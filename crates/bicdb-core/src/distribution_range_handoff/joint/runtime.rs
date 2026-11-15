@@ -229,10 +229,25 @@ impl NativeJointHandoffRuntime {
                     crate::distribution_data::NativeJointReleaseOwnerView::Frozen(frozen),
                 )?;
                 admission.require_live()?;
-                let dropped = std::mem::replace(
-                    &mut held.exclusion,
-                    RetainedExclusion::Released(original.clone()),
-                );
+                let database_arc = service.database();
+                let database = database_arc
+                    .try_read()
+                    .ok_or_else(|| invalid("fresh survivor release actual DB busy"))?;
+                let physical = admission.native().historical_cut_scope(&database)?;
+                admission.require_local_with_scope(
+                    &service,
+                    &physical,
+                    crate::distribution_data::NativeJointReleaseOwnerView::Frozen(frozen),
+                )?;
+                let dropped = {
+                    let _version = admission.native_publication_guard()?;
+                    std::mem::replace(
+                        &mut held.exclusion,
+                        RetainedExclusion::Released(original.clone()),
+                    )
+                };
+                // Actual drop occurs after final guard; the original immutable
+                // activation is already retained for a distinct fresh arm.
                 (original, Some(dropped))
             }
             RetainedExclusion::Released(actual) => {
@@ -386,6 +401,75 @@ impl NativeJointHandoffRuntime {
         self.close_old_with_role_owner(plan, Arc::new(role), parent)
     }
     #[cfg(feature = "tls-replication")]
+    pub(crate) fn observe_constraints_for_initial_step(
+        &self,
+        step: &crate::distribution_native_host::NativeInitialOldStep<'_>,
+        parent: &crate::CancellationToken,
+    ) -> Result<crate::distribution_data::NativeJointIrrevocableFacts> {
+        step.require_metadata_current()?;
+        step.require_joint_runtime(self)?;
+        let _operation = self.operation(step.plan().old_range().id)?;
+        let frozen = self.freeze(step.plan(), step.role(), parent)?;
+        let service = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("OLD constraints actual service busy"))?;
+        {
+            let db = service.database();
+            let db = db
+                .try_read()
+                .ok_or_else(|| invalid("OLD constraints actual database busy"))?;
+            service.require_initial_old_step(step, step.plan(), step.role(), &db)?;
+        }
+        let observed = service.observe_native_joint_constraints(
+            step.plan().clone(),
+            step.role(),
+            frozen,
+            parent,
+        )?;
+        let facts = observed.into_actual_facts(&service)?;
+        {
+            let db = service.database();
+            let db = db
+                .try_read()
+                .ok_or_else(|| invalid("OLD constraints database changed before return"))?;
+            service.require_initial_old_step(step, step.plan(), step.role(), &db)?;
+        }
+        Ok(facts)
+    }
+    /// Separate actual constraint producer. Retain the original native safety,
+    /// raw/archive token and Frozen owner before any postcheck may fail.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn observe_constraints_for_constraint_step(
+        &self,
+        step: &crate::distribution_native_host::NativeInitialOldConstraintStep<'_>,
+        retained: &mut Option<Arc<ActualServiceNativeJointConstraints>>,
+        parent: &crate::CancellationToken,
+    ) -> Result<crate::distribution_data::NativeJointIrrevocableFacts> {
+        step.require_metadata_current()?;
+        step.require_joint_runtime(self)?;
+        let _operation = self.operation(step.plan().old_range().id)?;
+        let frozen = self.freeze(step.plan(), step.role(), parent)?;
+        let service = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("OLD constraint actual service busy at observation"))?;
+        if retained.is_none() {
+            let actual = service
+                .observe_native_joint_constraints_for_constraint_step(step, frozen, parent)?;
+            *retained = Some(Arc::new(actual));
+        }
+        let facts = retained.as_ref().unwrap().actual_facts(&service)?;
+        {
+            let db = service.database();
+            let db = db
+                .try_read()
+                .ok_or_else(|| invalid("OLD constraint actual DB busy after observation"))?;
+            service.require_initial_old_constraint_step(step, step.plan(), step.role(), &db)?;
+        }
+        Ok(facts)
+    }
+    #[cfg(feature = "tls-replication")]
     pub(crate) fn close_old_for_initial_step(
         &self,
         step: &crate::distribution_native_host::NativeInitialOldStep<'_>,
@@ -405,6 +489,32 @@ impl NativeJointHandoffRuntime {
         // The caller must retain this actual observation before any subsequent
         // fallible metadata/response check. No successful response is minted
         // merely because native WAL may have completed.
+        NativeJointOldObservation::from_actual_service(actual, self.service.clone())
+    }
+    /// The actual original host retains producer outcomes through every
+    /// fallible post-WAL, source-pin and observation-binding check. This path
+    /// never substitutes a newly constructed process or a decoded receipt.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn close_old_retained_for_initial_step(
+        &self,
+        step: &crate::distribution_native_host::NativeInitialOldStep<'_>,
+        retained: &mut crate::distribution_data::NativeJointOldRetainedOutcome,
+        parent: &crate::CancellationToken,
+    ) -> Result<NativeJointOldObservation> {
+        step.require_metadata_current()?;
+        step.require_joint_runtime(self)?;
+        let _operation = self.operation(step.plan().old_range().id)?;
+        let frozen = self.freeze(step.plan(), step.role(), parent)?;
+        let actual = {
+            let mut service = self
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("retained OLD actual source service busy"))?;
+            service
+                .close_native_joint_old_retained_for_initial_step(step, frozen, retained, parent)?
+        };
+        // Construction may refuse if the original service/native/pin changed.
+        // The caller's retained outcome still owns every actual receipt/pin.
         NativeJointOldObservation::from_actual_service(actual, self.service.clone())
     }
     pub(crate) fn close_old_with_role_owner(

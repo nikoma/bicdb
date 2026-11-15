@@ -28,7 +28,12 @@ impl RangeWriteStore {
         admission: &NativeJointOpenAdmission,
     ) -> Result<Option<NativeJointCatalogueActivationReceipt>> {
         admission.require_live()?;
-        let (writer, writer_root) = admission.original_writer_for_activation(database, self)?;
+        admission
+            .committed()
+            .require_native_publication_metadata(database, self)?;
+        let (writer, writer_root) =
+            admission.original_phase_owner_for_activation(database, self)?;
+        let writer_domain = admission.original_writer_domain_for_activation(database, self)?;
 
         let native = admission.native_receipt();
         let range = native.data().old_range().id;
@@ -73,11 +78,16 @@ impl RangeWriteStore {
             activated: fact.activated,
             native: fact.native,
             writer,
+            writer_domain,
             writer_root,
             cancellation: admission.cancellation().clone(),
         };
         receipt.require_current_with_scope(&scope, self)?;
         admission.require_live()?;
+        admission
+            .committed()
+            .require_native_publication_metadata(database, self)?;
+        let _version = admission.committed().native_publication_guard()?;
         Ok(Some(receipt))
     }
     #[allow(clippy::too_many_arguments)]
@@ -87,12 +97,14 @@ impl RangeWriteStore {
         admission: &NativeJointOpenAdmission,
         original: &crate::distribution_range_handoff::CommittedNativeJointDecisionObservation,
         catalogue: &NativeJointBridgeCatalogue,
-        image: Option<&NativeImageCatalogueFinalization>,
+        image: Option<&dyn NativeJointImageMaterialization>,
         frozen: &FrozenRangeMutationPermit,
         parent: &CancellationToken,
     ) -> Result<NativeJointCatalogueActivationReceipt> {
         parent.check()?;
-        let (writer, writer_root) = admission.original_writer_for_activation(database, self)?;
+        let (writer, writer_root) =
+            admission.original_phase_owner_for_activation(database, self)?;
+        let writer_domain = admission.original_writer_domain_for_activation(database, self)?;
 
         // Nonwaiting cross-service checks happen BEFORE this local journal.
         #[cfg(test)]
@@ -130,7 +142,7 @@ impl RangeWriteStore {
             .require_current_with_native_read_scope(&scope)?;
         scope.require_prepared_frozen(admission.local_preparation(), frozen)?;
         self.require_native_catalog_durability(database.data_path())?;
-        self.require_native_writer_host_base()?;
+        self.require_native_joint_host_base(database, data.old_range().id)?;
         if native.local_node_id() != &self.catalog.node_id || data != original.data() {
             return Err(range_write_error(
                 "fresh native activation changed exact local member/decision",
@@ -160,6 +172,10 @@ impl RangeWriteStore {
         gate.validate_quiescent_frozen(range, frozen)?;
         let controlled = gate.try_controlled_mutation(frozen)?;
         gate.validate(range, &RangeMutationAuthority::Controlled(&controlled))?;
+        writer_domain.require_current(database, self, data.activation_range())?;
+        admission
+            .committed()
+            .require_native_publication_metadata(database, self)?;
         let state = self
             .catalog
             .native_joint_handoffs
@@ -174,7 +190,6 @@ impl RangeWriteStore {
                 "fresh activation changed permanent plan/session/nonce",
             ));
         }
-        writer.require_database(database, data.activation_range())?;
         self.recovery_persistence_uncertain = true;
         state.serving_activation = Some(candidate.clone());
         // Missing raw log is possible only at an actually verified genesis
@@ -208,12 +223,17 @@ impl RangeWriteStore {
             activated: candidate,
             native: native.clone(),
             writer,
+            writer_domain,
             writer_root,
             cancellation: admission.cancellation().clone(),
         };
         receipt.require_current_with_scope(&scope, self)?;
         admission.require_live()?;
+        admission
+            .committed()
+            .require_native_publication_metadata(database, self)?;
         parent.check()?;
+        let _version = admission.committed().native_publication_guard()?;
         Ok(receipt)
     }
 }

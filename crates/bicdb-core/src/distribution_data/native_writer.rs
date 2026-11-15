@@ -214,3 +214,33 @@ impl ClusterDataNodeService {
         })
     }
 }
+
+/// Actual mutable Store borrowed only after full same-service/catalogue
+/// validation. Its publication operation is infallible and memory-only; the
+/// caller retains DB/journal/admission/hook and actual metadata version guards.
+pub(crate) struct NativeAssignedServiceWriterPublication<'a> {
+    store: &'a mut crate::distribution_range_consensus::RangeWriteStore,
+}
+impl NativeAssignedServiceWriterPublication<'_> {
+    pub(crate) fn publish(
+        &mut self,
+        state: Weak<NativeWriterHostState>,
+    ) -> Option<Weak<NativeWriterHostState>> {
+        self.store
+            .publish_prevalidated_assigned_native_writer(state)
+    }
+}
+impl ClusterDataNodeService {
+    pub(crate) fn prepare_assigned_native_writer_publication<'a>(
+        &'a mut self,
+        database: &BicDb,
+        policy: &SealedHostWriterEnrollment,
+    ) -> Result<NativeAssignedServiceWriterPublication<'a>> {
+        self.validate_native_writer_enrollment(database, policy)?;
+        self.range_writes
+            .require_assigned_native_writer_publication(database, policy)?;
+        Ok(NativeAssignedServiceWriterPublication {
+            store: self.range_writes.current_mut(),
+        })
+    }
+}

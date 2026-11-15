@@ -19,12 +19,21 @@ pub(crate) use activation_scope::NativeActivationReadScope;
 mod activation_decision;
 mod joint_handoff;
 pub(crate) use activation_decision::NativeActivationDecisionReceipt;
-pub(in crate::db::range_image_native) use joint_handoff::NativeJointServingDomain;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use joint_handoff::test_remote_joint_decision_cut;
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint_handoff::NativeRegisteredJointDecisionAttempt;
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint_handoff::NativeRemoteJointDecisionAttempt;
+pub(in crate::db::range_image_native) use joint_handoff::{
+    NativeClosedWriterFact, NativeClosedWriterPoint, NativeJointServingDomain,
+};
 pub(crate) use joint_handoff::{
     NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope,
     NativeJointDecisionReceipt, NativeJointHistoricalCutScope, NativeJointOldCloseReceipt,
-    NativeJointOldPhysicalProof, NativeJointPreparedPublicationScope,
-    NativeJointServingBridgeReceipt, NativeJointServingPreparation,
+    NativeJointOldCloseRecordData, NativeJointOldPhysicalProof,
+    NativeJointPreparedPublicationScope, NativeJointServingBridgeReceipt,
+    NativeJointServingPreparation,
 };
 
 #[cfg(test)]

@@ -1,0 +1,274 @@
+{
+  "source": "1742776ab02957a053aded2ad4f665500d9325bf",
+  "run": 43581326157,
+  "job": 132406489716,
+  "full_classifier_sha256": "36180829031e7fa3e9a1ed2bce1641ebfd375c6ca6c1418e5f8c60b4a92cda14",
+  "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+  "source_blob_sha256": "f0331b1df2d3c396725cffff0fa64fb36b49bca918d223b7a137ecbae0c129ce",
+  "two_timeout_trace_findings": [
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_actual_original_a_through_first_policy",
+      "raw_marker_line": 20273,
+      "original_request_budget_ms": 5000,
+      "operation": "begin_prepared_round",
+      "primary_error": "canceling statement due to query timeout",
+      "local_node": "n2",
+      "round_deadline_origin": "first_OWN_fallback; no_round_created_yet",
+      "exact_stages": [
+        {
+          "elapsed_us": 0,
+          "own_remaining_us": 1498011,
+          "request_remaining_us": 4999992,
+          "round_past_deadline_us": 0,
+          "round_remaining_us": 1498011,
+          "stage": "own_enter"
+        },
+        {
+          "elapsed_us": 19387,
+          "own_remaining_us": 1478624,
+          "request_remaining_us": 4980605,
+          "round_past_deadline_us": 0,
+          "round_remaining_us": 1478624,
+          "stage": "own_return"
+        },
+        {
+          "elapsed_us": 19387,
+          "own_remaining_us": 1478624,
+          "request_remaining_us": 4980605,
+          "round_past_deadline_us": 0,
+          "round_remaining_us": 1478624,
+          "stage": "point_enter"
+        },
+        {
+          "elapsed_us": 19688,
+          "own_remaining_us": 1478322,
+          "request_remaining_us": 4980303,
+          "round_past_deadline_us": 0,
+          "round_remaining_us": 1478322,
+          "stage": "point_return"
+        },
+        {
+          "elapsed_us": 19689,
+          "own_remaining_us": 1478322,
+          "request_remaining_us": 4980303,
+          "round_past_deadline_us": 0,
+          "round_remaining_us": 1478322,
+          "stage": "observe_enter"
+        },
+        {
+          "elapsed_us": 129401,
+          "own_remaining_us": 1368609,
+          "request_remaining_us": 4870590,
+          "round_past_deadline_us": 0,
+          "round_remaining_us": 1368609,
+          "stage": "observe_return"
+        },
+        {
+          "elapsed_us": 129402,
+          "own_remaining_us": 1368608,
+          "request_remaining_us": 4870589,
+          "round_past_deadline_us": 0,
+          "round_remaining_us": 1368608,
+          "stage": "prepare_enter"
+        },
+        {
+          "elapsed_us": 1117918,
+          "own_remaining_us": 380093,
+          "request_remaining_us": 3882074,
+          "round_past_deadline_us": 0,
+          "round_remaining_us": 380093,
+          "stage": "prepare_return"
+        },
+        {
+          "elapsed_us": 1117921,
+          "own_remaining_us": 380090,
+          "request_remaining_us": 3882071,
+          "round_past_deadline_us": 0,
+          "round_remaining_us": 380090,
+          "stage": "wrapper_enter"
+        },
+        {
+          "elapsed_us": 1412907,
+          "own_remaining_us": 85103,
+          "request_remaining_us": 3587084,
+          "round_past_deadline_us": 0,
+          "round_remaining_us": 85103,
+          "stage": "wrapper_return"
+        },
+        {
+          "elapsed_us": 1412908,
+          "own_remaining_us": 85103,
+          "request_remaining_us": 3587084,
+          "round_past_deadline_us": 0,
+          "round_remaining_us": 85103,
+          "stage": "round_enter"
+        },
+        {
+          "elapsed_us": 1512048,
+          "own_remaining_us": 0,
+          "request_remaining_us": 3487944,
+          "round_past_deadline_us": 14036,
+          "round_remaining_us": 0,
+          "stage": "round_return"
+        }
+      ],
+      "stage_durations_us": {
+        "own": 19387,
+        "point": 301,
+        "observe": 109712,
+        "prepare": 988516,
+        "wrapper": 294986,
+        "round_begin": 99140
+      },
+      "measured_own_deadline_exhausted_at_error": true,
+      "measured_parent_deadline_positive_at_error": true,
+      "round_created": false,
+      "limits": [
+        "No round constructed, so recorded round timing is explicitly first-OWN fallback, not an independently observed live round deadline.",
+        "Positive caller deadline does not independently prove uncanceled token; cancellation state not emitted in this marker.",
+        "Exact throwing subguard and component CPU/disk cause not proved by aggregate stage clocks.",
+        "Later intended negative controls after failed begin are not exercised."
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_early_all_released_admission_refuses",
+      "raw_marker_line": 20427,
+      "original_request_budget_ms": 5000,
+      "operation": "begin_prepared_round",
+      "primary_error": "canceling statement due to query timeout",
+      "local_node": "n2",
+      "round_deadline_origin": "first_OWN_fallback; no_round_created_yet",
+      "exact_stages": [
+        {
+          "elapsed_us": 0,
+          "own_remaining_us": 1498010,
+          "request_remaining_us": 4999993,
+          "round_past_deadline_us": 0,
+          "round_remaining_us": 1498010,
+          "stage": "own_enter"
+        },
+        {
+          "elapsed_us": 21769,
+          "own_remaining_us": 1476241,
+          "request_remaining_us": 4978224,
+          "round_past_deadline_us": 0,
+          "round_remaining_us": 1476241,
+          "stage": "own_return"
+        },
+        {
+          "elapsed_us": 21769,
+          "own_remaining_us": 1476241,
+          "request_remaining_us": 4978224,
+          "round_past_deadline_us": 0,
+          "round_remaining_us": 1476241,
+          "stage": "point_enter"
+        },
+        {
+          "elapsed_us": 22353,
+          "own_remaining_us": 1475656,
+          "request_remaining_us": 4977639,
+          "round_past_deadline_us": 0,
+          "round_remaining_us": 1475656,
+          "stage": "point_return"
+        },
+        {
+          "elapsed_us": 22354,
+          "own_remaining_us": 1475656,
+          "request_remaining_us": 4977639,
+          "round_past_deadline_us": 0,
+          "round_remaining_us": 1475656,
+          "stage": "observe_enter"
+        },
+        {
+          "elapsed_us": 164856,
+          "own_remaining_us": 1333153,
+          "request_remaining_us": 4835136,
+          "round_past_deadline_us": 0,
+          "round_remaining_us": 1333153,
+          "stage": "observe_return"
+        },
+        {
+          "elapsed_us": 164857,
+          "own_remaining_us": 1333152,
+          "request_remaining_us": 4835135,
+          "round_past_deadline_us": 0,
+          "round_remaining_us": 1333152,
+          "stage": "prepare_enter"
+        },
+        {
+          "elapsed_us": 1119517,
+          "own_remaining_us": 378492,
+          "request_remaining_us": 3880475,
+          "round_past_deadline_us": 0,
+          "round_remaining_us": 378492,
+          "stage": "prepare_return"
+        },
+        {
+          "elapsed_us": 1119520,
+          "own_remaining_us": 378490,
+          "request_remaining_us": 3880473,
+          "round_past_deadline_us": 0,
+          "round_remaining_us": 378490,
+          "stage": "wrapper_enter"
+        },
+        {
+          "elapsed_us": 1361976,
+          "own_remaining_us": 136034,
+          "request_remaining_us": 3638017,
+          "round_past_deadline_us": 0,
+          "round_remaining_us": 136034,
+          "stage": "wrapper_return"
+        },
+        {
+          "elapsed_us": 1361977,
+          "own_remaining_us": 136033,
+          "request_remaining_us": 3638016,
+          "round_past_deadline_us": 0,
+          "round_remaining_us": 136033,
+          "stage": "round_enter"
+        },
+        {
+          "elapsed_us": 1534895,
+          "own_remaining_us": 0,
+          "request_remaining_us": 3465098,
+          "round_past_deadline_us": 36884,
+          "round_remaining_us": 0,
+          "stage": "round_return"
+        }
+      ],
+      "stage_durations_us": {
+        "own": 21769,
+        "point": 584,
+        "observe": 142502,
+        "prepare": 954660,
+        "wrapper": 242456,
+        "round_begin": 172918
+      },
+      "measured_own_deadline_exhausted_at_error": true,
+      "measured_parent_deadline_positive_at_error": true,
+      "round_created": false,
+      "limits": [
+        "No round constructed, so recorded round timing is explicitly first-OWN fallback, not an independently observed live round deadline.",
+        "Positive caller deadline does not independently prove uncanceled token; cancellation state not emitted in this marker.",
+        "Exact throwing subguard and component CPU/disk cause not proved by aggregate stage clocks.",
+        "Later intended negative controls after failed begin are not exercised."
+      ]
+    }
+  ],
+  "ten_scope_failure_boundary": {
+    "source_line": 480,
+    "operation": "new.finish().unwrap().prepare_decision().unwrap() before decision publication loop",
+    "literal_error": "metadata consensus: recovery-role witness scope changed or expired",
+    "known": "Publication-loop/fault-hook reach is not proved; the regressed postcommit-term control fails before that loop.",
+    "unknown": "Scope mismatch vs expiry not distinguished by original error/trace."
+  },
+  "prior_old_characterization_missing_name": [
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::fifth_data_path_tests::native_fifth_data_path_transfer_failure_after_source_cut_characterization"
+  ],
+  "old_failure_mapping_totals": {
+    "old47_now_passed": 5,
+    "old47_still_failed": 42,
+    "current_newly_regressed_failed": 1
+  },
+  "no_engine_open_or_source_mutation": true
+}

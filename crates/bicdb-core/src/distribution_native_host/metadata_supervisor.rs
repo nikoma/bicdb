@@ -11,6 +11,11 @@ use std::collections::BTreeMap;
 use std::sync::{OnceLock, Weak};
 use std::thread::{self, JoinHandle};
 
+#[cfg(test)]
+mod observation;
+#[cfg(test)]
+use observation::Observation;
+
 static ACTIVE: OnceLock<Mutex<BTreeMap<usize, Weak<()>>>> = OnceLock::new();
 fn claim_worker(metadata: &Arc<Mutex<MetadataConsensusStore>>) -> Result<Arc<()>> {
     let mut active = ACTIVE
@@ -60,10 +65,14 @@ impl NativeMetadataSupervisorConfig {
 }
 
 pub(crate) struct NativeMetadataSupervisor {
+    #[cfg(test)]
+    observation: Arc<Observation>,
     cancellation: CancellationToken,
     worker: Option<JoinHandle<()>>,
 }
 struct Driver {
+    #[cfg(test)]
+    observation: Arc<Observation>,
     _claim: Arc<()>,
     metadata: Arc<Mutex<MetadataConsensusStore>>,
     actual: ClusterServiceOpenGuard,
@@ -131,7 +140,11 @@ impl NativeMetadataSupervisor {
             network,
         )?);
         let claim = claim_worker(&metadata)?;
+        #[cfg(test)]
+        let observation = Arc::new(Observation::new());
         let mut driver = Driver {
+            #[cfg(test)]
+            observation: observation.clone(),
             _claim: claim,
             metadata,
             actual,
@@ -157,6 +170,18 @@ impl NativeMetadataSupervisor {
                     // owner and current persisted role/C, never cached status.
                     match driver.tick(&round) {
                         Err(error) if active.check().is_ok() => {
+                            #[cfg(test)]
+                            driver.observation.record(
+                                "tick_error",
+                                None,
+                                0,
+                                0,
+                                None,
+                                None,
+                                start,
+                                &round,
+                                Some(&error),
+                            );
                             let error = error.to_string();
                             if last_error.as_ref() != Some(&error) {
                                 eprintln!("bicdb native metadata supervisor: {error}");
@@ -175,6 +200,8 @@ impl NativeMetadataSupervisor {
                 invalid(&format!("native metadata supervisor spawn failed: {error}"))
             })?;
         Ok(Self {
+            #[cfg(test)]
+            observation,
             cancellation,
             worker: Some(worker),
         })
@@ -199,6 +226,13 @@ impl NativeMetadataSupervisor {
         Ok(())
     }
 }
+#[cfg(test)]
+impl NativeMetadataSupervisor {
+    pub(crate) fn test_observation(&self) -> Arc<Observation> {
+        self.observation.clone()
+    }
+}
+
 impl Drop for NativeMetadataSupervisor {
     fn drop(&mut self) {
         self.cancellation.cancel();
@@ -221,17 +255,79 @@ fn election_delay(
     config.election + Duration::from_millis(hash % (config.election.as_millis() as u64 / 2).max(1))
 }
 impl Driver {
-    fn snapshot(&self) -> Result<NativeMetadataSupervisorSnapshot> {
-        Ok(self
-            .metadata
-            .try_lock()
-            .ok_or_else(|| invalid("native metadata tick store busy"))?
-            .native_supervisor_snapshot(&self.actual, Some(self.store_id))?
-            .1)
+    /// Only local serialization admission changes: the fast probe remains,
+    /// then waits within this SAME original round. No network, service/DB,
+    /// journal, version or other metadata guard is held at any call site.
+    fn lock_metadata<'a>(
+        &'a self,
+        parent: &CancellationToken,
+        busy: &'static str,
+    ) -> Result<parking_lot::MutexGuard<'a, MetadataConsensusStore>> {
+        parent.check()?;
+        #[cfg(test)]
+        let entered = Instant::now();
+        if let Some(held) = self.metadata.try_lock() {
+            let current = parent.check();
+            #[cfg(test)]
+            if let Err(error) = &current {
+                self.observation.observe_admission_denial(error);
+            }
+            current?;
+            return Ok(held);
+        }
+        #[cfg(test)]
+        self.observation
+            .initial_busy
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        let remaining = parent
+            .deadline()
+            .map(|end| end.saturating_duration_since(Instant::now()))
+            .unwrap_or_default();
+        let Some(held) = self.metadata.try_lock_for(remaining) else {
+            #[cfg(test)]
+            if let Err(error) = parent.check() {
+                self.observation.observe_admission_denial(&error);
+            }
+            return Err(invalid(busy));
+        };
+        // Acquiring a mutex never makes an expired/canceled round current.
+        let current = parent.check();
+        #[cfg(test)]
+        if let Err(error) = &current {
+            self.observation.observe_admission_denial(error);
+        }
+        current?;
+        #[cfg(test)]
+        self.observation.max_lock_wait_us.fetch_max(
+            entered.elapsed().as_micros().min(u64::MAX as u128) as u64,
+            std::sync::atomic::Ordering::Relaxed,
+        );
+        Ok(held)
+    }
+    fn snapshot(&self, parent: &CancellationToken) -> Result<NativeMetadataSupervisorSnapshot> {
+        #[cfg(test)]
+        let entered = Instant::now();
+        #[cfg(test)]
+        self.observation.before_snapshot(parent)?;
+        let result = {
+            let held = self.lock_metadata(parent, "native metadata tick store busy")?;
+            held.native_supervisor_snapshot(&self.actual, Some(self.store_id))
+        };
+        // Original native/owner error wins over a later diagnostic/deadline.
+        let snapshot = result?.1;
+        parent.check()?;
+        #[cfg(test)]
+        {
+            self.observation
+                .completed_snapshots
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            self.observation.record_snapshot(&snapshot, entered, parent);
+        }
+        Ok(snapshot)
     }
     fn tick(&mut self, parent: &CancellationToken) -> Result<()> {
         parent.check()?;
-        let snapshot = self.snapshot()?;
+        let snapshot = self.snapshot(parent)?;
         // Republish a successfully durable backend C even after restart or a
         // previous cache-publication failure. This is configuration DATA only.
         self.transport.install_topology(snapshot.topology.clone())?;
@@ -241,11 +337,10 @@ impl Driver {
             // Do not cancel this process: SAME-owner rebind resumes this same
             // worker without replacing or reviving any lifecycle token.
             self.election_at = Instant::now() + election_delay(&snapshot, self.config);
-            let mut store = self
-                .metadata
-                .try_lock()
-                .ok_or_else(|| invalid("native metadata ingress relinquish store busy"))?;
+            let mut store =
+                self.lock_metadata(parent, "native metadata ingress relinquish store busy")?;
             store.native_supervisor_snapshot(&self.actual, Some(self.store_id))?;
+            parent.check()?;
             store.relinquish_leadership()?;
             return Err(invalid(
                 "native metadata scheduler paused: actual owned ingress unavailable",
@@ -275,11 +370,9 @@ impl Driver {
             return Ok(());
         }
         let request = {
-            let mut store = self
-                .metadata
-                .try_lock()
-                .ok_or_else(|| invalid("native election store busy"))?;
+            let mut store = self.lock_metadata(parent, "native election store busy")?;
             store.native_supervisor_snapshot(&self.actual, Some(self.store_id))?;
+            parent.check()?;
             store.start_election_if_unchanged(&snapshot.status, snapshot.contact)?
         };
         let Some(request) = request else {
@@ -296,22 +389,62 @@ impl Driver {
         for (position, peer) in peers.iter().enumerate() {
             parent.check()?;
             let token = rpc_budget(parent, peers.len() - position);
+            #[cfg(test)]
+            let sent = Instant::now();
+            #[cfg(test)]
+            self.observation.record(
+                "vote_dispatch",
+                Some(peer),
+                request.term,
+                request.last_log_index,
+                None,
+                None,
+                sent,
+                parent,
+                None,
+            );
             let reply = match self.transport.request_metadata_vote_cancellable(
                 peer,
                 request.clone(),
                 &token,
             ) {
-                Ok(reply) => reply,
-                Err(_) => {
+                Ok(reply) => {
+                    #[cfg(test)]
+                    self.observation.record(
+                        "vote_returned",
+                        Some(peer),
+                        request.term,
+                        request.last_log_index,
+                        Some((reply.term, reply.vote_granted)),
+                        None,
+                        sent,
+                        parent,
+                        None,
+                    );
+                    reply
+                }
+                Err(error) => {
+                    #[cfg(test)]
+                    self.observation.record(
+                        "vote_error",
+                        Some(peer),
+                        request.term,
+                        request.last_log_index,
+                        None,
+                        None,
+                        sent,
+                        parent,
+                        Some(&error),
+                    );
+                    #[cfg(not(test))]
+                    let _ = error;
                     parent.check()?;
                     continue;
                 }
             };
-            let mut store = self
-                .metadata
-                .try_lock()
-                .ok_or_else(|| invalid("native election response store busy"))?;
+            let mut store = self.lock_metadata(parent, "native election response store busy")?;
             store.native_supervisor_snapshot(&self.actual, Some(self.store_id))?;
+            parent.check()?;
             if reply.term > request.term {
                 store.observe_remote_term(reply.term)?;
                 return Ok(());
@@ -327,10 +460,8 @@ impl Driver {
         }
         parent.check()?;
         {
-            let mut store = self
-                .metadata
-                .try_lock()
-                .ok_or_else(|| invalid("native election finish store busy"))?;
+            let mut store = self.lock_metadata(parent, "native election finish store busy")?;
+            parent.check()?;
             store.finish_native_supervisor_election(
                 &self.actual,
                 self.store_id,
@@ -338,7 +469,7 @@ impl Driver {
                 &votes,
             )?;
         }
-        let elected = self.snapshot()?;
+        let elected = self.snapshot(parent)?;
         self.replicate(&elected, parent)
     }
     fn replicate(
@@ -365,10 +496,7 @@ impl Driver {
         for (position, peer) in peers.iter().enumerate() {
             parent.check()?;
             let request = {
-                let store = self
-                    .metadata
-                    .try_lock()
-                    .ok_or_else(|| invalid("native heartbeat builder busy"))?;
+                let store = self.lock_metadata(parent, "native heartbeat builder busy")?;
                 let (_, current) =
                     store.native_supervisor_snapshot(&self.actual, Some(self.store_id))?;
                 if current.status.role != MetadataConsensusRole::Leader
@@ -382,29 +510,77 @@ impl Driver {
                 }) {
                     continue;
                 }
+                parent.check()?;
                 store.append_request_for_peer(peer, 16)?
             };
             let token = rpc_budget(parent, peers.len() - position);
+            #[cfg(test)]
+            let sent = Instant::now();
+            #[cfg(test)]
+            let header = (request.term, request.prev_log_index);
+            #[cfg(test)]
+            self.observation
+                .record_append_dispatch(peer, &request, sent, &token);
             let reply = match self
                 .transport
                 .append_metadata_cancellable(peer, request, &token)
             {
-                Ok(reply) => reply,
-                Err(_) => {
+                Ok(reply) => {
+                    #[cfg(test)]
+                    self.observation.record(
+                        "append_returned",
+                        Some(peer),
+                        header.0,
+                        reply.match_index,
+                        Some((reply.term, reply.success)),
+                        None,
+                        sent,
+                        &token,
+                        None,
+                    );
+                    reply
+                }
+                Err(error) => {
+                    #[cfg(test)]
+                    self.observation.record(
+                        "append_error",
+                        Some(peer),
+                        header.0,
+                        header.1,
+                        None,
+                        None,
+                        sent,
+                        &token,
+                        Some(&error),
+                    );
+                    #[cfg(not(test))]
+                    let _ = error;
                     parent.check()?;
                     continue;
                 }
             };
             parent.check()?;
-            {
-                let mut store = self
-                    .metadata
-                    .try_lock()
-                    .ok_or_else(|| invalid("native heartbeat response store busy"))?;
+            let counted = {
+                let mut store =
+                    self.lock_metadata(parent, "native heartbeat response store busy")?;
                 store.native_supervisor_snapshot(&self.actual, Some(self.store_id))?;
-                store.record_append_response(peer, &reply)?;
-            }
-            let current = self.snapshot()?;
+                parent.check()?;
+                store.record_append_response(peer, &reply)
+            };
+            #[cfg(test)]
+            self.observation.record(
+                "append_record_returned",
+                Some(peer),
+                header.0,
+                reply.match_index,
+                Some((reply.term, reply.success)),
+                counted.as_ref().ok().copied(),
+                sent,
+                parent,
+                counted.as_ref().err(),
+            );
+            counted?;
+            let current = self.snapshot(parent)?;
             self.transport.install_topology(current.topology)?;
         }
         Ok(())

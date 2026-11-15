@@ -1,0 +1,293 @@
+{
+  "schema": "bicdb-native512-fixture-current-point-regression-v1",
+  "base": "1742776ab02957a053aded2ad4f665500d9325bf",
+  "version": "1.0.512-beta",
+  "classification": "source repair prepared; NOT compiled/run; original required CI remains FAILED",
+  "original_run": {
+    "run": 43581326157,
+    "job": 132406489716,
+    "actual_checkout": "4700100a7741ffe402e0c0281201e4f1a6d0f0a6",
+    "source_head": "1742776ab02957a053aded2ad4f665500d9325bf",
+    "result": "280 passed; 43 failed; 1 ignored; 934 filtered; 2837.67s",
+    "raw_log_bytes": 12348962,
+    "raw_sha256": "54510f8f08528b3f411114a1fd5ae735a12f39bb74be7e0c23e02f3bb5ef3ec8",
+    "gzip_sha256": "54f1e6ad03a4c819cd91990fa061fd0ca568d61b93ef070f74fdf2514df0bf5b"
+  },
+  "all_43_failure_groups": [
+    {
+      "count": 18,
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:681:18",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native joint publication requires an actual current-MStore version captured outside engine locks\")",
+      "classification": "missing real preparation MStore point; source caller defect"
+    },
+    {
+      "count": 10,
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:480:10",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"metadata consensus: recovery-role witness scope changed or expired\")",
+      "classification": "separate prerequisite failure assigned to another owner; no causal diagnosis by this leaf"
+    },
+    {
+      "count": 2,
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:736:22",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "classification": "separate prerequisite failure assigned to another owner; no causal diagnosis by this leaf"
+    },
+    {
+      "count": 13,
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:217:10",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: native range image: remote NEW original Registered hook/open changed\")",
+      "classification": "separate prerequisite failure assigned to another owner; no causal diagnosis by this leaf"
+    }
+  ],
+  "all_43_original_failures": [
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activated_anchor_archive_tests::native_current_joint_actual_image_target_anchor_r3_at_r4_refuses_missing_serving_archive",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:681:18",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native joint publication requires an actual current-MStore version captured outside engine locks\")"
+    },
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_caller_cancel_and_exact_fresh_recovery",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:681:18",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native joint publication requires an actual current-MStore version captured outside engine locks\")"
+    },
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_foreign_db_and_store_refused",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:681:18",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native joint publication requires an actual current-MStore version captured outside engine locks\")"
+    },
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_missing_decision_archive_refused",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:681:18",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native joint publication requires an actual current-MStore version captured outside engine locks\")"
+    },
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_writer_replacement_refused",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:681:18",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native joint publication requires an actual current-MStore version captured outside engine locks\")"
+    },
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::current_joint_authority_tests::native_current_joint_actual_authority_and_original_writer_cannot_rebase_recovery",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:681:18",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native joint publication requires an actual current-MStore version captured outside engine locks\")"
+    },
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_activation_idempotence_tests::native_post_joint_actual_activation_idempotence_after_fresh_activation_ack4_and_strong",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:681:18",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native joint publication requires an actual current-MStore version captured outside engine locks\")"
+    },
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_actual_complete_image_target_becomes_leader_ack_and_strong_read",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:681:18",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native joint publication requires an actual current-MStore version captured outside engine locks\")"
+    },
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_fresh_open_phase_reconciles_exact_target_epoch_and_lost_catalogue_reply_while_frozen",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:681:18",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native joint publication requires an actual current-MStore version captured outside engine locks\")"
+    },
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_fresh_phase_refuses_expired_original_caller_with_later_long_budget",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:681:18",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native joint publication requires an actual current-MStore version captured outside engine locks\")"
+    },
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_fresh_preparation_phase_publishes_all_final_members_after_original_expiry",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:681:18",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native joint publication requires an actual current-MStore version captured outside engine locks\")"
+    },
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::observer_scope_cut_tests::native_current_joint_observer_scope_actual_foreign_identity_cancel_and_hook_cuts",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:681:18",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native joint publication requires an actual current-MStore version captured outside engine locks\")"
+    },
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::open_adversarial_tests::native_joint_open_final_sweep_foreign_actual_writer_reenrollment_refuses_old_phase",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:681:18",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native joint publication requires an actual current-MStore version captured outside engine locks\")"
+    },
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::open_adversarial_tests::native_joint_open_post_fsync_original_caller_cancel_cannot_start_fresh_phase",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:681:18",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native joint publication requires an actual current-MStore version captured outside engine locks\")"
+    },
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::open_adversarial_tests::native_joint_open_post_fsync_step_cancel_recovers_exact_fact_with_original_caller_live",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:681:18",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native joint publication requires an actual current-MStore version captured outside engine locks\")"
+    },
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::original_release_writer_tests::native_joint_original_image_release_refuses_hot_writer_reinstallation_before_owner_drop",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:681:18",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native joint publication requires an actual current-MStore version captured outside engine locks\")"
+    },
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::original_release_writer_tests::native_joint_original_survivor_release_refuses_hot_writer_reinstallation_before_owner_drop",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:681:18",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native joint publication requires an actual current-MStore version captured outside engine locks\")"
+    },
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::post_joint_no_data_tests::native_post_joint_actual_new_domain_prepare_only_recovers_then_ack4_and_strong",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:681:18",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native joint publication requires an actual current-MStore version captured outside engine locks\")"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_metadata_tests::native_registered_fifth_remote_hot_closed_actual_mstore_contention_same_own_progress",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:480:10",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"metadata consensus: recovery-role witness scope changed or expired\")"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_metadata_tests::native_registered_fifth_remote_hot_closed_actual_mstore_wait_expired_own_refuses",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:480:10",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"metadata consensus: recovery-role witness scope changed or expired\")"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_tests::native_registered_fifth_remote_hot_closed_audit_native_reply_lost_same_attempt_retry",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:480:10",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"metadata consensus: recovery-role witness scope changed or expired\")"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_first_policy_real_caller_expiry_fresh_same_xid",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:480:10",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"metadata consensus: recovery-role witness scope changed or expired\")"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_follower_binds_without_fake_leader_ready",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:480:10",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"metadata consensus: recovery-role witness scope changed or expired\")"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_lost_committed_decision_reply_keeps_same_attempt",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:480:10",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"metadata consensus: recovery-role witness scope changed or expired\")"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_original_client_ack_and_full_strong",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:480:10",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"metadata consensus: recovery-role witness scope changed or expired\")"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::local_term_tests::native_registered_fifth_remote_hot_local_term_after_decision_commit_retains_xid_refuses_vote",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:480:10",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"metadata consensus: recovery-role witness scope changed or expired\")"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::local_term_tests::native_registered_fifth_remote_hot_local_term_after_policy_readback_refuses_hook",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:480:10",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"metadata consensus: recovery-role witness scope changed or expired\")"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_actual_original_a_through_first_policy",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:736:22",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_early_all_released_admission_refuses",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:736:22",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_lost_committed_decision_reply_same_native_attempt",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:480:10",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"metadata consensus: recovery-role witness scope changed or expired\")"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_cancel_after_take_retains_exact_progress",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:217:10",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: native range image: remote NEW original Registered hook/open changed\")"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_cancel_before_take_same_phase_fresh_retry",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:217:10",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: native range image: remote NEW original Registered hook/open changed\")"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_changed_valid_quorum_cannot_replace_intent",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:217:10",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: native range image: remote NEW original Registered hook/open changed\")"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_materialization_independent_fetch_all_pin_owners",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:217:10",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: native range image: remote NEW original Registered hook/open changed\")"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_wrong_fact_digest_refuses_before_pin_take",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:217:10",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: native range image: remote NEW original Registered hook/open changed\")"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_commit_sync_unknown_never_replaces_xid",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:217:10",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: native range image: remote NEW original Registered hook/open changed\")"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_donor_provenance_and_native_target_record",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:217:10",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: native range image: remote NEW original Registered hook/open changed\")"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_postcommit_cancel_reconciles_same_xid",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:217:10",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: native range image: remote NEW original Registered hook/open changed\")"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_preput_abort_retains_original_attempt",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:217:10",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: native range image: remote NEW original Registered hook/open changed\")"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_old_decision_tests::native_registered_fifth_remote_old_decision_actual_nonleader_donor_independent_self_callback",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:217:10",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: native range image: remote NEW original Registered hook/open changed\")"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_old_decision_tests::native_registered_fifth_remote_old_decision_actual_observer_and_capture_ingress_refusals",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:217:10",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: native range image: remote NEW original Registered hook/open changed\")"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_old_decision_tests::native_registered_fifth_remote_old_decision_actual_retiree_postcommit_cancel_same_xid",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:217:10",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: native range image: remote NEW original Registered hook/open changed\")"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_old_decision_tests::native_registered_fifth_remote_old_decision_actual_survivor_native_body_and_same_xid",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:217:10",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: native range image: remote NEW original Registered hook/open changed\")"
+    }
+  ],
+  "diagnosis": {
+    "failed_boundary": "complete_joint_tests.rs681 is prepare_local_native_joint_serving(...).unwrap(), after observe_committed_native_joint_decision returned its wrapper; it is not a missing OWN network acquisition.",
+    "actual_cause": "The generic observer delegates to _with_point(...,None); protected native preparation requires actual attached current MStore version. The fixture already independently acquires SAME recipient OWN but omitted capture_actual_joint_metadata_point before taking service lock. No provided stale point was observed; there was no point.",
+    "existing_authoritative_producer": "ClusterDataNodeService::capture_actual_joint_metadata_point(service,&mq,business,&parent) obtains real attached MStore/current owned member outside service/DB/journal guards; preserves original OWN context/term/index/cancellation/deadline. _with_point consumes original mq and exact captured point.",
+    "related_negative": "closed_policy_baseline_tests also used None wrapper. It now captures genuine point outside locks while preserving original exact range-configuration refusal assertion; no general Serving or Closed grant added.",
+    "not_changed": "No production guard, wrapper compatibility, role, session, retry, timeout, request ordering within existing protocol, fault assertion or ACK/Strong acceptance changed. New actual validation necessarily adds proof work, no renewed budget.",
+    "original_reach": "18 cases had completed their fixture native decision publication and three metadata stages before this preparation prerequisite. Their later named cuts and final APP/Strong acceptance were not reached. This report does not invent precontrol ACK counts or call them zero."
+  },
+  "files": {
+    "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs": {
+      "base_blob": "f80afceb6e0bca180f822e202641151281da47c1",
+      "base_sha256": "87e08ad742b5d993dff7d7083d185d2c240c4e63b12621c46984fa102654847c",
+      "candidate_file_sha256": "51403d959869273d7d1dbba0b4250dd112ffb4070c86c55b6bd5f5f6969d63e2"
+    },
+    "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests/closed_policy_baseline_tests.rs": {
+      "base_blob": "1ca78773049335ce455d9559c45a15f889c5094f",
+      "base_sha256": "0972d02ddde182d4a134d6b02411e1d38f5cad3c331e1c58f9f32872091fb8d1",
+      "candidate_file_sha256": "c736e2b719524498efb40791fab64c891e685bc6f98f6d46ec744438c61f7f27"
+    }
+  },
+  "source_static_checks": {
+    "original_assertion_lines_exact": true,
+    "original_Duration_budget_expressions_exact": true,
+    "all_non_point_wrapper_calls_reviewed": "two fixturecallers changed; production generic init0 wrapper remains strict; all actual callers now use explicit with_point path",
+    "direct_rustfmt_skip_children": "PASS",
+    "git_diff_check": "PASS",
+    "source_version_check": "PASS29packages512/nochanges",
+    "Cargo_build_test_CI": "NOT RUN"
+  },
+  "remaining_gates": [
+    "Actual required CI on final composed head; source fix does not retroactively pass original18.",
+    "Separate10 recovery-role-expiry+2 QueryTimedOut hot cases and13 original Registered hook/open failures remain independently assigned.",
+    "No qualification/physical/RPO/RTO/throughput claim."
+  ]
+}

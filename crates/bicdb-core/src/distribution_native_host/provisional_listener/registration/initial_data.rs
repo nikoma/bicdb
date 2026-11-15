@@ -4,17 +4,23 @@ use super::*;
 use crate::db::{NativeInitialDataGenesis, NativeWriterHostState};
 use crate::distribution_native_read::NativeStrongEventDispatcher;
 use crate::distribution_range_recovery::RangeRecoveryRuntime;
+use crate::RangeWriteCoordinator;
 use std::sync::Weak;
 
 mod cleanup;
 mod hot_recovery;
 mod old_step;
+mod writer_data_domain;
 use cleanup::{NativeInitialDataCleanup, NativeInitialDataCleanupSender};
 use hot_recovery::NativeHotRecoveryMaintenance;
-pub(crate) use old_step::NativeInitialOldStep;
-use old_step::RetainedInitialOld;
+use old_step::RetainedInitialOldTable;
+mod source_discovery;
 #[cfg(test)]
-pub(crate) use old_step::{before_native_old_wal, CancelOldOwnBeforeNativeWal};
+pub(crate) use old_step::{
+    after_remote_native_old_wal, before_native_old_wal, CancelOldOwnBeforeNativeWal,
+    CancelRemoteOldAfterNativeWal,
+};
+pub(crate) use old_step::{NativeInitialOldConstraintStep, NativeInitialOldStep};
 
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct NativeInitialDataRangeStatus {
@@ -43,9 +49,14 @@ pub struct NativeInitialDataStatus {
 pub(crate) struct NativeInitialDataAdmission {
     service: Weak<Mutex<ClusterDataNodeService>>,
     runtime: Weak<RangeRecoveryRuntime>,
-    // Replaced only by this owner's own policy refresh, under its exclusive
-    // host borrow, after the new native policy and hook are both published.
+    // Mutable only after this actual owner's durable policy refresh. OLD
+    // operations separately retain their exact original writer snapshot.
     writer: parking_lot::RwLock<Arc<NativeWriterHostState>>,
+    source_writer: parking_lot::RwLock<Weak<crate::db::InstalledNativeWriterHostGuard>>,
+    source_coordinator:
+        parking_lot::RwLock<Weak<RangeWriteCoordinator<TcpClusterRelocationTransport>>>,
+    // Original service/open identity is never replaced by policy refresh.
+    database: crate::distribution_data::ClusterServiceOpenGuard,
     root: PathBuf,
     store_open: Uuid,
     // Actual service SLOT identity, not merely a live removed Store/old ID.
@@ -53,8 +64,37 @@ pub(crate) struct NativeInitialDataAdmission {
     life: Weak<AtomicBool>,
     published: Arc<AtomicBool>,
     image_sources: Weak<crate::distribution_range_image::NativeRemoteImageSourceRegistry>,
+    old_closures: Weak<RetainedInitialOldTable>,
+    old_metadata: Weak<Mutex<crate::distribution_consensus::MetadataConsensusStore>>,
+    old_provider: Weak<crate::distribution_metadata_read_provider::MetadataReadProvider>,
+    old_transport: Weak<TcpClusterRelocationTransport>,
 }
 impl NativeInitialDataAdmission {
+    /// Necessary original INITIAL process/slot/writer identity only. All
+    /// metadata/native proof is independent; this memory check creates none.
+    pub(crate) fn require_remote_new_original_memory(
+        &self,
+        original: &Arc<NativeWriterHostState>,
+    ) -> Result<()> {
+        if !self
+            .life
+            .upgrade()
+            .is_some_and(|life| life.load(Ordering::Acquire))
+            || !self.published.load(Ordering::Acquire)
+        {
+            return Err(invalid("remote NEW original INITIAL owner ended"));
+        }
+        self.database.require_live()?;
+        self.store_slot.require_live()?;
+        let writer = self
+            .writer
+            .try_read()
+            .ok_or_else(|| invalid("remote NEW original writer identity busy"))?;
+        if !Arc::ptr_eq(&writer, original) {
+            return Err(invalid("remote NEW original writer replaced"));
+        }
+        original.require_remote_new_registration_memory()
+    }
     /// The currently installed writer policy of this same retained owner.
     pub(super) fn writer(&self) -> Arc<NativeWriterHostState> {
         Arc::clone(&self.writer.read())
@@ -65,6 +105,26 @@ impl NativeInitialDataAdmission {
     pub(super) fn replace_writer(&self, writer: Arc<NativeWriterHostState>) {
         *self.writer.write() = writer;
     }
+    /// Follow only the existing INITIAL owner's completed actual policy
+    /// replacement. This installs no policy or grant; Joined has no source
+    /// registry and cannot populate these bindings through writer refresh.
+    fn replace_initial_writer(
+        &self,
+        writer: Arc<NativeWriterHostState>,
+        guard: &Arc<crate::db::InstalledNativeWriterHostGuard>,
+        coordinator: &Arc<RangeWriteCoordinator<TcpClusterRelocationTransport>>,
+    ) -> Result<()> {
+        if self.image_sources.upgrade().is_none() {
+            return Err(invalid(
+                "Joined/non-INITIAL owner cannot acquire donor bindings",
+            ));
+        }
+        let mut current = self.writer.write();
+        *self.source_writer.write() = Arc::downgrade(guard);
+        *self.source_coordinator.write() = Arc::downgrade(coordinator);
+        *current = writer;
+        Ok(())
+    }
     /// A Registered member that joined DATA through the joint handoff binds
     /// the same necessary lifetime/slot/writer refusals as an INITIAL owner.
     /// It has no image-source registry and no INITIAL genesis.
@@ -72,6 +132,7 @@ impl NativeInitialDataAdmission {
     pub(super) fn for_joined_owner(
         service: &Arc<Mutex<ClusterDataNodeService>>,
         runtime: &Arc<RangeRecoveryRuntime>,
+        database: crate::distribution_data::ClusterServiceOpenGuard,
         writer: Arc<NativeWriterHostState>,
         root: PathBuf,
         store_slot: crate::distribution_data::RangeWriteServiceSlotGuard,
@@ -82,12 +143,20 @@ impl NativeInitialDataAdmission {
             service: Arc::downgrade(service),
             runtime: Arc::downgrade(runtime),
             writer: parking_lot::RwLock::new(writer),
+            source_writer: parking_lot::RwLock::new(Weak::new()),
+            source_coordinator: parking_lot::RwLock::new(Weak::new()),
+            database,
             root,
             store_open: store_slot.id(),
             store_slot,
             life: Arc::downgrade(life),
             published,
             image_sources: Weak::new(),
+            // A Joined lifecycle supplies no INITIAL OLD/source authority.
+            old_closures: Weak::new(),
+            old_metadata: Weak::new(),
+            old_provider: Weak::new(),
+            old_transport: Weak::new(),
         }
     }
     pub(crate) fn require_live(&self) -> Result<()> {
@@ -98,6 +167,7 @@ impl NativeInitialDataAdmission {
         {
             return Err(invalid("initial DATA owner is stopping or ended"));
         }
+        self.database.require_live()?;
         self.store_slot.require_live()?;
         if self.store_slot.id() != self.store_open {
             return Err(invalid("initial DATA actual Store slot/open differs"));
@@ -145,6 +215,16 @@ impl NativeInitialDataAdmission {
         }
         Ok(())
     }
+    /// Necessary source-only ingress refusal. Joined owners deliberately have
+    /// no actual INITIAL source registry/process, even though they share the
+    /// immutable Append/Get listener. No role or capture grant is made here.
+    pub(crate) fn require_initial_source_hosting(&self) -> Result<()> {
+        self.require_live()?;
+        self.image_sources
+            .upgrade()
+            .ok_or_else(|| invalid("Joined/non-INITIAL owner has no source hosting authority"))?
+            .require_original_process()
+    }
     pub(crate) fn observe_remote_image_source_frame(
         &self,
         actual_target: &crate::distribution_consensus::MetadataReadParticipant,
@@ -184,7 +264,8 @@ pub(super) struct NativeInitialDataHost {
     hot_recovery: Option<Arc<NativeHotRecoveryMaintenance>>,
     registry_refresh_last_attempt: Option<serde_json::Value>,
     image_sources: Option<Arc<crate::distribution_range_image::NativeRemoteImageSourceRegistry>>,
-    old_closures: Mutex<BTreeMap<crate::RangeId, Arc<Mutex<RetainedInitialOld>>>>,
+    old_closures: Arc<RetainedInitialOldTable>,
+    writer_data_domains: super::writer_data_domain::NativeHostWriterDataDomains,
 }
 impl Drop for NativeInitialDataHost {
     fn drop(&mut self) {
@@ -248,8 +329,9 @@ impl NativeInitialDataHost {
             initial,
             enrollment: None,
             image_sources: None,
-            old_closures: Mutex::new(BTreeMap::new()),
+            old_closures: Arc::new(Mutex::new(BTreeMap::new())),
             registry_refresh_last_attempt: None,
+            writer_data_domains: Default::default(),
             genesis: BTreeMap::new(),
             runtime: None,
             dispatcher: None,
@@ -352,12 +434,21 @@ impl NativeInitialDataHost {
                 service: Arc::downgrade(&self.initial.service),
                 runtime: Arc::downgrade(runtime),
                 writer: parking_lot::RwLock::new(writer),
+                source_writer: parking_lot::RwLock::new(Arc::downgrade(&enrollment.guard)),
+                source_coordinator: parking_lot::RwLock::new(Arc::downgrade(
+                    &enrollment.coordinator,
+                )),
+                database: service.listener_open_guard(),
                 root,
                 store_open: service.native_initial_listener_store_open_id(),
                 store_slot: service.native_replica_listener_store_open_guard(),
                 life: Arc::downgrade(&self.life),
                 published: self.published.clone(),
                 image_sources: Arc::downgrade(self.image_sources.as_ref().unwrap()),
+                old_closures: Arc::downgrade(&self.old_closures),
+                old_metadata: Arc::downgrade(&self.initial.metadata),
+                old_provider: Arc::downgrade(&self.initial.provider),
+                old_transport: Arc::downgrade(&self.initial.transport),
             }));
         }
         if self.hot_recovery.is_none() {
@@ -560,6 +651,88 @@ impl NativeInitialDataHost {
             enrollment.guard.clone(),
             enrollment.coordinator.clone(),
             actual,
+            target_attempt,
+        ))
+    }
+    pub(super) fn collect_remote_old_at_actual_donor(
+        &self,
+        range: crate::RangeId,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_handoff::NativeRemoteOldCutCertificate> {
+        self.collect_remote_old_at_actual_donor_inner(range, parent, |_, _, _| Ok(()))
+    }
+    // The callback is a source-test seam at the actual post-fetch boundary.
+    // It holds no engine/MStore lock and cannot replace any frame or grant.
+    fn collect_remote_old_at_actual_donor_inner(
+        &self,
+        range: crate::RangeId,
+        parent: &CancellationToken,
+        after_fetch: impl FnOnce(
+            &HostMetadataReadObservation,
+            Uuid,
+            &[crate::distribution_transport::AuthenticatedNativeRemoteOldFrame],
+        ) -> Result<()>,
+    ) -> Result<crate::distribution_range_handoff::NativeRemoteOldCutCertificate> {
+        self.admission_for_old_step()?
+            .collect_remote_old_for_source(range, parent, after_fetch)
+    }
+    #[cfg(test)]
+    pub(super) fn test_collect_remote_old_at_actual_donor(
+        &self,
+        range: crate::RangeId,
+        parent: &CancellationToken,
+        after_fetch: impl FnOnce(
+            &HostMetadataReadObservation,
+            Uuid,
+            &[crate::distribution_transport::AuthenticatedNativeRemoteOldFrame],
+        ) -> Result<()>,
+    ) -> Result<crate::distribution_range_handoff::NativeRemoteOldCutCertificate> {
+        self.collect_remote_old_at_actual_donor_inner(range, parent, after_fetch)
+    }
+    pub(super) fn retain_remote_image_from_remote_old(
+        &self,
+        old: &mut Option<crate::distribution_range_handoff::NativeRemoteOldCutCertificate>,
+        target_attempt: Uuid,
+        original_request: &CancellationToken,
+    ) -> Result<crate::distribution_range_image::NativeRetainedRemoteImageSource> {
+        original_request.check()?;
+        let admission = self.admission_for_old_step()?;
+        let runtime = self
+            .runtime
+            .as_ref()
+            .ok_or_else(|| invalid("actual remote donor runtime absent"))?;
+        let enrollment = self
+            .enrollment
+            .as_ref()
+            .ok_or_else(|| invalid("actual remote donor writer absent"))?;
+        let registry = self
+            .image_sources
+            .as_ref()
+            .ok_or_else(|| invalid("actual remote donor registry absent"))?;
+        registry.require_original_process()?;
+        admission.require_listener(&self.initial.service, runtime)?;
+        let certificate = old
+            .as_ref()
+            .ok_or_else(|| invalid("actual remote OLD certificate absent"))?;
+        if certificate.selected_source_id() != &self.initial.seed.spec.node_id
+            || target_attempt.is_nil()
+        {
+            return Err(invalid(
+                "actual remote OLD certificate belongs to another donor/attempt",
+            ));
+        }
+        certificate.require_current()?;
+        // All fallible owner checks precede take. The returned retainer owns
+        // the actual certificate/capture progress before publication starts.
+        let certificate = old.take().unwrap();
+        Ok(registry.retain_initial_source_from_remote_old(
+            admission.clone(),
+            runtime.clone(),
+            self.initial.service.clone(),
+            self.initial.metadata.clone(),
+            enrollment.guard.clone(),
+            enrollment.coordinator.clone(),
+            certificate,
             target_attempt,
         ))
     }
@@ -804,7 +977,7 @@ impl NativeInitialDataHost {
                 .ok_or_else(|| invalid("DATA policy change service busy after policy"))?;
             service.retain_initial_data_writer(&coordinator, &guard, &range)?
         };
-        admission.replace_writer(writer);
+        admission.replace_initial_writer(writer, &guard, &coordinator)?;
         admission.require_live()?;
         self.hot_recovery = Some(NativeHotRecoveryMaintenance::new(self)?);
         dispatcher.publish(&coordinator, &guard)?;
@@ -861,6 +1034,9 @@ impl NativeInitialDataHost {
             std::thread::sleep(Duration::from_millis(5));
         }
         if let Some(owner) = &self.enrollment {
+            if self.writer_data_domains.unresolved() {
+                return Err(invalid("INITIAL unknown DATA-domain publication retained; explicit reconciliation required"));
+            }
             let database = self
                 .initial
                 .seed

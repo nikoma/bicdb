@@ -1,0 +1,82 @@
+{
+  "run": 43572675143,
+  "job": 132380250977,
+  "source": "d8115fedf13b0bd7107cfddd2664f2c6ea2f261f",
+  "artifacts": [
+    {
+      "id": 14106765738,
+      "name": "required-ci-pressure-1-b38f461ffc2a6729abb7a441bf25951009bbd721-1",
+      "zip_bytes": 22648,
+      "zip_sha256": "e701813e42f270158182803a15bc6522100a031b5c68b9c27870f830a918b3ef",
+      "streams": [
+        {
+          "member": "helper.jsonl",
+          "sha256": "25655559a12147549ea58e8bbd10e27b9f1c6ed95f85b09d37f0eb0b2490be08",
+          "events": {
+            "started": 1,
+            "sample": 256,
+            "completed": 1
+          },
+          "minimum_available_bytes": 11533164544,
+          "minimum_swap_free_bytes": 3221221376,
+          "command": [
+            "cargo",
+            "build",
+            "--config",
+            "profile.dev.package.\"*\".opt-level=2",
+            "-p",
+            "bicdb-core",
+            "--example",
+            "chaos_child",
+            "--locked"
+          ],
+          "completed": {
+            "child_returncode": 0,
+            "elapsed_seconds": 512.104604797,
+            "event": "completed",
+            "final_group_signal_before_leader_reap": true,
+            "guard_returncode": 0,
+            "omitted_sample_records": 0
+          },
+          "omitted_sample_records": 0,
+          "CPU_RSS_NOT_COLLECTED": true
+        },
+        {
+          "member": "native.jsonl",
+          "sha256": "4d78dfe6faff66d35d0c0ed90af1390b91bbc84cd2ff29ac961a2a5996d0cc98",
+          "events": {
+            "started": 1,
+            "sample": 1172,
+            "completed": 1
+          },
+          "minimum_available_bytes": 10453762048,
+          "minimum_swap_free_bytes": 3221221376,
+          "command": [
+            "cargo",
+            "test",
+            "--config",
+            "profile.dev.package.\"*\".opt-level=2",
+            "-p",
+            "bicdb-core",
+            "--lib",
+            "--locked",
+            "--",
+            "distribution_native_host::",
+            "range_image_native::rf3_fixture::",
+            "--test-threads=1"
+          ],
+          "completed": {
+            "child_returncode": 101,
+            "elapsed_seconds": 2344.452572402,
+            "event": "completed",
+            "final_group_signal_before_leader_reap": true,
+            "guard_returncode": 101,
+            "omitted_sample_records": 0
+          },
+          "omitted_sample_records": 0,
+          "CPU_RSS_NOT_COLLECTED": true
+        }
+      ]
+    }
+  ]
+}

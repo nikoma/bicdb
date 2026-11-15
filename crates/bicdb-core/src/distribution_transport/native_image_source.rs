@@ -16,6 +16,14 @@ pub(crate) struct AuthenticatedNativeRemoteImageSourceFrame {
     original_request: CancellationToken,
 }
 impl AuthenticatedNativeRemoteImageSourceFrame {
+    #[cfg(test)]
+    pub(crate) fn test_original_request_cancellation(&self) -> CancellationToken {
+        self.original_request.clone()
+    }
+    pub(crate) fn retain_original_request_cancellation(&self) -> Result<CancellationToken> {
+        self.require_request_live()?;
+        Ok(self.original_request.clone())
+    }
     pub(crate) fn require_request_live(&self) -> Result<()> {
         self.original_request.check()
     }

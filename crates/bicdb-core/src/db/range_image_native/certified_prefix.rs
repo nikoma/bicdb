@@ -527,7 +527,22 @@ impl BicDb {
         if self.read_native_birth()?.is_none() {
             return Ok(());
         }
+        #[cfg(feature = "tls-replication")]
+        if transaction.native_joined_remote_row_grant.is_some()
+            && (transaction.native_image_row_grant.is_some()
+                || transaction.native_registered_remote_row_grant.is_some())
+        {
+            return Err(invalid("Joined native mutation has mixed grant provenance"));
+        }
         if let Some(grant) = &transaction.native_image_row_grant {
+            return grant.require_current(self, transaction);
+        }
+        #[cfg(feature = "tls-replication")]
+        if let Some(grant) = &transaction.native_registered_remote_row_grant {
+            return grant.require_current(self, transaction);
+        }
+        #[cfg(feature = "tls-replication")]
+        if let Some(grant) = &transaction.native_joined_remote_row_grant {
             return grant.require_current(self, transaction);
         }
         let actual_hash =
@@ -557,7 +572,7 @@ impl BicDb {
         let journal = self.try_native_image_journal()?;
         self.native_range_install_safety_under_journal(admission, range_id, frozen, &journal)
     }
-    fn native_range_install_safety_under_journal(
+    pub(in crate::db::range_image_native) fn native_range_install_safety_under_journal(
         &self,
         admission: &NativeRecoveryAdmission,
         range_id: RangeId,
@@ -570,6 +585,18 @@ impl BicDb {
         // Draining is a caller operation outside DB/service guards.
         self.range_mutations
             .validate_quiescent_frozen(range_id, frozen)?;
+        self.native_range_install_safety_record_point(admission, range_id, journal)
+    }
+    /// Shared readonly native record calculation. Every caller must retain
+    /// its own actual frozen/quiescent or guarded Controlled exclusion.
+    pub(in crate::db::range_image_native) fn native_range_install_safety_record_point(
+        &self,
+        admission: &NativeRecoveryAdmission,
+        range_id: RangeId,
+        journal: &NativeImageJournalGuard<'_>,
+    ) -> Result<NativeRangeInstallSafety> {
+        journal.require_database(self)?;
+        admission.require_current(self)?;
         let birth = self
             .read_native_birth()?
             .ok_or_else(|| invalid("install safety has no native birth"))?;

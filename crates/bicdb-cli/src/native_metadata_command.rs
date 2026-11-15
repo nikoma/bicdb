@@ -160,6 +160,31 @@ pub enum Command {
         #[arg(long, default_value_t = 5000)]
         timeout_ms: u64,
     },
+    /// Move ONE range onto a registered member through the joint handoff, or
+    /// abort that move before its source cut (--abort). Send it to the host
+    /// that is BOTH the metadata leader and the leader of the range; any other
+    /// host refuses. Prerequisite: the target is already registered and has
+    /// opened its replica receiver (open-replica-receiver). The request only
+    /// creates the controller; the serving host advances it one stage per
+    /// step and reports progress in the `range_move` status section.
+    MoveRange {
+        #[arg(long)]
+        command_file: PathBuf,
+        #[arg(long)]
+        status_file: PathBuf,
+        #[arg(long)]
+        sequence: u64,
+        #[arg(long)]
+        range_id: u64,
+        /// Required to start a move. With --abort it is not needed: a host
+        /// has at most one move, identified by its range.
+        #[arg(long)]
+        target_node_id: Option<String>,
+        #[arg(long)]
+        abort: bool,
+        #[arg(long, default_value_t = 5000)]
+        timeout_ms: u64,
+    },
     /// Register ONLY this TLS node's metadata learner CONFIG identity.
     Register {
         #[arg(long)]
@@ -575,6 +600,10 @@ pub fn run(command: Command) -> Result<()> {
                             }
                         }
                     }
+                    // Process-owned range-move scheduling: starts at most one
+                    // step on its own worker and never waits for it. Its
+                    // outcome is the `range_move` status section only.
+                    let _ = host.advance_range_move(&lifetime);
                     if !manual_enrollment {
                         // A distinct finite process-maintenance attempt. Public
                         // EventClient request budgets remain unchanged. No root
@@ -894,6 +923,64 @@ pub fn run(command: Command) -> Result<()> {
                 ensure!(
                     Instant::now() < deadline,
                     "native metadata action timed out; actual pending state is retained"
+                );
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        }
+        Command::MoveRange {
+            command_file,
+            status_file,
+            sequence,
+            range_id,
+            target_node_id,
+            abort,
+            timeout_ms,
+        } => {
+            ensure!(
+                sequence > 0 && (1..=5000).contains(&timeout_ms),
+                "unsupported operator sequence/budget"
+            );
+            ensure!(
+                command_file != status_file,
+                "operator command/status paths must differ"
+            );
+            ensure!(
+                abort || target_node_id.is_some(),
+                "target-node-id is required to start a range move"
+            );
+            let range = bicdb_core::RangeId::new(range_id)?;
+            let action = match target_node_id {
+                Some(target) if !abort => NativeMetadataHostAction::MoveRange {
+                    range,
+                    target: ClusterNodeId::new(target)?,
+                },
+                _ => NativeMetadataHostAction::AbortMoveRange { range },
+            };
+            let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+            write(
+                &command_file,
+                &Request {
+                    version: 1,
+                    sequence,
+                    action,
+                    budget_ms: timeout_ms,
+                },
+            )?;
+            loop {
+                let reply: serde_json::Value =
+                    serde_json::from_slice(&read_bounded(&status_file, 1024 * 1024)?)?;
+                if reply["sequence"].as_u64() == Some(sequence) {
+                    ensure!(
+                        reply["error"].is_null(),
+                        "native range move refused: {}",
+                        reply["error"]
+                    );
+                    println!("{}", serde_json::to_string(&reply["host"]["range_move"])?);
+                    break;
+                }
+                ensure!(
+                    Instant::now() < deadline,
+                    "native range move request timed out; actual pending state is retained"
                 );
                 std::thread::sleep(Duration::from_millis(5));
             }

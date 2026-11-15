@@ -39,6 +39,7 @@ pub(crate) use registered_replica::{
     NativeRegisteredServingDataPolicyOrigin,
 };
 mod maintenance;
+mod range_move_hosts;
 use initial_data::NativeInitialDataHost;
 #[cfg(test)]
 pub(crate) use initial_data::{
@@ -49,6 +50,7 @@ pub(crate) use initial_data::{
     NativeInitialDataAdmission, NativeInitialOldConstraintStep, NativeInitialOldStep,
 };
 pub use initial_data::{NativeInitialDataRangeStatus, NativeInitialDataStatus};
+pub(in crate::distribution_native_host) use range_move_hosts::NativeLeaderRangeMoveHosts;
 mod schema_export;
 pub(crate) use maintenance::NativeMetadataMaintenanceReport;
 

@@ -26,6 +26,7 @@ use crate::distribution_range_handoff::{
 
 mod completion_tests;
 mod custody_retry_tests;
+mod range_move_tests;
 mod remote_backend_epoch_tests;
 
 type Transport = Arc<TcpClusterRelocationTransport>;

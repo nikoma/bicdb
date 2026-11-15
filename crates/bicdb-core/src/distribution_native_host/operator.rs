@@ -1,6 +1,10 @@
 //! Public metadata-only owner. Configuration DTOs never become birth/vote/data
 //! proofs; every action consumes the existing actual native producer.
+use super::range_move::{
+    request_range_move, request_range_move_abort, NativeRangeMoveSlot, NativeRangeMoveStatus,
+};
 use super::*;
+use crate::distribution::RangeId;
 use crate::{ClusterNetworkTransportConfig, DistributionConfig, MetadataConsensusStatus};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
@@ -56,8 +60,25 @@ pub enum NativeMetadataHostAction {
     OpenReplicaReceiver,
     Heartbeat,
     StartLearnerMetadata,
-    EnrollLearner { node: ClusterNodeId },
-    CatchUpLearner { node: ClusterNodeId },
+    EnrollLearner {
+        node: ClusterNodeId,
+    },
+    CatchUpLearner {
+        node: ClusterNodeId,
+    },
+    /// Move ONE range onto a registered member through the joint handoff.
+    /// Accepted only on the node that is both the metadata leader and the
+    /// leader of the range; the target must already be registered and have
+    /// opened its replica receiver. The request only creates the controller:
+    /// the process loop advances it (`advance_range_move`).
+    MoveRange {
+        range: RangeId,
+        target: ClusterNodeId,
+    },
+    /// Abort this host's move of the range before its source cut.
+    AbortMoveRange {
+        range: RangeId,
+    },
     Status,
     Stop,
 }
@@ -84,6 +105,8 @@ pub struct NativeMetadataHostStatus {
     pub last_metadata_maintenance: Option<serde_json::Value>,
     pub last_metadata_promotion: Option<serde_json::Value>,
     pub initial_data: Option<NativeInitialDataStatus>,
+    /// This host's range move, if one was requested. Diagnostic DATA only.
+    pub range_move: Option<NativeRangeMoveStatus>,
     pub data_serving: bool,
     pub data_refusal: &'static str,
 }
@@ -105,6 +128,7 @@ pub struct NativeMetadataHost {
     last_caught_up_learner_store_id: Option<Uuid>,
     last_metadata_maintenance: Option<serde_json::Value>,
     last_metadata_promotion: Option<serde_json::Value>,
+    range_move: Option<NativeRangeMoveSlot>,
 }
 impl NativeMetadataHost {
     pub fn start_fresh_metadata_only(
@@ -189,6 +213,7 @@ impl NativeMetadataHost {
             last_caught_up_learner_store_id: None,
             last_metadata_maintenance: None,
             last_metadata_promotion: None,
+            range_move: None,
         })
     }
     /// The process lifetime belongs here, never a bootstrap/action's 5s child.
@@ -260,6 +285,7 @@ impl NativeMetadataHost {
             last_metadata_maintenance: self.last_metadata_maintenance.clone(),
             last_metadata_promotion: self.last_metadata_promotion.clone(),
             initial_data,
+            range_move: self.range_move.as_ref().map(NativeRangeMoveSlot::status),
             data_serving,
             data_refusal: if data_serving {
                 "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported"
@@ -276,6 +302,19 @@ impl NativeMetadataHost {
             control.refresh_initial_data_registry(parent)?;
         }
         Ok(())
+    }
+    /// Process-owned scheduling of the host's range move: starts one step on
+    /// its own worker unless one is in flight, and never waits for it.
+    /// `process` is the process lifetime, not a request budget. The outcome
+    /// of every step is the `range_move` status section.
+    pub fn advance_range_move(&mut self, process: &CancellationToken) -> Result<()> {
+        if self.phase == NativeMetadataHostPhase::Stopped {
+            return Ok(());
+        }
+        match self.range_move.as_mut() {
+            Some(range_move) => range_move.advance(process),
+            None => Ok(()),
+        }
     }
     pub fn maintain_metadata(
         &mut self,
@@ -430,7 +469,27 @@ impl NativeMetadataHost {
                         .catch_up_learner(&node, &token)?,
                 );
             }
+            NativeMetadataHostAction::MoveRange { range, target } => {
+                if self.phase != NativeMetadataHostPhase::InitialData {
+                    return Err(invalid(
+                        "range move requires the open INITIAL DATA owner of the range leader",
+                    ));
+                }
+                let control = self
+                    .control
+                    .as_ref()
+                    .ok_or_else(|| invalid("owned native metadata control required"))?;
+                request_range_move(&mut self.range_move, range, &target, &token, || {
+                    NativeRangeMoveSlot::start(control, range, target.clone())
+                })?;
+            }
+            NativeMetadataHostAction::AbortMoveRange { range } => {
+                request_range_move_abort(&mut self.range_move, range, &token)?;
+            }
             NativeMetadataHostAction::Stop => {
+                if let Some(range_move) = self.range_move.as_mut() {
+                    range_move.stop(&token)?;
+                }
                 if let Some(supervisor) = self.supervisor.as_mut() {
                     supervisor.stop(&token)?;
                 }

@@ -54,8 +54,9 @@
 //! supplies the same stages by asking the members to act; it must never build
 //! a local quorum, role or freeze object from reply data. Those objects exist
 //! only where the member's own service issued them.
-// No production caller yet: the driver is reached only from the in-process
-// multi-node fixture. Remove this once a controller drives it.
+// The production caller is `range_move` (the remote backend). The in-process
+// backend and its host surface are still reached only from the multi-node
+// fixture.
 #![allow(dead_code)]
 use super::*;
 use crate::distribution::{
@@ -789,7 +790,7 @@ pub(crate) fn test_plan_learner_allocation(
 /// One committed learner allocation of `target` on the range, retiring the
 /// current range leader. The target must be an enrolled member that is not a
 /// replica of any range.
-fn plan_learner_allocation(
+pub(super) fn plan_learner_allocation(
     current: &ClusterTopology,
     range_id: RangeId,
     target: &ClusterNodeId,

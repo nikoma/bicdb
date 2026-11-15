@@ -4,13 +4,13 @@ This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe64
 
 ## Actual execution
 
-### Source7c: Core and Native failed; remaining workspace live
+### Completed source7c: Core and Native failed; workspace and application components passed
 
 Candidate **1.0.520-beta / `7c77418656a41ec6e25c7601319e061c328f48e1`**,
 tree `df63298f61b0a4cdd56f0caabc694d888c38dbda`, was checked out by CI as
 `25b2a1454450bd591364ce9d026a8469ab03c2fe` with the identical tree.
-This is a partial checkpoint of [Tests43704937146](https://github.com/nikoma/bicdb/actions/runs/43704937146),
-not a completed archive or qualified release.
+This is a completed failed execution checkpoint of [Tests43704937146](https://github.com/nikoma/bicdb/actions/runs/43704937146),
+not a qualified release. Complete archive verification is recorded separately.
 
 | Scope | Classification | Result and limit |
 | --- | --- | --- |
@@ -20,7 +20,7 @@ not a completed archive or qualified release.
 | Rails | **Passed, application CI scope** | 20 runs / 100 assertions, zero failures/errors/skips, including process-kill recovery. |
 | SQL | **Passed, CI scope** | 2,682 passed / 0 failed / 4 ignored across 282 summaries; actual committed-error/DDL cleanup and SQLSTATE controls passed. This is not distributed SQL or Native timed-Unknown acceptance. |
 | Native multi-node | **Failed** | 363 passed / 45 failed / 1 ignored; 409 unique outcomes. Exact failure cuts and separate passed components are retained below. |
-| Remaining workspace | **Not yet established** | Job still running at this checkpoint; no inherited pass. |
+| Remaining workspace | **Passed, CI scope** | 1,062 passed / 0 failed / 6 ignored across 129 summaries and 1,068 unique cases. Original Cell key rotation and CLI/application component controls passed. This does not qualify distributed movement or close the cross-call source gaps. |
 | Independent physical expansion | **Not tested** | Original Azure qualification remains failed; no stable five-node throughput gain or production admission. |
 
 The backup failure is `encrypted_full_backup_verifies_and_restores_records`
@@ -39,6 +39,16 @@ Complete SQL raw log: 295,655,118 bytes, SHA-256
 `742b900d47cd4d90c1b1649df51a302da61cc5e065ad24c7704567e24835b5c1`.
 Independent full-log/checkout/case/summary receipt SHA-256:
 `9eab149b2dcf9c05431732937167488bdba3ee9a1b73662d68deb97e5ec47a94`.
+
+The remaining-workspace raw log is 148,670,739 bytes, SHA-256
+`f933b3483fbf5fb787b4a17727535bf0c400f2f92c3c9034e4d4f4ff50e251e9`;
+gzip SHA-256 `c05b2c9566a77d8403100193f28a7ebdc9fb3962647dbdc5f2cccd80f4cd5081`.
+Independent complete raw-hash, checkout, case and summary receipt SHA-256:
+`577502e55151eaea63fd08a4d1472f68db7d2f5db01001b9d584d26123d79554`.
+Original Cell signed key rotation passed at raw307786, and the original schedule
+identity/SQL control passed at283067. These execute the source7c corrections;
+they do not inherit success for the later local backup, diagnostic, Open-budget
+or FIRST contention changes, which remain uncompiled and unexecuted.
 
 Passing same-attempt controls do not close the documented cross-call bootstrap
 association or Prepared-rekey source-head gaps.
@@ -60,7 +70,7 @@ gzip 3,594,128 bytes, SHA-256
 `e8808425833f37cc6acacf5d161c627982daaf5f90d1091abb7fc5b4f5b46110`.
 Independent full-log/case inventory receipt:
 `c7883e3929c3f6027a078b885bf2a7edad409be14cb150de661095d2d0575172`.
-The complete run archive remains pending while remaining-workspace is live.
+The remaining-workspace job has completed; final full-archive integrity verification is separate from these component execution results.
 
 | Actual failed scope | Classification | Observed cut and limit |
 | --- | --- | --- |

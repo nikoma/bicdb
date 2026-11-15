@@ -24,7 +24,8 @@ and **not tested**. SQL passed2,682/0/4, including the actual committed-error/DD
 cleanup and SQLSTATE controls. Native failed363/45/1. The failures include INITIAL startup and later
 FIRST prerequisites, hot catalogue Open timeouts and a fault that never fired.
 Separate typed-local/combined-Strong components passed within their own scope.
-Remaining-workspace is still running. Current exact source/tree/log identities and limits are in
+Remaining-workspace completed 1,062/0/6, including original Cell key rotation.
+Core and Native failures still block the candidate. Current exact source/tree/log identities and limits are in
 the [regression findings](design/native-520-regression-findings.md).
 
 The [Cell contract](design/cell-rotation-physical-gate-lifecycle.md) does not close

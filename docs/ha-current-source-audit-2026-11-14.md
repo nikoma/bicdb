@@ -16,7 +16,8 @@ capability-vector assertion. Its subsequent verify/restore assertions were not
 reached. The test-only correction is local and not tested. Native has now failed363/45/1, including startup/earlier FIRST failures and hot
 catalogue Open timeouts; a large-head fault was not reached. Separate native-local
 and combined Strong components passed in their own scopes. Remaining-workspace
-is still running at this checkpoint. Full identities,
+completed 1,062/0/6, including original Cell key rotation; the overall candidate
+still failed Core and Native. Full identities,
 complete terminal logs and exact limits are in the
 [520 regression findings](design/native-520-regression-findings.md).
 

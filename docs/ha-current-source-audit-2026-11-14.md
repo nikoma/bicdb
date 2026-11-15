@@ -42,15 +42,27 @@ The two remote cases retained actual known native commits, so their API errors
 are not rollback evidence. Six focused Strong/routing cases passed on this exact
 source, within their component scope. No physical qualification follows.
 
+The separate [source2d379 ledger acceptance](design/native-ledger-2d379-failed-acceptance.md)
+finished with **330 passed /16 failed /one ignored** in Native; all other
+executed required jobs and Rails passed, including seven actual ledger parser
+controls. Ten publication timeouts retain actual post-native-commit evidence;
+two markerless timeouts remain effect-inconclusive. Two archive controls, one
+S2 Start prerequisite and one known-native-commit API timeout complete the
+sixteen failures. The complete original capture and independent verification
+remain separate from later repairs and physical qualification.
+
 The separate [sourcef516 ordinary visibility controls](design/visibility-f516-eight-core-controls.md)
 actually passed all eight cases in normal Core CI, including the original
 five-second uncertain-outcome bound and deferred-index/replay controls.
 Compilation and the nondefault consumer also passed. That test checkout used
 the earlier main514 base; it does not establish current-main517 integration,
-native-local or physical acceptance. The remaining cold WAL/job-intent gap is
-explicitly open.
+native-local or physical acceptance. Its SQL generic postcommit error control
+also passed. Its Native job subsequently **failed: 332 passed /15 failed /one
+ignored**; the new native-local control reached the physical gap but failed its
+required diagnostic probe. The proposed test-only cross-thread probe correction
+has not been executed. The remaining cold WAL/job-intent gap is explicitly open.
 
-Newer separate candidate feedback: [native c05 acceptance](design/native-c05-acceptance-result.md)
+Earlier separate candidate feedback: [native c05 acceptance](design/native-c05-acceptance-result.md)
 finished with **331 passed /15 failed /one ignored**. Four remote-decision
 controls passed, but native acceptance failed. The later source follow-up is
 not a tested fix, physical expansion or production qualification. This result

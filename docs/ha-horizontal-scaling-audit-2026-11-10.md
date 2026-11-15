@@ -11,7 +11,46 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
-## Current evidence checkpoint — 2026-11-14 UTC
+## Evidence checkpoint — 2026-11-15 UTC
+
+Remote main inspected for this checkpoint is **1.0.517-beta /
+`bde74650c40934096e1cc6c6e75a3ea3c4643cf4`**. Its pre-merge native suite passed
+337/0/1 under the recorded four-second fixture, but its same-tree post-merge run
+failed **335/2/1**, and the Core concurrent-backup test failed. These are
+separate results; the earlier pass does not clear the later failures. The
+[exact main517 CI contract](design/main517-native-ci-evidence.md) records their
+source identities and boundaries. They establish neither physical qualification
+nor an explanation of the original Azure failure.
+
+The unmerged **1.0.518-beta** composition preserves the original 1.5-second hot
+fixture and all nine controls absent from main517's passing inventory. Source
+`785ef07ad52fea1bca7f16143179558f606ea890` failed library compilation. Corrected
+source `fbbadef57c5532af6acbc0f3e2016b332a3d16ab` passed Rails and PGwire, but
+all-target, Core and Native jobs failed on eight test-only compiler errors;
+actual Core/native controls did not execute. SQL/workspace were still running
+at the finding capture. The [source785](design/native-785-compilation-failure.md)
+and [sourcefbb](design/native-fbb-test-compilation-failure.md) findings preserve
+exact errors and distinguish unexecuted controls from failed runtime tests.
+Its reviewed correction needs its own exact-source compilation and execution.
+
+| Boundary | Classification at this checkpoint |
+| --- | --- |
+| main517 post-merge native suite and concurrent Standard backup | **Failed** CI; precise intended downstream cuts may remain unreached |
+| fbb Rails and PGwire | **Passed**, their actual hosted CI scope only |
+| fbb all-target/Core/native test compilation | **Failed**; new native controls **not tested** by those jobs |
+| Complete remote Serving, automatic native controller convergence, cold/permanently unavailable OLD recovery and cleanup | **Incomplete / not qualified**; source primitives and in-process fixtures do not establish operator delivery |
+| Independent-machine fault-safe four-to-five expansion and stable post-convergence capacity gain | **Not tested** on the current artifact; original Azure scale-out qualification remains **failed** |
+
+The [Standard live-backup defect](design/legacy-standard-live-backup-defect.md)
+is open. Existing owned online capture has a distinct passing test contract;
+it does not repair the original Standard success/restore requirement. The
+[ledger result](design/native-ledger-2d379-failed-acceptance.md) establishes seven
+actual Rust receipt-parser passes on historical source2d379, with no SDK/server
+workload or physical durability inference. Source versions, successful hosted
+application checks and tool-verifier success do not imply a built release,
+verified deployment, production admission or sustained throughput gain.
+
+## Earlier evidence checkpoint — 2026-11-14 UTC
 
 The [November14 checkpoint](ha-current-source-audit-2026-11-14.md) inspects
 main513 and separately records the failed streaming363 and native201 candidates,

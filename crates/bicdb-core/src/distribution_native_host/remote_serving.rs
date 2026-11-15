@@ -1144,6 +1144,10 @@ impl NativeRemoteServingQueue {
         let state = self.state.lock();
         serde_json::json!({"admitted":state.admitted,"processing":state.processing,
             "unknown":state.unknown.as_ref().map(|u|serde_json::json!({"operation":u.request.operation,"sequence":u.request.sequence,
+                // SAME stored absolute monotonic Instant, not a remaining
+                // duration or a new request/window. Debug DATA is meaningful
+                // only for these same-process diagnostic comparisons.
+                "original_deadline_monotonic_debug":format!("{:?}",u.original_deadline),
                 "original_deadline_expired":Instant::now()>=u.original_deadline,"original_error_kind":u.actual_error_kind,
                 "request_sha256":u.request_sha256})),"returned":state.returned})
     }

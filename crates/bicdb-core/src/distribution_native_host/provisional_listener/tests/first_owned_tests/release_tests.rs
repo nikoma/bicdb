@@ -387,9 +387,40 @@ pub(super) fn exercise(
                 );
                 let after_denial = after_denial?;
                 same_native(&retained, &after_denial);
+                // Full originals were already logged above. Compare cloned
+                // DATA without ONLY the time-dependent expiry observation;
+                // the SAME stored absolute monotonic deadline remains in the
+                // exact equality alongside request/op/sequence/error and
+                // admitted/processing/returned. No deadline is renewed.
+                let mut old_queue = retained["queue"].clone();
+                let mut new_queue = after_denial["queue"].clone();
+                let expired_before = old_queue["unknown"]
+                    .as_object_mut()
+                    .expect("original actual unknown required")
+                    .remove("original_deadline_expired")
+                    .expect("expiry observation required")
+                    .as_bool()
+                    .expect("expiry observation must be boolean");
+                let expired_after = new_queue["unknown"]
+                    .as_object_mut()
+                    .expect("same actual unknown required after readonly denial")
+                    .remove("original_deadline_expired")
+                    .expect("expiry observation required")
+                    .as_bool()
+                    .expect("expiry observation must be boolean");
+                assert!(
+                    !expired_before || expired_after,
+                    "same original deadline cannot go from expired to unexpired"
+                );
+                assert!(
+                    old_queue["unknown"]["original_deadline_monotonic_debug"]
+                        .as_str()
+                        .is_some_and(|deadline| !deadline.is_empty()),
+                    "actual stored absolute monotonic deadline identity required"
+                );
                 assert_eq!(
-                    retained["queue"], after_denial["queue"],
-                    "readonly denial cannot clear or replace original release uncertainty"
+                    old_queue, new_queue,
+                    "readonly denial cannot clear or replace original release uncertainty/deadline"
                 );
                 assert_eq!(retained["actual_successor"], after_denial["actual_successor"],
                     "readonly denial must retain the same dropped owner/history and original API errors");

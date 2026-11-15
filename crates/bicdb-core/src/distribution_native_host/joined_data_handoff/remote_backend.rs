@@ -40,15 +40,34 @@
 //! Implemented: target admission (committed metadata only), the source cut
 //! with the target fence, the Close round, the target install and the export
 //! retirement, the joint decision, the three membership candidates, the
-//! activation up to and including every new member's release (bridge
-//! preparation, bridge publication, catalogue activation, OLD custody
-//! retirement and release, all by step requests), the activation record and
+//! activation (bridge preparation, bridge publication, catalogue activation,
+//! OLD custody retirement, release and writer policy of every new member,
+//! all by step requests), the target's serving, the activation record and
 //! the source retirement.
 //!
-//! Not implemented, because the member steps do not exist yet: the writer
-//! policy of the new members and the target's serving. `activate` stops at
-//! `bridge_writer_policy_hook` and `serve` at `target_serve_hook`, each with
-//! a "not implemented" error, and nothing further is committed.
+//! The target's host commands. The target's writer policy and its serving
+//! replace the target's DATA owner and rebind its listener, so the target's
+//! step receiver only records the command and the target's own host loop
+//! performs it. Until that loop retained an outcome the target answers the
+//! repeated step with "host command pending". The coordinator repeats the
+//! step for a bounded time; when the time ends while the command is still
+//! pending, the call ends with an error and `waiting()` names what is
+//! awaited. The next call repeats the same step, and a completed command
+//! answers with its retained outcome.
+//!
+//! What is not sent to a serving target. Once the target holds its writer
+//! policy its host is a DATA owner and refuses every bridge step except the
+//! phase observations and its two host commands. The activation therefore
+//! decides by the read-only release observations what it sends: a target
+//! that is observed released is sent neither a preparation, publication,
+//! Open, custody retirement nor a release again.
+//!
+//! The leader of the final membership must be the target. A surviving member
+//! that led the final membership would have to recover its leadership
+//! itself, and no member step exists for that. The handoff retires the range
+//! leader, which makes the target the leader; any other plan is refused at
+//! the source stage, before the target is fenced or any old member is
+//! closed, and again by `activate` before any bridge step.
 //!
 //! The coordinator's own data service. A handoff retires the coordinator's
 //! own replica (the pre-handoff range leader), and a member never sends a
@@ -104,6 +123,38 @@ const BRIDGE_STEP_CALLS: usize = 32;
 /// member continues the same step on the next call.
 const BRIDGE_STEP_FAILURES: usize = 4;
 
+/// How long one call waits for the target's host loop to finish a host
+/// command before it reports the wait.
+const HOST_COMMAND_WAIT: Duration = Duration::from_secs(20);
+/// Pause between two repetitions of a pending host command step.
+const HOST_COMMAND_POLL: Duration = Duration::from_millis(100);
+/// A host command step that fails this many times in a row ends the call.
+/// The target rebinds its listener while it runs a command, so a few
+/// requests in a row may find no listener.
+const HOST_COMMAND_FAILURES: usize = 20;
+/// The target's refusal of a host command while its release is durable but
+/// not confirmed by its second window. Such a target is not a DATA owner
+/// yet: its release step is still served and confirms it.
+const RELEASE_UNCONFIRMED: &str = "joint bridge member holds no confirmed release";
+
+/// What the target answered to a repeated host command step.
+enum HostCommandAnswer {
+    /// The host loop retained this successful outcome.
+    Complete(NativeJointHandoffStepOutcomeV1),
+    /// The target holds no confirmed release; no command was recorded.
+    ReleaseUnconfirmed,
+}
+
+/// Test only: where this object's activation ends, as a coordinator that
+/// stops there would.
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum RemoteTestStop {
+    Open,
+    Release,
+    WriterPolicy,
+}
+
 /// A member's refusal of the read-only RELEASE observation while it holds no
 /// confirmed catalogue activation: its Open has not completed. As for the
 /// OLD observation there is no typed "not yet" answer.
@@ -141,9 +192,6 @@ const OBSERVE_IN_FLIGHT: [&str; 2] = [
 
 fn remote_error(detail: impl Into<String>) -> BicDbError {
     BicDbError::Cluster(format!("remote joined handoff backend: {}", detail.into()))
-}
-fn not_implemented(stage: &str) -> BicDbError {
-    remote_error(format!("{stage} is not implemented"))
 }
 /// An identity derived from committed scope DATA, so that a coordinator
 /// without memory computes the same one again.
@@ -302,9 +350,22 @@ pub(crate) struct RemoteJoinedHandoffBackend {
     bridge_observed: Vec<(ClusterNodeId, Option<bool>)>,
     /// The members this object asked to retire their OLD custody.
     bridge_retired: Vec<ClusterNodeId>,
-    /// What every new member answered for its completed release, in the
-    /// order the members were asked. Historical DATA.
+    /// What every new member this object asked answered for its completed
+    /// release, in the order the members were asked. Historical DATA. A
+    /// target that was observed released is not asked.
     bridge_released: Vec<(ClusterNodeId, NativeJointHandoffStepOutcomeV1)>,
+    /// What every new member answered for its completed writer policy: the
+    /// surviving members in node order, then the target. Historical DATA.
+    bridge_policies: Vec<(ClusterNodeId, NativeJointHandoffStepOutcomeV1)>,
+    /// What the target answered for its completed serving. Historical DATA.
+    served: Option<NativeJointHandoffStepOutcomeV1>,
+    /// The decision identity and members of the activation this object
+    /// completed; `serve` addresses the target with them.
+    activated: Option<(RemoteBridgeDecision, RemoteMembers)>,
+    /// What the last call was waiting for when it ended; see `waiting()`.
+    waiting: Option<String>,
+    /// How long one call repeats a pending host command of the target.
+    host_command_wait: Duration,
     /// This node's own data service, when the caller supplied it. See the
     /// module documentation.
     local: Option<Arc<Mutex<ClusterDataNodeService>>>,
@@ -319,14 +380,10 @@ pub(crate) struct RemoteJoinedHandoffBackend {
     activation: Option<NativeRemoteJointActivationCertificate>,
     /// The retired source's retirement, for the completion record.
     retired: Option<RemoteSourceRetirement>,
-    /// Test only: pass the two hooks of the member steps that do not exist
-    /// yet. It exists only until those steps land; then it is removed.
-    #[cfg(test)]
-    skip_unimplemented_member_steps: bool,
-    /// Test only: end the activation after every member's Open, as a
+    /// Test only: end the activation after the named part, as a
     /// coordinator that stops there would.
     #[cfg(test)]
-    stop_after_open: bool,
+    stop_after: Option<RemoteTestStop>,
 }
 
 impl RemoteJoinedHandoffBackend {
@@ -356,15 +413,18 @@ impl RemoteJoinedHandoffBackend {
             bridge_observed: Vec::new(),
             bridge_retired: Vec::new(),
             bridge_released: Vec::new(),
+            bridge_policies: Vec::new(),
+            served: None,
+            activated: None,
+            waiting: None,
+            host_command_wait: HOST_COMMAND_WAIT,
             local: None,
             committed_record: None,
             decision_body: None,
             activation: None,
             retired: None,
             #[cfg(test)]
-            skip_unimplemented_member_steps: false,
-            #[cfg(test)]
-            stop_after_open: false,
+            stop_after: None,
         }
     }
     /// Give the backend this coordinator's OWN data service: the service of
@@ -379,20 +439,43 @@ impl RemoteJoinedHandoffBackend {
         self.local = Some(service);
         self
     }
-    /// Test only, and only until the writer-policy and target-serve member
-    /// steps exist: pass their two hooks so that the remainder of the drive
-    /// (activation record, source retirement) can be exercised end to end.
-    /// Without it the drive stops at the first hook.
+    /// Test only: a shorter wait for a pending host command of the target.
     #[cfg(test)]
-    pub(crate) fn test_skip_unimplemented_member_steps(mut self) -> Self {
-        self.skip_unimplemented_member_steps = true;
+    pub(crate) fn test_host_command_wait(mut self, wait: Duration) -> Self {
+        self.host_command_wait = wait;
         self
     }
-    /// Test only: this object's activation ends after every member's Open.
+    /// Test only: this object's activation ends after the named part.
     #[cfg(test)]
-    pub(crate) fn test_stop_after_open(mut self) -> Self {
-        self.stop_after_open = true;
+    pub(crate) fn test_stop_after(mut self, stop: RemoteTestStop) -> Self {
+        self.stop_after = Some(stop);
         self
+    }
+    #[cfg(test)]
+    fn test_stop(&self, stop: RemoteTestStop) -> Result<()> {
+        if self.stop_after == Some(stop) {
+            return Err(remote_error(format!("test stop after {stop:?}")));
+        }
+        Ok(())
+    }
+    /// Every new member's completed writer policy outcome, in request order.
+    pub(crate) fn bridge_policies(&self) -> &[(ClusterNodeId, NativeJointHandoffStepOutcomeV1)] {
+        &self.bridge_policies
+    }
+    /// The target's completed serving outcome.
+    pub(crate) fn served(&self) -> Option<&NativeJointHandoffStepOutcomeV1> {
+        self.served.as_ref()
+    }
+    /// The leader of the final membership must be the target; see the
+    /// module documentation. `at` names where the refusal is raised.
+    fn require_target_leads(&self, activation: &RangeDescriptor, at: &str) -> Result<()> {
+        if activation.leader == self.target {
+            return Ok(());
+        }
+        Err(remote_error(format!(
+            "refused {at}: the final membership of range {} is led by {}, not by the target {}; a surviving member that leads the final membership must recover its leadership itself and no member step exists for that. Only a move that retires the range leader, which makes the target the leader, is supported",
+            activation.id, activation.leader, self.target
+        )))
     }
     /// What every new member answered to the RELEASE observation at the
     /// start of the last activation.
@@ -403,7 +486,8 @@ impl RemoteJoinedHandoffBackend {
     pub(crate) fn bridge_retired(&self) -> &[ClusterNodeId] {
         &self.bridge_retired
     }
-    /// Every new member's completed release outcome, in request order.
+    /// The completed release outcome of every new member this object asked,
+    /// in request order.
     pub(crate) fn bridge_released(&self) -> &[(ClusterNodeId, NativeJointHandoffStepOutcomeV1)] {
         &self.bridge_released
     }
@@ -998,6 +1082,7 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
     /// `resync` and `cut_and_ship`.
     fn admit_target(&mut self, hosts: &mut Self::Hosts, parent: &CancellationToken) -> Result<()> {
         parent.check()?;
+        self.waiting = None;
         let coordinator = self.coordinator();
         let metadata_leader = hosts.metadata_leader()?;
         if coordinator != metadata_leader {
@@ -1230,6 +1315,15 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
         let plan = self
             .plan(members, range, relocation, parent)
             .map_err(|error| stage_error("source round metadata", error))?;
+        // Before the target is fenced or any old member is closed. Nothing
+        // was sent by this call, so it started no cut.
+        if let Err(error) = self.require_target_leads(
+            plan.activation_range(),
+            "at the source stage, before the target fence and the source cut",
+        ) {
+            self.cut_started = resumed;
+            return Err(error);
+        }
         let donor = Self::select_donor(&plan)?;
         let target_attempt = Self::target_attempt(&plan)?;
         let mut fence_refusal = None;
@@ -1446,10 +1540,11 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
         Ok(())
     }
 
-    /// The activation up to the release, by step requests to every new
-    /// member, in the orders of the in-process driver (preparation and
-    /// publication in node order; Open and release on the target first, then
-    /// on the surviving members in node order):
+    /// The activation, by step requests to every new member, in the orders
+    /// of the in-process driver (preparation and publication in node order;
+    /// Open and release on the target first, then on the surviving members
+    /// in node order; the writer policy on the surviving members in node
+    /// order, then on the target):
     /// 1. `BridgePrepare`: the member prepares its own joint serving. A
     ///    surviving member closes its writer DATA domain over its own
     ///    retained source closure, under a policy it reads from its own
@@ -1468,14 +1563,25 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
     ///    holds after proving, itself, every new member durably open.
     /// 5. `BridgeRelease`: the member releases its own freeze, repeated
     ///    while the member answers "not complete".
-    /// Then the writer policy, which is not implemented.
+    /// 6. `BridgeWriterPolicy`: the member publishes its own writer DATA
+    ///    policy for the final membership after reading every other new
+    ///    member's audited release itself. A surviving member completes
+    ///    inside its step, repeated while it answers "not complete". The
+    ///    target records the command for its own host loop and answers
+    ///    "host command pending" until that loop retained the outcome; the
+    ///    step is repeated for a bounded time (see the module documentation).
     ///
     /// A repeated activation first asks every member, read-only, for its
     /// RELEASE observation. A member answers it only once its own Open is
     /// confirmed. When every member answers, parts 1 to 3 are not sent
     /// again: a released member has ended its preparation custody and
     /// refuses a repeated publication or Open. A member that is observed
-    /// released is not asked to retire custody again either.
+    /// released is not asked to retire custody again either, and a target
+    /// that is observed released is not sent its release again: it may hold
+    /// its writer policy already, and its host then refuses that step. A
+    /// surviving member answers a repeated release and a repeated writer
+    /// policy from what it retained, and the target a repeated writer policy
+    /// from its retained host command outcome; none repeats durable work.
     ///
     /// Nothing is retained that a new object could not obtain again: the
     /// decision identity comes from the committed record, and a member
@@ -1494,6 +1600,8 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
         parent: &CancellationToken,
     ) -> Result<()> {
         parent.check()?;
+        self.waiting = None;
+        self.activated = None;
         let coordinator = self.coordinator();
         let metadata_leader = hosts.metadata_leader()?;
         if coordinator != metadata_leader || members.metadata_leader != metadata_leader {
@@ -1514,6 +1622,22 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
                 "the activation needs the committed final membership of this handoff",
             ));
         }
+        // The record this activation is made for, as committed now: the
+        // last `resync` of an uninterrupted drive ran before any record of
+        // this handoff was committed. The activation record is proven for
+        // exactly this record.
+        self.committed_record = relocation.native_joint_handoff_v1.as_ref().map(|record| {
+            (
+                relocation.range_id,
+                relocation.id,
+                record.decision_sha256().to_owned(),
+            )
+        });
+        // The committed final membership names the leader of the activation.
+        let activation = topology
+            .range_by_id(relocation.range_id)
+            .ok_or_else(|| remote_error("the activation has no committed range of this handoff"))?;
+        self.require_target_leads(activation, "by the activation, before any bridge step")?;
         // Committed metadata first: it is what a coordinator without memory
         // has. A record certified without its scope leaves only the body of
         // a retained certificate.
@@ -1533,8 +1657,40 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
         self.activate_new_members(decision, members, parent)
     }
 
+    /// `TargetServe`: the target, holding its own confirmed writer policy,
+    /// moves that policy to its ordinary DATA socket, recovers the ranges it
+    /// leads and publishes its guarded ingress. The transition belongs to
+    /// the target's own host loop: the step is repeated like the target's
+    /// writer policy, and a target that already serves answers with its
+    /// retained outcome. Returns the ranges the target recovered.
     fn serve(&mut self, _hosts: &mut Self::Hosts, parent: &CancellationToken) -> Result<usize> {
-        self.target_serve_hook(parent)
+        parent.check()?;
+        self.waiting = None;
+        let (decision, members) = self.activated.clone().ok_or_else(|| {
+            remote_error("target serve needs the activation this coordinator object completed")
+        })?;
+        let operation = NativeJointHandoffStepOperationV1::TargetServe {
+            decision_sha256: decision.checksum_sha256().to_owned(),
+        };
+        let outcome =
+            match self.complete_host_command(&members, &decision, &operation, "serve", parent)? {
+                HostCommandAnswer::Complete(outcome) => outcome,
+                HostCommandAnswer::ReleaseUnconfirmed => {
+                    return Err(remote_error(format!(
+                        "target {} holds no confirmed release at its serve step",
+                        self.target
+                    )))
+                }
+            };
+        let recovered = outcome.target_recovered_ranges.ok_or_else(|| {
+            remote_error("the target completed its serve step without its recovered ranges")
+        })?;
+        self.served = Some(outcome);
+        Ok(recovered as usize)
+    }
+
+    fn waiting(&self) -> Option<String> {
+        self.waiting.clone()
     }
 
     fn records_completion(&self) -> bool {
@@ -1552,6 +1708,7 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
         parent: &CancellationToken,
     ) -> Result<()> {
         parent.check()?;
+        self.waiting = None;
         self.activation = None;
         let (range, relocation, digest) = self.committed_record.clone().ok_or_else(|| {
             remote_error("the activation record has no committed handoff record of this handoff")
@@ -1585,6 +1742,7 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
         parent: &CancellationToken,
     ) -> Result<()> {
         parent.check()?;
+        self.waiting = None;
         self.retired = None;
         let source = relocation
             .source
@@ -1704,10 +1862,21 @@ impl RemoteJoinedHandoffBackend {
             NativeJointHandoffStepOperationV1::BridgeRelease { .. } => self
                 .transport
                 .request_native_joint_bridge_release(recipient, decision, &request, &own, &token),
+            NativeJointHandoffStepOperationV1::BridgeWriterPolicy { .. } => {
+                self.transport.request_native_joint_bridge_writer_policy(
+                    recipient, decision, &request, &own, &token,
+                )
+            }
+            NativeJointHandoffStepOperationV1::TargetServe { .. } => self
+                .transport
+                .request_native_joint_target_serve(recipient, decision, &request, &own, &token),
             NativeJointHandoffStepOperationV1::SourceRetire { .. } => self
                 .transport
                 .request_native_joint_source_retire(recipient, decision, &request, &own, &token),
-            _ => Err(remote_error("not a bridge step of the activation")),
+            NativeJointHandoffStepOperationV1::TargetInstall { .. }
+            | NativeJointHandoffStepOperationV1::SourceExportRetire { .. } => {
+                Err(remote_error("not a bridge step of the activation"))
+            }
         }
     }
 
@@ -1749,7 +1918,7 @@ impl RemoteJoinedHandoffBackend {
     }
 
     /// Preparation, publication and Open on every new member of `decision`,
-    /// then the release.
+    /// then the custody retirement, the release and the writer policy.
     fn activate_new_members(
         &mut self,
         decision: RemoteBridgeDecision,
@@ -1801,9 +1970,7 @@ impl RemoteJoinedHandoffBackend {
             }
             self.prepare_publish_open(&decision, members, &new, &order, &decision_sha256, parent)?;
             #[cfg(test)]
-            if self.stop_after_open {
-                return Err(remote_error("test stop after Open"));
-            }
+            self.test_stop(RemoteTestStop::Open)?;
         }
         let released = |node: &ClusterNodeId| {
             every_open
@@ -1826,12 +1993,18 @@ impl RemoteJoinedHandoffBackend {
         }
         self.bridge_retired = retired;
 
-        // A released member answers the repeated request from what it
-        // retained, re-read under its own lock.
+        // A released surviving member answers the repeated request from
+        // what it retained, re-read under its own lock. A target that is
+        // observed released is not asked: once it holds its writer policy
+        // its host is a DATA owner and refuses a release step.
+        let target_released = released(&self.target);
         let operation = NativeJointHandoffStepOperationV1::BridgeRelease { decision_sha256 };
         let phase = bounded(parent, BRIDGE_PHASE);
         let mut outcomes = Vec::new();
         for node in &order {
+            if *node == self.target && target_released {
+                continue;
+            }
             let frame = self
                 .complete_bridge_step(members, &decision, node, &operation, &phase)
                 .map_err(|error| stage_error(&format!("bridge release of {node}"), error))?;
@@ -1843,38 +2016,172 @@ impl RemoteJoinedHandoffBackend {
             outcomes.push((node.clone(), frame.outcome().clone()));
         }
         self.bridge_released = outcomes;
+        #[cfg(test)]
+        self.test_stop(RemoteTestStop::Release)?;
 
-        self.bridge_writer_policy_hook(&decision, members, parent)
+        self.publish_writer_policies(&decision, members, &new, target_released, parent)?;
+        #[cfg(test)]
+        self.test_stop(RemoteTestStop::WriterPolicy)?;
+        self.activated = Some((decision, members.clone()));
+        Ok(())
     }
 
-    /// HOOK for the member step that does not exist yet: the writer policy
-    /// of every surviving member and of the target, after every new member
-    /// is released. The step requests belong here, in the order of the
-    /// in-process driver: the surviving members, then the target.
-    fn bridge_writer_policy_hook(
+    /// The writer policy of every new member, after every new member is
+    /// released: the surviving members in node order, then the target.
+    ///
+    /// A surviving member performs it inside its step. The target records
+    /// the command for its own host loop; see `complete_host_command`.
+    ///
+    /// `target_release_skipped`: the target was observed released and was
+    /// not sent its release. Such a target may hold a durable release that
+    /// its second window never confirmed (the coordinator that sent the
+    /// release stopped before its repetition). It then refuses its writer
+    /// policy with "no confirmed release", which also proves that it is not
+    /// a DATA owner yet: its release step is sent once, to confirm, and the
+    /// writer policy again.
+    fn publish_writer_policies(
         &mut self,
-        _decision: &RemoteBridgeDecision,
-        _members: &RemoteMembers,
+        decision: &RemoteBridgeDecision,
+        members: &RemoteMembers,
+        new: &[ClusterNodeId],
+        target_release_skipped: bool,
         parent: &CancellationToken,
     ) -> Result<()> {
-        parent.check()?;
-        #[cfg(test)]
-        if self.skip_unimplemented_member_steps {
-            return Ok(());
+        let decision_sha256 = decision.checksum_sha256().to_owned();
+        let operation = NativeJointHandoffStepOperationV1::BridgeWriterPolicy {
+            decision_sha256: decision_sha256.clone(),
+        };
+        let phase = bounded(parent, BRIDGE_PHASE);
+        let mut outcomes = Vec::new();
+        for node in new.iter().filter(|node| **node != self.target) {
+            let frame = self
+                .complete_bridge_step(members, decision, node, &operation, &phase)
+                .map_err(|error| stage_error(&format!("writer policy of {node}"), error))?;
+            if frame.outcome().writer_policy_installed != Some(true) {
+                return Err(remote_error(format!(
+                    "new member {node} completed its writer policy step without reporting the policy installed"
+                )));
+            }
+            outcomes.push((node.clone(), frame.outcome().clone()));
         }
-        Err(not_implemented("bridge writer policy"))
+        let target = self.target.clone();
+        let mut answer =
+            self.complete_host_command(members, decision, &operation, "writer policy", parent)?;
+        if matches!(answer, HostCommandAnswer::ReleaseUnconfirmed) && target_release_skipped {
+            let release = NativeJointHandoffStepOperationV1::BridgeRelease { decision_sha256 };
+            let phase = bounded(parent, BRIDGE_PHASE);
+            let frame = self
+                .complete_bridge_step(members, decision, &target, &release, &phase)
+                .map_err(|error| stage_error(&format!("bridge release of {target}"), error))?;
+            if frame.outcome().released != Some(true) {
+                return Err(remote_error(format!(
+                    "new member {target} completed its release step without reporting itself released"
+                )));
+            }
+            self.bridge_released
+                .insert(0, (target.clone(), frame.outcome().clone()));
+            answer =
+                self.complete_host_command(members, decision, &operation, "writer policy", parent)?;
+        }
+        let HostCommandAnswer::Complete(outcome) = answer else {
+            return Err(remote_error(format!(
+                "target {target} holds no confirmed release at its writer policy step"
+            )));
+        };
+        if outcome.writer_policy_installed != Some(true) {
+            return Err(remote_error(format!(
+                "target {target} completed its writer policy step without reporting the policy installed"
+            )));
+        }
+        outcomes.push((target, outcome));
+        self.bridge_policies = outcomes;
+        Ok(())
     }
 
-    /// HOOK for the member step that does not exist yet: the target recovers
-    /// the leadership of the range and opens its ingress. The step request
-    /// belongs here; it returns the ranges the target recovered.
-    fn target_serve_hook(&mut self, parent: &CancellationToken) -> Result<usize> {
-        parent.check()?;
-        #[cfg(test)]
-        if self.skip_unimplemented_member_steps {
-            return Ok(0);
+    /// Repeat one host command step of the target (`BridgeWriterPolicy` or
+    /// `TargetServe`) until the target's own host loop retained its outcome.
+    ///
+    /// The target's step receiver only records the command; its host loop
+    /// performs it and the next step reads the retained outcome. A failed
+    /// attempt of that loop is retained too: the next step reports its text
+    /// and arms the same command again. A command that already completed
+    /// answers with its retained outcome, so a new coordinator object
+    /// repeats nothing.
+    ///
+    /// The repetition is bounded by `HOST_COMMAND_WAIT`, and the command is
+    /// asked at least once. When the bound ends while
+    /// the command is still pending the call fails and `waiting()` reports
+    /// what is awaited, with the text of the host's last failed attempt when
+    /// it reported one; the next call continues the same command. A request
+    /// that fails has an unknown effect and is repeated; the target rebinds
+    /// its listener while it runs a command.
+    fn complete_host_command(
+        &mut self,
+        members: &RemoteMembers,
+        decision: &RemoteBridgeDecision,
+        operation: &NativeJointHandoffStepOperationV1,
+        what: &str,
+        parent: &CancellationToken,
+    ) -> Result<HostCommandAnswer> {
+        let target = self.target.clone();
+        let until = Instant::now() + self.host_command_wait;
+        let mut failures = 0;
+        let mut reported = None;
+        // The last request failed: its effect is unknown, nothing is pending
+        // as far as this call knows.
+        let mut unanswered = None;
+        loop {
+            parent.check()?;
+            match self.bridge_step(members, decision, &target, operation, parent) {
+                Ok(frame) => {
+                    failures = 0;
+                    unanswered = None;
+                    let outcome = frame.outcome();
+                    if outcome.complete {
+                        return Ok(HostCommandAnswer::Complete(outcome.clone()));
+                    }
+                    if outcome.stage
+                        != crate::distribution_range_handoff::NativeJointHandoffStepStageV1::BridgeHostCommand
+                    {
+                        return Err(remote_error(format!(
+                            "target {target} answered its {what} step with the stage {:?} of another step",
+                            outcome.stage
+                        )));
+                    }
+                    if let Some(text) = &outcome.host_command_error {
+                        reported = Some(text.clone());
+                    }
+                }
+                Err(error) => {
+                    parent.check()?;
+                    if error.to_string().contains(RELEASE_UNCONFIRMED) {
+                        return Ok(HostCommandAnswer::ReleaseUnconfirmed);
+                    }
+                    failures += 1;
+                    if failures >= HOST_COMMAND_FAILURES {
+                        return Err(stage_error(&format!("{what} of {target}"), error));
+                    }
+                    unanswered = Some(error);
+                }
+            }
+            if Instant::now() >= until {
+                break;
+            }
+            std::thread::sleep(HOST_COMMAND_POLL);
         }
-        Err(not_implemented("target serve"))
+        // Only a command the target itself reported pending is a wait.
+        if let Some(error) = unanswered {
+            return Err(stage_error(&format!("{what} of {target}"), error));
+        }
+        let note = format!(
+            "waiting for the host of target {target} to run its {what} command{}",
+            match reported {
+                Some(text) => format!("; its last attempt failed and is repeated: {text}"),
+                None => String::new(),
+            }
+        );
+        self.waiting = Some(note.clone());
+        Err(remote_error(note))
     }
 
     /// One member's read-only RELEASE observation: `None` while the member

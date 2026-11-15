@@ -77,6 +77,8 @@ pub(crate) use local_backend::LocalJoinedHandoffBackend;
 #[cfg(test)]
 pub(crate) use local_backend::TestHandoffCustodyCut;
 mod remote_backend;
+#[cfg(test)]
+pub(crate) use remote_backend::RemoteTestStop;
 pub(crate) use remote_backend::{
     RemoteJoinedHandoffBackend, RemoteMembers, RemoteOldCutObservation,
 };

@@ -26,7 +26,7 @@ fn native_remote_backend_fresh_instance_resync_reports_cut_started_only_after_cl
     );
 }
 #[test]
-fn native_remote_backend_driver_reports_unimplemented_stage_without_panic() {
+fn native_remote_backend_driver_refuses_other_coordinator_and_serve_without_activation() {
     run_registered_image_baseline_with_source(
         Case::Required,
         Some(SourceCase::RemoteBackendDriverStub),
@@ -536,16 +536,6 @@ fn driver_stub(
     );
     let error = backend.require_decision().unwrap_err().to_string();
     assert!(error.contains("decision certificate absent"), "{error}");
-    // The member step that does not exist yet names itself.
-    let refused = |result: Result<()>, stage: &str| {
-        let error = result.unwrap_err().to_string();
-        assert!(
-            error.contains(&format!(
-                "remote joined handoff backend: {stage} is not implemented"
-            )),
-            "{error}"
-        );
-    };
     // The activation sends bridge steps, which the new members admit from
     // the metadata leader: another coordinator is refused before a request.
     let error = backend
@@ -558,7 +548,16 @@ fn driver_stub(
             && error.contains("admit bridge steps from the metadata leader"),
         "{error}"
     );
-    refused(backend.serve(hosts, &token).map(|_| ()), "target serve");
+    // The target is asked to serve only by the object that completed the
+    // activation: without one no request is sent.
+    let error = backend.serve(hosts, &token).unwrap_err().to_string();
+    assert!(
+        error.contains(
+            "remote joined handoff backend: target serve needs the activation this coordinator object completed"
+        ),
+        "{error}"
+    );
+    assert!(backend.waiting().is_none());
     backend.forget_aborted_allocation();
     assert!(backend.closed_frames().is_empty());
 }

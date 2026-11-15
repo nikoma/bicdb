@@ -317,6 +317,40 @@ pub(super) fn exercise_with_serve(
     output: &std::path::Path,
     serve: &mut dyn FnMut(&mut NativeMetadataControlHost),
 ) {
+    if follower {
+        assert_ne!(data.activation_range().leader, node(4));
+    }
+    exercise_range_with_serve(
+        label,
+        follower.then(|| data.activation_range().leader.clone()),
+        data.old_range().id,
+        control,
+        controls,
+        original,
+        services,
+        topology,
+        acknowledged,
+        output,
+        serve,
+    );
+}
+/// The same acceptance for a caller that learns the decision only by
+/// performing `serve`: it names the moved range, and the leader of the final
+/// membership when that is a surviving original member and not the target.
+#[allow(clippy::too_many_arguments)]
+pub(in super::super) fn exercise_range_with_serve(
+    label: &str,
+    surviving_leader: Option<ClusterNodeId>,
+    moved: crate::RangeId,
+    control: &mut NativeMetadataControlHost,
+    controls: &mut [NativeMetadataControlHost],
+    original: &crate::ClusterEventClient,
+    services: &[Arc<Mutex<crate::ClusterDataNodeService>>],
+    topology: &ClusterTopology,
+    acknowledged: &[serde_json::Value],
+    output: &std::path::Path,
+    serve: &mut dyn FnMut(&mut NativeMetadataControlHost),
+) {
     let mut ledger = Vec::new();
     let key = acknowledged[0]["key"].as_str().unwrap();
     let expected = &acknowledged[0]["value"];
@@ -340,8 +374,8 @@ pub(super) fn exercise_with_serve(
     }
     serve(control);
     let published = control.joined_data_status().unwrap();
-    if follower {
-        assert_ne!(data.activation_range().leader, node(4));
+    if let Some(surviving_leader) = &surviving_leader {
+        assert_ne!(surviving_leader, &node(4));
         assert_eq!(
             published.registered_range.as_ref().unwrap()["leader_recovered_prefix_observed"],
             false
@@ -349,7 +383,7 @@ pub(super) fn exercise_with_serve(
         // The surviving original leader now leads the activation epoch and
         // must recover it itself; the target, a follower, never does.
         let leader = (0..4)
-            .find(|i| node(*i) == data.activation_range().leader)
+            .find(|i| node(*i) == *surviving_leader)
             .expect("activation leader is a surviving original member");
         let recovered = controls[leader]
             .recover_initial_data_leadership(&budget(5000))
@@ -375,7 +409,7 @@ pub(super) fn exercise_with_serve(
         .unwrap();
         assert_eq!(value, acknowledged["value"]);
     }
-    let next_key = new_key(topology, data.old_range().id, "next-ack");
+    let next_key = new_key(topology, moved, "next-ack");
     let next = serde_json::json!({"source":"same-original-client-after-join","nested":{"tenant":17,"rows":[null,true,4,{"v":"full"}]}});
     let appended = client_call(
         output,
@@ -428,7 +462,7 @@ pub(super) fn exercise_with_serve(
         let database=service.lock().database();
         let db=database.read();
         let row=db.get(crate::CLUSTER_EVENTS_COLLECTION,&record_id);
-        let point=db.native_range_prefix_observation(data.old_range().id);
+        let point=db.native_range_prefix_observation(moved);
         serde_json::json!({"node":node(index),"full_record":row.as_ref().ok(),
             "record_error":row.as_ref().err().map(ToString::to_string),"native_watermarks":point.as_ref().ok(),
             "watermark_error":point.as_ref().err().map(ToString::to_string)})

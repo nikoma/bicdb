@@ -284,7 +284,10 @@ pub(in super::super) fn exercise(
             factory,
             pending,
             ranges,
+            acknowledged,
+            output,
             template,
+            original_gateway,
             process,
         );
         return;
@@ -1118,7 +1121,7 @@ pub(in super::super) fn exercise(
     }
 }
 
-mod data_tests;
+pub(super) mod data_tests;
 
 mod local_term_tests;
 

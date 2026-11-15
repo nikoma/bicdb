@@ -6,10 +6,10 @@ use crate::db::{NativeWriterDataDomainPolicy, NativeWriterDataDomainTransition};
 use crate::distribution_consensus::MetadataReadParticipant;
 use crate::distribution_metadata_read_provider::MetadataReadProvider;
 use crate::distribution_native_host::provisional_listener::registration::bridge_step::{
-    acquire_bridge_step_own, bridge_remaining, bridge_reply, observe_bridge_phase,
-    open_member_bridge, publish_member_bridge, publish_member_writer_policy, release_member_bridge,
-    retained_prepare_step, retire_joint_source, retire_member_old_custody, BridgeStepOwn,
-    NativeBridgeMemberSteps, MIN_BRIDGE_SUBSTEP_BUDGET,
+    acquire_bridge_step_own, bridge_remaining, bridge_reply, handoff_finished,
+    observe_bridge_phase, open_member_bridge, publish_member_bridge, publish_member_writer_policy,
+    release_member_bridge, retained_prepare_step, retire_joint_source, retire_member_old_custody,
+    BridgeStepOwn, NativeBridgeMemberSteps, MIN_BRIDGE_SUBSTEP_BUDGET,
 };
 use crate::distribution_native_host::provisional_listener::registration::NativeDataOwnerAdmission;
 use crate::distribution_range_handoff::{
@@ -214,10 +214,8 @@ impl NativeInitialDataAdmission {
             .writer_data_domains
             .upgrade()
             .ok_or_else(|| invalid("joint bridge step original DATA continuation ended"))?;
-        let mut domains = domains
-            .try_lock()
-            .ok_or_else(|| invalid("joint bridge step DATA continuation table busy"))?;
-        // No host service, DB, native journal or MStore guard spans the RPC.
+        // No host service, DB, native journal, MStore or DATA continuation
+        // table guard spans the RPC: the table is taken after it.
         let BridgeStepOwn { own, business, .. } =
             acquire_bridge_step_own(&owners.provider, &owners.transport, peer, request, token)?;
         owners
@@ -230,6 +228,9 @@ impl NativeInitialDataAdmission {
             business,
             token,
         )?;
+        let mut domains = domains
+            .try_lock()
+            .ok_or_else(|| invalid("joint bridge step DATA continuation table busy"))?;
         domains.advance_serving(request.range_id, admission, &policy)
         // No ordinary enrolled readQQ, recovered Ready or dispatcher/APP
         // publication occurs in this necessary policy-only transition.
@@ -252,8 +253,13 @@ impl NativeInitialDataAdmission {
     ) -> Result<(NativeJointHandoffStepOutcomeV1, (u64, u64, Uuid))> {
         let range = request.range_id;
         let mut anchor = fresh.anchor;
+        // What this member's own fresh metadata shows finished is released
+        // first and never counts against the capacity.
+        let own_topology = fresh.own.committed_topology(fresh.business)?;
+        steps.release_finished(own_topology)?;
+        let finished = handoff_finished(own_topology, request.relocation_id);
         let mut held = steps.hold()?;
-        let step = retained_prepare_step(&mut held, request)?;
+        let step = retained_prepare_step(&mut held, request, finished)?;
         if let Some(custody) = step.custody() {
             request.require_decision(custody.data())?;
             return Ok((step.prepare_outcome(Stage::Complete)?, anchor));
@@ -517,6 +523,19 @@ impl NativeMetadataControlHost {
             .get(&range)
             .and_then(|step| step.custody())
             .map(|custody| custody.test_evidence()))
+    }
+    /// Release what `own_topology` shows finished, as the next preparation
+    /// of this original member does; returns the ranges still retained.
+    pub(crate) fn test_initial_release_finished_bridge_steps(
+        &self,
+        own_topology: &ClusterTopology,
+    ) -> Result<Vec<crate::RangeId>> {
+        let initial = self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("original INITIAL host absent"))?;
+        initial.bridge_steps.release_finished(own_topology)?;
+        initial.bridge_steps.test_retained_ranges()
     }
     /// Memory evidence of this member's own writer policy step; grants nothing.
     pub(crate) fn test_initial_bridge_writer_policy(

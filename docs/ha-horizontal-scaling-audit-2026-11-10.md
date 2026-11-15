@@ -11,7 +11,17 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
-## Latest execution checkpoint — head2ce failed, 2026-11-15 UTC
+## Corrected source checkpoint — not executed, 2026-11-15 UTC
+
+Source-only corrections `118bb5ecd7fe0e2fe720cd42b163f4522e5a6d22` (Cell physical
+gate custody) and `781b4e8029f0e8c747fee69252c94a9f04992103` (test channel type)
+are composed with the completed failed evidence below. They passed formatting
+and independent source review; exact-source compilation and runtime acceptance
+remain **not tested**. The [Cell contract](design/cell-rotation-physical-gate-lifecycle.md)
+does not close cross-call source-head or general cold-association gaps. Source,
+CI acceptance, a binary, deployment and production qualification remain separate.
+
+## Latest completed execution — head2ce failed, 2026-11-15 UTC
 
 Remote main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
 Unmerged520 source `2ce4c48202d4d1bb1ef759b08a41dc36f431af6d` passed PGwire
@@ -21,7 +31,7 @@ channel type; no actual Core/Native cases executed. SQL passed 2,682/0/4, includ
 the real known-committed finalization-error cleanup and SQLSTATE controls. These
 do not execute Core's timed-Unknown or distributed HA paths. Remaining-workspace
 failed 851/1/1 on signed Cell key rotation with a missing enrolled physical gate;
-the repair is under source review. Page checksum/profile and retained-claim
+the repair is composed as unexecuted source. Page checksum/profile and retained-claim
 controls passed. Later CLI/AppHost controls were not reached. The narrow local
 test correction is source-reviewed only. The complete archive is frozen and
 independently verified; successful component checks do not clear the failed gate.

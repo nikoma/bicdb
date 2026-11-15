@@ -4,7 +4,20 @@ This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe64
 
 ## Actual execution
 
-### Current head2ce: application passes, HA compilation and Cell rotation failures
+### Corrected batch: source review only, new CI required
+
+The pending batch composes test-channel correction
+`781b4e8029f0e8c747fee69252c94a9f04992103` and Cell gate-lifecycle correction
+`118bb5ecd7fe0e2fe720cd42b163f4522e5a6d22` (reviewed leaf
+`ff791fd2883a3f5b44b238727c1fbfaca9430e94`). The
+[Cell correction contract](cell-rotation-physical-gate-lifecycle.md) retains
+actual closed root/stage claims, a new stage gate before FORMAT copying, and
+strict retry/activation checks. It adds four Core and one Page control while
+preserving original tests. Formatting, source pins and independent source
+review passed; compilation and every old/new runtime control are **not tested**
+on this batch. Earlier component passes below do not qualify it.
+
+### Completed head2ce: application passes, HA compilation and Cell rotation failures
 
 This is a **completed, failed CI checkpoint**, not a qualified release.
 Source **`2ce4c48202d4d1bb1ef759b08a41dc36f431af6d`**, tree
@@ -50,9 +63,9 @@ The failed Cell unwrap/error is at raw307795–307796; the raw error does not na
 the internal rotation path or checkpoint. Source inspection finds that rotation
 deliberately omits the source gate while copying enrolled FORMAT into a fresh
 stage; later guarded stage writes then require a gate that was not initialized.
-This is an integration defect to repair through actual stage ownership and a
-new stable gate, not by bypassing the mandatory check. A fix is under source
-review and remains uncompiled/unexecuted. Core visibility/Standard/bootstrap
+This is an integration defect repaired at source through actual stage ownership
+and a new stable gate; the mandatory check remains. The composed correction
+above remains uncompiled/unexecuted. Core visibility/Standard/bootstrap
 and the later CLI/application-port acceptance remain **not tested** here.
 
 The complete archive contains 89 premanifest files, 92 total, 11 complete gzip

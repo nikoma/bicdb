@@ -25,9 +25,11 @@ all-target/nondefault compilation, Core, SQL, PGwire/Oracle and Rails checks.
 Native execution failed **372 passed / 27 failed / 1 ignored**. Some failures
 occurred before their intended fault/read/write cuts; genuine passed components
 remain separate from the failed end-to-end result. The remaining-workspace job
-is still live at this checkpoint. The [exact regression findings](design/native-520-regression-findings.md)
+also failed a CLI join test on a busy owned-learner status read. It stopped
+before the main519 application-state port-bind test, which remains separately
+unresolved. The [exact regression findings](design/native-520-regression-findings.md)
 record source identities, raw-log hashes, passed/failed/inconclusive/not-tested
-boundaries, two unexecuted local test corrections and next deterministic controls.
+boundaries, unexecuted source/test corrections and next deterministic controls.
 
 The candidate remains unmerged. Complete remote Serving, bounded automatic
 controller convergence, cold recovery, physical four-to-five expansion and

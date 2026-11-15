@@ -11,6 +11,29 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
+## Latest execution checkpoint — candidate520 failed, 2026-11-15 UTC
+
+Delivered main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
+Its completed post-merge Tests run43677527718 failed the application-state
+test's final replicated reopen on `Address already in use`. The earlier
+no-listener and standalone queued-job assertions passed; later replicated
+application assertions were not reached. Its native job passed at API level;
+that is not an independently reviewed physical or whole-release qualification.
+
+Candidate **1.0.520-beta / `326c363477477950f76bdb51fe6425cab85dc362`** passed
+all-target/nondefault compilation, Core, SQL, PGwire/Oracle and Rails checks.
+Native execution failed **372 passed / 27 failed / 1 ignored**. Some failures
+occurred before their intended fault/read/write cuts; genuine passed components
+remain separate from the failed end-to-end result. The remaining-workspace job
+is still live at this checkpoint. The [exact regression findings](design/native-520-regression-findings.md)
+record source identities, raw-log hashes, passed/failed/inconclusive/not-tested
+boundaries, two unexecuted local test corrections and next deterministic controls.
+
+The candidate remains unmerged. Complete remote Serving, bounded automatic
+controller convergence, cold recovery, physical four-to-five expansion and
+post-convergence throughput gain remain open. The original Azure qualification
+remains **failed**. Earlier checkpoint statuses below are historical snapshots.
+
 ## Later source checkpoint — main519, 2026-11-15 UTC
 
 Remote main advanced to **1.0.519-beta /

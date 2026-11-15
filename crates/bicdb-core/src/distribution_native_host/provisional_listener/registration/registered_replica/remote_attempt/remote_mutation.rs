@@ -107,26 +107,57 @@ impl NativeMetadataControlHost {
     pub(crate) fn registered_remote_final_image_receipt(
         &self,
         range: crate::RangeId,
-    ) -> Result<&Arc<crate::db::NativeRegisteredRemoteFinalImageReceipt>> {
-        self.replica
-            .as_ref()
-            .and_then(|r| r.remote_images.get(&range))
+    ) -> Result<Arc<crate::db::NativeRegisteredRemoteFinalImageReceipt>> {
+        let absent = || invalid("original Registered protected final image receipt absent");
+        let receiver = self.replica.as_ref().ok_or_else(absent)?;
+        let held = receiver.remote_install.hold()?;
+        held.remote_images
+            .get(&range)
             .and_then(|owner| owner.final_image_receipt())
-            .ok_or_else(|| invalid("original Registered protected final image receipt absent"))
+            .cloned()
+            .ok_or_else(absent)
     }
     #[cfg(test)]
     pub(crate) fn test_registered_remote_image_state(
         &self,
         range: crate::RangeId,
     ) -> Result<serde_json::Value> {
-        self.replica
-            .as_ref()
-            .and_then(|receiver| receiver.remote_images.get(&range))
+        let absent = || invalid("Registered actual image owner absent");
+        let receiver = self.replica.as_ref().ok_or_else(absent)?;
+        let held = receiver.remote_install.hold()?;
+        held.remote_images
+            .get(&range)
             .map(|owner| owner.test_state())
-            .ok_or_else(|| invalid("Registered actual image owner absent"))
+            .ok_or_else(absent)
     }
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn advance_registered_remote_image(
+        &mut self,
+        source: &Arc<NativeRemoteImageFact>,
+        frame: &NativeRemoteImageStep<'_>,
+        role: HandoffRoleAdmission,
+        own: HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+        operation: crate::db::NativeRegisteredRemoteImageOperation,
+    ) -> Result<crate::db::NativeRegisteredRemoteImageProgress> {
+        let data_owner = self.assigned.is_some() || self.data.is_some();
+        let Some(receiver) = self.replica.as_ref() else {
+            return Err(invalid(if data_owner {
+                "Registered image cannot replace existing DATA owner"
+            } else {
+                "actual Registered image receiver absent"
+            }));
+        };
+        let mut held = receiver.remote_install.hold()?;
+        receiver
+            .remote_install_custody(&mut held, data_owner)
+            .advance_registered_remote_image(source, frame, role, own, business, parent, operation)
+    }
+}
+impl RegisteredRemoteInstallCustody<'_> {
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn advance_registered_remote_image(
         &mut self,
         source: &Arc<NativeRemoteImageFact>,
         frame: &NativeRemoteImageStep<'_>,
@@ -145,15 +176,12 @@ impl NativeMetadataControlHost {
             );
         }
         parent.check()?;
-        if self.assigned.is_some() || self.data.is_some() {
+        if self.data_owner {
             return Err(invalid(
                 "Registered image cannot replace existing DATA owner",
             ));
         }
-        let receiver = self
-            .replica
-            .as_mut()
-            .ok_or_else(|| invalid("actual Registered image receiver absent"))?;
+        let receiver = self;
         let range = role.role().current_range().id;
         let attempt = receiver
             .remote_attempts

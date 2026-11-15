@@ -23,6 +23,13 @@ pub(crate) use remote_old::{
     NativeRemoteOldOperationV1, NativeRemoteOldReplyV1, NativeRemoteOldRequestV1,
 };
 #[cfg(feature = "tls-replication")]
+mod remote_step;
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_step::{
+    NativeJointHandoffStepOperationV1, NativeJointHandoffStepOutcomeV1,
+    NativeJointHandoffStepReplyV1, NativeJointHandoffStepRequestV1, NativeJointHandoffStepStageV1,
+};
+#[cfg(feature = "tls-replication")]
 mod remote_old_collect;
 pub(crate) use old_quorum::{
     NativeJointOldClosedQuorum, NativeJointOldImageProof, NativeJointOldRound,

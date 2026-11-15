@@ -13,14 +13,36 @@ impl NativeMetadataControlHost {
         business: Uuid,
         parent: &CancellationToken,
     ) -> Result<Arc<NativeRegisteredRemoteInstallingFence>> {
+        let data_owner = self.assigned.is_some() || self.data.is_some();
+        let Some(receiver) = self.replica.as_ref() else {
+            return Err(invalid(if data_owner {
+                "Registered Installing cannot replace DATA owner"
+            } else {
+                "actual Registered receiver absent"
+            }));
+        };
+        let mut held = receiver.remote_install.hold()?;
+        receiver
+            .remote_install_custody(&mut held, data_owner)
+            .publish_registered_remote_installing(source, frame, role, own, business, parent)
+    }
+}
+impl RegisteredRemoteInstallCustody<'_> {
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn publish_registered_remote_installing(
+        &mut self,
+        source: &Arc<NativeRemoteImageFact>,
+        frame: &NativeRemoteImageStep<'_>,
+        role: HandoffRoleAdmission,
+        own: HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<Arc<NativeRegisteredRemoteInstallingFence>> {
         parent.check()?;
-        if self.assigned.is_some() || self.data.is_some() {
+        if self.data_owner {
             return Err(invalid("Registered Installing cannot replace DATA owner"));
         }
-        let receiver = self
-            .replica
-            .as_mut()
-            .ok_or_else(|| invalid("actual Registered receiver absent"))?;
+        let receiver = self;
         let range = role.role().current_range().id;
         let attempt = receiver
             .remote_attempts

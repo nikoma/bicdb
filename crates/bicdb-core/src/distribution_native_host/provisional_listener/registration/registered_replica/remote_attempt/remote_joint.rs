@@ -158,6 +158,10 @@ impl NativeRegisteredRemoteJointOwner {
     }
 }
 impl NativeRegisteredRemoteJointTarget {
+    /// Identity comparison only: the exact original discovered source Arc.
+    pub(super) fn original_source(&self) -> &Arc<NativeRemoteImageFact> {
+        self.preflight.source()
+    }
     pub(crate) fn require_original_preflight(
         &self,
         original: &Arc<NativeRegisteredRemoteInstallPreflight>,
@@ -291,8 +295,6 @@ impl NativeRegisteredRemoteJointTarget {
     }
 }
 impl NativeMetadataControlHost {
-    /// Consume the real A lease only AFTER actual complete native/profile2 and
-    /// catalogue verification. The source/final DATA cannot call this alone.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn take_registered_remote_joint_target(
         &mut self,
@@ -303,16 +305,40 @@ impl NativeMetadataControlHost {
         business: Uuid,
         parent: &CancellationToken,
     ) -> Result<Arc<NativeRegisteredRemoteJointOwner>> {
+        let data_owner = self.assigned.is_some() || self.data.is_some();
+        let Some(receiver) = self.replica.as_ref() else {
+            return Err(invalid(if data_owner {
+                "Registered joint cannot replace existing DATA owner"
+            } else {
+                "actual original Registered receiver absent"
+            }));
+        };
+        let mut held = receiver.remote_install.hold()?;
+        receiver
+            .remote_install_custody(&mut held, data_owner)
+            .take_registered_remote_joint_target(source, frame, role, own, business, parent)
+    }
+}
+impl RegisteredRemoteInstallCustody<'_> {
+    /// Consume the real A lease only AFTER actual complete native/profile2 and
+    /// catalogue verification. The source/final DATA cannot call this alone.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn take_registered_remote_joint_target(
+        &mut self,
+        source: &Arc<NativeRemoteImageFact>,
+        frame: &NativeRemoteImageStep<'_>,
+        role: HandoffRoleAdmission,
+        own: HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<Arc<NativeRegisteredRemoteJointOwner>> {
         parent.check()?;
-        if self.assigned.is_some() || self.data.is_some() {
+        if self.data_owner {
             return Err(invalid(
                 "Registered joint cannot replace existing DATA owner",
             ));
         }
-        let receiver = self
-            .replica
-            .as_mut()
-            .ok_or_else(|| invalid("actual original Registered receiver absent"))?;
+        let receiver = self;
         let range = role.role().current_range().id;
         // Acquire table custody BEFORE any A lease take; insertion after that
         // irreversible transfer stays infallible, as in the original path.

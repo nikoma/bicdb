@@ -392,6 +392,7 @@ impl NativeMetadataControlHost {
             .ok_or_else(|| invalid("actual Registered receiver required"))?
             .assigned_parts()?;
         self.assigned = Some(NativeAssignedDataHost::new(parts, image)?);
+        self.close_registered_remote_install_for_data_owner();
         self.advance_assigned_closed_data_policy(parent)
     }
     pub(in crate::distribution_native_host) fn advance_assigned_closed_data_policy(

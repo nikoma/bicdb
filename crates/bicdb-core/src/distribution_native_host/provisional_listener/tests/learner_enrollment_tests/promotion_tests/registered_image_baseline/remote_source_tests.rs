@@ -11,6 +11,7 @@ use crate::distribution_range_image::{
 };
 use crate::distribution_transport::AuthenticatedNativeRemoteImageSourceFrame;
 mod constraint_then_close_tests;
+mod native_handoff_step_tests;
 mod source_discovery_tests;
 mod source_export_retirement_tests;
 pub(super) mod two_range_stall_tests;
@@ -134,6 +135,8 @@ pub(super) enum SourceCase {
     TargetHotDecisionCatalogueReadbackFailed,
     TargetHotDecisionCataloguePostCanceled,
     TargetHotDecisionCataloguePostTerm,
+    NativeHandoffStepInstall,
+    NativeHandoffStepRefusals,
 }
 pub(super) fn uses_original_sdk_rpc_observer(case: SourceCase) -> bool {
     hot_policy_tests::is_hot_policy(case)

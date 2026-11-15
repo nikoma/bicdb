@@ -20,6 +20,12 @@ pub(crate) struct NativeRegisteredRemoteVerificationProgress {
     pub bytes: u64,
     pub target_reserved_b: u64,
 }
+impl NativeRegisteredRemoteVerificationProgress {
+    /// Progress DATA only; the final image publication re-proves the scan.
+    pub(crate) fn scan_complete(&self) -> bool {
+        matches!(self.status, RegisteredTargetVerificationStatus::Complete)
+    }
+}
 /// Original-owner scan state, never reconstructed from a source DTO.
 pub(super) struct RegisteredTargetVerifier {
     generation: Uuid,

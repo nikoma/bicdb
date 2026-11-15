@@ -107,6 +107,19 @@ fn same_point(before: &serde_json::Value, after: &serde_json::Value) {
         after["preparation"]["preparation_sha256"]
     );
 }
+// Diagnostic only; the original Box payload remains retained for final
+// attribution. An opaque payload is identified honestly, never replaced by
+// a fabricated string or interpreted as an HA result.
+fn panic_data(payload: &(dyn std::any::Any + Send)) -> serde_json::Value {
+    if let Some(text) = payload.downcast_ref::<String>() {
+        serde_json::json!({"payload_kind":"String","payload":text})
+    } else if let Some(text) = payload.downcast_ref::<&str>() {
+        serde_json::json!({"payload_kind":"str","payload":text})
+    } else {
+        serde_json::json!({"payload_kind":"opaque","actual_type_id":format!("{:?}",payload.type_id()),
+            "original_payload_retained":true})
+    }
+}
 #[allow(clippy::too_many_arguments)]
 pub(super) fn exercise(
     five: &mut Five,
@@ -491,20 +504,44 @@ pub(super) fn exercise(
             Ok(())
         }));
         stop.store(true, Ordering::Release);
-        for worker in workers {
-            let (errors, omitted) = match worker.join() {
-                Ok(v) => v,
-                Err(p) => std::panic::resume_unwind(p),
-            };
-            report.event(
-                serde_json::json!({"actual_release_source_poll_errors":errors,"omitted":omitted}),
-            );
+        report.event(serde_json::json!({"actual_primary_action_before_worker_cleanup":match &result {
+            Ok(Ok(()))=>serde_json::json!({"returned_ok":true}),
+            Ok(Err(error))=>serde_json::json!({"returned_error":crate::distribution_native_host::remote_first::error_data(error)}),
+            Err(payload)=>serde_json::json!({"panicked":panic_data(payload.as_ref())}),
+        }}));
+        let mut worker_panics = Vec::new();
+        for (join_index, worker) in workers.into_iter().enumerate() {
+            let thread_id = format!("{:?}", worker.thread().id());
+            match worker.join() {
+                Ok((errors, omitted)) => report.event(serde_json::json!({
+                    "actual_release_source_join_index":join_index,"actual_thread_id":thread_id,
+                    "actual_release_source_poll_errors":errors,"omitted":omitted,
+                    "actual_worker_joined":true,
+                })),
+                Err(payload) => {
+                    report.event(serde_json::json!({
+                        "actual_release_source_join_index":join_index,"actual_thread_id":thread_id,
+                        "actual_worker_cleanup_panic":panic_data(payload.as_ref()),
+                    }));
+                    worker_panics.push(payload);
+                }
+            }
         }
+        report.event(serde_json::json!({"all_release_workers_joined":true,
+            "actual_worker_cleanup_panic_count":worker_panics.len(),
+            "primary_action_error_or_panic_preserved":!matches!(&result,Ok(Ok(())))}));
         // RAII also releases on parent panic. Kernel/network calls and scoped
         // joins retain their original bounds; teardown is not preemptible.
+        // Every join outcome is logged first. A secondary worker panic cannot
+        // replace the original action Err/panic; successful action plus failed
+        // cleanup must still fail using the first original worker payload.
         match result {
-            Ok(actual) => actual,
-            Err(p) => std::panic::resume_unwind(p),
+            Err(primary) => std::panic::resume_unwind(primary),
+            Ok(Err(primary)) => Err(primary),
+            Ok(Ok(())) => match worker_panics.into_iter().next() {
+                Some(payload) => std::panic::resume_unwind(payload),
+                None => Ok(()),
+            },
         }
     })
 }

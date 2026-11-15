@@ -18,7 +18,9 @@ mod bridge;
 pub(crate) use bridge::NativeJointBridgeCatalogue;
 mod activation;
 mod release;
+pub(crate) use activation::NativeJointActivationComparison;
 use activation::NativeJointCatalogueActivation;
+pub(super) use activation::{ActivationIoHistory, NativeJointActivationPublication};
 pub(crate) use activation::{
     NativeJointCatalogueActivationFact, NativeJointCatalogueActivationReceipt,
 };

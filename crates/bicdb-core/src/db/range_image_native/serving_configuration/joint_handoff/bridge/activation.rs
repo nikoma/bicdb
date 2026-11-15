@@ -493,6 +493,10 @@ impl NativeJointBridgeReadScope<'_> {
     }
 }
 impl NativeJointServingBridgeReceipt {
+    pub(crate) fn native_metadata_initialization_version(&self) -> u32 {
+        self.native.metadata_initialization_version()
+    }
+
     pub(crate) fn current_read_scope<'a>(
         &'a self,
         database: &'a BicDb,

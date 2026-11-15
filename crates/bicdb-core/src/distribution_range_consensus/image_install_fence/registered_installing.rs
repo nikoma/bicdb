@@ -288,6 +288,7 @@ impl NativeRegisteredRemoteInstallingPublication {
         }
         // The real atomic file replacement includes both file and directory
         // fsync. All errors retain the memory refusal and original candidate.
+        store.note_catalogue_write_entered()?;
         crate::storage::replace_durably(
             &store.root.join(DEFAULT_RANGE_WRITE_LOG),
             crate::storage::ReplaceContents::Plain(&bytes),

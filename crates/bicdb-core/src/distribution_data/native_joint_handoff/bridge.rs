@@ -7,6 +7,8 @@ use crate::distribution_range_image_install::{
     NativeImageCatalogueFinalization, NativeImageInstallFreeze, NativeJointImageMaterialization,
 };
 
+#[cfg(test)]
+mod activation_controls;
 mod collection_binding;
 mod image_release;
 pub(crate) use collection_binding::{
@@ -94,6 +96,12 @@ impl ActualServiceNativeJointPreparedEvidence {
     }
     pub(crate) fn preparation_memory_lifetime(&self) -> crate::cancellation::CancellationLifetime {
         self.origin.memory_lifetime()
+    }
+    pub(crate) fn retained_activation_memory_lifetime(
+        &self,
+    ) -> Result<crate::cancellation::CancellationLifetime> {
+        self.origin.require_actual(self)?;
+        Ok(self.origin.memory_lifetime())
     }
     pub(crate) fn require_original_writer_lifetime(&self) -> Result<()> {
         self.writer_domain.require_lifetime(
@@ -690,6 +698,30 @@ impl ClusterDataNodeService {
         parent.check()?;
         host.require_live_request(business)?;
         let database = checked_database_read(&self.db, &self.storage_policy)?;
+        if self.range_writes.needs_owned_activation_recovery() {
+            actual.require_original_preparation_session()?;
+            actual.require_original_writer_lifetime()?;
+            if actual.prepared.native_database_incarnation() != database.incarnation_id()
+                || actual.prepared.checksum_sha256() != native.native_preparation_sha256()
+                || actual.committed.data() != native.data()
+            {
+                return Err(data_error(
+                    "owned activation retry substituted actual preparation/open",
+                ));
+            }
+            self.range_writes
+                .current_mut()
+                .retry_owned_activation_from_actual_host(
+                    &database,
+                    host,
+                    business,
+                    native,
+                    &actual.writer_domain,
+                    actual.lease.try_frozen()?,
+                    point,
+                    parent,
+                )?;
+        }
         actual.require_original_phase_owner(&database, &self.range_writes)?;
         match point {
             Some(point) => {
@@ -732,11 +764,38 @@ impl ClusterDataNodeService {
             admission.cancellation(),
         );
         parent.check()?;
-        if !admission.has_fresh_open_phase() {
+        let recovering_owned_activation = self.range_writes.needs_owned_activation_recovery();
+        if !admission.has_fresh_open_phase() && !recovering_owned_activation {
             admission.require_external_publications_current()?;
             admission.require_local_open_preparation(self)?;
         }
         let database = checked_database_read(&self.db, &self.storage_policy)?;
+        if self.range_writes.needs_owned_activation_recovery() {
+            actual.require_original_preparation_session()?;
+            actual.require_original_writer_lifetime()?;
+            if actual.prepared.native_database_incarnation() != database.incarnation_id()
+                || actual.prepared.checksum_sha256()
+                    != admission.native_receipt().native_preparation_sha256()
+                || actual.committed.data() != admission.data()
+            {
+                return Err(data_error(
+                    "owned activation retry substituted actual preparation/open",
+                ));
+            }
+            self.range_writes
+                .current_mut()
+                .retry_owned_activation_from_admission(
+                    &database,
+                    admission,
+                    &actual.writer_domain,
+                    actual.lease.try_frozen()?,
+                    parent,
+                )?;
+        }
+        if !admission.has_fresh_open_phase() && recovering_owned_activation {
+            admission.require_external_publications_current()?;
+            admission.require_local_open_preparation(self)?;
+        }
         actual.require_original_phase_owner(&database, &self.range_writes)?;
         self.storage_policy.require_database(&database)?;
         self.range_writes

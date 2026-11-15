@@ -108,6 +108,37 @@ impl NativeJointWriterDomain {
         }
         self.require_current(scope.database(), store, range)
     }
+    /// Necessary recovery comparison only, never a generic current/Serving
+    /// proof. The actual retained full-head owner gates the only exception.
+    pub(crate) fn require_owned_activation_comparison(
+        &self,
+        db: &BicDb,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+        comparison: &crate::distribution_range_consensus::NativeJointActivationComparison<'_>,
+        range: &RangeDescriptor,
+    ) -> Result<()> {
+        comparison.require_store(db, store, self)?;
+        self.require_lifetime(db.data_path(), store.native_writer_store_open_id(), range)?;
+        #[cfg(feature = "tls-replication")]
+        if let Self::Registered(owner) = self {
+            let owner = owner
+                .upgrade()
+                .ok_or_else(|| invalid("activation comparison original Registered owner ended"))?;
+            if owner.terminal_writer().is_some() {
+                return self.require_current(db, store, range);
+            }
+            owner
+                .target()
+                .require_owned_activation_identity(db, store, comparison)?;
+            owner.target().original_hook().require_current(db)?;
+            return self.require_lifetime(
+                db.data_path(),
+                store.native_writer_store_open_id(),
+                range,
+            );
+        }
+        self.require_current(db, store, range)
+    }
     pub(crate) fn require_current(
         &self,
         db: &BicDb,

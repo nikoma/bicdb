@@ -293,6 +293,7 @@ impl NativeRegisteredRemoteCataloguePublication {
         if bytes.len() > 64 * 1024 * 1024 {
             return Err(range_write_error("Registered catalogue floor byte bound"));
         }
+        store.note_catalogue_write_entered()?;
         crate::storage::replace_durably(
             &store.root.join(DEFAULT_RANGE_WRITE_LOG),
             crate::storage::ReplaceContents::Plain(&bytes),

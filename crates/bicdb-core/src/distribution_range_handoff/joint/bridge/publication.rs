@@ -333,6 +333,13 @@ pub(crate) struct NativeJointOpenAdmission {
     cancellation: crate::CancellationToken,
 }
 impl NativeJointOpenAdmission {
+    /// Producer-sealed preparation ancestry only; no raw token or new phase.
+    pub(crate) fn original_preparation_memory_lifetime(
+        &self,
+    ) -> Result<crate::cancellation::CancellationLifetime> {
+        self.local.actual.retained_activation_memory_lifetime()
+    }
+
     #[cfg(feature = "tls-replication")]
     pub(crate) fn retain_registered_release_owner(
         &self,
@@ -509,5 +516,80 @@ impl NativeJointOpenAdmission {
             phase.require_member_with_service(self.receipt.local_node_id(), service)?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+impl NativeJointPublishedServingQuorum {
+    pub(crate) fn test_owned_activation_state(
+        &self,
+        node: &ClusterNodeId,
+    ) -> Result<serde_json::Value> {
+        let original = self
+            .prepared
+            .observations
+            .get(node)
+            .ok_or_else(|| invalid("actual activation test member absent"))?;
+        let service = original
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("actual activation test service busy"))?;
+        original.actual.test_owned_activation_state(&service)
+    }
+    pub(crate) fn test_owned_activation_later_io(
+        &self,
+        node: &ClusterNodeId,
+    ) -> Result<serde_json::Value> {
+        let original = self
+            .prepared
+            .observations
+            .get(node)
+            .ok_or_else(|| invalid("actual activation test member absent"))?;
+        let mut service = original
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("actual activation test service busy"))?;
+        original.actual.test_owned_activation_later_io(&mut service)
+    }
+    pub(crate) fn test_owned_activation_foreign(
+        &self,
+        node: &ClusterNodeId,
+    ) -> Result<serde_json::Value> {
+        let original = self
+            .prepared
+            .observations
+            .get(node)
+            .ok_or_else(|| invalid("actual activation test member absent"))?;
+        let foreign = self
+            .prepared
+            .observations
+            .iter()
+            .find(|(id, _)| *id != node)
+            .map(|(_, v)| v)
+            .ok_or_else(|| invalid("actual foreign activation test member absent"))?;
+        let service = original
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("actual activation test service busy"))?;
+        original.actual.test_owned_activation_foreign(
+            &service,
+            &self.receipts[node],
+            &foreign.actual,
+        )
+    }
+}
+
+#[cfg(test)]
+impl NativeJointOpenAdmission {
+    pub(crate) fn test_stale_activation_owner_comparison(&self) -> Result<serde_json::Value> {
+        self.require_live()?;
+        let service = self
+            .local
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("actual stale activation comparison service busy"))?;
+        self.local
+            .actual
+            .test_stale_activation_comparison(&service, self)
     }
 }

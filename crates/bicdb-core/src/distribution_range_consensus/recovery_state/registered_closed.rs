@@ -175,9 +175,11 @@ impl RangeWriteStore {
             .validate_quiescent_frozen(capability.scope().range_id, frozen)?;
         self.require_active_recovery_scope_record(capability.scope())?;
         let envelope = RangeWriteEnvelope::new(self.catalog.clone())?;
+        let encoded = serde_json::to_vec_pretty(&envelope)?;
+        self.note_catalogue_write_entered()?;
         write(
             &self.root.join(DEFAULT_RANGE_WRITE_LOG),
-            &serde_json::to_vec_pretty(&envelope)?,
+            &encoded,
             self.fsync,
         )?;
         // Real post-write readback verifies checksum and every current field.

@@ -170,6 +170,7 @@ impl RangeWriteStore {
         }
         let gate = database.range_mutation_gate();
         gate.validate_quiescent_frozen(range, frozen)?;
+        self.retain_owned_activation(database, admission, &writer_domain, image, frozen)?;
         let controlled = gate.try_controlled_mutation(frozen)?;
         gate.validate(range, &RangeMutationAuthority::Controlled(&controlled))?;
         writer_domain.require_current(database, self, data.activation_range())?;
@@ -190,30 +191,18 @@ impl RangeWriteStore {
                 "fresh activation changed permanent plan/session/nonce",
             ));
         }
-        self.recovery_persistence_uncertain = true;
-        state.serving_activation = Some(candidate.clone());
-        // Missing raw log is possible only at an actually verified genesis
-        // cut; the local scope/opaque catalogue checks above reject a nonzero
-        // native prefix with such missing raw history.
-        self.catalog
-            .ranges
-            .entry(range)
-            .or_insert_with(|| RangeWriteLog {
-                current_epoch: data.activation_range().epoch,
-                last_index: 0,
-                resolved_through: 0,
-                compacted_through: 0,
-                entries: BTreeMap::new(),
-            })
-            .current_epoch = data.activation_range().epoch;
-        if existing.is_none() && image.is_some() {
-            self.catalog.image_install_intents.remove(&range);
-        }
-        let persisted = self.persist_native_joint(database, range);
+        let persisted = self.write_owned_activation_from_admission(
+            database,
+            admission,
+            &writer_domain,
+            image,
+            frozen,
+            &controlled,
+            parent,
+        );
         #[cfg(test)]
         eprintln!("ACTUAL_JOINT_OPEN_CATALOGUE_PERSIST node={} success={} uncertain={} range={} scoped=true",self.catalog.node_id,persisted.is_ok(),self.recovery_persistence_uncertain,range);
         persisted?;
-        self.recovery_persistence_uncertain = false;
         drop(controlled);
         #[cfg(test)]
         test_cuts::after_persist()?;

@@ -264,6 +264,7 @@ impl NativeRegisteredDecisionCataloguePublication {
             error_sha256: None,
         });
         let last = self.outcomes.len() - 1;
+        store.note_catalogue_write_entered()?;
         let result = crate::storage::replace_durably(
             &store.root.join(DEFAULT_RANGE_WRITE_LOG),
             crate::storage::ReplaceContents::Plain(&self.bytes),

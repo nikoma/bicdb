@@ -299,6 +299,7 @@ impl NativeJoinedRemoteInstallingPublication {
         // Exact original/candidate bytes already retained before memory/IO.
         store.catalog = pending.candidate.clone();
         store.recovery_persistence_uncertain = true;
+        store.note_catalogue_write_entered()?;
         crate::storage::replace_durably(
             &store.root.join(DEFAULT_RANGE_WRITE_LOG),
             crate::storage::ReplaceContents::Plain(&pending.bytes),

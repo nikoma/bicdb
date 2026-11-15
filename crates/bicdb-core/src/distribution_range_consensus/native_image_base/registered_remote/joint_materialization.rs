@@ -59,6 +59,22 @@ impl NativeRegisteredRemoteCatalogueMaterialization {
         }
         self.require_current(store, db, physical)
     }
+    /// Purpose-specific same-original physical comparison under an owned
+    /// activation intent; this asserts NO catalogue durability or Serving.
+    pub(crate) fn require_owned_activation_identity(
+        &self,
+        store: &RangeWriteStore,
+        db: &crate::BicDb,
+        physical: &NativeInstalledRangeImageBase,
+        original: &Arc<NativeRegisteredRemoteInstallPreflight>,
+    ) -> Result<()> {
+        if !Arc::ptr_eq(&self.preflight, original) {
+            return Err(range_write_error(
+                "activation comparison changed original Registered preflight",
+            ));
+        }
+        self.require_identity_point(store, db, physical)
+    }
     pub(crate) fn require_current(
         &self,
         store: &RangeWriteStore,

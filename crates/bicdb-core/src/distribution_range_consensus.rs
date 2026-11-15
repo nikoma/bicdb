@@ -173,6 +173,7 @@ mod native_writer;
 #[cfg(feature = "tls-replication")]
 pub(crate) use native_writer::NativeAssignedCoordinatorWriterPublication;
 mod registered_joint_identity;
+pub(crate) use joint_handoff_state::NativeJointActivationComparison;
 #[cfg(all(test, feature = "tls-replication"))]
 pub(crate) use joint_handoff_state::{test_registered_decision_catalogue_cut, CatalogueCut};
 pub(crate) use joint_handoff_state::{
@@ -877,6 +878,14 @@ pub struct RangeWriteStore {
     open_id: Uuid,
     open_lifetime: Arc<()>,
     recovery_persistence_uncertain: bool,
+    // Necessary SAME-open IO fence only, never durability or mutation authority.
+    // Every actual catalogue write attempt advances it, even for identical bytes.
+    catalogue_write_generation: std::sync::atomic::AtomicU64,
+    // Only an ACTUAL same-open activation producer can fill this RAM slot.
+    // Global uncertainty alone cannot reconstruct or select this owner.
+    owned_joint_activation:
+        Option<Arc<Mutex<joint_handoff_state::NativeJointActivationPublication>>>,
+    activation_io_history: joint_handoff_state::ActivationIoHistory,
     // Immutable provenance of the ORIGINAL verified read, never pathname existence.
     catalogue_loaded_at_open: bool,
     #[cfg(test)]
@@ -1146,6 +1155,9 @@ impl RangeWriteStore {
             current_joint_recovery_writers: BTreeMap::new(),
             _native_abort_owner: abort_owner,
             recovery_persistence_uncertain: false,
+            catalogue_write_generation: std::sync::atomic::AtomicU64::new(0),
+            owned_joint_activation: None,
+            activation_io_history: Default::default(),
             catalogue_loaded_at_open: existing_catalog,
             #[cfg(test)]
             test_native_commit_write_error_once: false,
@@ -1833,25 +1845,31 @@ impl RangeWriteStore {
     }
 
     fn persist_with(&self, write: impl FnOnce(&Path, &[u8], bool) -> Result<()>) -> Result<()> {
-        self.persist_gated(Self::require_native_writer_host_base, write)
-    }
-
-    /// The gate runs immediately before and after the durable catalogue
-    /// write. Every caller names the host identity that authorises its write.
-    fn persist_gated(
-        &self,
-        gate: impl Fn(&Self) -> Result<()>,
-        write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
-    ) -> Result<()> {
-        gate(self)?;
+        self.require_native_writer_host_base()?;
         fs::create_dir_all(&self.root)?;
         let envelope = RangeWriteEnvelope::new(self.catalog.clone())?;
-        write(
-            &self.root.join(DEFAULT_RANGE_WRITE_LOG),
-            &serde_json::to_vec_pretty(&envelope)?,
-            self.fsync,
-        )?;
-        gate(self)
+        let bytes = serde_json::to_vec_pretty(&envelope)?;
+        self.note_catalogue_write_entered()?;
+        write(&self.root.join(DEFAULT_RANGE_WRITE_LOG), &bytes, self.fsync)?;
+        self.require_native_writer_host_base()
+    }
+
+    pub(super) fn current_catalogue_write_generation(&self) -> u64 {
+        self.catalogue_write_generation
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Call only after preflight/encoding, immediately before actual catalogue IO.
+    /// A failed entered write supersedes older recovery owners too. No wrap/reset.
+    pub(super) fn note_catalogue_write_entered(&self) -> Result<u64> {
+        self.catalogue_write_generation
+            .fetch_update(
+                std::sync::atomic::Ordering::SeqCst,
+                std::sync::atomic::Ordering::SeqCst,
+                |n| n.checked_add(1),
+            )
+            .map(|previous| previous + 1)
+            .map_err(|_| range_write_error("catalogue IO generation exhausted; write refused"))
     }
 
     fn persist_or_restore<T>(&mut self, previous: RangeWriteCatalog, value: T) -> Result<T> {

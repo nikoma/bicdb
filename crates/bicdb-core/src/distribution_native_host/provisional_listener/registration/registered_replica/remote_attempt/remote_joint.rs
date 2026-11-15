@@ -193,6 +193,23 @@ impl NativeRegisteredRemoteJointTarget {
             &self.preflight,
         )
     }
+    /// Only a private actual retained activation comparison can enter this
+    /// necessary read path. Generic materialization/currentness stays strict.
+    pub(crate) fn require_owned_activation_identity(
+        &self,
+        db: &BicDb,
+        store: &RangeWriteStore,
+        comparison: &crate::distribution_range_consensus::NativeJointActivationComparison<'_>,
+    ) -> Result<()> {
+        comparison.require_registered_target(db, store, self)?;
+        self.preflight.require_original_process()?;
+        self.preflight.original.database.require_database(db)?;
+        self.preflight.original.store.require_live()?;
+        self.preflight.native().require_current(db)?;
+        db.validate_range_image_bindings(self.preflight.bindings())?;
+        self.catalogue
+            .require_owned_activation_identity(store, db, &self.base, &self.preflight)
+    }
     pub(crate) fn require_joint_lifetime(
         &self,
         root: &std::path::Path,

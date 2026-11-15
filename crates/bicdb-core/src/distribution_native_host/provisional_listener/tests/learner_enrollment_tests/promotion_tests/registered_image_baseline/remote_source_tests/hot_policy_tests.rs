@@ -11,6 +11,7 @@ use crate::distribution_range_handoff::{
     NativeJointPreparedServingRound,
 };
 
+mod activation_owned_tests;
 mod collection_binding_tests;
 mod fresh_collection_tests;
 mod new_decision_round_tests;
@@ -18,7 +19,8 @@ mod prepared_candidate_tests;
 mod publication_scope_tests;
 
 pub(in super::super) fn is_hot_policy(case: SourceCase) -> bool {
-    publication_scope_tests::is_case(case)
+    activation_owned_tests::is_case(case)
+        || publication_scope_tests::is_case(case)
         || prepared_candidate_tests::is_case(case)
         || collection_binding_tests::is_case(case)
         || fresh_collection_tests::is_case(case)
@@ -636,7 +638,10 @@ pub(in super::super) fn exercise(
     let preparation_session = process.child();
     // The new ancestry control gives the ACTUAL producer a child BEFORE
     // effects; the independent aggregate/fresh-phase caller stays its parent.
-    let producer_session = if matches!(case, SourceCase::TargetCollectionProducerCanceled) {
+    let producer_session = if matches!(
+        case,
+        SourceCase::TargetCollectionProducerCanceled | SourceCase::TargetActivationProducerCanceled
+    ) {
         preparation_session.child()
     } else {
         preparation_session.clone()
@@ -909,18 +914,64 @@ pub(in super::super) fn exercise(
         let phase = Arc::new(phase.finish().unwrap());
         let i = (0..5).find(|i| node(*i) == *local).unwrap();
         let admission = phase.acquire_local_open(&all_clients[i], &node(0)).unwrap();
-        let receipt = Arc::new(
-            operation(output, &mut ledger, "actual_catalogue_open", || {
-                admission.persist_local_catalogue_activation(process)
-            })
-            .unwrap(),
-        );
-        if i == 4 {
+        let receipt = if i == 4 && activation_owned_tests::is_case(case) {
+            let Some((receipt, actual_release_owner)) = activation_owned_tests::activate(
+                case,
+                &published,
+                &admission,
+                &all_clients,
+                &factory.database,
+                &producer_session,
+                process,
+                output,
+            ) else {
+                return;
+            };
+            release_owner = Some(actual_release_owner);
+            receipt
+        } else {
+            Arc::new(
+                operation(output, &mut ledger, "actual_catalogue_open", || {
+                    admission.persist_local_catalogue_activation(process)
+                })
+                .unwrap(),
+            )
+        };
+        if i == 4 && release_owner.is_none() {
             release_owner = Some(
                 admission
                     .retain_registered_release_owner(receipt.clone())
                     .unwrap(),
             );
+        }
+        if matches!(case, SourceCase::TargetActivationLaterSameBytes) && i != 4 {
+            let actual_database = services[i].lock().database();
+            activation_owned_tests::later_same_bytes(
+                &published,
+                local,
+                &all_clients,
+                &actual_database,
+                output,
+            );
+            return;
+        }
+        if matches!(case, SourceCase::TargetActivationLawfulOtherRange)
+            && i != 4
+            && untouched
+                .replicas
+                .iter()
+                .any(|r| r.node_id == *local && r.role == crate::RangeReplicaRole::Voter)
+        {
+            activation_owned_tests::lawful_other_range(
+                &published,
+                local,
+                &all_clients,
+                original_gateway,
+                &current,
+                &untouched,
+                output,
+            );
+            return;
         }
         activations.insert(local.clone(), receipt);
     }

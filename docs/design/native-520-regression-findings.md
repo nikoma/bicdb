@@ -4,7 +4,7 @@ This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe64
 
 ## Actual execution
 
-### Source7c: partial CI checkpoint; Core failed, remaining jobs live
+### Source7c: Core and Native failed; remaining workspace live
 
 Candidate **1.0.520-beta / `7c77418656a41ec6e25c7601319e061c328f48e1`**,
 tree `df63298f61b0a4cdd56f0caabc694d888c38dbda`, was checked out by CI as
@@ -19,7 +19,8 @@ not a completed archive or qualified release.
 | PGwire | **Passed, CI scope** | 511 passed / 0 failed / 2 ignored; Oracle HR50, embedded HA11, verification3 and protocol195 are separate component scopes. |
 | Rails | **Passed, application CI scope** | 20 runs / 100 assertions, zero failures/errors/skips, including process-kill recovery. |
 | SQL | **Passed, CI scope** | 2,682 passed / 0 failed / 4 ignored across 282 summaries; actual committed-error/DDL cleanup and SQLSTATE controls passed. This is not distributed SQL or Native timed-Unknown acceptance. |
-| Native multi-node, remaining workspace | **Not yet established** | Jobs were still running at this checkpoint; no inherited pass. |
+| Native multi-node | **Failed** | 363 passed / 45 failed / 1 ignored; 409 unique outcomes. Exact failure cuts and separate passed components are retained below. |
+| Remaining workspace | **Not yet established** | Job still running at this checkpoint; no inherited pass. |
 | Independent physical expansion | **Not tested** | Original Azure qualification remains failed; no stable five-node throughput gain or production admission. |
 
 The backup failure is `encrypted_full_backup_verifies_and_restores_records`
@@ -48,6 +49,50 @@ coverage remains an explicit missing producer. The separate
 [root-local fence refinement](bootstrap-root-local-fence-refinement.md) specifies
 shared IO exclusion, ancestor Page admission and pending-marker/FI ordering;
 it is **design only**, with runtime wiring and crash qualification outstanding.
+
+### Completed source7c Native job: exact failure boundaries
+
+[Native132783896405](https://github.com/nikoma/bicdb/actions/runs/43704937146/job/132783896405)
+compiled and ran **363 passed / 45 failed / 1 ignored**, with 983 filtered out.
+This is a failed acceptance result. Its complete raw log is 42,835,265 bytes,
+SHA-256 `d64ff32826c1acd4a59aa4819be4ea0933a9ed5c8effa4b1ae6201d99aa83172`;
+gzip 3,594,128 bytes, SHA-256
+`e8808425833f37cc6acacf5d161c627982daaf5f90d1091abb7fc5b4f5b46110`.
+Independent full-log/case inventory receipt:
+`c7883e3929c3f6027a078b885bf2a7edad409be14cb150de661095d2d0575172`.
+The complete run archive remains pending while remaining-workspace is live.
+
+| Actual failed scope | Classification | Observed cut and limit |
+| --- | --- | --- |
+| 21 FIRST startup cases | **Failed prerequisite; later cuts not tested** | Normal parallel INITIAL DATA opening returned ConnectionReset/ConnectionRefused. Intended later FIRST/fault assertions were not reached. Exact inner read/socket cause remains inconclusive. |
+| Cross retained-discovery exclusion | **Partial pass, later failed** | Opposing FIRST refusal and before/after positions passed; later original SDK APPEND failed with a range-policy refresh refusal. |
+| Over512 | **Partial pass, later failed before allocation** | 45 APP acknowledgments and 44 full Strong reads passed; the next Strong call hit its original two-second RPC deadline. The over512 transfer/fault cut was not reached. This is not observed successful absence or proven data loss. |
+| Catalogue rename-unknown | **Partial pass, later failed** | Two APP/full-Strong pairs and allocation/enrollment prerequisites passed; ALL_OLD_close failed `joint metadata service identity busy` before the catalogue fault. |
+| 20 hot catalogue Open cases | **Failed** | `hot_policy_tests.rs:991`: first `actual_catalogue_open` returned QueryTimedOut. Release/policy and their later selected APP/Strong tails were not reached. Trace intervals do not establish CPU/IO root cause or absence of effects. |
+| Large unrelated-head activation | **Failed, intended fault not tested** | `activation_owned_tests.rs:127` expected fault-fired1, observed0. Intended owned-IO/Unknown/refsync assertions were not reached. |
+
+Separate current-source component passes include typed native-local follower
+apply (raw17516), combined stale-gateway/catch-up-gap transfer recovery17448,
+source-frame controls21135/21138/21141 and post-scope archive/middle-history
+controls20953/20956. They do not qualify the failed cases' unreached tails or a
+physical/operator expansion. All400 earlier326 names and all349 main519 names
+are present, but changed helpers/budgets preclude causal or performance inference
+from matching names alone.
+
+The comprehensive 45-case/source-cut classifier SHA-256 is
+`f88af999ada1689060b5bce34fc3134dae5eec78b0225c70c48d8c76ddde9311`.
+Direct stderr events precede buffered failure footers; the separately retained
+serial-case projection SHA-256 is
+`72cb76e227e01c8adec6fc1b18a83b3d57a3fcb77a10a9cfecb9356ae30664ac`.
+
+The [INITIAL diagnostic correction](native-initial-open-failure-evidence.md)
+retains every real worker result and read failure boundary without retries or
+budget changes; it does **not** fix the socket failures. Separate source
+`fe8618729236c63446830254f76a9a560e87ff4a` removes redundant Open validation and
+adds a genuine cancellation control, retaining original1500ms windows and full
+publication/owned-IO checks. It is **not compiled or executed**; saved time and
+sufficiency to resolve the 21 hot failures remain unproven. No failed case is
+reclassified as passing by these untested source changes.
 
 ### Historical pre-CI review of the source7c corrections
 

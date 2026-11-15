@@ -13,8 +13,10 @@ workspace/no-default compilation, PGwire511/0/2, SQL2,682/0/4 and Rails20 runs /
 100 assertions passing. Core library passed975/0/8, including visibility8,
 Standard3, bootstrap11 and new rekey4 controls; the job later failed a backup
 capability-vector assertion. Its subsequent verify/restore assertions were not
-reached. The test-only correction is local and not tested. Native and
-remaining-workspace are still running at this checkpoint. Full identities,
+reached. The test-only correction is local and not tested. Native has now failed363/45/1, including startup/earlier FIRST failures and hot
+catalogue Open timeouts; a large-head fault was not reached. Separate native-local
+and combined Strong components passed in their own scopes. Remaining-workspace
+is still running at this checkpoint. Full identities,
 complete terminal logs and exact limits are in the
 [520 regression findings](design/native-520-regression-findings.md).
 

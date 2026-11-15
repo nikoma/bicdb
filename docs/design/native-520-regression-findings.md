@@ -71,6 +71,20 @@ original assertion/cut classifier SHA-256:
 `4babc8214096f5504a0e7c166bb81666b2e4a8990978f259968fe7974df03578`.
 Later targets not reached by this failed Core job receive no passing coverage.
 
+The isolated [primary-only enrollment correction](primary-only-export-physical-format-enrollment.md)
+(`4829efc186c58951aba87d9a946255baa209939b`, descriptor child
+`058586f90026ea44ba510ac8183cfbc8fb33d4ed`) leaves new Core FORMAT enrollment
+off for the mutation-fenced primary-only profile. Existing enrollment still
+requires its actual inode and unchanged-file/parent durability barriers; normal
+indexed enrollment and actual WAL/Page recovery remain unchanged. Three genuine
+controls are defined for exact legacy bytes/live-backup refusal, missing enrolled
+inode and existing-enrollment sync failures. Classification: **source correction;
+not compiled or executed**. Original test/fixture bytes remain intact. Root and
+independent source-review receipts respectively:
+`3dc3f6a23cd53cc7f302e275f3e4ff2614f6463f946e072a00f775036bbb6436`,
+`12d78f3206e9ef4aa3d1fcaf27aa6bc80e2b70ea72a06796ba0f6fab963ffae3`.
+The failed source6de result is not reclassified by this untested successor.
+
 ### Completed source7c: Core and Native failed; workspace and application components passed
 
 Candidate **1.0.520-beta / `7c77418656a41ec6e25c7601319e061c328f48e1`**,

@@ -48,6 +48,43 @@ The frozen trace's attribution of `records_completion=false` to a remote
 backend is corrected above: the actual remote Policy is the distinct direct
 host path. The missing completion producer finding remains unchanged.
 
+## Later source trace: the retiring source already participates
+
+Inspection of the composed source through `deb4f543c` distinguishes two
+different custody facts. The metadata owner retains a certified decision
+summary rather than the participant's full local D. That does not mean the
+retiring source lacks its native decision. FIRST collection materializes every
+original OLD member plus the target, and its native/catalogue member operations
+admit both OLD and NEW. The actual metadata-owner certification independently
+queries catalogue evidence from every OLD member plus the target before
+proposing certification; failure of any exchange propagates. The normal-host
+definition also publishes native/catalogue decisions to the retiring OLD source.
+
+Sources: [native_decision.rs](../../crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/first_coordinator/native_decision.rs),
+[native_catalogue.rs](../../crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/first_coordinator/native_catalogue.rs),
+[first_catalogue_certification.rs](../../crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/first_catalogue_certification.rs),
+and [the actual OLD recipient](../../crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data/old_step/remote_new.rs).
+This is source-path inspection, **not execution of the later source composition**.
+
+The smallest missing remote retirement step should therefore use the actual
+retired source's existing closed session, permanent promise, native decision
+and healthy catalogue. Its own fresh committed metadata read must show the
+recorded activation and its absence from final membership. It must issue its
+own actual durable membership retirement receipt; neither the donor identity
+nor the metadata owner's decision summary is a replacement proof.
+
+The existing local source-retirement helper may fail a currentness postcheck
+after the durable catalogue operation returned successfully. A remote actor
+must retain the real known receipt before fallible postchecks, and retain the
+original error separately. An ambiguous persistence result cannot become a
+known receipt merely because bytes are visible, and a lost reply cannot justify
+blind mutation replay. This is an outcome-retention requirement for the missing
+remote producer, not evidence of data loss or a reproduced local failure.
+Actual authenticated remote retirement, independent selected metadata
+completion and interrupted/unknown-outcome controls remain **not implemented
+or tested**. `rows_retained=true`, warm phase retirement and physical deletion
+remain different boundaries.
+
 ## Warm custody cannot be discarded by status
 
 Both `remote_serving` and `remote_reference_retirement` retain at most eight

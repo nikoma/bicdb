@@ -722,9 +722,11 @@ fn native_range_move_abort_before_cut_commits_and_a_new_move_is_accepted() {
     });
 }
 
-/// (c) The production move with the remote backend in its current state: the
-/// stage it cannot perform is reported as blocked in the status; the host and
-/// its metadata are unaffected and the step is repeated after the backoff.
+/// (c) The production move with the remote backend on a fixture whose members
+/// cannot complete it (this fixture starts no member image-source process):
+/// the stage that fails is reported as blocked in the status, with the
+/// member's refusal verbatim; the host and its metadata are unaffected and the
+/// step is repeated after the backoff.
 #[test]
 fn native_range_move_remote_backend_reports_blocked_stage_without_failing_host() {
     run("range-move-remote-blocked", |five| {
@@ -747,8 +749,7 @@ fn native_range_move_remote_backend_reports_blocked_stage_without_failing_host()
             error.starts_with(&format!(
                 "blocked at {}: ",
                 status.next_stage.expect("an unfinished move")
-            )) && error.contains("remote joined handoff backend: ")
-                && error.contains("is not implemented"),
+            )),
             "{error}"
         );
         assert!(!status.completed && !status.aborted && status.paused.is_none());

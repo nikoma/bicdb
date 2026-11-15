@@ -21,6 +21,7 @@ pub(in super::super) fn is_hot_policy(case: SourceCase) -> bool {
         || new_decision_round_tests::is_case(case)
         || source_export_retirement_tests::is_case(case)
         || native_handoff_step_tests::is_case(case)
+        || remote_backend_drive_tests::is_case(case)
         || catalogue_tests::is_catalogue_control(case)
         || matches!(
             case,
@@ -264,6 +265,23 @@ pub(in super::super) fn exercise(
             ranges,
             acknowledged,
             output,
+            template,
+            process,
+        );
+        return;
+    }
+    if remote_backend_drive_tests::is_case(case) {
+        remote_backend_drive_tests::exercise(
+            case,
+            controls,
+            clients,
+            services,
+            metadata,
+            target,
+            target_control,
+            factory,
+            pending,
+            ranges,
             template,
             process,
         );

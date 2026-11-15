@@ -11,6 +11,9 @@ use std::time::{Duration, Instant};
 
 const MAX_STEP_REQUEST_BYTES: usize = 16 * 1024;
 const MAX_STEP_REPLY_BYTES: usize = 64 * 1024;
+/// A reply that returns the recipient's original source manifest DATA is
+/// bounded like every other message that carries that manifest.
+const MAX_STEP_MANIFEST_REPLY_BYTES: usize = 2 * 1024 * 1024 + MAX_STEP_REPLY_BYTES;
 
 /// Operations are added by later phases (decision, bridge, serve). Each one
 /// is an instruction for the recipient's own bounded work, never authority.
@@ -22,6 +25,30 @@ pub(crate) enum NativeJointHandoffStepOperationV1 {
         donor: ClusterNodeId,
         target_attempt: Uuid,
     },
+    /// The Registered target, which retains the completed install of
+    /// `target_attempt` and its own joint target owner, asks the donor itself
+    /// to retire the completed export (the existing target-to-donor export
+    /// retirement; the donor observes the target's owner over its own pinned
+    /// transport). The reply returns the target's original source manifest as
+    /// historical DATA. Repeatable: the donor answers its retained terminal.
+    SourceExportRetire {
+        donor: ClusterNodeId,
+        target_attempt: Uuid,
+    },
+}
+impl NativeJointHandoffStepOperationV1 {
+    fn install_identity(&self) -> (&ClusterNodeId, Uuid) {
+        match self {
+            Self::TargetInstall {
+                donor,
+                target_attempt,
+            }
+            | Self::SourceExportRetire {
+                donor,
+                target_attempt,
+            } => (donor, *target_attempt),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -82,21 +109,15 @@ impl NativeJointHandoffStepRequestV1 {
         {
             return Err(invalid("invalid bounded joint handoff step request DATA"));
         }
-        match &self.operation {
-            NativeJointHandoffStepOperationV1::TargetInstall {
-                donor,
-                target_attempt,
-            } => {
-                if donor.as_str().is_empty()
-                    || donor.as_str().len() > 1024
-                    || target_attempt.is_nil()
-                    || *target_attempt == self.session_id
-                {
-                    return Err(invalid(
-                        "invalid bounded joint handoff target install identity",
-                    ));
-                }
-            }
+        let (donor, target_attempt) = self.operation.install_identity();
+        if donor.as_str().is_empty()
+            || donor.as_str().len() > 1024
+            || target_attempt.is_nil()
+            || target_attempt == self.session_id
+        {
+            return Err(invalid(
+                "invalid bounded joint handoff target install identity",
+            ));
         }
         Ok(())
     }
@@ -132,16 +153,15 @@ impl NativeJointHandoffStepRequestV1 {
                 "joint handoff step request differs from actual Pending plan",
             ));
         }
-        match &self.operation {
-            NativeJointHandoffStepOperationV1::TargetInstall { donor, .. } => {
-                // The donor's own receiver independently decides whether it
-                // is the selected image source of its ALL-old certificate.
-                if !plan.old_members().contains_key(donor) {
-                    return Err(invalid(
-                        "joint handoff step donor is not an actual OLD member",
-                    ));
-                }
-            }
+        // The donor's own receiver independently decides whether it is the
+        // selected image source of its ALL-old certificate.
+        if !plan
+            .old_members()
+            .contains_key(self.operation.install_identity().0)
+        {
+            return Err(invalid(
+                "joint handoff step donor is not an actual OLD member",
+            ));
         }
         Ok(())
     }
@@ -238,21 +258,59 @@ pub(crate) struct NativeJointHandoffStepReplyV1 {
     pub metadata_term: u64,
     pub metadata_read_index: u64,
     pub metadata_context_id: Uuid,
+    /// The recipient's original source manifest, returned by
+    /// `SourceExportRetire` only. Historical DATA covered by the checksum:
+    /// every member that later receives it compares it with its own facts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_manifest: Option<crate::distribution_range_image::NativeRemoteImageManifestV1>,
     pub checksum_sha256: String,
 }
 impl NativeJointHandoffStepReplyV1 {
     pub(crate) fn checksum(&self) -> Result<String> {
         let mut value = self.clone();
         value.checksum_sha256.clear();
+        let bound = if value.source_manifest.is_some() {
+            MAX_STEP_MANIFEST_REPLY_BYTES
+        } else {
+            MAX_STEP_REPLY_BYTES
+        };
         Ok(hex::encode(sha2::Sha256::digest(
             crate::distribution_range_image::bounded_json(
                 &("native-joint-handoff-step-reply-v1", value),
-                MAX_STEP_REPLY_BYTES,
+                bound,
             )?,
         )))
     }
     pub(crate) fn require_request(&self, request: &NativeJointHandoffStepRequestV1) -> Result<()> {
         self.outcome.require_shape()?;
+        let (donor, target_attempt) = request.operation.install_identity();
+        match (&request.operation, &self.source_manifest) {
+            (NativeJointHandoffStepOperationV1::TargetInstall { .. }, None) => {}
+            (NativeJointHandoffStepOperationV1::SourceExportRetire { .. }, Some(manifest)) => {
+                manifest.require_shape()?;
+                if !self.outcome.complete
+                    || self.outcome.manifest_sha256.as_ref() != Some(&manifest.checksum_sha256)
+                    || self.outcome.source_session != Some(manifest.source_session)
+                    || &manifest.source_id != donor
+                    || manifest.target_attempt != target_attempt
+                    || manifest.target_id != self.node_id
+                    || manifest.capture_range.id != request.range_id
+                    || manifest.capture_range.epoch != request.range_epoch
+                    || manifest.relocation_id != request.relocation_id
+                    || manifest.handoff_session != request.session_id
+                    || manifest.nonce != request.nonce
+                {
+                    return Err(invalid(
+                        "joint handoff step reply returns another source manifest",
+                    ));
+                }
+            }
+            _ => {
+                return Err(invalid(
+                    "joint handoff step reply manifest DATA differs from its operation",
+                ))
+            }
+        }
         if self.request != *request
             || self.outcome.binding_sha256 != request.binding()?
             || self.metadata_term == 0

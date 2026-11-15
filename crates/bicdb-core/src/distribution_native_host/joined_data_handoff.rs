@@ -417,6 +417,10 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
             finished: None,
         }
     }
+    /// The backend and what it retains, read-only.
+    pub(crate) fn backend(&self) -> &B {
+        &self.backend
+    }
     /// True once the handoff reached the last stage its backend produces.
     pub(crate) fn completed(&self) -> bool {
         self.finished.is_some()

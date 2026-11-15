@@ -100,3 +100,25 @@ these guards. Relayout invalidates the journal identity before changing files.
 There is no implicit downgrade after enabling tracking: use a compatible binary
 for the database, its restored copies and branches. v1-v3 backup readers remain
 available, but an artifact's source-format feature flags still apply.
+
+## Mandatory physical backup gate profiles
+
+Sources implementing `physical_backup_gate_v1` retain the four existing page
+layout/tracking combinations with mandatory reader-fenced magics:
+
+| Layout | Tracking | Current magic |
+| --- | --- | --- |
+| Monolithic | Untracked | `BICDBPG5` |
+| Segmented | Untracked | `BICDBPG6` |
+| Segmented | Tracked | `BICDBPG7` |
+| Monolithic | Tracked | `BICDBPG8` |
+
+The earlier `BICDBPG\0`/`BICDBPG2`/`BICDBPG3`/`BICDBPG4` values describe
+pre-gate inputs. Current owning-engine opens validate those inputs and publish
+the mandatory fence before later writes; tracking, extent routing and relayout
+remain distinct. The new values are outside the prior decoder's accepted
+magic set. Exact current-output tests therefore require 5/6/7/8, while tests
+which intentionally read historical artifacts retain their original bytes.
+The byte/source compatibility assertions in those tests do not execute or
+qualify a historical reader binary. See the [physical gate contract](design/standard-live-backup-physical-gate.md)
+and the [520 test-oracle correction](design/page-gated-profile-test-correction.md).

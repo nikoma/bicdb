@@ -2,8 +2,8 @@
 //! (`store.pages`, `store.pages.1`, …) behind the same `PageStore` API.
 //!
 //! Pins the layout contract: pure-arithmetic page routing across segment
-//! boundaries, superblock round-trip of the extent size (with the v2 magic
-//! so pre-segmentation engines fail closed), crash recovery replaying across
+//! boundaries, superblock round-trip of the extent size (with distinct mandatory
+//! physical-gate magics so pre-gate engines refuse), crash recovery replaying across
 //! segments, checkpoint tail-reclaim deleting whole trailing segment files,
 //! and full back-compatibility of the legacy monolithic layout.
 
@@ -108,10 +108,10 @@ fn raw_store_reads_and_writes_across_segment_boundaries() {
 }
 
 #[test]
-fn segmented_superblock_uses_v2_magic_and_legacy_stays_v1() {
+fn mandatory_gated_profiles_keep_segmented_and_monolithic_layouts_distinct() {
     let dir = TempDir::new().unwrap();
     let segmented_path = dir.path().join("segmented.pages");
-    let legacy_path = dir.path().join("legacy.pages");
+    let monolithic_path = dir.path().join("monolithic.pages");
     drop(
         PageStore::open(
             &segmented_path,
@@ -124,7 +124,7 @@ fn segmented_superblock_uses_v2_magic_and_legacy_stays_v1() {
     );
     drop(
         PageStore::open(
-            &legacy_path,
+            &monolithic_path,
             PageStoreOptions::default()
                 .with_page_size(PAGE_SIZE)
                 .with_fsync(false),
@@ -133,13 +133,50 @@ fn segmented_superblock_uses_v2_magic_and_legacy_stays_v1() {
     );
     let header_bytes = 64; // PAGE_HEADER_BYTES
     let segmented = std::fs::read(&segmented_path).unwrap();
-    let legacy = std::fs::read(&legacy_path).unwrap();
+    let monolithic = std::fs::read(&monolithic_path).unwrap();
+    let segmented_magic = &segmented[header_bytes..header_bytes + 8];
+    let monolithic_magic = &monolithic[header_bytes..header_bytes + 8];
+    eprintln!("ACTUAL_MANDATORY_UNTRACKED_PROFILES segmented={segmented_magic:?} monolithic={monolithic_magic:?}");
     assert_eq!(
-        &segmented[header_bytes..header_bytes + 8],
-        b"BICDBPG2",
-        "segmented store must publish the v2 superblock magic so old engines fail closed"
+        segmented_magic, b"BICDBPG6",
+        "segmented output must retain its mandatory physical-reader fence"
     );
-    assert_eq!(&legacy[header_bytes..header_bytes + 8], b"BICDBPG\0");
+    assert_eq!(
+        monolithic_magic, b"BICDBPG5",
+        "fresh monolithic output must retain its mandatory physical-reader fence"
+    );
+    assert_ne!(
+        segmented_magic, monolithic_magic,
+        "the reader fence must not collapse the two layouts"
+    );
+    // Byte/source compatibility assertion against the literal accepted-magics
+    // set in main519 (587dd6e), manager.rs2672-2701. No old binary runs here.
+    let pre_gate_magics = [*b"BICDBPG\0", *b"BICDBPG2", *b"BICDBPG3", *b"BICDBPG4"];
+    assert!(
+        pre_gate_magics
+            .iter()
+            .all(|old| old.as_slice() != segmented_magic && old.as_slice() != monolithic_magic),
+        "current outputs must be outside the pre-gate reader's accepted byte set"
+    );
+    // Actual current readers must still recover the original extent layouts.
+    let segmented = PageStore::open(
+        &segmented_path,
+        PageStoreOptions::default()
+            .with_page_size(PAGE_SIZE)
+            .with_fsync(false),
+    )
+    .unwrap();
+    let monolithic = PageStore::open(
+        &monolithic_path,
+        PageStoreOptions::default()
+            .with_page_size(PAGE_SIZE)
+            .with_fsync(false),
+    )
+    .unwrap();
+    assert_eq!(segmented.extent_pages(), PAGES_PER_SEGMENT);
+    assert_eq!(monolithic.extent_pages(), 0);
+    assert_eq!(segmented.page_size(), PAGE_SIZE);
+    assert_eq!(monolithic.page_size(), PAGE_SIZE);
 }
 
 #[test]

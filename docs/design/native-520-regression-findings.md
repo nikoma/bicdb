@@ -18,7 +18,8 @@ not a completed archive or qualified release.
 | Core | **Failed** | Library 975 passed / 0 failed / 8 ignored. All eight visibility, three Standard, eleven bootstrap and four new rekey controls passed. Later backup target: 9 passed / 1 failed; 30 additional backup cases were not executed. |
 | PGwire | **Passed, CI scope** | 511 passed / 0 failed / 2 ignored; Oracle HR50, embedded HA11, verification3 and protocol195 are separate component scopes. |
 | Rails | **Passed, application CI scope** | 20 runs / 100 assertions, zero failures/errors/skips, including process-kill recovery. |
-| Native multi-node, SQL, remaining workspace | **Not yet established** | Jobs were still running at this checkpoint; no inherited pass. |
+| SQL | **Passed, CI scope** | 2,682 passed / 0 failed / 4 ignored across 282 summaries; actual committed-error/DDL cleanup and SQLSTATE controls passed. This is not distributed SQL or Native timed-Unknown acceptance. |
+| Native multi-node, remaining workspace | **Not yet established** | Jobs were still running at this checkpoint; no inherited pass. |
 | Independent physical expansion | **Not tested** | Original Azure qualification remains failed; no stable five-node throughput gain or production admission. |
 
 The backup failure is `encrypted_full_backup_verifies_and_restores_records`
@@ -33,6 +34,11 @@ finish. Historical input fixtures and all restore/payload assertions are retaine
 
 Complete Core raw log: 2,433,064 bytes, SHA-256
 `fea8f65fa0a030ae47609fd9da94e2ffa00ae2f2f922dd881eca134c220c96d7`.
+Complete SQL raw log: 295,655,118 bytes, SHA-256
+`742b900d47cd4d90c1b1649df51a302da61cc5e065ad24c7704567e24835b5c1`.
+Independent full-log/checkout/case/summary receipt SHA-256:
+`9eab149b2dcf9c05431732937167488bdba3ee9a1b73662d68deb97e5ec47a94`.
+
 Passing same-attempt controls do not close the documented cross-call bootstrap
 association or Prepared-rekey source-head gaps.
 The [deferred final-tail design](bootstrap-deferred-final-tail-7c.md) specifies

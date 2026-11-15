@@ -20,8 +20,9 @@ Core library passed975/0/8; visibility8, Standard3, bootstrap11 and new Cell
 rekey4 controls passed. Its later backup assertion failed because the expected
 capability vector omits mandatory `physical_backup_gate_v1`; subsequent restore
 assertions were not reached. The two-vector source correction remains local
-and **not tested**. Native, SQL and remaining-workspace jobs were still running
-at this checkpoint. Current exact source/tree/log identities and limits are in
+and **not tested**. SQL passed2,682/0/4, including the actual committed-error/DDL
+cleanup and SQLSTATE controls. Native and remaining-workspace jobs were still
+running at this checkpoint. Current exact source/tree/log identities and limits are in
 the [regression findings](design/native-520-regression-findings.md).
 
 The [Cell contract](design/cell-rotation-physical-gate-lifecycle.md) does not close

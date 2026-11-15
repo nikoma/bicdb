@@ -75,6 +75,7 @@ enum Case {
     ServingMissingReleased,
     ServingSuccessorRead,
     ServingDrainResume,
+    ServingPartialDrainResume,
 }
 fn is_catalogue_case(case: Case) -> bool {
     matches!(
@@ -113,6 +114,7 @@ fn is_catalogue_case(case: Case) -> bool {
             | Case::ServingMissingReleased
             | Case::ServingSuccessorRead
             | Case::ServingDrainResume
+            | Case::ServingPartialDrainResume
     )
 }
 #[derive(Clone, Copy, Debug)]
@@ -122,6 +124,14 @@ enum SetupCut {
 }
 
 enum OwnerCommand {
+    LocalServingPartialDrain(
+        crate::RangeId,
+        Uuid,
+        ClusterNodeId,
+        Uuid,
+        mpsc::SyncSender<Arc<crate::distribution_transport::InitialTransitionControl>>,
+        mpsc::SyncSender<serde_json::Value>,
+    ),
     LocalServingDrainCancel(crate::RangeId, Uuid, mpsc::SyncSender<serde_json::Value>),
     PolicySocketProfile(crate::RangeId, Uuid, mpsc::SyncSender<serde_json::Value>),
     LocalServing(
@@ -894,6 +904,11 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                         let result=target.test_registered_policy_socket_profile(range,phase,&request);
                         let _=send.try_send(release_tests::policy_return_data(result));
                     },
+                    OwnerCommand::LocalServingPartialDrain(range,phase,peer,business,ready,send)=> {
+                        let request=parent.child_with_deadline(Instant::now()+Duration::from_secs(4));
+                        let result=target.test_actual_registered_partial_drain_cancel(range,phase,peer,business,ready,&request);
+                        let _=send.try_send(release_tests::policy_return_data(result));
+                    },
                     OwnerCommand::LocalServingDrainCancel(range,phase,send)=> {
                         let request=parent.child_with_deadline(Instant::now()+Duration::from_secs(4));
                         let result=target.test_actual_registered_policy_drain_cancel(range,phase,&request);
@@ -951,7 +966,7 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                         worker_omitted += 1;
                     }
                 }
-                if matches!(case,Case::Preparation|Case::PreparationCancelledAfterNative|Case::PreparationCommitUnknown|Case::PreparationHostPollCancelled|Case::PreparationHostPollExpired|Case::Bridge|Case::BridgeMissingPrepared|Case::BridgeCancelledAfterNative|Case::BridgeCommitUnknown|Case::Open|Case::OpenR2Progress|Case::OpenLaterIoFailed|Case::OpenCancelledAfterIo|Case::OpenIoUnknown|Case::Release|Case::ReleaseMissingOpen|Case::ReleaseCancelledAfterDrop|Case::Serving|Case::ServingMissingReleased|Case::ServingSuccessorRead|Case::ServingDrainResume) {
+                if matches!(case,Case::Preparation|Case::PreparationCancelledAfterNative|Case::PreparationCommitUnknown|Case::PreparationHostPollCancelled|Case::PreparationHostPollExpired|Case::Bridge|Case::BridgeMissingPrepared|Case::BridgeCancelledAfterNative|Case::BridgeCommitUnknown|Case::Open|Case::OpenR2Progress|Case::OpenLaterIoFailed|Case::OpenCancelledAfterIo|Case::OpenIoUnknown|Case::Release|Case::ReleaseMissingOpen|Case::ReleaseCancelledAfterDrop|Case::Serving|Case::ServingMissingReleased|Case::ServingSuccessorRead|Case::ServingDrainResume|Case::ServingPartialDrainResume) {
                     // Every real poll has its own caller token; expiring or
                     // canceling it must not stop the retained owner/process.
                     let window=if case==Case::PreparationHostPollExpired {Duration::from_millis(100)} else {Duration::from_secs(5)};
@@ -1556,6 +1571,7 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                     | Case::ServingMissingReleased
                     | Case::ServingSuccessorRead
                     | Case::ServingDrainResume
+                    | Case::ServingPartialDrainResume
             ) {
                 // Same five retained normal hosts; real range leader directly
                 // observes OLD/survivor/Registered NEW, donor remains neither leader.
@@ -2061,6 +2077,7 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                                 | Case::ServingMissingReleased
                                 | Case::ServingSuccessorRead
                                 | Case::ServingDrainResume
+                                | Case::ServingPartialDrainResume
                         )
                         .then(|| {
                             (
@@ -2268,4 +2285,10 @@ fn native_first_actual_registered_replacement_socket_policy_read_and_original_de
 #[test]
 fn native_first_actual_registered_cancelled_closed_drain_resumes_same_installed_owner() {
     run(Case::ServingDrainResume);
+}
+
+#[test]
+fn native_first_actual_registered_shutdown_active_authenticated_peer_cancel_then_same_owner_resume()
+{
+    run(Case::ServingPartialDrainResume);
 }

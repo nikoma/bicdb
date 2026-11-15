@@ -1,6 +1,7 @@
 //! Real finite actor steps and the SAME stock SDK object created before Close.
 //! These are same-process TCP/TLS controls, not VM/RPO/capacity qualification.
 use super::*;
+mod partial_drain_tests;
 #[allow(clippy::too_many_arguments)]
 fn actor_call(
     coordinator: &mut NativeMetadataHost,
@@ -210,6 +211,19 @@ pub(super) fn serve(
     }
     let mut installed = BTreeMap::new();
     for member in members {
+        if case == Case::ServingPartialDrainResume && *member == node(4) {
+            return partial_drain_tests::run(
+                coordinator,
+                metadata,
+                member,
+                range,
+                phase,
+                controls,
+                target,
+                report,
+                parent,
+            );
+        }
         if case == Case::ServingDrainResume && *member == node(4) {
             return verify_actual_cancelled_drain_resume(
                 coordinator,

@@ -48,6 +48,27 @@ enum NativeLearnerLifecycle {
 }
 impl NativeMetadataLearnerHost {
     #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_actual_registered_partial_drain_cancel(
+        &mut self,
+        range: crate::RangeId,
+        phase: Uuid,
+        peer: ClusterNodeId,
+        business: Uuid,
+        ready: std::sync::mpsc::SyncSender<
+            Arc<crate::distribution_transport::InitialTransitionControl>,
+        >,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => host
+                .test_registered_image_control_mut()?
+                .test_actual_registered_partial_drain_cancel(
+                    range, phase, peer, business, ready, parent,
+                ),
+            NativeLearnerLifecycle::Cold(_) => Err(invalid("partial drain cannot cast cold owner")),
+        }
+    }
+    #[cfg(test)]
     pub(in crate::distribution_native_host) fn test_actual_registered_policy_drain_cancel(
         &mut self,
         range: crate::RangeId,

@@ -4,6 +4,10 @@
 mod native_obligation_frame_tests;
 
 #[cfg(test)]
+mod active_drain;
+#[cfg(test)]
+pub(crate) use active_drain::ActualActiveDrainCancel;
+#[cfg(test)]
 mod initial_transition;
 #[cfg(test)]
 pub(crate) use initial_transition::InitialTransitionControl;
@@ -861,6 +865,8 @@ impl ClusterDataServerHandle {
                 .map_err(|_| transport_error("cluster accept thread panicked"))?;
         }
         while self.active.load(Ordering::SeqCst) != 0 {
+            #[cfg(test)]
+            active_drain::after_actual_shutdown_and_accept_join(self, parent)?;
             parent.check()?;
             thread::sleep(Duration::from_millis(2));
         }

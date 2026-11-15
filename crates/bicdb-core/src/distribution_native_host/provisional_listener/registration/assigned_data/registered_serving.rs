@@ -5,6 +5,8 @@ use crate::distribution_native_host::NativeRegisteredRemoteJointOwner;
 use crate::distribution_range_handoff::NativeJointServingPolicyAdmission;
 #[cfg(test)]
 mod drain_tests;
+#[cfg(test)]
+mod partial_drain_tests;
 
 pub(super) struct RegisteredServingPolicy {
     owner: Arc<NativeRegisteredRemoteJointOwner>,
@@ -128,6 +130,8 @@ impl NativeAssignedDataHost {
         self.life.store(false, Ordering::Release);
         #[cfg(test)]
         drain_tests::after_actual_closed_life_ended(parent)?;
+        #[cfg(test)]
+        partial_drain_tests::before_actual_listener_drain(self.listener.as_ref().unwrap(), parent)?;
         let drained = self
             .listener
             .as_mut()
@@ -137,6 +141,8 @@ impl NativeAssignedDataHost {
             .stop_and_drain(parent);
         #[cfg(test)]
         drain_tests::note_actual_drain_return(&drained);
+        #[cfg(test)]
+        partial_drain_tests::note_actual_listener_drain_return(&drained);
         let drained = drained?;
         while self.parts.runtime.active_contexts()? != 0 {
             parent.check()?;

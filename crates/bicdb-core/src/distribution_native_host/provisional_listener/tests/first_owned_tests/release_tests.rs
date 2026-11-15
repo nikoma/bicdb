@@ -14,6 +14,7 @@ pub(super) fn is_case(case: Case) -> bool {
             | Case::ServingMissingReleased
             | Case::ServingSuccessorRead
             | Case::ServingDrainResume
+            | Case::ServingPartialDrainResume
     )
 }
 enum Control {
@@ -542,7 +543,10 @@ pub(super) fn exercise(
                 "selected_APP_Strong_NOT_PROVEN":true,"automatic_controller_cold_cleanup_NOT_IMPLEMENTED":true}));
             if matches!(
                 case,
-                Case::Serving | Case::ServingSuccessorRead | Case::ServingDrainResume
+                Case::Serving
+                    | Case::ServingSuccessorRead
+                    | Case::ServingDrainResume
+                    | Case::ServingPartialDrainResume
             ) {
                 serving_tests::serve(
                     coordinator,

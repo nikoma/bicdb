@@ -13,7 +13,10 @@ struct State {
     accept_arrived: bool,
     accept_release: bool,
     auth_peer: Option<ClusterNodeId>,
+    auth_business: Option<Uuid>,
     auth_arrived: bool,
+    auth_wait_active: bool,
+    auth_deadline: Option<Instant>,
     auth_release: bool,
     auth_data: Option<serde_json::Value>,
     connect_peer: Option<ClusterNodeId>,
@@ -52,6 +55,15 @@ impl InitialTransitionControl {
     }
     pub(crate) fn pause_authenticated_host_read(&self, peer: ClusterNodeId) {
         self.actual.state.lock().auth_peer = Some(peer);
+    }
+    pub(crate) fn pause_authenticated_host_read_request(
+        &self,
+        peer: ClusterNodeId,
+        business: Uuid,
+    ) {
+        let mut s = self.actual.state.lock();
+        s.auth_peer = Some(peer);
+        s.auth_business = Some(business);
     }
     pub(crate) fn pause_connected_host_read(&self, peer: ClusterNodeId) {
         self.actual.state.lock().connect_peer = Some(peer);
@@ -123,6 +135,15 @@ impl Hooks {
             active,
         }
     }
+    pub(super) fn control_snapshot(&self, active: &AtomicUsize) -> serde_json::Value {
+        let s = self.state.lock();
+        serde_json::json!({"actual_authenticated_request":s.auth_data,
+            "actual_authenticated_handler_paused":s.auth_wait_active && !s.auth_release,
+            "actual_authenticated_handler_remaining_us":s.auth_deadline.map(|d|d.saturating_duration_since(Instant::now()).as_micros()),
+            "actual_active_connections":active.load(Ordering::SeqCst),
+            "actual_shutdown":s.shutdown,"actual_accept_ended":s.accept_ended,
+            "authority_returned":false})
+    }
     pub(super) fn before_accept(&self, shutdown: &AtomicBool) {
         if !self.enabled.load(Ordering::Acquire) {
             return;
@@ -168,7 +189,13 @@ impl Hooks {
         if s.auth_peer.as_ref() != Some(peer) || s.auth_arrived {
             return Ok(());
         }
+        if s.auth_business.is_some_and(|expected| !matches!(request,
+            ClusterDataRequest::HostMetadataReadAcquire { request } if request.read_request_id==expected)) {
+            return Ok(());
+        }
         s.auth_arrived = true;
+        s.auth_wait_active = true;
+        s.auth_deadline = Some(deadline);
         if let ClusterDataRequest::HostMetadataReadAcquire { request } = request {
             s.auth_data = Some(
                 serde_json::json!({"actual_acquisition":request.acquisition_id,"actual_business":request.read_request_id,
@@ -180,6 +207,7 @@ impl Hooks {
         while !s.auth_release && Instant::now() < deadline {
             self.changed.wait_for(&mut s, Duration::from_millis(2));
         }
+        s.auth_wait_active = false;
         // The real provider retains the SAME original request_deadline. An
         // expired request receives its normal real refusal; no renewed token.
         Ok(())

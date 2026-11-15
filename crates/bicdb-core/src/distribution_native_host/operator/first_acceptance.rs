@@ -11,6 +11,15 @@ impl NativeMetadataHost {
         self.test_first_control()?
             .test_first_metadata_identity_wait(range, mode, parent)
     }
+    pub(in crate::distribution_native_host) fn test_actual_partial_drain_peer_call(
+        &self,
+        destination: &ClusterNodeId,
+        business: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<impl FnOnce() -> Result<serde_json::Value> + Send + 'static> {
+        self.test_first_control()?
+            .test_actual_partial_drain_peer_call(destination, business, parent)
+    }
     fn test_first_control(&self) -> Result<&NativeMetadataControlHost> {
         self.control
             .as_ref()

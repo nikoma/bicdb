@@ -164,8 +164,11 @@ fn assign_two_ranges(
     proposed
 }
 fn key_in(topology: &ClusterTopology, range: crate::RangeId) -> String {
+    key_in_named(topology, range, "registered-fifth-ack")
+}
+fn key_in_named(topology: &ClusterTopology, range: crate::RangeId, prefix: &str) -> String {
     (0..100_000)
-        .map(|i| format!("registered-fifth-ack-{}-{i}", range))
+        .map(|i| format!("{prefix}-{}-{i}", range))
         .find(|key| {
             let id = crate::cluster_event_record_id("items", key).unwrap();
             topology
@@ -459,6 +462,79 @@ fn run_registered_image_baseline_with_placement_and_source(
                 &output.join("ack-ledger.json"),
                 &ledger,
                 &mut evidence_errors,
+            );
+        }
+        if matches!(
+            source_case,
+            Some(remote_source_tests::SourceCase::TargetPublicationMiddleHistoryAfterScope)
+        ) {
+            // A middle-history fault needs a real interior retained entry.
+            // The ordinary fixture has only one actual command per range.
+            // Add two genuine SDK commands BEFORE Close, using the original
+            // client/2s bound; never manufacture a history entry or counter.
+            phase = "actual_middle_history_prerequisites";
+            let range = &ranges[0];
+            let mut extra = Vec::new();
+            for ordinal in 1..=2 {
+                let key = key_in_named(
+                    &current,
+                    range.id,
+                    &format!("publication-middle-history-{ordinal}"),
+                );
+                let value = serde_json::json!({"actual_middle_history_prerequisite":ordinal,
+                    "range":range.id,"nested":[null,{"full":"payload"}]});
+                let record_id = crate::cluster_event_record_id("items", &key).unwrap();
+                extra.push(serde_json::json!({"phase":"intent","key":key,
+                    "record_id":record_id,"expected_full_value":value,"expected_range":range.id,
+                    "expected_range_epoch":range.epoch,"expected_topology_generation":current.generation,
+                    "configured_gateway":node(0),"configured_timeout_ms":2000,
+                    "metadata_source":"setup descriptors; stock SDK owns actual routing; not raw wire evidence",
+                    "expected_payload_sha256":hex::encode(Sha256::digest(serde_json::to_vec(&value).unwrap())),
+                    "outcome":"not_started"}));
+                evidence(
+                    &output.join("middle-history-prerequisite-ledger.json"),
+                    &extra,
+                )
+                .unwrap();
+                let actual = gateway.append("items", &key, value.clone());
+                let entry = extra.last_mut().unwrap();
+                entry["phase"] = "actual_return".into();
+                entry["inserted"] = serde_json::to_value(actual.as_ref().ok()).unwrap();
+                entry["error"] =
+                    serde_json::to_value(actual.as_ref().err().map(ToString::to_string)).unwrap();
+                entry["outcome"] = if actual.is_ok() {
+                    "acknowledged"
+                } else {
+                    "unknown_effect"
+                }
+                .into();
+                // Retain the primary actual result before any assertion.
+                eprintln!("NATIVE_MIDDLE_HISTORY_PREREQUISITE {entry}");
+                evidence_after(
+                    &output.join("middle-history-prerequisite-ledger.json"),
+                    &extra,
+                    &mut evidence_errors,
+                );
+                assert!(actual.unwrap());
+                let actual_read = gateway.get_strong("items", &key);
+                eprintln!("NATIVE_MIDDLE_HISTORY_PREREQUISITE_READ {actual_read:?}");
+                assert_eq!(serde_json::to_value(actual_read.unwrap()).unwrap(), value);
+            }
+            let leader = (0..4).find(|i| node(*i) == range.leader).unwrap();
+            let actual = databases[leader]
+                .read()
+                .current_native_range_source_lineage(range.id)
+                .unwrap();
+            eprintln!(
+                "NATIVE_MIDDLE_HISTORY_ACTUAL_PREFIX {}",
+                serde_json::json!({"range":range.id,"range_index":actual.range_index(),
+                    "logical_history_sha256":actual.logical_history_sha256(),
+                    "actual_local_visibility_sequence":actual.actual_local_visibility_sequence(),
+                    "authority_claim":false})
+            );
+            assert!(
+                actual.range_index() >= 3,
+                "genuine interior history prerequisite"
             );
         }
         phase = "commit_two_data_learner_assignments";

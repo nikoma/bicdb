@@ -1,6 +1,19 @@
 # HA and horizontal scaling: evidence checkpoint, November 14, 2026
 
-Latest separate candidate feedback: [native 1fc acceptance](design/native-1fc-acceptance-result.md)
+Delivered-main observation, November 15 00:15 UTC: **1.0.514-beta**,
+`7fc833e3a9130ea710a0fbbfbaba6b065eedf8d3`. Its normal
+[required CI](https://github.com/nikoma/bicdb/actions/runs/43636965492) and
+[Rails checks](https://github.com/nikoma/bicdb/actions/runs/43636965456) passed.
+That documentation merge did not deliver the separate candidate repairs,
+a new optimized binary, physical expansion or production qualification.
+
+Newer separate candidate feedback: [native c05 acceptance](design/native-c05-acceptance-result.md)
+finished with **331 passed /15 failed /one ignored**. Four remote-decision
+controls passed, but native acceptance failed. The later source follow-up is
+not a tested fix, physical expansion or production qualification. This result
+does not rewrite the earlier source-pinned checkpoints below.
+
+Earlier separate candidate feedback: [native 1fc acceptance](design/native-1fc-acceptance-result.md)
 finished with **330 passed /16 failed /one ignored**. All other non-skipped
 required jobs and Rails passed. That tested head failed acceptance; later
 follow-ups must be assessed separately. The older source-pinned checkpoints

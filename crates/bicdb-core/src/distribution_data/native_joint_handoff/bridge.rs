@@ -198,6 +198,10 @@ impl ActualServiceNativeJointPreparedEvidence {
         let database = checked_database_read(&service.db, &service.storage_policy)?;
         service.require_native_catalog_database(&database)?;
         if self.prepared.local_node_id() != &service.node_id {
+            // Preserve the original actual writer/store refusal. This extra
+            // validation is only on the foreign-service rejection path; it
+            // cannot authorize this service or replace the final local scope.
+            self.require_original_phase_owner(&database, &service.range_writes)?;
             return Err(data_error(
                 "joint bridge preparation belongs to another service",
             ));
@@ -215,6 +219,8 @@ impl ActualServiceNativeJointPreparedEvidence {
                 self.lease.frozen(),
             )?;
         }
+        self.prepared
+            .require_original_protected_records(&database)?;
         // One actual journal-held physical observation covers this local
         // validation only. The constructor checks the real preparation,
         // catalogue, native lineage and every retained history entry. A
@@ -271,12 +277,6 @@ impl ActualServiceNativeJointPreparedEvidence {
     ) -> Result<crate::db::NativeJointPhaseOwner> {
         let database = checked_database_read(&service.db, &service.storage_policy)?;
         service.require_native_catalog_database(&database)?;
-        self.writer_domain.require_current(
-            &database,
-            &service.range_writes,
-            fresh.data().activation_range(),
-        )?;
-        self.require_original_phase_owner(&database, &service.range_writes)?;
         history.require_current(self, &database)?;
         fresh.require_current(&database)?;
         let old = self.committed.metadata_anchor();
@@ -299,14 +299,6 @@ impl ActualServiceNativeJointPreparedEvidence {
                 "fresh joint phase changed original decision/open or reused old metadata",
             ));
         }
-        self.prepared.require_current(
-            &database,
-            &service.range_writes,
-            fresh,
-            &self.catalogue,
-            self.lease.image(),
-            self.lease.frozen(),
-        )?;
         let pin = self
             .pin
             .try_lock()
@@ -317,7 +309,28 @@ impl ActualServiceNativeJointPreparedEvidence {
         } else {
             gate.validate_quiescent_frozen(fresh.data().old_range().id, self.lease.frozen())?;
         }
-        self.require_original_phase_owner(&database, &service.range_writes)
+        // The foreign participant must still validate its OWN complete physical
+        // point. Keep that one independently read point under its actual journal
+        // while validating the same original phase owner on both sides. This
+        // does not reuse the publisher's local scope or a cached numeric floor.
+        // Original-history and fresh protected-decision checks above remain;
+        // publication_read_scope rereads preparation CURRENT/archive, catalogue,
+        // lineage and every retained resolution with the fresh actual request.
+        let scope = self.prepared.publication_read_scope(
+            &database,
+            &service.range_writes,
+            fresh,
+            &self.catalogue,
+            self.lease.image(),
+            self.lease.frozen(),
+        )?;
+        self.require_original_phase_owner_with_publication_scope(&scope, &service.range_writes)?;
+        if let Some(pin) = pin.as_ref() {
+            gate.validate_source_capture_read_pin(fresh.data().old_range().id, pin)?;
+        } else {
+            gate.validate_quiescent_frozen(fresh.data().old_range().id, self.lease.frozen())?;
+        }
+        self.require_original_phase_owner_with_publication_scope(&scope, &service.range_writes)
     }
     pub(crate) fn require_current_under_open_phase(
         &self,

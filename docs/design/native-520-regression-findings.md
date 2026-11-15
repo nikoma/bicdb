@@ -35,6 +35,10 @@ Complete Core raw log: 2,433,064 bytes, SHA-256
 `fea8f65fa0a030ae47609fd9da94e2ffa00ae2f2f922dd881eca134c220c96d7`.
 Passing same-attempt controls do not close the documented cross-call bootstrap
 association or Prepared-rekey source-head gaps.
+The [deferred final-tail design](bootstrap-deferred-final-tail-7c.md) specifies
+both ordinary absent/existing-target association and latest closed-target
+finalization. It is **not implemented or tested**; native final acknowledged-prefix
+coverage remains an explicit missing producer.
 
 ### Historical pre-CI review of the source7c corrections
 

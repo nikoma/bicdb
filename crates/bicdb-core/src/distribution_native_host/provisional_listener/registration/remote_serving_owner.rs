@@ -67,13 +67,31 @@ impl NativeMetadataControlHost {
                 unique.insert(key, phase);
             }
         }
+        let mut phases = unique.into_iter().collect::<Vec<_>>();
+        // Resume after the last attempted phase, even when its queue is
+        // busy or its work exhausted the caller. A repeatedly hot first range cannot starve
+        // another retained original phase. The cursor grants no authority.
+        if let Some(cursor) = self.remote_serving_poll_cursor {
+            let start = phases
+                .iter()
+                .position(|(key, _)| *key > cursor)
+                .unwrap_or(0);
+            phases.rotate_left(start);
+        }
         let mut progressed = 0;
-        for participant in unique.into_values() {
+        for (key, participant) in phases {
+            // Do not dequeue another original RPC once this poll has ended.
+            parent.check()?;
+            self.remote_serving_poll_cursor = Some(key);
             let queue = participant.retained_serving_queue();
             let Some(mut work) = queue.take()? else {
                 continue;
             };
-            let result = self.apply_finite_remote_serving(&participant, &mut work);
+            let result = work.bind_actor_poll(parent).and_then(|()| {
+                #[cfg(test)]
+                self.test_after_actual_actor_bind(&work, parent)?;
+                self.apply_finite_remote_serving(&participant, &mut work)
+            });
             if matches!(
                 work.request.operation,
                 NativeRemoteServingOperationV1::Release
@@ -95,6 +113,7 @@ impl NativeMetadataControlHost {
             // original private native state is already held in this host.
             queue.complete(work, result)?;
             progressed += 1;
+            parent.check()?;
         }
         Ok(progressed)
     }
@@ -200,7 +219,7 @@ impl NativeMetadataControlHost {
         let operation = work.request.operation;
         let process = self.remote_serving.get(&key).unwrap().process.clone();
         let request = process
-            .bound_request(&work.token)
+            .bound_request(&work.bound_actor_request())
             .child_linked_to(&work.own.original_request_cancellation())
             .child_with_deadline(work.role.deadline().min(work.own.deadline()));
         let mutating = operation == NativeRemoteServingOperationV1::Prepare;
@@ -382,7 +401,8 @@ impl NativeMetadataControlHost {
             .find(|p| p.snapshot().binding.range_id == range)
             .ok_or_else(|| invalid("preparation test needs actual original participant"))?;
         if let Some(mode) = arm {
-            if !matches!(mode, 1 | 2)
+            if !matches!(mode, 1 | 2 | 3 | 4)
+                || self.remote_host_poll_cuts.contains_key(&range)
                 || self.remote_preparation_test.contains_key(&range)
                 || self
                     .remote_serving
@@ -397,6 +417,7 @@ impl NativeMetadataControlHost {
         let state = self.remote_serving.get(&(range, phase.snapshot().phase_id));
         // Capture actual memory-only liveness BEFORE diagnostic storage IO.
         let memory = serde_json::json!({"actual_participant":phase.snapshot(),"deferred_mode":self.remote_preparation_test.get(&range),
+            "actual_host_poll_cut":self.remote_host_poll_cuts.get(&range),
             "continuation_present":state.is_some(),"lifetime_error":state.and_then(|s|s.process.require_memory().err()).map(|e|e.to_string()),
             "closed_started":state.map(|s|s.closed_started),"closed_lease_transferred":state.map(|s|s.closed_lease_transferred),
             "original_lease_still_retained":state.map(|s|s.lease.is_some()),"native_attempt":state.map(|s|s.preparation.test_native_outcome()),"bridge":state.map(|s|s.bridge.test_outcome())});
@@ -508,7 +529,7 @@ impl NativeMetadataControlHost {
             ));
         }
         let request = process
-            .bound_request(&work.token)
+            .bound_request(&work.bound_actor_request())
             .child_linked_to(&work.own.original_request_cancellation())
             .child_with_deadline(work.role.deadline().min(work.own.deadline()));
         let quorum = self.collect_actual_remote_preparations(work, &request)?;
@@ -585,7 +606,7 @@ impl NativeMetadataControlHost {
             invalid("remote bridge needs SAME actual completed preparation owner")
         })?;
         let request = process
-            .bound_request(&work.token)
+            .bound_request(&work.bound_actor_request())
             .child_linked_to(&work.own.original_request_cancellation())
             .child_with_deadline(work.role.deadline().min(work.own.deadline()));
         let quorum = self.collect_actual_remote_preparations(work, &request)?;
@@ -664,5 +685,76 @@ impl NativeMetadataControlHost {
             actual.bridge.test_arm(mode)?;
         }
         self.test_remote_preparation_control(range, None)
+    }
+}
+
+#[cfg(test)]
+impl NativeMetadataControlHost {
+    /// Selected real TLS ingress, after queue take and actual caller binding,
+    /// before the ordinary handler. Neither the original RPC nor Role/OWN is
+    /// canceled or edited. Mode4 waits for the real short caller's deadline.
+    fn test_after_actual_actor_bind(
+        &mut self,
+        work: &NativeRemoteServingIngress,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        let range = work.request.manifest.capture_range.id;
+        let Some(mode @ (3 | 4)) = self.remote_preparation_test.get(&range).copied() else {
+            return Ok(());
+        };
+        if work.request.operation != NativeRemoteServingOperationV1::Prepare {
+            return Err(invalid(
+                "host poll cut requires the original actual Prepare",
+            ));
+        }
+        parent.check()?;
+        work.require_request()?;
+        let now = Instant::now();
+        let original_deadline = work.token.deadline();
+        let server_left = original_deadline.map(|d| d.saturating_duration_since(now).as_micros());
+        let role_left = work
+            .role
+            .deadline()
+            .saturating_duration_since(now)
+            .as_micros();
+        let own_left = work
+            .own
+            .deadline()
+            .saturating_duration_since(now)
+            .as_micros();
+        if mode == 4
+            && parent
+                .deadline()
+                .is_none_or(|d| d.saturating_duration_since(now) > Duration::from_millis(250))
+        {
+            return Err(invalid(
+                "expiry cut requires the actual caller's short original window",
+            ));
+        }
+        self.remote_preparation_test.remove(&range);
+        if mode == 3 {
+            parent.cancel();
+        } else {
+            while parent.check().is_ok() {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        }
+        let original_server_still_live = work.token.check().is_ok();
+        let role_still_live = work.role.require_live_request().is_ok();
+        let own_still_live = work.own.require_live_request(work.business).is_ok();
+        self.remote_host_poll_cuts.insert(range, serde_json::json!({
+            "selected_original_tls_ingress":true,"mode":mode,"fired":1,
+            "original_operation":work.request.original_operation,"sequence":work.request.sequence,
+            "actual_poll_parent_error":parent.check().err().map(|e|e.to_string()),
+            "bound_effect_error":work.bound_actor_request().check().err().map(|e|e.to_string()),
+            "original_server_remaining_us_before":server_left,
+            "original_Role_remaining_us_before":role_left,"original_OWN_remaining_us_before":own_left,
+            "original_server_still_live":original_server_still_live,
+            "original_Role_still_live":role_still_live,"original_OWN_still_live":own_still_live,
+            "original_server_deadline_unchanged":work.token.deadline()==original_deadline,
+            "original_server_cancelled":work.token.is_cancel_requested(),
+            "real_poll_parent_cancelled":parent.is_cancel_requested(),
+        }));
+        Ok(())
     }
 }

@@ -428,10 +428,14 @@ pub(crate) struct NativeMetadataControlHost {
     remote_serving_process: std::sync::OnceLock<CancellationToken>,
     #[cfg(test)]
     remote_preparation_test: BTreeMap<crate::RangeId, u8>,
+    #[cfg(test)]
+    remote_host_poll_cuts: BTreeMap<crate::RangeId, serde_json::Value>,
     remote_serving:
         BTreeMap<(crate::RangeId, Uuid), remote_serving_owner::NativeRemoteLocalServing>,
     remote_reference_retirement:
         BTreeMap<(crate::RangeId, Uuid), remote_serving_owner::NativeRemoteReferenceRetirement>,
+    // Scheduling DATA only: never a native/metadata/readiness grant.
+    remote_serving_poll_cursor: Option<(crate::RangeId, Uuid)>,
     replica: Option<NativeRegisteredReplicaReceiver>,
     assigned: Option<NativeAssignedDataHost>,
     joined: Option<NativeJoinedDataHost>,
@@ -463,8 +467,11 @@ impl NativeMetadataControlHost {
             remote_serving_process: std::sync::OnceLock::new(),
             remote_serving: BTreeMap::new(),
             remote_reference_retirement: BTreeMap::new(),
+            remote_serving_poll_cursor: None,
             #[cfg(test)]
             remote_preparation_test: BTreeMap::new(),
+            #[cfg(test)]
+            remote_host_poll_cuts: BTreeMap::new(),
             replica: None,
             assigned: None,
             joined: None,
@@ -491,8 +498,11 @@ impl NativeMetadataControlHost {
             remote_serving_process: std::sync::OnceLock::new(),
             remote_serving: BTreeMap::new(),
             remote_reference_retirement: BTreeMap::new(),
+            remote_serving_poll_cursor: None,
             #[cfg(test)]
             remote_preparation_test: BTreeMap::new(),
+            #[cfg(test)]
+            remote_host_poll_cuts: BTreeMap::new(),
             replica: None,
             assigned: None,
             joined: None,

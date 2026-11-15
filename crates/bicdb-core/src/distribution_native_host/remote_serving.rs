@@ -199,13 +199,42 @@ pub(in crate::distribution_native_host) struct NativeRemoteServingIngress {
     pub(in crate::distribution_native_host) business: Uuid,
     pub(in crate::distribution_native_host) point: Arc<ActualNativeJointMetadataPoint>,
     pub(in crate::distribution_native_host) token: CancellationToken,
+    // Original RPC token above remains unchanged for reply/Unknown attribution.
+    actor_poll: Option<CancellationToken>,
     effect_entered: bool,
     open_effect: Option<Arc<std::sync::atomic::AtomicBool>>,
     hash: String,
     reply: SyncSender<Result<NativeRemoteServingReplyV1>>,
 }
 impl NativeRemoteServingIngress {
+    /// Bind only this actual consumer turn, never the original RPC or peers.
+    /// Queue delivery cannot renew either original parent or server deadline.
+    pub(in crate::distribution_native_host) fn bind_actor_poll(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        if self.actor_poll.is_some() {
+            return Err(invalid(
+                "serving ingress cannot rebind its original actor poll",
+            ));
+        }
+        self.actor_poll = Some(parent.child());
+        self.require_actor_poll()
+    }
+    pub(in crate::distribution_native_host) fn require_actor_poll(&self) -> Result<()> {
+        if let Some(parent) = &self.actor_poll {
+            parent.check()?;
+        }
+        Ok(())
+    }
+    pub(in crate::distribution_native_host) fn bound_actor_request(&self) -> CancellationToken {
+        match &self.actor_poll {
+            Some(parent) => self.token.child_linked_to(parent),
+            None => self.token.child(),
+        }
+    }
     pub(in crate::distribution_native_host) fn require_request(&self) -> Result<()> {
+        self.require_actor_poll()?;
         self.token.check()?;
         if self.token.deadline().is_none() {
             return Err(invalid(
@@ -229,6 +258,7 @@ impl NativeRemoteServingIngress {
         Ok(())
     }
     pub(in crate::distribution_native_host) fn require_request_memory(&self) -> Result<()> {
+        self.require_actor_poll()?;
         self.token.check()?;
         self.role.require_live_request()?;
         self.own.require_live_request(self.business)?;
@@ -291,6 +321,7 @@ impl NativeRemoteServingQueue {
             business,
             point,
             token,
+            actor_poll: None,
             effect_entered: false,
             open_effect: None,
             hash: hash.clone(),
@@ -602,6 +633,7 @@ impl NativeRemoteServingIngress {
 }
 impl NativeRemotePreparationAdmission<'_> {
     pub(crate) fn require_memory_current(&self) -> Result<()> {
+        self.work.require_actor_poll()?;
         self.work.token.check()?;
         self.work.role.require_live_request()?;
         self.work.own.require_live_request(self.work.business)?;
@@ -628,7 +660,7 @@ impl NativeRemotePreparationAdmission<'_> {
     }
     pub(crate) fn bound_effect_request(&self) -> CancellationToken {
         self.process
-            .bound_request(&self.work.token)
+            .bound_request(&self.work.bound_actor_request())
             .child_linked_to(&self.work.own.original_request_cancellation())
             .child_with_deadline(self.work.role.deadline().min(self.work.own.deadline()))
     }
@@ -975,7 +1007,7 @@ impl NativeRemoteServingIngress {
             session: self.request.manifest.handoff_session,
             nonce: self.request.manifest.nonce,
             token: process
-                .bound_request(&self.token)
+                .bound_request(&self.bound_actor_request())
                 .child_linked_to(&self.own.original_request_cancellation())
                 .child_with_deadline(self.role.deadline().min(self.own.deadline())),
             process,

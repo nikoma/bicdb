@@ -93,6 +93,8 @@ pub(super) fn exercise(
     let mode = match case {
         Case::PreparationCancelledAfterNative => Some(1),
         Case::PreparationCommitUnknown => Some(2),
+        Case::PreparationHostPollCancelled => Some(3),
+        Case::PreparationHostPollExpired => Some(4),
         _ => None,
     };
     let before = report.data_call("actual_target_preparation_original_before_step", || {
@@ -118,6 +120,81 @@ pub(super) fn exercise(
         "before":before,"after":after.as_ref().ok(),"diagnostic_error":after.as_ref().err().map(ToString::to_string),
         "original_request_budget_ms":5000,"Serving":false,"physical_qualification_claim":false}));
     let after = after?;
+    if matches!(
+        case,
+        Case::PreparationHostPollCancelled | Case::PreparationHostPollExpired
+    ) {
+        let expected = if case == Case::PreparationHostPollCancelled {
+            BicDbError::QueryCanceled.to_string()
+        } else {
+            BicDbError::QueryTimedOut.to_string()
+        };
+        let actual_error = first
+            .as_ref()
+            .err()
+            .expect("original actual Prepare must refuse its ended actor")
+            .to_string();
+        assert!(
+            actual_error.contains(&expected),
+            "expected actual actor failure, got {actual_error}"
+        );
+        let cut = &after["memory_before_storage"]["actual_host_poll_cut"];
+        assert_eq!(cut["fired"], 1);
+        assert_eq!(cut["selected_original_tls_ingress"], true);
+        assert_eq!(cut["original_server_still_live"], true);
+        assert_eq!(cut["original_Role_still_live"], true);
+        assert_eq!(cut["original_OWN_still_live"], true);
+        assert_eq!(cut["original_server_deadline_unchanged"], true);
+        assert_eq!(cut["original_server_cancelled"], false);
+        assert_eq!(
+            cut["real_poll_parent_cancelled"],
+            case == Case::PreparationHostPollCancelled
+        );
+        assert_eq!(cut["actual_poll_parent_error"], expected);
+        assert_eq!(cut["bound_effect_error"], expected);
+        for field in [
+            "original_server_remaining_us_before",
+            "original_Role_remaining_us_before",
+            "original_OWN_remaining_us_before",
+        ] {
+            assert!(
+                cut[field].as_u64().is_some_and(|n| n > 0),
+                "actual original allowance must remain positive: {field}"
+            );
+        }
+        assert_eq!(
+            after["memory_before_storage"]["continuation_present"],
+            false
+        );
+        for observed in [&before, &after] {
+            let storage = &observed["storage"];
+            assert!(
+                storage["health_error"].is_null(),
+                "actual native owner must be healthy"
+            );
+            for field in ["native_next_xid", "native_next_lsn", "native_durable_lsn"] {
+                assert!(
+                    storage[field].as_u64().is_some(),
+                    "actual native counter required: {field}"
+                );
+            }
+            for field in ["current", "archive", "bridge_current", "bridge_archive"] {
+                let value = &storage[field];
+                assert!(value.is_null() || (value["raw_read_error"].is_null()
+                    && value["decode_error"].is_null() && value["omitted"].is_null()),
+                    "actual absence/decoded bytes required, not a matching forensic failure: {field}");
+            }
+        }
+        assert_eq!(
+            before["storage"], after["storage"],
+            "actual native/WAL/catalogue must remain unchanged before Prepare effects"
+        );
+        assert_eq!(
+            before["memory_before_storage"]["actual_participant"],
+            after["memory_before_storage"]["actual_participant"]
+        );
+        return Ok(());
+    }
     if case == Case::Preparation {
         let actual = first?;
         assert!(actual["point"]["preparation"].is_object());

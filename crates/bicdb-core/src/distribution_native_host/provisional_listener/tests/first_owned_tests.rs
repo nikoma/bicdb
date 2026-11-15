@@ -53,6 +53,8 @@ enum Case {
     Preparation,
     PreparationCancelledAfterNative,
     PreparationCommitUnknown,
+    PreparationHostPollCancelled,
+    PreparationHostPollExpired,
     Bridge,
     BridgeMissingPrepared,
     BridgeCancelledAfterNative,
@@ -85,6 +87,8 @@ fn is_catalogue_case(case: Case) -> bool {
             | Case::Preparation
             | Case::PreparationCancelledAfterNative
             | Case::PreparationCommitUnknown
+            | Case::PreparationHostPollCancelled
+            | Case::PreparationHostPollExpired
             | Case::Bridge
             | Case::BridgeMissingPrepared
             | Case::BridgeCancelledAfterNative
@@ -849,8 +853,12 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                         worker_omitted += 1;
                     }
                 }
-                if matches!(case,Case::Preparation|Case::PreparationCancelledAfterNative|Case::PreparationCommitUnknown|Case::Bridge|Case::BridgeMissingPrepared|Case::BridgeCancelledAfterNative|Case::BridgeCommitUnknown|Case::Open|Case::OpenR2Progress|Case::OpenLaterIoFailed|Case::OpenCancelledAfterIo|Case::OpenIoUnknown|Case::Release|Case::ReleaseMissingOpen|Case::ReleaseCancelledAfterDrop) {
-                    if let Err(error)=target.poll_finite_remote_serving(&parent) {
+                if matches!(case,Case::Preparation|Case::PreparationCancelledAfterNative|Case::PreparationCommitUnknown|Case::PreparationHostPollCancelled|Case::PreparationHostPollExpired|Case::Bridge|Case::BridgeMissingPrepared|Case::BridgeCancelledAfterNative|Case::BridgeCommitUnknown|Case::Open|Case::OpenR2Progress|Case::OpenLaterIoFailed|Case::OpenCancelledAfterIo|Case::OpenIoUnknown|Case::Release|Case::ReleaseMissingOpen|Case::ReleaseCancelledAfterDrop) {
+                    // Every real poll has its own caller token; expiring or
+                    // canceling it must not stop the retained owner/process.
+                    let window=if case==Case::PreparationHostPollExpired {Duration::from_millis(100)} else {Duration::from_secs(5)};
+                    let actor_poll=parent.child_with_deadline(Instant::now()+window);
+                    if let Err(error)=target.poll_finite_remote_serving(&actor_poll) {
                         if worker_errors.len()<64 {worker_errors.push(crate::distribution_native_host::remote_first::error_data(&error));}
                         else {worker_omitted+=1;}
                     }
@@ -1432,6 +1440,8 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                     | Case::Preparation
                     | Case::PreparationCancelledAfterNative
                     | Case::PreparationCommitUnknown
+                    | Case::PreparationHostPollCancelled
+                    | Case::PreparationHostPollExpired
                     | Case::Bridge
                     | Case::BridgeMissingPrepared
                     | Case::BridgeCancelledAfterNative
@@ -1931,6 +1941,8 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                             Case::Preparation
                                 | Case::PreparationCancelledAfterNative
                                 | Case::PreparationCommitUnknown
+                                | Case::PreparationHostPollCancelled
+                                | Case::PreparationHostPollExpired
                                 | Case::Bridge
                                 | Case::BridgeMissingPrepared
                                 | Case::BridgeCancelledAfterNative
@@ -2067,6 +2079,15 @@ fn native_first_remote_prepare_actual_postcommit_server_cancel_known_read_no_rep
 #[test]
 fn native_first_remote_prepare_actual_commit_sync_unknown_cannot_be_read_as_success() {
     run(Case::PreparationCommitUnknown);
+}
+
+#[test]
+fn native_first_actual_host_poll_cancel_refuses_prepare_while_original_tls_request_is_live() {
+    run(Case::PreparationHostPollCancelled);
+}
+#[test]
+fn native_first_actual_host_poll_expiry_refuses_prepare_while_original_tls_request_is_live() {
+    run(Case::PreparationHostPollExpired);
 }
 
 #[test]

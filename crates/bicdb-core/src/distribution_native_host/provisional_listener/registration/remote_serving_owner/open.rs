@@ -93,7 +93,7 @@ impl NativeMetadataControlHost {
             .cloned()
             .ok_or_else(|| invalid("Open actual known native bridge absent"))?;
         let request = process
-            .bound_request(&work.token)
+            .bound_request(&work.bound_actor_request())
             .child_linked_to(&work.own.original_request_cancellation())
             .child_with_deadline(work.role.deadline().min(work.own.deadline()));
         // Only a genuine new mutating request can enter the old owned retry.

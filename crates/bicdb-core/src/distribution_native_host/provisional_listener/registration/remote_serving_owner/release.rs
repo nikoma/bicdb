@@ -168,7 +168,7 @@ impl NativeMetadataControlHost {
         }
         let process = actual.process.clone();
         let request = process
-            .bound_request(&work.token)
+            .bound_request(&work.bound_actor_request())
             .child_linked_to(&work.own.original_request_cancellation())
             .child_with_deadline(work.role.deadline().min(work.own.deadline()));
         let ingress = work.admit_native_release(process)?;

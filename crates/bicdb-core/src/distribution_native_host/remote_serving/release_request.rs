@@ -42,7 +42,7 @@ impl NativeRemoteServingIngress {
             nonce: self.request.manifest.nonce,
             retry: self.request.operation == NativeRemoteServingOperationV1::ReconcileRelease,
             token: process
-                .bound_request(&self.token)
+                .bound_request(&self.bound_actor_request())
                 .child_linked_to(&self.own.original_request_cancellation())
                 .child_with_deadline(self.role.deadline().min(self.own.deadline())),
             process,

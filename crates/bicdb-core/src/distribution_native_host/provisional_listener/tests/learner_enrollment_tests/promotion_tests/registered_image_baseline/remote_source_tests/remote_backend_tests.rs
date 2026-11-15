@@ -536,7 +536,7 @@ fn driver_stub(
     );
     let error = backend.require_decision().unwrap_err().to_string();
     assert!(error.contains("decision certificate absent"), "{error}");
-    // The bridge phases name themselves.
+    // The member step that does not exist yet names itself.
     let refused = |result: Result<()>, stage: &str| {
         let error = result.unwrap_err().to_string();
         assert!(
@@ -558,7 +558,7 @@ fn driver_stub(
             && error.contains("admit bridge steps from the metadata leader"),
         "{error}"
     );
-    refused(backend.serve(hosts, &token).map(|_| ()), "target serving");
+    refused(backend.serve(hosts, &token).map(|_| ()), "target serve");
     backend.forget_aborted_allocation();
     assert!(backend.closed_frames().is_empty());
 }

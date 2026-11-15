@@ -17,6 +17,7 @@ pub(crate) use registered_decision::{test_registered_decision_catalogue_cut, Cat
 mod bridge;
 pub(crate) use bridge::NativeJointBridgeCatalogue;
 mod activation;
+mod committed_confirmation;
 mod release;
 mod retirement;
 use activation::NativeJointCatalogueActivation;

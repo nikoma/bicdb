@@ -82,15 +82,32 @@ impl NativeRegisteredReplicaAdmission {
                 None,
                 token,
             )?,
-            // The added member never held OLD custody of this range: the
-            // proof is still required, nothing is removed.
+            // The added member never held OLD custody of this range. What
+            // it retires under the same proof is its own obsolete
+            // participation custody of a remote decision round, when it
+            // took part in one; otherwise nothing is removed.
             StepOperation::RetireOldCustody { .. } => retire_member_old_custody(
                 &steps,
                 &backend.provider,
                 &backend.transport,
                 request,
                 fresh,
-                &|_| Ok(()),
+                &|proof| {
+                    let owner = self
+                        .joint_targets
+                        .upgrade()
+                        .ok_or_else(|| invalid("joint bridge step original owner table ended"))?
+                        .try_lock()
+                        .ok_or_else(|| invalid("joint bridge step owner table busy"))?
+                        .get(&request.range_id)
+                        .cloned();
+                    match owner {
+                        Some(owner) => {
+                            owner.retire_remote_decision_custody_after_remote_joint_open(proof)
+                        }
+                        None => Ok(()),
+                    }
+                },
                 token,
             )?,
             StepOperation::BridgeRelease { .. } => release_member_bridge(
@@ -173,6 +190,18 @@ impl NativeRegisteredReplicaAdmission {
                 "joint bridge step retained owner has another actual service",
             ));
         }
+        // First part: this member confirms the decision into its OWN
+        // catalogue, from its own committed metadata and its own protected
+        // native decision record, under its live retained Registered owner.
+        // An already confirmed decision writes nothing; another one refuses.
+        ClusterDataNodeService::confirm_committed_native_joint_decision(
+            &backend.service,
+            &fresh.own,
+            fresh.business,
+            request.relocation_id,
+            range,
+            token,
+        )?;
         // The real freeze the retained owner itself still holds; never one
         // rebuilt from a plan, a number or request DATA.
         let lease = NativeJointServingLease::Registered {

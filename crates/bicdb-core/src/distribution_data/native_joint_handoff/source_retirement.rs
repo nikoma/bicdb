@@ -129,6 +129,24 @@ impl NativeJointSourceRetirementProof for NativeJointSourceRetired {
 }
 
 impl ClusterDataNodeService {
+    /// The retired source's complete own step: confirm the committed
+    /// decision of `relocation` into its own catalogue from its own
+    /// protected native decision record (a source that took part in the
+    /// decision in-process already holds it and nothing is written), then
+    /// record its retirement. Both read the same own metadata read `own`.
+    pub(crate) fn retire_confirmed_native_joint_source(
+        service: &Arc<Mutex<Self>>,
+        own: &HostMetadataReadObservation,
+        business: Uuid,
+        relocation: crate::distribution::RelocationId,
+        range: RangeId,
+        parent: &CancellationToken,
+    ) -> Result<NativeJointSourceRetired> {
+        Self::confirm_committed_native_joint_decision(
+            service, own, business, relocation, range, parent,
+        )?;
+        Self::retire_actual_native_joint_source(service, own, business, range, parent)
+    }
     /// Record this member's retirement from `range` (or confirm the record it
     /// already holds) on its own committed metadata read `own`.
     pub(crate) fn retire_actual_native_joint_source(

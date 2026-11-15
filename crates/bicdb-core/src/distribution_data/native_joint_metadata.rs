@@ -25,6 +25,12 @@ pub(crate) struct ActualNativeJointMetadataPublicationGuard<'a> {
     point: &'a ActualNativeJointMetadataPoint,
     version: NativeMetadataPublicationGuard<'a>,
 }
+/// Allocation cache publication uses the SAME actual version, independently
+/// of readonly observer guards. This type grants no native or metadata effect.
+pub(crate) struct ActualNativeJointMetadataAllocationPublicationGuard<'a> {
+    point: &'a ActualNativeJointMetadataPoint,
+    version: NativeMetadataPublicationGuard<'a>,
+}
 impl ActualNativeJointMetadataPoint {
     pub(crate) fn require_request(
         &self,
@@ -110,6 +116,41 @@ impl ActualNativeJointMetadataPoint {
         };
         guard.require_current_memory()?;
         Ok(guard)
+    }
+    /// Necessary atomic lifetime/version refusals only. Full current native,
+    /// service, metadata and original OWN checks precede the short guard.
+    pub(crate) fn require_allocation_publication_memory(&self) -> Result<()> {
+        self.phase.check()?;
+        self.database.require_allocation_publication_memory()?;
+        self.slot.require_live()?;
+        self.registration.require_current_memory(&self.metadata)?;
+        self.member.publication_version().require_current_memory()
+    }
+    pub(crate) fn try_allocation_publication_guard(
+        &self,
+    ) -> Result<ActualNativeJointMetadataAllocationPublicationGuard<'_>> {
+        // Preserve detailed original point/health refusal OUTSIDE the guard.
+        self.require_current_memory()?;
+        let version = self.member.publication_version().try_publication_guard()?;
+        let guard = ActualNativeJointMetadataAllocationPublicationGuard {
+            point: self,
+            version,
+        };
+        guard.require_memory()?;
+        Ok(guard)
+    }
+}
+impl ActualNativeJointMetadataAllocationPublicationGuard<'_> {
+    pub(crate) fn require_memory(&self) -> Result<()> {
+        self.point.phase.check()?;
+        self.point
+            .database
+            .require_allocation_publication_memory()?;
+        self.point.slot.require_live()?;
+        self.point
+            .registration
+            .require_current_memory(&self.point.metadata)?;
+        self.version.require_current_memory()
     }
 }
 impl ActualNativeJointMetadataPublicationGuard<'_> {

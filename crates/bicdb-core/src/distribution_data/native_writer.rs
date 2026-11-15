@@ -272,6 +272,13 @@ impl NativeWriterAllocationRefresh {
         self.policy.require_live()?;
         self.point.require_current_memory()
     }
+    /// Used only after full current validation and actual allocation-version
+    /// acquisition; no health failure diagnostic payload is read or formatted.
+    pub(crate) fn require_publication_memory(&self) -> Result<()> {
+        self.slot.require_live()?;
+        self.policy.require_live()?;
+        self.point.require_allocation_publication_memory()
+    }
     pub(crate) fn with_current<
         T: crate::distribution_range_consensus::RangeWriteTransport + 'static,
     >(

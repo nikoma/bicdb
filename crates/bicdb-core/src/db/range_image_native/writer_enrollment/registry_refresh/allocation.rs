@@ -3,6 +3,8 @@
 //! disk bytes never turn an old failed fsync into a successful helper return.
 use super::*;
 use crate::distribution_data::NativeWriterAllocationRefresh;
+#[cfg(test)]
+mod publication_health_cut;
 
 #[derive(Debug, Clone, Copy)]
 enum Outcome {
@@ -268,7 +270,7 @@ impl InstalledNativeWriterHostGuard {
                     #[cfg(test)]
                     if mode==1 {
                         let cut=AllocationCut{mode,parent_live:parent.check().is_ok(),own_live:prepared.require_memory().is_ok(),
-                            parent_deadline:parent.deadline(),fired:0,xid:0};
+                            parent_deadline:parent.deadline(),fired:0,xid:0,atomic_health_refusal:false,publication_error:None};
                         let fire=cut.parent_live && cut.own_live;
                         *self.state.allocation_cut.lock()=Some(cut);
                         if fire {parent.cancel();}
@@ -279,7 +281,7 @@ impl InstalledNativeWriterHostGuard {
                     #[cfg(test)]
                     if mode==3 {
                         *self.state.allocation_cut.lock()=Some(AllocationCut{mode,parent_live:parent.check().is_ok(),
-                            own_live:prepared.require_memory().is_ok(),parent_deadline:parent.deadline(),fired:0,xid:0});
+                            own_live:prepared.require_memory().is_ok(),parent_deadline:parent.deadline(),fired:0,xid:0,atomic_health_refusal:false,publication_error:None});
                     }
                     attempt.outcome = Outcome::Entered;
                     let actual = db.in_paged_transaction(|paged, xid| {
@@ -321,6 +323,8 @@ impl InstalledNativeWriterHostGuard {
                     parent_deadline: parent.deadline(),
                     fired: 0,
                     xid: 0,
+                    atomic_health_refusal: false,
+                    publication_error: None,
                 };
                 let fire = cut.parent_live && cut.own_live;
                 *self.state.allocation_cut.lock() = Some(cut);
@@ -358,6 +362,19 @@ impl InstalledNativeWriterHostGuard {
             prepared.with_current(db, coordinator, self, || Ok(()))?;
             parent.check()?;
             let verified = Arc::new(VerifiedRegistryExtension(stored));
+            #[cfg(test)]
+            let mut health_cut = if self
+                .state
+                .allocation_fault
+                .compare_exchange(4, 0, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+            {
+                Some(publication_health_cut::PublicationHealthCut::start(
+                    db.native_metadata_owner_health()?,
+                )?)
+            } else {
+                None
+            };
             let mut old = None;
             prepared.with_current(db, coordinator, self, || {
                 let hook = db
@@ -379,10 +396,36 @@ impl InstalledNativeWriterHostGuard {
                     .registry_extension
                     .try_write()
                     .ok_or_else(|| invalid("allocation verified cache busy"))?;
-                let version = prepared.point().try_publication_guard()?;
+                let version = prepared.point().try_allocation_publication_guard()?;
+                #[cfg(test)]
+                if let Some(health_cut) = health_cut.as_mut() {
+                    let cut = AllocationCut {
+                        mode: 4,
+                        parent_live: parent.check().is_ok(),
+                        own_live: prepared.require_publication_memory().is_ok(),
+                        parent_deadline: parent.deadline(),
+                        fired: 0,
+                        xid,
+                        atomic_health_refusal: false,
+                        publication_error: None,
+                    };
+                    let fire = cut.parent_live && cut.own_live;
+                    *self.state.allocation_cut.lock() = Some(cut);
+                    let actual_fence = if fire {
+                        // The SAME actual version is held. Only the separate
+                        // worker records/formats the injected health failure.
+                        health_cut.fire(parent)
+                    } else {
+                        Ok(())
+                    };
+                    if let Some(cut) = self.state.allocation_cut.lock().as_mut() {
+                        cut.fired = health_cut.fired();
+                    }
+                    actual_fence?;
+                }
                 parent.check()?;
-                prepared.require_memory()?;
-                version.require_current_memory()?;
+                prepared.require_publication_memory()?;
+                version.require_memory()?;
                 old = cache.replace(verified);
                 self.state
                     .registry_publication_pending
@@ -393,6 +436,25 @@ impl InstalledNativeWriterHostGuard {
             Ok(())
         })();
         if let Err(error) = &result {
+            #[cfg(test)]
+            if let Some(cut) = self.state.allocation_cut.lock().as_mut() {
+                if cut.mode == 4 {
+                    // Original actual Result, after the final version/service
+                    // guards have unwound. No error payload is cloned.
+                    cut.atomic_health_refusal = matches!(error,
+                        BicDbError::PagedStorage(message)
+                        if message == "actual allocation database durability is fenced; details deferred");
+                    cut.publication_error = Some(if cut.atomic_health_refusal {
+                        "PagedStorage: actual allocation atomic health refusal"
+                    } else {
+                        match error {
+                            BicDbError::QueryCanceled => "QueryCanceled",
+                            BicDbError::QueryTimedOut => "QueryTimedOut",
+                            _ => "Other original error; see actual worker return",
+                        }
+                    });
+                }
+            }
             if let Some(attempt) = retained.as_mut() {
                 if attempt.first_error_kind.is_none() {
                     attempt.first_error_kind = Some(error_kind(error));
@@ -446,6 +508,8 @@ pub(in crate::db::range_image_native::writer_enrollment) struct AllocationCut {
     parent_deadline: Option<std::time::Instant>,
     fired: u64,
     xid: u64,
+    atomic_health_refusal: bool,
+    publication_error: Option<&'static str>,
 }
 #[cfg(test)]
 impl InstalledNativeWriterHostGuard {
@@ -477,7 +541,7 @@ impl InstalledNativeWriterHostGuard {
     }
     pub(crate) fn test_arm_allocation_fault(&self, mode: u8) -> Result<()> {
         self.state.require_lifetime()?;
-        if !(1..=3).contains(&mode)
+        if !(1..=4).contains(&mode)
             || self
                 .state
                 .allocation_fault
@@ -500,7 +564,9 @@ impl InstalledNativeWriterHostGuard {
             "recovery_hold":self.state.allocation_recovery_hold.load(Ordering::Acquire),
             "actual_live_recovery_hold_cuts":self.state.allocation_recovery_cut.load(Ordering::Acquire),
             "cut":cut.as_ref().map(|c|serde_json::json!({"mode":c.mode,"parent_live_before":c.parent_live,"own_live_before":c.own_live,
-                "original_deadline_recorded":c.parent_deadline.is_some(),"fault_fired":c.fired,"original_xid":c.xid})),
+                "original_deadline_recorded":c.parent_deadline.is_some(),"fault_fired":c.fired,"original_xid":c.xid,
+                "actual_typed_atomic_health_refusal":c.atomic_health_refusal,
+                "actual_original_publication_error":c.publication_error})),
             "retained":attempt.as_ref().map(|a|serde_json::json!({"record":a.record,"actual_outcome":format!("{:?}",a.outcome),"first_error_kind":a.first_error_kind})),
             "published":cache.as_ref().map(|v|serde_json::json!({"record":v.0})),"DATA_only_no_authority":true})
     }

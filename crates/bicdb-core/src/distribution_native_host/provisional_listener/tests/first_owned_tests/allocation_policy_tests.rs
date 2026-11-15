@@ -21,6 +21,10 @@ fn native_initial_live_allocation_commit_sync_unknown_never_replays_or_publishes
 fn native_initial_live_allocation_actual_generic_epoch_marker_cannot_replace_native_serving() {
     run(4);
 }
+#[test]
+fn native_initial_live_allocation_actual_publication_guard_refuses_injected_health_fence() {
+    run(5);
+}
 fn run(mode: u8) {
     let mut report = Report {
         events: Vec::new(),
@@ -113,6 +117,9 @@ fn exercise(five: &mut Five, report: &mut Report, mode: u8) -> Result<()> {
     if (1..=3).contains(&mode) {
         five.sources[leader].test_initial_allocation_fault(mode)?;
     }
+    if mode == 5 {
+        five.sources[leader].test_initial_allocation_fault(4)?;
+    }
     if mode == 4 {
         five.sources[leader].test_initial_allocation_pause(true)?;
     }
@@ -198,6 +205,66 @@ fn exercise(five: &mut Five, report: &mut Report, mode: u8) -> Result<()> {
             native_before, native_after,
             "refused origin changed actual selected native prefix"
         );
+    }
+    if mode == 5 {
+        let token = five
+            .lifetime
+            .child_with_deadline(Instant::now() + Duration::from_secs(5));
+        let original = loop {
+            token.check()?;
+            let data = five.sources[leader].test_initial_allocation_evidence()?;
+            if data["cut"]["actual_original_publication_error"].is_string() {
+                break data;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        };
+        // The original actual publication Result is captured separately by
+        // its typed diagnostic cut, before this distinct SDK denial attempt.
+        report.event(serde_json::json!({"actual_health_fence_original":original,
+            "before":before[leader],"injected_same_health_not_storage_IO_fault":true,
+            "failure_detail_mutex_held_by_test":false}));
+        let refused_key = key(&five.topology, selected.id, "allocation-health-refuses")?;
+        let blocked = report.call("allocation_health_fence_actual_sdk_append", || {
+            client.append(
+                "items",
+                &refused_key,
+                serde_json::json!({"actual":"fenced publication must not grant an ACK"}),
+            )
+        });
+        let after = five.sources[leader].test_initial_allocation_evidence()?;
+        report.event(serde_json::json!({"actual_health_fence_sdk_error":blocked.as_ref().err().map(ToString::to_string),
+            "after":after,"original":original}));
+        assert_eq!(original["cut"]["mode"], 4);
+        assert_eq!(original["cut"]["parent_live_before"], true);
+        assert_eq!(original["cut"]["own_live_before"], true);
+        assert_eq!(original["cut"]["original_deadline_recorded"], true);
+        assert_eq!(original["cut"]["fault_fired"], 1);
+        assert_eq!(original["cut"]["actual_typed_atomic_health_refusal"], true);
+        assert_eq!(
+            original["cut"]["actual_original_publication_error"],
+            "PagedStorage: actual allocation atomic health refusal"
+        );
+        let xid = original["retained"]["record"]["native_page_xid"]
+            .as_u64()
+            .unwrap();
+        assert!(xid > 0);
+        assert_eq!(original["cut"]["original_xid"].as_u64(), Some(xid));
+        assert_eq!(
+            original["retained"]["actual_outcome"],
+            format!("Known({xid})"),
+            "the actual successful native return must precede publication refusal"
+        );
+        assert_eq!(original["published"], before[leader]["published"]);
+        assert_eq!(original["pending"], true);
+        assert!(blocked.is_err());
+        assert_eq!(original["retained"]["record"], after["retained"]["record"]);
+        assert_eq!(
+            original["retained"]["actual_outcome"],
+            after["retained"]["actual_outcome"]
+        );
+        assert_eq!(original["published"], after["published"]);
+        assert_eq!(after["pending"], true);
+        return Ok(());
     }
     if mode == 3 {
         let token = five

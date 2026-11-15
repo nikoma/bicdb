@@ -67,7 +67,40 @@
     "stored_bytes": 1881033,
     "stored_sha256": "903a8c442ac5bebb7046e00e930262cbd905e3d911853b6a2864e5987994268a"
   },
-  "post_merge_ci": "separate_run_identity; not asserted by pre-merge evidence",
+  "post_merge_ci": {
+    "Core": {
+      "conclusion": "failure",
+      "exact_error": "source file paged/store.wal changed while the backup was streaming",
+      "failed_case": "a_backup_taken_while_writes_are_in_flight_restores_consistently",
+      "failed_target": "backup_paged",
+      "target_counts": {
+        "failed": 1,
+        "ignored": 0,
+        "passed": 3
+      }
+    },
+    "job_API_snapshot_sha256": "5c9e9460e7986c13cf87d241d4fa1cd1d8996b6b736b63b392bf6a756c344154",
+    "native_conclusion": "failure",
+    "native_exact_totals": {
+      "failed": 2,
+      "failed_cases": [
+        "native_writer_data_domain_actual_decided_closed_points_preserve_original_policy",
+        "native_registered_fifth_remote_new_actual_cancel_after_take_retains_exact_progress"
+      ],
+      "filtered": 940,
+      "ignored": 1,
+      "passed": 335,
+      "seconds": 1866.98
+    },
+    "native_job": 132667643050,
+    "native_status": "completed",
+    "observed_UTC": "2026-11-15T03:03:17.716620+00:00",
+    "premerge_result_remains_separate": true,
+    "remaining_workspace_job": 132667643016,
+    "remaining_workspace_last_status": "in_progress",
+    "root_failed_components_receipt_sha256": "32da7d2a48687cb107014eef91916073d8b719fd30ea04f5cc1656bd9dacb203",
+    "run": 43666718926
+  },
   "qualifications": {
     "deployment": "not_verified",
     "independent_machine_scale_out": "not_tested",

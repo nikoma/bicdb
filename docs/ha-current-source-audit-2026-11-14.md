@@ -12,8 +12,14 @@ Latest delivered-main observation, November 15 02:13 UTC:
 [required CI](https://github.com/nikoma/bicdb/actions/runs/43659430043) passed,
 including native **337 passed /zero failed /one ignored**. The
 [complete source-pinned CI evidence](design/main517-native-ci-evidence.md)
-retains actual hot/fifth/Strong results and their exact settings. The separate post-merge push runs were still live
-at this observation. Source delivery and that CI result do not establish a
+retains actual hot/fifth/Strong results and their exact settings. At the later
+November 15 03:03 UTC checkpoint, the separate
+[post-merge native job](https://github.com/nikoma/bicdb/actions/runs/43666718926/job/132667643050)
+had **failed**. Retained logs subsequently established native **335/2/1** and a
+Core concurrent-backup failure; the evidence page records exact boundaries and
+next deterministic tests. Complete archive finalization remains pending while
+remaining-workspace CI is live. The pre-merge pass remains a separate
+result, and main is not unconditionally CI-green. Source delivery does not establish a
 new binary, release, deployment, automatic remote operator, physical expansion
 or production qualification.
 

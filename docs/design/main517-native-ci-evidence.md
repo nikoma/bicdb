@@ -67,3 +67,37 @@ separate post-merge push CI has its own run identity and is not relabeled by
 this pre-merge result. Automatic remote orchestration, cross-range SQL,
 external-ledger physical reconciliation and the original failed Azure
 qualification remain separate gates.
+
+At the November 15, 03:03 UTC checkpoint, the separate
+[post-merge native job](https://github.com/nikoma/bicdb/actions/runs/43666718926/job/132667643050)
+had **failed**; the remaining-workspace job was still running. The job API
+snapshot SHA-256 is
+`5c9e9460e7986c13cf87d241d4fa1cd1d8996b6b736b63b392bf6a756c344154`.
+Complete original post-merge capture and exact failure classification were
+pending at that checkpoint. Main cannot be described as unconditionally
+CI-green. The earlier pre-merge pass and this failure are both retained;
+their difference alone establishes no timing, hardware or regression cause.
+
+Subsequent original-log verification established **335 passed, two failed,
+one ignored** in that native job, with 940 filtered and 1,866.98 seconds
+reported. The post-merge Core job also failed a concurrent-backup target.
+
+| Finding | Classification | Actual boundary and next deterministic test |
+| --- | --- | --- |
+| `native_writer_data_domain_actual_decided_closed_points_preserve_original_policy` | Failed | [Actual metadata lock inspection](https://github.com/nikoma/bicdb/blob/bde74650c40934096e1cc6c6e75a3ea3c4643cf4/crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests/writer_data_domain_fact_tests.rs#L102) unwrapped `None`; the current loop node was not retained. Synchronize the actual competing metadata operation and retain node/request state before inspection. Later fact checks were unreached; no Closed-point guarantee follows. |
+| `native_registered_fifth_remote_new_actual_cancel_after_take_retains_exact_progress` | Failed | [Actual S2 retirement](https://github.com/nikoma/bicdb/blob/bde74650c40934096e1cc6c6e75a3ea3c4643cf4/crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests.rs#L696) returned an n2 RPC rejection: `source discovery metadata busy at boundary`. The later intended after-take exercise was unreached. Hold that actual metadata boundary, then release within the unchanged parent deadline; require actual retirement and the original after-take assertions with the same progress/owners and fresh authority. A separate hold-through-deadline variant must refuse within the original bound. |
+| `a_backup_taken_while_writes_are_in_flight_restores_consistently` | Failed | Core's `backup_paged` target reported 3/1/0; [backup creation](https://github.com/nikoma/bicdb/blob/bde74650c40934096e1cc6c6e75a3ea3c4643cf4/crates/bicdb-core/tests/backup_paged.rs#L271) returned `source file paged/store.wal changed while the backup was streaming`. Restore/payload checks were unreached. Synchronize a real WAL change across the streaming copy and require the original successful backup/consistent restore assertion. The failed backup does not establish acknowledged-data loss. |
+
+These reproduce from the exact post-merge run linked above and its
+[Core job](https://github.com/nikoma/bicdb/actions/runs/43666718926/job/132667643037).
+They remain open; no implementation fix is asserted here. Root verified both
+complete original gzip/raw logs, actual checkout lines and failed case/summary
+lines, receipt SHA-256
+`32da7d2a48687cb107014eef91916073d8b719fd30ea04f5cc1656bd9dacb203`.
+Native raw SHA-256 is
+`85c48b06103445131bdd781dfb29bb6da030e35f37053958190e3790c19a141c`;
+Core raw SHA-256 is
+`24ff5f1bab02071168fdf81460026e00e533da802ebaa0e832971f17adc32fb7`.
+Complete post-merge archive finalization remains pending while workspace CI
+continues. Neither the earlier pass nor these failures provide physical RPO,
+RTO, throughput or production qualification.

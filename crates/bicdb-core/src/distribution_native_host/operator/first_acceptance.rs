@@ -2,6 +2,15 @@
 //! service, Role, OWN, Frozen or native quorum or enable an automatic planner.
 use super::*;
 impl NativeMetadataHost {
+    pub(in crate::distribution_native_host) fn test_committed_publication_request_wait(
+        &self,
+        range: crate::RangeId,
+        mode: u8,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.test_first_control()?
+            .test_committed_publication_request_wait(range, mode, parent)
+    }
     pub(in crate::distribution_native_host) fn test_first_metadata_identity_own_cancel(
         &self,
         range: crate::RangeId,

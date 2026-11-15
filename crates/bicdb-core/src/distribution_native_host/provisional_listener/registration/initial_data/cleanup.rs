@@ -95,14 +95,40 @@ impl NativeInitialDataCleanupSender {
         QUARANTINED.load(Ordering::Relaxed)
     }
     pub(super) fn ensure(parent: &CancellationToken) -> Result<Self> {
+        Self::ensure_in(&CLEANUP, &INITIALIZING, parent)
+    }
+    fn ensure_in(
+        cleanup: &OnceLock<Self>,
+        initializing: &Mutex<()>,
+        parent: &CancellationToken,
+    ) -> Result<Self> {
         parent.check()?;
-        if let Some(sender) = CLEANUP.get() {
+        if let Some(sender) = cleanup.get() {
             return Ok(sender.clone());
         }
-        let _initializing = INITIALIZING
-            .try_lock()
-            .ok_or_else(|| invalid("initial DATA cleanup worker is being initialized; retry"))?;
-        if let Some(sender) = CLEANUP.get() {
+        // Concurrent normal DATA opens share this revocation-only worker.
+        // Before any hook/service/DB guard exists, await initialization only
+        // inside the original finite opening request. No fresh retry action.
+        let _initializing = loop {
+            parent.check()?;
+            let acquired = if parent.deadline().is_some() {
+                initializing.try_lock_for(Duration::from_millis(5))
+            } else {
+                initializing.try_lock()
+            };
+            if let Some(guard) = acquired {
+                parent.check()?;
+                break guard;
+            }
+            if parent.deadline().is_none() {
+                return Err(invalid(
+                    "initial DATA cleanup worker is being initialized; retry",
+                ));
+            }
+            #[cfg(test)]
+            tests::after_actual_contention()?;
+        };
+        if let Some(sender) = cleanup.get() {
             return Ok(sender.clone());
         }
         let (tx, rx) = mpsc::channel::<NativeInitialDataCleanup>();
@@ -149,7 +175,9 @@ impl NativeInitialDataCleanupSender {
                 ))
             })?;
         let sender = Self(tx);
-        let _ = CLEANUP.set(sender.clone());
+        let _ = cleanup.set(sender.clone());
+        #[cfg(test)]
+        tests::after_actual_startup();
         parent.check()?;
         Ok(sender)
     }
@@ -161,5 +189,148 @@ impl NativeInitialDataCleanupSender {
         if let Err(error) = self.0.send(owner) {
             error.0.quarantine();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::RefCell;
+    type AfterContention = Box<dyn FnOnce() -> Result<()>>;
+    thread_local! {
+        static CUT: RefCell<Option<AfterContention>> = RefCell::new(None);
+        static AFTER_STARTUP: RefCell<Option<CancellationToken>> = const { RefCell::new(None) };
+    }
+    struct Clear;
+    impl Drop for Clear {
+        fn drop(&mut self) {
+            CUT.with(|slot| slot.borrow_mut().take());
+            AFTER_STARTUP.with(|slot| slot.borrow_mut().take());
+        }
+    }
+    struct Release(mpsc::Sender<()>);
+    impl Drop for Release {
+        fn drop(&mut self) {
+            let _ = self.0.send(());
+        }
+    }
+    pub(super) fn after_actual_contention() -> Result<()> {
+        let cut = CUT.with(|slot| slot.borrow_mut().take());
+        cut.map_or(Ok(()), |cut| cut())
+    }
+    pub(super) fn after_actual_startup() {
+        if let Some(original) = AFTER_STARTUP.with(|slot| slot.borrow_mut().take()) {
+            original.cancel();
+        }
+    }
+    #[test]
+    fn cleanup_original_cancel_after_real_start_retains_published_worker() {
+        let cleanup = OnceLock::new();
+        let initializing = Mutex::new(());
+        let parent = CancellationToken::uncancelable()
+            .child_with_deadline(Instant::now() + Duration::from_secs(5));
+        AFTER_STARTUP.with(|slot| *slot.borrow_mut() = Some(parent.clone()));
+        let _clear = Clear;
+        let actual = NativeInitialDataCleanupSender::ensure_in(&cleanup, &initializing, &parent);
+        assert!(matches!(actual, Err(crate::BicDbError::QueryCanceled)));
+        assert!(
+            cleanup.get().is_some(),
+            "actual started worker stays retained"
+        );
+        let fresh = CancellationToken::uncancelable()
+            .child_with_deadline(Instant::now() + Duration::from_secs(5));
+        assert!(NativeInitialDataCleanupSender::ensure_in(&cleanup, &initializing, &fresh).is_ok());
+    }
+    #[test]
+    fn cleanup_initialization_waits_then_starts_one_actual_worker() {
+        run(0);
+    }
+    #[test]
+    fn cleanup_initialization_preserves_original_cancel() {
+        run(1);
+    }
+    #[test]
+    fn cleanup_initialization_preserves_original_deadline() {
+        run(2);
+    }
+    #[test]
+    fn cleanup_initialization_unbounded_caller_refuses_immediately() {
+        run(3);
+    }
+    fn run(mode: u8) {
+        let cleanup = OnceLock::new();
+        let initializing = Mutex::new(());
+        let parent = if mode == 3 {
+            CancellationToken::uncancelable()
+        } else {
+            CancellationToken::uncancelable()
+                .child_with_deadline(Instant::now() + Duration::from_secs(5))
+        };
+        std::thread::scope(|scope| {
+            let (release_send, release_recv) = mpsc::channel();
+            let (held_send, held_recv) = mpsc::sync_channel(1);
+            let held_initializing = &initializing;
+            let holder = scope.spawn(move || {
+                let held = held_initializing.lock();
+                held_send.send(()).unwrap();
+                release_recv.recv_timeout(Duration::from_secs(30)).unwrap();
+                drop(held);
+            });
+            // Declared before any assertion: unwind releases before scope join.
+            let release = Release(release_send.clone());
+            held_recv.recv_timeout(Duration::from_secs(5)).unwrap();
+            assert!(initializing.try_lock().is_none());
+            let observed = std::rc::Rc::new(std::cell::Cell::new(false));
+            let seen = observed.clone();
+            let original = parent.clone();
+            CUT.with(|slot| {
+                assert!(slot.borrow().is_none());
+                *slot.borrow_mut() = Some(Box::new(move || {
+                    seen.set(true);
+                    original.check()?;
+                    match mode {
+                        0 => release_send
+                            .send(())
+                            .map_err(|_| invalid("initializer holder ended"))?,
+                        1 => original.cancel(),
+                        _ => {}
+                    }
+                    Ok(())
+                }));
+            });
+            let clear = Clear;
+            let actual =
+                NativeInitialDataCleanupSender::ensure_in(&cleanup, &initializing, &parent);
+            let held_at_return = initializing.try_lock().is_none();
+            // Capture original return and custody before cleanup releases it.
+            drop(clear);
+            drop(release);
+            holder.join().unwrap();
+            assert_eq!(observed.get(), mode != 3);
+            if mode == 0 {
+                let sender = actual.unwrap();
+                assert!(cleanup.get().is_some());
+                let again =
+                    NativeInitialDataCleanupSender::ensure_in(&cleanup, &initializing, &parent)
+                        .unwrap();
+                // Both actual senders remain connected to the real worker.
+                drop(again);
+                drop(sender);
+            } else {
+                assert!(held_at_return);
+                assert!(
+                    cleanup.get().is_none(),
+                    "failed wait cannot publish a worker"
+                );
+                match actual {
+                    Err(crate::BicDbError::QueryCanceled) if mode == 1 => {}
+                    Err(crate::BicDbError::QueryTimedOut) if mode == 2 => {}
+                    Err(error) if mode == 3 => assert!(error
+                        .to_string()
+                        .contains("cleanup worker is being initialized")),
+                    _ => panic!("original cleanup initialization error changed"),
+                }
+            }
+        });
     }
 }

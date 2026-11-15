@@ -594,11 +594,16 @@ impl NativeMetadataHost {
         &mut self,
         parent: &CancellationToken,
     ) -> Result<NativeMetadataHostStatus> {
+        // One original maintenance window includes the returned diagnostic.
+        // The controller's worker may retain an in-flight mutation after this
+        // expires; status must neither renew that work nor replay it.
+        let token = parent.child_with_deadline(Instant::now() + Duration::from_millis(900));
+        token.check()?;
         let controller = self
             .control
             .as_ref()
             .ok_or_else(|| invalid("actual native control owner required for maintenance"))?;
-        self.last_metadata_maintenance = Some(match controller.maintain_joins(parent) {
+        self.last_metadata_maintenance = Some(match controller.maintain_joins(&token) {
             Ok(report) => {
                 let value = serde_json::to_value(&report)?;
                 if report.stage == "promoted_and_installed" {
@@ -611,7 +616,7 @@ impl NativeMetadataHost {
             }
         });
         // Fresh diagnostic currentness, not a renewal of timed-out mutation.
-        self.status(parent)
+        self.status(&token)
     }
     /// Each finite action preserves its original caller deadline, including
     /// all network/IO/drain work. Failures retain actual owners for retry.

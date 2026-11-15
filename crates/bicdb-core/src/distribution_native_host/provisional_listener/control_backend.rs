@@ -166,11 +166,18 @@ impl NativeMetadataControlBackend {
     }
     pub(super) fn publish_committed_metadata(&self, parent: &CancellationToken) -> Result<()> {
         parent.check()?;
-        let actual = self
-            .service
-            .try_lock()
-            .ok_or_else(|| invalid("control service busy before publication"))?
-            .listener_open_guard();
+        // Publication reads the already committed topology. Wait only on an
+        // existing finite request; never renew a proposal or hold service and
+        // metadata guards together. Unbounded callers retain instantaneous
+        // contention refusal.
+        let actual = if parent.deadline().is_some() {
+            ClusterDataNodeService::capture_actual_listener_identity_waiting(&self.service, parent)?
+        } else {
+            self.service
+                .try_lock()
+                .ok_or_else(|| invalid("control service busy before publication"))?
+                .listener_open_guard()
+        };
         let topology = {
             let store = self.lock_metadata(parent)?;
             store.require_listener_database(&actual)?;

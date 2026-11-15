@@ -3,6 +3,18 @@
 use super::*;
 
 impl NativeMetadataControlHost {
+    pub(in crate::distribution_native_host) fn test_committed_publication_request_wait(
+        &self,
+        range: crate::RangeId,
+        mode: u8,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        // The real publication path is called exactly once, without proposing
+        // anything. Reuse custody of the actual same-open service guard.
+        self.test_status_request_wait(range, mode, parent, |original| {
+            self.backend.publish_committed_metadata(original)
+        })
+    }
     pub(in crate::distribution_native_host) fn test_hot_request_wait(
         &self,
         range: crate::RangeId,

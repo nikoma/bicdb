@@ -15,7 +15,23 @@ pub(in crate::db::range_image_native::writer_enrollment) struct RetainedAllocati
     record: RegistryExtensionRecord,
     previous_facts: HostWriterPolicyFacts,
     outcome: Outcome,
-    first_error: Option<String>,
+    // Bounded diagnostic DATA only. The original error is returned unchanged;
+    // never invoke its Display under caller/attempt/native publication guards.
+    first_error_kind: Option<&'static str>,
+}
+
+fn error_kind(error: &BicDbError) -> &'static str {
+    match error {
+        BicDbError::QueryCanceled => "query_canceled",
+        BicDbError::QueryTimedOut => "query_timed_out",
+        BicDbError::CommitOutcomeUnknown { .. } => "commit_outcome_unknown",
+        BicDbError::WriteFailed { .. } => "write_failed",
+        BicDbError::PagedStorage(_) => "paged_storage",
+        BicDbError::Io(_) => "io",
+        BicDbError::Cluster(_) => "cluster",
+        BicDbError::FormatCompatibility(_) => "format_compatibility",
+        _ => "other",
+    }
 }
 impl NativeWriterHostState {
     fn allocation_previous(&self, db: &BicDb) -> Result<(HostWriterPolicyFacts, String, u32)> {
@@ -185,7 +201,7 @@ impl InstalledNativeWriterHostGuard {
                     record,
                     previous_facts: previous,
                     outcome: Outcome::NotEntered,
-                    first_error: None,
+                    first_error_kind: None,
                 });
             }
             let attempt = retained.as_mut().unwrap();
@@ -378,8 +394,8 @@ impl InstalledNativeWriterHostGuard {
         })();
         if let Err(error) = &result {
             if let Some(attempt) = retained.as_mut() {
-                if attempt.first_error.is_none() {
-                    attempt.first_error = Some(error.to_string());
+                if attempt.first_error_kind.is_none() {
+                    attempt.first_error_kind = Some(error_kind(error));
                 }
             }
         } else {
@@ -485,7 +501,7 @@ impl InstalledNativeWriterHostGuard {
             "actual_live_recovery_hold_cuts":self.state.allocation_recovery_cut.load(Ordering::Acquire),
             "cut":cut.as_ref().map(|c|serde_json::json!({"mode":c.mode,"parent_live_before":c.parent_live,"own_live_before":c.own_live,
                 "original_deadline_recorded":c.parent_deadline.is_some(),"fault_fired":c.fired,"original_xid":c.xid})),
-            "retained":attempt.as_ref().map(|a|serde_json::json!({"record":a.record,"actual_outcome":format!("{:?}",a.outcome),"first_error":a.first_error})),
+            "retained":attempt.as_ref().map(|a|serde_json::json!({"record":a.record,"actual_outcome":format!("{:?}",a.outcome),"first_error_kind":a.first_error_kind})),
             "published":cache.as_ref().map(|v|serde_json::json!({"record":v.0})),"DATA_only_no_authority":true})
     }
 }

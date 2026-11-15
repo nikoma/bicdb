@@ -3,6 +3,22 @@
 //! A native audit only admits the exact descriptor; closed native readiness,
 //! completion, activation and final readQQ/MQ are separate real producers.
 use super::*;
+
+// Diagnostic classification only; never format the original error under State
+// or operation guards. The actual Result is propagated unchanged.
+fn error_kind(error: &BicDbError) -> &'static str {
+    match error {
+        BicDbError::QueryCanceled => "query_canceled",
+        BicDbError::QueryTimedOut => "query_timed_out",
+        BicDbError::CommitOutcomeUnknown { .. } => "commit_outcome_unknown",
+        BicDbError::WriteFailed { .. } => "write_failed",
+        BicDbError::PagedStorage(_) => "paged_storage",
+        BicDbError::Io(_) => "io",
+        BicDbError::Cluster(_) => "cluster",
+        BicDbError::FormatCompatibility(_) => "format_compatibility",
+        _ => "other",
+    }
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum AllocationPhase {
     Fence,
@@ -10,6 +26,17 @@ enum AllocationPhase {
     Complete,
     Activate,
     Publish,
+}
+impl AllocationPhase {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Fence => "Fence",
+            Self::Prepare => "Prepare",
+            Self::Complete => "Complete",
+            Self::Activate => "Activate",
+            Self::Publish => "Publish",
+        }
+    }
 }
 pub(super) struct AllocationJob {
     range: crate::RangeDescriptor,
@@ -19,7 +46,7 @@ pub(super) struct AllocationJob {
     phase: AllocationPhase,
     position: usize,
     peer_opens: BTreeMap<ClusterNodeId, HotRecoveryPeerOpen>,
-    first_error: Option<String>,
+    first_error_kind: Option<&'static str>,
     last_actual: Option<serde_json::Value>,
 }
 impl NativeHotRecoveryMaintenance {
@@ -96,7 +123,7 @@ impl NativeHotRecoveryMaintenance {
             // service/DB/journal/version guards have unwound; DATA only.
             #[cfg(test)]
             self.record(serde_json::json!({"phase":"allocation_original_audit_return",
-                "actual_returned_ok":actual.is_ok(),"actual_error":actual.as_ref().err().map(ToString::to_string),
+                "actual_returned_ok":actual.is_ok(),"actual_error_kind":actual.as_ref().err().map(error_kind),
                 "actual_owner_attempt":self.host.test_allocation_evidence()}));
             actual?;
         }
@@ -223,7 +250,7 @@ impl NativeHotRecoveryMaintenance {
                     phase: AllocationPhase::Fence,
                     position: 0,
                     peer_opens: BTreeMap::new(),
-                    first_error: None,
+                    first_error_kind: None,
                     last_actual: None,
                 },
             );
@@ -244,14 +271,14 @@ impl NativeHotRecoveryMaintenance {
         }
         let result = self.run_allocation(job, parent);
         if let Err(error) = &result {
-            if job.first_error.is_none() {
-                job.first_error = Some(error.to_string());
+            if job.first_error_kind.is_none() {
+                job.first_error_kind = Some(error_kind(error));
             }
         }
         self.record(serde_json::json!({"phase":"same_owner_allocation","range":job.range,
-            "nonce":job.scope.recovery_nonce,"actual_phase":format!("{:?}",job.phase),"position":job.position,
-            "last_actual":job.last_actual,"first_error":job.first_error,
-            "actual_result_error":result.as_ref().err().map(ToString::to_string),"scheduling_DATA_not_permission":true}));
+            "nonce":job.scope.recovery_nonce,"actual_phase":job.phase.name(),"position":job.position,
+            "last_actual":job.last_actual,"first_error_kind":job.first_error_kind,
+            "actual_error_kind":result.as_ref().err().map(error_kind),"scheduling_DATA_not_permission":true}));
         result?;
         state.allocation_jobs.remove(&range.id);
         Ok(true)
@@ -334,10 +361,8 @@ impl NativeHotRecoveryMaintenance {
                 &token,
             );
             // Retain actual API outcome BEFORE any outer currentness failure.
-            job.last_actual = Some(
-                serde_json::json!({"node":node,"phase":format!("{:?}",job.phase),
-                "returned_ok":actual.is_ok(),"error":actual.as_ref().err().map(ToString::to_string)}),
-            );
+            job.last_actual = Some(serde_json::json!({"node":node,"phase":job.phase.name(),
+                "returned_ok":actual.is_ok(),"actual_error_kind":actual.as_ref().err().map(error_kind)}));
             let actual_open = actual?.observed_open().clone();
             if let Some(original) = job.peer_opens.get(&node) {
                 original.require_same(&actual_open)?;

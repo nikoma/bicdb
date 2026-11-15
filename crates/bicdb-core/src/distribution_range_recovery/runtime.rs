@@ -147,6 +147,13 @@ pub(crate) struct RangeRecoveryRuntime {
     #[cfg(feature = "tls-replication")]
     event_dispatcher:
         Mutex<std::sync::Weak<crate::distribution_native_read::NativeStrongEventDispatcher>>,
+    #[cfg(feature = "tls-replication")]
+    remote_successor_reads: Mutex<
+        BTreeMap<
+            (RangeId, Uuid),
+            std::sync::Weak<crate::distribution_native_host::NativeRemoteSuccessorReadRegistration>,
+        >,
+    >,
     sessions: Arc<Mutex<Sessions>>,
     participant_transport:
         Option<Arc<dyn crate::distribution_range_consensus::RangeWriteTransport>>,
@@ -870,6 +877,8 @@ impl RangeRecoveryRuntime {
             gate,
             #[cfg(feature = "tls-replication")]
             event_dispatcher: Mutex::new(std::sync::Weak::new()),
+            #[cfg(feature = "tls-replication")]
+            remote_successor_reads: Mutex::new(BTreeMap::new()),
             sessions: Arc::new(Mutex::new(Sessions::default())),
             participant_transport: None,
             #[cfg(test)]
@@ -1556,5 +1565,52 @@ mod tests {
             session.session_id,
             "rejected normal takeover cannot rotate the actual committed-session freeze"
         );
+    }
+}
+
+#[cfg(feature = "tls-replication")]
+impl RangeRecoveryRuntime {
+    pub(crate) fn attach_remote_successor_read(
+        &self,
+        original: &Arc<crate::distribution_native_host::NativeRemoteSuccessorReadRegistration>,
+    ) -> Result<()> {
+        original.require_runtime(self)?;
+        let key = original.key();
+        let mut slots = self
+            .remote_successor_reads
+            .try_lock()
+            .ok_or_else(|| invalid("successor read registry busy"))?;
+        if let Some(old) = slots.get(&key) {
+            if !std::sync::Weak::ptr_eq(old, &Arc::downgrade(original)) {
+                return Err(invalid(
+                    "successor reader cannot replace original ended or live route",
+                ));
+            }
+        } else {
+            if slots.len() >= 8 {
+                return Err(invalid(
+                    "successor reader preserves eight-original-phase bound",
+                ));
+            }
+            slots.insert(key, Arc::downgrade(original));
+        }
+        Ok(())
+    }
+    pub(crate) fn receive_remote_successor_serving(
+        &self,
+        peer: MetadataReadParticipant,
+        request: crate::distribution_native_host::NativeRemoteServingRequestV1,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_native_host::NativeRemoteServingReplyV1> {
+        parent.check()?;
+        request.require_shape()?;
+        let original = self
+            .remote_successor_reads
+            .try_lock()
+            .ok_or_else(|| invalid("successor read registry busy"))?
+            .get(&(request.manifest.capture_range.id, request.phase_id))
+            .and_then(std::sync::Weak::upgrade)
+            .ok_or_else(|| invalid("actual retained successor readonly route absent or ended"))?;
+        original.read(self, peer, &request, parent)
     }
 }

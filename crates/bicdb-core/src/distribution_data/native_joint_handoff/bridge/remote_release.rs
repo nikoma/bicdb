@@ -41,6 +41,8 @@ pub(crate) struct NativeRemoteReleaseOwner {
     state: parking_lot::Mutex<ReleaseState>,
     outer_returns: parking_lot::Mutex<RetainedReturns>,
     release_returns: parking_lot::Mutex<RetainedReturns>,
+    policy_returns: parking_lot::Mutex<RetainedReturns>,
+    policy_outer_returns: parking_lot::Mutex<RetainedReturns>,
     #[cfg(test)]
     cancel_after_drop: parking_lot::Mutex<Option<CancellationToken>>,
     #[cfg(test)]
@@ -227,6 +229,8 @@ impl NativeRemoteReleaseOwner {
             }),
             outer_returns: parking_lot::Mutex::new(Default::default()),
             release_returns: parking_lot::Mutex::new(Default::default()),
+            policy_returns: parking_lot::Mutex::new(Default::default()),
+            policy_outer_returns: parking_lot::Mutex::new(Default::default()),
             #[cfg(test)]
             cancel_after_drop: parking_lot::Mutex::new(None),
             #[cfg(test)]
@@ -242,7 +246,46 @@ impl NativeRemoteReleaseOwner {
         self.participant
             .upgrade()
             .ok_or_else(|| data_error("remote release original participant ended"))?
-            .require_lifetime_memory()
+            .require_released_successor_memory(self)
+    }
+    /// Necessary sealed identity comparison only. It never checks an empty
+    /// hook or constructs a successor from missing original custody.
+    pub(crate) fn require_original_participant_identity(
+        &self,
+        participant: &NativeRemoteNewParticipant,
+    ) -> Result<()> {
+        self.process.require_memory()?;
+        if self
+            .participant
+            .upgrade()
+            .is_none_or(|p| !std::ptr::eq(p.as_ref(), participant))
+        {
+            return Err(data_error(
+                "released successor changed actual original participant",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn require_original_manifest_identity(
+        &self,
+        manifest: &crate::distribution_range_image::NativeRemoteImageManifestV1,
+    ) -> Result<()> {
+        self.require_memory_lifetime()?;
+        let participant = self
+            .participant
+            .upgrade()
+            .ok_or_else(|| data_error("Policy original participant ended"))?;
+        let original = participant.snapshot();
+        if manifest.checksum_sha256 != original.binding.manifest_sha256
+            || manifest.capture_range.id != original.binding.range_id
+            || manifest.handoff_session != self.native.data().promise().session_id
+            || manifest.nonce != self.native.data().promise().nonce
+        {
+            return Err(data_error(
+                "Policy changed original retained manifest/session",
+            ));
+        }
+        Ok(())
     }
     pub(crate) fn require_lifetime(&self) -> Result<()> {
         self.require_memory_lifetime()?;
@@ -503,6 +546,16 @@ impl NativeRemoteReleaseOwner {
                 .release_with_fresh_phase(admission, self.activation.clone())
         }
     }
+    pub(crate) fn require_known_policy_origin(&self) -> Result<()> {
+        self.require_lifetime()?;
+        self.release_returns.lock().require_known_ok()
+    }
+    pub(crate) fn note_policy_outer_return(&self, ok: bool, error: Option<&BicDbError>) {
+        self.policy_outer_returns.lock().record(ok, error);
+    }
+    pub(crate) fn note_policy_api_return(&self, ok: bool, error: Option<&BicDbError>) {
+        self.policy_returns.lock().record(ok, error);
+    }
     pub(crate) fn note_outer_return(&self, ok: bool, error: Option<&BicDbError>) {
         // Called after the serialized operation unwinds its physical guards.
         // No failure in diagnostic retention replaces the original API result.
@@ -676,7 +729,7 @@ impl NativeRemoteReleaseOwner {
             serde_json::json!({"memory":memory,"actual_owner_DATA":owner.as_ref().ok(),
             "actual_owner_error":owner.as_ref().err().map(ToString::to_string),
             "actual_release_API_returns":self.release_returns.lock().data(),
-            "outer_API_returns":self.outer_returns.lock().data(),"actual_drop_cut":*self.drop_cut.lock(),
+            "outer_API_returns":self.outer_returns.lock().data(),"policy_API_returns":self.policy_returns.lock().data(),"policy_outer_API_returns":self.policy_outer_returns.lock().data(),"actual_drop_cut":*self.drop_cut.lock(),
             "DATA_only_not_released_proof":true,"separate_snapshots_are_not_atomic":true}),
         )
     }

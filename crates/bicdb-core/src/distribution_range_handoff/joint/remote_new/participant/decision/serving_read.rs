@@ -196,6 +196,7 @@ impl NativeRemoteNewParticipant {
                 original_frozen_owner: frozen.owner(),
                 actual_dropped_open: false,
                 actual_writer_installed: false,
+                policy_released_audit: None,
             };
             scope.require_native(db, store)?;
             let _version = metadata.try_publication_guard()?;
@@ -346,6 +347,39 @@ impl NativeRemoteNewParticipant {
             .ok_or_else(|| invalid("serving original decision catalogue absent"))?
             .require_original_successful_publication()?;
         self.require_lifetime_memory()
+    }
+    pub(crate) fn require_original_committed_for_released_owner(
+        &self,
+        db: &crate::BicDb,
+        receipt: &crate::db::NativeJointDecisionReceipt,
+        successor: &crate::distribution_data::NativeRemoteReleaseOwner,
+    ) -> Result<()> {
+        self.require_released_successor_memory(successor)?;
+        let actual = self
+            .decision
+            .try_lock()
+            .ok_or_else(|| invalid("serving original native decision busy at physical boundary"))?;
+        let completed = actual
+            .completed
+            .as_ref()
+            .ok_or_else(|| invalid("serving original successful native read absent"))?;
+        if actual.expected.as_ref() != Some(receipt.data())
+            || completed.checksum_sha256() != receipt.checksum_sha256()
+        {
+            return Err(invalid(
+                "serving physical boundary substituted original native receipt/body",
+            ));
+        }
+        let native = actual.native.as_ref().ok_or_else(|| {
+            invalid("serving original native attempt absent at physical boundary")
+        })?;
+        db.observe_known_remote_native_decision(receipt, native)?;
+        actual
+            .catalogue
+            .as_ref()
+            .ok_or_else(|| invalid("serving original decision catalogue absent"))?
+            .require_original_successful_publication()?;
+        self.require_released_successor_memory(successor)
     }
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn retain_original_serving_lease(
@@ -520,7 +554,10 @@ impl NativeRemoteNewParticipant {
         parent: &CancellationToken,
     ) -> Result<NativeRemoteServingReplyV1> {
         use crate::distribution_native_host::NativeRemoteServingOperationV1 as Op;
-        if matches!(request.operation, Op::ObserveOpen | Op::ObserveReleased) {
+        if matches!(
+            request.operation,
+            Op::ObserveOpen | Op::ObserveReleased | Op::ObserveReleasedForPolicy
+        ) {
             let route = self
                 .remote_release
                 .try_lock()
@@ -535,7 +572,10 @@ impl NativeRemoteNewParticipant {
                     request, role, own, business, metadata, parent, &observed,
                 );
             }
-            if request.operation == Op::ObserveReleased {
+            if matches!(
+                request.operation,
+                Op::ObserveReleased | Op::ObserveReleasedForPolicy
+            ) {
                 return Err(invalid(
                     "released observation requires actual original successor",
                 ));
@@ -648,6 +688,7 @@ impl NativeRemoteNewParticipant {
                         original_frozen_owner: frozen_owner,
                         actual_dropped_open: false,
                         actual_writer_installed: false,
+                        policy_released_audit: None,
                     })
                 },
                 || {

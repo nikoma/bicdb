@@ -45,6 +45,9 @@ pub(crate) use registration::{
 };
 pub use registration::{NativeInitialDataRangeStatus, NativeInitialDataStatus};
 pub(crate) use registration::{NativeJoinedRemoteJointOwner, NativeJoinedRemoteMaterializedOwner};
+pub(crate) use registration::{
+    NativeRemoteLocalServingPolicy, NativeRemoteSuccessorReadRegistration,
+};
 
 pub(crate) struct NativeProvisionalHost {
     listener: Option<ClusterDataServerHandle>,

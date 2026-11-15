@@ -74,6 +74,7 @@ fn verify_history(
         }
         MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
         | MetadataRecoveryRolePurpose::NativeJointServingPhase { .. }
+        | MetadataRecoveryRolePurpose::NativeJointLocalServingPolicy { .. }
         | MetadataRecoveryRolePurpose::ObserveFencedRecovery { .. } => {
             return Err(invalid("readonly/current-joint scope cannot mint historical adoption authority in this producer"))
         }

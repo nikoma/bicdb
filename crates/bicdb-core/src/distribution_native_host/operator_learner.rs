@@ -62,6 +62,41 @@ impl NativeMetadataLearnerHost {
             }
         }
     }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_local_policy_generic_refusal(
+        &self,
+        range: crate::RangeId,
+        phase: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        match &self.host {
+            NativeLearnerLifecycle::Fresh(host) => host
+                .test_registered_image_control()?
+                .test_local_policy_generic_refusal(range, phase, parent),
+            NativeLearnerLifecycle::Cold(_) => {
+                Err(invalid("generic refusal cannot cast cold owner"))
+            }
+        }
+    }
+    pub(crate) fn advance_finite_remote_serving_policy(
+        &mut self,
+        range: crate::RangeId,
+        phase: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        parent.check()?;
+        if self.stopped {
+            return Err(invalid("stopped learner cannot advance local Policy"));
+        }
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => {
+                host.advance_finite_remote_serving_policy(range, phase, parent)
+            }
+            NativeLearnerLifecycle::Cold(_) => Err(invalid(
+                "cold learner cannot reconstruct finite released Policy ownership",
+            )),
+        }
+    }
     pub(crate) fn retire_finite_remote_open_references(
         &mut self,
         range: crate::RangeId,

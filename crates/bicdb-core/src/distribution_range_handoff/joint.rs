@@ -52,8 +52,9 @@ mod remote_new;
 pub(crate) use remote_new::{
     NativeMetadataOwnerCatalogueScope, NativeRemoteAllOpenQuorum,
     NativeRemoteAllOpenRetirementAdmission, NativeRemoteAllOpenRound,
-    NativeRemoteCatalogueDecisionV1, NativeRemoteCatalogueRound, NativeRemoteDecisionAdmission,
-    NativeRemoteDecisionBindingV1, NativeRemoteDecisionReceiptV1, NativeRemoteDecisionSourceData,
+    NativeRemoteAllReleasedQuorum, NativeRemoteAllReleasedRound, NativeRemoteCatalogueDecisionV1,
+    NativeRemoteCatalogueRound, NativeRemoteDecisionAdmission, NativeRemoteDecisionBindingV1,
+    NativeRemoteDecisionReceiptV1, NativeRemoteDecisionSourceData,
     NativeRemoteDecisionSourceRequestV1, NativeRemoteDualDurableDecision,
     NativeRemoteJointDecisionCertificate, NativeRemoteJointDecisionCertificateRound,
     NativeRemoteNewFactSetV1, NativeRemoteNewHandoffV1, NativeRemoteNewMaterializedQuorum,

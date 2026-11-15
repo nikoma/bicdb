@@ -314,6 +314,33 @@ impl NativeRemoteNewParticipant {
             .require_original_successful_publication()?;
         proof.require_original_native(self, completed, native)
     }
+    pub(crate) fn require_remote_policy_proof(
+        &self,
+        proof: &NativeRemoteAllOpenQuorum,
+        successor: &crate::distribution_data::NativeRemoteReleaseOwner,
+    ) -> Result<()> {
+        self.require_released_successor_memory(successor)?;
+        let held = self
+            .decision
+            .try_lock()
+            .ok_or_else(|| invalid("remote Release original native outcome busy"))?;
+        let completed = held
+            .completed
+            .as_ref()
+            .ok_or_else(|| invalid("remote Release original known native return absent"))?;
+        let native = held
+            .native
+            .as_ref()
+            .ok_or_else(|| invalid("remote Release original private native attempt absent"))?;
+        if held.expected.as_ref() != Some(completed.data()) {
+            return Err(invalid("remote Release original native body changed"));
+        }
+        held.catalogue
+            .as_ref()
+            .ok_or_else(|| invalid("remote Release original decision catalogue absent"))?
+            .require_original_successful_publication()?;
+        proof.require_original_native_for_policy(self, completed, native, successor)
+    }
     /// Intent DATA selected only from this actual retained participant. It
     /// cannot construct an owner or authorize retirement without a newly
     /// collected opaque ALL-Open proof and fresh local metadata point.
@@ -387,6 +414,57 @@ impl NativeRemoteNewParticipant {
     ) -> Result<Arc<crate::distribution_native_host::NativeRemoteServingQueue>> {
         request.require_shape()?;
         self.require_lifetime_memory()?;
+        role.require_own_host_metadata(own, business)?;
+        metadata.require_request(own, business)?;
+        if role.purpose() != &request.purpose()
+            || request.phase_id != self.snapshot.phase_id
+            || request.manifest.checksum_sha256 != self.snapshot.binding.manifest_sha256
+            || crate::distribution_range_image::bounded_json(&request.manifest, 2 * 1024 * 1024)?
+                != self.manifest_bytes
+            || role.local_node_id() != &self.snapshot.node_id
+        {
+            return Err(invalid(
+                "serving continuation substituted original participant/MF/phase",
+            ));
+        }
+        let held = self
+            .decision
+            .try_lock()
+            .ok_or_else(|| invalid("serving original native decision busy"))?;
+        let actual = held.completed.as_ref().ok_or_else(|| {
+            invalid("serving continuation lacks actual known native helper return")
+        })?;
+        let native = held
+            .native
+            .as_ref()
+            .ok_or_else(|| invalid("serving continuation original native attempt absent"))?;
+        native.actual_committed_xid()?;
+        if actual.decision_sha256() != request.decision_sha256
+            || held.expected.as_ref() != Some(actual.data())
+            || held.catalogue.is_none()
+        {
+            return Err(invalid(
+                "serving continuation changed original known native/catalogue custody",
+            ));
+        }
+        actual.data().require_metadata_domain(
+            own.committed_topology(business)?,
+            own.restore_activation(business)?,
+        )?;
+        Ok(self.serving_queue.clone())
+    }
+    // Distinct SAME-successor binding after original references/hook retire.
+    pub(crate) fn serving_queue_for_released(
+        &self,
+        request: &crate::distribution_native_host::NativeRemoteServingRequestV1,
+        role: &RecoveryRoleAdmission,
+        own: &HostMetadataReadObservation,
+        business: Uuid,
+        metadata: &ActualNativeJointMetadataPoint,
+        successor: &crate::distribution_data::NativeRemoteReleaseOwner,
+    ) -> Result<Arc<crate::distribution_native_host::NativeRemoteServingQueue>> {
+        request.require_shape()?;
+        self.require_released_successor_memory(successor)?;
         role.require_own_host_metadata(own, business)?;
         metadata.require_request(own, business)?;
         if role.purpose() != &request.purpose()

@@ -2,14 +2,25 @@
 //! No selected-range Serving, APP/Strong, controller or cold completion claim.
 use super::*;
 use std::collections::BTreeSet;
+mod serving_tests;
 
 pub(super) fn is_case(case: Case) -> bool {
     matches!(
         case,
-        Case::Release | Case::ReleaseMissingOpen | Case::ReleaseCancelledAfterDrop
+        Case::Release
+            | Case::ReleaseMissingOpen
+            | Case::ReleaseCancelledAfterDrop
+            | Case::Serving
+            | Case::ServingMissingReleased
     )
 }
 enum Control {
+    LocalServing(
+        crate::RangeId,
+        Uuid,
+        bool,
+        mpsc::SyncSender<serde_json::Value>,
+    ),
     Retire(crate::RangeId, Uuid, mpsc::SyncSender<serde_json::Value>),
     Inspect(
         crate::RangeId,
@@ -131,8 +142,11 @@ pub(super) fn exercise(
     target: &mpsc::Sender<OwnerCommand>,
     report: &mut Report,
     case: Case,
+    original_client: &crate::ClusterEventClient,
+    original_selected_key: &str,
 ) -> Result<()> {
     let lifetime = five.lifetime.child();
+    let original_topology = five.topology.clone();
     let (before, rest) = five.sources.split_at_mut(metadata);
     let (coordinator, after) = rest
         .split_first_mut()
@@ -162,6 +176,12 @@ pub(super) fn exercise(
                 let mut errors=Vec::new();let mut omitted=0u64;
                 while !stop.load(Ordering::Acquire) && parent.check().is_ok() {
                     while let Ok(control)=receive.try_recv() {
+                        if let Control::LocalServing(range,phase,generic,send)=control {
+                            let request=parent.child_with_deadline(Instant::now()+Duration::from_secs(4));
+                            let result=if generic {host.test_local_policy_generic_refusal(range,phase,&request)}
+                                else {host.advance_finite_remote_serving_policy(range,phase,&request)};
+                            let _=send.try_send(policy_return_data(result));continue;
+                        }
                         let (send,result)=match control {
                             Control::Retire(range,phase,send)=> {
                                 let request=parent.child_with_deadline(Instant::now()+Duration::from_secs(4));
@@ -169,6 +189,7 @@ pub(super) fn exercise(
                                 (send,result)
                             },
                             Control::Inspect(range,mode,send)=>(send,host.test_remote_release_control(range,mode)),
+                            Control::LocalServing(..)=>unreachable!("local Serving control handled above"),
                         };
                         let _=send.try_send(serde_json::json!({"ok":result.is_ok(),"data":result.as_ref().ok(),
                             "error":result.as_ref().err().map(crate::distribution_native_host::remote_first::error_data)}));
@@ -466,6 +487,9 @@ pub(super) fn exercise(
                     .is_null());
             }
             for member in members {
+                if case == Case::ServingMissingReleased && *member == node(4) {
+                    continue;
+                }
                 if case == Case::ReleaseCancelledAfterDrop && *member == node(4) {
                     continue;
                 }
@@ -478,6 +502,19 @@ pub(super) fn exercise(
                 same_point(&points[member], &released["point"]);
                 assert_eq!(released["point"]["actual_dropped_open"], true);
                 assert_eq!(released["point"]["actual_writer_installed"], false);
+            }
+            if case == Case::ServingMissingReleased {
+                return serving_tests::missing_released(
+                    coordinator,
+                    metadata,
+                    range,
+                    phase,
+                    members,
+                    &controls,
+                    target,
+                    report,
+                    &lifetime,
+                );
             }
             for member in members {
                 let released = report.data_call("actual_ALL_protected_ObserveReleased", || {
@@ -501,6 +538,22 @@ pub(super) fn exercise(
             );
             report.event(serde_json::json!({"actual_ALL_original_owner_release_component":true,"Serving":false,
                 "selected_APP_Strong_NOT_PROVEN":true,"automatic_controller_cold_cleanup_NOT_IMPLEMENTED":true}));
+            if case == Case::Serving {
+                serving_tests::serve(
+                    coordinator,
+                    metadata,
+                    range,
+                    phase,
+                    members,
+                    &controls,
+                    target,
+                    report,
+                    &lifetime,
+                    original_client,
+                    original_selected_key,
+                    &original_topology,
+                )?;
+            }
             Ok(())
         }));
         stop.store(true, Ordering::Release);
@@ -544,4 +597,11 @@ pub(super) fn exercise(
             },
         }
     })
+}
+
+pub(super) fn policy_return_data(result: Result<serde_json::Value>) -> serde_json::Value {
+    serde_json::json!({"actual_api_ok":result.is_ok(),"actual_result":result.as_ref().ok(),
+        "actual_error":result.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),
+        "actual_cluster_body":result.as_ref().err().and_then(|e|match e {BicDbError::Cluster(body)=>Some(body),_=>None}),
+        "actor_channel_delivery_DATA_only":true})
 }

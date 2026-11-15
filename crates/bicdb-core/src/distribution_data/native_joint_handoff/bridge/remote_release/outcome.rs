@@ -64,6 +64,15 @@ impl RetainedReturns {
         }
         Ok(())
     }
+    pub(super) fn require_known_ok(&self) -> Result<()> {
+        self.require_not_exhausted()?;
+        if self.last_ok != Some(true) {
+            return Err(data_error(
+                "policy needs actual known original release API success",
+            ));
+        }
+        Ok(())
+    }
     pub(super) fn record(&mut self, ok: bool, error: Option<&BicDbError>) {
         let failure = error.map(Failure::retain);
         match self.count.checked_add(1) {

@@ -571,3 +571,78 @@ impl NativeMetadataControlHost {
         ))
     }
 }
+
+impl NativeMetadataControlHost {
+    /// SAME actual transferred Installed guard/coordinator before deciding an
+    /// old installer is no longer the owner. A None Assigned slot is never
+    /// enough; no empty-hook validation is retried or weakened.
+    pub(in crate::distribution_native_host) fn require_same_remote_registered_joined_policy(
+        &self,
+        successor: &Arc<crate::distribution_data::NativeRemoteReleaseOwner>,
+        range: crate::RangeId,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        successor.require_memory_lifetime()?;
+        let joined = self
+            .joined
+            .as_ref()
+            .ok_or_else(|| invalid("Policy original Joined owner absent"))?;
+        let original = joined
+            .registered
+            .as_ref()
+            .ok_or_else(|| invalid("Policy cannot cast a generic Joined owner"))?;
+        original.require_original_lifetime()?;
+        let owner = original.registered_owner();
+        if !successor.domain().phase_owner().same_actual(
+            &crate::db::NativeJointPhaseOwner::Registered(Arc::downgrade(&owner)),
+        ) || !Arc::ptr_eq(successor.service(), &joined.parts.backend.service)
+            || original.range.id != range
+            || original.range != *successor.native().data().activation_range()
+            || original.historical_native_bridge().checksum_sha256()
+                != successor.native().checksum_sha256()
+        {
+            return Err(invalid(
+                "Policy changed original transferred Joined/native/Registered owner",
+            ));
+        }
+        original
+            .drained
+            .require_service(&joined.parts.backend.service)?;
+        original.drained.require_store(joined.parts.store.id())?;
+        let enrollment = joined
+            .enrollment
+            .as_ref()
+            .ok_or_else(|| invalid("Policy transferred Joined Installed enrollment absent"))?;
+        if !Arc::ptr_eq(&enrollment.guard, &original.guard)
+            || !Arc::ptr_eq(&enrollment.coordinator, &original.coordinator)
+        {
+            return Err(invalid(
+                "Policy replaced actual transferred guard/coordinator",
+            ));
+        }
+        let db = joined
+            .parts
+            .factory
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("Policy original Joined DB busy"))?;
+        original
+            .guard
+            .require_for_coordinator(&db, &original.range, &original.coordinator)?;
+        parent.check()
+    }
+}
+
+impl NativeMetadataControlHost {
+    pub(in crate::distribution_native_host) fn publish_remote_registered_joined_data(
+        &mut self,
+        policy: &crate::distribution_range_handoff::NativeJointServingPolicyAdmission,
+        parent: &CancellationToken,
+    ) -> Result<usize> {
+        self.joined
+            .as_mut()
+            .ok_or_else(|| invalid("actual original Joined owner absent for local Policy"))?
+            .publish_registered_with_policy(parent, policy)
+    }
+}

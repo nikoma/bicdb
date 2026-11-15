@@ -31,6 +31,8 @@ pub(super) fn exercise(
     target: &mpsc::Sender<OwnerCommand>,
     report: &mut Report,
     case: Case,
+    original_client: &crate::ClusterEventClient,
+    original_selected_key: &str,
 ) -> Result<()> {
     for expected in ["PromotedFrozen", "AwaitingActivation"] {
         let actual = report.data_call(
@@ -56,6 +58,8 @@ pub(super) fn exercise(
             target,
             report,
             case,
+            original_client,
+            original_selected_key,
         );
     }
     if open_tests::is_case(case) {

@@ -1,6 +1,20 @@
 //! Existing Registered member control transition; never a fresh-voter factory.
 use super::*;
 impl NativeUnassignedLearnerHost {
+    pub(in crate::distribution_native_host) fn advance_finite_remote_serving_policy(
+        &mut self,
+        range: crate::RangeId,
+        phase: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        let request = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        self.metadata_transition
+            .control
+            .as_mut()
+            .ok_or_else(|| invalid("actual Registered local Policy host absent"))?
+            .advance_finite_remote_serving_policy(range, phase, &request)
+    }
+
     pub(in crate::distribution_native_host) fn retire_finite_remote_open_references(
         &mut self,
         range: crate::RangeId,

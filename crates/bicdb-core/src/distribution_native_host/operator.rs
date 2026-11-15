@@ -224,6 +224,32 @@ impl NativeMetadataHost {
             .ok_or_else(|| invalid("actual Open control owner absent"))?
             .drive_finite_remote_open(relocation, phase, node, reconcile, parent)
     }
+    /// Actual finite owner-local DATA policy/recovery transition, never a
+    /// diagnostic Ready setter or a queued remote mutation callback.
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_local_policy_generic_refusal(
+        &self,
+        range: crate::RangeId,
+        phase: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_ref()
+            .ok_or_else(|| invalid("actual Policy host absent"))?
+            .test_local_policy_generic_refusal(range, phase, parent)
+    }
+    pub(crate) fn advance_finite_remote_serving_policy(
+        &mut self,
+        range: crate::RangeId,
+        phase: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        let request = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual local Policy host absent"))?
+            .advance_finite_remote_serving_policy(range, phase, &request)
+    }
     pub(crate) fn drive_finite_remote_release(
         &mut self,
         relocation: crate::distribution::RelocationId,

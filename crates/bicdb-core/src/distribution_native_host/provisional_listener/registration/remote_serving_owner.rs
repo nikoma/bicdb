@@ -2,6 +2,7 @@
 //! host reconstruction, replacement owner, or authority from reply DATA.
 use super::*;
 mod open;
+mod policy;
 mod reference_retirement;
 mod release;
 use crate::distribution_data::{
@@ -12,6 +13,7 @@ use crate::distribution_native_host::{
     NativeRemotePreparationProcess, NativeRemoteServingOperationV1, NativeRemoteServingReplyV1,
 };
 use crate::distribution_range_handoff::NativeRemoteNewParticipant;
+pub(crate) use policy::NativeRemoteLocalServingPolicy;
 pub(super) use reference_retirement::NativeRemoteReferenceRetirement;
 
 pub(super) struct NativeRemoteLocalServing {
@@ -34,6 +36,7 @@ pub(super) struct NativeRemoteLocalServing {
     activation:
         Option<Arc<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt>>,
     release: Option<Arc<crate::distribution_data::NativeRemoteReleaseOwner>>,
+    policy: Option<Arc<NativeRemoteLocalServingPolicy>>,
 }
 impl NativeMetadataControlHost {
     /// One explicit actor turn. It operates on this actual &mut host; it does
@@ -194,6 +197,7 @@ impl NativeMetadataControlHost {
                     bridge: Default::default(),
                     activation: None,
                     release: None,
+                    policy: None,
                     #[cfg(test)]
                     open_test: None,
                     #[cfg(test)]

@@ -868,7 +868,8 @@ pub(super) fn validate_ordinary_fence_for_role(
                 "read-only observation role cannot collect mutation fences",
             ));
         }
-        MetadataRecoveryRolePurpose::NativeJointServingPhase { .. } => {
+        MetadataRecoveryRolePurpose::NativeJointServingPhase { .. }
+        | MetadataRecoveryRolePurpose::NativeJointLocalServingPolicy { .. } => {
             return Err(invalid(
                 "serving phase intent cannot collect recovery mutation fences",
             ));

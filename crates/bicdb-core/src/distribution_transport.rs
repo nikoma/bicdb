@@ -1782,6 +1782,10 @@ fn handle_cluster_data_connection(
             } else if let Some(original) = registered_replica {
                 original
                     .receive_remote_serving_from_authenticated_dispatch(peer, *request, &parent)?
+            } else if let Some(actual) = recovery_runtime {
+                // Only a sealed SAME-runtime readonly successor can cross the
+                // original Registered socket replacement. No mutation fallback.
+                actual.receive_remote_successor_serving(peer, *request, &parent)?
             } else {
                 return Err(transport_error(
                     "serving requires original immutable INITIAL/Registered profile",

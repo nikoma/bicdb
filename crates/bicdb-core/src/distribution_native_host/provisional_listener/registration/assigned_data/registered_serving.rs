@@ -313,6 +313,75 @@ impl NativeAssignedDataHost {
     }
 }
 impl NativeMetadataControlHost {
+    /// Repair only a socket whose SAME actual Installed owner already exists.
+    /// This runs before fresh self-TLS collection on a later finite step. It
+    /// neither retries native installation nor revives the old phase admission.
+    pub(in crate::distribution_native_host) fn restore_retained_remote_policy_socket(
+        &mut self,
+        successor: &Arc<crate::distribution_data::NativeRemoteReleaseOwner>,
+        range: crate::RangeId,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        if self.joined.is_some() {
+            self.require_same_remote_registered_joined_policy(successor, range, parent)?;
+            return self.open_registered_joined_data(parent);
+        }
+        let Some(owner) = self.assigned.as_mut() else {
+            return Ok(());
+        };
+        // Before an actual Installed return the original replica listener is
+        // still the owner. Absence is not permission to drain or mint a policy.
+        let Some(guard) = owner.attempt.as_ref().and_then(|a| a.installed_guard()) else {
+            return Ok(());
+        };
+        successor.require_memory_lifetime()?;
+        let registered = owner
+            .registered
+            .as_ref()
+            .ok_or_else(|| invalid("Policy socket repair cannot use generic Assigned custody"))?;
+        registered.owner.require_first_policy_attempt_lifetime()?;
+        if !successor.domain().phase_owner().same_actual(
+            &crate::db::NativeJointPhaseOwner::Registered(Arc::downgrade(&registered.owner)),
+        ) || !Arc::ptr_eq(successor.service(), &owner.parts.backend.service)
+            || owner.range.id != range
+            || owner.range != *successor.native().data().activation_range()
+            || registered
+                .admission
+                .historical_native_bridge()
+                .checksum_sha256()
+                != successor.native().checksum_sha256()
+        {
+            return Err(invalid(
+                "Policy socket repair changed original Installed owner",
+            ));
+        }
+        let attempt = owner.attempt.as_ref().unwrap();
+        if attempt.unresolved_native_publication() {
+            return Err(invalid(
+                "Policy socket repair refuses unresolved native publication",
+            ));
+        }
+        attempt.installed_metadata_anchor()?;
+        let coordinator = owner
+            .coordinator
+            .as_ref()
+            .ok_or_else(|| invalid("Policy socket repair lost actual Installed coordinator"))?;
+        let database = owner
+            .parts
+            .factory
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("Policy socket repair actual DB busy"))?;
+        guard.require_for_coordinator(&database, &owner.range, coordinator)?;
+        drop(database);
+        self.replica
+            .as_mut()
+            .ok_or_else(|| invalid("Policy socket repair lost original drain owner"))?
+            .drain_for_assigned(parent)?;
+        owner.bind_closed(&self.network, parent)
+    }
+
     pub(crate) fn install_registered_serving_data_policy(
         &mut self,
         range: crate::RangeId,

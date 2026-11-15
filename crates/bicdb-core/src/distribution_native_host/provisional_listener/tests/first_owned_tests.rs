@@ -67,6 +67,8 @@ enum Case {
     Release,
     ReleaseMissingOpen,
     ReleaseCancelledAfterDrop,
+    Serving,
+    ServingMissingReleased,
 }
 fn is_catalogue_case(case: Case) -> bool {
     matches!(
@@ -101,6 +103,8 @@ fn is_catalogue_case(case: Case) -> bool {
             | Case::Release
             | Case::ReleaseMissingOpen
             | Case::ReleaseCancelledAfterDrop
+            | Case::Serving
+            | Case::ServingMissingReleased
     )
 }
 #[derive(Clone, Copy, Debug)]
@@ -110,6 +114,12 @@ enum SetupCut {
 }
 
 enum OwnerCommand {
+    LocalServing(
+        crate::RangeId,
+        Uuid,
+        bool,
+        mpsc::SyncSender<serde_json::Value>,
+    ),
     RetireReferences(crate::RangeId, Uuid, mpsc::SyncSender<serde_json::Value>),
     ReleaseControl(
         crate::RangeId,
@@ -807,6 +817,12 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
             while !active.load(Ordering::Acquire) && parent.check().is_ok() {
                 while let Ok(command)=owner_receive.try_recv() {
                     match command {
+                    OwnerCommand::LocalServing(range,phase,generic,send)=> {
+                        let request=parent.child_with_deadline(Instant::now()+Duration::from_secs(4));
+                        let result=if generic {target.test_local_policy_generic_refusal(range,phase,&request)}
+                            else {target.advance_finite_remote_serving_policy(range,phase,&request)};
+                        let _=send.try_send(release_tests::policy_return_data(result));
+                    },
                     OwnerCommand::RetireReferences(range,phase,send)=> {
                         let request=parent.child_with_deadline(Instant::now()+Duration::from_secs(4));
                         let actual=target.retire_finite_remote_open_references(range,phase,&request);
@@ -853,7 +869,7 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                         worker_omitted += 1;
                     }
                 }
-                if matches!(case,Case::Preparation|Case::PreparationCancelledAfterNative|Case::PreparationCommitUnknown|Case::PreparationHostPollCancelled|Case::PreparationHostPollExpired|Case::Bridge|Case::BridgeMissingPrepared|Case::BridgeCancelledAfterNative|Case::BridgeCommitUnknown|Case::Open|Case::OpenR2Progress|Case::OpenLaterIoFailed|Case::OpenCancelledAfterIo|Case::OpenIoUnknown|Case::Release|Case::ReleaseMissingOpen|Case::ReleaseCancelledAfterDrop) {
+                if matches!(case,Case::Preparation|Case::PreparationCancelledAfterNative|Case::PreparationCommitUnknown|Case::PreparationHostPollCancelled|Case::PreparationHostPollExpired|Case::Bridge|Case::BridgeMissingPrepared|Case::BridgeCancelledAfterNative|Case::BridgeCommitUnknown|Case::Open|Case::OpenR2Progress|Case::OpenLaterIoFailed|Case::OpenCancelledAfterIo|Case::OpenIoUnknown|Case::Release|Case::ReleaseMissingOpen|Case::ReleaseCancelledAfterDrop|Case::Serving|Case::ServingMissingReleased) {
                     // Every real poll has its own caller token; expiring or
                     // canceling it must not stop the retained owner/process.
                     let window=if case==Case::PreparationHostPollExpired {Duration::from_millis(100)} else {Duration::from_secs(5)};
@@ -1454,6 +1470,8 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                     | Case::Release
                     | Case::ReleaseMissingOpen
                     | Case::ReleaseCancelledAfterDrop
+                    | Case::Serving
+                    | Case::ServingMissingReleased
             ) {
                 // Same five retained normal hosts; real range leader directly
                 // observes OLD/survivor/Registered NEW, donor remains neither leader.
@@ -1955,6 +1973,8 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                                 | Case::Release
                                 | Case::ReleaseMissingOpen
                                 | Case::ReleaseCancelledAfterDrop
+                                | Case::Serving
+                                | Case::ServingMissingReleased
                         )
                         .then(|| {
                             (
@@ -1984,6 +2004,8 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                                 &owner_send,
                                 report,
                                 case,
+                                &client,
+                                &selected_key,
                             )?;
                         }
                     }
@@ -2141,4 +2163,13 @@ fn native_first_actual_release_refuses_missing_real_open_before_successor() {
 #[test]
 fn native_first_actual_registered_drop_cancel_retains_owner_then_reconciles() {
     run(Case::ReleaseCancelledAfterDrop);
+}
+
+#[test]
+fn native_first_actual_released_owners_to_serving_original_sdk_ack_full_strong() {
+    run(Case::Serving);
+}
+#[test]
+fn native_first_actual_local_policy_refuses_real_unreleased_member_without_native_write() {
+    run(Case::ServingMissingReleased);
 }

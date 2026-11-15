@@ -1,7 +1,110 @@
 //! Direct protected reads of the actual host-retained release successor. Old
 //! preparation/Frozen slots are never revived after one-way retirement.
 use super::*;
+/// Distinct released-owner read; generic prepublication/empty-hook read
+/// admission stays strict. No Stored record or failed constructor selects it.
+struct ReleasedRead<'a> {
+    original: NativeRemoteServingReadAdmission<'a>,
+    successor: &'a crate::distribution_data::NativeRemoteReleaseOwner,
+}
+impl ReleasedRead<'_> {
+    fn require_memory(&self) -> Result<()> {
+        let p = &self.original;
+        p.caller.check()?;
+        p.participant
+            .require_released_successor_memory(self.successor)?;
+        p.role.require_live_request()?;
+        p.own.require_live_request(p.business)?;
+        p.metadata.require_current_memory()?;
+        if p.request.phase_id != p.participant.snapshot.phase_id
+            || p.request.manifest.checksum_sha256 != p.participant.snapshot.binding.manifest_sha256
+            || p.request.decision_sha256 != p.receipt.decision_sha256()
+            || p.role.local_node_id() != &p.participant.snapshot.node_id
+        {
+            return Err(invalid(
+                "released protected read changed original participant/phase",
+            ));
+        }
+        p.native.actual_committed_xid()?;
+        Ok(())
+    }
+    fn require_current(&self) -> Result<()> {
+        self.require_memory()?;
+        let p = &self.original;
+        p.role.require_own_host_metadata(p.own, p.business)?;
+        p.metadata.require_request(p.own, p.business)?;
+        if p.role.purpose() != &p.request.purpose()
+            || p.role.context_id() == p.receipt.metadata_context_id()
+            || p.role.metadata_term() < p.receipt.metadata_anchor().0
+            || p.role.metadata_read_index() < p.receipt.metadata_anchor().1
+        {
+            return Err(invalid(
+                "released protected read changed fresh purpose/metadata anchors",
+            ));
+        }
+        p.receipt.data().require_metadata_domain(
+            p.own.committed_topology(p.business)?,
+            p.own.restore_activation(p.business)?,
+        )?;
+        self.require_memory()
+    }
+    fn require_native(
+        &self,
+        db: &crate::BicDb,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+    ) -> Result<()> {
+        self.require_current()?;
+        let p = &self.original;
+        p.metadata.require_native_store_point(db, store)?;
+        if db.incarnation_id() != p.participant.snapshot.database_open
+            || store.native_writer_store_open_id() != p.participant.snapshot.store_open
+        {
+            return Err(invalid(
+                "released protected read replaced original DB/Store open",
+            ));
+        }
+        db.observe_known_remote_native_decision(p.receipt, p.native)?;
+        self.require_memory()
+    }
+}
+
 impl NativeRemoteNewParticipant {
+    /// Only the genuine retained release successor selects this lifetime.
+    /// The ordinary original empty-hook/current getters remain unchanged.
+    pub(crate) fn require_released_successor_memory(
+        &self,
+        actual: &crate::distribution_data::NativeRemoteReleaseOwner,
+    ) -> Result<()> {
+        actual.require_original_participant_identity(self)?;
+        match &self.original {
+            OriginalParticipant::Old {
+                admission,
+                writer,
+                process,
+                ..
+            } => {
+                process.require_original_process()?;
+                admission.require_remote_new_original_memory(writer)
+            }
+            OriginalParticipant::Registered { owner, target, .. } => {
+                let owner = owner
+                    .upgrade()
+                    .ok_or_else(|| invalid("released original Registered owner ended"))?;
+                owner.require_first_policy_attempt_lifetime()?;
+                if let Some(writer) = owner.terminal_writer() {
+                    // This field is minted only by the actual FIRST native
+                    // installer after retaining its Installed guard. A live
+                    // registration is necessary, not serving/Ready authority.
+                    writer.require_remote_new_registration_memory()
+                } else {
+                    target
+                        .original_hook()
+                        .require_remote_new_registration_memory()
+                }
+            }
+        }
+    }
+
     pub(crate) fn retain_remote_release_route(
         &self,
         actual: &Arc<crate::distribution_data::NativeRemoteReleaseOwner>,
@@ -38,13 +141,17 @@ impl NativeRemoteNewParticipant {
         use crate::distribution_native_host::NativeRemoteServingOperationV1 as Op;
         if !matches!(
             request.operation,
-            Op::ObserveOpen | Op::ObserveReleased | Op::Release | Op::ReconcileRelease
+            Op::ObserveOpen
+                | Op::ObserveReleased
+                | Op::ObserveReleasedForPolicy
+                | Op::Release
+                | Op::ReconcileRelease
         ) {
             return Err(invalid(
                 "release response requires actual Release or distinct protected read",
             ));
         }
-        self.serving_queue_for_original(request, role, own, business, metadata)?;
+        self.serving_queue_for_released(request, role, own, business, metadata, observed.owner())?;
         observed.owner().require_participant(self)?;
         metadata.require_external_current()?;
         let (term, index, _) = observed.metadata_anchor();
@@ -55,7 +162,7 @@ impl NativeRemoteNewParticipant {
         }
         if matches!(
             request.operation,
-            Op::ObserveReleased | Op::Release | Op::ReconcileRelease
+            Op::ObserveReleased | Op::ObserveReleasedForPolicy | Op::Release | Op::ReconcileRelease
         ) {
             observed.require_released_open()?;
         }
@@ -74,7 +181,7 @@ impl NativeRemoteNewParticipant {
                 let catalogue = held.catalogue.as_ref().ok_or_else(|| {
                     invalid("released observation original decision catalogue absent")
                 })?;
-                let admission = NativeRemoteServingReadAdmission {
+                let admission = ReleasedRead { successor: observed.owner(), original: NativeRemoteServingReadAdmission {
                     participant: self,
                     request,
                     role,
@@ -84,7 +191,7 @@ impl NativeRemoteNewParticipant {
                     caller: parent,
                     receipt,
                     native,
-                };
+                }};
                 admission.require_current()?;
                 admission.require_native(physical.database(), store)?;
                 if observed
@@ -123,11 +230,14 @@ impl NativeRemoteNewParticipant {
                     original_frozen_owner: frozen_owner,
                     actual_dropped_open: released,
                     actual_writer_installed: false,
+                    policy_released_audit: if request.operation == Op::ObserveReleasedForPolicy {
+                        Some(crate::distribution_native_host::NativeRemoteReleasedPolicyAuditV1::from_protected_release(observed.actual())?)
+                    } else { None },
                 })
             },
             || {
                 parent.check()?;
-                self.require_lifetime_memory()?;
+                self.require_released_successor_memory(observed.owner())?;
                 role.require_live_request()?;
                 own.require_live_request(business)?;
                 metadata.require_current_memory()

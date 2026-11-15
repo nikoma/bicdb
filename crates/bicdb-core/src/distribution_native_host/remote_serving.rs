@@ -10,8 +10,12 @@ use crate::distribution_range_recovery::RecoveryRoleAdmission;
 use parking_lot::Mutex;
 use std::sync::mpsc::{self, SyncSender};
 use std::time::Instant;
+mod local_policy;
 mod release_request;
+pub(crate) use local_policy::NativeRemoteLocalPolicyAuthority;
+mod released_policy_audit;
 pub(crate) use release_request::NativeRemoteReleaseRequestAdmission;
+pub(crate) use released_policy_audit::NativeRemoteReleasedPolicyAuditV1;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) enum NativeRemoteServingOperationV1 {
@@ -30,6 +34,7 @@ pub(crate) enum NativeRemoteServingOperationV1 {
     ResolveBridge,
     ReconcileOpen,
     ReconcileRelease,
+    ObserveReleasedForPolicy,
 }
 impl NativeRemoteServingOperationV1 {
     pub(crate) fn readonly(self) -> bool {
@@ -39,6 +44,7 @@ impl NativeRemoteServingOperationV1 {
                 | Self::ObserveBridge
                 | Self::ObserveOpen
                 | Self::ObserveReleased
+                | Self::ObserveReleasedForPolicy
                 | Self::ObserveServing
                 | Self::ObserveDecision
                 | Self::ResolvePrepared
@@ -137,6 +143,10 @@ pub(crate) struct NativeRemoteServingPointV1 {
     pub original_frozen_owner: Uuid,
     pub actual_dropped_open: bool,
     pub actual_writer_installed: bool,
+    /// Actual protected source OWN/generation audit, requested only by the
+    /// distinct Policy read. None is omitted, preserving compact old bytes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy_released_audit: Option<NativeRemoteReleasedPolicyAuditV1>,
 }
 impl NativeRemoteServingReplyV1 {
     pub(crate) fn require_request(&self, request: &NativeRemoteServingRequestV1) -> Result<()> {
@@ -182,6 +192,19 @@ impl NativeRemoteServingReplyV1 {
         {
             return Err(invalid(
                 "serving actual response substituted request/member/native phase",
+            ));
+        }
+        if request.operation == NativeRemoteServingOperationV1::ObserveReleasedForPolicy {
+            point
+                .policy_released_audit
+                .as_ref()
+                .ok_or_else(|| {
+                    invalid("policy released read requires actual source OWN/generation audit")
+                })?
+                .require_reply(request, self)?;
+        } else if point.policy_released_audit.is_some() {
+            return Err(invalid(
+                "compact serving read cannot substitute a policy audit operation",
             ));
         }
         Ok(())
@@ -285,6 +308,9 @@ struct State {
     returned: u64,
     returned_chain: sha2::Sha256,
     exhausted: bool,
+    // Denial-only one-way original phase claim. Dead Weak cannot reopen it.
+    local_policy:
+        Option<std::sync::Weak<crate::distribution_native_host::NativeRemoteLocalServingPolicy>>,
 }
 struct Unknown {
     request: NativeRemoteServingRequestV1,
@@ -346,7 +372,8 @@ impl NativeRemoteServingQueue {
                 .try_lock()
                 .ok_or_else(|| invalid("serving ingress admission busy"))?;
             let readonly = work.request.operation.readonly();
-            if (!readonly && state.binding.as_ref().is_some_and(|b| b != &binding))
+            if (!readonly && state.local_policy.is_some())
+                || (!readonly && state.binding.as_ref().is_some_and(|b| b != &binding))
                 || state.exhausted
                 || state.pending.is_some()
                 || state.processing
@@ -571,6 +598,30 @@ impl NativeRemotePreparationProcess {
             ));
         }
         actual.require_original_committed_for_serving(db, committed.native_receipt())
+    }
+    pub(crate) fn require_released_native(
+        &self,
+        db: &crate::BicDb,
+        committed: &crate::distribution_range_handoff::CommittedNativeJointDecisionObservation,
+        successor: &crate::distribution_data::NativeRemoteReleaseOwner,
+    ) -> Result<()> {
+        self.require_memory()?;
+        let actual = self
+            .participant
+            .upgrade()
+            .ok_or_else(|| invalid("released original phase owner ended"))?;
+        if actual.snapshot().checksum_sha256 != self.participant_sha256
+            || committed.data().checksum_sha256() != self.decision_sha256
+        {
+            return Err(invalid(
+                "released policy changed original actual process/decision",
+            ));
+        }
+        actual.require_original_committed_for_released_owner(
+            db,
+            committed.native_receipt(),
+            successor,
+        )
     }
     pub(crate) fn require_participant(&self, sha: &str) -> Result<()> {
         self.require_memory()?;
@@ -1190,6 +1241,57 @@ impl NativeRemoteOpenRequestAdmission {
         self.require_memory_current()?;
         self.effect
             .store(true, std::sync::atomic::Ordering::Release);
+        Ok(())
+    }
+}
+
+impl NativeRemoteServingQueue {
+    pub(in crate::distribution_native_host) fn require_local_policy_idle(
+        &self,
+        original: &Arc<crate::distribution_native_host::NativeRemoteLocalServingPolicy>,
+    ) -> Result<()> {
+        original.require_queue(self)?;
+        let state = self
+            .state
+            .try_lock()
+            .ok_or_else(|| invalid("local Policy original queue busy"))?;
+        if state.exhausted
+            || state.processing
+            || state.pending.is_some()
+            || state.unknown.is_some()
+            || state
+                .local_policy
+                .as_ref()
+                .is_some_and(|p| !std::sync::Weak::ptr_eq(p, &Arc::downgrade(original)))
+        {
+            return Err(invalid(
+                "local Policy requires returned original RPC/no processing or uncertainty",
+            ));
+        }
+        Ok(())
+    }
+    pub(in crate::distribution_native_host) fn retain_local_policy_owner(
+        &self,
+        original: &Arc<crate::distribution_native_host::NativeRemoteLocalServingPolicy>,
+    ) -> Result<()> {
+        original.require_queue(self)?;
+        let mut state = self
+            .state
+            .try_lock()
+            .ok_or_else(|| invalid("local Policy original queue busy"))?;
+        if state.exhausted || state.processing || state.pending.is_some() || state.unknown.is_some()
+        {
+            return Err(invalid(
+                "local Policy cannot consume an in-flight or unknown original request",
+            ));
+        }
+        if let Some(previous) = &state.local_policy {
+            if !std::sync::Weak::ptr_eq(previous, &Arc::downgrade(original)) {
+                return Err(invalid("local Policy cannot replace original phase owner"));
+            }
+        } else {
+            state.local_policy = Some(Arc::downgrade(original));
+        }
         Ok(())
     }
 }

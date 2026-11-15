@@ -8,6 +8,8 @@ use crate::distribution_data::{
 use crate::distribution_native_host::NativeRemoteServingOperationV1;
 use crate::distribution_transport::AuthenticatedNativeRemoteServingFrame;
 use std::sync::Arc;
+mod all_released;
+pub(crate) use all_released::{NativeRemoteAllReleasedQuorum, NativeRemoteAllReleasedRound};
 
 pub(crate) struct NativeRemoteAllOpenRound {
     manifest: Arc<NativeRemoteImageManifestV1>,
@@ -54,6 +56,13 @@ impl NativeRemoteAllOpenRound {
         })
     }
     pub(crate) fn record(&mut self, frame: AuthenticatedNativeRemoteServingFrame) -> Result<()> {
+        self.record_actual(frame, false)
+    }
+    fn record_actual(
+        &mut self,
+        frame: AuthenticatedNativeRemoteServingFrame,
+        policy: bool,
+    ) -> Result<()> {
         self.caller.check()?;
         frame.require_live_binding(&self.manifest, self.phase, &self.decision)?;
         let point = frame.point();
@@ -61,11 +70,19 @@ impl NativeRemoteAllOpenRound {
             .preparation
             .as_ref()
             .ok_or_else(|| invalid("remote ALL Open lacks actual protected preparation"))?;
-        if !matches!(
-            frame.operation(),
-            NativeRemoteServingOperationV1::ObserveOpen
-                | NativeRemoteServingOperationV1::ObserveReleased
-        ) || !self.manifest.new_members.contains_key(frame.node_id())
+        let operation_ok = if policy {
+            frame.operation() == NativeRemoteServingOperationV1::ObserveReleasedForPolicy
+                && point.actual_dropped_open
+                && point.policy_released_audit.is_some()
+        } else {
+            matches!(
+                frame.operation(),
+                NativeRemoteServingOperationV1::ObserveOpen
+                    | NativeRemoteServingOperationV1::ObserveReleased
+            )
+        };
+        if !operation_ok
+            || !self.manifest.new_members.contains_key(frame.node_id())
             || self.frames.contains_key(frame.node_id())
             || self
                 .observer
@@ -198,6 +215,39 @@ impl NativeRemoteAllOpenQuorum {
     ) -> Result<()> {
         self.require_live()?;
         participant.require_lifetime_memory()?;
+        let snapshot = participant.snapshot();
+        let frame = self
+            .actual
+            .frames
+            .get(&snapshot.node_id)
+            .ok_or_else(|| invalid("remote Release omits actual final local member"))?;
+        let point = frame.point();
+        if snapshot.binding != self.actual.binding
+            || snapshot.phase_id != self.actual.phase
+            || self.actual.observer.as_ref() != Some(&snapshot.node_id)
+            || point.original_participant_sha256 != snapshot.checksum_sha256
+            || point.native_database_open != snapshot.database_open
+            || point.store_open != snapshot.store_open
+            || receipt.decision_sha256() != self.actual.decision
+            || point.native_decision_record_sha256 != receipt.checksum_sha256()
+            || point.native_decision_xid != native.actual_committed_xid()?
+            || point.remote_provenance_sha256 != native.actual_provenance_sha256()?
+        {
+            return Err(invalid(
+                "remote Release substituted original native attempt/owner/provenance",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn require_original_native_for_policy(
+        &self,
+        participant: &NativeRemoteNewParticipant,
+        receipt: &crate::db::NativeJointDecisionReceipt,
+        native: &crate::db::NativeRemoteJointDecisionAttempt,
+        successor: &crate::distribution_data::NativeRemoteReleaseOwner,
+    ) -> Result<()> {
+        self.require_live()?;
+        participant.require_released_successor_memory(successor)?;
         let snapshot = participant.snapshot();
         let frame = self
             .actual

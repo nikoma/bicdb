@@ -77,15 +77,20 @@ pub(crate) use provisional_listener::NativeFirstCoordinatorAction;
 #[cfg(feature = "tls-replication")]
 pub(crate) use provisional_listener::NativeRemoteMembershipScope;
 #[cfg(feature = "tls-replication")]
+pub(crate) use provisional_listener::{
+    NativeRemoteLocalServingPolicy, NativeRemoteSuccessorReadRegistration,
+};
+#[cfg(feature = "tls-replication")]
 pub(crate) use remote_first::{
     NativeFirstReceiveOperationV1, NativeFirstReceiveReplyV1, NativeFirstReceiveRequestV1,
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use remote_serving::{
     NativeRemoteBridgeReadRequestAdmission, NativeRemoteBridgeRequestAdmission,
-    NativeRemoteOpenRequestAdmission, NativeRemotePreparationAdmission,
-    NativeRemotePreparationProcess, NativeRemotePreparationReadAdmission,
-    NativeRemoteReleaseRequestAdmission, NativeRemoteServingQueue,
+    NativeRemoteLocalPolicyAuthority, NativeRemoteOpenRequestAdmission,
+    NativeRemotePreparationAdmission, NativeRemotePreparationProcess,
+    NativeRemotePreparationReadAdmission, NativeRemoteReleaseRequestAdmission,
+    NativeRemoteReleasedPolicyAuditV1, NativeRemoteServingQueue,
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use remote_serving::{

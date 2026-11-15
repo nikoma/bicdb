@@ -674,3 +674,26 @@ impl NativeMetadataControlHost {
         Ok((receiver.admission.clone(), receiver.runtime.clone()))
     }
 }
+
+impl NativeRegisteredReplicaReceiver {
+    pub(in super::super) fn capture_remote_policy_read_route(
+        &self,
+        backend: &Arc<NativeMetadataControlBackend>,
+        participant: &Arc<crate::distribution_range_handoff::NativeRemoteNewParticipant>,
+        successor: &Arc<crate::distribution_data::NativeRemoteReleaseOwner>,
+    ) -> Result<Arc<super::remote_serving_successor_read::NativeRemoteSuccessorReadRegistration>>
+    {
+        if self.stopping {
+            return Err(invalid("stopping actual host cannot retain Policy reader"));
+        }
+        let runtime = &self.runtime;
+        self.admission
+            .require_listener(&self.backend.service, runtime)?;
+        super::remote_serving_successor_read::NativeRemoteSuccessorReadRegistration::capture(
+            backend,
+            runtime,
+            participant,
+            successor,
+        )
+    }
+}

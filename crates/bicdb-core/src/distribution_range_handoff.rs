@@ -41,8 +41,9 @@ pub(crate) use joint::{NativeJointPhaseTrace, NativeRefreshTraceContext};
 pub(crate) use joint::{
     NativeMetadataOwnerCatalogueScope, NativeRemoteAllOpenQuorum,
     NativeRemoteAllOpenRetirementAdmission, NativeRemoteAllOpenRound,
-    NativeRemoteCatalogueDecisionV1, NativeRemoteCatalogueRound, NativeRemoteDecisionAdmission,
-    NativeRemoteDecisionBindingV1, NativeRemoteDecisionReceiptV1, NativeRemoteDecisionSourceData,
+    NativeRemoteAllReleasedQuorum, NativeRemoteAllReleasedRound, NativeRemoteCatalogueDecisionV1,
+    NativeRemoteCatalogueRound, NativeRemoteDecisionAdmission, NativeRemoteDecisionBindingV1,
+    NativeRemoteDecisionReceiptV1, NativeRemoteDecisionSourceData,
     NativeRemoteDecisionSourceRequestV1, NativeRemoteDualDurableDecision,
     NativeRemoteJointDecisionCertificate, NativeRemoteJointDecisionCertificateRound,
     NativeRemoteNewFactSetV1, NativeRemoteNewHandoffV1, NativeRemoteNewMaterializedQuorum,

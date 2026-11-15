@@ -160,6 +160,15 @@ pub(crate) enum MetadataRecoveryRolePurpose {
         decision_sha256: String,
         readonly: bool,
     },
+    /// Finite owner-local continuation only, from the actual recipient to
+    /// itself AFTER ALL-released proof and its original RPC queue has drained.
+    /// Generic recovery/remote mutation admission explicitly refuses it.
+    NativeJointLocalServingPolicy {
+        relocation_id: crate::distribution::RelocationId,
+        session_id: Uuid,
+        nonce: Uuid,
+        decision_sha256: String,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -238,6 +247,12 @@ impl MetadataRecoveryRoleRequest {
             nonce,
             decision_sha256,
             ..
+        }
+        | MetadataRecoveryRolePurpose::NativeJointLocalServingPolicy {
+            relocation_id,
+            session_id,
+            nonce,
+            decision_sha256,
         } = &self.purpose
         {
             if relocation_id.get() == 0
@@ -370,6 +385,36 @@ impl MetadataRecoveryRoleRequest {
                     || (*readonly && !observer && metadata_leader != &initiator.id))
                     || (!recipient_voter
                         && !(*readonly && plan.source.as_ref() == Some(&recipient.id)))
+                    || plan.range_id != range.id
+                    || plan.phase != RelocationPhase::CleaningUp
+                    || plan.promoted_epoch != Some(range.epoch)
+                    || record.stage()
+                        != crate::distribution::NativeJointHandoffStageV1::AwaitingActivation
+                    || record.decision_sha256() != decision_sha256
+                    || record.session_id() != *session_id
+                    || record.nonce() != *nonce
+                    || session.session_id != *session_id
+                    || session.nonce != *nonce
+                {
+                    return Err(invalid());
+                }
+            }
+            MetadataRecoveryRolePurpose::NativeJointLocalServingPolicy {
+                relocation_id,
+                session_id,
+                nonce,
+                decision_sha256,
+            } => {
+                let plan = topology
+                    .relocations
+                    .get(relocation_id)
+                    .ok_or_else(invalid)?;
+                let session = plan.handoff_session.as_ref().ok_or_else(invalid)?;
+                let record = plan.native_joint_handoff_v1.as_ref().ok_or_else(invalid)?;
+                if initiator.id != recipient.id
+                    || initiator.lifecycle != ClusterNodeLifecycle::Active
+                    || recipient.lifecycle != ClusterNodeLifecycle::Active
+                    || !recipient_voter
                     || plan.range_id != range.id
                     || plan.phase != RelocationPhase::CleaningUp
                     || plan.promoted_epoch != Some(range.epoch)

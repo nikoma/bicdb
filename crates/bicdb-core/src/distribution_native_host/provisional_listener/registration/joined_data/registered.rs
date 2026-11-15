@@ -48,7 +48,24 @@ impl NativeJoinedDataHost {
         )
     }
     pub(super) fn publish_registered(&mut self, parent: &CancellationToken) -> Result<usize> {
+        self.publish_registered_inner(parent, None)
+    }
+    pub(super) fn publish_registered_with_policy(
+        &mut self,
+        parent: &CancellationToken,
+        policy: &crate::distribution_range_handoff::NativeJointServingPolicyAdmission,
+    ) -> Result<usize> {
+        self.publish_registered_inner(parent, Some(policy))
+    }
+    fn publish_registered_inner(
+        &mut self,
+        parent: &CancellationToken,
+        policy: Option<&crate::distribution_range_handoff::NativeJointServingPolicyAdmission>,
+    ) -> Result<usize> {
         parent.check()?;
+        if let Some(policy) = policy {
+            policy.require_external_current()?;
+        }
         if self.stopping {
             return Err(invalid("stopping Registered Joined cannot publish"));
         }
@@ -57,6 +74,16 @@ impl NativeJoinedDataHost {
             .as_ref()
             .ok_or_else(|| invalid("original Registered Joined custody absent"))?;
         original.require_original_lifetime()?;
+        if let Some(policy) = policy {
+            if policy.native().checksum_sha256()
+                != original.historical_native_bridge().checksum_sha256()
+                || policy.local_node_id() != &self.parts.backend.node_id
+            {
+                return Err(invalid(
+                    "local Policy changed actual installed Joined native/recipient",
+                ));
+            }
+        }
         let selected = self
             .selected_range
             .as_ref()
@@ -113,6 +140,9 @@ impl NativeJoinedDataHost {
             .backend
             .transport
             .acquire_host_metadata_observation(&route, business, Duration::from_secs(5), parent)?;
+        if let Some(policy) = policy {
+            policy.require_post_policy_metadata(&own, business)?;
+        }
         let current = own.committed_topology(business)?;
         if current
             .range_by_id(selected.id)
@@ -155,6 +185,14 @@ impl NativeJoinedDataHost {
                     let db = database
                         .try_read()
                         .ok_or_else(|| invalid("Registered Joined actual DB busy at publish"))?;
+                    if let Some(policy) = policy {
+                        policy.require_local_registered_current(
+                            &self.parts.backend.service,
+                            &service,
+                            &db,
+                            &original.registered_owner(),
+                        )?;
+                    }
                     let physical = enrollment.guard.joined_publication_scope(
                         &db,
                         selected,
@@ -178,6 +216,9 @@ impl NativeJoinedDataHost {
                         let continuity =
                             released.observe_actual_continuity(store_open, &activation_sha)?;
                         store.require_native_joint_open_continuity(&actual, &continuity)?;
+                        if let Some(policy) = policy {
+                            policy.require_local_with_store_scope(store, &cut)?;
+                        }
                         let range_slots =
                             released.borrow_arm_publication(store_open, &activation_sha)?;
                         parent.check()?;
@@ -188,6 +229,11 @@ impl NativeJoinedDataHost {
                             let version = physical.publication_guard()?;
                             version.require_current_memory()?;
                             parent.check()?;
+                            // Same actual current MStore/version is already
+                            // guarded; do not recursively acquire a read gate.
+                            if let Some(policy) = policy {
+                                policy.require_publication_request_memory()?;
+                            }
                             retired = dispatcher_publication.publish();
                             published.store(true, Ordering::Release);
                         }

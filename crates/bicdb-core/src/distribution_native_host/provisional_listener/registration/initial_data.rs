@@ -1550,3 +1550,31 @@ impl NativeMetadataControlHost {
             "actual_stopping":self.data.as_ref().map(|d|d.stopping)})
     }
 }
+
+impl NativeInitialDataHost {
+    pub(in super::super) fn capture_remote_policy_read_route(
+        &self,
+        backend: &Arc<NativeMetadataControlBackend>,
+        participant: &Arc<crate::distribution_range_handoff::NativeRemoteNewParticipant>,
+        successor: &Arc<crate::distribution_data::NativeRemoteReleaseOwner>,
+    ) -> Result<Arc<super::remote_serving_successor_read::NativeRemoteSuccessorReadRegistration>>
+    {
+        if self.stopping {
+            return Err(invalid("stopping actual host cannot retain Policy reader"));
+        }
+        let runtime = self
+            .runtime
+            .as_ref()
+            .ok_or_else(|| invalid("Policy original INITIAL runtime absent"))?;
+        self.admission
+            .as_ref()
+            .ok_or_else(|| invalid("Policy original INITIAL admission absent"))?
+            .require_listener(&self.initial.service, runtime)?;
+        super::remote_serving_successor_read::NativeRemoteSuccessorReadRegistration::capture(
+            backend,
+            runtime,
+            participant,
+            successor,
+        )
+    }
+}

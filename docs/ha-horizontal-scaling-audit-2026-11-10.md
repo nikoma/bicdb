@@ -11,7 +11,20 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
-## Latest execution checkpoint — composed520 compilation failed, 2026-11-15 UTC
+## Latest execution checkpoint — head0a failed, 2026-11-15 UTC
+
+Remote main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
+Unmerged520 source `0a04ccc06db33a04d254a5e00776248d7ea1772a` failed its normal
+workflows. Six jobs failed Core guard compilation before database acceptance.
+Remaining-workspace executed383 passes/1 failure; Page unit346/0 includes the new
+actual checksum/no-repair control. A later old-format expectation failed against
+the mandatory new gated signature. Paired/later assertions were not reached.
+The archive is complete and independently verified in the
+[exact findings](design/native-520-regression-findings.md). Follow-up guard/profile
+corrections remain uncompiled and unexecuted. Native/Strong/ACK, physical expansion,
+cold recovery and sustained capacity qualification remain open.
+
+## Earlier execution checkpoint — composed520 compilation failed, 2026-11-15 UTC
 
 Delivered main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
 Composed520 source `8bc2df66361a3d4307b2943439a8a9d2b4fa0b92` failed its normal

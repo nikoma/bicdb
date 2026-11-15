@@ -108,8 +108,14 @@ pub(super) fn exercise(
         .expect("actual final publisher must refuse");
     match case {
         SourceCase::TargetCollectionForeignArchive => {
+            // The same actual archive deletion may be observed first by
+            // the full preparation read or its journal-held scope. Both
+            // diagnose that exact protected archive; a timeout or unrelated
+            // Cluster error is not this control's successful refusal.
             assert!(matches!(error, BicDbError::Cluster(ref d)
-            if d == "native range image: NEW joint preparation immutable archive missing"))
+            if matches!(d.as_str(),
+                "native range image: NEW joint preparation immutable archive missing"
+                | "native range image: publication scope lost actual preparation pointer/archive")))
         }
         SourceCase::TargetCollectionLocalArchive => {
             assert!(matches!(error, BicDbError::Cluster(ref d)

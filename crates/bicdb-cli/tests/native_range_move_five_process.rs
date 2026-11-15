@@ -6,12 +6,14 @@
 //!
 //! The final assertions are one marked block switched by `EXPECT_COMPLETION`.
 //!
-//! Availability of the moved range is MEASURED, not asserted: a second
-//! client does one Strong read and one append on the moved range about every
-//! 100 ms from before `move-range` until after completion, and the test
-//! prints when reads and writes were refused and at which stage. Asserted:
-//! reads and writes succeed again after completion, and every append that
-//! was acknowledged before or during the move is readable afterwards.
+//! Availability of the moved range is measured: a second client does one
+//! Strong read and one append on the moved range about every 100 ms from
+//! before `move-range` until after completion, and the test prints when
+//! reads and writes were refused and at which stage. Asserted: reads and
+//! writes succeed again after completion, every append that was
+//! acknowledged before or during the move is readable afterwards, and (for
+//! a move that completes in one attempt) neither reads nor writes were
+//! refused for longer than `MAX_UNAVAILABLE` in a row.
 use bicdb_core::{
     cluster_event_record_id, ClusterBootstrapSnapshot, ClusterEventClient, ClusterEventOperation,
     ClusterEventRequest, ClusterId, ClusterNetworkTransportConfig, ClusterNode, ClusterNodeId,
@@ -97,11 +99,48 @@ const CLIENT_BACKOFF: Duration = Duration::from_millis(400);
 /// so no append is in flight while it commits. It reads throughout.
 const APPENDS_DURING_ALLOCATION: bool = false;
 
+/// The longest time the moved range may refuse Strong reads, or appends, in
+/// a row during a move that completes in its first attempt.
+///
+/// The range is refused from the learner allocation until the target
+/// serves: the allocation changes the range epoch, the old voters' writer
+/// policy is of the previous epoch, and the cut follows at once. Measured
+/// between five processes on a shared build host: 16 to 20 s (before the
+/// coordinator stopped waiting a supervisor tick per stage and the members
+/// stopped answering "not complete" on a 0.5 s timing edge: 22 to 46 s).
+/// The bound is not a product promise; it fails when a stage waits again.
+const MAX_UNAVAILABLE: Duration = Duration::from_secs(30);
+
+/// The longest run of failed attempts of one kind: from the first failed
+/// attempt to the next successful one (or to the last attempt).
+fn longest_outage(attempts: &[Attempt], write: bool) -> f64 {
+    let (mut longest, mut open) = (0f64, None::<f64>);
+    let mut last = 0f64;
+    for attempt in attempts.iter().filter(|attempt| attempt.write == write) {
+        last = attempt.at;
+        match (open, attempt.ok) {
+            (None, false) => open = Some(attempt.at),
+            (Some(from), true) => {
+                longest = longest.max(attempt.at - from);
+                open = None;
+            }
+            _ => {}
+        }
+    }
+    if let Some(from) = open {
+        longest = longest.max(last - from);
+    }
+    longest
+}
+
 fn node(i: usize) -> ClusterNodeId {
     ClusterNodeId::new(format!("n{i}")).unwrap()
 }
 fn binary() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_bicdb"))
+    let mut command = Command::new(env!("CARGO_BIN_EXE_bicdb"));
+    // The coordinator reports where the move spends its time (standard error).
+    command.env("BICDB_RANGE_MOVE_TRACE", "1");
+    command
 }
 fn stamp(started: Instant) -> String {
     let wall = std::time::SystemTime::now()
@@ -1398,6 +1437,14 @@ fn native_range_move_five_process_operator_sequence() {
                     .collect())
         );
     }
+    // Where the coordinating host spent the move, part by part.
+    for i in 0..5 {
+        if let Ok(text) = std::fs::read_to_string(cluster.root.join(format!("node{i}.stderr"))) {
+            for line in text.lines().filter(|line| line.contains("RANGE_MOVE_TRACE")) {
+                println!("XPROC_M node{i} {}", line.chars().take(420).collect::<String>());
+            }
+        }
+    }
     let _ = gateway.refresh();
     let untouched = rows
         .iter()
@@ -1519,6 +1566,18 @@ fn native_range_move_five_process_operator_sequence() {
                     .any(|attempt| attempt.write == write && attempt.ok && attempt.at > move_end),
                 "no {name} on the moved range succeeded after the move completed"
             );
+        }
+        // The unavailable window. With appends in flight at the allocation
+        // the first attempt is aborted and repeated, which is another
+        // sequence with its own windows; it is measured and not bounded here.
+        if !APPENDS_DURING_ALLOCATION {
+            for (write, name) in [(false, "Strong reads"), (true, "appends")] {
+                let longest = longest_outage(&attempts, write);
+                assert!(
+                    longest <= MAX_UNAVAILABLE.as_secs_f64(),
+                    "{name} on the moved range were refused for {longest:.3}s in a row; the bound is {MAX_UNAVAILABLE:?}"
+                );
+            }
         }
         // A Strong read that answers, answers the acknowledged row: an
         // absence or another value is never an availability matter.

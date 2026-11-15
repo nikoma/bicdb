@@ -8,6 +8,68 @@ use crate::distribution_range_handoff::{
     NativeJointHandoffStepReplyV1, NativeJointHandoffStepRequestV1,
 };
 
+/// How long a member repeats its own read-only phase observation while its
+/// own state is held by another request of the same member.
+const MEMBER_OBSERVATION_BUSY_WAIT: Duration = Duration::from_millis(750);
+/// Pause between two such repetitions.
+const MEMBER_OBSERVATION_BUSY_PAUSE: Duration = Duration::from_millis(10);
+
+/// Receiver side of a joint handoff step. A member reads its own state
+/// without waiting (`try_lock`) and refuses with "busy" while another
+/// request of the same member, usually an ordinary client request, holds
+/// it. For the read-only phase observation that refusal fails the whole
+/// window of whoever observes (the coordinator, or another member inside
+/// its second window), although the holder releases shortly. The member
+/// therefore repeats the observation itself, for a bounded time inside the
+/// request's own deadline.
+///
+/// Every repetition is a complete new attempt of the same request: the peer
+/// is authenticated again and the member takes its own fresh committed
+/// metadata again, exactly as if the observer had sent the request again.
+/// No lock is held between two attempts, so the repetition adds no lock
+/// order. A step that changes member state is never repeated here: its
+/// repetition stays with the coordinator.
+pub(super) fn repeat_busy_phase_observation<T>(
+    request: &NativeJointHandoffStepRequestV1,
+    parent: &CancellationToken,
+    attempt: impl Fn() -> Result<T>,
+) -> Result<T> {
+    let started = Instant::now();
+    let mut repeated = 0u32;
+    let answer = if !matches!(
+        request.operation,
+        NativeJointHandoffStepOperationV1::BridgePhaseObserve { .. }
+    ) {
+        attempt()
+    } else {
+        let until = started + MEMBER_OBSERVATION_BUSY_WAIT;
+        loop {
+            match attempt() {
+                Err(error)
+                    if Instant::now() < until
+                        && parent.check().is_ok()
+                        && error.to_string().contains("busy") =>
+                {
+                    repeated += 1;
+                    std::thread::sleep(MEMBER_OBSERVATION_BUSY_PAUSE);
+                }
+                other => break other,
+            }
+        }
+    };
+    crate::distribution_native_host::range_move_trace(started, || {
+        format!(
+            "member served step {} busy_repetitions={repeated} {}",
+            request.operation.trace_name(),
+            match &answer {
+                Ok(_) => "ok".to_string(),
+                Err(error) => format!("error {error}"),
+            }
+        )
+    });
+    answer
+}
+
 /// One authenticated bridge step frame. Constructed only by the pinned
 /// exchange below; a decoded reply is never one. It records what THIS
 /// exchange's TLS/native handshake proved about the replying member and the

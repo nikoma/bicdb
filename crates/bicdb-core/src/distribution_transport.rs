@@ -1805,13 +1805,18 @@ fn handle_cluster_data_connection(
             };
             if let Some(original) = continued {
                 let reply =
-                    original.advance_joint_bridge_step_as_data_owner(peer, &request, &parent)?;
+                    native_handoff_step::repeat_busy_phase_observation(&request, &parent, || {
+                        original.advance_joint_bridge_step_as_data_owner(peer, &request, &parent)
+                    })?;
                 return Ok(ClusterDataResponse::NativeJointHandoffStep(reply));
             }
             if let Some(survivor) = initial_data {
                 // A surviving original member serves only the bridge steps of
                 // a committed decision; it refuses the install operation.
-                let reply = survivor.advance_joint_bridge_step(peer, &request, &parent)?;
+                let reply =
+                    native_handoff_step::repeat_busy_phase_observation(&request, &parent, || {
+                        survivor.advance_joint_bridge_step(peer, &request, &parent)
+                    })?;
                 return Ok(ClusterDataResponse::NativeJointHandoffStep(reply));
             }
             let target = registered_replica.ok_or_else(|| {
@@ -1819,7 +1824,10 @@ fn handle_cluster_data_connection(
                     "joint handoff step requires its original immutable INITIAL or Registered owner",
                 )
             })?;
-            let reply = target.advance_joint_handoff_step(peer, &request, &parent)?;
+            let reply =
+                native_handoff_step::repeat_busy_phase_observation(&request, &parent, || {
+                    target.advance_joint_handoff_step(peer, &request, &parent)
+                })?;
             #[cfg(test)]
             if target.test_take_joint_handoff_step_reply_loss() {
                 suppress_actual_completion_reply.set(true);

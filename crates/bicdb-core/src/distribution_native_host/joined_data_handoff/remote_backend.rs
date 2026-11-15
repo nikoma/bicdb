@@ -121,12 +121,18 @@ const BRIDGE_REQUEST_MS: u64 = 4500;
 /// Budget of one bridge phase (preparation, publication or Open) over every
 /// new member.
 const BRIDGE_PHASE: Duration = Duration::from_secs(90);
-/// Bound of the step requests one member is sent for one bridge phase. Every
-/// answered step performs at least one bounded part.
-const BRIDGE_STEP_CALLS: usize = 32;
-/// A bridge step that fails this many times in a row ends the call. The
-/// member continues the same step on the next call.
+/// A bridge step that is refused this many times in a row for another reason
+/// than a busy member ends the call. The member continues the same step on
+/// the next call.
 const BRIDGE_STEP_FAILURES: usize = 4;
+/// A member's step is repeated until the member reports it complete or its
+/// phase budget (`BRIDGE_PHASE`) ends; there is no bound on the number of
+/// requests. The first answers of a step that performs several bounded parts
+/// are repeated at once; after `BRIDGE_REPEAT_FREE` repetitions the pause
+/// between two requests doubles from the first to the second value.
+const BRIDGE_REPEAT_FREE: u32 = 2;
+const BRIDGE_REPEAT_PAUSE: (Duration, Duration) =
+    (Duration::from_millis(25), Duration::from_millis(400));
 
 /// How long one call waits for the target's host loop to finish a host
 /// command before it reports the wait.
@@ -137,10 +143,13 @@ const HOST_COMMAND_POLL: Duration = Duration::from_millis(100);
 /// The target rebinds its listener while it runs a command, so a few
 /// requests in a row may find no listener.
 const HOST_COMMAND_FAILURES: usize = 20;
-/// How often one call repeats the activation observation while a member
-/// answers that its own data service is busy, and the pause between two.
-const ACTIVATION_BUSY_REPEATS: usize = 40;
-const ACTIVATION_BUSY_PAUSE: Duration = Duration::from_millis(100);
+/// How long one call repeats the source Close of one old member while that
+/// member answers that its own state is busy.
+const CLOSE_BUSY_WAIT: Duration = Duration::from_secs(5);
+/// How long one call repeats the activation observation while a member
+/// answers that its own state is busy. The pause between two observations
+/// doubles as for a bridge step.
+const ACTIVATION_BUSY_WAIT: Duration = Duration::from_secs(30);
 /// The target's refusal of a host command while its release is durable but
 /// not confirmed by its second window. Such a target is not a DATA owner
 /// yet: its release step is still served and confirms it.
@@ -199,6 +208,21 @@ const OBSERVE_IN_FLIGHT: [&str; 2] = [
     "OLD source operation still active",
 ];
 
+/// A member's refusal because another request of the same member holds the
+/// state it reads without waiting. It asks for a repetition and says nothing
+/// about the step. There is no typed "busy" answer; every such refusal of a
+/// member carries this word.
+fn member_busy(error: &BicDbError) -> bool {
+    !matches!(error, BicDbError::QueryTimedOut) && error.to_string().contains("busy")
+}
+/// The pause before repetition number `repeated` (from 1) of a member request.
+fn repeat_pause(repeated: u32) -> Duration {
+    let (first, last) = BRIDGE_REPEAT_PAUSE;
+    match repeated.checked_sub(BRIDGE_REPEAT_FREE + 1) {
+        None => Duration::ZERO,
+        Some(doubled) => first.saturating_mul(1u32 << doubled.min(8)).min(last),
+    }
+}
 fn remote_error(detail: impl Into<String>) -> BicDbError {
     BicDbError::Cluster(format!("remote joined handoff backend: {}", detail.into()))
 }
@@ -986,27 +1010,45 @@ impl RemoteJoinedHandoffBackend {
             .map_err(|error| stage_error("source round metadata", error))?;
         self.closed_scope_sha256 = Some(plan.checksum_sha256()?);
         for recipient in plan.old_members().keys() {
-            let operation = bounded(parent, REQUEST);
-            let business = Uuid::now_v7();
-            let own = self
-                .transport
-                .acquire_host_metadata_observation(
-                    &members.metadata_leader,
+            // An old voter still answers client requests of the range (it
+            // refuses them, and holds its own state while it does). A Close
+            // that finds that state held is refused as "busy"; it is sent
+            // again, as a new request under a new metadata read, for a
+            // bounded time. A repeated Close continues the same operation
+            // and confirms the same promise and close record.
+            let until = Instant::now() + CLOSE_BUSY_WAIT;
+            let mut busy = 0u32;
+            let frame = loop {
+                let operation = bounded(parent, REQUEST);
+                let business = Uuid::now_v7();
+                let own = self
+                    .transport
+                    .acquire_host_metadata_observation(
+                        &members.metadata_leader,
+                        business,
+                        REQUEST,
+                        &operation,
+                    )
+                    .map_err(|error| stage_error("source close metadata", error))?;
+                let request = NativeRemoteOldRequestV1::from_plan(
+                    &plan,
+                    NativeRemoteOldOperationV1::Close,
                     business,
-                    REQUEST,
-                    &operation,
-                )
-                .map_err(|error| stage_error("source close metadata", error))?;
-            let request = NativeRemoteOldRequestV1::from_plan(
-                &plan,
-                NativeRemoteOldOperationV1::Close,
-                business,
-                OLD_REQUEST_MS,
-            )?;
-            let frame = self
-                .transport
-                .request_remote_native_old(recipient, &plan, &request, &own, &operation)
-                .map_err(|error| stage_error("source close", error))?;
+                    OLD_REQUEST_MS,
+                )?;
+                match self
+                    .transport
+                    .request_remote_native_old(recipient, &plan, &request, &own, &operation)
+                {
+                    Ok(frame) => break frame,
+                    Err(error) if Instant::now() < until && member_busy(&error) => {
+                        parent.check()?;
+                        busy = busy.saturating_add(1);
+                        std::thread::sleep(repeat_pause(busy.saturating_add(BRIDGE_REPEAT_FREE)));
+                    }
+                    Err(error) => return Err(stage_error("source close", error)),
+                }
+            };
             if frame.reply().closed.is_none() {
                 return Err(handoff_error(format!(
                     "source close: old member {recipient} returned no closure"
@@ -1477,9 +1519,11 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
         let resumed = self.cut_started;
         // Before the first member mutation, and before anything can fail.
         self.cut_started = true;
+        let started = Instant::now();
         let plan = self
             .plan(members, range, relocation, parent)
             .map_err(|error| stage_error("source round metadata", error))?;
+        trace(started, || "cut: plan".into());
         // Before the target is fenced or any old member is closed. Nothing
         // was sent by this call, so it started no cut.
         if let Err(error) = self.require_target_leads(
@@ -1495,14 +1539,17 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
         // not be aborted either. Asked read-only; nothing was sent by this
         // call, so it started no cut and the abort stays possible.
         if !resumed {
+            let started = Instant::now();
             if let Err(error) = self.require_no_unfinished_command(range, parent) {
                 self.cut_started = resumed;
                 return Err(error);
             }
+            trace(started, || "cut: unfinished command probe".into());
         }
         let donor = Self::select_donor(&plan)?;
         let target_attempt = Self::target_attempt(&plan)?;
         let mut fence_refusal = None;
+        let started = Instant::now();
         if !self.target_fenced {
             match self.fence_target(members, &plan, parent) {
                 Ok(()) => self.target_fenced = true,
@@ -1520,7 +1567,11 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
                 Err(error) => return Err(stage_error("target fence", error)),
             }
         }
+        trace(started, || "cut: target fence".into());
+        let started = Instant::now();
         self.close_old_members(members, range, relocation, parent)?;
+        trace(started, || "cut: source close of every old member".into());
+        let started = Instant::now();
         self.plan = Some(plan.clone());
         self.committed = Some((range.clone(), relocation.clone()));
         self.donor = Some(donor.clone());
@@ -1533,6 +1584,8 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
                 )),
                 (error, None) => stage_error("target install", error),
             })?;
+        trace(started, || "cut: target install".into());
+        let started = Instant::now();
         // The target served the install under this node's fence.
         self.target_fenced = true;
         let (outcome, manifest) = self
@@ -1547,6 +1600,7 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
                 "the target retired the export of another install than the one it completed",
             ));
         }
+        trace(started, || "cut: source export retirement".into());
         self.install = Some(installed);
         self.manifest = Some(manifest);
         Ok(())
@@ -1560,7 +1614,10 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
     /// that every member which later needs the decision must hold it before
     /// the certificate is retained.
     fn decide(&mut self, members: &RemoteMembers, parent: &CancellationToken) -> Result<()> {
-        self.decide_on_every_member(members, parent)
+        let started = Instant::now();
+        let decided = self.decide_on_every_member(members, parent);
+        trace(started, || format!("decision ok={}", decided.is_ok()));
+        decided
     }
 
     /// The retained certificate, or the certified decision of the committed
@@ -1855,21 +1912,32 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
         // its data service and answers "busy" while a client request holds
         // it; that refusal asks for a repetition. The whole window is
         // observed again each time: nothing of a refused one is kept.
-        let mut busy = 0;
+        let until = Instant::now() + ACTIVATION_BUSY_WAIT;
+        let mut busy = 0u32;
         let certificate = loop {
-            match NativeRemoteJointActivationCertificate::observe_as_outside_coordinator(
+            let started = Instant::now();
+            let observed = NativeRemoteJointActivationCertificate::observe_as_outside_coordinator(
                 &body,
                 &self.transport,
                 &members.metadata_leader,
                 parent,
-            ) {
+            );
+            trace(started, || {
+                format!(
+                    "activation observation: {}",
+                    match &observed {
+                        Ok(_) => "ok".to_string(),
+                        Err(error) => format!("error {error}"),
+                    }
+                )
+            });
+            match observed {
                 Ok(certificate) => break certificate,
-                Err(BicDbError::Cluster(refusal))
-                    if busy < ACTIVATION_BUSY_REPEATS && refusal.contains("busy") =>
-                {
+                Err(error) if Instant::now() < until && member_busy(&error) => {
                     parent.check()?;
-                    busy += 1;
-                    std::thread::sleep(ACTIVATION_BUSY_PAUSE);
+                    busy = busy.saturating_add(1);
+                    // Never at once: the member is asked again after a pause.
+                    std::thread::sleep(repeat_pause(busy.saturating_add(BRIDGE_REPEAT_FREE)));
                 }
                 Err(error) => return Err(error),
             }
@@ -1980,52 +2048,79 @@ impl RemoteJoinedHandoffBackend {
     ) -> Result<AuthenticatedNativeJointBridgeStepFrame> {
         let token = bounded(parent, REQUEST);
         let business = Uuid::now_v7();
+        let started = Instant::now();
         let own = self.transport.acquire_host_metadata_observation(
             &members.metadata_leader,
             business,
             REQUEST,
             &token,
         )?;
+        let observed = started.elapsed();
         let request = NativeJointHandoffStepRequestV1::from_decision(
             decision,
             operation.clone(),
             business,
             BRIDGE_REQUEST_MS,
         )?;
+        let answer =
+            self.bridge_step_request(recipient, decision, operation, &request, &own, &token);
+        trace(started, || {
+            format!(
+                "bridge step {} of {recipient}: own metadata {} ms, then {}",
+                operation.trace_name(),
+                observed.as_millis(),
+                match &answer {
+                    Ok(frame) => format!("complete={}", frame.outcome().complete),
+                    Err(error) => format!("error {error}"),
+                }
+            )
+        });
+        answer
+    }
+
+    fn bridge_step_request(
+        &self,
+        recipient: &ClusterNodeId,
+        decision: &dyn NativeJointBridgeDecision,
+        operation: &NativeJointHandoffStepOperationV1,
+        request: &NativeJointHandoffStepRequestV1,
+        own: &HostMetadataReadObservation,
+        token: &CancellationToken,
+    ) -> Result<AuthenticatedNativeJointBridgeStepFrame> {
         match operation {
             NativeJointHandoffStepOperationV1::BridgePrepare { .. } => self
                 .transport
-                .request_native_joint_bridge_prepare(recipient, decision, &request, &own, &token),
+                .request_native_joint_bridge_prepare(recipient, decision, request, own, token),
             NativeJointHandoffStepOperationV1::BridgePublish { .. } => self
                 .transport
-                .request_native_joint_bridge_publish(recipient, decision, &request, &own, &token),
+                .request_native_joint_bridge_publish(recipient, decision, request, own, token),
             NativeJointHandoffStepOperationV1::BridgeOpen { .. } => self
                 .transport
-                .request_native_joint_bridge_open(recipient, decision, &request, &own, &token),
+                .request_native_joint_bridge_open(recipient, decision, request, own, token),
             NativeJointHandoffStepOperationV1::BridgePhaseObserve { kind, .. } => self
                 .transport
                 .request_native_joint_bridge_phase_observation(
-                    recipient, decision, *kind, &request, &own, &token,
+                    recipient, decision, *kind, request, own, token,
                 ),
             NativeJointHandoffStepOperationV1::RetireOldCustody { .. } => self
                 .transport
                 .request_native_joint_bridge_retire_old_custody(
-                    recipient, decision, &request, &own, &token,
+                    recipient, decision, request, own, token,
                 ),
             NativeJointHandoffStepOperationV1::BridgeRelease { .. } => self
                 .transport
-                .request_native_joint_bridge_release(recipient, decision, &request, &own, &token),
+                .request_native_joint_bridge_release(recipient, decision, request, own, token),
             NativeJointHandoffStepOperationV1::BridgeWriterPolicy { .. } => {
                 self.transport.request_native_joint_bridge_writer_policy(
-                    recipient, decision, &request, &own, &token,
+                    recipient, decision, request, own, token,
                 )
             }
             NativeJointHandoffStepOperationV1::TargetServe { .. } => self
                 .transport
-                .request_native_joint_target_serve(recipient, decision, &request, &own, &token),
+                .request_native_joint_target_serve(recipient, decision, request, own, token),
             NativeJointHandoffStepOperationV1::SourceRetire { .. } => self
                 .transport
-                .request_native_joint_source_retire(recipient, decision, &request, &own, &token),
+                .request_native_joint_source_retire(recipient, decision, request, own, token),
             NativeJointHandoffStepOperationV1::TargetInstall { .. }
             | NativeJointHandoffStepOperationV1::SourceExportRetire { .. } => {
                 Err(remote_error("not a bridge step of the activation"))
@@ -2037,6 +2132,15 @@ impl RemoteJoinedHandoffBackend {
     /// An incomplete answer is progress and a failed request has an unknown
     /// effect; either way the member continues the same step, which the
     /// request identity names, on the next request.
+    ///
+    /// The repetition is bounded by time, not by a number of requests: it
+    /// ends when `phase` ends. While the range serves client requests a
+    /// member answers "busy" whenever a client request holds the state the
+    /// step reads, and a member's own confirmation window fails (the answer
+    /// is then incomplete) whenever another member is busy; neither says
+    /// anything about the step, so neither is counted. Any other refusal
+    /// still ends the call after `BRIDGE_STEP_FAILURES` in a row. The pause
+    /// between two requests grows as `repeat_pause` describes.
     fn complete_bridge_step(
         &self,
         members: &RemoteMembers,
@@ -2046,27 +2150,44 @@ impl RemoteJoinedHandoffBackend {
         phase: &CancellationToken,
     ) -> Result<AuthenticatedNativeJointBridgeStepFrame> {
         let mut failures = 0;
-        for _ in 0..BRIDGE_STEP_CALLS {
-            phase.check()?;
+        let mut repeated = 0u32;
+        let mut last = String::from("no answer");
+        loop {
+            if phase.check().is_err() {
+                break;
+            }
             match self.bridge_step(members, decision, recipient, operation, phase) {
                 Ok(frame) => {
                     failures = 0;
                     if frame.outcome().complete {
                         return Ok(frame);
                     }
+                    last = "the member answered that the step is not complete".into();
                 }
                 Err(error) => {
-                    phase.check()?;
-                    failures += 1;
-                    if failures >= BRIDGE_STEP_FAILURES {
-                        return Err(error);
+                    if phase.check().is_err() {
+                        break;
                     }
-                    std::thread::sleep(Duration::from_millis(50));
+                    if !member_busy(&error) {
+                        failures += 1;
+                        if failures >= BRIDGE_STEP_FAILURES {
+                            return Err(error);
+                        }
+                    }
+                    last = error.to_string();
                 }
             }
+            repeated = repeated.saturating_add(1);
+            let pause = repeat_pause(repeated);
+            if !pause.is_zero() {
+                std::thread::sleep(pause);
+            }
         }
+        // The phase budget ended, or the step of this controller was
+        // cancelled: both are reported as what was last answered.
         Err(remote_error(format!(
-            "member {recipient} did not complete its bridge step within its bounded number of requests"
+            "member {recipient} did not complete its {} step within its phase budget after {repeated} requests; last answer: {last}",
+            operation.trace_name()
         )))
     }
 
@@ -2361,9 +2482,12 @@ impl RemoteJoinedHandoffBackend {
                 Err(error) if error.to_string().contains(RELEASE_NOT_OPEN) => return Ok(None),
                 Err(error) => {
                     phase.check()?;
-                    failures += 1;
-                    if failures >= BRIDGE_STEP_FAILURES {
-                        return Err(error);
+                    // A busy member is asked again until the phase ends.
+                    if !member_busy(&error) {
+                        failures += 1;
+                        if failures >= BRIDGE_STEP_FAILURES {
+                            return Err(error);
+                        }
                     }
                     std::thread::sleep(Duration::from_millis(50));
                 }

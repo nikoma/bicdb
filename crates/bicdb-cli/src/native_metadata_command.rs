@@ -754,6 +754,30 @@ pub fn run(command: Command) -> Result<()> {
                         },
                     )?;
                     last_tick = Instant::now();
+                } else if host.range_move_step_due() {
+                    // The last step completed its stage: the next stage is
+                    // started now, not on the next tick. A blocked, waiting
+                    // or paused move keeps the tick cadence above. The stage
+                    // is published at once for whoever reads the status file.
+                    if host.advance_range_move(&lifetime).is_ok() {
+                        if let Ok(next) = host.status(
+                            &lifetime
+                                .child_with_deadline(Instant::now() + Duration::from_millis(250)),
+                        ) {
+                            status = next;
+                            write(
+                                &status_file,
+                                &Reply {
+                                    version: 1,
+                                    sequence,
+                                    process_id: std::process::id(),
+                                    host: Some(&status),
+                                    error: command_error.clone(),
+                                    data_serving: status.data_serving,
+                                },
+                            )?;
+                        }
+                    }
                 }
                 std::thread::sleep(Duration::from_millis(5));
             }
@@ -993,10 +1017,6 @@ pub fn run(command: Command) -> Result<()> {
                             error = Some(e.to_string());
                         }
                     }
-                    // Process-owned joint handoff host commands of this
-                    // member: at most one per tick, outcome retained for the
-                    // coordinator's repeated step.
-                    let _ = host.advance_joint_bridge_host_commands(&lifetime);
                     write(
                         &status_file,
                         &Reply {
@@ -1013,6 +1033,14 @@ pub fn run(command: Command) -> Result<()> {
                         },
                     )?;
                     last_refresh = Instant::now();
+                }
+                // Process-owned joint handoff host commands of this member:
+                // at most one per pass, outcome retained for the
+                // coordinator's repeated step. Without a recorded command
+                // this reads one memory slot, so it is asked every pass and a
+                // recorded command does not wait for the next 500 ms tick.
+                if !stopping {
+                    let _ = host.advance_joint_bridge_host_commands(&lifetime);
                 }
                 std::thread::sleep(Duration::from_millis(5));
             }

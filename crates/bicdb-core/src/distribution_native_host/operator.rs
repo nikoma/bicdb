@@ -341,6 +341,15 @@ impl NativeMetadataHost {
             None => Ok(()),
         }
     }
+    /// The host's range move completed a stage and its next step can start
+    /// now; see `advance_range_move`. Memory only.
+    pub fn range_move_step_due(&self) -> bool {
+        self.phase != NativeMetadataHostPhase::Stopped
+            && self
+                .range_move
+                .as_ref()
+                .is_some_and(NativeRangeMoveSlot::step_due)
+    }
     pub fn maintain_metadata(
         &mut self,
         parent: &CancellationToken,

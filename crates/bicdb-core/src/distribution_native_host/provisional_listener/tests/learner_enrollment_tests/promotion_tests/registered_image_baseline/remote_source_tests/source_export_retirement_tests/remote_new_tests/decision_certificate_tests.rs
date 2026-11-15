@@ -299,6 +299,33 @@ pub(super) fn exercise(
                 .unwrap();
             assert!(plain.reply().native_decision.is_none());
             assert!(plain.reply().native_decision_body.is_none());
+            // Decode-only negatives derive from the ACTUAL successful pinned
+            // replies above. No altered DTO is used to mint a certificate,
+            // local owner, native outcome or permission.
+            let mut missing_body = frame.reply().clone();
+            missing_body.native_decision_body = None;
+            let missing_body_result = missing_body.require_request(&missing_body.request);
+            let mut unexpected_body = plain.reply().clone();
+            unexpected_body.native_decision_body = Some(certificate.data().clone());
+            let unexpected_body_result = unexpected_body.require_request(&unexpected_body.request);
+            evidence(
+                &output.join("native-unit-decision-wire-refusals.json"),
+                &serde_json::json!({
+                    "actual_unit_request":frame.reply().request,
+                    "actual_plain_request":plain.reply().request,
+                    "missing_unit_body_error":missing_body_result.as_ref().err().map(ToString::to_string),
+                    "unrequested_plain_body_error":unexpected_body_result.as_ref().err().map(ToString::to_string),
+                    "cloned_reply_DATA_only":true,"altered_frame_used_as_authority":false,
+                }),
+            ).unwrap();
+            assert!(missing_body_result
+                .unwrap_err()
+                .to_string()
+                .contains("observed native DECISION body not returned"));
+            assert!(unexpected_body_result
+                .unwrap_err()
+                .to_string()
+                .contains("unrequested native DECISION body"));
             let retained = |host: &NativeMetadataControlHost| {
                 host.test_remote_new_phase_evidence(range).unwrap()["retained_requests"]
                     .as_u64()

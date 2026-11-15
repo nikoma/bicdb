@@ -785,6 +785,7 @@ impl TcpClusterRelocationTransport {
             mut reply,
             original_request,
             actual_observer,
+            ..
         } = actual;
         // Drop repeated MF/snapshot copies only AFTER full authenticated
         // request/reply validation. The remaining sealed witness keeps exact

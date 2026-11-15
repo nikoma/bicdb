@@ -22,7 +22,8 @@ control or new timing diagnostic executed. SQL and PGwire likewise failed
 library compilation with zero executed cases. Remaining-workspace passed508
 component cases before the common purpose-match compilation failure; full
 workspace/offline acceptance was not reached. All jobs are terminal and the
-collector exited normally; archive verification is in progress. Local source
+collector exited normally. The complete93-file archive is frozen and verified,
+including eleven full logs and six original ZIPs/six members. Local source
 corrections qualify the types and explicitly refuse the narrow serving purposes
 at the generic consumer; they are uncompiled and unexecuted. Source6de passes
 below do not transfer to this successor. Main remains519; no binary, deployment,

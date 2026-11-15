@@ -53,9 +53,16 @@ root partial-runtime/cut receipt
 The full failed-job classifier SHA-256 is
 `4e4da738eeba1c6d8e73c4b4b64e3376b7bed2436aff1849fb4f5a2acc11fe8b`.
 Its six zero-case compilation failures remain separate from those real partial
-component passes. The sole collector exited naturally; original archive
-settlement/final verification is in progress. No useful job was cancelled or
-restarted to publish a correction.
+component passes: Lua five, Page499 and Script four; Cell/AppHost/CLI and the
+offline acceptance step were not reached. The sole collector exited naturally;
+the complete archive is frozen: 90 premanifest / 93 total files, eleven full
+logs and six original ZIPs / six members. Manifest SHA-256
+`7a8a4d589be1a09312e6d404d9a6af71a35968c2880d37066fc8a62afe0ceb2b`;
+capture verification
+`dcc41dbed64e642ff88eede95629608e69bed0722ab7af00d8802f6cce3768f1`.
+All actual job/artifact identities, raw/stored hashes, ZIP CRCs and member
+hashes were verified, and a wrong expected manifest hash was rejected. No
+useful job was cancelled or restarted to publish a correction.
 
 Local corrective source `c62f0fb4c` qualifies both parameters as `crate::BicDb`
 and explicitly refuses both narrow serving purposes in the generic recovery

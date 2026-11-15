@@ -11,7 +11,10 @@ mod phase;
 mod preparation_custody;
 mod publication;
 pub(crate) use phase::{NativeJointPreparationPhaseQuorum, NativeJointPreparationPhaseRound};
-pub(crate) use preparation_custody::NativeJointPreparationCustody;
+pub(crate) use preparation_custody::{
+    NativeJointPreparationCustody, NativeJointPreparationPhaseFacts,
+    NativeJointPreparationRetainedFacts,
+};
 pub(crate) use publication::{
     NativeJointActivatedQuorum, NativeJointOpenAdmission, NativeJointOpenPhaseQuorum,
     NativeJointOpenPhaseRound, NativeJointPublishedServingQuorum, NativeJointReleaseAdmission,

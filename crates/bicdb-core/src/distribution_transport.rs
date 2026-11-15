@@ -132,7 +132,9 @@ pub(crate) use native_abort::{
 pub(crate) use native_image_source::AuthenticatedNativeRemoteImageSourceFrame;
 #[cfg(test)]
 pub(crate) mod native_image_response_stall;
-pub(crate) use native_handoff_step::AuthenticatedNativeJointHandoffStep;
+pub(crate) use native_handoff_step::{
+    AuthenticatedNativeJointBridgeStepFrame, AuthenticatedNativeJointHandoffStep,
+};
 pub(crate) use native_new::{
     AuthenticatedNativeRemoteDecisionSource, AuthenticatedNativeRemoteNewFactSet,
     AuthenticatedNativeRemoteNewFrame, AuthenticatedNativeSourceExportTerminal,
@@ -1771,13 +1773,19 @@ fn handle_cluster_data_connection(
             let peer = authenticated_caller.as_ref().ok_or_else(|| {
                 transport_error("joint handoff step requires actual authenticated caller")
             })?;
-            let target = registered_replica.ok_or_else(|| {
-                transport_error(
-                    "joint handoff step requires its original immutable Registered owner",
-                )
-            })?;
             let parent =
                 CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            if let Some(survivor) = initial_data {
+                // A surviving original member serves only the bridge steps of
+                // a committed decision; it refuses the install operation.
+                let reply = survivor.advance_joint_bridge_step(peer, &request, &parent)?;
+                return Ok(ClusterDataResponse::NativeJointHandoffStep(reply));
+            }
+            let target = registered_replica.ok_or_else(|| {
+                transport_error(
+                    "joint handoff step requires its original immutable INITIAL or Registered owner",
+                )
+            })?;
             let reply = target.advance_joint_handoff_step(peer, &request, &parent)?;
             #[cfg(test)]
             if target.test_take_joint_handoff_step_reply_loss() {

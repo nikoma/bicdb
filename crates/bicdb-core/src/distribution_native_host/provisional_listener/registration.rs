@@ -25,6 +25,7 @@ pub(crate) use joined_data::{
     NativeJoinedRangeReceiveRequest,
 };
 pub(crate) use joined_data::{NativeJoinedRemoteJointOwner, NativeJoinedRemoteMaterializedOwner};
+mod bridge_step;
 mod registered_replica;
 mod writer_data_domain;
 use registered_replica::NativeRegisteredReplicaReceiver;

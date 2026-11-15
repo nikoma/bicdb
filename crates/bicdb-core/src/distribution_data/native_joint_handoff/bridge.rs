@@ -143,6 +143,10 @@ impl ActualServiceNativeJointPreparedEvidence {
     pub(crate) fn prepared(&self) -> &crate::db::NativeJointServingPreparation {
         &self.prepared
     }
+    /// Identity DATA of the actual Store slot open this preparation used.
+    pub(crate) fn store_open_id(&self) -> Uuid {
+        self.catalogue.store_open_id()
+    }
     pub(crate) fn require_current(&self, service: &ClusterDataNodeService) -> Result<()> {
         #[cfg(test)]
         let mut trace = crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(

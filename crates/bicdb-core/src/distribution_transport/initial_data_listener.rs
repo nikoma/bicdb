@@ -41,6 +41,8 @@ pub(super) fn require_request(
         ClusterDataRequest::NativeRemoteImageSourceFrame { .. }
         | ClusterDataRequest::NativeRemoteOld { .. }
         | ClusterDataRequest::NativeRemoteNew { .. }
+        // A surviving member's own bounded bridge work; the request is identity DATA.
+        | ClusterDataRequest::NativeJointHandoffStep { .. }
         | ClusterDataRequest::NativeSourceExportRetirement { .. }
         | ClusterDataRequest::NativeSourceDiscovery { .. }
         | ClusterDataRequest::NativeDecisionSourceProvenance { .. } => admission.require_initial_source_hosting(),

@@ -129,6 +129,95 @@ impl NativeJointPreparationCustody {
             custody: Some(self.clone()),
         })
     }
+    pub(crate) fn data(&self) -> &NativeJointDecisionData {
+        self.actual.committed().data()
+    }
+    /// Historical identity of the retained native preparation. Read from
+    /// memory only; it proves nothing current and grants nothing.
+    pub(crate) fn retained_facts(&self) -> NativeJointPreparationRetainedFacts {
+        let prepared = self.actual.prepared();
+        NativeJointPreparationRetainedFacts {
+            decision_sha256: self.data().checksum_sha256().into(),
+            preparation_sha256: prepared.checksum_sha256().into(),
+            native_database_incarnation: prepared.native_database_incarnation().into(),
+            local_visibility_sequence: prepared.actual_local_visibility_sequence(),
+            decision_receipt_sha256: self
+                .actual
+                .committed()
+                .native_receipt()
+                .checksum_sha256()
+                .into(),
+            store_open_id: self.actual.store_open_id(),
+        }
+    }
+    /// The member-local half of one fresh PREPARATION phase: exactly what the
+    /// in-process phase round does for this member (`acquire_inner`), run by
+    /// the member itself under an observation IT acquired. Read-only: no pin,
+    /// freeze, promise or catalogue changes; the result is historical DATA.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn observe_fresh_preparation_phase(
+        self: &Arc<Self>,
+        metadata: crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        parent: &crate::CancellationToken,
+    ) -> Result<NativeJointPreparationPhaseFacts> {
+        // A fresh request may not detach from the ORIGINAL session ancestry.
+        let request = self.actual.bound_preparation_request(parent);
+        request.check()?;
+        self.require_original_caller()?;
+        let data = self.data();
+        if metadata.requester_node_id() != self.local_node_id()
+            || data
+                .new_members()
+                .get(self.local_node_id())
+                .is_none_or(|member| member.incarnation != metadata.requester_incarnation())
+        {
+            return Err(invalid(
+                "fresh preparation phase changed actual recipient/incarnation",
+            ));
+        }
+        let point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &self.service,
+            &metadata,
+            business,
+            &request,
+        )?;
+        let facts = {
+            let service = self
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("fresh preparation phase actual service busy"))?;
+            let fresh = self.actual.observe_fresh_committed_with_point(
+                &service,
+                metadata,
+                business,
+                data.old_range().id,
+                point,
+            )?;
+            // The complete protected CURRENT/archive/State/writer check the
+            // in-process phase performs for this member under this lock.
+            let _writer = self
+                .actual
+                .require_current_under_preparation_custody(&service, &fresh, self)?;
+            if fresh.data() != data {
+                return Err(invalid(
+                    "fresh preparation phase changed protected global decision",
+                ));
+            }
+            fresh.require_current_metadata_only()?;
+            let (metadata_term, metadata_read_index, metadata_context_id) = fresh.metadata_anchor();
+            NativeJointPreparationPhaseFacts {
+                retained: self.retained_facts(),
+                metadata_term,
+                metadata_read_index,
+                metadata_context_id,
+                deadline: fresh.deadline(),
+            }
+        };
+        request.check()?;
+        self.require_original_caller()?;
+        Ok(facts)
+    }
     #[cfg(test)]
     pub(crate) fn test_original_candidate(self: &Arc<Self>) -> NativeJointPreparedServingCandidate {
         NativeJointPreparedServingCandidate {
@@ -177,4 +266,25 @@ impl NativeJointPreparationCustody {
             .ok_or_else(|| invalid("preparation archive fault DB busy"))?;
         database.test_remove_joint_preparation_archive(self.actual.prepared(), parent)
     }
+}
+
+/// Historical identity DATA of one retained native preparation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct NativeJointPreparationRetainedFacts {
+    pub(crate) decision_sha256: String,
+    pub(crate) preparation_sha256: String,
+    pub(crate) native_database_incarnation: String,
+    pub(crate) local_visibility_sequence: u64,
+    pub(crate) decision_receipt_sha256: String,
+    pub(crate) store_open_id: Uuid,
+}
+/// One member-local fresh phase observation: the retained identity plus the
+/// metadata anchor and absolute deadline of the observation that re-proved it.
+#[derive(Clone, Debug)]
+pub(crate) struct NativeJointPreparationPhaseFacts {
+    pub(crate) retained: NativeJointPreparationRetainedFacts,
+    pub(crate) metadata_term: u64,
+    pub(crate) metadata_read_index: u64,
+    pub(crate) metadata_context_id: Uuid,
+    pub(crate) deadline: Instant,
 }

@@ -53,15 +53,12 @@ impl RegisteredTargetInstallStep {
             return completed.clone();
         }
         let manifest = self.source.as_ref().map(|source| source.manifest());
-        NativeJointHandoffStepOutcomeV1 {
-            binding_sha256: self.binding_sha256.clone(),
-            stage: self.stage,
-            complete: false,
-            manifest_sha256: manifest.map(|m| m.checksum_sha256.clone()),
-            source_session: manifest.map(|m| m.source_session),
-            range_index: None,
-            native_receipt_sha256: None,
-        }
+        NativeJointHandoffStepOutcomeV1::install(
+            self.binding_sha256.clone(),
+            self.stage,
+            manifest.map(|m| (m.checksum_sha256.clone(), m.source_session)),
+            None,
+        )
     }
 }
 
@@ -241,7 +238,12 @@ impl NativeRegisteredReplicaAdmission {
         let StepOperation::TargetInstall {
             donor,
             target_attempt,
-        } = &request.operation;
+        } = &request.operation
+        else {
+            // Bridge operations run after the membership is final and prove
+            // themselves against the committed decision, not a Pending plan.
+            return self.advance_joint_bridge_step(peer, request, &token);
+        };
         let binding_sha256 = request.binding()?;
         // Authenticate and verify against OWN committed metadata before any
         // retained state is created, read or disclosed.
@@ -437,6 +439,11 @@ impl NativeRegisteredReplicaAdmission {
         };
         match step.stage {
             Stage::Discovering | Stage::Complete => unreachable!("handled by the caller"),
+            Stage::BridgeWriterDomain | Stage::BridgePreparation => {
+                return Err(invalid(
+                    "joint handoff step target install has no bridge stage",
+                ))
+            }
             Stage::Preparing => {
                 let transferred = custody.remote_attempts.get(&range).is_some_and(|retained| {
                     retained.lease.is_some() && Arc::ptr_eq(retained.preflight.source(), &source)
@@ -682,15 +689,15 @@ impl NativeRegisteredReplicaAdmission {
                 // The owner stays in this receiver's own table for the later
                 // decision step. Only historical identity leaves the process.
                 step.stage = Stage::Complete;
-                step.completed = Some(NativeJointHandoffStepOutcomeV1 {
-                    binding_sha256: step.binding_sha256.clone(),
-                    stage: Stage::Complete,
-                    complete: true,
-                    manifest_sha256: Some(source.manifest().checksum_sha256.clone()),
-                    source_session: Some(source.manifest().source_session),
-                    range_index: Some(range_index),
-                    native_receipt_sha256: Some(native_receipt_sha256),
-                });
+                step.completed = Some(NativeJointHandoffStepOutcomeV1::install(
+                    step.binding_sha256.clone(),
+                    Stage::Complete,
+                    Some((
+                        source.manifest().checksum_sha256.clone(),
+                        source.manifest().source_session,
+                    )),
+                    Some((range_index, native_receipt_sha256)),
+                ));
             }
         }
         Ok(())

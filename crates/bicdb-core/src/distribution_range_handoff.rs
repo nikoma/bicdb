@@ -22,7 +22,8 @@ pub(crate) use joint::{
     NativeJointNewRound, NativeJointOldClosedQuorum, NativeJointOldImageProof,
     NativeJointOldObservation, NativeJointOldRound, NativeJointOpenAdmission,
     NativeJointOpenPhaseQuorum, NativeJointOpenPhaseRound, NativeJointPreparationCustody,
-    NativeJointPreparationPhaseQuorum, NativeJointPreparationPhaseRound,
+    NativeJointPreparationPhaseFacts, NativeJointPreparationPhaseQuorum,
+    NativeJointPreparationPhaseRound, NativeJointPreparationRetainedFacts,
     NativeJointPreparedDecision, NativeJointPreparedServingCandidate,
     NativeJointPreparedServingObservation, NativeJointPreparedServingQuorum,
     NativeJointPreparedServingRound, NativeJointPreparedServingVoteData,
@@ -32,8 +33,9 @@ pub(crate) use joint::{
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use joint::{
-    NativeJointHandoffStepOperationV1, NativeJointHandoffStepOutcomeV1,
-    NativeJointHandoffStepReplyV1, NativeJointHandoffStepRequestV1, NativeJointHandoffStepStageV1,
+    NativeJointBridgePhaseKindV1, NativeJointHandoffStepOperationV1,
+    NativeJointHandoffStepOutcomeV1, NativeJointHandoffStepReplyV1,
+    NativeJointHandoffStepRequestV1, NativeJointHandoffStepStageV1,
 };
 #[cfg(test)]
 pub(crate) use joint::{NativeJointPhaseTrace, NativeRefreshTraceContext};

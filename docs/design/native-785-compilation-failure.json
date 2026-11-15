@@ -1,0 +1,249 @@
+{
+  "source_head": "785ef07ad52fea1bca7f16143179558f606ea890",
+  "source_tree": "fb7758f89401804d756e50ba32bcb1c4ffd69d3c",
+  "actual_ci_checkout": "73a298087187e6961a37406752141bc7584c112d",
+  "tests_run": 43674157083,
+  "rails_run": 43674157110,
+  "finding": "failed",
+  "scope": "Seven jobs failed on the same five bicdb-core(lib) compiler errors; actual Core/native test steps and their cfg(test) compilation were not reached.",
+  "compiler_jobs": [
+    {
+      "job": 132690498318,
+      "name": "Rails 8.1.4 with stock PostgreSQL adapter",
+      "conclusion": "failure",
+      "raw_sha256": "0e6531eb528af3d4f434f71449d027d9a736f3ed7d083df8964d648259a029d0",
+      "stored_sha256": "a786bf30da9937805126d2ebf450cc80288cd48650f1533ac4cfc0d835b9df00",
+      "actual_compiler_errors": [
+        {
+          "line": 880,
+          "exact": "2026-11-15T03:51:47.7903145Z error[E0365]: `ActivationIoHistory` is private, and cannot be re-exported"
+        },
+        {
+          "line": 888,
+          "exact": "2026-11-15T03:51:47.7918813Z error[E0365]: `NativeJointActivationPublication` is private, and cannot be re-exported"
+        },
+        {
+          "line": 896,
+          "exact": "2026-11-15T03:51:49.2493177Z error[E0603]: struct import `NativeJointActivationPublication` is private"
+        },
+        {
+          "line": 918,
+          "exact": "2026-11-15T03:51:49.2755354Z error[E0603]: struct import `ActivationIoHistory` is private"
+        },
+        {
+          "line": 1200,
+          "exact": "2026-11-15T03:52:02.0436351Z error[E0616]: field `store_id` of struct `NativeAbortProtocol` is private"
+        }
+      ]
+    },
+    {
+      "job": 132690498480,
+      "name": "Community-only workspace compiles, tests included",
+      "conclusion": "failure",
+      "raw_sha256": "f04f21fddb81eba5e3b43e03b04e9dec5821d15ee3142b2d7e6b3218fd666221",
+      "stored_sha256": "4de0d396ca0f5f4aa0ba561ed20433155f91b339d7f56e4c29d392579df9c203",
+      "actual_compiler_errors": [
+        {
+          "line": 553,
+          "exact": "2026-11-15T03:51:33.2325002Z error[E0365]: `ActivationIoHistory` is private, and cannot be re-exported"
+        },
+        {
+          "line": 561,
+          "exact": "2026-11-15T03:51:33.2334632Z error[E0365]: `NativeJointActivationPublication` is private, and cannot be re-exported"
+        },
+        {
+          "line": 569,
+          "exact": "2026-11-15T03:51:34.3646380Z error[E0603]: struct import `NativeJointActivationPublication` is private"
+        },
+        {
+          "line": 591,
+          "exact": "2026-11-15T03:51:34.3859576Z error[E0603]: struct import `ActivationIoHistory` is private"
+        },
+        {
+          "line": 873,
+          "exact": "2026-11-15T03:51:45.2570773Z error[E0616]: field `store_id` of struct `NativeAbortProtocol` is private"
+        }
+      ]
+    },
+    {
+      "job": 132690519796,
+      "name": "bicdb-core native multi-node (serial)",
+      "conclusion": "failure",
+      "raw_sha256": "087bd3b4e8d48aee5fc9a37cb5875fad4eab2879262e9ba0204ba4a5f490cfc6",
+      "stored_sha256": "67e5da59dc1fd4425a3e2296cfe948955bc0f440cc147972833a839ac12833f6",
+      "actual_compiler_errors": [
+        {
+          "line": 1020,
+          "exact": "2026-11-15T03:58:45.0364656Z error[E0365]: `ActivationIoHistory` is private, and cannot be re-exported"
+        },
+        {
+          "line": 1028,
+          "exact": "2026-11-15T03:58:45.0374859Z error[E0365]: `NativeJointActivationPublication` is private, and cannot be re-exported"
+        },
+        {
+          "line": 1036,
+          "exact": "2026-11-15T03:58:46.1799115Z error[E0603]: struct import `NativeJointActivationPublication` is private"
+        },
+        {
+          "line": 1058,
+          "exact": "2026-11-15T03:58:46.2010567Z error[E0603]: struct import `ActivationIoHistory` is private"
+        },
+        {
+          "line": 1340,
+          "exact": "2026-11-15T03:58:56.5762417Z error[E0616]: field `store_id` of struct `NativeAbortProtocol` is private"
+        }
+      ]
+    },
+    {
+      "job": 132690519803,
+      "name": "bicdb-sql",
+      "conclusion": "failure",
+      "raw_sha256": "1ca34f6b74bfe82a54e9f516567ca9f451eabda9183ae0c60927bee86659d9e4",
+      "stored_sha256": "b391493ba230523d01b191d517afc90694b32ad1acfd4cc6f213f56f1dc3435b",
+      "actual_compiler_errors": [
+        {
+          "line": 898,
+          "exact": "2026-11-15T03:53:43.1504296Z error[E0365]: `ActivationIoHistory` is private, and cannot be re-exported"
+        },
+        {
+          "line": 906,
+          "exact": "2026-11-15T03:53:43.1514978Z error[E0365]: `NativeJointActivationPublication` is private, and cannot be re-exported"
+        },
+        {
+          "line": 914,
+          "exact": "2026-11-15T03:53:44.3003502Z error[E0603]: struct import `NativeJointActivationPublication` is private"
+        },
+        {
+          "line": 936,
+          "exact": "2026-11-15T03:53:44.3230275Z error[E0603]: struct import `ActivationIoHistory` is private"
+        },
+        {
+          "line": 1218,
+          "exact": "2026-11-15T03:53:55.1811609Z error[E0616]: field `store_id` of struct `NativeAbortProtocol` is private"
+        }
+      ]
+    },
+    {
+      "job": 132690519811,
+      "name": "bicdb-pgwire",
+      "conclusion": "failure",
+      "raw_sha256": "657de8f7d453a285298d3448d1ee7a30cce8121ca13c2a3cd83068356ab0268e",
+      "stored_sha256": "2665948bee5752c3fa8a06e508f25280a86507c761df97dd60eb25c5731ab658",
+      "actual_compiler_errors": [
+        {
+          "line": 838,
+          "exact": "2026-11-15T03:52:10.9694190Z error[E0365]: `ActivationIoHistory` is private, and cannot be re-exported"
+        },
+        {
+          "line": 846,
+          "exact": "2026-11-15T03:52:10.9706152Z error[E0365]: `NativeJointActivationPublication` is private, and cannot be re-exported"
+        },
+        {
+          "line": 854,
+          "exact": "2026-11-15T03:52:12.3684055Z error[E0603]: struct import `NativeJointActivationPublication` is private"
+        },
+        {
+          "line": 876,
+          "exact": "2026-11-15T03:52:12.3939741Z error[E0603]: struct import `ActivationIoHistory` is private"
+        },
+        {
+          "line": 1158,
+          "exact": "2026-11-15T03:52:26.2485617Z error[E0616]: field `store_id` of struct `NativeAbortProtocol` is private"
+        }
+      ]
+    },
+    {
+      "job": 132690519818,
+      "name": "bicdb-core",
+      "conclusion": "failure",
+      "raw_sha256": "c4c18ab223a4f1fab0f04f85ab0b6006991f7c73eea54108f9ccfcf9946c5e19",
+      "stored_sha256": "9f7bafb33d468b1207e2a2c818e5f7c80c44656eec29499977629a7f3811f516",
+      "actual_compiler_errors": [
+        {
+          "line": 1021,
+          "exact": "2026-11-15T03:58:57.2149063Z error[E0365]: `ActivationIoHistory` is private, and cannot be re-exported"
+        },
+        {
+          "line": 1029,
+          "exact": "2026-11-15T03:58:57.2159536Z error[E0365]: `NativeJointActivationPublication` is private, and cannot be re-exported"
+        },
+        {
+          "line": 1037,
+          "exact": "2026-11-15T03:58:58.3908241Z error[E0603]: struct import `NativeJointActivationPublication` is private"
+        },
+        {
+          "line": 1059,
+          "exact": "2026-11-15T03:58:58.4136897Z error[E0603]: struct import `ActivationIoHistory` is private"
+        },
+        {
+          "line": 1341,
+          "exact": "2026-11-15T03:59:09.1328091Z error[E0616]: field `store_id` of struct `NativeAbortProtocol` is private"
+        }
+      ]
+    },
+    {
+      "job": 132690519895,
+      "name": "rest of workspace",
+      "conclusion": "failure",
+      "raw_sha256": "9e6674c9ca6776da0d0959d17c3715d11f0a6e3126e9168b743985ff2f3b486f",
+      "stored_sha256": "45391a9c6cbe199ea68defd52e3ec45b762a7824fd9953d7ffda27c267dc5d7d",
+      "actual_compiler_errors": [
+        {
+          "line": 5886,
+          "exact": "2026-11-15T03:58:26.7805878Z error[E0365]: `ActivationIoHistory` is private, and cannot be re-exported"
+        },
+        {
+          "line": 5894,
+          "exact": "2026-11-15T03:58:26.7814891Z error[E0365]: `NativeJointActivationPublication` is private, and cannot be re-exported"
+        },
+        {
+          "line": 5902,
+          "exact": "2026-11-15T03:58:27.7938122Z error[E0603]: struct import `NativeJointActivationPublication` is private"
+        },
+        {
+          "line": 5924,
+          "exact": "2026-11-15T03:58:27.8091569Z error[E0603]: struct import `ActivationIoHistory` is private"
+        },
+        {
+          "line": 6179,
+          "exact": "2026-11-15T03:58:38.7109216Z error[E0616]: field `store_id` of struct `NativeAbortProtocol` is private"
+        }
+      ]
+    }
+  ],
+  "source_pins": [
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/joint_handoff_state.rs",
+      "blob": "4d8c98c5ceb8f7d017b72e6490e130381c5ee2dc",
+      "sha256": "ab85853a13e207b118a7148b7f2b3fda2d357a63f80fb3fe02c88eeceaf56c51"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/joint_handoff_state/activation.rs",
+      "blob": "64f9403dc8e30d1125ec5139b7472b3400ac6bbd",
+      "sha256": "c466fe8174702ed0058cbd2acfbf81e907f7f29e7dc98d26940c4fc3b8260f45"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/joint_handoff_state/activation/owned_catalogue.rs",
+      "blob": "80d5cd904c0282a82aa420bf5f38c1d6a4a68d2d",
+      "sha256": "67634fd68202f5b974e859f0694c70a8902d9c6e8dbc4a878209c7bdffd2ad58"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/native_abort.rs",
+      "blob": "255c7ff3a6d8f053125fdd0d57e092000c2f02cc",
+      "sha256": "f1137438aa456bb5bb725bd4dc51641621764f158857e26a0ee140aa85e7190d"
+    }
+  ],
+  "REST_independent_actual_execution": {
+    "summary_count": 32,
+    "summary_totals_not_unique_test_count": {
+      "passed": 498,
+      "failed": 0,
+      "ignored": 0
+    },
+    "scope": "Earlier independent workspace targets executed and passed before later core dependency compile failure. AppRuntime/SQL/PG/Core/Native acceptance is not inferred from these targets."
+  },
+  "proposed_correction_commit": "fb58b37bb748e167a3787723f43f3384ba846109",
+  "correction_validation": "Standalone formatting and source review only; no successful compile or runtime result yet.",
+  "qualification": "Not qualified; no physical experiment or throughput claim.",
+  "private_complete_classifier_sha256": "aaff88e6b9dace6dfba04aa1356da8384e9942107ebeeafddddf05e2da2e8851"
+}

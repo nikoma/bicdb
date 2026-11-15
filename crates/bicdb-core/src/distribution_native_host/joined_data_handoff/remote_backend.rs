@@ -188,6 +188,16 @@ impl RemoteSourceRetirement {
 
 /// Receiver-side budget of one OLD request; the receiver bounds it to 5 s.
 const OLD_REQUEST_MS: u64 = 4000;
+/// How long the learner allocation waits for the moved range's write command
+/// in flight on this node to finish before the step ends and is repeated.
+const ALLOCATION_HOLD_WAIT: Duration = Duration::from_secs(5);
+/// How long the admission hold is kept after the allocation committed, until
+/// this node's own published configuration shows it.
+const ALLOCATION_PUBLISH_WAIT: Duration = Duration::from_secs(10);
+/// This node's write coordinator of the ranges it leads.
+pub(crate) type LocalRangeWriter =
+    crate::distribution_range_consensus::RangeWriteCoordinator<TcpClusterRelocationTransport>;
+use crate::distribution_range_consensus::RangeAllocationHold;
 /// The receiver's refusal of a read-only observation when its process retains
 /// no operation of the range. The read-only observation has no typed "absent"
 /// answer, so this text is the only way to tell absence from a failure.
@@ -378,6 +388,13 @@ pub(crate) struct RemoteJoinedHandoffBackend {
     /// This node's own data service, when the caller supplied it. See the
     /// module documentation.
     local: Option<Arc<Mutex<ClusterDataNodeService>>>,
+    /// This node's own write coordinator of the ranges it leads, when the
+    /// caller supplied it: the learner allocation is proposed under its
+    /// admission hold of the moved range.
+    local_writer: Option<Arc<LocalRangeWriter>>,
+    /// The admission hold of the allocation being proposed. Held only
+    /// between `before_allocation` and `after_allocation` of one call.
+    allocation_hold: Option<RangeAllocationHold<TcpClusterRelocationTransport>>,
     /// Range, relocation and decision digest of the committed handoff record
     /// the last `resync` read.
     committed_record: Option<(RangeId, RelocationId, String)>,
@@ -437,6 +454,8 @@ impl RemoteJoinedHandoffBackend {
             waiting: None,
             host_command_wait: HOST_COMMAND_WAIT,
             local: None,
+            local_writer: None,
+            allocation_hold: None,
             committed_record: None,
             decision_body: None,
             activation: None,
@@ -458,6 +477,14 @@ impl RemoteJoinedHandoffBackend {
         service: Arc<Mutex<ClusterDataNodeService>>,
     ) -> Self {
         self.local = Some(service);
+        self
+    }
+    /// Give the backend this coordinator's OWN write coordinator: the one
+    /// that admits the writes of the ranges this node leads. With it the
+    /// learner allocation is proposed only while no write command of the
+    /// moved range is between its admission and its local completion.
+    pub(crate) fn with_local_writer(mut self, writer: Arc<LocalRangeWriter>) -> Self {
+        self.local_writer = Some(writer);
         self
     }
     /// Test only: a shorter wait for a pending host command of the target.
@@ -879,11 +906,26 @@ impl RemoteJoinedHandoffBackend {
     }
     /// Every voter of the committed range answers the read-only probe and
     /// none holds an unfinished native command of the range.
-    fn require_no_unfinished_command(
+    pub(crate) fn require_no_unfinished_command(
         &self,
         range: &RangeDescriptor,
         parent: &CancellationToken,
     ) -> Result<()> {
+        self.unfinished_command_voter(range, parent)?
+            .map_or(Ok(()), |(node, what)| Err(remote_error(format!(
+                "refused before the target fence and the source cut: old voter {node} holds an unfinished {what} of range {} (it was in flight when the learner allocation committed, and the range's changed configuration does not let it finish). Its source Close would be refused on every repetition. Nothing was sent, so the move can still be aborted: abort it (move-range --abort) to return the range to its original voters, let it finish, then start the move again",
+                range.id
+            ))))
+    }
+    /// The first voter of the committed range that holds an unfinished
+    /// native command or an unfinished normal recovery of it, with which of
+    /// the two, asked read-only. A voter that does not answer as one is an
+    /// error.
+    fn unfinished_command_voter(
+        &self,
+        range: &RangeDescriptor,
+        parent: &CancellationToken,
+    ) -> Result<Option<(ClusterNodeId, &'static str)>> {
         for replica in &range.replicas {
             if replica.role != RangeReplicaRole::Voter {
                 continue;
@@ -892,28 +934,30 @@ impl RemoteJoinedHandoffBackend {
             match self.probe(node, range, &bounded(parent, REQUEST)) {
                 Ok(NativeRangeMoveProbeRoleV1::Voter {
                     unfinished_command: false,
+                    unfinished_recovery: false,
                     ..
                 }) => {}
+                Ok(NativeRangeMoveProbeRoleV1::Voter {
+                    unfinished_command: true,
+                    ..
+                }) => return Ok(Some((node.clone(), "write command"))),
                 Ok(NativeRangeMoveProbeRoleV1::Voter { .. }) => {
-                    return Err(remote_error(format!(
-                        "refused before the target fence and the source cut: old voter {node} holds an unfinished write command of range {} (a write was in flight when the learner allocation committed, and the range's changed writer policy does not let it finish). Its source Close would be refused on every repetition. Nothing was sent, so the move can still be aborted: abort it (move-range --abort) to return the range to its original voters, let the write finish, then start the move again",
-                        range.id
-                    )))
+                    return Ok(Some((node.clone(), "recovery")))
                 }
                 Ok(NativeRangeMoveProbeRoleV1::RegisteredReplicaReceiver) => {
                     return Err(remote_error(format!(
-                        "refused before the target fence and the source cut: old voter {node} answered as a registered replica receiver, not as a data owner"
+                        "refused before any member was changed: old voter {node} answered as a registered replica receiver, not as a data owner"
                     )))
                 }
                 Err(error) => {
                     parent.check()?;
                     return Err(remote_error(format!(
-                        "refused before the target fence and the source cut: old voter {node} did not answer the read-only probe: {error}"
+                        "refused before any member was changed: old voter {node} did not answer the read-only probe: {error}"
                     )));
                 }
             }
         }
-        Ok(())
+        Ok(None)
     }
     /// The authenticated Close frames of the last source round.
     pub(crate) fn closed_frames(
@@ -1188,6 +1232,75 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
             )));
         }
         Ok(())
+    }
+
+    /// Immediately before the learner allocation is proposed. A write
+    /// command that is admitted under the range's present descriptor and
+    /// finishes after the allocation committed is refused by its own commit
+    /// callback with its native pending record durable, and nothing settles
+    /// it while the allocation stands. So the allocation is proposed only
+    /// under this node's admission hold of the range (this node leads it):
+    /// the hold is granted once no command of the range is between its
+    /// admission and its local completion, waiting for one boundedly, and it
+    /// refuses every new admission before it prepares anything. Under the
+    /// hold every voter is asked, read-only, and must hold no unfinished
+    /// command. A refusal here committed nothing: the command is settled by
+    /// the range's recovery under its unchanged configuration and the step
+    /// is repeated.
+    fn before_allocation(
+        &mut self,
+        _hosts: &mut Self::Hosts,
+        range: &RangeDescriptor,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        self.allocation_hold = None;
+        let hold = match &self.local_writer {
+            Some(writer) => Some(
+                writer
+                    .hold_range_for_allocation(range.id, ALLOCATION_HOLD_WAIT, parent)
+                    .map_err(|error| {
+                        self.waiting = Some(format!(
+                            "waiting for a write command of range {} on this node to finish before the learner allocation is proposed",
+                            range.id
+                        ));
+                        remote_error(format!(
+                            "the learner allocation of range {} was not proposed: {error}. Nothing was committed",
+                            range.id
+                        ))
+                    })?,
+            ),
+            None => None,
+        };
+        if let Some((node, what)) = self.unfinished_command_voter(range, parent)? {
+            self.waiting = Some(format!(
+                "waiting for the unfinished {what} of range {} on voter {node} to be settled before the learner allocation is proposed",
+                range.id
+            ));
+            return Err(remote_error(format!(
+                "the learner allocation of range {} was not proposed: voter {node} holds an unfinished {what} of the range, which is settled only while the range keeps its present configuration. Nothing was committed",
+                range.id
+            )));
+        }
+        self.allocation_hold = hold;
+        Ok(())
+    }
+
+    /// The allocation commit attempt is over. After a commit the hold is
+    /// kept until this node's own published configuration shows the changed
+    /// range, so that no command is admitted under the previous descriptor;
+    /// then, and after a failed attempt at once, it is released.
+    fn after_allocation(
+        &mut self,
+        range: &RangeDescriptor,
+        committed: bool,
+        parent: &CancellationToken,
+    ) {
+        if let Some(hold) = self.allocation_hold.take() {
+            if committed {
+                hold.wait_published_change(range, ALLOCATION_PUBLISH_WAIT, parent);
+            }
+        }
     }
 
     /// Before the learner allocation is proposed: ask the target and every

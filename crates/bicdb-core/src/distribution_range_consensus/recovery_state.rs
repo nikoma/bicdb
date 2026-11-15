@@ -219,6 +219,22 @@ impl RecoveryFenceRecord {
     }
 }
 
+/// See `RangeWriteStore::normal_recovery_unfinished`.
+pub(super) fn catalog_normal_recovery_unfinished(
+    catalog: &RangeWriteCatalog,
+    range_id: RangeId,
+) -> bool {
+    catalog.recovery_fences.get(&range_id).is_some_and(|fence| {
+        matches!(
+            fence.scope.purpose,
+            MetadataRecoveryRolePurpose::NormalRecovery
+        ) && !matches!(
+            fence.phase,
+            RecoveryFencePhase::NativeActivated(_) | RecoveryFencePhase::Completed { .. }
+        )
+    })
+}
+
 /// Real store-open-bound prefix observation. There is deliberately no numeric
 /// constructor, Deserialize, Clone or conversion from a repair DTO.
 #[derive(Debug)]
@@ -1121,6 +1137,12 @@ impl RangeWriteStore {
             super::validate_native_recovery_entry_size(entry)?;
         }
         Ok(entry.cloned())
+    }
+    /// Read-only: this store holds a normal recovery of the range that was
+    /// fenced and is neither activated nor completed. Until it is, it can
+    /// only continue under the range configuration it was fenced for.
+    pub(crate) fn normal_recovery_unfinished(&self, range_id: RangeId) -> bool {
+        catalog_normal_recovery_unfinished(&self.catalog, range_id)
     }
     pub(crate) fn recovery_store_open_id(&self) -> Uuid {
         self.open_id

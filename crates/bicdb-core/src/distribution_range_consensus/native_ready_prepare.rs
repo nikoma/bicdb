@@ -101,7 +101,24 @@ pub(super) fn validate_native_prepared_catalog(catalog: &RangeWriteCatalog) -> R
                 } else {
                     log.last_index != point.range_index || log.resolved_through != point.range_index
                 }
-                || log.current_epoch != record.scope.range_epoch
+                || (log.current_epoch != record.scope.range_epoch
+                    // One later epoch is consistent with a completed and
+                    // activated normal recovery: the one a durable joint
+                    // handoff promise of this range moved the log to. A
+                    // prepared or completed (still frozen) recovery, and any
+                    // other epoch, stay refused.
+                    && !(matches!(record.phase, RecoveryFencePhase::NativeActivated(_))
+                        && matches!(
+                            record.scope.purpose,
+                            MetadataRecoveryRolePurpose::NormalRecovery
+                        )
+                        && super::joint_handoff_state::joint_promise_supersedes_activated_recovery(
+                            catalog,
+                            *range_id,
+                            record.scope.range_epoch,
+                            point.range_index,
+                            log.current_epoch,
+                        )))
                 || catalog.image_install_intents.contains_key(range_id)
                 || log
                     .entries

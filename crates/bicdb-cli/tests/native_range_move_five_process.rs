@@ -83,19 +83,20 @@ const BLOCK_PATIENCE: Duration = Duration::from_secs(90);
 const CLIENT_BACKOFF: Duration = Duration::from_millis(400);
 /// What the availability client appends while the first move attempt runs.
 ///
-/// `true`: it appends through the whole move, from before `move-range`. An
-/// append that is in flight on the range leader when the learner allocation
-/// commits is refused half-way by the changed writer policy and leaves an
-/// unfinished native command there, and a source Close refuses such a voter
-/// on every repetition. The coordinator asks before it fences or closes
-/// anything and reports the move blocked before the cut. The test then does
-/// what the operator does: `move-range --abort`, wait until the range
+/// `true`: it appends through the whole move, from before `move-range`. The
+/// coordinator leads the moved range: it proposes the learner allocation
+/// only under its own admission hold of the range, taken once no append is
+/// between its admission and its local completion, so no append straddles
+/// the allocation commit. Should a voter still hold an unfinished write
+/// command after the allocation (the coordinator asks before it fences or
+/// closes anything and reports the move blocked before the cut), the test
+/// does what the operator does: `move-range --abort`, wait until the range
 /// acknowledges appends again, and `move-range` again, this time with the
 /// client's appends paused until the allocation is committed.
 ///
 /// `false`: the client pauses its appends around the first allocation too,
 /// so no append is in flight while it commits. It reads throughout.
-const APPENDS_DURING_ALLOCATION: bool = false;
+const APPENDS_DURING_ALLOCATION: bool = true;
 
 fn node(i: usize) -> ClusterNodeId {
     ClusterNodeId::new(format!("n{i}")).unwrap()

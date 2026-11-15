@@ -4,6 +4,16 @@ Inspected source: `3d8eef4e611995db5f60dc2920ab34afe20aa0ee`. This is an
 unpublished, uncompiled composition. These are source findings and acceptance
 requirements, not executed HA, garbage-collection or scale-out results.
 
+Later source-only composition adds the distinct
+[metadata-owner activation primitive](native-remote-activation-metadata-owner.md)
+from `15a453fb5` and its independently reviewed source-identity correction
+`7d46e9eef`. That change supplies a finite actual ALL-released collection,
+protected proposer and known selected-commit observation; the historical
+missing-producer finding below is scoped to inspected source3d8. Compilation
+and runtime acceptance remain **not tested**. Automatic all-Policy ordering,
+remote source retirement, warm custody retirement and cold recovery remain
+open; this primitive does not close the full completion gap.
+
 ## Completion has separate producers
 
 The local custody backend has a real completion chain. After actual release

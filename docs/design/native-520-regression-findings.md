@@ -4,7 +4,7 @@ This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe64
 
 ## Actual execution
 
-### Source700: test-compilation failures; other jobs still running
+### Source700: complete failed run; Core/Native test execution not reached
 
 Draft PR207 source **1.0.520-beta /
 `700726e90f041815b132cda4f87ca92337f55baa`**, tree
@@ -12,7 +12,8 @@ Draft PR207 source **1.0.520-beta /
 run below. Normal [Tests43728210745](https://github.com/nikoma/bicdb/actions/runs/43728210745)
 and [Rails43728210770](https://github.com/nikoma/bicdb/actions/runs/43728210770)
 check out `939038eb35677874c941c2d1220cd0a7d6548b40` with the same tree.
-This is an **incomplete execution checkpoint**, not a frozen whole-run result.
+All jobs completed naturally. The overall Tests workflow failed; the separate
+Rails workflow passed. Component passes do not replace the failed native gate.
 
 All-target132854681021, Native132854704823 and Core132854704889 failed test compilation with the
 same eighteen diagnostics: seventeen missing `BTreeMap` references (eight E0433,
@@ -26,8 +27,11 @@ build and application step: twenty runs, one hundred assertions, zero failures,
 errors or skips, including process-kill queue/cache recovery, twenty-four reports
 and twenty-four cable messages. PGwire132854704821 passed 511/0/2 across
 twenty-eight summaries. Those component/application results are separate from
-native HA. SQL132854704853 subsequently passed 2,682/0/4 across 282 summaries;
-remaining-workspace was still running at this checkpoint.
+native HA. SQL132854704853 passed 2,682/0/4 across 282 summaries.
+Remaining-workspace132854704890 passed 1,062/0/6 across 129 summaries, plus
+Python47/3/34 and Node2 checks. These are case-result rows across targets, not
+independent physical trials. All jobs are terminal and the sole collector
+exited naturally. No earlier runtime result is inherited by this source.
 Earlier revisions' passing results are not substituted for current results.
 
 Complete all-target raw1,406,089 bytes SHA-256
@@ -47,6 +51,12 @@ Independent complete-log SQL receipt:
 Its actual committed-sync DimensionMismatch/DDL-cleanup control passed at
 raw14369. That SQL pass does not execute Core's timed-Unknown or native
 multi-node paths and does not establish general multi-range SQL transactions.
+Remaining-workspace raw163,621,423 bytes
+`1389576968fc64270ea80b40ec64c2bd77c556050bbca00edc49cbc4cc9bd721`;
+gzip SHA-256
+`c4eb9cb101cd9b47a3dfbe1c8d6dd4c5e01c1a5da4712ca3fe978e5b1c25135e`.
+Independent complete-log remaining-workspace scope receipt:
+`5cf5ba0b699ad8d84a45df4f5e029a8a5d804102148bc4dddff7b437a27f8cf9`.
 Rails original artifact14167656585 contains sixteen verified members; ZIP SHA-256
 `a419978095b8b02c2c280c77d36448c00128395c624d918fa75fbcf5150e29a8`.
 Its exercised CI debug binary SHA-256 is
@@ -58,8 +68,22 @@ The independent all-target eighteen-error classification receipt is
 `c65a1869996c882dad275eccb53ea6153701dda5f68dfe44dbb925219e52f85a`;
 the capture-side Native prerequisite classifier is
 `c8887ade3e6e4f7ff48b9db5e94c69e0a18e323bff5872c0df739af531656265`.
-The sole collector remains responsible for the original logs and artifacts;
-no useful job is cancelled or restarted to publish a correction.
+No useful job was cancelled or restarted to publish a correction.
+
+The whole archive is frozen after natural collector exit: 96 premanifest /
+99 total files, eleven complete log gzips and eight original artifact ZIPs /
+27 members. Manifest SHA-256
+`09374b4a4045c38fc58daeb48334113639c107fa40adaaf236e584ca3ebdab59`;
+capture-side verification
+`90f853e2531a8e824ca326c3fe1f05bb56b869ada3d0dc7cdc6ba4481756f615`;
+independent root complete-archive verification
+`6d506225335eb08fdc2ffaf1dc81e43e2fea115bd7c6c35ab58b0001aa5017ee`.
+All actual job/artifact IDs, stored/decompressed hashes, API ZIP digests,
+CRCs and member hashes were checked. A wrong expected manifest digest was
+rejected; negative-control receipt SHA-256
+`96e222957f832f7491455e5720cf597dd7591f2ecfa1348dec3b1fe6fc4650df`.
+These originals receive no later writes. The separate source-only correction
+does not reclassify this failed run or execute its intended native cuts.
 
 The reproducible issue is **failed test compilation**, not a demonstrated native
 runtime failure. At the pinned source, the actual failing workflow command is
@@ -148,8 +172,10 @@ and explicitly refuses both narrow serving purposes in the generic recovery
 readiness consumer before Frozen validation and new source-pin/readiness
 construction. The caller's Frozen input already exists; this is not a global
 no-effect claim. It assigns no
-generic recovery owner to either purpose. This is a **source correction only**:
-standalone formatting and diff checks passed; it has not compiled or executed.
+generic recovery owner to either purpose. At this historical correction
+checkpoint, only standalone formatting and diff checks had run. Source700
+subsequently built the production library/helper and application but failed
+test compilation, as recorded above; no native runtime acceptance follows.
 This compile defect supplies no runtime proof of an authority bypass or of HA
 acceptance. The original failed source and all original assertions remain intact.
 

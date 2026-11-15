@@ -11,7 +11,7 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
-## Current execution checkpoint — source700 test compilation failed, 2026-11-15 UTC
+## Current complete execution — source700 failed, 2026-11-15 UTC
 
 Draft520 `700726e90f041815b132cda4f87ca92337f55baa` advanced past the three
 sourcebd09 library diagnostics. All-target, Core and Native jobs then failed on
@@ -19,11 +19,13 @@ eighteen test-compilation errors: seventeen missing `BTreeMap` references and
 one private-field access in a test diagnostic. None executed Core/native tests
 or the new stage clocks. Native's production helper build, PGwire511/0/2 and the
 separate Rails build/application twenty runs/one hundred assertions passed.
-SQL also passed2,682/0/4. Remaining-workspace
-was still running at this checkpoint; no whole-run archive or overall passing result
-is claimed. A minimal source-reviewed correction retains private ownership,
+SQL passed2,682/0/4; remaining-workspace passed1,062/0/6 plus offline tooling.
+All jobs completed naturally; the overall Tests workflow failed. No overall
+passing result is claimed. A minimal source-reviewed correction retains private ownership,
 original assertions and deadlines; it has not compiled or executed. See the
 [exact source, logs and reproducer](design/native-520-regression-findings.md).
+The frozen99-file archive includes eleven full logs and eight original ZIPs /
+27 members; independent full-archive integrity and wrong-digest controls passed.
 Main remains519. Physical scale-out, production qualification and the original
 failed Azure result remain unchanged.
 

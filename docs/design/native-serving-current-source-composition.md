@@ -2,12 +2,13 @@
 
 This is a source-composition checkpoint, not an HA acceptance result. Its
 baseline is `6de646beb603accf39358017d8e0c83c39c741b1`, followed by the native
-serving/recovery additions below. Public candidate
+serving/recovery additions below. Recorded CI candidate
 `700726e90f041815b132cda4f87ca92337f55baa` includes those additions and the
 sourcebd09 library-compilation correction. Source700's production native
 helper build, SQL, PGwire and Rails application passed; all-target, Core and
 Native jobs failed test compilation on eighteen errors before native execution.
-The remaining-workspace job was still running at the recorded checkpoint.
+Remaining-workspace passed1,062/0/6 plus offline tooling. All jobs completed
+naturally and the overall Tests workflow failed.
 The minimal FIRST import
 and private diagnostic-delegation correction `c072c75ea` is source-reviewed,
 not compiled or executed. Actual per-source results remain in the

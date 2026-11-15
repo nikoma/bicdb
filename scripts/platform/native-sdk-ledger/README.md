@@ -18,7 +18,9 @@ ran. Its passing standalone Rails and PGwire results do not test this producer.
 The reviewed successor `980b5983c927859c6218edc78e17b68d71eae2ac` is not compiled
 or executed at this checkpoint. SQL2682/0/4, PGwire511/0/2 and Rails20runs/100
 assertions passed on d3; they do not execute this producer. Remaining workspace
-is still running. See the [exact source-scoped findings](../../../docs/design/native-520-regression-findings.md).
+failed950/1/2 on the native CLI registry-addition healthy-read/fresh-ACK gate. No
+DATA relocation or false absence was observed; that failure is not this probe
+being executed. See the [exact source-scoped findings](../../../docs/design/native-520-regression-findings.md).
 No preceding pass is inherited, and no physical qualification gate changes.
 
 This directory contains the format verifier, a read-only cross-run reconciliation

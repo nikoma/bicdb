@@ -10,6 +10,19 @@ The [exact successor findings and three-file compiler correction](native-520-reg
 are recorded separately. Neither the corrections nor baseline source7e99's
 passing component jobs establish a passing assembled runtime result.
 
+Later source **`d3af39c107951802a612d31b42e70fd4bc90e71c`** completed with
+formatting/SQL/PGwire/Rails passes but a Core/native test-compilation error and
+a real CLI availability failure after metadata-only fifth-voter addition.
+The first-allocation unit's strict pending getters also affect the existing
+v1 registry publisher: its origin preflight calls that getter while its own
+publication is pending. Fresh retries self-refuse too. No DATA move was
+attempted; Strong calls returned Unavailable rather than absence. The separate
+validator/test-cut corrections do not fix this production availability defect.
+An original-owner, actual-outcome-safe registry repair must preserve strict
+ordinary APP/Strong fences. See the [complete d3 findings](native-520-regression-findings.md).
+Neither predecessor component passes nor source-only composition establish a
+successful assembled HA result.
+
 At the original pre-e2 composition checkpoint, the changes below were **implemented or defined in source and independently source-reviewed; assembled compilation and execution had not yet been attempted**. The subsequent failed e2 attempt is recorded above. No successful assembled compiler/runtime result is established. Formatting, source-preservation, version identity and documentation links are separate checks. No source-only correction is labelled a passing regression, physical qualification, release or deployment.
 
 | Source unit | Exact unit commits | Implementation and evidence boundary |

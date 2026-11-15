@@ -11,15 +11,19 @@ automatic data/leader movement but did not pass capacity or fault-safe rebalance
 qualification; no Phase-9 checkbox is closed by that exploratory trial.
 
 Current exact-head qualification checkpoint: draft **1.0.520-beta /
-`d3af39c107951802a612d31b42e70fd4bc90e71c`** passed formatting, SQL2682/0/4,
-PGwire511/0/2 and Rails20runs/100assertions. All-target/Core/Native failed test compilation on
-one inaccessible response validator; zero Core/native controls executed.
-Remaining workspace is still running, so its result is not inferred. The last executed native result remains source7e99 **396/55/1**.
-Separate minimal source corrections are reviewed, not compiled or executed.
-The [exact results, reproducers and smallest next checks](design/native-520-regression-findings.md)
-remain merge and qualification blockers. APIs, source review and checked
-roadmap items do not establish fault-safe automatic convergence. No physical
-expansion or production checkbox changes at this checkpoint.
+`d3af39c107951802a612d31b42e70fd4bc90e71c`** completed with failed Tests.
+SQL2682/0/4, PGwire511/0/2, Rails20runs/100assertions and formatting passed;
+all-target/Core/Native failed test compilation before Core/native controls.
+Remaining-workspace failed950/1/2: actual metadata-only fifth-voter addition left
+four original writers publication-pending; old ACK reads were Unavailable and
+fresh writes got no ACK within the unchanged ten-second healthy gate. No DATA
+move or false-absence result was observed. This production availability defect
+needs a separate original-owner/outcome-safe publication repair. The reviewed
+minimal compile/test-control fixes alone are insufficient. The
+[full results, archive, failure and unchanged reproducers](design/native-520-regression-findings.md)
+remain merge and qualification blockers. Delivered main519's selected348/0/1
+native suite has different case/timing scope; it does not qualify this successor.
+No physical expansion or production checkbox changes.
 
 The goal is a cluster where an operator joins a server and BicDB automatically
 places, replicates, moves, and balances data without application-level shard

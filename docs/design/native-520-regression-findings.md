@@ -4,18 +4,20 @@ This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe64
 
 ## Actual execution
 
-### Sourced3: test compilation failed; remaining-workspace still running
+### Sourced3: complete failed run; registry-only availability failed
 
 Public draft **1.0.520-beta / `d3af39c107951802a612d31b42e70fd4bc90e71c`**,
 tree `a80a2894bf8d852641788f23cca142d7f1fb977b`, runs at actual PR checkout
 `7d5f1066dc3c1a666b4daa1d5f1468ee1ebf6595` with the same tree in normal
 [Tests43757717285](https://github.com/nikoma/bicdb/actions/runs/43757717285) and
 [Rails43757717284](https://github.com/nikoma/bicdb/actions/runs/43757717284).
-This is an **incomplete execution checkpoint**: remaining-workspace132945377712
-is still running. Its outcome and the complete archive inventory are not
-inferred. SQL132945377726 has completed successfully. The same sole collector is retained;
-there was no manual workflow dispatch, rerun or cancellation. Main remains
+All jobs finished naturally and the sole collector exited. Tests **failed**;
+Rails passed. Across both runs, seven jobs passed, four failed and four optional
+jobs were skipped. SQL132945377726 completed successfully; remaining-workspace
+132945377712 executed a failing native CLI availability control. There was no
+manual workflow dispatch, rerun or cancellation. Main remains
 **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
+The source is unmerged and not production-qualified.
 
 | Scope | Classification | Actual result and limit |
 | --- | --- | --- |
@@ -25,8 +27,72 @@ there was no manual workflow dispatch, rerun or cancellation. Main remains
 | PGwire132945377717 | Passed within scope | 511 passed / 0 failed / 2 ignored, 513 unique cases across 28 summaries. Separate Oracle HR target 50/0, embedded HA 11/0, verification 3/0 and protocol target 195/0. These targets do not all run under one Oracle profile |
 | Rails132945355061 | Passed within scope | 20 runs / 100 assertions, zero failures/errors/skips; 24 reports, 24 cable messages, zero failed jobs, two overlapping workers; migration/seed/HTTP/WebSocket and standalone restart acceptance |
 | SQL132945377726 | Passed within scope | 2,682 passed / 0 failed / 4 ignored across 282 summaries; 2,686 result rows / 2,685 unique names. Actual committed-error DDL/row/GUC cleanup and durability SQLSTATE controls passed |
-| Remaining-workspace132945377712 | Inconclusive while running | Preserve the useful job to natural completion; no earlier source's result transfers |
+| Remaining-workspace132945377712 | **Failed availability** | 950 passed / 1 failed / 2 ignored across 96 summaries, 953 unique cases. Native CLI target5/1 failed its actual healthy-old-read/fresh-ACK/readback gate after metadata-only fifth-voter addition. No DATA relocation was attempted; later AppHost and offline Python/Node steps were not reached |
 | Full corrected native runtime, physical expansion and production qualification | Not tested | Component passes do not clear these gates |
+
+The complete frozen archive contains **99 files / 96 premanifest files**,
+eleven full gzip logs and eight original ZIPs/59 members. Manifest SHA256
+`e6f530e22fcac189270c191c09cfef78074e2863ed0e1eb099e273e496cd8ac3`.
+Independent root full-archive receipt SHA256
+`a2c7b56d4f2d02bd3b219d0de8eed86578c6ba4f229eb4780f568c1242e42d94`
+verifies complete job/artifact inventories, stored/raw log hashes, original
+ZIP/API digest/size, CRC/member hashes and source/tree. Capture-side positive
+and deliberately wrong-digest refusal controls are retained. All eight actual
+upload IDs match the captured API/ZIP inventory. Ten checkout-bearing logs
+use the exact merge checkout; the selector job has no checkout. The canonical
+archive is read-only and every predecessor archive is unchanged.
+
+The runtime failure is
+`writer_registry_refresh_baseline::native_metadata_registry_addition_actual_cli_requires_healthy_existing_read_and_fresh_ack`
+at `crates/bicdb-cli/tests/native_metadata_operator_cli/writer_registry_refresh_baseline.rs:463`.
+The original public APP ACK and full Strong value succeeded before the fifth
+metadata voter. After that real registry-only addition, DATA assignments and
+all four original writer bindings stayed unchanged. Both rounds' existing-ACK
+reads returned typed Unavailable/WriterAdmission; both fresh writes received no
+user ACK and remain `NO_USER_ACK_OUTCOME_UNKNOWN`. All four registry publications
+were pending with no verified extension. The original ten-second healthy-triple
+receipt never arrived. `observed_false_absence=false` and
+`observed_wrong_value=false` describe only those observed calls; unavailable
+reads establish neither durable acknowledged-data loss nor survival.
+
+REST full raw log: 101,326,215 bytes, SHA256
+`9de5435590ccdf2df531ffcdba1ec16d535adfa6d07598545f8019cb2c0219bf`;
+gzip SHA256 `8f31670a2b013c7d21ad7022d339144d0a9f1d564cc3fec0ea060b81a4837c07`.
+Independent root complete-stream/result projection SHA256
+`ca97e587bd6191719d34b0e7f931e355ed7f0d6a6b6ed425a0a542c25eb2d964`
+retains original operation errors and the four actual after-health bindings.
+Terminal row is raw799516, panic799519–799520, final target summary799529.
+The original CLI journal has586 rows/562 RPC phases. CI output can be buffered;
+raw log timestamps are not independent phase timing. The test retains actual
+monotonic API-receipt elapsed fields and its original two-second SDK calls.
+Five other native CLI cases passed, including four-process APP/Strong and the
+bounded registered/promoted metadata restart cases; those do not establish
+populated DATA cold recovery. AppRuntime159/0/1 and Cell40/0/0 are component
+passes in the prefix, not full workspace or production qualification. This is
+neither the historical main519 AppHost AddressInUse failure nor a compile error.
+
+Source trace identifies a candidate regression in the registry-only publisher:
+`refresh_metadata_registry` sets the registry-pending fence, then its final
+`with_current_for_publication` calls the origin validator, which reaches
+`require_original_database` and the newly strict `require_range`. That getter
+refuses the very pending flag that the publisher must resolve. Fresh retry
+preparation encounters the same refusal. The APP/Strong pending fence is valid;
+a correction must use a separate original-owner refresh preflight and actual
+retained native outcomes. A visible CURRENT record or Committed status alone
+cannot turn a native API error into Known. No such production correction is
+included in the minimal `980b` compile/test-control unit below; the corrective
+batch is incomplete until this availability defect is fixed and tested.
+
+The unchanged focused reproducer is:
+
+```sh
+cargo test -p bicdb-cli --test native_metadata_operator_cli --locked writer_registry_refresh_baseline::native_metadata_registry_addition_actual_cli_requires_healthy_existing_read_and_fresh_ack -- --exact --test-threads=1
+```
+
+It is recorded, not run locally. Preserve the full original ten-second healthy
+receipt requirement, both two-second read/write probes, existing ACK value,
+same-owner checks and all refusal/uncertainty assertions. Do not replace this
+positive availability assertion with a passing refusal.
 
 SQL's complete original raw log is 348,523,507 bytes, SHA256
 `7fd5480f8ea9df1520232e719d10db31af32ab313c961ac3d808e2e35c15ba37`;

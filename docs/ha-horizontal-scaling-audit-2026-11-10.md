@@ -11,31 +11,58 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
-## Current execution checkpoint — sourced3 test compilation failed, 2026-11-15 UTC
+## Delivered main and candidate scope — 2026-11-15 UTC
 
-Main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
-Draft **1.0.520-beta / `d3af39c107951802a612d31b42e70fd4bc90e71c`** passed
-formatting/static checks, SQL2682/0/4, PGwire511/0/2 and Rails20runs/100assertions. All-target,
+Delivered main is **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
+Its selected [native-component CI job132700843200](https://github.com/nikoma/bicdb/actions/runs/43677527718/job/132700843200)
+actually passed348/0/1:348 executed passes, one listed ignored case and944
+filtered. Its349 listed case results are not349 executed passes. The complete
+13,543,529-byte raw log SHA256 is
+`da06ccedd111fc3d420c9ffb4f70691702f9ee1d7a31d2872af0dd9ce0305f10`;
+scoped archive manifest SHA256
+`7eefde57b7e1023328b6b0ffbe107793f80319323d439444e54faeda42d42bfe`.
+A fresh local recheck reused the original eleven-file archive and independently
+verified its full case inventory/source/tree; receipt SHA256
+`587a8a037b808129076021a19e1327f45a96695c3cf71e6987ea62fb6a985be2`.
+This does not make main's whole CI green: its remaining-workspace job failed an
+AppHost AddressInUse control. The main suite lacks the later FIRST/local
+visibility/catch-up cases, and its hot fixture used4000ms rather than the
+candidate's1500ms. Counts are not an interchangeable benchmark or proof of
+independent-host HA, current binary qualification or full64-range convergence.
+
+## Current complete execution — sourced3 failed, 2026-11-15 UTC
+
+Draft **1.0.520-beta / `d3af39c107951802a612d31b42e70fd4bc90e71c`** finished
+all jobs: seven passed, four failed and four optional jobs skipped. Formatting,
+SQL2682/0/4, PGwire511/0/2 and Rails20runs/100assertions passed. All-target,
 Core and serial Native test compilation failed on one private response-validator
-call in the new real-TLS control. The Core/native production helper builds
-passed, but zero Core/native controls executed. The following no-default
-consumer check was skipped. Remaining workspace is still running; this is
-not a complete passing or archived CI run.
+call; Core/native helpers built but zero Core/native controls ran. The following
+no-default consumer check was skipped. Remaining-workspace failed950/1/2 on its
+native CLI metadata-registry addition availability control. Before the fifth
+metadata voter, the actual APP ACK and full Strong read succeeded. Afterward,
+old-ACK reads returned Unavailable and fresh writes received no ACK; all four
+original writer policies remained publication-pending. No false absence was
+observed, no DATA move was attempted, and the original ten-second healthy receipt
+requirement failed. This is an availability defect, not proof of durable loss.
 
-A separate minimal source-reviewed successor fixes the validator's internal
-visibility and two test-only cut-retention defects without changing validation
-bodies, authority producers, original assertions or timeouts. It has not
-compiled or run. See the [exact source identities, current classifications and reproducers](design/native-520-regression-findings.md).
-The original source7e99 native failures remain the last executed native result.
-No current physical RPO/RTO, converged four-to-five-node expansion, stable
-post-convergence capacity gain or production qualification is established.
-The original failed Azure run and verified deletion remain unchanged.
+The complete read-only archive contains99files,11full logs and8original ZIPs/
+59members; manifest SHA256
+`e6f530e22fcac189270c191c09cfef78074e2863ed0e1eb099e273e496cd8ac3`.
+Full independent integrity verification passed. Minimal source corrections for
+the private validator and two test-control defects are reviewed, uncompiled and
+unrun. The additional production registry self-refusal requires its own
+original-owner/Known-outcome fix; ordinary APP/Strong fences must stay strict.
+See the [actual source identities, exact failure and unchanged reproducers](design/native-520-regression-findings.md).
+Candidate7e99's396/55/1 remains the last executed native result for the candidate
+line; main519's older348/0/1 does not qualify the successor.
 
 [External-ledger experiment readiness](../scripts/platform/native-sdk-ledger/README.md#experiment-readiness-source-d3)
-is a separate open gate: current bounded tooling has no actual SDK/collector
-end-to-end result or full-dataset campaign checker. The basic workload's ACK
-samples cannot replace complete attempt/uncertainty evidence, and instrumented
-SDK timings include collector/fsync overhead. No server capacity claim follows.
+is another open gate: bounded tooling has no actual SDK/collector end-to-end
+result or full-dataset campaign checker. ACK-only samples cannot replace complete
+attempt/uncertainty evidence; instrumented SDK timings include fsync/collector
+overhead. No current physical RPO/RTO, converged4→5 expansion, stable capacity
+gain, general distributed SQL or production admission is established. The
+original failed Azure result and verified deletion remain unchanged.
 
 ## Previous complete execution — sourcee2 compilation failed, 2026-11-15 UTC
 

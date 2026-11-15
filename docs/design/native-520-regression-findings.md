@@ -1,6 +1,6 @@
 # Native 520 candidate regression findings
 
-This record covers candidate **1.0.520-beta / `326c363477477950f76bdb51fe6425cab85dc362`**, tree `66972d1997cc2c4626aa1a02ae94dd13d880329b`. It is a failed CI candidate, not a qualified release. The tested pull-request checkout was `44d50d087cd1e4fefdba93e3f539b1806f232f83`, with that same tree. Source corrections described below have not been compiled or executed. The original Azure qualification remains failed and its evidence is unchanged.
+This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe6425cab85dc362`**, tree `66972d1997cc2c4626aa1a02ae94dd13d880329b`, and retains later exact-source checkpoints separately. Source326 is a failed CI candidate, not a qualified release. Its tested pull-request checkout was `44d50d087cd1e4fefdba93e3f539b1806f232f83`, with that same tree. Corrections retain their individual compilation and execution status below; an earlier passing result is not inherited by a successor. The original Azure qualification remains failed and its evidence is unchanged.
 
 ## Actual execution
 
@@ -37,6 +37,19 @@ review and standalone formatting only; it has not been compiled or executed.
 The smallest next check is compilation of the actual Core test target followed
 by the unchanged backup exclusion control and required broad suites. The
 original FIRST/Strong/ACK, cold recovery and controller gates remain open.
+
+An independent source review also confirms the existing
+[cross-call bootstrap association gap](standard-live-backup-physical-gate.md):
+an originally absent target can be created and acknowledged by a normal opener,
+survive the first install's no-replace refusal, then be claimed and replaced by
+a distinct finish call after that owner closes. The original live-owner race
+control stops before this fresh call. Classification: **failed source safety
+review; runtime reproduction not tested**. The next deterministic regression
+must retain both real acknowledged records and the first error, close the real
+owner, invoke a distinct finish and require target/stage preservation plus safe
+subsequent recovery. Original-target and renamed-predecessor association must
+survive restart; a RAM flag or newly acquired DirectoryLock does not supply it.
+This is not an established cause of the historical Azure visibility failures.
 
 ### Earlier head0a: Core guard compilation and Page profile assertion failures
 

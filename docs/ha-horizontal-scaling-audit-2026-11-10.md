@@ -24,6 +24,13 @@ independent evidence scopes. The candidate remains unmerged; strong-read,
 bounded relocation, cold recovery, physical expansion and capacity qualification
 remain open. The failed Azure baseline is unchanged.
 
+The [physical backup/bootstrap review](design/standard-live-backup-physical-gate.md)
+also retains a confirmed source gap: after an initial no-clobber refusal, a
+fresh finish can adopt and replace an unrelated target created after staging.
+Same-attempt ownership does not persist original-target or renamed-predecessor
+association across calls/restarts. Runtime reproduction is **not tested** and
+the cold-recovery protocol remains blocked; this is not a proven Azure cause.
+
 ## Earlier execution checkpoint — head0a failed, 2026-11-15 UTC
 
 Remote main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.

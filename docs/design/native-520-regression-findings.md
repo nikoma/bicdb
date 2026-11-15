@@ -4,6 +4,21 @@ This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe64
 
 ## Actual execution
 
+### Local corrective source after the complete d3 failure
+
+The corrective composition at `0bc9f88e3a5fb89951d2b4ea8937e4ab1baf8bab`
+includes the separately frozen registry fix
+`b821a97e1f0ae7ddd7974a9e96a53e0ba81f6797`, alongside the minimal validator
+and test-cut corrections below. Its [retained registry publication contract](native-registry-pending-owned-publication.md)
+separates the publisher's original-identity preflight from ordinary APP/Strong
+admission, retains the actual native API outcome before late checks and refuses
+to adopt Unknown outcomes from visible bytes. The original CLI healthy-read/
+fresh-ACK assertions and two-second SDK calls remain unchanged. Two new
+same-process component controls cover actual Known-return cancellation and
+native sync Unknown. This composition has passed source formatting, preservation
+and version checks; it has **not compiled or executed**. Source review and these
+new test definitions do not repair the retained d3 result or establish HA.
+
 ### Sourced3: complete failed run; registry-only availability failed
 
 Public draft **1.0.520-beta / `d3af39c107951802a612d31b42e70fd4bc90e71c`**,

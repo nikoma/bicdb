@@ -56,6 +56,13 @@ See the [actual source identities, exact failure and unchanged reproducers](desi
 Candidate7e99's396/55/1 remains the last executed native result for the candidate
 line; main519's older348/0/1 does not qualify the successor.
 
+A local [registry publication correction](design/native-registry-pending-owned-publication.md)
+is composed with the minimal compiler/test-control fixes. It keeps the strict
+APP/Strong fence while retaining the original publisher and actual native
+outcome. Formatting and source review are separate from its still-unexecuted
+original CLI regression and new Known/Unknown component controls. No passing
+corrected-runtime result is established.
+
 [External-ledger experiment readiness](../scripts/platform/native-sdk-ledger/README.md#experiment-readiness-source-d3)
 is another open gate: bounded tooling has no actual SDK/collector end-to-end
 result or full-dataset campaign checker. ACK-only samples cannot replace complete

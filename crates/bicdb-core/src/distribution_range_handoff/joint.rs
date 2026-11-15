@@ -86,4 +86,4 @@ mod trace;
 pub(crate) use trace::{NativeJointPhaseTrace, NativeRefreshTraceContext};
 
 #[cfg(feature = "tls-replication")]
-pub(crate) use bridge::NativeRemoteBridgeAdmission;
+pub(crate) use bridge::{NativeRemoteBridgeAdmission, NativeRemoteBridgeReadAdmission};

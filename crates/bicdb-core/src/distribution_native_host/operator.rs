@@ -188,6 +188,29 @@ impl NativeMetadataHost {
             .ok_or_else(|| invalid("actual metadata control owner absent"))?
             .drive_finite_remote_bridge(relocation, phase, node, parent)
     }
+    pub(crate) fn resolve_finite_remote_bridge(
+        &mut self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+        node: &ClusterNodeId,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual metadata control owner absent"))?
+            .resolve_finite_remote_bridge(relocation, phase, node, parent)
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_remote_bridge_control(
+        &mut self,
+        range: crate::RangeId,
+        arm: Option<u8>,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual bridge control host absent"))?
+            .test_remote_bridge_control(range, arm)
+    }
     pub(crate) fn poll_finite_remote_serving(
         &mut self,
         parent: &CancellationToken,

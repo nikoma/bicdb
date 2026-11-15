@@ -1757,4 +1757,4 @@ fn pending_handoff_configuration(
 }
 
 #[cfg(feature = "tls-replication")]
-pub(crate) use joint::NativeRemoteBridgeAdmission;
+pub(crate) use joint::{NativeRemoteBridgeAdmission, NativeRemoteBridgeReadAdmission};

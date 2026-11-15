@@ -25,6 +25,7 @@ pub(crate) enum NativeRemoteServingOperationV1 {
     ObserveServing,
     ObserveDecision,
     ResolvePrepared,
+    ResolveBridge,
 }
 impl NativeRemoteServingOperationV1 {
     pub(crate) fn readonly(self) -> bool {
@@ -37,6 +38,7 @@ impl NativeRemoteServingOperationV1 {
                 | Self::ObserveServing
                 | Self::ObserveDecision
                 | Self::ResolvePrepared
+                | Self::ResolveBridge
         )
     }
 }
@@ -767,5 +769,121 @@ impl NativeRemoteBridgeRequestAdmission<'_> {
     }
     pub(crate) fn bound_request(&self) -> CancellationToken {
         self.actual.bound_effect_request()
+    }
+}
+
+/// A fresh readonly original bridge observation; never accepted by native WAL.
+pub(crate) struct NativeRemoteBridgeReadRequestAdmission<'a> {
+    actual: NativeRemotePreparationAdmission<'a>,
+}
+impl NativeRemoteServingIngress {
+    pub(in crate::distribution_native_host) fn admit_bridge_read(
+        &self,
+        process: Arc<NativeRemotePreparationProcess>,
+    ) -> Result<NativeRemoteBridgeReadRequestAdmission<'_>> {
+        self.require_request()?;
+        process.require_memory()?;
+        if !matches!(
+            self.request.operation,
+            NativeRemoteServingOperationV1::ObserveBridge
+                | NativeRemoteServingOperationV1::ResolveBridge
+        ) {
+            return Err(invalid(
+                "known bridge read requires fresh authenticated readonly bridge operation",
+            ));
+        }
+        Ok(NativeRemoteBridgeReadRequestAdmission {
+            actual: NativeRemotePreparationAdmission {
+                work: self,
+                process,
+            },
+        })
+    }
+}
+impl NativeRemoteBridgeReadRequestAdmission<'_> {
+    pub(crate) fn require_current(
+        &self,
+        committed: &crate::distribution_range_handoff::CommittedNativeJointDecisionObservation,
+    ) -> Result<()> {
+        self.actual.require_current(committed)
+    }
+    pub(crate) fn require_memory_current(&self) -> Result<()> {
+        self.actual.require_memory_current()
+    }
+    pub(crate) fn bound_request(&self) -> CancellationToken {
+        self.actual.bound_effect_request()
+    }
+}
+#[cfg(test)]
+impl NativeRemoteBridgeRequestAdmission<'_> {
+    pub(crate) fn test_cancel_original_server_request(&self) -> serde_json::Value {
+        let mut event = self.actual.test_cancel_original_server_request();
+        event["cut"] = serde_json::json!(
+            "actual bridge native API returned known commit, before receipt/postchecks"
+        );
+        event
+    }
+}
+
+impl NativeRemoteServingQueue {
+    pub(in crate::distribution_native_host) fn resolve_original_bridge(
+        &self,
+        work: &NativeRemoteServingIngress,
+        participant: &crate::distribution_range_handoff::NativeRemoteNewParticipant,
+        bridge: &crate::distribution_data::NativeRemoteServiceBridge,
+        admission: &crate::distribution_range_handoff::NativeRemoteBridgeReadAdmission<'_>,
+    ) -> Result<()> {
+        if work.request.operation != NativeRemoteServingOperationV1::ResolveBridge {
+            return Err(invalid(
+                "bridge resolution needs fresh authenticated readonly ResolveBridge",
+            ));
+        }
+        work.require_request()?;
+        admission.require_live()?;
+        admission.require_participant(&participant.snapshot().checksum_sha256)?;
+        bridge.require_resolution()?;
+        let binding = (
+            work.peer.node_id().clone(),
+            work.peer.member_incarnation(),
+            work.peer
+                .certificate_sha256()
+                .ok_or_else(|| invalid("bridge resolution actual TLS peer absent"))?
+                .to_string(),
+            work.request.original_operation,
+            work.request.manifest.checksum_sha256.clone(),
+            work.request.phase_id,
+        );
+        let version = work.point.try_publication_guard()?;
+        let mut state = self
+            .state
+            .try_lock()
+            .ok_or_else(|| invalid("bridge resolution original queue busy"))?;
+        work.require_request_memory()?;
+        admission.require_live()?;
+        if state.binding.as_ref() != Some(&binding) {
+            return Err(invalid(
+                "bridge resolution cannot rebind another original coordinator operation",
+            ));
+        }
+        let removed = if let Some(original) = state.unknown.as_ref() {
+            if state.binding.as_ref() != Some(&binding)
+                || original.request.operation != NativeRemoteServingOperationV1::PublishBridge
+                || original.request.original_operation != work.request.original_operation
+                || original.request.phase_id != work.request.phase_id
+                || original.request.decision_sha256 != work.request.decision_sha256
+                || work.request.sequence <= state.admitted
+            {
+                return Err(invalid("bridge resolution changed original actor/operation/stage or reused admitted sequence"));
+            }
+            state.unknown.take()
+        } else {
+            None
+        };
+        drop(state);
+        drop(version);
+        // Original return classification remains in the rolling outcome hash;
+        // DATA destruction never occurs under the short publication guard.
+        drop(removed);
+        Ok(())
     }
 }

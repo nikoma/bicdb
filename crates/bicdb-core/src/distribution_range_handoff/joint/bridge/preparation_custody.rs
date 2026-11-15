@@ -410,3 +410,94 @@ impl NativeRemotePreparedObservation {
         )
     }
 }
+
+#[cfg(feature = "tls-replication")]
+pub(crate) struct NativeRemoteBridgeReadAdmission<'a> {
+    quorum: Arc<crate::distribution_range_handoff::NativeRemotePreparedQuorum>,
+    local: NativeRemotePreparedObservation,
+    request: crate::distribution_native_host::NativeRemoteBridgeReadRequestAdmission<'a>,
+}
+#[cfg(feature = "tls-replication")]
+impl crate::distribution_range_handoff::NativeRemotePreparedQuorum {
+    pub(crate) fn admit_local_bridge_read<'a>(
+        self: &Arc<Self>,
+        local: NativeRemotePreparedObservation,
+        request: crate::distribution_native_host::NativeRemoteBridgeReadRequestAdmission<'a>,
+    ) -> Result<NativeRemoteBridgeReadAdmission<'a>> {
+        self.require_local(local.actual.committed(), &local)?;
+        request.require_current(local.actual.committed())?;
+        let actual = NativeRemoteBridgeReadAdmission {
+            quorum: self.clone(),
+            local,
+            request,
+        };
+        actual.require_live()?;
+        // Read-only: no pin acquisition/drain, Controlled permit or mutation.
+        actual.require_live()?;
+        Ok(actual)
+    }
+}
+#[cfg(feature = "tls-replication")]
+impl NativeRemoteBridgeReadAdmission<'_> {
+    pub(crate) fn require_live(&self) -> Result<()> {
+        self.request.require_memory_current()?;
+        self.quorum.require_local_memory(&self.local)
+    }
+    pub(crate) fn committed(&self) -> &CommittedNativeJointDecisionObservation {
+        self.local.actual.committed()
+    }
+    pub(crate) fn bound_request(&self) -> crate::CancellationToken {
+        self.request.bound_request()
+    }
+    pub(crate) fn require_service(&self, service: &ClusterDataNodeService) -> Result<()> {
+        self.require_live()?;
+        if !std::ptr::eq(service, self.local.actual.service.data_ptr()) {
+            return Err(invalid(
+                "remote bridge substituted actual local preparation service",
+            ));
+        }
+        self.local.actual.require_current_with_service(service)?;
+        self.request.require_current(self.committed())
+    }
+    pub(crate) fn actual(&self) -> &ActualServiceNativeJointPreparedEvidence {
+        &self.local.actual.actual
+    }
+    pub(crate) fn require_scope(
+        &self,
+        scope: &crate::db::NativeJointPreparedPublicationScope<'_>,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+    ) -> Result<()> {
+        self.require_live()?;
+        self.committed()
+            .require_current_with_publication_scope(scope)?;
+        self.local
+            .actual
+            .require_local_publication_scope(scope, store, self.committed())?;
+        self.require_live()
+    }
+    pub(crate) fn require_native_local(
+        &self,
+        db: &BicDb,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+        prepared: &crate::db::NativeJointServingPreparation,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        self.quorum
+            .require_native_local(db, store, prepared, frozen)
+    }
+}
+
+#[cfg(all(test, feature = "tls-replication"))]
+impl NativeRemoteBridgeAdmission<'_> {
+    pub(crate) fn test_cancel_original_server_request(&self) -> serde_json::Value {
+        self.request.test_cancel_original_server_request()
+    }
+}
+
+#[cfg(feature = "tls-replication")]
+impl NativeRemoteBridgeReadAdmission<'_> {
+    pub(crate) fn require_participant(&self, sha: &str) -> Result<()> {
+        self.require_live()?;
+        self.local.require_original_remote_participant(sha)
+    }
+}

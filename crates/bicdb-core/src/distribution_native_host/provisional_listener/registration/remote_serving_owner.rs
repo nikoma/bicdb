@@ -77,6 +77,13 @@ impl NativeMetadataControlHost {
         if work.request.operation == NativeRemoteServingOperationV1::PublishBridge {
             return self.apply_finite_remote_bridge(participant, work);
         }
+        if matches!(
+            work.request.operation,
+            NativeRemoteServingOperationV1::ObserveBridge
+                | NativeRemoteServingOperationV1::ResolveBridge
+        ) {
+            return self.apply_finite_remote_bridge_read(participant, work);
+        }
         if !matches!(
             work.request.operation,
             NativeRemoteServingOperationV1::Prepare
@@ -496,5 +503,113 @@ impl NativeMetadataControlHost {
         request.check()?;
         reply.require_request(&work.request)?;
         Ok(reply)
+    }
+}
+
+impl NativeMetadataControlHost {
+    fn apply_finite_remote_bridge_read(
+        &mut self,
+        participant: &Arc<NativeRemoteNewParticipant>,
+        work: &mut NativeRemoteServingIngress,
+    ) -> Result<NativeRemoteServingReplyV1> {
+        work.require_request()?;
+        let key = (
+            work.request.manifest.capture_range.id,
+            work.request.phase_id,
+        );
+        let original = self.remote_serving.get(&key).ok_or_else(|| {
+            invalid("remote bridge cannot construct a missing original preparation host")
+        })?;
+        if !Arc::ptr_eq(&original.participant, participant)
+            || original.manifest_sha256 != work.request.manifest.checksum_sha256
+            || original.decision_sha256 != work.request.decision_sha256
+        {
+            return Err(invalid(
+                "remote bridge changed original actual host participant/native D",
+            ));
+        }
+        let process = original.process.clone();
+        let custody = original.preparation.completed().cloned().ok_or_else(|| {
+            invalid("remote bridge needs SAME actual completed preparation owner")
+        })?;
+        let request = process
+            .bound_request(&work.token)
+            .child_linked_to(&work.own.original_request_cancellation())
+            .child_with_deadline(work.role.deadline().min(work.own.deadline()));
+        let quorum = self.collect_actual_remote_preparations(work, &request)?;
+        let backend = self.backend.clone();
+        let leader = backend
+            .provider
+            .current_metadata_leader_hint(&request)?
+            .ok_or_else(|| invalid("remote bridge post-ALL metadata leader absent"))?;
+        // Genuine distinct post-ALL OWN/MStore + local protected owner read.
+        let local = custody.observe_remote_preparation(&backend.transport, &leader, &request)?;
+        let admission = quorum.admit_local_bridge_read(local, work.admit_bridge_read(process)?)?;
+        let original = self.remote_serving.get_mut(&key).unwrap();
+        ClusterDataNodeService::read_known_remote_joint_bridge(
+            &backend.service,
+            &admission,
+            &mut original.bridge,
+        )?;
+        let native = original
+            .bridge
+            .completed()
+            .cloned()
+            .ok_or_else(|| invalid("remote bridge actual completed native receipt absent"))?;
+        // A new actual protected read is not a decoded vote conversion. The
+        // underlying bridge receipt was retained before outer request checks.
+        let observed = custody.observe_remote_preparation(&backend.transport, &leader, &request)?;
+        let mut reply = participant.observe_actual_preparation_for_serving(
+            &work.request,
+            &work.role,
+            &work.own,
+            work.business,
+            &work.point,
+            &request,
+            &observed,
+        )?;
+        ClusterDataNodeService::observe_remote_joint_bridge_read_point(
+            &backend.service,
+            &admission,
+            &native,
+            &mut reply.actual,
+        )?;
+        work.require_request()?;
+        request.check()?;
+        reply.require_request(&work.request)?;
+        if work.request.operation == NativeRemoteServingOperationV1::ResolveBridge {
+            participant
+                .retained_serving_queue()
+                .resolve_original_bridge(work, participant, &original.bridge, &admission)?;
+        }
+        Ok(reply)
+    }
+}
+
+#[cfg(test)]
+impl NativeMetadataControlHost {
+    pub(in crate::distribution_native_host) fn test_remote_bridge_control(
+        &mut self,
+        range: crate::RangeId,
+        arm: Option<u8>,
+    ) -> Result<serde_json::Value> {
+        if let Some(mode) = arm {
+            let actual = self
+                .remote_serving
+                .iter_mut()
+                .find(|((r, _), _)| *r == range)
+                .map(|(_, s)| s)
+                .ok_or_else(|| {
+                    invalid("bridge fault needs SAME actual prepared host continuation")
+                })?;
+            actual.process.require_memory()?;
+            if actual.preparation.completed().is_none() {
+                return Err(invalid(
+                    "bridge fault requires genuine actual completed preparation",
+                ));
+            }
+            actual.bridge.test_arm(mode)?;
+        }
+        self.test_remote_preparation_control(range, None)
     }
 }

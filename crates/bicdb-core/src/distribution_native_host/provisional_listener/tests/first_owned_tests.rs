@@ -16,6 +16,7 @@ use crate::distribution_range_image::{
 use std::io::Write as _;
 use std::sync::mpsc;
 use std::time::Instant;
+mod bridge_retry_tests;
 mod bridge_tests;
 mod metadata_head_tests;
 mod preparation_tests;
@@ -52,6 +53,8 @@ enum Case {
     PreparationCommitUnknown,
     Bridge,
     BridgeMissingPrepared,
+    BridgeCancelledAfterNative,
+    BridgeCommitUnknown,
 }
 fn is_catalogue_case(case: Case) -> bool {
     matches!(
@@ -74,6 +77,8 @@ fn is_catalogue_case(case: Case) -> bool {
             | Case::PreparationCommitUnknown
             | Case::Bridge
             | Case::BridgeMissingPrepared
+            | Case::BridgeCancelledAfterNative
+            | Case::BridgeCommitUnknown
     )
 }
 #[derive(Clone, Copy, Debug)]
@@ -83,6 +88,11 @@ enum SetupCut {
 }
 
 enum OwnerCommand {
+    BridgeControl(
+        crate::RangeId,
+        Option<u8>,
+        mpsc::SyncSender<serde_json::Value>,
+    ),
     Snapshot(mpsc::SyncSender<serde_json::Value>),
     PreparationControl(
         crate::RangeId,
@@ -764,6 +774,11 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
             while !active.load(Ordering::Acquire) && parent.check().is_ok() {
                 while let Ok(command)=owner_receive.try_recv() {
                     match command {
+                    OwnerCommand::BridgeControl(range,arm,send)=> {
+                        let actual=target.test_remote_bridge_control(range,arm);
+                        let _=send.try_send(serde_json::json!({"ok":actual.is_ok(),"data":actual.as_ref().ok(),
+                            "error":actual.as_ref().err().map(crate::distribution_native_host::remote_first::error_data)}));
+                    },
                     OwnerCommand::PreparationControl(range,arm,send)=> {
                         let actual=target.test_remote_preparation_control(range,arm);
                         let _=send.try_send(serde_json::json!({"ok":actual.is_ok(),"data":actual.as_ref().ok(),
@@ -789,7 +804,7 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                         worker_omitted += 1;
                     }
                 }
-                if matches!(case,Case::Preparation|Case::PreparationCancelledAfterNative|Case::PreparationCommitUnknown|Case::Bridge|Case::BridgeMissingPrepared) {
+                if matches!(case,Case::Preparation|Case::PreparationCancelledAfterNative|Case::PreparationCommitUnknown|Case::Bridge|Case::BridgeMissingPrepared|Case::BridgeCancelledAfterNative|Case::BridgeCommitUnknown) {
                     if let Err(error)=target.poll_finite_remote_serving(&parent) {
                         if worker_errors.len()<64 {worker_errors.push(crate::distribution_native_host::remote_first::error_data(&error));}
                         else {worker_omitted+=1;}
@@ -1374,6 +1389,8 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                     | Case::PreparationCommitUnknown
                     | Case::Bridge
                     | Case::BridgeMissingPrepared
+                    | Case::BridgeCancelledAfterNative
+                    | Case::BridgeCommitUnknown
             ) {
                 // Same five retained normal hosts; real range leader directly
                 // observes OLD/survivor/Registered NEW, donor remains neither leader.
@@ -1863,6 +1880,8 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                                 | Case::PreparationCommitUnknown
                                 | Case::Bridge
                                 | Case::BridgeMissingPrepared
+                                | Case::BridgeCancelledAfterNative
+                                | Case::BridgeCommitUnknown
                         )
                         .then(|| {
                             (
@@ -1997,4 +2016,13 @@ fn native_first_remote_all_actual_preparations_then_target_native_bridge() {
 #[test]
 fn native_first_remote_bridge_refuses_actual_unprepared_final_member() {
     run(Case::BridgeMissingPrepared);
+}
+
+#[test]
+fn native_first_remote_bridge_postcommit_server_cancel_resolves_same_native_xid() {
+    run(Case::BridgeCancelledAfterNative);
+}
+#[test]
+fn native_first_remote_bridge_commit_sync_unknown_remains_blocked() {
+    run(Case::BridgeCommitUnknown);
 }

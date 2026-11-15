@@ -269,6 +269,8 @@ impl NativeRemoteNewParticipant {
             request.operation,
             crate::distribution_native_host::NativeRemoteServingOperationV1::Prepare
                 | crate::distribution_native_host::NativeRemoteServingOperationV1::PublishBridge
+                | crate::distribution_native_host::NativeRemoteServingOperationV1::ObserveBridge
+                | crate::distribution_native_host::NativeRemoteServingOperationV1::ResolveBridge
                 | crate::distribution_native_host::NativeRemoteServingOperationV1::ObservePrepared
                 | crate::distribution_native_host::NativeRemoteServingOperationV1::ResolvePrepared
         ) {

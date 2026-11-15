@@ -76,6 +76,21 @@ impl NativeMetadataControlHost {
             parent,
         )
     }
+    pub(in crate::distribution_native_host) fn resolve_finite_remote_bridge(
+        &mut self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+        node: &ClusterNodeId,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.drive_finite_remote_serving_step(
+            relocation,
+            phase,
+            node,
+            NativeRemoteServingOperationV1::ResolveBridge,
+            parent,
+        )
+    }
     fn drive_finite_remote_serving_step(
         &mut self,
         relocation: crate::distribution::RelocationId,
@@ -89,10 +104,15 @@ impl NativeMetadataControlHost {
             NativeRemoteServingOperationV1::Prepare
                 | NativeRemoteServingOperationV1::ResolvePrepared
                 | NativeRemoteServingOperationV1::PublishBridge
+                | NativeRemoteServingOperationV1::ResolveBridge
         ) {
             return Err(invalid("finite coordinator operation not implemented"));
         }
-        let resolve = operation == NativeRemoteServingOperationV1::ResolvePrepared;
+        let resolve = matches!(
+            operation,
+            NativeRemoteServingOperationV1::ResolvePrepared
+                | NativeRemoteServingOperationV1::ResolveBridge
+        );
         let actual_process = self
             .data_process
             .get()
@@ -123,7 +143,9 @@ impl NativeMetadataControlHost {
             if let Some(state) = &owner.serving {
                 state.process.check()?;
                 match (&state.pending,resolve) {
-                    (Some(pending),true) if &pending.node==node && pending.request.operation==NativeRemoteServingOperationV1::Prepare=>{},
+                    (Some(pending),true) if &pending.node==node && matches!((operation,pending.request.operation),
+                        (NativeRemoteServingOperationV1::ResolvePrepared,NativeRemoteServingOperationV1::Prepare)
+                        | (NativeRemoteServingOperationV1::ResolveBridge,NativeRemoteServingOperationV1::PublishBridge))=>{},
                     (Some(_),_)=>return Err(invalid("remote preparation original pending return requires readonly resolution of SAME recipient; no mutation replay")),
                     (None,true)=>return Err(invalid("remote preparation has no original pending request to resolve")),
                     _=>{},
@@ -307,8 +329,11 @@ impl NativeMetadataControlHost {
         }
         frame.require_live_binding(&request.manifest, phase, &request.decision_sha256)?;
         if frame.point().preparation.is_none()
-            || (operation == NativeRemoteServingOperationV1::PublishBridge
-                && frame.point().native_bridge_sha256.is_none())
+            || (matches!(
+                operation,
+                NativeRemoteServingOperationV1::PublishBridge
+                    | NativeRemoteServingOperationV1::ResolveBridge
+            ) && frame.point().native_bridge_sha256.is_none())
         {
             return Err(invalid(
                 "remote preparation actual protected preparation absent from authenticated return",

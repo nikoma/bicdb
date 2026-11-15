@@ -264,3 +264,44 @@ integration should feed the existing Step/backend ingress into these same
 actual owner continuations, preserving shared receiver exclusion, rather than
 create a competing authority system. Controller/cold/GC and full Serving remain
 open.
+
+## Known original bridge resolution on the current-source integration
+
+The current-source successor connects `ResolveBridge` as a distinct readonly
+operation. The actual host retains the original private bridge attempt and
+same prepared owner before entry. A fresh authenticated request re-collects
+actual ALL preparations and independently reads current OWN/MStore plus exact
+native CURRENT/archive/body under the same DB/Store/Frozen and process binding.
+The read admission is a different type from the effect admission; native WAL
+publication cannot accept it. It creates no transaction, Controlled permit,
+format write, catalogue mutation or new native attempt. A genuine successful
+read is retained before its outer checks, while the original native API result,
+issued XID, candidate and error details stay unchanged.
+
+Only the same actual peer/incarnation/certificate, privately allocated original
+operation, phase and MF may resolve the pending bridge reply. The queue clears
+only that original PublishBridge result after the protected known read and
+final memory checks. Ordinary `ObserveBridge` DATA does not clear it. Resolving
+one known native effect does not clear global catalogue uncertainty or produce
+Open/Serving permission. A missing attempt, native entered/unframed/API-error
+outcome, changed context or expired original request cannot be reconstructed or
+replayed. The next read owns a new request; it does not make the old one live.
+
+Two added definitions use the existing real five-object/TLS ALL-preparation
+setup. `native_first_remote_bridge_postcommit_server_cancel_resolves_same_native_xid`
+requires the actual bridge native API to return known, then deliberately cancels
+its real original server token while original windows are still live, before
+receipt/postchecks. It requires a refused mutation replay and fresh readonly
+resolution with unchanged candidate, XID, next-XID/LSN and native CURRENT/archive.
+`native_first_remote_bridge_commit_sync_unknown_remains_blocked` requires the
+actual commit-sync fault to fire and the original native result to remain
+unknown after the fresh reader refuses; visible bytes are never success proof.
+All returns and forensics precede assertions. No post-fault APP or rollback/no-effect
+claim is made. Compilation, runtime, cut reach and races are **not tested**.
+
+This successor runs only in a separate source worktree based on the exact
+current 520 integration. It keeps the existing typed owned activation and all
+catalogue IO generation writers as the sole future Open sink. The earlier
+2ad6 checkpoint's missing bridge resolver is superseded by this implementation,
+not by a new claim about its unexecuted tests. Full Open, ALL-release, policy,
+leader/SDK acceptance, controller, cold recovery and GC remain open.

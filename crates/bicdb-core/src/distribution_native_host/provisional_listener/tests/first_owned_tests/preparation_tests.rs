@@ -45,7 +45,13 @@ pub(super) fn exercise(
         )?;
         assert_eq!(actual["actual_committed_record"]["stage"], expected);
     }
-    if matches!(case, Case::Bridge | Case::BridgeMissingPrepared) {
+    if matches!(
+        case,
+        Case::Bridge
+            | Case::BridgeMissingPrepared
+            | Case::BridgeCancelledAfterNative
+            | Case::BridgeCommitUnknown
+    ) {
         return bridge_tests::exercise(
             five,
             metadata,

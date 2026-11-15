@@ -81,6 +81,21 @@ pub(super) fn exercise(
                 assert!(prepared["point"]["preparation"].is_object());
                 assert_eq!(prepared["local_quorum_constructed"], false);
             }
+            if matches!(
+                case,
+                Case::BridgeCancelledAfterNative | Case::BridgeCommitUnknown
+            ) {
+                return bridge_retry_tests::exercise(
+                    coordinator,
+                    relocation,
+                    phase,
+                    range,
+                    target,
+                    report,
+                    case,
+                    &lifetime,
+                );
+            }
             let before = report.data_call("actual_target_bridge_before_request", || {
                 preparation_tests::control(target, range, None)
             })?;

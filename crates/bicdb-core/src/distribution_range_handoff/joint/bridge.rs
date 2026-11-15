@@ -855,4 +855,6 @@ impl NativeJointActivationAdmission {
 }
 
 #[cfg(feature = "tls-replication")]
-pub(crate) use preparation_custody::NativeRemoteBridgeAdmission;
+pub(crate) use preparation_custody::{
+    NativeRemoteBridgeAdmission, NativeRemoteBridgeReadAdmission,
+};

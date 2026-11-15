@@ -11,15 +11,18 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
-## Current partial execution — sourcebd09 compilation failed, 2026-11-15 UTC
+## Current complete execution — sourcebd09 failed, 2026-11-15 UTC
 
 Draft520 `bd09a77e8e72bb88e73c395b9629d96812061c30` failed all-target and Rails
 compilation on two unresolved `BicDb` types and an incomplete generic-recovery
 purpose match. Those jobs executed no tests; no-default consumer and Rails
 application acceptance were not reached. Core and Native also failed their
 helper library build on those same errors; no test-only compilation, runtime
-control or new timing diagnostic executed. SQL and PGwire failed, with exact
-cuts still being classified; remaining-workspace is still running. Local source
+control or new timing diagnostic executed. SQL and PGwire likewise failed
+library compilation with zero executed cases. Remaining-workspace passed508
+component cases before the common purpose-match compilation failure; full
+workspace/offline acceptance was not reached. All jobs are terminal and the
+collector exited normally; archive verification is in progress. Local source
 corrections qualify the types and explicitly refuse the narrow serving purposes
 at the generic consumer; they are uncompiled and unexecuted. Source6de passes
 below do not transfer to this successor. Main remains519; no binary, deployment,

@@ -4,7 +4,7 @@ This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe64
 
 ## Actual execution
 
-### Sourcebd09: early compilation failed; other jobs remain unresolved
+### Sourcebd09: complete failed run; Native/Core execution not reached
 
 Draft PR207 source **1.0.520-beta /
 `bd09a77e8e72bb88e73c395b9629d96812061c30`**, tree
@@ -21,12 +21,15 @@ three diagnostics: two E0425 unresolved `BicDb` types in
 `db/native_recovery_ready.rs:1947` for the new `NativeJointServingPhase` and
 `NativeJointLocalServingPolicy` purposes. Both complete logs contain **zero
 test-case rows and zero runtime summaries**. The no-default consumer and Rails
-application steps were not reached, not passed. SQL and PGwire have also failed;
-their full failure cuts are not yet classified at this checkpoint. Core and
+application steps were not reached, not passed. SQL and PGwire have also failed
+library compilation on those same three errors, with zero cases/summaries. Core and
 Native subsequently failed the chaos-helper library build on the same three
 errors, before test-only compilation or runtime: both contain zero executed
 cases/summaries and their actual test steps were skipped. Remaining-workspace
-is still running. No earlier passing result is inherited.
+failed later on the same E0004 purpose match after 508 actual passing component
+cases across 34 summaries. It did not reach the complete workspace or offline
+tooling acceptance step. All jobs are terminal; the overall candidate failed.
+No earlier passing result is inherited.
 
 All-target complete raw95,210 bytes, SHA-256
 `820b96be94fac96483bc256dc83b9dec9a82ce235fece4bb0f47c24f93cd3d23`;
@@ -43,8 +46,16 @@ Independent complete-log prerequisite classifiers respectively:
 `efd0809531ff318680355331462ef6182d66d47a3312f73b94f68df5c7452b0a`.
 The new controls and stage clocks remain unassessed; helper build failure is
 not a Native runtime failure at any intended fault cut.
-The sole collector remains on this exact source; useful jobs are not cancelled
-or restarted to publish a correction.
+Remaining-workspace raw2,543,803 bytes SHA-256
+`85b3bd3445c6802b0dc9d22c8eff340cdab23306f9fdf6b45a306226b2ecb5a8`;
+root partial-runtime/cut receipt
+`108eb5e13154ddcd614bebecf3d70ba09ce2560c04ba73e6d1e5469e8404729c`.
+The full failed-job classifier SHA-256 is
+`4e4da738eeba1c6d8e73c4b4b64e3376b7bed2436aff1849fb4f5a2acc11fe8b`.
+Its six zero-case compilation failures remain separate from those real partial
+component passes. The sole collector exited naturally; original archive
+settlement/final verification is in progress. No useful job was cancelled or
+restarted to publish a correction.
 
 Local corrective source `c62f0fb4c` qualifies both parameters as `crate::BicDb`
 and explicitly refuses both narrow serving purposes in the generic recovery

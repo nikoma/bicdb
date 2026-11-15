@@ -265,14 +265,6 @@ pub(crate) trait JoinedHandoffBackend {
     ) -> Result<usize>;
 }
 
-#[cfg(test)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum TestHandoffCustodyCut {
-    AfterTargetNew,
-    BeforePreparationOwn,
-    AfterFirstNativePreparation,
-}
-
 /// One handoff of `range` onto `target`: the stage logic over a backend that
 /// holds the custody described in the module documentation.
 pub(crate) struct NativeJoinedDataHandoff<B: JoinedHandoffBackend = LocalJoinedHandoffBackend> {
@@ -291,14 +283,6 @@ impl NativeJoinedDataHandoff<LocalJoinedHandoffBackend> {
             target,
             recovered: None,
         }
-    }
-    #[cfg(test)]
-    pub(crate) fn test_cancel_custody_once(&mut self, cut: TestHandoffCustodyCut) {
-        self.backend.test_cancel_custody_once(cut);
-    }
-    #[cfg(test)]
-    pub(crate) fn test_custody_snapshot(&self) -> serde_json::Value {
-        self.backend.test_custody_snapshot()
     }
     /// Ask the target runtime to restart a dropped transfer in every state in
     /// which it must refuse, and record what it answered.

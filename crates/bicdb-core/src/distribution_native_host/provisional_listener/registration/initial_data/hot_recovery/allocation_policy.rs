@@ -122,7 +122,10 @@ impl NativeHotRecoveryMaintenance {
             })
             .collect())
     }
-    fn allocation_open_observed(&self, range: &crate::RangeDescriptor) -> bool {
+    pub(in crate::distribution_native_host::provisional_listener::registration::initial_data) fn allocation_open_observed(
+        &self,
+        range: &crate::RangeDescriptor,
+    ) -> bool {
         if !self
             .coordinator
             .initial_data_leader_admission_observed(range)

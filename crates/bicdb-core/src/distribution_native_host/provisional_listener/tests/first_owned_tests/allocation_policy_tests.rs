@@ -145,6 +145,34 @@ fn exercise(five: &mut Five, report: &mut Report, mode: u8) -> Result<()> {
         let generic = report.call("allocation_real_generic_prefix_tail_recovery", || {
             five.sources[leader].test_initial_allocation_generic_recovery(selected.id, &token)
         })?;
+        let actual_status = report.call("allocation_actual_generic_marker_status", || {
+            five.sources[leader].status(&five.lifetime)
+        })?;
+        report.event(serde_json::json!({"actual_status_after_generic_marker_before_native_serving":actual_status}));
+        let selected_status = actual_status
+            .initial_data
+            .as_ref()
+            .and_then(|d| d.ranges.iter().find(|r| r.range_id == selected.id))
+            .ok_or_else(|| invalid("actual allocation current descriptor status missing"))?;
+        assert_eq!(selected_status.epoch, selected.epoch + 1);
+        assert_eq!(
+            selected_status.leader_admission_observed, false,
+            "generic recovered marker must not advertise new native epoch readiness"
+        );
+        assert_eq!(
+            actual_status.data_serving, false,
+            "the actual incomplete led allocation remains diagnostically unavailable"
+        );
+        sdk(
+            report,
+            &client,
+            &key(
+                &five.topology,
+                other.id,
+                "allocation-unrelated-during-native-hold",
+            )?,
+            serde_json::json!({"actual":"untouched range remains available while selected native epoch is incomplete"}),
+        )?;
         let native_before =
             five.sources[leader].test_initial_allocation_native_point(selected.id)?;
         let refused_key = key(

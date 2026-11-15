@@ -787,7 +787,9 @@ impl NativeInitialDataHost {
             }
             None => false,
         };
-        let current = self.initial.topology.try_read();
+        // Routing is DATA only. Never retain its read guard across the actual
+        // native observation; a queued routing writer must not form a lock cycle.
+        let current = self.initial.topology.try_read().map(|c| c.clone());
         let ranges = self
             .genesis
             .values()
@@ -801,11 +803,17 @@ impl NativeInitialDataHost {
                     epoch: descriptor.epoch,
                     local_leader: descriptor.leader == self.initial.seed.spec.node_id,
                     leader_admission_observed: selected.is_some()
-                        && self.enrollment.as_ref().is_some_and(|owner| {
-                            owner
-                                .coordinator
-                                .initial_data_leader_admission_observed(descriptor)
-                        }),
+                        && if descriptor.epoch > proof.range().epoch {
+                            self.hot_recovery
+                                .as_ref()
+                                .is_some_and(|hot| hot.allocation_open_observed(descriptor))
+                        } else {
+                            self.enrollment.as_ref().is_some_and(|owner| {
+                                owner
+                                    .coordinator
+                                    .initial_data_leader_admission_observed(descriptor)
+                            })
+                        },
                 }
             })
             .collect();

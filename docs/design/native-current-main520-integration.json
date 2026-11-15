@@ -127,7 +127,44 @@
         "git diff check"
       ],
       "correction_compilation": "not tested",
-      "next_gate": "Preserve remaining original307 useful jobs to terminal and freeze archive, then normal exact-source CI of correction. No run cancellation or reinterpretation of library errors as runtime tests."
+      "next_gate": "Original307 jobs are terminal and complete archive frozen/independently verified. Next normal exact-source CI of the one-field correction; no original result rewritten.",
+      "terminal_observation": {
+        "compiled_jobs_failed": 7,
+        "same_error_in_every_failed_build": "Core(lib) E0063 source_retirement",
+        "all_failed_job_ids": [
+          132713733327,
+          132713748822,
+          132713748836,
+          132713748838,
+          132713748877,
+          132713748889,
+          132713733446
+        ],
+        "REST_earlier_summary_invocations": 38,
+        "REST_repeated_totals_not_unique_tests": {
+          "passed": 554,
+          "failed": 0,
+          "ignored": 0
+        },
+        "later_Core_native_PG_SQL_Rails_AppRuntime_schedule_controls": "unexecuted",
+        "terminal_classifier_sha256": "6ca734736847b1cffae704b6458537f1d4412d7efa17c8768ed4c3f53a1c306b",
+        "root_actual_execution_verification_sha256": "219634e9915f0d4179ff1992d834d1be8746c0554ef19b441315ef105e9d912a"
+      },
+      "complete_archive": {
+        "premanifest_files": 85,
+        "total_frozen_files": 88,
+        "full_gzip_logs": 11,
+        "original_ZIPs": 6,
+        "ZIP_members": 6,
+        "missing_or_partial": 0,
+        "manifest_sha256": "53e90c46835512017108b82d1313841ef5f1c65393907aa87c8c8984d7e2f7b9",
+        "root_full_verification_sha256": "4c65368f06f7de1c462490d2e8b1ed58a988a8f699b3ffe825869519f16648cf",
+        "offline_positive": "passed",
+        "wrong_manifest_digest": "rejected",
+        "collector": "2067534 exited naturally; never restart",
+        "scope": "Full stored/raw hashes, API inventory/source/digests/sizes, ZIP CRC/member hashes; no qualification"
+      },
+      "correction_whole_file_inverse_review_sha256": "e408924fbd68191c60608c6304e247c0e1be46a6f032f568bd096ad30f788cd3"
     }
   ],
   "source_checks_at_reviewed_revision": {

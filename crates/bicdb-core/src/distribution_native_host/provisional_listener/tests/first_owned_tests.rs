@@ -14,6 +14,7 @@ use crate::distribution_native_host::{
 use crate::distribution_range_image::{
     NativeRemoteImageSourceOperationV1 as Frame, RangeImageCursorV1, RangeImageHistoryCursorV1,
 };
+use std::collections::BTreeMap;
 use std::io::Write as _;
 use std::sync::mpsc;
 use std::time::Instant;

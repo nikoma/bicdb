@@ -39,6 +39,25 @@ pub(super) struct NativeRemoteLocalServing {
     policy: Option<Arc<NativeRemoteLocalServingPolicy>>,
 }
 impl NativeMetadataControlHost {
+    /// Test diagnostic delegation stays with the actual private release owner.
+    /// Return only its fixed SHA256 DATA after the original Joined-owner check;
+    /// never expose a live release owner, admission, request or serving proof.
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_registered_policy_successor_decision_sha256(
+        &self,
+        range: crate::RangeId,
+        phase: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<String> {
+        let successor = self
+            .remote_serving
+            .get(&(range, phase))
+            .and_then(|s| s.release.as_ref())
+            .ok_or_else(|| invalid("actual Registered policy successor absent"))?;
+        self.require_same_remote_registered_joined_policy(successor, range, parent)?;
+        Ok(successor.native().data().checksum_sha256().to_owned())
+    }
+
     /// One explicit actor turn. It operates on this actual &mut host; it does
     /// not periodically freeze placement or create a native host from intent.
     pub(in crate::distribution_native_host) fn poll_finite_remote_serving(

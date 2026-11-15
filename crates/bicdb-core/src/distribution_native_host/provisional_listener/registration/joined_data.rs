@@ -417,12 +417,8 @@ impl NativeMetadataControlHost {
         phase: Uuid,
         parent: &CancellationToken,
     ) -> Result<serde_json::Value> {
-        let successor = self
-            .remote_serving
-            .get(&(range, phase))
-            .and_then(|s| s.release.as_ref())
-            .ok_or_else(|| invalid("actual Registered policy successor absent"))?;
-        self.require_same_remote_registered_joined_policy(successor, range, parent)?;
+        let decision =
+            self.test_registered_policy_successor_decision_sha256(range, phase, parent)?;
         let joined = self.joined.as_ref().unwrap();
         let old = self
             .replica
@@ -433,7 +429,7 @@ impl NativeMetadataControlHost {
             "actual_APP_dispatcher_published":joined.published.load(Ordering::Acquire),
             "actual_original_drained_owner_verified":true,
             "original_listeners":old.test_retained_listener_presence(),
-            "actual_native_decision":successor.native().data().checksum_sha256(),
+            "actual_native_decision":decision,
             "actual_original_install_evidence":self.test_registered_first_policy_evidence()?,
             "readonly_DATA_not_policy_authority":true}))
     }

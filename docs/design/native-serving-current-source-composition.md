@@ -17,6 +17,9 @@ composition. The original failed Azure evidence remains unchanged.
 | Released-owner local policy | `0b792faeda8cf27735a37028dd59ac6ce8603e5e` | Fresh pinned ALL-Released proof and a distinct self-purpose Role; actual install/transfer/recovery/publication checks remain independent. General recovery and mutation factories refuse that purpose. |
 | Joined successor readonly dispatch | `70997ccaeaf66cc23f2fcb29eeefcf13200779c8` | Selects only the sealed Registered successor for three readonly operations before INITIAL-only gates. No handler-error fallback or new native permission. |
 | Retained Closed drain continuation | `a39c38c4a4937b923367f391fb9c0a76b8b0df52` | Resumes the same Installed owner through actual drain, transfer and Joined binding; it never revives Closed life or replays native installation. |
+| Actual active-peer drain cancellation | `371c3f48d58dc05762fbd3be9103255ec4e87315`, cleanup clarification `a87018cfd63f4a3642f936631dbd4a3ef86d6fd2` | A separate control reaches real listener shutdown, accept-thread join and the active-handler drain loop before cancelling the original parent. It retains original API/peer results and resumes the same owner; it is unexecuted. |
+| Primary-only legacy FORMAT preservation | `4829efc186c58951aba87d9a946255baa209939b`, descriptor child `058586f90026ea44ba510ac8183cfbc8fb33d4ed` | Preserves the original mutation-fenced profile's FORMAT bytes while retaining existing enrollment inode/barrier checks. The failed source6de assertion and historical fixture remain intact; this correction has not run. |
+| Remote metadata-owner activation | `15a453fb57797cddedc4c99f704a01858d42fa67` corrected by `7d46e9eef499dea6765ed45858970d8f679b2849` | Actual metadata owner collects all pinned released frames, builds a distinct non-Clone proof and proposes only the matching activation record. Retirement identity comes from the original certified sole OLD-minus-NEW member, independently of snapshot donor. Source-reviewed only; not automatic completion. |
 | Current correction baseline | `6de646beb603accf39358017d8e0c83c39c741b1` | Includes all-worker INITIAL diagnostics, Open validation reduction, FIRST same-OWN wait and backup expectation correction. Its separate CI evidence remains pinned in the regression findings. |
 
 The source-only composition commits are `63a24bcee` (local policy),
@@ -27,10 +30,11 @@ candidate version until merge order and the next unused main version are known.
 
 ## Conflict and preservation checks
 
-The two actual code conflicts were in the compact FIRST target poll Case list.
-Resolution retains the original per-poll child deadline and both real
-PreparationHostPoll cancellation/expiry cases, while adding all four Serving
-cases, including successor-read and drain-resume. It does not restore a
+The FIRST target Case conflicts are resolved by union, retaining original
+per-poll child deadlines and both real PreparationHostPoll cancellation/expiry
+cases, plus successor-read, drain-resume, active-peer partial-drain and both
+metadata activation cases. The original wait/partial-drain test wrappers and
+SDK/full-value assertions remain. It does not restore a
 process-lifetime token as an RPC execution window. Source6de's all-worker
 INITIAL results and original five-second setup calls were merged without a
 code conflict. Existing mutation/fault and SDK/full-value assertions remain.
@@ -53,11 +57,26 @@ and documentation links are source checks only. The original full Serving
 SDK/new-APP/full-Strong control must still run, as must each new component
 definition and required broad suites on the final versioned head.
 
-The new drain control cancels after Closed life ends but before the real drain
+The first drain control cancels after Closed life ends but before the real drain
 API's first cancellation check and socket shutdown. It verifies that exact
 continuation boundary; it does not test partially completed socket shutdown.
 The component requires the same Installed/native evidence and an incomplete,
 APP-closed Joined result. It stops before the full SDK tail.
+
+The separate [active-peer control](native-registered-active-peer-drain-cancellation-control.md)
+reaches the genuine partial-shutdown boundary described above. Its source-only
+error-precedence correction `15fd1ec4d` decodes the original API result before
+propagating later retained/peer errors, so a later cleanup error cannot mask an
+earlier actual API failure. Neither control has executed.
+
+The [remote activation producer](native-remote-activation-metadata-owner.md)
+changes metadata only after collecting actual ALL-released proof. Its positive
+definition runs after the original full SDK/APP/Strong assertions and requires
+genuinely different snapshot-donor and retiring-replica identities. Its negative
+definition refuses an actual unreleased recipient before proposing. This is
+not ALL-Policy readiness: no automatic caller may finalize while Policy is
+pending/unknown without a proven ordering/recovery contract. Source retirement,
+warm custody cleanup and cold reconstruction remain separate missing producers.
 
 Actual new-epoch recovery, late publication refusal, multi-range fairness,
 topology/admission lock contention, recovery after fault removal and independent

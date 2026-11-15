@@ -64,10 +64,13 @@ For actual Committed plus successful WAL delivery and an admission/memory error,
 explicit COMMIT first attempts the unchanged committed catalog-scope cleanup on a
 nonblocking recursive shared DB borrow. It uses the actual durable decision and
 existing header-absence/context/token/child checks, not the error tag or a new
-owner grant. It acquires no new exclusive DB lease or wait window. A secondary
-cleanup failure is a notice attached to the exact original error. The successful
+owner grant. Only the outer DB-borrow attempt is nonblocking: the unchanged
+catalog helper retains its existing internal locks and storage I/O, so complete
+cleanup under stalled storage is not proven bounded. It acquires no new exclusive
+DB lease or wait window. A secondary cleanup failure is a notice attached to the
+exact original error. The successful
 path keeps its original transaction-drop/exclusive purge order. Purge requiring
-mutable DB access remains deferred on an error. If the bounded attempt is busy or
+mutable DB access remains deferred on an error. If the outer borrow attempt is busy or
 fails strict checks, a context-bearing logical reservation can remain until
 existing cleanup/reopen; no retained mutex, successful cleanup, or new cold DDL
 reconciliation is claimed for that case.

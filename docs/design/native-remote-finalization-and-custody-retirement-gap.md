@@ -13,9 +13,12 @@ records `Cleaned` / relocation `Completed`. The source retirement record
 explicitly requires `rows_retained=true`. Completion of membership retirement
 does not establish deletion of obsolete source records or reclaimed disk space.
 
-The new remote Policy path has not supplied those completion proofs. Its
-backend inherits `records_completion=false`, so reaching serving leaves the
-metadata record at `AwaitingActivation`. The earlier source-export retirement
+The new remote Policy is a direct host path and has not supplied those
+completion proofs or callers; it leaves the metadata record at
+`AwaitingActivation`. Separately, the generic handoff driver's default
+`records_completion=false` stops an unsupported backend at Serving; the
+inspected local backend overrides it. No remote backend implementation is
+inferred from that default. The earlier source-export retirement
 is a different resource operation. A successful local policy API or APP/Strong
 pair cannot replace either missing metadata proof.
 
@@ -30,6 +33,9 @@ The independent 13-file completion trace receipt is
 its complete trace SHA-256 is
 `76d353ef4550238b2f53bee7505deaaa55be99f112248533e08dd15694bc3687`.
 Those receipts cover source inspection only.
+The frozen trace's attribution of `records_completion=false` to a remote
+backend is corrected above: the actual remote Policy is the distinct direct
+host path. The missing completion producer finding remains unchanged.
 
 ## Warm custody cannot be discarded by status
 

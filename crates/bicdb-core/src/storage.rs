@@ -844,7 +844,29 @@ pub(crate) fn acquire_database_backup_exclusive_guard(db_path: &Path) -> Result<
 }
 
 fn backup_write_gate_path(path: &Path) -> Result<Option<PathBuf>> {
-    for root in path.ancestors().skip(1).take(16) {
+    // A standalone child inode cannot shadow the enclosing enrolled Core
+    // domain. Resolve all enrollment first, exactly as Page's resolver does.
+    // Walk the complete input path: depth is not permission to omit a gate.
+    for root in path.ancestors().skip(1) {
+        if crate::format::load_metadata(root)?.is_some_and(|metadata| {
+            metadata
+                .feature_flags
+                .contains(crate::format::PHYSICAL_BACKUP_GATE_FEATURE_FLAG)
+        }) {
+            let gate = root.join(BACKUP_WRITE_GATE);
+            return match fs::symlink_metadata(&gate) {
+                Ok(_) => Ok(Some(gate)),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Err(
+                    BicDbError::Backup("enrolled physical backup gate is missing".into()),
+                ),
+                Err(error) => Err(error.into()),
+            };
+        }
+    }
+    // Preserve standalone/legacy-codec behavior only after proving there is
+    // no enclosing enrolled Core root. Actual acquisition still checks inode
+    // identity and obtains the kernel lock before any physical mutation.
+    for root in path.ancestors().skip(1) {
         let gate = root.join(BACKUP_WRITE_GATE);
         if bicdb_page::physical_gate::PhysicalGate::retained_at_root(root).is_some() {
             return Ok(Some(gate));
@@ -854,17 +876,7 @@ fn backup_write_gate_path(path: &Path) -> Result<Option<PathBuf>> {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(error) => return Err(error.into()),
         }
-        if crate::format::load_metadata(root)?.is_some_and(|metadata| {
-            metadata
-                .feature_flags
-                .contains(crate::format::PHYSICAL_BACKUP_GATE_FEATURE_FLAG)
-        }) {
-            return Err(BicDbError::Backup(
-                "enrolled physical backup gate is missing".into(),
-            ));
-        }
     }
-    // Standalone codecs/legacy FORMAT tests are not enrolled writers.
     Ok(None)
 }
 
@@ -2909,6 +2921,127 @@ mod tests {
         writer_rx.recv_timeout(Duration::from_secs(2)).unwrap();
         drop(release_tx);
         worker.join().unwrap();
+    }
+
+    #[cfg(unix)]
+    fn actual_core_atomic_helper_root_exclusion(with_child_gate: bool) {
+        use std::os::unix::fs::MetadataExt;
+        use std::sync::mpsc;
+
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().canonicalize().unwrap();
+        let mut db = crate::BicDb::open(&root).unwrap();
+        db.create_collection("root_cut_values").unwrap();
+        db.insert("root_cut_values", crate::Record::new("acknowledged"))
+            .unwrap();
+        crate::format::require_physical_backup_gate(&root).unwrap();
+
+        let mut parent = root.join("deep_core_payload");
+        for level in 0..20 {
+            parent.push(format!("level-{level}"));
+        }
+        fs::create_dir_all(&parent).unwrap();
+        let path = parent.join("actual-core-atomic.json");
+        let original = b"{\"value\":\"before\"}\n";
+        let replacement = b"{\"value\":\"after actual helper\"}\n";
+        write_atomic(&path, original, true).unwrap();
+        assert!(
+            path.ancestors()
+                .position(|candidate| candidate == root)
+                .unwrap()
+                > 16
+        );
+
+        // The child is a genuine distinct inode and an actual SH when selected,
+        // not a DTO or a table flag. It must not govern this Core file.
+        let child_gate = if with_child_gate {
+            Some(bicdb_page::physical_gate::PhysicalGate::at_root(&parent).unwrap())
+        } else {
+            None
+        };
+        let child_shared = child_gate.as_ref().map(|gate| gate.shared().unwrap());
+        let root_metadata = fs::metadata(root.join(BACKUP_WRITE_GATE)).unwrap();
+        let root_identity = (root_metadata.dev(), root_metadata.ino());
+        let child_identity = child_gate.as_ref().map(|_| {
+            let metadata = fs::metadata(parent.join(BACKUP_WRITE_GATE)).unwrap();
+            (metadata.dev(), metadata.ino())
+        });
+        if let Some(identity) = child_identity {
+            assert_ne!(identity, root_identity);
+        }
+
+        let worker_root = root.clone();
+        let worker_path = path.clone();
+        let (contention_tx, contention_rx) = mpsc::channel();
+        let observed = std::thread::scope(|scope| {
+            // This lexical owner drops before scope's automatic joins on
+            // unwinding. The worker receives paths/DATA, never the EX owner.
+            let _exclusive_observer =
+                backup_gate_observation::arm(&root, true, Box::new(|_| {})).unwrap();
+            let exclusive = acquire_database_backup_exclusive_guard(&root).unwrap();
+            let snapshots = backup_gate_observation::live_exclusive_guards(&root);
+            let worker = scope.spawn(move || -> Result<()> {
+                let _shared_observer = backup_gate_observation::arm(
+                    &worker_root,
+                    false,
+                    Box::new(move |event| {
+                        if !event.acquired && !event.released {
+                            let _ = contention_tx.send(event);
+                        }
+                    }),
+                )?;
+                // The real production helper, through replace_durably and
+                // acquire_backup_write_guard. No test lock substitutes for it.
+                write_atomic(&worker_path, replacement, true)
+            });
+            // Preserve every observation/error before assertions. A missing
+            // syscall cut is a red prerequisite, not success inferred from Err.
+            let contention = contention_rx.recv_timeout(Duration::from_secs(5));
+            let live_before = snapshots.len() == 1 && snapshots[0].is_live();
+            let before_release = fs::read(&path);
+            let live_after = snapshots.len() == 1 && snapshots[0].is_live();
+            drop(exclusive);
+            let result = worker.join();
+            (
+                snapshots,
+                contention,
+                live_before,
+                before_release,
+                live_after,
+                result,
+            )
+        });
+        let (snapshots, contention, live_before, before_release, live_after, result) = observed;
+        let after_release = fs::read(&path);
+        eprintln!("ACTUAL_CORE_ATOMIC_GATE_CUT {{child_gate:{with_child_gate}, root_identity:{root_identity:?}, child_identity:{child_identity:?}, ex:{snapshots:?}, contention:{contention:?}, live_before:{live_before}, live_after:{live_after}, before:{before_release:?}, result:{result:?}, after:{after_release:?}}}");
+        assert!(
+            live_before && live_after,
+            "INCONCLUSIVE: actual EX lifetime not retained at the read cut"
+        );
+        let event = contention
+            .expect("INCONCLUSIVE: helper did not reach actual enclosing-root SH contention");
+        assert_eq!(event.gate, root.join(BACKUP_WRITE_GATE));
+        assert_eq!(event.file_identity, Some(root_identity));
+        assert!(!event.exclusive && !event.acquired && !event.released);
+        assert_eq!(before_release.unwrap(), original);
+        result
+            .expect("actual worker panic")
+            .expect("actual helper must complete after root EX release");
+        assert_eq!(after_release.unwrap(), replacement);
+        assert!(db.get("root_cut_values", "acknowledged").unwrap().is_some());
+        drop(child_shared);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn backup_gate_core_atomic_helper_enrollment_precedes_real_child_inode() {
+        actual_core_atomic_helper_root_exclusion(true);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn backup_gate_core_atomic_helper_finds_enrollment_beyond_sixteen_ancestors() {
+        actual_core_atomic_helper_root_exclusion(false);
     }
 
     // ---- Torn-tail recovery and failed-append repair of the generic frame

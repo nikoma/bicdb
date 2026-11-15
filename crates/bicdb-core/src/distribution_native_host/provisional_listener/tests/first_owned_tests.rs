@@ -4,6 +4,7 @@
 //! manufactured MF, backend substitute or native grant constructor is used.
 use super::*;
 mod cross_protocol_tests;
+mod metadata_identity_tests;
 use crate::distribution_native_host::remote_first::NativeFirstIngressFault as Fault;
 use crate::distribution_native_host::{
     NativeFirstCoordinatorAction as Action, NativeFirstReceiveOperationV1 as Op,
@@ -18,6 +19,9 @@ use std::sync::mpsc;
 use std::time::Instant;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Case {
+    MetadataIdentityWait,
+    MetadataIdentityCancel,
+    MetadataIdentityExpiry,
     Normal,
     LostEnroll,
     CancelledQueued,
@@ -737,6 +741,18 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
             &five.lifetime,
         )
     })?;
+    if matches!(
+        case,
+        Case::MetadataIdentityWait | Case::MetadataIdentityCancel | Case::MetadataIdentityExpiry
+    ) {
+        return metadata_identity_tests::exercise(
+            &five.sources[coordinator],
+            selected.id,
+            case,
+            report,
+            &five.lifetime,
+        );
+    }
     let mut target = five.target.take().unwrap();
     let fault = match case {
         Case::LostEnroll => Some(Fault::LoseSuccessfulReply(Op::Enroll)),

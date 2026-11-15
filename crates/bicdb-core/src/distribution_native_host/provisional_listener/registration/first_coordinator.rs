@@ -259,7 +259,10 @@ impl NativeFirstCoordinator {
                 "FIRST original actual range-leader/Pending scope changed",
             ));
         }
-        let point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+        // This original coordinator owns no service/DB/MStore guard here.
+        // Wait only for the SAME service identity under this OWN and request;
+        // reserve_intent and the native OLD RPC remain strictly later.
+        let point = ClusterDataNodeService::capture_actual_joint_metadata_point_waiting(
             &self.backend.service,
             &own,
             business,

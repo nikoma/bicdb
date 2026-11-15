@@ -1,6 +1,30 @@
 //! Test-only DATA facades on the actual control owner; no raw owner escapes.
 use super::*;
 impl NativeMetadataControlHost {
+    pub(in crate::distribution_native_host) fn test_first_metadata_identity_wait(
+        &self,
+        range: crate::RangeId,
+        mode: u8,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        let original = self.first_coordinators.get(&range).ok_or_else(|| {
+            invalid("metadata identity control requires original FIRST coordinator")
+        })?;
+        let request = parent
+            .child_linked_to(&original.process)
+            .child_with_deadline(Instant::now() + Duration::from_secs(5));
+        // Genuine original self/leader/Pending OWN and point, with NO held
+        // service/DB/MStore guards. The scheduling control reuses this OWN;
+        // no new authority is acquired while its actual service is held.
+        let (own, business) = original.own(&request)?;
+        ClusterDataNodeService::test_same_joint_metadata_identity_wait(
+            &original.backend.service,
+            &own,
+            business,
+            &request,
+            mode,
+        )
+    }
     pub(in crate::distribution_native_host) fn test_first_topology(
         &self,
         parent: &CancellationToken,

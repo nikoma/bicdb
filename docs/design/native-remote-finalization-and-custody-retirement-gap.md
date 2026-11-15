@@ -17,8 +17,9 @@ The new remote Policy is a direct host path and has not supplied those
 completion proofs or callers; it leaves the metadata record at
 `AwaitingActivation`. Separately, the generic handoff driver's default
 `records_completion=false` stops an unsupported backend at Serving; the
-inspected local backend overrides it. No remote backend implementation is
-inferred from that default. The earlier source-export retirement
+inspected local backend overrides it. The older partial
+`RemoteJoinedHandoffBackend` uses that default, while the new direct Policy
+path does not use that backend. The earlier source-export retirement
 is a different resource operation. A successful local policy API or APP/Strong
 pair cannot replace either missing metadata proof.
 

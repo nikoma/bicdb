@@ -35,7 +35,12 @@ The original `recover_local_leadership` API retains its existing legacy behavior
 The retained INITIAL owner uses a bounded 64-range sweep with its existing
 rotating cursor and per-range current-history validation. Cancellation and
 deadline errors remain typed; independently completed markers are retained when
-a later range fails. Registered publication validates only its selected locally
+a later range fails. The cursor advances for each range selected for an actual
+attempt, before that attempt, rather than to the unattempted batch tail. Source
+review caught that using the batch-tail cursor together with an early shared
+deadline return could repeatedly starve a later range. The corrected scheduling
+has no runtime progress result yet; a genuine multi-range deadline/fairness
+control remains required. Registered publication validates only its selected locally
 led range; a follower creates no leader marker. All subsequent actual policy,
 metadata, native continuity and dispatcher checks remain required. The separate
 generic Joined recovery path is unchanged. This is source wiring, not executed

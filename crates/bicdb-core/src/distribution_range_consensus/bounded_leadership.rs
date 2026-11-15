@@ -66,12 +66,22 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             }
             ranges.truncate(max_ranges);
             parent.check()?;
-            *cursor = ranges.last().map(|range| range.id);
+            if ranges.is_empty() {
+                *cursor = None;
+            }
         }
         let mut completed = 0usize;
         let mut failures = Vec::new();
         for range in ranges {
             parent.check()?;
+            {
+                // Advance for the range actually selected for this attempt,
+                // never the unattempted tail of the batch. If this range uses
+                // the whole caller window, the next call starts after it.
+                let mut cursor = recovery_lock(&self.recovery_cursor, Some(parent))?;
+                parent.check()?;
+                *cursor = Some(range.id);
+            }
             match self.recover_native_range_leadership_bounded(&range, parent) {
                 Ok(changed) => completed = completed.saturating_add(usize::from(changed)),
                 Err(error @ (BicDbError::QueryCanceled | BicDbError::QueryTimedOut)) => {

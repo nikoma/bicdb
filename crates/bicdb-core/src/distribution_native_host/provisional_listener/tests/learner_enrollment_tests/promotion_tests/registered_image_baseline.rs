@@ -485,9 +485,10 @@ fn run_registered_image_baseline_with_placement_and_source(
                     "range":range.id,"nested":[null,{"full":"payload"}]});
                 let record_id = crate::cluster_event_record_id("items", &key).unwrap();
                 extra.push(serde_json::json!({"phase":"intent","key":key,
-                    "record_id":record_id,"expected_full_value":value,"range":range.id,
-                    "range_epoch":range.epoch,"topology_generation":current.generation,
-                    "original_gateway":node(0),"original_timeout_ms":2000,
+                    "record_id":record_id,"expected_full_value":value,"expected_range":range.id,
+                    "expected_range_epoch":range.epoch,"expected_topology_generation":current.generation,
+                    "configured_gateway":node(0),"configured_timeout_ms":2000,
+                    "metadata_source":"setup descriptors; stock SDK owns actual routing; not raw wire evidence",
                     "expected_payload_sha256":hex::encode(Sha256::digest(serde_json::to_vec(&value).unwrap())),
                     "outcome":"not_started"}));
                 evidence(

@@ -54,8 +54,10 @@ before assertions. Missing hook, actual contention, original error-class or
 recipient completion evidence fails the intended control. Client timeout alone
 does not count as proof that server work finished.
 
-The per-registry hooks are cfg(test), one-shot callbacks outside registry and
-engine guards. They receive original cancellation and clock DATA, not a Tx,
+The per-registry hooks are cfg(test), one-shot callbacks extracted from an
+original OnceLock arm before use. The temporary registry Arc and callback mutex
+drop before any wait/callback; diagnostics retain no registry/session/native
+owner. The callbacks run outside registry and engine guards. They receive original cancellation and clock DATA, not a Tx,
 writer, Frozen permit, fabricated grant or mutable metadata store. The actual
 competing holder uses the fixture's existing source MStore. At most a few facts
 are retained; no per-probe polling trace or Error/guard is retained.

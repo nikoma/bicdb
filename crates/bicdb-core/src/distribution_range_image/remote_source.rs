@@ -699,7 +699,8 @@ pub(crate) struct NativeRemoteImageSourceRegistry {
     #[cfg(test)]
     export_work_diagnostics: export_retirement::ExportWorkDiagnostics,
     #[cfg(test)]
-    metadata_wait_control: Mutex<Option<Arc<metadata_wait_controls::SourceMetadataWaitControl>>>,
+    metadata_wait_control:
+        std::sync::OnceLock<Mutex<Option<metadata_wait_controls::SourceMetadataWaitControl>>>,
     transport: Arc<TcpClusterRelocationTransport>,
     provider: Arc<crate::distribution_metadata_read_provider::MetadataReadProvider>,
     original_process: std::sync::OnceLock<CancellationToken>,
@@ -729,7 +730,7 @@ impl NativeRemoteImageSourceRegistry {
             #[cfg(test)]
             export_work_diagnostics: Default::default(),
             #[cfg(test)]
-            metadata_wait_control: Mutex::new(None),
+            metadata_wait_control: std::sync::OnceLock::new(),
             transport,
             provider,
             original_process: std::sync::OnceLock::new(),

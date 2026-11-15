@@ -167,10 +167,21 @@ impl SourceDiscoveryAdmission<'_> {
         self.own.require_live_request(self.business)?;
         self.member.publication_version().require_current_memory()?;
         #[cfg(test)]
-        let diagnostics = self.original.image_sources.upgrade();
+        let mut diagnostics = self
+            .original
+            .image_sources
+            .upgrade()
+            .and_then(|registry| registry.test_take_source_metadata_wait(stage))
+            .map(|(before, busy, failure)| (Some(before), Some(busy), Some(failure)));
         #[cfg(test)]
-        if let Some(registry) = &diagnostics {
-            registry.test_before_source_metadata_wait(stage, self.caller, &self.own);
+        if let Some((before, _, _)) = &mut diagnostics {
+            if let Some(callback) = before.take() {
+                callback(
+                    self.caller,
+                    self.own.deadline(),
+                    self.test_metadata_wait_data(stage, false),
+                );
+            }
         }
         let result = (|| loop {
             self.caller.check()?;
@@ -196,17 +207,42 @@ impl SourceDiscoveryAdmission<'_> {
                 return Ok(store);
             }
             #[cfg(test)]
-            if let Some(registry) = &diagnostics {
-                registry.test_busy_source_metadata_wait(stage, self.caller, &self.own);
+            if let Some((_, busy, _)) = &mut diagnostics {
+                if let Some(callback) = busy.take() {
+                    callback(
+                        self.caller,
+                        self.own.deadline(),
+                        self.test_metadata_wait_data(stage, true),
+                    );
+                }
             }
         })();
         #[cfg(test)]
-        if let (Some(registry), Err(error)) = (&diagnostics, &result) {
-            registry.test_failed_source_metadata_wait(stage, error);
+        if let (Some((_, _, failure)), Err(error)) = (&mut diagnostics, &result) {
+            if let Some(callback) = failure.take() {
+                callback(match error {
+                    BicDbError::QueryCanceled => "QueryCanceled",
+                    BicDbError::QueryTimedOut => "QueryTimedOut",
+                    _ => "OtherActualError",
+                });
+            }
         }
         #[cfg(not(test))]
         let _ = stage;
         result
+    }
+    #[cfg(test)]
+    fn test_metadata_wait_data(&self, stage: &'static str, busy: bool) -> serde_json::Value {
+        let now = Instant::now();
+        serde_json::json!({
+            "stage":stage,"actual_failed_lock_wait":busy,
+            "actual_own_context":self.own.context_id(),
+            "actual_own_original_request_live":self.own.original_request_cancellation().check().is_ok(),
+            "actual_own_remaining_us":self.own.deadline().saturating_duration_since(now).as_micros(),
+            "actual_server_caller_remaining_us":self.caller.deadline().map(|d|d.saturating_duration_since(now).as_micros()),
+            "actual_server_caller_cancel_requested":self.caller.is_cancel_requested(),
+            "comparison_DATA_not_authority":true
+        })
     }
     fn require_current(&self) -> Result<()> {
         self.caller.check()?;

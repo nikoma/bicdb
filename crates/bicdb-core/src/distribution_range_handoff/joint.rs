@@ -23,6 +23,13 @@ pub(crate) use remote_old::{
     NativeRemoteOldOperationV1, NativeRemoteOldReplyV1, NativeRemoteOldRequestV1,
 };
 #[cfg(feature = "tls-replication")]
+mod remote_step;
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_step::{
+    NativeJointHandoffStepOperationV1, NativeJointHandoffStepOutcomeV1,
+    NativeJointHandoffStepReplyV1, NativeJointHandoffStepRequestV1, NativeJointHandoffStepStageV1,
+};
+#[cfg(feature = "tls-replication")]
 mod remote_old_collect;
 pub(crate) use old_quorum::{
     NativeJointOldClosedQuorum, NativeJointOldImageProof, NativeJointOldRound,
@@ -44,18 +51,19 @@ mod remote_new;
 #[cfg(feature = "tls-replication")]
 pub(crate) use remote_new::{
     NativeRemoteDecisionAdmission, NativeRemoteDecisionBindingV1, NativeRemoteDecisionReceiptV1,
-    NativeRemoteDecisionSourceData, NativeRemoteDecisionSourceRequestV1, NativeRemoteNewFactSetV1,
-    NativeRemoteNewHandoffV1, NativeRemoteNewMaterializedQuorum, NativeRemoteNewOperationV1,
-    NativeRemoteNewParticipant, NativeRemoteNewPinHandoffPermit, NativeRemoteNewReplyV1,
-    NativeRemoteNewRequestV1, NativeRemoteNewRound, NativeRemoteNewSnapshotV1,
-    NativeRemoteNewTargetPinIssuance,
+    NativeRemoteDecisionSourceData, NativeRemoteDecisionSourceRequestV1,
+    NativeRemoteJointDecisionCertificate, NativeRemoteJointDecisionCertificateRound,
+    NativeRemoteNewFactSetV1, NativeRemoteNewHandoffV1, NativeRemoteNewMaterializedQuorum,
+    NativeRemoteNewOperationV1, NativeRemoteNewParticipant, NativeRemoteNewPinHandoffPermit,
+    NativeRemoteNewReplyV1, NativeRemoteNewRequestV1, NativeRemoteNewRound,
+    NativeRemoteNewSnapshotV1, NativeRemoteNewTargetPinIssuance,
 };
 
 #[cfg(feature = "tls-replication")]
 pub(crate) use decision::NativeRegisteredDecisionCatalogueRetry;
 mod decision;
 pub(crate) use decision::{
-    NativeJointDecisionData, NativeJointDecisionPublicationAdmission,
+    NativeJointDecisionData, NativeJointDecisionProof, NativeJointDecisionPublicationAdmission,
     NativeJointDecisionPublicationRound, NativeJointDurableDecision, NativeJointPreparedDecision,
 };
 
@@ -67,13 +75,14 @@ pub(crate) use committed::CommittedNativeJointDecisionObservation;
 
 mod bridge;
 pub(crate) use bridge::{
-    NativeJointActivationAdmission, NativeJointOpenAdmission, NativeJointOpenPhaseQuorum,
-    NativeJointOpenPhaseRound, NativeJointPreparationCustody, NativeJointPreparationPhaseQuorum,
-    NativeJointPreparationPhaseRound, NativeJointPreparedServingCandidate,
-    NativeJointPreparedServingObservation, NativeJointPreparedServingQuorum,
-    NativeJointPreparedServingRound, NativeJointPreparedServingVoteData,
-    NativeJointPublishedServingQuorum, NativeJointReleaseAdmission, NativeJointReleaseContinuation,
-    NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
+    NativeJointActivatedQuorum, NativeJointActivationAdmission, NativeJointOpenAdmission,
+    NativeJointOpenPhaseQuorum, NativeJointOpenPhaseRound, NativeJointPreparationCustody,
+    NativeJointPreparationPhaseQuorum, NativeJointPreparationPhaseRound,
+    NativeJointPreparedServingCandidate, NativeJointPreparedServingObservation,
+    NativeJointPreparedServingQuorum, NativeJointPreparedServingRound,
+    NativeJointPreparedServingVoteData, NativeJointPublishedServingQuorum,
+    NativeJointReleaseAdmission, NativeJointReleaseContinuation, NativeJointReleasePhaseQuorum,
+    NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
     NativeJointServingPublicationRound,
 };
 

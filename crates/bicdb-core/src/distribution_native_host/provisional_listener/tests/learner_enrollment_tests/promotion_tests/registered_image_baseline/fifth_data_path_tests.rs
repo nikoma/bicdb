@@ -17,14 +17,16 @@
 //! between stages and is run again.
 use super::*;
 use crate::distribution_native_host::joined_data_handoff::{
-    NativeJoinedDataHandoff, NativeJoinedDataHandoffHosts, NativeJoinedDataHandoffStage as Stage,
-    NativeJoinedDataMember, NativeJoinedDataPlanningView,
+    JoinedHandoffMetadataHosts, NativeJoinedDataHandoff, NativeJoinedDataHandoffHosts,
+    NativeJoinedDataHandoffStage as Stage, NativeJoinedDataMember, NativeJoinedDataPlanningView,
 };
 use crate::distribution_range_handoff::{
     NativeJointHandoffPlan, NativeJointHandoffRuntime, NativeJointOldObservation,
 };
 
+mod completion_tests;
 mod custody_retry_tests;
+mod remote_backend_epoch_tests;
 
 type Transport = Arc<TcpClusterRelocationTransport>;
 
@@ -238,7 +240,7 @@ fn commit_topology(five: &Five, candidate: ClusterTopology) {
 
 /// The fixture's host actions. Each one is the member's existing host method;
 /// the sequencing and the abort/resume decisions are the driver's.
-impl NativeJoinedDataHandoffHosts for Five {
+impl JoinedHandoffMetadataHosts for Five {
     fn metadata_leader(&self) -> Result<ClusterNodeId> {
         Ok(node(0))
     }
@@ -292,6 +294,9 @@ impl NativeJoinedDataHandoffHosts for Five {
             business,
         })
     }
+}
+
+impl NativeJoinedDataHandoffHosts for Five {
     fn member(&self, id: &ClusterNodeId) -> Result<NativeJoinedDataMember> {
         let i = index_of(id);
         // The fifth member's transport is the one its own DATA owner uses.
@@ -676,7 +681,7 @@ fn native_fifth_data_path_receives_image_becomes_voter_and_serves_after_one_orig
         // Steps 5 to 9.
         assert_eq!(
             scenario.handoff.drive(&mut *five, &parent).unwrap(),
-            Stage::Serving
+            Stage::SourceRetired
         );
         scenario.mark("fifth leadership recovered and ingress published");
         accept(five, &mut scenario);
@@ -1017,7 +1022,7 @@ fn native_fifth_data_path_abort_then_new_handoff_completes() {
 
         assert_eq!(
             scenario.handoff.drive(&mut *five, &parent).unwrap(),
-            Stage::Serving
+            Stage::SourceRetired
         );
         scenario.mark("new handoff completed after the abort");
         // The same stale client follows the range to its new leader.
@@ -1082,7 +1087,7 @@ fn native_fifth_data_path_transfer_failure_after_source_cut_resumes_to_completio
         // Resume: the same call again.
         assert_eq!(
             scenario.handoff.drive(&mut *five, &parent).unwrap(),
-            Stage::Serving
+            Stage::SourceRetired
         );
         scenario.mark("resumed to completion");
         // In every state the install passed through, the runtime refused to
@@ -1174,7 +1179,7 @@ fn native_fifth_data_path_interrupted_driver_reruns_to_completion() {
         }
         assert_eq!(
             scenario.handoff.drive(&mut *five, &parent).unwrap(),
-            Stage::Serving
+            Stage::SourceRetired
         );
         assert!(scenario.handoff.completed());
         scenario.mark("driver completed after three interruptions");
@@ -1182,7 +1187,7 @@ fn native_fifth_data_path_interrupted_driver_reruns_to_completion() {
         let after = committed(five);
         assert_eq!(
             scenario.handoff.drive(&mut *five, &parent).unwrap(),
-            Stage::Serving
+            Stage::SourceRetired
         );
         assert_eq!(committed(five), after);
         assert!(five.host.joined_data_status().unwrap().dispatcher_published);

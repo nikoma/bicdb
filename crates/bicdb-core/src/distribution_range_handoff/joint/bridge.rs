@@ -13,10 +13,10 @@ mod publication;
 pub(crate) use phase::{NativeJointPreparationPhaseQuorum, NativeJointPreparationPhaseRound};
 pub(crate) use preparation_custody::NativeJointPreparationCustody;
 pub(crate) use publication::{
-    NativeJointOpenAdmission, NativeJointOpenPhaseQuorum, NativeJointOpenPhaseRound,
-    NativeJointPublishedServingQuorum, NativeJointReleaseAdmission, NativeJointReleaseContinuation,
-    NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
-    NativeJointServingPublicationRound,
+    NativeJointActivatedQuorum, NativeJointOpenAdmission, NativeJointOpenPhaseQuorum,
+    NativeJointOpenPhaseRound, NativeJointPublishedServingQuorum, NativeJointReleaseAdmission,
+    NativeJointReleaseContinuation, NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound,
+    NativeJointServingPolicyAdmission, NativeJointServingPublicationRound,
 };
 
 /// An uncounted bundle of genuine actual evidence and an untrusted service

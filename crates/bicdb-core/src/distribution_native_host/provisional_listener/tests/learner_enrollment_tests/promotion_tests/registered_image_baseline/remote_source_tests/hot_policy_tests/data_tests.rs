@@ -71,6 +71,22 @@ pub(super) fn install_first_policy(
     ledger: &mut Vec<serde_json::Value>,
 ) {
     if !matches!(case, SourceCase::TargetHotDataFirstCallerExpired) {
+        // While a receiver-driven install step holds the shared custody the
+        // host cannot become the DATA owner. The refusal consumes nothing
+        // and the identical transition succeeds once the step has returned.
+        let in_flight = control
+            .test_hold_registered_install_step_in_flight()
+            .unwrap();
+        let refused = control
+            .install_registered_serving_data_policy(range, admission.clone(), &budget(5000))
+            .unwrap_err()
+            .to_string();
+        assert!(
+            refused.contains("install step in flight; retry the DATA owner transition"),
+            "{refused}"
+        );
+        assert!(control.test_registered_first_policy_evidence().is_err());
+        drop(in_flight);
         operation(
             output,
             ledger,

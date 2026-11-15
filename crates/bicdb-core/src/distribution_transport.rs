@@ -95,6 +95,7 @@ mod native_source_discovery;
 mod native_source_export;
 pub(crate) use native_source_discovery::AuthenticatedNativeSourceDiscovery;
 pub(crate) use native_source_export::AuthenticatedRegisteredExportNew;
+mod native_handoff_step;
 mod native_new;
 mod native_old;
 use crate::distribution_native_host::{
@@ -131,6 +132,7 @@ pub(crate) use native_abort::{
 pub(crate) use native_image_source::AuthenticatedNativeRemoteImageSourceFrame;
 #[cfg(test)]
 pub(crate) mod native_image_response_stall;
+pub(crate) use native_handoff_step::AuthenticatedNativeJointHandoffStep;
 pub(crate) use native_new::{
     AuthenticatedNativeRemoteDecisionSource, AuthenticatedNativeRemoteNewFactSet,
     AuthenticatedNativeRemoteNewFrame, AuthenticatedNativeSourceExportTerminal,
@@ -301,6 +303,9 @@ enum ClusterDataRequest {
     },
     NativeRemoteNew {
         request: crate::distribution_range_handoff::NativeRemoteNewRequestV1,
+    },
+    NativeJointHandoffStep {
+        request: crate::distribution_range_handoff::NativeJointHandoffStepRequestV1,
     },
     NativeObserveRegisteredExportNew {
         request: crate::distribution_range_image::NativeObserveRegisteredNewRequestV1,
@@ -559,6 +564,7 @@ impl ClusterDataRequest {
             | Self::NativeRemoteImageSourceFrame { .. }
             | Self::NativeRemoteOld { .. }
             | Self::NativeRemoteNew { .. }
+            | Self::NativeJointHandoffStep { .. }
             | Self::NativeObserveRegisteredExportNew { .. }
             | Self::NativeSourceExportRetirement { .. }
             | Self::NativeSourceDiscovery { .. }
@@ -657,6 +663,7 @@ impl ClusterDataRequest {
                 | Self::NativeRemoteImageSourceFrame { .. }
                 | Self::NativeRemoteOld { .. }
                 | Self::NativeRemoteNew { .. }
+                | Self::NativeJointHandoffStep { .. }
                 | Self::NativeObserveRegisteredExportNew { .. }
                 | Self::NativeSourceExportRetirement { .. }
                 | Self::NativeSourceDiscovery { .. }
@@ -671,6 +678,7 @@ enum ClusterDataResponse {
     NativeRemoteImageSourceFrame(crate::distribution_range_image::NativeRemoteImageSourceReplyV1),
     NativeRemoteOld(crate::distribution_range_handoff::NativeRemoteOldReplyV1),
     NativeRemoteNew(crate::distribution_range_handoff::NativeRemoteNewReplyV1),
+    NativeJointHandoffStep(crate::distribution_range_handoff::NativeJointHandoffStepReplyV1),
     NativeSourceDiscovery(crate::distribution_range_image::NativeSourceDiscoveryReplyV1),
     NativeDecisionSourceProvenance(crate::distribution_range_image::NativeSourceDiscoveryReplyV1),
     NativeObserveRegisteredExportNew(
@@ -1759,6 +1767,24 @@ fn handle_cluster_data_connection(
             };
             return Ok(ClusterDataResponse::NativeRemoteNew(reply));
         }
+        if let ClusterDataRequest::NativeJointHandoffStep { request } = request.request {
+            let peer = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("joint handoff step requires actual authenticated caller")
+            })?;
+            let target = registered_replica.ok_or_else(|| {
+                transport_error(
+                    "joint handoff step requires its original immutable Registered owner",
+                )
+            })?;
+            let parent =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            let reply = target.advance_joint_handoff_step(peer, &request, &parent)?;
+            #[cfg(test)]
+            if target.test_take_joint_handoff_step_reply_loss() {
+                suppress_actual_completion_reply.set(true);
+            }
+            return Ok(ClusterDataResponse::NativeJointHandoffStep(reply));
+        }
         if let ClusterDataRequest::HostMetadataReadAcquire { request } = request.request {
             let provider = metadata_read_provider
                 .ok_or_else(|| transport_error("fresh host metadata provider is not active"))?;
@@ -2594,6 +2620,9 @@ fn dispatch_cluster_data_request(
         )),
         ClusterDataRequest::NativeRemoteNew { .. } => Err(transport_error(
             "native NEW requires its actual before-latch owner",
+        )),
+        ClusterDataRequest::NativeJointHandoffStep { .. } => Err(transport_error(
+            "joint handoff step requires its actual before-latch owner",
         )),
         ClusterDataRequest::NativeEventGet(_) => Err(transport_error(
             "typed Get requires the before-latch dispatcher",
@@ -5580,6 +5609,7 @@ impl TcpClusterRelocationTransport {
                 ClusterDataRequest::NativeRemoteImageSourceFrame { .. }
                     | ClusterDataRequest::NativeRemoteOld { .. }
                     | ClusterDataRequest::NativeRemoteNew { .. }
+                    | ClusterDataRequest::NativeJointHandoffStep { .. }
                     | ClusterDataRequest::NativeObserveRegisteredExportNew { .. }
                     | ClusterDataRequest::NativeSourceExportRetirement { .. }
                     | ClusterDataRequest::NativeSourceDiscovery { .. }

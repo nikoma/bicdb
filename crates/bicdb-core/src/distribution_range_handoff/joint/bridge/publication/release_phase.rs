@@ -7,7 +7,9 @@ use crate::distribution_data::{
 };
 use crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt;
 use std::time::{Duration, Instant};
+mod activated_quorum;
 mod writer_policy;
+pub(crate) use activated_quorum::NativeJointActivatedQuorum;
 pub(crate) use writer_policy::NativeJointServingPolicyAdmission;
 
 enum ReleaseOwner {

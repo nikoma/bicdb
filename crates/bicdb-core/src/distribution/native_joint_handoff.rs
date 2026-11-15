@@ -12,8 +12,16 @@ pub enum NativeJointHandoffStageV1 {
     /// Final membership is committed; physical source cleanup is still pending.
     AwaitingActivation,
     /// A distinct actual new-data activation quorum permits retirement only.
+    /// `activated_quorum_sha256` commits to the durable catalogue activation
+    /// of EVERY member of the new set, each observed released and open under
+    /// a fresh metadata read of its own.
     AwaitingCleanup,
-    /// Actual protected source tombstone and full empty-range audit completed.
+    /// The retired source durably recorded its retirement from the range
+    /// after reading `AwaitingCleanup` through its own committed metadata
+    /// read; `source_cleanup_sha256` commits to that record. The record is a
+    /// tombstone of membership: the source's permanent handoff promise and
+    /// range rows are retained. Physical row reclamation and its empty-range
+    /// audit are a separate protocol and are NOT asserted by this stage.
     Cleaned,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -55,6 +63,12 @@ impl NativeJointHandoffMetadataV1 {
     }
     pub fn range_index(&self) -> u64 {
         self.range_index
+    }
+    pub fn activated_quorum_sha256(&self) -> Option<&str> {
+        self.activated_quorum_sha256.as_deref()
+    }
+    pub fn source_cleanup_sha256(&self) -> Option<&str> {
+        self.source_cleanup_sha256.as_deref()
     }
     pub fn logical_genesis_sha256(&self) -> &str {
         &self.logical_genesis_sha256
@@ -114,6 +128,81 @@ impl NativeJointHandoffMetadataV1 {
         }
         Ok(())
     }
+    /// `AwaitingActivation` to `AwaitingCleanup`. Returns false, changing
+    /// nothing, when exactly this activation is already recorded.
+    fn record_activation(
+        &mut self,
+        decision_sha256: &str,
+        activated_quorum_sha256: &str,
+    ) -> Result<bool> {
+        if self.decision_sha256 != decision_sha256 {
+            return Err(cluster_error(
+                "joint activation record belongs to another decision",
+            ));
+        }
+        if !sha256_hex(activated_quorum_sha256) {
+            return Err(cluster_error("joint activation quorum digest is damaged"));
+        }
+        match self.stage {
+            NativeJointHandoffStageV1::AwaitingActivation => {}
+            NativeJointHandoffStageV1::AwaitingCleanup | NativeJointHandoffStageV1::Cleaned
+                if self.activated_quorum_sha256.as_deref() == Some(activated_quorum_sha256) =>
+            {
+                return Ok(false)
+            }
+            NativeJointHandoffStageV1::AwaitingCleanup | NativeJointHandoffStageV1::Cleaned => {
+                return Err(cluster_error(
+                    "a different joint activation quorum is already recorded",
+                ))
+            }
+            _ => {
+                return Err(cluster_error(
+                    "joint activation record requires its committed final membership",
+                ))
+            }
+        }
+        self.stage = NativeJointHandoffStageV1::AwaitingCleanup;
+        self.activated_quorum_sha256 = Some(activated_quorum_sha256.into());
+        Ok(true)
+    }
+    /// `AwaitingCleanup` to `Cleaned`. Returns false, changing nothing, when
+    /// exactly this source retirement is already recorded.
+    fn record_source_cleanup(
+        &mut self,
+        decision_sha256: &str,
+        activated_quorum_sha256: &str,
+        source_cleanup_sha256: &str,
+    ) -> Result<bool> {
+        if self.decision_sha256 != decision_sha256 {
+            return Err(cluster_error(
+                "joint source retirement belongs to another decision",
+            ));
+        }
+        if !sha256_hex(source_cleanup_sha256) {
+            return Err(cluster_error("joint source retirement digest is damaged"));
+        }
+        if self.stage < NativeJointHandoffStageV1::AwaitingCleanup {
+            return Err(cluster_error(
+                "joint source retirement requires the recorded activation quorum",
+            ));
+        }
+        if self.activated_quorum_sha256.as_deref() != Some(activated_quorum_sha256) {
+            return Err(cluster_error(
+                "joint source retirement observed another activation quorum",
+            ));
+        }
+        if self.stage == NativeJointHandoffStageV1::Cleaned {
+            if self.source_cleanup_sha256.as_deref() == Some(source_cleanup_sha256) {
+                return Ok(false);
+            }
+            return Err(cluster_error(
+                "a different joint source retirement is already recorded",
+            ));
+        }
+        self.stage = NativeJointHandoffStageV1::Cleaned;
+        self.source_cleanup_sha256 = Some(source_cleanup_sha256.into());
+        Ok(true)
+    }
     fn immutable_binding(&self) -> Self {
         let mut record = self.clone();
         record.stage = NativeJointHandoffStageV1::Certified;
@@ -121,6 +210,12 @@ impl NativeJointHandoffMetadataV1 {
         record.source_cleanup_sha256 = None;
         record
     }
+}
+fn sha256_hex(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|v| v.is_ascii_digit() || (b'a'..=b'f').contains(&v))
 }
 /// Sequential proposals and authoritative snapshot jumps preserve every known
 /// decision and tombstone. Stage data alone never authorizes a runtime action.
@@ -163,7 +258,7 @@ pub(crate) fn validate_native_joint_handoff_preservation(
 
 impl NativeJointHandoffMetadataV1 {
     pub(crate) fn from_actual_decision(
-        proof: &crate::distribution_range_handoff::NativeJointDurableDecision,
+        proof: &dyn crate::distribution_range_handoff::NativeJointDecisionProof,
     ) -> Result<Self> {
         proof.require_current()?;
         let actual = proof.data();
@@ -257,7 +352,7 @@ impl NativeJointHandoffMetadataV1 {
 impl DistributionStore {
     fn require_joint_metadata_observation(
         &self,
-        proof: &crate::distribution_range_handoff::NativeJointDurableDecision,
+        proof: &dyn crate::distribution_range_handoff::NativeJointDecisionProof,
         fresh: &crate::distribution_consensus::HostMetadataReadObservation,
         business: Uuid,
     ) -> Result<()> {
@@ -266,21 +361,33 @@ impl DistributionStore {
         }
         fresh.require_live_request(business)?;
         proof.require_current()?;
+        self.require_joint_metadata_domain(proof.data(), fresh, business)
+    }
+    /// The builder is an ephemeral view of exactly the fresh committed
+    /// configuration, in the decision's own cluster/member domain.
+    fn require_joint_metadata_domain(
+        &self,
+        data: &crate::distribution_range_handoff::NativeJointDecisionData,
+        fresh: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+    ) -> Result<()> {
+        if !self.ephemeral {
+            return Err(cluster_error("native joint metadata requires an ephemeral consensus-proposal view; local topology-file publication is insufficient"));
+        }
+        fresh.require_live_request(business)?;
         let observed = fresh.committed_topology(business)?;
         if observed != &self.topology {
             return Err(cluster_error(
                 "joint metadata builder is not the actual fresh committed topology",
             ));
         }
-        proof
-            .data()
-            .require_metadata_domain(observed, fresh.restore_activation(business)?)
+        data.require_metadata_domain(observed, fresh.restore_activation(business)?)
     }
     /// A real dual-data-majority WAL decision is a prerequisite. Legacy source
     /// and target DB sequence equality is deliberately absent from this path.
     pub(crate) fn certify_native_joint_handoff(
         &mut self,
-        proof: &crate::distribution_range_handoff::NativeJointDurableDecision,
+        proof: &dyn crate::distribution_range_handoff::NativeJointDecisionProof,
         fresh: &crate::distribution_consensus::HostMetadataReadObservation,
         business: Uuid,
         actor: &ClusterNodeId,
@@ -350,7 +457,7 @@ impl DistributionStore {
     }
     pub(crate) fn promote_native_joint_handoff_frozen(
         &mut self,
-        proof: &crate::distribution_range_handoff::NativeJointDurableDecision,
+        proof: &dyn crate::distribution_range_handoff::NativeJointDecisionProof,
         fresh: &crate::distribution_consensus::HostMetadataReadObservation,
         business: Uuid,
         actor: &ClusterNodeId,
@@ -419,7 +526,7 @@ impl DistributionStore {
     /// pending-activation/cleanup stage prevents false convergence reporting.
     pub(crate) fn finalize_native_joint_membership_frozen(
         &mut self,
-        proof: &crate::distribution_range_handoff::NativeJointDurableDecision,
+        proof: &dyn crate::distribution_range_handoff::NativeJointDecisionProof,
         fresh: &crate::distribution_consensus::HostMetadataReadObservation,
         business: Uuid,
         actor: &ClusterNodeId,
@@ -462,6 +569,153 @@ impl DistributionStore {
         self.commit_change(actor.clone(),now_ms,format!("{id} native final data membership committed; activation and physical cleanup pending"))?;
         Ok(epoch)
     }
+    /// Record that every member of the new set durably activated the range
+    /// and was released. The proof is the live all-released quorum itself;
+    /// no digest is accepted from a caller. Membership does not change. This
+    /// permits the retirement of the old source and nothing else. Returns
+    /// false, committing nothing, when this activation is already recorded.
+    pub(crate) fn record_native_joint_activation(
+        &mut self,
+        proof: &crate::distribution_range_handoff::NativeJointActivatedQuorum,
+        fresh: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        actor: &ClusterNodeId,
+        now_ms: u64,
+    ) -> Result<bool> {
+        self.ensure_actor(actor)?;
+        proof.require_current()?;
+        let data = proof.data();
+        self.require_joint_metadata_domain(data, fresh, business)?;
+        let id = data.promise().relocation_id;
+        let plan = self
+            .topology
+            .relocations
+            .get(&id)
+            .ok_or_else(|| cluster_error("joint plan absent"))?;
+        let record = plan
+            .native_joint_handoff_v1
+            .as_ref()
+            .ok_or_else(|| cluster_error("joint final membership decision absent"))?;
+        let mut next = record.clone();
+        let changed = next.record_activation(data.checksum_sha256(), proof.checksum_sha256())?;
+        let range = self
+            .topology
+            .range_by_id(data.old_range().id)
+            .ok_or_else(|| cluster_error("joint range absent"))?;
+        let mut canonical = range.clone();
+        canonical.approximate_bytes = 0;
+        canonical.approximate_qps = 0;
+        canonical.replicas.sort_by_key(|r| r.id);
+        if canonical != *data.activation_range() || plan.promoted_epoch != Some(range.epoch) {
+            return Err(cluster_error(
+                "joint activation record is not for the committed final membership",
+            ));
+        }
+        if !changed {
+            return Ok(false);
+        }
+        proof.require_current()?;
+        let plan = self.topology.relocations.get_mut(&id).unwrap();
+        plan.native_joint_handoff_v1 = Some(next);
+        plan.updated_at_ms = now_ms;
+        fresh.require_live_request(business)?;
+        self.commit_change(
+            actor.clone(),
+            now_ms,
+            format!("{id} native new data membership activated on every member; source retirement pending"),
+        )?;
+        Ok(true)
+    }
+    /// Record the retired source's own durable retirement from the range and
+    /// complete the relocation. The proof is the receipt the source's service
+    /// issued after ITS OWN committed metadata read showed the recorded
+    /// activation quorum. Membership does not change and no row is deleted.
+    /// Returns false, committing nothing, when it is already recorded.
+    pub(crate) fn complete_native_joint_source_retirement(
+        &mut self,
+        proof: &crate::distribution_data::NativeJointSourceRetired,
+        fresh: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        actor: &ClusterNodeId,
+        now_ms: u64,
+    ) -> Result<bool> {
+        self.ensure_actor(actor)?;
+        if !self.ephemeral {
+            return Err(cluster_error("native joint metadata requires an ephemeral consensus-proposal view; local topology-file publication is insufficient"));
+        }
+        fresh.require_live_request(business)?;
+        proof.require_current()?;
+        let observed = fresh.committed_topology(business)?;
+        if observed != &self.topology {
+            return Err(cluster_error(
+                "joint metadata builder is not the actual fresh committed topology",
+            ));
+        }
+        let id = proof.relocation_id();
+        let plan = self
+            .topology
+            .relocations
+            .get(&id)
+            .ok_or_else(|| cluster_error("joint plan absent"))?;
+        let record = plan
+            .native_joint_handoff_v1
+            .as_ref()
+            .ok_or_else(|| cluster_error("joint activation record absent"))?;
+        let node = self
+            .topology
+            .nodes
+            .get(proof.node_id())
+            .ok_or_else(|| cluster_error("retired joint source is not a member"))?;
+        if &self.topology.cluster_id != proof.cluster_id()
+            || plan.source.as_ref() != Some(proof.node_id())
+            || node.incarnation != proof.node_incarnation()
+            || plan.range_id != proof.range_id()
+            || plan.promoted_epoch != Some(proof.activation_epoch())
+            || plan
+                .handoff_session
+                .as_ref()
+                .is_none_or(|s| s.session_id != proof.session_id() || s.nonce != proof.nonce())
+        {
+            return Err(cluster_error(
+                "joint source retirement is not this relocation's retired source",
+            ));
+        }
+        // Stages before Cleaned are validated against the committed range:
+        // the source is absent from it. A Cleaned record is immutable.
+        if record.stage() != NativeJointHandoffStageV1::Cleaned
+            && self
+                .topology
+                .range_by_id(plan.range_id)
+                .is_none_or(|range| {
+                    range.epoch != proof.activation_epoch()
+                        || range.replicas.iter().any(|r| &r.node_id == proof.node_id())
+                })
+        {
+            return Err(cluster_error(
+                "joint source retirement is not for the committed final membership",
+            ));
+        }
+        let mut next = record.clone();
+        if !next.record_source_cleanup(
+            proof.decision_sha256(),
+            proof.activated_quorum_sha256(),
+            proof.checksum_sha256(),
+        )? {
+            return Ok(false);
+        }
+        let plan = self.topology.relocations.get_mut(&id).unwrap();
+        plan.native_joint_handoff_v1 = Some(next);
+        plan.phase = RelocationPhase::Completed;
+        plan.updated_at_ms = now_ms;
+        plan.last_error = None;
+        fresh.require_live_request(business)?;
+        self.commit_change(
+            actor.clone(),
+            now_ms,
+            format!("{id} native retired source recorded its retirement; relocation completed"),
+        )?;
+        Ok(true)
+    }
 }
 
 impl DistributionStore {
@@ -501,5 +755,263 @@ impl DistributionStore {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod native_joint_handoff_completion_tests {
+    use super::*;
+
+    fn digest(byte: char) -> String {
+        std::iter::repeat_n(byte, 64).collect()
+    }
+    fn record(stage: NativeJointHandoffStageV1) -> NativeJointHandoffMetadataV1 {
+        NativeJointHandoffMetadataV1 {
+            version: 1,
+            session_id: Uuid::from_u128(7),
+            nonce: Uuid::from_u128(9),
+            decision_sha256: digest('d'),
+            old_configuration_sha256: digest('1'),
+            new_configuration_sha256: digest('2'),
+            range_index: 3,
+            logical_genesis_sha256: digest('3'),
+            logical_history_sha256: digest('4'),
+            source_snapshot_db_sequence: 5,
+            target_local_snapshot_db_sequence: 6,
+            stage,
+            activated_quorum_sha256: (stage >= NativeJointHandoffStageV1::AwaitingCleanup)
+                .then(|| digest('a')),
+            source_cleanup_sha256: (stage == NativeJointHandoffStageV1::Cleaned)
+                .then(|| digest('c')),
+        }
+    }
+    fn plan(record: &NativeJointHandoffMetadataV1) -> RangeRelocation {
+        let completed = record.stage == NativeJointHandoffStageV1::Cleaned;
+        RangeRelocation {
+            id: RelocationId::new(1).unwrap(),
+            plan_id: "joined-data-1".into(),
+            handoff_session: Some(RangeHandoffSession {
+                session_id: record.session_id,
+                nonce: record.nonce,
+            }),
+            native_joint_handoff_v1: Some(record.clone()),
+            range_id: RangeId::new(1).unwrap(),
+            expected_epoch: 4,
+            learner_epoch: 5,
+            promoted_epoch: Some(7),
+            source: Some(ClusterNodeId::new("n1").unwrap()),
+            target: ClusterNodeId::new("n5").unwrap(),
+            target_replica_id: ReplicaId::new(9).unwrap(),
+            reason: ReplicaMoveReason::LoadBalance,
+            phase: if completed {
+                RelocationPhase::Completed
+            } else {
+                RelocationPhase::CleaningUp
+            },
+            resume_phase: None,
+            snapshot_id: None,
+            snapshot_sha256: None,
+            snapshot_bytes_copied: 0,
+            snapshot_resume_after_key: None,
+            snapshot_commit_sequence: None,
+            destination_durable_commit_sequence: None,
+            source_commit_sequence: None,
+            cleanup_resume_after_key: None,
+            cleanup_records_deleted: 0,
+            created_at_ms: 1,
+            updated_at_ms: 1,
+            last_error: None,
+        }
+    }
+    fn topology(record: &NativeJointHandoffMetadataV1) -> ClusterTopology {
+        let config = DistributionConfig {
+            enabled: true,
+            cluster_id: ClusterId::new("cluster-a").unwrap(),
+            range_image_bootstrap_id: None,
+            node_id: ClusterNodeId::new("n1").unwrap(),
+            node_address: "127.0.0.1:9444".into(),
+            node_tls_certificate_sha256: None,
+            node_incarnation: 1,
+            node_capacity_bytes: 10_000,
+            replication_factor: 3,
+            initial_ranges: 4,
+            default_placement: PlacementPolicy::default(),
+            suspect_after_ms: 100,
+            dead_after_ms: 200,
+            topology_history_limit: 4,
+            metadata_election_timeout_ms: default_metadata_election_timeout_ms(),
+            metadata_heartbeat_interval_ms: default_metadata_heartbeat_interval_ms(),
+            transport: ClusterNetworkTransportConfig::default(),
+        };
+        let local =
+            ClusterNode::new(config.node_id.clone(), "127.0.0.1:9444", 1, 10_000, 1).unwrap();
+        let mut topology = ClusterTopology::new(&config, local, 1).unwrap();
+        topology.format_version = NATIVE_JOINT_HANDOFF_TOPOLOGY_FORMAT_VERSION;
+        let plan = plan(record);
+        topology.relocations.insert(plan.id, plan);
+        topology
+    }
+
+    #[test]
+    fn native_joint_handoff_completion_activation_record_requires_final_membership() {
+        use NativeJointHandoffStageV1::*;
+        for early in [Certified, PromotedFrozen] {
+            let mut early_record = record(early);
+            let refused = early_record
+                .record_activation(&digest('d'), &digest('a'))
+                .unwrap_err();
+            assert!(refused
+                .to_string()
+                .contains("requires its committed final membership"));
+            assert_eq!(early_record, record(early));
+        }
+        let mut current = record(AwaitingActivation);
+        // A proof of another decision, and a damaged digest, change nothing.
+        assert!(current
+            .record_activation(&digest('e'), &digest('a'))
+            .unwrap_err()
+            .to_string()
+            .contains("another decision"));
+        assert!(current.record_activation(&digest('d'), "A").is_err());
+        assert!(current
+            .record_activation(&digest('d'), &digest('G'))
+            .is_err());
+        assert_eq!(current, record(AwaitingActivation));
+        assert!(current
+            .record_activation(&digest('d'), &digest('a'))
+            .unwrap());
+        assert_eq!(current, record(AwaitingCleanup));
+        current.validate_for(&plan(&current)).unwrap();
+        // The same activation again is a no-op; another one is refused, also
+        // after the relocation completed.
+        assert!(!current
+            .record_activation(&digest('d'), &digest('a'))
+            .unwrap());
+        assert!(current
+            .record_activation(&digest('d'), &digest('b'))
+            .unwrap_err()
+            .to_string()
+            .contains("different joint activation quorum"));
+        let mut cleaned = record(Cleaned);
+        assert!(!cleaned
+            .record_activation(&digest('d'), &digest('a'))
+            .unwrap());
+        assert!(cleaned
+            .record_activation(&digest('d'), &digest('b'))
+            .is_err());
+        assert_eq!(cleaned, record(Cleaned));
+    }
+
+    #[test]
+    fn native_joint_handoff_completion_source_retirement_requires_recorded_activation() {
+        use NativeJointHandoffStageV1::*;
+        for early in [Certified, PromotedFrozen, AwaitingActivation] {
+            let mut early_record = record(early);
+            assert!(early_record
+                .record_source_cleanup(&digest('d'), &digest('a'), &digest('c'))
+                .unwrap_err()
+                .to_string()
+                .contains("requires the recorded activation quorum"));
+            assert_eq!(early_record, record(early));
+        }
+        let mut current = record(AwaitingCleanup);
+        assert!(current
+            .record_source_cleanup(&digest('e'), &digest('a'), &digest('c'))
+            .unwrap_err()
+            .to_string()
+            .contains("another decision"));
+        // The source observed an activation quorum that is not the recorded one.
+        assert!(current
+            .record_source_cleanup(&digest('d'), &digest('b'), &digest('c'))
+            .unwrap_err()
+            .to_string()
+            .contains("another activation quorum"));
+        assert!(current
+            .record_source_cleanup(&digest('d'), &digest('a'), "c")
+            .is_err());
+        assert_eq!(current, record(AwaitingCleanup));
+        assert!(current
+            .record_source_cleanup(&digest('d'), &digest('a'), &digest('c'))
+            .unwrap());
+        assert_eq!(current, record(Cleaned));
+        current.validate_for(&plan(&current)).unwrap();
+        assert!(!current
+            .record_source_cleanup(&digest('d'), &digest('a'), &digest('c'))
+            .unwrap());
+        assert!(current
+            .record_source_cleanup(&digest('d'), &digest('a'), &digest('f'))
+            .unwrap_err()
+            .to_string()
+            .contains("different joint source retirement"));
+        assert_eq!(current, record(Cleaned));
+    }
+
+    #[test]
+    fn native_joint_handoff_completion_validators_bind_stage_digests_and_phase() {
+        use NativeJointHandoffStageV1::*;
+        for stage in [AwaitingActivation, AwaitingCleanup, Cleaned] {
+            let valid = record(stage);
+            valid.validate_for(&plan(&valid)).unwrap();
+        }
+        // A stage without its digest, and a digest without its stage.
+        let mut missing = record(AwaitingCleanup);
+        missing.activated_quorum_sha256 = None;
+        assert!(missing.validate_for(&plan(&missing)).is_err());
+        let mut early = record(AwaitingActivation);
+        early.activated_quorum_sha256 = Some(digest('a'));
+        assert!(early.validate_for(&plan(&early)).is_err());
+        let mut missing = record(Cleaned);
+        missing.source_cleanup_sha256 = None;
+        assert!(missing.validate_for(&plan(&missing)).is_err());
+        let mut early = record(AwaitingCleanup);
+        early.source_cleanup_sha256 = Some(digest('c'));
+        assert!(early.validate_for(&plan(&early)).is_err());
+        // Cleaned and the Completed phase imply each other.
+        let cleaned = record(Cleaned);
+        let base = topology(&cleaned);
+        let mut unfinished = plan(&cleaned);
+        cleaned.validate_topology(&unfinished, &base).unwrap();
+        assert!(!unfinished.is_active());
+        unfinished.phase = RelocationPhase::CleaningUp;
+        assert!(cleaned
+            .validate_topology(&unfinished, &base)
+            .unwrap_err()
+            .to_string()
+            .contains("cleaned native joint handoff is not completed"));
+        let awaiting = record(AwaitingCleanup);
+        let mut premature = plan(&awaiting);
+        assert!(premature.is_active());
+        premature.phase = RelocationPhase::Completed;
+        assert!(awaiting.validate_topology(&premature, &base).is_err());
+        assert!(premature.is_active());
+    }
+
+    #[test]
+    fn native_joint_handoff_completion_records_never_regress_or_change() {
+        use NativeJointHandoffStageV1::*;
+        let forward = [AwaitingActivation, AwaitingCleanup, Cleaned];
+        for (i, from) in forward.iter().enumerate() {
+            for (j, to) in forward.iter().enumerate() {
+                let outcome = validate_native_joint_handoff_preservation(
+                    &topology(&record(*from)),
+                    &topology(&record(*to)),
+                );
+                assert_eq!(outcome.is_ok(), j >= i, "{from:?} -> {to:?}");
+            }
+        }
+        let recorded = topology(&record(AwaitingCleanup));
+        let mut changed = record(Cleaned);
+        changed.activated_quorum_sha256 = Some(digest('b'));
+        assert!(
+            validate_native_joint_handoff_preservation(&recorded, &topology(&changed)).is_err()
+        );
+        let cleaned = topology(&record(Cleaned));
+        let mut changed = record(Cleaned);
+        changed.source_cleanup_sha256 = Some(digest('f'));
+        assert!(validate_native_joint_handoff_preservation(&cleaned, &topology(&changed)).is_err());
+        // A completed joint relocation stays as a tombstone.
+        let mut erased = cleaned.clone();
+        erased.relocations.clear();
+        assert!(validate_native_joint_handoff_preservation(&cleaned, &erased).is_err());
     }
 }

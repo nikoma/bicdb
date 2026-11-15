@@ -58,6 +58,88 @@ pub(crate) struct NativeRegisteredReplicaAdmission {
     original_hook: crate::db::NativeRegisteredReceiverHook,
     closed_fence_ready: Weak<AtomicBool>,
     joint_targets: Weak<RegisteredJointTargets>,
+    remote_install: Weak<RegisteredRemoteInstall>,
+}
+/// Original Registered install custody shared between the owning host and
+/// the same receiver's authenticated step RPC. Sharing changes who may drive
+/// one bounded operation, never what that operation must independently prove.
+pub(super) struct RegisteredRemoteInstall {
+    tables: Mutex<RegisteredRemoteInstallTables>,
+    #[cfg(test)]
+    drop_next_step_reply: AtomicBool,
+}
+#[derive(Default)]
+pub(super) struct RegisteredRemoteInstallTables {
+    /// Set by the owning host once a distinct DATA owner exists; the receiver
+    /// path then refuses exactly like the host's own continuation methods.
+    /// It lives under the custody lock: a step reads it while it holds the
+    /// tables for its whole duration, and the host sets it only while holding
+    /// them, so "a step advances install state" and "this host becomes a
+    /// DATA owner" exclude each other.
+    data_owner: bool,
+    remote_attempts: std::collections::BTreeMap<
+        crate::RangeId,
+        remote_attempt::NativeRegisteredRemoteInstallAttempt,
+    >,
+    remote_images: std::collections::BTreeMap<
+        crate::RangeId,
+        crate::db::NativeRegisteredRemoteImageInstallation,
+    >,
+    remote_steps:
+        std::collections::BTreeMap<crate::RangeId, remote_attempt::RegisteredTargetInstallStep>,
+}
+impl RegisteredRemoteInstallTables {
+    pub(super) fn close_for_data_owner(&mut self) {
+        self.data_owner = true;
+    }
+    pub(super) fn data_owner_present(&self) -> bool {
+        self.data_owner
+    }
+}
+impl RegisteredRemoteInstall {
+    /// Nonwaiting: one bounded operation owns the tables; a concurrent caller
+    /// is refused instead of queued behind engine or network work.
+    pub(super) fn hold(
+        &self,
+    ) -> Result<parking_lot::MutexGuard<'_, RegisteredRemoteInstallTables>> {
+        self.tables
+            .try_lock()
+            .ok_or_else(|| invalid("Registered remote install custody busy"))
+    }
+    /// The owning host's transition to a distinct DATA owner takes the same
+    /// custody a receiver-driven step holds. Nonwaiting: while a step is in
+    /// flight the transition is refused and may simply be retried.
+    pub(super) fn hold_for_data_owner(
+        &self,
+    ) -> Result<parking_lot::MutexGuard<'_, RegisteredRemoteInstallTables>> {
+        self.tables.try_lock().ok_or_else(|| {
+            invalid("Registered remote install step in flight; retry the DATA owner transition")
+        })
+    }
+    #[cfg(test)]
+    pub(super) fn test_drop_next_step_reply(&self) {
+        self.drop_next_step_reply.store(true, Ordering::Release);
+    }
+    #[cfg(test)]
+    pub(super) fn test_take_step_reply_loss(&self) -> bool {
+        self.drop_next_step_reply.swap(false, Ordering::AcqRel)
+    }
+}
+/// One bounded target-local operation over the original receiver's owners.
+pub(super) struct RegisteredRemoteInstallCustody<'a> {
+    data_owner: bool,
+    backend: Arc<NativeMetadataControlBackend>,
+    runtime: Arc<RangeRecoveryRuntime>,
+    admission: Arc<NativeRegisteredReplicaAdmission>,
+    remote_joint_targets: Arc<RegisteredJointTargets>,
+    remote_attempts: &'a mut std::collections::BTreeMap<
+        crate::RangeId,
+        remote_attempt::NativeRegisteredRemoteInstallAttempt,
+    >,
+    remote_images: &'a mut std::collections::BTreeMap<
+        crate::RangeId,
+        crate::db::NativeRegisteredRemoteImageInstallation,
+    >,
 }
 impl NativeRegisteredReplicaAdmission {
     #[cfg(test)]
@@ -111,15 +193,8 @@ pub(super) struct NativeRegisteredReplicaReceiver {
     drained: Option<DrainedClusterDataListener>,
     listener: Option<ClusterDataServerHandle>,
     stopping: bool,
-    remote_attempts: std::collections::BTreeMap<
-        crate::RangeId,
-        remote_attempt::NativeRegisteredRemoteInstallAttempt,
-    >,
+    remote_install: Arc<RegisteredRemoteInstall>,
     remote_joint_targets: Arc<RegisteredJointTargets>,
-    remote_images: std::collections::BTreeMap<
-        crate::RangeId,
-        crate::db::NativeRegisteredRemoteImageInstallation,
-    >,
 }
 #[derive(Clone)]
 pub(super) struct RegisteredAssignedParts {
@@ -143,6 +218,22 @@ impl Drop for NativeRegisteredReplicaReceiver {
     }
 }
 impl NativeRegisteredReplicaReceiver {
+    /// The owning host's own continuation over the same shared custody.
+    pub(super) fn remote_install_custody<'a>(
+        &self,
+        tables: &'a mut RegisteredRemoteInstallTables,
+        data_owner: bool,
+    ) -> RegisteredRemoteInstallCustody<'a> {
+        RegisteredRemoteInstallCustody {
+            data_owner,
+            backend: self.backend.clone(),
+            runtime: self.runtime.clone(),
+            admission: self.admission.clone(),
+            remote_joint_targets: self.remote_joint_targets.clone(),
+            remote_attempts: &mut tables.remote_attempts,
+            remote_images: &mut tables.remote_images,
+        }
+    }
     pub(super) fn assigned_parts(&self) -> Result<RegisteredAssignedParts> {
         self.admission
             .require_listener(&self.backend.service, &self.runtime)?;
@@ -261,6 +352,11 @@ impl NativeRegisteredReplicaReceiver {
         let life = Arc::new(AtomicBool::new(true));
         let closed_fence_ready = Arc::new(AtomicBool::new(false));
         let remote_joint_targets = Arc::new(Mutex::new(std::collections::BTreeMap::new()));
+        let remote_install = Arc::new(RegisteredRemoteInstall {
+            tables: Mutex::new(RegisteredRemoteInstallTables::default()),
+            #[cfg(test)]
+            drop_next_step_reply: AtomicBool::new(false),
+        });
         let admission = Arc::new(NativeRegisteredReplicaAdmission {
             service: Arc::downgrade(&backend.service),
             runtime: Arc::downgrade(&runtime),
@@ -276,6 +372,7 @@ impl NativeRegisteredReplicaReceiver {
             original_hook,
             closed_fence_ready: Arc::downgrade(&closed_fence_ready),
             joint_targets: Arc::downgrade(&remote_joint_targets),
+            remote_install: Arc::downgrade(&remote_install),
         });
         admission.require_listener(&backend.service, &runtime)?;
         parent.check()?;
@@ -290,8 +387,7 @@ impl NativeRegisteredReplicaReceiver {
             drained: None,
             listener: None,
             stopping: false,
-            remote_attempts: Default::default(),
-            remote_images: Default::default(),
+            remote_install,
             remote_joint_targets,
         })
     }
@@ -459,6 +555,14 @@ impl NativeMetadataControlHost {
     }
     pub(in crate::distribution_native_host) fn has_replica_receiver(&self) -> bool {
         self.replica.is_some()
+    }
+    /// The original receiver's shared install custody, for the host's own
+    /// transition to a distinct DATA owner under that custody.
+    pub(super) fn registered_remote_install(&self) -> Result<Arc<RegisteredRemoteInstall>> {
+        self.replica
+            .as_ref()
+            .map(|receiver| receiver.remote_install.clone())
+            .ok_or_else(|| invalid("actual Registered receiver required"))
     }
 }
 

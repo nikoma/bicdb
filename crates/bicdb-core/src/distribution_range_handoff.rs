@@ -14,32 +14,38 @@ mod joint;
 #[cfg(feature = "tls-replication")]
 pub(crate) use joint::NativeJointReadOnlyPlanIdentity;
 pub(crate) use joint::{
-    CommittedNativeJointDecisionObservation, NativeJointActivationAdmission,
-    NativeJointDecisionData, NativeJointDecisionPublicationAdmission,
-    NativeJointDecisionPublicationRound, NativeJointDurableDecision, NativeJointHandoffPlan,
-    NativeJointHandoffRuntime, NativeJointMaterializedFacts, NativeJointMaterializedQuorums,
-    NativeJointNewObservation, NativeJointNewRound, NativeJointOldClosedQuorum,
-    NativeJointOldImageProof, NativeJointOldObservation, NativeJointOldRound,
-    NativeJointOpenAdmission, NativeJointOpenPhaseQuorum, NativeJointOpenPhaseRound,
-    NativeJointPreparationCustody, NativeJointPreparationPhaseQuorum,
-    NativeJointPreparationPhaseRound, NativeJointPreparedDecision,
-    NativeJointPreparedServingCandidate, NativeJointPreparedServingObservation,
-    NativeJointPreparedServingQuorum, NativeJointPreparedServingRound,
-    NativeJointPreparedServingVoteData, NativeJointPublishedServingQuorum,
-    NativeJointReleaseAdmission, NativeJointReleaseContinuation, NativeJointReleasePhaseQuorum,
-    NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
+    CommittedNativeJointDecisionObservation, NativeJointActivatedQuorum,
+    NativeJointActivationAdmission, NativeJointDecisionData, NativeJointDecisionProof,
+    NativeJointDecisionPublicationAdmission, NativeJointDecisionPublicationRound,
+    NativeJointDurableDecision, NativeJointHandoffPlan, NativeJointHandoffRuntime,
+    NativeJointMaterializedFacts, NativeJointMaterializedQuorums, NativeJointNewObservation,
+    NativeJointNewRound, NativeJointOldClosedQuorum, NativeJointOldImageProof,
+    NativeJointOldObservation, NativeJointOldRound, NativeJointOpenAdmission,
+    NativeJointOpenPhaseQuorum, NativeJointOpenPhaseRound, NativeJointPreparationCustody,
+    NativeJointPreparationPhaseQuorum, NativeJointPreparationPhaseRound,
+    NativeJointPreparedDecision, NativeJointPreparedServingCandidate,
+    NativeJointPreparedServingObservation, NativeJointPreparedServingQuorum,
+    NativeJointPreparedServingRound, NativeJointPreparedServingVoteData,
+    NativeJointPublishedServingQuorum, NativeJointReleaseAdmission, NativeJointReleaseContinuation,
+    NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
     NativeJointServingPublicationRound,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint::{
+    NativeJointHandoffStepOperationV1, NativeJointHandoffStepOutcomeV1,
+    NativeJointHandoffStepReplyV1, NativeJointHandoffStepRequestV1, NativeJointHandoffStepStageV1,
 };
 #[cfg(test)]
 pub(crate) use joint::{NativeJointPhaseTrace, NativeRefreshTraceContext};
 #[cfg(feature = "tls-replication")]
 pub(crate) use joint::{
     NativeRemoteDecisionAdmission, NativeRemoteDecisionBindingV1, NativeRemoteDecisionReceiptV1,
-    NativeRemoteDecisionSourceData, NativeRemoteDecisionSourceRequestV1, NativeRemoteNewFactSetV1,
-    NativeRemoteNewHandoffV1, NativeRemoteNewMaterializedQuorum, NativeRemoteNewOperationV1,
-    NativeRemoteNewParticipant, NativeRemoteNewPinHandoffPermit, NativeRemoteNewReplyV1,
-    NativeRemoteNewRequestV1, NativeRemoteNewRound, NativeRemoteNewSnapshotV1,
-    NativeRemoteNewTargetPinIssuance,
+    NativeRemoteDecisionSourceData, NativeRemoteDecisionSourceRequestV1,
+    NativeRemoteJointDecisionCertificate, NativeRemoteJointDecisionCertificateRound,
+    NativeRemoteNewFactSetV1, NativeRemoteNewHandoffV1, NativeRemoteNewMaterializedQuorum,
+    NativeRemoteNewOperationV1, NativeRemoteNewParticipant, NativeRemoteNewPinHandoffPermit,
+    NativeRemoteNewReplyV1, NativeRemoteNewRequestV1, NativeRemoteNewRound,
+    NativeRemoteNewSnapshotV1, NativeRemoteNewTargetPinIssuance,
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use joint::{

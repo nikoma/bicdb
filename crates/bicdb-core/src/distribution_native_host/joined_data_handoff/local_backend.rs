@@ -12,11 +12,12 @@ use crate::distribution_range_consensus::{
     RecoveryFenceScope,
 };
 use crate::distribution_range_handoff::{
-    NativeJointDecisionPublicationRound, NativeJointDurableDecision, NativeJointHandoffPlan,
-    NativeJointNewObservation, NativeJointNewRound, NativeJointOldClosedQuorum,
-    NativeJointOldRound, NativeJointPreparationCustody, NativeJointPreparationPhaseQuorum,
-    NativeJointPreparedServingQuorum, NativeJointPreparedServingRound,
-    NativeJointPublishedServingQuorum, NativeJointReleaseContinuation,
+    NativeJointActivatedQuorum, NativeJointDecisionPublicationRound, NativeJointDurableDecision,
+    NativeJointHandoffPlan, NativeJointNewObservation, NativeJointNewRound,
+    NativeJointOldClosedQuorum, NativeJointOldRound, NativeJointPreparationCustody,
+    NativeJointPreparationPhaseQuorum, NativeJointPreparedServingQuorum,
+    NativeJointPreparedServingRound, NativeJointPublishedServingQuorum,
+    NativeJointReleaseContinuation,
 };
 use crate::distribution_range_image::RangeImageCapture;
 use crate::distribution_range_image_install::{
@@ -117,6 +118,11 @@ pub(crate) struct LocalJoinedHandoffBackend {
     image_owner: Option<crate::distribution_data::NativeJointImageReleaseOwner>,
     continuation: Option<Arc<NativeJointReleaseContinuation>>,
     released: BTreeSet<ClusterNodeId>,
+    /// The live all-released proof of the activation record. It expires with
+    /// its phase window and is replaced by every `prove_activation`.
+    activated: Option<NativeJointActivatedQuorum>,
+    /// The receipt the retired source issued for its durable retirement.
+    retired: Option<crate::distribution_data::NativeJointSourceRetired>,
     /// Ranges the target recovered when it opened ingress; set on completion.
     recovered: Option<usize>,
     /// Records per copied image step.
@@ -161,6 +167,8 @@ impl LocalJoinedHandoffBackend {
             image_owner: None,
             continuation: None,
             released: BTreeSet::new(),
+            activated: None,
+            retired: None,
             recovered: None,
             image_batch_records: 256,
             last_attempt: None,
@@ -510,6 +518,7 @@ impl LocalJoinedHandoffBackend {
 
 impl JoinedHandoffBackend for LocalJoinedHandoffBackend {
     type Members = Members;
+    type Hosts = dyn NativeJoinedDataHandoffHosts;
 
     fn cut_started(&self) -> bool {
         self.cut_attempted || !self.runtimes.is_empty()
@@ -517,7 +526,7 @@ impl JoinedHandoffBackend for LocalJoinedHandoffBackend {
 
     fn old_epoch(
         &self,
-        hosts: &dyn NativeJoinedDataHandoffHosts,
+        hosts: &Self::Hosts,
         node: &ClusterNodeId,
         range: &RangeDescriptor,
     ) -> Result<u64> {
@@ -535,17 +544,13 @@ impl JoinedHandoffBackend for LocalJoinedHandoffBackend {
         self.closed = None;
     }
 
-    fn admit_target(
-        &mut self,
-        hosts: &mut dyn NativeJoinedDataHandoffHosts,
-        parent: &CancellationToken,
-    ) -> Result<()> {
+    fn admit_target(&mut self, hosts: &mut Self::Hosts, parent: &CancellationToken) -> Result<()> {
         hosts.open_target(&bounded(parent, HOST_OPERATION))
     }
 
     fn members(
         &self,
-        hosts: &dyn NativeJoinedDataHandoffHosts,
+        hosts: &Self::Hosts,
         range: &RangeDescriptor,
         relocation: &RangeRelocation,
     ) -> Result<Members> {
@@ -590,7 +595,7 @@ impl JoinedHandoffBackend for LocalJoinedHandoffBackend {
     /// of the same session are confirmed, never replaced.
     fn cut_and_ship(
         &mut self,
-        hosts: &mut dyn NativeJoinedDataHandoffHosts,
+        hosts: &mut Self::Hosts,
         members: &Members,
         range: &RangeDescriptor,
         relocation: &RangeRelocation,
@@ -824,11 +829,33 @@ impl JoinedHandoffBackend for LocalJoinedHandoffBackend {
         actor: &ClusterNodeId,
         now: u64,
     ) -> Result<()> {
-        let decision = self.decision.as_ref().ok_or_else(|| {
-            handoff_error(
-                "durable decision custody absent; the membership stages need the live decision",
-            )
-        })?;
+        let decision = || {
+            self.decision.as_ref().ok_or_else(|| {
+                handoff_error(
+                    "durable decision custody absent; the membership stages need the live decision",
+                )
+            })
+        };
+        match committed {
+            Some(NativeJointHandoffStageV1::AwaitingActivation) => {
+                let proof = self.activated.as_ref().ok_or_else(|| {
+                    handoff_error("activation proof absent before the activation record")
+                })?;
+                view.record_native_joint_activation(proof, fresh, business, actor, now)
+                    .map_err(|error| stage_error("activation record", error))?;
+                return Ok(());
+            }
+            Some(NativeJointHandoffStageV1::AwaitingCleanup) => {
+                let proof = self.retired.as_ref().ok_or_else(|| {
+                    handoff_error("source retirement receipt absent before completion")
+                })?;
+                view.complete_native_joint_source_retirement(proof, fresh, business, actor, now)
+                    .map_err(|error| stage_error("source retirement record", error))?;
+                return Ok(());
+            }
+            _ => {}
+        }
+        let decision = decision()?;
         match committed {
             None => {
                 view.certify_native_joint_handoff(decision, fresh, business, actor, now)
@@ -842,7 +869,7 @@ impl JoinedHandoffBackend for LocalJoinedHandoffBackend {
                 view.finalize_native_joint_membership_frozen(decision, fresh, business, actor, now)
                     .map_err(|error| stage_error("final membership", error))?;
             }
-            Some(_) => return Err(handoff_error("membership stage is already final")),
+            Some(_) => return Err(handoff_error("relocation is already completed")),
         }
         Ok(())
     }
@@ -852,7 +879,7 @@ impl JoinedHandoffBackend for LocalJoinedHandoffBackend {
     /// after the last finished part.
     fn activate(
         &mut self,
-        hosts: &mut dyn NativeJoinedDataHandoffHosts,
+        hosts: &mut Self::Hosts,
         members: &Members,
         parent: &CancellationToken,
     ) -> Result<()> {
@@ -1106,13 +1133,89 @@ impl JoinedHandoffBackend for LocalJoinedHandoffBackend {
     }
 
     /// Target leadership and ingress; returns the ranges the target recovered.
-    fn serve(
-        &mut self,
-        hosts: &mut dyn NativeJoinedDataHandoffHosts,
-        parent: &CancellationToken,
-    ) -> Result<usize> {
+    fn serve(&mut self, hosts: &mut Self::Hosts, parent: &CancellationToken) -> Result<usize> {
         hosts
             .publish_target(&bounded(parent, LEADERSHIP))
             .map_err(|error| stage_error("target leadership and ingress", error))
+    }
+
+    fn records_completion(&self) -> bool {
+        true
+    }
+
+    /// One fresh all-member phase of the retained release continuation, taken
+    /// after every member was released. Each member is observed by its own
+    /// transport under its own metadata read; the phase is then claimed as
+    /// the activation record instead of a release.
+    fn prove_activation(&mut self, members: &Members, parent: &CancellationToken) -> Result<()> {
+        parent.check()?;
+        self.activated = None;
+        let continuation = self
+            .continuation
+            .clone()
+            .ok_or_else(|| handoff_error("release continuation custody absent"))?;
+        let plan = self
+            .plan
+            .clone()
+            .ok_or_else(|| handoff_error("plan custody absent before the activation record"))?;
+        if plan.new_members().keys().ne(self.released.iter()) {
+            return Err(handoff_error(
+                "activation record needs every member of the new set released",
+            ));
+        }
+        let mut round = continuation.begin_fresh_release_phase(PHASE)?;
+        for node in plan.new_members().keys() {
+            round.acquire_actual_member(&members.get(node)?.client, &members.metadata_leader)?;
+        }
+        self.activated = Some(Arc::new(round.finish()?).certify_activated_quorum()?);
+        Ok(())
+    }
+
+    /// The retired source reads the committed metadata through its own
+    /// transport and its own service records the retirement. Nothing of the
+    /// earlier custody is used, so a driver created after a restart can run
+    /// this. The source's freeze owner, when this object still holds it, is
+    /// left untouched: no fence is released and no row is deleted.
+    fn retire_source(
+        &mut self,
+        members: &Members,
+        range: &RangeDescriptor,
+        relocation: &RangeRelocation,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        let source = relocation
+            .source
+            .clone()
+            .ok_or_else(|| handoff_error("committed relocation names no source"))?;
+        if range
+            .replicas
+            .iter()
+            .any(|replica| replica.node_id == source)
+        {
+            return Err(handoff_error(
+                "the source is still a replica of the committed range",
+            ));
+        }
+        let member = members.get(&source)?;
+        let retired = retry_timed_out(|| {
+            let token = bounded(parent, REQUEST);
+            let business = Uuid::now_v7();
+            let own = member.client.acquire_host_metadata_observation(
+                &members.metadata_leader,
+                business,
+                REQUEST,
+                &token,
+            )?;
+            ClusterDataNodeService::retire_actual_native_joint_source(
+                &member.service,
+                &own,
+                business,
+                range.id,
+                &token,
+            )
+        })
+        .map_err(|error| stage_error("source retirement", error))?;
+        self.retired = Some(retired);
+        Ok(())
     }
 }

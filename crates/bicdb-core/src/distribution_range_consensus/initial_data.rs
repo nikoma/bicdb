@@ -116,33 +116,42 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
             )
         };
         let require_original = || -> Result<()> {
-            parent.check()?;
-            open.require_live()?;
-            slot.require_live()?;
-            runtime.require_point_read_service(&self.local_service, &self.local_node_id)?;
-            let service = loop {
+            loop {
                 parent.check()?;
-                if let Some(service) = self.local_service.try_lock_for(Duration::from_millis(5)) {
-                    break service;
+                open.require_live()?;
+                slot.require_live()?;
+                runtime.require_point_read_service(&self.local_service, &self.local_node_id)?;
+                let service = loop {
+                    parent.check()?;
+                    if let Some(service) = self.local_service.try_lock_for(Duration::from_millis(5))
+                    {
+                        break service;
+                    }
+                };
+                let database = service.database();
+                let database = database
+                    .try_read()
+                    .ok_or_else(|| range_write_error("initial first READ original DB busy"))?;
+                open.require_database(&database)?;
+                if service.native_initial_listener_store_open_id() != slot.id() {
+                    return Err(range_write_error(
+                        "initial first READ original Store changed",
+                    ));
                 }
-            };
-            let database = service.database();
-            let database = database
-                .try_read()
-                .ok_or_else(|| range_write_error("initial first READ original DB busy"))?;
-            open.require_database(&database)?;
-            if service.native_initial_listener_store_open_id() != slot.id() {
-                return Err(range_write_error(
-                    "initial first READ original Store changed",
-                ));
+                let Some(topology) = self.topology.try_read() else {
+                    // A routing writer may itself need this service/DB. Never
+                    // wait for it while retaining either guard, nor turn busy
+                    // into absent/current. Every retry uses the original token.
+                    drop(database);
+                    drop(service);
+                    parent.check()?;
+                    std::thread::sleep(Duration::from_millis(2));
+                    continue;
+                };
+                host.require_for_coordinator_with_topology(&database, range, self, &topology)?;
+                genesis.require_current(&database, &topology)?;
+                return parent.check();
             }
-            host.require_for_coordinator(&database, range, self)?;
-            let topology = self
-                .topology
-                .try_read()
-                .ok_or_else(|| range_write_error("initial first READ original routing busy"))?;
-            genesis.require_current(&database, &topology)?;
-            parent.check()
         };
         #[cfg(test)]
         self.transport.test_before_initial_genesis_read(parent)?;

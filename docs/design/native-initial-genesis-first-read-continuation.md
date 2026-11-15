@@ -46,6 +46,15 @@ All service/DB/topology guards end before network IO. A fresh acquisition and
 business identity are created for each read; a successful observation is used
 only with its own business identity. No old observation is renewed.
 
+The immutable initial `fc517d70c` implementation had a source-found boundedness
+gap: its new original-owner check called the legacy coordinator validator,
+which can reacquire routing before the explicit routing try-read. The corrective
+child obtains the actual routing guard with the original parent, releases DB
+and service before pacing on routing contention, and uses the existing borrowed
+topology validator plus genesis check under that same guard. Busy is never
+absence/currentness. This correction does not alter the original post-first
+read tail or claim a historical cause or an executed regression result.
+
 Only locally produced ConnectionReset, ConnectionRefused, ConnectionAborted,
 BrokenPipe or UnexpectedEof provenance permits another first read. Timeouts,
 arbitrary application IO, framed semantic errors, malformed responses and

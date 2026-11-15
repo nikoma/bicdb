@@ -36,7 +36,9 @@ or restarted to publish a correction.
 
 Local corrective source `c62f0fb4c` qualifies both parameters as `crate::BicDb`
 and explicitly refuses both narrow serving purposes in the generic recovery
-readiness consumer before Frozen/pin/readiness construction. It assigns no
+readiness consumer before Frozen validation and new source-pin/readiness
+construction. The caller's Frozen input already exists; this is not a global
+no-effect claim. It assigns no
 generic recovery owner to either purpose. This is a **source correction only**:
 standalone formatting and diff checks passed; it has not compiled or executed.
 This compile defect supplies no runtime proof of an authority bypass or of HA

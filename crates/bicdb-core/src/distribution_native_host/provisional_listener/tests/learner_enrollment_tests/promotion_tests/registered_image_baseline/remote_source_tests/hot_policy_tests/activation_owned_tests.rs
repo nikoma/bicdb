@@ -93,6 +93,14 @@ pub(super) fn activate(
         let fired = fault.fired();
         drop(fault);
         events.push(serde_json::json!({"stage":"actual_activation_write_return","returned_ok":initial.is_ok(),"exact_error":initial.as_ref().err().map(ToString::to_string),"fault_fired":fired}));
+        // Retain the original API return before diagnostics or an unreached
+        // fault assertion can panic. Runner-local evidence is not guaranteed
+        // to be uploaded; the final report below is unreachable on panic.
+        eprintln!(
+            "NATIVE_OWNED_ACTIVATION_RETURN {}",
+            serde_json::json!({"case":format!("{case:?}"),"local_node":local,
+                "actual_return":events.last(),"scope":"same-process component return; not physical qualification"})
+        );
         let before = published.test_owned_activation_state(local)?;
         events
             .push(serde_json::json!({"stage":"retained_original_failed_write","snapshot":before}));

@@ -11,7 +11,19 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
-## Current complete execution — source6de failed, 2026-11-15 UTC
+## Current partial execution — sourcebd09 compilation failed, 2026-11-15 UTC
+
+Draft520 `bd09a77e8e72bb88e73c395b9629d96812061c30` failed all-target and Rails
+compilation on two unresolved `BicDb` types and an incomplete generic-recovery
+purpose match. Those jobs executed no tests; no-default consumer and Rails
+application acceptance were not reached. SQL and PGwire also failed, with exact
+cuts still being classified; other useful jobs remain running. Local source
+corrections qualify the types and explicitly refuse the narrow serving purposes
+at the generic consumer; they are uncompiled and unexecuted. Source6de passes
+below do not transfer to this successor. Main remains519; no binary, deployment,
+physical or production gate is cleared by this source checkpoint.
+
+## Previous complete execution — source6de failed, 2026-11-15 UTC
 
 Delivered main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
 Current draft520 `6de646beb603accf39358017d8e0c83c39c741b1` passed workspace /

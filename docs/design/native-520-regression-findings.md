@@ -4,6 +4,44 @@ This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe64
 
 ## Actual execution
 
+### Sourcebd09: early compilation failed; other jobs remain unresolved
+
+Draft PR207 source **1.0.520-beta /
+`bd09a77e8e72bb88e73c395b9629d96812061c30`**, tree
+`c8b9d8d64a7593211cf3ebd1eaa7bddd45747909`, was published only after source6de
+completed and its full archive was frozen. Normal
+[Tests43726287929](https://github.com/nikoma/bicdb/actions/runs/43726287929) and
+[Rails43726288005](https://github.com/nikoma/bicdb/actions/runs/43726288005)
+check out actual merge `cb8c3b61bf70105f79af059f07b6a54704fa6ca6`, whose tree
+matches the public source exactly.
+
+All-target132848817942 and Rails132848817906 failed Core compilation on the same
+three diagnostics: two E0425 unresolved `BicDb` types in
+`joint/bridge/preparation_custody.rs:452,567`, and E0004 at
+`db/native_recovery_ready.rs:1947` for the new `NativeJointServingPhase` and
+`NativeJointLocalServingPolicy` purposes. Both complete logs contain **zero
+test-case rows and zero runtime summaries**. The no-default consumer and Rails
+application steps were not reached, not passed. SQL and PGwire have also failed;
+their full failure cuts are not yet classified at this checkpoint. Core, Native
+and remaining-workspace are still running. No earlier passing result is inherited.
+
+All-target complete raw95,210 bytes, SHA-256
+`820b96be94fac96483bc256dc83b9dec9a82ce235fece4bb0f47c24f93cd3d23`;
+Rails raw108,757 bytes,
+`58d95fb772cca5b3ec6ff295116a78727337c755b1c794bd69790a14ad9aa56c`.
+Independent root complete-log compiler/result-scope receipt:
+`3b93957ad58c70cb15089f17410ef00a77b28cc0dd7308c25fca0e60cde7854a`.
+The sole collector remains on this exact source; useful jobs are not cancelled
+or restarted to publish a correction.
+
+Local corrective source `c62f0fb4c` qualifies both parameters as `crate::BicDb`
+and explicitly refuses both narrow serving purposes in the generic recovery
+readiness consumer before Frozen/pin/readiness construction. It assigns no
+generic recovery owner to either purpose. This is a **source correction only**:
+standalone formatting and diff checks passed; it has not compiled or executed.
+This compile defect supplies no runtime proof of an authority bypass or of HA
+acceptance. The original failed source and all original assertions remain intact.
+
 ### Source6de: Core and Native failed; compilation, SQL, PGwire and Rails passed
 
 Current draft PR207 source is **1.0.520-beta /

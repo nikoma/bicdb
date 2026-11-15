@@ -430,6 +430,8 @@ pub(crate) struct NativeMetadataControlHost {
     remote_preparation_test: BTreeMap<crate::RangeId, u8>,
     remote_serving:
         BTreeMap<(crate::RangeId, Uuid), remote_serving_owner::NativeRemoteLocalServing>,
+    remote_reference_retirement:
+        BTreeMap<(crate::RangeId, Uuid), remote_serving_owner::NativeRemoteReferenceRetirement>,
     replica: Option<NativeRegisteredReplicaReceiver>,
     assigned: Option<NativeAssignedDataHost>,
     joined: Option<NativeJoinedDataHost>,
@@ -460,6 +462,7 @@ impl NativeMetadataControlHost {
             data_process: std::sync::OnceLock::new(),
             remote_serving_process: std::sync::OnceLock::new(),
             remote_serving: BTreeMap::new(),
+            remote_reference_retirement: BTreeMap::new(),
             #[cfg(test)]
             remote_preparation_test: BTreeMap::new(),
             replica: None,
@@ -487,6 +490,7 @@ impl NativeMetadataControlHost {
             data_process: std::sync::OnceLock::new(),
             remote_serving_process: std::sync::OnceLock::new(),
             remote_serving: BTreeMap::new(),
+            remote_reference_retirement: BTreeMap::new(),
             #[cfg(test)]
             remote_preparation_test: BTreeMap::new(),
             replica: None,

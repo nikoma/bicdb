@@ -84,7 +84,8 @@ pub(crate) use remote_first::{
 pub(crate) use remote_serving::{
     NativeRemoteBridgeReadRequestAdmission, NativeRemoteBridgeRequestAdmission,
     NativeRemoteOpenRequestAdmission, NativeRemotePreparationAdmission,
-    NativeRemotePreparationProcess, NativeRemotePreparationReadAdmission, NativeRemoteServingQueue,
+    NativeRemotePreparationProcess, NativeRemotePreparationReadAdmission,
+    NativeRemoteReleaseRequestAdmission, NativeRemoteServingQueue,
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use remote_serving::{

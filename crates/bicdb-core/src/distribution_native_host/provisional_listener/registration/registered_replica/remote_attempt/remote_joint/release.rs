@@ -15,6 +15,24 @@ pub(crate) struct NativeRegisteredRemoteJointReleaseOwner {
     owner: Arc<NativeRegisteredRemoteJointOwner>,
 }
 impl NativeRegisteredRemoteJointOwner {
+    pub(crate) fn require_original_release_freeze(
+        &self,
+        frozen: &Arc<NativeImageInstallFreeze>,
+    ) -> Result<()> {
+        let original = self
+            .frozen
+            .try_lock()
+            .ok_or_else(|| invalid("Registered original release comparison busy"))?;
+        if original
+            .as_ref()
+            .is_none_or(|actual| !Arc::ptr_eq(actual, frozen))
+        {
+            return Err(invalid(
+                "Registered release comparison changed SAME original freeze",
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn retain_release(
         self: &Arc<Self>,
         frozen: &Arc<NativeImageInstallFreeze>,
@@ -125,6 +143,14 @@ impl NativeRegisteredRemoteJointReleaseOwner {
         admission: &NativeJointReleaseAdmission,
     ) -> Result<()> {
         self.release_fresh_with(admission, || Ok(()))
+    }
+    #[cfg(test)]
+    pub(crate) fn test_release_with_fresh_phase_at_actual_drop(
+        &mut self,
+        admission: &NativeJointReleaseAdmission,
+        after_drop: impl FnOnce() -> Result<()>,
+    ) -> Result<()> {
+        self.release_fresh_with(admission, after_drop)
     }
     #[cfg(test)]
     pub(crate) fn test_release_with_fresh_phase_after_drop(

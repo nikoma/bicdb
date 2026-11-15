@@ -81,6 +81,7 @@ pub(crate) struct NativeRemoteNewParticipant {
     >,
     remote_prepared:
         Mutex<Option<Weak<crate::distribution_range_handoff::NativeJointPreparationCustody>>>,
+    remote_release: Mutex<Option<Weak<crate::distribution_data::NativeRemoteReleaseOwner>>>,
 }
 impl NativeRemoteNewParticipant {
     #[allow(clippy::too_many_arguments)]
@@ -177,6 +178,7 @@ impl NativeRemoteNewParticipant {
             serving_queue: Arc::default(),
             remote_prepared: Mutex::new(None),
             remote_bridge: Mutex::new(None),
+            remote_release: Mutex::new(None),
         })
     }
 
@@ -297,6 +299,7 @@ impl NativeRemoteNewParticipant {
             serving_queue: Arc::default(),
             remote_prepared: Mutex::new(None),
             remote_bridge: Mutex::new(None),
+            remote_release: Mutex::new(None),
         })
     }
 

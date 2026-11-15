@@ -21,6 +21,7 @@ mod bridge_tests;
 mod metadata_head_tests;
 mod open_tests;
 mod preparation_tests;
+mod release_tests;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Case {
     Normal,
@@ -61,6 +62,9 @@ enum Case {
     OpenLaterIoFailed,
     OpenCancelledAfterIo,
     OpenIoUnknown,
+    Release,
+    ReleaseMissingOpen,
+    ReleaseCancelledAfterDrop,
 }
 fn is_catalogue_case(case: Case) -> bool {
     matches!(
@@ -90,6 +94,9 @@ fn is_catalogue_case(case: Case) -> bool {
             | Case::OpenLaterIoFailed
             | Case::OpenCancelledAfterIo
             | Case::OpenIoUnknown
+            | Case::Release
+            | Case::ReleaseMissingOpen
+            | Case::ReleaseCancelledAfterDrop
     )
 }
 #[derive(Clone, Copy, Debug)]
@@ -99,6 +106,12 @@ enum SetupCut {
 }
 
 enum OwnerCommand {
+    RetireReferences(crate::RangeId, Uuid, mpsc::SyncSender<serde_json::Value>),
+    ReleaseControl(
+        crate::RangeId,
+        Option<u8>,
+        mpsc::SyncSender<serde_json::Value>,
+    ),
     OpenControl(
         crate::RangeId,
         Option<u8>,
@@ -790,6 +803,17 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
             while !active.load(Ordering::Acquire) && parent.check().is_ok() {
                 while let Ok(command)=owner_receive.try_recv() {
                     match command {
+                    OwnerCommand::RetireReferences(range,phase,send)=> {
+                        let request=parent.child_with_deadline(Instant::now()+Duration::from_secs(4));
+                        let actual=target.retire_finite_remote_open_references(range,phase,&request);
+                        let _=send.try_send(serde_json::json!({"ok":actual.is_ok(),"data":actual.as_ref().ok(),
+                            "error":actual.as_ref().err().map(crate::distribution_native_host::remote_first::error_data)}));
+                    },
+                    OwnerCommand::ReleaseControl(range,mode,send)=> {
+                        let actual=target.test_remote_release_control(range,mode);
+                        let _=send.try_send(serde_json::json!({"ok":actual.is_ok(),"data":actual.as_ref().ok(),
+                            "error":actual.as_ref().err().map(crate::distribution_native_host::remote_first::error_data)}));
+                    },
                     OwnerCommand::OpenControl(range,mode,send)=> {
                         let actual=target.test_remote_open_control(range,mode);
                         let _=send.try_send(serde_json::json!({"ok":actual.is_ok(),"data":actual.as_ref().ok(),
@@ -825,7 +849,7 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                         worker_omitted += 1;
                     }
                 }
-                if matches!(case,Case::Preparation|Case::PreparationCancelledAfterNative|Case::PreparationCommitUnknown|Case::Bridge|Case::BridgeMissingPrepared|Case::BridgeCancelledAfterNative|Case::BridgeCommitUnknown|Case::Open|Case::OpenR2Progress|Case::OpenLaterIoFailed|Case::OpenCancelledAfterIo|Case::OpenIoUnknown) {
+                if matches!(case,Case::Preparation|Case::PreparationCancelledAfterNative|Case::PreparationCommitUnknown|Case::Bridge|Case::BridgeMissingPrepared|Case::BridgeCancelledAfterNative|Case::BridgeCommitUnknown|Case::Open|Case::OpenR2Progress|Case::OpenLaterIoFailed|Case::OpenCancelledAfterIo|Case::OpenIoUnknown|Case::Release|Case::ReleaseMissingOpen|Case::ReleaseCancelledAfterDrop) {
                     if let Err(error)=target.poll_finite_remote_serving(&parent) {
                         if worker_errors.len()<64 {worker_errors.push(crate::distribution_native_host::remote_first::error_data(&error));}
                         else {worker_omitted+=1;}
@@ -1417,6 +1441,9 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                     | Case::OpenLaterIoFailed
                     | Case::OpenCancelledAfterIo
                     | Case::OpenIoUnknown
+                    | Case::Release
+                    | Case::ReleaseMissingOpen
+                    | Case::ReleaseCancelledAfterDrop
             ) {
                 // Same five retained normal hosts; real range leader directly
                 // observes OLD/survivor/Registered NEW, donor remains neither leader.
@@ -1913,6 +1940,9 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                                 | Case::OpenLaterIoFailed
                                 | Case::OpenCancelledAfterIo
                                 | Case::OpenIoUnknown
+                                | Case::Release
+                                | Case::ReleaseMissingOpen
+                                | Case::ReleaseCancelledAfterDrop
                         )
                         .then(|| {
                             (
@@ -2077,4 +2107,17 @@ fn native_first_actual_open_post_io_server_cancel_resolves_owned_without_native_
 #[test]
 fn native_first_actual_open_directory_sync_unknown_requires_new_owned_fsync() {
     run(Case::OpenIoUnknown);
+}
+
+#[test]
+fn native_first_actual_all_open_retirement_and_unique_release_component() {
+    run(Case::Release);
+}
+#[test]
+fn native_first_actual_release_refuses_missing_real_open_before_successor() {
+    run(Case::ReleaseMissingOpen);
+}
+#[test]
+fn native_first_actual_registered_drop_cancel_retains_owner_then_reconciles() {
+    run(Case::ReleaseCancelledAfterDrop);
 }

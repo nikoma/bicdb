@@ -4,6 +4,7 @@ use super::*;
 use crate::distribution_native_host::{
     NativeRemoteServingPointV1, NativeRemoteServingReplyV1, NativeRemoteServingRequestV1,
 };
+mod released;
 
 pub(crate) struct NativeRemoteServingReadAdmission<'a> {
     participant: &'a NativeRemoteNewParticipant,
@@ -519,6 +520,27 @@ impl NativeRemoteNewParticipant {
         parent: &CancellationToken,
     ) -> Result<NativeRemoteServingReplyV1> {
         use crate::distribution_native_host::NativeRemoteServingOperationV1 as Op;
+        if matches!(request.operation, Op::ObserveOpen | Op::ObserveReleased) {
+            let route = self
+                .remote_release
+                .try_lock()
+                .map_err(|_| invalid("remote release readonly route busy"))?
+                .clone();
+            if let Some(route) = route {
+                let original = route.upgrade().ok_or_else(|| {
+                    invalid("remote release original successor ended; no reconstruction")
+                })?;
+                let observed = original.observe_current(transport, metadata_leader, parent)?;
+                return self.observe_actual_release_for_serving(
+                    request, role, own, business, metadata, parent, &observed,
+                );
+            }
+            if request.operation == Op::ObserveReleased {
+                return Err(invalid(
+                    "released observation requires actual original successor",
+                ));
+            }
+        }
         if !matches!(request.operation, Op::ObserveBridge | Op::ObserveOpen) {
             return Err(invalid(
                 "direct Open route accepts distinct readonly bridge/Open observations only",

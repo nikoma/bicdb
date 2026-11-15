@@ -92,6 +92,7 @@ impl NativeInitialDataAdmission {
             request.operation,
             crate::distribution_native_host::NativeRemoteServingOperationV1::ObserveBridge
                 | crate::distribution_native_host::NativeRemoteServingOperationV1::ObserveOpen
+                | crate::distribution_native_host::NativeRemoteServingOperationV1::ObserveReleased
         ) {
             let leader = provider
                 .current_metadata_leader_hint(&token)?

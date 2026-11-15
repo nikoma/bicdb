@@ -37,6 +37,26 @@ impl NativeRemoteOldRetirementSlot<'_> {
 }
 
 impl NativeRemoteNewParticipant {
+    /// The genuine donor registry remains reachable from the original OLD
+    /// participant even when that donor is outside final NEW. This is only a
+    /// memory-reference retirement; no readonly RPC or data Role is widened.
+    pub(crate) fn retire_original_source_after_all_open(
+        &self,
+        phase: &NativeRemoteAllOpenRetirementAdmission<'_>,
+    ) -> Result<()> {
+        phase.require_current()?;
+        phase.require_original_participant(self)?;
+        if phase.manifest().source_id != self.snapshot.node_id {
+            return Ok(());
+        }
+        let OriginalParticipant::Old { process, .. } = &self.original else {
+            return Err(invalid(
+                "ALL Open donor is not the original actual OLD participant",
+            ));
+        };
+        process.retire_original_source_after_all_open(phase)
+    }
+
     pub(crate) fn retire_original_after_all_open(
         &self,
         phase: &NativeRemoteAllOpenRetirementAdmission<'_>,

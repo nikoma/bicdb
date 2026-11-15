@@ -2,6 +2,8 @@
 //! host reconstruction, replacement owner, or authority from reply DATA.
 use super::*;
 mod open;
+mod reference_retirement;
+mod release;
 use crate::distribution_data::{
     NativeJointServingLease, NativeRemoteServiceBridge, NativeRemoteServicePreparation,
 };
@@ -10,6 +12,7 @@ use crate::distribution_native_host::{
     NativeRemotePreparationProcess, NativeRemoteServingOperationV1, NativeRemoteServingReplyV1,
 };
 use crate::distribution_range_handoff::NativeRemoteNewParticipant;
+pub(super) use reference_retirement::NativeRemoteReferenceRetirement;
 
 pub(super) struct NativeRemoteLocalServing {
     participant: Arc<NativeRemoteNewParticipant>,
@@ -26,8 +29,11 @@ pub(super) struct NativeRemoteLocalServing {
     open_test: Option<u8>,
     #[cfg(test)]
     open_cut: Option<serde_json::Value>,
+    #[cfg(test)]
+    release_test: Option<u8>,
     activation:
         Option<Arc<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt>>,
+    release: Option<Arc<crate::distribution_data::NativeRemoteReleaseOwner>>,
 }
 impl NativeMetadataControlHost {
     /// One explicit actor turn. It operates on this actual &mut host; it does
@@ -68,6 +74,23 @@ impl NativeMetadataControlHost {
                 continue;
             };
             let result = self.apply_finite_remote_serving(&participant, &mut work);
+            if matches!(
+                work.request.operation,
+                NativeRemoteServingOperationV1::Release
+                    | NativeRemoteServingOperationV1::ReconcileRelease
+            ) {
+                let key = (
+                    work.request.manifest.capture_range.id,
+                    work.request.phase_id,
+                );
+                if let Some(original) = self
+                    .remote_serving
+                    .get(&key)
+                    .and_then(|s| s.release.as_ref())
+                {
+                    original.note_outer_return(result.is_ok(), result.as_ref().err());
+                }
+            }
             // The actual primary result is retained/sent unchanged; the
             // original private native state is already held in this host.
             queue.complete(work, result)?;
@@ -81,6 +104,13 @@ impl NativeMetadataControlHost {
         work: &mut NativeRemoteServingIngress,
     ) -> Result<NativeRemoteServingReplyV1> {
         work.require_request()?;
+        if matches!(
+            work.request.operation,
+            NativeRemoteServingOperationV1::Release
+                | NativeRemoteServingOperationV1::ReconcileRelease
+        ) {
+            return self.apply_finite_remote_release(participant, work);
+        }
         if matches!(
             work.request.operation,
             NativeRemoteServingOperationV1::Open | NativeRemoteServingOperationV1::ReconcileOpen
@@ -144,10 +174,13 @@ impl NativeMetadataControlHost {
                     preparation: Default::default(),
                     bridge: Default::default(),
                     activation: None,
+                    release: None,
                     #[cfg(test)]
                     open_test: None,
                     #[cfg(test)]
                     open_cut: None,
+                    #[cfg(test)]
+                    release_test: None,
                 },
             );
         }

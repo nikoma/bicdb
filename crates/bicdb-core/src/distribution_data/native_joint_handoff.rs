@@ -23,6 +23,8 @@ mod remote_serving_preparation;
 pub(crate) use registered_target::ActualServiceNativeRegisteredJointNewEvidence;
 mod source_retirement;
 #[cfg(feature = "tls-replication")]
+pub(crate) use bridge::{NativeRemoteReleaseObservation, NativeRemoteReleaseOwner};
+#[cfg(feature = "tls-replication")]
 pub(crate) use remote_serving_bridge::NativeRemoteServiceBridge;
 #[cfg(feature = "tls-replication")]
 pub(crate) use remote_serving_preparation::NativeRemoteServicePreparation;

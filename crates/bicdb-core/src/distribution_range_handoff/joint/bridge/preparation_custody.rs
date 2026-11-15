@@ -10,6 +10,93 @@ pub(crate) struct NativeJointPreparationCustody {
     service: Arc<Mutex<ClusterDataNodeService>>,
 }
 impl NativeJointPreparationCustody {
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn remote_release_vote(
+        &self,
+        metadata_term: u64,
+        metadata_read_index: u64,
+        metadata_context_id: Uuid,
+    ) -> Result<NativeJointPreparedServingVoteData> {
+        self.require_original_caller()?;
+        let prepared = self.actual.prepared();
+        Ok(NativeJointPreparedServingVoteData {
+            preparation_sha256: prepared.checksum_sha256().into(),
+            native_database_incarnation: prepared.native_database_incarnation().into(),
+            actual_local_visibility_sequence: prepared.actual_local_visibility_sequence(),
+            metadata_term,
+            metadata_read_index,
+            metadata_context_id,
+        })
+    }
+    /// SAME actual reference, borrowed only for the fresh release comparison.
+    /// This creates neither a Frozen clone nor a release admission.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn with_original_remote_release_owner<T>(
+        &self,
+        native: &crate::db::NativeJointServingBridgeReceipt,
+        operation: impl for<'a> FnOnce(
+            &Arc<Mutex<ClusterDataNodeService>>,
+            crate::distribution_data::NativeJointReleaseOwnerView<'a>,
+        ) -> Result<T>,
+    ) -> Result<T> {
+        self.require_original_caller()?;
+        if native.data() != self.actual.committed().data()
+            || native.native_preparation_sha256() != self.actual.prepared().checksum_sha256()
+        {
+            return Err(invalid(
+                "release comparison changed original prepared/native owner",
+            ));
+        }
+        self.actual
+            .with_original_remote_release_owner(&self.service, operation)
+    }
+
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn retain_remote_release_successor(
+        self: &Arc<Self>,
+        participant: &Arc<crate::distribution_range_handoff::NativeRemoteNewParticipant>,
+        process: Arc<crate::distribution_native_host::NativeRemotePreparationProcess>,
+        native: Arc<crate::db::NativeJointServingBridgeReceipt>,
+        activation: Arc<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt>,
+        survivor: Option<Arc<crate::distribution_range_handoff::NativeJointHandoffRuntime>>,
+    ) -> Result<Arc<crate::distribution_data::NativeRemoteReleaseOwner>> {
+        crate::distribution_data::NativeRemoteReleaseOwner::retain_original(
+            self.clone(),
+            &self.actual,
+            self.service.clone(),
+            participant,
+            process,
+            native,
+            activation,
+            survivor,
+        )
+    }
+
+    /// A private one-way custody move under the actual remote admission. A
+    /// busy Arc is returned unchanged to the already-retained successor.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn try_into_remote_release_parts(
+        self: Arc<Self>,
+        admission: &crate::distribution_range_handoff::NativeJointReleaseAdmission,
+        successor: &crate::distribution_data::NativeRemoteReleaseOwner,
+    ) -> std::result::Result<
+        (
+            Arc<ActualServiceNativeJointPreparedEvidence>,
+            Arc<Mutex<ClusterDataNodeService>>,
+        ),
+        (BicDbError, Arc<Self>),
+    > {
+        if let Err(error) = admission.require_remote_successor(successor) {
+            return Err((error, self));
+        }
+        match Arc::try_unwrap(self) {
+            Ok(actual) => Ok((actual.actual, actual.service)),
+            Err(original) => Err((
+                invalid("release waits for original preparation custody readers"),
+                original,
+            )),
+        }
+    }
     /// Infallible custody transfer immediately after the genuine producer.
     /// The service association is UNTRUSTED until the full count boundary.
     pub(crate) fn retain(

@@ -47,6 +47,42 @@ enum NativeLearnerLifecycle {
     Cold(NativeColdLearnerMetadataHost),
 }
 impl NativeMetadataLearnerHost {
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_remote_release_control(
+        &mut self,
+        range: crate::RangeId,
+        mode: Option<u8>,
+    ) -> Result<serde_json::Value> {
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => host
+                .test_registered_image_control_mut()?
+                .test_remote_release_control(range, mode),
+            NativeLearnerLifecycle::Cold(_) => {
+                Err(invalid("release control cannot cast cold owner to Fresh"))
+            }
+        }
+    }
+    pub(crate) fn retire_finite_remote_open_references(
+        &mut self,
+        range: crate::RangeId,
+        phase: uuid::Uuid,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        if self.stopped {
+            return Err(invalid(
+                "reference retirement original learner host stopped",
+            ));
+        }
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => {
+                host.retire_finite_remote_open_references(range, phase, parent)
+            }
+            NativeLearnerLifecycle::Cold(_) => Err(invalid(
+                "reference retirement requires original Fresh owner; cold reconstruction unsupported",
+            )),
+        }
+    }
     pub(crate) fn poll_finite_remote_serving(
         &mut self,
         parent: &CancellationToken,

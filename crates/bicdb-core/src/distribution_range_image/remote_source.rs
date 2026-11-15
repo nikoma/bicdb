@@ -760,6 +760,27 @@ pub(crate) struct NativeRemoteImageSourceRegistry {
     original_process: std::sync::OnceLock<CancellationToken>,
 }
 impl NativeRemoteImageSourceRegistry {
+    /// Select only an existing actual discovery owner. A manifest does not
+    /// create a source, certificate, replacement capture or registry entry.
+    pub(crate) fn retire_original_source_after_all_open(
+        &self,
+        phase: &crate::distribution_range_handoff::NativeRemoteAllOpenRetirementAdmission<'_>,
+    ) -> Result<()> {
+        self.require_original_process()?;
+        phase.require_current()?;
+        let attempt = self
+            .discoveries
+            .try_lock()
+            .ok_or_else(|| invalid("ALL Open actual source discovery table busy"))?
+            .get(&phase.manifest().capture_range.id)
+            .cloned()
+            .ok_or_else(|| invalid("ALL Open original source discovery absent"))?;
+        let source = attempt
+            .source()?
+            .ok_or_else(|| invalid("ALL Open original retained source absent"))?;
+        source.retire_remote_old_export_after_all_open(phase)
+    }
+
     pub(crate) fn new(
         transport: Arc<TcpClusterRelocationTransport>,
         provider: Arc<crate::distribution_metadata_read_provider::MetadataReadProvider>,

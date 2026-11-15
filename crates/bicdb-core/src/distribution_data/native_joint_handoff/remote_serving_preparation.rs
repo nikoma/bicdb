@@ -9,10 +9,35 @@ use crate::distribution_range_handoff::{
 pub(crate) struct NativeRemoteServicePreparation {
     native: Option<crate::db::NativeRemoteJointPreparationAttempt>,
     completed: Option<Arc<NativeJointPreparationCustody>>,
+    transferred: Option<std::sync::Weak<NativeRemoteReleaseOwner>>,
     #[cfg(test)]
     mode: u8,
 }
 impl NativeRemoteServicePreparation {
+    /// Retire only the extra host reference after the SAME successor is
+    /// already retained and routed. None after this take is never fresh work.
+    pub(crate) fn transfer_to_release_successor(
+        &mut self,
+        successor: &Arc<NativeRemoteReleaseOwner>,
+    ) -> Result<()> {
+        if let Some(original) = &self.transferred {
+            if !std::sync::Weak::ptr_eq(original, &Arc::downgrade(successor)) {
+                return Err(data_error(
+                    "preparation release refuses replacement successor",
+                ));
+            }
+            return Ok(());
+        }
+        let actual = self
+            .completed
+            .as_ref()
+            .ok_or_else(|| data_error("release requires actual completed preparation owner"))?;
+        successor.require_original_custody(actual)?;
+        self.transferred = Some(Arc::downgrade(successor));
+        let redundant = self.completed.take();
+        drop(redundant);
+        Ok(())
+    }
     pub(crate) fn completed(&self) -> Option<&Arc<NativeJointPreparationCustody>> {
         self.completed.as_ref()
     }
@@ -126,6 +151,11 @@ impl ClusterDataNodeService {
         let process = admission.process().clone();
         let request = admission.request();
         request.check()?;
+        if retained.transferred.is_some() {
+            return Err(data_error(
+                "remote preparation already moved to original release successor; no new attempt",
+            ));
+        }
         if retained.completed.is_some() {
             return Err(data_error("remote preparation already retained; use distinct fresh protected observation, never native replay"));
         }

@@ -352,6 +352,41 @@ pub(super) struct RetainedInitialOld {
 pub(super) type RetainedInitialOldTable =
     Mutex<BTreeMap<crate::RangeId, Arc<Mutex<RetainedInitialOld>>>>;
 impl NativeInitialDataHost {
+    pub(in crate::distribution_native_host) fn retained_remote_release_runtime(
+        &self,
+        participant: &Arc<crate::distribution_range_handoff::NativeRemoteNewParticipant>,
+    ) -> Result<Arc<crate::distribution_range_handoff::NativeJointHandoffRuntime>> {
+        if self.stopping {
+            return Err(invalid(
+                "stopping INITIAL host cannot transfer release custody",
+            ));
+        }
+        let admission = self
+            .admission
+            .as_ref()
+            .ok_or_else(|| invalid("release original INITIAL admission absent"))?;
+        let table = self
+            .old_closures
+            .try_lock()
+            .ok_or_else(|| invalid("release original OLD table busy"))?;
+        let entry = table
+            .get(&participant.snapshot().binding.range_id)
+            .ok_or_else(|| invalid("release original OLD table entry absent"))?
+            .try_lock()
+            .ok_or_else(|| invalid("release original OLD entry busy"))?;
+        admission.require_remote_new_original_memory(&entry.writer)?;
+        if entry
+            .remote_new
+            .as_ref()
+            .is_none_or(|original| !Arc::ptr_eq(original, participant))
+            || entry.remote_retired
+        {
+            return Err(invalid(
+                "release runtime capture changed original participant or retired slot",
+            ));
+        }
+        Ok(entry.runtime.clone())
+    }
     pub(super) fn retained_actual_old_source(
         &self,
         range: crate::RangeId,

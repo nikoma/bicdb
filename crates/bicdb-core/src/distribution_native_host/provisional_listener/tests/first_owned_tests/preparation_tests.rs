@@ -45,6 +45,19 @@ pub(super) fn exercise(
         )?;
         assert_eq!(actual["actual_committed_record"]["stage"], expected);
     }
+    if release_tests::is_case(case) {
+        return release_tests::exercise(
+            five,
+            metadata,
+            relocation,
+            phase,
+            range,
+            final_members,
+            target,
+            report,
+            case,
+        );
+    }
     if open_tests::is_case(case) {
         return open_tests::exercise(
             five,

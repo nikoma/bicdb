@@ -224,6 +224,31 @@ impl NativeMetadataHost {
             .ok_or_else(|| invalid("actual Open control owner absent"))?
             .drive_finite_remote_open(relocation, phase, node, reconcile, parent)
     }
+    pub(crate) fn drive_finite_remote_release(
+        &mut self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+        node: &ClusterNodeId,
+        reconcile: bool,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual Release metadata owner absent"))?
+            .drive_finite_remote_release(relocation, phase, node, reconcile, parent)
+    }
+    pub(crate) fn inspect_finite_remote_released(
+        &self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+        node: &ClusterNodeId,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_ref()
+            .ok_or_else(|| invalid("actual released observation metadata owner absent"))?
+            .inspect_finite_remote_released(relocation, phase, node, parent)
+    }
     pub(crate) fn inspect_finite_remote_open(
         &self,
         relocation: crate::distribution::RelocationId,
@@ -246,6 +271,28 @@ impl NativeMetadataHost {
             .as_mut()
             .ok_or_else(|| invalid("actual Open control owner absent"))?
             .test_remote_open_control(range, mode)
+    }
+    pub(crate) fn retire_finite_remote_open_references(
+        &mut self,
+        range: crate::RangeId,
+        phase: uuid::Uuid,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual reference retirement control host absent"))?
+            .advance_remote_all_open_reference_retirement(range, phase, parent)
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_remote_release_control(
+        &mut self,
+        range: crate::RangeId,
+        mode: Option<u8>,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual release control host absent"))?
+            .test_remote_release_control(range, mode)
     }
     pub(crate) fn poll_finite_remote_serving(
         &mut self,

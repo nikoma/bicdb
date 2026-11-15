@@ -288,6 +288,69 @@ impl NativeRemoteDecisionAdmission<'_> {
     }
 }
 impl NativeRemoteNewParticipant {
+    pub(crate) fn require_remote_release_proof(
+        &self,
+        proof: &NativeRemoteAllOpenQuorum,
+    ) -> Result<()> {
+        self.require_lifetime_memory()?;
+        let held = self
+            .decision
+            .try_lock()
+            .ok_or_else(|| invalid("remote Release original native outcome busy"))?;
+        let completed = held
+            .completed
+            .as_ref()
+            .ok_or_else(|| invalid("remote Release original known native return absent"))?;
+        let native = held
+            .native
+            .as_ref()
+            .ok_or_else(|| invalid("remote Release original private native attempt absent"))?;
+        if held.expected.as_ref() != Some(completed.data()) {
+            return Err(invalid("remote Release original native body changed"));
+        }
+        held.catalogue
+            .as_ref()
+            .ok_or_else(|| invalid("remote Release original decision catalogue absent"))?
+            .require_original_successful_publication()?;
+        proof.require_original_native(self, completed, native)
+    }
+    /// Intent DATA selected only from this actual retained participant. It
+    /// cannot construct an owner or authorize retirement without a newly
+    /// collected opaque ALL-Open proof and fresh local metadata point.
+    pub(crate) fn retained_serving_intent(
+        &self,
+    ) -> Result<(Arc<NativeRemoteImageManifestV1>, Uuid, String)> {
+        self.require_lifetime_memory()?;
+        let held = self
+            .decision
+            .try_lock()
+            .ok_or_else(|| invalid("retirement original native decision busy"))?;
+        let completed = held
+            .completed
+            .as_ref()
+            .ok_or_else(|| invalid("retirement requires actual known native decision return"))?;
+        let native = held
+            .native
+            .as_ref()
+            .ok_or_else(|| invalid("retirement original native decision attempt absent"))?;
+        native.actual_committed_xid()?;
+        if held.expected.as_ref() != Some(completed.data()) || held.catalogue.is_none() {
+            return Err(invalid(
+                "retirement original decision/catalogue custody changed",
+            ));
+        }
+        let manifest: NativeRemoteImageManifestV1 = serde_json::from_slice(&self.manifest_bytes)?;
+        manifest.require_shape()?;
+        if manifest.checksum_sha256 != self.snapshot.binding.manifest_sha256 {
+            return Err(invalid("retirement retained manifest identity changed"));
+        }
+        Ok((
+            Arc::new(manifest),
+            self.snapshot.phase_id,
+            completed.decision_sha256().to_string(),
+        ))
+    }
+
     pub(super) fn require_all_open_known_decision(
         &self,
         phase: &NativeRemoteAllOpenRetirementAdmission<'_>,

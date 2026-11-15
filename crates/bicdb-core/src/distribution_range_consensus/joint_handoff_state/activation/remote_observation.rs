@@ -2,6 +2,42 @@
 //! activation additionally requires its retained actual verified IO owner.
 use super::*;
 impl RangeWriteStore {
+    /// Distinct post-Open read under a genuine native historical scope and
+    /// actual release-state observation. This never resolves uncertain IO or
+    /// treats an old owner/candidate as the current full head.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn observe_remote_release_catalogue(
+        &self,
+        scope: &crate::db::NativeJointHistoricalCutScope<'_>,
+        fact: &NativeJointCatalogueActivationFact,
+    ) -> Result<(String, String, u64)> {
+        fact.require_current_with_historical_cut_scope(scope, self)?;
+        self.require_native_catalog_durability(scope.database().data_path())?;
+        self.require_current_catalogue_io_returned_ok()?;
+        let generation = self.current_catalogue_write_generation();
+        let mut bytes = Vec::new();
+        open_range_catalog_no_follow(&self.root.join(DEFAULT_RANGE_WRITE_LOG))?
+            .take(64 * 1024 * 1024 + 1)
+            .read_to_end(&mut bytes)?;
+        if bytes.len() > 64 * 1024 * 1024 {
+            return Err(range_write_error(
+                "remote release read exceeds existing64MiB catalogue head",
+            ));
+        }
+        if serde_json::from_slice::<RangeWriteEnvelope>(&bytes)?.verify()? != self.catalog {
+            return Err(range_write_error(
+                "remote release actual current catalogue disk/memory differ",
+            ));
+        }
+        fact.require_current_with_historical_cut_scope(scope, self)?;
+        self.require_current_catalogue_io_generation(generation)?;
+        Ok((
+            hex::encode(Sha256::digest(&bytes)),
+            fact.activation_sha256()?,
+            generation,
+        ))
+    }
+
     #[cfg(feature = "tls-replication")]
     pub(crate) fn observe_remote_open_catalogue(
         &self,

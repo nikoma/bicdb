@@ -159,6 +159,97 @@ pub(crate) struct NativeRemoteAllOpenRetirementAdmission<'a> {
     caller: &'a CancellationToken,
 }
 impl NativeRemoteAllOpenQuorum {
+    pub(crate) fn require_live(&self) -> Result<()> {
+        self.actual.require_complete_memory()
+    }
+    pub(crate) fn require_post_all(
+        &self,
+        fresh: &crate::distribution_range_handoff::CommittedNativeJointDecisionObservation,
+    ) -> Result<()> {
+        self.require_live()?;
+        fresh.require_current_metadata_only()?;
+        let mf = &self.actual.manifest;
+        if fresh.data().checksum_sha256() != self.actual.decision
+            || fresh.data().promise().session_id != mf.handoff_session
+            || fresh.data().promise().nonce != mf.nonce
+            || fresh.data().activation_range() != &mf.activation_range
+            || self.actual.observer.as_ref() != Some(fresh.native_receipt().local_node_id())
+        {
+            return Err(invalid(
+                "remote Release changed ALL Open decision/recipient/domain",
+            ));
+        }
+        let (term, index, context) = fresh.metadata_anchor();
+        for frame in self.actual.frames.values() {
+            let prior = frame.metadata_anchor();
+            if term < prior.0 || index < prior.1 || context == prior.2 {
+                return Err(invalid(
+                    "remote Release requires independent post-ALL current MQ",
+                ));
+            }
+        }
+        self.require_live()
+    }
+    pub(crate) fn require_original_native(
+        &self,
+        participant: &NativeRemoteNewParticipant,
+        receipt: &crate::db::NativeJointDecisionReceipt,
+        native: &crate::db::NativeRemoteJointDecisionAttempt,
+    ) -> Result<()> {
+        self.require_live()?;
+        participant.require_lifetime_memory()?;
+        let snapshot = participant.snapshot();
+        let frame = self
+            .actual
+            .frames
+            .get(&snapshot.node_id)
+            .ok_or_else(|| invalid("remote Release omits actual final local member"))?;
+        let point = frame.point();
+        if snapshot.binding != self.actual.binding
+            || snapshot.phase_id != self.actual.phase
+            || self.actual.observer.as_ref() != Some(&snapshot.node_id)
+            || point.original_participant_sha256 != snapshot.checksum_sha256
+            || point.native_database_open != snapshot.database_open
+            || point.store_open != snapshot.store_open
+            || receipt.decision_sha256() != self.actual.decision
+            || point.native_decision_record_sha256 != receipt.checksum_sha256()
+            || point.native_decision_xid != native.actual_committed_xid()?
+            || point.remote_provenance_sha256 != native.actual_provenance_sha256()?
+        {
+            return Err(invalid(
+                "remote Release substituted original native attempt/owner/provenance",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn require_release_observation(
+        &self,
+        observed: &crate::distribution_data::NativeRemoteReleaseObservation,
+    ) -> Result<()> {
+        self.require_post_all(observed.actual().committed())?;
+        let owner = observed.owner();
+        let point = self
+            .actual
+            .frames
+            .get(owner.native().local_node_id())
+            .ok_or_else(|| invalid("remote Release lacks actual local Open frame"))?
+            .point();
+        if point.native_bridge_sha256.as_deref() != Some(owner.native().checksum_sha256())
+            || point.catalogue_activation_sha256.as_deref()
+                != Some(observed.actual().activation().activation_sha256()?.as_str())
+            || point.preparation.as_ref().is_none_or(|p| {
+                p.preparation_sha256 != observed.vote().preparation_sha256
+                    || p.native_database_incarnation != observed.vote().native_database_incarnation
+            })
+            || point.store_open != observed.actual().activation().store_open_id()
+            || point.original_frozen_owner != owner.frozen_owner()
+        {
+            return Err(invalid(
+                "remote Release changed actual original preparation/bridge/Open/Frozen",
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn admit_retirement<'a>(
         &'a self,
         own: &'a HostMetadataReadObservation,
@@ -178,6 +269,23 @@ impl NativeRemoteAllOpenQuorum {
     }
 }
 impl NativeRemoteAllOpenRetirementAdmission<'_> {
+    pub(crate) fn require_release_successor_observation(
+        &self,
+        participant: &NativeRemoteNewParticipant,
+        observed: &crate::distribution_data::NativeRemoteReleaseObservation,
+    ) -> Result<()> {
+        self.require_current()?;
+        self.require_original_participant(participant)?;
+        participant.require_remote_release_proof(self.quorum)?;
+        observed.owner().require_participant(participant)?;
+        self.quorum.require_release_observation(observed)?;
+        observed.inspect(
+            |scope, store, _head, _activation, _frozen, _released| {
+                self.require_database_store(scope.database(), store)
+            },
+            || self.require_memory_current(),
+        )
+    }
     pub(crate) fn require_memory_current(&self) -> Result<()> {
         self.caller.check()?;
         self.own.require_live_request(self.business)?;

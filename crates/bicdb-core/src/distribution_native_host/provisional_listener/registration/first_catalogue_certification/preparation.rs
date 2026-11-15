@@ -118,6 +118,64 @@ impl NativeMetadataControlHost {
         node: &ClusterNodeId,
         parent: &CancellationToken,
     ) -> Result<serde_json::Value> {
+        self.inspect_finite_remote_open_or_released(
+            relocation,
+            phase,
+            node,
+            NativeRemoteServingOperationV1::ObserveOpen,
+            parent,
+        )
+    }
+    pub(in crate::distribution_native_host) fn inspect_finite_remote_released(
+        &self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+        node: &ClusterNodeId,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.inspect_finite_remote_open_or_released(
+            relocation,
+            phase,
+            node,
+            NativeRemoteServingOperationV1::ObserveReleased,
+            parent,
+        )
+    }
+    pub(in crate::distribution_native_host) fn drive_finite_remote_release(
+        &mut self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+        node: &ClusterNodeId,
+        reconcile: bool,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.drive_finite_remote_serving_step(
+            relocation,
+            phase,
+            node,
+            if reconcile {
+                NativeRemoteServingOperationV1::ReconcileRelease
+            } else {
+                NativeRemoteServingOperationV1::Release
+            },
+            parent,
+        )
+    }
+    fn inspect_finite_remote_open_or_released(
+        &self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+        node: &ClusterNodeId,
+        operation: NativeRemoteServingOperationV1,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        if !matches!(
+            operation,
+            NativeRemoteServingOperationV1::ObserveOpen
+                | NativeRemoteServingOperationV1::ObserveReleased
+        ) {
+            return Err(invalid("finite Open/released reader operation differs"));
+        }
         let process = self
             .data_process
             .get()
@@ -163,7 +221,7 @@ impl NativeMetadataControlHost {
             decision_sha256: history.record.decision_sha256().into(),
             original_operation: Uuid::now_v7(),
             sequence: 1,
-            operation: NativeRemoteServingOperationV1::ObserveOpen,
+            operation,
             business,
             challenge: Uuid::now_v7(),
             budget_ms: remaining_finite(&token)?.as_millis().clamp(1, 5000) as u64,
@@ -196,6 +254,8 @@ impl NativeMetadataControlHost {
                 | NativeRemoteServingOperationV1::ResolveBridge
                 | NativeRemoteServingOperationV1::Open
                 | NativeRemoteServingOperationV1::ReconcileOpen
+                | NativeRemoteServingOperationV1::Release
+                | NativeRemoteServingOperationV1::ReconcileRelease
         ) {
             return Err(invalid("finite coordinator operation not implemented"));
         }
@@ -204,6 +264,7 @@ impl NativeMetadataControlHost {
             NativeRemoteServingOperationV1::ResolvePrepared
                 | NativeRemoteServingOperationV1::ResolveBridge
                 | NativeRemoteServingOperationV1::ReconcileOpen
+                | NativeRemoteServingOperationV1::ReconcileRelease
         );
         let actual_process = self
             .data_process
@@ -238,7 +299,8 @@ impl NativeMetadataControlHost {
                     (Some(pending),true) if &pending.node==node && matches!((operation,pending.request.operation),
                         (NativeRemoteServingOperationV1::ResolvePrepared,NativeRemoteServingOperationV1::Prepare)
                         | (NativeRemoteServingOperationV1::ResolveBridge,NativeRemoteServingOperationV1::PublishBridge)
-                        | (NativeRemoteServingOperationV1::ReconcileOpen,NativeRemoteServingOperationV1::Open))=>{},
+                        | (NativeRemoteServingOperationV1::ReconcileOpen,NativeRemoteServingOperationV1::Open)
+                        | (NativeRemoteServingOperationV1::ReconcileRelease,NativeRemoteServingOperationV1::Release))=>{},
                     (Some(_),_)=>return Err(invalid("remote preparation original pending return requires readonly resolution of SAME recipient; no mutation replay")),
                     (None,true)=>return Err(invalid("remote preparation has no original pending request to resolve")),
                     _=>{},
@@ -431,7 +493,15 @@ impl NativeMetadataControlHost {
                 operation,
                 NativeRemoteServingOperationV1::Open
                     | NativeRemoteServingOperationV1::ReconcileOpen
+                    | NativeRemoteServingOperationV1::Release
+                    | NativeRemoteServingOperationV1::ReconcileRelease
             ) && frame.point().catalogue_activation_sha256.is_none())
+            || (matches!(
+                operation,
+                NativeRemoteServingOperationV1::Release
+                    | NativeRemoteServingOperationV1::ReconcileRelease
+            ) && (frame.point().native_bridge_sha256.is_none()
+                || !frame.point().actual_dropped_open))
         {
             return Err(invalid(
                 "remote preparation actual protected preparation absent from authenticated return",

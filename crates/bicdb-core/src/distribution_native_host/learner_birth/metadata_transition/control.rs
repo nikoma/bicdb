@@ -1,6 +1,18 @@
 //! Existing Registered member control transition; never a fresh-voter factory.
 use super::*;
 impl NativeUnassignedLearnerHost {
+    pub(in crate::distribution_native_host) fn retire_finite_remote_open_references(
+        &mut self,
+        range: crate::RangeId,
+        phase: uuid::Uuid,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        self.metadata_transition
+            .control
+            .as_mut()
+            .ok_or_else(|| invalid("reference retirement actual original control absent"))?
+            .advance_remote_all_open_reference_retirement(range, phase, parent)
+    }
     pub(in crate::distribution_native_host) fn poll_finite_remote_serving(
         &mut self,
         parent: &CancellationToken,

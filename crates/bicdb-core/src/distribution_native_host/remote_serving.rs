@@ -10,6 +10,8 @@ use crate::distribution_range_recovery::RecoveryRoleAdmission;
 use parking_lot::Mutex;
 use std::sync::mpsc::{self, SyncSender};
 use std::time::Instant;
+mod release_request;
+pub(crate) use release_request::NativeRemoteReleaseRequestAdmission;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) enum NativeRemoteServingOperationV1 {
@@ -27,6 +29,7 @@ pub(crate) enum NativeRemoteServingOperationV1 {
     ResolvePrepared,
     ResolveBridge,
     ReconcileOpen,
+    ReconcileRelease,
 }
 impl NativeRemoteServingOperationV1 {
     pub(crate) fn readonly(self) -> bool {
@@ -319,13 +322,20 @@ impl NativeRemoteServingQueue {
                 || (!readonly && work.request.sequence <= state.admitted)
                 || (state.unknown.as_ref().is_some_and(|old| {
                     !readonly
-                        && !(work.request.operation
+                        && !(((work.request.operation
                             == NativeRemoteServingOperationV1::ReconcileOpen
                             && matches!(
                                 old.request.operation,
                                 NativeRemoteServingOperationV1::Open
                                     | NativeRemoteServingOperationV1::ReconcileOpen
-                            )
+                            ))
+                            || (work.request.operation
+                                == NativeRemoteServingOperationV1::ReconcileRelease
+                                && matches!(
+                                    old.request.operation,
+                                    NativeRemoteServingOperationV1::Release
+                                        | NativeRemoteServingOperationV1::ReconcileRelease
+                                )))
                             && state.binding.as_ref() == Some(&binding))
                 }))
             {
@@ -417,8 +427,11 @@ impl NativeRemoteServingQueue {
             if result.is_err()
                 && actual_effect
                 && !work.request.operation.readonly()
-                && !(work.request.operation == NativeRemoteServingOperationV1::ReconcileOpen
-                    && state.unknown.is_some())
+                && !(matches!(
+                    work.request.operation,
+                    NativeRemoteServingOperationV1::ReconcileOpen
+                        | NativeRemoteServingOperationV1::ReconcileRelease
+                ) && state.unknown.is_some())
             {
                 state.unknown = Some(Unknown {
                     request: work.request,

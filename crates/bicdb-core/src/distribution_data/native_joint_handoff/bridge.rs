@@ -16,9 +16,13 @@ pub(crate) use collection_binding::{
 };
 pub(super) mod preparation_origin;
 mod release;
+#[cfg(feature = "tls-replication")]
+mod remote_release;
 pub(crate) use image_release::NativeJointImageReleaseOwner;
 use preparation_origin::{CompletedPreparationOrigin, PreparedHistory, PreparingOrigin};
 pub(crate) use release::{ActualServiceNativeJointReleaseEvidence, NativeJointReleaseOwnerView};
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_release::{NativeRemoteReleaseObservation, NativeRemoteReleaseOwner};
 
 /// Keep the actual owner alive, including an installer's nonextractable
 /// recovery lease. No raw Frozen is created from a metadata plan or number.

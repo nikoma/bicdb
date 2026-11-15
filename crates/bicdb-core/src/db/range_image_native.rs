@@ -119,8 +119,6 @@ pub(crate) use native_read::{
 pub(crate) use serving_configuration::test_remote_joint_decision_cut;
 #[cfg(feature = "tls-replication")]
 pub(crate) use serving_configuration::NativeRegisteredJointDecisionAttempt;
-#[cfg(feature = "tls-replication")]
-pub(crate) use serving_configuration::NativeRemoteJointDecisionAttempt;
 pub(crate) use serving_configuration::{
     NativeActivationDecisionReceipt, NativeActivationReadScope, NativeCompletionReadScope,
     NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope,
@@ -132,6 +130,10 @@ pub(crate) use serving_configuration::{
 use serving_configuration::{
     NativeClosedWriterFact, NativeClosedWriterPoint, NativeJointServingDomain,
     NativeRecoveredServingConfiguration,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use serving_configuration::{
+    NativeRemoteCataloguePhysicalPoint, NativeRemoteJointDecisionAttempt,
 };
 #[cfg(test)]
 pub(crate) mod rf3_fixture;

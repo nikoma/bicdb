@@ -10,7 +10,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 mod assigned_data;
+mod first_catalogue_certification;
 mod first_coordinator;
+pub(crate) use first_catalogue_certification::NativeFirstCatalogueCertificationIntent;
 mod initial_data;
 mod remote_new_metadata;
 pub(crate) use assigned_data::NativeAssignedDataAdmission;
@@ -428,6 +430,10 @@ pub(crate) struct NativeMetadataControlHost {
     network: ClusterNetworkTransportConfig,
     config: DistributionConfig,
     first_coordinators: BTreeMap<crate::RangeId, first_coordinator::NativeFirstCoordinator>,
+    remote_catalogue_certifications: BTreeMap<
+        (crate::distribution::RelocationId, Uuid),
+        first_catalogue_certification::NativeFirstCatalogueCertificationAttempt,
+    >,
 }
 impl NativeMetadataControlHost {
     pub(crate) fn new(
@@ -452,6 +458,7 @@ impl NativeMetadataControlHost {
             network,
             config,
             first_coordinators: BTreeMap::new(),
+            remote_catalogue_certifications: BTreeMap::new(),
         }
     }
     pub(in crate::distribution_native_host) fn from_registered_member(
@@ -474,6 +481,7 @@ impl NativeMetadataControlHost {
             network,
             config,
             first_coordinators: BTreeMap::new(),
+            remote_catalogue_certifications: BTreeMap::new(),
         }
     }
     pub(in crate::distribution_native_host) fn is_running(&self) -> bool {

@@ -519,4 +519,4 @@ pub(crate) use decision::NativeJointDecisionReceipt;
 #[cfg(feature = "tls-replication")]
 pub(crate) use decision::NativeRegisteredJointDecisionAttempt;
 #[cfg(feature = "tls-replication")]
-pub(crate) use decision::NativeRemoteJointDecisionAttempt;
+pub(crate) use decision::{NativeRemoteCataloguePhysicalPoint, NativeRemoteJointDecisionAttempt};

@@ -133,6 +133,37 @@ impl NativeMetadataHost {
             .ok_or_else(|| invalid("actual control owner absent"))?
             .drive_finite_remote_first(range, action, parent)
     }
+    pub(crate) fn first_catalogue_certification_intent(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<super::provisional_listener::NativeFirstCatalogueCertificationIntent> {
+        self.control
+            .as_ref()
+            .ok_or_else(|| invalid("actual FIRST control owner absent"))?
+            .first_catalogue_certification_intent(range)
+    }
+    pub(crate) fn certify_finite_remote_catalogue(
+        &mut self,
+        intent: super::provisional_listener::NativeFirstCatalogueCertificationIntent,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual metadata control owner absent"))?
+            .certify_finite_remote_catalogue(intent, parent)
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_first_catalogue_collection_refusal(
+        &mut self,
+        range: crate::RangeId,
+        mode: u8,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual FIRST control owner absent"))?
+            .test_first_catalogue_collection_refusal(range, mode, parent)
+    }
     pub fn start_fresh_metadata_only(
         root: &Path,
         plan: NativeMetadataBootstrapPlan,

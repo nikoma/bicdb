@@ -1,6 +1,7 @@
 //! Actual range-leader finite FIRST owner. Not a remote backend or periodic
 //! relocation loop. It cannot announce global DECISION/Open/Serving.
 use super::*;
+mod native_catalogue;
 mod native_decision;
 
 #[cfg(test)]
@@ -30,6 +31,15 @@ pub(crate) enum NativeFirstCoordinatorAction {
         node: ClusterNodeId,
     },
     ObserveNativeDecision {
+        node: ClusterNodeId,
+    },
+    PublishCatalogueMember {
+        node: ClusterNodeId,
+    },
+    ResumeCatalogueMember {
+        node: ClusterNodeId,
+    },
+    ObserveCatalogueMember {
         node: ClusterNodeId,
     },
     Receive {
@@ -333,11 +343,22 @@ impl NativeFirstCoordinator {
             && !matches!(
                 &action,
                 NativeFirstCoordinatorAction::ObserveNativeDecision { .. }
+                    | NativeFirstCoordinatorAction::ResumeCatalogueMember { .. }
+                    | NativeFirstCoordinatorAction::ObserveCatalogueMember { .. }
             )
         {
             return Err(invalid("FIRST prior remote native outcome unresolved; only same-original readonly observation allowed"));
         }
         match action {
+            NativeFirstCoordinatorAction::PublishCatalogueMember { node } => {
+                self.catalogue_member(node, false, false, &token)
+            }
+            NativeFirstCoordinatorAction::ResumeCatalogueMember { node } => {
+                self.catalogue_member(node, true, false, &token)
+            }
+            NativeFirstCoordinatorAction::ObserveCatalogueMember { node } => {
+                self.catalogue_member(node, false, true, &token)
+            }
             NativeFirstCoordinatorAction::CollectNativeNew => self.collect_native_new(&token),
             NativeFirstCoordinatorAction::PrepareNativeMember { node } => {
                 self.native_member(node, false, false, &token)

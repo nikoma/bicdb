@@ -23,8 +23,6 @@ pub(crate) use activation_decision::NativeActivationDecisionReceipt;
 pub(crate) use joint_handoff::test_remote_joint_decision_cut;
 #[cfg(feature = "tls-replication")]
 pub(crate) use joint_handoff::NativeRegisteredJointDecisionAttempt;
-#[cfg(feature = "tls-replication")]
-pub(crate) use joint_handoff::NativeRemoteJointDecisionAttempt;
 pub(in crate::db::range_image_native) use joint_handoff::{
     NativeClosedWriterFact, NativeClosedWriterPoint, NativeJointServingDomain,
 };
@@ -34,6 +32,10 @@ pub(crate) use joint_handoff::{
     NativeJointOldCloseRecordData, NativeJointOldPhysicalProof,
     NativeJointPreparedPublicationScope, NativeJointServingBridgeReceipt,
     NativeJointServingPreparation,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint_handoff::{
+    NativeRemoteCataloguePhysicalPoint, NativeRemoteJointDecisionAttempt,
 };
 
 #[cfg(test)]

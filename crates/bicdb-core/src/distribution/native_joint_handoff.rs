@@ -503,3 +503,133 @@ impl DistributionStore {
         Ok(())
     }
 }
+
+// DISTINCT actual remote aggregation; no constructor or conversion into the
+// local NativeJointDurableDecision. This stage leaves all writers frozen.
+#[cfg(feature = "tls-replication")]
+impl NativeJointHandoffMetadataV1 {
+    pub(crate) fn from_actual_remote_decision(
+        proof: &crate::distribution_range_handoff::NativeRemoteDualDurableDecision,
+    ) -> Result<Self> {
+        proof.require_current()?;
+        let actual = proof.data();
+        let result = Self {
+            version: 1,
+            session_id: actual.promise().session_id,
+            nonce: actual.promise().nonce,
+            decision_sha256: actual.checksum_sha256().into(),
+            old_configuration_sha256: actual.promise().old_config_sha256.clone(),
+            new_configuration_sha256: actual.promise().new_config_sha256.clone(),
+            range_index: actual.range_index(),
+            logical_genesis_sha256: actual.logical_genesis_sha256().into(),
+            logical_history_sha256: actual.logical_history_sha256().into(),
+            source_snapshot_db_sequence: actual.source_snapshot_db_sequence()?,
+            target_local_snapshot_db_sequence: actual.target_local_snapshot_db_sequence()?,
+            stage: NativeJointHandoffStageV1::Certified,
+            activated_quorum_sha256: None,
+            source_cleanup_sha256: None,
+        };
+        Ok(result)
+    }
+}
+#[cfg(feature = "tls-replication")]
+impl DistributionStore {
+    fn require_remote_joint_metadata_observation(
+        &self,
+        proof: &crate::distribution_range_handoff::NativeRemoteDualDurableDecision,
+        fresh: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+    ) -> Result<()> {
+        if !self.ephemeral {
+            return Err(cluster_error("native joint metadata requires an ephemeral consensus-proposal view; local topology-file publication is insufficient"));
+        }
+        fresh.require_live_request(business)?;
+        proof.require_current()?;
+        if fresh.requester_node_id() != proof.actual_observer()
+            || fresh.metadata_leader_id() != proof.actual_observer()
+        {
+            return Err(cluster_error(
+                "remote handoff proof must be independently fetched by the actual metadata leader",
+            ));
+        }
+        let observed = fresh.committed_topology(business)?;
+        if observed != &self.topology {
+            return Err(cluster_error(
+                "joint metadata builder is not the actual fresh committed topology",
+            ));
+        }
+        proof
+            .data()
+            .require_metadata_domain(observed, fresh.restore_activation(business)?)
+    }
+    pub(crate) fn certify_native_remote_joint_handoff(
+        &mut self,
+        proof: &crate::distribution_range_handoff::NativeRemoteDualDurableDecision,
+        fresh: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        actor: &ClusterNodeId,
+        now_ms: u64,
+    ) -> Result<bool> {
+        self.ensure_actor(actor)?;
+        self.require_remote_joint_metadata_observation(proof, fresh, business)?;
+        let data = proof.data();
+        let id = data.promise().relocation_id;
+        let canonical = |range: &RangeDescriptor| {
+            let mut r = range.clone();
+            r.approximate_bytes = 0;
+            r.approximate_qps = 0;
+            r.replicas.sort_by_key(|r| r.id);
+            r
+        };
+        let range = self
+            .topology
+            .range_by_id(data.old_range().id)
+            .ok_or_else(|| cluster_error("joint old range absent"))?;
+        let record = NativeJointHandoffMetadataV1::from_actual_remote_decision(proof)?;
+        if let Some(existing) = &self.topology.relocations[&id].native_joint_handoff_v1 {
+            if existing.immutable_binding() != record.immutable_binding() {
+                return Err(cluster_error(
+                    "different native joint decision already pending",
+                ));
+            }
+            return Ok(false);
+        }
+        if canonical(range) != *data.old_range() {
+            return Err(cluster_error(
+                "joint old metadata configuration changed before certification",
+            ));
+        }
+        let plan = self
+            .topology
+            .relocations
+            .get_mut(&id)
+            .ok_or_else(|| cluster_error("joint plan absent"))?;
+        if !matches!(
+            plan.phase,
+            RelocationPhase::LearnerAllocated
+                | RelocationPhase::SnapshotCopying
+                | RelocationPhase::CatchingUp
+                | RelocationPhase::ReadyToPromote
+        ) {
+            return Err(cluster_error(
+                "joint certification is not at its exact pending learner phase",
+            ));
+        }
+        plan.native_joint_handoff_v1 = Some(record);
+        plan.phase = RelocationPhase::ReadyToPromote;
+        plan.updated_at_ms = now_ms;
+        plan.last_error = None;
+        plan.resume_phase = None;
+        self.topology.format_version = self
+            .topology
+            .format_version
+            .max(NATIVE_JOINT_HANDOFF_TOPOLOGY_FORMAT_VERSION);
+        fresh.require_live_request(business)?;
+        self.commit_change(
+            actor.clone(),
+            now_ms,
+            format!("{id} native OLD/NEW data decision durably certified"),
+        )?;
+        Ok(true)
+    }
+}

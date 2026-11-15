@@ -165,8 +165,6 @@ pub(crate) use range_image_native::NativeRegisteredNoDomainScope;
 pub(crate) use range_image_native::NativeRegisteredRemoteAttemptScope;
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeRegisteredRemoteMutationScope;
-#[cfg(feature = "tls-replication")]
-pub(crate) use range_image_native::NativeRemoteJointDecisionAttempt;
 pub(crate) use range_image_native::NativeReplicaMaterialization;
 pub(crate) use range_image_native::{
     FreshNativeCatalogueBootstrap, FreshRangeGenesisAuthority, InstalledNativeWriterHostGuard,
@@ -225,6 +223,10 @@ pub(crate) use range_image_native::{
 pub(crate) use range_image_native::{
     NativeRegisteredRemoteProposalPointer, NativeRegisteredRemoteProposalPublication,
     NativeRegisteredRemoteProposalReceipt,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::{
+    NativeRemoteCataloguePhysicalPoint, NativeRemoteJointDecisionAttempt,
 };
 mod range_image_bindings;
 pub(crate) use range_image_bindings::RangeImageDbBindings;

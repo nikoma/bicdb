@@ -465,6 +465,69 @@ impl NativeJointOldObservation {
         }
         Ok(())
     }
+    pub(super) fn confirm_remote_decision_catalogue(
+        &self,
+        writer: &crate::db::NativeWriterHostState,
+        admission: &super::remote_new::NativeRemoteDecisionAdmission<'_>,
+        retained: &mut Option<
+            crate::distribution_range_consensus::NativeRemoteDecisionCataloguePublication,
+        >,
+        observe_only: bool,
+        parent: &crate::CancellationToken,
+    ) -> Result<String> {
+        admission.require_old_parts(&self.native, &self.promise, &self.frozen, writer)?;
+        let pin = self
+            .pin
+            .try_lock()
+            .ok_or_else(|| invalid("remote OLD catalogue original pin busy"))?;
+        if pin.is_some() {
+            return Err(invalid(
+                "remote OLD catalogue requires original ALL pin handoff",
+            ));
+        }
+        let mut service = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("remote OLD catalogue original service busy"))?;
+        service.confirm_remote_old_decision_catalogue(
+            writer,
+            &self.native,
+            &self.promise,
+            &self.frozen,
+            admission,
+            retained,
+            observe_only,
+            parent,
+        )
+    }
+    pub(super) fn recover_known_remote_decision(
+        &self,
+        writer: &crate::db::NativeWriterHostState,
+        admission: &super::remote_new::NativeRemoteDecisionAdmission<'_>,
+        parent: &crate::CancellationToken,
+    ) -> Result<crate::db::NativeJointDecisionReceipt> {
+        admission.known_read_attempt()?;
+        admission.require_old_parts(&self.native, &self.promise, &self.frozen, writer)?;
+        let pin = self
+            .pin
+            .try_lock()
+            .ok_or_else(|| invalid("known remote OLD original pin busy"))?;
+        if pin.is_some() {
+            return Err(invalid("known remote OLD read requires actual pin handoff"));
+        }
+        let service = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("known remote OLD original service busy"))?;
+        service.recover_known_remote_old_decision(
+            writer,
+            &self.native,
+            &self.promise,
+            &self.frozen,
+            admission,
+            parent,
+        )
+    }
     pub(super) fn publish_remote_decision(
         &self,
         writer: &crate::db::NativeWriterHostState,

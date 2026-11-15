@@ -34,8 +34,9 @@ pub(crate) use joint::{
 pub(crate) use joint::{NativeJointPhaseTrace, NativeRefreshTraceContext};
 #[cfg(feature = "tls-replication")]
 pub(crate) use joint::{
-    NativeRemoteDecisionAdmission, NativeRemoteDecisionBindingV1, NativeRemoteDecisionReceiptV1,
-    NativeRemoteDecisionSourceData, NativeRemoteDecisionSourceRequestV1, NativeRemoteNewFactSetV1,
+    NativeRemoteCatalogueDecisionV1, NativeRemoteCatalogueRound, NativeRemoteDecisionAdmission,
+    NativeRemoteDecisionBindingV1, NativeRemoteDecisionReceiptV1, NativeRemoteDecisionSourceData,
+    NativeRemoteDecisionSourceRequestV1, NativeRemoteDualDurableDecision, NativeRemoteNewFactSetV1,
     NativeRemoteNewHandoffV1, NativeRemoteNewMaterializedQuorum, NativeRemoteNewOperationV1,
     NativeRemoteNewParticipant, NativeRemoteNewPinHandoffPermit, NativeRemoteNewReplyV1,
     NativeRemoteNewRequestV1, NativeRemoteNewRound, NativeRemoteNewSnapshotV1,

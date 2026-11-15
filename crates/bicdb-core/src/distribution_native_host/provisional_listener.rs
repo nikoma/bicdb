@@ -13,6 +13,7 @@ mod metadata_startup;
 mod registration;
 pub(crate) use learner_enrollment::NativeLearnerMetadataEnrollment;
 pub(crate) use metadata_startup::NativeInitialWriterEnrollment;
+pub(crate) use registration::NativeFirstCatalogueCertificationIntent;
 pub(crate) use registration::NativeFirstCoordinatorAction;
 pub(crate) use registration::NativeInitialOldConstraintStep;
 pub use registration::NativeJoinedDataStatus;

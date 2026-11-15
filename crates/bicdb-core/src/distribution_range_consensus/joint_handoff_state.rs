@@ -5,6 +5,11 @@ use crate::distribution_range_handoff::NativeJointHandoffPlan;
 use crate::distribution_range_recovery::RecoveryRoleAdmission;
 
 #[cfg(feature = "tls-replication")]
+mod remote_decision;
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_decision::NativeRemoteDecisionCataloguePublication;
+
+#[cfg(feature = "tls-replication")]
 mod registered_decision;
 #[cfg(feature = "tls-replication")]
 pub(crate) use registered_decision::{

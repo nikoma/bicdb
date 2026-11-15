@@ -4,6 +4,9 @@ use super::*;
 #[cfg(test)]
 mod reader_controls;
 use crate::distribution_range_handoff::NativeRemoteDecisionAdmission;
+mod catalogue;
+mod known_read;
+pub(crate) use catalogue::NativeRemoteCataloguePhysicalPoint;
 
 #[derive(Debug)]
 enum RemoteOutcome {
@@ -368,6 +371,7 @@ impl BicDb {
         attempt: &mut NativeRemoteJointDecisionAttempt,
         parent: &CancellationToken,
     ) -> Result<NativeJointDecisionReceipt> {
+        admission.require_native_mutation()?;
         physical.require_current(self, store, admission)?;
         let metadata = admission.metadata();
         metadata.require_native_store_point(self, store)?;

@@ -900,3 +900,6 @@ mod actor_tests;
 
 #[cfg(test)]
 mod learner_tests;
+
+#[cfg(feature = "tls-replication")]
+mod remote_catalogue;

@@ -19,7 +19,7 @@ pub(super) struct FirstNativeDecision {
     receipts: BTreeMap<ClusterNodeId, NativeRemoteDecisionReceiptV1>,
 }
 impl NativeFirstCoordinator {
-    fn native_ready(&self) -> Result<()> {
+    pub(super) fn native_ready(&self) -> Result<()> {
         self.process.check()?;
         if self.pending_receive.is_some()
             || self.pending_control.is_some()
@@ -34,7 +34,7 @@ impl NativeFirstCoordinator {
         }
         Ok(())
     }
-    fn native_manifest(&self) -> Result<NativeRemoteImageManifestV1> {
+    pub(super) fn native_manifest(&self) -> Result<NativeRemoteImageManifestV1> {
         let mf = self
             .native_decision
             .manifest
@@ -48,7 +48,7 @@ impl NativeFirstCoordinator {
         }
         Ok(mf)
     }
-    fn native_request(
+    pub(super) fn native_request(
         &self,
         operation: NewOp,
         token: &CancellationToken,
@@ -68,7 +68,7 @@ impl NativeFirstCoordinator {
         request.require_shape()?;
         Ok(request)
     }
-    fn native_exchange(
+    pub(super) fn native_exchange(
         &mut self,
         node: &ClusterNodeId,
         request: &NativeRemoteNewRequestV1,
@@ -255,5 +255,45 @@ impl FirstNativeDecision {
         serde_json::json!({"phase":self.phase,"facts":self.facts,"pending":self.pending,
             "prepared":self.prepared,"receipts":self.receipts,"last_resolution":self.last_resolution,
             "global_quorum_or_serving":false})
+    }
+}
+
+impl FirstNativeDecision {
+    pub(super) fn catalogue_intent(
+        &self,
+    ) -> Result<super::super::first_catalogue_certification::NativeFirstCatalogueCertificationIntent>
+    {
+        let manifest = self
+            .manifest
+            .clone()
+            .ok_or_else(|| invalid("FIRST actual target MF absent"))?;
+        let facts = self
+            .facts
+            .clone()
+            .ok_or_else(|| invalid("FIRST actual NEW collection absent"))?;
+        let first = self
+            .receipts
+            .values()
+            .next()
+            .ok_or_else(|| invalid("FIRST actual original native return absent"))?;
+        if self
+            .receipts
+            .values()
+            .any(|r| r.decision_sha256 != first.decision_sha256)
+        {
+            return Err(invalid(
+                "FIRST recipients returned mixed complete native decisions",
+            ));
+        }
+        Ok(
+            super::super::first_catalogue_certification::NativeFirstCatalogueCertificationIntent {
+                manifest,
+                facts,
+                decision_sha256: first.decision_sha256.clone(),
+            },
+        )
+    }
+    pub(super) fn retain_catalogue_resolution(&mut self, value: serde_json::Value) {
+        self.last_resolution = Some(value);
     }
 }

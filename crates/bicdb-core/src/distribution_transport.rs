@@ -134,8 +134,9 @@ pub(crate) use native_image_source::AuthenticatedNativeRemoteImageSourceFrame;
 #[cfg(test)]
 pub(crate) mod native_image_response_stall;
 pub(crate) use native_new::{
-    AuthenticatedNativeRemoteDecisionSource, AuthenticatedNativeRemoteNewFactSet,
-    AuthenticatedNativeRemoteNewFrame, AuthenticatedNativeSourceExportTerminal,
+    AuthenticatedNativeRemoteCatalogueFrame, AuthenticatedNativeRemoteDecisionSource,
+    AuthenticatedNativeRemoteNewFactSet, AuthenticatedNativeRemoteNewFrame,
+    AuthenticatedNativeSourceExportTerminal,
 };
 pub(crate) use native_old::AuthenticatedNativeRemoteOldFrame;
 

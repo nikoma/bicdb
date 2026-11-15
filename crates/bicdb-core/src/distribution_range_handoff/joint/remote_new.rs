@@ -7,6 +7,10 @@ use crate::distribution_range_image::{NativeRemoteImageManifestV1, NativeSourceE
 use crate::CancellationToken;
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
+mod catalogue;
+pub(crate) use catalogue::{
+    NativeRemoteCatalogueDecisionV1, NativeRemoteCatalogueRound, NativeRemoteDualDurableDecision,
+};
 mod decision;
 mod participant;
 pub(crate) use decision::{
@@ -73,6 +77,12 @@ pub(crate) enum NativeRemoteNewOperationV1 {
     ObserveDecision {
         facts: NativeRemoteNewFactSetV1,
     },
+    PublishCatalogue {
+        facts: NativeRemoteNewFactSetV1,
+    },
+    ObserveCatalogue {
+        facts: NativeRemoteNewFactSetV1,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -102,7 +112,9 @@ impl NativeRemoteNewRequestV1 {
         }
         if let NativeRemoteNewOperationV1::PrepareDecision { facts }
         | NativeRemoteNewOperationV1::PublishDecision { facts }
-        | NativeRemoteNewOperationV1::ObserveDecision { facts } = &self.operation
+        | NativeRemoteNewOperationV1::ObserveDecision { facts }
+        | NativeRemoteNewOperationV1::PublishCatalogue { facts }
+        | NativeRemoteNewOperationV1::ObserveCatalogue { facts } = &self.operation
         {
             facts.require_manifest(&self.manifest)?;
             if facts.phase_id != self.phase_id {
@@ -369,6 +381,8 @@ pub(crate) struct NativeRemoteNewReplyV1 {
     pub handoff: Option<NativeRemoteNewHandoffV1>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub native_decision: Option<NativeRemoteDecisionReceiptV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub catalogue_decision: Option<NativeRemoteCatalogueDecisionV1>,
     pub metadata_term: u64,
     pub metadata_read_index: u64,
     pub metadata_context_id: Uuid,
@@ -412,7 +426,9 @@ impl NativeRemoteNewReplyV1 {
             }
             if let NativeRemoteNewOperationV1::PrepareDecision { facts }
             | NativeRemoteNewOperationV1::PublishDecision { facts }
-            | NativeRemoteNewOperationV1::ObserveDecision { facts } = &request.operation
+            | NativeRemoteNewOperationV1::ObserveDecision { facts }
+            | NativeRemoteNewOperationV1::PublishCatalogue { facts }
+            | NativeRemoteNewOperationV1::ObserveCatalogue { facts } = &request.operation
             {
                 if handoff.fact_set_sha256 != facts.checksum_sha256 {
                     return Err(invalid(
@@ -425,6 +441,8 @@ impl NativeRemoteNewReplyV1 {
             NativeRemoteNewOperationV1::PrepareDecision { .. }
                 | NativeRemoteNewOperationV1::PublishDecision { .. }
                 | NativeRemoteNewOperationV1::ObserveDecision { .. }
+                | NativeRemoteNewOperationV1::PublishCatalogue { .. }
+                | NativeRemoteNewOperationV1::ObserveCatalogue { .. }
         ) {
             return Err(invalid(
                 "remote NEW preparation returned no actual handoff outcome",
@@ -433,7 +451,9 @@ impl NativeRemoteNewReplyV1 {
         match (&request.operation, &self.native_decision) {
             (
                 NativeRemoteNewOperationV1::PublishDecision { facts }
-                | NativeRemoteNewOperationV1::ObserveDecision { facts },
+                | NativeRemoteNewOperationV1::ObserveDecision { facts }
+                | NativeRemoteNewOperationV1::PublishCatalogue { facts }
+                | NativeRemoteNewOperationV1::ObserveCatalogue { facts },
                 Some(receipt),
             ) => {
                 receipt.require_request(request, facts)?;
@@ -445,11 +465,36 @@ impl NativeRemoteNewReplyV1 {
             }
             (
                 NativeRemoteNewOperationV1::PublishDecision { .. }
-                | NativeRemoteNewOperationV1::ObserveDecision { .. },
+                | NativeRemoteNewOperationV1::ObserveDecision { .. }
+                | NativeRemoteNewOperationV1::PublishCatalogue { .. }
+                | NativeRemoteNewOperationV1::ObserveCatalogue { .. },
                 None,
             ) => return Err(invalid("native DECISION outcome not proved")),
             (_, None) => {}
             _ => return Err(invalid("unrequested native DECISION outcome")),
+        }
+        match (&request.operation, &self.catalogue_decision) {
+            (
+                NativeRemoteNewOperationV1::PublishCatalogue { facts }
+                | NativeRemoteNewOperationV1::ObserveCatalogue { facts },
+                Some(actual),
+            ) => {
+                actual.require_request(request, facts)?;
+                if actual.original_participant_sha256 != self.snapshot.checksum_sha256
+                    || Some(&actual.native) != self.native_decision.as_ref()
+                {
+                    return Err(invalid(
+                        "remote catalogue differs from original actual recipient/native receipt",
+                    ));
+                }
+            }
+            (
+                NativeRemoteNewOperationV1::PublishCatalogue { .. }
+                | NativeRemoteNewOperationV1::ObserveCatalogue { .. },
+                None,
+            ) => return Err(invalid("remote catalogue successful sink outcome absent")),
+            (_, None) => {}
+            _ => return Err(invalid("unrequested remote catalogue outcome")),
         }
         Ok(())
     }

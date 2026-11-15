@@ -185,6 +185,7 @@ use joint_handoff_state::{NativeJointLocalState, NATIVE_JOINT_HANDOFF_CATALOG_FO
 #[cfg(feature = "tls-replication")]
 pub(crate) use joint_handoff_state::{
     NativeRegisteredDecisionCatalogueAuthority, NativeRegisteredDecisionCataloguePublication,
+    NativeRemoteDecisionCataloguePublication,
 };
 #[cfg(test)]
 pub(crate) use native_prefix::tests::{

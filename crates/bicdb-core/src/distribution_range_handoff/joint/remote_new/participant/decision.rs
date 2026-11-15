@@ -2,6 +2,7 @@
 use super::*;
 use crate::distribution_range_handoff::{NativeJointDecisionData, NativeRemoteDecisionReceiptV1};
 use crate::distribution_transport::AuthenticatedNativeRemoteDecisionSource;
+mod catalogue;
 
 struct DecisionContext {
     frames: AuthenticatedNativeRemoteNewFactSet,
@@ -15,9 +16,11 @@ struct DecisionContext {
 #[derive(Default)]
 pub(super) struct DecisionCustody {
     expected: Option<NativeJointDecisionData>,
-    /// Actual full sink return retained BEFORE outer metadata/reply checks.
-    /// Absence stays unknown even when bytes later happen to be visible.
+    /// Actual native or fresh KnownRead helper return, retained BEFORE outer
+    /// metadata/reply checks. Visible bytes alone never fill this slot.
     completed: Option<crate::db::NativeJointDecisionReceipt>,
+    catalogue:
+        Option<crate::distribution_range_consensus::NativeRemoteDecisionCataloguePublication>,
     contexts: Vec<Arc<DecisionContext>>,
     encoded_bytes: usize,
     native: Option<crate::db::NativeRemoteJointDecisionAttempt>,
@@ -29,26 +32,121 @@ pub(super) struct DecisionCustody {
     lose_success_reply: bool,
     #[cfg(test)]
     lost_success_reply: Option<NativeRemoteDecisionReceiptV1>,
+    #[cfg(test)]
+    lose_catalogue_reply: bool,
+    #[cfg(test)]
+    lost_catalogue_reply: Option<NativeRemoteCatalogueDecisionV1>,
+    #[cfg(test)]
+    fail_catalogue_dirsync: bool,
+    #[cfg(test)]
+    catalogue_dirsync_fault_count: u64,
 }
 /// Constructor is private to the original participant after genuine callbacks.
 /// This does NOT implement or convert to a local publication admission.
 pub(crate) struct NativeRemoteDecisionAdmission<'a> {
     participant: &'a NativeRemoteNewParticipant,
-    context: &'a DecisionContext,
+    context: DecisionRequest<'a>,
     data: &'a NativeJointDecisionData,
     plan: &'a NativeJointHandoffPlan,
 }
+enum DecisionRequest<'a> {
+    Native(&'a DecisionContext),
+    KnownRead {
+        role: &'a RecoveryRoleAdmission,
+        own: &'a HostMetadataReadObservation,
+        business: Uuid,
+        metadata: &'a ActualNativeJointMetadataPoint,
+        caller: &'a CancellationToken,
+        native: &'a crate::db::NativeRemoteJointDecisionAttempt,
+    },
+    Catalogue {
+        role: &'a RecoveryRoleAdmission,
+        own: &'a HostMetadataReadObservation,
+        business: Uuid,
+        metadata: &'a ActualNativeJointMetadataPoint,
+        caller: &'a CancellationToken,
+        completed: &'a crate::db::NativeJointDecisionReceipt,
+        native: &'a crate::db::NativeRemoteJointDecisionAttempt,
+    },
+}
 impl NativeRemoteDecisionAdmission<'_> {
+    pub(crate) fn require_native_mutation(&self) -> Result<()> {
+        if !matches!(&self.context, DecisionRequest::Native(_)) {
+            return Err(invalid(
+                "catalogue continuation cannot re-enter native DECISION WAL",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn catalogue_receipt(&self) -> Result<&crate::db::NativeJointDecisionReceipt> {
+        match &self.context {
+            DecisionRequest::Catalogue {
+                completed, native, ..
+            } => {
+                native.actual_committed_xid()?;
+                if completed.data() != self.data {
+                    return Err(invalid(
+                        "catalogue continuation changed original known native body",
+                    ));
+                }
+                Ok(completed)
+            }
+            _ => Err(invalid(
+                "catalogue requires its distinct original known-outcome admission",
+            )),
+        }
+    }
+    pub(crate) fn known_read_attempt(
+        &self,
+    ) -> Result<&crate::db::NativeRemoteJointDecisionAttempt> {
+        match &self.context {
+            DecisionRequest::KnownRead { native, .. } => {
+                native.actual_committed_xid()?;
+                Ok(native)
+            }
+            _ => Err(invalid(
+                "known native readback needs distinct fresh KnownRead admission",
+            )),
+        }
+    }
+    pub(crate) fn original_participant_sha256(&self) -> &str {
+        &self.participant.snapshot.checksum_sha256
+    }
+    pub(crate) fn require_known_catalogue_native(&self, db: &crate::BicDb) -> Result<()> {
+        match &self.context {
+            DecisionRequest::Catalogue {
+                completed, native, ..
+            } => {
+                self.catalogue_receipt()?;
+                db.observe_known_remote_native_decision(completed, native)
+            }
+            _ => Err(invalid(
+                "remote catalogue lacks actual original known native return",
+            )),
+        }
+    }
+    fn own_request(&self) -> (&HostMetadataReadObservation, Uuid) {
+        match &self.context {
+            DecisionRequest::Native(c) => (&c.own, c.business),
+            DecisionRequest::Catalogue { own, business, .. }
+            | DecisionRequest::KnownRead { own, business, .. } => (own, *business),
+        }
+    }
     pub(crate) fn durable_binding(
         &self,
     ) -> Result<crate::distribution_range_handoff::NativeRemoteDecisionBindingV1> {
+        let DecisionRequest::Native(context) = &self.context else {
+            return Err(invalid(
+                "catalogue observation cannot frame another native decision",
+            ));
+        };
         let value = crate::distribution_range_handoff::NativeRemoteDecisionBindingV1 {
             binding: self.participant.snapshot.binding.clone(),
             phase_id: self.participant.snapshot.phase_id,
             participant: self.participant.snapshot.clone(),
-            fact_set_sha256: self.context.frames.facts().checksum_sha256.clone(),
-            source_evidence_sha256: self.context.source.provenance_sha256().to_string(),
-            source_proof: self.context.source.historical_provenance().clone(),
+            fact_set_sha256: context.frames.facts().checksum_sha256.clone(),
+            source_evidence_sha256: context.source.provenance_sha256().to_string(),
+            source_proof: context.source.historical_provenance().clone(),
         };
         value.validate()?;
         Ok(value)
@@ -98,31 +196,47 @@ impl NativeRemoteDecisionAdmission<'_> {
         self.data
     }
     pub(crate) fn role(&self) -> &RecoveryRoleAdmission {
-        &self.context.role
+        match &self.context {
+            DecisionRequest::Native(c) => &c.role,
+            DecisionRequest::Catalogue { role, .. } | DecisionRequest::KnownRead { role, .. } => {
+                role
+            }
+        }
     }
     pub(crate) fn metadata(&self) -> &ActualNativeJointMetadataPoint {
-        &self.context.metadata
+        match &self.context {
+            DecisionRequest::Native(c) => &c.metadata,
+            DecisionRequest::Catalogue { metadata, .. }
+            | DecisionRequest::KnownRead { metadata, .. } => metadata,
+        }
     }
+    /// Memory/request checks ONLY. Full immutable-body/physical validation is
+    /// performed outside the final publication gate under lexical owners.
     pub(crate) fn require_memory_current(&self) -> Result<()> {
-        self.context.caller.check()?;
-        self.context.role.require_live_request()?;
-        self.context
-            .own
-            .require_live_request(self.context.business)?;
-        self.context.frames.require_request_live()?;
-        self.context.source.require_request_live()?;
-        self.context.metadata.require_current_memory()?;
+        match &self.context {
+            DecisionRequest::Native(c) => {
+                c.caller.check()?;
+                c.frames.require_request_live()?;
+                c.source.require_request_live()?;
+            }
+            DecisionRequest::Catalogue { caller, native, .. }
+            | DecisionRequest::KnownRead { caller, native, .. } => {
+                caller.check()?;
+                native.actual_committed_xid()?;
+            }
+        }
+        self.role().require_live_request()?;
+        let (own, business) = self.own_request();
+        own.require_live_request(business)?;
+        self.metadata().require_current_memory()?;
         self.participant.require_lifetime_memory()
     }
     pub(crate) fn require_current(&self) -> Result<()> {
         self.require_memory_current()?;
-        self.plan.require_role(&self.context.role)?;
-        self.context
-            .role
-            .require_own_host_metadata(&self.context.own, self.context.business)?;
-        self.context
-            .metadata
-            .require_request(&self.context.own, self.context.business)?;
+        self.plan.require_role(self.role())?;
+        let (own, business) = self.own_request();
+        self.role().require_own_host_metadata(own, business)?;
+        self.metadata().require_request(own, business)?;
         self.data.validate()
     }
     pub(crate) fn require_target(&self, target: &NativeRegisteredRemoteJointTarget) -> Result<()> {
@@ -138,7 +252,7 @@ impl NativeRemoteDecisionAdmission<'_> {
     pub(crate) fn publication_guard(
         &self,
     ) -> Result<crate::distribution_data::ActualNativeJointMetadataPublicationGuard<'_>> {
-        self.context.metadata.try_publication_guard()
+        self.metadata().try_publication_guard()
     }
 }
 impl NativeRemoteNewParticipant {
@@ -155,7 +269,7 @@ impl NativeRemoteNewParticipant {
         self.require_request(request)?;
         let NativeRemoteNewOperationV1::ObserveDecision { facts } = &request.operation else {
             return Err(invalid(
-                "remote DECISION observation needs explicit readonly operation",
+                "known native read requires explicit readonly operation",
             ));
         };
         self.require_current(parent)?;
@@ -170,54 +284,66 @@ impl NativeRemoteNewParticipant {
                 .is_none_or(|h| h.fact_set_sha256 != facts.checksum_sha256)
         {
             return Err(invalid(
-                "remote DECISION observation changed original participant/intent",
+                "known native read changed original recipient/phase intent",
             ));
         }
-        let retained = self
+        let mut held = self
             .decision
             .try_lock()
-            .ok_or_else(|| invalid("remote DECISION original attempt active"))?;
-        let completed=retained.completed.as_ref().ok_or_else(||invalid("remote DECISION original successful sink return absent; unknown remains unresolved"))?;
-        let expected = retained
-            .expected
+            .ok_or_else(|| invalid("known native read original attempt active"))?;
+        let DecisionCustody {
+            expected,
+            native,
+            completed,
+            ..
+        } = &mut *held;
+        let data = expected
             .as_ref()
-            .ok_or_else(|| invalid("remote DECISION original body absent"))?;
-        let native = retained
-            .native
+            .ok_or_else(|| invalid("known native read original D absent"))?;
+        let native = native
             .as_ref()
-            .ok_or_else(|| invalid("remote DECISION original native attempt absent"))?;
-        if completed.data() != expected
-            || expected.remote_new_facts().len() != facts.members.len()
-            || role.metadata_term() < completed.metadata_anchor().0
-            || role.metadata_read_index() < completed.metadata_anchor().1
-        {
-            return Err(invalid(
-                "remote DECISION observation changed original body/current metadata floor",
-            ));
-        }
-        let service = match &self.original {
-            OriginalParticipant::Old { actual, .. } => actual.actual_service(),
-            OriginalParticipant::Registered { service, .. } => service,
+            .ok_or_else(|| invalid("known native read original native attempt absent"))?;
+        // Private outcome is set ONLY after real paged.commit returned Ok.
+        // Native Unknown/abort/unframed cannot enter this helper, regardless
+        // of visible bytes, native tx status or an old wire response.
+        native.actual_committed_xid()?;
+        let admission = NativeRemoteDecisionAdmission {
+            participant: self,
+            data,
+            plan: &plan,
+            context: DecisionRequest::KnownRead {
+                role,
+                own,
+                business,
+                metadata,
+                caller: parent,
+                native,
+            },
         };
-        crate::distribution_data::ClusterDataNodeService::observe_known_remote_decision(
-            service, completed, native, metadata, parent,
-        )?;
+        admission.require_current()?;
+        let receipt=match &self.original {
+            OriginalParticipant::Registered {target,service,frozen,..}=>crate::distribution_data::ClusterDataNodeService::recover_known_remote_registered_decision(
+                service,target,frozen.try_as_frozen()?,&admission,parent)?,
+            OriginalParticipant::Old {actual,writer,..}=>actual.recover_known_remote_decision(writer,&admission,parent)?,
+        };
+        // NEW actual successful fresh helper return, retained before outer
+        // checks. Original failed call/outcome/XID are never rewritten.
+        *completed = Some(receipt);
+        admission.require_current()?;
+        metadata.require_external_current()?;
+        let actual = completed.as_ref().unwrap();
         let reply = NativeRemoteDecisionReceiptV1 {
             binding: NativeSourceExportBindingV1::from_manifest(&request.manifest)?,
             phase_id: self.snapshot.phase_id,
             fact_set_sha256: facts.checksum_sha256.clone(),
             node_id: self.snapshot.node_id.clone(),
-            decision_sha256: completed.decision_sha256().into(),
-            native_record_sha256: completed.checksum_sha256().into(),
+            decision_sha256: actual.decision_sha256().into(),
+            native_record_sha256: actual.checksum_sha256().into(),
             native_page_xid: native.actual_committed_xid()?,
             remote_provenance_sha256: native.actual_provenance_sha256()?.into(),
         };
-        drop(retained);
-        self.require_current(parent)?;
-        metadata.require_external_current()?;
-        role.require_own_host_metadata(own, business)?;
-        parent.check()?;
         reply.require_request(request, facts)?;
+        parent.check()?;
         Ok(reply)
     }
     #[allow(clippy::too_many_arguments)]
@@ -361,7 +487,7 @@ impl NativeRemoteNewParticipant {
         // BEFORE native begin, first put, postcheck or reply can fail.
         let admission = NativeRemoteDecisionAdmission {
             participant: self,
-            context: &context,
+            context: DecisionRequest::Native(&context),
             data: &data,
             plan: &plan,
         };
@@ -404,13 +530,38 @@ impl NativeRemoteNewParticipant {
 #[cfg(test)]
 impl NativeRemoteNewParticipant {
     pub(crate) fn test_arm_remote_decision_cut(&self, code: u8) -> Result<()> {
-        if !(1..=4).contains(&code) {
+        if !(1..=7).contains(&code) {
             return Err(invalid("unknown remote DECISION fault code"));
         }
         let mut held = self
             .decision
             .try_lock()
             .ok_or_else(|| invalid("remote DECISION diagnostic custody busy"))?;
+        if code == 7 {
+            return held
+                .catalogue
+                .as_mut()
+                .ok_or_else(|| invalid("actual pending catalogue candidate absent"))?
+                .test_arm_intervening_write();
+        }
+        if code == 5 {
+            if held.lose_catalogue_reply || held.lost_catalogue_reply.is_some() {
+                return Err(invalid(
+                    "actual catalogue success reply loss already armed/fired",
+                ));
+            }
+            held.lose_catalogue_reply = true;
+            return Ok(());
+        }
+        if code == 6 {
+            if held.fail_catalogue_dirsync || held.catalogue_dirsync_fault_count != 0 {
+                return Err(invalid(
+                    "actual catalogue dirsync fault already armed/fired",
+                ));
+            }
+            held.fail_catalogue_dirsync = true;
+            return Ok(());
+        }
         if code == 4 {
             if held.cut != 0 || held.lose_success_reply || held.lost_success_reply.is_some() {
                 return Err(invalid(
@@ -427,6 +578,31 @@ impl NativeRemoteNewParticipant {
         Ok(())
     }
     pub(crate) fn test_after_success_reply(&self, reply: &NativeRemoteNewReplyV1) -> Result<()> {
+        if matches!(
+            reply.request.operation,
+            NativeRemoteNewOperationV1::PublishCatalogue { .. }
+        ) {
+            let mut held = self
+                .decision
+                .try_lock()
+                .ok_or_else(|| invalid("actual catalogue reply-loss observation busy"))?;
+            if held.lose_catalogue_reply {
+                let actual = reply.catalogue_decision.clone().ok_or_else(|| {
+                    invalid("catalogue loss requires actual successful returned receipt")
+                })?;
+                if held.catalogue.is_none() {
+                    return Err(invalid(
+                        "catalogue loss requires retained original physical candidate",
+                    ));
+                }
+                held.lose_catalogue_reply = false;
+                held.lost_catalogue_reply = Some(actual);
+                return Err(invalid(
+                    "injected loss of actual successful catalogue wire reply",
+                ));
+            }
+            return Ok(());
+        }
         if !matches!(
             reply.request.operation,
             NativeRemoteNewOperationV1::PublishDecision { .. }
@@ -469,12 +645,15 @@ impl NativeRemoteNewParticipant {
         Ok(
             serde_json::json!({"expected":held.expected,"retained_request_contexts":held.contexts.len(),
             "successful_sink_return_retained":held.completed.is_some(),"actual_success_reply_lost":held.lost_success_reply,
+            "catalogue":held.catalogue.as_ref().map(|c|c.test_evidence()),
+            "actual_catalogue_success_reply_lost":held.lost_catalogue_reply,
+            "actual_catalogue_dirsync_fault_count":held.catalogue_dirsync_fault_count,
             "actual_test_cut":held.observed_cut.as_ref().map(|(code,fired)|serde_json::json!({"code":code,"fired":fired.load(Ordering::Acquire)})),
             "retained_encoded_bytes":held.encoded_bytes,"native":held.native.as_ref().map(|n|n.test_evidence()),
             "source_callback_actual_observers":held.contexts.iter().map(|c|serde_json::json!({"node":c.source.actual_observer(),"birth":c.source.actual_observer_birth()})).collect::<Vec<_>>(),
             "original_phase":self.snapshot.phase_id,"original_MF_binding":self.snapshot.binding,
             "retained_pre_freeze_predecessor":predecessor,
-            "no_catalogue_vote_or_serving":true}),
+            "no_catalogue_vote_or_serving":held.catalogue.is_none(),"no_Serving_grant":true}),
         )
     }
 }

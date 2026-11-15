@@ -30,6 +30,27 @@ enum Case {
     LostExport,
     LostNativeDecision,
     UnknownNativeDecision,
+    Catalogue,
+    CatalogueKnownNativeRead,
+    CatalogueLostReply,
+    CatalogueIoUnknown,
+    CatalogueInterveningWrite,
+    CatalogueDuplicate,
+    CatalogueWrongExpected,
+    CatalogueStale,
+}
+fn is_catalogue_case(case: Case) -> bool {
+    matches!(
+        case,
+        Case::Catalogue
+            | Case::CatalogueKnownNativeRead
+            | Case::CatalogueLostReply
+            | Case::CatalogueIoUnknown
+            | Case::CatalogueInterveningWrite
+            | Case::CatalogueDuplicate
+            | Case::CatalogueWrongExpected
+            | Case::CatalogueStale
+    )
 }
 #[derive(Clone, Copy, Debug)]
 enum SetupCut {
@@ -371,6 +392,46 @@ impl Five {
         }
         self.lifetime.cancel();
     }
+}
+
+#[test]
+fn native_first_remote_catalogue_actual_recipients_and_metadata_certified() {
+    run(Case::Catalogue);
+}
+
+#[test]
+fn native_first_remote_catalogue_actual_known_commit_late_error_fresh_readback() {
+    run(Case::CatalogueKnownNativeRead);
+}
+
+#[test]
+fn native_first_remote_catalogue_actual_reply_loss_same_known_candidate() {
+    run(Case::CatalogueLostReply);
+}
+
+#[test]
+fn native_first_remote_catalogue_actual_dirsync_unknown_same_candidate_retry() {
+    run(Case::CatalogueIoUnknown);
+}
+
+#[test]
+fn native_first_remote_catalogue_actual_intervening_io_cannot_clear_old_uncertainty() {
+    run(Case::CatalogueInterveningWrite);
+}
+
+#[test]
+fn native_first_remote_catalogue_actual_duplicate_recipient_refused() {
+    run(Case::CatalogueDuplicate);
+}
+
+#[test]
+fn native_first_remote_catalogue_actual_frame_wrong_expected_body_refused() {
+    run(Case::CatalogueWrongExpected);
+}
+
+#[test]
+fn native_first_remote_catalogue_actual_expired_frame_new_collection_refused() {
+    run(Case::CatalogueStale);
 }
 
 #[test]
@@ -1233,6 +1294,14 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                     | Case::LostExport
                     | Case::LostNativeDecision
                     | Case::UnknownNativeDecision
+                    | Case::Catalogue
+                    | Case::CatalogueKnownNativeRead
+                    | Case::CatalogueLostReply
+                    | Case::CatalogueIoUnknown
+                    | Case::CatalogueInterveningWrite
+                    | Case::CatalogueDuplicate
+                    | Case::CatalogueWrongExpected
+                    | Case::CatalogueStale
             ) {
                 // Same five retained normal hosts; real range leader directly
                 // observes OLD/survivor/Registered NEW, donor remains neither leader.
@@ -1281,13 +1350,20 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                         }
                     )?;
                 }
-                if matches!(case, Case::LostNativeDecision | Case::UnknownNativeDecision) {
+                if matches!(
+                    case,
+                    Case::LostNativeDecision
+                        | Case::UnknownNativeDecision
+                        | Case::CatalogueKnownNativeRead
+                ) {
                     report.data_call("arm_actual_original_target_native_cut", || {
                         native_command(
                             &owner_send,
                             selected.id,
                             Some(if case == Case::LostNativeDecision {
                                 4
+                            } else if case == Case::CatalogueKnownNativeRead {
+                                2
                             } else {
                                 3
                             }),
@@ -1363,16 +1439,239 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                         before["actual_success_reply_lost"],
                         observed["actual_reply"]["native_decision"]
                     );
+                } else if case == Case::CatalogueKnownNativeRead {
+                    let recovered = drive!(
+                        "actual_known_commit_late_error_fresh_readback",
+                        Action::ObserveNativeDecision { node: node(4) }
+                    )?;
+                    let after = report
+                        .data_call("actual_known_commit_same_attempt_after_readback", || {
+                            native_command(&owner_send, selected.id, None)
+                        })?;
+                    report.event(serde_json::json!({"actual_fresh_readback":recovered,"before":before,"after":after,
+                        "new_native_write_or_old_request_revival":false}));
+                    assert!(
+                        target_result.is_err(),
+                        "actual post-commit cut must fail original helper"
+                    );
+                    assert_eq!(before["actual_test_cut"]["code"], 2);
+                    assert_eq!(before["actual_test_cut"]["fired"], true);
+                    assert_eq!(before["successful_sink_return_retained"], false);
+                    assert_eq!(
+                        before["native"]["actual_native_attempt"]["outcome"]["state"],
+                        "actual_commit_returned"
+                    );
+                    assert_eq!(after["successful_sink_return_retained"], true);
+                    assert_eq!(
+                        before["native"], after["native"],
+                        "fresh read must preserve original xid/body/provenance/outcome"
+                    );
+                    assert_eq!(
+                        recovered["actual_reply"]["native_decision"]["native_page_xid"],
+                        before["native"]["actual_issued_xid"]
+                    );
+                } else if is_catalogue_case(case) && target_result.is_err() {
+                    // A NEW genuine protected KnownRead may resolve private
+                    // KnownCommitted only; actual sync Unknown stays blocked.
+                    drive!(
+                        "fresh_actual_target_native_KnownRead",
+                        Action::ObserveNativeDecision { node: node(4) }
+                    )?;
                 } else {
                     target_result?;
                 }
                 for participant in participants.iter().filter(|id| **id != node(4)) {
-                    drive!(
+                    let original = drive!(
                         "actual_original_OLD_recipient_native_DECISION",
                         Action::PublishNativeMember {
                             node: participant.clone()
                         }
+                    );
+                    if is_catalogue_case(case) && original.is_err() {
+                        drive!(
+                            "fresh_actual_OLD_native_KnownRead",
+                            Action::ObserveNativeDecision {
+                                node: participant.clone()
+                            }
+                        )?;
+                    } else {
+                        original?;
+                    }
+                }
+                if is_catalogue_case(case) {
+                    // The SAME native operation may have returned Err only
+                    // after real commit; an actual NEW KnownRead above is the
+                    // only permitted resolution. No native re-commit here.
+                    if matches!(
+                        case,
+                        Case::CatalogueLostReply
+                            | Case::CatalogueIoUnknown
+                            | Case::CatalogueInterveningWrite
+                    ) {
+                        native_command(
+                            &owner_send,
+                            selected.id,
+                            Some(if case == Case::CatalogueLostReply {
+                                5
+                            } else {
+                                6
+                            }),
+                        )?;
+                    }
+                    let before_catalogue = native_command(&owner_send, selected.id, None)?;
+                    let target_catalogue = drive!(
+                        "actual_original_target_catalogue",
+                        Action::PublishCatalogueMember { node: node(4) }
+                    );
+                    let after_catalogue = native_command(&owner_send, selected.id, None)?;
+                    report.event(serde_json::json!({"catalogue_call_ok":target_catalogue.as_ref().ok(),
+                        "catalogue_call_error":target_catalogue.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),
+                        "original_before":before_catalogue,"original_after":after_catalogue}));
+                    assert_eq!(
+                        before_catalogue["native"], after_catalogue["native"],
+                        "catalogue must not begin or commit another native D"
+                    );
+                    if case == Case::CatalogueLostReply {
+                        assert!(target_catalogue.is_err());
+                        assert!(
+                            after_catalogue["actual_catalogue_success_reply_lost"].is_object(),
+                            "cut requires actual successful returned catalogue receipt"
+                        );
+                        let observed = drive!(
+                            "actual_readonly_same_known_catalogue",
+                            Action::ObserveCatalogueMember { node: node(4) }
+                        )?;
+                        let after = native_command(&owner_send, selected.id, None)?;
+                        assert_eq!(after_catalogue["native"], after["native"]);
+                        assert_eq!(
+                            after_catalogue["catalogue"], after["catalogue"],
+                            "readonly known observation performs no IO rewrite"
+                        );
+                        assert_eq!(
+                            after_catalogue["actual_catalogue_success_reply_lost"],
+                            observed["actual_reply"]["catalogue_decision"]
+                        );
+                    } else if matches!(
+                        case,
+                        Case::CatalogueIoUnknown | Case::CatalogueInterveningWrite
+                    ) {
+                        assert!(target_catalogue.is_err());
+                        assert_eq!(
+                            after_catalogue["actual_catalogue_dirsync_fault_count"], 1,
+                            "real named storage dirsync fault reached"
+                        );
+                        assert_eq!(after_catalogue["catalogue"]["owns_uncertainty"], true);
+                        assert!(after_catalogue["catalogue"]["verified_generation"].is_null());
+                        let observe = drive!(
+                            "uncertain_catalogue_visible_bytes_not_success",
+                            Action::ObserveCatalogueMember { node: node(4) }
+                        );
+                        let foreign = participants
+                            .iter()
+                            .find(|n| **n != node(4))
+                            .unwrap()
+                            .clone();
+                        let wrong_owner = drive!(
+                            "uncertain_catalogue_wrong_original_recipient_refuses",
+                            Action::ResumeCatalogueMember { node: foreign }
+                        );
+                        let refused = native_command(&owner_send, selected.id, None)?;
+                        report.event(serde_json::json!({"observe_error":observe.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),
+                            "wrong_original_recipient_error":wrong_owner.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),"after_refusals":refused}));
+                        assert!(observe.is_err());
+                        assert!(wrong_owner.is_err());
+                        assert_eq!(after_catalogue["catalogue"],refused["catalogue"],"refused observation/foreign resolution cannot clear original uncertainty");
+                        assert_eq!(after_catalogue["native"], refused["native"]);
+                        if case == Case::CatalogueInterveningWrite {
+                            native_command(&owner_send, selected.id, Some(7))?;
+                        }
+                        let retry = drive!(
+                            "same_owned_catalogue_candidate_fresh_retry",
+                            Action::ResumeCatalogueMember { node: node(4) }
+                        );
+                        let after_retry = native_command(&owner_send, selected.id, None)?;
+                        report.event(serde_json::json!({"fresh_retry":retry.as_ref().ok(),"fresh_retry_error":retry.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),"after_retry":after_retry}));
+                        assert_eq!(
+                            after_catalogue["native"], after_retry["native"],
+                            "same original native xid/body/provenance"
+                        );
+                        assert_eq!(
+                            after_catalogue["catalogue"]["candidate_sha256"],
+                            after_retry["catalogue"]["candidate_sha256"]
+                        );
+                        if case == Case::CatalogueInterveningWrite {
+                            assert!(retry
+                                .as_ref()
+                                .err()
+                                .is_some_and(|e| e.to_string().contains("superseded")));
+                            assert_eq!(
+                                after_retry["catalogue"]["actual_intervening_write_count"],
+                                1
+                            );
+                            assert_eq!(after_retry["catalogue"]["owns_uncertainty"], true);
+                            assert!(after_retry["catalogue"]["verified_generation"].is_null());
+                            return Ok(()); // this real stale owner remains closed
+                        }
+                        retry?;
+                        assert_eq!(after_retry["catalogue"]["owns_uncertainty"], false);
+                        assert!(after_retry["catalogue"]["verified_generation"]
+                            .as_u64()
+                            .is_some());
+                    } else {
+                        target_catalogue?;
+                    }
+                    for participant in participants.iter().filter(|id| **id != node(4)) {
+                        drive!(
+                            "actual_original_OLD_catalogue_durable",
+                            Action::PublishCatalogueMember {
+                                node: participant.clone()
+                            }
+                        )?;
+                    }
+                    if matches!(
+                        case,
+                        Case::CatalogueDuplicate
+                            | Case::CatalogueWrongExpected
+                            | Case::CatalogueStale
+                    ) {
+                        let before = native_command(&owner_send, selected.id, None)?;
+                        let mode = if case == Case::CatalogueDuplicate {
+                            1
+                        } else if case == Case::CatalogueWrongExpected {
+                            2
+                        } else {
+                            3
+                        };
+                        let denied = report.data_call(
+                            "actual_pinned_catalogue_collection_refusal",
+                            || {
+                                five.sources[coordinator].test_first_catalogue_collection_refusal(
+                                    selected.id,
+                                    mode,
+                                    &five.lifetime,
+                                )
+                            },
+                        )?;
+                        let after = native_command(&owner_send, selected.id, None)?;
+                        report.event(serde_json::json!({"actual_collection_control":denied,"target_before":before,"target_after":after}));
+                        assert_eq!(denied["count_refused"], true);
+                        assert_eq!(denied["raw_frame_fabricated"], false);
+                        assert_eq!(before["native"], after["native"]);
+                        assert_eq!(before["catalogue"], after["catalogue"]);
+                    }
+                    let intent = five.sources[coordinator]
+                        .first_catalogue_certification_intent(selected.id)?;
+                    let actual_meta = (0..4).find(|i| node(*i) == metadata_leader).unwrap();
+                    let certified = report.data_call(
+                        "actual_metadata_owner_independent_dual_durability_certification",
+                        || {
+                            five.sources[actual_meta]
+                                .certify_finite_remote_catalogue(intent, &five.lifetime)
+                        },
                     )?;
+                    report.event(serde_json::json!({"actual_certified_only":certified,"automatic_initiation":false,
+                        "global_Open_release_Serving":false,"later_epoch_producers_implemented":false}));
+                    assert_eq!(certified["actual_committed_record"]["stage"], "Certified");
                 }
             }
             Ok(())

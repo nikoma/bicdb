@@ -31,6 +31,9 @@ impl NativeHostWriterDataDomains {
         self.closed.insert(range, attempt);
         Ok(())
     }
+    pub(super) fn retains_closed(&self, range: crate::RangeId) -> bool {
+        self.closed.contains_key(&range)
+    }
     pub(super) fn unresolved(&self) -> bool {
         self.closed.values().any(|a| a.publication_unresolved())
             || self.serving.values().any(|a| a.publication_unresolved())

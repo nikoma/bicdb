@@ -68,6 +68,10 @@ pub(crate) struct NativeInitialDataAdmission {
     old_metadata: Weak<Mutex<crate::distribution_consensus::MetadataConsensusStore>>,
     old_provider: Weak<crate::distribution_metadata_read_provider::MetadataReadProvider>,
     old_transport: Weak<TcpClusterRelocationTransport>,
+    // The same retained continuation tables the owning host drives. Sharing
+    // changes who may run one bounded step, never what that step must prove.
+    writer_data_domains: Weak<Mutex<super::writer_data_domain::NativeHostWriterDataDomains>>,
+    bridge_steps: Weak<super::bridge_step::NativeBridgeMemberSteps>,
 }
 impl NativeInitialDataAdmission {
     /// Necessary original INITIAL process/slot/writer identity only. All
@@ -157,6 +161,8 @@ impl NativeInitialDataAdmission {
             old_metadata: Weak::new(),
             old_provider: Weak::new(),
             old_transport: Weak::new(),
+            writer_data_domains: Weak::new(),
+            bridge_steps: Weak::new(),
         }
     }
     pub(crate) fn require_live(&self) -> Result<()> {
@@ -265,7 +271,8 @@ pub(super) struct NativeInitialDataHost {
     registry_refresh_last_attempt: Option<serde_json::Value>,
     image_sources: Option<Arc<crate::distribution_range_image::NativeRemoteImageSourceRegistry>>,
     old_closures: Arc<RetainedInitialOldTable>,
-    writer_data_domains: super::writer_data_domain::NativeHostWriterDataDomains,
+    writer_data_domains: Arc<Mutex<super::writer_data_domain::NativeHostWriterDataDomains>>,
+    bridge_steps: Arc<super::bridge_step::NativeBridgeMemberSteps>,
 }
 impl Drop for NativeInitialDataHost {
     fn drop(&mut self) {
@@ -332,6 +339,7 @@ impl NativeInitialDataHost {
             old_closures: Arc::new(Mutex::new(BTreeMap::new())),
             registry_refresh_last_attempt: None,
             writer_data_domains: Default::default(),
+            bridge_steps: Default::default(),
             genesis: BTreeMap::new(),
             runtime: None,
             dispatcher: None,
@@ -449,6 +457,8 @@ impl NativeInitialDataHost {
                 old_metadata: Arc::downgrade(&self.initial.metadata),
                 old_provider: Arc::downgrade(&self.initial.provider),
                 old_transport: Arc::downgrade(&self.initial.transport),
+                writer_data_domains: Arc::downgrade(&self.writer_data_domains),
+                bridge_steps: Arc::downgrade(&self.bridge_steps),
             }));
         }
         if self.hot_recovery.is_none() {
@@ -1061,7 +1071,12 @@ impl NativeInitialDataHost {
             std::thread::sleep(Duration::from_millis(5));
         }
         if let Some(owner) = &self.enrollment {
-            if self.writer_data_domains.unresolved() {
+            // A busy table is a step still running: treated as unresolved.
+            if self
+                .writer_data_domains
+                .try_lock()
+                .is_none_or(|domains| domains.unresolved())
+            {
                 return Err(invalid("INITIAL unknown DATA-domain publication retained; explicit reconciliation required"));
             }
             let database = self

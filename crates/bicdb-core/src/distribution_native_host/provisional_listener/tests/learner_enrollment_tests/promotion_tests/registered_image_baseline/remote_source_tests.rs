@@ -148,6 +148,11 @@ pub(super) enum SourceCase {
     TargetHotDecisionCataloguePostTerm,
     NativeHandoffStepInstall,
     NativeHandoffStepRefusals,
+    NativeBridgeStepPrepareObserve,
+    NativeBridgeStepRefusals,
+    NativeBridgeStepPublish,
+    NativeBridgeStepPublishFaults,
+    NativeBridgeStepOpen,
 }
 pub(super) fn uses_original_sdk_rpc_observer(case: SourceCase) -> bool {
     hot_policy_tests::is_hot_policy(case)

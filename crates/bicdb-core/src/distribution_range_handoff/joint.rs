@@ -26,8 +26,17 @@ pub(crate) use remote_old::{
 mod remote_step;
 #[cfg(feature = "tls-replication")]
 pub(crate) use remote_step::{
-    NativeJointHandoffStepOperationV1, NativeJointHandoffStepOutcomeV1,
-    NativeJointHandoffStepReplyV1, NativeJointHandoffStepRequestV1, NativeJointHandoffStepStageV1,
+    NativeJointBridgePhaseKindV1, NativeJointHandoffStepOperationV1,
+    NativeJointHandoffStepOutcomeV1, NativeJointHandoffStepReplyV1,
+    NativeJointHandoffStepRequestV1, NativeJointHandoffStepStageV1,
+};
+#[cfg(feature = "tls-replication")]
+mod remote_bridge_certificate;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use bridge::{test_arm_bridge_second_window_fault, NativeBridgeSecondWindowFault};
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_bridge_certificate::{
+    NativeRemoteBridgePublicationCertificate, NativeRemoteBridgePublicationCertificateRound,
 };
 #[cfg(feature = "tls-replication")]
 mod remote_old_collect;
@@ -77,7 +86,8 @@ mod bridge;
 pub(crate) use bridge::{
     NativeJointActivatedQuorum, NativeJointActivationAdmission, NativeJointOpenAdmission,
     NativeJointOpenPhaseQuorum, NativeJointOpenPhaseRound, NativeJointPreparationCustody,
-    NativeJointPreparationPhaseQuorum, NativeJointPreparationPhaseRound,
+    NativeJointPreparationPhaseFacts, NativeJointPreparationPhaseQuorum,
+    NativeJointPreparationPhaseRound, NativeJointPreparationRetainedFacts,
     NativeJointPreparedServingCandidate, NativeJointPreparedServingObservation,
     NativeJointPreparedServingQuorum, NativeJointPreparedServingRound,
     NativeJointPreparedServingVoteData, NativeJointPublishedServingQuorum,

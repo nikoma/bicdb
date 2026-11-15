@@ -18,7 +18,9 @@ pub(super) struct NativeInitialDataCleanup {
     hot_recovery: Option<Arc<NativeHotRecoveryMaintenance>>,
     dispatcher: Option<Arc<NativeStrongEventDispatcher>>,
     listeners: Vec<ClusterDataServerHandle>,
-    writer_data_domains: super::super::writer_data_domain::NativeHostWriterDataDomains,
+    writer_data_domains: Arc<Mutex<super::super::writer_data_domain::NativeHostWriterDataDomains>>,
+    // Retained preparation custody drains with its original owners.
+    _bridge_steps: Arc<super::super::bridge_step::NativeBridgeMemberSteps>,
 }
 impl NativeInitialDataCleanup {
     pub(super) fn take_from(owner: &mut NativeInitialDataHost) -> Self {
@@ -28,7 +30,10 @@ impl NativeInitialDataCleanup {
             runtime: owner.runtime.take(),
             hot_recovery: owner.hot_recovery.take(),
             dispatcher: owner.dispatcher.take(),
-            writer_data_domains: std::mem::take(&mut owner.writer_data_domains),
+            // The SAME shared tables: a receiver step still running keeps its
+            // lock and is seen below as unresolved, never waited on in Drop.
+            writer_data_domains: owner.writer_data_domains.clone(),
+            _bridge_steps: owner.bridge_steps.clone(),
             listeners: [owner.listener.take(), owner.old_listener.take()]
                 .into_iter()
                 .flatten()
@@ -59,7 +64,10 @@ impl NativeInitialDataCleanup {
             .as_ref()
             .is_none_or(|dispatcher| dispatcher.try_clear_for_cleanup());
         if !drained
-            || self.writer_data_domains.unresolved()
+            || self
+                .writer_data_domains
+                .try_lock()
+                .is_none_or(|domains| domains.unresolved())
             || !binding_cleared
             || self
                 .dispatcher

@@ -13,6 +13,8 @@ use crate::error::{BicDbError, Result};
 mod joint;
 #[cfg(feature = "tls-replication")]
 pub(crate) use joint::NativeJointReadOnlyPlanIdentity;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use joint::{test_arm_bridge_second_window_fault, NativeBridgeSecondWindowFault};
 pub(crate) use joint::{
     CommittedNativeJointDecisionObservation, NativeJointActivatedQuorum,
     NativeJointActivationAdmission, NativeJointDecisionData, NativeJointDecisionProof,
@@ -22,7 +24,8 @@ pub(crate) use joint::{
     NativeJointNewRound, NativeJointOldClosedQuorum, NativeJointOldImageProof,
     NativeJointOldObservation, NativeJointOldRound, NativeJointOpenAdmission,
     NativeJointOpenPhaseQuorum, NativeJointOpenPhaseRound, NativeJointPreparationCustody,
-    NativeJointPreparationPhaseQuorum, NativeJointPreparationPhaseRound,
+    NativeJointPreparationPhaseFacts, NativeJointPreparationPhaseQuorum,
+    NativeJointPreparationPhaseRound, NativeJointPreparationRetainedFacts,
     NativeJointPreparedDecision, NativeJointPreparedServingCandidate,
     NativeJointPreparedServingObservation, NativeJointPreparedServingQuorum,
     NativeJointPreparedServingRound, NativeJointPreparedServingVoteData,
@@ -32,11 +35,16 @@ pub(crate) use joint::{
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use joint::{
-    NativeJointHandoffStepOperationV1, NativeJointHandoffStepOutcomeV1,
-    NativeJointHandoffStepReplyV1, NativeJointHandoffStepRequestV1, NativeJointHandoffStepStageV1,
+    NativeJointBridgePhaseKindV1, NativeJointHandoffStepOperationV1,
+    NativeJointHandoffStepOutcomeV1, NativeJointHandoffStepReplyV1,
+    NativeJointHandoffStepRequestV1, NativeJointHandoffStepStageV1,
 };
 #[cfg(test)]
 pub(crate) use joint::{NativeJointPhaseTrace, NativeRefreshTraceContext};
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint::{
+    NativeRemoteBridgePublicationCertificate, NativeRemoteBridgePublicationCertificateRound,
+};
 #[cfg(feature = "tls-replication")]
 pub(crate) use joint::{
     NativeRemoteDecisionAdmission, NativeRemoteDecisionBindingV1, NativeRemoteDecisionReceiptV1,

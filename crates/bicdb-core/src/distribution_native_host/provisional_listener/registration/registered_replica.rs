@@ -59,6 +59,7 @@ pub(crate) struct NativeRegisteredReplicaAdmission {
     closed_fence_ready: Weak<AtomicBool>,
     joint_targets: Weak<RegisteredJointTargets>,
     remote_install: Weak<RegisteredRemoteInstall>,
+    bridge_steps: Weak<super::bridge_step::NativeBridgeMemberSteps>,
 }
 /// Original Registered install custody shared between the owning host and
 /// the same receiver's authenticated step RPC. Sharing changes who may drive
@@ -195,6 +196,8 @@ pub(super) struct NativeRegisteredReplicaReceiver {
     stopping: bool,
     remote_install: Arc<RegisteredRemoteInstall>,
     remote_joint_targets: Arc<RegisteredJointTargets>,
+    // Retained preparation custody of this original receiver, per range.
+    bridge_steps: Arc<super::bridge_step::NativeBridgeMemberSteps>,
 }
 #[derive(Clone)]
 pub(super) struct RegisteredAssignedParts {
@@ -352,6 +355,7 @@ impl NativeRegisteredReplicaReceiver {
         let life = Arc::new(AtomicBool::new(true));
         let closed_fence_ready = Arc::new(AtomicBool::new(false));
         let remote_joint_targets = Arc::new(Mutex::new(std::collections::BTreeMap::new()));
+        let bridge_steps = Arc::new(super::bridge_step::NativeBridgeMemberSteps::default());
         let remote_install = Arc::new(RegisteredRemoteInstall {
             tables: Mutex::new(RegisteredRemoteInstallTables::default()),
             #[cfg(test)]
@@ -373,6 +377,7 @@ impl NativeRegisteredReplicaReceiver {
             closed_fence_ready: Arc::downgrade(&closed_fence_ready),
             joint_targets: Arc::downgrade(&remote_joint_targets),
             remote_install: Arc::downgrade(&remote_install),
+            bridge_steps: Arc::downgrade(&bridge_steps),
         });
         admission.require_listener(&backend.service, &runtime)?;
         parent.check()?;
@@ -389,6 +394,7 @@ impl NativeRegisteredReplicaReceiver {
             stopping: false,
             remote_install,
             remote_joint_targets,
+            bridge_steps,
         })
     }
     fn advance(

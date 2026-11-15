@@ -148,7 +148,7 @@ impl NativeJointOldObservation {
             )?;
         Ok(command)
     }
-    pub(super) fn retained_serving_lease(
+    pub(crate) fn retained_serving_lease(
         &self,
     ) -> Result<(
         Arc<Mutex<crate::distribution_data::ClusterDataNodeService>>,

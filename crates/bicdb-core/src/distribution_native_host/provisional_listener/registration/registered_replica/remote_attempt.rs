@@ -17,6 +17,7 @@ pub(crate) use remote_joint::{
     NativeRegisteredRemoteJointOwner, NativeRegisteredRemoteJointReleaseOwner,
     NativeRegisteredRemoteJointTarget, NativeRegisteredServingDataPolicyOrigin,
 };
+mod bridge_step;
 mod remote_installing;
 mod remote_step;
 pub(super) use remote_step::RegisteredTargetInstallStep;

@@ -35,9 +35,33 @@ pub(crate) enum NativeJointHandoffStepOperationV1 {
         donor: ClusterNodeId,
         target_attempt: Uuid,
     },
+    /// A NEW member of the committed decision prepares its own local joint
+    /// serving and retains that preparation custody in its own host. The
+    /// decision digest is correlation DATA; the recipient compares it with
+    /// the decision it observes committed at its own metadata point.
+    BridgePrepare { decision_sha256: String },
+    /// Read-only. A NEW member makes its own fresh committed observation at
+    /// its own metadata point and reports historical checksums of the state
+    /// relevant to `kind`. Nothing is created, changed or granted.
+    BridgePhaseObserve {
+        decision_sha256: String,
+        kind: NativeJointBridgePhaseKindV1,
+    },
+    /// A prepared NEW member publishes its own native serving bridge. The
+    /// member itself collects fresh PREPARATION observations from every other
+    /// NEW member over its own pinned transport, before and after its own
+    /// durable write; the request carries no observation, quorum or phase.
+    BridgePublish { decision_sha256: String },
+    /// A member holding its own confirmed bridge persists its own catalogue
+    /// activation. As for `BridgePublish`, the member itself collects fresh
+    /// OPEN observations of every other NEW member before and after its own
+    /// durable write; the request carries no observation, quorum or phase.
+    BridgeOpen { decision_sha256: String },
 }
 impl NativeJointHandoffStepOperationV1 {
-    fn install_identity(&self) -> (&ClusterNodeId, Uuid) {
+    /// The donor and target attempt of an install-family operation, which
+    /// runs against the Pending plan; `None` for every bridge operation.
+    fn install_identity(&self) -> Option<(&ClusterNodeId, Uuid)> {
         match self {
             Self::TargetInstall {
                 donor,
@@ -46,9 +70,45 @@ impl NativeJointHandoffStepOperationV1 {
             | Self::SourceExportRetire {
                 donor,
                 target_attempt,
-            } => (donor, *target_attempt),
+            } => Some((donor, *target_attempt)),
+            Self::BridgePrepare { .. }
+            | Self::BridgePublish { .. }
+            | Self::BridgeOpen { .. }
+            | Self::BridgePhaseObserve { .. } => None,
         }
     }
+    /// The committed decision a bridge operation is bound to; `None` for the
+    /// operations that run against the Pending plan before any decision.
+    pub(crate) fn bridge_decision_sha256(&self) -> Option<&str> {
+        match self {
+            Self::TargetInstall { .. } | Self::SourceExportRetire { .. } => None,
+            Self::BridgePrepare { decision_sha256 }
+            | Self::BridgePublish { decision_sha256 }
+            | Self::BridgeOpen { decision_sha256 }
+            | Self::BridgePhaseObserve {
+                decision_sha256, ..
+            } => Some(decision_sha256),
+        }
+    }
+    /// Read-only operations never create or change recipient state.
+    pub(crate) fn read_only(&self) -> bool {
+        match self {
+            Self::BridgePhaseObserve { .. } => true,
+            Self::TargetInstall { .. }
+            | Self::SourceExportRetire { .. }
+            | Self::BridgePrepare { .. }
+            | Self::BridgePublish { .. }
+            | Self::BridgeOpen { .. } => false,
+        }
+    }
+}
+
+/// Which retained member state a phase observation reports.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum NativeJointBridgePhaseKindV1 {
+    Preparation,
+    Open,
+    Release,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -92,6 +152,33 @@ impl NativeJointHandoffStepRequestV1 {
         result.require_plan(plan)?;
         Ok(result)
     }
+    /// Bridge operations run after the membership is final, when no Pending
+    /// plan exists any more. The identity comes from the committed decision
+    /// the SENDER itself observed; the recipient compares it with its own.
+    pub(crate) fn from_decision(
+        data: &NativeJointDecisionData,
+        operation: NativeJointHandoffStepOperationV1,
+        business: Uuid,
+        budget_ms: u64,
+    ) -> Result<Self> {
+        let p = data.promise();
+        let result = Self {
+            version: 1,
+            range_id: data.old_range().id,
+            range_epoch: data.old_range().epoch,
+            relocation_id: p.relocation_id,
+            plan_id: p.plan_id.clone(),
+            session_id: p.session_id,
+            nonce: p.nonce,
+            scope_sha256: data.plan_sha256()?,
+            operation,
+            business,
+            challenge: Uuid::now_v7(),
+            budget_ms,
+        };
+        result.require_decision(data)?;
+        Ok(result)
+    }
     pub(crate) fn require_shape(&self) -> Result<()> {
         crate::distribution_range_image::bounded_json(self, MAX_STEP_REQUEST_BYTES)?;
         if self.version != 1
@@ -109,15 +196,37 @@ impl NativeJointHandoffStepRequestV1 {
         {
             return Err(invalid("invalid bounded joint handoff step request DATA"));
         }
-        let (donor, target_attempt) = self.operation.install_identity();
-        if donor.as_str().is_empty()
-            || donor.as_str().len() > 1024
-            || target_attempt.is_nil()
-            || target_attempt == self.session_id
-        {
-            return Err(invalid(
-                "invalid bounded joint handoff target install identity",
-            ));
+        match &self.operation {
+            NativeJointHandoffStepOperationV1::TargetInstall {
+                donor,
+                target_attempt,
+            }
+            | NativeJointHandoffStepOperationV1::SourceExportRetire {
+                donor,
+                target_attempt,
+            } => {
+                if donor.as_str().is_empty()
+                    || donor.as_str().len() > 1024
+                    || target_attempt.is_nil()
+                    || *target_attempt == self.session_id
+                {
+                    return Err(invalid(
+                        "invalid bounded joint handoff target install identity",
+                    ));
+                }
+            }
+            NativeJointHandoffStepOperationV1::BridgePrepare { decision_sha256 }
+            | NativeJointHandoffStepOperationV1::BridgePublish { decision_sha256 }
+            | NativeJointHandoffStepOperationV1::BridgeOpen { decision_sha256 }
+            | NativeJointHandoffStepOperationV1::BridgePhaseObserve {
+                decision_sha256, ..
+            } => {
+                if !is_digest(decision_sha256) {
+                    return Err(invalid(
+                        "invalid bounded joint handoff bridge decision identity",
+                    ));
+                }
+            }
         }
         Ok(())
     }
@@ -153,14 +262,48 @@ impl NativeJointHandoffStepRequestV1 {
                 "joint handoff step request differs from actual Pending plan",
             ));
         }
-        // The donor's own receiver independently decides whether it is the
-        // selected image source of its ALL-old certificate.
-        if !plan
-            .old_members()
-            .contains_key(self.operation.install_identity().0)
+        match &self.operation {
+            NativeJointHandoffStepOperationV1::TargetInstall { donor, .. }
+            | NativeJointHandoffStepOperationV1::SourceExportRetire { donor, .. } => {
+                // The donor's own receiver independently decides whether it
+                // is the selected image source of its ALL-old certificate.
+                if !plan.old_members().contains_key(donor) {
+                    return Err(invalid(
+                        "joint handoff step donor is not an actual OLD member",
+                    ));
+                }
+            }
+            NativeJointHandoffStepOperationV1::BridgePrepare { .. }
+            | NativeJointHandoffStepOperationV1::BridgePublish { .. }
+            | NativeJointHandoffStepOperationV1::BridgeOpen { .. }
+            | NativeJointHandoffStepOperationV1::BridgePhaseObserve { .. } => {
+                // A Pending plan names no decision. Bridge operations are
+                // bound only by `require_decision` to a committed decision.
+                return Err(invalid(
+                    "joint handoff bridge step is bound to a committed decision, not a Pending plan",
+                ));
+            }
+        }
+        Ok(())
+    }
+    /// The caller compares against the decision IT observed committed at its
+    /// own metadata point; the request never supplies that decision.
+    pub(crate) fn require_decision(&self, data: &NativeJointDecisionData) -> Result<()> {
+        self.require_shape()?;
+        let p = data.promise();
+        if data.old_range().id != self.range_id
+            || data.old_range().epoch != self.range_epoch
+            || p.old_epoch != self.range_epoch
+            || p.range_id != self.range_id
+            || p.relocation_id != self.relocation_id
+            || p.plan_id != self.plan_id
+            || p.session_id != self.session_id
+            || p.nonce != self.nonce
+            || data.plan_sha256()? != self.scope_sha256
+            || self.operation.bridge_decision_sha256() != Some(data.checksum_sha256())
         {
             return Err(invalid(
-                "joint handoff step donor is not an actual OLD member",
+                "joint handoff bridge step differs from actual committed decision",
             ));
         }
         Ok(())
@@ -200,6 +343,18 @@ pub(crate) enum NativeJointHandoffStepStageV1 {
     NativeBase,
     CatalogueFloor,
     JointTarget,
+    /// A surviving member's closed writer DATA domain is not yet verified.
+    BridgeWriterDomain,
+    /// The writer domain is closed; the native preparation is not retained.
+    BridgePreparation,
+    /// The member's native bridge publication is not confirmed: either no
+    /// durable write happened yet, or one happened and the member's second
+    /// observation window did not confirm an unchanged NEW member set. The
+    /// same request identity resumes it under a distinct fresh phase.
+    BridgePublication,
+    /// The member's catalogue activation is not confirmed; same resumption
+    /// rule as `BridgePublication`.
+    BridgeActivation,
     Complete,
 }
 
@@ -219,10 +374,243 @@ pub(crate) struct NativeJointHandoffStepOutcomeV1 {
     pub range_index: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub native_receipt_sha256: Option<String>,
+    /// Present on every bridge outcome and on no install outcome: the
+    /// decision the recipient itself observed committed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decision_sha256: Option<String>,
+    /// The recipient's own retained native preparation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preparation_sha256: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_database_incarnation: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_visibility_sequence: Option<u64>,
+    /// The recipient's own protected native decision receipt.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decision_receipt_sha256: Option<String>,
+    /// The recipient's actual Store slot open at the retained preparation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub store_open_id: Option<Uuid>,
+    /// Digest of the recipient's exact writer/owner registration object: the
+    /// identity an in-process observer compares by pointer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub writer_identity_sha256: Option<String>,
+    /// The recipient's own durable native serving bridge receipt. Present
+    /// only on a complete `BridgePublish` outcome.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bridge_receipt_sha256: Option<String>,
+    /// The post-quorum metadata anchor recorded in that durable bridge.
+    /// Present only on an OPEN phase observation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bridge_anchor: Option<(u64, u64, Uuid)>,
+    /// The recipient's own durable catalogue activation. Present only on a
+    /// complete `BridgeOpen` outcome.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activation_sha256: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phase_kind: Option<NativeJointBridgePhaseKindV1>,
+    /// What was left of the recipient's own fresh metadata observation when
+    /// it replied. The receiver of the reply may only shorten its window.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub window_remaining_ms: Option<u64>,
 }
 impl NativeJointHandoffStepOutcomeV1 {
+    /// An install outcome with no bridge DATA.
+    pub(crate) fn install(
+        binding_sha256: String,
+        stage: NativeJointHandoffStepStageV1,
+        manifest: Option<(String, Uuid)>,
+        floor: Option<(u64, String)>,
+    ) -> Self {
+        let (manifest_sha256, source_session) = manifest.unzip();
+        let (range_index, native_receipt_sha256) = floor.unzip();
+        Self {
+            binding_sha256,
+            stage,
+            complete: stage == NativeJointHandoffStepStageV1::Complete,
+            manifest_sha256,
+            source_session,
+            range_index,
+            native_receipt_sha256,
+            decision_sha256: None,
+            preparation_sha256: None,
+            native_database_incarnation: None,
+            local_visibility_sequence: None,
+            decision_receipt_sha256: None,
+            store_open_id: None,
+            writer_identity_sha256: None,
+            bridge_receipt_sha256: None,
+            bridge_anchor: None,
+            activation_sha256: None,
+            phase_kind: None,
+            window_remaining_ms: None,
+        }
+    }
+    /// A bridge outcome that has not retained a preparation yet.
+    pub(crate) fn bridge_progress(
+        binding_sha256: String,
+        stage: NativeJointHandoffStepStageV1,
+        decision_sha256: String,
+    ) -> Self {
+        let mut result = Self::install(binding_sha256, stage, None, None);
+        result.decision_sha256 = Some(decision_sha256);
+        result
+    }
+    fn bridge_fields(&self) -> [bool; 6] {
+        [
+            self.preparation_sha256.is_some(),
+            self.native_database_incarnation.is_some(),
+            self.local_visibility_sequence.is_some(),
+            self.decision_receipt_sha256.is_some(),
+            self.store_open_id.is_some(),
+            self.writer_identity_sha256.is_some(),
+        ]
+    }
+    /// The outcome must be the kind the exact requested operation produces.
+    pub(crate) fn require_operation(
+        &self,
+        operation: &NativeJointHandoffStepOperationV1,
+    ) -> Result<()> {
+        self.require_shape()?;
+        let matches = match operation {
+            NativeJointHandoffStepOperationV1::TargetInstall { .. }
+            | NativeJointHandoffStepOperationV1::SourceExportRetire { .. } => {
+                self.decision_sha256.is_none()
+            }
+            NativeJointHandoffStepOperationV1::BridgePrepare { decision_sha256 } => {
+                self.decision_sha256.as_ref() == Some(decision_sha256)
+                    && self.phase_kind.is_none()
+                    && self.bridge_receipt_sha256.is_none()
+                    && self.activation_sha256.is_none()
+                    && !matches!(
+                        self.stage,
+                        NativeJointHandoffStepStageV1::BridgePublication
+                            | NativeJointHandoffStepStageV1::BridgeActivation
+                    )
+            }
+            NativeJointHandoffStepOperationV1::BridgeOpen { decision_sha256 } => {
+                self.decision_sha256.as_ref() == Some(decision_sha256)
+                    && self.phase_kind.is_none()
+                    && self.bridge_anchor.is_none()
+                    && self.bridge_receipt_sha256.is_some() == self.complete
+                    && self.activation_sha256.is_some() == self.complete
+                    && matches!(
+                        self.stage,
+                        NativeJointHandoffStepStageV1::BridgeActivation
+                            | NativeJointHandoffStepStageV1::Complete
+                    )
+            }
+            NativeJointHandoffStepOperationV1::BridgePublish { decision_sha256 } => {
+                self.decision_sha256.as_ref() == Some(decision_sha256)
+                    && self.phase_kind.is_none()
+                    && self.bridge_anchor.is_none()
+                    && self.activation_sha256.is_none()
+                    && self.bridge_receipt_sha256.is_some() == self.complete
+                    && matches!(
+                        self.stage,
+                        NativeJointHandoffStepStageV1::BridgePublication
+                            | NativeJointHandoffStepStageV1::Complete
+                    )
+            }
+            NativeJointHandoffStepOperationV1::BridgePhaseObserve {
+                decision_sha256,
+                kind,
+            } => {
+                self.decision_sha256.as_ref() == Some(decision_sha256)
+                    && self.phase_kind == Some(*kind)
+                    && self.activation_sha256.is_none()
+                    && self.bridge_receipt_sha256.is_some()
+                        == (*kind == NativeJointBridgePhaseKindV1::Open)
+                    && self.bridge_anchor.is_some() == self.bridge_receipt_sha256.is_some()
+                    && self.complete
+            }
+        };
+        if !matches {
+            return Err(invalid(
+                "joint handoff step outcome DATA answers another operation",
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn require_shape(&self) -> Result<()> {
         let complete = self.stage == NativeJointHandoffStepStageV1::Complete;
+        if let Some(decision) = &self.decision_sha256 {
+            let fields = self.bridge_fields();
+            if !is_digest(&self.binding_sha256)
+                || !is_digest(decision)
+                || self.complete != complete
+                || self.manifest_sha256.is_some()
+                || self.source_session.is_some()
+                || self.range_index.is_some()
+                || self.native_receipt_sha256.is_some()
+                || !matches!(
+                    self.stage,
+                    NativeJointHandoffStepStageV1::BridgeWriterDomain
+                        | NativeJointHandoffStepStageV1::BridgePreparation
+                        | NativeJointHandoffStepStageV1::BridgePublication
+                        | NativeJointHandoffStepStageV1::BridgeActivation
+                        | NativeJointHandoffStepStageV1::Complete
+                )
+                || fields.iter().any(|present| *present != complete)
+                || (self.bridge_receipt_sha256.is_some() && !complete)
+                || (self.bridge_anchor.is_some() && self.bridge_receipt_sha256.is_none())
+                || (self.activation_sha256.is_some() && self.bridge_receipt_sha256.is_none())
+                || self.bridge_anchor.is_some_and(|(term, index, context)| {
+                    term == 0 || index == 0 || context.is_nil()
+                })
+                || self
+                    .activation_sha256
+                    .as_deref()
+                    .is_some_and(|x| !is_digest(x))
+                || self
+                    .bridge_receipt_sha256
+                    .as_deref()
+                    .is_some_and(|x| !is_digest(x))
+                || self
+                    .writer_identity_sha256
+                    .as_deref()
+                    .is_some_and(|x| !is_digest(x))
+                || self
+                    .preparation_sha256
+                    .as_deref()
+                    .is_some_and(|x| !is_digest(x))
+                || self
+                    .decision_receipt_sha256
+                    .as_deref()
+                    .is_some_and(|x| !is_digest(x))
+                || self
+                    .native_database_incarnation
+                    .as_deref()
+                    .is_some_and(|x| x.is_empty() || x.len() > 256)
+                || self.store_open_id.is_some_and(|x| x.is_nil())
+                || self.phase_kind.is_some() != self.window_remaining_ms.is_some()
+                || (self.phase_kind.is_some() && !complete)
+                || self
+                    .window_remaining_ms
+                    .is_some_and(|left| !(1..=5000).contains(&left))
+            {
+                return Err(invalid(
+                    "joint handoff bridge step outcome DATA is inconsistent",
+                ));
+            }
+            return Ok(());
+        }
+        if self.bridge_fields().iter().any(|present| *present)
+            || self.bridge_receipt_sha256.is_some()
+            || self.bridge_anchor.is_some()
+            || self.activation_sha256.is_some()
+            || self.phase_kind.is_some()
+            || self.window_remaining_ms.is_some()
+            || matches!(
+                self.stage,
+                NativeJointHandoffStepStageV1::BridgeWriterDomain
+                    | NativeJointHandoffStepStageV1::BridgePreparation
+                    | NativeJointHandoffStepStageV1::BridgePublication
+                    | NativeJointHandoffStepStageV1::BridgeActivation
+            )
+        {
+            return Err(invalid("joint handoff step outcome DATA is inconsistent"));
+        }
         if !is_digest(&self.binding_sha256)
             || self.complete != complete
             || self
@@ -282,11 +670,19 @@ impl NativeJointHandoffStepReplyV1 {
         )))
     }
     pub(crate) fn require_request(&self, request: &NativeJointHandoffStepRequestV1) -> Result<()> {
-        self.outcome.require_shape()?;
-        let (donor, target_attempt) = request.operation.install_identity();
-        match (&request.operation, &self.source_manifest) {
-            (NativeJointHandoffStepOperationV1::TargetInstall { .. }, None) => {}
-            (NativeJointHandoffStepOperationV1::SourceExportRetire { .. }, Some(manifest)) => {
+        self.outcome.require_operation(&request.operation)?;
+        match (request.operation.install_identity(), &self.source_manifest) {
+            (_, None)
+                if !matches!(
+                    request.operation,
+                    NativeJointHandoffStepOperationV1::SourceExportRetire { .. }
+                ) => {}
+            (Some((donor, target_attempt)), Some(manifest))
+                if matches!(
+                    request.operation,
+                    NativeJointHandoffStepOperationV1::SourceExportRetire { .. }
+                ) =>
+            {
                 manifest.require_shape()?;
                 if !self.outcome.complete
                     || self.outcome.manifest_sha256.as_ref() != Some(&manifest.checksum_sha256)

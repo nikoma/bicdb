@@ -10,13 +10,22 @@ use std::sync::Arc;
 mod phase;
 mod preparation_custody;
 mod publication;
+#[cfg(feature = "tls-replication")]
+mod remote_publication;
 pub(crate) use phase::{NativeJointPreparationPhaseQuorum, NativeJointPreparationPhaseRound};
-pub(crate) use preparation_custody::NativeJointPreparationCustody;
+pub(crate) use preparation_custody::{
+    NativeJointPreparationCustody, NativeJointPreparationPhaseFacts,
+    NativeJointPreparationRetainedFacts,
+};
 pub(crate) use publication::{
     NativeJointActivatedQuorum, NativeJointOpenAdmission, NativeJointOpenPhaseQuorum,
     NativeJointOpenPhaseRound, NativeJointPublishedServingQuorum, NativeJointReleaseAdmission,
     NativeJointReleaseContinuation, NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound,
     NativeJointServingPolicyAdmission, NativeJointServingPublicationRound,
+};
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use remote_publication::{
+    test_arm_bridge_second_window_fault, NativeBridgeSecondWindowFault,
 };
 
 /// An uncounted bundle of genuine actual evidence and an untrusted service
@@ -480,12 +489,50 @@ pub(crate) struct NativeJointPreparedServingVoteData {
 /// The only native bridge publisher. Construction performs a real fresh Host
 /// MQ AFTER collection and retains the actual quorum and original deadlines.
 pub(crate) struct NativeJointActivationAdmission {
-    phase: Option<Arc<NativeJointPreparationPhaseQuorum>>,
+    backing: ActivationBacking,
     publication_claimed: std::sync::atomic::AtomicBool,
-    quorum: Arc<NativeJointPreparedServingQuorum>,
     local: Arc<NativeJointPreparedServingObservation>,
     fresh: CommittedNativeJointDecisionObservation,
     cancellation: crate::CancellationToken,
+}
+/// What stands behind the admission for every NEW member other than the
+/// local one. The local member is always its actual retained preparation.
+enum ActivationBacking {
+    /// Every member's actual service is reachable in this process.
+    Local {
+        quorum: Arc<NativeJointPreparedServingQuorum>,
+        phase: Option<Arc<NativeJointPreparationPhaseQuorum>>,
+    },
+    /// Every other member is a transport-minted authenticated PREPARATION
+    /// observation this member collected itself inside one bounded window.
+    /// Private construction: only this member's own remote publication.
+    #[cfg(feature = "tls-replication")]
+    Remote(remote_publication::RemoteActivationBacking),
+}
+impl NativeJointActivationAdmission {
+    fn phase(&self) -> Option<&Arc<NativeJointPreparationPhaseQuorum>> {
+        match &self.backing {
+            ActivationBacking::Local { phase, .. } => phase.as_ref(),
+            #[cfg(feature = "tls-replication")]
+            ActivationBacking::Remote(_) => None,
+        }
+    }
+    /// The in-process quorum and phase; a remote-backed admission has none
+    /// and is published only by its own member's remote publication.
+    fn local_backing(
+        &self,
+    ) -> Result<(
+        &Arc<NativeJointPreparedServingQuorum>,
+        Option<&Arc<NativeJointPreparationPhaseQuorum>>,
+    )> {
+        match &self.backing {
+            ActivationBacking::Local { quorum, phase } => Ok((quorum, phase.as_ref())),
+            #[cfg(feature = "tls-replication")]
+            ActivationBacking::Remote(_) => Err(invalid(
+                "remote-backed joint admission has no in-process prepared quorum",
+            )),
+        }
+    }
 }
 impl NativeJointPreparedServingQuorum {
     #[cfg(feature = "tls-replication")]
@@ -571,9 +618,11 @@ impl NativeJointPreparedServingQuorum {
         }?;
         let cancellation = cancellation.child_with_deadline(fresh.deadline());
         let result = NativeJointActivationAdmission {
-            phase: None,
+            backing: ActivationBacking::Local {
+                quorum: self.clone(),
+                phase: None,
+            },
             publication_claimed: std::sync::atomic::AtomicBool::new(false),
-            quorum: self.clone(),
             local,
             fresh,
             cancellation,
@@ -600,7 +649,7 @@ impl NativeJointPreparedServingQuorum {
 impl NativeJointActivationAdmission {
     pub(super) fn claim_publication_attempt(&self) -> Result<()> {
         self.require_live()?;
-        if self.phase.is_some()
+        if self.has_fresh_publication_phase()
             && self
                 .publication_claimed
                 .swap(true, std::sync::atomic::Ordering::AcqRel)
@@ -626,14 +675,20 @@ impl NativeJointActivationAdmission {
     /// validation occurs in the native pre-WAL boundary under the real local
     /// service/DB guard. Do not repeat that same sweep in each wrapper.
     pub(crate) fn has_fresh_publication_phase(&self) -> bool {
-        self.phase.is_some()
+        match &self.backing {
+            ActivationBacking::Local { phase, .. } => phase.is_some(),
+            // A remote window IS a distinct fresh full phase: every other
+            // member reattested inside it and the local one under its lock.
+            #[cfg(feature = "tls-replication")]
+            ActivationBacking::Remote(_) => true,
+        }
     }
     pub(crate) fn require_publication_service_entry(
         &self,
         service: &ClusterDataNodeService,
     ) -> Result<()> {
         self.require_live()?;
-        if self.phase.is_none() {
+        if !self.has_fresh_publication_phase() {
             self.require_external_preparations_current()?;
             self.require_local_preparation_current(service)?;
         }
@@ -644,10 +699,18 @@ impl NativeJointActivationAdmission {
         service: &ClusterDataNodeService,
     ) -> Result<()> {
         self.require_live()?;
-        if let Some(phase) = &self.phase {
-            phase.require_member_with_service(self.local.local_node_id(), service)
-        } else {
-            self.local.require_current_with_service(service)
+        match &self.backing {
+            ActivationBacking::Local {
+                phase: Some(phase), ..
+            } => phase.require_member_with_service(self.local.local_node_id(), service),
+            ActivationBacking::Local { phase: None, .. } => {
+                self.local.require_current_with_service(service)
+            }
+            #[cfg(feature = "tls-replication")]
+            ActivationBacking::Remote(remote) => {
+                remote.require_local_with_service(&self.local, service)?;
+                self.require_live()
+            }
         }
     }
     pub(crate) fn require_local_publication_scope(
@@ -660,8 +723,15 @@ impl NativeJointActivationAdmission {
         let writer = self
             .local
             .require_local_publication_scope(scope, store, &self.fresh)?;
-        if let Some(phase) = &self.phase {
-            phase.require_local_publication_writer(self.local.local_node_id(), &writer)?;
+        match &self.backing {
+            ActivationBacking::Local {
+                phase: Some(phase), ..
+            } => phase.require_local_publication_writer(self.local.local_node_id(), &writer)?,
+            ActivationBacking::Local { phase: None, .. } => {}
+            #[cfg(feature = "tls-replication")]
+            ActivationBacking::Remote(remote) => {
+                remote.require_local_publication_writer(&writer)?
+            }
         }
         self.require_live()
     }
@@ -670,7 +740,12 @@ impl NativeJointActivationAdmission {
         &self.cancellation
     }
     pub(crate) fn data(&self) -> &NativeJointDecisionData {
-        &self.quorum.data
+        match &self.backing {
+            ActivationBacking::Local { quorum, .. } => &quorum.data,
+            // The decision this member's own retained preparation protects.
+            #[cfg(feature = "tls-replication")]
+            ActivationBacking::Remote(_) => self.local.data(),
+        }
     }
     pub(crate) fn committed(&self) -> &CommittedNativeJointDecisionObservation {
         &self.fresh
@@ -681,10 +756,14 @@ impl NativeJointActivationAdmission {
     pub(crate) fn require_live(&self) -> Result<()> {
         self.cancellation.check()?;
         self.fresh.require_metadata_current()?;
-        if let Some(phase) = &self.phase {
+        if let Some(phase) = self.phase() {
             phase.require_live()?;
         }
-        if self.fresh.data() != &self.quorum.data
+        #[cfg(feature = "tls-replication")]
+        if let ActivationBacking::Remote(remote) = &self.backing {
+            remote.require_live(&self.local)?;
+        }
+        if self.fresh.data() != self.data()
             || self.fresh.native_receipt().local_node_id() != self.local.local_node_id()
         {
             return Err(invalid(
@@ -692,18 +771,31 @@ impl NativeJointActivationAdmission {
             ));
         }
         let (term, index, context) = self.fresh.metadata_anchor();
-        for observation in self.quorum.observations.values() {
-            let (vote_term, vote_index, vote_context) = if let Some(phase) = &self.phase {
-                phase
-                    .committed(observation.local_node_id())?
-                    .metadata_anchor()
-            } else {
-                observation.committed().metadata_anchor()
-            };
+        let post_quorum = |(vote_term, vote_index, vote_context): (u64, u64, Uuid)| {
             if context == vote_context || term < vote_term || index < vote_index {
                 return Err(invalid(
                     "joint activation metadata is not independently post-NEW-quorum",
                 ));
+            }
+            Ok(())
+        };
+        match &self.backing {
+            ActivationBacking::Local { quorum, phase } => {
+                for observation in quorum.observations.values() {
+                    post_quorum(if let Some(phase) = phase {
+                        phase
+                            .committed(observation.local_node_id())?
+                            .metadata_anchor()
+                    } else {
+                        observation.committed().metadata_anchor()
+                    })?;
+                }
+            }
+            #[cfg(feature = "tls-replication")]
+            ActivationBacking::Remote(remote) => {
+                for anchor in remote.anchors(self.data(), self.local.local_node_id())? {
+                    post_quorum(anchor)?;
+                }
             }
         }
         Ok(())
@@ -712,24 +804,40 @@ impl NativeJointActivationAdmission {
     /// check is nonwaiting; never recursively acquire the current latch.
     pub(crate) fn require_external_preparations_current(&self) -> Result<()> {
         self.require_live()?;
-        for (node, observation) in &self.quorum.observations {
-            if node != self.local.local_node_id() {
-                if let Some(phase) = &self.phase {
-                    phase.require_member_current(node)?;
-                } else {
-                    observation.require_current()?;
+        match &self.backing {
+            ActivationBacking::Local { quorum, phase } => {
+                for (node, observation) in &quorum.observations {
+                    if node != self.local.local_node_id() {
+                        if let Some(phase) = phase {
+                            phase.require_member_current(node)?;
+                        } else {
+                            observation.require_current()?;
+                        }
+                    }
                 }
+            }
+            // No other member's lock is reachable from this process. Every
+            // other NEW member must still be inside the bounded window in
+            // which it re-proved, under ITS lock, the identity counted here.
+            #[cfg(feature = "tls-replication")]
+            ActivationBacking::Remote(remote) => {
+                remote.require_external_current(self.data(), self.local.local_node_id())?
             }
         }
         Ok(())
     }
     pub(crate) fn votes(&self) -> BTreeMap<ClusterNodeId, NativeJointPreparedServingVoteData> {
-        self.quorum
+        let (quorum, phase) = match &self.backing {
+            ActivationBacking::Local { quorum, phase } => (quorum, phase),
+            #[cfg(feature = "tls-replication")]
+            ActivationBacking::Remote(remote) => return remote.votes(&self.local),
+        };
+        quorum
             .observations
             .iter()
             .map(|(node, observation)| {
                 let actual = observation.actual.prepared();
-                let (term, index, context) = self.phase.as_ref().map_or_else(
+                let (term, index, context) = phase.as_ref().map_or_else(
                     || observation.committed().metadata_anchor(),
                     |phase| phase.observations[node].committed.metadata_anchor(),
                 );
@@ -759,7 +867,7 @@ impl NativeJointActivationAdmission {
         );
         parent.check()?;
         self.require_live()?;
-        if self.phase.is_none() {
+        if !self.has_fresh_publication_phase() {
             self.require_external_preparations_current()?;
         }
         let service = self

@@ -41,8 +41,15 @@ pub(crate) struct NativeRegisteredRemoteJointOwner {
     frozen: parking_lot::Mutex<
         Option<Arc<crate::distribution_range_image_install::NativeImageInstallFreeze>>,
     >,
+    /// Minted once with THIS owner object and never copied into another.
+    /// Memory-only identity DATA; it grants nothing.
+    registration_identity: Uuid,
 }
 impl NativeRegisteredRemoteJointOwner {
+    /// Identity DATA of this exact retained owner object.
+    pub(crate) fn registration_identity(&self) -> Uuid {
+        self.registration_identity
+    }
     pub(crate) fn original_target_arc(&self) -> &Arc<NativeRegisteredRemoteJointTarget> {
         &self.target
     }
@@ -480,6 +487,7 @@ impl RegisteredRemoteInstallCustody<'_> {
                     lease,
                 ),
             ))),
+            registration_identity: Uuid::now_v7(),
         });
         // Infallible retention follows the infallible original-lease take.
         joint_targets.insert(range, owner.clone());

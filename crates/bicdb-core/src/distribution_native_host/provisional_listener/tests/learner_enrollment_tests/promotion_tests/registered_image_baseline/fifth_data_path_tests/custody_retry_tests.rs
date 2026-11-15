@@ -159,7 +159,7 @@ fn exercise(cut: Cut) {
             "original_cut_records":after_preparations,"completed_records":completed_preparations,
             "acknowledged_full_payloads":scenario.acknowledged,
         })).unwrap();
-        assert_eq!(resumed.unwrap(), Stage::Serving);
+        assert_eq!(resumed.unwrap(), Stage::SourceRetired);
         assert_eq!(
             completed["source_cut_rounds"], before["source_cut_rounds"],
             "fresh caller must not recut"

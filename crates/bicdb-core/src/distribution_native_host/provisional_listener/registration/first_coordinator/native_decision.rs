@@ -206,7 +206,7 @@ impl NativeFirstCoordinator {
             ));
         }
         let operation = if observe {
-            NewOp::ObserveDecision { facts }
+            NewOp::ObserveKnownDecision { facts }
         } else if publish {
             NewOp::PublishDecision { facts }
         } else {

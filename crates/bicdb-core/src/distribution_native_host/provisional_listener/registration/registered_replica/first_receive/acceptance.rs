@@ -37,20 +37,25 @@ impl NativeMetadataControlHost {
             "original_process_live_at_snapshot":a.process.check().is_ok(),
             "manifest":a.source.get().map(|s|s.manifest()),"last_api_return":*a.last_api_return.lock(),
         })).collect::<Vec<_>>();
-        let custody=receiver.remote_attempts.keys().map(|range| {
-            let result=self.test_registered_remote_attempt_memory_custody(*range);
+        // Snapshot only keys and owned diagnostic DATA under the actual
+        // shared table. Release it BEFORE a helper re-acquires that table.
+        // A concurrently driven step can advance after this snapshot; this
+        // remains explicitly non-atomic diagnostic DATA, never permission.
+        let (attempt_ranges, native_states) = {
+            let held = receiver.remote_install.hold()?;
+            let ranges = held.remote_attempts.keys().copied().collect::<Vec<_>>();
+            let native_states = held
+                .remote_images
+                .iter()
+                .map(|(range, image)| serde_json::json!({"range":range,"state":image.test_state()}))
+                .collect::<Vec<_>>();
+            (ranges, native_states)
+        };
+        let custody = attempt_ranges.into_iter().map(|range| {
+            let result=self.test_registered_remote_attempt_memory_custody(range);
             serde_json::json!({"range":range,"actual_memory_custody":result.as_ref().ok(),
                 "diagnostic_error":result.as_ref().err().map(crate::distribution_native_host::remote_first::error_data)})
         }).collect::<Vec<_>>();
-        let native_states = receiver
-            .remote_images
-            .iter()
-            .map(|(range, image)| {
-                serde_json::json!({
-                    "range":range,"state":image.test_state(),
-                })
-            })
-            .collect::<Vec<_>>();
         let retained_targets = receiver
             .remote_joint_targets
             .try_lock()

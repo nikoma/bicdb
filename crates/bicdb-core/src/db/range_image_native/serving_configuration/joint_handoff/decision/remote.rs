@@ -317,6 +317,54 @@ impl BicDb {
         }
         Ok(current) // Historical integrity only; no Role/A or cold grant.
     }
+    /// READ-ONLY re-proof of the original committed remote DECISION attempt:
+    /// exact CURRENT/archive record bytes, committed native xid and protected
+    /// provenance must still equal what THIS process durably wrote. It writes
+    /// nothing, takes no mutation permit and cannot replace a missing attempt.
+    pub(crate) fn observe_remote_native_decision(
+        &self,
+        native: &NativeRecoveryAdmission,
+        attempt: &NativeRemoteJointDecisionAttempt,
+    ) -> Result<NativeJointDecisionReceipt> {
+        let xid = attempt.actual_committed_xid()?;
+        let actual = attempt
+            .native
+            .as_ref()
+            .ok_or_else(|| invalid("remote DECISION observation has no original attempt"))?;
+        if actual.record.decision != attempt.expected || actual.record.native_page_xid != xid {
+            return Err(invalid(
+                "remote DECISION observation changed retained native body/xid",
+            ));
+        }
+        self.require_registered_joint_decision_storage_healthy()?;
+        let receipt = self.read_native_joint_decision(
+            native,
+            attempt.expected.old_range().id,
+            attempt.expected.checksum_sha256(),
+        )?;
+        let paged = self
+            .paged_records
+            .as_ref()
+            .ok_or_else(|| invalid("remote DECISION native page store absent"))?;
+        if receipt.record != actual.record
+            || bounded_json(&receipt.record, MAX_NATIVE_RECEIPT_BYTES)? != actual.bytes
+            || paged.store().transactions().status(xid) != bicdb_page::TxStatus::Committed
+        {
+            return Err(invalid(
+                "remote native DECISION exact CURRENT/archive/xid observation not proven",
+            ));
+        }
+        let provenance = self.require_remote_native_decision_provenance(&receipt.record)?;
+        if actual.provenance.as_ref() != Some(&provenance)
+            || bounded_json(&provenance, MAX_NATIVE_RECEIPT_BYTES)? != actual.provenance_bytes
+        {
+            return Err(invalid(
+                "remote DECISION observed protected provenance bytes changed",
+            ));
+        }
+        self.require_registered_joint_decision_storage_healthy()?;
+        Ok(receipt) // A native fact only. No catalogue acknowledgement/vote.
+    }
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn publish_remote_registered_native_decision(
         &self,

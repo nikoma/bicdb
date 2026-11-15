@@ -180,6 +180,7 @@ pub(crate) use joint_handoff_state::{
     NativeJointBridgeCatalogue, NativeJointCatalogueActivationFact,
     NativeJointCatalogueActivationReceipt, NativeJointOldCatalogPreflight,
     NativeJointOldPromiseReceipt, NativeJointReleaseObservedObligations,
+    NativeJointSourceRetirementReceipt,
 };
 use joint_handoff_state::{NativeJointLocalState, NATIVE_JOINT_HANDOFF_CATALOG_FORMAT};
 #[cfg(feature = "tls-replication")]

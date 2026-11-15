@@ -27,13 +27,30 @@
 //! between calls. A call that fails or stops between stages leaves them here
 //! and a later call continues from the committed metadata stage plus this
 //! custody. Losing the process that holds this object is a cold restart and
-//! is not covered.
+//! is not covered before the activation record below is committed.
+//!
+//! Completion. Serving is not the end of a relocation. After the target
+//! serves, a backend that records completion commits two further metadata
+//! stages. The activation record (`AwaitingCleanup`) commits to the durable
+//! catalogue activation of every member of the new set, each observed
+//! released and open; from then on the committed metadata alone says that
+//! the handoff is past Serving, and a driver without custody does not drive
+//! it again. The source retirement (`Cleaned`, relocation `Completed`)
+//! records the tombstone the retired source wrote on its own committed
+//! metadata read. It needs no custody, so a new driver object finishes it.
+//! No row is deleted on the retired source and its permanent promise stays;
+//! the completed relocation only stops blocking a later handoff of the range.
 //!
 //! Seam. This module holds the stage logic only: the stage derivation from the
 //! committed metadata, the abort boundary, the resume rules and the metadata
 //! commits. Everything that touches a member (its service, runtime, transport
 //! client) and the custody above sit behind `JoinedHandoffBackend`.
-//! `local_backend` is the in-process implementation. A remote implementation
+//! `local_backend` is the in-process implementation; `remote_backend` is the
+//! beginning of the one that asks the members over RPC. The stage logic itself
+//! reaches the hosts only through `JoinedHandoffMetadataHosts` (committed
+//! metadata reads and commits); each backend names its own host surface as
+//! `JoinedHandoffBackend::Hosts`, and a backend without in-process custody
+//! re-derives its retained state in `resync`. A remote implementation
 //! supplies the same stages by asking the members to act; it must never build
 //! a local quorum, role or freeze object from reply data. Those objects exist
 //! only where the member's own service issued them.
@@ -58,6 +75,10 @@ mod local_backend;
 pub(crate) use local_backend::LocalJoinedHandoffBackend;
 #[cfg(test)]
 pub(crate) use local_backend::TestHandoffCustodyCut;
+mod remote_backend;
+pub(crate) use remote_backend::{
+    RemoteJoinedHandoffBackend, RemoteMembers, RemoteOldCutObservation,
+};
 
 /// Per-request network budget of one metadata or role acquisition.
 const REQUEST: Duration = Duration::from_secs(5);
@@ -102,7 +123,10 @@ fn retry_timed_out<T>(mut attempt: impl FnMut() -> Result<T>) -> Result<T> {
 /// Completed stages, in order. `drive_until` returns after the named stage.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum NativeJoinedDataHandoffStage {
-    /// The target holds a writer policy and a DATA socket; no range changed.
+    /// The target is admitted to receive this range's data; no range changed.
+    /// In-process backend: it holds a writer policy and a DATA socket. A
+    /// backend whose target stays a registered replica receiver until release
+    /// admits it as such.
     TargetAdmitted,
     /// The learner allocation is committed; no old voter holds a promise.
     LearnerAllocated,
@@ -118,6 +142,13 @@ pub(crate) enum NativeJoinedDataHandoffStage {
     MembershipFinal,
     /// Open and release finished; the target leads and serves the range.
     Serving,
+    /// Metadata stage: the activation of every member of the new set is
+    /// recorded (`AwaitingCleanup`). The committed metadata now says that the
+    /// handoff is past Serving.
+    ActivationRecorded,
+    /// Metadata stage: the retired source recorded its retirement and the
+    /// relocation is `Completed` (`Cleaned`). Its rows are retained.
+    SourceRetired,
 }
 
 /// Actual handles of one participating member. They are the member's own
@@ -137,9 +168,9 @@ pub(crate) struct NativeJoinedDataPlanningView {
     pub(crate) business: Uuid,
 }
 
-/// The hosts this driver acts on. Every method is an existing host action;
-/// the driver holds the sequencing, the idempotence and the abort boundary.
-pub(crate) trait NativeJoinedDataHandoffHosts {
+/// The metadata surface of the hosts: all that the stage logic itself needs,
+/// whatever the backend. Every method is an existing host action.
+pub(crate) trait JoinedHandoffMetadataHosts {
     fn metadata_leader(&self) -> Result<ClusterNodeId>;
     fn committed_topology(&self) -> Result<ClusterTopology>;
     /// Commit through the real metadata consensus and return once the
@@ -151,6 +182,12 @@ pub(crate) trait NativeJoinedDataHandoffHosts {
     ) -> Result<()>;
     fn planning_view(&mut self, parent: &CancellationToken)
         -> Result<NativeJoinedDataPlanningView>;
+}
+
+/// The hosts the in-process backend acts on. Every method is an existing host
+/// action; the driver holds the sequencing, the idempotence and the abort
+/// boundary.
+pub(crate) trait NativeJoinedDataHandoffHosts: JoinedHandoffMetadataHosts {
     fn member(&self, node: &ClusterNodeId) -> Result<NativeJoinedDataMember>;
     /// Every original DATA owner whose installed policy follows the committed
     /// configuration, voters of this range or not.
@@ -192,6 +229,9 @@ pub(crate) trait NativeJoinedDataHandoffHosts {
 pub(crate) trait JoinedHandoffBackend {
     /// The member handles of one `drive_until` call.
     type Members;
+    /// The host surface this backend acts on. The stage logic uses only its
+    /// metadata part.
+    type Hosts: ?Sized + JoinedHandoffMetadataHosts;
     /// True once a source round was started or a freeze owner exists: a
     /// permanent handoff promise may exist and the abort is refused. It must
     /// become true before the first member mutation of `cut_and_ship`.
@@ -200,32 +240,56 @@ pub(crate) trait JoinedHandoffBackend {
     /// voter is an error.
     fn old_epoch(
         &self,
-        hosts: &dyn NativeJoinedDataHandoffHosts,
+        hosts: &Self::Hosts,
         node: &ClusterNodeId,
         range: &RangeDescriptor,
     ) -> Result<u64>;
     /// The abort was committed: drop what was retained for the aborted
     /// allocation.
     fn forget_aborted_allocation(&mut self);
-    /// Install the target's writer policy and DATA socket. Repeatable.
-    fn admit_target(
-        &mut self,
-        hosts: &mut dyn NativeJoinedDataHandoffHosts,
-        parent: &CancellationToken,
-    ) -> Result<()>;
+    /// Admit the target to receive this range's data. Repeatable. The
+    /// in-process backend installs the target's writer policy and DATA
+    /// socket; a backend whose target stays a registered replica receiver
+    /// until release admits it as such.
+    fn admit_target(&mut self, hosts: &mut Self::Hosts, parent: &CancellationToken) -> Result<()>;
     /// Resolve the participating members of the committed relocation.
     fn members(
         &self,
-        hosts: &dyn NativeJoinedDataHandoffHosts,
+        hosts: &Self::Hosts,
         range: &RangeDescriptor,
         relocation: &RangeRelocation,
     ) -> Result<Self::Members>;
+    /// Re-derive retained state from the members' durable state before any
+    /// stage decision of this call. The in-process backend retains everything
+    /// in memory and needs nothing.
+    fn resync(
+        &mut self,
+        _hosts: &mut Self::Hosts,
+        _members: &Self::Members,
+        _range: &RangeDescriptor,
+        _relocation: &RangeRelocation,
+        _parent: &CancellationToken,
+    ) -> Result<()> {
+        Ok(())
+    }
+    /// Re-derive `cut_started` from the members before an abort is decided.
+    /// An error refuses the abort. The in-process backend answers
+    /// `cut_started` from memory and needs nothing.
+    fn resync_before_abort(
+        &mut self,
+        _hosts: &mut Self::Hosts,
+        _range: &RangeDescriptor,
+        _relocation: &RangeRelocation,
+        _parent: &CancellationToken,
+    ) -> Result<()> {
+        Ok(())
+    }
     /// No finalized image, publication round or durable decision is held.
     fn cut_required(&self) -> bool;
     /// Source cut, transfer and verification onto the target.
     fn cut_and_ship(
         &mut self,
-        hosts: &mut dyn NativeJoinedDataHandoffHosts,
+        hosts: &mut Self::Hosts,
         members: &Self::Members,
         range: &RangeDescriptor,
         relocation: &RangeRelocation,
@@ -253,16 +317,46 @@ pub(crate) trait JoinedHandoffBackend {
     /// Policy continuation through release.
     fn activate(
         &mut self,
-        hosts: &mut dyn NativeJoinedDataHandoffHosts,
+        hosts: &mut Self::Hosts,
         members: &Self::Members,
         parent: &CancellationToken,
     ) -> Result<()>;
     /// Target leadership and ingress; the ranges the target recovered.
-    fn serve(
+    fn serve(&mut self, hosts: &mut Self::Hosts, parent: &CancellationToken) -> Result<usize>;
+    /// True when this backend produces the proofs of the two completion
+    /// stages. A backend that does not ends at `Serving`, as before, and its
+    /// relocation stays at `AwaitingActivation`.
+    fn records_completion(&self) -> bool {
+        false
+    }
+    /// Observe every member of the new set released and open inside one
+    /// fresh window and retain that proof for the activation record. Called
+    /// after `serve`; `stage_candidate` then consumes it for the committed
+    /// stage `AwaitingActivation`.
+    fn prove_activation(
         &mut self,
-        hosts: &mut dyn NativeJoinedDataHandoffHosts,
-        parent: &CancellationToken,
-    ) -> Result<usize>;
+        _members: &Self::Members,
+        _parent: &CancellationToken,
+    ) -> Result<()> {
+        Err(handoff_error(
+            "this backend does not produce the activation record",
+        ))
+    }
+    /// Ask the retired source to record its retirement from the range on its
+    /// own committed metadata read, and retain its receipt. It must not
+    /// delete or overwrite any data of the source. `stage_candidate` then
+    /// consumes the receipt for the committed stage `AwaitingCleanup`.
+    fn retire_source(
+        &mut self,
+        _members: &Self::Members,
+        _range: &RangeDescriptor,
+        _relocation: &RangeRelocation,
+        _parent: &CancellationToken,
+    ) -> Result<()> {
+        Err(handoff_error(
+            "this backend does not produce the source retirement",
+        ))
+    }
 }
 
 /// One handoff of `range` onto `target`: the stage logic over a backend that
@@ -271,18 +365,16 @@ pub(crate) struct NativeJoinedDataHandoff<B: JoinedHandoffBackend = LocalJoinedH
     range: RangeId,
     target: ClusterNodeId,
     backend: B,
-    /// Ranges the target recovered when it opened ingress; set on completion.
+    /// Ranges the target recovered when it opened ingress; set once served.
     recovered: Option<usize>,
+    /// The final stage, once this object reached or observed it.
+    finished: Option<NativeJoinedDataHandoffStage>,
 }
 
 impl NativeJoinedDataHandoff<LocalJoinedHandoffBackend> {
     pub(crate) fn new(range: RangeId, target: ClusterNodeId) -> Self {
-        Self {
-            range,
-            backend: LocalJoinedHandoffBackend::new(target.clone()),
-            target,
-            recovered: None,
-        }
+        let backend = LocalJoinedHandoffBackend::new(target.clone());
+        Self::with_backend(range, target, backend)
     }
     /// Ask the target runtime to restart a dropped transfer in every state in
     /// which it must refuse, and record what it answered.
@@ -315,14 +407,25 @@ impl NativeJoinedDataHandoff<LocalJoinedHandoffBackend> {
 }
 
 impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
+    /// A handoff of `range` onto `target` over the given backend.
+    pub(crate) fn with_backend(range: RangeId, target: ClusterNodeId, backend: B) -> Self {
+        Self {
+            range,
+            target,
+            backend,
+            recovered: None,
+            finished: None,
+        }
+    }
+    /// True once the handoff reached the last stage its backend produces.
     pub(crate) fn completed(&self) -> bool {
-        self.recovered.is_some()
+        self.finished.is_some()
     }
     /// Run the handoff to completion. Repeating it after completion changes
     /// nothing and returns the same stage.
     pub(crate) fn drive(
         &mut self,
-        hosts: &mut dyn NativeJoinedDataHandoffHosts,
+        hosts: &mut B::Hosts,
         parent: &CancellationToken,
     ) -> Result<NativeJoinedDataHandoffStage> {
         self.drive_until(hosts, None, parent)
@@ -339,6 +442,30 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
             })
             .cloned()
     }
+    fn recorded(relocation: &RangeRelocation) -> Option<NativeJointHandoffStageV1> {
+        relocation
+            .native_joint_handoff_v1
+            .as_ref()
+            .map(|record| record.stage())
+    }
+    /// The committed metadata holds a completed handoff of the range onto
+    /// the target whose replica is still the target's voter replica there.
+    fn committed_complete(&self, topology: &ClusterTopology) -> bool {
+        let Some(range) = topology.range_by_id(self.range) else {
+            return false;
+        };
+        topology.relocations.values().any(|plan| {
+            plan.range_id == self.range
+                && plan.target == self.target
+                && plan.phase == RelocationPhase::Completed
+                && Self::recorded(plan) == Some(NativeJointHandoffStageV1::Cleaned)
+                && range.replicas.iter().any(|replica| {
+                    replica.id == plan.target_replica_id
+                        && replica.node_id == self.target
+                        && replica.role == RangeReplicaRole::Voter
+                })
+        })
+    }
     fn range(&self, topology: &ClusterTopology) -> Result<RangeDescriptor> {
         topology
             .range_by_id(self.range)
@@ -351,7 +478,7 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
     /// A later `drive` starts a new learner allocation.
     pub(crate) fn abort_before_cut(
         &mut self,
-        hosts: &mut dyn NativeJoinedDataHandoffHosts,
+        hosts: &mut B::Hosts,
         parent: &CancellationToken,
     ) -> Result<()> {
         parent.check()?;
@@ -382,6 +509,14 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
         {
             return Err(handoff_error(
                 "the committed relocation is past its bare learner allocation; the handoff can only be resumed",
+            ));
+        }
+        // A backend without memory of its own asks the members first.
+        self.backend
+            .resync_before_abort(hosts, &range, &relocation, parent)?;
+        if self.backend.cut_started() {
+            return Err(handoff_error(
+                "a source round was started and a permanent handoff promise may exist; the handoff can only be resumed",
             ));
         }
         // Durable truth, independent of this object's memory: a source close
@@ -425,21 +560,79 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
     /// call may be repeated after any error or early return.
     pub(crate) fn drive_until(
         &mut self,
-        hosts: &mut dyn NativeJoinedDataHandoffHosts,
+        hosts: &mut B::Hosts,
         until: Option<NativeJoinedDataHandoffStage>,
         parent: &CancellationToken,
     ) -> Result<NativeJoinedDataHandoffStage> {
         use NativeJoinedDataHandoffStage as Stage;
         parent.check()?;
-        if self.recovered.is_some() {
-            return Ok(Stage::Serving);
+        if let Some(finished) = self.finished {
+            return Ok(finished);
         }
+        // The committed metadata decides alone whether the handoff is past
+        // Serving. Such a handoff is never driven through its stages again,
+        // with or without custody.
+        let topology = hosts.committed_topology()?;
+        let recorded = self.relocation(&topology).as_ref().and_then(Self::recorded);
+        if recorded < Some(NativeJointHandoffStageV1::AwaitingCleanup) {
+            if self.committed_complete(&topology) {
+                self.finished = Some(Stage::SourceRetired);
+                return Ok(Stage::SourceRetired);
+            }
+            if let Some(stopped) = self.drive_to_activation_record(hosts, until, parent)? {
+                return Ok(stopped);
+            }
+        } else if let Some(earlier) = until.filter(|stage| *stage <= Stage::Serving) {
+            return Ok(earlier);
+        }
+        if until == Some(Stage::ActivationRecorded) {
+            return Ok(Stage::ActivationRecorded);
+        }
+        // Step 11: the retired source records its retirement; the relocation
+        // completes. Nothing here needs the custody of the earlier stages.
+        let topology = hosts.committed_topology()?;
+        let relocation = self
+            .relocation(&topology)
+            .ok_or_else(|| handoff_error("committed relocation disappeared"))?;
+        if Self::recorded(&relocation) != Some(NativeJointHandoffStageV1::AwaitingCleanup) {
+            return Err(handoff_error(
+                "committed relocation does not record its activation quorum",
+            ));
+        }
+        let range = self.range(&topology)?;
+        let members = self.backend.members(&*hosts, &range, &relocation)?;
+        self.backend
+            .retire_source(&members, &range, &relocation, parent)?;
+        self.commit_membership_stage(
+            hosts,
+            Some(NativeJointHandoffStageV1::AwaitingCleanup),
+            parent,
+        )?;
+        if !self.committed_complete(&hosts.committed_topology()?) {
+            return Err(handoff_error(
+                "committed relocation is not completed after the source retirement",
+            ));
+        }
+        self.finished = Some(Stage::SourceRetired);
+        Ok(Stage::SourceRetired)
+    }
+
+    /// Steps 1 to 10: everything up to the committed activation record.
+    /// Returns the stage at which this call stops, or `None` when the
+    /// activation record is committed and the completion continues.
+    fn drive_to_activation_record(
+        &mut self,
+        hosts: &mut B::Hosts,
+        until: Option<NativeJoinedDataHandoffStage>,
+        parent: &CancellationToken,
+    ) -> Result<Option<NativeJoinedDataHandoffStage>> {
+        use NativeJoinedDataHandoffStage as Stage;
         // Step 1: target admission, before any range configuration changes.
         self.backend
             .admit_target(hosts, parent)
             .map_err(|error| stage_error("target admission", error))?;
         if until == Some(Stage::TargetAdmitted) {
-            return Ok(Stage::TargetAdmitted);
+            return Ok(Some(Stage::TargetAdmitted));
         }
         // Step 2: the committed learner allocation.
         let mut topology = hosts.committed_topology()?;
@@ -454,13 +647,15 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
             .relocation(&topology)
             .ok_or_else(|| handoff_error("committed learner allocation absent"))?;
         if until == Some(Stage::LearnerAllocated) {
-            return Ok(Stage::LearnerAllocated);
+            return Ok(Some(Stage::LearnerAllocated));
         }
         let range = self.range(&topology)?;
         let members = self.backend.members(&*hosts, &range, &relocation)?;
+        self.backend
+            .resync(hosts, &members, &range, &relocation, parent)?;
         if relocation.native_joint_handoff_v1.is_some() {
             if let Some(stage @ (Stage::ImageVerified | Stage::DecisionPublished)) = until {
-                return Ok(stage);
+                return Ok(Some(stage));
             }
         } else {
             // Steps 3 and 4: source cut, transfer and verification.
@@ -469,14 +664,14 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
                     .cut_and_ship(hosts, &members, &range, &relocation, parent)?;
             }
             if until == Some(Stage::ImageVerified) {
-                return Ok(Stage::ImageVerified);
+                return Ok(Some(Stage::ImageVerified));
             }
             // Step 5: the joint decision on an old and a new data majority.
             if !self.backend.decision_durable() {
                 self.backend.decide(&members, parent)?;
             }
             if until == Some(Stage::DecisionPublished) {
-                return Ok(Stage::DecisionPublished);
+                return Ok(Some(Stage::DecisionPublished));
             }
         }
         // Step 6: the three staged metadata membership commits.
@@ -491,11 +686,8 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
                 Stage::MembershipFinal,
             ),
         ] {
-            let committed = relocation
-                .native_joint_handoff_v1
-                .as_ref()
-                .map(|record| record.stage());
-            if committed == stage {
+            if Self::recorded(&relocation) == stage {
+                self.backend.require_decision()?;
                 self.commit_membership_stage(hosts, stage, parent)?;
                 topology = hosts.committed_topology()?;
                 relocation = self
@@ -503,38 +695,55 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
                     .ok_or_else(|| handoff_error("committed relocation disappeared"))?;
             }
             if until == Some(reached) {
-                return Ok(reached);
+                return Ok(Some(reached));
             }
         }
-        if relocation
-            .native_joint_handoff_v1
-            .as_ref()
-            .map(|record| record.stage())
-            != Some(NativeJointHandoffStageV1::AwaitingActivation)
-        {
+        if Self::recorded(&relocation) != Some(NativeJointHandoffStageV1::AwaitingActivation) {
             return Err(handoff_error(
                 "committed relocation is not awaiting activation after the membership stages",
             ));
         }
-        // Steps 7 to 9: policy continuation, Open and release, serving.
-        self.backend.activate(hosts, &members, parent)?;
-        let recovered = self.backend.serve(hosts, parent)?;
-        self.recovered = Some(recovered);
-        Ok(Stage::Serving)
+        // Steps 7 to 9: policy continuation, Open and release, serving. A
+        // served handoff is not activated or published a second time.
+        if self.recovered.is_none() {
+            self.backend.activate(hosts, &members, parent)?;
+            let recovered = self.backend.serve(hosts, parent)?;
+            self.recovered = Some(recovered);
+        }
+        if !self.backend.records_completion() {
+            self.finished = Some(Stage::Serving);
+            return Ok(Some(Stage::Serving));
+        }
+        if until == Some(Stage::Serving) {
+            return Ok(Some(Stage::Serving));
+        }
+        // Step 10: the activation record. The proof lives inside one fresh
+        // window, so the proof and its commit are repeated together.
+        retry_timed_out(|| {
+            self.backend
+                .prove_activation(&members, parent)
+                .map_err(|error| stage_error("activation quorum", error))?;
+            self.commit_membership_stage(
+                hosts,
+                Some(NativeJointHandoffStageV1::AwaitingActivation),
+                parent,
+            )
+        })?;
+        Ok(None)
     }
 
     /// One staged metadata membership step, built by the backend from its
     /// retained durable decision on a planning view of the fresh committed
     /// configuration and committed by the real metadata consensus.
     /// `committed` is the stage the committed relocation records before this
-    /// step.
+    /// step. The two completion stages are built the same way from the
+    /// backend's retained activation proof and source retirement receipt.
     fn commit_membership_stage(
         &mut self,
-        hosts: &mut dyn NativeJoinedDataHandoffHosts,
+        hosts: &mut B::Hosts,
         committed: Option<NativeJointHandoffStageV1>,
         parent: &CancellationToken,
     ) -> Result<()> {
-        self.backend.require_decision()?;
         let actor = hosts.metadata_leader()?;
         let NativeJoinedDataPlanningView {
             mut view,
@@ -550,6 +759,31 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
             .commit_topology(view.topology().clone(), parent)
             .map_err(|error| stage_error("membership commit", error))
     }
+}
+
+/// A relocation of the range is committed and not `Completed`. A joint
+/// relocation is `Completed` only once its retired source recorded its
+/// retirement, so an unfinished handoff refuses the next one.
+fn range_has_unfinished_relocation(topology: &ClusterTopology, range_id: RangeId) -> bool {
+    topology
+        .relocations
+        .values()
+        .any(|plan| plan.range_id == range_id && plan.phase != RelocationPhase::Completed)
+}
+#[cfg(test)]
+pub(crate) fn test_range_has_unfinished_relocation(
+    topology: &ClusterTopology,
+    range_id: RangeId,
+) -> bool {
+    range_has_unfinished_relocation(topology, range_id)
+}
+#[cfg(test)]
+pub(crate) fn test_plan_learner_allocation(
+    current: &ClusterTopology,
+    range_id: RangeId,
+    target: &ClusterNodeId,
+) -> Result<ClusterTopology> {
+    plan_learner_allocation(current, range_id, target)
 }
 
 /// One committed learner allocation of `target` on the range, retiring the
@@ -578,11 +812,7 @@ fn plan_learner_allocation(
     }) {
         return Err(handoff_error("target already holds a range replica"));
     }
-    if proposed
-        .relocations
-        .values()
-        .any(|plan| plan.range_id == range_id && plan.phase != RelocationPhase::Completed)
-    {
+    if range_has_unfinished_relocation(&proposed, range_id) {
         return Err(handoff_error("range already has a committed relocation"));
     }
     let id = RelocationId::new(proposed.next_relocation_id)?;

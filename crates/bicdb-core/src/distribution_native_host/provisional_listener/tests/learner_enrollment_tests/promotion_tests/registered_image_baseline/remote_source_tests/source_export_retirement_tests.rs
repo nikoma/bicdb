@@ -172,6 +172,7 @@ pub(super) fn exercise(
     ranges: &[crate::RangeDescriptor],
     acknowledged: &[serde_json::Value],
     output: &std::path::Path,
+    template: &crate::DistributionConfig,
     process: &CancellationToken,
 ) {
     assert!(is_case(case));
@@ -833,6 +834,8 @@ pub(super) fn exercise(
             controls,
             clients,
             services,
+            metadata,
+            template,
             target_control,
             factory,
             pending,

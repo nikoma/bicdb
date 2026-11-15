@@ -335,5 +335,68 @@
     "general_multi_range_transactions": false,
     "physical_scaling": false,
     "production_admission": false
+  },
+  "later_main519_recheck": {
+    "version": "1.0.519-beta",
+    "sha": "587dd6e4775e454cc9e8224d5fed76e8795c6ff6",
+    "source_pins": [
+      {
+        "path": "crates/bicdb-pgwire/src/lib.rs",
+        "git_blob": "2b5eb58f812ac2352ad80ec87601f1d865bdd6ab",
+        "sha256": "f1bae040c48b7aa97fda0d1d59e25c194173d395d35044c731bd40e801d62de9",
+        "same_as_main517": true
+      },
+      {
+        "path": "crates/bicdb-pgwire/src/query_exec.rs",
+        "git_blob": "5b8d412d85bd16e34dfdff0c05f6c032678ba8d0",
+        "sha256": "5ce7b5fd977387e88cd9942f7d148be24b1053fa073f1369cbc0b2cf959f87d0",
+        "same_as_main517": true
+      },
+      {
+        "path": "crates/bicdb-pgwire/src/server_cluster.rs",
+        "git_blob": "ae2b588f426f2f03173e571eab12e7974730f3dd",
+        "sha256": "7840c1c93d88e980c49f7e51fb97978b8dac5dd95201cfd41a9993aa44201b2f",
+        "same_as_main517": true
+      },
+      {
+        "path": "crates/bicdb-sql/src/session.rs",
+        "git_blob": "8d64c1dd11a6ef44f9ba2162e692e3fce163ff64",
+        "sha256": "86d1f7ebf6b1b4ca0aac15d701088b2b9b07e742994ad0f2c350228b89902886",
+        "same_as_main517": true
+      },
+      {
+        "path": "crates/bicdb-core/src/distribution_query.rs",
+        "git_blob": "2c9390f0b0f75789160df64129f9da2b142767ec",
+        "sha256": "3f4ba08a2694662a163f7ddb7cd41b2ac88f5c1539ac18483d4eb69caedbaa44",
+        "same_as_main517": true
+      },
+      {
+        "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+        "git_blob": "152caa77154cb6654858c2e69375c4bcde1fda14",
+        "sha256": "b31bf46bf046aa62df6f2104929890866a150e57d150e38dd97e3e33d1489eb9",
+        "same_as_main517": false
+      },
+      {
+        "path": "crates/bicdb-core/src/db/record_read_snapshot.rs",
+        "git_blob": "2154cc5e975538b2f7dc7ff6aaa322719d713746",
+        "sha256": "abf6b52158b64bb940a050100f97386a33ce4ae82a648e75eac0742e87f231f7",
+        "same_as_main517": true
+      },
+      {
+        "path": "crates/bicdb-core/src/query_budget.rs",
+        "git_blob": "03153c51450aef4871edc87f0d7e1c7bafcfa2a7",
+        "sha256": "7edb9fa9683c2d933b6dcbc2d2d3f5f84861ea08431a39dcb288bf08be46be4d",
+        "same_as_main517": true
+      },
+      {
+        "path": "crates/bicdb-core/src/distribution_events.rs",
+        "git_blob": "6e542245476df617e29ac5e7fd1a8764eaf7ad35",
+        "sha256": "fe3f2ea78dfa9d3c21c130ec7fbc93d0f14f57d2abbf07acb6634b547542f83c",
+        "same_as_main517": true
+      }
+    ],
+    "classification": "Source/design only. Cross-process storage/handoff additions do not implement the proposed transparent SQL execution/registry/snapshot protocol.",
+    "recorded_main517_and_candidate518_results_remain_historical": true,
+    "new_SQL_runtime_or_physical_test": false
   }
 }

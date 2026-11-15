@@ -299,7 +299,7 @@ impl NativeRemoteNewParticipant {
         parent: &CancellationToken,
     ) -> Result<NativeRemoteDecisionReceiptV1> {
         self.require_request(request)?;
-        let NativeRemoteNewOperationV1::ObserveDecision { facts } = &request.operation else {
+        let NativeRemoteNewOperationV1::ObserveKnownDecision { facts } = &request.operation else {
             return Err(invalid(
                 "known native read requires explicit readonly operation",
             ));
@@ -556,6 +556,82 @@ impl NativeRemoteNewParticipant {
         };
         reply.require_request(request, facts)?;
         Ok(reply)
+    }
+}
+
+impl NativeRemoteNewParticipant {
+    /// READ-ONLY: the original participant re-proves that the native DECISION
+    /// it already durably committed still exists with its exact bytes/xid and
+    /// protected provenance, then returns the same receipt DATA plus the exact
+    /// body. No Role, pin, write, vote or replacement attempt is created here.
+    pub(crate) fn observe_remote_decision(
+        &self,
+        request: &NativeRemoteNewRequestV1,
+        parent: &CancellationToken,
+    ) -> Result<(NativeRemoteDecisionReceiptV1, NativeJointDecisionData)> {
+        self.require_request(request)?;
+        if !matches!(
+            &request.operation,
+            NativeRemoteNewOperationV1::ObserveDecision
+        ) {
+            return Err(invalid(
+                "durable DECISION observation needs its explicit read-only operation",
+            ));
+        }
+        let handoff = self
+            .handoff_outcome()?
+            .ok_or_else(|| invalid("observed DECISION original pin handoff incomplete"))?;
+        self.require_lifetime_memory()?;
+        parent.check()?;
+        let retained = self
+            .decision
+            .try_lock()
+            .ok_or_else(|| invalid("remote DECISION original attempt active"))?;
+        let expected = retained
+            .expected
+            .as_ref()
+            .ok_or_else(|| invalid("no original remote DECISION body was retained"))?;
+        let attempt = retained
+            .native
+            .as_ref()
+            .ok_or_else(|| invalid("no original remote native DECISION attempt exists"))?;
+        let receipt = match &self.original {
+            OriginalParticipant::Registered {
+                target, service, ..
+            } => {
+                let service = service
+                    .try_lock()
+                    .ok_or_else(|| invalid("remote DECISION observation target service busy"))?;
+                let database = service.database();
+                let db = database
+                    .try_read()
+                    .ok_or_else(|| invalid("remote DECISION observation target DB busy"))?;
+                db.observe_remote_native_decision(target.native(), attempt)?
+            }
+            OriginalParticipant::Old { actual, .. } => actual.observe_remote_decision(attempt)?,
+        };
+        if receipt.data() != expected
+            || receipt.decision_sha256() != expected.checksum_sha256()
+            || receipt.local_node_id() != &self.snapshot.node_id
+        {
+            return Err(invalid(
+                "observed durable DECISION differs from original body/recipient",
+            ));
+        }
+        let reply = NativeRemoteDecisionReceiptV1 {
+            binding: NativeSourceExportBindingV1::from_manifest(&request.manifest)?,
+            phase_id: request.phase_id,
+            fact_set_sha256: handoff.fact_set_sha256.clone(),
+            node_id: self.snapshot.node_id.clone(),
+            decision_sha256: receipt.decision_sha256().to_string(),
+            native_record_sha256: receipt.checksum_sha256().to_string(),
+            native_page_xid: attempt.actual_committed_xid()?,
+            remote_provenance_sha256: attempt.actual_provenance_sha256()?.to_string(),
+        };
+        reply.require_observation(request, &handoff.fact_set_sha256)?;
+        self.require_lifetime_memory()?;
+        parent.check()?;
+        Ok((reply, expected.clone()))
     }
 }
 

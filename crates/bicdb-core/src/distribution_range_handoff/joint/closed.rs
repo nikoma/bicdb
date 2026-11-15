@@ -528,6 +528,21 @@ impl NativeJointOldObservation {
             parent,
         )
     }
+    /// Read-only re-proof of this original owner's committed remote DECISION.
+    pub(super) fn observe_remote_decision(
+        &self,
+        attempt: &crate::db::NativeRemoteJointDecisionAttempt,
+    ) -> Result<crate::db::NativeJointDecisionReceipt> {
+        let service = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("remote OLD decision observation service busy"))?;
+        let database = service.database();
+        let db = database
+            .try_read()
+            .ok_or_else(|| invalid("remote OLD decision observation DB busy"))?;
+        db.observe_remote_native_decision(self.native.native_admission(), attempt)
+    }
     pub(super) fn publish_remote_decision(
         &self,
         writer: &crate::db::NativeWriterHostState,

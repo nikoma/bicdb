@@ -301,6 +301,16 @@ impl NativeRemoteNewParticipant {
     }
     pub(crate) fn retain_request(&self, request: &NativeRemoteNewRequestV1) -> Result<()> {
         self.require_request(request)?;
+        if matches!(
+            &request.operation,
+            NativeRemoteNewOperationV1::ObserveDecision
+        ) {
+            // A decision read retains nothing a retry needs: its reply is
+            // re-proved from the durable record and bound to the exact
+            // request. It is checked against the retained phase/manifest
+            // above but never takes one of the lifetime request slots.
+            return Ok(());
+        }
         let bytes = request.custody_bytes()?;
         let handoff = self
             .handoff
@@ -624,7 +634,13 @@ impl NativeRemoteNewParticipant {
             .handoff
             .try_lock()
             .ok_or_else(|| invalid("remote NEW diagnostic handoff custody busy"))?;
+        let retained_requests = self
+            .requests
+            .try_lock()
+            .ok_or_else(|| invalid("remote NEW diagnostic request custody busy"))?
+            .len();
         Ok(serde_json::json!({
+            "retained_requests":retained_requests,
             "snapshot":self.snapshot,"handoff_started":self.handoff_started(),
             "retained_encoded_frame_bytes":handoff.encoded_frame_bytes,
             "exact_intent":handoff.intent,"attempts":handoff.attempts.iter().map(|a| serde_json::json!({

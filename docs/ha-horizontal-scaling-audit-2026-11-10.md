@@ -11,7 +11,33 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
-## Evidence checkpoint — 2026-11-15 UTC
+## Later source checkpoint — main519, 2026-11-15 UTC
+
+Remote main advanced to **1.0.519-beta /
+`587dd6e4775e454cc9e8224d5fed76e8795c6ff6`** through PR208. It adds metadata/backend
+seams, an authenticated recipient target-install step, native-decision certificate
+support and metadata completion/source-retirement records. The
+[519 release contract](releases/1.0.519-beta.md) explicitly leaves most remote
+backend stages unimplemented and lists restart, unavailable-source, second-move
+and retained-row limitations. These additions do not establish an operator's
+automatic fault-safe rebalance. A metadata `Completed` record does not establish
+physical source deletion, capacity gain or production qualification.
+
+GitHub metadata reports successful required PR208 checks and an identical tested
+head/merge tree (`e88a49e83f7f92fc1fea6293b88eb3bfb21bf7c9`). This checkpoint
+has not independently revalidated raw case counts/cuts. Main519's post-merge
+Tests run43677527718 was still live at inspection; its Rails run43677527740
+reported success. Earlier same-tree passes and later execution remain separate.
+
+The prior518 composition and reviewed eight-error correction are being integrated
+above519 as a **520 candidate**. Its own exact-source compilation/runtime remain
+pending. The [520 candidate boundary](releases/1.0.520-beta.md) preserves these
+limits and historical results. The original Azure scale-out qualification is
+still **failed**, and no new independent-machine expansion or stable five-node
+throughput comparison has passed. Source517 and candidate518 observations below
+remain historical evidence with their original identities.
+
+## Earlier evidence checkpoint — main517, 2026-11-15 UTC
 
 Remote main inspected for this checkpoint is **1.0.517-beta /
 `bde74650c40934096e1cc6c6e75a3ea3c4643cf4`**. Its pre-merge native suite passed

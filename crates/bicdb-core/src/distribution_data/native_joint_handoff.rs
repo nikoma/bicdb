@@ -17,6 +17,8 @@ mod registered_target;
 mod remote_decision;
 #[cfg(feature = "tls-replication")]
 pub(crate) use registered_target::ActualServiceNativeRegisteredJointNewEvidence;
+mod source_retirement;
+pub(crate) use source_retirement::NativeJointSourceRetired;
 mod bridge;
 pub(crate) use bridge::{
     ActualServiceNativeJointPreparedEvidence, ActualServiceNativeJointReleaseEvidence,

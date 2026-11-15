@@ -80,19 +80,39 @@ impl RemoteNewRecipientMetadata {
             .nodes
             .get(peer.node_id())
             .ok_or_else(|| invalid("remote NEW authenticated actor absent"))?;
+        let listed = request.manifest.old_members.contains_key(peer.node_id())
+            || request.manifest.new_members.contains_key(peer.node_id());
         if peer.plaintext_loopback()
             || actor.lifecycle != crate::distribution::ClusterNodeLifecycle::Active
             || actor.incarnation != peer.member_incarnation()
             || peer
                 .certificate_sha256()
                 .is_none_or(|pin| !actor.accepts_tls_certificate_sha256(pin))
-            || (matches!(&request.operation, NativeRemoteNewOperationV1::Observe)
-                && !request.manifest.old_members.contains_key(peer.node_id())
-                && !request.manifest.new_members.contains_key(peer.node_id()))
+            || (matches!(&request.operation, NativeRemoteNewOperationV1::Observe) && !listed)
         {
             return Err(invalid(
                 "remote NEW actual peer/credential/readonly participant differs",
             ));
+        }
+        if role.is_none() && !matches!(&request.operation, NativeRemoteNewOperationV1::Observe) {
+            // No witnessed Role covers this acquisition (a decision read, or
+            // the first half of a preparation). Before any participant state
+            // is looked up, retained or read, the recipient's OWN committed
+            // observation must admit the peer.
+            let range = topology
+                .range_by_id(request.manifest.capture_range.id)
+                .ok_or_else(|| invalid("remote NEW current range absent"))?;
+            if !unwitnessed_peer_admitted(
+                listed,
+                range.replicas.iter().any(|r| &r.node_id == peer.node_id()),
+                &range.leader,
+                own.metadata_leader_id(),
+                peer.node_id(),
+            ) {
+                return Err(invalid(
+                    "remote NEW peer is neither a member of this handoff nor its permitted initiator",
+                ));
+            }
         }
         if let Some(role) = &role {
             role.require_own_host_metadata(&own, business)?;
@@ -150,5 +170,44 @@ impl RemoteNewRecipientMetadata {
         }
         self.point.require_external_current()?;
         self.own.require_live_request(self.business)
+    }
+}
+
+/// Who may send an operation that no witnessed Role covers: a committed
+/// replica of the range that the manifest also lists as an OLD or NEW member,
+/// or the node the committed-handoff initiator rule admits for mutations (the
+/// range leader or the metadata leader). Every input except `listed` comes
+/// from the recipient's own committed metadata observation.
+fn unwitnessed_peer_admitted(
+    listed: bool,
+    committed_replica: bool,
+    range_leader: &ClusterNodeId,
+    metadata_leader: &ClusterNodeId,
+    peer: &ClusterNodeId,
+) -> bool {
+    (listed && committed_replica) || range_leader == peer || metadata_leader == peer
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn native_remote_decision_certificate_unwitnessed_peer_rule_admits_members_and_initiators_only()
+    {
+        let id = |name: &str| ClusterNodeId::new(name.to_string()).unwrap();
+        let (range_leader, metadata_leader, outsider) = (id("n1"), id("n0"), id("n9"));
+        let admitted = |listed, replica, peer: &ClusterNodeId| {
+            unwitnessed_peer_admitted(listed, replica, &range_leader, &metadata_leader, peer)
+        };
+        // An Active cluster node outside the plan that may not initiate it.
+        assert!(!admitted(false, false, &outsider));
+        // Request DATA alone never admits: a manifest listing without the
+        // recipient's own committed replica, or the reverse.
+        assert!(!admitted(true, false, &outsider));
+        assert!(!admitted(false, true, &outsider));
+        assert!(admitted(true, true, &id("n2")));
+        // The initiator rule: range leader or metadata leader, listed or not.
+        assert!(admitted(false, false, &metadata_leader));
+        assert!(admitted(false, false, &range_leader));
     }
 }

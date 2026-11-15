@@ -32,6 +32,30 @@ pub(super) struct NativeFirstReceiverAttempt {
     last_api_return: Mutex<Option<serde_json::Value>>,
 }
 impl NativeFirstReceiverAttempt {
+    fn require_shared_claim(&self) -> Result<()> {
+        let install = self
+            .original
+            .remote_install
+            .upgrade()
+            .ok_or_else(|| invalid("FIRST original install custody ended"))?;
+        let held = install.hold()?;
+        if held.data_owner_present() || !held.remote_steps.is_empty() {
+            return Err(invalid(
+                "FIRST cannot adopt DATA or receiver-driven step custody",
+            ));
+        }
+        let actual = held
+            .first_receive_claim
+            .as_ref()
+            .and_then(Weak::upgrade)
+            .ok_or_else(|| invalid("FIRST original actual owner claim ended or is absent"))?;
+        if !std::ptr::eq(actual.as_ref(), self) {
+            return Err(invalid(
+                "FIRST shared custody belongs to another original owner",
+            ));
+        }
+        Ok(())
+    }
     fn require_original(
         &self,
         peer: &MetadataReadParticipant,
@@ -39,6 +63,7 @@ impl NativeFirstReceiverAttempt {
     ) -> Result<()> {
         self.original.require_live()?;
         self.process.check()?;
+        self.require_shared_claim()?;
         let p = self.plan.promise();
         if peer.node_id() != &self.coordinator.0
             || peer.member_incarnation() != self.coordinator.1
@@ -115,6 +140,14 @@ impl NativeMetadataControlHost {
                 "FIRST cannot replace DATA or revive a Joined receiver",
             ));
         }
+        // This is the SAME shared table used by main519's receiver step and
+        // DATA-owner transition. Do not retain this short hold across calls
+        // to host wrapper methods which acquire that table themselves.
+        self.replica
+            .as_ref()
+            .ok_or_else(|| invalid("original FIRST receiver ended"))?
+            .admission
+            .require_first_install_open()?;
         let backend = self.backend.clone();
         let (admission, runtime) = {
             let receiver = self
@@ -178,8 +211,19 @@ impl NativeMetadataControlHost {
                 ));
             }
             let receiver = self.replica.as_mut().unwrap();
+            let install = receiver.remote_install.clone();
+            // Serialize initial no-domain/freeze and FIRST retention with the
+            // actual receiver-driven step. No host wrapper is called while
+            // this custody is held; it ends before apply_first_receive_step.
+            let mut held = install.hold()?;
+            if held.data_owner_present() {
+                return Err(invalid("FIRST cannot enroll after a DATA owner"));
+            }
             if !receiver.first_attempts.is_empty()
-                || !receiver.remote_attempts.is_empty()
+                || held.first_receive_claim.is_some()
+                || !held.remote_attempts.is_empty()
+                || !held.remote_images.is_empty()
+                || !held.remote_steps.is_empty()
                 || !receiver
                     .remote_joint_targets
                     .try_lock()
@@ -229,6 +273,12 @@ impl NativeMetadataControlHost {
             receiver
                 .first_attempts
                 .insert(request.range, attempt.clone());
+            // The actual owner is already strongly retained before publishing
+            // its denial-only Weak claim and releasing this SAME table. A
+            // receiver-driven step can never start a competing attempt in the
+            // gap between this enrollment and FIRST's later Transfer call.
+            held.first_receive_claim = Some(Arc::downgrade(&attempt));
+            drop(held);
             attempt
         };
         attempt.require_original(&ingress.peer, request)?;
@@ -274,6 +324,8 @@ impl NativeMetadataControlHost {
         let request = &ingress.request;
         token.check()?;
         attempt.process.check()?;
+        attempt.original.require_first_install_open()?;
+        attempt.require_shared_claim()?;
         if matches!(request.operation, Op::Enroll) {
             // A specific same-A enrollment reobservation repeats the actual
             // no-domain proof. It never reconstructs or replaces the original.
@@ -467,6 +519,33 @@ fn remaining_ms(token: &CancellationToken) -> Result<u64> {
 }
 
 impl NativeRegisteredReplicaAdmission {
+    /// A short nonwaiting check of the actual SAME install custody. This
+    /// never returns its guard or makes a second table for the FIRST path.
+    pub(super) fn require_first_install_open(&self) -> Result<()> {
+        let install = self
+            .remote_install
+            .upgrade()
+            .ok_or_else(|| invalid("FIRST original install custody ended"))?;
+        let held = install.hold()?;
+        if held.data_owner_present() {
+            return Err(invalid("FIRST cannot advance after a DATA owner"));
+        }
+        if !held.remote_steps.is_empty() {
+            return Err(invalid(
+                "FIRST cannot adopt a receiver-driven target install step",
+            ));
+        }
+        if let Some(claim) = &held.first_receive_claim {
+            let actual = claim
+                .upgrade()
+                .ok_or_else(|| invalid("FIRST actual owner claim ended; no reconstruction"))?;
+            if !std::ptr::eq(actual.original.as_ref(), self) {
+                return Err(invalid("FIRST claim changed actual receiver admission"));
+            }
+            actual.process.check()?;
+        }
+        Ok(())
+    }
     pub(super) fn admit_first_from_actual_peer(
         self: &Arc<Self>,
         peer: MetadataReadParticipant,
@@ -477,6 +556,7 @@ impl NativeRegisteredReplicaAdmission {
         // waiting. Queue delivery never creates another cancellation deadline.
         let token = request.cancellation(parent)?;
         self.require_live()?;
+        self.require_first_install_open()?;
         let backend = self
             .backend
             .upgrade()
@@ -572,6 +652,7 @@ impl NativeRegisteredReplicaAdmission {
         .ok_or_else(|| invalid("FIRST ingress requires actual current-MStore owner"))?;
         point.require_request(&own, business)?;
         point.require_external_current()?;
+        self.require_first_install_open()?;
         self.first_receive
             .upgrade()
             .ok_or_else(|| invalid("FIRST original queue ended"))?

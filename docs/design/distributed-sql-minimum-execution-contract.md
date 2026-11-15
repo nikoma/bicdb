@@ -16,6 +16,17 @@ transparent replay of an uncertain business transaction are not promised.
 Locality is an optional placement optimization. Correctness must hold when
 related rows, indexes and constraint authorities occupy different ranges.
 
+## Later main519 source check
+
+Remote main subsequently advanced to **1.0.519-beta /
+`587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**. The
+[source checkpoint](distributed-sql-main517-candidate518-checkpoint.json) also
+pins the same nine SQL boundaries there. Its cross-process handoff additions
+do not implement the gateway, SQL decision registry or shared snapshot described
+below. The earlier main517/candidate518 review remains historical; the new520
+composition needs its own exact-source validation. This recheck executes no SQL
+workload and grants no distributed SQL or physical qualification.
+
 ## Source517 and candidate518 recheck
 
 A [new source checkpoint](distributed-sql-main517-candidate518-checkpoint.json)

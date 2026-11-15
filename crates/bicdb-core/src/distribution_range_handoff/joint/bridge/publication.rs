@@ -5,8 +5,8 @@ mod open_phase;
 mod release_phase;
 pub(crate) use open_phase::{NativeJointOpenPhaseQuorum, NativeJointOpenPhaseRound};
 pub(crate) use release_phase::{
-    NativeJointReleaseAdmission, NativeJointReleaseContinuation, NativeJointReleasePhaseQuorum,
-    NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
+    NativeJointActivatedQuorum, NativeJointReleaseAdmission, NativeJointReleaseContinuation,
+    NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
 };
 
 pub(crate) struct NativeJointServingPublicationRound {

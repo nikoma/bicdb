@@ -11,8 +11,12 @@ mod catalogue;
 pub(crate) use catalogue::{
     NativeRemoteCatalogueDecisionV1, NativeRemoteCatalogueRound, NativeRemoteDualDurableDecision,
 };
+mod certificate;
 mod decision;
 mod participant;
+pub(crate) use certificate::{
+    NativeRemoteJointDecisionCertificate, NativeRemoteJointDecisionCertificateRound,
+};
 pub(crate) use decision::{
     NativeRemoteDecisionAdmission, NativeRemoteDecisionBindingV1, NativeRemoteDecisionReceiptV1,
     NativeRemoteDecisionSourceData, NativeRemoteDecisionSourceRequestV1,
@@ -74,7 +78,7 @@ pub(crate) enum NativeRemoteNewOperationV1 {
         facts: NativeRemoteNewFactSetV1,
     },
     /// Read ONLY the SAME retained known-committed native attempt. Never replay.
-    ObserveDecision {
+    ObserveKnownDecision {
         facts: NativeRemoteNewFactSetV1,
     },
     PublishCatalogue {
@@ -83,6 +87,10 @@ pub(crate) enum NativeRemoteNewOperationV1 {
     ObserveCatalogue {
         facts: NativeRemoteNewFactSetV1,
     },
+    /// Read-only: re-prove and return this recipient's ALREADY durable native
+    /// DECISION receipt and exact body. Never writes, pins, votes or retries a
+    /// publication; ordinary `Observe` callbacks stay byte-for-byte unchanged.
+    ObserveDecision,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -112,7 +120,7 @@ impl NativeRemoteNewRequestV1 {
         }
         if let NativeRemoteNewOperationV1::PrepareDecision { facts }
         | NativeRemoteNewOperationV1::PublishDecision { facts }
-        | NativeRemoteNewOperationV1::ObserveDecision { facts }
+        | NativeRemoteNewOperationV1::ObserveKnownDecision { facts }
         | NativeRemoteNewOperationV1::PublishCatalogue { facts }
         | NativeRemoteNewOperationV1::ObserveCatalogue { facts } = &self.operation
         {
@@ -383,6 +391,10 @@ pub(crate) struct NativeRemoteNewReplyV1 {
     pub native_decision: Option<NativeRemoteDecisionReceiptV1>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub catalogue_decision: Option<NativeRemoteCatalogueDecisionV1>,
+    /// Exact durable DECISION body, returned ONLY by `ObserveDecision`. DATA:
+    /// it is hash-bound to the authenticated receipt and grants nothing alone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_decision_body: Option<NativeJointDecisionData>,
     pub metadata_term: u64,
     pub metadata_read_index: u64,
     pub metadata_context_id: Uuid,
@@ -426,7 +438,7 @@ impl NativeRemoteNewReplyV1 {
             }
             if let NativeRemoteNewOperationV1::PrepareDecision { facts }
             | NativeRemoteNewOperationV1::PublishDecision { facts }
-            | NativeRemoteNewOperationV1::ObserveDecision { facts }
+            | NativeRemoteNewOperationV1::ObserveKnownDecision { facts }
             | NativeRemoteNewOperationV1::PublishCatalogue { facts }
             | NativeRemoteNewOperationV1::ObserveCatalogue { facts } = &request.operation
             {
@@ -440,7 +452,7 @@ impl NativeRemoteNewReplyV1 {
             request.operation,
             NativeRemoteNewOperationV1::PrepareDecision { .. }
                 | NativeRemoteNewOperationV1::PublishDecision { .. }
-                | NativeRemoteNewOperationV1::ObserveDecision { .. }
+                | NativeRemoteNewOperationV1::ObserveKnownDecision { .. }
                 | NativeRemoteNewOperationV1::PublishCatalogue { .. }
                 | NativeRemoteNewOperationV1::ObserveCatalogue { .. }
         ) {
@@ -451,7 +463,7 @@ impl NativeRemoteNewReplyV1 {
         match (&request.operation, &self.native_decision) {
             (
                 NativeRemoteNewOperationV1::PublishDecision { facts }
-                | NativeRemoteNewOperationV1::ObserveDecision { facts }
+                | NativeRemoteNewOperationV1::ObserveKnownDecision { facts }
                 | NativeRemoteNewOperationV1::PublishCatalogue { facts }
                 | NativeRemoteNewOperationV1::ObserveCatalogue { facts },
                 Some(receipt),
@@ -465,13 +477,42 @@ impl NativeRemoteNewReplyV1 {
             }
             (
                 NativeRemoteNewOperationV1::PublishDecision { .. }
-                | NativeRemoteNewOperationV1::ObserveDecision { .. }
+                | NativeRemoteNewOperationV1::ObserveKnownDecision { .. }
                 | NativeRemoteNewOperationV1::PublishCatalogue { .. }
                 | NativeRemoteNewOperationV1::ObserveCatalogue { .. },
                 None,
             ) => return Err(invalid("native DECISION outcome not proved")),
+            (NativeRemoteNewOperationV1::ObserveDecision, Some(receipt)) => {
+                let handoff = self.handoff.as_ref().ok_or_else(|| {
+                    invalid("observed native DECISION has no original pin handoff outcome")
+                })?;
+                receipt.require_observation(request, &handoff.fact_set_sha256)?;
+                let body = self
+                    .native_decision_body
+                    .as_ref()
+                    .ok_or_else(|| invalid("observed native DECISION body not returned"))?;
+                body.validate()?;
+                if receipt.node_id != self.snapshot.node_id
+                    || body.checksum_sha256() != receipt.decision_sha256
+                {
+                    return Err(invalid(
+                        "observed DECISION receipt/body differs from authenticated snapshot recipient",
+                    ));
+                }
+            }
+            (NativeRemoteNewOperationV1::ObserveDecision, None) => {
+                return Err(invalid("durable native DECISION observation not proved"))
+            }
             (_, None) => {}
             _ => return Err(invalid("unrequested native DECISION outcome")),
+        }
+        if self.native_decision_body.is_some()
+            && !matches!(
+                request.operation,
+                NativeRemoteNewOperationV1::ObserveDecision
+            )
+        {
+            return Err(invalid("unrequested native DECISION body"));
         }
         match (&request.operation, &self.catalogue_decision) {
             (

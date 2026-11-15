@@ -70,6 +70,38 @@ pub(crate) struct NativeInitialDataAdmission {
     old_transport: Weak<TcpClusterRelocationTransport>,
 }
 impl NativeInitialDataAdmission {
+    /// Necessary readonly identity of a real Registered successor's installed
+    /// listener, including while its APP dispatcher is deliberately closed.
+    /// Generic INITIAL/APP lifetime checks below remain unchanged and strict.
+    pub(crate) fn require_registered_successor_listener_memory(
+        &self,
+        original: &Arc<crate::distribution_native_host::NativeRegisteredRemoteJointOwner>,
+    ) -> Result<()> {
+        original.require_first_policy_attempt_lifetime()?;
+        self.require_live()?;
+        if self
+            .service
+            .upgrade()
+            .is_none_or(|s| !Arc::ptr_eq(&s, original.service()))
+        {
+            return Err(invalid(
+                "Registered successor listener changed actual service",
+            ));
+        }
+        let expected = original
+            .terminal_writer()
+            .ok_or_else(|| invalid("Registered successor listener terminal writer absent"))?;
+        let actual = self
+            .writer
+            .try_read()
+            .ok_or_else(|| invalid("Registered successor listener writer identity busy"))?;
+        if !Arc::ptr_eq(&actual, expected) {
+            return Err(invalid(
+                "Registered successor listener changed actual installed writer",
+            ));
+        }
+        expected.require_remote_new_registration_memory()
+    }
     /// Necessary original INITIAL process/slot/writer identity only. All
     /// metadata/native proof is independent; this memory check creates none.
     pub(crate) fn require_remote_new_original_memory(

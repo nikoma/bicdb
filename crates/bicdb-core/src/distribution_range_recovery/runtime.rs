@@ -1613,4 +1613,34 @@ impl RangeRecoveryRuntime {
             .ok_or_else(|| invalid("actual retained successor readonly route absent or ended"))?;
         original.read(self, peer, &request, parent)
     }
+    /// Only a sealed Registered successor bound to this actual replacement
+    /// listener may precede INITIAL dispatch, and only for these readonly ops.
+    pub(crate) fn registered_successor_read_for_listener(
+        &self,
+        listener: &crate::distribution_native_host::NativeInitialDataAdmission,
+        request: &crate::distribution_native_host::NativeRemoteServingRequestV1,
+    ) -> Result<Option<Arc<crate::distribution_native_host::NativeRemoteSuccessorReadRegistration>>>
+    {
+        use crate::distribution_native_host::NativeRemoteServingOperationV1 as Op;
+        if !matches!(
+            request.operation,
+            Op::ObserveOpen | Op::ObserveReleased | Op::ObserveReleasedForPolicy
+        ) {
+            return Ok(None);
+        }
+        let original = self
+            .remote_successor_reads
+            .try_lock()
+            .ok_or_else(|| invalid("successor read registry busy"))?
+            .get(&(request.manifest.capture_range.id, request.phase_id))
+            .cloned();
+        let Some(original) = original else {
+            return Ok(None);
+        };
+        let original = original
+            .upgrade()
+            .ok_or_else(|| invalid("selected successor listener route ended"))?;
+        // Registry guard is already dropped before actual owner/lifetime checks.
+        original.select_registered_replacement(self, listener)
+    }
 }

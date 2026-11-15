@@ -176,6 +176,16 @@ impl NativeMetadataControlHost {
         ) {
             return Err(invalid("finite Open/released reader operation differs"));
         }
+        self.inspect_actual_retained_serving_read(relocation, phase, node, operation, parent)
+    }
+    fn inspect_actual_retained_serving_read(
+        &self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+        node: &ClusterNodeId,
+        operation: NativeRemoteServingOperationV1,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
         let process = self
             .data_process
             .get()
@@ -236,6 +246,40 @@ impl NativeMetadataControlHost {
         Ok(
             serde_json::json!({"point":frame.point(),"metadata_anchor":frame.metadata_anchor(),
             "readonly_no_queue_resolution":true,"Serving":false}),
+        )
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_registered_successor_read_dispatch(
+        &self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+        node: &ClusterNodeId,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        // SAME retained metadata coordinator/manifest and real transport in
+        // both calls. DATA inspection cannot construct a Policy admission.
+        let positive = self.inspect_actual_retained_serving_read(
+            relocation,
+            phase,
+            node,
+            NativeRemoteServingOperationV1::ObserveReleasedForPolicy,
+            parent,
+        );
+        let denied = self.inspect_actual_retained_serving_read(
+            relocation,
+            phase,
+            node,
+            NativeRemoteServingOperationV1::ObserveDecision,
+            parent,
+        );
+        Ok(
+            serde_json::json!({"actual_policy_read_returned_ok":positive.is_ok(),
+            "actual_policy_read":positive.as_ref().ok(),
+            "actual_policy_read_error":positive.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),
+            "actual_nonselected_returned_ok":denied.is_ok(),
+            "actual_nonselected_error":denied.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),
+            "actual_nonselected_cluster_body":denied.as_ref().err().and_then(|e|match e {BicDbError::Cluster(body)=>Some(body),_=>None}),
+            "actual_pinned_destination":node,"socket_selector_or_endpoint_override":false}),
         )
     }
     fn drive_finite_remote_serving_step(

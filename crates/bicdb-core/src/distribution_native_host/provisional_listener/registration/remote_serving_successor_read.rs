@@ -25,6 +25,39 @@ impl std::fmt::Debug for NativeRemoteSuccessorReadRegistration {
     }
 }
 impl NativeRemoteSuccessorReadRegistration {
+    /// Explicit same-owner Joined selection, before ORIGINAL INITIAL dispatch.
+    /// A real INITIAL survivor is a different domain and stays on its original
+    /// handler. Missing/invalid owner on a selected Registered route is an
+    /// error, never a handler-error fallback or a new policy grant.
+    pub(crate) fn select_registered_replacement(
+        self: &Arc<Self>,
+        runtime: &RangeRecoveryRuntime,
+        listener: &crate::distribution_native_host::NativeInitialDataAdmission,
+    ) -> Result<Option<Arc<Self>>> {
+        self.require_runtime(runtime)?;
+        let successor = self
+            .successor
+            .upgrade()
+            .ok_or_else(|| invalid("Registered successor route actual owner ended"))?;
+        let crate::db::NativeJointWriterDomain::Registered(original) = successor.domain() else {
+            return Ok(None);
+        };
+        let owner = original
+            .upgrade()
+            .ok_or_else(|| invalid("Registered successor route original receiver ended"))?;
+        owner.require_first_policy_attempt_lifetime()?;
+        let actual_runtime = self
+            .runtime
+            .upgrade()
+            .ok_or_else(|| invalid("Registered successor route original runtime ended"))?;
+        listener.require_listener(successor.service(), &actual_runtime)?;
+        // Exact installed writer pointer, actual DB/open/slot and registration
+        // lifetime bind this listener to the original native install. A boolean
+        // profile or an absent INITIAL source registry supplies no authority.
+        listener.require_registered_successor_listener_memory(&owner)?;
+        successor.require_memory_lifetime()?;
+        Ok(Some(self.clone()))
+    }
     pub(super) fn capture(
         backend: &Arc<NativeMetadataControlBackend>,
         runtime: &Arc<RangeRecoveryRuntime>,

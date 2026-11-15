@@ -260,6 +260,11 @@ impl Drop for NativeRegisteredReplicaReceiver {
     }
 }
 impl NativeRegisteredReplicaReceiver {
+    #[cfg(test)]
+    pub(super) fn test_retained_listener_presence(&self) -> serde_json::Value {
+        serde_json::json!({"replica_listener_present":self.listener.is_some(),
+            "old_replica_listener_present":self.old_listener.is_some()})
+    }
     /// The owning host's own continuation over the same shared custody.
     pub(super) fn remote_install_custody<'a>(
         &self,

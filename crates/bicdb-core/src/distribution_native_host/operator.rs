@@ -110,6 +110,19 @@ pub struct NativeMetadataHost {
     last_metadata_promotion: Option<serde_json::Value>,
 }
 impl NativeMetadataHost {
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_registered_successor_read_dispatch(
+        &self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+        node: &ClusterNodeId,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_ref()
+            .ok_or_else(|| invalid("actual read coordinator absent"))?
+            .test_registered_successor_read_dispatch(relocation, phase, node, parent)
+    }
     /// Finite internal component only. No periodic automatic placement entry.
     pub(crate) fn begin_finite_remote_first(
         &mut self,

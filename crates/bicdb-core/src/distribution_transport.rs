@@ -1542,9 +1542,23 @@ fn handle_cluster_data_connection(
                 )),
             }
         }
+        // Joined uses the INITIAL listener implementation but has no INITIAL
+        // source authority. Select a real SAME Registered successor BEFORE its
+        // original source-only allowlist, for exact protected readonly ops.
+        // Authentication and actual local DB/birth checks above remain first.
+        let registered_successor_read = match (&request.request, initial_data, recovery_runtime) {
+            (
+                ClusterDataRequest::NativeRemoteServing { request },
+                Some(listener),
+                Some(runtime),
+            ) => runtime.registered_successor_read_for_listener(listener, request)?,
+            _ => None,
+        };
         if let Some(initial_data) = initial_data {
             initial_data.require_live()?;
-            initial_data_listener::require_request(initial_data, &request.request)?;
+            if registered_successor_read.is_none() {
+                initial_data_listener::require_request(initial_data, &request.request)?;
+            }
         }
         if let Some(replica) = registered_replica {
             replica.require_live()?;
@@ -1776,7 +1790,11 @@ fn handle_cluster_data_connection(
             })?;
             let parent =
                 CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
-            let reply = if let Some(original) = initial_data {
+            let reply = if let Some(original) = registered_successor_read {
+                // Explicit sealed SAME Registered install/listener and allowed
+                // readonly op. No original-handler error is caught or retried.
+                original.read(recovery_runtime.unwrap(), peer, &request, &parent)?
+            } else if let Some(original) = initial_data {
                 original
                     .receive_remote_serving_from_authenticated_dispatch(peer, *request, &parent)?
             } else if let Some(original) = registered_replica {

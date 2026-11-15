@@ -411,6 +411,32 @@ impl NativeJoinedDataHost {
 }
 impl NativeMetadataControlHost {
     #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_registered_policy_socket_profile(
+        &self,
+        range: crate::RangeId,
+        phase: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        let successor = self
+            .remote_serving
+            .get(&(range, phase))
+            .and_then(|s| s.release.as_ref())
+            .ok_or_else(|| invalid("actual Registered policy successor absent"))?;
+        self.require_same_remote_registered_joined_policy(successor, range, parent)?;
+        let joined = self.joined.as_ref().unwrap();
+        let old = self
+            .replica
+            .as_ref()
+            .ok_or_else(|| invalid("actual original Registered listener owner absent"))?;
+        Ok(serde_json::json!({"actual_Registered_Joined_owner":true,
+            "actual_replacement_listener_bound":joined.listener.is_some(),
+            "actual_APP_dispatcher_published":joined.published.load(Ordering::Acquire),
+            "actual_original_drained_owner_verified":true,
+            "original_listeners":old.test_retained_listener_presence(),
+            "actual_native_decision":successor.native().data().checksum_sha256(),
+            "readonly_DATA_not_policy_authority":true}))
+    }
+    #[cfg(test)]
     pub(in crate::distribution_native_host) fn test_registered_first_policy_evidence(
         &self,
     ) -> Result<serde_json::Value> {

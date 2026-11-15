@@ -48,6 +48,20 @@ enum NativeLearnerLifecycle {
 }
 impl NativeMetadataLearnerHost {
     #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_registered_policy_socket_profile(
+        &self,
+        range: crate::RangeId,
+        phase: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        match &self.host {
+            NativeLearnerLifecycle::Fresh(host) => host
+                .test_registered_image_control()?
+                .test_registered_policy_socket_profile(range, phase, parent),
+            NativeLearnerLifecycle::Cold(_) => Err(invalid("read profile cannot cast cold owner")),
+        }
+    }
+    #[cfg(test)]
     pub(in crate::distribution_native_host) fn test_remote_release_control(
         &mut self,
         range: crate::RangeId,

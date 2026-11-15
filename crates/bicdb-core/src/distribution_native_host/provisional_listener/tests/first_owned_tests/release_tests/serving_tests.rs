@@ -167,6 +167,8 @@ pub(super) fn serve(
     original: &crate::ClusterEventClient,
     old_key: &str,
     original_topology: &ClusterTopology,
+    relocation: crate::distribution::RelocationId,
+    route_component_only: bool,
 ) -> Result<()> {
     let old_value = serde_json::json!({"actual":"selected-original-ACK"});
     // All earlier sdk() attempts must have returned successfully for this
@@ -237,6 +239,17 @@ pub(super) fn serve(
             "NativeJointLocalServingPolicy"
         );
         installed.insert(member.clone(), actual);
+    }
+    if route_component_only {
+        return verify_registered_replacement_route(
+            coordinator,
+            relocation,
+            range,
+            phase,
+            target,
+            report,
+            parent,
+        );
     }
     // At least one genuine final member is neither data nor metadata leader.
     // Its actual production self-role/install already succeeded above.
@@ -372,5 +385,76 @@ pub(super) fn serve(
     report.event(serde_json::json!({"actual_inprocess_original_SDK_ACK_and_full_Strong_controls_reached":true,
         "independent_process_VM_RPO_capacity_NOT_QUALIFIED":true,
         "final_metadata_controller_cold_repeated_relocation_cleanup_NOT_COMPLETE":true}));
+    Ok(())
+}
+
+fn verify_registered_replacement_route(
+    coordinator: &NativeMetadataHost,
+    relocation: crate::distribution::RelocationId,
+    range: crate::RangeId,
+    phase: Uuid,
+    target: &mpsc::Sender<OwnerCommand>,
+    report: &mut Report,
+    parent: &CancellationToken,
+) -> Result<()> {
+    let (send, receive) = mpsc::sync_channel(1);
+    target
+        .send(OwnerCommand::PolicySocketProfile(range, phase, send))
+        .map_err(|_| invalid("actual replacement listener owner ended"))?;
+    let profile = receive
+        .recv_timeout(Duration::from_secs(5))
+        .map_err(|_| invalid("actual replacement listener profile unavailable"))?;
+    let before = report.data_call(
+        "actual_replacement_socket_native_before_readonly_dispatch",
+        || target_control(target, range, phase, false, None),
+    )?;
+    let read = report.data_call(
+        "actual_pinned_replacement_policy_read_and_nonselected_original_handler",
+        || coordinator.test_registered_successor_read_dispatch(relocation, phase, &node(4), parent),
+    );
+    let after = report.data_call(
+        "actual_replacement_socket_native_after_readonly_dispatch",
+        || target_control(target, range, phase, false, None),
+    );
+    report.event(serde_json::json!({"actual_listener_profile":profile,
+        "actual_read_and_denial":read.as_ref().ok(),"read_error":read.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),
+        "actual_native_after":after.as_ref().ok(),"snapshot_error":after.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),
+        "source_component_only_no_APP_Strong_acceptance":true}));
+    let profile = require_actual_ok(profile)?;
+    let read = read?;
+    let after = after?;
+    assert_eq!(profile["actual_Registered_Joined_owner"], true);
+    assert_eq!(profile["actual_replacement_listener_bound"], true);
+    assert_eq!(profile["actual_original_drained_owner_verified"], true);
+    assert_eq!(
+        profile["original_listeners"]["replica_listener_present"],
+        false
+    );
+    assert_eq!(
+        profile["original_listeners"]["old_replica_listener_present"],
+        false
+    );
+    assert_eq!(profile["actual_APP_dispatcher_published"], false);
+    assert_eq!(
+        read["actual_policy_read_returned_ok"], true,
+        "actual replacement protected source route was not reached: {read}"
+    );
+    let point = &read["actual_policy_read"]["point"];
+    assert_eq!(point["actual_dropped_open"], true);
+    assert_eq!(
+        point["policy_released_audit"]["local_node_id"],
+        serde_json::to_value(node(4))?
+    );
+    assert_eq!(
+        read["actual_pinned_destination"],
+        serde_json::to_value(node(4))?
+    );
+    assert_eq!(read["actual_nonselected_returned_ok"], false);
+    assert_eq!(read["actual_nonselected_cluster_body"], format!(
+        "cluster node {} rejected RPC cluster_data_operation_failed: cluster error: native host bootstrap: Joined/non-INITIAL owner has no source hosting authority", node(4)),
+        "nonselected operation must preserve exact original INITIAL denial, not fallback on another error");
+    same_native(&before, &after);
+    assert_eq!(before["queue"], after["queue"]);
+    assert_eq!(before["actual_successor"], after["actual_successor"]);
     Ok(())
 }

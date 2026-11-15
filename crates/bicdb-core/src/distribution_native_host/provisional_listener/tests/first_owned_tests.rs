@@ -69,6 +69,7 @@ enum Case {
     ReleaseCancelledAfterDrop,
     Serving,
     ServingMissingReleased,
+    ServingSuccessorRead,
 }
 fn is_catalogue_case(case: Case) -> bool {
     matches!(
@@ -105,6 +106,7 @@ fn is_catalogue_case(case: Case) -> bool {
             | Case::ReleaseCancelledAfterDrop
             | Case::Serving
             | Case::ServingMissingReleased
+            | Case::ServingSuccessorRead
     )
 }
 #[derive(Clone, Copy, Debug)]
@@ -114,6 +116,7 @@ enum SetupCut {
 }
 
 enum OwnerCommand {
+    PolicySocketProfile(crate::RangeId, Uuid, mpsc::SyncSender<serde_json::Value>),
     LocalServing(
         crate::RangeId,
         Uuid,
@@ -817,6 +820,11 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
             while !active.load(Ordering::Acquire) && parent.check().is_ok() {
                 while let Ok(command)=owner_receive.try_recv() {
                     match command {
+                    OwnerCommand::PolicySocketProfile(range,phase,send)=> {
+                        let request=parent.child_with_deadline(Instant::now()+Duration::from_secs(4));
+                        let result=target.test_registered_policy_socket_profile(range,phase,&request);
+                        let _=send.try_send(release_tests::policy_return_data(result));
+                    },
                     OwnerCommand::LocalServing(range,phase,generic,send)=> {
                         let request=parent.child_with_deadline(Instant::now()+Duration::from_secs(4));
                         let result=if generic {target.test_local_policy_generic_refusal(range,phase,&request)}
@@ -1472,6 +1480,7 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                     | Case::ReleaseCancelledAfterDrop
                     | Case::Serving
                     | Case::ServingMissingReleased
+                    | Case::ServingSuccessorRead
             ) {
                 // Same five retained normal hosts; real range leader directly
                 // observes OLD/survivor/Registered NEW, donor remains neither leader.
@@ -1975,6 +1984,7 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                                 | Case::ReleaseCancelledAfterDrop
                                 | Case::Serving
                                 | Case::ServingMissingReleased
+                                | Case::ServingSuccessorRead
                         )
                         .then(|| {
                             (
@@ -2172,4 +2182,9 @@ fn native_first_actual_released_owners_to_serving_original_sdk_ack_full_strong()
 #[test]
 fn native_first_actual_local_policy_refuses_real_unreleased_member_without_native_write() {
     run(Case::ServingMissingReleased);
+}
+
+#[test]
+fn native_first_actual_registered_replacement_socket_policy_read_and_original_denial() {
+    run(Case::ServingSuccessorRead);
 }

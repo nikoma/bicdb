@@ -4,6 +4,79 @@ use super::*;
 use crate::distribution_range_consensus::RangeWriteTransport;
 
 #[test]
+fn native_bounded_leadership_actual_held_service_releases_original_request() {
+    service_contention(0);
+}
+#[test]
+fn native_bounded_leadership_actual_held_service_original_cancel_refuses() {
+    service_contention(1);
+}
+#[test]
+fn native_bounded_leadership_actual_held_service_original_expiry_refuses() {
+    service_contention(2);
+}
+
+fn service_contention(mode: u8) {
+    let (f, mut controls, _) = opened();
+    let (coordinator, _, _, _) = controls[0].test_hot_recovery_bindings().unwrap();
+    let (_, selected) = scope_and_range(&f, &controls);
+    let before = f.hosts[0]
+        .seed
+        .database
+        .read()
+        .native_range_prefix_observation(selected.id)
+        .unwrap();
+    let actual = coordinator
+        .test_bounded_leadership_actual_service_contention(&selected, mode, &budget(5000))
+        .unwrap();
+    // Retain the complete real return and cleanup witness before assertions.
+    eprintln!("NATIVE_BOUNDED_LEADERSHIP_ACTUAL_SERVICE {actual}");
+    assert_eq!(actual["original_service_guard_held"], true);
+    assert_eq!(actual["actual_failed_service_lock_slice"], true);
+    assert_eq!(actual["actual_holder_joined_ok"], true);
+    assert!(actual["cleanup_error"].is_null());
+    assert_eq!(
+        actual["recovered_epochs_before"],
+        actual["recovered_epochs_after"]
+    );
+    if mode == 0 {
+        assert_eq!(actual["original_returned_ok"], true);
+        assert_eq!(actual["original_marker_changed"], false);
+        assert!(actual["original_error"].is_null());
+    } else {
+        assert_eq!(actual["original_returned_ok"], false);
+        assert_eq!(
+            actual["original_error_class"],
+            if mode == 1 {
+                "QueryCanceled"
+            } else {
+                "QueryTimedOut"
+            }
+        );
+        assert!(actual["original_marker_changed"].is_null());
+        if mode == 1 {
+            assert_eq!(actual["original_request_cancelled"], true);
+        } else {
+            assert_eq!(actual["original_request_expired"], true);
+            assert_eq!(actual["original_request_cancelled"], false);
+        }
+    }
+    let after = f.hosts[0]
+        .seed
+        .database
+        .read()
+        .native_range_prefix_observation(selected.id)
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(before).unwrap(),
+        serde_json::to_value(after).unwrap()
+    );
+    for control in &mut controls {
+        control.stop(&budget(5000)).unwrap();
+    }
+}
+
+#[test]
 fn native_bounded_leadership_actual_selected_validation_preserves_sdk_ack_and_strong() {
     let (f, mut controls, configs) = opened();
     let (coordinator, _, _, _) = controls[0].test_hot_recovery_bindings().unwrap();

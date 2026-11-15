@@ -54,17 +54,22 @@ actual local service/topology/admission locks; refuse a late epoch publication;
 recover after removing the fault without leaking reservations or rewriting
 native history; keep another range's APP/full Strong working; retain ordinary
 legacy regressions and refuse unsupported/deadline-free native transports.
-Five new controls are defined on actual enrolled hosts: selected native
+Eight new controls are defined on actual enrolled hosts: selected native
 revalidation followed by the original SDK APP/full Strong, and progress/probe
 socket cancellation/expiry at the actual selected peer destination. A real
 replacement blackhole socket must accept before cancellation; expiry must
 retain the original deadline. No authenticated reply, history or marker is
 fabricated. The socket controls test transport primitives, not a full recovery
 or late-publication path. They compare real local native observations and
-existing readiness before/after. The positive case revalidates an already
+existing readiness before/after. Three additional controls hold the original
+local service mutex in a real worker, require a failed timed acquisition on
+that exact mutex, then release, cancel or expire the original capture request.
+They retain the actual return and worker cleanup before assertions and require
+unchanged native observations and existing recovered markers. No synthetic
+busy response or readiness is installed. The positive case revalidates an already
 recovered INITIAL epoch; it does not qualify a newly elected epoch.
 
-Actual held-lock, late-publication, recovery-after-fault, unresolved-tail,
+Actual topology/admission held-lock, late-publication, recovery-after-fault, unresolved-tail,
 unrelated-range progress and unsupported-transport controls remain outstanding.
 All new definitions and their results remain **not tested**. Automatic scheduling, final
 metadata, repeated movement, cold recovery, cleanup, the failed Azure baseline

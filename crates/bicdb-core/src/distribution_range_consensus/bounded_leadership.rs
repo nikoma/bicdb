@@ -1,6 +1,8 @@
 //! Finite native-only catalogue leadership validation. Same recovery predicates;
 //! no legacy replay, historical adoption or Native Ready/Strong grant is minted.
 use super::*;
+#[cfg(test)]
+mod contention_tests;
 
 pub(super) fn recovery_parent_check(parent: Option<&CancellationToken>) -> Result<()> {
     if let Some(parent) = parent {
@@ -21,6 +23,8 @@ pub(super) fn recovery_lock<'a, T>(
             parent.check()?;
             return Ok(guard);
         }
+        #[cfg(test)]
+        contention_tests::after_failed_lock_slice(lock as *const Mutex<T> as usize)?;
     }
 }
 impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {

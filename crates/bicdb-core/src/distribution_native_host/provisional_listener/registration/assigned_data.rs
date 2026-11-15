@@ -408,12 +408,18 @@ impl NativeMetadataControlHost {
             .assigned
             .as_mut()
             .ok_or_else(|| invalid("retained Assigned owner absent"))?;
-        owner.install_closed(parent)?;
-        self.replica
-            .as_mut()
-            .ok_or_else(|| invalid("original Registered drain owner absent"))?
-            .drain_for_assigned(parent)?;
-        owner.bind_closed(&self.network, parent)
+        crate::native_policy_trace::stage!("actual_install_closed", owner.install_closed(parent))?;
+        crate::native_policy_trace::stage!(
+            "actual_original_replica_drain",
+            self.replica
+                .as_mut()
+                .ok_or_else(|| invalid("original Registered drain owner absent"))?
+                .drain_for_assigned(parent)
+        )?;
+        crate::native_policy_trace::stage!(
+            "actual_bind_closed",
+            owner.bind_closed(&self.network, parent)
+        )
     }
     /// Exclusive custody transfer, not a serving grant. The real consumer must
     /// still obtain fresh committed authority and actual NEW preparation.

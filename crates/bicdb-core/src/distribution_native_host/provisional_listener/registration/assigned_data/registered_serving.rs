@@ -247,6 +247,12 @@ impl NativeAssignedDataHost {
         Ok(())
     }
     pub(super) fn install_registered_serving(&mut self, parent: &CancellationToken) -> Result<()> {
+        #[cfg(test)]
+        if let Some(attempt) = &self.attempt {
+            attempt.test_trace_publication_state("registered_install_entry");
+        } else {
+            crate::native_policy_trace::note("actual_registered_install_attempt_absent");
+        }
         parent.check()?;
         if self.stopping {
             return Err(invalid(
@@ -270,7 +276,12 @@ impl NativeAssignedDataHost {
             .registered
             .as_ref()
             .ok_or_else(|| invalid("Registered Serving provenance absent"))?;
-        retained.admission.require_external_current()?;
+        crate::native_policy_trace::stage!(
+            "retained_external_ALL_current",
+            retained.admission.require_external_current()
+        )?;
+        #[cfg(test)]
+        crate::native_policy_trace::note("actual_route_MStore_lock_entry");
         let route = self
             .parts
             .backend
@@ -278,21 +289,35 @@ impl NativeAssignedDataHost {
             .status()
             .leader_id
             .ok_or_else(|| invalid("Registered first DATA metadata leader unknown"))?;
+        #[cfg(test)]
+        crate::native_policy_trace::note("actual_route_MStore_lock_returned");
         let business = Uuid::now_v7();
-        let observed = self
-            .parts
-            .backend
-            .transport
-            .acquire_host_metadata_observation(&route, business, Duration::from_secs(5), parent)?;
+        let observed = crate::native_policy_trace::stage!(
+            "actual_fresh_origin_OWN",
+            self.parts
+                .backend
+                .transport
+                .acquire_host_metadata_observation(
+                    &route,
+                    business,
+                    Duration::from_secs(5),
+                    parent
+                )
+        )?;
+        #[cfg(test)]
+        crate::native_policy_trace::origin_own(observed.deadline());
         self.parts
             .backend
             .transport
             .install_topology(observed.committed_topology(business)?.clone())?;
-        let (origin, policy) = retained.owner.prepare_first_serving_data_policy(
-            retained.admission.clone(),
-            observed,
-            business,
-            parent,
+        let (origin, policy) = crate::native_policy_trace::stage!(
+            "actual_prepare_first_policy_origin",
+            retained.owner.prepare_first_serving_data_policy(
+                retained.admission.clone(),
+                observed,
+                business,
+                parent
+            )
         )?;
         if origin.range() != &self.range {
             return Err(invalid(
@@ -300,7 +325,8 @@ impl NativeAssignedDataHost {
             ));
         }
         if self.coordinator.is_none() {
-            self.coordinator = Some(Arc::new(
+            self.coordinator = Some(Arc::new(crate::native_policy_trace::stage!(
+                "actual_new_registered_coordinator",
                 RangeWriteCoordinator::new_registered_serving_schema_fenced(
                     policy.facts().cluster_id.clone(),
                     self.parts.backend.node_id.clone(),
@@ -308,8 +334,8 @@ impl NativeAssignedDataHost {
                     self.parts.backend.service.clone(),
                     self.parts.backend.transport.clone(),
                     &origin,
-                )?,
-            ));
+                )
+            )?));
         }
         let coordinator = self.coordinator.as_ref().unwrap();
         let database = self
@@ -319,23 +345,37 @@ impl NativeAssignedDataHost {
             .try_read()
             .ok_or_else(|| invalid("Registered first DATA DB busy"))?;
         if self.attempt.is_none() {
-            self.attempt = Some(NativeAssignedWriterInstallAttempt::begin_registered(
-                &database,
-                coordinator,
-                &origin,
-                &policy,
+            self.attempt = Some(crate::native_policy_trace::stage!(
+                "begin_actual_registered_native_attempt",
+                NativeAssignedWriterInstallAttempt::begin_registered(
+                    &database,
+                    coordinator,
+                    &origin,
+                    &policy
+                )
             )?);
         }
         // Host, original owner, coordinator and exact attempt precede WAL.
-        let result = self.attempt.as_mut().unwrap().advance_registered(
-            &database,
-            coordinator,
-            &origin,
-            &policy,
+        let result = crate::native_policy_trace::stage!(
+            "advance_actual_registered_native_attempt",
+            self.attempt.as_mut().unwrap().advance_registered(
+                &database,
+                coordinator,
+                &origin,
+                &policy
+            )
         );
+        #[cfg(test)]
+        self.attempt
+            .as_ref()
+            .unwrap()
+            .test_trace_publication_state("actual_native_advance_return_state");
         drop(database);
         result?;
-        origin.require_owned_metadata_current()
+        crate::native_policy_trace::stage!(
+            "actual_post_install_owned_MStore_current",
+            origin.require_owned_metadata_current()
+        )
     }
 }
 impl NativeMetadataControlHost {
@@ -426,33 +466,70 @@ impl NativeMetadataControlHost {
         admission: Arc<NativeJointServingPolicyAdmission>,
         parent: &CancellationToken,
     ) -> Result<()> {
-        parent.check()?;
-        admission.require_external_current()?;
-        if self.data.is_some() {
-            return Err(invalid(
-                "INITIAL DATA cannot become original Registered Serving",
-            ));
-        }
-        if let Some(retained) = self.assigned.as_mut() {
-            retained.replace_registered_policy_phase(admission)?;
-        } else {
-            let owner = self.registered_remote_joint_owner(range)?;
-            let receiver = self
-                .replica
-                .as_ref()
-                .ok_or_else(|| invalid("Registered Serving original receiver absent"))?;
-            let parts = receiver.assigned_parts()?;
-            // No receiver-driven install step may be in flight while the
-            // distinct DATA owner is created; the flag is set under that
-            // same custody. A refusal consumed nothing and is retryable.
-            let install = self.registered_remote_install()?;
-            let mut custody = install.hold_for_data_owner()?;
-            self.assigned = Some(NativeAssignedDataHost::new_registered_serving(
-                parts, owner, admission,
-            )?);
-            custody.close_for_data_owner();
-            drop(custody);
-        }
-        self.advance_assigned_closed_data_policy(parent)
+        crate::native_policy_trace::root!(
+            crate::native_policy_trace::Seed::new(
+                "registered_first_policy",
+                admission.local_node_id().to_string(),
+                range,
+                parent,
+                admission.test_policy_trace_clocks()
+            ),
+            {
+                #[cfg(test)]
+                if let Some(attempt) = self
+                    .assigned
+                    .as_ref()
+                    .and_then(|owner| owner.attempt.as_ref())
+                {
+                    attempt.test_trace_publication_state("host_actual_entry_retained_attempt");
+                }
+                parent.check()?;
+                crate::native_policy_trace::stage!(
+                    "entry_actual_external_ALL_current",
+                    admission.require_external_current()
+                )?;
+                if self.data.is_some() {
+                    return Err(invalid(
+                        "INITIAL DATA cannot become original Registered Serving",
+                    ));
+                }
+                if let Some(retained) = self.assigned.as_mut() {
+                    retained.replace_registered_policy_phase(admission)?;
+                } else {
+                    let owner = crate::native_policy_trace::stage!(
+                        "actual_registered_joint_owner_lookup",
+                        self.registered_remote_joint_owner(range)
+                    )?;
+                    let receiver = self
+                        .replica
+                        .as_ref()
+                        .ok_or_else(|| invalid("Registered Serving original receiver absent"))?;
+                    let parts = crate::native_policy_trace::stage!(
+                        "actual_registered_parts",
+                        receiver.assigned_parts()
+                    )?;
+                    // No receiver-driven install step may be in flight while the
+                    // distinct DATA owner is created; the flag is set under that
+                    // same custody. A refusal consumed nothing and is retryable.
+                    let install = crate::native_policy_trace::stage!(
+                        "actual_install_table_lookup",
+                        self.registered_remote_install()
+                    )?;
+                    let mut custody = crate::native_policy_trace::stage!(
+                        "actual_install_table_hold_for_data_owner",
+                        install.hold_for_data_owner()
+                    )?;
+                    self.assigned = Some(NativeAssignedDataHost::new_registered_serving(
+                        parts, owner, admission,
+                    )?);
+                    custody.close_for_data_owner();
+                    drop(custody);
+                }
+                crate::native_policy_trace::stage!(
+                    "actual_install_drain_bind_return",
+                    self.advance_assigned_closed_data_policy(parent)
+                )
+            }
+        )
     }
 }

@@ -15,6 +15,11 @@ pub(crate) struct NativeRemoteLocalPolicyAuthority {
     token: CancellationToken,
 }
 impl NativeRemoteLocalPolicyAuthority {
+    /// Passive scalar clock DATA; no Role/token/owner is returned.
+    #[cfg(test)]
+    pub(crate) fn test_policy_trace_deadlines(&self) -> (Instant, Instant) {
+        (self.role.deadline(), self.own.deadline())
+    }
     #[allow(clippy::too_many_arguments)]
     pub(in crate::distribution_native_host) fn acquire(
         provider: &Arc<crate::distribution_metadata_read_provider::MetadataReadProvider>,

@@ -9,6 +9,7 @@ mod broker;
 mod cancellation;
 mod decimal_input;
 mod exact_decimal_list_sum;
+mod native_policy_trace;
 pub use exact_decimal_list_sum::{exact_decimal_list_sum_value, MAX_EXACT_DECIMAL_LIST_SUM_ITEMS};
 mod exact_decimal_units;
 pub use exact_decimal_units::{

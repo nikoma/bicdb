@@ -420,8 +420,11 @@ impl NativeJointReleasePhaseQuorum {
         &self,
         old: &Arc<NativeJointOldObservation>,
     ) -> Result<()> {
-        self.require_live()?;
-        old.require_current_after_joint_open()?;
+        crate::native_policy_trace::stage!("retirement_original_phase_live", self.require_live())?;
+        crate::native_policy_trace::stage!(
+            "retirement_actual_OLD_post_open_scope",
+            old.require_current_after_joint_open()
+        )?;
         if !self
             .continuation
             .data
@@ -434,9 +437,32 @@ impl NativeJointReleasePhaseQuorum {
             return Err(invalid("joint retirement must retain retired-source freeze and exact original survivor facts"));
         }
         for node in self.members.keys() {
-            self.require_member_current(node)?;
+            crate::native_policy_trace::stage!(
+                "retirement_actual_foreign_member_current",
+                self.require_member_current(node)
+            )?;
         }
         self.require_live()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_retirement_trace_seed(
+        &self,
+        node: String,
+        range: crate::RangeId,
+    ) -> crate::native_policy_trace::Seed {
+        crate::native_policy_trace::Seed::new(
+            "local_OLD_observation_retirement",
+            node,
+            range,
+            &self.cancellation,
+            crate::native_policy_trace::Clocks {
+                authority: "actual_local_release_phase",
+                all_phase: self.cancellation.deadline(),
+                role_source: "local phase retains no distinct Role object; OWN is not Role",
+                ..Default::default()
+            },
+        )
     }
 
     fn require_live(&self) -> Result<()> {

@@ -94,6 +94,31 @@ impl NativeJointReleasePhaseQuorum {
     }
 }
 impl NativeJointServingPolicyAdmission {
+    #[cfg(test)]
+    pub(crate) fn test_policy_trace_clocks(&self) -> crate::native_policy_trace::Clocks {
+        let mut clocks = crate::native_policy_trace::Clocks {
+            admission: self.cancellation.deadline(),
+            post_own: Some(self.post.committed().deadline()),
+            ..Default::default()
+        };
+        match &self.authority {
+            PolicyAuthority::Local(phase) => {
+                clocks.authority = "actual_local_ALL_released";
+                clocks.all_phase = phase.cancellation.deadline();
+                clocks.role_source = "local phase retains no distinct Role object; OWN is not Role";
+            }
+            #[cfg(feature = "tls-replication")]
+            PolicyAuthority::Remote { request, .. } => {
+                let (role, own) = request.test_policy_trace_deadlines();
+                clocks.authority = "actual_remote_ALL_released_local_policy";
+                clocks.role = Some(role);
+                clocks.role_own = Some(own);
+                clocks.role_source = "same actual private local-policy Role";
+                // No ALL-frame deadline getter/proof is manufactured here.
+            }
+        }
+        clocks
+    }
     #[cfg(feature = "tls-replication")]
     pub(crate) fn from_actual_remote_all_released(
         proof: Arc<crate::distribution_range_handoff::NativeRemoteAllReleasedQuorum>,

@@ -263,6 +263,29 @@ impl NativeAssignedWriterInstallAttempt {
         ))
     }
     #[cfg(test)]
+    pub(crate) fn test_trace_publication_state(&self, point: &'static str) {
+        if !crate::native_policy_trace::active() {
+            return;
+        }
+        let (stage, record) = match &self.publication {
+            Publication::AwaitingNative => ("AwaitingNative", None),
+            Publication::Prepared { record, .. } => ("Prepared", Some(record)),
+            Publication::NativeUncertain { record, .. } => ("NativeUncertain", Some(record)),
+            Publication::NativeReadBack { record, .. } => ("NativeReadBack", Some(record)),
+            Publication::Installed { guard } => ("Installed", Some(&guard.state.record)),
+        };
+        crate::native_policy_trace::native(
+            point,
+            crate::native_policy_trace::NativeState {
+                stage,
+                xid: record.map(|r| r.native_page_xid),
+                generation: record.map(|r| r.generation),
+                coordinator: self.coordinator_id,
+                database_open: self.database_incarnation.clone(),
+            },
+        );
+    }
+    #[cfg(test)]
     pub(crate) fn test_publication_evidence(&self) -> Result<serde_json::Value> {
         let (stage, record) = match &self.publication {
             Publication::AwaitingNative => ("AwaitingNative", None),
@@ -349,14 +372,25 @@ impl NativeAssignedWriterInstallAttempt {
                 "assigned policy already installed; use retained current guard",
             ));
         }
-        let authority = self.require_request(database, coordinator, origin, policy)?;
+        #[cfg(test)]
+        self.test_trace_publication_state("actual_native_attempt_entry");
+        let authority = crate::native_policy_trace::stage!(
+            "native_original_request",
+            self.require_request(database, coordinator, origin, policy)
+        )?;
         let _admission = database
             .serializable_commit_admission
             .try_write()
             .ok_or_else(|| invalid("assigned policy admission busy"))?;
-        origin.require_current(database, policy)?;
+        crate::native_policy_trace::stage!(
+            "native_full_origin_current",
+            origin.require_current(database, policy)
+        )?;
         origin.require_original_empty_hook(database)?;
-        coordinator.validate_native_writer_enrollment(database, policy)?;
+        crate::native_policy_trace::stage!(
+            "native_enrollment_validation",
+            coordinator.validate_native_writer_enrollment(database, policy)
+        )?;
         if matches!(&self.publication, Publication::AwaitingNative) {
             let registration = CommitAdmissionRegistration::new(Some(&authority));
             let record = NativeWriterPolicyRecord {
@@ -393,8 +427,11 @@ impl NativeAssignedWriterInstallAttempt {
             }
             database.require_never_installed_receiver_writer_records()?;
             let _journal = database.try_native_image_journal()?;
-            database
-                .in_paged_transaction(|paged, xid| {
+            crate::native_policy_trace::stage!(
+                "actual_native_transaction_helper_API",
+                database.in_paged_transaction(|paged, xid| {
+                    #[cfg(test)]
+                    crate::native_policy_trace::issued_xid(xid);
                     self.require_original_attempt_lifetime()?;
                     origin.require_live()?;
                     policy.require_live()?;
@@ -409,17 +446,27 @@ impl NativeAssignedWriterInstallAttempt {
                         record: record.clone(),
                         registration: registration.clone(),
                     };
-                    paged
-                        .store()
-                        .put(
-                            xid,
-                            &native_key(POLICY_POINTER),
-                            &bounded_json(&record, MAX_NATIVE_RECEIPT_BYTES)?,
-                        )
-                        .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
+                    #[cfg(test)]
+                    self.test_trace_publication_state(
+                        "actual_candidate_retained_before_native_put",
+                    );
+                    crate::native_policy_trace::stage!(
+                        "actual_native_policy_put_expression_including_encoding",
+                        paged
+                            .store()
+                            .put(
+                                xid,
+                                &native_key(POLICY_POINTER),
+                                &bounded_json(&record, MAX_NATIVE_RECEIPT_BYTES)?,
+                            )
+                            .map_err(|e| BicDbError::PagedStorage(e.to_string()))
+                    )?;
                     Ok(())
-                })?
-                .ok_or_else(|| invalid("assigned policy has no native page store"))?;
+                })
+            )?
+            .ok_or_else(|| invalid("assigned policy has no native page store"))?;
+            #[cfg(test)]
+            self.test_trace_publication_state("actual_native_transaction_API_returned");
             #[cfg(test)]
             if matches!(origin, FirstPolicyOrigin::Registered(_)) {
                 registered_after_native_commit::fire();
@@ -452,11 +499,13 @@ impl NativeAssignedWriterInstallAttempt {
                     "fresh assigned policy differs from original attempted audit",
                 ));
             }
-            let actual: NativeWriterPolicyRecord = database
-                .read_native_range_image_record(POLICY_POINTER)?
-                .ok_or_else(|| {
-                    invalid("assigned policy outcome unresolved; exact attempted receipt absent")
-                })?;
+            let actual: NativeWriterPolicyRecord = crate::native_policy_trace::stage!(
+                "actual_retained_policy_pointer_readback",
+                database.read_native_range_image_record(POLICY_POINTER)
+            )?
+            .ok_or_else(|| {
+                invalid("assigned policy outcome unresolved; exact attempted receipt absent")
+            })?;
             actual.validate()?;
             if actual != *record || registration.generation() != record.generation {
                 return Err(invalid(
@@ -486,9 +535,14 @@ impl NativeAssignedWriterInstallAttempt {
                 };
             }
         }
+        #[cfg(test)]
+        self.test_trace_publication_state("actual_readback_state_before_full_origin_validation");
         // No native journal spans full image/decision validation. Its actual
         // read pin and admission exclusion still cover this installation.
-        origin.require_current(database, policy)?;
+        crate::native_policy_trace::stage!(
+            "native_full_origin_current",
+            origin.require_current(database, policy)
+        )?;
         self.require_request(database, coordinator, origin, policy)?;
         let _journal = database.try_native_image_journal()?;
         let (record, registration, state) = match &self.publication {
@@ -520,75 +574,93 @@ impl NativeAssignedWriterInstallAttempt {
             registration: &registration,
         };
         let released = origin.actual_released_publication_point()?;
-        origin.with_publication_service(
-            database,
-            policy,
-            &candidate,
-            |actual_service, service| {
-                origin.require_original_empty_hook(database)?;
-                let mut hook = database
-                    .commit_admission
-                    .try_write()
-                    .ok_or_else(|| invalid("assigned actual hook busy before publication"))?;
-                // All I/O, native identity reads and full admission validation
-                // precede the short actual-version gate. The returned concrete
-                // publication borrow retains the actual service Store/cache and
-                // held routing topology; the surrounding journal/admission/hook
-                // and original release scope remain lexical through publication.
-                self.require_request(database, coordinator, origin, policy)?;
-                origin.require_native_metadata_point(database)?;
-                let range_publication = released
-                    .as_ref()
-                    .map(|(guard, store, sha)| guard.borrow_arm_publication(*store, sha))
-                    .transpose()?;
-                let mut publication = coordinator.prepare_assigned_native_writer_publication(
-                    database,
-                    actual_service,
-                    service,
-                    policy,
-                    &candidate,
-                )?;
-                #[cfg(test)]
-                if matches!(origin, FirstPolicyOrigin::Registered(_)) {
-                    // Actual native audit/readback and physical publication slots
-                    // exist; the short metadata version guard is NOT held yet.
-                    registered_before_hook::fire();
-                }
-                let retired;
-                {
-                    let version = origin.publication_version_guard()?;
-                    if let Some(version) = &version {
-                        version.require_current_memory()?;
+        crate::native_policy_trace::stage!(
+            "actual_service_cache_hook_publication",
+            origin.with_publication_service(
+                database,
+                policy,
+                &candidate,
+                |actual_service, service| {
+                    origin.require_original_empty_hook(database)?;
+                    let mut hook = database
+                        .commit_admission
+                        .try_write()
+                        .ok_or_else(|| invalid("assigned actual hook busy before publication"))?;
+                    // All I/O, native identity reads and full admission validation
+                    // precede the short actual-version gate. The returned concrete
+                    // publication borrow retains the actual service Store/cache and
+                    // held routing topology; the surrounding journal/admission/hook
+                    // and original release scope remain lexical through publication.
+                    self.require_request(database, coordinator, origin, policy)?;
+                    origin.require_native_metadata_point(database)?;
+                    let range_publication = released
+                        .as_ref()
+                        .map(|(guard, store, sha)| guard.borrow_arm_publication(*store, sha))
+                        .transpose()?;
+                    #[cfg(test)]
+                    crate::native_policy_trace::note("actual_publication_slots_prepare_entry");
+                    let mut publication = coordinator.prepare_assigned_native_writer_publication(
+                        database,
+                        actual_service,
+                        service,
+                        policy,
+                        &candidate,
+                    )?;
+                    #[cfg(test)]
+                    if matches!(origin, FirstPolicyOrigin::Registered(_)) {
+                        // Actual native audit/readback and physical publication slots
+                        // exist; the short metadata version guard is NOT held yet.
+                        registered_before_hook::fire();
                     }
-                    // Concrete memory publication only: no callback/full-live/native
-                    // read/fsync under this guard. Hook and both caches agree.
-                    let old_caches = publication.publish();
-                    let old_hook = hook.replace_enrolled_retaining_old(
-                        authority,
-                        registration.clone(),
-                        state.clone(),
+                    #[cfg(test)]
+                    crate::native_policy_trace::note(
+                        "actual_publication_slots_ready_before_short_version_guard",
                     );
-                    let old_publication = std::mem::replace(
-                        &mut self.publication,
-                        Publication::Installed {
-                            guard: Arc::new(InstalledNativeWriterHostGuard {
-                                state: state.clone(),
-                            }),
-                        },
+                    let retired;
+                    {
+                        let version = origin.publication_version_guard()?;
+                        if let Some(version) = &version {
+                            version.require_current_memory()?;
+                        }
+                        // Concrete memory publication only: no callback/full-live/native
+                        // read/fsync under this guard. Hook and both caches agree.
+                        let old_caches = publication.publish();
+                        let old_hook = hook.replace_enrolled_retaining_old(
+                            authority,
+                            registration.clone(),
+                            state.clone(),
+                        );
+                        let old_publication = std::mem::replace(
+                            &mut self.publication,
+                            Publication::Installed {
+                                guard: Arc::new(InstalledNativeWriterHostGuard {
+                                    state: state.clone(),
+                                }),
+                            },
+                        );
+                        retired = (old_caches, old_hook, old_publication);
+                    }
+                    #[cfg(test)]
+                    self.test_trace_publication_state(
+                        "actual_hook_Installed_retained_after_short_version_guard",
                     );
-                    retired = (old_caches, old_hook, old_publication);
-                }
-                // Retired owners and lexical cache/topology guards leave only
-                // AFTER the short version guard; no destructor/callback inside it.
-                drop(retired);
-                drop(publication);
-                drop(range_publication);
-                // Exact Installed custody is already retained on every error.
-                origin.retain_installed_writer(state.clone())
-            },
+                    // Retired owners and lexical cache/topology guards leave only
+                    // AFTER the short version guard; no destructor/callback inside it.
+                    drop(retired);
+                    drop(publication);
+                    drop(range_publication);
+                    // Exact Installed custody is already retained on every error.
+                    origin.retain_installed_writer(state.clone())
+                },
+            )
         )?;
+        #[cfg(test)]
+        self.test_trace_publication_state("actual_service_publication_returned");
         drop(_journal);
-        origin.require_current(database, policy)?;
+        crate::native_policy_trace::stage!(
+            "native_full_origin_current",
+            origin.require_current(database, policy)
+        )?;
         self.require_original_attempt_lifetime()?;
         self.installed_guard().unwrap().require_for_coordinator(
             database,

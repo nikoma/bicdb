@@ -552,36 +552,49 @@ impl NativeMetadataControlHost {
         range: crate::RangeId,
         phase: &crate::distribution_range_handoff::NativeJointReleasePhaseQuorum,
     ) -> Result<()> {
-        let initial = self
-            .data
-            .as_ref()
-            .ok_or_else(|| invalid("actual INITIAL survivor absent"))?;
-        // The phase revalidates this observation for the post-open point.
-        let actual = initial.retained_old_source_identity(range)?;
-        phase.require_actual_old_owner_retirement(&actual)?;
-        let mut entries = initial
-            .old_closures
-            .try_lock()
-            .ok_or_else(|| invalid("actual survivor OLD table busy"))?;
-        let retained = entries
-            .get(&range)
-            .ok_or_else(|| invalid("actual survivor OLD entry missing"))?;
-        let entry = retained
-            .try_lock()
-            .ok_or_else(|| invalid("actual survivor OLD entry active"))?;
-        if entry
-            .actual
-            .as_ref()
-            .is_none_or(|old| !Arc::ptr_eq(old, &actual))
-            || entry.outcome.is_some()
-        {
-            return Err(invalid(
-                "cannot retire an uncertain/replaced OLD native outcome",
-            ));
-        }
-        drop(entry);
-        entries.remove(&range);
-        Ok(())
+        crate::native_policy_trace::root!(
+            phase.test_retirement_trace_seed(self.backend.node_id.to_string(), range),
+            {
+                let initial = self
+                    .data
+                    .as_ref()
+                    .ok_or_else(|| invalid("actual INITIAL survivor absent"))?;
+                // The phase revalidates this observation for the post-open point.
+                let actual = crate::native_policy_trace::stage!(
+                    "actual_OLD_source_identity",
+                    initial.retained_old_source_identity(range)
+                )?;
+                crate::native_policy_trace::stage!(
+                    "actual_local_phase_OLD_owner_current",
+                    phase.require_actual_old_owner_retirement(&actual)
+                )?;
+                let mut entries = initial
+                    .old_closures
+                    .try_lock()
+                    .ok_or_else(|| invalid("actual survivor OLD table busy"))?;
+                let retained = entries
+                    .get(&range)
+                    .ok_or_else(|| invalid("actual survivor OLD entry missing"))?;
+                let entry = retained
+                    .try_lock()
+                    .ok_or_else(|| invalid("actual survivor OLD entry active"))?;
+                if entry
+                    .actual
+                    .as_ref()
+                    .is_none_or(|old| !Arc::ptr_eq(old, &actual))
+                    || entry.outcome.is_some()
+                {
+                    return Err(invalid(
+                        "cannot retire an uncertain/replaced OLD native outcome",
+                    ));
+                }
+                drop(entry);
+                entries.remove(&range);
+                #[cfg(test)]
+                crate::native_policy_trace::note("actual_OLD_observation_table_removed");
+                Ok(())
+            }
+        )
     }
 }
 

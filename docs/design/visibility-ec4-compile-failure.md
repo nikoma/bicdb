@@ -17,6 +17,7 @@ are in `db/commit_visibility_tests/visibility_wait_tests.rs` (baseline lines
 | `cargo check --workspace --all-targets` | Failed | Eight test-closure lifetime errors; no all-target compile pass |
 | Subsequent non-default Core consumer step | Not tested | Skipped after the failed preceding check |
 | New Core/native regression execution in this job | Not tested | Compilation did not reach test execution |
+| Separate Core library and native multi-node jobs | Failed compilation | Both reported the same eight `E0373` errors; neither started a test binary or reported a Rust test summary |
 | Earlier formatting, version, legal and source reviews | Passed within their static scope | They did not detect or establish Rust lifetime correctness |
 | Production runtime correctness or physical qualification | Not established | Absence of a production-code diagnostic does not prove a successful complete build or runtime behavior |
 
@@ -26,6 +27,16 @@ The retained gzip is 159,287 bytes, SHA-256
 `ee6ed7a87d1f64970db89a1aee7255c165be7a151bfdc18fe8252e514af388ed`.
 This document records that source and job only; independent jobs may compile
 or execute different targets and require their own exact result attribution.
+
+The separate [Core library job](https://github.com/nikoma/bicdb/actions/runs/43659820277/job/132646405955)
+and [native multi-node job](https://github.com/nikoma/bicdb/actions/runs/43659820277/job/132646405972)
+also failed compilation at this source. Their complete original raw-log SHA-256
+values are, respectively,
+`7cfc89360fee4d5a509ef95c671f3ccff34682c531dd3399eba3078c3b327c8f`
+and `fd96fadd5e0681585070df8fbf211a066db222e772459507e5b473fe80e99678`.
+These are compile failures, not runtime regression failures or zero-test passes.
+The independent SQL and remaining-workspace jobs were still running at this
+checkpoint; their outcomes are not inferred from the compilation failures.
 
 ## Separate correction and next deterministic checks
 

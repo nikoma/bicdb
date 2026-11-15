@@ -94,6 +94,13 @@ they do not retire completed entries. The per-range
 range that already has a Closed or Serving attempt. Raising a cap, clearing an
 unknown result, or deleting an old owner is not a completion protocol.
 
+Later inspection also identifies FIRST's separate eight-range coordinator
+limit, one-attempt-per-range retention and INITIAL-only remote entry point.
+These are additional constraints on this finite remote path, rather than
+evidence about every local backend. The exact boundaries and required genuine
+acceptance sequences are in the
+[warm retirement and repeated movement contract](native-warm-retirement-and-repeated-movement-contract.md).
+
 There is an important distinction in the actual serving path. The writer's
 `ServingDomainRecord` validates its historical OWN/quorum audits and immutable
 native archives. It does not require its old metadata snapshot to be the

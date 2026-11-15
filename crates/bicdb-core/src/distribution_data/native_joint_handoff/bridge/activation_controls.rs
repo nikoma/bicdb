@@ -65,3 +65,13 @@ impl ActualServiceNativeJointPreparedEvidence {
             )
     }
 }
+
+impl ClusterDataNodeService {
+    pub(crate) fn test_large_activation_catalogue_entries(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<serde_json::Value> {
+        self.range_writes
+            .test_large_activation_catalogue_entries(range)
+    }
+}

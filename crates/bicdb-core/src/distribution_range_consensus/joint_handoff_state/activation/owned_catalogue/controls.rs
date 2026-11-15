@@ -24,9 +24,18 @@ impl RangeWriteStore {
                 }
             })
             .collect::<Vec<_>>();
+        let original_bytes = super::super::super::super::native_limits::validate_native_json_size(
+            &actual.original,
+            MAX_CATALOGUE_HEAD_BYTES,
+        )?;
+        let candidate_bytes = super::super::super::super::native_limits::validate_native_json_size(
+            &actual.candidate,
+            MAX_CATALOGUE_HEAD_BYTES,
+        )?;
         let mut value = serde_json::json!({"retained":true,"uncertain_at_snapshot_entry":uncertain,"history":history,
             "actual_io_returns":outcomes,"write_generation":actual.write_generation,"store_write_generation":self.current_catalogue_write_generation(),"owns_uncertainty":actual.owns_uncertainty,"verified_at_snapshot_entry":actual.verified,"original_store":actual.store,
             "native_bridge_sha256":actual.native.checksum_sha256(),"native_preparation_sha256":actual.native.native_preparation_sha256(),
+            "original_serialized_bytes":original_bytes,"candidate_serialized_bytes":candidate_bytes,"candidate_envelope_bytes":actual.bytes.len(),"existing_head_bound_bytes":MAX_CATALOGUE_HEAD_BYTES,"resident_memory_measured":false,
             "candidate_bytes_sha256":hex::encode(Sha256::digest(&actual.bytes)),"original_session_live_at_snapshot":actual.session.check().is_ok(),
             "memory_is_original":self.catalog==actual.original,"memory_is_candidate":self.catalog==actual.candidate,
             "snapshot_not_whole_RPC_coverage":true});
@@ -135,5 +144,89 @@ impl RangeWriteStore {
         Ok(
             serde_json::json!({"fresh_actual_admission_live":true,"selected_native_bridge_current":true,"global_healthy":true,"comparison_returned_ok":comparison.is_ok(),"comparison_error":comparison.as_ref().err().map(ToString::to_string),"same_memory_head":self.catalog==actual.candidate,"io_attempts":actual.outcomes.len(),"saved_generation":actual.write_generation,"current_generation":self.current_catalogue_write_generation()}),
         )
+    }
+}
+
+impl RangeWriteStore {
+    /// Read actual retained ordinary commands; never constructs catalogue DATA.
+    pub(crate) fn test_large_activation_catalogue_entries(
+        &self,
+        range: RangeId,
+    ) -> Result<serde_json::Value> {
+        self.require_durable_recovery_catalog()?;
+        let log = self
+            .catalog
+            .ranges
+            .get(&range)
+            .ok_or_else(|| range_write_error("large-entry actual range absent"))?;
+        let mut entries = Vec::new();
+        for (index, entry) in &log.entries {
+            super::super::super::super::native_limits::validate_native_recovery_entry_size(entry)?;
+            let bytes = super::super::super::super::native_limits::validate_native_json_size(
+                entry,
+                crate::distribution_range_consensus::MAX_NATIVE_RECOVERY_ENTRY_BYTES,
+            )?;
+            entries.push(serde_json::json!({"index":index,"state":entry.state,"complete_entry_bytes":bytes,"actual_checksum":entry.command.checksum_sha256,"record_ids":entry.command.mutations.iter().filter(|m|m.collection=="items").map(|m|m.record_id.as_str()).collect::<Vec<_>>()}));
+        }
+        let model_bytes = super::super::super::super::native_limits::validate_native_json_size(
+            &self.catalog,
+            MAX_CATALOGUE_HEAD_BYTES,
+        )?;
+        let file = open_range_catalog_no_follow(&self.root.join(DEFAULT_RANGE_WRITE_LOG))?;
+        Ok(
+            serde_json::json!({"actual_catalogue_file_bytes":file.metadata()?.len(),"catalogue_model_bytes":model_bytes,"actual_open":self.open_id,"entries":entries,"ordinary_entry_limit_bytes":crate::distribution_range_consensus::MAX_NATIVE_RECOVERY_ENTRY_BYTES,"existing_head_bound_bytes":MAX_CATALOGUE_HEAD_BYTES,"read_only_not_admission":true}),
+        )
+    }
+}
+
+#[cfg(test)]
+mod capacity_counting_tests {
+    use super::*;
+    struct Repeated<'a> {
+        chunk: &'a str,
+        count: usize,
+    }
+    impl serde::Serialize for Repeated<'_> {
+        fn serialize<S: serde::Serializer>(
+            &self,
+            serializer: S,
+        ) -> std::result::Result<S::Ok, S::Error> {
+            use serde::ser::SerializeSeq;
+            let mut sequence = serializer.serialize_seq(Some(self.count))?;
+            for _ in 0..self.count {
+                sequence.serialize_element(self.chunk)?;
+            }
+            sequence.end()
+        }
+    }
+    #[test]
+    fn activation_head_counting_preserves_existing_64mib_boundary_without_scratch_vec() {
+        assert_eq!(MAX_CATALOGUE_HEAD_BYTES, 64 * 1024 * 1024);
+        assert_eq!(MAX_RETAINED_ENCODED_BYTES, 3 * MAX_CATALOGUE_HEAD_BYTES);
+        // Each actual serialized string is 1024 bytes; each array separator
+        // adds one. Only a 1022-byte input string exists, not a 64MiB Vec.
+        let chunk = "x".repeat(1022);
+        let count = (MAX_CATALOGUE_HEAD_BYTES - 1) / 1025;
+        let fit = Repeated {
+            chunk: &chunk,
+            count,
+        };
+        let actual = super::super::super::super::super::native_limits::validate_native_json_size(
+            &fit,
+            MAX_CATALOGUE_HEAD_BYTES,
+        )
+        .unwrap();
+        assert_eq!(actual, count * 1025 + 1);
+        assert!(actual > 8 * 1024 * 1024);
+        assert!(
+            super::super::super::super::super::native_limits::validate_native_json_size(
+                &Repeated {
+                    chunk: &chunk,
+                    count: count + 1
+                },
+                MAX_CATALOGUE_HEAD_BYTES
+            )
+            .is_err()
+        );
     }
 }

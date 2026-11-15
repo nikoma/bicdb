@@ -295,6 +295,13 @@ pub(in super::super) fn exercise(
             .count(),
         1
     );
+    let large_head_records = if matches!(case, SourceCase::TargetActivationLargeHeadDirSyncRetry) {
+        Some(activation_owned_tests::prepare_large_head(
+            services, pending, &untouched, output,
+        ))
+    } else {
+        None
+    };
     for source in controls.iter() {
         source.bind_initial_image_source_process(process).unwrap();
     }
@@ -901,6 +908,7 @@ pub(in super::super) fn exercise(
     };
     let mut activations = BTreeMap::new();
     let mut release_owner = None;
+    let mut large_head_control_ran = false;
     for local in data.new_members().keys() {
         let mut phase = published
             .begin_fresh_open_phase(Duration::from_secs(4))
@@ -914,20 +922,46 @@ pub(in super::super) fn exercise(
         let phase = Arc::new(phase.finish().unwrap());
         let i = (0..5).find(|i| node(*i) == *local).unwrap();
         let admission = phase.acquire_local_open(&all_clients[i], &node(0)).unwrap();
-        let receipt = if i == 4 && activation_owned_tests::is_case(case) {
+        let is_large_head_member =
+            matches!(case, SourceCase::TargetActivationLargeHeadDirSyncRetry)
+                && !large_head_control_ran
+                && i != 4
+                && untouched
+                    .replicas
+                    .iter()
+                    .any(|r| r.node_id == *local && r.role == crate::RangeReplicaRole::Voter);
+        let run_activation_control = is_large_head_member
+            || (i == 4
+                && activation_owned_tests::is_case(case)
+                && !matches!(case, SourceCase::TargetActivationLargeHeadDirSyncRetry));
+        let receipt = if run_activation_control {
+            let actual_database = services[i].lock().database();
             let Some((receipt, actual_release_owner)) = activation_owned_tests::activate(
                 case,
+                local,
                 &published,
                 &admission,
                 &all_clients,
-                &factory.database,
+                &actual_database,
                 &producer_session,
                 process,
                 output,
             ) else {
                 return;
             };
-            release_owner = Some(actual_release_owner);
+            if let Some(owner) = actual_release_owner {
+                release_owner = Some(owner);
+            }
+            if is_large_head_member {
+                large_head_control_ran = true;
+                activation_owned_tests::verify_large_head(
+                    services,
+                    pending,
+                    &untouched,
+                    large_head_records.as_ref().unwrap(),
+                    output,
+                );
+            }
             receipt
         } else {
             Arc::new(
@@ -974,6 +1008,12 @@ pub(in super::super) fn exercise(
             return;
         }
         activations.insert(local.clone(), receipt);
+    }
+    if matches!(case, SourceCase::TargetActivationLargeHeadDirSyncRetry) {
+        assert!(
+            large_head_control_ran,
+            "actual large-head survivor activation control never reached"
+        );
     }
     let continuation = Arc::new(
         published

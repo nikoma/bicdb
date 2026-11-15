@@ -3,7 +3,12 @@
 use super::*;
 use crate::db::{NativeJointPhaseOwner, NativeJointServingBridgeReceipt, NativeJointWriterDomain};
 use crate::distribution_range_mutation::FrozenRangeMutationIdentity;
-const MAX_RETAINED: usize = 8 * 1024 * 1024;
+// SAME head limit as the existing protected catalogue custody reader. The
+// wire-fact 8MiB limit is unrelated to this whole-file catalogue contract.
+const MAX_CATALOGUE_HEAD_BYTES: usize = 64 * 1024 * 1024;
+// Encoded accounting only: Rust models, Store copies and allocation overhead
+// are additional. This is not a hard resident-memory claim.
+const MAX_RETAINED_ENCODED_BYTES: usize = 3 * MAX_CATALOGUE_HEAD_BYTES;
 const MAX_ATTEMPTS: usize = 8;
 #[derive(Debug, Default)]
 pub(in crate::distribution_range_consensus) struct ActivationIoHistory {
@@ -224,9 +229,9 @@ impl NativeJointActivationPublication {
     fn read_head(store: &RangeWriteStore) -> Result<RangeWriteCatalog> {
         let mut bytes = Vec::new();
         open_range_catalog_no_follow(&store.root.join(DEFAULT_RANGE_WRITE_LOG))?
-            .take(MAX_RETAINED as u64 + 1)
+            .take(MAX_CATALOGUE_HEAD_BYTES as u64 + 1)
             .read_to_end(&mut bytes)?;
-        if bytes.len() > MAX_RETAINED {
+        if bytes.len() > MAX_CATALOGUE_HEAD_BYTES {
             return Err(range_write_error(
                 "activation catalogue head exceeds bounded read",
             ));
@@ -329,8 +334,10 @@ impl NativeJointActivationPublication {
         let data = native.data();
         let range = data.old_range().id;
         let activation = NativeJointCatalogueActivation::from_actual(&native)?;
-        let original_bytes =
-            crate::distribution_range_image::bounded_json(&store.catalog, MAX_RETAINED)?;
+        let original_bytes = super::super::super::native_limits::validate_native_json_size(
+            &store.catalog,
+            MAX_CATALOGUE_HEAD_BYTES,
+        )?;
         if Self::read_head(store)? != store.catalog {
             return Err(range_write_error(
                 "activation original disk/memory head differs",
@@ -370,18 +377,20 @@ impl NativeJointActivationPublication {
         if first && image.is_some() {
             candidate.image_install_intents.remove(&range);
         }
-        let candidate_bytes =
-            crate::distribution_range_image::bounded_json(&candidate, MAX_RETAINED)?;
+        let candidate_bytes = super::super::super::native_limits::validate_native_json_size(
+            &candidate,
+            MAX_CATALOGUE_HEAD_BYTES,
+        )?;
         let envelope = RangeWriteEnvelope::new(candidate.clone())?;
-        let bytes = crate::distribution_range_image::bounded_json(&envelope, MAX_RETAINED)?;
+        let bytes =
+            crate::distribution_range_image::bounded_json(&envelope, MAX_CATALOGUE_HEAD_BYTES)?;
         if original_bytes
-            .len()
-            .checked_add(candidate_bytes.len())
+            .checked_add(candidate_bytes)
             .and_then(|n| n.checked_add(bytes.len()))
-            .is_none_or(|n| n > MAX_RETAINED)
+            .is_none_or(|n| n > MAX_RETAINED_ENCODED_BYTES)
         {
             return Err(range_write_error(
-                "activation original/candidate retention exceeds 8MiB",
+                "activation encoded original/candidate/envelope exceeds existing head accounting",
             ));
         }
         Ok(Self {
@@ -492,7 +501,7 @@ impl NativeJointActivationPublication {
         }
         let mut actual = Vec::new();
         open_range_catalog_no_follow(&store.root.join(DEFAULT_RANGE_WRITE_LOG))?
-            .take(MAX_RETAINED as u64 + 1)
+            .take(MAX_CATALOGUE_HEAD_BYTES as u64 + 1)
             .read_to_end(&mut actual)?;
         if actual != self.bytes
             || serde_json::from_slice::<RangeWriteEnvelope>(&actual)?.verify()? != self.candidate

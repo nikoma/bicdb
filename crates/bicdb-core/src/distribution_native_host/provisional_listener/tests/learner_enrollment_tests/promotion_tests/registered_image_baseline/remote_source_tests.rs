@@ -142,6 +142,7 @@ pub(super) enum SourceCase {
     TargetActivationProducerCanceled,
     TargetActivationLaterSameBytes,
     TargetActivationLawfulOtherRange,
+    TargetActivationLargeHeadDirSyncRetry,
     TargetHotDecisionTermBeforePut,
     TargetHotDecisionTermAfterCommit,
     TargetHotFirstPolicyTermBeforeHook,

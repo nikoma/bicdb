@@ -3,6 +3,10 @@
 This source-only unit is based on `8bbbb144f683f6442493610b94ef7e893b1441f7`.
 No Rust build or test has run. It changes neither production policy behavior nor
 the original tests, assertions, phase windows, native IO, errors or retries.
+The immutable initial `ceced59da` trace incorrectly typed its DATA range as
+`u64`; source inspection confirmed the actual `RangeId` newtype. Its corrective
+child uses that existing type directly, with no conversion or authority change.
+This was a source-found compilation hazard, not an executed compiler result.
 
 Public `6de646beb603accf39358017d8e0c83c39c741b1` executed 375 Native passes,
 37 failures and one ignored case. Fourteen failures returned QueryTimedOut from

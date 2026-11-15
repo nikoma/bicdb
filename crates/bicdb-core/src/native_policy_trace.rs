@@ -58,7 +58,7 @@ mod actual {
     pub(crate) struct Seed {
         scope: &'static str,
         node: String,
-        range: u64,
+        range: crate::RangeId,
         parent: CancellationToken,
         clocks: Clocks,
     }
@@ -66,7 +66,7 @@ mod actual {
         pub(crate) fn new(
             scope: &'static str,
             node: String,
-            range: u64,
+            range: crate::RangeId,
             parent: &CancellationToken,
             clocks: Clocks,
         ) -> Self {

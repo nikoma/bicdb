@@ -1,4 +1,4 @@
-//! Selected-thread, one-shot observations at actual commit boundaries.
+//! One-shot observations at actual commit boundaries.
 //! Test callbacks receive sequence DATA, never a counter setter or authority.
 use super::*;
 use std::cell::RefCell;
@@ -70,53 +70,71 @@ fn call(point: Point, sequence: u64) {
 }
 
 struct NativePublicProbe {
+    registration: Uuid,
+    armed_thread: std::thread::ThreadId,
+    callback: Box<dyn FnOnce(serde_json::Value) + Send>,
+}
+// A real follower applies on the quorum fan-out worker, rather than the
+// origin thread arming this diagnostic. Select only the exact actual DB open.
+// Entries contain observation callbacks, never transactions or capabilities.
+fn native_public_probes(
+) -> &'static parking_lot::Mutex<std::collections::BTreeMap<String, NativePublicProbe>> {
+    static PROBES: std::sync::OnceLock<
+        parking_lot::Mutex<std::collections::BTreeMap<String, NativePublicProbe>>,
+    > = std::sync::OnceLock::new();
+    PROBES.get_or_init(Default::default)
+}
+struct NativePublicProbeGuard {
     expected_open: String,
-    callback: Box<dyn FnOnce(serde_json::Value)>,
+    registration: Uuid,
 }
-thread_local! {
-    static NATIVE_PUBLIC_PROBE: RefCell<Option<NativePublicProbe>> = const { RefCell::new(None) };
-}
-struct NativePublicProbeGuard(PhantomData<Rc<()>>);
 impl Drop for NativePublicProbeGuard {
     fn drop(&mut self) {
-        NATIVE_PUBLIC_PROBE.with(|slot| {
-            slot.borrow_mut().take();
-        });
+        let removed = {
+            let mut probes = native_public_probes().lock();
+            if probes
+                .get(&self.expected_open)
+                .is_some_and(|probe| probe.registration == self.registration)
+            {
+                probes.remove(&self.expected_open)
+            } else {
+                None
+            }
+        };
+        drop(removed);
     }
 }
 pub(super) fn arm_native_public_finalizer_probe(
     expected_actual_open: String,
-    callback: Box<dyn FnOnce(serde_json::Value)>,
+    callback: Box<dyn FnOnce(serde_json::Value) + Send>,
 ) -> impl Drop {
-    NATIVE_PUBLIC_PROBE.with(|slot| {
-        let mut slot = slot.borrow_mut();
-        assert!(
-            slot.is_none(),
-            "native public-finalizer probe already armed"
-        );
-        *slot = Some(NativePublicProbe {
-            expected_open: expected_actual_open,
+    let registration = Uuid::now_v7();
+    let mut probes = native_public_probes().lock();
+    assert!(
+        !probes.contains_key(&expected_actual_open),
+        "native public-finalizer probe already armed for actual open"
+    );
+    probes.insert(
+        expected_actual_open.clone(),
+        NativePublicProbe {
+            registration,
+            armed_thread: std::thread::current().id(),
             callback,
-        });
-    });
-    NativePublicProbeGuard(PhantomData)
+        },
+    );
+    NativePublicProbeGuard {
+        expected_open: expected_actual_open,
+        registration,
+    }
 }
 
 /// Called ONLY after the real private native preparation proved actual apply.
 /// The fixture receives DATA, never a transaction/grant/permit or state setter.
 pub(super) fn probe_native_public_finalizer(tx: &mut Transaction) {
     let db = unsafe { tx.db.as_ref() };
-    let probe = NATIVE_PUBLIC_PROBE.with(|slot| {
-        let selected = slot
-            .borrow()
-            .as_ref()
-            .is_some_and(|probe| probe.expected_open == db.incarnation);
-        if selected {
-            slot.borrow_mut().take()
-        } else {
-            None
-        }
-    });
+    // Drop the registry guard before observing or invoking the same Tx's
+    // original public API. A different open cannot consume this one-shot.
+    let probe = native_public_probes().lock().remove(&db.incarnation);
     let Some(probe) = probe else {
         return;
     };
@@ -144,6 +162,8 @@ pub(super) fn probe_native_public_finalizer(tx: &mut Transaction) {
     let after = observe(tx);
     (probe.callback)(serde_json::json!({
         "before":before,"after":after,
+        "probe_armed_thread":format!("{:?}",probe.armed_thread),
+        "probe_actual_finalizer_thread":format!("{:?}",std::thread::current().id()),
         "public_returned_ok":result.is_ok(),
         "public_exact_original_unknown":exact_unknown,
         "public_result":format!("{result:?}"),

@@ -450,8 +450,12 @@ impl NativeMetadataLearnerHost {
             (schema, ids)
         };
         let metadata = match &self.host {
-            NativeLearnerLifecycle::Fresh(host) => host.owned_metadata_snapshot(&token)?,
-            NativeLearnerLifecycle::Cold(host) => host.owned_metadata_snapshot(&token)?,
+            NativeLearnerLifecycle::Fresh(host) => {
+                host.owned_metadata_snapshot(&observed, business, &token)?
+            }
+            NativeLearnerLifecycle::Cold(host) => {
+                host.owned_metadata_snapshot(&observed, business, &token)?
+            }
         };
         let (metadata_store_id, metadata, listener) = match metadata {
             Some((id, status, listener)) => (Some(id), Some(status), listener),

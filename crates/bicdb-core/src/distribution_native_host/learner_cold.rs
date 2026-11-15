@@ -1,6 +1,6 @@
 //! All-owner cold learner restart. No dead listener is relabelled as drained;
 //! no historical C/UUID is relabelled as current quorum or data admission.
-use super::learner_birth::lock_owned_member_metadata;
+use super::learner_birth::{lock_owned_member_metadata, lock_owned_status_metadata};
 use super::*;
 use crate::distribution::ClusterNetworkTransportConfig;
 use crate::distribution_consensus::{HostMetadataReadObservation, MetadataConsensusStore};
@@ -140,22 +140,26 @@ impl NativeColdLearnerMetadataHost {
     }
     pub(in crate::distribution_native_host) fn owned_metadata_snapshot(
         &self,
+        observed: &HostMetadataReadObservation,
+        business: Uuid,
         parent: &CancellationToken,
     ) -> Result<Option<(Uuid, crate::MetadataConsensusStatus, bool)>> {
         parent.check()?;
+        observed.require_live_request(business)?;
         let Some(metadata) = self.metadata.as_ref() else {
             return Ok(None);
         };
-        let store = metadata
-            .try_lock()
-            .ok_or_else(|| invalid("cold owned metadata status busy"))?;
+        let store = lock_owned_status_metadata(metadata, observed, business, parent)?;
         let id = store.registered_native_metadata_member_store_id()?;
-        Ok(Some((
+        let snapshot = (
             id,
             store.status(),
             (self.listener.is_some() || self.control.as_ref().is_some_and(|c| c.is_running()))
                 && !self.stopping,
-        )))
+        );
+        observed.require_live_request(business)?;
+        parent.check()?;
+        Ok(Some(snapshot))
     }
 
     /// This opens ONLY the existing actual root/manifest. It neither starts a

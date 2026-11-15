@@ -7,6 +7,8 @@ use crate::distribution_transport::DrainedClusterDataListener;
 
 mod control;
 #[cfg(test)]
+mod status_wait;
+#[cfg(test)]
 mod validation_barrier;
 
 pub(in crate::distribution_native_host) fn lock_owned_member_metadata<'a>(
@@ -25,6 +27,37 @@ pub(in crate::distribution_native_host) fn lock_owned_member_metadata<'a>(
         }
         #[cfg(test)]
         validation_barrier::record_actual_busy_acquisition();
+    }
+}
+
+/// A status snapshot grants no membership or write permission. Wait only under
+/// the SAME caller and Host MQ that the enclosing refresh already acquired.
+pub(in crate::distribution_native_host) fn lock_owned_status_metadata<'a>(
+    metadata: &'a Mutex<MetadataConsensusStore>,
+    observed: &HostMetadataReadObservation,
+    business: Uuid,
+    parent: &CancellationToken,
+) -> Result<parking_lot::MutexGuard<'a, MetadataConsensusStore>> {
+    parent.check()?;
+    observed.require_live_request(business)?;
+    #[cfg(test)]
+    status_wait::before_actual_lock(observed, business, parent)?;
+    loop {
+        parent.check()?;
+        observed.require_live_request(business)?;
+        let deadline = parent.deadline().map_or(observed.deadline(), |deadline| {
+            deadline.min(observed.deadline())
+        });
+        let remaining = deadline
+            .checked_duration_since(Instant::now())
+            .ok_or(crate::BicDbError::QueryTimedOut)?;
+        if let Some(store) = metadata.try_lock_for(remaining.min(Duration::from_millis(5))) {
+            parent.check()?;
+            observed.require_live_request(business)?;
+            return Ok(store);
+        }
+        #[cfg(test)]
+        status_wait::record_actual_busy_acquisition();
     }
 }
 
@@ -160,19 +193,21 @@ impl NativeUnassignedLearnerHost {
 
     pub(in crate::distribution_native_host) fn owned_metadata_snapshot(
         &self,
+        observed: &HostMetadataReadObservation,
+        business: Uuid,
         parent: &CancellationToken,
     ) -> Result<Option<(Uuid, crate::MetadataConsensusStatus, bool)>> {
         parent.check()?;
+        observed.require_live_request(business)?;
         self.provider.actual_open.require_live()?;
         let Some(metadata) = self.metadata_transition.metadata.as_ref() else {
             return Ok(None);
         };
-        let store = metadata
-            .try_lock()
-            .ok_or_else(|| invalid("owned learner metadata status busy"))?;
+        let store = lock_owned_status_metadata(metadata, observed, business, parent)?;
+        self.provider.actual_open.require_live()?;
         store.require_listener_database(&self.provider.actual_open)?;
         let id = store.registered_native_metadata_member_store_id()?;
-        Ok(Some((
+        let snapshot = (
             id,
             store.status(),
             (self.metadata_transition.listener.is_some()
@@ -182,7 +217,10 @@ impl NativeUnassignedLearnerHost {
                     .as_ref()
                     .is_some_and(|c| c.is_running()))
                 && !self.metadata_transition.stopping,
-        )))
+        );
+        observed.require_live_request(business)?;
+        parent.check()?;
+        Ok(Some(snapshot))
     }
 
     /// Current OWN learner MQ is mandatory. Enrollment's audit result is not

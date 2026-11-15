@@ -2,6 +2,7 @@
 //! fixture; the separate CLI positive exercises the public single-command path.
 use super::*;
 use std::time::Instant;
+mod owned_status_wait_tests;
 fn config(f: &EnrollmentFixture) -> crate::DistributionConfig {
     let topology = f.launches[0].metadata.lock().committed_topology().clone();
     let local = &topology.nodes[&node(0)];

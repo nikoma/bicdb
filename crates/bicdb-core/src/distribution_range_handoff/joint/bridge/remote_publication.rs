@@ -41,6 +41,9 @@ pub(crate) struct NativeJointBridgeMemberIdentity {
     /// OPEN phase only: the member's own durable bridge receipt and the
     /// post-quorum metadata anchor recorded in it.
     pub(crate) bridge: Option<(String, (u64, u64, Uuid))>,
+    /// RELEASE phase only: the member's own durable catalogue activation
+    /// and its armed same-open generation (`None` while it is not released).
+    pub(crate) release: Option<(String, Option<Uuid>)>,
 }
 
 /// Every rule one counted phase frame must satisfy. The member is the peer
@@ -73,14 +76,17 @@ fn require_phase_frame(
                 if *actual == kind
         )
         || outcome.phase_kind != Some(kind)
-        || !matches!(
-            kind,
-            NativeJointBridgePhaseKindV1::Preparation | NativeJointBridgePhaseKindV1::Open
-        )
-        || (kind == NativeJointBridgePhaseKindV1::Open)
+        || (kind != NativeJointBridgePhaseKindV1::Preparation)
             != (outcome.bridge_receipt_sha256.is_some() && outcome.bridge_anchor.is_some())
         || (kind == NativeJointBridgePhaseKindV1::Preparation
             && (outcome.bridge_receipt_sha256.is_some() || outcome.bridge_anchor.is_some()))
+        || (kind == NativeJointBridgePhaseKindV1::Release)
+            != (outcome.activation_sha256.is_some() && outcome.released.is_some())
+        || (kind != NativeJointBridgePhaseKindV1::Release
+            && (outcome.activation_sha256.is_some()
+                || outcome.released.is_some()
+                || outcome.released_generation.is_some()))
+        || outcome.released_generation.is_some() != (outcome.released == Some(true))
         || !outcome.complete
         || outcome.decision_sha256.as_deref() != Some(data.checksum_sha256())
     {
@@ -108,6 +114,10 @@ fn require_phase_frame(
             .bridge_receipt_sha256
             .clone()
             .zip(outcome.bridge_anchor),
+        release: outcome
+            .activation_sha256
+            .clone()
+            .map(|activation| (activation, outcome.released_generation)),
     })
 }
 
@@ -117,6 +127,10 @@ fn require_phase_frame(
 pub(super) struct RemotePreparationWindow {
     pub(super) kind: NativeJointBridgePhaseKindV1,
     pub(super) observer: ClusterNodeId,
+    /// `true`: the observer is itself a NEW member and counts every OTHER
+    /// one (every member-side proof). `false`: the observer is outside the
+    /// NEW set and counts EVERY member (coordinator-side aggregation only).
+    pub(super) member_observer: bool,
     pub(super) frames: BTreeMap<ClusterNodeId, AuthenticatedNativeJointBridgeStepFrame>,
     pub(super) identities: BTreeMap<ClusterNodeId, NativeJointBridgeMemberIdentity>,
 }
@@ -130,6 +144,31 @@ impl RemotePreparationWindow {
         own: &crate::distribution_consensus::HostMetadataReadObservation,
         business: Uuid,
         token: &crate::CancellationToken,
+    ) -> Result<Self> {
+        Self::collect_inner(kind, data, client, own, business, token, true)
+    }
+    /// Same window for an observer OUTSIDE the NEW set: one frame from EVERY
+    /// NEW member. Each member admits such an observer only when its own
+    /// metadata shows it is the coordinator.
+    pub(super) fn collect_from_outside(
+        kind: NativeJointBridgePhaseKindV1,
+        data: &NativeJointDecisionData,
+        client: &TcpClusterRelocationTransport,
+        own: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        token: &crate::CancellationToken,
+    ) -> Result<Self> {
+        Self::collect_inner(kind, data, client, own, business, token, false)
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn collect_inner(
+        kind: NativeJointBridgePhaseKindV1,
+        data: &NativeJointDecisionData,
+        client: &TcpClusterRelocationTransport,
+        own: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        token: &crate::CancellationToken,
+        member_observer: bool,
     ) -> Result<Self> {
         let observer = client.local_metadata_read_participant().node_id().clone();
         let mut frames = BTreeMap::new();
@@ -165,6 +204,7 @@ impl RemotePreparationWindow {
         let window = Self {
             kind,
             observer,
+            member_observer,
             frames,
             identities,
         };
@@ -173,7 +213,7 @@ impl RemotePreparationWindow {
     }
     /// EVERY other NEW member exactly once, each frame unchanged and live.
     pub(super) fn require_complete(&self, data: &NativeJointDecisionData) -> Result<()> {
-        if !data.new_members().contains_key(&self.observer)
+        if data.new_members().contains_key(&self.observer) != self.member_observer
             || self.frames.keys().ne(data
                 .new_members()
                 .keys()

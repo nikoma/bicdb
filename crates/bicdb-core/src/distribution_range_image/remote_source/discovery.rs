@@ -281,6 +281,43 @@ impl NativeSourceDiscoveryAttempt {
     }
 }
 impl NativeRemoteImageSourceRegistry {
+    /// The export source this original process retained for `range`, if any.
+    /// Memory custody only; it grants no export, cut or serving permission.
+    pub(crate) fn retained_range_source(
+        &self,
+        range: RangeId,
+    ) -> Result<Option<Arc<NativeRetainedRemoteImageSource>>> {
+        self.require_original_process()?;
+        let attempt = self
+            .discoveries
+            .try_lock()
+            .ok_or_else(|| invalid("source discovery table busy"))?
+            .get(&range)
+            .cloned();
+        if let Some(source) = attempt
+            .map(|attempt| attempt.source())
+            .transpose()?
+            .flatten()
+        {
+            return Ok(Some(source));
+        }
+        #[cfg(test)]
+        if let Some(source) = self.test_adopted_sources.lock().get(&range) {
+            return Ok(Some(source.clone()));
+        }
+        Ok(None)
+    }
+    /// Fixture custody transfer of an in-process donor seed's source.
+    #[cfg(test)]
+    pub(crate) fn test_adopt_range_source(
+        &self,
+        range: RangeId,
+        source: NativeRetainedRemoteImageSource,
+    ) {
+        self.test_adopted_sources
+            .lock()
+            .insert(range, Arc::new(source));
+    }
     pub(crate) fn source_discovery_attempt(
         &self,
         request: &NativeSourceDiscoveryRequestV1,

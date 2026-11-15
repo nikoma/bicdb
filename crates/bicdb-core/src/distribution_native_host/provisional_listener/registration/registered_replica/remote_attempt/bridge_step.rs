@@ -6,7 +6,8 @@ use crate::distribution_consensus::MetadataReadParticipant;
 use crate::distribution_data::NativeJointServingLease;
 use crate::distribution_native_host::provisional_listener::registration::bridge_step::{
     acquire_bridge_step_own, bridge_reply, observe_bridge_phase, open_member_bridge,
-    publish_member_bridge, retained_prepare_step, BridgeStepOwn, NativeBridgeMemberSteps,
+    publish_member_bridge, release_member_bridge, retained_prepare_step, retire_member_old_custody,
+    BridgeStepOwn, NativeBridgeMemberSteps,
 };
 use crate::distribution_range_handoff::{
     NativeJointHandoffStepOperationV1 as StepOperation, NativeJointHandoffStepOutcomeV1,
@@ -78,7 +79,27 @@ impl NativeRegisteredReplicaAdmission {
                 &backend.transport,
                 request,
                 fresh,
-                true,
+                None,
+                token,
+            )?,
+            // The added member never held OLD custody of this range: the
+            // proof is still required, nothing is removed.
+            StepOperation::RetireOldCustody { .. } => retire_member_old_custody(
+                &steps,
+                &backend.provider,
+                &backend.transport,
+                request,
+                fresh,
+                &|_| Ok(()),
+                token,
+            )?,
+            StepOperation::BridgeRelease { .. } => release_member_bridge(
+                &steps,
+                &backend.provider,
+                &backend.transport,
+                request,
+                fresh,
+                &|| Ok(()),
                 token,
             )?,
             StepOperation::TargetInstall { .. } => {

@@ -654,6 +654,11 @@ pub(in super::super) fn exercise(
             &current,
             selected,
             output,
+            donor,
+            retained,
+            metadata,
+            template,
+            services,
         );
         return;
     }

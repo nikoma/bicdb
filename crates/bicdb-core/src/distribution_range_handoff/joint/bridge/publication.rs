@@ -11,6 +11,14 @@ pub(crate) use release_phase::{
     NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
 };
 
+pub(crate) use release_phase::NativeJointActivationProof;
+#[cfg(feature = "tls-replication")]
+pub(crate) use release_phase::{
+    NativeJointMemberRelease, NativeJointMemberReleaseOwner, NativeJointReleasePhaseFacts,
+    NativeJointRemoteOldRetirementProof, NativeRemoteBridgeReleased,
+    NativeRemoteJointActivationCertificate,
+};
+
 pub(crate) struct NativeJointServingPublicationRound {
     fresh_required: bool,
     pending: std::collections::BTreeSet<ClusterNodeId>,

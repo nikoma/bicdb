@@ -83,6 +83,7 @@ mod committed;
 pub(crate) use committed::CommittedNativeJointDecisionObservation;
 
 mod bridge;
+pub(crate) use bridge::NativeJointActivationProof;
 pub(crate) use bridge::{
     NativeJointActivatedQuorum, NativeJointActivationAdmission, NativeJointOpenAdmission,
     NativeJointOpenPhaseQuorum, NativeJointOpenPhaseRound, NativeJointPreparationCustody,
@@ -94,6 +95,12 @@ pub(crate) use bridge::{
     NativeJointReleaseAdmission, NativeJointReleaseContinuation, NativeJointReleasePhaseQuorum,
     NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
     NativeJointServingPublicationRound,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use bridge::{
+    NativeJointMemberRelease, NativeJointMemberReleaseOwner, NativeJointReleasePhaseFacts,
+    NativeJointRemoteOldRetirementProof, NativeRemoteBridgeReleased,
+    NativeRemoteJointActivationCertificate,
 };
 
 #[cfg(test)]

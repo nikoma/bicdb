@@ -442,7 +442,8 @@ impl NativeRegisteredReplicaAdmission {
             Stage::BridgeWriterDomain
             | Stage::BridgePreparation
             | Stage::BridgePublication
-            | Stage::BridgeActivation => {
+            | Stage::BridgeActivation
+            | Stage::BridgeRelease => {
                 return Err(invalid(
                     "joint handoff step target install has no bridge stage",
                 ))

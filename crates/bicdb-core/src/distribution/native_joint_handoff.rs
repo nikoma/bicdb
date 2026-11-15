@@ -570,13 +570,15 @@ impl DistributionStore {
         Ok(epoch)
     }
     /// Record that every member of the new set durably activated the range
-    /// and was released. The proof is the live all-released quorum itself;
-    /// no digest is accepted from a caller. Membership does not change. This
+    /// and was released. The proof is the live all-released quorum itself
+    /// (every member's service in this process, or this member's own state
+    /// plus authenticated release frames of every other member); the trait
+    /// is sealed and no digest is accepted from a caller. Membership does not change. This
     /// permits the retirement of the old source and nothing else. Returns
     /// false, committing nothing, when this activation is already recorded.
     pub(crate) fn record_native_joint_activation(
         &mut self,
-        proof: &crate::distribution_range_handoff::NativeJointActivatedQuorum,
+        proof: &dyn crate::distribution_range_handoff::NativeJointActivationProof,
         fresh: &crate::distribution_consensus::HostMetadataReadObservation,
         business: Uuid,
         actor: &ClusterNodeId,

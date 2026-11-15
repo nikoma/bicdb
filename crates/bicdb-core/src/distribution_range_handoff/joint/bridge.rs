@@ -17,11 +17,18 @@ pub(crate) use preparation_custody::{
     NativeJointPreparationCustody, NativeJointPreparationPhaseFacts,
     NativeJointPreparationRetainedFacts,
 };
+pub(crate) use publication::NativeJointActivationProof;
 pub(crate) use publication::{
     NativeJointActivatedQuorum, NativeJointOpenAdmission, NativeJointOpenPhaseQuorum,
     NativeJointOpenPhaseRound, NativeJointPublishedServingQuorum, NativeJointReleaseAdmission,
     NativeJointReleaseContinuation, NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound,
     NativeJointServingPolicyAdmission, NativeJointServingPublicationRound,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use publication::{
+    NativeJointMemberRelease, NativeJointMemberReleaseOwner, NativeJointReleasePhaseFacts,
+    NativeJointRemoteOldRetirementProof, NativeRemoteBridgeReleased,
+    NativeRemoteJointActivationCertificate,
 };
 #[cfg(all(test, feature = "tls-replication"))]
 pub(crate) use remote_publication::{

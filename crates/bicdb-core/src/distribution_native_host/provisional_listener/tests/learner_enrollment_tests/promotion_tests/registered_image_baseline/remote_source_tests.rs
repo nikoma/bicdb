@@ -149,6 +149,7 @@ pub(super) enum SourceCase {
     NativeBridgeStepPublish,
     NativeBridgeStepPublishFaults,
     NativeBridgeStepOpen,
+    NativeBridgeStepRelease,
 }
 pub(super) fn uses_original_sdk_rpc_observer(case: SourceCase) -> bool {
     hot_policy_tests::is_hot_policy(case)

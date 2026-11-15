@@ -11,6 +11,7 @@ use crate::distribution::{ClusterId, ClusterNodeId, RangeDescriptor, RangeId, Re
 use crate::error::{BicDbError, Result};
 
 mod joint;
+pub(crate) use joint::NativeJointActivationProof;
 #[cfg(feature = "tls-replication")]
 pub(crate) use joint::NativeJointReadOnlyPlanIdentity;
 #[cfg(all(test, feature = "tls-replication"))]
@@ -38,6 +39,12 @@ pub(crate) use joint::{
     NativeJointBridgePhaseKindV1, NativeJointHandoffStepOperationV1,
     NativeJointHandoffStepOutcomeV1, NativeJointHandoffStepReplyV1,
     NativeJointHandoffStepRequestV1, NativeJointHandoffStepStageV1,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint::{
+    NativeJointMemberRelease, NativeJointMemberReleaseOwner, NativeJointReleasePhaseFacts,
+    NativeJointRemoteOldRetirementProof, NativeRemoteBridgeReleased,
+    NativeRemoteJointActivationCertificate,
 };
 #[cfg(test)]
 pub(crate) use joint::{NativeJointPhaseTrace, NativeRefreshTraceContext};

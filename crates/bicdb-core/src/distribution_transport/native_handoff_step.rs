@@ -276,6 +276,50 @@ impl TcpClusterRelocationTransport {
         self.request_native_joint_bridge_step(recipient, data, request, own, parent)
     }
 
+    /// Coordinator -> durably open NEW member. The member retires its own
+    /// obsolete OLD custody after proving, itself, every NEW member open.
+    pub(crate) fn request_native_joint_bridge_retire_old_custody(
+        &self,
+        recipient: &ClusterNodeId,
+        data: &NativeJointDecisionData,
+        request: &NativeJointHandoffStepRequestV1,
+        own: &HostMetadataReadObservation,
+        parent: &CancellationToken,
+    ) -> Result<AuthenticatedNativeJointBridgeStepFrame> {
+        if !matches!(
+            &request.operation,
+            NativeJointHandoffStepOperationV1::RetireOldCustody { .. }
+        ) {
+            return Err(transport_error(
+                "joint bridge custody retirement exchange carries another operation",
+            ));
+        }
+        self.request_native_joint_bridge_step(recipient, data, request, own, parent)
+    }
+
+    /// Coordinator -> durably open NEW member. The member releases its own
+    /// retained freeze after collecting, itself, fresh RELEASE observations
+    /// of every other NEW member before and after its release. The frame
+    /// reports the armed generation once the member confirmed it.
+    pub(crate) fn request_native_joint_bridge_release(
+        &self,
+        recipient: &ClusterNodeId,
+        data: &NativeJointDecisionData,
+        request: &NativeJointHandoffStepRequestV1,
+        own: &HostMetadataReadObservation,
+        parent: &CancellationToken,
+    ) -> Result<AuthenticatedNativeJointBridgeStepFrame> {
+        if !matches!(
+            &request.operation,
+            NativeJointHandoffStepOperationV1::BridgeRelease { .. }
+        ) {
+            return Err(transport_error(
+                "joint bridge release exchange carries another operation",
+            ));
+        }
+        self.request_native_joint_bridge_step(recipient, data, request, own, parent)
+    }
+
     /// Coordinator or NEW member -> another NEW member. Read-only: the member
     /// re-proves its own retained state under its own fresh metadata.
     pub(crate) fn request_native_joint_bridge_phase_observation(

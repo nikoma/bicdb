@@ -4,7 +4,39 @@ This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe64
 
 ## Actual execution
 
-### Corrected batch: source review only, new CI required
+### Source7c: partial CI checkpoint; Core failed, remaining jobs live
+
+Candidate **1.0.520-beta / `7c77418656a41ec6e25c7601319e061c328f48e1`**,
+tree `df63298f61b0a4cdd56f0caabc694d888c38dbda`, was checked out by CI as
+`25b2a1454450bd591364ce9d026a8469ab03c2fe` with the identical tree.
+This is a partial checkpoint of [Tests43704937146](https://github.com/nikoma/bicdb/actions/runs/43704937146),
+not a completed archive or qualified release.
+
+| Scope | Classification | Result and limit |
+| --- | --- | --- |
+| Workspace/all-target and no-default Core consumer | **Passed compilation** | Test channel type correction compiles. Compilation does not execute HA cases. |
+| Core | **Failed** | Library 975 passed / 0 failed / 8 ignored. All eight visibility, three Standard, eleven bootstrap and four new rekey controls passed. Later backup target: 9 passed / 1 failed; 30 additional backup cases were not executed. |
+| PGwire | **Passed, CI scope** | 511 passed / 0 failed / 2 ignored; Oracle HR50, embedded HA11, verification3 and protocol195 are separate component scopes. |
+| Rails | **Passed, application CI scope** | 20 runs / 100 assertions, zero failures/errors/skips, including process-kill recovery. |
+| Native multi-node, SQL, remaining workspace | **Not yet established** | Jobs were still running at this checkpoint; no inherited pass. |
+| Independent physical expansion | **Not tested** | Original Azure qualification remains failed; no stable five-node throughput gain or production admission. |
+
+The backup failure is `encrypted_full_backup_verifies_and_restores_records`
+at `crates/bicdb-core/tests/backup.rs:235`: actual capabilities include
+`physical_backup_gate_v1` alongside `format_metadata_v2`, while the assertion
+expects only the latter. Backup creation returned successfully; later plaintext,
+verification and restore assertions were **not reached**, so this is not an
+observed restore failure or data-loss result. Source correction
+`2e4ddcbe882632613d89b8415f2d33f9f71a9f66` changes only the two exact expected
+capability vectors. It is **not tested** and remains local while useful CI jobs
+finish. Historical input fixtures and all restore/payload assertions are retained.
+
+Complete Core raw log: 2,433,064 bytes, SHA-256
+`fea8f65fa0a030ae47609fd9da94e2ffa00ae2f2f922dd881eca134c220c96d7`.
+Passing same-attempt controls do not close the documented cross-call bootstrap
+association or Prepared-rekey source-head gaps.
+
+### Historical pre-CI review of the source7c corrections
 
 The pending batch composes test-channel correction
 `781b4e8029f0e8c747fee69252c94a9f04992103` and Cell gate-lifecycle correction
@@ -21,7 +53,7 @@ on this batch. Earlier component passes below do not qualify it.
 
 This is a **completed, failed CI checkpoint**, not a qualified release.
 Source **`2ce4c48202d4d1bb1ef759b08a41dc36f431af6d`**, tree
-`f4d72164c2a2a906857b179d44df216d4457b9f8`, is the public PR207 head. Actual
+`f4d72164c2a2a906857b179d44df216d4457b9f8`, was the public PR207 head at that checkpoint. Actual
 checkout `e1ef338cb41d51d4d9dfbc8660502e4afbc3f366` has that identical tree.
 [Tests43696050976](https://github.com/nikoma/bicdb/actions/runs/43696050976)
 failed; Rails completed successfully. All logs and original artifacts are

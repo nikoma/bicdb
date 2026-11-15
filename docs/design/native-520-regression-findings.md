@@ -112,12 +112,40 @@ Independent complete raw-hash, summary and unique-case receipt SHA-256:
 | Hot Registered continuation | **Failed** | Fourteen cases reach actual Open then fail the first Registered policy helper; one fails a fresh same-candidate policy retry; one large unrelated-catalogue case reaches survivor OLD-observation retirement before failing. These are distinct cuts, not sixteen Open failures. The later source-only serving corrections have not executed. |
 | Same-service identity wait expiry | **Passed, component CI scope** | The actual held-service/original-parent expiry control passes. It stops before ALL-OLD effects and establishes no full relocation acceptance. |
 | Same-service identity wait release/cancellation | **Inconclusive for intended control** | Their cases fail setup: release on dispatcher publication contention and cancellation on connection reset. Intended held-lock outcomes are not tested by those failed executions. |
+| Stale-gateway/catch-up and independent follower Apply | **Passed, component CI scope** | The original stale gateway recovers the full acknowledged payload during the real CQ gap/transfer (raw17424); follower Apply finishes before another range's global gap closes (17492). These do not execute the failed full host lifecycle. |
+| Remote decision and final-frame metadata contention | **Passed, component CI scope** | All four remote-decision controls pass (22955–22970), including actual commit-sync Unknown with retained XID and postcommit cancellation reconciliation. All three final-frame metadata wait/release/cancel/expiry controls pass (23015–23025). Their original authority and attempt boundaries remain separate from the first genesis metadata read. |
 | Integrated bounded recovery, automatic convergence and physical expansion | **Not tested** | New source composition is outside source6de. No physical loss, RPO/RTO, routing or capacity gate is cleared. |
 
 The counts alone do not prove an improvement over source7c: source6de defines
 four additional controls, and the reached failure cuts differ. Per-case cause
 classification remains in progress. No error/no-effect, lost-ACK or stale-route
 cause is inferred from a timeout or a missing diagnostic marker.
+
+The complete 37-failure case/cut classifier SHA-256 is
+`8524f2d09dc06b6030f91ff9a90e54ffa8b685b76088758d60c3990fe61c992a`.
+Root independently matched all 413 actual names/lines/outcomes, all 37 failed
+names, six exact source-file hashes and the cut category totals; receipt
+`e0eba12c30ce0b26d3e791df37fdcdeec82bc446692c96d2ec01e3397e45fce6`.
+All 409 source7c names remain: 361 pass in both, 33 fail in both, twelve change
+from fail to pass, two change from pass to fail and one remains ignored. Of the
+four additional definitions, two pass and two fail setup. These differing-source
+outcomes are neither a causal comparison nor a scaling measurement.
+
+The nineteen setup-reset cases retain 47 `INITIAL_NATIVE_READ_FAILURE`
+events at `first_metadata`: 46 connection resets and one connection refusal.
+Their original five-second parents still have 4,944,640–4,958,254 microseconds
+remaining and are not cancelled. Original-parent expiry therefore does not
+explain these immediate failures. Source inspection distinguishes the public
+genesis `MetadataReadAcquire` path from enrollment's existing opt-in
+`HostMetadataReadAcquire` socket recovery. Existing listener-transition controls
+select the latter; their passes do not cover the former. A listener replacement
+is a source susceptibility, **not a proven historical server-side reset cause**.
+The next smallest deterministic control must drive the real genesis request
+into the actual old listener backlog, perform shutdown/rebind on that same
+metadata host, and require either a fresh authenticated read under the original
+finite parent or the original cancel/expiry refusal before readiness publication.
+Semantic, identity and mutation errors must remain terminal; increasing setup
+budgets or serializing the fixture would not prove that recovery contract.
 
 ### Completed source7c: Core and Native failed; workspace and application components passed
 

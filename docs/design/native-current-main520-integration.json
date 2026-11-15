@@ -102,6 +102,32 @@
         "collector": "exited naturally; not restarted",
         "scope": "Full stored/raw log hashes, original ZIP API digest/size/CRC/member hashes and source/API IDs independently verified; archive integrity is not runtime or physical qualification."
       }
+    },
+    {
+      "id": "source307-library-compilation",
+      "classification": "failed production-library compilation; correction uncompiled",
+      "source": "307a476d1b161d98a0793e310e220cdee19d130e",
+      "tree": "ccdc97d97c496fa015527ad331ee2f944d30dae0",
+      "tests_run": 43681776083,
+      "rails_run": 43681776163,
+      "initial_observed_failed_jobs": [
+        132713733327,
+        132713748838
+      ],
+      "compiler_error": "E0063 missing source_retirement in NativeJointLocalState initializer",
+      "path": "crates/bicdb-core/src/distribution_range_consensus/joint_handoff_state/remote_decision.rs",
+      "line": 106,
+      "initial_classifier_sha256": "5e79471f191d29ea2bcf165ccfa79881d2c5058710cd1f3a2b1ec20b402e6fda",
+      "alltargets_raw_sha256": "edbf8d092f4239bb37074e3103becaa0d7c82bf1be7b652ed01c2dffa2cf31c2",
+      "pg_raw_sha256": "cf7693cda66dfc10fc6c8adc775487d535d5e93400247afb1b73890f000d31aa",
+      "correction": "085cf9617e8b2dd81fd2bb4d1bf094d6e868c021",
+      "correction_scope": "One source_retirement:None field in a fresh .or_insert literal; existing actual state is preserved. Other fresh-state constructors already use None. No original assertions/deadlines changed.",
+      "correction_checks": [
+        "standalone formatting/parsing of changed file",
+        "git diff check"
+      ],
+      "correction_compilation": "not tested",
+      "next_gate": "Preserve remaining original307 useful jobs to terminal and freeze archive, then normal exact-source CI of correction. No run cancellation or reinterpretation of library errors as runtime tests."
     }
   ],
   "source_checks_at_reviewed_revision": {

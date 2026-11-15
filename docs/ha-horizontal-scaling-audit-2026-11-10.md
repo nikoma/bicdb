@@ -45,6 +45,12 @@ still **failed**, and no new independent-machine expansion or stable five-node
 throughput comparison has passed. Source517 and candidate518 observations below
 remain historical evidence with their original identities.
 
+The first normal520 composition, source307a, subsequently **failed production
+library compilation** on one missing main519 retirement-state field. Its narrow
+fresh-state initializer correction is source-reviewed but uncompiled. See the
+[520 notes](releases/1.0.520-beta.md) for exact source and correction identities;
+none of the earlier passing results clears this failure.
+
 At the later terminal capture of sourcefbb run43675202613, SQL and remaining
 workspace also passed. Its overall Tests result remains failed on the three
 test-compilation jobs; no Core/native controls ran. The

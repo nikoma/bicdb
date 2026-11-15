@@ -26,7 +26,8 @@ build and application step: twenty runs, one hundred assertions, zero failures,
 errors or skips, including process-kill queue/cache recovery, twenty-four reports
 and twenty-four cable messages. PGwire132854704821 passed 511/0/2 across
 twenty-eight summaries. Those component/application results are separate from
-native HA. SQL and remaining-workspace were still running at this checkpoint.
+native HA. SQL132854704853 subsequently passed 2,682/0/4 across 282 summaries;
+remaining-workspace was still running at this checkpoint.
 Earlier revisions' passing results are not substituted for current results.
 
 Complete all-target raw1,406,089 bytes SHA-256
@@ -37,6 +38,15 @@ Core raw2,530,065 bytes
 `8d29ecce91fb41c05d3a82248a9e1337b19c3f1f999cc7110ad83645c6dd59a3`;
 PGwire raw1,505,387 bytes
 `089d3952eac7fd42cf75db47a2251ad7b8eb6ca9ebd4b44a8acdeddde3a37c17`.
+SQL raw348,134,743 bytes
+`5e14590a67119a81948dc96547f0ca0fc39a39526454400c2b4a3741d7d6d8a8`;
+gzip SHA-256
+`dccba560ced4616bfe53ac46848668073a519dda9eb0362a3af5c0acd9eba5ff`.
+Independent complete-log SQL receipt:
+`81445498781347c9278f5dfc90ef1ed903dac488b8b6963e6431ba192a7593df`.
+Its actual committed-sync DimensionMismatch/DDL-cleanup control passed at
+raw14369. That SQL pass does not execute Core's timed-Unknown or native
+multi-node paths and does not establish general multi-range SQL transactions.
 Rails original artifact14167656585 contains sixteen verified members; ZIP SHA-256
 `a419978095b8b02c2c280c77d36448c00128395c624d918fa75fbcf5150e29a8`.
 Its exercised CI debug binary SHA-256 is

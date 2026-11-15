@@ -19,8 +19,8 @@ eighteen test-compilation errors: seventeen missing `BTreeMap` references and
 one private-field access in a test diagnostic. None executed Core/native tests
 or the new stage clocks. Native's production helper build, PGwire511/0/2 and the
 separate Rails build/application twenty runs/one hundred assertions passed.
-SQL and remaining-workspace
-were still running at this checkpoint; no whole-run archive or passing result
+SQL also passed2,682/0/4. Remaining-workspace
+was still running at this checkpoint; no whole-run archive or overall passing result
 is claimed. A minimal source-reviewed correction retains private ownership,
 original assertions and deadlines; it has not compiled or executed. See the
 [exact source, logs and reproducer](design/native-520-regression-findings.md).

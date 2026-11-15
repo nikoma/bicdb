@@ -1,10 +1,44 @@
 # HA and horizontal scaling: evidence checkpoint, November 14, 2026
 
+## Latest observation — November 15, 2026, 11:20 UTC
+
+Delivered remote main is **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**,
+not the historical517 checkpoint below. Its post-merge Native job passed
+348/0/1; the separate remaining-workspace job failed its replicated application
+reopen on `Address already in use`. These separate results do not establish an
+unconditionally green or qualified release.
+
+Unmerged **1.0.520-beta / `7c77418656a41ec6e25c7601319e061c328f48e1`** has current
+workspace/no-default compilation, PGwire511/0/2, SQL2,682/0/4 and Rails20 runs /
+100 assertions passing. Core library passed975/0/8, including visibility8,
+Standard3, bootstrap11 and new rekey4 controls; the job later failed a backup
+capability-vector assertion. Its subsequent verify/restore assertions were not
+reached. The test-only correction is local and not tested. Native and
+remaining-workspace are still running at this checkpoint. Full identities,
+complete terminal logs and exact limits are in the
+[520 regression findings](design/native-520-regression-findings.md).
+
+The separately reviewed remote preparation/Open/release source is locally
+composed but not compiled or executed. Actual Serving publication, complete
+controller recovery, repeated relocation, cold association and cleanup remain
+open. The [deferred final-tail bootstrap proposal](design/bootstrap-deferred-final-tail-7c.md)
+is a design, not a fix; its native final acknowledged-prefix minter is missing.
+
+The single-primary streaming findings [190](https://github.com/nikoma/bicdb/issues/190),
+[191](https://github.com/nikoma/bicdb/issues/191) and
+[192](https://github.com/nikoma/bicdb/issues/192) remain open in GitHub at this
+observation. Native range and Cell component passes do not close them.
+The original Azure qualification remains failed. No new physical run, stable
+five-node capacity gain, measured production RPO/RTO or production admission is
+established. Source delivery, a binary, a release and deployment remain separate.
+
+## Historical checkpoints retained below
+
 The [private current-main integration checkpoint](design/native-main517-integration-contract.md)
 records source changes and controls awaiting runtime validation. Its inherited
 package label and source checks are not delivered-main or qualification results.
 
-Latest delivered-main observation, November 15 02:13 UTC:
+Earlier delivered-main observation, November 15 02:13 UTC:
 **1.0.517-beta**, `bde74650c40934096e1cc6c6e75a3ea3c4643cf4`, merged through
 [PR206](https://github.com/nikoma/bicdb/pull/206). Its tree
 `7ee0e1f37c310612165b56e3ca0c1dc10a8e0e9c` is identical to source

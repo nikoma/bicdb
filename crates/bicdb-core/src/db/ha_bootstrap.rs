@@ -165,9 +165,11 @@ pub const BOOTSTRAP_SITE: &str = "bootstrap";
 /// discards an incomplete one. Returns true when a bootstrap was installed.
 ///
 /// The install renames the old directory aside, renames the staging
-/// directory into place, and `fsync`s the parent before anything is
-/// deleted, so a power loss leaves either the old database or the complete
-/// new one. `BOOTSTRAP_READY` stays inside the installed directory until
+/// directory into place, and `fsync`s the parent before retiring the current
+/// old preimage. An obsolete replaced tree is cleared earlier only while an
+/// actual current old owner remains. If the old name is absent, the retained
+/// replaced preimage stays through installation and the parent durability cut.
+/// `BOOTSTRAP_READY` stays inside the installed directory until
 /// that `fsync` succeeded: an install whose directory sync failed (the open
 /// fails with `WriteFailed`, site `bootstrap.dir_sync`) is completed by the
 /// next open, which syncs again before it removes the marker and the old
@@ -217,9 +219,11 @@ pub fn finish_standby_bootstrap(path: &Path) -> Result<bool> {
     let ready = prepare_bootstrap_ready_durability(&staging, &ownership, installed)?;
     // Only the actual originally retained cleanup owner may be removed.
     // A path which appeared after an original None is not cleanup authority.
-    if let Some(original_replaced) = ownership.replaced.as_ref() {
-        original_replaced.require_at(&replaced)?;
-        fs::remove_dir_all(&replaced)?;
+    if ownership.old.is_some() {
+        if let Some(original_replaced) = ownership.replaced.as_ref() {
+            original_replaced.require_at(&replaced)?;
+            fs::remove_dir_all(&replaced)?;
+        }
     }
     let renamed = (|| -> Result<Option<&BootstrapTreeOwner>> {
         bicdb_page::test_faults::io_fault(&format!("{BOOTSTRAP_SITE}.rename"), path)?;
@@ -231,6 +235,9 @@ pub fn finish_standby_bootstrap(path: &Path) -> Result<bool> {
             None
         };
         installed.require_at(&staging)?;
+        // A genuine interrupted old->replaced state, with no synthetic marker
+        // or substituted owner, is observable before the second real rename.
+        bicdb_page::test_faults::io_fault(&format!("{BOOTSTRAP_SITE}.stage_rename"), path)?;
         // This atomic destination condition closes normal Core creation after
         // custody capture; never move aside a fresh unowned root or replace it.
         rename_no_replace::rename(&staging, path)?;
@@ -251,9 +258,19 @@ pub fn finish_standby_bootstrap(path: &Path) -> Result<bool> {
             "actual_old_moved_to_replaced":old_at_replaced.is_some(),
         }),
     );
-    // The SAME staged owner now follows the installed root; only the SAME
-    // original old owner (if actually moved) follows cleanup at replaced.
-    complete_bootstrap_install(path, &ready, old_at_replaced)?;
+    // The SAME staged owner follows the installed root. Cleanup retains the
+    // actual moved old owner, or the already-retained replaced predecessor.
+    let cleanup = old_at_replaced.or_else(|| {
+        // A prior interrupted install may have moved old here. Keep this SAME
+        // actual retained preimage through parent fsync. Its logical association
+        // across crashes is a separate, still-open recovery protocol question.
+        ownership
+            .old
+            .is_none()
+            .then_some(ownership.replaced.as_ref())
+            .flatten()
+    });
+    complete_bootstrap_install(path, &ready, cleanup)?;
     eprintln!(
         "bicdb replication: installed a snapshot of the primary into {}",
         path.display()
@@ -491,3 +508,6 @@ pub(super) fn test_after_initial_bootstrap_check(path: &Path, actual_installed: 
         }),
     );
 }
+
+#[cfg(all(test, unix))]
+mod preimage_retry_tests;

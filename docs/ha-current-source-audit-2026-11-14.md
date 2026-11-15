@@ -19,6 +19,15 @@ required jobs and Rails passed. That tested head failed acceptance; later
 follow-ups must be assessed separately. The older source-pinned checkpoints
 below retain their original scope.
 
+The separate [source881 Strong-read inspection](design/native-strong-read-source-boundary-881.md)
+traces the explicit native quorum, materialization, snapshot and routing barriers.
+It retains six exact historical c05 focused passes, while the full c05 run
+remains failed. It found no confirmed error-to-successful-absence conversion in
+that inspected chain; this is not a linearizability proof, an explanation of
+the original Azure records, or current-release qualification. The combined
+actual catch-up-gap and same-stale-gateway transition remains an unexecuted
+acceptance requirement at that source checkpoint.
+
 Status checkpoint: November14, 2026, 18:56UTC. Running jobs below are not
 classified as passes; later completion does not rewrite the pinned failures.
 

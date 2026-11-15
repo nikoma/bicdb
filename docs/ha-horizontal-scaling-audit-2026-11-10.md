@@ -11,10 +11,15 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
-## Current partial execution — source7c, 2026-11-15 UTC
+## Current partial execution — source6de, 2026-11-15 UTC
 
 Delivered main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
-Unmerged520 candidate `7c77418656a41ec6e25c7601319e061c328f48e1` passed workspace
+Current draft520 `6de646beb603accf39358017d8e0c83c39c741b1` passed workspace /
+no-default compilation, PGwire511/0/2 and Rails20 runs/100 assertions. Core,
+Native, SQL and remaining-workspace are pending. Compilation does not execute
+the new native controls or qualify the original failed cases.
+
+Preceding520 candidate `7c77418656a41ec6e25c7601319e061c328f48e1` passed workspace
 and no-default compilation, PGwire511/0/2 and Rails20 runs/100 assertions.
 Core library passed975/0/8; visibility8, Standard3, bootstrap11 and new Cell
 rekey4 controls passed. Its later backup assertion failed because the expected

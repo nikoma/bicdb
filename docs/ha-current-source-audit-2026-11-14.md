@@ -1,6 +1,6 @@
 # HA and horizontal scaling: evidence checkpoint, November 14, 2026
 
-## Latest observation — November 15, 2026: source7c Native completion
+## Latest observation — November 15, 2026: source6de partial CI
 
 Delivered remote main is **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**,
 not the historical517 checkpoint below. Its post-merge Native job passed
@@ -8,7 +8,13 @@ not the historical517 checkpoint below. Its post-merge Native job passed
 reopen on `Address already in use`. These separate results do not establish an
 unconditionally green or qualified release.
 
-Unmerged **1.0.520-beta / `7c77418656a41ec6e25c7601319e061c328f48e1`** has current
+Current draft **1.0.520-beta / `6de646beb603accf39358017d8e0c83c39c741b1`**
+passed workspace/no-default compilation, PGwire511/0/2 and Rails20 runs /
+100 assertions. Other runtime jobs are still pending; this is not a complete
+HA acceptance result. INITIAL diagnostics are not a socket fix, and the new
+Open/identity-wait corrections still require their actual native controls.
+
+The preceding **1.0.520-beta / `7c77418656a41ec6e25c7601319e061c328f48e1`** has
 workspace/no-default compilation, PGwire511/0/2, SQL2,682/0/4 and Rails20 runs /
 100 assertions passing. Core library passed975/0/8, including visibility8,
 Standard3, bootstrap11 and new rekey4 controls; the job later failed a backup

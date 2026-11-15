@@ -4,6 +4,42 @@ This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe64
 
 ## Actual execution
 
+### Source6de: compilation, PGwire and Rails passed; other runtime jobs pending
+
+Current draft PR207 source is **1.0.520-beta /
+`6de646beb603accf39358017d8e0c83c39c741b1`**, tree
+`de0b68af8d158f39358604590769afb8237115f0`. Normal
+[Tests43714999361](https://github.com/nikoma/bicdb/actions/runs/43714999361) and
+[Rails43714999384](https://github.com/nikoma/bicdb/actions/runs/43714999384)
+checked out `7714bd37b9cfe87658e3baadd1f906a187a06b58` with that identical tree.
+Workspace/all-target and no-default consumer compilation passed. PGwire completed
+511 passed / 0 failed / 2 ignored across 28 summaries. Rails completed 20 runs /
+100 assertions, zero failures/errors/skips, including actual process-kill queue
+and cache recovery, 24 completed reports and 24 cable messages. Core, Native,
+SQL and remaining-workspace are still pending at this checkpoint; no overall
+pass or inherited Native acceptance is claimed.
+
+This successor composes the two backup-vector expectations, all-worker INITIAL
+failure evidence, duplicate-validation reduction and same-OWN FIRST identity
+wait described below. Compilation does not establish that the four new control
+definitions or original 45 failed native cases passed. The original failed Azure
+qualification and all physical/production gates remain unchanged.
+
+Complete raw log hashes: all-targets 2,781,766 bytes,
+`16e875783c19e0ff58ef486753c8548823bfbf9ae96ea7c819d71cc94e054b66`;
+PGwire 1,320,138 bytes,
+`40c26cd3ab5fb44e10bd46cc84375e608cb3a31ad2ae4ae29ce927ae16e80345`;
+Rails 1,184,666 bytes,
+`5fee47ff0fff5b4da39044378d73dcb2e1c1877e0641e2691d30c9700797212d`.
+Independent complete-log receipts respectively:
+`9a5bb9b2ba34088f04bc4fc8bb3d864b18f7f104396d9d520c90841633995c16`,
+`332574d8c7116d551187e1bda23a92294e9ec565828409767cb08f3405f445e4`,
+`74bf19aebe1ae949eaeb1ce5b817fee943a1b4a14f139670d1e407d71c56c104`.
+Rails built and exercised a CI debug binary with SHA-256
+`64e18a818ebade9ebfbca810f4932bd132bf827ff4a1dfffbb9279483dda9245`.
+This is not a retained optimized physical-qualification binary or published
+release/deployment. The full source6de archive is not frozen while useful jobs run.
+
 ### Completed source7c: Core and Native failed; workspace and application components passed
 
 Candidate **1.0.520-beta / `7c77418656a41ec6e25c7601319e061c328f48e1`**,

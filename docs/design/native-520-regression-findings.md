@@ -10,7 +10,7 @@ Candidate **1.0.520-beta / `7c77418656a41ec6e25c7601319e061c328f48e1`**,
 tree `df63298f61b0a4cdd56f0caabc694d888c38dbda`, was checked out by CI as
 `25b2a1454450bd591364ce9d026a8469ab03c2fe` with the identical tree.
 This is a completed failed execution checkpoint of [Tests43704937146](https://github.com/nikoma/bicdb/actions/runs/43704937146),
-not a qualified release. Complete archive verification is recorded separately.
+not a qualified release. The complete archive is frozen and independently verified.
 
 | Scope | Classification | Result and limit |
 | --- | --- | --- |
@@ -70,7 +70,16 @@ gzip 3,594,128 bytes, SHA-256
 `e8808425833f37cc6acacf5d161c627982daaf5f90d1091abb7fc5b4f5b46110`.
 Independent full-log/case inventory receipt:
 `c7883e3929c3f6027a078b885bf2a7edad409be14cb150de661095d2d0575172`.
-The remaining-workspace job has completed; final full-archive integrity verification is separate from these component execution results.
+The complete archive contains 96 premanifest files, 99 total, 11 full gzip logs
+and eight original ZIPs/28 members, with no missing or partial captures. Manifest
+SHA-256: `d2da4de6a06ae9b6fd8663c64e90e5b8cbd0ad1f8fea411a6d20462baf6b7967`;
+independent full-archive verification receipt SHA-256:
+`39a3508a61ea7ea7017cae52ffaa44a001d9b2744d27537c6940d3785002881b`.
+Verification covers every stored/raw hash, exact source/tree inventories,
+original ZIP API digests/sizes, CRC and member hashes. The verifier passed its
+positive control and rejected a wrong manifest digest. The sole collector
+exited naturally; no job was cancelled or restarted. Archive integrity preserves
+the failed result and does not qualify the database or untested successors.
 
 | Actual failed scope | Classification | Observed cut and limit |
 | --- | --- | --- |

@@ -2838,7 +2838,10 @@ pub fn require_physical_gate_profile(path: &Path) -> Result<()> {
     bytes[..prefix.len()].copy_from_slice(&prefix);
     file.read_exact(&mut bytes[prefix.len()..])
         .map_err(|e| PageError::io(path, e))?;
-    decode_superblock(path, &bytes, size)?;
+    // The shared decoder assumes a verified complete page. Keep the reader
+    // fence fail-closed on corruption without opening/recovering a Page writer.
+    page::verify(&bytes, SUPERBLOCK_PAGE_ID)?;
+    decode_superblock(&bytes, path, size)?;
     let magic = &bytes[PAGE_HEADER_BYTES..PAGE_HEADER_BYTES + 8];
     if [
         SUPERBLOCK_MAGIC_GATED,
@@ -3112,6 +3115,9 @@ fn validate_write_completion(page_id: PageId, requested: usize, written: usize) 
         })
     }
 }
+
+#[cfg(test)]
+mod physical_gate_profile_tests;
 
 #[cfg(test)]
 mod tests {

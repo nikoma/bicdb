@@ -740,10 +740,11 @@ impl Drop for PendingDirectory {
 /// Restore into inactive staging, authenticate every payload, then install
 /// under the destination's stable directory lock. A durable pending marker
 /// makes interruption fail closed before any server can open a partial tree.
-pub(super) fn restore(
+pub(super) fn restore_with_retained_tail(
     path: &Path,
     target: &Path,
     options: &BackupRestoreOptions,
+    tail: impl FnOnce(&Path) -> Result<()>,
 ) -> Result<BackupRestoreReport> {
     reject_symlinks(target)?;
     let (repo, manifest) = open_snapshot(path, &options.passphrase)?;
@@ -819,8 +820,11 @@ pub(super) fn restore(
         }
     }
     sync_parent_directory(&target.join("entry"))?;
-    fs::remove_file(&marker)?;
-    sync_parent_directory(&marker)?;
+    // Same actual target custody as payload installation. Never return it as
+    // a forgeable permission or drop/reacquire before node-local finalization.
+    crate::db::authorize_materialized_native_copy(target)?;
+    tail(target)?;
+    complete_restore_pending_marker(&marker)?;
     Ok(BackupRestoreReport {
         backup_id: manifest.backup_id,
         files_restored: manifest.files.len(),

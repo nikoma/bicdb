@@ -831,10 +831,26 @@ pub fn restore_backup(
     target_path: impl AsRef<Path>,
     options: BackupRestoreOptions,
 ) -> Result<BackupRestoreReport> {
+    restore_backup_with_retained_tail(backup_path, target_path, options, |_| Ok(()))
+}
+
+/// Private same-owner finalization, never an extracted restore permission.
+/// Both codecs keep their original root/Page/backup/physical owners through
+/// verified payloads, native-copy authorization, and this tail. A tail error
+/// leaves backup-restore.pending, so a visible READY is not install authority.
+pub(crate) fn restore_backup_with_retained_tail(
+    backup_path: impl AsRef<Path>,
+    target_path: impl AsRef<Path>,
+    options: BackupRestoreOptions,
+    tail: impl FnOnce(&Path) -> Result<()>,
+) -> Result<BackupRestoreReport> {
     if repository::is_manifest(backup_path.as_ref())? {
-        let report = repository::restore(backup_path.as_ref(), target_path.as_ref(), &options)?;
-        crate::db::authorize_materialized_native_copy(target_path.as_ref())?;
-        return Ok(report);
+        return repository::restore_with_retained_tail(
+            backup_path.as_ref(),
+            target_path.as_ref(),
+            &options,
+            tail,
+        );
     }
     let mut reader = BufReader::new(File::open(backup_path)?);
     let verified = verify_backup_reader_header(&mut reader, &options.passphrase)?;
@@ -906,8 +922,8 @@ pub fn restore_backup(
     // The verified archive came from a root in custody; this freshly
     // materialized directory may take custody at its first open.
     crate::db::authorize_materialized_native_copy(target_path)?;
-    fs::remove_file(&marker)?;
-    sync_parent_directory(&marker)?;
+    tail(target_path)?;
+    complete_restore_pending_marker(&marker)?;
     Ok(BackupRestoreReport {
         backup_id: verified.backup_id,
         files_restored,
@@ -917,6 +933,15 @@ pub fn restore_backup(
         restored_records: None,
         source_format_version: verified.source_format.format_version,
     })
+}
+
+/// A failed post-unlink sync is UNKNOWN: the marker may already be absent.
+/// Keep the original error; bootstrap needs its distinct fresh durability
+/// producer, never an inference that this restore API returned success.
+fn complete_restore_pending_marker(marker: &Path) -> Result<()> {
+    fs::remove_file(marker)?;
+    bicdb_page::test_faults::io_fault("backup.restore.pending.dir_sync", marker)?;
+    sync_parent_directory(marker)
 }
 
 pub fn restore_backup_to_point(
@@ -2324,7 +2349,7 @@ impl Drop for OnlineBackupCheckpoint {
 }
 
 #[cfg(unix)]
-fn open_backup_lock_file(path: &Path) -> Result<File> {
+pub(crate) fn open_backup_lock_file(path: &Path) -> Result<File> {
     use std::os::fd::AsRawFd;
 
     use std::os::unix::fs::OpenOptionsExt;
@@ -2346,7 +2371,7 @@ fn open_backup_lock_file(path: &Path) -> Result<File> {
 }
 
 #[cfg(windows)]
-fn open_backup_lock_file(path: &Path) -> Result<File> {
+pub(crate) fn open_backup_lock_file(path: &Path) -> Result<File> {
     use std::os::windows::fs::OpenOptionsExt;
 
     OpenOptions::new()
@@ -2364,7 +2389,7 @@ fn open_backup_lock_file(path: &Path) -> Result<File> {
 }
 
 #[cfg(not(any(unix, windows)))]
-fn open_backup_lock_file(path: &Path) -> Result<File> {
+pub(crate) fn open_backup_lock_file(path: &Path) -> Result<File> {
     OpenOptions::new()
         .create_new(true)
         .read(true)

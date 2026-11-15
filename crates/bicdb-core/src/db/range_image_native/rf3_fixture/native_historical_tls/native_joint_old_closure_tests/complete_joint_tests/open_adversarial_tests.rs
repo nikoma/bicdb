@@ -1,6 +1,7 @@
 //! Adversarial scheduling of real producers. No synthesized receipt, changed
 //! quorum, forced generation, schema import or released Frozen owner.
 use super::*;
+mod combined_domain_tests;
 use crate::distribution_range_consensus::RangeWriteStore;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -85,6 +86,10 @@ pub(super) fn exercise(
         prepared.require_current().is_err(),
         "old preparation stays expired"
     );
+    if matches!(mode, 7 | 8) {
+        combined_domain_tests::exercise(fixture, &published, parent, range, mode);
+        return;
+    }
     let local = node("n3");
     let path = catalog_path(fixture, &local);
     let before = std::fs::read(&path).unwrap();

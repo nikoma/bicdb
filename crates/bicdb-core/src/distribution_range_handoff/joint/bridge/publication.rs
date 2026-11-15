@@ -427,6 +427,42 @@ impl NativeJointOpenAdmission {
     pub(crate) fn cancellation(&self) -> &crate::CancellationToken {
         &self.cancellation
     }
+    /// SAME actual service/DB borrow, before the final foreign sweep. The
+    /// original phase-owner validator already performs the complete physical
+    /// writer-domain check; retain its opaque identities together rather than
+    /// repeating that full read twice through the separate legacy getters.
+    /// This is no cached currentness grant: final foreign/native/gate/domain
+    /// and publication checks remain at their original effect boundaries.
+    pub(crate) fn original_owner_and_domain_for_activation(
+        &self,
+        database: &crate::BicDb,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+    ) -> Result<(
+        crate::db::NativeJointPhaseOwner,
+        crate::db::NativeJointWriterDomain,
+        std::path::PathBuf,
+    )> {
+        #[cfg(test)]
+        let mut trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "open-original-owner-and-domain-full-validation",
+            self.receipt.local_node_id(),
+            &self.cancellation,
+        );
+        self.require_live()?;
+        let actual = self
+            .local
+            .actual
+            .require_original_phase_owner(database, store)?;
+        let (original, root) = self.local.actual.original_phase_owner_for_continuation()?;
+        let domain = self.local.actual.writer_domain().clone();
+        if !actual.same_actual(&original) || !original.same_actual(&domain.phase_owner()) {
+            return Err(invalid("joint activation changed preparation writer"));
+        }
+        self.require_live()?;
+        #[cfg(test)]
+        trace.complete();
+        Ok((original, domain, root))
+    }
     pub(crate) fn original_writer_domain_for_activation(
         &self,
         database: &crate::BicDb,

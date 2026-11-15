@@ -139,9 +139,8 @@ impl RangeWriteStore {
         parent: &CancellationToken,
     ) -> Result<NativeJointCatalogueActivationReceipt> {
         parent.check()?;
-        let (writer, writer_root) =
-            admission.original_phase_owner_for_activation(database, self)?;
-        let writer_domain = admission.original_writer_domain_for_activation(database, self)?;
+        let (writer, writer_domain, writer_root) =
+            admission.original_owner_and_domain_for_activation(database, self)?;
 
         // Nonwaiting cross-service checks happen BEFORE this local journal.
         #[cfg(test)]

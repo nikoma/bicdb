@@ -2907,7 +2907,7 @@ mod tests {
 
         let write_path = storage_path.clone();
         let (writer_tx, writer_rx) = mpsc::channel();
-        let (release_tx, release_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel::<()>();
         let worker = std::thread::spawn(move || {
             let guard = acquire_backup_write_guard(&write_path)
                 .unwrap()

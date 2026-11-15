@@ -1,5 +1,25 @@
 # Offline verification and external collection for the stock SDK ledger
 
+Most recent completed successful compilation/parser evidence is source
+`7e99c9c96970b78a44402c975627c64e001adffa` (1.0.520-beta candidate): its
+normal all-target job passed, and
+[Core job132883861981](https://github.com/nikoma/bicdb/actions/runs/43737698638/job/132883861981)
+executed `native_external_ledger_receipts`: **7 passed, 0 failed, 0 ignored**.
+The full Core raw-log SHA256 is
+`7c507e92b1ef0a726573c496e89e6572990c20f67deeb320c65a3913f0a3319d`;
+the target appears at original raw lines29651–29662. This is parser/schema
+execution and compilation, not a linked optimized producer, actual SDK workload
+or external-collector run. That source's separate native suite failed396/55/1.
+
+Later public source `d3af39c107951802a612d31b42e70fd4bc90e71c` (same candidate
+version) failed all-target/Core/Native test compilation on the new TLS control's
+private response-validator call. No current Core/native or ledger-parser cases
+ran. Its passing standalone Rails and PGwire results do not test this producer.
+The reviewed successor `980b5983c927859c6218edc78e17b68d71eae2ac` is not compiled
+or executed at this checkpoint. SQL and remaining-workspace jobs on d3 are still
+running. See the [exact source-scoped findings](../../../docs/design/native-520-regression-findings.md).
+No preceding pass is inherited, and no physical qualification gate changes.
+
 This directory contains the format verifier, a read-only cross-run reconciliation
 plan generator/checker, and external receipt collection/controller tooling.
 The normal Core `native_external_ledger_receipts` integration target executed
@@ -12,7 +32,7 @@ Source availability and parser tests do not establish a working end-to-end
 SDK client, database durability, HA, consistency or scale-out. Later candidate
 compilation and runtime results must retain their own source identities.
 
-Latest type-check checkpoint: source `6de646beb603accf39358017d8e0c83c39c741b1`
+Earlier successful type-check checkpoint: source `6de646beb603accf39358017d8e0c83c39c741b1`
 (1.0.520-beta candidate), tree `de0b68af8d158f39358604590769afb8237115f0`, passed
 the normal [all-target CI job132814500830](https://github.com/nikoma/bicdb/actions/runs/43714999361/job/132814500830).
 Its `cargo check --workspace --all-targets --locked` includes the automatically
@@ -136,6 +156,69 @@ or truncation. A byte/line/row bound can stop that scan; `journal_input` describ
 bytes actually read and their hash, not an unread whole-file digest. Retain the
 complete original file independently. Ledger IO failure can prevent a final
 completion record; no successful final record is assumed.
+
+## Experiment readiness: source d3
+
+This section inspects candidate `d3af39c107951802a612d31b42e70fd4bc90e71c`;
+it is source evidence, not a workload or physical result. The actual SDK, example,
+external sink and bounded reconciliation remain distinct from the ordinary
+[`cluster-events workload`](../../../crates/bicdb-cli/src/cluster_events_command.rs).
+That basic command keeps an ACK-only list until after traffic, samples only
+20 errors, emits successful-call percentiles rather than raw samples, and has
+no RPC observer. Its deployment-default reads are not an explicit Strong
+contract across all supported deployment modes. It fails the requested complete
+attempt/uncertainty/retry-ledger requirement; capturing stdout cannot recover
+unemitted failed keys or attempts.
+
+The [stock producer](../../../crates/bicdb-core/examples/native_external_ledger/client.rs)
+already persists each complete logical intent before SDK entry and explicitly
+uses Strong reads. The actual
+[transport observer](../../../crates/bicdb-core/src/distribution_transport/evidence.rs)
+retains observed invocation/retry/discovery frames, original identities,
+destination, dispatch facts and errors. Range/epoch/leader/topology evidence is
+available through actual serialized requests/replies when reached; a pre-routing
+failure can legitimately lack those fields. Keep them unavailable rather than
+backfilling from a later topology. Complete per-replica watermarks, readiness
+and restoration events require separate node/controller evidence; advertised
+leader DATA is not independent proof of authority. SDK/server success, delivered wrapper ACK,
+external receipt and uncertainty retain their separate meanings. The source
+contracts and prior component controls pass within their recorded scope;
+current actual SDK-to-collector execution remains **not tested**.
+
+The [bounded reconciliation contract](RECONCILIATION.md) accepts at most
+16 original sources, 8,192 targets, 32 KiB per raw value and 64 MiB total retained
+expected-value spans per invocation. It refuses excess input rather than
+returning a passing subset. A full 8 GiB corpus needs an additional pinned
+campaign/full-corpus index and aggregate coverage over every bounded bundle;
+that layer is not implemented here. Handwritten splitting or canary reads do
+not prove complete coverage. This is a **failed source requirement for the full
+experiment**, not an observed database loss or a reason to raise limits silently.
+
+Raw `sdk_elapsed_ns` includes synchronous RPC evidence callbacks and their local
+and external fsync work. It excludes earlier intent and later explicit
+ACK/terminal appends. `client_elapsed_before_terminal_fsync_ns` has its own
+broader scope and still excludes terminal fsync. These fields cannot yield
+uninstrumented database latency by subtraction. The sequential producer is not
+a sustained-throughput driver; no capacity or tail-latency result is established
+by this source audit. Run phase labels are supplied input, not proof that native
+relocation converged. Dedicated convergence-phase and restoration-lineage
+provenance must be retained by the experiment; a topology generation alone
+establishes neither. Current-artifact physical RPO/RTO, complete four-to-five-node convergence and
+capacity gain are **not tested** here. The original Azure scale-out qualification
+remains **failed**.
+
+The next smallest **not-tested** boundary is a real child producer with normal
+native TLS owners, the real external collector/controller, independently captured
+completion/exit, and complete generated Strong reconciliation of its entire
+small corpus. This is an end-to-end component prerequisite, not full-dataset or
+physical qualification. Use the collector's existing actual-listener readiness
+callback; an unauthenticated TCP readiness probe can trigger its fence path.
+Read-only reconciliation runs can have a complete external receipt chain and
+SDK evidence while `verify_external.py` returns 1 because its
+`functional_evidence_complete` also requires nonempty writes. Preserve that
+specific scope/exit and require actual child completion plus all-batch coverage;
+never accept arbitrary verifier exit 1 as success. All tool reports retain
+`not_qualified`.
 
 ## Remaining physical-use blockers
 

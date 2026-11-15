@@ -31,6 +31,12 @@ No current physical RPO/RTO, converged four-to-five-node expansion, stable
 post-convergence capacity gain or production qualification is established.
 The original failed Azure run and verified deletion remain unchanged.
 
+[External-ledger experiment readiness](../scripts/platform/native-sdk-ledger/README.md#experiment-readiness-source-d3)
+is a separate open gate: current bounded tooling has no actual SDK/collector
+end-to-end result or full-dataset campaign checker. The basic workload's ACK
+samples cannot replace complete attempt/uncertainty evidence, and instrumented
+SDK timings include collector/fsync overhead. No server capacity claim follows.
+
 ## Previous complete execution — sourcee2 compilation failed, 2026-11-15 UTC
 
 Delivered main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.

@@ -13,12 +13,16 @@ mod ordinary_apply;
 #[cfg(test)]
 mod origin_fault;
 mod recovery_apply;
+#[cfg(test)]
+mod replica_apply_fault;
 pub(crate) use ordinary_apply::NativeReplicaMaterialization;
 #[cfg(test)]
 pub(in crate::db) use origin_fault::test_record_origin_release;
 #[cfg(test)]
 pub(crate) use origin_fault::{NativeOriginAppSpan, NativeOriginFaultArm, NativeOriginFaultProbe};
 pub(crate) use recovery_apply::{KnownNativeRecoveryPrefix, NativeRecoveryAppliedReceipt};
+#[cfg(test)]
+pub(crate) use replica_apply_fault::NativeReplicaApplyFaultArm;
 
 fn pending_key(range: RangeId) -> String {
     format!("pending:{}", range.get())
@@ -45,6 +49,8 @@ pub(in crate::db) struct NativeRangeScopeRegistry {
     entries: BTreeMap<u64, NativeCommandScope>,
     #[cfg(test)]
     origin_fault: Option<Arc<NativeOriginFaultProbe>>,
+    #[cfg(test)]
+    replica_apply_fault: Option<Arc<replica_apply_fault::NativeReplicaApplyFault>>,
 }
 #[derive(Debug)]
 struct NativeCommandScopeLease {

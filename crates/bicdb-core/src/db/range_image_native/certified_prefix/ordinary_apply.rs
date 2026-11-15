@@ -260,6 +260,12 @@ impl BicDb {
             return self.native_replica_materialization(&actual, intent.range(), Some(command));
         }
         intent.validate_native_base(&actual)?;
+        // Same-open/record-selected loss after the real local CQ and normal
+        // admission checks. No recovery Apply is intercepted or guard waited on.
+        #[cfg(test)]
+        if self.test_refuse_native_replica_before_apply(admission, &actual) {
+            return Err(invalid("injected actual ordinary CQ before local WAL"));
+        }
         let mut transaction = self.begin_transaction()?;
         let result = (|| {
             let pending =

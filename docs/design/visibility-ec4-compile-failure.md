@@ -18,6 +18,7 @@ are in `db/commit_visibility_tests/visibility_wait_tests.rs` (baseline lines
 | Subsequent non-default Core consumer step | Not tested | Skipped after the failed preceding check |
 | New Core/native regression execution in this job | Not tested | Compilation did not reach test execution |
 | Separate Core library and native multi-node jobs | Failed compilation | Both reported the same eight `E0373` errors; neither started a test binary or reported a Rust test summary |
+| Separate SQL job and new generic post-commit cleanup control | Passed on ec4 | The actual SQL control executed; this is not a timed-Unknown or native test result |
 | Earlier formatting, version, legal and source reviews | Passed within their static scope | They did not detect or establish Rust lifetime correctness |
 | Production runtime correctness or physical qualification | Not established | Absence of a production-code diagnostic does not prove a successful complete build or runtime behavior |
 
@@ -37,6 +38,26 @@ and `fd96fadd5e0681585070df8fbf211a066db222e772459507e5b473fe80e99678`.
 These are compile failures, not runtime regression failures or zero-test passes.
 The independent SQL and remaining-workspace jobs were still running at this
 checkpoint; their outcomes are not inferred from the compilation failures.
+
+Subsequently the [SQL job](https://github.com/nikoma/bicdb/actions/runs/43659820277/job/132646405961)
+finished successfully at 2026-11-15 01:33:12 UTC. Its complete original log
+records `actual_committed_sync_dimension_error_preserves_sql_ddl_row_guc_and_original_error`
+as passed, at raw line 13,023. This invokes a real generic post-commit Sync
+dimension error and checks retained committed DDL, rows, GUC state and the
+original error. It does not inject a timed visibility Unknown or test PGwire,
+distributed atomicity, Strong reads or cold recovery.
+
+The SQL library reported 924 passed, zero failed and four ignored. Across 282
+target summaries, the job reported 2,682 passed, zero failed and four ignored.
+The full original raw log is 311,472,743 bytes, SHA-256
+`15f00b9eed7f0e696c3d196363b448280c38c6536b12b0b936fb9312a2ba9b3c`;
+the 36,432,309-byte gzip has SHA-256
+`848125b528a0d174a59017cf7171ace236ebe05d88b3036266f7a07f8ac59b4c`.
+Root independently checked both full hashes, all summaries and the exact
+execution line. The relevant SQL implementation and control are unchanged by
+the separate test-capture correction. This remains an ec4 result, not an
+execution of the corrected candidate; the three compilation failures remain
+failed and the remaining-workspace job was still running at this later cut.
 
 ## Separate correction and next deterministic checks
 

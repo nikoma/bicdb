@@ -621,3 +621,42 @@ impl NativeMetadataControlHost {
             "actual_close_present":held.actual.is_some(),"outcome_present":held.outcome.is_some()}))
     }
 }
+
+#[cfg(test)]
+impl NativeMetadataControlHost {
+    pub(crate) fn test_actual_old_retirement_configuration(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<serde_json::Value> {
+        let initial = self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("actual ORIGINAL data owner absent"))?;
+        let actual = initial.retained_old_source_identity(range)?;
+        let database = initial
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("actual retirement control service busy"))?
+            .database();
+        let (strict_configuration_error, successor, plan) = {
+            let db = database
+                .try_read()
+                .ok_or_else(|| invalid("actual retirement control DB busy"))?;
+            let lineage = db.current_native_range_source_lineage(range)?;
+            let result = actual.plan().require_old_native_configuration(&lineage);
+            (
+                result.as_ref().err().map(ToString::to_string),
+                lineage.native_joint_successor_plan_sha256()?,
+                actual.plan().checksum_sha256()?,
+            )
+        };
+        let strict = actual.require_current();
+        let retirement = actual.require_current_after_joint_open();
+        Ok(
+            serde_json::json!({"original_plan":plan,"actual_successor_plan":successor,
+            "strict_configuration_error":strict_configuration_error,"strict_original_returned_ok":strict.is_ok(),
+            "strict_original_error":strict.as_ref().err().map(ToString::to_string),"retirement_returned_ok":retirement.is_ok(),
+            "retirement_error":retirement.as_ref().err().map(ToString::to_string),"DATA_only":true}),
+        )
+    }
+}

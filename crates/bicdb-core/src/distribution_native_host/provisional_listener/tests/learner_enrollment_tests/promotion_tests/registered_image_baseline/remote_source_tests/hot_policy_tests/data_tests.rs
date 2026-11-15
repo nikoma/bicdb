@@ -13,6 +13,7 @@ pub(super) fn is_data_case(case: SourceCase) -> bool {
             | SourceCase::TargetHotDataReplyLost
             | SourceCase::TargetHotDataFirstCallerExpired
             | SourceCase::TargetHotDataFollower
+            | SourceCase::TargetHotDataFollowerApplyingGuard
     )
 }
 #[test]
@@ -38,6 +39,14 @@ fn native_registered_fifth_remote_hot_data_follower_binds_without_fake_leader_re
     run_registered_image_baseline_with_source(
         Case::Required,
         Some(SourceCase::TargetHotDataFollower),
+    );
+}
+#[test]
+fn native_registered_fifth_remote_hot_surviving_leader_actual_pending_callback_rejects_foreign_open(
+) {
+    run_registered_image_baseline_with_source(
+        Case::Required,
+        Some(SourceCase::TargetHotDataFollowerApplyingGuard),
     );
 }
 fn fresh_policy(
@@ -291,7 +300,10 @@ pub(super) fn exercise(
     )
     .unwrap();
     let published = control.joined_data_status().unwrap();
-    if matches!(case, SourceCase::TargetHotDataFollower) {
+    if matches!(
+        case,
+        SourceCase::TargetHotDataFollower | SourceCase::TargetHotDataFollowerApplyingGuard
+    ) {
         assert_ne!(data.activation_range().leader, node(4));
         assert_eq!(
             published.registered_range.as_ref().unwrap()["leader_recovered_prefix_observed"],
@@ -307,6 +319,40 @@ pub(super) fn exercise(
             .unwrap();
         assert!(recovered >= 1, "surviving leader recovered no range");
     }
+    let applying_probe = if matches!(
+        case,
+        SourceCase::TargetHotDataFollower | SourceCase::TargetHotDataFollowerApplyingGuard
+    ) {
+        // Genuine retained surviving leader, not the target/follower claiming
+        // leader readiness. This API still requires its actual writer/quorum.
+        let leader = (0..4)
+            .find(|i| node(*i) == data.activation_range().leader)
+            .unwrap();
+        let recovered = operation(
+            output,
+            &mut phase_ledger,
+            "actual_surviving_INITIAL_leader_recovery",
+            || controls[leader].recover_initial_data_leadership(&budget(5000)),
+        )
+        .unwrap();
+        assert!(
+            recovered >= 1,
+            "actual surviving leader recovered no activation range"
+        );
+        if matches!(case, SourceCase::TargetHotDataFollowerApplyingGuard) {
+            let source = services[leader].lock().database();
+            let foreign = factory.database.clone();
+            let armed = source
+                .read()
+                .test_arm_native_applying_guard_probe(&foreign)
+                .unwrap();
+            Some(armed)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
     assert!(published.dispatcher_published);
     for acknowledged in acknowledged {
         let key = acknowledged["key"].as_str().unwrap();
@@ -374,6 +420,29 @@ pub(super) fn exercise(
     )
     .unwrap();
     assert_eq!(read, next);
+    if let Some((_retained_probe, read_probe)) = &applying_probe {
+        let actual = read_probe();
+        evidence(
+            &output.join("actual-pending-callback-guard-before-assertions.json"),
+            &actual,
+        )
+        .unwrap();
+        assert!(
+            actual["actual_callbacks"].as_u64().is_some_and(|n| n >= 1),
+            "real source commit callback not reached"
+        );
+        for fact in actual["facts"].as_array().unwrap() {
+            assert_eq!(fact["strict_returned_ok"], false);
+            assert!(fact["strict_error"].as_str().is_some_and(
+                |e| e.contains("unfinished native command; source range image unavailable")
+            ));
+            assert_eq!(fact["foreign_returned_ok"], false);
+            assert!(fact["foreign_error"].as_str().is_some_and(
+                |e| e.contains("applying native command belongs to another database open")
+            ));
+            assert_ne!(fact["original_actual_open"], fact["actual_foreign_open"]);
+        }
+    }
     let record_id = crate::cluster_event_record_id("items", &next_key).unwrap();
     let physical=services.iter().enumerate().map(|(index,service)| {
         let database=service.lock().database();

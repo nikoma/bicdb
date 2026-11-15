@@ -898,6 +898,33 @@ impl NativeInitialDataHost {
     /// was published before. A process-owned maintenance worker retains the
     /// original writer objects, so this bounded continuation is refused once
     /// that worker has been started.
+    /// A surviving original member that keeps range leadership across a
+    /// joint handoff leads a new epoch that nothing has recovered yet: the
+    /// joined target recovers only when leadership moves to it. Run the same
+    /// coordinator recovery here. It grants nothing by itself; every write
+    /// still proves its own writer, Serving domain and quorum.
+    fn recover_data_leadership(&mut self, parent: &CancellationToken) -> Result<usize> {
+        parent.check()?;
+        if self.stopping {
+            return Err(invalid(
+                "stopping INITIAL data owner cannot recover leadership",
+            ));
+        }
+        self.admission
+            .as_ref()
+            .ok_or_else(|| invalid("leader recovery requires the retained admission"))?
+            .require_live()?;
+        let coordinator = Arc::clone(
+            &self
+                .enrollment
+                .as_ref()
+                .ok_or_else(|| invalid("leader recovery requires the retained writer"))?
+                .coordinator,
+        );
+        let recovered = coordinator.recover_local_leadership(64)?;
+        parent.check()?;
+        Ok(recovered)
+    }
     fn refresh_data_policy(&mut self, parent: &CancellationToken) -> Result<()> {
         parent.check()?;
         if self.stopping {

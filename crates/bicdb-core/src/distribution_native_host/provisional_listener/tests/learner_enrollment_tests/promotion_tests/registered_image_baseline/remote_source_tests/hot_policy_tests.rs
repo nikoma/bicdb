@@ -38,6 +38,8 @@ pub(in super::super) fn is_hot_policy(case: SourceCase) -> bool {
                 | SourceCase::TargetHotDataReplyLost
                 | SourceCase::TargetHotDataFirstCallerExpired
                 | SourceCase::TargetHotDataFollower
+                | SourceCase::TargetHotDataFollowerApplyingGuard
+                | SourceCase::TargetHotRetirementOwnSuccessor
                 | SourceCase::TargetHotDecisionTermBeforePut
                 | SourceCase::TargetHotDecisionTermAfterCommit
                 | SourceCase::TargetHotFirstPolicyTermBeforeHook
@@ -948,6 +950,28 @@ pub(in super::super) fn exercise(
             "writer_installed":factory.database.read().commit_admission_ready(),"original_a_retained":true,"application_tested":false})).unwrap();
         assert!(!factory.database.read().commit_admission_ready());
     }
+    if matches!(case, SourceCase::TargetHotRetirementOwnSuccessor) {
+        let actual=data.new_members().keys().filter(|id|**id!=node(4)).map(|id| {
+            let index=(0..4).find(|i|node(*i)==*id).unwrap();
+            let returned=controls[index].test_actual_old_retirement_configuration(selected);
+            serde_json::json!({"node":id,"actual":returned.as_ref().ok(),"error":returned.as_ref().err().map(ToString::to_string)})
+        }).collect::<Vec<_>>();
+        evidence(&output.join("actual-own-successor-retirement-before-assertions.json"),&serde_json::json!({
+            "members":actual,"actual_native_global_decision":data.checksum_sha256(),"ordinary_guard_relaxed":false,
+            "second_handoff_or_registry_reclamation_tested":false})).unwrap();
+        for entry in actual {
+            assert!(entry["error"].is_null());
+            assert_eq!(entry["actual"]["retirement_returned_ok"], true);
+            assert_eq!(entry["actual"]["strict_original_returned_ok"], false);
+            assert!(entry["actual"]["strict_configuration_error"]
+                .as_str()
+                .is_some_and(|e| e.contains("exact committed learner-allocation ancestry")));
+            assert_eq!(
+                entry["actual"]["actual_successor_plan"],
+                entry["actual"]["original_plan"]
+            );
+        }
+    }
     retained
         .retire_old_export_custody_after_joint_open(&phase)
         .unwrap();
@@ -1113,3 +1137,11 @@ mod catalogue_tests;
 mod closed_tests;
 
 mod closed_metadata_tests;
+
+#[test]
+fn native_registered_fifth_remote_hot_retirement_own_successor_keeps_predecessor_guard_strict() {
+    run_registered_image_baseline_with_source(
+        Case::Required,
+        Some(SourceCase::TargetHotRetirementOwnSuccessor),
+    );
+}

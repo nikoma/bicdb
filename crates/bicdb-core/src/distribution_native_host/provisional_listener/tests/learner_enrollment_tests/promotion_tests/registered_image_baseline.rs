@@ -566,7 +566,10 @@ fn run_registered_image_baseline_with_placement_and_source(
                 .retain(|_, plan| plan.range_id == ranges[0].id);
             if matches!(
                 source_case,
-                Some(remote_source_tests::SourceCase::TargetHotDataFollower)
+                Some(
+                    remote_source_tests::SourceCase::TargetHotDataFollower
+                        | remote_source_tests::SourceCase::TargetHotDataFollowerApplyingGuard
+                )
             ) {
                 let selected = &ranges[0];
                 let retire = selected

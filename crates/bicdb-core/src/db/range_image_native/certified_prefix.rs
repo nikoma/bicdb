@@ -9,6 +9,8 @@ use crate::distribution_range_mutation::RangeMutationAuthority;
 mod no_data;
 use no_data::NativeNoDataPrefixEvidence;
 pub(crate) use no_data::NativeRecoveryAbortedReceipt;
+#[cfg(test)]
+mod applying_guard_probe;
 mod ordinary_apply;
 #[cfg(test)]
 mod origin_fault;
@@ -983,6 +985,8 @@ impl BicDb {
             ));
         }
         self.check_recovery_state()?;
+        #[cfg(test)]
+        applying_guard_probe::at_actual_apply(self, own, &lineage);
         Ok(lineage)
     }
     pub(crate) fn current_native_range_source_lineage(

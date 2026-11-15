@@ -134,6 +134,8 @@ pub(super) enum SourceCase {
     TargetHotDataReplyLost,
     TargetHotDataFirstCallerExpired,
     TargetHotDataFollower,
+    TargetHotDataFollowerApplyingGuard,
+    TargetHotRetirementOwnSuccessor,
     TargetHotDecisionTermBeforePut,
     TargetHotDecisionTermAfterCommit,
     TargetHotFirstPolicyTermBeforeHook,

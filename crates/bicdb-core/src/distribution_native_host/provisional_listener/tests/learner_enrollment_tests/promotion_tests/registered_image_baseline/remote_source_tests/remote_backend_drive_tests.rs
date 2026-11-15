@@ -373,6 +373,50 @@ pub(super) fn exercise(
     );
 
     if matches!(case, SourceCase::RemoteBackendRedrive) {
+        // First loss of memory, before anything is committed: the committed
+        // relocation is still the bare learner allocation, so the new
+        // backend repeats the source stage. Every part confirms what is
+        // durable: the same close records, the same install attempt and its
+        // retained outcome, the donor's export terminal, the same decision.
+        let records = native_records(services, &old, range.id);
+        let step = target_control
+            .test_joint_handoff_step_state(range.id)
+            .unwrap();
+        let manifest_sha256 = handoff
+            .backend()
+            .source_manifest()
+            .unwrap()
+            .checksum_sha256
+            .clone();
+        handoff = coordinated(range.id, 0);
+        assert!(handoff.backend().cut_required());
+        assert_eq!(
+            handoff
+                .drive_until(&mut hosts, Some(Stage::DecisionPublished), &budget(120_000))
+                .unwrap(),
+            Stage::DecisionPublished
+        );
+        assert_eq!(hosts.commits, 0);
+        assert_eq!(native_records(services, &old, range.id), records);
+        assert_eq!(
+            target_control
+                .test_joint_handoff_step_state(range.id)
+                .unwrap(),
+            step
+        );
+        assert_eq!(
+            handoff.backend().source_manifest().unwrap().checksum_sha256,
+            manifest_sha256
+        );
+        assert_eq!(
+            handoff
+                .backend()
+                .decision_certificate()
+                .unwrap()
+                .checksum_sha256()
+                .unwrap(),
+            certificate_sha256
+        );
         assert_eq!(
             handoff
                 .drive_until(&mut hosts, Some(Stage::Certified), &budget(60_000))

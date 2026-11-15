@@ -155,6 +155,10 @@ pub(crate) struct RemoteJoinedHandoffBackend {
     /// The pending plan the retained install and decision belong to. Scope
     /// DATA of this coordinator's own metadata observation.
     plan: Option<Arc<NativeJointHandoffPlan>>,
+    /// The committed range and relocation the retained plan was read for.
+    /// A plan is a bounded metadata acquisition: new work is issued under a
+    /// fresh one of the same scope.
+    committed: Option<(RangeDescriptor, RangeRelocation)>,
     /// The old member the target installed its image from.
     donor: Option<ClusterNodeId>,
     /// What the target answered for its completed install. Historical DATA.
@@ -185,6 +189,7 @@ impl RemoteJoinedHandoffBackend {
             observed: Vec::new(),
             target_fenced: false,
             plan: None,
+            committed: None,
             donor: None,
             install: None,
             manifest: None,
@@ -271,6 +276,31 @@ impl RemoteJoinedHandoffBackend {
             )));
         }
         Ok(())
+    }
+
+    /// A fresh acquisition of the retained plan's scope. The retained plan
+    /// expires with its metadata acquisition; a round that issues new work
+    /// starts under a live one. A fresh plan of another scope is refused.
+    fn renewed_plan(
+        &mut self,
+        members: &RemoteMembers,
+        parent: &CancellationToken,
+    ) -> Result<Arc<NativeJointHandoffPlan>> {
+        let (Some(retained), Some((range, relocation))) =
+            (self.plan.clone(), self.committed.clone())
+        else {
+            return Err(remote_error(
+                "no plan of an installed image is retained for this handoff",
+            ));
+        };
+        let fresh = self.plan(members, &range, &relocation, parent)?;
+        if fresh.checksum_sha256()? != retained.checksum_sha256()? {
+            return Err(remote_error(
+                "the pending plan changed its scope after the image was installed",
+            ));
+        }
+        self.plan = Some(fresh.clone());
+        Ok(fresh)
     }
 
     /// Fence the target for this handoff session, as this coordinator. The
@@ -473,6 +503,7 @@ impl RemoteJoinedHandoffBackend {
             )
             .map_err(|error| stage_error("decision recovery certificate", error))?;
         self.plan = Some(plan);
+        self.committed = Some((range.clone(), relocation.clone()));
         self.donor = Some(donor);
         self.install = Some(outcome);
         self.manifest = Some(manifest);
@@ -726,6 +757,7 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
         self.closed_scope_sha256 = None;
         self.observed.clear();
         self.plan = None;
+        self.committed = None;
     }
 
     /// Verify, on committed metadata only, that the target can be admitted;
@@ -928,7 +960,9 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
     ///
     /// A repeated call repeats every part. Each confirms what is durable:
     /// the same promise and native close record, the same install attempt,
-    /// the donor's retained export terminal.
+    /// the donor's retained export terminal. The fence is issued once per
+    /// object; a new object finds it refused once the target holds install
+    /// custody and relies on the install steps (see below).
     fn cut_and_ship(
         &mut self,
         _hosts: &mut Self::Hosts,
@@ -939,6 +973,9 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
     ) -> Result<()> {
         parent.check()?;
         self.require_coordinator(members, range, Self::recorded(relocation))?;
+        // An old member already retains an operation of this handoff: an
+        // earlier coordinator object fenced the target and started the cut.
+        let resumed = self.cut_started;
         // Before the first member mutation, and before anything can fail.
         self.cut_started = true;
         let plan = self
@@ -946,17 +983,39 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
             .map_err(|error| stage_error("source round metadata", error))?;
         let donor = Self::select_donor(&plan)?;
         let target_attempt = Self::target_attempt(&plan)?;
+        let mut fence_refusal = None;
         if !self.target_fenced {
-            self.fence_target(members, &plan, parent)
-                .map_err(|error| stage_error("target fence", error))?;
-            self.target_fenced = true;
+            match self.fence_target(members, &plan, parent) {
+                Ok(()) => self.target_fenced = true,
+                // A target that already holds install custody of this session
+                // refuses another fence. When the cut is known to have been
+                // started, the install steps below settle it: the target
+                // serves them only under the fence this node issued, and
+                // only for the one attempt of this plan. Without a started
+                // cut a refused fence ends the call before any old member
+                // is closed.
+                Err(error) if resumed => {
+                    parent.check()?;
+                    fence_refusal = Some(error.to_string());
+                }
+                Err(error) => return Err(stage_error("target fence", error)),
+            }
         }
         self.close_old_members(members, range, relocation, parent)?;
         self.plan = Some(plan.clone());
+        self.committed = Some((range.clone(), relocation.clone()));
         self.donor = Some(donor.clone());
         let installed = self
             .install_on_target(members, &plan, &donor, target_attempt, parent)
-            .map_err(|error| stage_error("target install", error))?;
+            .map_err(|error| match (error, fence_refusal) {
+                (BicDbError::QueryTimedOut, _) => BicDbError::QueryTimedOut,
+                (error, Some(fence)) => handoff_error(format!(
+                    "target install: {error}; the target also refused a new fence: {fence}"
+                )),
+                (error, None) => stage_error("target install", error),
+            })?;
+        // The target served the install under this node's fence.
+        self.target_fenced = true;
         let (outcome, manifest) = self
             .retire_source_export(members, &plan, &donor, target_attempt, parent)
             .map_err(|error| stage_error("source export retirement", error))?;
@@ -995,7 +1054,7 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
         publishers.push(self.target.clone());
         let token = bounded(parent, DECISION_ROUND);
         let certificate = match self.transport.recollect_remote_joint_decision_certificate(
-            plan.clone(),
+            plan,
             &manifest,
             phase,
             &publishers,
@@ -1005,6 +1064,10 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
             Ok(certificate) => certificate,
             Err(_) => {
                 parent.check()?;
+                // The round issues new work: it starts under a live plan.
+                let plan = self
+                    .renewed_plan(members, parent)
+                    .map_err(|error| stage_error("joint decision metadata", error))?;
                 self.transport
                     .run_remote_joint_decision_round(
                         plan,

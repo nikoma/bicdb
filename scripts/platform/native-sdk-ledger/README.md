@@ -21,7 +21,12 @@ client module. This is **type-checking**, not a linked/optimized experiment
 binary, a producer invocation or external-collector acceptance. The separate
 Core job failed before its ledger integration target, so no new seven-parser
 runtime result is inherited from this checkpoint. Core and Native failed overall.
-The later unpublished startup/Serving composition has not compiled or run.
+Later public candidate source700
+`700726e90f041815b132cda4f87ca92337f55baa` failed all-target/Core/Native
+test compilation before Core/native case execution. Its separate production
+helper, Rails, SQL and PGwire passes do not establish a new producer type-check,
+linked probe or SDK/collector execution result. The minimal test-compilation
+correction remains source-only at this checkpoint.
 See the [source6de results and raw log identities](../../../docs/design/native-520-regression-findings.md).
 
 The original producer source was

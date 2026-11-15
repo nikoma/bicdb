@@ -13,8 +13,13 @@ is now covered by the all-target type-check checkpoint at source6de
 `6de646beb603accf39358017d8e0c83c39c741b1` (1.0.520-beta candidate). This does
 not build a retained optimized probe binary or execute its SDK/cluster workload.
 The actual producer/collector experiment remains unexecuted, and later local
-source additions do not inherit that type-check pass. Statements below about the
-first leaf's missing verifier/generator describe that historical b440 design;
+source additions do not inherit that type-check pass.
+
+Later public source700 failed all-target/Core/Native test compilation before
+Core/native cases; its separate application and component passes do not execute
+this producer or collector. The source-only compilation correction has not run.
+Statements below about the first leaf's missing verifier/generator describe
+that historical b440 design;
 they are not the current Python implementation inventory. See the
 [current tooling overview](../../scripts/platform/native-sdk-ledger/README.md).
 

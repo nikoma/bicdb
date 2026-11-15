@@ -1,6 +1,12 @@
 # HA and horizontal scaling: evidence checkpoint, November 14, 2026
 
-Latest separate candidate feedback: [native 1fc acceptance](design/native-1fc-acceptance-result.md)
+Newer separate candidate feedback: [native c05 acceptance](design/native-c05-acceptance-result.md)
+finished with **331 passed /15 failed /one ignored**. Four remote-decision
+controls passed, but native acceptance failed. The later source follow-up is
+not a tested fix, physical expansion or production qualification. This result
+does not rewrite the earlier source-pinned checkpoints below.
+
+Earlier separate candidate feedback: [native 1fc acceptance](design/native-1fc-acceptance-result.md)
 finished with **330 passed /16 failed /one ignored**. All other non-skipped
 required jobs and Rails passed. That tested head failed acceptance; later
 follow-ups must be assessed separately. The older source-pinned checkpoints

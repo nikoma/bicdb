@@ -6,6 +6,8 @@ use crate::distribution_consensus::{
     HostMetadataReadObservation, NativeMetadataPublicationGuard,
     NativeOwnedMetadataMemberObservation,
 };
+#[cfg(test)]
+mod waiting_tests;
 
 pub(crate) struct ActualNativeJointMetadataPoint {
     registration: Arc<NativeMetadataIngressRegistration>,
@@ -129,12 +131,54 @@ impl ClusterDataNodeService {
         business: Uuid,
         parent: &CancellationToken,
     ) -> Result<Option<Arc<ActualNativeJointMetadataPoint>>> {
+        Self::capture_actual_joint_metadata_point_inner(service, own, business, parent, None)
+    }
+    /// Only for a caller proven outside service/DB/MStore scopes. The SAME
+    /// original request and OWN bound this service-identity acquisition; no
+    /// metadata observation or native operation is retried or refreshed.
+    pub(crate) fn capture_actual_joint_metadata_point_waiting(
+        service: &Arc<Mutex<Self>>,
+        own: &HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<Option<Arc<ActualNativeJointMetadataPoint>>> {
+        parent.check()?;
+        own.require_live_request(business)?;
+        if parent.deadline().is_none() {
+            return Err(data_error(
+                "waiting joint metadata identity requires original finite request",
+            ));
+        }
+        let wait = parent.child_with_deadline(own.deadline());
+        Self::capture_actual_joint_metadata_point_inner(service, own, business, parent, Some(&wait))
+    }
+    fn capture_actual_joint_metadata_point_inner(
+        service: &Arc<Mutex<Self>>,
+        own: &HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+        identity_wait: Option<&CancellationToken>,
+    ) -> Result<Option<Arc<ActualNativeJointMetadataPoint>>> {
         parent.check()?;
         own.require_live_request(business)?;
         let (registration, database, slot) = {
-            let actual = service
-                .try_lock()
-                .ok_or_else(|| data_error("joint metadata service identity busy"))?;
+            let actual = match identity_wait {
+                None => service
+                    .try_lock()
+                    .ok_or_else(|| data_error("joint metadata service identity busy"))?,
+                Some(wait) => loop {
+                    wait.check()?;
+                    own.require_live_request(business)?;
+                    if let Some(actual) = service.try_lock_for(std::time::Duration::from_millis(5))
+                    {
+                        wait.check()?;
+                        own.require_live_request(business)?;
+                        break actual;
+                    }
+                    #[cfg(test)]
+                    waiting_tests::after_actual_contention(service)?;
+                },
+            };
             let database = actual.listener_open_guard();
             let slot = actual.native_replica_listener_store_open_guard();
             // Explicit legacy metadata-init0 fixtures have no protected native

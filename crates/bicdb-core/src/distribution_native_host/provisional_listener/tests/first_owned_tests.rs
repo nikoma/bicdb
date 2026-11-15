@@ -4,6 +4,7 @@
 //! manufactured MF, backend substitute or native grant constructor is used.
 use super::*;
 mod cross_protocol_tests;
+mod metadata_identity_tests;
 use crate::distribution_native_host::remote_first::NativeFirstIngressFault as Fault;
 use crate::distribution_native_host::{
     NativeFirstCoordinatorAction as Action, NativeFirstReceiveOperationV1 as Op,
@@ -24,6 +25,9 @@ mod preparation_tests;
 mod release_tests;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Case {
+    MetadataIdentityWait,
+    MetadataIdentityCancel,
+    MetadataIdentityExpiry,
     Normal,
     LostEnroll,
     CancelledQueued,
@@ -357,15 +361,65 @@ impl Five {
                         "original_action_budget_ms":5000}),
                     );
                         let parent = &five.lifetime;
-                        scope.spawn(move || host.apply(HostAction::OpenInitialData, parent))
+                        scope.spawn(move || {
+                            let started = Instant::now();
+                            let actual = host.apply(HostAction::OpenInitialData, parent);
+                            (started.elapsed().as_micros(), actual)
+                        })
                     })
                     .collect::<Vec<_>>();
-                for handle in handles {
-                    let result = match handle.join() {
-                        Ok(actual) => actual,
-                        Err(panic) => std::panic::resume_unwind(panic),
-                    };
-                    report.call("normal_initial_data_return", || result)?;
+                enum OriginalFailure {
+                    Error(BicDbError),
+                    Panic(Box<dyn std::any::Any + Send>),
+                }
+                let expected_count = handles.len();
+                let mut failures = Vec::new();
+                for (ordinal, handle) in handles.into_iter().enumerate() {
+                    match handle.join() {
+                        Ok((elapsed_us, actual)) => {
+                            report.event(serde_json::json!({
+                                "stage":"normal_initial_data_joined_return","ordinal":ordinal,
+                                "node":node(ordinal),"ok":actual.is_ok(),
+                                "actual_call_elapsed_us":elapsed_us,
+                                "original_action_budget_ms":5000,
+                                "actual_status":actual.as_ref().ok(),
+                                "error":actual.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),
+                            }));
+                            if let Err(error) = report.call("normal_initial_data_return", || actual)
+                            {
+                                failures.push((ordinal, OriginalFailure::Error(error)));
+                            }
+                        }
+                        Err(payload) => {
+                            let data = if let Some(text) = payload.downcast_ref::<String>() {
+                                serde_json::json!({"kind":"String","payload":text})
+                            } else if let Some(text) = payload.downcast_ref::<&str>() {
+                                serde_json::json!({"kind":"str","payload":text})
+                            } else {
+                                serde_json::json!({"kind":"opaque","type_id":format!("{:?}",payload.as_ref().type_id()),"original_payload_retained":true})
+                            };
+                            report.event(serde_json::json!({
+                                "stage":"normal_initial_data_panic","ordinal":ordinal,
+                                "node":node(ordinal),"actual_payload":data,
+                                "original_action_budget_ms":5000,
+                            }));
+                            failures.push((ordinal, OriginalFailure::Panic(payload)));
+                        }
+                    }
+                }
+                report.event(serde_json::json!({
+                    "stage":"normal_initial_data_all_returns_retained",
+                    "joined":expected_count,"failed_or_panicked":failures.len(),
+                    "no_new_DataOpen_attempts":true,
+                }));
+                // Retain every actual return before selecting the first
+                // original failure in invocation order. No failed opening
+                // is retried or relabeled successful during setup.
+                if let Some((_, original)) = failures.into_iter().next() {
+                    match original {
+                        OriginalFailure::Error(error) => return Err(error),
+                        OriginalFailure::Panic(payload) => std::panic::resume_unwind(payload),
+                    }
                 }
                 Ok(())
             })?;
@@ -770,6 +824,18 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
             &five.lifetime,
         )
     })?;
+    if matches!(
+        case,
+        Case::MetadataIdentityWait | Case::MetadataIdentityCancel | Case::MetadataIdentityExpiry
+    ) {
+        return metadata_identity_tests::exercise(
+            &five.sources[coordinator],
+            selected.id,
+            case,
+            report,
+            &five.lifetime,
+        );
+    }
     let mut target = five.target.take().unwrap();
     let fault = match case {
         Case::LostEnroll => Some(Fault::LoseSuccessfulReply(Op::Enroll)),

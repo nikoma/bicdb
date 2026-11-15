@@ -804,17 +804,35 @@ impl ClusterDataNodeService {
             admission.require_external_publications_current()?;
             admission.require_local_open_preparation(self)?;
         }
-        actual.require_original_phase_owner(&database, &self.range_writes)?;
         self.storage_policy.require_database(&database)?;
         self.range_writes
             .current_mut()
             .refsync_native_joint_catalogue_activation(&database, admission)?;
         self.require_native_catalog_database(&database)?;
-        actual.writer_domain.require_current(
-            &database,
-            &self.range_writes,
-            admission.data().activation_range(),
-        )?;
+        #[cfg(test)]
+        let mut domain_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "open-service-original-phase-owner-and-domain",
+            &self.node_id,
+            admission.cancellation(),
+        );
+        // This is the SAME full domain check the earlier phase-owner call
+        // performed, plus its original owner/process equality. The intervening
+        // storage/refsync/catalogue checks are read-only (refsync only refuses
+        // uncertainty). Validate once here, immediately before recovery or
+        // new publication, rather than twice under this same service/DB scope.
+        // The owned-Unknown retry above retains its independent actual sink
+        // checks; no uncertain state gains a new-publication exception.
+        if actual.committed.data() != admission.data() {
+            return Err(data_error(
+                "joint Open changed original prepared decision/domain",
+            ));
+        }
+        actual.require_original_phase_owner(&database, &self.range_writes)?;
+        #[cfg(test)]
+        {
+            domain_trace.complete();
+            drop(domain_trace);
+        }
         if actual.prepared.local_node_id() != &self.node_id {
             return Err(data_error(
                 "joint catalogue activation targets another actual service",

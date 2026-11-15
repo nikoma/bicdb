@@ -99,14 +99,21 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
                 .ok_or(BicDbError::QueryTimedOut)
         };
         let business = Uuid::now_v7();
-        let first = self.transport.acquire_metadata_read_observation(
-            metadata_leader,
-            business,
-            range.id,
-            range.epoch,
-            remaining()?,
-            parent,
-        )?;
+        let first = self
+            .transport
+            .acquire_metadata_read_observation(
+                metadata_leader,
+                business,
+                range.id,
+                range.epoch,
+                remaining()?,
+                parent,
+            )
+            .map_err(|error| {
+                #[cfg(test)]
+                initial_read_failure("first_metadata", &self.local_node_id, range, parent, &error);
+                error
+            })?;
         {
             let service = loop {
                 parent.check()?;
@@ -125,16 +132,45 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
         // pending/control checks come from the existing sealed read producer.
         // A decoded list, raw progress0, or NativeOriginStatus cannot replace it.
         let collected = runtime
-            .acquire_native_read_candidate(first, business, Uuid::now_v7(), parent)?
-            .into_initial_data_genesis(genesis)?;
-        let final_metadata = self.transport.acquire_metadata_read_observation(
-            metadata_leader,
-            business,
-            range.id,
-            range.epoch,
-            remaining()?,
-            parent,
-        )?;
+            .acquire_native_read_candidate(first, business, Uuid::now_v7(), parent)
+            .map_err(|error| {
+                #[cfg(test)]
+                initial_read_failure(
+                    "actual_native_read_candidate",
+                    &self.local_node_id,
+                    range,
+                    parent,
+                    &error,
+                );
+                error
+            })?
+            .into_initial_data_genesis(genesis)
+            .map_err(|error| {
+                #[cfg(test)]
+                initial_read_failure(
+                    "initial_genesis_comparison",
+                    &self.local_node_id,
+                    range,
+                    parent,
+                    &error,
+                );
+                error
+            })?;
+        let final_metadata = self
+            .transport
+            .acquire_metadata_read_observation(
+                metadata_leader,
+                business,
+                range.id,
+                range.epoch,
+                remaining()?,
+                parent,
+            )
+            .map_err(|error| {
+                #[cfg(test)]
+                initial_read_failure("final_metadata", &self.local_node_id, range, parent, &error);
+                error
+            })?;
         let service = loop {
             parent.check()?;
             if let Some(service) = self.local_service.try_lock_for(Duration::from_millis(5)) {
@@ -183,4 +219,63 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
             })
             && self.recovered_epochs.lock().get(&range.id) == Some(&range.epoch)
     }
+}
+
+#[cfg(test)]
+fn initial_read_failure(
+    stage: &str,
+    node: &ClusterNodeId,
+    range: &RangeDescriptor,
+    parent: &CancellationToken,
+    error: &BicDbError,
+) {
+    use std::io::Write as _;
+    // Keep this projection local: host-private protocol helpers do not become
+    // public for logging. Formatting/writing DATA must not replace the error.
+    struct Prefix {
+        text: String,
+        complete: bool,
+    }
+    impl std::fmt::Write for Prefix {
+        fn write_str(&mut self, text: &str) -> std::fmt::Result {
+            if !self.complete {
+                return Ok(());
+            }
+            let mut end = (4096 - self.text.len()).min(text.len());
+            while !text.is_char_boundary(end) {
+                end -= 1;
+            }
+            self.text.push_str(&text[..end]);
+            self.complete &= end == text.len();
+            Ok(())
+        }
+    }
+    let mut prefix = Prefix {
+        text: String::new(),
+        complete: true,
+    };
+    let formatted = std::fmt::write(&mut prefix, format_args!("{error}")).is_ok();
+    let io_kind = match error {
+        BicDbError::Io(io) => Some(format!("{:?}", io.kind())),
+        _ => None,
+    };
+    let io_os_code = match error {
+        BicDbError::Io(io) => io.raw_os_error(),
+        _ => None,
+    };
+    let event = serde_json::json!({
+        "stage":stage,"node":node,"range":range.id,"epoch":range.epoch,
+        "actual_original_remaining_us":parent.deadline().map(|d|d.saturating_duration_since(Instant::now()).as_micros()),
+        "actual_original_cancelled":parent.is_cancel_requested(),
+        "error_kind":format!("{:?}",std::mem::discriminant(error)),
+        "io_kind":io_kind,"io_os_code":io_os_code,
+        "display_prefix":prefix.text,"prefix_incomplete":!prefix.complete,
+        "display_format_complete":formatted,
+        "diagnostic_only_not_authority_or_no_effect":true,
+    });
+    let _ = writeln!(
+        std::io::stderr().lock(),
+        "INITIAL_NATIVE_READ_FAILURE {}",
+        event
+    );
 }

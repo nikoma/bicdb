@@ -432,6 +432,12 @@ impl NativeJointOpenAdmission {
         database: &crate::BicDb,
         store: &crate::distribution_range_consensus::RangeWriteStore,
     ) -> Result<crate::db::NativeJointWriterDomain> {
+        #[cfg(test)]
+        let mut trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "open-original-writer-domain-full-validation",
+            self.receipt.local_node_id(),
+            &self.cancellation,
+        );
         self.require_live()?;
         self.local
             .actual
@@ -439,6 +445,8 @@ impl NativeJointOpenAdmission {
         let domain = self.local.actual.writer_domain().clone();
         domain.require_current(database, store, self.data().activation_range())?;
         self.require_live()?;
+        #[cfg(test)]
+        trace.complete();
         Ok(domain)
     }
     pub(crate) fn original_phase_owner_for_activation(
@@ -446,6 +454,12 @@ impl NativeJointOpenAdmission {
         database: &crate::BicDb,
         store: &crate::distribution_range_consensus::RangeWriteStore,
     ) -> Result<(crate::db::NativeJointPhaseOwner, std::path::PathBuf)> {
+        #[cfg(test)]
+        let mut trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "open-original-phase-owner-full-validation",
+            self.receipt.local_node_id(),
+            &self.cancellation,
+        );
         self.require_live()?;
         let actual = self
             .local
@@ -456,6 +470,8 @@ impl NativeJointOpenAdmission {
             return Err(invalid("joint activation changed preparation writer"));
         }
         self.require_live()?;
+        #[cfg(test)]
+        trace.complete();
         Ok((original, root))
     }
     pub(crate) fn require_live(&self) -> Result<()> {

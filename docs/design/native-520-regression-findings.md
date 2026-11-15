@@ -4,13 +4,13 @@ This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe64
 
 ## Actual execution
 
-### Source7c: partial CI checkpoint; Core failed, remaining jobs live
+### Completed source7c: Core and Native failed; workspace and application components passed
 
 Candidate **1.0.520-beta / `7c77418656a41ec6e25c7601319e061c328f48e1`**,
 tree `df63298f61b0a4cdd56f0caabc694d888c38dbda`, was checked out by CI as
 `25b2a1454450bd591364ce9d026a8469ab03c2fe` with the identical tree.
-This is a partial checkpoint of [Tests43704937146](https://github.com/nikoma/bicdb/actions/runs/43704937146),
-not a completed archive or qualified release.
+This is a completed failed execution checkpoint of [Tests43704937146](https://github.com/nikoma/bicdb/actions/runs/43704937146),
+not a qualified release. The complete archive is frozen and independently verified.
 
 | Scope | Classification | Result and limit |
 | --- | --- | --- |
@@ -19,7 +19,8 @@ not a completed archive or qualified release.
 | PGwire | **Passed, CI scope** | 511 passed / 0 failed / 2 ignored; Oracle HR50, embedded HA11, verification3 and protocol195 are separate component scopes. |
 | Rails | **Passed, application CI scope** | 20 runs / 100 assertions, zero failures/errors/skips, including process-kill recovery. |
 | SQL | **Passed, CI scope** | 2,682 passed / 0 failed / 4 ignored across 282 summaries; actual committed-error/DDL cleanup and SQLSTATE controls passed. This is not distributed SQL or Native timed-Unknown acceptance. |
-| Native multi-node, remaining workspace | **Not yet established** | Jobs were still running at this checkpoint; no inherited pass. |
+| Native multi-node | **Failed** | 363 passed / 45 failed / 1 ignored; 409 unique outcomes. Exact failure cuts and separate passed components are retained below. |
+| Remaining workspace | **Passed, CI scope** | 1,062 passed / 0 failed / 6 ignored across 129 summaries and 1,068 unique cases. Original Cell key rotation and CLI/application component controls passed. This does not qualify distributed movement or close the cross-call source gaps. |
 | Independent physical expansion | **Not tested** | Original Azure qualification remains failed; no stable five-node throughput gain or production admission. |
 
 The backup failure is `encrypted_full_backup_verifies_and_restores_records`
@@ -39,6 +40,16 @@ Complete SQL raw log: 295,655,118 bytes, SHA-256
 Independent full-log/checkout/case/summary receipt SHA-256:
 `9eab149b2dcf9c05431732937167488bdba3ee9a1b73662d68deb97e5ec47a94`.
 
+The remaining-workspace raw log is 148,670,739 bytes, SHA-256
+`f933b3483fbf5fb787b4a17727535bf0c400f2f92c3c9034e4d4f4ff50e251e9`;
+gzip SHA-256 `c05b2c9566a77d8403100193f28a7ebdc9fb3962647dbdc5f2cccd80f4cd5081`.
+Independent complete raw-hash, checkout, case and summary receipt SHA-256:
+`577502e55151eaea63fd08a4d1472f68db7d2f5db01001b9d584d26123d79554`.
+Original Cell signed key rotation passed at raw307786, and the original schedule
+identity/SQL control passed at283067. These execute the source7c corrections;
+they do not inherit success for the later local backup, diagnostic, Open-budget
+or FIRST contention changes, which remain uncompiled and unexecuted.
+
 Passing same-attempt controls do not close the documented cross-call bootstrap
 association or Prepared-rekey source-head gaps.
 The [deferred final-tail design](bootstrap-deferred-final-tail-7c.md) specifies
@@ -48,6 +59,75 @@ coverage remains an explicit missing producer. The separate
 [root-local fence refinement](bootstrap-root-local-fence-refinement.md) specifies
 shared IO exclusion, ancestor Page admission and pending-marker/FI ordering;
 it is **design only**, with runtime wiring and crash qualification outstanding.
+
+### Completed source7c Native job: exact failure boundaries
+
+[Native132783896405](https://github.com/nikoma/bicdb/actions/runs/43704937146/job/132783896405)
+compiled and ran **363 passed / 45 failed / 1 ignored**, with 983 filtered out.
+This is a failed acceptance result. Its complete raw log is 42,835,265 bytes,
+SHA-256 `d64ff32826c1acd4a59aa4819be4ea0933a9ed5c8effa4b1ae6201d99aa83172`;
+gzip 3,594,128 bytes, SHA-256
+`e8808425833f37cc6acacf5d161c627982daaf5f90d1091abb7fc5b4f5b46110`.
+Independent full-log/case inventory receipt:
+`c7883e3929c3f6027a078b885bf2a7edad409be14cb150de661095d2d0575172`.
+The complete archive contains 96 premanifest files, 99 total, 11 full gzip logs
+and eight original ZIPs/28 members, with no missing or partial captures. Manifest
+SHA-256: `d2da4de6a06ae9b6fd8663c64e90e5b8cbd0ad1f8fea411a6d20462baf6b7967`;
+independent full-archive verification receipt SHA-256:
+`39a3508a61ea7ea7017cae52ffaa44a001d9b2744d27537c6940d3785002881b`.
+Verification covers every stored/raw hash, exact source/tree inventories,
+original ZIP API digests/sizes, CRC and member hashes. The verifier passed its
+positive control and rejected a wrong manifest digest. The sole collector
+exited naturally; no job was cancelled or restarted. Archive integrity preserves
+the failed result and does not qualify the database or untested successors.
+
+| Actual failed scope | Classification | Observed cut and limit |
+| --- | --- | --- |
+| 21 FIRST startup cases | **Failed prerequisite; later cuts not tested** | Normal parallel INITIAL DATA opening returned ConnectionReset/ConnectionRefused. Intended later FIRST/fault assertions were not reached. Exact inner read/socket cause remains inconclusive. |
+| Cross retained-discovery exclusion | **Partial pass, later failed** | Opposing FIRST refusal and before/after positions passed; later original SDK APPEND failed with a range-policy refresh refusal. |
+| Over512 | **Partial pass, later failed before allocation** | 45 APP acknowledgments and 44 full Strong reads passed; the next Strong call hit its original two-second RPC deadline. The over512 transfer/fault cut was not reached. This is not observed successful absence or proven data loss. |
+| Catalogue rename-unknown | **Partial pass, later failed** | Two APP/full-Strong pairs and allocation/enrollment prerequisites passed; ALL_OLD_close failed `joint metadata service identity busy` before the catalogue fault. |
+| 20 hot catalogue Open cases | **Failed** | `hot_policy_tests.rs:991`: first `actual_catalogue_open` returned QueryTimedOut. Release/policy and their later selected APP/Strong tails were not reached. Trace intervals do not establish CPU/IO root cause or absence of effects. |
+| Large unrelated-head activation | **Failed, intended fault not tested** | `activation_owned_tests.rs:127` expected fault-fired1, observed0. Intended owned-IO/Unknown/refsync assertions were not reached. |
+
+Separate current-source component passes include typed native-local follower
+apply (raw17516), combined stale-gateway/catch-up-gap transfer recovery17448,
+source-frame controls21135/21138/21141 and post-scope archive/middle-history
+controls20953/20956. They do not qualify the failed cases' unreached tails or a
+physical/operator expansion. All400 earlier326 names and all349 main519 names
+are present, but changed helpers/budgets preclude causal or performance inference
+from matching names alone.
+
+The comprehensive 45-case/source-cut classifier SHA-256 is
+`f88af999ada1689060b5bce34fc3134dae5eec78b0225c70c48d8c76ddde9311`.
+Direct stderr events precede buffered failure footers; the separately retained
+serial-case projection SHA-256 is
+`72cb76e227e01c8adec6fc1b18a83b3d57a3fcb77a10a9cfecb9356ae30664ac`.
+
+The [INITIAL diagnostic correction](native-initial-open-failure-evidence.md)
+retains every real worker result and read failure boundary without retries or
+budget changes; it does **not** fix the socket failures. Separate source
+`fe8618729236c63446830254f76a9a560e87ff4a` removes redundant Open validation and
+adds a genuine cancellation control, retaining original1500ms windows and full
+publication/owned-IO checks. It is **not compiled or executed**; saved time and
+sufficiency to resolve the 21 hot failures remain unproven. No failed case is
+reclassified as passing by these untested source changes.
+
+The separate [FIRST same-OWN identity wait](native-first-same-own-metadata-identity-wait.md),
+source `90259379d227d66fad18adde38b0748b2c6fe6ca`, addresses the observed immediate
+service-identity contention refusal. Only the guard-free FIRST coordinator uses
+bounded acquisition of the same service mutex, under its original request and
+OWN deadlines; the original one-shot API and subsequent mutation/intent/RPC
+paths remain unchanged. Three genuine held-service controls are defined for
+release, cancellation and expiry. Classification: **source change; not compiled
+or tested**. The historical holder remains unidentified, and the original
+catalogue-rename acceptance is still failed at the earlier cut. This is neither
+a mutation retry nor proof of bounded end-to-end relocation.
+
+Independent full-source review receipt SHA-256:
+`4a73eaa9d56ac436408b82b9f6f8d6c043b762c0241a4047a77a6fac7aebafd6`.
+That review checks the protected metadata-capture suffix and the FIRST
+coordinator's unchanged mutation paths; it does not execute the controls.
 
 ### Historical pre-CI review of the source7c corrections
 

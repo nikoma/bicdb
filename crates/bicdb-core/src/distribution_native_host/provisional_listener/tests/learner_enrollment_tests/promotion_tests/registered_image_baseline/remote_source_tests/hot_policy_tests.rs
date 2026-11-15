@@ -942,6 +942,18 @@ pub(in super::super) fn exercise(
         let phase = Arc::new(phase.finish().unwrap());
         let i = (0..5).find(|i| node(*i) == *local).unwrap();
         let admission = phase.acquire_local_open(&all_clients[i], &node(0)).unwrap();
+        if matches!(case, SourceCase::TargetActivationAbsentThenCanceled) {
+            let actual_database = services[i].lock().database();
+            activation_owned_tests::absent_then_canceled(
+                &published,
+                local,
+                &admission,
+                &actual_database,
+                process,
+                output,
+            );
+            return;
+        }
         let is_large_head_member =
             matches!(case, SourceCase::TargetActivationLargeHeadDirSyncRetry)
                 && !large_head_control_ran

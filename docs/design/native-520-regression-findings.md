@@ -97,9 +97,9 @@ All jobs have terminated. The complete candidate archive is frozen: 98 premanife
 
 ## Reproducible test corrections
 
-### Follow-up source status, not executed validation
+### Follow-up source status at the source326 checkpoint
 
-The public candidate remains `326c363477477950f76bdb51fe6425cab85dc362`, with the failed execution above. The following corrections are separate source units; none has Rust compilation or runtime results at this checkpoint:
+At this historical checkpoint the public candidate was `326c363477477950f76bdb51fe6425cab85dc362`, with the failed execution above. The following corrections were separate source units without compilation or runtime results at that checkpoint. Later exact-source execution is recorded above; it does not establish unexecuted acceptance cuts:
 
 | Source unit | Source status | Remaining execution gate |
 |---|---|---|

@@ -33,6 +33,11 @@ struct FakeState {
     old_epoch: Option<u64>,
     /// What the backend reports it is waiting for after a failed call.
     waiting: Option<String>,
+    /// Outcomes of the next `before_allocation` calls: a text refuses with
+    /// it and reports it as what the backend waits for. Empty: allowed.
+    allocation_refusals: VecDeque<String>,
+    /// Every allocation hook call, in order.
+    allocation_calls: Vec<String>,
 }
 struct FakeBackend {
     state: Arc<Mutex<FakeState>>,
@@ -79,6 +84,35 @@ impl JoinedHandoffBackend for FakeBackend {
             Some(None) => Err(BicDbError::QueryTimedOut),
             Some(Some(text)) => Err(scripted(&text)),
         }
+    }
+    fn before_allocation(
+        &mut self,
+        _hosts: &mut Self::Hosts,
+        range: &crate::RangeDescriptor,
+        _parent: &CancellationToken,
+    ) -> Result<()> {
+        let mut state = self.state.lock();
+        state
+            .allocation_calls
+            .push(format!("before epoch {}", range.epoch));
+        match state.allocation_refusals.pop_front() {
+            None => Ok(()),
+            Some(text) => {
+                state.waiting = Some(text.clone());
+                Err(scripted(&text))
+            }
+        }
+    }
+    fn after_allocation(
+        &mut self,
+        range: &crate::RangeDescriptor,
+        committed: bool,
+        _parent: &CancellationToken,
+    ) {
+        self.state
+            .lock()
+            .allocation_calls
+            .push(format!("after epoch {} committed {committed}", range.epoch));
     }
     fn members(
         &self,
@@ -149,6 +183,8 @@ struct ScriptedHosts {
     settle: Option<String>,
     /// This node cannot read its own metadata.
     unreadable: bool,
+    /// The next commit fails with this text and changes nothing.
+    fail_commit: Option<String>,
 }
 impl JoinedHandoffMetadataHosts for ScriptedHosts {
     fn metadata_leader(&self) -> Result<ClusterNodeId> {
@@ -165,6 +201,9 @@ impl JoinedHandoffMetadataHosts for ScriptedHosts {
         candidate: ClusterTopology,
         _parent: &CancellationToken,
     ) -> Result<()> {
+        if let Some(text) = self.fail_commit.take() {
+            return Err(scripted(&text));
+        }
         self.topology = candidate;
         self.commits += 1;
         Ok(())
@@ -305,6 +344,7 @@ fn native_range_move_controller_lifecycle_with_scripted_backend() {
             commits: 0,
             settle: None,
             unreadable: false,
+            fail_commit: None,
         };
         let state = Arc::new(Mutex::new(FakeState::default()));
 
@@ -651,6 +691,94 @@ fn native_range_move_controller_lifecycle_with_scripted_backend() {
             )),
             "{refused}"
         );
+    });
+}
+
+/// The learner allocation is proposed only after the backend allowed it,
+/// with the range descriptor before the allocation, and the backend is told
+/// how the commit attempt ended. A refusal commits nothing and is repeated
+/// as a wait, not a failure.
+#[test]
+fn native_range_move_allocation_is_proposed_only_when_the_backend_allows_it() {
+    run("range-move-allocation-hooks", |five| {
+        let original = committed(five);
+        let range = original.ranges.values().next().unwrap().clone();
+        let local = range.leader.clone();
+        let parent = CancellationToken::uncancelable();
+        let mut hosts = ScriptedHosts {
+            leader: local.clone(),
+            topology: original.clone(),
+            commits: 0,
+            settle: None,
+            unreadable: false,
+            fail_commit: None,
+        };
+        let state = Arc::new(Mutex::new(FakeState::default()));
+        let mut controller =
+            NativeRangeMoveController::new(local.clone(), range.id, node(4), &hosts, fake(&state))
+                .unwrap()
+                .with_backoff(Duration::ZERO, Duration::ZERO);
+        controller.tick(&mut hosts, &parent);
+        assert_eq!(controller.status().stage, Some("target_admitted"));
+        assert!(state.lock().allocation_calls.is_empty());
+
+        // The backend refuses: nothing is proposed, no commit attempt is
+        // reported to it, and the step is a wait.
+        state
+            .lock()
+            .allocation_refusals
+            .push_back("a write command is in flight".into());
+        controller.tick(&mut hosts, &parent);
+        let status = controller.status();
+        eprintln!("NATIVE_RANGE_MOVE allocation refused: {status:?}");
+        assert_eq!(status.stage, Some("target_admitted"));
+        assert_eq!(
+            status.waiting.as_deref(),
+            Some("waiting at learner_allocated: a write command is in flight")
+        );
+        assert_eq!(status.last_error, None);
+        assert_eq!(hosts.commits, 0);
+        assert_eq!(hosts.topology, original);
+        let before = format!("before epoch {}", range.epoch);
+        assert_eq!(state.lock().allocation_calls, vec![before.clone()]);
+
+        // The backend allows it and the commit fails: the backend is told,
+        // nothing is committed, and the stage is repeated.
+        state.lock().waiting = None;
+        hosts.fail_commit = Some("proposal lost".into());
+        controller.tick(&mut hosts, &parent);
+        let status = controller.status();
+        assert_eq!(status.stage, Some("target_admitted"));
+        assert!(
+            status
+                .last_error
+                .as_deref()
+                .is_some_and(|error| error.contains("learner allocation commit")
+                    && error.contains("proposal lost")),
+            "{status:?}"
+        );
+        assert_eq!(hosts.commits, 0);
+        let failed = format!("after epoch {} committed false", range.epoch);
+        assert_eq!(
+            state.lock().allocation_calls,
+            vec![before.clone(), before.clone(), failed.clone()]
+        );
+
+        // Allowed and committed: told so, with the descriptor before the
+        // allocation. A committed allocation is not asked about again.
+        controller.tick(&mut hosts, &parent);
+        let status = controller.status();
+        assert_eq!(status.stage, Some("learner_allocated"));
+        assert_eq!(hosts.commits, 1);
+        let done = format!("after epoch {} committed true", range.epoch);
+        let expected = vec![before.clone(), before.clone(), failed, before, done];
+        assert_eq!(state.lock().allocation_calls, expected);
+        state
+            .lock()
+            .admissions
+            .push_back(Some("member unreachable".into()));
+        controller.tick(&mut hosts, &parent);
+        assert_eq!(state.lock().allocation_calls, expected);
     });
 }
 

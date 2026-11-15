@@ -96,7 +96,7 @@ const CLIENT_BACKOFF: Duration = Duration::from_millis(400);
 ///
 /// `false`: the client pauses its appends around the first allocation too,
 /// so no append is in flight while it commits. It reads throughout.
-const APPENDS_DURING_ALLOCATION: bool = true;
+const APPENDS_DURING_ALLOCATION: bool = false;
 
 fn node(i: usize) -> ClusterNodeId {
     ClusterNodeId::new(format!("n{i}")).unwrap()

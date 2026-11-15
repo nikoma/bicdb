@@ -22,6 +22,21 @@ fn supervise(five: &Five, i: usize) -> NativeMetadataSupervisor {
         }
     }
 }
+/// The status read takes the member's service without waiting, and a
+/// supervisor worker that has just started may hold it for a moment. The
+/// product refusal ("busy") is unchanged; the test repeats the read, bounded.
+fn status(five: &Five, i: usize) -> crate::MetadataConsensusStatus {
+    let retry = budget(5000);
+    loop {
+        match five.controls[i].metadata_status(&budget(5000)) {
+            Ok(status) => return status,
+            Err(error) if error.to_string().contains("busy") && retry.check().is_ok() => {
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            Err(error) => panic!("metadata status of member {i} is unreadable: {error}"),
+        }
+    }
+}
 fn one_step(slot: &mut NativeRangeMoveSlot<RemoteJoinedHandoffBackend>) -> NativeRangeMoveStatus {
     slot.advance(&CancellationToken::uncancelable()).unwrap();
     slot.wait_step(&budget(120_000)).unwrap();
@@ -52,10 +67,7 @@ fn native_metadata_leadership_transfer_lets_the_range_leader_coordinate_its_move
         let leader = range.leader.clone();
         let x = index_of(&leader);
         let mut workers = vec![supervise(five, 0), supervise(five, x)];
-        let term = five.controls[0]
-            .metadata_status(&budget(5000))
-            .unwrap()
-            .current_term;
+        let term = status(five, 0).current_term;
 
         // Refused on the metadata leader, which does not lead the range, and
         // on the range leader, which does not lead metadata. Both say what
@@ -93,12 +105,12 @@ fn native_metadata_leadership_transfer_lets_the_range_leader_coordinate_its_move
             .unwrap();
         eprintln!("NATIVE_METADATA_LEADERSHIP_TRANSFER report={report:?}");
         assert!(report.term > term);
-        let old = five.controls[0].metadata_status(&budget(5000)).unwrap();
+        let old = status(five, 0);
         assert_eq!(old.role, MetadataConsensusRole::Follower);
         assert_eq!(old.leader_id, Some(leader.clone()));
         let until = Instant::now() + Duration::from_secs(8);
         loop {
-            let new = five.controls[x].metadata_status(&budget(5000)).unwrap();
+            let new = status(five, x);
             assert_eq!(new.role, MetadataConsensusRole::Leader, "{new:?}");
             assert_eq!(new.current_term, report.term);
             if new.commit_index >= new.last_log_index {

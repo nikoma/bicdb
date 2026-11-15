@@ -94,6 +94,22 @@ publication/owned-IO checks. It is **not compiled or executed**; saved time and
 sufficiency to resolve the 21 hot failures remain unproven. No failed case is
 reclassified as passing by these untested source changes.
 
+The separate [FIRST same-OWN identity wait](native-first-same-own-metadata-identity-wait.md),
+source `90259379d227d66fad18adde38b0748b2c6fe6ca`, addresses the observed immediate
+service-identity contention refusal. Only the guard-free FIRST coordinator uses
+bounded acquisition of the same service mutex, under its original request and
+OWN deadlines; the original one-shot API and subsequent mutation/intent/RPC
+paths remain unchanged. Three genuine held-service controls are defined for
+release, cancellation and expiry. Classification: **source change; not compiled
+or tested**. The historical holder remains unidentified, and the original
+catalogue-rename acceptance is still failed at the earlier cut. This is neither
+a mutation retry nor proof of bounded end-to-end relocation.
+
+Independent full-source review receipt SHA-256:
+`4a73eaa9d56ac436408b82b9f6f8d6c043b762c0241a4047a77a6fac7aebafd6`.
+That review checks the protected metadata-capture suffix and the FIRST
+coordinator's unchanged mutation paths; it does not execute the controls.
+
 ### Historical pre-CI review of the source7c corrections
 
 The pending batch composes test-channel correction

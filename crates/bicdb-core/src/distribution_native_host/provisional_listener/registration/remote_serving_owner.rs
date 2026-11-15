@@ -474,6 +474,12 @@ impl NativeMetadataControlHost {
         use crate::distribution_native_host::NativeRemoteServingRequestV1;
         use crate::distribution_range_handoff::NativeRemotePreparedRound;
         let backend = &self.backend;
+        #[cfg(test)]
+        let mut collection_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "remote-bridge-all-prepared-collection",
+            &backend.node_id,
+            request,
+        );
         let leader = backend
             .provider
             .current_metadata_leader_hint(request)?
@@ -491,12 +497,23 @@ impl NativeMetadataControlHost {
             work.require_request()?;
             request.check()?;
             let business = Uuid::now_v7();
+            #[cfg(test)]
+            let mut own_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+                "remote-prepared-member-own",
+                node,
+                request,
+            );
             let own = backend.transport.acquire_host_metadata_observation(
                 &leader,
                 business,
                 remaining(request)?,
                 request,
             )?;
+            #[cfg(test)]
+            {
+                own_trace.complete();
+                drop(own_trace);
+            }
             let observe = NativeRemoteServingRequestV1 {
                 version: 1,
                 manifest: work.request.manifest.clone(),
@@ -511,14 +528,27 @@ impl NativeMetadataControlHost {
                 challenge: Uuid::now_v7(),
                 budget_ms: remaining(request)?.as_millis().clamp(1, 5000) as u64,
             };
+            #[cfg(test)]
+            let mut member_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+                "remote-prepared-member-tls",
+                node,
+                request,
+            );
             let actual = backend
                 .transport
                 .request_remote_native_serving(node, &observe, &own, business, request)?;
             round.record(actual)?;
+            #[cfg(test)]
+            {
+                member_trace.complete();
+                drop(member_trace);
+            }
         }
         let actual = round.try_finish().map_err(|(error, _round)| error)?;
         work.require_request()?;
         request.check()?;
+        #[cfg(test)]
+        collection_trace.complete();
         Ok(Arc::new(actual))
     }
     fn apply_finite_remote_bridge(
@@ -555,6 +585,12 @@ impl NativeMetadataControlHost {
             .bound_request(&work.bound_actor_request())
             .child_linked_to(&work.own.original_request_cancellation())
             .child_with_deadline(work.role.deadline().min(work.own.deadline()));
+        #[cfg(test)]
+        let mut bridge_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "remote-bridge-original-owner-step",
+            &self.backend.node_id,
+            &request,
+        );
         let quorum = self.collect_actual_remote_preparations(work, &request)?;
         let backend = self.backend.clone();
         let leader = backend
@@ -562,15 +598,37 @@ impl NativeMetadataControlHost {
             .current_metadata_leader_hint(&request)?
             .ok_or_else(|| invalid("remote bridge post-ALL metadata leader absent"))?;
         // Genuine distinct post-ALL OWN/MStore + local protected owner read.
+        #[cfg(test)]
+        let mut local_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "remote-bridge-post-all-local",
+            &backend.node_id,
+            &request,
+        );
         let local = custody.observe_remote_preparation(&backend.transport, &leader, &request)?;
+        #[cfg(test)]
+        {
+            local_trace.complete();
+            drop(local_trace);
+        }
         work.mark_effect_entered()?;
         let admission = quorum.admit_local_bridge(local, work.admit_bridge(process)?)?;
         let original = self.remote_serving.get_mut(&key).unwrap();
+        #[cfg(test)]
+        let mut native_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "remote-bridge-native-publication",
+            &backend.node_id,
+            &request,
+        );
         ClusterDataNodeService::publish_remote_joint_bridge(
             &backend.service,
             &admission,
             &mut original.bridge,
         )?;
+        #[cfg(test)]
+        {
+            native_trace.complete();
+            drop(native_trace);
+        }
         let native = original
             .bridge
             .completed()
@@ -579,7 +637,18 @@ impl NativeMetadataControlHost {
         participant.retain_remote_bridge_route(&custody, &native)?;
         // A new actual protected read is not a decoded vote conversion. The
         // underlying bridge receipt was retained before outer request checks.
+        #[cfg(test)]
+        let mut post_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "remote-bridge-post-native-local",
+            &backend.node_id,
+            &request,
+        );
         let observed = custody.observe_remote_preparation(&backend.transport, &leader, &request)?;
+        #[cfg(test)]
+        {
+            post_trace.complete();
+            drop(post_trace);
+        }
         let mut reply = participant.observe_actual_preparation_for_serving(
             &work.request,
             &work.role,
@@ -598,6 +667,8 @@ impl NativeMetadataControlHost {
         work.require_request()?;
         request.check()?;
         reply.require_request(&work.request)?;
+        #[cfg(test)]
+        bridge_trace.complete();
         Ok(reply)
     }
 }

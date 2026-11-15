@@ -512,6 +512,15 @@ impl NativeMetadataControlHost {
                 } else {
                     pending.original_error = Some(data);
                 }
+                // The actual error is already retained. Emit only its existing
+                // bounded diagnostic DATA after the RPC and all engine guards;
+                // a secondary poll failure must not replace the primary return.
+                #[cfg(test)]
+                eprintln!(
+                    "NATIVE_REMOTE_SERVING_ORIGINAL_ERROR phase={} node={} operation={:?} sequence={} original_error={:?} resolution_error={:?} poll_errors={:?} omitted={}",
+                    phase, node, operation, request.sequence, pending.original_error,
+                    pending.resolution_error, pending.poll_errors, pending.poll_errors_omitted
+                );
                 return Err(error);
             }
         };

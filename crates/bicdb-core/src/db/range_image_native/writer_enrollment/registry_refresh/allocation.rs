@@ -267,7 +267,9 @@ impl InstalledNativeWriterHostGuard {
                     #[cfg(test)]
                     let mode=self.state.allocation_fault.load(Ordering::Acquire);
                     #[cfg(test)]
-                    if mode!=2 {self.state.allocation_fault.store(0,Ordering::Release);}
+                    // These two cuts belong to later actual boundaries:
+                    // known native return (2) and held publication version (4).
+                    if !matches!(mode, 2 | 4) {self.state.allocation_fault.store(0,Ordering::Release);}
                     #[cfg(test)]
                     if mode==1 {
                         let cut=AllocationCut{mode,parent_live:parent.check().is_ok(),own_live:prepared.require_memory().is_ok(),
@@ -306,7 +308,15 @@ impl InstalledNativeWriterHostGuard {
                         drop(fault);
                     }
                     #[cfg(test)]
-                    if let Some(cut)=self.state.allocation_cut.lock().as_mut() {cut.xid=attempt.record.native_page_xid;}
+                    // Only THIS selected native-fault attempt owns this stamp.
+                    // A later mode-0 retry must preserve a mode-1 pre-IO XID 0.
+                    if mode == 3 {
+                        if let Some(cut) = self.state.allocation_cut.lock().as_mut() {
+                            if cut.mode == 3 {
+                                cut.xid = attempt.record.native_page_xid;
+                            }
+                        }
+                    }
                     match actual {
                         Ok(Some(xid)) => attempt.outcome=Outcome::Known(xid),
                         Ok(None) => {attempt.outcome=Outcome::Unknown; return Err(invalid("allocation actual native page transaction absent"));},

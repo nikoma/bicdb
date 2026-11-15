@@ -887,7 +887,7 @@ impl NativeInitialDataHost {
                 .ok_or_else(|| invalid("leader recovery requires the retained writer"))?
                 .coordinator,
         );
-        let recovered = coordinator.recover_local_leadership(64)?;
+        let recovered = coordinator.recover_native_local_leadership_bounded(64, parent)?;
         parent.check()?;
         Ok(recovered)
     }

@@ -24,6 +24,83 @@ pub(super) fn recovery_lock<'a, T>(
     }
 }
 impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
+    /// Native-only bounded sweep for a retained INITIAL owner. Cursor and
+    /// completion markers are DATA; each selected range still validates its
+    /// current native history independently under the same finite caller.
+    pub(crate) fn recover_native_local_leadership_bounded(
+        &self,
+        max_ranges: usize,
+        parent: &CancellationToken,
+    ) -> Result<usize> {
+        parent.check()?;
+        if parent.deadline().is_none()
+            || !self.native_image_mode
+            || max_ranges == 0
+            || max_ranges > 64
+        {
+            return Err(range_write_error(
+                "native leadership sweep requires a finite native caller and limit 1..=64",
+            ));
+        }
+        let mut ranges = {
+            let topology = self.recovery_topology(Some(parent))?;
+            let recovered = recovery_lock(&self.recovered_epochs, Some(parent))?;
+            topology
+                .ranges
+                .values()
+                .filter(|range| {
+                    range.leader == self.local_node_id
+                        && recovered.get(&range.id) != Some(&range.epoch)
+                })
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+        ranges.sort_by_key(|range| range.id);
+        {
+            let mut cursor = recovery_lock(&self.recovery_cursor, Some(parent))?;
+            if let Some(last) = *cursor {
+                let split = ranges.partition_point(|range| range.id <= last);
+                if split < ranges.len() {
+                    ranges.rotate_left(split);
+                }
+            }
+            ranges.truncate(max_ranges);
+            parent.check()?;
+            *cursor = ranges.last().map(|range| range.id);
+        }
+        let mut completed = 0usize;
+        let mut failures = Vec::new();
+        for range in ranges {
+            parent.check()?;
+            match self.recover_native_range_leadership_bounded(&range, parent) {
+                Ok(changed) => completed = completed.saturating_add(usize::from(changed)),
+                Err(error @ (BicDbError::QueryCanceled | BicDbError::QueryTimedOut)) => {
+                    return Err(error);
+                }
+                Err(error) => failures.push(format!("{}: {error}", range.id)),
+            }
+        }
+        {
+            let topology = self.recovery_topology(Some(parent))?;
+            let mut recovered = recovery_lock(&self.recovered_epochs, Some(parent))?;
+            parent.check()?;
+            recovered.retain(|range_id, epoch| {
+                topology.range_by_id(*range_id).is_some_and(|range| {
+                    range.leader == self.local_node_id && range.epoch == *epoch
+                })
+            });
+        }
+        parent.check()?;
+        if failures.is_empty() {
+            Ok(completed)
+        } else {
+            Err(range_write_error(format!(
+                "native leadership recovery deferred for {} range(s): {}",
+                failures.len(),
+                failures.join(" | ")
+            )))
+        }
+    }
     pub(super) fn recovery_service(
         &self,
         parent: Option<&CancellationToken>,

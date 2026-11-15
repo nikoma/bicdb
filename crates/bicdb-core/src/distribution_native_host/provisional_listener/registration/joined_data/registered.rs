@@ -87,7 +87,18 @@ impl NativeJoinedDataHost {
         dispatcher.clear();
         // Genuine native majority history/epoch recovery, never synthetic
         // Ready, metadata progress or a manual local native floor.
-        let recovered = enrollment.coordinator.recover_local_leadership(64)?;
+        // This publication owns only its selected range. A Joined follower
+        // never manufactures a leader marker, and a local leader keeps the
+        // same finite caller through actual native quorum history validation.
+        let recovered = if selected.leader == self.parts.backend.node_id {
+            usize::from(
+                enrollment
+                    .coordinator
+                    .recover_native_range_leadership_bounded(selected, parent)?,
+            )
+        } else {
+            0
+        };
         parent.check()?;
         let route = {
             let metadata = self.parts.backend.lock_metadata(parent)?;

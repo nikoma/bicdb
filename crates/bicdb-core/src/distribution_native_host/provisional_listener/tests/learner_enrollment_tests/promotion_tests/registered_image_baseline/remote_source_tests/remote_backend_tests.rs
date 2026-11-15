@@ -351,17 +351,13 @@ fn resync(
             hosts,
             &moved,
         );
-        let observe = |observer: usize, hosts: &mut MetadataOnlyHosts| {
+        let observe = |observer: usize, _hosts: &mut MetadataOnlyHosts| {
             let mut fresh = RemoteJoinedHandoffBackend::new(node(4), clients[observer].clone());
             assert!(!fresh.cut_started());
+            // The lenient observation itself: `resync` additionally refuses a
+            // coordinator that is not both leaders before it observes.
             fresh
-                .resync(
-                    hosts,
-                    &members,
-                    moved.range,
-                    moved.relocation,
-                    &budget(20_000),
-                )
+                .observe_cut(&members, moved.range, moved.relocation, &budget(20_000))
                 .unwrap();
             (fresh.cut_started(), fresh.cut_observations().to_vec())
         };
@@ -487,10 +483,13 @@ fn driver_stub(
     ranges: &[crate::RangeDescriptor],
 ) {
     let moved = moved(pending, &ranges[0]);
+    // A coordinator that is not the metadata leader is refused at the first
+    // stage, whatever the requested stage, before any member is asked.
+    let outsider = (1..4).find(|i| *i != moved.leader).unwrap_or(1);
     let mut handoff = NativeJoinedDataHandoff::with_backend(
         moved.range.id,
         node(4),
-        RemoteJoinedHandoffBackend::new(node(4), clients[moved.leader].clone()),
+        RemoteJoinedHandoffBackend::new(node(4), clients[outsider].clone()),
     );
     for until in [
         Some(Stage::LearnerAllocated),
@@ -503,21 +502,41 @@ fn driver_stub(
             .unwrap_err()
             .to_string();
         assert!(
-            error.contains("remote joined handoff backend: target admission is not implemented"),
+            error.contains("remote joined handoff backend: coordinator")
+                && error.contains("is not the metadata leader"),
             "{error}"
         );
         assert!(!error.contains(COMMIT_REACHED), "{error}");
     }
     assert!(!handoff.completed());
-    // The stage refused before any member was asked to act.
     assert!(native_records(services, &moved)
         .values()
         .all(Option::is_none));
 
-    // Every stage beyond the implemented ones names itself.
-    let mut backend = RemoteJoinedHandoffBackend::new(node(4), clients[moved.leader].clone());
+    let mut backend = RemoteJoinedHandoffBackend::new(node(4), clients[outsider].clone());
     let members = resolve(&backend, hosts, &moved);
     let token = budget(20_000);
+    // The source stage of such a coordinator starts no cut.
+    let error = backend
+        .cut_and_ship(hosts, &members, moved.range, moved.relocation, &token)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("is not the metadata leader"), "{error}");
+    assert!(!backend.cut_started());
+    assert!(backend.closed_frames().is_empty());
+    assert!(native_records(services, &moved)
+        .values()
+        .all(Option::is_none));
+    // Without an installed image and a certificate the later stages refuse.
+    assert!(backend.cut_required() && !backend.decision_durable());
+    let error = backend.decide(&members, &token).unwrap_err().to_string();
+    assert!(
+        error.contains("needs the retained plan and source manifest"),
+        "{error}"
+    );
+    let error = backend.require_decision().unwrap_err().to_string();
+    assert!(error.contains("decision certificate absent"), "{error}");
+    // The bridge phases name themselves.
     let refused = |result: Result<()>, stage: &str| {
         let error = result.unwrap_err().to_string();
         assert!(
@@ -527,31 +546,11 @@ fn driver_stub(
             "{error}"
         );
     };
-    refused(backend.admit_target(hosts, &token), "target admission");
-    refused(
-        backend.decide(&members, &token),
-        "joint decision publication",
-    );
-    refused(backend.require_decision(), "durable decision custody");
     refused(
         backend.activate(hosts, &members, &token),
         "activation and release",
     );
     refused(backend.serve(hosts, &token).map(|_| ()), "target serving");
-    assert!(backend.cut_required() && !backend.decision_durable());
-    assert!(!backend.cut_started());
-    // The source stage runs its implemented half, the Close round, and then
-    // names the missing half.
-    refused(
-        backend.cut_and_ship(hosts, &members, moved.range, moved.relocation, &token),
-        "source collection and image transfer",
-    );
-    assert!(backend.cut_started());
-    assert_eq!(backend.closed_frames().len(), moved.old.len());
-    assert!(native_records(services, &moved)
-        .values()
-        .all(Option::is_some));
     backend.forget_aborted_allocation();
     assert!(backend.closed_frames().is_empty());
-    assert!(backend.cut_started());
 }

@@ -855,6 +855,15 @@ impl NativeMetadataControlHost {
     pub(crate) fn heartbeat(&self, parent: &CancellationToken) -> Result<()> {
         self.backend.heartbeat(parent)
     }
+    /// The same metadata heartbeat as `heartbeat`, as an owned handle for a
+    /// test host surface that cannot borrow this host.
+    #[cfg(test)]
+    pub(crate) fn test_heartbeat_handle(
+        &self,
+    ) -> Box<dyn Fn(&CancellationToken) -> Result<()> + Send + Sync> {
+        let backend = self.backend.clone();
+        Box::new(move |parent| backend.heartbeat(parent))
+    }
     pub(crate) fn stop(&mut self, parent: &CancellationToken) -> Result<()> {
         if let Some(assigned) = self.assigned.as_mut() {
             assigned.stop(parent)?;

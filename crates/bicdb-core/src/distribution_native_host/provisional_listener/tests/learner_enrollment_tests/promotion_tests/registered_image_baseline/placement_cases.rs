@@ -6,12 +6,31 @@ pub(super) enum AssignmentMode {
     OriginalLeader,
     AutomaticReplicaPlan,
     MetadataLeader,
+    /// The first selected range is led by the metadata leader: one node can
+    /// coordinate its handoff. The fixture issues no fence in these modes.
+    CoordinatorLeadsRange,
+    /// The first selected range is led by another node than the metadata
+    /// leader.
+    CoordinatorNotRangeLeader,
 }
 pub(super) fn select(
     topology: &ClusterTopology,
     config: &crate::DistributionConfig,
     mode: AssignmentMode,
 ) -> (Vec<crate::RangeDescriptor>, Option<crate::RebalancePlan>) {
+    if matches!(
+        mode,
+        AssignmentMode::CoordinatorLeadsRange | AssignmentMode::CoordinatorNotRangeLeader
+    ) {
+        let leads = mode == AssignmentMode::CoordinatorLeadsRange;
+        let mut ranges = topology.ranges.values().cloned().collect::<Vec<_>>();
+        let moved = ranges
+            .iter()
+            .position(|range| (range.leader == node(0)) == leads)
+            .expect("the fixture has ranges led by the metadata leader and by other nodes");
+        let moved = ranges.remove(moved);
+        return (vec![moved, ranges.remove(0)], None);
+    }
     if mode != AssignmentMode::AutomaticReplicaPlan {
         return (topology.ranges.values().take(2).cloned().collect(), None);
     }

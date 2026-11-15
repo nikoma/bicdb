@@ -510,6 +510,7 @@ impl LocalJoinedHandoffBackend {
 
 impl JoinedHandoffBackend for LocalJoinedHandoffBackend {
     type Members = Members;
+    type Hosts = dyn NativeJoinedDataHandoffHosts;
 
     fn cut_started(&self) -> bool {
         self.cut_attempted || !self.runtimes.is_empty()
@@ -517,7 +518,7 @@ impl JoinedHandoffBackend for LocalJoinedHandoffBackend {
 
     fn old_epoch(
         &self,
-        hosts: &dyn NativeJoinedDataHandoffHosts,
+        hosts: &Self::Hosts,
         node: &ClusterNodeId,
         range: &RangeDescriptor,
     ) -> Result<u64> {
@@ -535,17 +536,13 @@ impl JoinedHandoffBackend for LocalJoinedHandoffBackend {
         self.closed = None;
     }
 
-    fn admit_target(
-        &mut self,
-        hosts: &mut dyn NativeJoinedDataHandoffHosts,
-        parent: &CancellationToken,
-    ) -> Result<()> {
+    fn admit_target(&mut self, hosts: &mut Self::Hosts, parent: &CancellationToken) -> Result<()> {
         hosts.open_target(&bounded(parent, HOST_OPERATION))
     }
 
     fn members(
         &self,
-        hosts: &dyn NativeJoinedDataHandoffHosts,
+        hosts: &Self::Hosts,
         range: &RangeDescriptor,
         relocation: &RangeRelocation,
     ) -> Result<Members> {
@@ -590,7 +587,7 @@ impl JoinedHandoffBackend for LocalJoinedHandoffBackend {
     /// of the same session are confirmed, never replaced.
     fn cut_and_ship(
         &mut self,
-        hosts: &mut dyn NativeJoinedDataHandoffHosts,
+        hosts: &mut Self::Hosts,
         members: &Members,
         range: &RangeDescriptor,
         relocation: &RangeRelocation,
@@ -852,7 +849,7 @@ impl JoinedHandoffBackend for LocalJoinedHandoffBackend {
     /// after the last finished part.
     fn activate(
         &mut self,
-        hosts: &mut dyn NativeJoinedDataHandoffHosts,
+        hosts: &mut Self::Hosts,
         members: &Members,
         parent: &CancellationToken,
     ) -> Result<()> {
@@ -1106,11 +1103,7 @@ impl JoinedHandoffBackend for LocalJoinedHandoffBackend {
     }
 
     /// Target leadership and ingress; returns the ranges the target recovered.
-    fn serve(
-        &mut self,
-        hosts: &mut dyn NativeJoinedDataHandoffHosts,
-        parent: &CancellationToken,
-    ) -> Result<usize> {
+    fn serve(&mut self, hosts: &mut Self::Hosts, parent: &CancellationToken) -> Result<usize> {
         hosts
             .publish_target(&bounded(parent, LEADERSHIP))
             .map_err(|error| stage_error("target leadership and ingress", error))

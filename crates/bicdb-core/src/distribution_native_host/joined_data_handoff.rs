@@ -33,7 +33,11 @@
 //! committed metadata, the abort boundary, the resume rules and the metadata
 //! commits. Everything that touches a member (its service, runtime, transport
 //! client) and the custody above sit behind `JoinedHandoffBackend`.
-//! `local_backend` is the in-process implementation. A remote implementation
+//! `local_backend` is the in-process implementation. The stage logic itself
+//! reaches the hosts only through `JoinedHandoffMetadataHosts` (committed
+//! metadata reads and commits); each backend names its own host surface as
+//! `JoinedHandoffBackend::Hosts`, and a backend without in-process custody
+//! re-derives its retained state in `resync`. A remote implementation
 //! supplies the same stages by asking the members to act; it must never build
 //! a local quorum, role or freeze object from reply data. Those objects exist
 //! only where the member's own service issued them.
@@ -102,7 +106,10 @@ fn retry_timed_out<T>(mut attempt: impl FnMut() -> Result<T>) -> Result<T> {
 /// Completed stages, in order. `drive_until` returns after the named stage.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum NativeJoinedDataHandoffStage {
-    /// The target holds a writer policy and a DATA socket; no range changed.
+    /// The target is admitted to receive this range's data; no range changed.
+    /// In-process backend: it holds a writer policy and a DATA socket. A
+    /// backend whose target stays a registered replica receiver until release
+    /// admits it as such.
     TargetAdmitted,
     /// The learner allocation is committed; no old voter holds a promise.
     LearnerAllocated,
@@ -137,9 +144,9 @@ pub(crate) struct NativeJoinedDataPlanningView {
     pub(crate) business: Uuid,
 }
 
-/// The hosts this driver acts on. Every method is an existing host action;
-/// the driver holds the sequencing, the idempotence and the abort boundary.
-pub(crate) trait NativeJoinedDataHandoffHosts {
+/// The metadata surface of the hosts: all that the stage logic itself needs,
+/// whatever the backend. Every method is an existing host action.
+pub(crate) trait JoinedHandoffMetadataHosts {
     fn metadata_leader(&self) -> Result<ClusterNodeId>;
     fn committed_topology(&self) -> Result<ClusterTopology>;
     /// Commit through the real metadata consensus and return once the
@@ -151,6 +158,12 @@ pub(crate) trait NativeJoinedDataHandoffHosts {
     ) -> Result<()>;
     fn planning_view(&mut self, parent: &CancellationToken)
         -> Result<NativeJoinedDataPlanningView>;
+}
+
+/// The hosts the in-process backend acts on. Every method is an existing host
+/// action; the driver holds the sequencing, the idempotence and the abort
+/// boundary.
+pub(crate) trait NativeJoinedDataHandoffHosts: JoinedHandoffMetadataHosts {
     fn member(&self, node: &ClusterNodeId) -> Result<NativeJoinedDataMember>;
     /// Every original DATA owner whose installed policy follows the committed
     /// configuration, voters of this range or not.
@@ -192,6 +205,9 @@ pub(crate) trait NativeJoinedDataHandoffHosts {
 pub(crate) trait JoinedHandoffBackend {
     /// The member handles of one `drive_until` call.
     type Members;
+    /// The host surface this backend acts on. The stage logic uses only its
+    /// metadata part.
+    type Hosts: ?Sized + JoinedHandoffMetadataHosts;
     /// True once a source round was started or a freeze owner exists: a
     /// permanent handoff promise may exist and the abort is refused. It must
     /// become true before the first member mutation of `cut_and_ship`.
@@ -200,32 +216,44 @@ pub(crate) trait JoinedHandoffBackend {
     /// voter is an error.
     fn old_epoch(
         &self,
-        hosts: &dyn NativeJoinedDataHandoffHosts,
+        hosts: &Self::Hosts,
         node: &ClusterNodeId,
         range: &RangeDescriptor,
     ) -> Result<u64>;
     /// The abort was committed: drop what was retained for the aborted
     /// allocation.
     fn forget_aborted_allocation(&mut self);
-    /// Install the target's writer policy and DATA socket. Repeatable.
-    fn admit_target(
-        &mut self,
-        hosts: &mut dyn NativeJoinedDataHandoffHosts,
-        parent: &CancellationToken,
-    ) -> Result<()>;
+    /// Admit the target to receive this range's data. Repeatable. The
+    /// in-process backend installs the target's writer policy and DATA
+    /// socket; a backend whose target stays a registered replica receiver
+    /// until release admits it as such.
+    fn admit_target(&mut self, hosts: &mut Self::Hosts, parent: &CancellationToken) -> Result<()>;
     /// Resolve the participating members of the committed relocation.
     fn members(
         &self,
-        hosts: &dyn NativeJoinedDataHandoffHosts,
+        hosts: &Self::Hosts,
         range: &RangeDescriptor,
         relocation: &RangeRelocation,
     ) -> Result<Self::Members>;
+    /// Re-derive retained state from the members' durable state before any
+    /// stage decision of this call. The in-process backend retains everything
+    /// in memory and needs nothing.
+    fn resync(
+        &mut self,
+        _hosts: &mut Self::Hosts,
+        _members: &Self::Members,
+        _range: &RangeDescriptor,
+        _relocation: &RangeRelocation,
+        _parent: &CancellationToken,
+    ) -> Result<()> {
+        Ok(())
+    }
     /// No finalized image, publication round or durable decision is held.
     fn cut_required(&self) -> bool;
     /// Source cut, transfer and verification onto the target.
     fn cut_and_ship(
         &mut self,
-        hosts: &mut dyn NativeJoinedDataHandoffHosts,
+        hosts: &mut Self::Hosts,
         members: &Self::Members,
         range: &RangeDescriptor,
         relocation: &RangeRelocation,
@@ -253,16 +281,12 @@ pub(crate) trait JoinedHandoffBackend {
     /// Policy continuation through release.
     fn activate(
         &mut self,
-        hosts: &mut dyn NativeJoinedDataHandoffHosts,
+        hosts: &mut Self::Hosts,
         members: &Self::Members,
         parent: &CancellationToken,
     ) -> Result<()>;
     /// Target leadership and ingress; the ranges the target recovered.
-    fn serve(
-        &mut self,
-        hosts: &mut dyn NativeJoinedDataHandoffHosts,
-        parent: &CancellationToken,
-    ) -> Result<usize>;
+    fn serve(&mut self, hosts: &mut Self::Hosts, parent: &CancellationToken) -> Result<usize>;
 }
 
 /// One handoff of `range` onto `target`: the stage logic over a backend that
@@ -277,12 +301,8 @@ pub(crate) struct NativeJoinedDataHandoff<B: JoinedHandoffBackend = LocalJoinedH
 
 impl NativeJoinedDataHandoff<LocalJoinedHandoffBackend> {
     pub(crate) fn new(range: RangeId, target: ClusterNodeId) -> Self {
-        Self {
-            range,
-            backend: LocalJoinedHandoffBackend::new(target.clone()),
-            target,
-            recovered: None,
-        }
+        let backend = LocalJoinedHandoffBackend::new(target.clone());
+        Self::with_backend(range, target, backend)
     }
     /// Ask the target runtime to restart a dropped transfer in every state in
     /// which it must refuse, and record what it answered.
@@ -315,6 +335,15 @@ impl NativeJoinedDataHandoff<LocalJoinedHandoffBackend> {
 }
 
 impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
+    /// A handoff of `range` onto `target` over the given backend.
+    pub(crate) fn with_backend(range: RangeId, target: ClusterNodeId, backend: B) -> Self {
+        Self {
+            range,
+            target,
+            backend,
+            recovered: None,
+        }
+    }
     pub(crate) fn completed(&self) -> bool {
         self.recovered.is_some()
     }
@@ -322,7 +351,7 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
     /// nothing and returns the same stage.
     pub(crate) fn drive(
         &mut self,
-        hosts: &mut dyn NativeJoinedDataHandoffHosts,
+        hosts: &mut B::Hosts,
         parent: &CancellationToken,
     ) -> Result<NativeJoinedDataHandoffStage> {
         self.drive_until(hosts, None, parent)
@@ -351,7 +380,7 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
     /// A later `drive` starts a new learner allocation.
     pub(crate) fn abort_before_cut(
         &mut self,
-        hosts: &mut dyn NativeJoinedDataHandoffHosts,
+        hosts: &mut B::Hosts,
         parent: &CancellationToken,
     ) -> Result<()> {
         parent.check()?;
@@ -425,7 +454,7 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
     /// call may be repeated after any error or early return.
     pub(crate) fn drive_until(
         &mut self,
-        hosts: &mut dyn NativeJoinedDataHandoffHosts,
+        hosts: &mut B::Hosts,
         until: Option<NativeJoinedDataHandoffStage>,
         parent: &CancellationToken,
     ) -> Result<NativeJoinedDataHandoffStage> {
@@ -458,6 +487,8 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
         }
         let range = self.range(&topology)?;
         let members = self.backend.members(&*hosts, &range, &relocation)?;
+        self.backend
+            .resync(hosts, &members, &range, &relocation, parent)?;
         if relocation.native_joint_handoff_v1.is_some() {
             if let Some(stage @ (Stage::ImageVerified | Stage::DecisionPublished)) = until {
                 return Ok(stage);
@@ -530,7 +561,7 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
     /// step.
     fn commit_membership_stage(
         &mut self,
-        hosts: &mut dyn NativeJoinedDataHandoffHosts,
+        hosts: &mut B::Hosts,
         committed: Option<NativeJointHandoffStageV1>,
         parent: &CancellationToken,
     ) -> Result<()> {

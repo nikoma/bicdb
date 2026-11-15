@@ -17,8 +17,8 @@
 //! between stages and is run again.
 use super::*;
 use crate::distribution_native_host::joined_data_handoff::{
-    NativeJoinedDataHandoff, NativeJoinedDataHandoffHosts, NativeJoinedDataHandoffStage as Stage,
-    NativeJoinedDataMember, NativeJoinedDataPlanningView,
+    JoinedHandoffMetadataHosts, NativeJoinedDataHandoff, NativeJoinedDataHandoffHosts,
+    NativeJoinedDataHandoffStage as Stage, NativeJoinedDataMember, NativeJoinedDataPlanningView,
 };
 use crate::distribution_range_handoff::{
     NativeJointHandoffPlan, NativeJointHandoffRuntime, NativeJointOldObservation,
@@ -238,7 +238,7 @@ fn commit_topology(five: &Five, candidate: ClusterTopology) {
 
 /// The fixture's host actions. Each one is the member's existing host method;
 /// the sequencing and the abort/resume decisions are the driver's.
-impl NativeJoinedDataHandoffHosts for Five {
+impl JoinedHandoffMetadataHosts for Five {
     fn metadata_leader(&self) -> Result<ClusterNodeId> {
         Ok(node(0))
     }
@@ -292,6 +292,9 @@ impl NativeJoinedDataHandoffHosts for Five {
             business,
         })
     }
+}
+
+impl NativeJoinedDataHandoffHosts for Five {
     fn member(&self, id: &ClusterNodeId) -> Result<NativeJoinedDataMember> {
         let i = index_of(id);
         // The fifth member's transport is the one its own DATA owner uses.

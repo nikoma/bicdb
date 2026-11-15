@@ -549,8 +549,26 @@ impl NativeRemoteImageSourceSession {
         let proof = {
             let metadata = loop {
                 parent.check()?;
+                self.original_session.check()?;
                 own.require_live_request(business)?;
-                if let Some(metadata) = self.metadata.try_lock_for(Duration::from_millis(5)) {
+                let deadline = parent
+                    .deadline()
+                    .map_or(own.deadline(), |deadline| deadline.min(own.deadline()));
+                let deadline = self
+                    .original_session
+                    .deadline()
+                    .map_or(deadline, |session| session.min(deadline));
+                let remaining = deadline
+                    .checked_duration_since(Instant::now())
+                    .filter(|remaining| !remaining.is_zero())
+                    .ok_or(BicDbError::QueryTimedOut)?;
+                let metadata = self
+                    .metadata
+                    .try_lock_for(remaining.min(Duration::from_millis(5)));
+                parent.check()?;
+                self.original_session.check()?;
+                own.require_live_request(business)?;
+                if let Some(metadata) = metadata {
                     break metadata;
                 }
             };
@@ -572,10 +590,35 @@ impl NativeRemoteImageSourceSession {
             capture.validate(&db)?;
         }
         {
-            let metadata = self
-                .metadata
-                .try_lock()
-                .ok_or_else(|| invalid("source metadata changed before frame"))?;
+            // The DB read scope above has ended. A heartbeat briefly owning
+            // this mutex is contention, not proof that the selected metadata
+            // changed. Keep the original request/OWN bounds while acquiring
+            // the same Store, then perform the unchanged freshness check.
+            let metadata = loop {
+                parent.check()?;
+                self.original_session.check()?;
+                own.require_live_request(business)?;
+                let deadline = parent
+                    .deadline()
+                    .map_or(own.deadline(), |deadline| deadline.min(own.deadline()));
+                let deadline = self
+                    .original_session
+                    .deadline()
+                    .map_or(deadline, |session| session.min(deadline));
+                let remaining = deadline
+                    .checked_duration_since(Instant::now())
+                    .filter(|remaining| !remaining.is_zero())
+                    .ok_or(BicDbError::QueryTimedOut)?;
+                let metadata = self
+                    .metadata
+                    .try_lock_for(remaining.min(Duration::from_millis(5)));
+                parent.check()?;
+                self.original_session.check()?;
+                own.require_live_request(business)?;
+                if let Some(metadata) = metadata {
+                    break metadata;
+                }
+            };
             proof.require_current(&metadata)?;
         }
         self.admission

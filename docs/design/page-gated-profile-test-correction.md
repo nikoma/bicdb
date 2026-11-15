@@ -48,7 +48,7 @@ tracking-generation and budget assertion outside the corrected byte oracles
 is retained. Historical input/fixture bytes remain unchanged. This test leaf
 does not relax output assertions to accept both old and new profiles.
 
-## Evidence states
+## Evidence states at the original test-leaf checkpoint
 
 | Scope | State |
 | --- | --- |
@@ -61,3 +61,17 @@ does not relax output assertions to accept both old and new profiles.
 The new checksum/no-repair Page unit actually passed on `0a04ccc06`; that is
 coverage of its original source, not execution of these corrected test bodies.
 No binary, merge, release, deployment or HA qualification is produced here.
+
+## Later exact-source execution
+
+Candidate `2ce4c48202d4d1bb1ef759b08a41dc36f431af6d` actually passed both
+corrected cases in remaining-workspace job132756718432: segmented/monolithic
+profiles at raw2649 and tracked relayout at3855. The checksum/no-repair case
+also passed at1396, and the three retained/moved claim controls at4350/4351/4512.
+The full Page scope was 346 unit plus 152 integration passes. This is current
+CI component execution, with no historical binary or physical failure trial.
+
+The overall candidate failed Core test compilation and later Cell key rotation.
+Those failures and the frozen full raw evidence are retained in the
+[exact findings](native-520-regression-findings.md). The Page passes do not
+establish Core backup/bootstrap, native handoff or production qualification.

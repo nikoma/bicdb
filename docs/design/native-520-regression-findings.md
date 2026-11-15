@@ -4,16 +4,15 @@ This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe64
 
 ## Actual execution
 
-### Current head2ce: independent application passes, HA compilation blocked
+### Current head2ce: application passes, HA compilation and Cell rotation failures
 
-This is an **incomplete execution checkpoint**, not a completed archive or a
-passing candidate. Source **`2ce4c48202d4d1bb1ef759b08a41dc36f431af6d`**, tree
+This is a **completed, failed CI checkpoint**, not a qualified release.
+Source **`2ce4c48202d4d1bb1ef759b08a41dc36f431af6d`**, tree
 `f4d72164c2a2a906857b179d44df216d4457b9f8`, is the public PR207 head. Actual
 checkout `e1ef338cb41d51d4d9dfbc8660502e4afbc3f366` has that identical tree.
 [Tests43696050976](https://github.com/nikoma/bicdb/actions/runs/43696050976)
-remains running at this checkpoint; remaining-workspace is still live. SQL has
-completed successfully and its complete log has been independently verified.
-No useful job has been cancelled or restarted to publish the next correction.
+failed; Rails completed successfully. All logs and original artifacts are
+frozen and independently verified. No useful job was cancelled or restarted.
 
 | Scope | Classification | Exact result and limit |
 | --- | --- | --- |
@@ -21,7 +20,8 @@ No useful job has been cancelled or restarted to publish the next correction.
 | PGwire | **Passed, CI scope** | 511 passed / 0 failed / 2 ignored across target summaries. Separate Oracle HR: 50/0; embedded HA: 11/0; verification: 3/0. These do not exercise the complete distributed handoff or physical expansion. |
 | Rails | **Passed, application CI scope** | [Rails43696050973](https://github.com/nikoma/bicdb/actions/runs/43696050973): 20 runs, 100 assertions, zero failures/errors/skips; real queue/cache process-kill recovery, 24 completed reports and 24 cable messages. This does not qualify distributed HA. |
 | SQL | **Passed, CI scope** | 2,682 passed / 0 failed / 4 ignored across 282 summaries. The actual committed-finalization error/DDL cleanup and SQLSTATE mapping controls passed. This is not timed visibility-Unknown or distributed SQL acceptance. |
-| Remaining workspace | **Inconclusive; still running** | Do not inherit earlier results or classify pending profile/CLI/application controls as passed. |
+| Remaining workspace | **Failed** | 851 passed / 1 failed / 1 ignored across 61 summaries and 853 unique case names. Cell signed key rotation failed at `bicdb-cell/src/lib.rs:7589` with `Database(Backup("enrolled physical backup gate is missing"))`; Cell target 39/1/0. Activated/reopen/canary tails and later CLI/AppHost targets were not reached. |
+| Page components | **Passed, CI scope** | Checksum/no-repair at raw1396, paired segmented/monolithic gated profiles2649, tracked relayout3855, retained claims4350/4351 and moved-claim4512. Page unit346/0 plus integration152/0. This does not execute Core's backup/bootstrap or HA controls. |
 | Physical expansion and release qualification | **Not tested** | No new Azure experiment, stable five-node throughput comparison or production admission. |
 
 The completed raw PGwire log is 1,323,097 bytes, SHA-256
@@ -41,8 +41,30 @@ detail, detached committed transaction/DDL undo, preserved row/DDL/GUC after
 later ROLLBACK and a fresh SQL session, and healthy recovery with a failed
 derived job. It does not invoke the separate Core timed-Unknown cut or establish
 HA/failover behavior. Core's eight visibility controls remain unexecuted here.
-The overall archive remains open until the remaining jobs terminate and their
-logs/artifacts are retained and independently verified.
+Remaining-workspace raw log is 39,194,032 bytes, SHA-256
+`2c5178564320d017b562fb54dad65516f9c7b20edc31214c45577d470dccb535`;
+gzip SHA-256 `a6fd268fc6662bac8629ae8cca9b5b1558844b0f41a9e4fb25c57eafd6b7329f`.
+Independent full-log/case/cut receipt SHA-256:
+`5065ceb6c7b6a55740e36d475e4ffd9496df20f5526280c3c628a1de6735aa74`.
+The failed Cell unwrap/error is at raw307795–307796; the raw error does not name
+the internal rotation path or checkpoint. Source inspection finds that rotation
+deliberately omits the source gate while copying enrolled FORMAT into a fresh
+stage; later guarded stage writes then require a gate that was not initialized.
+This is an integration defect to repair through actual stage ownership and a
+new stable gate, not by bypassing the mandatory check. A fix is under source
+review and remains uncompiled/unexecuted. Core visibility/Standard/bootstrap
+and the later CLI/application-port acceptance remain **not tested** here.
+
+The complete archive contains 89 premanifest files, 92 total, 11 complete gzip
+logs and seven original ZIPs/24 members, with no missing or partial captures.
+Manifest SHA-256:
+`eaf355e7d77c1b41813a16547d4bc1848be9bf0fe7085a6e65939aa68b1b36e5`;
+independent full-archive verification receipt SHA-256:
+`74af72b27b7d31c39c3d9f4e67dbef702d7b79ef67ee4d8566c2afe6c794893b`.
+Verification covers exact source/tree/API inventories, every stored/raw hash,
+original ZIP API digest/size, CRC and member hashes. The original collector
+exited naturally; no replacement collector was started. Archive integrity does
+not qualify database behavior or the local successor fixes.
 
 Local correction **`781b4e8029f0e8c747fee69252c94a9f04992103`** specifies
 `mpsc::channel::<()>()` in the failed test. Only dropping the sender releases the

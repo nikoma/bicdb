@@ -32,21 +32,6 @@ impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
         self.require_strong_point_runtime(runtime)?;
         loop {
             parent.check()?;
-            let Some(topology) = self.topology.try_read_for(Duration::from_millis(5)) else {
-                continue;
-            };
-            let ranges = topology
-                .ranges
-                .values()
-                .map(crate::distribution_native_read::canonical_range)
-                .collect::<Vec<_>>();
-            drop(topology);
-            if ranges.is_empty() {
-                return Err(range_write_error(
-                    "installed event writer has no range configuration",
-                ));
-            }
-            parent.check()?;
             let Some(service) = self.local_service.try_lock_for(Duration::from_millis(5)) else {
                 #[cfg(test)]
                 publication_contention::after_failed_service_slice(
@@ -63,9 +48,25 @@ impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
                 continue;
             };
             parent.check()?;
+            let Some(topology) = self.topology.try_read_for(Duration::from_millis(5)) else {
+                drop(database);
+                drop(service);
+                continue;
+            };
+            parent.check()?;
+            let ranges = topology
+                .ranges
+                .values()
+                .map(crate::distribution_native_read::canonical_range)
+                .collect::<Vec<_>>();
+            if ranges.is_empty() {
+                return Err(range_write_error(
+                    "installed event writer has no range configuration",
+                ));
+            }
             for range in ranges {
                 parent.check()?;
-                host.require_for_coordinator(&database, &range, self)?;
+                host.require_for_coordinator_with_topology(&database, &range, self, &topology)?;
             }
             parent.check()?;
             return Ok(());

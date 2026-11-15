@@ -332,6 +332,36 @@ impl NativeMetadataControlHost {
         range: crate::RangeId,
         code: u8,
     ) -> Result<()> {
+        if matches!(code, 7 | 8) {
+            // Scheduling only on the SAME retained uncertain catalogue. The
+            // ordinary getter must continue refusing this fenced Store; do
+            // not obtain/reconstruct a current owner or change its health.
+            // The existing catalogue arm validates pending owned uncertainty.
+            let phase = {
+                let receiver = self
+                    .replica
+                    .as_ref()
+                    .ok_or_else(|| invalid("remote DECISION original receiver absent"))?;
+                let owner = {
+                    let table = receiver
+                        .remote_joint_targets
+                        .try_lock()
+                        .ok_or_else(|| invalid("remote DECISION retained owner table busy"))?;
+                    table
+                        .get(&range)
+                        .cloned()
+                        .ok_or_else(|| invalid("remote DECISION original owner absent"))?
+                };
+                let held = owner
+                    .remote_new
+                    .try_lock()
+                    .ok_or_else(|| invalid("remote DECISION original phase busy"))?;
+                held.as_ref()
+                    .cloned()
+                    .ok_or_else(|| invalid("remote DECISION original phase absent"))?
+            };
+            return phase.test_arm_remote_decision_cut(code);
+        }
         let owner = self.registered_remote_joint_owner(range)?;
         let phase = owner
             .remote_new

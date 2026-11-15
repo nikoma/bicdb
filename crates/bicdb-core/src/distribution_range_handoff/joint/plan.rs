@@ -247,9 +247,14 @@ impl NativeJointHandoffPlan {
         let Some(successor_plan) = lineage.native_joint_successor_plan_sha256()? else {
             return self.require_old_native_configuration(lineage);
         };
-        if successor_plan != self.checksum_sha256()?
-            || canonical_range(lineage.native_write_range()?)
-                != canonical_range(&self.data.activation_range)
+        if successor_plan != self.checksum_sha256()? {
+            // The published joint domain is an earlier handoff's. Its
+            // configuration is then this plan's predecessor and must match
+            // exactly, as before any bridge of this plan exists.
+            return self.require_old_native_configuration(lineage);
+        }
+        if canonical_range(lineage.native_write_range()?)
+            != canonical_range(&self.data.activation_range)
             || lineage.cluster_id() != &self.data.cluster_id
             || lineage.bootstrap_id() != self.data.bootstrap_id
             || lineage.schema_sha256() != self.data.schema_sha256

@@ -287,8 +287,13 @@ impl RangeWriteStore {
             ));
         }
         native.require_current(database)?;
-        self.require_native_joint_host_base(database, data.old_range().id)?;
-        writer_domain.require_current(database, self, data.activation_range())?;
+        // This path exists to resolve the store's uncertain marker, which a
+        // registered owner's proof would otherwise refuse. The checks below
+        // still require the uncertainty to be this exact activation's.
+        self.with_own_uncertainty_set_aside(|store| {
+            store.require_native_joint_host_base(database, data.old_range().id)?;
+            writer_domain.require_current(database, store, data.activation_range())
+        })?;
         #[cfg(feature = "tls-replication")]
         if let crate::db::NativeJointWriterDomain::Closed(actual) = writer_domain {
             if actual.data() != data {
@@ -451,7 +456,11 @@ impl RangeWriteStore {
         admission.committed().require_current(database)?;
         let native = admission.native_receipt();
         native.require_current(database)?;
-        self.require_native_joint_host_base(database, native.data().old_range().id)?;
+        // As above: only reached while uncertain, and bound below to the
+        // exact activation before anything is re-fsynced.
+        self.with_own_uncertainty_set_aside(|store| {
+            store.require_native_joint_host_base(database, native.data().old_range().id)
+        })?;
         if !self.fsync
             || self.root.canonicalize()? != database.data_path().canonicalize()?
             || !crate::format::native_joint_data_handoff_active(database.data_path())?
@@ -478,7 +487,9 @@ impl RangeWriteStore {
                 "cannot re-fsync an unrelated uncertain joint activation",
             ));
         }
-        writer_domain.require_current(database, self, native.data().activation_range())?;
+        self.with_own_uncertainty_set_aside(|store| {
+            writer_domain.require_current(database, store, native.data().activation_range())
+        })?;
         self.persist_native_joint(database, range)?;
         self.recovery_persistence_uncertain = false;
         writer.require_store(&writer_root, self.open_id)?;
@@ -604,7 +615,15 @@ impl RangeWriteStore {
         drop(pin);
         let controlled = gate.try_controlled_mutation(frozen)?;
         gate.validate(range, &RangeMutationAuthority::Controlled(&controlled))?;
-        writer_domain.require_current(database, self, data.activation_range())?;
+        if existing.is_some() {
+            // Exact retry of this activation (matched above): its own
+            // uncertain marker must not refuse the write that resolves it.
+            self.with_own_uncertainty_set_aside(|store| {
+                writer_domain.require_current(database, store, data.activation_range())
+            })?;
+        } else {
+            writer_domain.require_current(database, self, data.activation_range())?;
+        }
         let state = self
             .catalog
             .native_joint_handoffs

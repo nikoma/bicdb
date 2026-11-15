@@ -859,18 +859,6 @@ impl NativeInitialDataHost {
             &token,
         )
     }
-    /// Re-enroll the SAME retained coordinator at the current committed DATA
-    /// configuration. A range whose voter set or epoch changed (a committed
-    /// learner allocation, or a completed joint membership change) is outside
-    /// the previously installed policy, and the metadata-only registry refresh
-    /// deliberately refuses such a change. This publishes a complete new
-    /// native policy from a fresh host metadata observation; it creates no
-    /// leadership, recovered epoch, Ready or Strong permission.
-    ///
-    /// APP ingress is closed across the replacement and reopened only if it
-    /// was published before. A process-owned maintenance worker retains the
-    /// original writer objects, so this bounded continuation is refused once
-    /// that worker has been started.
     /// A surviving original member that keeps range leadership across a
     /// joint handoff leads a new epoch that nothing has recovered yet: the
     /// joined target recovers only when leadership moves to it. Run the same
@@ -898,6 +886,18 @@ impl NativeInitialDataHost {
         parent.check()?;
         Ok(recovered)
     }
+    /// Re-enroll the SAME retained coordinator at the current committed DATA
+    /// configuration. A range whose voter set or epoch changed (a committed
+    /// learner allocation, or a completed joint membership change) is outside
+    /// the previously installed policy, and the metadata-only registry refresh
+    /// deliberately refuses such a change. This publishes a complete new
+    /// native policy from a fresh host metadata observation; it creates no
+    /// leadership, recovered epoch, Ready or Strong permission.
+    ///
+    /// APP ingress is closed across the replacement and reopened only if it
+    /// was published before. A process-owned maintenance worker retains the
+    /// original writer objects, so this bounded continuation is refused once
+    /// that worker has been started.
     fn refresh_data_policy(&mut self, parent: &CancellationToken) -> Result<()> {
         parent.check()?;
         if self.stopping {

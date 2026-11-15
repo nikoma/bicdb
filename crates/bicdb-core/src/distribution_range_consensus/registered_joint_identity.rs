@@ -81,9 +81,22 @@ impl RangeWriteStore {
         db: &crate::BicDb,
         range: RangeId,
     ) -> Result<()> {
+        self.with_own_uncertainty_set_aside(|store| store.require_native_joint_host_base(db, range))
+    }
+    /// Run an identity proof for a joint activation write or its exact
+    /// re-fsync with the store's uncertain marker set aside. Callers must
+    /// already have established that any uncertainty is this activation's
+    /// own. The marker is restored on every exit, including a panic.
+    pub(super) fn with_own_uncertainty_set_aside<T>(
+        &mut self,
+        proof: impl FnOnce(&Self) -> Result<T>,
+    ) -> Result<T> {
         let uncertain = std::mem::replace(&mut self.recovery_persistence_uncertain, false);
-        let proved = self.require_native_joint_host_base(db, range);
+        let proved = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| proof(self)));
         self.recovery_persistence_uncertain = uncertain;
-        proved
+        match proved {
+            Ok(result) => result,
+            Err(panic) => std::panic::resume_unwind(panic),
+        }
     }
 }

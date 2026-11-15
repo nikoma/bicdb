@@ -13,13 +13,15 @@ use crate::distribution_range_handoff::{
 
 mod activation_owned_tests;
 mod collection_binding_tests;
+mod entry_scope_tests;
 mod fresh_collection_tests;
 mod new_decision_round_tests;
 mod prepared_candidate_tests;
 mod publication_scope_tests;
 
 pub(in super::super) fn is_hot_policy(case: SourceCase) -> bool {
-    activation_owned_tests::is_case(case)
+    entry_scope_tests::is_case(case)
+        || activation_owned_tests::is_case(case)
         || publication_scope_tests::is_case(case)
         || prepared_candidate_tests::is_case(case)
         || collection_binding_tests::is_case(case)
@@ -1143,6 +1145,21 @@ pub(in super::super) fn exercise(
                 .acquire_local_writer_policy(&all_clients[i], &node(0))
                 .unwrap(),
         );
+        if i == 4 && entry_scope_tests::is_case(case) {
+            entry_scope_tests::exercise(
+                case,
+                target_control,
+                selected,
+                admission,
+                metadata[i].clone(),
+                factory,
+                &current,
+                ranges,
+                output,
+                &mut ledger,
+            );
+            return;
+        }
         if i == 4 && matches!(case, SourceCase::TargetHotFirstPolicyTermBeforeHook) {
             let before = local_term_tests::snapshot(target_control, factory, &current, ranges);
             let request = budget(5000);

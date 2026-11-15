@@ -6,7 +6,33 @@ use crate::distribution_range_handoff::NativeJointServingPolicyAdmission;
 #[cfg(test)]
 mod drain_tests;
 #[cfg(test)]
+mod entry_tests;
+#[cfg(test)]
 mod partial_drain_tests;
+
+/// Single-use borrow of the exact entry admission and original caller. This
+/// carries no physical/currentness authority into native work: the factory
+/// performs its full external check again after the fresh HostMQ observation.
+struct RegisteredPolicyEntry<'a> {
+    admission: &'a Arc<NativeJointServingPolicyAdmission>,
+    caller: &'a CancellationToken,
+}
+impl<'a> RegisteredPolicyEntry<'a> {
+    fn acquire(
+        admission: &'a Arc<NativeJointServingPolicyAdmission>,
+        caller: &'a CancellationToken,
+    ) -> Result<Self> {
+        caller.check()?;
+        admission.require_external_current()?;
+        caller.check()?;
+        Ok(Self { admission, caller })
+    }
+    fn consume(self) -> Result<Arc<NativeJointServingPolicyAdmission>> {
+        self.caller.check()?;
+        self.admission.require_live()?;
+        Ok(Arc::clone(self.admission))
+    }
+}
 
 pub(super) struct RegisteredServingPolicy {
     owner: Arc<NativeRegisteredRemoteJointOwner>,
@@ -196,12 +222,12 @@ impl NativeAssignedDataHost {
         self.listener.take();
         Ok(result)
     }
-    pub(super) fn new_registered_serving(
+    fn new_registered_serving(
         parts: registered_replica::RegisteredAssignedParts,
         owner: Arc<NativeRegisteredRemoteJointOwner>,
-        admission: Arc<NativeJointServingPolicyAdmission>,
+        entry: RegisteredPolicyEntry<'_>,
     ) -> Result<Self> {
-        admission.require_external_current()?;
+        let admission = entry.consume()?;
         if !parts.factory.spec.initial_ranges.is_empty()
             || !Arc::ptr_eq(&parts.backend.service, owner.service())
             || owner.target().native().local_node_id() != &parts.backend.node_id
@@ -228,11 +254,8 @@ impl NativeAssignedDataHost {
             registered: Some(RegisteredServingPolicy { owner, admission }),
         })
     }
-    pub(super) fn replace_registered_policy_phase(
-        &mut self,
-        admission: Arc<NativeJointServingPolicyAdmission>,
-    ) -> Result<()> {
-        admission.require_external_current()?;
+    fn replace_registered_policy_phase(&mut self, entry: RegisteredPolicyEntry<'_>) -> Result<()> {
+        let admission = entry.consume()?;
         let retained = self.registered.as_mut().ok_or_else(|| {
             invalid("legacy Assigned owner cannot become original Registered Serving")
         })?;
@@ -277,15 +300,20 @@ impl NativeAssignedDataHost {
             .as_ref()
             .ok_or_else(|| invalid("Registered Serving provenance absent"))?;
         crate::native_policy_trace::stage!(
-            "retained_external_ALL_current",
-            retained.admission.require_external_current()
+            "retained_actual_admission_live",
+            retained.admission.require_live()
         )?;
+        // Both real requests constrain routing and fresh HostMQ. The factory
+        // still validates ALL external/current bindings after HostMQ returns.
+        let acquisition = parent.child_linked_to(&retained.admission.bound_policy_request());
+        #[cfg(test)]
+        entry_tests::at_actual_acquisition(false, &acquisition);
         #[cfg(test)]
         crate::native_policy_trace::note("actual_route_MStore_lock_entry");
         let route = self
             .parts
             .backend
-            .lock_metadata(parent)?
+            .lock_metadata(&acquisition)?
             .status()
             .leader_id
             .ok_or_else(|| invalid("Registered first DATA metadata leader unknown"))?;
@@ -301,7 +329,7 @@ impl NativeAssignedDataHost {
                     &route,
                     business,
                     Duration::from_secs(5),
-                    parent
+                    &acquisition
                 )
         )?;
         #[cfg(test)]
@@ -310,6 +338,8 @@ impl NativeAssignedDataHost {
             .backend
             .transport
             .install_topology(observed.committed_topology(business)?.clone())?;
+        #[cfg(test)]
+        entry_tests::at_actual_acquisition(true, &acquisition);
         let (origin, policy) = crate::native_policy_trace::stage!(
             "actual_prepare_first_policy_origin",
             retained.owner.prepare_first_serving_data_policy(
@@ -484,9 +514,9 @@ impl NativeMetadataControlHost {
                     attempt.test_trace_publication_state("host_actual_entry_retained_attempt");
                 }
                 parent.check()?;
-                crate::native_policy_trace::stage!(
+                let entry = crate::native_policy_trace::stage!(
                     "entry_actual_external_ALL_current",
-                    admission.require_external_current()
+                    RegisteredPolicyEntry::acquire(&admission, parent)
                 )?;
                 if self.data.is_some() {
                     return Err(invalid(
@@ -494,7 +524,7 @@ impl NativeMetadataControlHost {
                     ));
                 }
                 if let Some(retained) = self.assigned.as_mut() {
-                    retained.replace_registered_policy_phase(admission)?;
+                    retained.replace_registered_policy_phase(entry)?;
                 } else {
                     let owner = crate::native_policy_trace::stage!(
                         "actual_registered_joint_owner_lookup",
@@ -520,7 +550,7 @@ impl NativeMetadataControlHost {
                         install.hold_for_data_owner()
                     )?;
                     self.assigned = Some(NativeAssignedDataHost::new_registered_serving(
-                        parts, owner, admission,
+                        parts, owner, entry,
                     )?);
                     custody.close_for_data_owner();
                     drop(custody);

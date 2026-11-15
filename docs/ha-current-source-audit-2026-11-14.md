@@ -1,6 +1,6 @@
 # HA and horizontal scaling: evidence checkpoint, November 14, 2026
 
-## Latest observation — November 15, 2026, 11:20 UTC
+## Latest observation — November 15, 2026: source7c Native completion
 
 Delivered remote main is **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**,
 not the historical517 checkpoint below. Its post-merge Native job passed

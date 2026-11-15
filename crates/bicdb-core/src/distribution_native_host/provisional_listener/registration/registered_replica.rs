@@ -64,15 +64,19 @@ pub(crate) struct NativeRegisteredReplicaAdmission {
 /// the same receiver's authenticated step RPC. Sharing changes who may drive
 /// one bounded operation, never what that operation must independently prove.
 pub(super) struct RegisteredRemoteInstall {
-    /// Set by the owning host once a distinct DATA owner exists; the receiver
-    /// path then refuses exactly like the host's own continuation methods.
-    data_owner: AtomicBool,
     tables: Mutex<RegisteredRemoteInstallTables>,
     #[cfg(test)]
     drop_next_step_reply: AtomicBool,
 }
 #[derive(Default)]
 pub(super) struct RegisteredRemoteInstallTables {
+    /// Set by the owning host once a distinct DATA owner exists; the receiver
+    /// path then refuses exactly like the host's own continuation methods.
+    /// It lives under the custody lock: a step reads it while it holds the
+    /// tables for its whole duration, and the host sets it only while holding
+    /// them, so "a step advances install state" and "this host becomes a
+    /// DATA owner" exclude each other.
+    data_owner: bool,
     remote_attempts: std::collections::BTreeMap<
         crate::RangeId,
         remote_attempt::NativeRegisteredRemoteInstallAttempt,
@@ -84,6 +88,14 @@ pub(super) struct RegisteredRemoteInstallTables {
     remote_steps:
         std::collections::BTreeMap<crate::RangeId, remote_attempt::RegisteredTargetInstallStep>,
 }
+impl RegisteredRemoteInstallTables {
+    pub(super) fn close_for_data_owner(&mut self) {
+        self.data_owner = true;
+    }
+    pub(super) fn data_owner_present(&self) -> bool {
+        self.data_owner
+    }
+}
 impl RegisteredRemoteInstall {
     /// Nonwaiting: one bounded operation owns the tables; a concurrent caller
     /// is refused instead of queued behind engine or network work.
@@ -94,11 +106,15 @@ impl RegisteredRemoteInstall {
             .try_lock()
             .ok_or_else(|| invalid("Registered remote install custody busy"))
     }
-    pub(super) fn close_for_data_owner(&self) {
-        self.data_owner.store(true, Ordering::Release);
-    }
-    pub(super) fn data_owner_present(&self) -> bool {
-        self.data_owner.load(Ordering::Acquire)
+    /// The owning host's transition to a distinct DATA owner takes the same
+    /// custody a receiver-driven step holds. Nonwaiting: while a step is in
+    /// flight the transition is refused and may simply be retried.
+    pub(super) fn hold_for_data_owner(
+        &self,
+    ) -> Result<parking_lot::MutexGuard<'_, RegisteredRemoteInstallTables>> {
+        self.tables.try_lock().ok_or_else(|| {
+            invalid("Registered remote install step in flight; retry the DATA owner transition")
+        })
     }
     #[cfg(test)]
     pub(super) fn test_drop_next_step_reply(&self) {
@@ -337,7 +353,6 @@ impl NativeRegisteredReplicaReceiver {
         let closed_fence_ready = Arc::new(AtomicBool::new(false));
         let remote_joint_targets = Arc::new(Mutex::new(std::collections::BTreeMap::new()));
         let remote_install = Arc::new(RegisteredRemoteInstall {
-            data_owner: AtomicBool::new(false),
             tables: Mutex::new(RegisteredRemoteInstallTables::default()),
             #[cfg(test)]
             drop_next_step_reply: AtomicBool::new(false),
@@ -541,12 +556,13 @@ impl NativeMetadataControlHost {
     pub(in crate::distribution_native_host) fn has_replica_receiver(&self) -> bool {
         self.replica.is_some()
     }
-    /// A distinct DATA owner now exists. The shared install custody refuses
-    /// every later receiver-driven step exactly like the host's own methods.
-    pub(super) fn close_registered_remote_install_for_data_owner(&self) {
-        if let Some(receiver) = self.replica.as_ref() {
-            receiver.remote_install.close_for_data_owner();
-        }
+    /// The original receiver's shared install custody, for the host's own
+    /// transition to a distinct DATA owner under that custody.
+    pub(super) fn registered_remote_install(&self) -> Result<Arc<RegisteredRemoteInstall>> {
+        self.replica
+            .as_ref()
+            .map(|receiver| receiver.remote_install.clone())
+            .ok_or_else(|| invalid("actual Registered receiver required"))
     }
 }
 

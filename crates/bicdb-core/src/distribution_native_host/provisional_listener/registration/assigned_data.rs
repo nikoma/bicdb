@@ -391,8 +391,13 @@ impl NativeMetadataControlHost {
             .as_ref()
             .ok_or_else(|| invalid("actual Registered receiver required"))?
             .assigned_parts()?;
+        // No receiver-driven install step may be in flight while the distinct
+        // DATA owner is created; the flag is set under that same custody.
+        let install = self.registered_remote_install()?;
+        let mut custody = install.hold_for_data_owner()?;
         self.assigned = Some(NativeAssignedDataHost::new(parts, image)?);
-        self.close_registered_remote_install_for_data_owner();
+        custody.close_for_data_owner();
+        drop(custody);
         self.advance_assigned_closed_data_policy(parent)
     }
     pub(in crate::distribution_native_host) fn advance_assigned_closed_data_policy(

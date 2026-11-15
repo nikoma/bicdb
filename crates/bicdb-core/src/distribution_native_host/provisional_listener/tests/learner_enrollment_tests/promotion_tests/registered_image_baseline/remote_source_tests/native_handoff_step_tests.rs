@@ -244,8 +244,30 @@ pub(super) fn exercise(
             target_before,
             "refused steps must not change the target"
         );
-        // (e) The first attempt is retained by exactly one bounded sub-step
-        // (the budget equals the minimum continuation budget).
+        // (e) A first caller names another OLD member as donor. Exactly one
+        // bounded sub-step runs (the budget equals the minimum continuation
+        // budget), so the retained step is only a discovery position.
+        let wrong_donor = plan.retiring_source().clone();
+        assert_ne!(wrong_donor, donor);
+        let wrong_attempt = Uuid::now_v7();
+        let wrong = step(
+            &clients[0],
+            &plan,
+            &wrong_donor,
+            wrong_attempt,
+            1500,
+            &mut ledger,
+            output,
+        );
+        let stuck = target_control.test_joint_handoff_step_state(range).unwrap();
+        assert_eq!(stuck["donor"], serde_json::json!(wrong_donor));
+        assert_eq!(stuck["target_attempt"], wrong_attempt.to_string());
+        assert_eq!(stuck["stage"], serde_json::json!(Stage::Discovering));
+        assert!(target_control
+            .test_registered_remote_attempt(range)
+            .is_err());
+        // Nothing but that position exists, so a fresh authorized step may
+        // re-point the install to the right donor under a new attempt id.
         let first = step(
             &clients[0],
             &plan,
@@ -255,12 +277,50 @@ pub(super) fn exercise(
             &mut ledger,
             output,
         );
+        if let Err(error) = &first {
+            assert!(
+                !error.to_string().contains("retains"),
+                "a discovery-only step must be replaceable: {error}"
+            );
+        }
         let retained = target_control.test_joint_handoff_step_state(range).unwrap();
+        assert_eq!(retained["donor"], serde_json::json!(donor));
         assert_eq!(retained["target_attempt"], attempt.to_string());
+        assert_eq!(retained["relocation"], stuck["relocation"]);
         assert!(retained["completed"].is_null());
         if let Ok(outcome) = &first {
             assert!(!outcome.complete);
         }
+        // Drive the re-pointed attempt past its first durable write (the
+        // proposal). From there another attempt id is refused as before.
+        let mut durable = None;
+        let mut durable_errors = Vec::new();
+        for _ in 0..24 {
+            match step(
+                &clients[0],
+                &plan,
+                &donor,
+                attempt,
+                4000,
+                &mut ledger,
+                output,
+            ) {
+                Ok(outcome) if outcome.stage >= Stage::Installing => {
+                    durable = Some(outcome);
+                    break;
+                }
+                Ok(_) => {}
+                Err(error) => durable_errors.push(error.to_string()),
+            }
+        }
+        let durable = durable.unwrap_or_else(|| {
+            panic!("re-pointed attempt made no durable progress: {durable_errors:?}")
+        });
+        assert!(!target_control
+            .test_registered_remote_attempt(range)
+            .unwrap()["proposal"]
+            .is_null());
+        let retained = target_control.test_joint_handoff_step_state(range).unwrap();
         let second_attempt = Uuid::now_v7();
         let error = step(
             &clients[0],
@@ -300,9 +360,34 @@ pub(super) fn exercise(
                 }
             }
         }
-        let resumed = resumed.expect("original attempt must continue after the refusal");
+        let mut resumed = resumed.expect("original attempt must continue after the refusal");
         assert!(resumed.stage > Stage::Discovering, "{resumed:?}");
         assert!(resumed.manifest_sha256.is_some());
+        // The re-pointed attempt then completes on the right donor.
+        let mut completion_errors = Vec::new();
+        for _ in 0..96 {
+            if resumed.complete {
+                break;
+            }
+            match step(
+                &clients[0],
+                &plan,
+                &donor,
+                attempt,
+                4000,
+                &mut ledger,
+                output,
+            ) {
+                Ok(outcome) => resumed = outcome,
+                Err(error) => {
+                    completion_errors.push(error.to_string());
+                    assert!(completion_errors.len() <= 4, "{completion_errors:?}");
+                }
+            }
+        }
+        assert!(resumed.complete, "{resumed:?} {completion_errors:?}");
+        assert_eq!(resumed.stage, Stage::Complete);
+        assert!(target_control.registered_remote_joint_owner(range).is_ok());
         let donor_state = controls[donor_index]
             .test_source_discovery_state(range)
             .unwrap();
@@ -315,6 +400,10 @@ pub(super) fn exercise(
             &serde_json::json!({
                 "foreign_peer":node(foreign),"foreign_peer_error":foreign_error,
                 "changed_identity_errors":changed_errors,
+                "wrong_donor":wrong_donor,"wrong_donor_attempt":wrong_attempt,
+                "wrong_donor_outcome":wrong.as_ref().ok(),
+                "wrong_donor_error":wrong.as_ref().err().map(ToString::to_string),
+                "wrong_donor_step":stuck,"durable_progress":durable,
                 "first_attempt":attempt,"refused_second_attempt":second_attempt,
                 "second_attempt_error":error.to_string(),"resumed":resumed,
                 "retained_step":target_control.test_joint_handoff_step_state(range).unwrap(),

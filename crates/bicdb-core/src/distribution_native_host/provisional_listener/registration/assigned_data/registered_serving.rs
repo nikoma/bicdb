@@ -335,10 +335,16 @@ impl NativeMetadataControlHost {
                 .as_ref()
                 .ok_or_else(|| invalid("Registered Serving original receiver absent"))?;
             let parts = receiver.assigned_parts()?;
+            // No receiver-driven install step may be in flight while the
+            // distinct DATA owner is created; the flag is set under that
+            // same custody. A refusal consumed nothing and is retryable.
+            let install = self.registered_remote_install()?;
+            let mut custody = install.hold_for_data_owner()?;
             self.assigned = Some(NativeAssignedDataHost::new_registered_serving(
                 parts, owner, admission,
             )?);
-            self.close_registered_remote_install_for_data_owner();
+            custody.close_for_data_owner();
+            drop(custody);
         }
         self.advance_assigned_closed_data_policy(parent)
     }

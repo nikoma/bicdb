@@ -34,6 +34,9 @@ const VERIFY_STEP_RECORDS: usize = 4096;
 /// them; this only remembers which bounded operation comes next.
 pub(in super::super) struct RegisteredTargetInstallStep {
     binding_sha256: String,
+    /// The committed relocation (id, session, nonce) this attempt was
+    /// authorized for by the receiver's own Role and metadata.
+    relocation: (crate::RelocationId, Uuid, Uuid),
     donor: ClusterNodeId,
     target_attempt: Uuid,
     discovery_started: bool,
@@ -257,7 +260,9 @@ impl NativeRegisteredReplicaAdmission {
         }
         let range = request.range_id;
         let mut held = install.hold()?;
-        if install.data_owner_present() {
+        // Read under the custody this step holds until it returns: the host
+        // sets it only while holding the same custody.
+        if held.data_owner_present() {
             return Err(invalid(
                 "joint handoff step cannot replace an existing DATA owner",
             ));
@@ -266,18 +271,55 @@ impl NativeRegisteredReplicaAdmission {
             remote_attempts,
             remote_images,
             remote_steps,
+            ..
         } = &mut *held;
-        if let Some(retained) = remote_steps.get(&range) {
-            if retained.binding_sha256 != binding_sha256 {
-                return Err(invalid(
-                    "joint handoff step retains another exact target install attempt",
-                ));
+        // The plan `first` built from this receiver's own fresh Role and
+        // committed metadata names the range's CURRENT committed relocation.
+        let current = {
+            let promise = first.plan.promise();
+            (promise.relocation_id, promise.session_id, promise.nonce)
+        };
+        let foreign_owner = joint_targets
+            .try_lock()
+            .ok_or_else(|| invalid("joint handoff step owner table busy"))?
+            .contains_key(&range);
+        let superseded = match remote_steps.get(&range) {
+            Some(retained) if retained.binding_sha256 != binding_sha256 => {
+                // Preparation is the first operation that retains anything
+                // beyond this entry (the attempt and its transferred freeze,
+                // in memory); the proposal after it is the first durable
+                // write. Until the attempt exists the entry is only a driver
+                // position and a fresh authorized step may replace it: the
+                // donor or attempt id was wrong or lost, or the relocation it
+                // was started for is no longer the committed one.
+                let only_position = retained.stage <= Stage::Preparing
+                    && !foreign_owner
+                    && !remote_attempts.contains_key(&range)
+                    && !remote_images.contains_key(&range);
+                if !only_position {
+                    if retained.relocation != current {
+                        // No product path discards a retained install attempt
+                        // or its durable Installing state; never invent one.
+                        return Err(invalid(&format!(
+                            "joint handoff step retains install custody of stale relocation {} \
+                             (session {}), which is no longer this range's committed relocation; \
+                             this original receiver cannot discard it",
+                            retained.relocation.0.get(),
+                            retained.relocation.1
+                        )));
+                    }
+                    return Err(invalid(
+                        "joint handoff step retains another exact target install attempt",
+                    ));
+                }
+                true
             }
-        } else {
-            let foreign_owner = joint_targets
-                .try_lock()
-                .ok_or_else(|| invalid("joint handoff step owner table busy"))?
-                .contains_key(&range);
+            _ => false,
+        };
+        if superseded {
+            remote_steps.remove(&range);
+        }
+        if !remote_steps.contains_key(&range) {
             if foreign_owner || remote_attempts.contains_key(&range) {
                 return Err(invalid(
                     "joint handoff step cannot adopt install custody it did not start",
@@ -287,6 +329,7 @@ impl NativeRegisteredReplicaAdmission {
                 range,
                 RegisteredTargetInstallStep {
                     binding_sha256: binding_sha256.clone(),
+                    relocation: current,
                     donor: donor.clone(),
                     target_attempt: *target_attempt,
                     discovery_started: false,
@@ -303,7 +346,8 @@ impl NativeRegisteredReplicaAdmission {
         }
         let step = remote_steps.get_mut(&range).unwrap();
         let mut custody = RegisteredRemoteInstallCustody {
-            data_owner: install.data_owner_present(),
+            // Verified absent above, under the custody held until return.
+            data_owner: false,
             backend: backend.clone(),
             runtime: runtime.clone(),
             admission: self.clone(),
@@ -714,6 +758,28 @@ impl NativeMetadataControlHost {
             .test_drop_next_step_reply();
         Ok(())
     }
+    /// Hold the install custody from another thread exactly as a receiver
+    /// step does for its whole duration, until the returned value is dropped.
+    pub(crate) fn test_hold_registered_install_step_in_flight(
+        &self,
+    ) -> Result<TestRegisteredInstallStepInFlight> {
+        let install = self.registered_remote_install()?;
+        let (ready, held) = std::sync::mpsc::channel();
+        let (release, wait) = std::sync::mpsc::channel::<()>();
+        let thread = std::thread::spawn(move || {
+            let custody = install.hold();
+            let _ = ready.send(custody.is_ok());
+            let _ = wait.recv();
+            drop(custody);
+        });
+        if !held.recv().unwrap_or(false) {
+            return Err(invalid("test step custody was not acquired"));
+        }
+        Ok(TestRegisteredInstallStepInFlight {
+            release: Some(release),
+            thread: Some(thread),
+        })
+    }
     /// Memory-only driver position; grants nothing and reads no native state.
     pub(crate) fn test_joint_handoff_step_state(
         &self,
@@ -728,11 +794,27 @@ impl NativeMetadataControlHost {
             None => serde_json::Value::Null,
             Some(step) => serde_json::json!({
                 "binding_sha256":step.binding_sha256,"donor":step.donor,
+                "relocation":step.relocation.0,"session":step.relocation.1,
                 "target_attempt":step.target_attempt,"stage":step.stage,
                 "discovery_started":step.discovery_started,
                 "manifest_sha256":step.source.as_ref().map(|s|s.manifest().checksum_sha256.clone()),
                 "completed":step.completed,"memory_only":true,
             }),
         })
+    }
+}
+
+#[cfg(test)]
+pub(crate) struct TestRegisteredInstallStepInFlight {
+    release: Option<std::sync::mpsc::Sender<()>>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+#[cfg(test)]
+impl Drop for TestRegisteredInstallStepInFlight {
+    fn drop(&mut self) {
+        drop(self.release.take());
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
     }
 }

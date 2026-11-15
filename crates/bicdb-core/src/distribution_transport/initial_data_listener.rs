@@ -51,6 +51,7 @@ pub(super) fn require_request(
         | ClusterDataRequest::FetchBootstrapSnapshot
         | ClusterDataRequest::ExportSchemaBundle { .. }
         | ClusterDataRequest::MetadataVote { .. }
+        | ClusterDataRequest::MetadataLeadershipTransfer { .. }
         | ClusterDataRequest::MetadataAppend { .. }
         | ClusterDataRequest::MetadataReadProbe { .. }
         | ClusterDataRequest::MetadataReadAcquire { .. }

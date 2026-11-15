@@ -42,6 +42,7 @@ pub(super) fn require_request(request: &ClusterDataRequest) -> Result<()> {
         ClusterDataRequest::Ping | ClusterDataRequest::RegisterMetadataLearner {..}
         | ClusterDataRequest::FetchBootstrapSnapshot | ClusterDataRequest::ExportSchemaBundle {..}
         | ClusterDataRequest::MetadataVote {..} | ClusterDataRequest::MetadataAppend {..}
+        | ClusterDataRequest::MetadataLeadershipTransfer {..}
         | ClusterDataRequest::MetadataReadProbe {..} | ClusterDataRequest::MetadataReadAcquire {..}
         | ClusterDataRequest::HostMetadataReadAcquire {..}
         | ClusterDataRequest::AcquireMetadataRecoveryRole {..}

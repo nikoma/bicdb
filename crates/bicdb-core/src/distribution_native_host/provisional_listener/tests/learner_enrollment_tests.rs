@@ -535,6 +535,8 @@ fn native_registered_learner_enrollment_retries_only_exact_persisted_pending_ent
     f.shutdown();
 }
 
+mod leadership_transfer_refusal_tests;
+
 mod metadata_transition_tests;
 
 mod promotion_tests;

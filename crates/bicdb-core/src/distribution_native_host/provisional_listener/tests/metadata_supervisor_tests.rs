@@ -492,3 +492,5 @@ fn native_owned_metadata_supervisor_strict_metadata_reopen_preserves_protected_u
         id
     );
 }
+
+mod leadership_transfer_tests;

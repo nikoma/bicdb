@@ -39,6 +39,7 @@ pub(crate) use registered_replica::{
     NativeRegisteredReplicaAdmission, NativeRegisteredSelectedRangeNoDomain,
     NativeRegisteredServingDataPolicyOrigin,
 };
+mod leadership_transfer;
 mod maintenance;
 mod range_move_hosts;
 use initial_data::NativeInitialDataHost;

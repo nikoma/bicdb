@@ -71,6 +71,19 @@ impl InstalledNativeWriterHostGuard {
         {
             return Err(invalid("allocation replaced original State/coordinator"));
         }
+        // Factory AND sink origin refusal; the sink separately checks under
+        // its actual admission gate before any allocation publication effect.
+        if self
+            .state
+            .registry_attempt
+            .try_lock()
+            .ok_or_else(|| invalid("registry original attempt busy during allocation preparation"))?
+            .is_some()
+        {
+            return Err(invalid(
+                "registry original attempt excludes allocation preparation",
+            ));
+        }
         self.state.require_original_identity_database(db)
     }
     pub(crate) fn allocation_policy_is_current(
@@ -137,6 +150,17 @@ impl InstalledNativeWriterHostGuard {
             .serializable_commit_admission
             .try_write()
             .ok_or_else(|| invalid("allocation admission gate busy"))?;
+        if self
+            .state
+            .registry_attempt
+            .try_lock()
+            .ok_or_else(|| invalid("registry publication attempt busy during allocation"))?
+            .is_some()
+        {
+            return Err(invalid(
+                "registry publication must resolve its SAME retained attempt before allocation",
+            ));
+        }
         prepared.with_current(db, coordinator, self, || Ok(()))?;
         let _journal = db.try_native_image_journal()?;
         let mut retained = self

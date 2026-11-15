@@ -526,6 +526,7 @@ impl NativeAssignedWriterInstallAttempt {
                     coordinator: Arc::downgrade(&authority),
                     registry_extension: parking_lot::RwLock::new(None),
                     registry_publication_pending: std::sync::atomic::AtomicBool::new(false),
+                    registry_attempt: parking_lot::Mutex::new(None),
                     #[cfg(feature = "tls-replication")]
                     allocation_attempt: parking_lot::Mutex::new(None),
                     #[cfg(all(test, feature = "tls-replication"))]

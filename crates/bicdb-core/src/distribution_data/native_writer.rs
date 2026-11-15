@@ -200,6 +200,7 @@ impl ClusterDataNodeService {
             .ok_or_else(|| data_error("registry refresh service busy before preparation"))?;
         let writer = service.range_writes.native_writer_host_state()?;
         guard.require_registry_refresh_origin(database, coordinator, &writer)?;
+        guard.require_registry_refresh_preparation_available()?;
         let slot = service.native_replica_listener_store_open_guard();
         slot.require_live()?;
         let policy = service.prepare_native_host_writer_enrollment(database, metadata, business)?;

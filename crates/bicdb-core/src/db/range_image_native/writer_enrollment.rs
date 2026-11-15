@@ -140,6 +140,7 @@ pub(crate) struct NativeWriterHostState {
     registry_extension:
         parking_lot::RwLock<Option<Arc<registry_refresh::VerifiedRegistryExtension>>>,
     registry_publication_pending: std::sync::atomic::AtomicBool,
+    registry_attempt: parking_lot::Mutex<Option<registry_refresh::RetainedRegistryAttempt>>,
     #[cfg(feature = "tls-replication")]
     allocation_attempt: parking_lot::Mutex<Option<registry_refresh::RetainedAllocationAttempt>>,
     #[cfg(all(test, feature = "tls-replication"))]
@@ -995,6 +996,7 @@ impl BicDb {
             coordinator: Arc::downgrade(&authority),
             registry_extension: parking_lot::RwLock::new(None),
             registry_publication_pending: std::sync::atomic::AtomicBool::new(false),
+            registry_attempt: parking_lot::Mutex::new(None),
             #[cfg(feature = "tls-replication")]
             allocation_attempt: parking_lot::Mutex::new(None),
             #[cfg(all(test, feature = "tls-replication"))]

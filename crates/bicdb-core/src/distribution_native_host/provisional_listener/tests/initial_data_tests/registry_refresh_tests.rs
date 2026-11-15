@@ -2,6 +2,7 @@
 //! The RF3 same-registry reaffirmation controls storage/lifetime; the separate
 //! public six-case CLI regression supplies actual fifth-registry addition.
 use super::*;
+mod retained_attempt_tests;
 
 fn ready() -> (
     Fixture,

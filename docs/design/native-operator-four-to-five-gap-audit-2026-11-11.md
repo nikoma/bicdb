@@ -6,6 +6,90 @@ components and an automatic four-to-five-node operator candidate. No build,
 database open, process experiment, VM action or deployment was performed for
 this audit.
 
+## Current source boundary at `4f33a8b016a9` — 2026-11-15
+
+This additive update inspects candidate **1.0.520-beta /
+`4f33a8b016a999d43410ca8698270dc01fbeffd6`**, tree
+`4c87ba7caed1e5a9043eac854d7bdf15ac00b15d`. It supersedes the historical
+NOT IMPLEMENTED/NOT WIRED assessments below only for the specific components
+listed here. Main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
+The candidate's normal [Tests43767288668](https://github.com/nikoma/bicdb/actions/runs/43767288668)
+is still running at this checkpoint. Its complete all-target compilation and
+no-default consumer checks passed; [Rails43767288693](https://github.com/nikoma/bicdb/actions/runs/43767288693)
+also passed its actual 20 runs/100 assertions, zero failures/errors/skips and
+24 completed reports/cable messages. Native/Core and the unchanged CLI
+availability control remain pending. No runtime or physical result is inferred
+from compilation or Rails.
+
+| Boundary | Implemented source | Actual executed evidence and classification |
+| --- | --- | --- |
+| Initial native DATA and explicit Strong point access | Public retained host/CLI open paths, actual coordinator/runtime/listener and request-scoped Strong protocol exist | **Passed within predecessor scope:** d3's REST CLI target passed the actual four-process APP/Strong case. This is not a passing current-candidate or movement result |
+| Fifth metadata voter and original writer refresh | Automatic metadata enrollment/promotion and registry refresh exist | **Failed availability at d3:** the unchanged healthy-old-read/fresh-ACK/readback control failed. All four original writers remained pending; no DATA movement was attempted |
+| Retained registry correction | Current source retains the original publisher/native outcome and separates maintenance identity from strict APP/Strong admission | **Not tested at runtime:** current all-target compilation passed; the source-reviewed correction, two new component controls and original CLI ten-second health gate still require execution |
+| Registered fifth replica receiver | Fresh/registered retained receiver and public join path exist | **Passed within predecessor scope:** d3's CLI receiver case passed with DATA serving false. Receiver ingress or metadata voting does not establish populated DATA ownership |
+| Native image/joint/Open/policy/release steps | Finite internal native host consumers exist, including actual remote-serving participants | **Inconclusive as a complete assembled operation:** existence and source review do not prove successful end-to-end relocation, cleanup, cold recovery or replacement |
+| Automatic native DATA placement and repair after one join | The public operator loop maintains metadata and initial writer/hot recovery; finite native relocation consumers are not a complete periodic placement controller | **Not implemented as the complete native operator path inspected here; not tested** for automatic full-range four-to-five convergence. This is a functional integration gap as well as a qualification gap |
+| Complete external campaign and capacity comparison | Bounded SDK/receipt/reconciliation components exist | **Not tested:** no current full-dataset physical expansion, complete campaign-wide ledger or stable post-convergence throughput gain |
+
+Compilation job `132975145942` full raw-log SHA256 is
+`7e415d496e305e3bac5c8d282b1a042627f0168e433b5b7ad16071dbce6c0a6d`.
+Rails job `132975145225` full raw-log SHA256 is
+`bd9877aa33953ce0036748fe2bf8a24fc20ea3a7c46dd116eaf89c0243fedf63`;
+its original 16-member ZIP/API digest is
+`b8a98a1e172f507ef7e1786b74ca1e6242f27bf5c340544cf9a57f3174a674f1`.
+Independent complete-log/original-ZIP review receipt SHA256
+`30e45c3483eb13e8c55aac2d0e24a54dd7ae7886ab9ae77637090eb6ecac0d54`
+pins actual checkout `2f42e67a11c5d8f81d79e170edd0814d4a741d2d` to the
+candidate tree. The Rails artifact records its CI-built debug binary hash;
+no binary file, release or deployment is produced by this document.
+
+The precise automatic/native distinction matters. The existing generic
+`TransportClusterRelocationDriver` and placement planner are real implementations;
+the original Azure trial observed automatic movement with the older generic
+runtime and still failed qualification. Their existence does not wire the
+protected native path described by this audit.
+
+Source anchors for the current native operator boundary are:
+
+- [CLI maintenance loop](../../crates/bicdb-cli/src/native_metadata_command.rs):
+  the initial-host periodic turn starts the metadata supervisor, maintains
+  metadata membership, refreshes the initial writer registry and reports status.
+  It does not schedule new native range placements.
+- [Public host and finite internal methods](../../crates/bicdb-core/src/distribution_native_host/operator.rs):
+  `advance_finite_remote_membership`, `drive_finite_remote_release`,
+  `advance_finite_remote_serving_policy` and `poll_finite_remote_serving` remain
+  crate-internal consumers. `status` explicitly limits its initial DATA contract
+  to point access; a published dispatcher is not request-scoped Strong readiness.
+- [Owned participant polling](../../crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/remote_serving_owner.rs):
+  a finite actor turn progresses retained actual participants. It does not
+  periodically create placement plans. Existing worker polling after a retained
+  operation starts is distinct from automatic cluster-wide placement.
+- [Protected handoff enforcement](../../crates/bicdb-core/src/distribution/native_joint_handoff.rs):
+  `require_legacy_relocation_mutation` refuses generic membership/cleanup for
+  enforced native voters and requires the typed actual OLD/NEW data-quorum path.
+  Removing that refusal would bypass the intended safety contract.
+- [Unchanged CLI availability assertion](../../crates/bicdb-cli/tests/native_metadata_operator_cli/writer_registry_refresh_baseline.rs)
+  and [complete d3 findings](native-520-regression-findings.md): original ACK and
+  Strong value preceded the fifth voter; later reads were Unavailable and fresh
+  writes had no ACK. No false absence was observed. Unavailable reads prove
+  neither acknowledged-data loss nor survival.
+
+The next operator gate remains a complete automatic operation, not a manual
+sequence of finite internal calls: one ordinary join, actual assigned image and
+joint activation, safe source retirement, bounded resumption/diagnosis, healthy
+reads and fresh ACKs, then restored replication after another tolerated failure.
+All 64 ranges, the complete intended corpus, raw attempts/uncertainty and final
+reads must remain in the evidence. A source-only component, passing refusal,
+small smoke or generic planner test cannot close this gate. Populated cold
+recovery, ordinary distributed SQL and production admission remain separate.
+
+The original Azure result stays failed and its verified teardown unchanged.
+No resources were provisioned or new spending authorization inferred. See the
+[current HA audit](../ha-horizontal-scaling-audit-2026-11-10.md) and
+[registry publication correction](native-registry-pending-owned-publication.md)
+for their distinct source/runtime scopes. All older dated sections below retain
+their original revision and evidence meaning.
+
 ## Exact source scope
 
 | Source | Exact revision | Scope |

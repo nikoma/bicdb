@@ -304,9 +304,11 @@ pub(super) fn exercise(
             // local owner, native outcome or permission.
             let mut missing_body = frame.reply().clone();
             missing_body.native_decision_body = None;
+            missing_body.checksum_sha256 = missing_body.checksum().unwrap();
             let missing_body_result = missing_body.require_request(&missing_body.request);
             let mut unexpected_body = plain.reply().clone();
             unexpected_body.native_decision_body = Some(certificate.data().clone());
+            unexpected_body.checksum_sha256 = unexpected_body.checksum().unwrap();
             let unexpected_body_result = unexpected_body.require_request(&unexpected_body.request);
             evidence(
                 &output.join("native-unit-decision-wire-refusals.json"),

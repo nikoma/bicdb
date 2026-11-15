@@ -44,7 +44,41 @@ root independent verification is
 The earlier [ec4 failed acceptance](visibility-ec4-compile-failure.md) remains
 failed and unchanged. Sourcef516's actual all-target and nondefault-consumer
 compilation passed, so its eight lifetime corrections have compilation and
-execution evidence. At this checkpoint native, SQL and remaining-workspace
-jobs were still running. These passes do not close the cold memory-job gap,
+execution evidence. SQL subsequently passed, including the actual generic
+postcommit Sync dimension-error control (library 924/0/4; 282 target summaries
+total 2682/0/4, without a unique-case claim). Root verified the exact test and
+all summary lines against the complete original gzip/raw bytes, receipt
+`4b0417a1eeb0c6dec8ca0cad08b24de766c3d387738f5e48c71e7cf2635ee539`.
+These passes do not close the cold memory-job gap,
 qualify multi-range transactions, or demonstrate automatic four-to-five-node
 expansion, RPO/RTO or sustained capacity gain.
+
+The [native job](https://github.com/nikoma/bicdb/actions/runs/43664842686/job/132661837027)
+subsequently **failed: 332 passed, 15 failed, one ignored**, with 949 filtered
+and 3,156.84 seconds reported. That elapsed time is not RTO or a performance
+comparison. The remaining-workspace job was still live when this native
+checkpoint was captured; the overall candidate has not passed.
+
+The new native-local component reached actual follower application while the
+other range's lower commit remained held: A WAL sequence 1, global prefix 0,
+B origin returned `Ok(2)`, and the target's actual native point and local
+snapshot were 2 with the full B value. It then failed because its required
+public-finalizer probe returned `Disconnected`. This is useful partial
+component evidence, not a passing native-local control or Strong-read proof.
+
+Source inspection located a test diagnostic defect: the origin armed a
+thread-local probe, but real quorum fan-out applies on follower workers. The
+proposed test-only correction `e73b0ee16` selects a one-shot callback by actual
+database open across those workers. It keeps the same actual transaction,
+private preparation check, public finalizer, assertions and deadlines; the
+callback receives data only. Independent review found no additional source
+blocker in that correction; compilation and runtime execution remain untested.
+The original failed result is unchanged.
+
+Native raw log: 13,649,950 bytes, SHA-256
+`bb32bf4308b381caf677717c172f6b46efb357a08d5f584c4f2bea3023305ff8`.
+Gzip: 1,960,868 bytes, SHA-256
+`0212ab3ec8aea49669ee84618867eb0c71ba2863ac875eb6db7949940c633be7`.
+Root independently verified these bytes, the failed case line, actual partial
+component evidence and five source pins, receipt
+`5a27a7ff0e95ddf025c5836940b30ee7e26ea661736a43bfb6e0e6146fa26033`.

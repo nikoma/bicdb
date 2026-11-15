@@ -31,6 +31,12 @@ review identified this source defect. The correction retains one backend enum,
 its facade re-export and one method pair with the same three fault cuts. This
 correction does not establish a compiler pass.
 
+The later test-only probe correction `e73b0ee16` addresses the actually failed
+native-local observation documented in the [visibility evidence](visibility-f516-eight-core-controls.md).
+It does not alter the fixture, production finalizer or original assertions and
+has not been executed. The successful ordinary controls and failed native
+control remain separate classifications.
+
 Two archive-damage controls reached the intended refusal in retained failed
 runs but expected another diagnostic. Their proposed correction accepts only
 the two exact `Cluster` diagnostics emitted by the full preparation check and

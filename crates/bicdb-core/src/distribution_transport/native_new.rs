@@ -452,7 +452,8 @@ impl TcpClusterRelocationTransport {
             ));
         }
         if let NativeRemoteNewOperationV1::PrepareDecision { facts }
-        | NativeRemoteNewOperationV1::PublishDecision { facts } = &request.operation
+        | NativeRemoteNewOperationV1::PublishDecision { facts }
+        | NativeRemoteNewOperationV1::ObserveDecision { facts } = &request.operation
         {
             if reply.handoff.as_ref().is_none_or(|handoff| {
                 handoff.fact_set_sha256 != facts.checksum_sha256

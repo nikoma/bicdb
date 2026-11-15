@@ -130,6 +130,7 @@ impl NativeMetadataControlHost {
             "pending_original_return":actual.pending_original_return,"last_return":actual.last_return,
             "pending_control":actual.pending_control.as_ref().map(|(kind,peer,intent)|serde_json::json!({"kind":format!("{kind:?}"),"peer":peer,"intent":intent})),
             "known_closed_peers":actual.closed,"last_close_resolution":actual.last_close_resolution,
+            "native_decision":actual.native_decision.snapshot(),
             "original_process_live_at_snapshot":actual.process.check().is_ok(),
             "returned_count":actual.returned_count,
             "outcome_chain_sha256":hex::encode(actual.outcome_chain.clone().finalize()),"data_only":true}),

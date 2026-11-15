@@ -33,6 +33,17 @@ pub(crate) enum NativeFirstReceiveOperationV1 {
     PublishNativeBase,
     AdoptCatalogueFloor,
     Materialize,
+    RetireSourceExport,
+    DescribeSourceExport,
+}
+
+impl NativeFirstReceiveOperationV1 {
+    pub(crate) fn resolves(self, original: Self) -> bool {
+        matches!(
+            (original, self),
+            (Self::Start, Self::Describe) | (Self::RetireSourceExport, Self::DescribeSourceExport)
+        )
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]

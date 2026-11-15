@@ -101,6 +101,21 @@ impl NativeMetadataLearnerHost {
             }
         }
     }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_first_native_decision(
+        &self,
+        range: crate::RangeId,
+        arm: Option<u8>,
+    ) -> Result<serde_json::Value> {
+        let NativeLearnerLifecycle::Fresh(host) = &self.host else {
+            return Err(invalid("FIRST test never casts cold owner to Fresh"));
+        };
+        let actual = host.test_registered_image_control()?;
+        if let Some(code) = arm {
+            actual.test_arm_remote_native_decision_cut(range, code)?;
+        }
+        actual.test_remote_native_decision_evidence(range)
+    }
     pub fn start_fresh_metadata_only(
         root: &Path,
         cluster: crate::ClusterId,

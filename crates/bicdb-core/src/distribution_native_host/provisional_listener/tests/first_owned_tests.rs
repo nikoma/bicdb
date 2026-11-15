@@ -26,6 +26,10 @@ enum Case {
     Over512,
     LostClose,
     ConcurrentAdmission,
+    NativeDecision,
+    LostExport,
+    LostNativeDecision,
+    UnknownNativeDecision,
 }
 #[derive(Clone, Copy, Debug)]
 enum SetupCut {
@@ -35,6 +39,30 @@ enum SetupCut {
 
 enum OwnerCommand {
     Snapshot(mpsc::SyncSender<serde_json::Value>),
+    NativeDecision(
+        crate::RangeId,
+        Option<u8>,
+        mpsc::SyncSender<serde_json::Value>,
+    ),
+}
+fn native_command(
+    sender: &mpsc::Sender<OwnerCommand>,
+    range: crate::RangeId,
+    arm: Option<u8>,
+) -> Result<serde_json::Value> {
+    let (send, receive) = mpsc::sync_channel(1);
+    sender
+        .send(OwnerCommand::NativeDecision(range, arm, send))
+        .map_err(|_| invalid("FIRST actual native owner command ended"))?;
+    let data = receive
+        .recv_timeout(Duration::from_secs(5))
+        .map_err(|_| invalid("FIRST actual native owner diagnostic return unavailable"))?;
+    if data["ok"] != true {
+        return Err(invalid(format!(
+            "actual native owner diagnostic failed: {data}"
+        )));
+    }
+    Ok(data["data"].clone())
 }
 fn snapshot(sender: &mpsc::Sender<OwnerCommand>) -> Result<serde_json::Value> {
     let (send, receive) = mpsc::sync_channel(1);
@@ -346,6 +374,22 @@ impl Five {
 }
 
 #[test]
+fn native_first_normal_hosts_to_actual_recipient_native_decision() {
+    run(Case::NativeDecision);
+}
+#[test]
+fn native_first_actual_target_s2_reply_loss_describe_same_terminal_then_native_decision() {
+    run(Case::LostExport);
+}
+#[test]
+fn native_first_actual_native_decision_reply_loss_readonly_same_original_xid() {
+    run(Case::LostNativeDecision);
+}
+#[test]
+fn native_first_actual_native_sync_unknown_blocks_observation_and_new_mutation() {
+    run(Case::UnknownNativeDecision);
+}
+#[test]
 fn native_first_normal_hosts_actual_leader_nonleader_donor_to_materialized() {
     run(Case::Normal);
 }
@@ -558,6 +602,7 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
     let mut target = five.target.take().unwrap();
     let fault = match case {
         Case::LostEnroll => Some(Fault::LoseSuccessfulReply(Op::Enroll)),
+        Case::LostExport => Some(Fault::LoseSuccessfulReply(Op::RetireSourceExport)),
         Case::CancelledQueued => Some(Fault::CancelBeforeConsume(Op::Enroll)),
         Case::ExpiredQueued => Some(Fault::ExpireBeforeConsume(Op::Enroll)),
         Case::UnknownFinal => Some(Fault::CancelOriginalAfterFinalWal),
@@ -606,7 +651,13 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
         let worker = scope.spawn(move || {
             while !active.load(Ordering::Acquire) && parent.check().is_ok() {
                 while let Ok(command)=owner_receive.try_recv() {
-                    match command {OwnerCommand::Snapshot(send)=> {
+                    match command {
+                    OwnerCommand::NativeDecision(range,arm,send)=> {
+                        let actual=target.test_first_native_decision(range,arm);
+                        let _=send.try_send(serde_json::json!({"ok":actual.is_ok(),"data":actual.as_ref().ok(),
+                            "error":actual.as_ref().err().map(crate::distribution_native_host::remote_first::error_data)}));
+                    },
+                    OwnerCommand::Snapshot(send)=> {
                         let actual=target.test_first_receiver_snapshot();
                         let _=send.try_send(serde_json::json!({"ok":actual.is_ok(),"data":actual.as_ref().ok(),
                             "error":actual.as_ref().err().map(crate::distribution_native_host::remote_first::error_data)}));
@@ -1176,6 +1227,154 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
             ] {
                 receive!(name, operation, Frame::Finish)?;
             }
+            if matches!(
+                case,
+                Case::NativeDecision
+                    | Case::LostExport
+                    | Case::LostNativeDecision
+                    | Case::UnknownNativeDecision
+            ) {
+                // Same five retained normal hosts; real range leader directly
+                // observes OLD/survivor/Registered NEW, donor remains neither leader.
+                let collected = drive!(
+                    "actual_direct_coordinator_NEW_collection",
+                    Action::CollectNativeNew
+                )?;
+                let phase = collected["phase"].clone();
+                let retire = drive!(
+                    "actual_target_owned_S2_retirement",
+                    Action::Receive {
+                        operation: Op::RetireSourceExport,
+                        frame: None
+                    }
+                );
+                if case == Case::LostExport {
+                    report.event(serde_json::json!({"actual_S2_retire_return":retire.as_ref().ok(),
+                        "actual_S2_retire_error":retire.as_ref().err().map(crate::distribution_native_host::remote_first::error_data)}));
+                    assert!(
+                        retire.is_err(),
+                        "actual successful S2 reply must be suppressed"
+                    );
+                } else {
+                    retire?;
+                }
+                let terminal = drive!(
+                    "actual_target_owned_S2_Describe",
+                    Action::Receive {
+                        operation: Op::DescribeSourceExport,
+                        frame: None
+                    }
+                )?;
+                report.event(serde_json::json!({"actual_S2_terminal":terminal,"original_MF":describe,"phase":phase}));
+                let mut participants = selected
+                    .replicas
+                    .iter()
+                    .filter(|r| r.role == RangeReplicaRole::Voter)
+                    .map(|r| r.node_id.clone())
+                    .collect::<Vec<_>>();
+                participants.push(node(4));
+                for participant in &participants {
+                    drive!(
+                        "actual_recipient_prepare_original_pins",
+                        Action::PrepareNativeMember {
+                            node: participant.clone()
+                        }
+                    )?;
+                }
+                if matches!(case, Case::LostNativeDecision | Case::UnknownNativeDecision) {
+                    report.data_call("arm_actual_original_target_native_cut", || {
+                        native_command(
+                            &owner_send,
+                            selected.id,
+                            Some(if case == Case::LostNativeDecision {
+                                4
+                            } else {
+                                3
+                            }),
+                        )
+                    })?;
+                }
+                let target_result = drive!(
+                    "actual_target_native_DECISION",
+                    Action::PublishNativeMember { node: node(4) }
+                );
+                let before = report
+                    .data_call("actual_target_native_return_before_assertions", || {
+                        native_command(&owner_send, selected.id, None)
+                    })?;
+                report.event(serde_json::json!({"actual_target_D_return":target_result.as_ref().ok(),
+                    "actual_target_D_error":target_result.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),
+                    "original_target_native":before,"phase":phase,"no_globalQQ_Open_release_Serving":true}));
+                if case == Case::UnknownNativeDecision {
+                    let replay = drive!(
+                        "native_Unknown_mutation_refuses_without_replay",
+                        Action::PublishNativeMember { node: node(4) }
+                    );
+                    let observe = drive!(
+                        "native_Unknown_readonly_must_not_promote_visible_bytes",
+                        Action::ObserveNativeDecision { node: node(4) }
+                    );
+                    let after = report
+                        .data_call("native_Unknown_same_attempt_after_refusals", || {
+                            native_command(&owner_send, selected.id, None)
+                        })?;
+                    report.event(serde_json::json!({"replay_error":replay.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),
+                        "readonly_error":observe.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),"after":after}));
+                    assert!(target_result.is_err());
+                    assert!(replay.is_err());
+                    assert!(observe.is_err());
+                    assert_eq!(before["native"]["actual_commit_sync_fault_count"], 1);
+                    assert_eq!(
+                        before["native"]["actual_native_attempt"]["outcome"]["state"],
+                        "unknown_effect"
+                    );
+                    assert_eq!(before["successful_sink_return_retained"], false);
+                    assert_eq!(
+                        before["native"], after["native"],
+                        "no new native XID or outcome promotion"
+                    );
+                    return Ok(());
+                }
+                if case == Case::LostNativeDecision {
+                    let observed = drive!(
+                        "fresh_authenticated_same_original_native_D_observation",
+                        Action::ObserveNativeDecision { node: node(4) }
+                    )?;
+                    let after = report
+                        .data_call("same_native_attempt_after_readonly_resolution", || {
+                            native_command(&owner_send, selected.id, None)
+                        })?;
+                    report.event(
+                        serde_json::json!({"actual_readonly_resolution":observed,"after":after}),
+                    );
+                    assert!(
+                        target_result.is_err(),
+                        "actual successful native wire reply must be suppressed"
+                    );
+                    assert_eq!(before["successful_sink_return_retained"], true);
+                    assert!(before["actual_success_reply_lost"]["native_page_xid"]
+                        .as_u64()
+                        .is_some_and(|x| x > 0));
+                    assert_eq!(
+                        before["native"], after["native"],
+                        "readonly must not publish another XID"
+                    );
+                    assert_eq!(
+                        before["actual_success_reply_lost"],
+                        observed["actual_reply"]["native_decision"]
+                    );
+                } else {
+                    target_result?;
+                }
+                for participant in participants.iter().filter(|id| **id != node(4)) {
+                    drive!(
+                        "actual_original_OLD_recipient_native_DECISION",
+                        Action::PublishNativeMember {
+                            node: participant.clone()
+                        }
+                    )?;
+                }
+            }
             Ok(())
         }));
         stop.store(true, Ordering::Release);
@@ -1196,7 +1395,7 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
     });
     result?;
     // No selected post-Close APP/Strong success is claimed without release.
-    if case != Case::UnknownFinal {
+    if !matches!(case, Case::UnknownFinal | Case::UnknownNativeDecision) {
         sdk(
             report,
             &client,

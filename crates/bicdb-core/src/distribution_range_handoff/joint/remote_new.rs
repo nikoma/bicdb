@@ -69,6 +69,10 @@ pub(crate) enum NativeRemoteNewOperationV1 {
     PublishDecision {
         facts: NativeRemoteNewFactSetV1,
     },
+    /// Read ONLY the SAME retained known-committed native attempt. Never replay.
+    ObserveDecision {
+        facts: NativeRemoteNewFactSetV1,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -97,7 +101,8 @@ impl NativeRemoteNewRequestV1 {
             return Err(invalid("invalid bounded remote NEW request"));
         }
         if let NativeRemoteNewOperationV1::PrepareDecision { facts }
-        | NativeRemoteNewOperationV1::PublishDecision { facts } = &self.operation
+        | NativeRemoteNewOperationV1::PublishDecision { facts }
+        | NativeRemoteNewOperationV1::ObserveDecision { facts } = &self.operation
         {
             facts.require_manifest(&self.manifest)?;
             if facts.phase_id != self.phase_id {
@@ -406,7 +411,8 @@ impl NativeRemoteNewReplyV1 {
                 ));
             }
             if let NativeRemoteNewOperationV1::PrepareDecision { facts }
-            | NativeRemoteNewOperationV1::PublishDecision { facts } = &request.operation
+            | NativeRemoteNewOperationV1::PublishDecision { facts }
+            | NativeRemoteNewOperationV1::ObserveDecision { facts } = &request.operation
             {
                 if handoff.fact_set_sha256 != facts.checksum_sha256 {
                     return Err(invalid(
@@ -418,13 +424,18 @@ impl NativeRemoteNewReplyV1 {
             request.operation,
             NativeRemoteNewOperationV1::PrepareDecision { .. }
                 | NativeRemoteNewOperationV1::PublishDecision { .. }
+                | NativeRemoteNewOperationV1::ObserveDecision { .. }
         ) {
             return Err(invalid(
                 "remote NEW preparation returned no actual handoff outcome",
             ));
         }
         match (&request.operation, &self.native_decision) {
-            (NativeRemoteNewOperationV1::PublishDecision { facts }, Some(receipt)) => {
+            (
+                NativeRemoteNewOperationV1::PublishDecision { facts }
+                | NativeRemoteNewOperationV1::ObserveDecision { facts },
+                Some(receipt),
+            ) => {
                 receipt.require_request(request, facts)?;
                 if receipt.node_id != self.snapshot.node_id {
                     return Err(invalid(
@@ -432,9 +443,11 @@ impl NativeRemoteNewReplyV1 {
                     ));
                 }
             }
-            (NativeRemoteNewOperationV1::PublishDecision { .. }, None) => {
-                return Err(invalid("native DECISION outcome not proved"))
-            }
+            (
+                NativeRemoteNewOperationV1::PublishDecision { .. }
+                | NativeRemoteNewOperationV1::ObserveDecision { .. },
+                None,
+            ) => return Err(invalid("native DECISION outcome not proved")),
             (_, None) => {}
             _ => return Err(invalid("unrequested native DECISION outcome")),
         }

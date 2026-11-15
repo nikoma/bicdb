@@ -65,6 +65,7 @@ impl NativeRegisteredReplicaAdmission {
                 &request.operation,
                 NativeRemoteNewOperationV1::Materialize
                     | NativeRemoteNewOperationV1::PublishDecision { .. }
+                    | NativeRemoteNewOperationV1::ObserveDecision { .. }
             ),
             &token,
         )?;
@@ -132,6 +133,24 @@ impl NativeRegisteredReplicaAdmission {
         first.require_current()?;
         let mut native_decision = None;
         let current = if matches!(
+            &request.operation,
+            NativeRemoteNewOperationV1::ObserveDecision { .. }
+        ) {
+            native_decision = Some(
+                state.observe_known_remote_decision(
+                    request,
+                    first
+                        .role
+                        .as_ref()
+                        .ok_or_else(|| invalid("remote DECISION observation actual Role absent"))?,
+                    &first.own,
+                    first.business,
+                    &first.point,
+                    &token,
+                )?,
+            );
+            first
+        } else if matches!(
             &request.operation,
             NativeRemoteNewOperationV1::PublishDecision { .. }
         ) {
@@ -260,6 +279,8 @@ impl NativeRegisteredReplicaAdmission {
         reply.require_request(request)?;
         current.require_current()?;
         token.check()?;
+        #[cfg(test)]
+        state.test_after_success_reply(&reply)?;
         Ok(reply)
     }
 }

@@ -15,6 +15,9 @@ struct DecisionContext {
 #[derive(Default)]
 pub(super) struct DecisionCustody {
     expected: Option<NativeJointDecisionData>,
+    /// Actual full sink return retained BEFORE outer metadata/reply checks.
+    /// Absence stays unknown even when bytes later happen to be visible.
+    completed: Option<crate::db::NativeJointDecisionReceipt>,
     contexts: Vec<Arc<DecisionContext>>,
     encoded_bytes: usize,
     native: Option<crate::db::NativeRemoteJointDecisionAttempt>,
@@ -22,6 +25,10 @@ pub(super) struct DecisionCustody {
     cut: u8,
     #[cfg(test)]
     observed_cut: Option<(u8, Arc<AtomicBool>)>,
+    #[cfg(test)]
+    lose_success_reply: bool,
+    #[cfg(test)]
+    lost_success_reply: Option<NativeRemoteDecisionReceiptV1>,
 }
 /// Constructor is private to the original participant after genuine callbacks.
 /// This does NOT implement or convert to a local publication admission.
@@ -135,6 +142,84 @@ impl NativeRemoteDecisionAdmission<'_> {
     }
 }
 impl NativeRemoteNewParticipant {
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn observe_known_remote_decision(
+        &self,
+        request: &NativeRemoteNewRequestV1,
+        role: &RecoveryRoleAdmission,
+        own: &HostMetadataReadObservation,
+        business: Uuid,
+        metadata: &ActualNativeJointMetadataPoint,
+        parent: &CancellationToken,
+    ) -> Result<NativeRemoteDecisionReceiptV1> {
+        self.require_request(request)?;
+        let NativeRemoteNewOperationV1::ObserveDecision { facts } = &request.operation else {
+            return Err(invalid(
+                "remote DECISION observation needs explicit readonly operation",
+            ));
+        };
+        self.require_current(parent)?;
+        let plan = NativeJointHandoffPlan::from_actual_role_and_own(role, own, business)?;
+        request.require_plan(&plan)?;
+        role.require_own_host_metadata(own, business)?;
+        metadata.require_request(own, business)?;
+        metadata.require_external_current()?;
+        if role.local_node_id() != &self.snapshot.node_id
+            || self
+                .handoff_outcome()?
+                .is_none_or(|h| h.fact_set_sha256 != facts.checksum_sha256)
+        {
+            return Err(invalid(
+                "remote DECISION observation changed original participant/intent",
+            ));
+        }
+        let retained = self
+            .decision
+            .try_lock()
+            .ok_or_else(|| invalid("remote DECISION original attempt active"))?;
+        let completed=retained.completed.as_ref().ok_or_else(||invalid("remote DECISION original successful sink return absent; unknown remains unresolved"))?;
+        let expected = retained
+            .expected
+            .as_ref()
+            .ok_or_else(|| invalid("remote DECISION original body absent"))?;
+        let native = retained
+            .native
+            .as_ref()
+            .ok_or_else(|| invalid("remote DECISION original native attempt absent"))?;
+        if completed.data() != expected
+            || expected.remote_new_facts().len() != facts.members.len()
+            || role.metadata_term() < completed.metadata_anchor().0
+            || role.metadata_read_index() < completed.metadata_anchor().1
+        {
+            return Err(invalid(
+                "remote DECISION observation changed original body/current metadata floor",
+            ));
+        }
+        let service = match &self.original {
+            OriginalParticipant::Old { actual, .. } => actual.actual_service(),
+            OriginalParticipant::Registered { service, .. } => service,
+        };
+        crate::distribution_data::ClusterDataNodeService::observe_known_remote_decision(
+            service, completed, native, metadata, parent,
+        )?;
+        let reply = NativeRemoteDecisionReceiptV1 {
+            binding: NativeSourceExportBindingV1::from_manifest(&request.manifest)?,
+            phase_id: self.snapshot.phase_id,
+            fact_set_sha256: facts.checksum_sha256.clone(),
+            node_id: self.snapshot.node_id.clone(),
+            decision_sha256: completed.decision_sha256().into(),
+            native_record_sha256: completed.checksum_sha256().into(),
+            native_page_xid: native.actual_committed_xid()?,
+            remote_provenance_sha256: native.actual_provenance_sha256()?.into(),
+        };
+        drop(retained);
+        self.require_current(parent)?;
+        metadata.require_external_current()?;
+        role.require_own_host_metadata(own, business)?;
+        parent.check()?;
+        reply.require_request(request, facts)?;
+        Ok(reply)
+    }
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn publish_remote_decision(
         &self,
@@ -289,9 +374,13 @@ impl NativeRemoteNewParticipant {
                 service,target,frozen.try_as_frozen()?,&admission,retained.native.as_mut().unwrap(),parent)?,
             OriginalParticipant::Old {actual,writer,..}=>actual.publish_remote_decision(writer,&admission,retained.native.as_mut().unwrap(),parent)?,
         };
+        // The actual sink return is retained before all outer fallible checks.
+        // It never replaces the native attempt/outcome or its original XID.
+        retained.completed = Some(receipt);
         admission.require_current()?;
         context.metadata.require_external_current()?;
         parent.check()?;
+        let receipt = retained.completed.as_ref().unwrap();
         let reply = NativeRemoteDecisionReceiptV1 {
             binding: NativeSourceExportBindingV1::from_manifest(&request.manifest)?,
             phase_id: request.phase_id,
@@ -315,17 +404,55 @@ impl NativeRemoteNewParticipant {
 #[cfg(test)]
 impl NativeRemoteNewParticipant {
     pub(crate) fn test_arm_remote_decision_cut(&self, code: u8) -> Result<()> {
-        if !(1..=3).contains(&code) {
+        if !(1..=4).contains(&code) {
             return Err(invalid("unknown remote DECISION fault code"));
         }
         let mut held = self
             .decision
             .try_lock()
             .ok_or_else(|| invalid("remote DECISION diagnostic custody busy"))?;
+        if code == 4 {
+            if held.cut != 0 || held.lose_success_reply || held.lost_success_reply.is_some() {
+                return Err(invalid(
+                    "actual native DECISION reply loss already armed/fired",
+                ));
+            }
+            held.lose_success_reply = true;
+            return Ok(());
+        }
         if held.cut != 0 {
             return Err(invalid("remote DECISION cut already armed"));
         }
         held.cut = code;
+        Ok(())
+    }
+    pub(crate) fn test_after_success_reply(&self, reply: &NativeRemoteNewReplyV1) -> Result<()> {
+        if !matches!(
+            reply.request.operation,
+            NativeRemoteNewOperationV1::PublishDecision { .. }
+        ) {
+            return Ok(());
+        }
+        let mut held = self
+            .decision
+            .try_lock()
+            .ok_or_else(|| invalid("actual decision reply-loss observation busy"))?;
+        if held.lose_success_reply {
+            if held.completed.is_none() {
+                return Err(invalid(
+                    "reply-loss hook requires actual successful native sink",
+                ));
+            }
+            let receipt = reply
+                .native_decision
+                .clone()
+                .ok_or_else(|| invalid("reply-loss hook needs actual returned native receipt"))?;
+            held.lose_success_reply = false;
+            held.lost_success_reply = Some(receipt);
+            return Err(invalid(
+                "injected loss of actual successful native DECISION wire reply",
+            ));
+        }
         Ok(())
     }
     pub(crate) fn test_remote_decision_evidence(&self) -> Result<serde_json::Value> {
@@ -341,6 +468,7 @@ impl NativeRemoteNewParticipant {
             .ok_or_else(|| invalid("remote DECISION diagnostic custody busy"))?;
         Ok(
             serde_json::json!({"expected":held.expected,"retained_request_contexts":held.contexts.len(),
+            "successful_sink_return_retained":held.completed.is_some(),"actual_success_reply_lost":held.lost_success_reply,
             "actual_test_cut":held.observed_cut.as_ref().map(|(code,fired)|serde_json::json!({"code":code,"fired":fired.load(Ordering::Acquire)})),
             "retained_encoded_bytes":held.encoded_bytes,"native":held.native.as_ref().map(|n|n.test_evidence()),
             "source_callback_actual_observers":held.contexts.iter().map(|c|serde_json::json!({"node":c.source.actual_observer(),"birth":c.source.actual_observer_birth()})).collect::<Vec<_>>(),

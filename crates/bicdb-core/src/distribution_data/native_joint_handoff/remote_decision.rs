@@ -1,6 +1,25 @@
 //! Original service/DB/Store consumer for the DISTINCT remote native publisher.
 use super::*;
 impl ClusterDataNodeService {
+    pub(crate) fn observe_known_remote_decision(
+        original: &Arc<Mutex<Self>>,
+        receipt: &crate::db::NativeJointDecisionReceipt,
+        attempt: &crate::db::NativeRemoteJointDecisionAttempt,
+        metadata: &ActualNativeJointMetadataPoint,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        let service = original
+            .try_lock()
+            .ok_or_else(|| data_error("remote DECISION readonly original service busy"))?;
+        let database = checked_database_read(&service.db, &service.storage_policy)?;
+        service.require_native_catalog_database(&database)?;
+        metadata.require_native_store_point(&database, &service.range_writes)?;
+        database.observe_known_remote_native_decision(receipt, attempt)?;
+        metadata.require_native_store_point(&database, &service.range_writes)?;
+        parent.check()
+    }
+
     pub(crate) fn publish_remote_registered_decision(
         service: &Arc<Mutex<Self>>,
         target: &Arc<crate::distribution_native_host::NativeRegisteredRemoteJointTarget>,

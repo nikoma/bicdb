@@ -341,6 +341,40 @@ impl NativeMetadataControlHost {
             .get()
             .ok_or_else(|| invalid("FIRST actual source discovery absent"))?
             .clone();
+        if matches!(
+            request.operation,
+            Op::RetireSourceExport | Op::DescribeSourceExport
+        ) {
+            if request.source_operation.is_some() {
+                return Err(invalid(
+                    "FIRST export retirement is not an image frame step",
+                ));
+            }
+            // This is the ORIGINAL recipient transport, never a coordinator
+            // impersonating the target. S2 independently calls back to this
+            // retained materialized target; no target/DB/table lock spans RPC.
+            let export =
+                crate::distribution_range_image::NativeSourceExportRequestV1::from_manifest(
+                    source.manifest(),
+                    if request.operation == Op::RetireSourceExport {
+                        crate::distribution_range_image::NativeSourceExportOperationV1::Retire
+                    } else {
+                        crate::distribution_range_image::NativeSourceExportOperationV1::Describe
+                    },
+                    &own,
+                    business,
+                    remaining_ms(token)?,
+                )?;
+            role.role().require_own_host_metadata(&own, business)?;
+            ingress.mark_effect_entered();
+            let actual = self
+                .backend
+                .transport
+                .request_remote_source_export_retirement(source.manifest(), &export, &own, token)?;
+            role.role().require_own_host_metadata(&own, business)?;
+            token.check()?;
+            return Ok(serde_json::to_value(actual)?);
+        }
         let source_operation = request.source_operation.clone().ok_or_else(|| {
             invalid("FIRST image step requires separately authenticated live frame")
         })?;

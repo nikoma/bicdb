@@ -1,6 +1,7 @@
 //! Actual range-leader finite FIRST owner. Not a remote backend or periodic
 //! relocation loop. It cannot announce global DECISION/Open/Serving.
 use super::*;
+mod native_decision;
 
 #[cfg(test)]
 mod acceptance;
@@ -21,6 +22,16 @@ pub(crate) enum NativeFirstCoordinatorAction {
     ConstrainAll,
     CloseAll,
     FenceTarget,
+    CollectNativeNew,
+    PrepareNativeMember {
+        node: ClusterNodeId,
+    },
+    PublishNativeMember {
+        node: ClusterNodeId,
+    },
+    ObserveNativeDecision {
+        node: ClusterNodeId,
+    },
     Receive {
         operation: NativeFirstReceiveOperationV1,
         frame: Option<NativeRemoteImageSourceOperationV1>,
@@ -37,6 +48,7 @@ pub(super) struct NativeFirstCoordinator {
     constrained: BTreeSet<ClusterNodeId>,
     closed: BTreeSet<ClusterNodeId>,
     target_fenced: bool,
+    native_decision: native_decision::FirstNativeDecision,
     /// Constant retained DATA; actual OLD/image owners remain on their hosts.
     next_sequence: u64,
     pending_receive: Option<NativeFirstReceiveRequestV1>,
@@ -167,6 +179,7 @@ impl NativeMetadataControlHost {
                 constrained: BTreeSet::new(),
                 closed: BTreeSet::new(),
                 target_fenced: false,
+                native_decision: Default::default(),
                 next_sequence: 1,
                 pending_receive: None,
                 pending_control: None,
@@ -268,7 +281,9 @@ impl NativeFirstCoordinator {
         self.outcome_chain.update(bytes);
         self.returned_count = self.returned_count.saturating_add(1);
         if self.pending_original_return.is_none()
-            && (self.pending_receive.is_some() || self.pending_control.is_some())
+            && (self.pending_receive.is_some()
+                || self.pending_control.is_some()
+                || self.native_decision.pending.is_some())
         {
             self.pending_original_return = Some(event.clone());
         }
@@ -314,7 +329,25 @@ impl NativeFirstCoordinator {
             .child_linked_to(&self.process)
             .child_with_deadline(Instant::now() + Duration::from_secs(5));
         token.check()?;
+        if self.native_decision.pending.is_some()
+            && !matches!(
+                &action,
+                NativeFirstCoordinatorAction::ObserveNativeDecision { .. }
+            )
+        {
+            return Err(invalid("FIRST prior remote native outcome unresolved; only same-original readonly observation allowed"));
+        }
         match action {
+            NativeFirstCoordinatorAction::CollectNativeNew => self.collect_native_new(&token),
+            NativeFirstCoordinatorAction::PrepareNativeMember { node } => {
+                self.native_member(node, false, false, &token)
+            }
+            NativeFirstCoordinatorAction::PublishNativeMember { node } => {
+                self.native_member(node, true, false, &token)
+            }
+            NativeFirstCoordinatorAction::ObserveNativeDecision { node } => {
+                self.native_member(node, true, true, &token)
+            }
             NativeFirstCoordinatorAction::ObservePendingClose => self.observe_pending_close(&token),
             NativeFirstCoordinatorAction::ObservePending => {
                 let sequence = self
@@ -577,11 +610,15 @@ impl NativeFirstCoordinator {
                 "FIRST prior OLD/fence outcome unresolved before target operation",
             ));
         }
+        if self.native_decision.pending.is_some() {
+            return Err(invalid(
+                "FIRST original remote native outcome unresolved before target operation",
+            ));
+        }
         let observing = matches!(operation, NativeFirstReceiveOperationV1::ObserveLast { .. });
         if let Some(prior) = &self.pending_receive {
             let allowed = matches!(operation, NativeFirstReceiveOperationV1::ObserveLast { sequence } if sequence == prior.sequence)
-                || (matches!(prior.operation, NativeFirstReceiveOperationV1::Start)
-                    && matches!(operation, NativeFirstReceiveOperationV1::Describe));
+                || operation.resolves(prior.operation);
             if !allowed {
                 return Err(invalid(
                     "FIRST prior target outcome unresolved; new mutation refused",
@@ -640,6 +677,32 @@ impl NativeFirstCoordinator {
         actual.require_request_live()?;
         token.check()?;
         let value = actual.reply().result.clone();
+        if matches!(
+            operation,
+            NativeFirstReceiveOperationV1::Start | NativeFirstReceiveOperationV1::Describe
+        ) {
+            let mf: crate::distribution_range_image::NativeRemoteImageManifestV1 =
+                serde_json::from_value(value.clone())?;
+            mf.require_shape()?;
+            crate::distribution_range_image::NativeSourceExportBindingV1::from_manifest(&mf)?
+                .require_plan(&self.plan)?;
+            if mf.target_attempt
+                != self
+                    .target_attempt
+                    .ok_or_else(|| invalid("FIRST original A absent"))?
+                || mf.source_id != self.donor
+                || mf.target_id != self.target
+                || self
+                    .native_decision
+                    .manifest
+                    .as_ref()
+                    .is_some_and(|old| old.checksum_sha256 != mf.checksum_sha256)
+            {
+                return Err(invalid("FIRST authenticated target changed original MF/A"));
+            }
+            self.native_decision.manifest.get_or_insert(mf);
+        }
+
         if observing {
             let prior = self
                 .pending_receive

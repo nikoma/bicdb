@@ -206,13 +206,7 @@ impl NativeFirstReceiveQueue {
                 let allowed = matches!(
                     request.operation,
                     NativeFirstReceiveOperationV1::ObserveLast { .. }
-                ) || (matches!(
-                    unknown.request.operation,
-                    NativeFirstReceiveOperationV1::Start
-                ) && matches!(
-                    request.operation,
-                    NativeFirstReceiveOperationV1::Describe
-                ));
+                ) || request.operation.resolves(unknown.request.operation);
                 if !allowed {
                     return Err(invalid(
                         "FIRST prior native outcome is unresolved; new mutation refused",
@@ -343,10 +337,10 @@ impl NativeFirstReceiveQueue {
             state.uncertain_count = state.uncertain_count.saturating_add(1);
         }
         if result.is_ok() {
-            let resolves = state.unknown.as_ref().is_some_and(|old| {
-                matches!(old.request.operation, NativeFirstReceiveOperationV1::Start)
-                    && matches!(request.operation, NativeFirstReceiveOperationV1::Describe)
-            });
+            let resolves = state
+                .unknown
+                .as_ref()
+                .is_some_and(|old| request.operation.resolves(old.request.operation));
             if resolves {
                 // Specific REAL reobservation, never generic native Resume.
                 // The original error classification remains in the hash chain.

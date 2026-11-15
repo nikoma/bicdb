@@ -2598,6 +2598,7 @@ impl BicDb {
         &self,
         tx: &mut Transaction,
         flashback_scn: Option<u64>,
+        native_preparation: Option<&native_wal_apply::NativeWalApplyPreparation<'_>>,
     ) -> Result<u64> {
         if tx.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
@@ -2824,6 +2825,9 @@ impl BicDb {
             None
         };
         self.require_native_transaction_mutation_scope(tx)?;
+        if let Some(actual) = native_preparation {
+            actual.require_current(self, tx)?;
+        }
         #[cfg(test)]
         if tx.native_admission_recovery_release.is_some() && self.test_native_admission_rejected(tx)
         {
@@ -2964,6 +2968,8 @@ impl BicDb {
             grant.retain_wal_durable(commit_seq);
         }
         bicdb_page::test_faults::crash_point("commit.after_txlog_durable");
+        #[cfg(test)]
+        commit_visibility_tests::after_real_wal(commit_seq);
         timer.lap(&commit_trace::WAL_ENCODE);
         let deferred = self
             .deferred_materializer
@@ -3063,9 +3069,18 @@ impl BicDb {
         // Publish visibility only after this seq's records are fully applied; the
         // watermark advances across the contiguous applied prefix (see above).
         self.mark_committed_seq(commit_seq);
-        // Row-lock waiters wake to re-read the row, so release them only once
-        // this commit is visible to their refreshed snapshots.
-        self.wait_until_visible(commit_seq);
+        // Keep row-lock waiters behind the original bounded visibility wait.
+        // If it expires, release this finished apply's locks with an uncertain
+        // completion; no successful receipt or thread floor is published.
+        #[cfg(test)]
+        commit_visibility_tests::after_actual_apply(commit_seq);
+        tx.visibility_wait_exhausted = if native_preparation.is_some() {
+            // Only the privately retained, fully revalidated native producer
+            // selects LOCAL completion. Consumer range/QQ/localB checks remain.
+            false
+        } else {
+            !self.wait_until_visible(commit_seq)
+        };
         let locked_keys = tx.locked_keys.get_mut().take_all();
         release_owned_write_locks(&self.write_locks, tx.id, &locked_keys);
         // Fail-closed: once the database is fenced no commit is reported
@@ -3077,7 +3092,7 @@ impl BicDb {
             let fenced = self.check_recovery_state().unwrap_err();
             return Err(self.commit_outcome_unknown(tx.id.0, commit_seq, &fenced));
         }
-        // The commit is durable and visible: publish its change-capture ops.
+        // The commit is durably applied: publish its change-capture ops.
         // A failure here leaves them only in the transaction log. The commit
         // stays committed (a refusal would make the client retry and
         // duplicate it); the database is fenced, so no checkpoint or
@@ -3120,12 +3135,21 @@ impl BicDb {
             tx.finalize_committed_record_audit_events()?;
             tx.finalize_committed_broker_outbox();
         }
-        tx.receipt_commit_finished(commit_seq);
+        if tx.visibility_wait_exhausted {
+            // Actual local apply is retained. A healthy visibility gap is not
+            // an abort or a durability fence, and cannot produce a success
+            // receipt. Outer finalizers still own the remaining obligations.
+            tx.receipt_recovery_required(commit_seq);
+        } else {
+            tx.receipt_commit_finished(commit_seq);
+        }
         timer.lap(&commit_trace::BOOKKEEPING);
         commit_trace::tick();
         // So this thread's next `begin_transaction` does not start behind its own
         // commit and self-conflict on a row nobody else touched.
-        self.note_commit_seq_on_this_thread(commit_seq);
+        if native_preparation.is_none() && !tx.visibility_wait_exhausted {
+            self.note_commit_seq_on_this_thread(commit_seq);
+        }
         if let (Some(admission), Some(ticket)) = (admission, admission_ticket) {
             tx.commit_admission_ticket = Some((admission, ticket));
         }

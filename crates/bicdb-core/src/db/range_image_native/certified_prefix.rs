@@ -755,11 +755,18 @@ impl BicDb {
                     )?,
                 }
             }
-            let sequence = self.commit_transaction(&mut transaction)?;
+            let local = super::super::native_wal_apply::NativeWalApplyPreparation::for_pending(
+                self,
+                &transaction,
+                &pending,
+                authority,
+            )?;
+            let sequence =
+                self.commit_transaction_with_native_preparation(&mut transaction, &local)?;
             self.tx_log.write_durable(sequence)?;
             let receipt = transaction.mint_native_wal_apply_receipt()?;
             self.record_native_range_materialized(&pending, &receipt, authority)?;
-            transaction.finalize_commit_admission()?;
+            transaction.finalize_native_local_apply(&local, Some(&receipt))?;
             transaction.finalize_committed_broker_outbox();
             transaction.finalize_committed_memory_jobs()?;
             self.complete_native_range_command(&pending, certificate, &receipt, authority)
@@ -1033,6 +1040,73 @@ impl BicDb {
             transaction_id: local_transaction_id,
             lease,
         })
+    }
+
+    /// Validate an original opaque pending owner BEFORE local row apply. No
+    /// receipt, quorum, Serving or renewed role is produced by this comparison.
+    pub(in crate::db) fn require_native_pending_transaction(
+        &self,
+        pending: &NativeRangePendingApply,
+        transaction: &Transaction,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<()> {
+        self.range_mutations
+            .validate(pending.pending.range_id, authority)?;
+        if pending.database_incarnation != self.incarnation
+            || pending.pending.expected_local_transaction_id != transaction.id().0
+            || pending._scope.transaction_id != transaction.id().0
+            || !Arc::ptr_eq(&pending._scope.registry, &self.native_range_command_scopes)
+            || super::super::native_wal_apply::actual_transaction_mutations_sha256(transaction)?
+                != pending.intent.mutations_sha256()
+        {
+            return Err(invalid(
+                "native local preparation changed original Tx/open/mutations/scope",
+            ));
+        }
+        {
+            let registry = self.native_range_command_scopes.lock();
+            let entry = registry
+                .entries
+                .get(&transaction.id().0)
+                .ok_or_else(|| invalid("native local preparation original scope absent"))?;
+            if entry.lease != pending._scope.lease
+                || !entry.armed
+                || entry.database_incarnation != self.incarnation
+                || entry.mutations_sha256 != pending.intent.mutations_sha256()
+            {
+                return Err(invalid("native local preparation original scope changed"));
+            }
+        }
+        let _journal = self
+            .native_range_image_journal
+            .try_lock_for(NATIVE_COMMAND_JOURNAL_WAIT)
+            .ok_or_else(|| invalid("native local preparation journal busy"))?;
+        if self.native_range_image_installing(pending.pending.range_id)? {
+            return Err(invalid("native local preparation range installing"));
+        }
+        let birth = self
+            .read_native_birth()?
+            .ok_or_else(|| invalid("native local preparation birth absent"))?;
+        let current: PendingNativeRangeCommand = self
+            .read_native_range_image_record(&pending_key(pending.pending.range_id))?
+            .ok_or_else(|| invalid("native local preparation pending absent"))?;
+        current.validate()?;
+        let mut original = current.clone();
+        original.materialized = None;
+        original.checksum_sha256 = original.checksum()?;
+        if original != pending.pending
+            || current.birth_id != birth.birth_id
+            || self.native_range_image_generations(&birth, current.range_id)?
+                != (
+                    current.global_image_generation,
+                    current.range_image_generation,
+                )
+        {
+            return Err(invalid(
+                "native local preparation protected pending/base changed",
+            ));
+        }
+        Ok(())
     }
 
     fn require_native_pending(

@@ -310,6 +310,23 @@ impl BicDb {
     /// collection take the flashback clock for their whole commit and carry
     /// their history rows; all others go straight to the commit body.
     pub(crate) fn commit_transaction(&self, tx: &mut Transaction) -> Result<u64> {
+        self.commit_transaction_with_preparation(tx, None)
+    }
+
+    pub(super) fn commit_transaction_with_native_preparation(
+        &self,
+        tx: &mut Transaction,
+        preparation: &native_wal_apply::NativeWalApplyPreparation<'_>,
+    ) -> Result<u64> {
+        preparation.require_current(self, tx)?;
+        self.commit_transaction_with_preparation(tx, Some(preparation))
+    }
+
+    fn commit_transaction_with_preparation(
+        &self,
+        tx: &mut Transaction,
+        preparation: Option<&native_wal_apply::NativeWalApplyPreparation<'_>>,
+    ) -> Result<u64> {
         if !std::ptr::eq(tx.db.as_ptr(), self)
             || !Arc::ptr_eq(&tx.catalog_admission, &self.catalog_admission)
             || !Arc::ptr_eq(&tx.tx_states, &self.tx_states)
@@ -354,7 +371,7 @@ impl BicDb {
             }
             self.commit_read_only_on_standby(tx)
         } else {
-            self.commit_transaction_tracked(tx)
+            self.commit_transaction_tracked(tx, preparation)
         };
         // A commit that failed before its decision on a database fenced in
         // the meantime reports the fence (58030), not whatever it tripped
@@ -394,7 +411,10 @@ impl BicDb {
             other => other,
         };
         if let Ok(seq) = committed {
-            if !tx.writes.is_empty() || !tx.imported_record_audit_events.is_empty() {
+            if preparation.is_none()
+                && !tx.visibility_wait_exhausted
+                && (!tx.writes.is_empty() || !tx.imported_record_audit_events.is_empty())
+            {
                 replication_live::note_thread_commit(seq);
             }
         }
@@ -404,13 +424,17 @@ impl BicDb {
         committed
     }
 
-    fn commit_transaction_tracked(&self, tx: &mut Transaction) -> Result<u64> {
+    fn commit_transaction_tracked(
+        &self,
+        tx: &mut Transaction,
+        preparation: Option<&native_wal_apply::NativeWalApplyPreparation<'_>>,
+    ) -> Result<u64> {
         if self.flashback_tracked.load(AtomicOrdering::Acquire) == 0
             || tx.bypass_commit_admission
             || tx.state != TxState::Pending
             || !self.flashback_tx_touches_tracked(tx)?
         {
-            return self.commit_transaction_inner(tx, None);
+            return self.commit_transaction_inner(tx, None, preparation);
         }
         // Commits to the same archived table stay in SCN order (a row's
         // versions are ordered by SCN); commits to different tables run in
@@ -447,7 +471,7 @@ impl BicDb {
             scn
         };
         let base_len = tx.writes.len();
-        let result = self.commit_transaction_inner(tx, Some(scn));
+        let result = self.commit_transaction_inner(tx, Some(scn), preparation);
         {
             let mut clock = self.flashback_clock.lock();
             clock.in_flight.remove(&scn);

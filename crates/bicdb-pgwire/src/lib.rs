@@ -4383,7 +4383,12 @@ fn execute_server_db_sql_for_state_inner(
                 // Read-your-writes: future transactions on this connection floor
                 // their snapshot at this commit so they never self-conflict on a
                 // row they just wrote while the visibility watermark lags.
-                state.last_commit_seq = state.last_commit_seq.max(commit_seq);
+                // The buffered sequence alone is not an ordinary visibility
+                // proof. Do not turn an uncertain completion into a session's
+                // successful read floor; keep committed DDL/session cleanup.
+                if durability.is_ok() && admission_finalization.is_ok() && finalization.is_ok() {
+                    state.last_commit_seq = state.last_commit_seq.max(commit_seq);
+                }
                 server.record_write_execution(duration_nanos_u64(started.elapsed()));
                 durability?;
                 admission_finalization?;

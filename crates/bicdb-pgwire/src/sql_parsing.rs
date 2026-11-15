@@ -329,6 +329,25 @@ pub(crate) fn drain_deferred_trigger_hooks(
     }
 }
 
+/// Preserve the actual original completion error and expose a secondary
+/// committed-cleanup failure without converting it into rollback or success.
+fn commit_error_with_catalog_cleanup(
+    primary: BicDbError,
+    cleanup: Option<PgWireError>,
+) -> PgWireError {
+    match cleanup {
+        None => primary.into(),
+        Some(secondary) => PgWireError::Sql(SqlError::WithNotices {
+            error: Box::new(SqlError::from(primary)),
+            notices: vec![bicdb_sql::SqlNotice {
+                sqlstate: "01000".into(),
+                message: format!("locally committed catalog cleanup remains deferred: {secondary}"),
+                fields: Vec::new(),
+            }],
+        }),
+    }
+}
+
 pub(crate) fn commit_buffered_transaction(
     server: &Arc<PgWireServer>,
     state: &mut ConnectionState,
@@ -386,7 +405,12 @@ pub(crate) fn commit_buffered_transaction(
                     tx.finalize_committed_broker_outbox();
                 }
                 let finalization = tx.finalize_committed_memory_jobs();
-                state.last_commit_seq = state.last_commit_seq.max(commit_seq);
+                // The buffered sequence alone is not an ordinary visibility
+                // proof. Do not turn an uncertain completion into a session's
+                // successful read floor; keep committed DDL/session cleanup.
+                if durability.is_ok() && admission_finalization.is_ok() && finalization.is_ok() {
+                    state.last_commit_seq = state.last_commit_seq.max(commit_seq);
+                }
                 server.record_write_execution(duration_nanos_u64(started.elapsed()));
                 state.committed_shared_role_ddl = std::mem::take(&mut state.tx_shared_role_ddl);
                 if durability.is_ok() {
@@ -399,9 +423,39 @@ pub(crate) fn commit_buffered_transaction(
                 server
                     .advisory_locks
                     .release_transaction(state.connection_id);
+                // This branch owns actual completed local apply, independent
+                // of its caller-facing error. Finish committed read-only scope
+                // cleanup on a nonblocking shared borrow before propagating an
+                // uncertain finalizer. Never reenter DDL undo or wait for a new
+                // exclusive DB lease merely to return the original error.
+                let scope_cleanup_error = if committed_ddl
+                    && durability.is_ok()
+                    && tx.state() == bicdb_core::TxState::Committed
+                    && (admission_finalization.is_err() || finalization.is_err())
+                {
+                    (|| -> Result<()> {
+                        let db = server.db.try_read_recursive().ok_or_else(|| {
+                            PgWireError::Server("committed catalog cleanup deferred: database shared borrow is busy".into())
+                        })?;
+                        committed_catalog_scopes.finish_committed_catalog_scopes(&db)?;
+                        Ok(())
+                    })().err()
+                } else {
+                    None
+                };
                 durability?;
-                admission_finalization?;
-                finalization?;
+                if let Err(primary) = admission_finalization {
+                    return Err(commit_error_with_catalog_cleanup(
+                        primary,
+                        scope_cleanup_error,
+                    ));
+                }
+                if let Err(primary) = finalization {
+                    return Err(commit_error_with_catalog_cleanup(
+                        primary,
+                        scope_cleanup_error,
+                    ));
+                }
                 server.sync_quorum.wait_for(commit_seq)?;
                 if committed_ddl {
                     // Native COMMIT bypasses SqlSession::commit. Release its

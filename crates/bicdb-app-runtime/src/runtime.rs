@@ -540,6 +540,23 @@ pub struct ApplicationRuntime {
     module_cache: Mutex<CompiledModuleCache>,
 }
 
+#[cfg(test)]
+impl ApplicationRuntime {
+    /// Drain the actual background threads before tests assert a lifecycle
+    /// operation that requires quiescent invocation admission. Joining happens
+    /// outside the supervisor-map lock, as in the runtime's normal teardown.
+    pub(crate) fn stop_background_supervisors_for_test(&self) {
+        let supervisors = {
+            let mut owned = self
+                .supervisors
+                .lock()
+                .expect("application supervisors poisoned");
+            std::mem::take(&mut *owned)
+        };
+        stop_supervisor_sets(supervisors);
+    }
+}
+
 impl std::fmt::Debug for ApplicationRuntime {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let active = self.active.read();

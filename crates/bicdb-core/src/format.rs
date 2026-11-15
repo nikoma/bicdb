@@ -86,7 +86,11 @@ pub const NATIVE_JOINED_REMOTE_RECEIVE_V2_FEATURE_FLAG: &str = "native_joined_re
 pub const NATIVE_JOINED_REMOTE_IMAGE_FEATURE_FLAG: &str = "native_joined_remote_image_v1";
 /// Required companion provenance for genuine remote native DECISION.
 pub const NATIVE_REMOTE_JOINT_DECISION_FEATURE_FLAG: &str = "native_remote_joint_decision_v1";
+/// Root-local unresolved job semantics. Whole-root backups retain this fence;
+/// it is not a portable row-image capability or a job-replay permission.
+pub const MEMORY_JOB_OUTCOME_UNKNOWN_FEATURE_FLAG: &str = "memory_job_outcome_unknown_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
+    MEMORY_JOB_OUTCOME_UNKNOWN_FEATURE_FLAG,
     NATIVE_JOINED_REMOTE_IMAGE_FEATURE_FLAG,
     NATIVE_REMOTE_JOINT_DECISION_FEATURE_FLAG,
     NATIVE_JOINED_REMOTE_RECEIVE_V2_FEATURE_FLAG,
@@ -220,6 +224,39 @@ pub(crate) fn install_replicated_reader_features(root: &Path, features: &[String
         root,
         &features.iter().map(String::as_str).collect::<Vec<_>>(),
     )
+}
+
+/// Unconditional durable reader barrier BEFORE an unresolved job sidecar can
+/// be published. Re-fsync even when a prior uncertain rename left the bit visible.
+pub(crate) fn enable_memory_job_outcome_unknown(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    metadata
+        .feature_flags
+        .insert(MEMORY_JOB_OUTCOME_UNKNOWN_FEATURE_FLAG.into());
+    persist_metadata_with(root, &metadata, true, |path, bytes, fsync| {
+        // Same ordered atomic replacement as write_atomic; a named site makes
+        // the actual barrier's failure observable in scoped I/O controls.
+        storage::replace_durably(
+            path,
+            storage::ReplaceContents::Plain(bytes),
+            fsync,
+            "memory_jobs.outcome_unknown.format",
+            storage::FailClosed::No,
+        )
+    })
+}
+#[cfg(test)]
+pub(crate) fn test_reader_without_memory_job_outcome_unknown(root: &Path) -> Result<()> {
+    let metadata = read_or_legacy_metadata(root)?;
+    let without: Vec<_> = KNOWN_FEATURE_FLAGS
+        .iter()
+        .copied()
+        .filter(|feature| *feature != MEMORY_JOB_OUTCOME_UNKNOWN_FEATURE_FLAG)
+        .collect();
+    validate_supported_with_flags(&metadata, &without)
 }
 
 fn enable_feature_flags(root: &Path, features: &[&str]) -> Result<()> {
@@ -770,7 +807,10 @@ fn persist_metadata_with(
             .contains(NATIVE_METADATA_STORE_FEATURE_FLAG)
         || metadata
             .feature_flags
-            .contains(NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG);
+            .contains(NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG)
+        || metadata
+            .feature_flags
+            .contains(MEMORY_JOB_OUTCOME_UNKNOWN_FEATURE_FLAG);
     write(
         &metadata_path(root),
         &serde_json::to_vec_pretty(metadata)?,

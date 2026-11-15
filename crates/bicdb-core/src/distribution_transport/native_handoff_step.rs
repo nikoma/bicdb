@@ -228,6 +228,30 @@ impl TcpClusterRelocationTransport {
         self.request_native_joint_bridge_step(recipient, data, request, own, parent)
     }
 
+    /// Coordinator -> prepared NEW member. The member publishes its own
+    /// native serving bridge after collecting, itself, fresh observations of
+    /// every other NEW member before and after its durable write. The frame
+    /// reports the member's own durable bridge receipt checksum once the
+    /// member confirmed it; an incomplete frame is resumable progress DATA.
+    pub(crate) fn request_native_joint_bridge_publish(
+        &self,
+        recipient: &ClusterNodeId,
+        data: &NativeJointDecisionData,
+        request: &NativeJointHandoffStepRequestV1,
+        own: &HostMetadataReadObservation,
+        parent: &CancellationToken,
+    ) -> Result<AuthenticatedNativeJointBridgeStepFrame> {
+        if !matches!(
+            &request.operation,
+            NativeJointHandoffStepOperationV1::BridgePublish { .. }
+        ) {
+            return Err(transport_error(
+                "joint bridge publish exchange carries another operation",
+            ));
+        }
+        self.request_native_joint_bridge_step(recipient, data, request, own, parent)
+    }
+
     /// Coordinator or NEW member -> another NEW member. Read-only: the member
     /// re-proves its own retained state under its own fresh metadata.
     pub(crate) fn request_native_joint_bridge_phase_observation(
@@ -302,6 +326,7 @@ impl TcpClusterRelocationTransport {
             ));
         }
         self.require_numeric_metadata_destination(recipient, &token)?;
+        let sent = Instant::now();
         let (response, actual, actual_birth) = self.call_with_native_destination_cancellable(
             &token,
             recipient,
@@ -309,7 +334,6 @@ impl TcpClusterRelocationTransport {
                 request: request.clone(),
             },
         )?;
-        let received = Instant::now();
         token.check()?;
         own.require_live_request(request.business)?;
         if actual.node_id() != recipient
@@ -340,13 +364,15 @@ impl TcpClusterRelocationTransport {
             ));
         }
         // The window can only shrink: the member's reported remainder counts
-        // from RECEIPT, which is later than when the member measured it.
+        // from the instant BEFORE this request left, which is earlier than
+        // when the member measured it, so the member's own observation
+        // cannot have expired while this frame still reads as live.
         let mut window_deadline = own.deadline();
         if let Some(deadline) = token.deadline() {
             window_deadline = window_deadline.min(deadline);
         }
         if let Some(left) = reply.outcome.window_remaining_ms {
-            window_deadline = window_deadline.min(received + Duration::from_millis(left));
+            window_deadline = window_deadline.min(sent + Duration::from_millis(left));
         }
         let frame = AuthenticatedNativeJointBridgeStepFrame {
             reply,

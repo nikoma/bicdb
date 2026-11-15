@@ -1109,3 +1109,33 @@ impl BicDb {
         Ok(Some(receipt))
     }
 }
+
+#[cfg(test)]
+impl BicDb {
+    /// Read the actual protected bridge pointer and its archive as DATA only;
+    /// never a publication, Open or serving grant.
+    pub(crate) fn test_joint_bridge_record(
+        &self,
+        range: RangeId,
+    ) -> Result<Option<serde_json::Value>> {
+        let Some(record) =
+            self.read_native_range_image_record::<NativeJointServingBridgeRecord>(&key(range))?
+        else {
+            return Ok(None);
+        };
+        record.validate()?;
+        let archive = self.read_native_range_image_record::<NativeJointServingBridgeRecord>(
+            &archive_key(range, &record.checksum_sha256),
+        )?;
+        Ok(Some(serde_json::json!({
+            "checksum_sha256":record.checksum_sha256,
+            "decision_sha256":record.decision.checksum_sha256(),
+            "local_node_id":record.prepared.local_node_id,
+            "new_prepared":record.new_prepared,
+            "post_quorum_metadata_context_id":record.post_quorum_metadata_context_id,
+            "post_quorum_metadata_term":record.post_quorum_metadata_term,
+            "post_quorum_metadata_read_index":record.post_quorum_metadata_read_index,
+            "archive_equals_pointer":archive.as_ref() == Some(&record),
+        })))
+    }
+}

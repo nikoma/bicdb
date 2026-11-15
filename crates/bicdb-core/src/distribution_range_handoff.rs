@@ -13,6 +13,8 @@ use crate::error::{BicDbError, Result};
 mod joint;
 #[cfg(feature = "tls-replication")]
 pub(crate) use joint::NativeJointReadOnlyPlanIdentity;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use joint::{test_arm_bridge_second_window_fault, NativeBridgeSecondWindowFault};
 pub(crate) use joint::{
     CommittedNativeJointDecisionObservation, NativeJointActivatedQuorum,
     NativeJointActivationAdmission, NativeJointDecisionData, NativeJointDecisionProof,
@@ -39,6 +41,10 @@ pub(crate) use joint::{
 };
 #[cfg(test)]
 pub(crate) use joint::{NativeJointPhaseTrace, NativeRefreshTraceContext};
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint::{
+    NativeRemoteBridgePublicationCertificate, NativeRemoteBridgePublicationCertificateRound,
+};
 #[cfg(feature = "tls-replication")]
 pub(crate) use joint::{
     NativeRemoteDecisionAdmission, NativeRemoteDecisionBindingV1, NativeRemoteDecisionReceiptV1,

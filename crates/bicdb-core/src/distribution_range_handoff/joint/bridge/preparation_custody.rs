@@ -6,8 +6,8 @@ use std::time::{Duration, Instant};
 /// This owns the actual native preparation, original State/A/lease and ONE
 /// physical pin. Retention grants neither quorum membership nor publication.
 pub(crate) struct NativeJointPreparationCustody {
-    actual: Arc<ActualServiceNativeJointPreparedEvidence>,
-    service: Arc<Mutex<ClusterDataNodeService>>,
+    pub(super) actual: Arc<ActualServiceNativeJointPreparedEvidence>,
+    pub(super) service: Arc<Mutex<ClusterDataNodeService>>,
 }
 impl NativeJointPreparationCustody {
     /// Infallible custody transfer immediately after the genuine producer.
@@ -134,9 +134,9 @@ impl NativeJointPreparationCustody {
     }
     /// Historical identity of the retained native preparation. Read from
     /// memory only; it proves nothing current and grants nothing.
-    pub(crate) fn retained_facts(&self) -> NativeJointPreparationRetainedFacts {
+    pub(crate) fn retained_facts(&self) -> Result<NativeJointPreparationRetainedFacts> {
         let prepared = self.actual.prepared();
-        NativeJointPreparationRetainedFacts {
+        Ok(NativeJointPreparationRetainedFacts {
             decision_sha256: self.data().checksum_sha256().into(),
             preparation_sha256: prepared.checksum_sha256().into(),
             native_database_incarnation: prepared.native_database_incarnation().into(),
@@ -148,7 +148,9 @@ impl NativeJointPreparationCustody {
                 .checksum_sha256()
                 .into(),
             store_open_id: self.actual.store_open_id(),
-        }
+            // The registration object captured BEFORE the native preparation.
+            writer_identity_sha256: self.actual.original_writer_identity_sha256()?,
+        })
     }
     /// The member-local half of one fresh PREPARATION phase: exactly what the
     /// in-process phase round does for this member (`acquire_inner`), run by
@@ -196,7 +198,7 @@ impl NativeJointPreparationCustody {
             )?;
             // The complete protected CURRENT/archive/State/writer check the
             // in-process phase performs for this member under this lock.
-            let _writer = self
+            let writer = self
                 .actual
                 .require_current_under_preparation_custody(&service, &fresh, self)?;
             if fresh.data() != data {
@@ -206,8 +208,12 @@ impl NativeJointPreparationCustody {
             }
             fresh.require_current_metadata_only()?;
             let (metadata_term, metadata_read_index, metadata_context_id) = fresh.metadata_anchor();
+            let mut retained = self.retained_facts()?;
+            // Report the registration this observation itself just proved
+            // current under the service lock, not a remembered value.
+            retained.writer_identity_sha256 = writer.identity_sha256()?;
             NativeJointPreparationPhaseFacts {
-                retained: self.retained_facts(),
+                retained,
                 metadata_term,
                 metadata_read_index,
                 metadata_context_id,
@@ -251,6 +257,23 @@ impl NativeJointPreparationCustody {
         Ok(serde_json::json!({"custody":self.test_evidence(),
             "actual_protected":database.test_joint_preparation_record(self.actual.committed().data().old_range().id)?}))
     }
+    /// This member's actual protected bridge record as DATA; grants nothing.
+    #[cfg(test)]
+    pub(crate) fn test_durable_bridge_record(&self) -> Result<Option<serde_json::Value>> {
+        let service = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("bridge forensic service busy"))?;
+        let database = service.database();
+        let database = database
+            .try_read()
+            .ok_or_else(|| invalid("bridge forensic DB busy"))?;
+        database.test_joint_bridge_record(self.data().old_range().id)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_read_pin_released(&self) -> Result<bool> {
+        self.actual.read_pin_already_released()
+    }
     #[cfg(test)]
     pub(crate) fn test_remove_actual_archive(
         &self,
@@ -277,6 +300,9 @@ pub(crate) struct NativeJointPreparationRetainedFacts {
     pub(crate) local_visibility_sequence: u64,
     pub(crate) decision_receipt_sha256: String,
     pub(crate) store_open_id: Uuid,
+    /// Digest of the exact writer/owner registration object; see
+    /// `NativeJointPhaseOwner::identity_sha256`.
+    pub(crate) writer_identity_sha256: String,
 }
 /// One member-local fresh phase observation: the retained identity plus the
 /// metadata anchor and absolute deadline of the observation that re-proved it.

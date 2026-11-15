@@ -5,8 +5,8 @@ use super::*;
 use crate::distribution_consensus::MetadataReadParticipant;
 use crate::distribution_data::NativeJointServingLease;
 use crate::distribution_native_host::provisional_listener::registration::bridge_step::{
-    acquire_bridge_step_own, bridge_reply, observe_bridge_phase, retained_prepare_step,
-    BridgeStepOwn, NativeBridgeMemberSteps,
+    acquire_bridge_step_own, bridge_reply, observe_bridge_phase, publish_member_bridge,
+    retained_prepare_step, BridgeStepOwn, NativeBridgeMemberSteps,
 };
 use crate::distribution_range_handoff::{
     NativeJointHandoffStepOperationV1 as StepOperation, NativeJointHandoffStepOutcomeV1,
@@ -62,6 +62,14 @@ impl NativeRegisteredReplicaAdmission {
             StepOperation::BridgePrepare { .. } => {
                 self.prepare_registered_bridge(&backend, &steps, request, fresh, token)?
             }
+            StepOperation::BridgePublish { .. } => publish_member_bridge(
+                &steps,
+                &backend.provider,
+                &backend.transport,
+                request,
+                fresh,
+                token,
+            )?,
             StepOperation::TargetInstall { .. } => {
                 return Err(invalid("joint bridge step received an install operation"))
             }
@@ -95,7 +103,7 @@ impl NativeRegisteredReplicaAdmission {
         let step = retained_prepare_step(&mut held, request)?;
         if let Some(custody) = step.custody() {
             request.require_decision(custody.data())?;
-            return Ok((step.prepare_outcome(Stage::Complete), anchor));
+            return Ok((step.prepare_outcome(Stage::Complete)?, anchor));
         }
         let owner = self
             .joint_targets
@@ -146,7 +154,7 @@ impl NativeRegisteredReplicaAdmission {
             backend.service.clone(),
         ));
         token.check()?;
-        Ok((step.prepare_outcome(Stage::Complete), anchor))
+        Ok((step.prepare_outcome(Stage::Complete)?, anchor))
     }
 }
 
@@ -167,5 +175,20 @@ impl NativeMetadataControlHost {
             .get(&range)
             .and_then(|step| step.custody())
             .map(|custody| custody.test_evidence()))
+    }
+    /// What this original Registered receiver retained and durably holds of
+    /// its own bridge publication; grants nothing.
+    pub(crate) fn test_registered_bridge_publication(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<Option<serde_json::Value>> {
+        let receiver = self
+            .replica
+            .as_ref()
+            .ok_or_else(|| invalid("actual Registered receiver absent"))?;
+        let held = receiver.bridge_steps.hold()?;
+        held.get(&range)
+            .map(|step| step.test_publication_evidence())
+            .transpose()
     }
 }

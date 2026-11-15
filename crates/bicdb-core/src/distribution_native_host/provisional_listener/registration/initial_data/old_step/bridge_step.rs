@@ -7,7 +7,8 @@ use crate::distribution_consensus::MetadataReadParticipant;
 use crate::distribution_metadata_read_provider::MetadataReadProvider;
 use crate::distribution_native_host::provisional_listener::registration::bridge_step::{
     acquire_bridge_step_own, bridge_remaining, bridge_reply, observe_bridge_phase,
-    retained_prepare_step, BridgeStepOwn, NativeBridgeMemberSteps, MIN_BRIDGE_SUBSTEP_BUDGET,
+    publish_member_bridge, retained_prepare_step, BridgeStepOwn, NativeBridgeMemberSteps,
+    MIN_BRIDGE_SUBSTEP_BUDGET,
 };
 use crate::distribution_native_host::provisional_listener::registration::NativeDataOwnerAdmission;
 use crate::distribution_range_handoff::{
@@ -80,6 +81,14 @@ impl NativeInitialDataAdmission {
             StepOperation::BridgePrepare { .. } => {
                 self.prepare_survivor_bridge(&owners, &steps, peer, request, fresh, &token)?
             }
+            StepOperation::BridgePublish { .. } => publish_member_bridge(
+                &steps,
+                &owners.provider,
+                &owners.transport,
+                request,
+                fresh,
+                &token,
+            )?,
             StepOperation::TargetInstall { .. } => unreachable!("refused above"),
         };
         self.require_listener(&owners.service, &owners.runtime)?;
@@ -114,7 +123,7 @@ impl NativeInitialDataAdmission {
         let step = retained_prepare_step(&mut held, request)?;
         if let Some(custody) = step.custody() {
             request.require_decision(custody.data())?;
-            return Ok((step.prepare_outcome(Stage::Complete), anchor));
+            return Ok((step.prepare_outcome(Stage::Complete)?, anchor));
         }
         let domains = self
             .writer_data_domains
@@ -188,7 +197,7 @@ impl NativeInitialDataAdmission {
             }
             if domains.closed(range).is_err() {
                 let Some(BridgeStepOwn { own, business, .. }) = own(&mut anchor)? else {
-                    return Ok((step.prepare_outcome(Stage::BridgeWriterDomain), anchor));
+                    return Ok((step.prepare_outcome(Stage::BridgeWriterDomain)?, anchor));
                 };
                 let policy = NativeWriterDataDomainPolicy::from_actual(
                     &owners.service,
@@ -211,7 +220,7 @@ impl NativeInitialDataAdmission {
         let closed = domains.closed(range)?;
         closed.require_lifetime()?;
         let Some(BridgeStepOwn { own, business, .. }) = own(&mut anchor)? else {
-            return Ok((step.prepare_outcome(Stage::BridgePreparation), anchor));
+            return Ok((step.prepare_outcome(Stage::BridgePreparation)?, anchor));
         };
         // The actual attached local MStore point BEFORE any service guard.
         let point = ClusterDataNodeService::capture_actual_joint_metadata_point(
@@ -247,7 +256,7 @@ impl NativeInitialDataAdmission {
             owners.service.clone(),
         ));
         token.check()?;
-        Ok((step.prepare_outcome(Stage::Complete), anchor))
+        Ok((step.prepare_outcome(Stage::Complete)?, anchor))
     }
 
     /// The real freeze of this member's own retained OLD closure. Nothing is
@@ -306,5 +315,20 @@ impl NativeMetadataControlHost {
             .get(&range)
             .and_then(|step| step.custody())
             .map(|custody| custody.test_evidence()))
+    }
+    /// What this original INITIAL member retained and durably holds of its
+    /// own bridge publication; grants nothing.
+    pub(crate) fn test_initial_bridge_publication(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<Option<serde_json::Value>> {
+        let initial = self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("original INITIAL host absent"))?;
+        let held = initial.bridge_steps.hold()?;
+        held.get(&range)
+            .map(|step| step.test_publication_evidence())
+            .transpose()
     }
 }

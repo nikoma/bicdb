@@ -479,9 +479,11 @@ impl NativeJointPreparationPhaseQuorum {
         trace.mark("construct_activation_admission");
         let cancellation = self.cancellation.child_with_deadline(fresh.deadline());
         let result = NativeJointActivationAdmission {
-            phase: Some(self.clone()),
+            backing: ActivationBacking::Local {
+                quorum: self.original.clone(),
+                phase: Some(self.clone()),
+            },
             publication_claimed: std::sync::atomic::AtomicBool::new(false),
-            quorum: self.original.clone(),
             local,
             fresh,
             cancellation,

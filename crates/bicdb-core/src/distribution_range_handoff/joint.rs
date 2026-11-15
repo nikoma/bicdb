@@ -31,6 +31,14 @@ pub(crate) use remote_step::{
     NativeJointHandoffStepRequestV1, NativeJointHandoffStepStageV1,
 };
 #[cfg(feature = "tls-replication")]
+mod remote_bridge_certificate;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use bridge::{test_arm_bridge_second_window_fault, NativeBridgeSecondWindowFault};
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_bridge_certificate::{
+    NativeRemoteBridgePublicationCertificate, NativeRemoteBridgePublicationCertificateRound,
+};
+#[cfg(feature = "tls-replication")]
 mod remote_old_collect;
 pub(crate) use old_quorum::{
     NativeJointOldClosedQuorum, NativeJointOldImageProof, NativeJointOldRound,

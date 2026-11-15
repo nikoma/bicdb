@@ -17,6 +17,28 @@ impl NativeJointPhaseOwner {
             _ => false,
         }
     }
+    /// Digest of exactly the identity `same_actual` compares: the kind of
+    /// owner and the identity minted with that one registration object. Two
+    /// owners of one process report the same digest exactly when
+    /// `same_actual` holds; a replaced registration (or a restarted process)
+    /// reports another. Historical DATA for a peer that cannot compare
+    /// pointers; it proves nothing current and grants nothing.
+    pub(crate) fn identity_sha256(&self) -> Result<String> {
+        let (kind, identity) = match self {
+            Self::Writer(writer) => ("writer", writer.registration_identity()),
+            #[cfg(feature = "tls-replication")]
+            Self::Registered(owner) => (
+                "registered",
+                owner
+                    .upgrade()
+                    .ok_or_else(|| invalid("original Registered phase owner ended"))?
+                    .registration_identity(),
+            ),
+        };
+        Ok(hex::encode(sha2::Sha256::digest(
+            format!("native-joint-phase-owner-identity-v1\n{kind}\n{identity}").as_bytes(),
+        )))
+    }
     /// Legacy getter remains strict. Receiver identity is never a writer.
     pub(crate) fn actual_writer(&self) -> Result<&Arc<NativeWriterHostState>> {
         match self {

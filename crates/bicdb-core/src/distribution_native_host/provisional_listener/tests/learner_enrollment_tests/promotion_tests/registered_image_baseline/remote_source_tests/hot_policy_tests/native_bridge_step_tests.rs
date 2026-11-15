@@ -5,17 +5,36 @@
 //! memory-only observation of what each member itself retained.
 use super::*;
 use crate::distribution_range_handoff::{
+    test_arm_bridge_second_window_fault, NativeBridgeSecondWindowFault,
     NativeJointBridgePhaseKindV1 as PhaseKind, NativeJointDecisionData,
     NativeJointHandoffStepOperationV1 as StepOperation, NativeJointHandoffStepOutcomeV1,
-    NativeJointHandoffStepRequestV1,
+    NativeJointHandoffStepRequestV1, NativeJointHandoffStepStageV1 as StepStage,
+    NativeRemoteBridgePublicationCertificateRound,
 };
 use crate::distribution_transport::AuthenticatedNativeJointBridgeStepFrame;
 
 pub(super) fn is_case(case: SourceCase) -> bool {
     matches!(
         case,
-        SourceCase::NativeBridgeStepPrepareObserve | SourceCase::NativeBridgeStepRefusals
+        SourceCase::NativeBridgeStepPrepareObserve
+            | SourceCase::NativeBridgeStepRefusals
+            | SourceCase::NativeBridgeStepPublish
+            | SourceCase::NativeBridgeStepPublishFaults
     )
+}
+#[test]
+fn native_bridge_step_publish_every_member_publishes_own_bridge_and_certificate_counts_all() {
+    run_registered_image_baseline_with_source(
+        Case::Required,
+        Some(SourceCase::NativeBridgeStepPublish),
+    );
+}
+#[test]
+fn native_bridge_step_publish_refuses_unprepared_and_recovers_unconfirmed_second_window() {
+    run_registered_image_baseline_with_source(
+        Case::Required,
+        Some(SourceCase::NativeBridgeStepPublishFaults),
+    );
 }
 #[test]
 fn native_bridge_step_prepare_retains_member_custody_and_phase_observations_agree() {
@@ -37,6 +56,11 @@ fn index(local: &ClusterNodeId) -> usize {
 }
 fn prepare_operation(data: &NativeJointDecisionData) -> StepOperation {
     StepOperation::BridgePrepare {
+        decision_sha256: data.checksum_sha256().into(),
+    }
+}
+fn publish_operation(data: &NativeJointDecisionData) -> StepOperation {
+    StepOperation::BridgePublish {
         decision_sha256: data.checksum_sha256().into(),
     }
 }
@@ -81,6 +105,9 @@ fn exchange(
     let result = match &operation {
         StepOperation::BridgePrepare { .. } => {
             client.request_native_joint_bridge_prepare(member, data, &request, &own, &parent)
+        }
+        StepOperation::BridgePublish { .. } => {
+            client.request_native_joint_bridge_publish(member, data, &request, &own, &parent)
         }
         StepOperation::BridgePhaseObserve { kind, .. } => client
             .request_native_joint_bridge_phase_observation(
@@ -127,6 +154,90 @@ fn prepare(
         }
     }
     panic!("member {member} did not retain its preparation in six bounded steps");
+}
+/// Repeats the same logical publish step until the member reports its own
+/// confirmed durable bridge. Every call is one bounded request.
+fn publish(
+    client: &TcpClusterRelocationTransport,
+    member: &ClusterNodeId,
+    data: &NativeJointDecisionData,
+    ledger: &mut Ledger<'_>,
+) -> AuthenticatedNativeJointBridgeStepFrame {
+    for _ in 0..4 {
+        let frame = exchange(client, member, data, publish_operation(data), ledger).unwrap();
+        if frame.outcome().complete {
+            return frame;
+        }
+        assert_eq!(frame.outcome().stage, StepStage::BridgePublication);
+        assert!(frame.outcome().bridge_receipt_sha256.is_none());
+    }
+    panic!("member {member} did not confirm its bridge publication in four bounded steps");
+}
+/// What the member itself retained and durably holds of its publication.
+fn publication(
+    controls: &[NativeMetadataControlHost],
+    target_control: &NativeMetadataControlHost,
+    member: &ClusterNodeId,
+    range: crate::RangeId,
+) -> Option<serde_json::Value> {
+    let i = index(member);
+    if i == 4 {
+        target_control
+            .test_registered_bridge_publication(range)
+            .unwrap()
+    } else {
+        controls[i].test_initial_bridge_publication(range).unwrap()
+    }
+}
+/// The member's durable bridge is its own, for this decision, with pointer
+/// and archive equal, and its durable votes name EVERY NEW member with the
+/// preparation identity that member itself reported.
+fn assert_durable_bridge(
+    evidence: &serde_json::Value,
+    member: &ClusterNodeId,
+    data: &NativeJointDecisionData,
+    prepared: &BTreeMap<ClusterNodeId, NativeJointHandoffStepOutcomeV1>,
+) -> String {
+    let durable = &evidence["durable_bridge"];
+    assert!(durable.is_object(), "{member} holds no durable bridge");
+    assert_eq!(durable["decision_sha256"], data.checksum_sha256());
+    assert_eq!(durable["local_node_id"], serde_json::json!(member));
+    assert_eq!(durable["archive_equals_pointer"], true);
+    let votes = durable["new_prepared"].as_object().unwrap();
+    assert_eq!(
+        votes.keys().cloned().collect::<BTreeSet<_>>(),
+        data.new_members()
+            .keys()
+            .map(|node| node.as_str().to_owned())
+            .collect::<BTreeSet<_>>()
+    );
+    let mut contexts = BTreeSet::new();
+    for (node, original) in prepared {
+        let vote = &votes[node.as_str()];
+        assert_eq!(
+            vote["preparation_sha256"],
+            serde_json::json!(original.preparation_sha256)
+        );
+        assert_eq!(
+            vote["native_database_incarnation"],
+            serde_json::json!(original.native_database_incarnation)
+        );
+        assert_eq!(
+            vote["actual_local_visibility_sequence"],
+            serde_json::json!(original.local_visibility_sequence)
+        );
+        assert!(contexts.insert(vote["metadata_context_id"].to_string()));
+        assert_ne!(
+            vote["metadata_context_id"],
+            durable["post_quorum_metadata_context_id"]
+        );
+        assert!(vote["metadata_term"].as_u64() <= durable["post_quorum_metadata_term"].as_u64());
+        assert!(
+            vote["metadata_read_index"].as_u64()
+                <= durable["post_quorum_metadata_read_index"].as_u64()
+        );
+    }
+    durable["checksum_sha256"].as_str().unwrap().to_owned()
 }
 /// Fault-control exchange: decoded DATA or the member's exact refusal.
 fn raw(
@@ -217,6 +328,29 @@ pub(super) fn exercise(
     );
     for member in &new {
         assert!(retained(controls, target_control, member, selected).is_none());
+    }
+    if matches!(
+        case,
+        SourceCase::NativeBridgeStepPublish | SourceCase::NativeBridgeStepPublishFaults
+    ) {
+        let clients = new
+            .iter()
+            .map(|member| (member.clone(), all_clients[initiator(member)].clone()))
+            .collect::<BTreeMap<_, _>>();
+        exercise_publish(
+            case,
+            &data,
+            &new,
+            &clients,
+            all_clients,
+            controls,
+            target_control,
+            &committed_leader,
+            &bystander,
+            selected,
+            &mut ledger,
+        );
+        return;
     }
     if matches!(case, SourceCase::NativeBridgeStepRefusals) {
         let foreign = |operation: StepOperation| {
@@ -388,6 +522,12 @@ pub(super) fn exercise(
                 original.decision_receipt_sha256
             );
             assert_eq!(outcome.store_open_id, original.store_open_id);
+            // The exact writer registration the member proved under its lock.
+            assert!(outcome.writer_identity_sha256.is_some());
+            assert_eq!(
+                outcome.writer_identity_sha256,
+                original.writer_identity_sha256
+            );
             // The member's own DISTINCT fresh metadata observation.
             assert!(contexts.insert(frame.metadata_anchor().2));
             assert!(frame.window_deadline() > Instant::now());
@@ -422,6 +562,282 @@ pub(super) fn exercise(
     )
     .err()
     .expect("no member can attest an Open phase before it publishes")
+    .to_string();
+    assert!(error.contains("no retained member state yet"), "{error}");
+}
+
+/// After every NEW member prepared itself, each one publishes its OWN bridge
+/// through one step RPC from the coordinator. The driver never touches a
+/// member's service, quorum or phase object.
+#[allow(clippy::too_many_arguments)]
+fn exercise_publish(
+    case: SourceCase,
+    data: &NativeJointDecisionData,
+    new: &[ClusterNodeId],
+    clients: &BTreeMap<ClusterNodeId, Arc<TcpClusterRelocationTransport>>,
+    all_clients: &[Arc<TcpClusterRelocationTransport>],
+    controls: &[NativeMetadataControlHost],
+    target_control: &NativeMetadataControlHost,
+    committed_leader: &ClusterNodeId,
+    bystander: &ClusterNodeId,
+    selected: crate::RangeId,
+    ledger: &mut Ledger<'_>,
+) {
+    let evidence_of =
+        |member: &ClusterNodeId| publication(controls, target_control, member, selected);
+    let foreign = |operation: StepOperation| {
+        NativeJointHandoffStepRequestV1::from_decision(data, operation, Uuid::now_v7(), 5000)
+            .unwrap()
+    };
+    let mut prepared = BTreeMap::<ClusterNodeId, NativeJointHandoffStepOutcomeV1>::new();
+    if matches!(case, SourceCase::NativeBridgeStepPublishFaults) {
+        let victim = bystander.clone();
+        let late = new
+            .iter()
+            .rev()
+            .find(|n| **n != victim && **n != node(0) && *n != committed_leader)
+            .cloned()
+            .expect("a second NEW member that is neither leader");
+        // 1. Nothing prepared: a publish has no retained preparation.
+        let error = raw(
+            &clients[&victim],
+            &victim,
+            &foreign(publish_operation(data)),
+            "bridge_publish_before_any_preparation",
+            ledger,
+        );
+        assert!(error.contains("retains no preparation"), "{error}");
+        assert!(evidence_of(&victim).is_none());
+        for member in new.iter().filter(|n| **n != late) {
+            let frame = prepare(&clients[member], member, data, ledger);
+            prepared.insert(member.clone(), frame.outcome().clone());
+        }
+        // 2. One NEW member is not prepared: the publisher's own first
+        // window cannot be completed, so nothing is written and its own
+        // read pin stays held.
+        let error = exchange(
+            &clients[&victim],
+            &victim,
+            data,
+            publish_operation(data),
+            ledger,
+        )
+        .err()
+        .expect("publish before every NEW member is prepared must fail")
+        .to_string();
+        eprintln!("NATIVE_BRIDGE_PUBLISH_BEFORE_ALL_PREPARED exact_error={error}");
+        let after = evidence_of(&victim).unwrap();
+        assert!(after["durable_bridge"].is_null(), "{after}");
+        assert_eq!(after["read_pin_released"], false);
+        assert_eq!(after["bridge_confirmed"], false);
+        assert!(after["retained_bridge_sha256"].is_null());
+        // 3. A publish from a NEW member that is not the coordinator.
+        let other = new
+            .iter()
+            .find(|n| **n != victim && **n != late)
+            .cloned()
+            .unwrap();
+        let error = raw(
+            &all_clients[index(&victim)],
+            &other,
+            &foreign(publish_operation(data)),
+            "bridge_publish_from_non_initiator_new_member",
+            ledger,
+        );
+        assert!(error.contains("not an admitted initiator"), "{error}");
+        assert!(evidence_of(&other).unwrap()["durable_bridge"].is_null());
+        assert_eq!(evidence_of(&other).unwrap()["read_pin_released"], false);
+        let frame = prepare(&clients[&late], &late, data, ledger);
+        prepared.insert(late.clone(), frame.outcome().clone());
+        // 4/5. The durable write happens, then the second window does not
+        // confirm an unchanged member set: fail closed, keep the marker,
+        // report nothing; the next call recovers the SAME bridge.
+        for (member, fault) in [
+            (
+                victim.clone(),
+                NativeBridgeSecondWindowFault::ChangedIdentity,
+            ),
+            (late.clone(), NativeBridgeSecondWindowFault::LostReply),
+        ] {
+            test_arm_bridge_second_window_fault(&member, data.checksum_sha256(), fault);
+            let frame = exchange(
+                &clients[&member],
+                &member,
+                data,
+                publish_operation(data),
+                ledger,
+            )
+            .unwrap();
+            let outcome = frame.outcome();
+            assert!(!outcome.complete, "{fault:?} must not confirm");
+            assert_eq!(outcome.stage, StepStage::BridgePublication);
+            assert!(outcome.bridge_receipt_sha256.is_none());
+            let unconfirmed = evidence_of(&member).unwrap();
+            assert_eq!(unconfirmed["publication_pending"], true);
+            assert_eq!(unconfirmed["bridge_confirmed"], false);
+            assert_eq!(unconfirmed["read_pin_released"], true);
+            let checksum = assert_durable_bridge(&unconfirmed, &member, data, &prepared);
+            assert_eq!(unconfirmed["retained_bridge_sha256"], checksum);
+            // Recovery under a distinct fresh phase: exact original audit.
+            let frame = publish(&clients[&member], &member, data, ledger);
+            assert_eq!(
+                frame.outcome().bridge_receipt_sha256.as_deref(),
+                Some(checksum.as_str())
+            );
+            let recovered = evidence_of(&member).unwrap();
+            assert_eq!(recovered["durable_bridge"], unconfirmed["durable_bridge"]);
+            assert_eq!(recovered["publication_pending"], false);
+            assert_eq!(recovered["bridge_confirmed"], true);
+            ledger.record(
+                serde_json::json!({"operation":"unconfirmed_second_window_recovered",
+                "member":member,"fault":format!("{fault:?}"),"bridge_sha256":checksum,
+                "durable_audit_unchanged":true}),
+            );
+        }
+        // The remaining members publish normally.
+        for member in new {
+            let frame = publish(&clients[member], member, data, ledger);
+            let after = evidence_of(member).unwrap();
+            let checksum = assert_durable_bridge(&after, member, data, &prepared);
+            assert_eq!(
+                frame.outcome().bridge_receipt_sha256.as_deref(),
+                Some(checksum.as_str())
+            );
+        }
+        return;
+    }
+    for member in new {
+        let frame = prepare(&clients[member], member, data, ledger);
+        assert!(frame.outcome().writer_identity_sha256.is_some());
+        prepared.insert(member.clone(), frame.outcome().clone());
+    }
+    let identities = prepared
+        .values()
+        .map(|outcome| outcome.writer_identity_sha256.clone().unwrap())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(identities.len(), new.len(), "one registration per member");
+    for member in new {
+        let before = evidence_of(member).unwrap();
+        assert!(before["durable_bridge"].is_null());
+        assert_eq!(before["read_pin_released"], false);
+    }
+    let mut receipts = BTreeMap::new();
+    for (position, member) in new.iter().enumerate() {
+        let started = Instant::now();
+        let frame = publish(&clients[member], member, data, ledger);
+        let outcome = frame.outcome().clone();
+        let original = &prepared[member];
+        assert_eq!(outcome.preparation_sha256, original.preparation_sha256);
+        assert_eq!(outcome.store_open_id, original.store_open_id);
+        assert_eq!(
+            outcome.decision_receipt_sha256,
+            original.decision_receipt_sha256
+        );
+        assert_eq!(
+            outcome.writer_identity_sha256,
+            original.writer_identity_sha256
+        );
+        let after = evidence_of(member).unwrap();
+        assert_eq!(after["publication_pending"], false);
+        assert_eq!(after["bridge_confirmed"], true);
+        assert_eq!(after["read_pin_released"], true);
+        let checksum = assert_durable_bridge(&after, member, data, &prepared);
+        assert_eq!(
+            outcome.bridge_receipt_sha256.as_deref(),
+            Some(checksum.as_str())
+        );
+        assert_eq!(after["retained_bridge_sha256"], checksum);
+        // Only this member's own pin went with its own publication.
+        for later in &new[position + 1..] {
+            let untouched = evidence_of(later).unwrap();
+            assert!(untouched["durable_bridge"].is_null());
+            assert_eq!(untouched["read_pin_released"], false);
+        }
+        // An identical retry returns the SAME outcome and rewrites nothing.
+        let again = publish(&clients[member], member, data, ledger);
+        assert_eq!(again.outcome(), &outcome);
+        assert_eq!(
+            evidence_of(member).unwrap()["durable_bridge"],
+            after["durable_bridge"]
+        );
+        ledger.record(
+            serde_json::json!({"operation":"member_published_own_bridge",
+            "member":member,"bridge_sha256":checksum,
+            "elapsed_ms":started.elapsed().as_millis() as u64,
+            "durable_bridge":after["durable_bridge"],"identical_retry":true}),
+        );
+        receipts.insert(member.clone(), checksum);
+    }
+    // Coordinator-side aggregation from authenticated frames only.
+    let coordinator = node(0);
+    let begin = || {
+        NativeRemoteBridgePublicationCertificateRound::begin(
+            data.clone(),
+            coordinator.clone(),
+            &budget(5000),
+        )
+        .unwrap()
+    };
+    let frame_of = |member: &ClusterNodeId, ledger: &mut Ledger<'_>| {
+        publish(&clients[member], member, data, ledger)
+    };
+    // (i) Omitting one NEW member.
+    let mut round = begin();
+    for member in &new[1..] {
+        round.record(frame_of(member, ledger)).unwrap();
+    }
+    let error = round.finish().err().unwrap().to_string();
+    assert!(error.contains("cannot omit or replace"), "{error}");
+    // (ii) Counting one member twice, (iii) a frame of another operation,
+    // (iv) a frame another initiator observed.
+    let plain = new
+        .iter()
+        .find(|n| **n != coordinator && *n != committed_leader)
+        .unwrap();
+    let mut round = begin();
+    round.record(frame_of(plain, ledger)).unwrap();
+    let error = round
+        .record(frame_of(plain, ledger))
+        .err()
+        .unwrap()
+        .to_string();
+    assert!(error.contains("already counted"), "{error}");
+    let mut round = begin();
+    let error = round
+        .record(prepare(&clients[plain], plain, data, ledger))
+        .err()
+        .unwrap()
+        .to_string();
+    assert!(error.contains("not a confirmed publication"), "{error}");
+    let foreign_frame = publish(&all_clients[index(committed_leader)], plain, data, ledger);
+    let error = round.record(foreign_frame).err().unwrap().to_string();
+    assert!(error.contains("observed by another initiator"), "{error}");
+    // (v) Every NEW member exactly once.
+    let mut round = begin();
+    for member in new {
+        round.record(frame_of(member, ledger)).unwrap();
+    }
+    let certificate = round.finish().unwrap();
+    certificate.require_current().unwrap();
+    assert_eq!(certificate.data(), data);
+    assert_eq!(certificate.receipts().unwrap(), receipts);
+    let checksum = certificate.checksum_sha256().unwrap();
+    assert_eq!(checksum, certificate.checksum_sha256().unwrap());
+    ledger.record(
+        serde_json::json!({"operation":"bridge_publication_certificate",
+        "coordinator":coordinator,"receipts":receipts,"certificate_sha256":checksum,
+        "built_only_from_authenticated_frames":true}),
+    );
+    // The next phase kind still has no retained member state.
+    let error = exchange(
+        &all_clients[0],
+        new.iter().find(|n| **n != node(0)).unwrap(),
+        data,
+        observe_operation(data, PhaseKind::Open),
+        ledger,
+    )
+    .err()
+    .expect("no member can attest an Open phase before the Open step exists")
     .to_string();
     assert!(error.contains("no retained member state yet"), "{error}");
 }

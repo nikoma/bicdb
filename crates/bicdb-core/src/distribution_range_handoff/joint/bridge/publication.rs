@@ -57,19 +57,20 @@ impl NativeJointServingPublicationRound {
         admission: &NativeJointActivationAdmission,
         parent: &crate::CancellationToken,
     ) -> Result<()> {
-        if !Arc::ptr_eq(&self.prepared, &admission.quorum) {
+        let (quorum, phase) = admission.local_backing()?;
+        if !Arc::ptr_eq(&self.prepared, quorum) {
             return Err(invalid(
                 "native bridge publication changed its actual prepared quorum",
             ));
         }
-        if self.fresh_required && admission.phase.is_none() {
+        if self.fresh_required && phase.is_none() {
             return Err(invalid(
                 "resumed native publication requires new actual full phase authority",
             ));
         }
         admission.claim_publication_attempt()?;
         let local = admission.local.local_node_id().clone();
-        if admission.phase.is_some() && !self.receipts.contains_key(&local) {
+        if phase.is_some() && !self.receipts.contains_key(&local) {
             // ONE scoped native producer reconciles an actual old pointer or
             // publishes only if actually absent. Do not spend another complete
             // sweep on a separate absence probe after an unknown attempt.
@@ -110,9 +111,10 @@ impl NativeJointServingPublicationRound {
                 "native bridge publication changed decision or local native history",
             ));
         }
+        let phase = admission.local_backing()?.1.cloned();
         let retired = {
             let _version = admission.committed().native_publication_guard()?;
-            let old_phase = std::mem::replace(&mut self.phase, admission.phase.clone());
+            let old_phase = std::mem::replace(&mut self.phase, phase);
             self.pending.remove(&node);
             let old_receipt = self.receipts.insert(node, Arc::new(receipt));
             (old_phase, old_receipt)
@@ -128,7 +130,8 @@ impl NativeJointServingPublicationRound {
         admission: &NativeJointActivationAdmission,
         parent: &crate::CancellationToken,
     ) -> Result<String> {
-        if !Arc::ptr_eq(&self.prepared, &admission.quorum) || admission.phase.is_none() {
+        let (quorum, phase) = admission.local_backing()?;
+        if !Arc::ptr_eq(&self.prepared, quorum) || phase.is_none() {
             return Err(invalid("lost-reply control needs same actual fresh phase"));
         }
         admission.claim_publication_attempt()?;

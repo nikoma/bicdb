@@ -143,6 +143,11 @@ impl ActualServiceNativeJointPreparedEvidence {
     pub(crate) fn prepared(&self) -> &crate::db::NativeJointServingPreparation {
         &self.prepared
     }
+    /// Identity DATA of the exact registration object captured before the
+    /// native preparation: what a fresh phase compares by pointer.
+    pub(crate) fn original_writer_identity_sha256(&self) -> Result<String> {
+        self.writer.identity_sha256()
+    }
     /// Identity DATA of the actual Store slot open this preparation used.
     pub(crate) fn store_open_id(&self) -> Uuid {
         self.catalogue.store_open_id()

@@ -33,6 +33,16 @@ pub(super) struct NativeBridgeMemberStep {
     /// retained here BEFORE the fallible native preparation can consume it.
     pub(super) lease: Option<NativeJointServingLease>,
     custody: Option<Arc<NativeJointPreparationCustody>>,
+    /// Set BEFORE this member's first native publication attempt and cleared
+    /// only when a second observation window confirmed it. While set, the
+    /// durable effect of an earlier attempt is unknown or unconfirmed.
+    publication_pending: bool,
+    /// One publication attempt of this member at a time.
+    publishing: Arc<AtomicBool>,
+    /// This member's own durable bridge receipt, retained as soon as the
+    /// native publisher returned it and before any later check.
+    bridge: Option<Arc<crate::db::NativeJointServingBridgeReceipt>>,
+    bridge_confirmed: bool,
 }
 impl Drop for NativeBridgeMemberStep {
     fn drop(&mut self) {
@@ -47,23 +57,35 @@ impl NativeBridgeMemberStep {
     pub(super) fn custody(&self) -> Option<&Arc<NativeJointPreparationCustody>> {
         self.custody.as_ref()
     }
+    /// Memory and durable evidence of this member's own publication; DATA.
+    #[cfg(test)]
+    pub(super) fn test_publication_evidence(&self) -> Result<serde_json::Value> {
+        let custody = self.custody.as_ref();
+        Ok(serde_json::json!({
+            "publication_pending":self.publication_pending,
+            "bridge_confirmed":self.bridge_confirmed,
+            "retained_bridge_sha256":self.bridge.as_ref().map(|receipt|receipt.checksum_sha256().to_owned()),
+            "read_pin_released":custody.map(|c|c.test_read_pin_released()).transpose()?,
+            "durable_bridge":custody.map(|c|c.test_durable_bridge_record()).transpose()?.flatten(),
+        }))
+    }
     /// Infallible custody transfer immediately after the genuine producer.
     pub(super) fn retain_custody(&mut self, custody: Arc<NativeJointPreparationCustody>) {
         self.custody = Some(custody);
         // The native preparation now owns the same real lease.
         self.lease = None;
     }
-    pub(super) fn prepare_outcome(&self, stage: Stage) -> NativeJointHandoffStepOutcomeV1 {
-        match &self.custody {
+    pub(super) fn prepare_outcome(&self, stage: Stage) -> Result<NativeJointHandoffStepOutcomeV1> {
+        Ok(match &self.custody {
             Some(custody) => {
-                prepared_outcome(self.binding_sha256.clone(), custody.retained_facts(), None)
+                prepared_outcome(self.binding_sha256.clone(), custody.retained_facts()?, None)
             }
             None => NativeJointHandoffStepOutcomeV1::bridge_progress(
                 self.binding_sha256.clone(),
                 stage,
                 self.decision_sha256.clone(),
             ),
-        }
+        })
     }
 }
 #[derive(Default)]
@@ -77,6 +99,14 @@ impl NativeBridgeMemberSteps {
         self.steps
             .try_lock()
             .ok_or_else(|| invalid("joint bridge step member custody busy"))
+    }
+    /// Retention of a produced outcome may not be skipped because another
+    /// bounded request of this member is in the table; holders never wait on
+    /// this member's own publication.
+    fn hold_for_retention(
+        &self,
+    ) -> parking_lot::MutexGuard<'_, BTreeMap<crate::RangeId, NativeBridgeMemberStep>> {
+        self.steps.lock()
     }
 }
 
@@ -113,6 +143,10 @@ pub(super) fn retained_prepare_step<'a>(
                 session: CancellationToken::new(Arc::new(AtomicBool::new(false)), None),
                 lease: None,
                 custody: None,
+                publication_pending: false,
+                publishing: Arc::new(AtomicBool::new(false)),
+                bridge: None,
+                bridge_confirmed: false,
             },
         );
     }
@@ -134,6 +168,7 @@ fn prepared_outcome(
     outcome.local_visibility_sequence = Some(facts.local_visibility_sequence);
     outcome.decision_receipt_sha256 = Some(facts.decision_receipt_sha256);
     outcome.store_open_id = Some(facts.store_open_id);
+    outcome.writer_identity_sha256 = Some(facts.writer_identity_sha256);
     if let Some((kind, remaining_ms)) = phase {
         outcome.phase_kind = Some(kind);
         outcome.window_remaining_ms = Some(remaining_ms);
@@ -326,6 +361,140 @@ pub(super) fn observe_bridge_phase(
         ),
         anchor,
     ))
+}
+
+/// Clears the single-attempt claim when one publication attempt ends.
+struct PublishingClaim(Arc<AtomicBool>);
+impl Drop for PublishingClaim {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+
+/// This member publishes its OWN native serving bridge.
+///
+/// The member itself observes every other NEW member over its own pinned
+/// transport before the durable write and again after it. The reply reports
+/// the durable receipt checksum only after that second window confirmed an
+/// unchanged member set; otherwise the uncertain marker stays and the same
+/// request identity resumes under a distinct fresh phase, where the native
+/// publisher reconciles the exact existing bridge instead of rewriting it.
+pub(super) fn publish_member_bridge(
+    steps: &NativeBridgeMemberSteps,
+    provider: &MetadataReadProvider,
+    transport: &TcpClusterRelocationTransport,
+    request: &NativeJointHandoffStepRequestV1,
+    fresh: BridgeStepOwn,
+    token: &CancellationToken,
+) -> Result<(NativeJointHandoffStepOutcomeV1, (u64, u64, Uuid))> {
+    let binding = request.binding()?;
+    let decision = request
+        .operation
+        .bridge_decision_sha256()
+        .ok_or_else(|| invalid("joint bridge step needs a committed decision identity"))?
+        .to_owned();
+    let published_outcome = |custody: &NativeJointPreparationCustody,
+                             receipt: &crate::db::NativeJointServingBridgeReceipt|
+     -> Result<NativeJointHandoffStepOutcomeV1> {
+        let mut outcome = prepared_outcome(binding.clone(), custody.retained_facts()?, None);
+        outcome.bridge_receipt_sha256 = Some(receipt.checksum_sha256().into());
+        Ok(outcome)
+    };
+    let anchor = fresh.anchor;
+    let (custody, confirmed, claim) = {
+        let mut held = steps.hold()?;
+        let step = held
+            .get_mut(&request.range_id)
+            .filter(|step| step.decision_sha256 == decision)
+            .ok_or_else(|| invalid("joint bridge publish member retains no preparation"))?;
+        let custody = step
+            .custody()
+            .cloned()
+            .ok_or_else(|| invalid("joint bridge publish member retains no preparation"))?;
+        // The decision this member itself protected, never request DATA.
+        request.require_decision(custody.data())?;
+        if step.bridge_confirmed && !step.publication_pending {
+            (custody, step.bridge.clone(), None)
+        } else {
+            if step.publishing.swap(true, Ordering::AcqRel) {
+                return Err(invalid(
+                    "joint bridge publish member attempt already running",
+                ));
+            }
+            // Uncertain from here until a second window confirms.
+            step.publication_pending = true;
+            (
+                custody,
+                None,
+                Some(PublishingClaim(step.publishing.clone())),
+            )
+        }
+    };
+    if let Some(receipt) = confirmed {
+        // An identical retry: the SAME retained receipt, re-read as this
+        // member's actual protected bridge under its own lock.
+        custody.require_published_bridge_current(&receipt)?;
+        token.check()?;
+        return Ok((published_outcome(&custody, &receipt)?, anchor));
+    }
+    let _claim = claim;
+    let leader = provider
+        .current_metadata_leader_hint(token)?
+        .ok_or_else(|| invalid("joint bridge step current metadata leader unavailable"))?;
+    let BridgeStepOwn { own, business, .. } = fresh;
+    let published = custody.publish_remote_bridge(transport, &leader, &own, business, token)?;
+    let receipt = published.receipt().clone();
+    // Retained BEFORE the second window or any later check can fail.
+    {
+        let mut held = steps.hold_for_retention();
+        let step = held
+            .get_mut(&request.range_id)
+            .filter(|step| step.decision_sha256 == decision)
+            .ok_or_else(|| invalid("joint bridge publish member custody ended"))?;
+        if step
+            .bridge
+            .as_ref()
+            .is_some_and(|old| old.checksum_sha256() != receipt.checksum_sha256())
+        {
+            return Err(invalid(
+                "joint bridge publish changed this member's retained native bridge",
+            ));
+        }
+        step.bridge = Some(receipt.clone());
+    }
+    let incomplete = || {
+        NativeJointHandoffStepOutcomeV1::bridge_progress(
+            binding.clone(),
+            Stage::BridgePublication,
+            decision.clone(),
+        )
+    };
+    if bridge_remaining(token).map_or(true, |left| left < MIN_BRIDGE_SUBSTEP_BUDGET) {
+        return Ok((incomplete(), anchor));
+    }
+    if let Err(_error) =
+        custody.confirm_remote_bridge_second_window(&published, transport, &leader, token)
+    {
+        // Fail closed: the durable bridge exists but is not reported. The
+        // marker stays; the next call re-proves everything under a new phase.
+        #[cfg(test)]
+        eprintln!(
+            "NATIVE_BRIDGE_PUBLISH_UNCONFIRMED node={} error={_error}",
+            custody.local_node_id()
+        );
+        return Ok((incomplete(), anchor));
+    }
+    {
+        let mut held = steps.hold_for_retention();
+        let step = held
+            .get_mut(&request.range_id)
+            .filter(|step| step.decision_sha256 == decision)
+            .ok_or_else(|| invalid("joint bridge publish member custody ended"))?;
+        step.bridge_confirmed = true;
+        step.publication_pending = false;
+    }
+    token.check()?;
+    Ok((published_outcome(&custody, &receipt)?, anchor))
 }
 
 pub(super) fn bridge_reply(

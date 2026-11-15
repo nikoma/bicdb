@@ -11,7 +11,29 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
-## Current complete execution — source7e99 native failed, 2026-11-15 UTC
+## Current complete execution — sourcee2 compilation failed, 2026-11-15 UTC
+
+Delivered main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
+Draft **1.0.520-beta / `e2adb410befd41bd475f015fd6590c33d1afaa4f`** finished
+all normal CI jobs: three passed, eight failed and four optional jobs skipped.
+Two Core library errors (`Debug` and observer visibility) blocked all-target,
+Core, Native, SQL, PGwire and Rails. Formatting separately failed child-module
+resolution. Core/native executed zero tests; Rails application acceptance was
+not reached. Remaining-workspace passed 564 Lua/Page/Script/Workflow/Extension
+cases before its Core dependency failed; it is a failed job, not a complete pass.
+
+The complete read-only archive contains 85 files, eleven full logs and six
+original ZIPs/six members; manifest SHA256
+`37696582e5b1fedfd039e9ad57e6266a8b6d0ae5695dae82d62980f9f9f4ba9d`.
+Full independent integrity verification passed. A reviewed three-file source
+correction passes recursive formatting, but has not compiled or executed.
+See the [exact classifications, source pins and smallest next checks](design/native-520-regression-findings.md)
+and [current-source distributed SQL design audit](design/distributed-sql-main519-e2-execution-checkpoint.md).
+No previous runtime result transfers to this successor. Physical scale-out,
+RPO/RTO, post-convergence throughput and production admission remain unqualified;
+the original failed Azure evidence and verified teardown are unchanged.
+
+## Previous complete execution — source7e99 native failed, 2026-11-15 UTC
 
 Delivered main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
 Draft **1.0.520-beta / `7e99c9c96970b78a44402c975627c64e001adffa`** passed
@@ -32,7 +54,7 @@ See the [exact findings, source identities and next controls](design/native-520-
 The complete archive is frozen and independently verified: 101 files, eleven
 full gzip logs and eight original ZIPs/28 members. Its manifest SHA256 is
 `124bdadc431992c03a89035e8879944acd20e732b8c31d3e9995ba5775ccf9fa`.
-Focused corrective source is uncompiled and unrun. No converged four-to-five-node
+At that checkpoint, focused corrective source was uncompiled and unrun. No converged four-to-five-node
 expansion, sustained five-node capacity gain, physical RPO/RTO or production
 qualification has been established. The original Azure run remains a failed
 qualification; its 23 resources were deleted and no new infrastructure was

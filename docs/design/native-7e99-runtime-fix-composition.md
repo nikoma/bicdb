@@ -2,7 +2,15 @@
 
 This is a source-composition checkpoint before validation of the assembled candidate. It starts from **1.0.520-beta / `7e99c9c96970b78a44402c975627c64e001adffa`**, whose complete CI run failed **396 passed / 55 failed / 1 ignored** in the serial native job. Its other component and application passes remain scoped to that exact source. The [complete baseline evidence](native-520-regression-findings.md) and original failed Azure qualification are preserved unchanged.
 
-At this checkpoint the changes below are **implemented or defined in source, independently source-reviewed, and not compiled or executed as an assembled candidate**. Formatting, source-preservation, version identity and documentation links are separate checks. No source-only correction is labelled a passing regression, physical qualification, release or deployment.
+Subsequent assembled source **`e2adb410befd41bd475f015fd6590c33d1afaa4f`**
+failed its completed normal CI run on two Core library diagnostics and one
+child-module-resolution error. Core/native tests did not execute; remaining
+workspace passed 564 component cases before dependency compilation failed.
+The [exact successor findings and three-file compiler correction](native-520-regression-findings.md)
+are recorded separately. Neither the corrections nor baseline source7e99's
+passing component jobs establish a passing assembled runtime result.
+
+At the original pre-e2 composition checkpoint, the changes below were **implemented or defined in source and independently source-reviewed; assembled compilation and execution had not yet been attempted**. The subsequent failed e2 attempt is recorded above. No successful assembled compiler/runtime result is established. Formatting, source-preservation, version identity and documentation links are separate checks. No source-only correction is labelled a passing regression, physical qualification, release or deployment.
 
 | Source unit | Exact unit commits | Implementation and evidence boundary |
 | --- | --- | --- |
@@ -27,7 +35,7 @@ Source-preservation checks compare each independent unit's unchanged files and i
 
 ## Finding classification and outstanding gates
 
-| Finding or claim | Classification at this checkpoint |
+| Finding or claim | Classification at the original pre-e2 source checkpoint |
 | --- | --- |
 | Exact source7e99 native acceptance | **Failed**; immutable original results retained |
 | Source formatting, preservation and relevant documentation checks | **Passed within their recorded source scope**; these do not compile or execute Rust |
@@ -41,4 +49,4 @@ Source-preservation checks compare each independent unit's unchanged files and i
 
 The first-allocation lane is not a repeatable scale-out product. RegistryAfterAllocation, changed-cohort continuation, retained original jobs/debts, terminal warm-custody reclamation, shared history/capacity bounds, source loss, coordinator replacement and populated cold restart remain open. No automatic controller/source-completion integration or general cross-range SQL/coordinator is delivered by this batch. The independently reviewed future Source/ALLPolicy/cold protocol units are excluded.
 
-The next validation is a normal exact-head PR CI run, preserving every useful job to natural completion and retaining complete original logs/artifacts. A passing subset, an intended fault not reached, or a timeout relabelled as a successful refusal does not clear acceptance. Physical requalification requires a separate pinned binary, complete external attempt/ACK/uncertainty/retry ledger, converged placement, correct read consistency and fault recovery, then sustained throughput measured after convergence at the same latency/error budget. No Azure resources are provisioned by this source checkpoint.
+After that separate compiler correction, the next validation is a normal exact-head PR CI run, preserving every useful job to natural completion and retaining complete original logs/artifacts. A passing subset, an intended fault not reached, or a timeout relabelled as a successful refusal does not clear acceptance. Physical requalification requires a separate pinned binary, complete external attempt/ACK/uncertainty/retry ledger, converged placement, correct read consistency and fault recovery, then sustained throughput measured after convergence at the same latency/error budget. No Azure resources are provisioned by this source checkpoint.

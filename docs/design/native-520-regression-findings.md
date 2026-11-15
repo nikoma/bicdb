@@ -4,9 +4,81 @@ This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe64
 
 ## Actual execution
 
+### Sourcee2: completed run failed compilation; native execution not reached
+
+The assembled runtime correction candidate **1.0.520-beta /
+`e2adb410befd41bd475f015fd6590c33d1afaa4f`**, tree
+`11e9da9b2888e9be5f7f7e4cb5c0ff00515a36f4`, ran at actual PR checkout
+`6e8e67d1d646a8373ad6cc9798682469892936f0` with the same tree. Both normal
+[Tests43755322556](https://github.com/nikoma/bicdb/actions/runs/43755322556) and
+[Rails43755322604](https://github.com/nikoma/bicdb/actions/runs/43755322604)
+finished naturally and failed. Across both runs: three jobs passed, eight
+failed and four optional jobs were skipped. Main remains **1.0.519-beta /
+`587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**. No source merge, release,
+deployment or physical qualification is established by this run.
+
+| Scope | Classification | Exact evidence and boundary |
+| --- | --- | --- |
+| All-target132938046568 | Failed | Library E0277: `RetainedAllocationAttempt` lacks `Debug`, required by `NativeWriterHostState`; E0624: `observe_allocation_epoch` is inaccessible to its ancestor-module caller |
+| Formatting132938046653 | Failed | Module resolution seeks `complete_joint_tests/combined_domain_tests.rs`; actual tracked child is `complete_joint_tests/open_adversarial_tests/combined_domain_tests.rs`. This is a path-resolution failure, not a whitespace diff |
+| Core132938081301 and Native132938081253 | Failed prerequisite; runtime not tested | Same two library errors while building the chaos helper; zero executed Core/native cases, runtime steps skipped. Neither original controls nor new phase clocks ran |
+| SQL132938081309 and PGwire132938081280 | Failed prerequisite; runtime not tested | Same two errors; zero executed cases/summaries. No PostgreSQL or Oracle acceptance result at this source |
+| Rails132938046486 | Failed prerequisite; application not tested | Same two errors building the CLI; Rails application step skipped, zero application runs |
+| Remaining workspace132938081249 | Failed after a passing prefix | 564 unique cases passed, zero failed/ignored across 40 summaries: Lua5, Page499, Script4, Workflow1, Extension55. Then the Core dependency of `bicdb-sync --lib` failed on the same two errors. Sync runtime and later AppHost/CLI/Cell targets were not reached |
+| Dependency boundary, licensing and selector jobs | Passed within their scope | Three static jobs; selector validation does not check out or execute the repository |
+| Automatic expansion, fault-safe convergence, sustained five-node throughput and production admission | Not tested | Earlier component passes and the 564-case prefix do not clear these gates |
+
+The complete archive is frozen read-only after the sole collector exited
+naturally: **85 total regular files / 82 premanifest files**, eleven complete
+gzip logs and six original ZIPs/six members. Manifest SHA256
+`37696582e5b1fedfd039e9ad57e6266a8b6d0ae5695dae82d62980f9f9f4ba9d`.
+Independent full-archive receipt SHA256
+`5a0597924590576225d45b8c1d728c3afe5520128191553015d61fceccc3f5b5`
+verifies stored/decompressed hashes, source/tree identity, complete API
+inventories, original ZIP sizes/digests, CRCs and member hashes. Capture-side
+positive and deliberate wrong-digest refusal checks are retained; original
+archives are unchanged. Native raw SHA256
+`e5a6ee96f534e5cbc3c49b5c4b4a346e597d883e7c4990575c3f3deede7bbd97`;
+REST raw SHA256
+`e875c1bf9a39cc0e63022bec15ee23b5756a3b4915fa1ad720a9b796c7619bd3`.
+Independent REST scope receipt SHA256
+`b3638e95cc2b48e2be7c9dee23c837819ff970cc64a999f56cf74b82a387fda4`.
+
+The separate three-file source correction is
+`f4569d983fc04116a9dddeef769eb18fb1d2126e`:
+
+- Derive `Debug` for the retained attempt. Source review additionally found
+  its test-only `AllocationCut` also requires `Debug`; that second derive is a
+  source-discovered dependency, **not an observed CI diagnostic**.
+- Permit the existing read-only observer only within its actual `initial_data`
+  ancestor. Its body, original caller and finite request contract are unchanged.
+- Add the exact child `#[path]`; the child tests and their assertions are unchanged.
+
+Independent source review SHA256
+`ee1216c7fb5bba025e3840d08e19e5687e8f100f2dfdd6b10cdeb43910933cf4`
+compares all three whole files back to e2 after reversing only those edits,
+and seven unchanged supporting files. A full recursive standalone
+`rustfmt --edition 2021 --check crates/bicdb-core/src/lib.rs` passes on the
+correction. This is **passed formatting/source review, untested compilation and
+runtime**, not compiler approval. No local Cargo build or Rust test was run.
+
+The smallest next check is normal PR CI on the corrected tree: resolve the
+module graph and both derives/visibility under all-target compilation, then
+execute Core, serial native, SQL, PGwire and Rails without changing their
+selectors, original timeouts, fault assertions or SDK tails. Runtime failures
+must retain their own original errors and reached-cut evidence. The source7e99
+native failures below remain the last executed native result and are not
+reclassified as repaired by this compiler correction.
+
+The independent [distributed SQL checkpoint](distributed-sql-main519-e2-execution-checkpoint.md)
+pins the actual local PGwire path and missing durable coordinator/shared-view
+producers. It is source/design evidence, not SQL implementation or acceptance.
+The original Azure unreadable-record cause remains **inconclusive**; its
+scale-out qualification remains **failed**.
+
 ### Source7e99: full compilation passed; native runtime failed
 
-Latest completed draft PR207 source **1.0.520-beta /
+Previous completed draft PR207 source **1.0.520-beta /
 `7e99c9c96970b78a44402c975627c64e001adffa`**, tree
 `8022e9f6e6d51f9eb4691ca877c328229b29c3b1`, ran at actual merge checkout
 `4c46808e3bbef80e5792cce2cbd9de8203839bbe` with the same tree. All jobs in

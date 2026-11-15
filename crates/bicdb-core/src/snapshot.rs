@@ -335,6 +335,9 @@ pub(crate) fn write_snapshot(
     compression: &storage::CompressionConfig,
     encryption: &EncryptionRuntime,
 ) -> Result<()> {
+    // Keep manifest invalidation, record rewrite and final publication in one
+    // real physical scope. This helper acquires no Core commit admission.
+    let _physical = storage::acquire_database_backup_write_guard(root)?;
     let dir = snapshot_dir(root);
     fs::create_dir_all(&dir)?;
     // Invalidate first: any reader during the rewrite sees no manifest -> fallback.
@@ -363,6 +366,7 @@ pub(crate) fn invalidate(root: &Path) -> Result<()> {
 }
 
 fn remove_if_present(path: &Path) -> Result<()> {
+    let _physical = storage::acquire_backup_write_guard(path)?;
     match fs::remove_file(path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),

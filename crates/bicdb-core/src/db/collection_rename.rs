@@ -343,6 +343,13 @@ impl BicDb {
         }
         self.ensure_renamable(old)?;
         let _database_mutation = self.range_mutations.try_enter_database()?;
+        // This unchecked catalog span ends before the outer catalog-log commit.
+        // Exclude physical capture before native/snapshot/catalog effects, while
+        // avoiding SH -> serializable Core admission inversion at log_catalog_op.
+        let _physical = self
+            .physical_gate
+            .shared()
+            .map_err(|error| BicDbError::Backup(error.to_string()))?;
         self.invalidate_native_range_images_before_mutation(None, "rename collection")?;
         let history = self
             .collection_state(old)?
@@ -855,3 +862,6 @@ impl BicDb {
         Ok(())
     }
 }
+
+#[cfg(all(test, unix))]
+mod physical_gate_tests;

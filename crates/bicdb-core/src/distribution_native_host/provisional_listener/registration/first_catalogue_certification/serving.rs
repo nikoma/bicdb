@@ -19,6 +19,34 @@ pub(super) struct NativeFirstMembershipAttempt {
     committed: bool,
 }
 impl NativeFirstCertifiedHistory {
+    /// Correlation DATA from the actual selected original certification entry.
+    /// Snapshot donor MF.source_id is independent of this retiring OLD voter.
+    pub(super) fn retired_source(&self) -> Result<&ClusterNodeId> {
+        let original = self
+            .issued_certification_entry
+            .topology
+            .relocations
+            .get(&self.manifest.relocation_id)
+            .ok_or_else(|| invalid("remote activation original committed relocation absent"))?;
+        let mut old_only = self
+            .manifest
+            .old_members
+            .keys()
+            .filter(|node| !self.manifest.new_members.contains_key(*node));
+        let retired = old_only
+            .next()
+            .ok_or_else(|| invalid("remote activation has no original retiring OLD member"))?;
+        if old_only.next().is_some()
+            || original.source.as_ref() != Some(retired)
+            || original.range_id != self.manifest.capture_range.id
+            || original.target != self.manifest.target_id
+        {
+            return Err(invalid(
+                "remote activation original retirement source is not exact OLD minus NEW",
+            ));
+        }
+        Ok(retired)
+    }
     pub(super) fn from_actual_commit(
         intent: &NativeFirstCatalogueCertificationIntent,
         original: &NativeFirstCatalogueCertificationAttempt,

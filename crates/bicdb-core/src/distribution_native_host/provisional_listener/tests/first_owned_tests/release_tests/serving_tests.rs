@@ -772,6 +772,17 @@ fn metadata_activation_after_actual_serving(
         !members.contains(&node(metadata)),
         "actual metadata leader must be outside final data voters"
     );
+    let actual_roles = coordinator.test_remote_activation_state(relocation, phase)?;
+    report.event(
+        serde_json::json!({"actual_original_activation_roles_before_call":actual_roles,
+        "snapshot_donor_is_not_a_retirement_permission":true}),
+    );
+    assert!(!actual_roles["actual_snapshot_donor"].is_null());
+    assert!(!actual_roles["actual_retiring_OLD_source"].is_null());
+    assert_ne!(
+        actual_roles["actual_snapshot_donor"], actual_roles["actual_retiring_OLD_source"],
+        "the genuine separate-donor/retiring-source prerequisite must be reached"
+    );
     let topology_before = coordinator.test_first_topology(parent)?;
     let mut before = BTreeMap::new();
     for member in members {

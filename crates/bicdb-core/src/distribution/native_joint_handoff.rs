@@ -260,7 +260,7 @@ impl DistributionStore {
             })
             || plan.phase != RelocationPhase::CleaningUp
             || plan.promoted_epoch != Some(mf.activation_range.epoch)
-            || plan.source.as_ref() != Some(&mf.source_id)
+            || plan.source.as_ref() != Some(scope.retired_source()?)
             || plan.target != mf.target_id
             || crate::distribution_native_read::canonical_range(range)
                 != crate::distribution_native_read::canonical_range(&mf.activation_range)

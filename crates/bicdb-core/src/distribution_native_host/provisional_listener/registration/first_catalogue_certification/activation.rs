@@ -66,6 +66,9 @@ impl NativeRemoteActivationScope<'_> {
     pub(crate) fn activation_sha256(&self) -> &str {
         self.proof.checksum_sha256()
     }
+    pub(crate) fn retired_source(&self) -> Result<&ClusterNodeId> {
+        self.history.retired_source()
+    }
     pub(crate) fn require_proposal(
         &self,
         previous: &ClusterTopology,
@@ -327,6 +330,8 @@ impl NativeMetadataControlHost {
             .ok_or_else(|| invalid("actual activation history absent"))?;
         Ok(
             serde_json::json!({"first_original_API_error":original.activation_first_error,
+            "actual_snapshot_donor":original.certified.as_ref().map(|h|&h.manifest.source_id),
+            "actual_retiring_OLD_source":original.certified.as_ref().map(|h|h.retired_source()).transpose()?,
             "actual_attempt_present":original.activation.is_some(),
             "actual_issued_entry":original.activation.as_ref().and_then(|a|a.entry.as_ref()),
             "actual_commit_observed":original.activation.as_ref().is_some_and(|a|a.committed),

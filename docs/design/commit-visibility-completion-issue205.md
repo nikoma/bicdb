@@ -1,7 +1,7 @@
 # Commit visibility completion: issue 205 source proposal
 
 This work starts at `1fcfdc3adf7e38422173e072e6fec4ad56e48188`. Reviewed source
-`526543fd481e47d09d3af6de16ebc1fe46f44d30` is integrated into the **1.0.517-beta
+`526543fd481e47d09d3af6de16ebc1fe46f44d30` is integrated into the **1.0.518-beta
 candidate**, on runtime base `881087806b3a5a9792b3e0ba46ba1ba1f2dd0617` and
 ledger source `bb33a0dcf948de053931b691fa6260e5bfa74c5b`. At candidate preparation
 the new work is **not compiled, executed, merged, or qualified**. The baseline A/B schedule

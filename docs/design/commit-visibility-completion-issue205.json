@@ -40,7 +40,7 @@
     "The new real WAL/apply concurrency and native controls are test definitions only until actual repository CI runs them.",
     "No source version, release, binary, deployment, controller, cold handoff, or physical HA qualification is assigned by this proposal."
   ],
-  "status": "1.0.517-beta source candidate; not compiled, executed, merged, published, deployed or qualified at preparation",
+  "status": "1.0.518-beta source candidate; not compiled, executed, merged, published, deployed or qualified at preparation",
   "implementation_source": "526543fd481e47d09d3af6de16ebc1fe46f44d30",
   "integrated_runtime_base": "881087806b3a5a9792b3e0ba46ba1ba1f2dd0617",
   "integrated_ledger_base": "bb33a0dcf948de053931b691fa6260e5bfa74c5b"

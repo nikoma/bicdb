@@ -396,6 +396,7 @@ impl NativeRemoteDecisionCataloguePublication {
             )));
             return Err(error);
         }
+        store.note_catalogue_write_returned_ok(generation);
         let checksum = self.require_disk(store, true)?;
         self.require_identity(db, store, admission, physical)?;
         self.require_pending(store)?;

@@ -333,7 +333,7 @@ impl NativeJoinedRemoteCataloguePublication {
                     .ok_or_else(|| range_write_error("Joined adoption write count exhausted"))?;
                 store.catalog = self.candidate.clone();
                 store.recovery_persistence_uncertain = true;
-                store.note_catalogue_write_entered()?;
+                let generation = store.note_catalogue_write_entered()?;
                 crate::storage::replace_durably(
                     &store.root.join(DEFAULT_RANGE_WRITE_LOG),
                     crate::storage::ReplaceContents::Plain(&self.bytes),
@@ -341,6 +341,7 @@ impl NativeJoinedRemoteCataloguePublication {
                     "joined_remote_adoption.catalogue",
                     crate::storage::FailClosed::No,
                 )?;
+                store.note_catalogue_write_returned_ok(generation);
                 self.attempts.last_mut().unwrap().replace_returned = true;
                 self.durable_replace_returned = self
                     .durable_replace_returned

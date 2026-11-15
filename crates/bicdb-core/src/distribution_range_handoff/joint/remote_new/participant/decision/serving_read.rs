@@ -465,3 +465,189 @@ impl NativeRemoteNewParticipant {
         )
     }
 }
+
+impl NativeRemoteNewParticipant {
+    /// Weak route only to the SAME actual host-owned completed native bridge.
+    /// It neither prolongs its custody nor manufactures a missing owner.
+    pub(crate) fn retain_remote_bridge_route(
+        &self,
+        custody: &Arc<crate::distribution_range_handoff::NativeJointPreparationCustody>,
+        bridge: &Arc<crate::db::NativeJointServingBridgeReceipt>,
+    ) -> Result<()> {
+        self.require_lifetime_memory()?;
+        custody.require_remote_participant(&self.snapshot.checksum_sha256)?;
+        {
+            let actual = self
+                .decision
+                .try_lock()
+                .ok_or_else(|| invalid("remote bridge route original decision busy"))?;
+            let original = actual
+                .completed
+                .as_ref()
+                .ok_or_else(|| invalid("remote bridge route original native read absent"))?;
+            if original.data() != bridge.data() {
+                return Err(invalid("remote bridge route changed original decision"));
+            }
+        }
+        let mut route = self
+            .remote_bridge
+            .try_lock()
+            .ok_or_else(|| invalid("remote bridge readonly route busy"))?;
+        if let Some((c, n)) = route.as_ref() {
+            if c.upgrade().is_none_or(|a| !Arc::ptr_eq(&a, custody))
+                || n.upgrade().is_none_or(|a| !Arc::ptr_eq(&a, bridge))
+            {
+                return Err(invalid(
+                    "remote bridge readonly route replaced original ended owner",
+                ));
+            }
+        } else {
+            *route = Some((Arc::downgrade(custody), Arc::downgrade(bridge)));
+        }
+        self.require_lifetime_memory()
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn observe_retained_open_for_serving(
+        &self,
+        request: &NativeRemoteServingRequestV1,
+        role: &RecoveryRoleAdmission,
+        own: &HostMetadataReadObservation,
+        business: Uuid,
+        metadata: &ActualNativeJointMetadataPoint,
+        transport: &crate::distribution_transport::TcpClusterRelocationTransport,
+        metadata_leader: &ClusterNodeId,
+        parent: &CancellationToken,
+    ) -> Result<NativeRemoteServingReplyV1> {
+        use crate::distribution_native_host::NativeRemoteServingOperationV1 as Op;
+        if !matches!(request.operation, Op::ObserveBridge | Op::ObserveOpen) {
+            return Err(invalid(
+                "direct Open route accepts distinct readonly bridge/Open observations only",
+            ));
+        }
+        self.serving_queue_for_original(request, role, own, business, metadata)?;
+        let (custody, native) = {
+            let route = self
+                .remote_bridge
+                .try_lock()
+                .ok_or_else(|| invalid("remote bridge readonly route busy"))?;
+            let (c, n) = route
+                .as_ref()
+                .ok_or_else(|| invalid("actual original host bridge route absent"))?;
+            (
+                c.upgrade()
+                    .ok_or_else(|| invalid("actual original host preparation owner ended"))?,
+                n.upgrade()
+                    .ok_or_else(|| invalid("actual original host native bridge owner ended"))?,
+            )
+        };
+        let observed = custody.observe_remote_open(native, transport, metadata_leader, parent)?;
+        self.observe_actual_open_for_serving(
+            request, role, own, business, metadata, parent, &observed,
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn observe_actual_open_for_serving(
+        &self,
+        request: &NativeRemoteServingRequestV1,
+        role: &RecoveryRoleAdmission,
+        own: &HostMetadataReadObservation,
+        business: Uuid,
+        metadata: &ActualNativeJointMetadataPoint,
+        parent: &CancellationToken,
+        observed: &crate::distribution_range_handoff::NativeRemoteOpenObservation,
+    ) -> Result<NativeRemoteServingReplyV1> {
+        use crate::distribution_native_host::NativeRemoteServingOperationV1 as Op;
+        if !matches!(
+            request.operation,
+            Op::Open | Op::ReconcileOpen | Op::ObserveOpen | Op::ObserveBridge
+        ) {
+            return Err(invalid(
+                "actual Open reply requires original Open or distinct readonly operation",
+            ));
+        }
+        self.serving_queue_for_original(request, role, own, business, metadata)?;
+        observed.require_participant(&self.snapshot.checksum_sha256)?;
+        metadata.require_external_current()?;
+        let (term, index, _) = observed.metadata_anchor();
+        if term < own.term() || index < own.read_index() {
+            return Err(invalid(
+                "remote Open protected observation regressed ingress metadata anchors",
+            ));
+        }
+        let actual =
+            observed.inspect(
+                |physical, store, head, activation, frozen_owner| {
+                    let held = self
+                        .decision
+                        .try_lock()
+                        .ok_or_else(|| invalid("remote Open original native custody busy"))?;
+                    let receipt = held.completed.as_ref().ok_or_else(|| {
+                        invalid("remote Open original successful native read absent")
+                    })?;
+                    let native = held.native.as_ref().ok_or_else(|| {
+                        invalid("remote Open original private native attempt absent")
+                    })?;
+                    let catalogue = held
+                        .catalogue
+                        .as_ref()
+                        .ok_or_else(|| invalid("remote Open original catalogue owner absent"))?;
+                    let admission = NativeRemoteServingReadAdmission {
+                        participant: self,
+                        request,
+                        role,
+                        own,
+                        business,
+                        metadata,
+                        caller: parent,
+                        receipt,
+                        native,
+                    };
+                    admission.require_current()?;
+                    admission.require_native(physical.database(), store)?;
+                    observed.require_native_receipt(receipt)?;
+                    catalogue.require_original_successful_publication()?;
+                    if request.operation == Op::ObserveOpen && activation.is_none() {
+                        return Err(invalid("actual remote Open catalogue activation absent"));
+                    }
+                    Ok(NativeRemoteServingPointV1 {
+                        phase_id: self.snapshot.phase_id,
+                        original_participant_sha256: self.snapshot.checksum_sha256.clone(),
+                        decision_sha256: receipt.decision_sha256().into(),
+                        native_decision_record_sha256: receipt.checksum_sha256().into(),
+                        remote_provenance_sha256: native.actual_provenance_sha256()?.into(),
+                        catalogue_decision_sha256: catalogue.candidate_sha256().into(),
+                        current_catalogue_sha256: head,
+                        native_decision_xid: native.actual_committed_xid()?,
+                        native_database_open: physical.database().incarnation_id().into(),
+                        store_open: store.native_writer_store_open_id(),
+                        preparation: Some(observed.vote().clone()),
+                        native_bridge_sha256: Some(physical.native().checksum_sha256().into()),
+                        catalogue_activation_sha256: activation,
+                        original_frozen_owner: frozen_owner,
+                        actual_dropped_open: false,
+                        actual_writer_installed: false,
+                    })
+                },
+                || {
+                    parent.check()?;
+                    self.require_lifetime_memory()?;
+                    role.require_live_request()?;
+                    own.require_live_request(business)?;
+                    metadata.require_current_memory()
+                },
+            )?;
+        let (term, index, context) = observed.metadata_anchor();
+        let reply = NativeRemoteServingReplyV1 {
+            request: request.clone(),
+            node_id: self.snapshot.node_id.clone(),
+            actual,
+            metadata_term: term,
+            metadata_read_index: index,
+            metadata_context: context,
+        };
+        reply.require_request(request)?;
+        parent.check()?;
+        observed.require_memory_current()?;
+        Ok(reply)
+    }
+}

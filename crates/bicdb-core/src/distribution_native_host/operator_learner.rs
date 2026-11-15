@@ -61,6 +61,21 @@ impl NativeMetadataLearnerHost {
         }
     }
     #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_remote_open_control(
+        &mut self,
+        range: crate::RangeId,
+        mode: Option<u8>,
+    ) -> Result<serde_json::Value> {
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => host
+                .test_registered_image_control_mut()?
+                .test_remote_open_control(range, mode),
+            NativeLearnerLifecycle::Cold(_) => {
+                Err(invalid("Open control cannot cast cold owner to Fresh"))
+            }
+        }
+    }
+    #[cfg(test)]
     pub(in crate::distribution_native_host) fn test_remote_bridge_control(
         &mut self,
         range: crate::RangeId,

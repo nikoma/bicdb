@@ -11,6 +11,8 @@ mod catalogue_scope;
 pub(crate) use catalogue_scope::NativeMetadataOwnerCatalogueScope;
 mod prepared;
 pub(crate) use prepared::{NativeRemotePreparedQuorum, NativeRemotePreparedRound};
+mod bridged;
+pub(crate) use bridged::{NativeRemoteBridgeQuorum, NativeRemoteBridgeRound};
 mod all_open;
 pub(crate) use all_open::{
     NativeRemoteAllOpenQuorum, NativeRemoteAllOpenRetirementAdmission, NativeRemoteAllOpenRound,

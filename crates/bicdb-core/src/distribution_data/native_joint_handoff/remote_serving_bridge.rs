@@ -253,3 +253,130 @@ impl NativeRemoteServiceBridge {
         Ok(())
     }
 }
+
+impl ActualServiceNativeJointPreparedEvidence {
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn inspect_remote_open_with_custody<T>(
+        &self,
+        service: &ClusterDataNodeService,
+        fresh: &crate::distribution_range_handoff::CommittedNativeJointDecisionObservation,
+        native: Arc<crate::db::NativeJointServingBridgeReceipt>,
+        custody: &crate::distribution_range_handoff::NativeJointPreparationCustody,
+        inspect: impl FnOnce(
+            &crate::db::NativeJointBridgeReadScope<'_>,
+            &crate::distribution_range_consensus::RangeWriteStore,
+            String,
+            Option<String>,
+            Uuid,
+        ) -> Result<T>,
+        final_memory: impl FnOnce() -> Result<()>,
+    ) -> Result<T> {
+        custody.require_actual_evidence(self)?;
+        let database = checked_database_read(&service.db, &service.storage_policy)?;
+        service.require_native_catalog_database(&database)?;
+        let scope = native.current_read_scope(&database)?;
+        self.require_local_open_scope_with_preparation_custody(
+            &scope,
+            &service.range_writes,
+            fresh,
+            native.clone(),
+            custody,
+        )?;
+        let frozen = self.lease.try_frozen()?;
+        let (head, activation, generation) = service.range_writes.observe_remote_open_catalogue(
+            &scope,
+            &native,
+            &self.writer_domain,
+            frozen,
+        )?;
+        let value = inspect(
+            &scope,
+            &service.range_writes,
+            head,
+            activation,
+            frozen.owner(),
+        )?;
+        self.require_local_open_scope_with_preparation_custody(
+            &scope,
+            &service.range_writes,
+            fresh,
+            native.clone(),
+            custody,
+        )?;
+        let version = fresh.native_publication_guard()?;
+        fresh.require_publication_point_memory()?;
+        self.require_original_preparation_session()?;
+        service
+            .range_writes
+            .require_current_catalogue_io_generation(generation)?;
+        final_memory()?;
+        drop(version);
+        drop(scope);
+        Ok(value)
+    }
+}
+
+impl ActualServiceNativeJointPreparedEvidence {
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_remote_open_member(
+        &self,
+        scope: &crate::db::NativeJointBridgeReadScope<'_>,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+        proof: &crate::distribution_range_handoff::NativeRemoteBridgeQuorum,
+        native: &Arc<crate::db::NativeJointServingBridgeReceipt>,
+    ) -> Result<()> {
+        proof.require_actual_local(scope, store, &self.prepared, self.lease.try_frozen()?)?;
+        store.observe_remote_open_catalogue(
+            scope,
+            native,
+            &self.writer_domain,
+            self.lease.try_frozen()?,
+        )?;
+        Ok(())
+    }
+}
+
+impl ActualServiceNativeJointPreparedEvidence {
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_remote_open_intent(
+        &self,
+        service: &ClusterDataNodeService,
+        native: &crate::db::NativeJointServingBridgeReceipt,
+    ) -> Result<()> {
+        self.require_original_preparation_session()?;
+        self.require_original_writer_lifetime()?;
+        let database = checked_database_read(&service.db, &service.storage_policy)?;
+        service.range_writes.require_retained_remote_open_intent(
+            &database,
+            native,
+            &self.writer_domain,
+            self.lease.try_frozen()?,
+        )
+    }
+}
+
+#[cfg(test)]
+impl ActualServiceNativeJointPreparedEvidence {
+    pub(crate) fn test_remote_open_io(
+        &self,
+        service: &mut ClusterDataNodeService,
+        native: &crate::db::NativeJointServingBridgeReceipt,
+        fail: bool,
+    ) -> Result<serde_json::Value> {
+        self.require_original_preparation_session()?;
+        let database = checked_database_read(&service.db, &service.storage_policy)?;
+        if fail {
+            service
+                .range_writes
+                .current_mut()
+                .test_remote_open_same_byte_error(
+                    &database,
+                    native,
+                    &self.writer_domain,
+                    self.lease.try_frozen()?,
+                )
+        } else {
+            service.range_writes.test_remote_open_io_state()
+        }
+    }
+}

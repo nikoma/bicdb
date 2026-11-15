@@ -217,10 +217,7 @@ impl FreshAuthority<'_> {
     }
     fn require_request_memory(&self) -> Result<()> {
         match self {
-            Self::Open(a) => {
-                a.cancellation().check()?;
-                a.committed().require_publication_request_memory()
-            }
+            Self::Open(a) => a.require_operation_request_memory(),
             Self::Host { host, business, .. } => host.require_live_request(*business),
         }
     }
@@ -436,6 +433,9 @@ impl NativeJointActivationPublication {
                 "activation owned IO attempt bound; original custody retained",
             ));
         }
+        if let FreshAuthority::Open(admission) = &authority {
+            admission.note_remote_open_effect_entered()?;
+        }
         self.verified = false;
         self.owns_uncertainty = true;
         store.recovery_persistence_uncertain = true;
@@ -469,6 +469,7 @@ impl NativeJointActivationPublication {
         // Record the ACTUAL return before readback, clocks or current checks.
         match result {
             Ok(()) => {
+                store.note_catalogue_write_returned_ok(self.write_generation);
                 self.outcomes[index] = IoReturn::ReturnedOk;
                 store.activation_io_history.record(
                     self.native.checksum_sha256(),
@@ -827,3 +828,104 @@ impl RangeWriteStore {
 
 #[cfg(test)]
 mod controls;
+
+impl RangeWriteStore {
+    /// Historical known IO owner plus a current selected projection ONLY.
+    /// Unlike mutating retry, healthy unrelated head/generation progress is
+    /// allowed. This method never writes, clears uncertainty or renews owner.
+    #[cfg(feature = "tls-replication")]
+    pub(in crate::distribution_range_consensus::joint_handoff_state::activation) fn require_known_activation_read_projection(
+        &self,
+        db: &crate::BicDb,
+        native: &NativeJointServingBridgeReceipt,
+        domain: &NativeJointWriterDomain,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        self.require_native_catalog_durability(db.data_path())?;
+        self.require_current_catalogue_io_returned_ok()?;
+        if !self.activation_uses_owned_profile(db)? {
+            return Err(range_write_error(
+                "remote Open observation requires actual protected owned activation profile",
+            ));
+        }
+        let owner = self
+            .owned_joint_activation
+            .as_ref()
+            .ok_or_else(|| {
+                range_write_error(
+                    "remote Open observation cannot reconstruct missing original IO owner",
+                )
+            })?
+            .try_lock()
+            .ok_or_else(|| range_write_error("remote Open observation original IO owner active"))?;
+        owner.session.check()?;
+        let range = native.data().old_range().id;
+        if !self.fsync
+            || !crate::format::native_joint_data_handoff_active(db.data_path())?
+            || !owner.verified
+            || owner.owns_uncertainty
+            || !matches!(owner.outcomes.last(), Some(IoReturn::ReturnedOk))
+            || owner.write_generation > self.current_catalogue_write_generation()
+            || self.open_id != owner.store
+            || db.incarnation_id() != owner.database_open
+            || self.root.canonicalize()? != owner.root
+            || db.data_path().canonicalize()? != owner.root
+            || db.native_abort_catalogue_store_id()? != Some(owner.catalogue)
+            || native.checksum_sha256() != owner.native.checksum_sha256()
+            || !owner.phase_owner.same_actual(&domain.phase_owner())
+            || self
+                .catalog
+                .native_joint_handoffs
+                .as_ref()
+                .and_then(|s| s.get(&range))
+                != owner
+                    .candidate
+                    .native_joint_handoffs
+                    .as_ref()
+                    .and_then(|s| s.get(&range))
+        {
+            return Err(range_write_error("remote Open observation changed original verified IO/native/Store/selected activation owner"));
+        }
+        // Actual gate/generation membership, not UUID equality or a retained
+        // cancellation handle pretending a dropped Frozen is still current.
+        owner.frozen.require_same_current(frozen)?;
+        owner.phase_owner.require_store(&self.root, self.open_id)?;
+        domain.require_lifetime(
+            db.data_path(),
+            self.open_id,
+            native.data().activation_range(),
+        )?;
+        owner.session.check()
+    }
+}
+
+#[cfg(feature = "tls-replication")]
+impl RangeWriteStore {
+    pub(crate) fn require_retained_remote_open_intent(
+        &self,
+        db: &crate::BicDb,
+        native: &NativeJointServingBridgeReceipt,
+        domain: &NativeJointWriterDomain,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        let owner = self
+            .owned_joint_activation
+            .as_ref()
+            .ok_or_else(|| {
+                range_write_error("ReconcileOpen cannot create a missing actual IO owner")
+            })?
+            .try_lock()
+            .ok_or_else(|| range_write_error("ReconcileOpen original IO owner busy"))?;
+        if owner.verified {
+            drop(owner);
+            return self.require_known_activation_read_projection(db, native, domain, frozen);
+        }
+        // A genuine retained owner can precede its first IO. This is still
+        // exact whole O/C/current generation and live original gate custody;
+        // it is not reconstruction from an absent owner or a healthy flag.
+        owner.require_pending_ownership(self)?;
+        owner.require_binding(db, self, native, domain)?;
+        owner.require_disk(self)?;
+        owner.frozen.require_same_current(frozen)
+    }
+}

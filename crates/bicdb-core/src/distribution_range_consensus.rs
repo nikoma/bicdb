@@ -883,6 +883,8 @@ pub struct RangeWriteStore {
     // Necessary SAME-open IO fence only, never durability or mutation authority.
     // Every actual catalogue write attempt advances it, even for identical bytes.
     catalogue_write_generation: std::sync::atomic::AtomicU64,
+    // Actual successful IO returns only; byte equality never advances this.
+    catalogue_successful_io_generation: std::sync::atomic::AtomicU64,
     // Only an ACTUAL same-open activation producer can fill this RAM slot.
     // Global uncertainty alone cannot reconstruct or select this owner.
     owned_joint_activation:
@@ -1158,6 +1160,7 @@ impl RangeWriteStore {
             _native_abort_owner: abort_owner,
             recovery_persistence_uncertain: false,
             catalogue_write_generation: std::sync::atomic::AtomicU64::new(0),
+            catalogue_successful_io_generation: std::sync::atomic::AtomicU64::new(0),
             owned_joint_activation: None,
             activation_io_history: Default::default(),
             catalogue_loaded_at_open: existing_catalog,
@@ -1851,8 +1854,9 @@ impl RangeWriteStore {
         fs::create_dir_all(&self.root)?;
         let envelope = RangeWriteEnvelope::new(self.catalog.clone())?;
         let bytes = serde_json::to_vec_pretty(&envelope)?;
-        self.note_catalogue_write_entered()?;
+        let generation = self.note_catalogue_write_entered()?;
         write(&self.root.join(DEFAULT_RANGE_WRITE_LOG), &bytes, self.fsync)?;
+        self.note_catalogue_write_returned_ok(generation);
         self.require_native_writer_host_base()
     }
 
@@ -1872,6 +1876,43 @@ impl RangeWriteStore {
             )
             .map(|previous| previous + 1)
             .map_err(|_| range_write_error("catalogue IO generation exhausted; write refused"))
+    }
+
+    /// Bookkeeping of an actual successful storage API return, never authority
+    /// or a durability/Serving grant. Call immediately after that SAME IO's Ok.
+    /// A later entered Error/unknown keeps this behind the admitted generation;
+    /// a late older successful return cannot hide a newer ambiguous write.
+    pub(super) fn note_catalogue_write_returned_ok(&self, generation: u64) {
+        self.catalogue_successful_io_generation
+            .fetch_max(generation, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    pub(crate) fn require_current_catalogue_io_returned_ok(&self) -> Result<()> {
+        let entered = self.current_catalogue_write_generation();
+        if entered == 0
+            || self
+                .catalogue_successful_io_generation
+                .load(std::sync::atomic::Ordering::SeqCst)
+                != entered
+            || self.current_catalogue_write_generation() != entered
+        {
+            return Err(range_write_error(
+                "remote Open observation latest catalogue IO has no known successful return",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Necessary memory-only recheck of the exact IO return captured by one
+    /// actual Store/native read scope, not a proof constructed from a counter.
+    pub(crate) fn require_current_catalogue_io_generation(&self, expected: u64) -> Result<()> {
+        self.require_current_catalogue_io_returned_ok()?;
+        if self.current_catalogue_write_generation() != expected {
+            return Err(range_write_error(
+                "remote Open catalogue IO advanced during protected observation",
+            ));
+        }
+        Ok(())
     }
 
     fn persist_or_restore<T>(&mut self, previous: RangeWriteCatalog, value: T) -> Result<T> {
@@ -6781,3 +6822,6 @@ mod tests {
         drop(database);
     }
 }
+
+#[cfg(test)]
+mod catalogue_io_return_tests;

@@ -820,6 +820,7 @@ impl ClusterDataNodeService {
             .range_writes
             .recover_native_joint_catalogue_activation(&database, admission)?
         {
+            admission.note_remote_open_effect_entered()?;
             self.range_writes
                 .current_mut()
                 .install_native_joint_activated_open(
@@ -848,6 +849,7 @@ impl ClusterDataNodeService {
                 actual.lease.try_frozen()?,
                 parent,
             )?;
+        admission.note_remote_open_effect_entered()?;
         self.range_writes
             .current_mut()
             .install_native_joint_activated_open(&database, &receipt, actual.lease.try_frozen()?)?;

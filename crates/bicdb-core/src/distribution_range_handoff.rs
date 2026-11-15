@@ -39,7 +39,17 @@ pub(crate) use joint::{
 pub(crate) use joint::{NativeJointPhaseTrace, NativeRefreshTraceContext};
 #[cfg(feature = "tls-replication")]
 pub(crate) use joint::{
-    NativeMetadataOwnerCatalogueScope, NativeRemoteCatalogueDecisionV1, NativeRemoteCatalogueRound, NativeRemoteDecisionAdmission, NativeRemoteDecisionBindingV1, NativeRemoteDecisionReceiptV1, NativeRemoteDecisionSourceData, NativeRemoteDecisionSourceRequestV1, NativeRemoteDualDurableDecision, NativeRemoteJointDecisionCertificate, NativeRemoteJointDecisionCertificateRound, NativeRemoteNewFactSetV1, NativeRemoteNewHandoffV1, NativeRemoteNewMaterializedQuorum, NativeRemoteNewOperationV1, NativeRemoteNewParticipant, NativeRemoteNewPinHandoffPermit, NativeRemoteNewReplyV1, NativeRemoteNewRequestV1, NativeRemoteNewRound, NativeRemoteNewSnapshotV1, NativeRemoteNewTargetPinIssuance, NativeRemoteAllOpenQuorum, NativeRemoteAllOpenRetirementAdmission, NativeRemoteAllOpenRound, NativeRemoteOldRetirementSlot, NativeRemotePreparedQuorum, NativeRemotePreparedRound, NativeRemoteServingReadAdmission,
+    NativeMetadataOwnerCatalogueScope, NativeRemoteAllOpenQuorum,
+    NativeRemoteAllOpenRetirementAdmission, NativeRemoteAllOpenRound,
+    NativeRemoteCatalogueDecisionV1, NativeRemoteCatalogueRound, NativeRemoteDecisionAdmission,
+    NativeRemoteDecisionBindingV1, NativeRemoteDecisionReceiptV1, NativeRemoteDecisionSourceData,
+    NativeRemoteDecisionSourceRequestV1, NativeRemoteDualDurableDecision,
+    NativeRemoteJointDecisionCertificate, NativeRemoteJointDecisionCertificateRound,
+    NativeRemoteNewFactSetV1, NativeRemoteNewHandoffV1, NativeRemoteNewMaterializedQuorum,
+    NativeRemoteNewOperationV1, NativeRemoteNewParticipant, NativeRemoteNewPinHandoffPermit,
+    NativeRemoteNewReplyV1, NativeRemoteNewRequestV1, NativeRemoteNewRound,
+    NativeRemoteNewSnapshotV1, NativeRemoteNewTargetPinIssuance, NativeRemoteOldRetirementSlot,
+    NativeRemotePreparedQuorum, NativeRemotePreparedRound, NativeRemoteServingReadAdmission,
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use joint::{
@@ -1758,3 +1768,9 @@ fn pending_handoff_configuration(
 
 #[cfg(feature = "tls-replication")]
 pub(crate) use joint::{NativeRemoteBridgeAdmission, NativeRemoteBridgeReadAdmission};
+
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint::NativeRemoteOpenObservation;
+
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint::{NativeRemoteBridgeQuorum, NativeRemoteBridgeRound};

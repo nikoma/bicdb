@@ -26,6 +26,7 @@ pub(crate) enum NativeRemoteServingOperationV1 {
     ObserveDecision,
     ResolvePrepared,
     ResolveBridge,
+    ReconcileOpen,
 }
 impl NativeRemoteServingOperationV1 {
     pub(crate) fn readonly(self) -> bool {
@@ -190,12 +191,13 @@ impl NativeRemoteServingReplyV1 {
 pub(in crate::distribution_native_host) struct NativeRemoteServingIngress {
     pub(in crate::distribution_native_host) peer: MetadataReadParticipant,
     pub(in crate::distribution_native_host) request: NativeRemoteServingRequestV1,
-    pub(in crate::distribution_native_host) role: RecoveryRoleAdmission,
-    pub(in crate::distribution_native_host) own: HostMetadataReadObservation,
+    pub(in crate::distribution_native_host) role: Arc<RecoveryRoleAdmission>,
+    pub(in crate::distribution_native_host) own: Arc<HostMetadataReadObservation>,
     pub(in crate::distribution_native_host) business: Uuid,
     pub(in crate::distribution_native_host) point: Arc<ActualNativeJointMetadataPoint>,
     pub(in crate::distribution_native_host) token: CancellationToken,
     effect_entered: bool,
+    open_effect: Option<Arc<std::sync::atomic::AtomicBool>>,
     hash: String,
     reply: SyncSender<Result<NativeRemoteServingReplyV1>>,
 }
@@ -281,12 +283,13 @@ impl NativeRemoteServingQueue {
         let work = NativeRemoteServingIngress {
             peer,
             request,
-            role,
-            own,
+            role: Arc::new(role),
+            own: Arc::new(own),
             business,
             point,
             token,
             effect_entered: false,
+            open_effect: None,
             hash: hash.clone(),
             reply: send,
         };
@@ -314,7 +317,17 @@ impl NativeRemoteServingQueue {
                 || state.pending.is_some()
                 || state.processing
                 || (!readonly && work.request.sequence <= state.admitted)
-                || (state.unknown.is_some() && !work.request.operation.readonly())
+                || (state.unknown.as_ref().is_some_and(|old| {
+                    !readonly
+                        && !(work.request.operation
+                            == NativeRemoteServingOperationV1::ReconcileOpen
+                            && matches!(
+                                old.request.operation,
+                                NativeRemoteServingOperationV1::Open
+                                    | NativeRemoteServingOperationV1::ReconcileOpen
+                            )
+                            && state.binding.as_ref() == Some(&binding))
+                }))
             {
                 return Err(invalid(
                     "serving ingress refuses replay/rebinding/concurrent or unresolved mutation",
@@ -396,7 +409,17 @@ impl NativeRemoteServingQueue {
                 Ok(bytes) => state.returned_chain.update(bytes),
                 Err(_) => state.exhausted = true, // Preserve the original API result.
             }
-            if result.is_err() && work.effect_entered && !work.request.operation.readonly() {
+            let actual_effect = work.effect_entered
+                || work
+                    .open_effect
+                    .as_ref()
+                    .is_some_and(|v| v.load(std::sync::atomic::Ordering::Acquire));
+            if result.is_err()
+                && actual_effect
+                && !work.request.operation.readonly()
+                && !(work.request.operation == NativeRemoteServingOperationV1::ReconcileOpen
+                    && state.unknown.is_some())
+            {
                 state.unknown = Some(Unknown {
                     request: work.request,
                     request_sha256: work.hash,
@@ -884,6 +907,240 @@ impl NativeRemoteServingQueue {
         // Original return classification remains in the rolling outcome hash;
         // DATA destruction never occurs under the short publication guard.
         drop(removed);
+        Ok(())
+    }
+}
+
+/// Owned witness of ONE actual authenticated Open ingress. Arc ownership keeps
+/// the SAME Role/OWN values, never clones/reconstructs their authority. Every
+/// check retains their original cancellation and earliest absolute deadline.
+pub(crate) struct NativeRemoteOpenRequestAdmission {
+    role: Arc<RecoveryRoleAdmission>,
+    own: Arc<HostMetadataReadObservation>,
+    point: Arc<ActualNativeJointMetadataPoint>,
+    business: Uuid,
+    phase: Uuid,
+    decision: String,
+    retry: bool,
+    effect: Arc<std::sync::atomic::AtomicBool>,
+    session: Uuid,
+    nonce: Uuid,
+    process: Arc<NativeRemotePreparationProcess>,
+    token: CancellationToken,
+}
+impl NativeRemoteServingIngress {
+    pub(in crate::distribution_native_host) fn admit_open(
+        &mut self,
+        process: Arc<NativeRemotePreparationProcess>,
+    ) -> Result<NativeRemoteOpenRequestAdmission> {
+        self.require_request()?;
+        process.require_memory()?;
+        if !matches!(
+            self.request.operation,
+            NativeRemoteServingOperationV1::Open | NativeRemoteServingOperationV1::ReconcileOpen
+        ) {
+            return Err(invalid(
+                "only actual admitted Open may enter owned catalogue activation",
+            ));
+        }
+        if self.open_effect.is_some() {
+            return Err(invalid(
+                "Open ingress already issued original effect witness",
+            ));
+        }
+        let effect = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        self.open_effect = Some(effect.clone());
+        Ok(NativeRemoteOpenRequestAdmission {
+            effect,
+            role: self.role.clone(),
+            own: self.own.clone(),
+            point: self.point.clone(),
+            business: self.business,
+            phase: self.request.phase_id,
+            decision: self.request.decision_sha256.clone(),
+            retry: self.request.operation == NativeRemoteServingOperationV1::ReconcileOpen,
+            session: self.request.manifest.handoff_session,
+            nonce: self.request.manifest.nonce,
+            token: process
+                .bound_request(&self.token)
+                .child_linked_to(&self.own.original_request_cancellation())
+                .child_with_deadline(self.role.deadline().min(self.own.deadline())),
+            process,
+        })
+    }
+}
+impl NativeRemoteOpenRequestAdmission {
+    pub(crate) fn require_memory_current(&self) -> Result<()> {
+        self.token.check()?;
+        self.process.require_memory()?;
+        self.role.require_live_request()?;
+        self.own.require_live_request(self.business)?;
+        self.point.require_current_memory()
+    }
+    pub(crate) fn require_current(
+        &self,
+        fresh: &crate::distribution_range_handoff::CommittedNativeJointDecisionObservation,
+    ) -> Result<()> {
+        self.require_memory_current()?;
+        self.role
+            .require_own_host_metadata(&self.own, self.business)?;
+        self.point.require_request(&self.own, self.business)?;
+        fresh.require_current_metadata_only()?;
+        if self.phase.is_nil()
+            || self.decision != fresh.data().checksum_sha256()
+            || self.session != fresh.data().promise().session_id
+            || self.nonce != fresh.data().promise().nonce
+            || self.role.local_node_id() != fresh.native_receipt().local_node_id()
+        {
+            return Err(invalid(
+                "remote Open changed original authenticated native phase/body/recipient",
+            ));
+        }
+        self.require_memory_current()
+    }
+    pub(crate) fn bound_request(&self) -> CancellationToken {
+        self.token.child()
+    }
+}
+
+impl NativeRemoteOpenRequestAdmission {
+    pub(crate) fn reconcile_actual_preparation(
+        &self,
+        service: &mut crate::distribution_data::ClusterDataNodeService,
+        actual: &crate::distribution_data::ActualServiceNativeJointPreparedEvidence,
+        native: &crate::db::NativeJointServingBridgeReceipt,
+    ) -> Result<()> {
+        self.require_memory_current()?;
+        self.process.require_service(service)?;
+        actual.require_remote_preparation_participant(&self.process.participant_sha256)?;
+        self.role
+            .require_own_host_metadata(&self.own, self.business)?;
+        self.point.require_request(&self.own, self.business)?;
+        if native.data().checksum_sha256() != self.decision
+            || native.local_node_id() != self.role.local_node_id()
+        {
+            return Err(invalid(
+                "Open reconciliation changed actual native recipient/decision",
+            ));
+        }
+        if self.retry {
+            actual.require_remote_open_intent(service, native)?;
+        }
+        self.note_actual_effect_entered()?;
+        service.reconcile_native_joint_open_phase_with_point(
+            &self.own,
+            self.business,
+            native,
+            actual,
+            &self.token,
+            Some(&self.point),
+        )?;
+        self.require_memory_current()
+    }
+}
+
+impl NativeRemoteServingQueue {
+    pub(in crate::distribution_native_host) fn resolve_original_open(
+        &self,
+        work: &NativeRemoteServingIngress,
+        admission: &crate::distribution_range_handoff::NativeJointOpenAdmission,
+        observed: &crate::distribution_range_handoff::NativeRemoteOpenObservation,
+        activation: &crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt,
+    ) -> Result<()> {
+        if work.request.operation != NativeRemoteServingOperationV1::ReconcileOpen {
+            return Err(invalid(
+                "Open resolution requires actual mutating same-owner ReconcileOpen",
+            ));
+        }
+        work.require_request()?;
+        admission.require_operation_request_memory()?;
+        admission.require_original_remote_open_observation(observed)?;
+        let expected = activation.activation_sha256()?;
+        let binding = (
+            work.peer.node_id().clone(),
+            work.peer.member_incarnation(),
+            work.peer
+                .certificate_sha256()
+                .ok_or_else(|| invalid("Open resolution actual TLS peer absent"))?
+                .to_string(),
+            work.request.original_operation,
+            work.request.manifest.checksum_sha256.clone(),
+            work.request.phase_id,
+        );
+        let mut removed = None;
+        // Same physical/native/Store proof remains borrowed through the final
+        // short metadata gate and this exact queue's one-way resolution.
+        observed.inspect(
+            |scope, _store, _head, actual, _owner| {
+                if actual.as_deref() != Some(expected.as_str())
+                    || scope.native().checksum_sha256() != activation.native_bridge_sha256()
+                {
+                    return Err(invalid(
+                        "Open resolution changed actual owned native/catalogue activation",
+                    ));
+                }
+                Ok(())
+            },
+            || {
+                work.require_request_memory()?;
+                admission.require_operation_request_memory()?;
+                let mut state = self
+                    .state
+                    .try_lock()
+                    .ok_or_else(|| invalid("Open resolution original queue busy"))?;
+                if state.binding.as_ref() != Some(&binding)
+                    || work.request.sequence != state.admitted
+                {
+                    return Err(invalid(
+                        "Open resolution replaced original actor/admitted mutation",
+                    ));
+                }
+                // A lost wire reply may follow an actual completed queue
+                // return. The protected same-owner read above still applies;
+                // absence here does not infer that the old RPC returned Ok.
+                let Some(old) = state.unknown.as_ref() else {
+                    return Ok(());
+                };
+                if state.binding.as_ref() != Some(&binding)
+                    || !matches!(
+                        old.request.operation,
+                        NativeRemoteServingOperationV1::Open
+                            | NativeRemoteServingOperationV1::ReconcileOpen
+                    )
+                    || old.request.original_operation != work.request.original_operation
+                    || old.request.phase_id != work.request.phase_id
+                    || old.request.decision_sha256 != work.request.decision_sha256
+                    || work.request.sequence != state.admitted
+                {
+                    return Err(invalid(
+                        "Open resolution replaced original actor/phase/admitted mutation",
+                    ));
+                }
+                removed = state.unknown.take();
+                Ok(())
+            },
+        )?;
+        drop(removed);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+impl NativeRemoteServingQueue {
+    pub(in crate::distribution_native_host) fn test_open_queue_state(&self) -> serde_json::Value {
+        let state = self.state.lock();
+        serde_json::json!({"admitted":state.admitted,"processing":state.processing,
+            "unknown":state.unknown.as_ref().map(|u|serde_json::json!({"operation":u.request.operation,"sequence":u.request.sequence,
+                "original_deadline_expired":Instant::now()>=u.original_deadline,"original_error_kind":u.actual_error_kind,
+                "request_sha256":u.request_sha256})),"returned":state.returned})
+    }
+}
+
+impl NativeRemoteOpenRequestAdmission {
+    pub(crate) fn note_actual_effect_entered(&self) -> Result<()> {
+        self.require_memory_current()?;
+        self.effect
+            .store(true, std::sync::atomic::Ordering::Release);
         Ok(())
     }
 }

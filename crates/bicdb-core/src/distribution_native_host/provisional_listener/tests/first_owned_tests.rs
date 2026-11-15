@@ -19,6 +19,7 @@ use std::time::Instant;
 mod bridge_retry_tests;
 mod bridge_tests;
 mod metadata_head_tests;
+mod open_tests;
 mod preparation_tests;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Case {
@@ -55,6 +56,11 @@ enum Case {
     BridgeMissingPrepared,
     BridgeCancelledAfterNative,
     BridgeCommitUnknown,
+    Open,
+    OpenR2Progress,
+    OpenLaterIoFailed,
+    OpenCancelledAfterIo,
+    OpenIoUnknown,
 }
 fn is_catalogue_case(case: Case) -> bool {
     matches!(
@@ -79,6 +85,11 @@ fn is_catalogue_case(case: Case) -> bool {
             | Case::BridgeMissingPrepared
             | Case::BridgeCancelledAfterNative
             | Case::BridgeCommitUnknown
+            | Case::Open
+            | Case::OpenR2Progress
+            | Case::OpenLaterIoFailed
+            | Case::OpenCancelledAfterIo
+            | Case::OpenIoUnknown
     )
 }
 #[derive(Clone, Copy, Debug)]
@@ -88,6 +99,11 @@ enum SetupCut {
 }
 
 enum OwnerCommand {
+    OpenControl(
+        crate::RangeId,
+        Option<u8>,
+        mpsc::SyncSender<serde_json::Value>,
+    ),
     BridgeControl(
         crate::RangeId,
         Option<u8>,
@@ -774,6 +790,11 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
             while !active.load(Ordering::Acquire) && parent.check().is_ok() {
                 while let Ok(command)=owner_receive.try_recv() {
                     match command {
+                    OwnerCommand::OpenControl(range,mode,send)=> {
+                        let actual=target.test_remote_open_control(range,mode);
+                        let _=send.try_send(serde_json::json!({"ok":actual.is_ok(),"data":actual.as_ref().ok(),
+                            "error":actual.as_ref().err().map(crate::distribution_native_host::remote_first::error_data)}));
+                    },
                     OwnerCommand::BridgeControl(range,arm,send)=> {
                         let actual=target.test_remote_bridge_control(range,arm);
                         let _=send.try_send(serde_json::json!({"ok":actual.is_ok(),"data":actual.as_ref().ok(),
@@ -804,7 +825,7 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                         worker_omitted += 1;
                     }
                 }
-                if matches!(case,Case::Preparation|Case::PreparationCancelledAfterNative|Case::PreparationCommitUnknown|Case::Bridge|Case::BridgeMissingPrepared|Case::BridgeCancelledAfterNative|Case::BridgeCommitUnknown) {
+                if matches!(case,Case::Preparation|Case::PreparationCancelledAfterNative|Case::PreparationCommitUnknown|Case::Bridge|Case::BridgeMissingPrepared|Case::BridgeCancelledAfterNative|Case::BridgeCommitUnknown|Case::Open|Case::OpenR2Progress|Case::OpenLaterIoFailed|Case::OpenCancelledAfterIo|Case::OpenIoUnknown) {
                     if let Err(error)=target.poll_finite_remote_serving(&parent) {
                         if worker_errors.len()<64 {worker_errors.push(crate::distribution_native_host::remote_first::error_data(&error));}
                         else {worker_omitted+=1;}
@@ -1391,6 +1412,11 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                     | Case::BridgeMissingPrepared
                     | Case::BridgeCancelledAfterNative
                     | Case::BridgeCommitUnknown
+                    | Case::Open
+                    | Case::OpenR2Progress
+                    | Case::OpenLaterIoFailed
+                    | Case::OpenCancelledAfterIo
+                    | Case::OpenIoUnknown
             ) {
                 // Same five retained normal hosts; real range leader directly
                 // observes OLD/survivor/Registered NEW, donor remains neither leader.
@@ -1882,6 +1908,11 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                                 | Case::BridgeMissingPrepared
                                 | Case::BridgeCancelledAfterNative
                                 | Case::BridgeCommitUnknown
+                                | Case::Open
+                                | Case::OpenR2Progress
+                                | Case::OpenLaterIoFailed
+                                | Case::OpenCancelledAfterIo
+                                | Case::OpenIoUnknown
                         )
                         .then(|| {
                             (
@@ -2025,4 +2056,25 @@ fn native_first_remote_bridge_postcommit_server_cancel_resolves_same_native_xid(
 #[test]
 fn native_first_remote_bridge_commit_sync_unknown_remains_blocked() {
     run(Case::BridgeCommitUnknown);
+}
+
+#[test]
+fn native_first_actual_remote_all_bridge_and_owned_open() {
+    run(Case::Open);
+}
+#[test]
+fn native_first_actual_open_observation_survives_stock_sdk_other_range_head_progress() {
+    run(Case::OpenR2Progress);
+}
+#[test]
+fn native_first_actual_later_same_byte_failed_io_refuses_readonly_open_projection() {
+    run(Case::OpenLaterIoFailed);
+}
+#[test]
+fn native_first_actual_open_post_io_server_cancel_resolves_owned_without_native_replay() {
+    run(Case::OpenCancelledAfterIo);
+}
+#[test]
+fn native_first_actual_open_directory_sync_unknown_requires_new_owned_fsync() {
+    run(Case::OpenIoUnknown);
 }

@@ -323,7 +323,7 @@ impl NativeJointOpenPhaseQuorum {
         let result = NativeJointOpenAdmission {
             open_phase: Some(self.clone()),
             attempted: std::sync::atomic::AtomicBool::new(false),
-            quorum: self.original.clone(),
+            authority: super::NativeJointOpenAuthority::Local(self.original.clone()),
             local,
             receipt: self.original.receipts[node].clone(),
             cancellation: self.cancellation.child_with_deadline(fresh.deadline()),

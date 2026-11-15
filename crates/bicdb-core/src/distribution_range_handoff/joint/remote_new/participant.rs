@@ -73,6 +73,12 @@ pub(crate) struct NativeRemoteNewParticipant {
     serving_queue: Arc<crate::distribution_native_host::NativeRemoteServingQueue>,
     // Weak observation route only. The actual serialized host retains custody;
     // a listener cannot reconstruct a preparation or keep its owner alive.
+    remote_bridge: Mutex<
+        Option<(
+            Weak<crate::distribution_range_handoff::NativeJointPreparationCustody>,
+            Weak<crate::db::NativeJointServingBridgeReceipt>,
+        )>,
+    >,
     remote_prepared:
         Mutex<Option<Weak<crate::distribution_range_handoff::NativeJointPreparationCustody>>>,
 }
@@ -170,6 +176,7 @@ impl NativeRemoteNewParticipant {
             decision: Mutex::new(Default::default()),
             serving_queue: Arc::default(),
             remote_prepared: Mutex::new(None),
+            remote_bridge: Mutex::new(None),
         })
     }
 
@@ -289,6 +296,7 @@ impl NativeRemoteNewParticipant {
             decision: Mutex::new(Default::default()),
             serving_queue: Arc::default(),
             remote_prepared: Mutex::new(None),
+            remote_bridge: Mutex::new(None),
         })
     }
 

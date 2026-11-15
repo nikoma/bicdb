@@ -211,6 +211,42 @@ impl NativeMetadataHost {
             .ok_or_else(|| invalid("actual bridge control host absent"))?
             .test_remote_bridge_control(range, arm)
     }
+    pub(crate) fn drive_finite_remote_open(
+        &mut self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+        node: &ClusterNodeId,
+        reconcile: bool,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual Open control owner absent"))?
+            .drive_finite_remote_open(relocation, phase, node, reconcile, parent)
+    }
+    pub(crate) fn inspect_finite_remote_open(
+        &self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+        node: &ClusterNodeId,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_ref()
+            .ok_or_else(|| invalid("actual Open control owner absent"))?
+            .inspect_finite_remote_open(relocation, phase, node, parent)
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_remote_open_control(
+        &mut self,
+        range: crate::RangeId,
+        mode: Option<u8>,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual Open control owner absent"))?
+            .test_remote_open_control(range, mode)
+    }
     pub(crate) fn poll_finite_remote_serving(
         &mut self,
         parent: &CancellationToken,

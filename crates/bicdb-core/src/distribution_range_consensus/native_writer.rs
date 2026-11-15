@@ -104,8 +104,10 @@ impl RangeWriteStore {
         }
         let envelope = RangeWriteEnvelope::new(self.catalog.clone())?;
         let bytes = serde_json::to_vec_pretty(&envelope)?;
-        self.note_catalogue_write_entered()?;
-        crate::storage::write_atomic(&self.root.join(DEFAULT_RANGE_WRITE_LOG), &bytes, self.fsync)
+        let generation = self.note_catalogue_write_entered()?;
+        crate::storage::write_atomic(&self.root.join(DEFAULT_RANGE_WRITE_LOG), &bytes, self.fsync)?;
+        self.note_catalogue_write_returned_ok(generation);
+        Ok(())
     }
 }
 impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {

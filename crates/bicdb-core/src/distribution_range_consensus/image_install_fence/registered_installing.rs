@@ -288,7 +288,7 @@ impl NativeRegisteredRemoteInstallingPublication {
         }
         // The real atomic file replacement includes both file and directory
         // fsync. All errors retain the memory refusal and original candidate.
-        store.note_catalogue_write_entered()?;
+        let generation = store.note_catalogue_write_entered()?;
         crate::storage::replace_durably(
             &store.root.join(DEFAULT_RANGE_WRITE_LOG),
             crate::storage::ReplaceContents::Plain(&bytes),
@@ -296,6 +296,7 @@ impl NativeRegisteredRemoteInstallingPublication {
             "registered_remote_install.catalogue",
             crate::storage::FailClosed::No,
         )?;
+        store.note_catalogue_write_returned_ok(generation);
         #[cfg(test)]
         test_cut::fire();
         self.fence.require_disk(store)?;

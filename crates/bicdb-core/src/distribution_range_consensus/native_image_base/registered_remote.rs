@@ -293,7 +293,7 @@ impl NativeRegisteredRemoteCataloguePublication {
         if bytes.len() > 64 * 1024 * 1024 {
             return Err(range_write_error("Registered catalogue floor byte bound"));
         }
-        store.note_catalogue_write_entered()?;
+        let generation = store.note_catalogue_write_entered()?;
         crate::storage::replace_durably(
             &store.root.join(DEFAULT_RANGE_WRITE_LOG),
             crate::storage::ReplaceContents::Plain(&bytes),
@@ -301,6 +301,7 @@ impl NativeRegisteredRemoteCataloguePublication {
             "registered_remote_adoption.catalogue",
             crate::storage::FailClosed::No,
         )?;
+        store.note_catalogue_write_returned_ok(generation);
         #[cfg(test)]
         cuts::fire();
         self.require_disk(store)?;

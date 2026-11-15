@@ -88,6 +88,25 @@ impl NativeInitialDataAdmission {
                 &token,
             );
         }
+        if matches!(
+            request.operation,
+            crate::distribution_native_host::NativeRemoteServingOperationV1::ObserveBridge
+                | crate::distribution_native_host::NativeRemoteServingOperationV1::ObserveOpen
+        ) {
+            let leader = provider
+                .current_metadata_leader_hint(&token)?
+                .ok_or_else(|| invalid("Open observation current metadata leader absent"))?;
+            return participant.observe_retained_open_for_serving(
+                &request,
+                &fresh.role,
+                &fresh.own,
+                fresh.business,
+                &fresh.point,
+                &transport,
+                &leader,
+                &token,
+            );
+        }
         let queue = participant.serving_queue_for_original(
             &request,
             &fresh.role,

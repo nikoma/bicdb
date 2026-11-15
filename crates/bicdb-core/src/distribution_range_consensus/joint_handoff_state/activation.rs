@@ -4,6 +4,8 @@
 use super::*;
 mod fresh;
 mod owned_catalogue;
+#[cfg(feature = "tls-replication")]
+mod remote_observation;
 use crate::distribution_consensus::MetadataRecoveryRolePurpose;
 use crate::distribution_range_handoff::NativeJointOpenAdmission;
 use crate::distribution_range_image_install::NativeJointImageMaterialization;

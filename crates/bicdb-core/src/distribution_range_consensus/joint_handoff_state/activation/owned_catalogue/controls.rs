@@ -230,3 +230,64 @@ mod capacity_counting_tests {
         );
     }
 }
+
+#[cfg(feature = "tls-replication")]
+impl RangeWriteStore {
+    pub(crate) fn test_remote_open_io_state(&self) -> Result<serde_json::Value> {
+        let entered = self.current_catalogue_write_generation();
+        let known = self
+            .catalogue_successful_io_generation
+            .load(std::sync::atomic::Ordering::SeqCst);
+        let uncertain = self.recovery_persistence_uncertain;
+        let original = self.test_owned_activation_snapshot()?;
+        let disk = NativeJointActivationPublication::read_head(self);
+        Ok(
+            serde_json::json!({"entered":entered,"known_success":known,"global_uncertain":uncertain,
+            "disk_matches_memory":disk.as_ref().is_ok_and(|d|d==&self.catalog),"original":original}),
+        )
+    }
+    pub(crate) fn test_remote_open_same_byte_error(
+        &mut self,
+        db: &crate::BicDb,
+        native: &NativeJointServingBridgeReceipt,
+        domain: &NativeJointWriterDomain,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<serde_json::Value> {
+        self.require_known_activation_read_projection(db, native, domain, frozen)?;
+        native.require_current(db)?;
+        domain.require_current(db, self, native.data().activation_range())?;
+        let controlled = db.range_mutation_gate().try_controlled_mutation(frozen)?;
+        db.range_mutation_gate().validate(
+            native.data().old_range().id,
+            &RangeMutationAuthority::Controlled(&controlled),
+        )?;
+        let before = self.test_remote_open_io_state()?;
+        let fault = bicdb_page::test_faults::arm_io_failure(
+            "actual_remote_open_same_byte.dir_sync",
+            &self.root,
+            1,
+            false,
+        );
+        let result = self.persist_with(|path, bytes, fsync| {
+            crate::storage::replace_durably(
+                path,
+                crate::storage::ReplaceContents::Plain(bytes),
+                fsync,
+                "actual_remote_open_same_byte",
+                crate::storage::FailClosed::No,
+            )
+        });
+        let actual_error = result.as_ref().err().map(ToString::to_string);
+        let returned_ok = result.is_ok();
+        let fired = fault.fired();
+        drop(fault);
+        drop(controlled);
+        let after = self.test_remote_open_io_state()?;
+        let read = self.require_known_activation_read_projection(db, native, domain, frozen);
+        let final_state = self.test_remote_open_io_state()?;
+        Ok(
+            serde_json::json!({"before":before,"IO_returned_ok":returned_ok,"IO_error":actual_error,"actual_dirsync_faults":fired,
+            "after_IO":after,"projection_error":read.as_ref().err().map(ToString::to_string),"after_readonly_projection":final_state}),
+        )
+    }
+}

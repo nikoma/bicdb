@@ -91,6 +91,95 @@ impl NativeMetadataControlHost {
             parent,
         )
     }
+    pub(in crate::distribution_native_host) fn drive_finite_remote_open(
+        &mut self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+        node: &ClusterNodeId,
+        reconcile: bool,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.drive_finite_remote_serving_step(
+            relocation,
+            phase,
+            node,
+            if reconcile {
+                NativeRemoteServingOperationV1::ReconcileOpen
+            } else {
+                NativeRemoteServingOperationV1::Open
+            },
+            parent,
+        )
+    }
+    pub(in crate::distribution_native_host) fn inspect_finite_remote_open(
+        &self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+        node: &ClusterNodeId,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        let process = self
+            .data_process
+            .get()
+            .ok_or_else(|| invalid("readonly Open caller actual host process absent"))?;
+        process.check()?;
+        let token = parent
+            .child_linked_to(process)
+            .child_with_deadline(Instant::now() + Duration::from_secs(5));
+        let owner = self
+            .remote_catalogue_certifications
+            .get(&(relocation, phase))
+            .filter(|o| !o.stopped)
+            .ok_or_else(|| invalid("readonly Open original coordinator absent"))?;
+        let history = owner
+            .certified
+            .as_ref()
+            .ok_or_else(|| invalid("readonly Open original certification absent"))?;
+        let original = owner
+            .serving
+            .as_ref()
+            .ok_or_else(|| invalid("readonly Open original serving coordinator absent"))?;
+        original.process.check()?;
+        let token = token.child_linked_to(&original.process);
+        let business = Uuid::now_v7();
+        let own = self.backend.transport.acquire_host_metadata_observation(
+            &self.backend.node_id,
+            business,
+            remaining_finite(&token)?,
+            &token,
+        )?;
+        serving::NativeRemoteMembershipScope {
+            history,
+            fresh: &own,
+            business,
+            token: &token,
+            candidate: None,
+        }
+        .require_view(own.committed_topology(business)?, &self.backend.node_id)?;
+        let request = NativeRemoteServingRequestV1 {
+            version: 1,
+            manifest: history.manifest.clone(),
+            phase_id: phase,
+            decision_sha256: history.record.decision_sha256().into(),
+            original_operation: Uuid::now_v7(),
+            sequence: 1,
+            operation: NativeRemoteServingOperationV1::ObserveOpen,
+            business,
+            challenge: Uuid::now_v7(),
+            budget_ms: remaining_finite(&token)?.as_millis().clamp(1, 5000) as u64,
+        };
+        let frame = self
+            .backend
+            .transport
+            .request_remote_native_serving(node, &request, &own, business, &token)?;
+        frame.require_live_binding(&request.manifest, phase, &request.decision_sha256)?;
+        token.check()?;
+        process.check()?;
+        Ok(
+            serde_json::json!({"point":frame.point(),"metadata_anchor":frame.metadata_anchor(),
+            "readonly_no_queue_resolution":true,"Serving":false}),
+        )
+    }
     fn drive_finite_remote_serving_step(
         &mut self,
         relocation: crate::distribution::RelocationId,
@@ -105,6 +194,8 @@ impl NativeMetadataControlHost {
                 | NativeRemoteServingOperationV1::ResolvePrepared
                 | NativeRemoteServingOperationV1::PublishBridge
                 | NativeRemoteServingOperationV1::ResolveBridge
+                | NativeRemoteServingOperationV1::Open
+                | NativeRemoteServingOperationV1::ReconcileOpen
         ) {
             return Err(invalid("finite coordinator operation not implemented"));
         }
@@ -112,6 +203,7 @@ impl NativeMetadataControlHost {
             operation,
             NativeRemoteServingOperationV1::ResolvePrepared
                 | NativeRemoteServingOperationV1::ResolveBridge
+                | NativeRemoteServingOperationV1::ReconcileOpen
         );
         let actual_process = self
             .data_process
@@ -145,7 +237,8 @@ impl NativeMetadataControlHost {
                 match (&state.pending,resolve) {
                     (Some(pending),true) if &pending.node==node && matches!((operation,pending.request.operation),
                         (NativeRemoteServingOperationV1::ResolvePrepared,NativeRemoteServingOperationV1::Prepare)
-                        | (NativeRemoteServingOperationV1::ResolveBridge,NativeRemoteServingOperationV1::PublishBridge))=>{},
+                        | (NativeRemoteServingOperationV1::ResolveBridge,NativeRemoteServingOperationV1::PublishBridge)
+                        | (NativeRemoteServingOperationV1::ReconcileOpen,NativeRemoteServingOperationV1::Open))=>{},
                     (Some(_),_)=>return Err(invalid("remote preparation original pending return requires readonly resolution of SAME recipient; no mutation replay")),
                     (None,true)=>return Err(invalid("remote preparation has no original pending request to resolve")),
                     _=>{},
@@ -334,6 +427,11 @@ impl NativeMetadataControlHost {
                 NativeRemoteServingOperationV1::PublishBridge
                     | NativeRemoteServingOperationV1::ResolveBridge
             ) && frame.point().native_bridge_sha256.is_none())
+            || (matches!(
+                operation,
+                NativeRemoteServingOperationV1::Open
+                    | NativeRemoteServingOperationV1::ReconcileOpen
+            ) && frame.point().catalogue_activation_sha256.is_none())
         {
             return Err(invalid(
                 "remote preparation actual protected preparation absent from authenticated return",
@@ -344,7 +442,7 @@ impl NativeMetadataControlHost {
         let actual = serde_json::json!({"node":frame.node_id(),"point":frame.point(),"metadata_anchor":frame.metadata_anchor(),
             "original_request":pending.request,"original_error":pending.original_error,"resolution_error":pending.resolution_error,
             "original_authenticated_return":pending.returned.as_ref().map(|f|f.point()),"owner_poll_errors":pending.poll_errors,"owner_poll_errors_omitted":pending.poll_errors_omitted,
-            "actual_authenticated_return_retained":true,"original_call_relabelled_success":false,"readonly_resolution":resolve,
+            "actual_authenticated_return_retained":true,"original_call_relabelled_success":false,"readonly_resolution":resolve && operation.readonly(),
             "local_quorum_constructed":false,"Serving":false});
         crate::distribution_range_image::bounded_json(&actual, 4 * 1024 * 1024)?;
         let post_business = Uuid::now_v7();

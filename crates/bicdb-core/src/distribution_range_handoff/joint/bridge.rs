@@ -9,6 +9,10 @@ use std::sync::Arc;
 
 mod phase;
 mod preparation_custody;
+#[cfg(feature = "tls-replication")]
+mod remote_open;
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_open::NativeRemoteOpenObservation;
 mod publication;
 pub(crate) use phase::{NativeJointPreparationPhaseQuorum, NativeJointPreparationPhaseRound};
 pub(crate) use preparation_custody::{

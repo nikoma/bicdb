@@ -501,3 +501,35 @@ impl NativeRemoteBridgeReadAdmission<'_> {
         self.local.require_original_remote_participant(sha)
     }
 }
+
+impl NativeJointPreparationCustody {
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn reconcile_remote_open(
+        &self,
+        request: &crate::distribution_native_host::NativeRemoteOpenRequestAdmission,
+        native: &crate::db::NativeJointServingBridgeReceipt,
+    ) -> Result<()> {
+        self.require_original_caller()?;
+        let mut service = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("Open reconcile original service busy"))?;
+        request.reconcile_actual_preparation(&mut service, &self.actual, native)
+    }
+}
+
+#[cfg(test)]
+impl NativeJointPreparationCustody {
+    pub(crate) fn test_remote_open_io(
+        &self,
+        native: &crate::db::NativeJointServingBridgeReceipt,
+        fail: bool,
+    ) -> Result<serde_json::Value> {
+        self.require_original_caller()?;
+        let mut service = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("Open test original service busy"))?;
+        self.actual.test_remote_open_io(&mut service, native, fail)
+    }
+}

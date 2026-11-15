@@ -1,6 +1,7 @@
 //! Explicit finite serialized native-host consumer. No automatic scheduler,
 //! host reconstruction, replacement owner, or authority from reply DATA.
 use super::*;
+mod open;
 use crate::distribution_data::{
     NativeJointServingLease, NativeRemoteServiceBridge, NativeRemoteServicePreparation,
 };
@@ -21,6 +22,12 @@ pub(super) struct NativeRemoteLocalServing {
     closed_lease_transferred: bool,
     preparation: NativeRemoteServicePreparation,
     bridge: NativeRemoteServiceBridge,
+    #[cfg(test)]
+    open_test: Option<u8>,
+    #[cfg(test)]
+    open_cut: Option<serde_json::Value>,
+    activation:
+        Option<Arc<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt>>,
 }
 impl NativeMetadataControlHost {
     /// One explicit actor turn. It operates on this actual &mut host; it does
@@ -74,6 +81,12 @@ impl NativeMetadataControlHost {
         work: &mut NativeRemoteServingIngress,
     ) -> Result<NativeRemoteServingReplyV1> {
         work.require_request()?;
+        if matches!(
+            work.request.operation,
+            NativeRemoteServingOperationV1::Open | NativeRemoteServingOperationV1::ReconcileOpen
+        ) {
+            return self.apply_finite_remote_open(participant, work);
+        }
         if work.request.operation == NativeRemoteServingOperationV1::PublishBridge {
             return self.apply_finite_remote_bridge(participant, work);
         }
@@ -130,6 +143,11 @@ impl NativeMetadataControlHost {
                     closed_lease_transferred,
                     preparation: Default::default(),
                     bridge: Default::default(),
+                    activation: None,
+                    #[cfg(test)]
+                    open_test: None,
+                    #[cfg(test)]
+                    open_cut: None,
                 },
             );
         }
@@ -481,6 +499,7 @@ impl NativeMetadataControlHost {
             .completed()
             .cloned()
             .ok_or_else(|| invalid("remote bridge actual completed native receipt absent"))?;
+        participant.retain_remote_bridge_route(&custody, &native)?;
         // A new actual protected read is not a decoded vote conversion. The
         // underlying bridge receipt was retained before outer request checks.
         let observed = custody.observe_remote_preparation(&backend.transport, &leader, &request)?;
@@ -556,6 +575,7 @@ impl NativeMetadataControlHost {
             .completed()
             .cloned()
             .ok_or_else(|| invalid("remote bridge actual completed native receipt absent"))?;
+        participant.retain_remote_bridge_route(&custody, &native)?;
         // A new actual protected read is not a decoded vote conversion. The
         // underlying bridge receipt was retained before outer request checks.
         let observed = custody.observe_remote_preparation(&backend.transport, &leader, &request)?;

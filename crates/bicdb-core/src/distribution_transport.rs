@@ -5138,6 +5138,50 @@ impl TcpClusterRelocationTransport {
         budget: Duration,
         parent: &CancellationToken,
     ) -> Result<MetadataReadObservation> {
+        self.acquire_metadata_read_observation_with_socket_provenance(
+            metadata_leader,
+            read_request_id,
+            range_id,
+            range_epoch,
+            budget,
+            parent,
+            false,
+        )
+    }
+
+    /// Only the initial protected-genesis first READ opts into sender-local
+    /// socket provenance. This does not retry, renew authority or change the
+    /// public one-shot metadata observation contract.
+    pub(crate) fn acquire_initial_genesis_metadata_read_observation(
+        &self,
+        metadata_leader: &ClusterNodeId,
+        read_request_id: Uuid,
+        range_id: RangeId,
+        range_epoch: u64,
+        budget: Duration,
+        parent: &CancellationToken,
+    ) -> Result<MetadataReadObservation> {
+        self.acquire_metadata_read_observation_with_socket_provenance(
+            metadata_leader,
+            read_request_id,
+            range_id,
+            range_epoch,
+            budget,
+            parent,
+            true,
+        )
+    }
+
+    fn acquire_metadata_read_observation_with_socket_provenance(
+        &self,
+        metadata_leader: &ClusterNodeId,
+        read_request_id: Uuid,
+        range_id: RangeId,
+        range_epoch: u64,
+        budget: Duration,
+        parent: &CancellationToken,
+        initial_genesis_socket_provenance: bool,
+    ) -> Result<MetadataReadObservation> {
         let request_started = Instant::now();
         parent.check()?;
         if budget.is_zero() || budget > Duration::from_secs(5) {
@@ -5167,12 +5211,13 @@ impl TcpClusterRelocationTransport {
                 .map_err(|_| transport_error("metadata acquisition duration overflow"))?,
         };
         request.validate()?;
-        let (response, participant) = self.call_with_read_participant_cancellable(
+        let (response, participant, _) = self.call_with_native_destination_peer_transport(
             &cancellation,
             metadata_leader,
             ClusterDataRequest::MetadataReadAcquire {
                 request: request.clone(),
             },
+            initial_genesis_socket_provenance,
         )?;
         match response {
             ClusterDataResponse::MetadataReadAcquire(response) => {

@@ -535,4 +535,5 @@ mod origin_pre_wal_fault_tests;
 
 mod borrowed_hook_tests;
 
+mod genesis_listener_transition_tests;
 mod listener_transition_tests;

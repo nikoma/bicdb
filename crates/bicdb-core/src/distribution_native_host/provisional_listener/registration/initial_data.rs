@@ -1574,11 +1574,25 @@ impl NativeMetadataControlHost {
     pub(in crate::distribution_native_host) fn test_initial_transition_snapshot(
         &self,
     ) -> serde_json::Value {
+        let ready_ranges: Vec<_> = self
+            .data
+            .as_ref()
+            .and_then(|d| d.enrollment.as_ref())
+            .map(|enrollment| {
+                enrollment
+                    .coordinator
+                    .test_initial_genesis_recovered_epochs()
+                    .keys()
+                    .copied()
+                    .collect()
+            })
+            .unwrap_or_default();
         serde_json::json!({"actual_initial_owner_retained":self.data.is_some(),
             "actual_enrollment_retained":self.data.as_ref().is_some_and(|d|d.enrollment.is_some()),
             "actual_old_listener_drained":self.data.as_ref().is_some_and(|d|d.drained.is_some()),
             "actual_DATA_listener_retained":self.data.as_ref().is_some_and(|d|d.listener.is_some()),
             "actual_APP_published":self.data.as_ref().is_some_and(|d|d.published.load(Ordering::Acquire)),
+            "actual_genesis_ready_ranges":ready_ranges,
             "actual_stopping":self.data.as_ref().map(|d|d.stopping)})
     }
 }

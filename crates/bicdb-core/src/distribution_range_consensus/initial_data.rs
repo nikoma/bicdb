@@ -98,22 +98,107 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
                 .map(|d| d.min(Duration::from_secs(5)))
                 .ok_or(BicDbError::QueryTimedOut)
         };
-        let business = Uuid::now_v7();
-        let first = self
-            .transport
-            .acquire_metadata_read_observation(
-                metadata_leader,
-                business,
-                range.id,
-                range.epoch,
-                remaining()?,
-                parent,
+        // Reject an unbounded caller before any same-owner lock wait.
+        remaining()?;
+        // Retain the actual original open/Store slot before a first READ can
+        // encounter the metadata leader's control-to-DATA listener transition.
+        // Neither a socket failure nor a new READ can replace these owners.
+        let (open, slot) = {
+            let service = loop {
+                parent.check()?;
+                if let Some(service) = self.local_service.try_lock_for(Duration::from_millis(5)) {
+                    break service;
+                }
+            };
+            (
+                service.listener_open_guard(),
+                service.native_replica_listener_store_open_guard(),
             )
-            .map_err(|error| {
-                #[cfg(test)]
-                initial_read_failure("first_metadata", &self.local_node_id, range, parent, &error);
-                error
-            })?;
+        };
+        let require_original = || -> Result<()> {
+            parent.check()?;
+            open.require_live()?;
+            slot.require_live()?;
+            runtime.require_point_read_service(&self.local_service, &self.local_node_id)?;
+            let service = loop {
+                parent.check()?;
+                if let Some(service) = self.local_service.try_lock_for(Duration::from_millis(5)) {
+                    break service;
+                }
+            };
+            let database = service.database();
+            let database = database
+                .try_read()
+                .ok_or_else(|| range_write_error("initial first READ original DB busy"))?;
+            open.require_database(&database)?;
+            if service.native_initial_listener_store_open_id() != slot.id() {
+                return Err(range_write_error(
+                    "initial first READ original Store changed",
+                ));
+            }
+            host.require_for_coordinator(&database, range, self)?;
+            let topology = self
+                .topology
+                .try_read()
+                .ok_or_else(|| range_write_error("initial first READ original routing busy"))?;
+            genesis.require_current(&database, &topology)?;
+            parent.check()
+        };
+        #[cfg(test)]
+        self.transport.test_before_initial_genesis_read(parent)?;
+        let (first, business) = loop {
+            require_original()?;
+            let business = Uuid::now_v7();
+            let actual = self
+                .transport
+                .acquire_initial_genesis_metadata_read_observation(
+                    metadata_leader,
+                    business,
+                    range.id,
+                    range.epoch,
+                    remaining()?,
+                    parent,
+                );
+            #[cfg(test)]
+            self.transport
+                .test_initial_genesis_read_return(&actual, business, range, parent)?;
+            match actual {
+                Ok(first) => {
+                    require_original()?;
+                    break (first, business);
+                }
+                Err(error) => {
+                    #[cfg(test)]
+                    initial_read_failure(
+                        "first_metadata",
+                        &self.local_node_id,
+                        range,
+                        parent,
+                        &error,
+                    );
+                    let transient =
+                        crate::distribution_transport::HotRecoveryPeerFailure::from_error(&error)
+                            .is_some_and(|failure| {
+                                matches!(
+                                    failure.kind(),
+                                    std::io::ErrorKind::ConnectionReset
+                                        | std::io::ErrorKind::ConnectionRefused
+                                        | std::io::ErrorKind::ConnectionAborted
+                                        | std::io::ErrorKind::BrokenPipe
+                                        | std::io::ErrorKind::UnexpectedEof
+                                )
+                            });
+                    if !transient {
+                        return Err(error);
+                    }
+                    require_original()?;
+                    // Pacing and every new authenticated READ consume the SAME
+                    // original absolute action. No native/host install repeats.
+                    std::thread::sleep(Duration::from_millis(2));
+                    parent.check()?;
+                }
+            }
+        };
         {
             let service = loop {
                 parent.check()?;
@@ -218,6 +303,12 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
                 })
             })
             && self.recovered_epochs.lock().get(&range.id) == Some(&range.epoch)
+    }
+    /// Exact stored marker DATA for reached-cut tests; no topology try-read
+    /// can turn contention into a misleading absent-marker observation.
+    #[cfg(test)]
+    pub(crate) fn test_initial_genesis_recovered_epochs(&self) -> BTreeMap<RangeId, u64> {
+        self.recovered_epochs.lock().clone()
     }
 }
 

@@ -459,6 +459,11 @@ impl NativeInitialDataHost {
         let admission = self.admission.as_ref().unwrap();
         admission.require_live()?;
         if self.drained.is_none() {
+            #[cfg(test)]
+            self.old_listener
+                .as_ref()
+                .ok_or_else(|| invalid("actual old INITIAL listener absent"))?
+                .test_before_initial_data_drain(parent)?;
             self.drained = Some(
                 self.old_listener
                     .as_mut()
@@ -1506,5 +1511,42 @@ impl NativeMetadataControlHost {
         );
         admission.require_listener(&data.initial.service, runtime)?;
         parent.check()
+    }
+}
+
+#[cfg(test)]
+impl NativeMetadataControlHost {
+    pub(in crate::distribution_native_host) fn test_initial_listener_transition_controls(
+        &self,
+    ) -> Result<(
+        crate::distribution_transport::InitialTransitionControl,
+        crate::distribution_transport::InitialTransitionControl,
+    )> {
+        if self.data.is_some() || self.controller.is_none() {
+            return Err(invalid(
+                "initial transition hook requires original running pre-DATA owner",
+            ));
+        }
+        // This actual INITIAL factory, service/DB/open and metadata controller
+        // already exist. No host/launch is synthesized from a request DTO.
+        self.backend.initial_data_launch()?;
+        let old = self
+            .listener
+            .as_ref()
+            .ok_or_else(|| invalid("actual original control listener absent"))?;
+        Ok((
+            old.test_initial_transition_control(),
+            self.backend.transport.test_initial_transition_control(),
+        ))
+    }
+    pub(in crate::distribution_native_host) fn test_initial_transition_snapshot(
+        &self,
+    ) -> serde_json::Value {
+        serde_json::json!({"actual_initial_owner_retained":self.data.is_some(),
+            "actual_enrollment_retained":self.data.as_ref().is_some_and(|d|d.enrollment.is_some()),
+            "actual_old_listener_drained":self.data.as_ref().is_some_and(|d|d.drained.is_some()),
+            "actual_DATA_listener_retained":self.data.as_ref().is_some_and(|d|d.listener.is_some()),
+            "actual_APP_published":self.data.as_ref().is_some_and(|d|d.published.load(Ordering::Acquire)),
+            "actual_stopping":self.data.as_ref().map(|d|d.stopping)})
     }
 }

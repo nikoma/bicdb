@@ -3,6 +3,10 @@
 #[cfg(test)]
 mod native_obligation_frame_tests;
 
+#[cfg(test)]
+mod initial_transition;
+#[cfg(test)]
+pub(crate) use initial_transition::InitialTransitionControl;
 mod native_registration;
 pub(crate) use native_registration::NativeMetadataRegistrationIngress;
 use std::collections::{BTreeMap, BTreeSet};
@@ -791,6 +795,8 @@ fn recv_json_frame<T: DeserializeOwned>(
 }
 
 pub struct ClusterDataServerHandle {
+    #[cfg(test)]
+    initial_transition: Arc<initial_transition::Hooks>,
     metadata_ingress: Option<Arc<crate::distribution_data::NativeMetadataIngressRegistration>>,
     local_addr: SocketAddr,
     shutdown: Arc<AtomicBool>,
@@ -881,6 +887,8 @@ impl ClusterDataServerHandle {
     }
 
     pub fn request_shutdown(&self) {
+        #[cfg(test)]
+        self.initial_transition.shutdown();
         if let Some(ingress) = &self.metadata_ingress {
             ingress.revoke();
         }
@@ -1163,6 +1171,10 @@ fn start_cluster_data_server_on_bound_listener(
                 .register_metadata_ingress(metadata, service_store_slot)
         })
         .transpose()?;
+    #[cfg(test)]
+    let initial_transition = Arc::new(initial_transition::Hooks::default());
+    #[cfg(test)]
+    let accept_transition = initial_transition.clone();
     let accept_ingress = metadata_ingress.clone();
     let thread = thread::spawn(move || {
         // The loop owns revocation even if it panics while the outer handle
@@ -1181,7 +1193,11 @@ fn start_cluster_data_server_on_bound_listener(
         if let Some(actual) = &_ingress.0 {
             actual.accept_loop_started();
         }
-        while !thread_shutdown.load(Ordering::SeqCst) {
+        while {
+            #[cfg(test)]
+            accept_transition.before_accept(&thread_shutdown);
+            !thread_shutdown.load(Ordering::SeqCst)
+        } {
             match listener.accept() {
                 Ok((stream, peer)) => {
                     if config.dev_localhost_plaintext && !peer.ip().is_loopback() {
@@ -1218,6 +1234,8 @@ fn start_cluster_data_server_on_bound_listener(
                     // Own the slot BEFORE spawning: if OS thread creation
                     // fails, dropping the closure must not leak drain custody.
                     let active_connection = ActiveConnection(active);
+                    #[cfg(test)]
+                    let worker_transition = accept_transition.clone();
                     thread::spawn(move || {
                         let _active = active_connection;
                         let _ = configure_stream(&stream, &config);
@@ -1255,6 +1273,8 @@ fn start_cluster_data_server_on_bound_listener(
                                     native_mode.as_ref(),
                                     native_metadata_control.as_ref(),
                                     request_deadline,
+                                    #[cfg(test)]
+                                    Some(&worker_transition),
                                 )
                             })
                         } else {
@@ -1278,6 +1298,8 @@ fn start_cluster_data_server_on_bound_listener(
                                 native_mode.as_ref(),
                                 native_metadata_control.as_ref(),
                                 request_deadline,
+                                #[cfg(test)]
+                                Some(&worker_transition),
                             )
                         };
                         if let Err(error) = result {
@@ -1294,8 +1316,12 @@ fn start_cluster_data_server_on_bound_listener(
                 }
             }
         }
+        #[cfg(test)]
+        accept_transition.accept_ended();
     });
     Ok(ClusterDataServerHandle {
+        #[cfg(test)]
+        initial_transition,
         metadata_ingress,
         local_addr,
         shutdown,
@@ -1379,6 +1405,7 @@ fn handle_cluster_data_connection(
         &std::sync::Weak<crate::distribution_native_host::NativeMetadataRegistrationController>,
     >,
     request_deadline: Instant,
+    #[cfg(test)] initial_transition: Option<&initial_transition::Hooks>,
 ) -> Result<()> {
     let request = recv_json_frame::<ClusterDataRequestEnvelope>(stream, config.max_frame_bytes)?;
     let request_id = request.request_id;
@@ -1474,6 +1501,10 @@ fn handle_cluster_data_connection(
             .and_then(|node| node.native_store_birth_v1.as_ref())
             .is_some_and(|birth| birth.writer_enforcement_version() == 1);
         drop(topology_guard);
+        #[cfg(test)]
+        if let Some(hook) = initial_transition {
+            hook.authenticated_host_read(&caller_node_id, &request.request, request_deadline)?;
+        }
         // Refuse an expired actual DB before acquiring service/DB latches.
         // Retaining an outer Arc or a directory lock cannot revive this open.
         local_open.require_live()?;
@@ -4149,6 +4180,8 @@ impl TcpClusterBootstrapClient {
 }
 
 pub struct TcpClusterRelocationTransport {
+    #[cfg(test)]
+    initial_transition: Arc<initial_transition::Hooks>,
     cluster_id: ClusterId,
     caller_node_id: ClusterNodeId,
     topology: Arc<RwLock<ClusterTopology>>,
@@ -4311,6 +4344,8 @@ impl TcpClusterRelocationTransport {
             )?)
         };
         Ok(Self {
+            #[cfg(test)]
+            initial_transition: Arc::new(initial_transition::Hooks::default()),
             cluster_id,
             caller_node_id,
             topology,
@@ -5523,8 +5558,9 @@ impl TcpClusterRelocationTransport {
         )
     }
 
-    // HOT alone opts into typed socket-failure provenance. Its transmitted
-    // request budget is bounded by the actual call child; no longer wire TTL.
+    // Specific actual socket callers opt into failure provenance (HOT and
+    // INITIAL pre-enrollment HostOWN READ). Budgets remain bounded by the
+    // actual call child; this flag grants no native/metadata authority.
     fn call_with_native_destination_peer_transport(
         &self,
         cancellation: &CancellationToken,
@@ -5791,6 +5827,13 @@ impl TcpClusterRelocationTransport {
             )
         })?;
         configure_stream(&stream, &self.config)?;
+        #[cfg(test)]
+        self.initial_transition.connected_host_read(
+            destination_node_id,
+            &envelope.request,
+            cancellation,
+            deadline,
+        )?;
         let exchange = (|| -> Result<_> {
             let pair = if let Some(tls) = self.client_tls.as_ref() {
                 let server_name = server_name_from_address(&address)?;

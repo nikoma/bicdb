@@ -48,19 +48,35 @@ impl TcpClusterRelocationTransport {
         request: &HostMetadataReadAcquireRequest,
         parent: &CancellationToken,
     ) -> Result<AuthenticatedHostMetadataReadReply> {
+        self.request_host_metadata_reply_with_socket_provenance(destination, request, parent, false)
+    }
+    fn request_host_metadata_reply_with_socket_provenance(
+        &self,
+        destination: &ClusterNodeId,
+        request: &HostMetadataReadAcquireRequest,
+        parent: &CancellationToken,
+        initial_read_socket_provenance: bool,
+    ) -> Result<AuthenticatedHostMetadataReadReply> {
         request.validate()?;
         parent.check()?;
         let started = Instant::now();
         let token = parent.child_with_deadline(started + Duration::from_millis(request.budget_ms));
         let deadline = token.deadline().expect("bounded host metadata request");
         self.require_numeric_metadata_destination(destination, &token)?;
-        let (response, peer) = self.call_with_read_participant_cancellable(
-            &token,
-            destination,
-            ClusterDataRequest::HostMetadataReadAcquire {
-                request: request.clone(),
-            },
-        )?;
+        let actual_request = ClusterDataRequest::HostMetadataReadAcquire {
+            request: request.clone(),
+        };
+        let (response, peer) = if initial_read_socket_provenance {
+            self.call_with_native_destination_peer_transport(
+                &token,
+                destination,
+                actual_request,
+                true,
+            )
+            .map(|(reply, peer, _)| (reply, peer))?
+        } else {
+            self.call_with_read_participant_cancellable(&token, destination, actual_request)?
+        };
         token.check()?;
         match response {
             ClusterDataResponse::HostMetadataReadAcquire(response) => {
@@ -86,6 +102,39 @@ impl TcpClusterRelocationTransport {
         budget: Duration,
         parent: &CancellationToken,
     ) -> Result<HostMetadataReadObservation> {
+        self.acquire_host_metadata_observation_with_socket_provenance(
+            metadata_leader,
+            business,
+            budget,
+            parent,
+            false,
+        )
+    }
+    /// INITIAL pre-enrollment READ only. The private socket minter cannot be
+    /// invoked through request DATA, a remote error string, or a native writer.
+    pub(crate) fn acquire_initial_host_metadata_observation(
+        &self,
+        metadata_leader: &ClusterNodeId,
+        business: Uuid,
+        budget: Duration,
+        parent: &CancellationToken,
+    ) -> Result<HostMetadataReadObservation> {
+        self.acquire_host_metadata_observation_with_socket_provenance(
+            metadata_leader,
+            business,
+            budget,
+            parent,
+            true,
+        )
+    }
+    fn acquire_host_metadata_observation_with_socket_provenance(
+        &self,
+        metadata_leader: &ClusterNodeId,
+        business: Uuid,
+        budget: Duration,
+        parent: &CancellationToken,
+        initial_read_socket_provenance: bool,
+    ) -> Result<HostMetadataReadObservation> {
         if business.is_nil() || budget.is_zero() || budget > Duration::from_secs(5) {
             return Err(transport_error(
                 "host metadata acquisition needs a nonnil business and at most five seconds",
@@ -108,7 +157,16 @@ impl TcpClusterRelocationTransport {
                 .unwrap_or(5000)
                 .clamp(1, 5000),
         };
-        let reply = self.request_host_metadata_reply(metadata_leader, &request, &token)?;
+        let reply = if initial_read_socket_provenance {
+            self.request_host_metadata_reply_with_socket_provenance(
+                metadata_leader,
+                &request,
+                &token,
+                true,
+            )?
+        } else {
+            self.request_host_metadata_reply(metadata_leader, &request, &token)?
+        };
         token.check()?;
         HostMetadataReadObservation::from_transport(reply, &request)
     }

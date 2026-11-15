@@ -95,13 +95,8 @@ impl NativeInitialConsensusLaunch {
         retain: impl FnOnce(NativeInitialWriterEnrollment),
     ) -> Result<()> {
         let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
-        let business = Uuid::now_v7();
-        let observed = self.transport.acquire_host_metadata_observation(
-            metadata_leader,
-            business,
-            Duration::from_secs(5),
-            &token,
-        )?;
+        let (observed, business) =
+            self.acquire_initial_enrollment_host_read(metadata_leader, &token)?;
         let topology = observed.committed_topology(business)?.clone();
         self.seed.require_initial_observer_identity(&topology)?;
         self.transport.install_topology(topology)?;
@@ -143,6 +138,92 @@ impl NativeInitialConsensusLaunch {
             metadata_term: term,
             metadata_read_index: read_index,
         });
+        #[cfg(test)]
+        self.transport.test_initial_enrollment_installed();
         token.check()
+    }
+}
+
+impl NativeInitialConsensusLaunch {
+    /// Only the readonly PRE-enrollment exchange repeats. The real original
+    /// launch/service/open/slot and the SAME action token remain mandatory.
+    /// Neither writer enrollment, hook install nor native WAL is in this loop.
+    fn acquire_initial_enrollment_host_read(
+        &self,
+        metadata_leader: &ClusterNodeId,
+        parent: &CancellationToken,
+    ) -> Result<(
+        crate::distribution_consensus::HostMetadataReadObservation,
+        Uuid,
+    )> {
+        parent.check()?;
+        let (open, slot) = {
+            let service = loop {
+                parent.check()?;
+                if let Some(service) = self.service.try_lock_for(Duration::from_millis(5)) {
+                    break service;
+                }
+            };
+            parent.check()?;
+            (
+                service.listener_open_guard(),
+                service.native_replica_listener_store_open_guard(),
+            )
+        };
+        loop {
+            parent.check()?;
+            open.require_live()?;
+            slot.require_live()?;
+            let remaining = parent
+                .deadline()
+                .and_then(|d| d.checked_duration_since(Instant::now()))
+                .filter(|d| !d.is_zero())
+                .ok_or(BicDbError::QueryTimedOut)?;
+            let business = Uuid::now_v7();
+            let actual = self.transport.acquire_initial_host_metadata_observation(
+                metadata_leader,
+                business,
+                remaining.min(Duration::from_secs(5)),
+                parent,
+            );
+            #[cfg(test)]
+            self.transport.test_initial_read_return(&actual, parent);
+            match actual {
+                Ok(observed) => {
+                    parent.check()?;
+                    open.require_live()?;
+                    slot.require_live()?;
+                    // These are the SAME actual service's open/slot refusal
+                    // fences. Existing policy/install validation below still
+                    // checks the actual database; READ success is no writer grant.
+                    return Ok((observed, business));
+                }
+                Err(error) => {
+                    let transient =
+                        crate::distribution_transport::HotRecoveryPeerFailure::from_error(&error)
+                            .is_some_and(|e| {
+                                matches!(
+                                    e.kind(),
+                                    std::io::ErrorKind::ConnectionReset
+                                        | std::io::ErrorKind::ConnectionRefused
+                                        | std::io::ErrorKind::ConnectionAborted
+                                        | std::io::ErrorKind::BrokenPipe
+                                        | std::io::ErrorKind::UnexpectedEof
+                                )
+                            });
+                    if !transient {
+                        return Err(error);
+                    }
+                    parent.check()?;
+                    open.require_live()?;
+                    slot.require_live()?;
+                    // Fresh authenticated READ/new business on the next pass.
+                    // Connect/TLS/read and pacing all consume the original
+                    // absolute action window, never a restarted five seconds.
+                    std::thread::sleep(Duration::from_millis(2));
+                    parent.check()?;
+                }
+            }
+        }
     }
 }

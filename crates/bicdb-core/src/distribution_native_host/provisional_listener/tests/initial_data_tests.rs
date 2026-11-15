@@ -534,3 +534,5 @@ mod hot_recovery_tests;
 mod origin_pre_wal_fault_tests;
 
 mod borrowed_hook_tests;
+
+mod listener_transition_tests;

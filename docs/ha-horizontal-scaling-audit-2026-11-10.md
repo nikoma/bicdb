@@ -17,8 +17,12 @@ Delivered main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff
 Its completed post-merge Tests run43677527718 failed the application-state
 test's final replicated reopen on `Address already in use`. The earlier
 no-listener and standalone queued-job assertions passed; later replicated
-application assertions were not reached. Its native job passed at API level;
-that is not an independently reviewed physical or whole-release qualification.
+application assertions were not reached. Its complete Native log has now been
+independently reconciled: **348 passed / 0 failed / 1 ignored**, across 349
+unique cases. Candidate326 added 51 Native cases, 26 of which failed; a passing
+older job supplies no coverage for those new cases. The single shared failing
+name also has changed exercise code. These remain CI results, not physical or
+whole-release qualification.
 
 Candidate **1.0.520-beta / `326c363477477950f76bdb51fe6425cab85dc362`** passed
 all-target/nondefault compilation, Core, SQL, PGwire/Oracle and Rails checks.

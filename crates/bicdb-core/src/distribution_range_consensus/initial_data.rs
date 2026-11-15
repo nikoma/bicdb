@@ -229,14 +229,50 @@ fn initial_read_failure(
     parent: &CancellationToken,
     error: &BicDbError,
 ) {
-    eprintln!(
+    use std::io::Write as _;
+    // Keep this projection local: host-private protocol helpers do not become
+    // public for logging. Formatting/writing DATA must not replace the error.
+    struct Prefix {
+        text: String,
+        complete: bool,
+    }
+    impl std::fmt::Write for Prefix {
+        fn write_str(&mut self, text: &str) -> std::fmt::Result {
+            let mut end = (4096 - self.text.len()).min(text.len());
+            while !text.is_char_boundary(end) {
+                end -= 1;
+            }
+            self.text.push_str(&text[..end]);
+            self.complete &= end == text.len();
+            Ok(())
+        }
+    }
+    let mut prefix = Prefix {
+        text: String::new(),
+        complete: true,
+    };
+    let formatted = std::fmt::write(&mut prefix, format_args!("{error}")).is_ok();
+    let io_kind = match error {
+        BicDbError::Io(io) => Some(format!("{:?}", io.kind())),
+        _ => None,
+    };
+    let io_os_code = match error {
+        BicDbError::Io(io) => io.raw_os_error(),
+        _ => None,
+    };
+    let event = serde_json::json!({
+        "stage":stage,"node":node,"range":range.id,"epoch":range.epoch,
+        "actual_original_remaining_us":parent.deadline().map(|d|d.saturating_duration_since(Instant::now()).as_micros()),
+        "actual_original_cancelled":parent.is_cancel_requested(),
+        "error_kind":format!("{:?}",std::mem::discriminant(error)),
+        "io_kind":io_kind,"io_os_code":io_os_code,
+        "display_prefix":prefix.text,"prefix_incomplete":!prefix.complete,
+        "display_format_complete":formatted,
+        "diagnostic_only_not_authority_or_no_effect":true,
+    });
+    let _ = writeln!(
+        std::io::stderr().lock(),
         "INITIAL_NATIVE_READ_FAILURE {}",
-        serde_json::json!({
-            "stage":stage,"node":node,"range":range.id,"epoch":range.epoch,
-            "actual_original_remaining_us":parent.deadline().map(|d|d.saturating_duration_since(Instant::now()).as_micros()),
-            "actual_original_cancelled":parent.is_cancel_requested(),
-            "error":crate::distribution_native_host::remote_first::error_data(error),
-            "diagnostic_only_not_authority_or_no_effect":true,
-        })
+        event
     );
 }

@@ -24,7 +24,10 @@ kernel work remain non-preemptible as before.
 Four test-only failure boundaries in the actual native genesis-read path identify
 first metadata acquisition, actual native read-candidate collection, genesis
 comparison and final metadata acquisition. They log the same original error and
-remaining caller allowance. Production error values and protocol operations are
+remaining caller allowance. Projection is local to the read module and stderr
+writes are fallible, so diagnostic IO cannot replace the original error. Failures
+before these calls (including remaining-budget checks) are not newly covered.
+Production error values and protocol operations are
 unchanged. A matching error at a boundary is diagnostic DATA, not proof of no
 effect, rollback, readiness or a lawful mutation retry.
 

@@ -82,3 +82,21 @@ Gzip: 1,960,868 bytes, SHA-256
 Root independently verified these bytes, the failed case line, actual partial
 component evidence and five source pins, receipt
 `5a27a7ff0e95ddf025c5836940b30ee7e26ea661736a43bfb6e0e6146fa26033`.
+
+The final workspace job passed, ending November 15 at 03:37:43 UTC. Its
+corrected schedule test actually passed at raw line 290112; the app-runtime
+target reported 159 passed, zero failed and one ignored at line 290121.
+This supplies runtime evidence for the test-only supervisor drain correction,
+while the overall required run remains **failed because Native failed**.
+
+Complete original capture is frozen: 88 pre-manifest files, eleven lossless
+logs and eight original ZIPs/28 members, with zero missing captures or partials.
+Manifest SHA-256:
+`102acecd5348140ffe1e0dd8cc2308e124e69602b85c991bc96b0dce5d745241`.
+Complete verification SHA-256:
+`f0d7984046360ec61cab952a29b97eafe0df201cabb142e0110b6f1b8dcc659b`.
+Root independently verified every pre-manifest file, all stored/raw log hashes,
+artifact API digest/size/source identity, ZIP CRC and all 28 member hashes,
+plus the exact schedule/target lines, receipt
+`ba3fc24217c7d0c43146c01dc349f90356a7d9b0979536374669901f63bc89f4`.
+The capture process exited normally and was not restarted.

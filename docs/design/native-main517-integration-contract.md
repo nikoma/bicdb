@@ -37,6 +37,20 @@ It does not alter the fixture, production finalizer or original assertions and
 has not been executed. The successful ordinary controls and failed native
 control remain separate classifications.
 
+The later metadata-wait source increment `a792ced94` is now composed separately
+above this checkpoint. It preserves every original source-discovery predicate
+and replaces only two instantaneous metadata-lock failures with waits bounded
+by the same original caller/OWN and sealed metadata version. Its four actual
+source contention/cancel/coupled-expiry controls are unexecuted; see the
+[exact contract](native-source-discovery-original-metadata-wait-9190.md).
+
+The finite remote certification producer still has a known availability
+limitation: whole-topology equality can refuse selected-effect resolution if a
+lawful unrelated metadata change commits before the final observation. Its
+separate correction and membership/Serving interfaces remain under review in
+other source increments. They are not proof that this candidate completes
+automatic relocation or cold recovery.
+
 Two archive-damage controls reached the intended refusal in retained failed
 runs but expected another diagnostic. Their proposed correction accepts only
 the two exact `Cluster` diagnostics emitted by the full preparation check and

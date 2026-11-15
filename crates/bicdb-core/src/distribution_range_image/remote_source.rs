@@ -19,6 +19,8 @@ use std::collections::BTreeMap;
 mod discovery;
 mod export_retirement;
 #[cfg(test)]
+mod frame_metadata_wait_controls;
+#[cfg(test)]
 mod metadata_wait_controls;
 pub(crate) use discovery::{
     ActualNativeSourceDiscovery, NativeSourceDiscoveryOperationV1, NativeSourceDiscoveryReplyV1,
@@ -292,6 +294,9 @@ impl ActualSourceOld {
     }
 }
 pub(crate) struct NativeRemoteImageSourceSession {
+    #[cfg(test)]
+    frame_metadata_wait:
+        std::sync::OnceLock<frame_metadata_wait_controls::FrameMetadataWaitControl>,
     admission: Arc<NativeInitialDataAdmission>,
     runtime: Arc<RangeRecoveryRuntime>,
     service: Arc<Mutex<ClusterDataNodeService>>,
@@ -336,6 +341,8 @@ impl NativeRemoteImageSourceSession {
             old,
             target_attempt,
             source_session: Uuid::now_v7(),
+            #[cfg(test)]
+            frame_metadata_wait: Default::default(),
             original_session: original_session.clone(),
             actual_open: None,
             slot: None,
@@ -594,6 +601,8 @@ impl NativeRemoteImageSourceSession {
             // this mutex is contention, not proof that the selected metadata
             // changed. Keep the original request/OWN bounds while acquiring
             // the same Store, then perform the unchanged freshness check.
+            #[cfg(test)]
+            self.test_before_frame_final_metadata_lock(own, business, parent);
             let metadata = loop {
                 parent.check()?;
                 self.original_session.check()?;
@@ -618,6 +627,8 @@ impl NativeRemoteImageSourceSession {
                 if let Some(metadata) = metadata {
                     break metadata;
                 }
+                #[cfg(test)]
+                self.test_frame_final_metadata_busy(own, business, parent);
             };
             proof.require_current(&metadata)?;
         }
@@ -959,7 +970,10 @@ impl NativeRemoteImageSourceRegistry {
         let mut actual = session
             .try_lock()
             .ok_or_else(|| invalid("source image operation already active"))?;
-        actual.observe_frame(target, request, &own, request.business, &token)
+        let result = actual.observe_frame(target, request, &own, request.business, &token);
+        #[cfg(test)]
+        actual.test_record_frame_wait_return(&result, request, &own, request.business, &token);
+        result
     }
 }
 

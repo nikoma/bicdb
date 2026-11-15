@@ -15,6 +15,7 @@ mod native_handoff_step_tests;
 mod remote_backend_tests;
 mod source_discovery_tests;
 mod source_export_retirement_tests;
+mod source_frame_metadata_wait_tests;
 pub(super) mod two_range_stall_tests;
 
 #[derive(Clone, Copy, Debug)]
@@ -65,6 +66,9 @@ pub(super) enum SourceCase {
     SourceDiscoveryPlanRevoked,
     SourceDiscoveryProcessRevoked,
     Frames,
+    FrameFinalMetadataWait,
+    FrameFinalMetadataCallerCancel,
+    FrameFinalMetadataScopeExpiry,
     CancelAfterIssuedFrame,
     RevokeBeforeNativeWal,
     RemoteOldFrames,
@@ -1570,7 +1574,19 @@ pub(super) fn exercise(
         process.check().unwrap();
         assert_eq!(manifest.range_index, 1);
         assert_ne!(manifest.source_reserved_b, 0);
-        let actual = frame(target, &manifest, Op::Manifest, output, &mut journal).unwrap();
+        let actual = if source_frame_metadata_wait_tests::is_case(case) {
+            source_frame_metadata_wait_tests::exercise(
+                case,
+                &retained,
+                target,
+                &manifest,
+                &metadata[source],
+                output,
+                &mut journal,
+            )
+        } else {
+            frame(target, &manifest, Op::Manifest, output, &mut journal).unwrap()
+        };
         assert!(matches!(&actual.reply().payload, Payload::Manifest(_)));
         if matches!(case, SourceCase::CancelAfterIssuedFrame) {
             let issued = serde_json::to_vec(actual.reply()).unwrap();

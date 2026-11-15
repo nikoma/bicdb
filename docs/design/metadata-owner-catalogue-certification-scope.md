@@ -49,7 +49,11 @@ owner/open/store, and current protected metadata leadership. The actual typed
 proposal return remains retained before diagnostic allocations and postchecks.
 Unknown proposal/persistence outcomes, whole-candidate postcommit comparison,
 and existing pending-entry reconciliation remain strict; this component does
-not solve their separate unrelated-head/recovery limits. No native request,
+not solve their separate unrelated-head/recovery limits. The original protected
+publication version is retained across collection: a real unrelated metadata
+LOAD/version advance fails this scope closed. This does not establish bounded
+forward progress under ongoing metadata work, heartbeats or global-topology
+drift. There is no automatic controller/convergence or Serving claim. No native request,
 receipt, failed fsync or old response is relabelled successful.
 
 ## Actual control definitions
@@ -65,7 +69,12 @@ Before the ordinary certification call the new case requires:
   refusal, while the actual range leader's original plan and the new readonly
   scope have the same immutable comparison checksum.
 * A real other host's protected point/open is refused; a dedicated original
-  scope request's cancellation and natural actual HostOWN expiry are refused.
+  scope request's cancellation is refused. Natural coupled original-scope
+  expiry runs LAST: the actual HostOWN and outer windows may expire together.
+  Both actual clocks/refusal results are recorded, and the original scope must
+  return `QueryTimedOut`. OWN-only expiry is not tested. No later scope,
+  request, proposal or effect uses that spent token. Returned test diagnostic
+  DATA is distinct from a completed production action or an expired grant.
   No shorter test TTL or replacement original deadline is introduced.
 * A changed, rechecksummed MF nonce is refused against its exact original
   source OLD record.

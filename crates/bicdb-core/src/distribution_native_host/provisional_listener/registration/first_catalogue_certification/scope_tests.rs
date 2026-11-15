@@ -172,21 +172,6 @@ impl NativeMetadataControlHost {
         if !matches!(denied, Err(BicDbError::QueryCanceled)) {
             return Err(invalid("actual original scope cancellation not refused"));
         }
-        // Natural actual HostOWN deadline, not a rewritten shorter test TTL.
-        let expired = issue(self, observed(self, &token)?, mf, &token)?;
-        while expired.test_original_request_live().is_ok() {
-            token.check()?;
-            std::thread::sleep(Duration::from_millis(2));
-        }
-        let denied = expired.require_live();
-        token.check()?;
-        note(
-            &mut events,
-            serde_json::json!({"cut":"actual_original_HostOWN_expired","ok":denied.is_ok(),"error":denied.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),"outer_action_live":true}),
-        );
-        if !matches!(denied, Err(BicDbError::QueryTimedOut)) {
-            return Err(invalid("actual original scope expiry not reached"));
-        }
         // Wrong immutable source close DATA cannot stand in for exact ancestry.
         let good = issue(self, observed(self, &token)?, mf, &token)?;
         let mut changed = mf.clone();
@@ -270,6 +255,43 @@ impl NativeMetadataControlHost {
             ));
         }
         token.check()?;
+        // LAST: actual original HostOWN and outer windows may coincide. No
+        // shorter independent OWN TTL is assumed, and no later operation uses
+        // this original token after natural expiry. Only diagnostic DATA exits.
+        let actual = observed(self, &token)?;
+        let entered = Instant::now();
+        let own_deadline = actual.0.deadline();
+        let own_context = actual.0.context_id();
+        let outer_deadline = token.deadline();
+        let own_remaining_us = own_deadline.saturating_duration_since(entered).as_micros();
+        let outer_remaining_us =
+            outer_deadline.map(|d| d.saturating_duration_since(entered).as_micros());
+        let expired = issue(self, actual, mf, &token)?;
+        while expired.test_original_request_live().is_ok() {
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        let denied = expired.require_live();
+        let outer_denied = token.check();
+        let returned = Instant::now();
+        note(
+            &mut events,
+            serde_json::json!({"cut":"coupled_original_scope_expiry_LAST",
+            "original_scope_result":denied.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),
+            "outer_result":outer_denied.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),
+            "original_OWN_context":own_context,"original_OWN_remaining_us_at_issuance":own_remaining_us,
+            "outer_remaining_us_at_issuance":outer_remaining_us,"own_deadline_equals_outer":outer_deadline==Some(own_deadline),
+            "OWN_deadline_reached_at_diagnostic":returned>=own_deadline,
+            "outer_deadline_reached_at_diagnostic":outer_deadline.map(|d|returned>=d),
+            "elapsed_us":returned.saturating_duration_since(entered).as_micros(),
+            "OWN_only_expiry_tested":false,"production_action_success":false,"expired_scope_reused":false}),
+        );
+        if !matches!(denied, Err(BicDbError::QueryTimedOut)) {
+            return Err(invalid(
+                "actual coupled original-scope QueryTimedOut refusal not reached",
+            ));
+        }
+        // No post-expiry currentness check, new scope, network request,
+        // metadata proposal or native effect. This is test diagnostic DATA.
         Ok(
             serde_json::json!({"actual_control_events":events,"all_actual_refusals_reached":true,"actual_distinct_purpose_hash_match":exact,"metadata_scope_minted_native_grant":false,"opaque_frame_fabricated":false,"source_definition_NOT_TESTED":true}),
         )

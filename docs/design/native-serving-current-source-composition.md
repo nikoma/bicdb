@@ -1,6 +1,6 @@
 # Native serving and recovery: isolated source composition
 
-This is an unpublished source composition, not an HA acceptance result. It
+This is a source-composition checkpoint, not an HA acceptance result. It
 contains current public candidate `6de646beb603accf39358017d8e0c83c39c741b1`
 and additional finite native serving/recovery work. Source6de's compilation,
 PGwire and Rails passes do not execute or qualify these additions. No Cargo
@@ -22,6 +22,7 @@ composition. The original failed Azure evidence remains unchanged.
 | Remote metadata-owner activation | `15a453fb57797cddedc4c99f704a01858d42fa67` corrected by `7d46e9eef499dea6765ed45858970d8f679b2849` | Actual metadata owner collects all pinned released frames, builds a distinct non-Clone proof and proposes only the matching activation record. Retirement identity comes from the original certified sole OLD-minus-NEW member, independently of snapshot donor. Source-reviewed only; not automatic completion. |
 | First genesis metadata read continuation | `fc517d70c0d7508db1abfaaec755ab6d38bd2779` corrected by `e83eeed3e7b9d98772c1113fc3104f427509e10f` | Only the actual first INITIAL `MetadataReadAcquire` retries locally typed socket failures within the original finite parent, revalidating the same open/Store/host/genesis/range. Three genuine shutdown/rebind/cancel/expiry definitions remain unexecuted. Public metadata API and final-MQ tail are unchanged. |
 | INITIAL dispatcher publication contention | `73a4bd9cf4a5cc0d229ea9794aeb2a4bf7ac9720`, routing correction `b1fcfa750` and documentation `988973fa3` | Guard-free INITIAL publication uses the original finite parent for service/DB/routing/binding contention; generic immediate callers remain unchanged. Three actual already-published service-held component definitions remain unexecuted; first-publication fault acceptance is still open. |
+| Passive policy/retirement diagnostics | `ceced59da` with corrections through `c47f6bced1e391b70072b2fd18f70bc604da892c` | Test-only actual stage/clock/native-state observations preserve original production operations, errors and uncertainty. Error formatting is deferred until root-local guards unwind; latest issued XID survives event truncation. No timeout cause, timing optimization or executed measurement is claimed. |
 | Current correction baseline | `6de646beb603accf39358017d8e0c83c39c741b1` | Includes all-worker INITIAL diagnostics, Open validation reduction, FIRST same-OWN wait and backup expectation correction. Its separate CI evidence remains pinned in the regression findings. |
 
 The source-only composition commits are `63a24bcee` (local policy),
@@ -51,6 +52,14 @@ becomes Strong-read readiness.
 The four documentation conflicts retain the newer complete source7c failed-run
 evidence. Later exact source6de checkpoints remain separate; their CI passes are
 not inherited by this composition. Historical source and artifacts are intact.
+
+The [passive diagnostic source](native-first-policy-passive-clock-diagnostics.md)
+targets the still-unresolved original Registered first-policy helper and LOCAL
+OLD-observation retirement. The added remote local-policy/Joined continuation
+does not establish closure of those failures. The next normal CI execution
+must retain each original result and actual stage/deadline data before a causal
+optimization is proposed. Production source projection is a static check, not
+a compiler or runtime result.
 
 ## Required acceptance remains open
 

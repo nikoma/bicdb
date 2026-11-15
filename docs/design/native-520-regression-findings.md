@@ -68,16 +68,16 @@ its own version, commit and tested tree; this run is not an inherited pass.
 | --- | --- | --- |
 | First local HOT catalogue Open | Failed | All 21 ran out of original proof time before the final local native scope; twenty final foreign sweeps began with 87–222 ms and consumed 94,470–297,515 microseconds. Test the [combined full domain validation](native-hot-open-combined-domain-7e99.md) under the unchanged 1500 ms listener window and original final fault/SDK assertions |
 | FIRST service/maintenance/status contention | Failed | Hold the actual service or same maintenance State; require finite original-caller continuation, cancellation and refusal on expiry. A completed Open must not be replayed merely to obtain final status |
-| Two cross-protocol cases' later SDK append | Failed | Actual range policy is epoch 1 while the committed learner allocation requires epoch 2. Test a separately verified same-worker policy continuation with unchanged SDK calls; do not replace the writer, relax exact epoch checks or treat registry refresh as readiness |
+| Two cross-protocol cases' later SDK append | Failed | Actual range policy is epoch 1 while the committed learner allocation requires epoch 2. Test the [same-worker first-allocation policy continuation](native-live-allocation-first-lane-source-unit.md) with unchanged SDK calls; do not replace the writer, relax exact epoch checks or treat registry refresh as readiness |
 | Metadata probe attempts exhausted rapidly | Failed | Retain actual errors and test [same-context paced real-TLS retries](native-metadata-probe-exhaustion-7e99.md). The original listener-reset cause remains inconclusive |
 | Final-WAL test compares numeric XID with boolean | Failed | Require the actual [protected committed XID](native-7e99-first-final-xid-control.md); preserve all later fault, denial and SDK assertions |
 | Remote bridge RPC deadlines and absent native attempt | Failed | Use the [test-only phase diagnostics](native-remote-bridge-budget-evidence-7e99.md) for actual ALL-prepared collection, post-ALL local observation and native entry under the original request. The wait fixes do not establish closure; an intended native fault not reached is not a passed control |
-| Catalogue intervening-IO forensic continuation | Failed | Retain original IO uncertainty and diagnostic refusal separately; reproduce the exact native-owner denial before changing a recovery path |
+| Catalogue intervening-IO forensic continuation | Failed | Retain original IO uncertainty and diagnostic refusal separately; execute the [retained uncertain test-arm correction](native-7e99-catalogue-uncertain-control-arming.md) without weakening production getters |
 | Relationship of these failures to the original Azure unreadable ACKs | Inconclusive | No retained evidence establishes the same cause, consistency mode or restoration event |
 | Corrective runtime source, complete rebalance and physical qualification | Not tested after correction | Source review and formatting are not compilation, runtime acceptance or physical evidence |
 
-Private corrective work is being composed separately from this immutable failed
-run. Removing repeated observations, waiting under an original finite caller,
+The [runtime source composition](native-7e99-runtime-fix-composition.md) is kept
+separate from this immutable failed run. Removing repeated observations, waiting under an original finite caller,
 adding socket pacing and fixing an incorrect assertion do not by themselves
 prove the original full native cases now pass. Unknown native IO remains
 unknown; no proof window, quorum, original assertion or production gate is

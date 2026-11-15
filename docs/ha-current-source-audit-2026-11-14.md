@@ -1,5 +1,9 @@
 # HA and horizontal scaling: evidence checkpoint, November 14, 2026
 
+The [private current-main integration checkpoint](design/native-main517-integration-contract.md)
+records source changes and controls awaiting runtime validation. Its inherited
+package label and source checks are not delivered-main or qualification results.
+
 Latest delivered-main observation, November 15 02:13 UTC:
 **1.0.517-beta**, `bde74650c40934096e1cc6c6e75a3ea3c4643cf4`, merged through
 [PR206](https://github.com/nikoma/bicdb/pull/206). Its tree

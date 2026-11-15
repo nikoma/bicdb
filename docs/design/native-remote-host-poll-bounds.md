@@ -36,7 +36,8 @@ FIRST/native decision, catalogue certification and frozen membership:
   original authorities remain live.
 
 Both require the original server deadline to remain unchanged, the original
-server not to be canceled, exact actor/effect errors, a healthy actual native
+server not to be canceled, exact typed remote denial body and actor/effect
+errors, a healthy actual native
 owner, unchanged full native/WAL/catalogue observations and no new preparation
 continuation. Failure to reach the actual cut is a failure, not a passing skip.
 The existing helper uses a distinct five-second poll child for old cases, whose

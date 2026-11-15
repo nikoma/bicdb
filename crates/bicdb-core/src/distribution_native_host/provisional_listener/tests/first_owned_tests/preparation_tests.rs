@@ -132,11 +132,18 @@ pub(super) fn exercise(
         let actual_error = first
             .as_ref()
             .err()
-            .expect("original actual Prepare must refuse its ended actor")
-            .to_string();
+            .expect("original actual Prepare must refuse its ended actor");
+        // The actual server maps the handler error to this RPC envelope;
+        // the pinned client returns Cluster(body) without another wrapper.
+        // A caller timeout, setup refusal or unrelated substring cannot pass.
+        let expected_body = format!(
+            "cluster node {} rejected RPC cluster_data_operation_failed: {}",
+            node(4),
+            expected
+        );
         assert!(
-            actual_error.contains(&expected),
-            "expected actual actor failure, got {actual_error}"
+            matches!(actual_error, BicDbError::Cluster(body) if body == &expected_body),
+            "required actual actor denial was not delivered: {actual_error:?}"
         );
         let cut = &after["memory_before_storage"]["actual_host_poll_cut"];
         assert_eq!(cut["fired"], 1);

@@ -1,10 +1,16 @@
 # Offline verification and external collection for the stock SDK ledger
 
 This directory contains the format verifier, a read-only cross-run reconciliation
-plan generator/checker, and external receipt collection/controller tooling. The
-Rust producer and its seven shared parser controls have not been compiled or
-executed at this checkpoint. Source availability does not establish a working
-SDK client, database durability, HA, consistency or scale-out.
+plan generator/checker, and external receipt collection/controller tooling.
+The normal Core `native_external_ledger_receipts` integration target executed
+all seven shared Rust parser controls at source
+`2d379154a67eca6d6ed5f8f9b5dbe8d7a9c987bd` (1.0.516-beta): **7 passed, 0 failed**.
+See the [source-pinned CI result and limits](../../../docs/design/native-ledger-2d379-failed-acceptance.md).
+This supersedes the original checkpoint's uncompiled-parser status. It does
+not execute the stock SDK workload or external collection against BicDB.
+Source availability and parser tests do not establish a working end-to-end
+SDK client, database durability, HA, consistency or scale-out. Later candidate
+compilation and runtime results must retain their own source identities.
 
 The original producer source was
 `b44064c2bf1b22712e5f30d2031aa5d58e907e44`, based on the 1.0.512-beta candidate

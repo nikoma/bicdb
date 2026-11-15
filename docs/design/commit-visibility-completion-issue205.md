@@ -1,7 +1,10 @@
 # Commit visibility completion: issue 205 source proposal
 
-This unversioned proposal starts at `1fcfdc3adf7e38422173e072e6fec4ad56e48188`.
-It is **not compiled, executed, merged, or qualified**. The baseline A/B schedule
+This work starts at `1fcfdc3adf7e38422173e072e6fec4ad56e48188`. Reviewed source
+`526543fd481e47d09d3af6de16ebc1fe46f44d30` is integrated into the **1.0.517-beta
+candidate**, on runtime base `881087806b3a5a9792b3e0ba46ba1ba1f2dd0617` and
+ledger source `bb33a0dcf948de053931b691fa6260e5bfa74c5b`. At candidate preparation
+the new work is **not compiled, executed, merged, or qualified**. The baseline A/B schedule
 in [issue 205](https://github.com/nikoma/bicdb/issues/205) is a source-derived
 counterexample to the old completion contract, not an executed loss report.
 The accompanying JSON preserves the earlier design and consumer-map distinctions.
@@ -190,6 +193,6 @@ worker processes another actual job at the same requested limit of one, then
 checks both complete vectors/indexes and ordinary reopen. No local Rust execution
 has occurred.
 
-All earlier design notes and frozen PR203/204 evidence remain unchanged. This
-proposal assigns no source version, built binary, release, deployment or complete
-operator/controller/cold-recovery status.
+All earlier design notes and frozen PR203/204 evidence remain unchanged. The
+candidate source version does not establish a built binary, published release,
+deployment or complete operator/controller/cold-recovery status.

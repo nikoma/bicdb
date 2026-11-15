@@ -316,7 +316,7 @@ pub(super) fn exercise(
     )
     .unwrap();
     let published = control.joined_data_status().unwrap();
-    if matches!(
+    let recovered_survivor = if matches!(
         case,
         SourceCase::TargetHotDataFollower | SourceCase::TargetHotDataFollowerApplyingGuard
     ) {
@@ -330,20 +330,6 @@ pub(super) fn exercise(
         let leader = (0..4)
             .find(|i| node(*i) == data.activation_range().leader)
             .expect("activation leader is a surviving original member");
-        let recovered = controls[leader]
-            .recover_initial_data_leadership(&budget(5000))
-            .unwrap();
-        assert!(recovered >= 1, "surviving leader recovered no range");
-    }
-    let applying_probe = if matches!(
-        case,
-        SourceCase::TargetHotDataFollower | SourceCase::TargetHotDataFollowerApplyingGuard
-    ) {
-        // Genuine retained surviving leader, not the target/follower claiming
-        // leader readiness. This API still requires its actual writer/quorum.
-        let leader = (0..4)
-            .find(|i| node(*i) == data.activation_range().leader)
-            .unwrap();
         let recovered = operation(
             output,
             &mut phase_ledger,
@@ -351,6 +337,15 @@ pub(super) fn exercise(
             || controls[leader].recover_initial_data_leadership(&budget(5000)),
         )
         .unwrap();
+        assert!(recovered >= 1, "surviving leader recovered no range");
+        Some((leader, recovered))
+    } else {
+        None
+    };
+    let applying_probe = if let Some((leader, recovered)) = recovered_survivor {
+        // Genuine retained surviving leader, not the target/follower claiming
+        // leader readiness. Retain the actual first recovery result: a second
+        // idempotent pass correctly finds no new epoch to recover.
         assert!(
             recovered >= 1,
             "actual surviving leader recovered no activation range"

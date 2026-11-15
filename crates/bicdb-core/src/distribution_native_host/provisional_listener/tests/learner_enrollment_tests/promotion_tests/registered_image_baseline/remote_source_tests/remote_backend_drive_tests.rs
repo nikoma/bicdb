@@ -1667,4 +1667,44 @@ fn whole_move(
         .unwrap();
     assert!(commands["pending"].is_null(), "{commands}");
     assert_eq!(commands["done"].as_array().unwrap().len(), 2, "{commands}");
+    // The finished handoff no longer occupies a member's step table: what a
+    // member's own committed metadata shows finished is released, and what
+    // it shows unfinished (the metadata before the move) is kept.
+    let cleaned = hosts.committed_topology().unwrap();
+    for member in &new {
+        let i = index_of(member);
+        let (unfinished, finished) = if i == 4 {
+            assert!(target_control
+                .test_registered_bridge_publication(range.id)
+                .unwrap()
+                .is_some());
+            (
+                target_control
+                    .test_registered_release_finished_bridge_steps(&pending)
+                    .unwrap(),
+                target_control
+                    .test_registered_release_finished_bridge_steps(&cleaned)
+                    .unwrap(),
+            )
+        } else {
+            assert!(controls[i]
+                .test_initial_bridge_publication(range.id)
+                .unwrap()
+                .is_some());
+            (
+                controls[i]
+                    .test_initial_release_finished_bridge_steps(&pending)
+                    .unwrap(),
+                controls[i]
+                    .test_initial_release_finished_bridge_steps(&cleaned)
+                    .unwrap(),
+            )
+        };
+        assert_eq!(
+            unfinished,
+            [range.id],
+            "{member} released an unfinished handoff"
+        );
+        assert!(finished.is_empty(), "{member} kept a finished handoff");
+    }
 }

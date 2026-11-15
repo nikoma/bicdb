@@ -5,9 +5,10 @@ use super::*;
 use crate::distribution_consensus::MetadataReadParticipant;
 use crate::distribution_data::NativeJointServingLease;
 use crate::distribution_native_host::provisional_listener::registration::bridge_step::{
-    accept_member_host_command, acquire_bridge_step_own, bridge_reply, observe_bridge_phase,
-    open_member_bridge, publish_member_bridge, release_member_bridge, retained_prepare_step,
-    retire_member_old_custody, BridgeStepOwn, NativeBridgeHostCommand, NativeBridgeMemberSteps,
+    accept_member_host_command, acquire_bridge_step_own, bridge_reply, handoff_finished,
+    observe_bridge_phase, open_member_bridge, publish_member_bridge, release_member_bridge,
+    require_committed_bridge_decision, retained_prepare_step, retire_member_old_custody,
+    BridgeStepOwn, NativeBridgeHostCommand, NativeBridgeMemberSteps,
 };
 use crate::distribution_range_handoff::{
     NativeJointHandoffStepOperationV1 as StepOperation, NativeJointHandoffStepOutcomeV1,
@@ -127,13 +128,32 @@ impl NativeRegisteredReplicaAdmission {
                 },
                 token,
             )?,
+            // The added member's counterpart of a survivor's OLD custody:
+            // its participation custody of a remote decision round, which
+            // keeps a reference to the freeze its release must own alone.
             StepOperation::BridgeRelease { .. } => release_member_bridge(
                 &steps,
                 &backend.provider,
                 &backend.transport,
                 request,
                 fresh,
-                &|| Ok(()),
+                &|| {
+                    let owner = self
+                        .joint_targets
+                        .upgrade()
+                        .ok_or_else(|| invalid("joint bridge step original owner table ended"))?
+                        .try_lock()
+                        .ok_or_else(|| invalid("joint bridge step owner table busy"))?
+                        .get(&request.range_id)
+                        .cloned();
+                    match owner.map(|owner| owner.remote_decision_custody_remaining()) {
+                        Some(Err(error)) => Err(error),
+                        Some(Ok(Some(remaining))) => Err(invalid(&format!(
+                            "joint bridge release refused: this member still retains decision participation custody ({remaining})"
+                        ))),
+                        Some(Ok(None)) | None => Ok(()),
+                    }
+                },
                 token,
             )?,
             StepOperation::SourceRetire { .. } => {
@@ -194,8 +214,13 @@ impl NativeRegisteredReplicaAdmission {
     ) -> Result<(NativeJointHandoffStepOutcomeV1, (u64, u64, Uuid))> {
         let range = request.range_id;
         let anchor = fresh.anchor;
+        // What this member's own fresh metadata shows finished is released
+        // first and never counts against the capacity.
+        let own_topology = fresh.own.committed_topology(fresh.business)?;
+        steps.release_finished(own_topology)?;
+        let finished = handoff_finished(own_topology, request.relocation_id);
         let mut held = steps.hold()?;
-        let step = retained_prepare_step(&mut held, request)?;
+        let step = retained_prepare_step(&mut held, request, finished)?;
         if let Some(custody) = step.custody() {
             request.require_decision(custody.data())?;
             return Ok((step.prepare_outcome(Stage::Complete)?, anchor));
@@ -331,12 +356,12 @@ impl NativeMetadataControlHost {
         token: &CancellationToken,
     ) -> Result<()> {
         let range = command.request.range_id;
-        let release = self
+        let (release, generation) = self
             .replica
             .as_ref()
             .ok_or_else(|| invalid("actual Registered receiver absent"))?
             .bridge_steps
-            .released_member(range)?;
+            .released_member_generation(range)?;
         // The decision this member itself protected, never request DATA.
         command.request.require_decision(release.data())?;
         let transport = self.backend.transport.clone();
@@ -356,7 +381,17 @@ impl NativeMetadataControlHost {
         let (admission, observed) =
             release.acquire_remote_writer_policy(&transport, &leader, &own, business, token)?;
         self.install_registered_serving_data_policy(range, Arc::new(admission), token)?;
-        release.confirm_remote_release_second_window(&observed, &transport, &leader, token)?;
+        // The same rule a surviving member applies before it reports its
+        // policy: the generation this member's own post-policy observation
+        // sees armed is the one its confirmed release retained. Otherwise
+        // the command is retained as failed and never as done.
+        let after =
+            release.confirm_remote_release_second_window(&observed, &transport, &leader, token)?;
+        if after != generation {
+            return Err(invalid(
+                "joint writer policy second window: this member's armed generation differs from its confirmed release",
+            ));
+        }
         token.check()
     }
 
@@ -368,13 +403,50 @@ impl NativeMetadataControlHost {
         command: &NativeBridgeHostCommand,
         token: &CancellationToken,
     ) -> Result<u64> {
-        let release = self
+        let range = command.request.range_id;
+        let receiver = self
             .replica
             .as_ref()
-            .ok_or_else(|| invalid("actual Registered receiver absent"))?
-            .bridge_steps
-            .released_member(command.request.range_id)?;
+            .ok_or_else(|| invalid("actual Registered receiver absent"))?;
+        let release = receiver.bridge_steps.released_member(range)?;
+        // The decision this member itself protected, never request DATA.
         command.request.require_decision(release.data())?;
+        let commands = receiver.host_commands.clone();
+        // The command was authorised when it was accepted; it runs later, on
+        // this thread. At execution this member takes its OWN fresh
+        // committed metadata and requires the same committed decision again:
+        // relocation, session, nonce, decision digest, certified scope, a
+        // stage at or after the final membership, and this member a voter.
+        let transport = self.backend.transport.clone();
+        let leader = self
+            .backend
+            .lock_metadata(token)?
+            .status()
+            .leader_id
+            .ok_or_else(|| invalid("joint target serve metadata leader unknown"))?;
+        let business = Uuid::now_v7();
+        let own = transport.acquire_host_metadata_observation(
+            &leader,
+            business,
+            Duration::from_secs(5),
+            token,
+        )?;
+        let local = transport.local_metadata_read_participant();
+        require_committed_bridge_decision(
+            own.committed_topology(business)?,
+            local.node_id(),
+            &command.request,
+        )
+        .map_err(|error| invalid(&format!("joint target serve refused at execution: {error}")))?;
+        // The writer policy this host retained as confirmed is still the one
+        // of exactly that decision.
+        if !commands.writer_policy_done(range, release.data().checksum_sha256()) {
+            return Err(invalid(
+                "joint target serve refused at execution: this member holds no confirmed writer policy of the committed decision",
+            ));
+        }
+        own.require_live_request(business)?;
+        drop(own);
         self.open_registered_joined_data(token)?;
         let recovered = self.publish_joined_data(token)?;
         token.check()?;
@@ -384,6 +456,28 @@ impl NativeMetadataControlHost {
 
 #[cfg(test)]
 impl NativeMetadataControlHost {
+    /// The binding every bridge step and the target's serve command at
+    /// execution apply to a member's own committed metadata.
+    pub(crate) fn test_require_committed_bridge_decision(
+        topology: &ClusterTopology,
+        local: &ClusterNodeId,
+        request: &NativeJointHandoffStepRequestV1,
+    ) -> Result<()> {
+        require_committed_bridge_decision(topology, local, request).map(|_| ())
+    }
+    /// Release what `own_topology` shows finished, as the next preparation
+    /// of this original receiver does; returns the ranges still retained.
+    pub(crate) fn test_registered_release_finished_bridge_steps(
+        &self,
+        own_topology: &ClusterTopology,
+    ) -> Result<Vec<crate::RangeId>> {
+        let receiver = self
+            .replica
+            .as_ref()
+            .ok_or_else(|| invalid("actual Registered receiver absent"))?;
+        receiver.bridge_steps.release_finished(own_topology)?;
+        receiver.bridge_steps.test_retained_ranges()
+    }
     /// What the host command slot of this original receiver retains.
     pub(crate) fn test_registered_bridge_host_commands(&self) -> Result<serde_json::Value> {
         Ok(self

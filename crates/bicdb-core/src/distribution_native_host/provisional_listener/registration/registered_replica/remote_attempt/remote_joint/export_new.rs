@@ -299,8 +299,10 @@ impl NativeRegisteredRemoteJointOwner {
     /// Only custody whose native pin the decision preparation already handed
     /// off is ended, and only under this member's own proof that every final
     /// member is durably open and after its own release continuation took
-    /// the freeze. Custody that still holds a pin is left exactly as it is;
-    /// the release then refuses by its own unchanged check. The protected
+    /// the freeze. Custody that still holds a pin is left exactly as it is
+    /// and REPORTED: the call then fails naming what remains, so the caller
+    /// never reads "retired" while this member's release would still refuse
+    /// by its own unchanged check. Nothing is dropped by force. The protected
     /// native decision record is untouched, no freeze is released and no
     /// new participant can be created afterwards (its creation needs the
     /// freeze this owner no longer holds). Absent custody is success.
@@ -346,12 +348,33 @@ impl NativeRegisteredRemoteJointOwner {
         } else {
             None
         };
+        let remaining = remaining_decision_custody(participant.is_some(), export.is_some());
         drop(export);
         drop(participant);
         // The real drops happen outside both custody latches.
         drop(ended_export);
         drop(ended_participant);
-        Ok(())
+        match remaining {
+            None => Ok(()),
+            Some(remaining) => Err(invalid(&format!(
+                "Registered decision custody was not retired and still holds this member's freeze: {remaining}; nothing was dropped by force and the release stays refused"
+            ))),
+        }
+    }
+    /// What this added member still retains of its participation custody of
+    /// a remote decision round; `None` when nothing remains. Read-only.
+    pub(crate) fn remote_decision_custody_remaining(&self) -> Result<Option<&'static str>> {
+        let participant = self
+            .remote_new
+            .try_lock()
+            .ok_or_else(|| invalid("remote NEW original Registered participant busy"))?
+            .is_some();
+        let export = self
+            .export_new
+            .try_lock()
+            .ok_or_else(|| invalid("Registered original export pin custody busy"))?
+            .is_some();
+        Ok(remaining_decision_custody(participant, export))
     }
     pub(crate) fn handoff_remote_new_export_pin(
         &self,
@@ -375,5 +398,17 @@ impl NativeRegisteredRemoteJointOwner {
         drop(retained);
         drop(dropped); // actual gate Drop never under publication guard
         Ok(())
+    }
+}
+
+/// Names the participation custody that remains, if any.
+fn remaining_decision_custody(participant: bool, export: bool) -> Option<&'static str> {
+    match (participant, export) {
+        (false, false) => None,
+        (true, false) => Some("the decision participant has not handed off its native pin"),
+        (false, true) => Some("the export observation still holds its native pin"),
+        (true, true) => Some(
+            "the decision participant has not handed off its native pin and the export observation still holds its native pin",
+        ),
     }
 }

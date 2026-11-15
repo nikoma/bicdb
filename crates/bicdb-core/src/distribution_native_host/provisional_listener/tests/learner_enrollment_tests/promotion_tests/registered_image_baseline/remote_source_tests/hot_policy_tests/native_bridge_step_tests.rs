@@ -570,6 +570,62 @@ pub(super) fn exercise(
             assert!(error.contains("retains no preparation"), "{error}");
             assert!(retained(controls, target_control, victim, selected).is_none());
         }
+        // 5. The binding the target's host applies again when it EXECUTES a
+        // serve command it accepted earlier, against its own fresh committed
+        // metadata: the same committed decision passes; a relocation that
+        // changed or ended since the command was accepted refuses.
+        let committed = metadata[0].lock().committed_topology().clone();
+        let serve = foreign(target_serve_operation(&data));
+        let bind = |topology: &ClusterTopology, request: &NativeJointHandoffStepRequestV1| {
+            NativeMetadataControlHost::test_require_committed_bridge_decision(
+                topology,
+                &node(4),
+                request,
+            )
+            .map_err(|error| error.to_string())
+        };
+        bind(&committed, &serve).expect("the committed decision binds the serve command");
+        let mut ended = committed.clone();
+        ended.relocations.remove(&serve.relocation_id);
+        let error = bind(&ended, &serve).unwrap_err();
+        assert!(
+            error.contains("relocation absent from own metadata"),
+            "{error}"
+        );
+        let mut superseded = committed.clone();
+        superseded
+            .relocations
+            .get_mut(&serve.relocation_id)
+            .unwrap()
+            .handoff_session
+            .as_mut()
+            .unwrap()
+            .nonce = Uuid::now_v7();
+        let error = bind(&superseded, &serve).unwrap_err();
+        assert!(
+            error.contains("differs from the decision committed in own metadata"),
+            "{error}"
+        );
+        let mut replaced = committed.clone();
+        replaced
+            .relocations
+            .get_mut(&serve.relocation_id)
+            .unwrap()
+            .native_joint_handoff_v1 = None;
+        let error = bind(&replaced, &serve).unwrap_err();
+        assert!(error.contains("decision is not committed"), "{error}");
+        let mut other_scope = serve.clone();
+        other_scope.scope_sha256 = if serve.scope_sha256.starts_with('0') {
+            "1".repeat(64)
+        } else {
+            "0".repeat(64)
+        };
+        let error = bind(&committed, &other_scope).unwrap_err();
+        assert!(error.contains("scope differs"), "{error}");
+        ledger.record(serde_json::json!({"operation":"serve_execution_binding",
+            "committed_decision_binds":true,"ended_relocation_refused":true,
+            "changed_session_refused":true,"missing_record_refused":true,
+            "other_scope_refused":true}));
         // The strict client itself refuses to bind a request to a decision
         // the caller did not observe.
         let mut other = foreign(prepare_operation(&data));
@@ -589,6 +645,36 @@ pub(super) fn exercise(
     let mut contexts = BTreeSet::new();
     for member in &new {
         let client = &all_clients[initiator(member)];
+        // The admitted initiator names the committed decision under another
+        // scope: refused against the member's own committed record BEFORE an
+        // entry exists, so the correct preparation below is not blocked.
+        let mut other = NativeJointHandoffStepRequestV1::from_decision(
+            &data,
+            prepare_operation(&data),
+            Uuid::now_v7(),
+            5000,
+        )
+        .unwrap();
+        other.scope_sha256 = if other.scope_sha256.starts_with('0') {
+            "1".repeat(64)
+        } else {
+            "0".repeat(64)
+        };
+        let error = raw(
+            client,
+            member,
+            &other,
+            "bridge_prepare_names_another_scope",
+            &mut ledger,
+        );
+        assert!(
+            error.contains("scope differs from the certified decision committed in own metadata"),
+            "{error}"
+        );
+        assert!(
+            publication(controls, target_control, member, selected).is_none(),
+            "a refused preparation left an entry on {member}"
+        );
         let frame = prepare(client, member, &data, &mut ledger);
         let outcome = frame.outcome().clone();
         assert_eq!(
@@ -1436,9 +1522,75 @@ fn exercise_release(
     assert_eq!(unconfirmed["release_pending"], true);
     assert_eq!(unconfirmed["release_confirmed"], false);
     assert_eq!(unconfirmed["preparation_custody_retained"], false);
+    // A release its own second window did not confirm is not attested to
+    // any peer: durably open, reported NOT released, no writer audit.
+    let attested = observe(&target, ledger);
+    assert_eq!(attested.released, Some(false));
+    assert!(attested.released_generation.is_none());
+    assert_eq!(
+        attested.activation_sha256.as_ref(),
+        Some(&activations[&target])
+    );
+    let audit = exchange(
+        &clients[&target],
+        &target,
+        data,
+        observe_operation(data, PhaseKind::WriterAudit),
+        ledger,
+    )
+    .unwrap();
+    assert_eq!(audit.outcome().released, Some(false));
+    assert!(audit.reply().writer_audit.is_none());
     let mut generations = BTreeMap::new();
     for member in std::iter::once(&target).chain(survivors.iter()) {
         let started = Instant::now();
+        if generations.len() + 1 == new.len() {
+            // The LAST member's release happens and its second window does
+            // not confirm. Every other member is released and confirmed, yet
+            // another member's writer policy window does not count this one
+            // as released until its own retry confirmed.
+            test_arm_bridge_second_window_fault(
+                member,
+                data.checksum_sha256(),
+                NativeBridgeSecondWindowFault::ChangedIdentity,
+            );
+            let frame = exchange(
+                &clients[member],
+                member,
+                data,
+                release_operation(data),
+                ledger,
+            )
+            .unwrap();
+            assert!(!frame.outcome().complete);
+            let unconfirmed = evidence_of!(member).unwrap();
+            assert_eq!(unconfirmed["release_pending"], true);
+            assert_eq!(unconfirmed["release_confirmed"], false);
+            assert_eq!(unconfirmed["preparation_custody_retained"], false);
+            let attested = observe(member, ledger);
+            assert_eq!(attested.released, Some(false));
+            assert!(attested.released_generation.is_none());
+            let earlier = survivors.iter().find(|n| *n != member).unwrap();
+            assert!(generations.contains_key(earlier));
+            let error = raw(
+                &clients[earlier],
+                earlier,
+                &foreign(writer_policy_operation(data)),
+                "bridge_writer_policy_while_a_release_is_unconfirmed",
+                ledger,
+            );
+            assert!(error.contains("Frozen or unarmed"), "{error}");
+            assert_eq!(
+                controls[index(earlier)]
+                    .test_initial_bridge_writer_policy(selected)
+                    .unwrap()["policy_confirmed"],
+                false
+            );
+            ledger.record(
+                serde_json::json!({"operation":"unconfirmed_release_is_not_attested",
+                "member":member,"observer":earlier,"writer_policy_refused":true}),
+            );
+        }
         let frame = release(&clients[member], member, data, ledger);
         let outcome = frame.outcome().clone();
         assert_eq!(outcome.released, Some(true));

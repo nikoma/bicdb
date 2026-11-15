@@ -27,6 +27,12 @@ pub(super) const MIN_BRIDGE_SUBSTEP_BUDGET: Duration = Duration::from_millis(150
 pub(super) struct NativeBridgeMemberStep {
     binding_sha256: String,
     decision_sha256: String,
+    /// The relocation this entry belongs to. Only this member's own fresh
+    /// committed metadata decides whether that handoff is finished.
+    relocation_id: crate::distribution::RelocationId,
+    /// Set when a finished entry is released: the table keeps the session
+    /// until the member host ends, so `Drop` does not cancel it.
+    session_kept: bool,
     /// Member-owned preparation session. It outlives every finite request and
     /// ends with this retained entry; no request can renew or replace it.
     session: CancellationToken,
@@ -71,11 +77,35 @@ pub(super) struct NativeBridgeMemberStep {
 }
 impl Drop for NativeBridgeMemberStep {
     fn drop(&mut self) {
-        // Custody cannot outlive the member host that retained it.
-        self.session.cancel();
+        // Custody cannot outlive the member host that retained it. The
+        // session of a released finished entry is ended by the table.
+        if !self.session_kept {
+            self.session.cancel();
+        }
     }
 }
 impl NativeBridgeMemberStep {
+    /// Nothing of this member is held yet: no lease, custody, receipt,
+    /// release continuation, uncertain marker or running attempt. Only such
+    /// an entry may be bound again by a later authorised preparation.
+    fn holds_nothing(&self) -> bool {
+        self.lease.is_none()
+            && self.custody.is_none()
+            && self.bridge.is_none()
+            && self.activation.is_none()
+            && self.activation_sha256.is_none()
+            && self.release_owner.is_none()
+            && self.release.is_none()
+            && self.released_generation.is_none()
+            && !(self.publication_pending
+                || self.bridge_confirmed
+                || self.activation_pending
+                || self.activation_confirmed
+                || self.old_custody_retired
+                || self.release_pending
+                || self.release_confirmed
+                || self.publishing.load(Ordering::Acquire))
+    }
     pub(super) fn session(&self) -> &CancellationToken {
         &self.session
     }
@@ -133,6 +163,7 @@ impl NativeBridgeMemberStep {
 /// the member step it continues; never a policy, quorum or serving grant.
 struct NativeBridgeWriterPolicyState {
     decision_sha256: String,
+    relocation_id: crate::distribution::RelocationId,
     /// Set BEFORE this member's first policy attempt and cleared only when a
     /// second observation window confirmed it.
     pending: bool,
@@ -144,8 +175,81 @@ pub(super) struct NativeBridgeMemberSteps {
     /// A short latch: every holder performs a few memory operations and
     /// never keeps it across network, store or engine work.
     writer_policies: Mutex<BTreeMap<crate::RangeId, NativeBridgeWriterPolicyState>>,
+    /// The member-owned sessions of released finished entries. The CLOSED
+    /// writer domain a survivor's host keeps for its Serving policy checks
+    /// this session as its lifetime, so a finished handoff does not end it:
+    /// it ends, as before, with this table and the member host.
+    finished_sessions: Mutex<Vec<CancellationToken>>,
+}
+impl Drop for NativeBridgeMemberSteps {
+    fn drop(&mut self) {
+        for session in self.finished_sessions.get_mut().drain(..) {
+            session.cancel();
+        }
+    }
+}
+/// The most handoffs one member retains that are NOT finished in its own
+/// committed metadata. Finished entries are released and never count.
+const MAX_UNFINISHED_BRIDGE_STEPS: usize = 8;
+/// Whether the handoff of `relocation` is finished in `topology`, which must
+/// be this member's OWN fresh committed metadata: the relocation is terminal
+/// with its handoff record cleaned, or it no longer exists.
+pub(super) fn handoff_finished(
+    topology: &crate::distribution::ClusterTopology,
+    relocation: crate::distribution::RelocationId,
+) -> bool {
+    topology
+        .relocations
+        .get(&relocation)
+        .is_none_or(|plan| !plan.is_active())
 }
 impl NativeBridgeMemberSteps {
+    /// Release every retained entry whose handoff is finished in this
+    /// member's own fresh committed metadata: its receipts, its release
+    /// continuation and its writer policy progress end here and it no longer
+    /// counts against the capacity. An entry of an unfinished handoff, or
+    /// one with a running attempt, is never touched.
+    pub(super) fn release_finished(
+        &self,
+        own_topology: &crate::distribution::ClusterTopology,
+    ) -> Result<()> {
+        self.release_finished_where(&|relocation| handoff_finished(own_topology, relocation))
+    }
+    fn release_finished_where(
+        &self,
+        finished: &dyn Fn(crate::distribution::RelocationId) -> bool,
+    ) -> Result<()> {
+        let ended = {
+            let mut held = self.hold()?;
+            let ranges = held
+                .iter()
+                .filter(|(_, step)| {
+                    finished(step.relocation_id) && !step.publishing.load(Ordering::Acquire)
+                })
+                .map(|(range, _)| *range)
+                .collect::<Vec<_>>();
+            let mut ended = Vec::new();
+            for range in ranges {
+                if let Some(mut step) = held.remove(&range) {
+                    step.session_kept = true;
+                    self.finished_sessions.lock().push(step.session.clone());
+                    ended.push(step);
+                }
+            }
+            self.writer_policies
+                .lock()
+                .retain(|range, state| !finished(state.relocation_id) || held.contains_key(range));
+            ended
+        };
+        // The real drops happen outside the table latch.
+        drop(ended);
+        Ok(())
+    }
+    /// How many entries this member retains; memory evidence.
+    #[cfg(test)]
+    pub(super) fn test_retained_ranges(&self) -> Result<Vec<crate::RangeId>> {
+        Ok(self.hold()?.keys().copied().collect())
+    }
     /// Memory evidence of this member's own writer policy step; DATA.
     #[cfg(test)]
     pub(super) fn test_writer_policy_evidence(&self, range: crate::RangeId) -> serde_json::Value {
@@ -174,39 +278,95 @@ impl NativeBridgeMemberSteps {
             .and_then(|step| step.release.clone())
             .ok_or_else(|| invalid("joint bridge member holds no confirmed release"))
     }
-    /// Retention of a produced outcome may not be skipped because another
-    /// bounded request of this member is in the table; holders never wait on
-    /// this member's own publication.
+    /// This member's confirmed release for `range` with its armed generation.
+    pub(super) fn released_member_generation(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<(Arc<NativeJointMemberRelease>, Uuid)> {
+        let missing = || invalid("joint bridge member holds no confirmed release");
+        let held = self.hold()?;
+        let step = held
+            .get(&range)
+            .filter(|step| step.release_confirmed && !step.release_pending)
+            .ok_or_else(missing)?;
+        Ok((
+            step.release.clone().ok_or_else(missing)?,
+            step.released_generation.ok_or_else(missing)?,
+        ))
+    }
+    /// BLOCKING: retention of a produced outcome may not be skipped, so the
+    /// caller waits for the table. It can wait behind any bounded request of
+    /// this member that holds the table, including a preparation of another
+    /// range, which holds it across its own metadata and engine work for up
+    /// to its request budget. Used only where an outcome already exists.
     fn hold_for_retention(
         &self,
     ) -> parking_lot::MutexGuard<'_, BTreeMap<crate::RangeId, NativeBridgeMemberStep>> {
         self.steps.lock()
     }
+    /// Bounded: used BEFORE this member gives anything up. A table held by
+    /// another request (a preparation of another range can hold it for
+    /// seconds) refuses instead of consuming the caller's live window.
+    fn hold_before_custody_ends(
+        &self,
+    ) -> Result<parking_lot::MutexGuard<'_, BTreeMap<crate::RangeId, NativeBridgeMemberStep>>> {
+        self.steps
+            .try_lock_for(Duration::from_millis(250))
+            .ok_or_else(|| {
+                invalid(
+                    "joint bridge step member custody busy; nothing was dropped or released, retry the step",
+                )
+            })
+    }
 }
 
 /// The retained entry for a `BridgePrepare`, created only after the request
-/// was authorised against this member's own committed metadata.
+/// was authorised against this member's own committed metadata, including
+/// the certified scope when the committed record carries it.
+///
+/// An entry that holds nothing yet (an earlier preparation was refused or
+/// failed before it retained a lease or custody) is bound to this request
+/// instead of refusing it: the same rule as a superseded install step,
+/// replace only while nothing is held. The member-owned session stays. An
+/// entry that holds anything keeps its exact identity and refuses another.
+/// `finished`: this member's own fresh metadata shows this handoff finished;
+/// nothing new is retained for it.
 pub(super) fn retained_prepare_step<'a>(
     steps: &'a mut BTreeMap<crate::RangeId, NativeBridgeMemberStep>,
     request: &NativeJointHandoffStepRequestV1,
+    finished: bool,
 ) -> Result<&'a mut NativeBridgeMemberStep> {
+    let finished_refusal = || {
+        invalid("joint bridge step refused: this handoff is finished in own metadata; nothing is prepared again")
+    };
     let binding_sha256 = request.binding()?;
     let decision_sha256 = request
         .operation
         .bridge_decision_sha256()
         .ok_or_else(|| invalid("joint bridge step needs a committed decision identity"))?
         .to_owned();
-    if let Some(retained) = steps.get(&request.range_id) {
+    if let Some(retained) = steps.get_mut(&request.range_id) {
         if retained.binding_sha256 != binding_sha256 || retained.decision_sha256 != decision_sha256
         {
-            return Err(invalid(
-                "joint bridge step retains another exact decision preparation",
-            ));
+            if !retained.holds_nothing() {
+                return Err(invalid(
+                    "joint bridge step retains another exact decision preparation",
+                ));
+            }
+            if finished {
+                return Err(finished_refusal());
+            }
+            retained.binding_sha256 = binding_sha256;
+            retained.decision_sha256 = decision_sha256;
+            retained.relocation_id = request.relocation_id;
         }
     } else {
-        if steps.len() >= 8 {
+        if finished {
+            return Err(finished_refusal());
+        }
+        if steps.len() >= MAX_UNFINISHED_BRIDGE_STEPS {
             return Err(invalid(
-                "joint bridge step member custody capacity; nothing is evicted",
+                "joint bridge step member custody capacity; no unfinished handoff is evicted",
             ));
         }
         steps.insert(
@@ -214,6 +374,8 @@ pub(super) fn retained_prepare_step<'a>(
             NativeBridgeMemberStep {
                 binding_sha256,
                 decision_sha256,
+                relocation_id: request.relocation_id,
+                session_kept: false,
                 session: CancellationToken::new(Arc::new(AtomicBool::new(false)), None),
                 lease: None,
                 custody: None,
@@ -281,7 +443,8 @@ pub(super) struct BridgeStepOwn {
 }
 
 /// Authenticate the peer and bind the request to the decision committed in
-/// THIS member's own fresh metadata, before any retained state is created,
+/// THIS member's own fresh metadata (`require_committed_bridge_decision`,
+/// which covers the certified scope), before any retained state is created,
 /// read or disclosed.
 ///
 /// A mutation is accepted only from the coordinator: the same initiator
@@ -299,10 +462,11 @@ pub(super) fn acquire_bridge_step_own(
 ) -> Result<BridgeStepOwn> {
     token.check()?;
     request.require_shape()?;
-    let decision = request
-        .operation
-        .bridge_decision_sha256()
-        .ok_or_else(|| invalid("joint bridge step needs a committed decision identity"))?;
+    if request.operation.bridge_decision_sha256().is_none() {
+        return Err(invalid(
+            "joint bridge step needs a committed decision identity",
+        ));
+    }
     let local = transport.local_metadata_read_participant();
     let leader = provider
         .current_metadata_leader_hint(token)?
@@ -333,6 +497,50 @@ pub(super) fn acquire_bridge_step_own(
             "joint bridge step actual peer/credential differs from committed member",
         ));
     }
+    let range = require_committed_bridge_decision(topology, local.node_id(), request)?;
+    let voter = |node: &ClusterNodeId| {
+        range.replicas.iter().any(|replica| {
+            &replica.node_id == node && replica.role == crate::distribution::RangeReplicaRole::Voter
+        })
+    };
+    let coordinator = peer.node_id() == &leader || &range.leader == peer.node_id();
+    if !(coordinator || (request.operation.read_only() && voter(peer.node_id()))) {
+        return Err(invalid(
+            "joint bridge step authenticated peer is not an admitted initiator",
+        ));
+    }
+    let birth = topology
+        .nodes
+        .get(local.node_id())
+        .and_then(|node| node.native_store_birth_v1.clone())
+        .ok_or_else(|| invalid("joint bridge step local native birth absent"))?;
+    let anchor = (own.term(), own.read_index(), own.context_id());
+    token.check()?;
+    Ok(BridgeStepOwn {
+        own,
+        business,
+        anchor,
+        birth,
+        coordinator,
+    })
+}
+
+/// Bind `request` to the decision committed in `topology`, which must be
+/// THIS member's own fresh committed metadata: the relocation, its session,
+/// the decision digest and stage of its handoff record, the certified scope
+/// of that record when it carries one, and this member's place in the
+/// committed membership. Nothing is retained, read or disclosed for a
+/// request that fails here. Returns the committed range.
+pub(super) fn require_committed_bridge_decision<'a>(
+    topology: &'a crate::distribution::ClusterTopology,
+    local: &ClusterNodeId,
+    request: &NativeJointHandoffStepRequestV1,
+) -> Result<&'a crate::distribution::RangeDescriptor> {
+    request.require_shape()?;
+    let decision = request
+        .operation
+        .bridge_decision_sha256()
+        .ok_or_else(|| invalid("joint bridge step needs a committed decision identity"))?;
     let retiring = matches!(
         &request.operation,
         crate::distribution_range_handoff::NativeJointHandoffStepOperationV1::SourceRetire { .. }
@@ -367,40 +575,33 @@ pub(super) fn acquire_bridge_step_own(
             // The retired source: named by the committed relocation, absent
             // from the committed final membership, after the recorded
             // activation of every member of the new set.
-            relocation.source.as_ref() != Some(local.node_id())
+            relocation.source.as_ref() != Some(local)
                 || range
                     .replicas
                     .iter()
-                    .any(|replica| &replica.node_id == local.node_id())
+                    .any(|replica| &replica.node_id == local)
                 || record.stage() < crate::distribution::NativeJointHandoffStageV1::AwaitingCleanup
         } else {
-            !voter(local.node_id())
+            !voter(local)
         }
     {
         return Err(invalid(
             "joint bridge step differs from the decision committed in own metadata",
         ));
     }
-    let coordinator = peer.node_id() == &leader || &range.leader == peer.node_id();
-    if !(coordinator || (request.operation.read_only() && voter(peer.node_id()))) {
-        return Err(invalid(
-            "joint bridge step authenticated peer is not an admitted initiator",
-        ));
+    // The scope the certification committed with this record. A record that
+    // was certified without it leaves the scope to the member's own native
+    // decision, compared before anything is prepared.
+    if let Some(committed) =
+        crate::distribution_range_handoff::NativeJointCommittedDecision::from_committed(relocation)?
+    {
+        if request.require_decision(&committed).is_err() {
+            return Err(invalid(
+                "joint bridge step scope differs from the certified decision committed in own metadata",
+            ));
+        }
     }
-    let birth = topology
-        .nodes
-        .get(local.node_id())
-        .and_then(|node| node.native_store_birth_v1.clone())
-        .ok_or_else(|| invalid("joint bridge step local native birth absent"))?;
-    let anchor = (own.term(), own.read_index(), own.context_id());
-    token.check()?;
-    Ok(BridgeStepOwn {
-        own,
-        business,
-        anchor,
-        birth,
-        coordinator,
-    })
+    Ok(range)
 }
 
 /// Read-only PREPARATION phase observation of this member's retained custody.
@@ -419,7 +620,9 @@ pub(super) fn observe_bridge_phase(
             Arc<NativeJointPreparationCustody>,
             Option<Arc<crate::db::NativeJointServingBridgeReceipt>>,
         ),
-        Release(Arc<NativeJointMemberRelease>),
+        /// The entry and whether this member's own second window confirmed
+        /// its release.
+        Release(Arc<NativeJointMemberRelease>, bool),
     }
     let nothing =
         || invalid("joint bridge phase observation of this kind has no retained member state yet");
@@ -447,10 +650,12 @@ pub(super) fn observe_bridge_phase(
             // Only a catalogue activation this member itself persisted AND
             // confirmed has a release continuation entry to attest.
             NativeJointBridgePhaseKindV1::Release | NativeJointBridgePhaseKindV1::WriterAudit => {
+                let step =
+                    step.filter(|step| step.activation_confirmed && !step.activation_pending);
                 Retained::Release(
-                    step.filter(|step| step.activation_confirmed && !step.activation_pending)
-                        .and_then(|step| step.release.clone())
+                    step.and_then(|step| step.release.clone())
                         .ok_or_else(nothing)?,
+                    step.is_some_and(|step| step.release_confirmed && !step.release_pending),
                 )
             }
         }
@@ -459,7 +664,7 @@ pub(super) fn observe_bridge_phase(
     // natively, never from the request or from the peer.
     let data = match &retained {
         Retained::Preparation(custody, _) => custody.data(),
-        Retained::Release(release) => release.data(),
+        Retained::Release(release, _) => release.data(),
     };
     request.require_decision(data)?;
     if data
@@ -483,14 +688,25 @@ pub(super) fn observe_bridge_phase(
     };
     let (custody, bridge) = match retained {
         Retained::Preparation(custody, bridge) => (custody, bridge),
-        Retained::Release(release) => {
-            let facts = if kind == NativeJointBridgePhaseKindV1::WriterAudit {
-                // This member's own audit of this very observation: DATA the
-                // observing member validates completely and never trusts.
-                release.observe_fresh_writer_audit_phase(own, business, token)?
-            } else {
-                release.observe_fresh_release_phase(own, business, token)?
-            };
+        Retained::Release(release, release_confirmed) => {
+            // A release is attested to a peer only after this member's own
+            // second window confirmed it, exactly as its bridge and its
+            // activation are. Until then the member reports what it durably
+            // holds (bridge and activation) and reports itself NOT released,
+            // with no writer audit: its freeze may already be dropped and
+            // armed, but no window of its own confirmed that yet.
+            let mut facts =
+                if kind == NativeJointBridgePhaseKindV1::WriterAudit && release_confirmed {
+                    // This member's own audit of this very observation: DATA
+                    // the observing member validates completely, never trusts.
+                    release.observe_fresh_writer_audit_phase(own, business, token)?
+                } else {
+                    release.observe_fresh_release_phase(own, business, token)?
+                };
+            if !release_confirmed {
+                facts.released_generation = None;
+                facts.writer_audit = None;
+            }
             *writer_audit = facts.writer_audit;
             #[cfg(test)]
             if let Some(substitute) = writer_audit.as_ref().and_then(|_| {
@@ -1013,7 +1229,9 @@ pub(super) fn release_member_bridge(
     // window can need this member's preparation observation any more.
     let mut end_preparation = || -> Result<()> {
         let ended = {
-            let mut held = steps.hold_for_retention();
+            // Bounded: a busy table refuses BEFORE anything is dropped, so
+            // the first window is not consumed waiting for another request.
+            let mut held = steps.hold_before_custody_ends()?;
             let step = held
                 .get_mut(&request.range_id)
                 .filter(|step| step.decision_sha256 == decision)
@@ -1276,6 +1494,7 @@ pub(super) fn publish_member_writer_policy(
                 .entry(request.range_id)
                 .or_insert_with(|| NativeBridgeWriterPolicyState {
                     decision_sha256: decision.clone(),
+                    relocation_id: request.relocation_id,
                     pending: false,
                     confirmed: false,
                 });
@@ -1375,7 +1594,9 @@ struct NativeBridgeHostCommandSlot {
     pending: Option<NativeBridgeHostCommand>,
     /// The retained failure text of the last attempt of one binding.
     failed: Option<(String, String)>,
-    /// Retained successful outcomes; nothing is evicted.
+    /// Retained successful outcomes. An outcome of a handoff that is
+    /// finished in this member's own committed metadata is released when a
+    /// command of another handoff arrives; an unfinished one never is.
     done: Vec<(NativeBridgeHostCommand, Option<u64>)>,
 }
 /// What the step receiver reports about a host command.
@@ -1422,9 +1643,9 @@ impl NativeBridgeHostCommands {
         {
             return Ok(NativeBridgeHostCommandState::Done(*recovered));
         }
-        if slot.done.len() >= 8 {
+        if slot.done.len() >= 2 * MAX_UNFINISHED_BRIDGE_STEPS {
             return Err(invalid(
-                "joint bridge host command capacity; nothing is evicted",
+                "joint bridge host command capacity; no outcome of an unfinished handoff is evicted",
             ));
         }
         // A repeated step after a failed attempt arms the same command again
@@ -1440,6 +1661,28 @@ impl NativeBridgeHostCommands {
             decision_sha256,
         });
         Ok(NativeBridgeHostCommandState::Pending(failure))
+    }
+    /// Release the retained outcomes of every OTHER handoff than `keep` that
+    /// is finished in `own_topology`, this member's own fresh committed
+    /// metadata. The outcomes of `keep` and of every unfinished handoff stay.
+    pub(super) fn release_finished(
+        &self,
+        own_topology: &crate::distribution::ClusterTopology,
+        keep: crate::distribution::RelocationId,
+    ) {
+        self.release_finished_where(
+            &|relocation| handoff_finished(own_topology, relocation),
+            keep,
+        );
+    }
+    fn release_finished_where(
+        &self,
+        finished: &dyn Fn(crate::distribution::RelocationId) -> bool,
+        keep: crate::distribution::RelocationId,
+    ) {
+        self.slot.lock().done.retain(|(command, _)| {
+            command.request.relocation_id == keep || !finished(command.request.relocation_id)
+        });
     }
     /// Whether the host retained a successful writer policy of `decision`.
     pub(super) fn writer_policy_done(&self, range: crate::RangeId, decision: &str) -> bool {
@@ -1502,6 +1745,12 @@ pub(super) fn accept_member_host_command(
 ) -> Result<(NativeJointHandoffStepOutcomeV1, (u64, u64, Uuid))> {
     let binding = request.binding()?;
     let anchor = fresh.anchor;
+    // Outcomes of other handoffs that this member's own fresh metadata shows
+    // finished no longer count against the capacity.
+    commands.release_finished(
+        fresh.own.committed_topology(fresh.business)?,
+        request.relocation_id,
+    );
     let (release, generation) = released_member_of(steps, request)?;
     let decision = release.data().checksum_sha256().to_owned();
     if request.operation.target_serve() && !commands.writer_policy_done(request.range_id, &decision)
@@ -1540,4 +1789,182 @@ pub(super) fn accept_member_host_command(
     };
     token.check()?;
     Ok((outcome, anchor))
+}
+
+#[cfg(test)]
+mod step_table_tests {
+    use super::*;
+    use crate::distribution::RelocationId;
+    use crate::distribution_range_handoff::NativeJointHandoffStepOperationV1 as StepOperation;
+
+    fn prepare(range: u64, scope: char) -> NativeJointHandoffStepRequestV1 {
+        NativeJointHandoffStepRequestV1 {
+            version: 1,
+            range_id: crate::RangeId::new(range).unwrap(),
+            range_epoch: 7,
+            relocation_id: RelocationId::new(range).unwrap(),
+            plan_id: format!("plan-{range}"),
+            session_id: Uuid::from_u128(u128::from(range) << 8 | 1),
+            nonce: Uuid::from_u128(u128::from(range) << 8 | 2),
+            scope_sha256: scope.to_string().repeat(64),
+            operation: StepOperation::BridgePrepare {
+                decision_sha256: "d".repeat(64),
+            },
+            business: Uuid::now_v7(),
+            challenge: Uuid::now_v7(),
+            budget_ms: 5000,
+        }
+    }
+
+    /// A preparation that retained nothing (it was refused or failed after
+    /// its entry was created) does not block a correctly bound one; an entry
+    /// that holds anything keeps its exact identity.
+    #[test]
+    fn native_bridge_step_unheld_preparation_is_superseded_and_a_held_one_refuses_another() {
+        let table = NativeBridgeMemberSteps::default();
+        let wrong = prepare(3, 'a');
+        let right = prepare(3, 'b');
+        assert_ne!(wrong.binding().unwrap(), right.binding().unwrap());
+        let mut held = table.hold().unwrap();
+        // The first preparation created its entry and then failed.
+        let session = retained_prepare_step(&mut held, &wrong, false)
+            .unwrap()
+            .session()
+            .clone();
+        assert!(held[&right.range_id].holds_nothing());
+        // The correctly bound retry takes the entry over; the member-owned
+        // session is the same and is not ended.
+        let step = retained_prepare_step(&mut held, &right, false).unwrap();
+        assert_eq!(step.binding_sha256, right.binding().unwrap());
+        assert_eq!(step.relocation_id, right.relocation_id);
+        assert!(session.check().is_ok() && step.session().check().is_ok());
+        assert_eq!(held.len(), 1);
+        // An identical retry returns the same entry.
+        retained_prepare_step(&mut held, &right, false).unwrap();
+        // Once the entry holds anything of this member, another identity is
+        // refused exactly as before.
+        held.get_mut(&right.range_id).unwrap().release_pending = true;
+        let error = retained_prepare_step(&mut held, &wrong, false)
+            .err()
+            .unwrap()
+            .to_string();
+        assert!(
+            error.contains("retains another exact decision preparation"),
+            "{error}"
+        );
+        assert_eq!(
+            held[&right.range_id].binding_sha256,
+            right.binding().unwrap()
+        );
+        retained_prepare_step(&mut held, &right, false).unwrap();
+    }
+
+    /// The capacity counts handoffs that are NOT finished in the member's
+    /// own metadata: unfinished entries at capacity refuse as before, and
+    /// finished ones are released and admit a new preparation.
+    #[test]
+    fn native_bridge_step_capacity_counts_unfinished_handoffs_and_releases_finished_ones() {
+        let table = NativeBridgeMemberSteps::default();
+        let mut sessions = Vec::new();
+        {
+            let mut held = table.hold().unwrap();
+            for range in 1..=MAX_UNFINISHED_BRIDGE_STEPS as u64 {
+                let step = retained_prepare_step(&mut held, &prepare(range, 'a'), false).unwrap();
+                sessions.push(step.session().clone());
+            }
+            let error = retained_prepare_step(&mut held, &prepare(100, 'a'), false)
+                .err()
+                .unwrap()
+                .to_string();
+            assert!(
+                error.contains("no unfinished handoff is evicted"),
+                "{error}"
+            );
+            assert!(!held.contains_key(&crate::RangeId::new(100).unwrap()));
+        }
+        table.writer_policies.lock().insert(
+            crate::RangeId::new(2).unwrap(),
+            NativeBridgeWriterPolicyState {
+                decision_sha256: "d".repeat(64),
+                relocation_id: RelocationId::new(2).unwrap(),
+                pending: false,
+                confirmed: true,
+            },
+        );
+        // Nothing is finished in own metadata: nothing is released.
+        table.release_finished_where(&|_| false).unwrap();
+        assert_eq!(
+            table.test_retained_ranges().unwrap().len(),
+            MAX_UNFINISHED_BRIDGE_STEPS
+        );
+        // An entry with a running attempt is never released.
+        table
+            .hold()
+            .unwrap()
+            .get(&crate::RangeId::new(1).unwrap())
+            .unwrap()
+            .publishing
+            .store(true, Ordering::Release);
+        // Relocations 1, 2 and 3 are finished; the others are not.
+        table
+            .release_finished_where(&|relocation| relocation.get() <= 3)
+            .unwrap();
+        let left = table.test_retained_ranges().unwrap();
+        assert_eq!(left.len(), MAX_UNFINISHED_BRIDGE_STEPS - 2);
+        assert!(left.contains(&crate::RangeId::new(1).unwrap()));
+        assert!(table.writer_policies.lock().is_empty());
+        // A released entry's member-owned session is kept by the table, not
+        // ended; an unfinished entry is untouched.
+        assert!(sessions.iter().all(|session| session.check().is_ok()));
+        {
+            let mut held = table.hold().unwrap();
+            retained_prepare_step(&mut held, &prepare(100, 'a'), false).unwrap();
+            retained_prepare_step(&mut held, &prepare(101, 'a'), false).unwrap();
+            assert!(retained_prepare_step(&mut held, &prepare(102, 'a'), false).is_err());
+            // Nothing new is retained for a handoff that is finished.
+            let error = retained_prepare_step(&mut held, &prepare(2, 'a'), true)
+                .err()
+                .unwrap()
+                .to_string();
+            assert!(error.contains("finished in own metadata"), "{error}");
+        }
+        // The table ends every session it kept, with the member host.
+        drop(table);
+        assert!(sessions.iter().all(|session| session.check().is_err()));
+    }
+
+    /// The host command outcomes of another finished handoff are released;
+    /// those of the named handoff and of unfinished ones stay.
+    #[test]
+    fn native_bridge_step_host_command_outcomes_of_finished_handoffs_are_released() {
+        let commands = NativeBridgeHostCommands::default();
+        let command = |range: u64| {
+            let mut request = prepare(range, 'a');
+            request.operation = StepOperation::BridgeWriterPolicy {
+                decision_sha256: "d".repeat(64),
+            };
+            request
+        };
+        for range in 1..=3 {
+            let request = command(range);
+            assert!(matches!(
+                commands.accept(&request).unwrap(),
+                NativeBridgeHostCommandState::Pending(None)
+            ));
+            commands.finish(&commands.pending().unwrap(), Ok(None));
+        }
+        // Relocation 3 is unfinished, 1 and 2 are finished, 2 is the handoff
+        // of the arriving command.
+        commands.release_finished_where(
+            &|relocation| relocation.get() <= 2,
+            RelocationId::new(2).unwrap(),
+        );
+        let slot = commands.slot.lock();
+        let left = slot
+            .done
+            .iter()
+            .map(|(command, _)| command.request.relocation_id.get())
+            .collect::<Vec<_>>();
+        assert_eq!(left, [2, 3]);
+    }
 }

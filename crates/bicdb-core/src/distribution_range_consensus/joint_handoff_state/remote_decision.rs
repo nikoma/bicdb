@@ -111,6 +111,7 @@ impl NativeRemoteDecisionCataloguePublication {
                 global_decision_sha256: None,
                 global_decision_native_sha256: None,
                 serving_activation: None,
+                source_retirement: None,
             });
         state.global_decision_sha256 = Some(receipt.decision_sha256().into());
         state.global_decision_native_sha256 = Some(receipt.checksum_sha256().into());

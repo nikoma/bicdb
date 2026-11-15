@@ -449,7 +449,7 @@ impl NativeRemoteBridgeAdmission<'_> {
     }
     pub(crate) fn require_native_local(
         &self,
-        db: &BicDb,
+        db: &crate::BicDb,
         store: &crate::distribution_range_consensus::RangeWriteStore,
         prepared: &crate::db::NativeJointServingPreparation,
         frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
@@ -564,7 +564,7 @@ impl NativeRemoteBridgeReadAdmission<'_> {
     }
     pub(crate) fn require_native_local(
         &self,
-        db: &BicDb,
+        db: &crate::BicDb,
         store: &crate::distribution_range_consensus::RangeWriteStore,
         prepared: &crate::db::NativeJointServingPreparation,
         frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,

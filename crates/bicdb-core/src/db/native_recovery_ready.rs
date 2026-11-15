@@ -1953,6 +1953,12 @@ impl BicDb {
                     "read-only metadata observer cannot certify readiness",
                 ));
             }
+            MetadataRecoveryRolePurpose::NativeJointServingPhase { .. }
+            | MetadataRecoveryRolePurpose::NativeJointLocalServingPolicy { .. } => {
+                return Err(invalid(
+                    "narrow joint serving purpose cannot certify generic recovery readiness",
+                ));
+            }
         };
         self.range_mutations.validate_frozen(range.id, &frozen)?;
         if frozen.owner() != owner {

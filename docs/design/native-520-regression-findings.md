@@ -4,6 +4,75 @@ This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe64
 
 ## Actual execution
 
+### Source700: test-compilation failures; other jobs still running
+
+Draft PR207 source **1.0.520-beta /
+`700726e90f041815b132cda4f87ca92337f55baa`**, tree
+`aacb16996f71880683459fc127482ef9ce4d3130`, follows the complete failed sourcebd09
+run below. Normal [Tests43728210745](https://github.com/nikoma/bicdb/actions/runs/43728210745)
+and [Rails43728210770](https://github.com/nikoma/bicdb/actions/runs/43728210770)
+check out `939038eb35677874c941c2d1220cd0a7d6548b40` with the same tree.
+This is an **incomplete execution checkpoint**, not a frozen whole-run result.
+
+All-target132854681021, Native132854704823 and Core132854704889 failed test compilation with the
+same eighteen diagnostics: seventeen missing `BTreeMap` references (eight E0433,
+nine E0425) in four FIRST child test modules, and E0616 for private
+`NativeRemoteLocalServing.release` access at `registration/joined_data.rs:423`.
+All three complete logs contain zero executed test-case rows and zero runtime
+summaries. Native's production chaos-helper build passed before its test build
+failed; no native control or passive stage clock executed. The earlier three
+library diagnostics are absent from these logs. Rails132854680904 passed its
+build and application step: twenty runs, one hundred assertions, zero failures,
+errors or skips, including process-kill queue/cache recovery, twenty-four reports
+and twenty-four cable messages. PGwire132854704821 passed 511/0/2 across
+twenty-eight summaries. Those component/application results are separate from
+native HA. SQL and remaining-workspace were still running at this checkpoint.
+Earlier revisions' passing results are not substituted for current results.
+
+Complete all-target raw1,406,089 bytes SHA-256
+`a28f1c7e66fbf60d9582b4fcf4958883a668e00f71b8899a093d2a153606fa36`;
+Native raw1,370,551 bytes
+`ba2b0397c287f6b4a4766c45b8ae53bbca74ca235ef561be325c6afb6a47a634`.
+Core raw2,530,065 bytes
+`8d29ecce91fb41c05d3a82248a9e1337b19c3f1f999cc7110ad83645c6dd59a3`;
+PGwire raw1,505,387 bytes
+`089d3952eac7fd42cf75db47a2251ad7b8eb6ca9ebd4b44a8acdeddde3a37c17`.
+Rails original artifact14167656585 contains sixteen verified members; ZIP SHA-256
+`a419978095b8b02c2c280c77d36448c00128395c624d918fa75fbcf5150e29a8`.
+Its exercised CI debug binary SHA-256 is
+`49107b5b027681de969ed77834881a6f2076dbc8c65fa84cf312485f67e6296c`;
+that is not an optimized physical-qualification binary, release or deployment.
+Independent root Core/PGwire complete-log and Rails artifact verification receipt:
+`f867fe41c4f62a780aec9481fbb03710cf2ab9c585d634fe06e3df5c6174370e`.
+The independent all-target eighteen-error classification receipt is
+`c65a1869996c882dad275eccb53ea6153701dda5f68dfe44dbb925219e52f85a`;
+the capture-side Native prerequisite classifier is
+`c8887ade3e6e4f7ff48b9db5e94c69e0a18e323bff5872c0df739af531656265`.
+The sole collector remains responsible for the original logs and artifacts;
+no useful job is cancelled or restarted to publish a correction.
+
+The reproducible issue is **failed test compilation**, not a demonstrated native
+runtime failure. At the pinned source, the actual failing workflow command is
+`cargo check --workspace --all-targets --locked`; the native command is
+`cargo test --config 'profile.dev.package."*".opt-level=2' --config profile.dev.opt-level=1 -p bicdb-core --lib --locked -- distribution_native_host:: range_image_native::rf3_fixture:: --test-threads=1`.
+These commands are recorded from remote CI, not rerun locally. The next smallest
+deterministic check is compilation of the corrected Core test target, followed
+by the unchanged native selectors and required broad suites.
+
+Isolated source correction `c072c75ea802ea528c6985c55bb4407fd05c00f0`
+adds the single parent `BTreeMap` import inherited through the four unchanged
+`super::*` chains. It moves the diagnostic's same successor lookup and original
+Joined-owner validation into the actual private owning module, returning only
+the decision checksum string DATA. The release field stays private; original
+assertions, deadlines, errors and diagnostic JSON values remain intact. This is
+**source-reviewed; not compiled or executed**. Standalone formatting and diff
+checks pass. Independent source-review receipt:
+`94ef95d6a59b1d1622e2e911dc74fc09c04b7d8da98d9cb0af415eb0e439b897`.
+Root whole-source inverse and actual Native-log review:
+`bc7546d3c3d2ab01c82dc5b6cad9fa2de4e05ce3e9e5c6cf3e073d6af8fbba54`.
+It establishes no HA, physical or production qualification and does not alter
+the original failed Azure evidence.
+
 ### Sourcebd09: complete failed run; Native/Core execution not reached
 
 Draft PR207 source **1.0.520-beta /

@@ -1,10 +1,17 @@
 # Native serving and recovery: isolated source composition
 
-This is a source-composition checkpoint, not an HA acceptance result. It
-contains current public candidate `6de646beb603accf39358017d8e0c83c39c741b1`
-and additional finite native serving/recovery work. Source6de's compilation,
-PGwire and Rails passes do not execute or qualify these additions. No Cargo
-build, Rust test, physical experiment, release or deployment has run for this
+This is a source-composition checkpoint, not an HA acceptance result. Its
+baseline is `6de646beb603accf39358017d8e0c83c39c741b1`, followed by the native
+serving/recovery additions below. Public candidate
+`700726e90f041815b132cda4f87ca92337f55baa` includes those additions and the
+sourcebd09 library-compilation correction. Source700's production native
+helper build, PGwire and Rails application passed; all-target, Core and Native jobs failed
+test compilation on eighteen errors before native execution. Other required
+jobs were still running at the recorded checkpoint. The minimal FIRST import
+and private diagnostic-delegation correction `c072c75ea` is source-reviewed,
+not compiled or executed. Actual per-source results remain in the
+[regression findings](native-520-regression-findings.md). No physical
+experiment, release, deployment or HA qualification follows from this
 composition. The original failed Azure evidence remains unchanged.
 
 ## Source units and actual boundaries

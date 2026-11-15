@@ -11,7 +11,8 @@ passing candidate. Source **`2ce4c48202d4d1bb1ef759b08a41dc36f431af6d`**, tree
 `f4d72164c2a2a906857b179d44df216d4457b9f8`, is the public PR207 head. Actual
 checkout `e1ef338cb41d51d4d9dfbc8660502e4afbc3f366` has that identical tree.
 [Tests43696050976](https://github.com/nikoma/bicdb/actions/runs/43696050976)
-remains running at this checkpoint; SQL and remaining-workspace are still live.
+remains running at this checkpoint; remaining-workspace is still live. SQL has
+completed successfully and its complete log has been independently verified.
 No useful job has been cancelled or restarted to publish the next correction.
 
 | Scope | Classification | Exact result and limit |
@@ -19,13 +20,27 @@ No useful job has been cancelled or restarted to publish the next correction.
 | All-target, Core and Native | **Failed compilation** | Core test `storage.rs:2910` has E0282 for an unconstrained `mpsc::channel()` payload. Core/Native helper builds passed, but library-test compilation failed with zero actual Core/Native cases. The nondefault-consumer check was skipped. |
 | PGwire | **Passed, CI scope** | 511 passed / 0 failed / 2 ignored across target summaries. Separate Oracle HR: 50/0; embedded HA: 11/0; verification: 3/0. These do not exercise the complete distributed handoff or physical expansion. |
 | Rails | **Passed, application CI scope** | [Rails43696050973](https://github.com/nikoma/bicdb/actions/runs/43696050973): 20 runs, 100 assertions, zero failures/errors/skips; real queue/cache process-kill recovery, 24 completed reports and 24 cable messages. This does not qualify distributed HA. |
-| SQL and remaining workspace | **Inconclusive; still running** | Do not inherit earlier results or classify pending profile/CLI/application controls as passed. |
+| SQL | **Passed, CI scope** | 2,682 passed / 0 failed / 4 ignored across 282 summaries. The actual committed-finalization error/DDL cleanup and SQLSTATE mapping controls passed. This is not timed visibility-Unknown or distributed SQL acceptance. |
+| Remaining workspace | **Inconclusive; still running** | Do not inherit earlier results or classify pending profile/CLI/application controls as passed. |
 | Physical expansion and release qualification | **Not tested** | No new Azure experiment, stable five-node throughput comparison or production admission. |
 
 The completed raw PGwire log is 1,323,097 bytes, SHA-256
 `6ad1a62b5f5256fbbf176f7e04061ab74cec6592889a835f2c88f0a923d3f099`;
 Rails is 1,185,534 bytes, SHA-256
 `3978cc0707f57abac7640839e1b0b20f9bce7c88bb941d94167f40246a4a691c`.
+SQL is 295,664,542 bytes, SHA-256
+`59c5698e2bb6ea488349669edee4ec3488d9f9dcd70eebb6c39e1abcf8976bf6`;
+its complete gzip is 35,058,855 bytes, SHA-256
+`29d2eb64d5706bb9f71f54b9cfd3a2670645e489e2ca460706887cfd4cbc3d74`.
+Independent raw-hash/case/summary receipt SHA-256:
+`3aa6a420f16ac32430ab6c0e02d0369af98865008be70e684e2b316dc431ee54`.
+The committed-error case passed at raw line12410; SQLSTATE mapping at11867.
+The former uses real public transaction/model APIs and checks the original
+`BicDbError::Memory` containing the synchronous indexing DimensionMismatch
+detail, detached committed transaction/DDL undo, preserved row/DDL/GUC after
+later ROLLBACK and a fresh SQL session, and healthy recovery with a failed
+derived job. It does not invoke the separate Core timed-Unknown cut or establish
+HA/failover behavior. Core's eight visibility controls remain unexecuted here.
 The overall archive remains open until the remaining jobs terminate and their
 logs/artifacts are retained and independently verified.
 

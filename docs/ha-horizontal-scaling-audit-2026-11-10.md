@@ -17,8 +17,10 @@ Remote main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`*
 Unmerged520 source `2ce4c48202d4d1bb1ef759b08a41dc36f431af6d` passed PGwire
 511/0/2 and separate Rails application20/100 checks, including process-kill
 recovery. All-target, Core and Native failed test compilation on an unconstrained
-channel type; no actual Core/Native cases executed. SQL and remaining-workspace
-are still live. The narrow local test correction is source-reviewed only.
+channel type; no actual Core/Native cases executed. SQL passed 2,682/0/4, including
+the real known-committed finalization-error cleanup and SQLSTATE controls. These
+do not execute Core's timed-Unknown or distributed HA paths. Remaining-workspace
+is still live. The narrow local test correction is source-reviewed only.
 See the [exact findings](design/native-520-regression-findings.md) for pins and
 independent evidence scopes. The candidate remains unmerged; strong-read,
 bounded relocation, cold recovery, physical expansion and capacity qualification

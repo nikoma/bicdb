@@ -42,7 +42,11 @@ transaction commits; it checks DDL, full selected values, GUC state, the origina
 error and a later rollback request. That is generic Committed-plus-error branch
 coverage, not a timed visibility-Unknown SQL control. No SQL-dependency test-hook
 feature is added; timed-Unknown SQL and PG wire cleanup integration remain
-unexecuted/missing.
+unexecuted/missing. The generic dimension control shows a committed source/DDL
+with definitively failed required post-commit Sync model work: preserving its
+original Memory error proves neither atomic source-plus-derived indexing nor
+rollback-on-error or SQL client retry safety. These are existing post-commit
+semantics, not a new all-errors outcome protocol.
 
 ## Public buffered and other SQL callers
 

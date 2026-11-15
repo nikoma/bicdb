@@ -771,7 +771,7 @@ fn native_range_move_remote_backend_reports_blocked_stage_without_failing_host()
         assert!(status
             .last_error
             .as_deref()
-            .is_some_and(|error| error.contains("is not implemented")));
+            .is_some_and(|error| error.starts_with("blocked at ")));
         slot.as_mut().unwrap().stop(&budget(5000)).unwrap();
     });
 }

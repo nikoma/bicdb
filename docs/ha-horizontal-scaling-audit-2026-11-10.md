@@ -15,12 +15,12 @@ scaling and fault-safe rebalance of the current artifact remain unqualified.
 
 Main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
 Draft **1.0.520-beta / `d3af39c107951802a612d31b42e70fd4bc90e71c`** passed
-formatting/static checks, PGwire511/0/2 and Rails20runs/100assertions. All-target,
+formatting/static checks, SQL2682/0/4, PGwire511/0/2 and Rails20runs/100assertions. All-target,
 Core and serial Native test compilation failed on one private response-validator
 call in the new real-TLS control. The Core/native production helper builds
 passed, but zero Core/native controls executed. The following no-default
-consumer check was skipped. SQL and remaining workspace are still running;
-this is not a complete passing or archived CI run.
+consumer check was skipped. Remaining workspace is still running; this is
+not a complete passing or archived CI run.
 
 A separate minimal source-reviewed successor fixes the validator's internal
 visibility and two test-only cut-retention defects without changing validation

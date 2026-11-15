@@ -16,8 +16,9 @@ version) failed all-target/Core/Native test compilation on the new TLS control's
 private response-validator call. No current Core/native or ledger-parser cases
 ran. Its passing standalone Rails and PGwire results do not test this producer.
 The reviewed successor `980b5983c927859c6218edc78e17b68d71eae2ac` is not compiled
-or executed at this checkpoint. SQL and remaining-workspace jobs on d3 are still
-running. See the [exact source-scoped findings](../../../docs/design/native-520-regression-findings.md).
+or executed at this checkpoint. SQL2682/0/4, PGwire511/0/2 and Rails20runs/100
+assertions passed on d3; they do not execute this producer. Remaining workspace
+is still running. See the [exact source-scoped findings](../../../docs/design/native-520-regression-findings.md).
 No preceding pass is inherited, and no physical qualification gate changes.
 
 This directory contains the format verifier, a read-only cross-run reconciliation

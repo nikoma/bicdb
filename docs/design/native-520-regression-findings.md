@@ -4,16 +4,16 @@ This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe64
 
 ## Actual execution
 
-### Sourced3: test compilation failed; remaining jobs still running
+### Sourced3: test compilation failed; remaining-workspace still running
 
 Public draft **1.0.520-beta / `d3af39c107951802a612d31b42e70fd4bc90e71c`**,
 tree `a80a2894bf8d852641788f23cca142d7f1fb977b`, runs at actual PR checkout
 `7d5f1066dc3c1a666b4daa1d5f1468ee1ebf6595` with the same tree in normal
 [Tests43757717285](https://github.com/nikoma/bicdb/actions/runs/43757717285) and
 [Rails43757717284](https://github.com/nikoma/bicdb/actions/runs/43757717284).
-This is an **incomplete execution checkpoint**: SQL132945377726 and
-remaining-workspace132945377712 are still running. Their outcomes and complete
-archive inventory are not inferred. The same sole collector is retained;
+This is an **incomplete execution checkpoint**: remaining-workspace132945377712
+is still running. Its outcome and the complete archive inventory are not
+inferred. SQL132945377726 has completed successfully. The same sole collector is retained;
 there was no manual workflow dispatch, rerun or cancellation. Main remains
 **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
 
@@ -24,8 +24,23 @@ there was no manual workflow dispatch, rerun or cancellation. Main remains
 | Formatting and three static jobs | Passed within scope | Nested-module resolution now succeeds. Dependency, licensing and selector checks passed; these do not execute native acceptance |
 | PGwire132945377717 | Passed within scope | 511 passed / 0 failed / 2 ignored, 513 unique cases across 28 summaries. Separate Oracle HR target 50/0, embedded HA 11/0, verification 3/0 and protocol target 195/0. These targets do not all run under one Oracle profile |
 | Rails132945355061 | Passed within scope | 20 runs / 100 assertions, zero failures/errors/skips; 24 reports, 24 cable messages, zero failed jobs, two overlapping workers; migration/seed/HTTP/WebSocket and standalone restart acceptance |
-| SQL and remaining workspace | Inconclusive while running | Preserve both useful jobs to natural completion; no earlier source's result transfers |
+| SQL132945377726 | Passed within scope | 2,682 passed / 0 failed / 4 ignored across 282 summaries; 2,686 result rows / 2,685 unique names. Actual committed-error DDL/row/GUC cleanup and durability SQLSTATE controls passed |
+| Remaining-workspace132945377712 | Inconclusive while running | Preserve the useful job to natural completion; no earlier source's result transfers |
 | Full corrected native runtime, physical expansion and production qualification | Not tested | Component passes do not clear these gates |
+
+SQL's complete original raw log is 348,523,507 bytes, SHA256
+`7fd5480f8ea9df1520232e719d10db31af32ab313c961ac3d808e2e35c15ba37`;
+gzip SHA256 `6e60d96808e6834e35a358d50a27ddc5e02ca88c4713cd7092ddf10bc8bd1a6b`.
+Independent root full-stream receipt SHA256
+`67c528dad91850983e6d7296f7efa0c8bae6014eb6c7a079cdd31a715b2d4a41`
+verifies every byte and all case/summaries. The genuine post-commit in-memory
+model dimension error preserves SQL DDL/row/GUC and original error at raw14372;
+its separate SQLSTATE control passed at raw13829. That unit checks constructed
+error mappings; neither control injects disk EIO. This is local SQL acceptance on d3,
+not Core's unexecuted native/timed-Unknown controls or general distributed SQL.
+The same bare name appears in two distinct test targets; both cases executed.
+Bare-name uniqueness is not case identity across binaries, and these are not
+independent physical trials.
 
 The actual all-target raw log is 1,395,187 bytes, SHA256
 `2ee177da3d88f9a99bda3abc8148b3dc02610f3b8c4eab8802f1933f580c25f9`;
@@ -183,8 +198,9 @@ is neither a published release nor a verified deployment.
 | Serial native job | **Failed** | 396 / 55 / 1; 452 unique cases, 986 filtered; 34 FIRST and 21 HOT failures |
 | Independent physical expansion, stable five-node throughput, production admission | Not tested | No qualification gate is cleared |
 
-Core contains one genuinely repeated child case and SQL contains one repeated
-case across targets; these are result rows, not counts of independent trials.
+Core contains one genuinely repeated child case. SQL has one bare name shared
+by two distinct test targets; both source-defined cases executed. These are
+result rows, not counts of independent physical trials.
 Core's pass does not substitute for its separately selected failed native job.
 The three INITIAL socket-transition, three dispatcher-publication and three
 same-service identity-wait controls passed in the native job. No new first-policy

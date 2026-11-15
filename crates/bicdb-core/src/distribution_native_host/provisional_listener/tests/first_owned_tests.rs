@@ -85,7 +85,7 @@ fn native_command(
         .recv_timeout(Duration::from_secs(5))
         .map_err(|_| invalid("FIRST actual native owner diagnostic return unavailable"))?;
     if data["ok"] != true {
-        return Err(invalid(format!(
+        return Err(invalid(&format!(
             "actual native owner diagnostic failed: {data}"
         )));
     }
@@ -100,7 +100,7 @@ fn snapshot(sender: &mpsc::Sender<OwnerCommand>) -> Result<serde_json::Value> {
         .recv_timeout(Duration::from_secs(5))
         .map_err(|_| invalid("FIRST owner diagnostic return unavailable"))?;
     if actual["ok"] != true {
-        return Err(invalid(format!(
+        return Err(invalid(&format!(
             "FIRST actual owner diagnostic error: {actual}"
         )));
     }

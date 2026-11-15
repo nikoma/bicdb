@@ -1602,9 +1602,9 @@ mod native_read_stamp_tests {
     fn activation_identity_accepts_only_original_live_controlled_lease() {
         let gate = RangeMutationGate::default();
         let owner = Uuid::now_v7();
-        let frozen = gate.try_freeze(range(1), owner).unwrap();
+        let frozen = gate.try_freeze(RangeId::new(1).unwrap(), owner).unwrap();
         let identity = frozen.observe_identity().unwrap();
-        let foreign = gate.try_freeze(range(2), owner).unwrap();
+        let foreign = gate.try_freeze(RangeId::new(2).unwrap(), owner).unwrap();
         let control = gate.try_controlled_mutation(&frozen).unwrap();
         let other = gate.try_controlled_mutation(&foreign).unwrap();
         identity.require_same_controlled(&frozen, &control).unwrap();
@@ -1622,7 +1622,10 @@ mod native_read_stamp_tests {
     #[test]
     fn activation_comparison_identity_does_not_retain_actual_frozen_owner() {
         let gate = RangeMutationGate::default();
-        let frozen = Arc::new(gate.try_freeze(range(1), Uuid::now_v7()).unwrap());
+        let frozen = Arc::new(
+            gate.try_freeze(RangeId::new(1).unwrap(), Uuid::now_v7())
+                .unwrap(),
+        );
         let identity = frozen.observe_identity().unwrap();
         let weak = Arc::downgrade(&frozen);
         let control = gate.try_controlled_mutation(&frozen).unwrap();
@@ -1631,10 +1634,12 @@ mod native_read_stamp_tests {
         assert!(weak.upgrade().is_none());
         {
             let states = gate.inner.ranges.lock();
-            assert!(states[&range(1)].frozen_owner_dropped);
+            assert!(states[&RangeId::new(1).unwrap()].frozen_owner_dropped);
         }
         drop(control);
-        let replacement = gate.try_freeze(range(1), identity.owner).unwrap();
+        let replacement = gate
+            .try_freeze(RangeId::new(1).unwrap(), identity.owner)
+            .unwrap();
         assert!(identity.require_same_current(&replacement).is_err());
         let next_control = gate.try_controlled_mutation(&replacement).unwrap();
         assert!(identity

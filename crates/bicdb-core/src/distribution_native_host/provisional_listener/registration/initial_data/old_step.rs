@@ -634,6 +634,7 @@ impl NativeMetadataControlHost {
             .ok_or_else(|| invalid("actual ORIGINAL data owner absent"))?;
         let actual = initial.retained_old_source_identity(range)?;
         let database = initial
+            .initial
             .service
             .try_lock()
             .ok_or_else(|| invalid("actual retirement control service busy"))?

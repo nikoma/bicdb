@@ -96,6 +96,8 @@ pub(crate) use native_joint_handoff::{
 pub(crate) use native_writer::NativeWriterRegistryRefresh;
 mod current_image_replacement;
 mod current_image_resume;
+#[cfg(feature = "tls-replication")]
+mod initial_member_cold;
 mod native_completion;
 mod native_image_install;
 mod native_range_read;

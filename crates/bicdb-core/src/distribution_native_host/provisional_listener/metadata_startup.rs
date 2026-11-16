@@ -104,6 +104,23 @@ impl NativeInitialConsensusLaunch {
         )?;
         let topology = observed.committed_topology(business)?.clone();
         self.seed.require_initial_observer_identity(&topology)?;
+        if self.reopened() {
+            // A reopened member opens DATA in the steady state only. What a
+            // member that was down during a range move must do to rejoin
+            // that move is a separate protocol; until the move is completed
+            // (or aborted) in committed metadata this member stays
+            // metadata-only and repeats this step.
+            if let Some(unfinished) = topology
+                .relocations
+                .values()
+                .find(|relocation| !relocation.phase.is_terminal())
+            {
+                return Err(invalid(&format!(
+                    "reopened initial member cannot open DATA while the move of range {} is unfinished in committed metadata ({:?})",
+                    unfinished.range_id, unfinished.phase
+                )));
+            }
+        }
         self.transport.install_topology(topology)?;
         let policy = {
             let service = self

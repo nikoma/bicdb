@@ -126,11 +126,12 @@ pub struct NativeMetadataHostStatus {
     pub data_refusal: &'static str,
 }
 
-/// No DB/service/store/coordinator accessors, Clone or deserialization. This
-/// owner is intentionally fresh-only; existing roots need a separate strict
-/// cold lifecycle and can never be retrofitted through this constructor.
+/// No DB/service/store/coordinator accessors, Clone or deserialization. The
+/// fresh constructor refuses any existing root; an existing root of an
+/// INITIAL member is opened only by the strict `reopen_metadata_only`, which
+/// has no provisional (pre-consensus) phase and creates nothing.
 pub struct NativeMetadataHost {
-    provisional: NativeProvisionalHost,
+    provisional: Option<NativeProvisionalHost>,
     permit: Option<NativeInitialConsensusPermit>,
     launch: Option<NativeInitialConsensusLaunch>,
     listener: Option<crate::distribution_transport::ClusterDataServerHandle>,
@@ -216,7 +217,7 @@ impl NativeMetadataHost {
         )?);
         let provisional = NativeProvisionalHost::start(seed, network.clone(), parent)?;
         Ok(Self {
-            provisional,
+            provisional: Some(provisional),
             permit: None,
             launch: None,
             listener: None,
@@ -225,6 +226,120 @@ impl NativeMetadataHost {
             network,
             template,
             phase: NativeMetadataHostPhase::Provisional,
+            last_enrolled_learner: None,
+            last_caught_up_learner_store_id: None,
+            last_metadata_maintenance: None,
+            last_metadata_promotion: None,
+            last_metadata_leadership_transfer: None,
+            range_move: None,
+        })
+    }
+    /// Reopen the EXISTING root of an INITIAL member whose earlier process
+    /// already exposed consensus (it reached `Launch`). The same common plan,
+    /// node identity and own TLS files as the fresh start are required; the
+    /// protected birth, the protected preparation record and the persisted
+    /// owned metadata state must agree with them.
+    ///
+    /// The result is the `OwnedMetadata` phase of a NEW process: the owned
+    /// metadata state as a Follower with no known leader (persisted term,
+    /// vote and log kept), a new metadata-only service and its listener.
+    /// Nothing of the earlier process's memory is restored: no leadership of
+    /// metadata or of a range, no writer policy, no recovered epoch, no
+    /// readiness. `EnableControl` and `OpenInitialData` then run as on a
+    /// fresh host, except that DATA is opened through a newly enrolled writer
+    /// policy and the ordinary leader recovery instead of the genesis proof.
+    pub fn reopen_metadata_only(
+        root: &Path,
+        plan: NativeMetadataBootstrapPlan,
+        local: ClusterNodeId,
+        local_address: &str,
+        network: ClusterNetworkTransportConfig,
+        paged_buffer_pool_bytes: u64,
+        parent: &CancellationToken,
+    ) -> Result<Self> {
+        parent.check()?;
+        let internal = plan.validated(parent)?;
+        network.validate()?;
+        if !root.is_dir()
+            || !(8 * 1024 * 1024..=1024 * 1024 * 1024).contains(&paged_buffer_pool_bytes)
+            || network.dev_localhost_plaintext
+        {
+            return Err(invalid(
+                "initial member reopen requires an existing root, supported memory and TLS",
+            ));
+        }
+        let tls = network
+            .tls
+            .as_ref()
+            .ok_or_else(|| invalid("own native TLS configuration required"))?;
+        if !tls.require_client_cert {
+            return Err(invalid("native metadata host requires mutual TLS"));
+        }
+        let pin = crate::replication_transport::replication_certificate_sha256(&tls.cert_path)?;
+        if !internal.topology.nodes.contains_key(&local) {
+            return Err(invalid("local identity absent from common plan"));
+        }
+        let numeric: std::net::SocketAddr = local_address
+            .parse()
+            .map_err(|_| invalid("metadata host requires numeric own address"))?;
+        if numeric.port() == 0 {
+            return Err(invalid("metadata host requires nonzero own port"));
+        }
+        let db = DbConfig::default()
+            .with_fsync(true)
+            .with_storage_mode(StorageMode::ServerPaged)
+            .with_paged_buffer_pool_bytes(paged_buffer_pool_bytes);
+        let (seed, accepted) =
+            NativeProvisionalNode::open_exposed(root, db, internal, &local, parent)?;
+        let launch = NativeInitialConsensusLaunch::reopen(
+            Arc::new(seed),
+            accepted,
+            network.clone(),
+            parent,
+        )?;
+        // Own identity as this node's OWN last committed configuration names
+        // it: the endpoint and certificate given to this process must be the
+        // committed ones. A member whose identity changed while it was down
+        // is refused here and by every peer.
+        let member = {
+            let store = launch.lock_initial_metadata(parent)?;
+            store
+                .committed_topology()
+                .nodes
+                .get(&local)
+                .cloned()
+                .ok_or_else(|| {
+                    invalid("reopened member absent from its own committed configuration")
+                })?
+        };
+        if member.lifecycle != ClusterNodeLifecycle::Active
+            || member.address != local_address
+            || member.tls_certificate_sha256.as_deref() != Some(pin.as_str())
+        {
+            return Err(invalid(
+                "own endpoint/TLS leaf differs from the reopened member's committed identity",
+            ));
+        }
+        let mut template = plan.configuration;
+        template.node_id = member.id.clone();
+        template.node_incarnation = member.incarnation;
+        template.node_address = member.address.clone();
+        template.node_tls_certificate_sha256 = member.tls_certificate_sha256.clone();
+        template.node_capacity_bytes = member.capacity_bytes;
+        template.transport = network.clone(); // NEVER seed-local TLS paths.
+        template.validate()?;
+        let listener = launch.start_metadata_listener(network.clone(), parent)?;
+        parent.check()?;
+        Ok(Self {
+            provisional: None,
+            permit: None,
+            launch: Some(launch),
+            listener: Some(listener),
+            control: None,
+            supervisor: None,
+            network,
+            template,
+            phase: NativeMetadataHostPhase::OwnedMetadata,
             last_enrolled_learner: None,
             last_caught_up_learner_store_id: None,
             last_metadata_maintenance: None,
@@ -399,11 +514,13 @@ impl NativeMetadataHost {
                         "initial preparation cannot replace exposed metadata",
                     ));
                 }
-                let configuration = self.provisional.observe_initial_configuration(&token)?;
-                self.permit = Some(
-                    self.provisional
-                        .prepare_common_initial_configuration(&configuration, &token)?,
-                );
+                let provisional = self
+                    .provisional
+                    .as_ref()
+                    .ok_or_else(|| invalid("a reopened initial member has no preparation phase"))?;
+                let configuration = provisional.observe_initial_configuration(&token)?;
+                self.permit =
+                    Some(provisional.prepare_common_initial_configuration(&configuration, &token)?);
                 self.phase = NativeMetadataHostPhase::Prepared;
             }
             NativeMetadataHostAction::Launch => {
@@ -415,7 +532,14 @@ impl NativeMetadataHost {
                         .permit
                         .as_ref()
                         .ok_or_else(|| invalid("actual all-C initial preparation required"))?;
-                    self.launch = Some(self.provisional.finish_initial_consensus(permit, &token)?);
+                    self.launch = Some(
+                        self.provisional
+                            .as_mut()
+                            .ok_or_else(|| {
+                                invalid("a reopened initial member has no provisional owner")
+                            })?
+                            .finish_initial_consensus(permit, &token)?,
+                    );
                     self.phase = NativeMetadataHostPhase::OwnedMetadata;
                     self.permit.take();
                 }
@@ -556,7 +680,9 @@ impl NativeMetadataHost {
                     listener.stop_and_drain(&token)?;
                 }
                 self.listener.take();
-                self.provisional.stop_retained(&token)?;
+                if let Some(provisional) = self.provisional.as_mut() {
+                    provisional.stop_retained(&token)?;
+                }
                 self.phase = NativeMetadataHostPhase::Stopped;
             }
             NativeMetadataHostAction::Status => {}
@@ -565,3 +691,6 @@ impl NativeMetadataHost {
         self.status(&token)
     }
 }
+
+#[cfg(test)]
+mod restart_tests;

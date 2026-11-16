@@ -340,7 +340,22 @@ impl NativeRemoteImageSourceRegistry {
                 if request.operation != NativeSourceDiscoveryOperationV1::Start {
                     return Err(invalid("source discovery has not started"));
                 }
-                if table.len() >= 8 {
+                // As for the session table: an attempt whose source retired
+                // its OLD custody after the joint open stays and no longer
+                // counts; one without a source, or in use right now, counts.
+                let holding = table
+                    .values()
+                    .filter(|attempt| {
+                        attempt.source.try_lock().is_none_or(|slot| {
+                            slot.as_ref().is_none_or(|source| {
+                                !source
+                                    .old_custody_retired_after_joint_open()
+                                    .unwrap_or(false)
+                            })
+                        })
+                    })
+                    .count();
+                if holding >= MAX_HELD_SOURCE_EXPORTS {
                     return Err(invalid(
                         "source discovery custody capacity; no timeout eviction",
                     ));

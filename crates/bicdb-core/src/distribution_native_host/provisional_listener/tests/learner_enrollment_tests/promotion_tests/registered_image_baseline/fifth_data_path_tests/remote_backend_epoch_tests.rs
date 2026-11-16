@@ -134,7 +134,8 @@ fn native_remote_backend_old_epoch_preflight_and_abort_over_rpc() {
                 Role::Voter {
                     durable_epoch: original.epoch,
                     unfinished_command: false,
-                    unfinished_recovery: false
+                    unfinished_recovery: false,
+                    writer_policy_refusal: None
                 },
                 "old voter {i}"
             );
@@ -245,7 +246,8 @@ fn native_remote_backend_probe_reports_unfinished_command_and_recovered_range_mo
                 Role::Voter {
                     durable_epoch: original.epoch,
                     unfinished_command: false,
-                    unfinished_recovery: false
+                    unfinished_recovery: false,
+                    writer_policy_refusal: None
                 }
             );
         }
@@ -282,7 +284,8 @@ fn native_remote_backend_probe_reports_unfinished_command_and_recovered_range_mo
             Role::Voter {
                 durable_epoch: original.epoch,
                 unfinished_command: true,
-                unfinished_recovery: false
+                unfinished_recovery: false,
+                writer_policy_refusal: None
             }
         );
         for &i in voters.iter().filter(|i| **i != leader) {
@@ -337,7 +340,8 @@ fn native_remote_backend_probe_reports_unfinished_command_and_recovered_range_mo
             Role::Voter {
                 durable_epoch: original.epoch,
                 unfinished_command: true,
-                unfinished_recovery: false
+                unfinished_recovery: false,
+                writer_policy_refusal: None
             }
         );
         let backend = RemoteJoinedHandoffBackend::new(node(4), five.clients[leader].clone());
@@ -481,7 +485,8 @@ fn native_remote_backend_probe_reports_unfinished_command_and_recovered_range_mo
                 Role::Voter {
                     durable_epoch: original.epoch,
                     unfinished_command: false,
-                    unfinished_recovery: false
+                    unfinished_recovery: false,
+                    writer_policy_refusal: None
                 }
             );
         }

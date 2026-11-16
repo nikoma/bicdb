@@ -2080,6 +2080,15 @@ impl ClusterDataNodeService {
         ))
     }
 
+    /// This member's installed native writer policy, for the read-only
+    /// range move probe to compare with the member's committed configuration
+    /// outside this service's latch. It grants and changes nothing.
+    pub(crate) fn range_move_probe_writer_state(
+        &self,
+    ) -> Result<Arc<crate::db::NativeWriterHostState>> {
+        self.range_writes.native_writer_host_state()
+    }
+
     pub fn install_range_backup_fence(
         &mut self,
         range: &RangeDescriptor,

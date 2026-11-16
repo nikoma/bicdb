@@ -1400,6 +1400,19 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
             }
             let token = bounded(parent, REQUEST);
             match self.probe(&replica.node_id, range, &token) {
+                Ok(NativeRangeMoveProbeRoleV1::Voter {
+                    writer_policy_refusal: Some(why),
+                    ..
+                }) => {
+                    return Err(refused(
+                        &replica.node_id,
+                        "voter",
+                        format!(
+                            "its installed writer policy does not cover the committed membership ({why}). A voter publishes a member that joined by its own registry refresh (its status reports the last attempt); until it has, it would refuse {} as the target of the image, and a refused image capture cannot be started again",
+                            self.target
+                        ),
+                    ))
+                }
                 Ok(NativeRangeMoveProbeRoleV1::Voter { durable_epoch, .. })
                     if durable_epoch <= range.epoch => {}
                 Ok(NativeRangeMoveProbeRoleV1::Voter { durable_epoch, .. }) => {

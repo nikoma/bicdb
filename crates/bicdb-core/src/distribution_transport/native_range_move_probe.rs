@@ -36,11 +36,20 @@ pub(crate) enum NativeRangeMoveProbeRoleV1 {
     /// the range that is fenced and not yet activated. Such a recovery can
     /// only finish under the range configuration it was started for, and a
     /// source Close refuses the voter while it stands.
+    /// `writer_policy_refusal`: why this voter's installed writer policy
+    /// does not cover its own committed configuration (its metadata voters
+    /// and members), in the voter's own words; absent when it covers it.
+    /// A voter publishes a member that joined into its policy by its own
+    /// registry refresh. Until it has, it refuses that member as the target
+    /// of an image it donates, and a donor's refused capture cannot be
+    /// started again.
     Voter {
         durable_epoch: u64,
         unfinished_command: bool,
         #[serde(default)]
         unfinished_recovery: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        writer_policy_refusal: Option<String>,
     },
     /// A registered replica receiver whose admission is live.
     RegisteredReplicaReceiver,
@@ -54,6 +63,9 @@ pub(crate) struct NativeRangeMoveProbeReplyV1 {
     pub range_epoch: u64,
     pub role: NativeRangeMoveProbeRoleV1,
 }
+
+/// The most bytes of a voter's own refusal text one probe reply carries.
+const MAX_PROBE_REFUSAL_BYTES: usize = 512;
 
 /// Receiver side. `initial` and `registered` are the listener's own immutable
 /// mode; both were proved live by the caller of this function.
@@ -95,14 +107,41 @@ pub(super) fn answer(
                 "range move probe: this member is a data owner but not a voter of range {range_id}, and it is not a registered replica receiver"
             )));
         }
-        let (durable_epoch, unfinished_command, unfinished_recovery) = service
-            .try_lock_for(Duration::from_millis(500))
-            .ok_or_else(|| transport_error("range move probe: data service busy; repeat"))?
-            .range_move_voter_facts_for_leader(&range, peer.node_id())?;
+        let (durable_epoch, unfinished_command, unfinished_recovery, writer) = {
+            let service = service
+                .try_lock_for(Duration::from_millis(500))
+                .ok_or_else(|| transport_error("range move probe: data service busy; repeat"))?;
+            let (epoch, command, recovery) =
+                service.range_move_voter_facts_for_leader(&range, peer.node_id())?;
+            (
+                epoch,
+                command,
+                recovery,
+                service.range_move_probe_writer_state(),
+            )
+        };
+        // This member's own installed policy against its own published
+        // committed configuration, compared outside the service latch: a
+        // report, never a grant.
+        let writer_policy_refusal = match writer {
+            Ok(state) => state
+                .require_topology(&topology.read_recursive())
+                .err()
+                .map(|error| error.to_string()),
+            Err(error) => Some(error.to_string()),
+        }
+        .map(|text| {
+            let mut end = text.len().min(MAX_PROBE_REFUSAL_BYTES);
+            while !text.is_char_boundary(end) {
+                end -= 1;
+            }
+            text[..end].to_owned()
+        });
         NativeRangeMoveProbeRoleV1::Voter {
             durable_epoch,
             unfinished_command,
             unfinished_recovery,
+            writer_policy_refusal,
         }
     } else {
         return Err(transport_error(
@@ -150,5 +189,43 @@ impl TcpClusterRelocationTransport {
             ));
         }
         Ok(reply)
+    }
+}
+
+#[cfg(test)]
+mod wire_tests {
+    use super::NativeRangeMoveProbeRoleV1 as Role;
+
+    /// The voter's writer-policy report is optional DATA on the wire: a
+    /// covered policy sends nothing, an absent field reads as covered, and a
+    /// refusal survives the round trip word for word.
+    #[test]
+    fn native_range_move_probe_voter_reply_carries_writer_policy_refusal_as_optional_data() {
+        let covered = Role::Voter {
+            durable_epoch: 7,
+            unfinished_command: false,
+            unfinished_recovery: false,
+            writer_policy_refusal: None,
+        };
+        let text = serde_json::to_string(&covered).unwrap();
+        assert!(!text.contains("writer_policy_refusal"), "{text}");
+        assert_eq!(serde_json::from_str::<Role>(&text).unwrap(), covered);
+        // A reply written before the field existed.
+        assert_eq!(
+            serde_json::from_str::<Role>(
+                r#"{"voter":{"durable_epoch":7,"unfinished_command":false}}"#
+            )
+            .unwrap(),
+            covered
+        );
+        let refused = Role::Voter {
+            durable_epoch: 7,
+            unfinished_command: false,
+            unfinished_recovery: false,
+            writer_policy_refusal: Some("current voter registry changed".into()),
+        };
+        let text = serde_json::to_string(&refused).unwrap();
+        assert_eq!(serde_json::from_str::<Role>(&text).unwrap(), refused);
+        assert_ne!(refused, covered);
     }
 }

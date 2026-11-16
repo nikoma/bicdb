@@ -704,6 +704,8 @@ pub(crate) struct NativeRemoteImageSourceRegistry {
     provider: Arc<crate::distribution_metadata_read_provider::MetadataReadProvider>,
     original_process: std::sync::OnceLock<CancellationToken>,
 }
+/// The most exports one donor process holds custody of at a time.
+pub(super) const MAX_HELD_SOURCE_EXPORTS: usize = 8;
 impl NativeRemoteImageSourceRegistry {
     pub(crate) fn new(
         transport: Arc<TcpClusterRelocationTransport>,
@@ -854,7 +856,19 @@ impl NativeRemoteImageSourceRegistry {
             }
             return Ok(id);
         }
-        if sessions.len() >= 8 {
+        // A session whose OLD certificate custody was retired after the joint
+        // open holds no cut, pin or freeze any more. It stays in the table
+        // and only stops counting, so the capacity bounds the exports this
+        // process still holds custody of and not the moves of its lifetime.
+        // A session that is in use right now always counts.
+        let holding = sessions
+            .values()
+            .filter(|held| {
+                held.try_lock()
+                    .is_none_or(|held| !matches!(held.old, ActualSourceOld::RetiredJoint { .. }))
+            })
+            .count();
+        if holding >= MAX_HELD_SOURCE_EXPORTS {
             return Err(invalid(
                 "source session owner capacity; retained cuts not evicted",
             ));

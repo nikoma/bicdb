@@ -3,6 +3,8 @@
 //! A native audit only admits the exact descriptor; closed native readiness,
 //! completion, activation and final readQQ/MQ are separate real producers.
 use super::*;
+#[cfg(test)]
+mod phase_success_controls;
 
 // Diagnostic classification only; never format the original error under State
 // or operation guards. The actual Result is propagated unchanged.
@@ -256,7 +258,9 @@ impl NativeHotRecoveryMaintenance {
             );
         }
         #[cfg(test)]
-        if self.host.test_allocation_recovery_is_paused(parent)? {
+        if self.host.test_allocation_recovery_is_paused(parent)?
+            && !phase_success_controls::selected(self)
+        {
             return Err(invalid(
                 "actual same-worker allocation held before closed recovery, no Ready grant",
             ));
@@ -376,6 +380,15 @@ impl NativeHotRecoveryMaintenance {
             // Retain that progress before late checks, so the next turn does
             // not repeat an already successful Fence/Prepare/Complete/Activate.
             job.position += 1;
+            #[cfg(test)]
+            phase_success_controls::after_actual_validated_success(
+                self,
+                job,
+                &role,
+                parent,
+                &token,
+                || held.require_actual_store_slot(),
+            );
             self.live(&token)?;
             role.require_live_request()?;
             held.require_actual_store_slot()?;

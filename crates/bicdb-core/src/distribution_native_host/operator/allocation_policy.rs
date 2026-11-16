@@ -118,3 +118,18 @@ impl NativeMetadataHost {
             .test_allocation_evidence())
     }
 }
+
+#[cfg(test)]
+impl NativeMetadataHost {
+    pub(in crate::distribution_native_host) fn test_actual_allocation_phase_return(
+        &self,
+        range: crate::RangeId,
+        mode: u8,
+        parent: &CancellationToken,
+    ) -> Result<(Result<()>, Result<serde_json::Value>)> {
+        self.control
+            .as_ref()
+            .ok_or_else(|| invalid("actual allocation phase control backend absent"))?
+            .test_actual_allocation_phase_return(range, mode, parent)
+    }
+}

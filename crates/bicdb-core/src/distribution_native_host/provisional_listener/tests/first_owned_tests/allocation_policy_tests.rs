@@ -389,3 +389,5 @@ fn exercise(five: &mut Five, report: &mut Report, mode: u8) -> Result<()> {
     )?;
     Ok(())
 }
+
+mod phase_return_tests;

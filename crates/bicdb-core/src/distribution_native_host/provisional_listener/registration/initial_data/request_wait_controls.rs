@@ -3,6 +3,62 @@
 use super::*;
 
 impl NativeMetadataControlHost {
+    pub(in crate::distribution_native_host) fn test_bootstrap_request_wait(
+        &self,
+        range: crate::RangeId,
+        mode: u8,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        let controller = self
+            .controller
+            .as_ref()
+            .ok_or_else(|| invalid("actual bootstrap controller absent"))?;
+        let metadata = || -> Result<serde_json::Value> {
+            // Diagnostic reads occur outside the held service guard and use
+            // no acceptance deadline or metadata publication operation.
+            let store = self
+                .backend
+                .lock_metadata(&CancellationToken::uncancelable())?;
+            Ok(
+                serde_json::json!({"status":store.status(),"C":store.committed_topology(),
+                "store_id":store.test_native_metadata_identity()}),
+            )
+        };
+        let before_native = self.test_request_native_counters(range)?;
+        let before_metadata = metadata()?;
+        let original_deadline = parent.deadline();
+        let actual = if mode == 3 {
+            let held = self.backend.service.lock();
+            let original = CancellationToken::uncancelable();
+            let result = controller.bootstrap(&original);
+            let returned = serde_json::json!({"actual_original_instant_busy":true,
+                "actual_returned_ok":result.is_ok(),"original_error":result.as_ref().err().map(ToString::to_string),
+                "unbounded_parent":original.deadline().is_none()});
+            drop(held);
+            Ok(returned)
+        } else {
+            ClusterDataNodeService::test_actual_request_service_wait(
+                &self.backend.service,
+                parent,
+                mode,
+                |original| controller.bootstrap(original),
+            )
+        };
+        // Preserve the actual result before these separate read diagnostics.
+        let after_native = self.test_request_native_counters(range);
+        let after_metadata = metadata();
+        Ok(serde_json::json!({"actual_control":actual.as_ref().ok(),
+            "original_control_error":actual.as_ref().err().map(ToString::to_string),
+            "before_native":before_native,"after_native":after_native.as_ref().ok(),
+            "after_native_error":after_native.as_ref().err().map(ToString::to_string),
+            "before_metadata":before_metadata,"after_metadata":after_metadata.as_ref().ok(),
+            "after_metadata_error":after_metadata.as_ref().err().map(ToString::to_string),
+            "original_parent_deadline_unchanged":parent.deadline()==original_deadline,
+            "routing_DATA_only":true,"bootstrap_called_once":true,
+            "controller_store_open_id":controller.store_open_id,
+            "actual_open_live_after":controller.actual_open.require_live().is_ok(),
+            "same_bound_service_after":controller.require_service(&self.backend.service,controller.store_open_id).is_ok()}))
+    }
     pub(in crate::distribution_native_host) fn test_committed_publication_request_wait(
         &self,
         range: crate::RangeId,

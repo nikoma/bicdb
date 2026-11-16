@@ -1,0 +1,60 @@
+{
+  "schema": 1,
+  "base_commit": "4f01b680462e164ee821c93d7e5acf5625cc1521",
+  "scope": "bootstrap finite service wait only; source-defined controls not executed",
+  "preservation": [
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration.rs",
+      "base_sha256": "e64d0f517b30ab7cc44350978dca059b19db97e0f92dde67a731d4d7a1be0e79",
+      "head_sha256": "9e2a1d67efab2877644a0351b66feb2ff30a01bbde573ed056366af089aea01a",
+      "inverse_entire_original_file_exact": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data/request_wait_controls.rs",
+      "base_sha256": "02a4ee2cd142f3b5d6ef8cc2073e3c2419b16e50f4edb865888991f9a79791b9",
+      "head_sha256": "bc70e5c49cc12faa7e2d36da80677d69c5f5337570f1b04e9e5fcaa752b4d575",
+      "inverse_entire_original_file_exact": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/operator/first_acceptance.rs",
+      "base_sha256": "f91babb90c7bf4c385ef3348256eceed46ea09d303c7bb23512e763f2e7ce5e4",
+      "head_sha256": "61a4b67ca71f8022dae919dfd0fc60aa65ac3d70e60206e7830205bbecb4037a",
+      "inverse_entire_original_file_exact": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "base_sha256": "a75f3e19ae0ca23a185655dda010552630f33894f69fee78d25b63e63506fa36",
+      "head_sha256": "d7b61fa791886dbad7e2210abca0aa83901d5686e382aa57b78bdcc869fc91f1",
+      "inverse_entire_original_file_exact": true
+    }
+  ],
+  "new_test_file": {
+    "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests/bootstrap_service_wait_tests.rs",
+    "sha256": "b727554f58c97b46b6e196bebd6591a35a43bc1778ed9394d793eec2977b5333",
+    "controls_defined": 4
+  },
+  "validation": {
+    "standalone_recursive_rustfmt": "passed",
+    "diff_whitespace": "passed",
+    "entire_original_files_inverse": "passed",
+    "compiler_rust_sdk_db_ci_cloud": "not run"
+  },
+  "predicate_order": [
+    "original parent check",
+    "finite existing identity wait OR original unbounded instant try_lock",
+    "service guard dropped before lock_metadata",
+    "actual listener/database binding",
+    "actual committed topology/status read",
+    "snapshot validation",
+    "same original parent check"
+  ],
+  "excluded": [
+    "timeout changes",
+    "RPC retry or reproposal",
+    "discovery routing changes",
+    "cached authority/snapshot fallback",
+    "other bootstrap/status/registry paths",
+    "existing CLI assertions",
+    "Page kernel/cold/Joined/PG features"
+  ]
+}

@@ -150,12 +150,20 @@ impl NativeMetadataRegistrationController {
     }
     pub(crate) fn bootstrap(&self, parent: &CancellationToken) -> Result<ClusterBootstrapSnapshot> {
         parent.check()?;
-        let actual = self
-            .backend
-            .service
-            .try_lock()
-            .ok_or_else(|| invalid("native bootstrap service busy"))?
-            .listener_open_guard();
+        let actual = if parent.deadline().is_some() {
+            // Bootstrap routing DATA only. Reuse the caller's finite request;
+            // release the actual service guard before acquiring metadata.
+            ClusterDataNodeService::capture_actual_listener_identity_waiting(
+                &self.backend.service,
+                parent,
+            )?
+        } else {
+            self.backend
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("native bootstrap service busy"))?
+                .listener_open_guard()
+        };
         let store = self.backend.lock_metadata(parent)?;
         store.require_listener_database(&actual)?;
         let status = store.status();

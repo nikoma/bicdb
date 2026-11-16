@@ -43,6 +43,75 @@ failure is not a substitute for a designed SQL admission boundary. Do not
 work around native strict-open refusal by opening another metadata owner,
 resetting the catalogue or exposing the raw shared database as a read fallback.
 
+## Startup ordering and potential generic SQL exposure
+
+There is **no mandatory synchronous native-profile refusal before the CLI binds
+its PostgreSQL socket** in this source. The exact single-database order is:
+
+1. CLI `Command::Serve` / `ServePg` calls `run_serve_command` after config-only
+   validation (`--check-config` returns without serving).
+2. `serve_with_host_services` calls `TcpListener::bind` **before**
+   `open_with_startup_gate`. While `PgWireServer::open` runs in a background
+   thread, the gate can return PostgreSQL `57P03`; it is not a native profile gate.
+3. `PgWireServer::open` obtains local storage configuration and opens `BicDb`.
+   `open_with_context` performs partition/profile/TLS/index setup, creates or
+   loads the generic router and returns the server. None of those entry points
+   performs a mandatory check rejecting the native virtual-range profile as a
+   SQL host. Specific roots can fail during setup: missing migrations, pending
+   catalog recovery or metadata writes needing native policy are still refused.
+   Fully prepared existing local catalogs can avoid such mutations; their
+   migrations are not a general native-read admission mechanism.
+4. `install_host_services` only records the CLI-selected balanced/manual service.
+   `serve_existing_listener` logs `server.listening` and calls
+   `start_background_tasks` → `start_host_services`. The controller's `start`
+   invokes `PgWireHostContext::start_distribution_controller`, which calls
+   `start_distribution_supervisor` when a router exists and returns `Ok(())`.
+5. The supervisor uses `thread::spawn`; its generic metadata open later refuses
+   known born-v2 and calls `server.request_shutdown`. There is no readiness join
+   between its successful native authority construction and the SQL accept loop.
+   `serve_existing_listener_async` accepts until it observes shutdown.
+
+Thus, **if generic database/SQL setup succeeds**, the CLI has a source-level
+potential to accept local SQL before asynchronous supervisor refusal. This is an
+ordering concern, not a reproduced query result or a demonstrated false absence.
+It must not be upgraded to a claim that every existing native root opens or that
+any particular query has succeeded during that interval.
+
+The embedding bypass is broader than this transient window:
+
+- Public `bicdb_pgwire::serve` calls `serve_with_host_services` with an **empty**
+  service list. Public `serve_listener_with_config` opens a `PgWireServer` then
+  directly calls `serve_existing_listener`, also without installing placement.
+- Public `PgWireServer::open_with_shared` can wrap an already-open actual `BicDb`;
+  `open_with_cluster_router` merely supplies routing metadata. A caller can pass
+  either returned server to public `serve_existing_listener` without a native
+  owner adapter or generic placement service.
+- `start_background_tasks` starts the services actually registered; it does not
+  automatically synthesize a missing native/legacy distribution controller.
+  Without that controller, the eventual generic-MStore refusal does not occur
+  through this path. Other storage/SQL checks still apply.
+
+**Smallest early guard/control proposal (not implemented here):** add a Core
+read-only generic-SQL-host admission predicate over the actual opened database
+and sticky native format/birth profile. Invoke it at the common pgwire
+`open_with_context` boundary **before partition/profile/index catalog setup** so
+shared/router/embed constructors cannot bypass it. Add a read-only persisted
+profile preflight before CLI library serving wrappers bind sockets; preserve
+normal strict Core-open validation as well. Until an owner-retaining native SQL
+adapter exists, a protected native range root receives a stable explicit
+unsupported-profile error. Do not disable Core's internal local reads or change
+the existing Strong protocol to implement this refusal.
+
+The smallest controls are a native root with all ordinary SQL catalogs already
+initialized (so incidental migration failure cannot mask the missing guard), a
+paused generic supervisor (so its shutdown cannot mask it), and each public
+constructor/serve wrapper. Require refusal before profile mutation/SQL query
+execution; the pre-bind wrapper must leave its port unbound. Pair with ordinary
+standalone, native single-primary HA and permitted legacy distribution SQL
+controls, plus the unchanged native metadata/event Strong lifecycle. A root's
+successful `57P03`, listener bind, or eventual shutdown alone is not an adequate
+pass criterion. These are proposed tests; none was executed by this track.
+
 ## Where current native reads prevent false absence
 
 The consuming native **event point-read** path has stronger semantics than the

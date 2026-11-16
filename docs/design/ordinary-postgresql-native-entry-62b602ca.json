@@ -60,6 +60,27 @@
         ],
         "fn open_with_startup_gate": [
           1279
+        ],
+        "pub fn serve(": [
+          1230
+        ],
+        "pub fn serve_with_host_services": [
+          1235
+        ],
+        "pub fn serve_listener_with_config": [
+          1361
+        ],
+        "pub fn serve_existing_listener": [
+          1388
+        ],
+        "async fn serve_existing_listener_async": [
+          1481
+        ],
+        "fn database_config_for_server": [
+          475
+        ],
+        "pub fn start_distribution_controller": [
+          1167
         ]
       }
     },
@@ -100,6 +121,9 @@
         ],
         "install_commit_admission": [
           1306
+        ],
+        "pub(crate) fn start_background_tasks_for_scope": [
+          117
         ]
       }
     },
@@ -234,6 +258,65 @@
           3242
         ]
       }
+    },
+    {
+      "path": "crates/bicdb-sql/src/oracle.rs",
+      "sha256": "008753e6ae1e3007326af352535d8b52ceecc460cbf1aa3495118a301091d7ae",
+      "references": {
+        "pub fn ensure_database_profile": [
+          508
+        ],
+        "fn ensure_database_profile_inner": [
+          549
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-sql/src/session/partition_admission.rs",
+      "sha256": "2a876810488e2d81717e6152f07d737c3811214685fa214841d2dce78fcc9314",
+      "references": {
+        "pub fn ensure_sql_partition_admission": [
+          450
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-sql/src/session/partition_admission/catalog.rs",
+      "sha256": "c26fb565140b86bd11982fa186505600d7f8eaf3eff864fab856c9f7e1848614",
+      "references": {
+        "fn validate(": [
+          220
+        ],
+        "fn needs_repair": [
+          284
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-sql/src/session/rename_journal.rs",
+      "sha256": "cf82814e36d1968bc78d3c5de7475ed2b27cfceb333795a015f0c44c247d50ec",
+      "references": {
+        "fn initialize_identities": [
+          165
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-pgwire/src/distribution_controller.rs",
+      "sha256": "5b7b37a7262a653ef95724152df89e1bdf5bd005e62d79e63105d6b2094c78ac",
+      "references": {
+        "impl PgWireHostService": [
+          64
+        ],
+        "fn start(": [
+          69
+        ]
+      }
     }
-  ]
+  ],
+  "finding_classification": {
+    "generic_cli_sql_exposure": "potential_source_ordering_window_not_executed",
+    "public_embedding_supervisor_bypass": "source_present_not_runtime_demonstrated",
+    "native_strong_false_absence_guard": "implemented_event_point_contract_not_general_sql"
+  }
 }

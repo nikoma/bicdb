@@ -60,6 +60,10 @@ independent complete-stream/result receipt SHA256 is
 This supersedes the pending CLI state in the earlier checkpoints, within its
 bounded metadata-only scope. DATA assignments did not move. The entire run
 still failed Native; no complete relocation or physical qualification follows.
+The complete 96-file read-only archive manifest SHA256 is
+`320733868a453f83a4aa3eb885c44126e438a12615a6e6482073016c6677d608`;
+independent full-archive verification receipt SHA256 is
+`3fcef4de7951cdd47f9ea857d8bb25b583c1cd68581582de0f1a6a61082ffa81`.
 
 | Boundary | Implemented source | Actual executed evidence and classification |
 | --- | --- | --- |

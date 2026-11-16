@@ -53,6 +53,28 @@ member. DATA assignments remain unchanged and
 no relocation or populated DATA cold restart is established. A passing
 promoted metadata-voter restart is not a DATA-host restart qualification.
 
+The complete archive is frozen read-only: **96 files / 93 premanifest files**,
+eleven full gzip logs and eight original ZIPs/28 members. Manifest SHA256
+`320733868a453f83a4aa3eb885c44126e438a12615a6e6482073016c6677d608`.
+Independent full-byte/source/API inventory/ZIP CRC and member verification
+receipt SHA256 is
+`3fcef4de7951cdd47f9ea857d8bb25b583c1cd68581582de0f1a6a61082ffa81`.
+Independent checkout/Core/actual-CLI-journal closure receipt SHA256 is
+`577042963b63640ce044f917d0609a272f236f6564bccc8323d3bcad2248fd9c`.
+Ten checkout-bearing logs agree on `2f42`; the selector log has no checkout.
+Core's generic timestamp parser misses one interleaved parent row; its separate
+deinterleaved classification retains all 1,891 main case names, 1,875/0/16,
+plus the isolated child pass. Earlier explicit child accounting remains valid.
+
+The actual CLI ZIP contains three instrumented journals/593 rows, not wire
+coverage for all six CLI cases. The registry journal has 54 rows/ten logical
+operations: two bootstrap-data results, two real USER_ACKs, three present full-
+value Strong results and three expected receiver refusals. Both ACK payload
+hashes and every Strong full value reconcile within that journal. The same
+original SDK/caller `n0` routes actual original-key requests to `n0` and fresh-key
+requests to `n2`; this is not proof of one SQL endpoint or SQL forwarding. These
+are same-runner CI journals, not the independent physical campaign collector.
+
 The source-pinned issue reports below describe observed failures, not passing
 fixes. Corrective implementation and its future execution remain separate.
 
@@ -71,7 +93,7 @@ python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/required
 
 The workflow's existing chaos-helper build remains a prerequisite. No manual
 dispatch, rerun or cancellation was used. The sole collector exited naturally;
-complete final artifact inventory still requires its frozen-archive review.
+complete final artifact inventory and integrity review passed as scoped above.
 Passing components
 and earlier revisions cannot qualify this failed assembled native candidate.
 

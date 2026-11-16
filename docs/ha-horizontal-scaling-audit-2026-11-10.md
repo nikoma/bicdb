@@ -72,6 +72,11 @@ The complete 206,768,590-byte native raw log SHA256 is
 `b2c2ccb8bb005fbd8970824f90a962ccb02c56882571b5297aef05b485efd5c4`;
 whole-log outcome inventory SHA256 is
 `3a1fef2bf4e14be7baeb159a083dc27df46209d4136fb5cbec5af2444ee77c07`.
+The final read-only archive contains 96 files, eleven full logs and eight
+original ZIPs/28 members; manifest SHA256 is
+`320733868a453f83a4aa3eb885c44126e438a12615a6e6482073016c6677d608`.
+Independent complete-archive verification passed; its receipt SHA256 is
+`3fcef4de7951cdd47f9ea857d8bb25b583c1cd68581582de0f1a6a61082ffa81`.
 See [exact failed cases, source causes and unchanged reproducers](design/native-520-regression-findings.md)
 and the [current operator integration boundary](design/native-operator-four-to-five-gap-audit-2026-11-11.md).
 The older generic placement/relocation implementation and original Azure movement

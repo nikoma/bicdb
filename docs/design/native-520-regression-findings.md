@@ -9,9 +9,10 @@ This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe64
 Exact candidate **1.0.520-beta / `62b602ca852a4183c4aa7630e2593e10446ff35c`**,
 tree `d659588bb66fb527720903064000e831c7c6c76a`, runs at actual pull-request
 checkout `16e5a38962fc650f7ba065278b471278e01a0b16`, with the same tree.
-At **2026-11-16 00:58 UTC**, automatic
+At **2026-11-16 01:17 UTC**, automatic
 [Tests43780143089](https://github.com/nikoma/bicdb/actions/runs/43780143089)
-remains in progress: SQL and remaining-workspace are still collecting evidence.
+remains in progress: remaining-workspace is still collecting evidence. SQL
+completed successfully at **01:12:42 UTC**.
 [Rails43780143098](https://github.com/nikoma/bicdb/actions/runs/43780143098)
 completed successfully. No jobs were manually dispatched, rerun or cancelled.
 The complete run archive is not yet frozen. The table records only terminal
@@ -23,6 +24,7 @@ jobs and does not transfer any result from source4f.
 | All-target `133015237885` | Failed | One E0308 in `committed_publication_wait_tests.rs:28:73`; zero cases/summaries. Following no-default consumer check skipped |
 | Core `133015259927` and serial Native `133015259888` | Failed prerequisite; runtime not tested | Actual chaos-helper builds passed; lib-test compilation failed on the same E0308. No Core/native case executed |
 | PGwire `133015259877` | Passed within scope | 511 passed / 0 failed / 2 ignored, 28 summaries and 513 unique cases. These are generic SQL/single-primary application checks, not native distributed SQL qualification |
+| SQL `133015259879` | Passed within scope | 2,682 passed / 0 failed / 4 ignored across 282 summaries; 2,686 case rows / 2,685 bare names. Separate targets share one bare name; no deduplication of executed cases. This is not transparent native distributed SQL acceptance |
 | Rails `133015237665` | Passed within scope | 20 runs / 100 assertions / zero failures, errors or skips; 24 reports and cable messages, zero failed jobs, two overlapping workers. Standalone restart/application acceptance |
 | Corrected test compilation and native recovery runtime | Not tested | Private one-line source correction is reviewed, not compiled or executed |
 | Physical DATA movement, fault-safe convergence, capacity, RPO/RTO and production qualification | Not tested by this run | Original Azure qualification remains failed |
@@ -51,6 +53,7 @@ Complete original raw logs, retained before any source correction push:
 | Core | 2,517,974 | `a31e2d425530a84f8b8cbf3d6187ae457b3251d9330a178555348ad0b59cb60c` |
 | Serial Native | 1,357,577 | `aa7ad2d2bb4937b72a50957275569630788812188ebf0192e20763dcd6e8978c` |
 | PGwire | 1,508,453 | `1ad8eb4aad06a50fb299467bd4b156c0b782a4d79145de030d50e581c0bf8ae4` |
+| SQL | 348,968,500 | `11141b9ec262eb7396ef41bf27cfaa950eb86d9912ba58338863d469e5a9cf6d` |
 | Rails | 1,373,002 | `f0b0278bcd9664e43869ce1c0830f58d0fa9d2469ef24ccd272c8730dc13f60b` |
 
 The original Rails artifact `14188416877` contains 16 members / 13,112 ZIP
@@ -60,6 +63,15 @@ The actual CI debug binary SHA-256 is
 the executable is not retained in that ZIP and is not a release or deployment.
 Independent full Rails-log/ZIP verification receipt SHA-256:
 `b302bce83cfc3c6f936a12be0f890e68c5d4b6733e0825f9ad36e3ca52135267`.
+
+SQL's independent complete-stream/control receipt SHA-256 is
+`a720664ee9fddc1585f5c26d23f9014eaaaaef31c6d4de0ea29bbe67a8d12886`;
+root's corrected full case inventory SHA-256 is
+`9d709e91323589a4bc379d375d487445d047eeeff54587275fa7a18b7e2159b5`.
+The first root row parser omitted two ignored rows with comma-delimited
+reasons; the preserved original full-raw/summary receipt still counted all four
+ignored tests in the 282 summaries. The corrected inventory retains both rows
+and agrees with the independent stream review; no test result was changed.
 
 The [separate ordinary-PG entry inspection](ordinary-postgresql-native-entry-62b602ca.md)
 pins the same source and distinguishes native Strong admission from local SQL.

@@ -36,14 +36,15 @@ Candidate **1.0.520-beta / `62b602ca852a4183c4aa7630e2593e10446ff35c`**,
 tree `d659588bb66fb527720903064000e831c7c6c76a`, executes at PR checkout
 `16e5a38962fc650f7ba065278b471278e01a0b16` with that same tree. This is
 the prepared correction below, now submitted to automatic CI. It is not merged,
-released, deployed or qualified. At the **2026-11-16 00:58 UTC checkpoint**,
-PGwire passed **511/0/2**, and Rails passed **20 runs / 100 assertions**, with
+released, deployed or qualified. At the **2026-11-16 01:17 UTC checkpoint**,
+SQL passed **2,682/0/4**, PGwire passed **511/0/2**, and Rails passed
+**20 runs / 100 assertions**, with
 zero failures, errors or skips. Four static jobs passed. All-target, Core and
 serial Native jobs **failed compilation on the same one E0308** in a new test:
 the topology's `u64` start-token map key was passed where `RangeId` was required.
 Those jobs executed no Core/native test cases; their failure says nothing about
-whether the intended runtime corrections pass. SQL and remaining-workspace jobs
-were still running and their results must not be inferred from preceding runs.
+whether the intended runtime corrections pass. The remaining-workspace job was
+still running; its result must not be inferred from preceding runs.
 The one-line correction in `f70c40967279c309a53e203e35a2dc20266cff14` selects
 the actual range descriptor's `.id`; it changes no production API, assertion or
 deadline and has not compiled or executed at this checkpoint. See the

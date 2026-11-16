@@ -34,12 +34,14 @@ independent-host HA, current binary qualification or full64-range convergence.
 
 Candidate **1.0.520-beta / `4f33a8b016a999d43410ca8698270dc01fbeffd6`**,
 tree `4c87ba7caed1e5a9043eac854d7bdf15ac00b15d`, runs at actual PR checkout
-`2f42e67a11c5d8f81d79e170edd0814d4a741d2d` with the same tree. At the
-**23:30 UTC** checkpoint, all-target/no-default compilation, nonserial Core,
-SQL, PGwire and Rails passed within their respective scopes. Serial native
+`2f42e67a11c5d8f81d79e170edd0814d4a741d2d` with the same tree. All jobs
+finished naturally by **2026-11-15 23:59:13 UTC**: ten passed, one failed and
+four optional jobs skipped across Tests and Rails. All-target/no-default
+compilation, nonserial Core, SQL, PGwire and Rails passed within their
+respective scopes. Serial native
 runtime **failed: 387 passed, 84 failed, 1 ignored**, 989 filtered, in
-2,971.93 seconds. The remaining-workspace job, including the original CLI
-availability gate, is still running. The candidate cannot merge on these results.
+2,971.93 seconds. Remaining-workspace passed **1,062/0/6** across 129 summaries.
+The candidate cannot merge on these results.
 These failures concern the protected native virtual-range host fixtures. The
 legacy/file-shipping, single-primary streaming, Cell and application-fleet modes
 retain their separate evidence and qualification boundaries below.
@@ -52,7 +54,18 @@ during activation and premature service/cleanup contention refusals. Separate
 hot-policy traces show repeated validations consuming the original admission
 window; a complete common cause is not established. Both new registry Known/
 Unknown controls and the original cancellation/old-Store control passed, but
-these component results do not establish CLI availability or complete relocation.
+these component results do not establish complete relocation.
+
+The original native CLI target separately passed **6/0/0**. Its actual
+healthy-existing-read/fresh-ACK/full-readback gate after adding a fifth metadata
+voter passed with its unchanged ten-second requirement and two-second SDK calls.
+This closes the observed registry-only availability regression for that bounded
+four-process scenario; it is not DATA redistribution, populated DATA restart,
+full-dataset acknowledged-commit reconciliation or physical qualification.
+REST's complete 163,814,084-byte raw log SHA256 is
+`8d8fe385b3751a3378e572a5a8ff733753ac476ad0360661b9ac7f306137cd5c`;
+independent complete-stream/result receipt SHA256 is
+`52e61381401d2dd96f14c5cce0c9b32278875655597f636f03a2c1f58e388193`.
 
 The complete 206,768,590-byte native raw log SHA256 is
 `b2c2ccb8bb005fbd8970824f90a962ccb02c56882571b5297aef05b485efd5c4`;

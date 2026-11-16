@@ -49,11 +49,23 @@ Failed scenarios remain **failed** even when their prerequisite prevented them
 from reaching the intended injected fault; the unreached guarantee is **not
 tested** by that scenario.
 
+The final normal run completed naturally by **2026-11-15 23:59:13 UTC**.
+Remaining-workspace passed **1,062/0/6** across 129 summaries; the actual native
+CLI target passed **6/0/0**. Its original healthy-existing-read/fresh-ACK/full-
+readback gate after adding a fifth metadata voter passed with unchanged windows.
+The complete 163,814,084-byte REST raw log SHA256 is
+`8d8fe385b3751a3378e572a5a8ff733753ac476ad0360661b9ac7f306137cd5c`;
+independent complete-stream/result receipt SHA256 is
+`52e61381401d2dd96f14c5cce0c9b32278875655597f636f03a2c1f58e388193`.
+This supersedes the pending CLI state in the earlier checkpoints, within its
+bounded metadata-only scope. DATA assignments did not move. The entire run
+still failed Native; no complete relocation or physical qualification follows.
+
 | Boundary | Implemented source | Actual executed evidence and classification |
 | --- | --- | --- |
 | Initial native DATA and explicit Strong point access | Public retained host/CLI open paths, actual coordinator/runtime/listener and request-scoped Strong protocol exist | **Passed within predecessor scope:** d3's REST CLI target passed the actual four-process APP/Strong case. This is not a passing current-candidate or movement result |
-| Fifth metadata voter and original writer refresh | Automatic metadata enrollment/promotion and registry refresh exist | **Failed availability at d3:** the unchanged healthy-old-read/fresh-ACK/readback control failed. All four original writers remained pending; no DATA movement was attempted |
-| Retained registry correction | Current source retains the original publisher/native outcome and separates maintenance identity from strict APP/Strong admission | **Passed within component scope:** both new actual commit-outcome controls and the original cancellation/old-Store control passed. The original CLI ten-second health gate remains pending; the complete native suite failed |
+| Fifth metadata voter and original writer refresh | Automatic metadata enrollment/promotion and registry refresh exist | **Passed within current4f scope:** the unchanged CLI healthy-old-read/fresh-ACK/readback control passed after fifth metadata-voter addition. Historical d3 failed with all four writers pending; that result remains retained. Neither case moves DATA |
+| Retained registry correction | Current source retains the original publisher/native outcome and separates maintenance identity from strict APP/Strong admission | **Passed within component/CLI scope:** both new actual commit-outcome controls, original cancellation/old-Store control and original CLI ten-second health gate passed. The complete native suite still failed |
 | Registered fifth replica receiver | Fresh/registered retained receiver and public join path exist | **Passed within predecessor scope:** d3's CLI receiver case passed with DATA serving false. Receiver ingress or metadata voting does not establish populated DATA ownership |
 | Native image/joint/Open/policy/release steps | Finite internal native host consumers exist, including actual remote-serving participants | **Failed current native acceptance:** 67 FIRST and 17 learner/hot-policy cases failed. Some intended phases were not reached. Individual passing controls do not establish complete relocation, cleanup, cold recovery or replacement |
 | Multiple native ranges on the joining target | The inspected FIRST planner requires a target with no range replicas; FIRST receiver enrollment rejects an existing DATA owner or another retained receive attempt | **Not implemented by iterating FIRST:** a populated-target admission/continuation producer is still required. This does not claim a first complete handoff passed |

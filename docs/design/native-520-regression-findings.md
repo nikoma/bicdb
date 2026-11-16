@@ -4,15 +4,16 @@ This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe64
 
 ## Actual execution
 
-### Source4f: compiled; native runtime failed, remaining workspace pending
+### Source4f: complete run failed native runtime; remaining workspace passed
 
 Candidate **1.0.520-beta / `4f33a8b016a999d43410ca8698270dc01fbeffd6`**,
 tree `4c87ba7caed1e5a9043eac854d7bdf15ac00b15d`, executed at actual PR
 checkout `2f42e67a11c5d8f81d79e170edd0814d4a741d2d` with the same tree.
-At **2026-11-15 23:30 UTC**, normal
+All jobs in normal
 [Tests43767288668](https://github.com/nikoma/bicdb/actions/runs/43767288668)
-still has a useful remaining-workspace job running. The native job is terminal
-and failed; the candidate remains draft and unmerged. Main is still
+and Rails43767288693 finished naturally by **2026-11-15 23:59:13 UTC**:
+ten passed, one failed and four optional jobs skipped. Native failed;
+remaining-workspace passed. The candidate remains draft and unmerged. Main is still
 **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
 
 | Scope | Classification | Observed result and limit |
@@ -23,8 +24,8 @@ and failed; the candidate remains draft and unmerged. Main is still
 | PGwire | Passed within scope | 511/0/2, including separate Oracle HR 50/0 and embedded HA 11/0; not a complete Oracle-profile qualification |
 | Rails | Passed within scope | 20 runs/100 assertions, no failures/errors/skips; 24 reports and cable messages. Standalone application acceptance, not distributed HA |
 | Serial native job `132975184551` | **Failed** | 387 passed / 84 failed / 1 ignored, 989 filtered, 2,971.93 seconds. All 472 listed cases accounted for; 67 FIRST failures and 17 learner/hot-policy failures |
-| Registry Known/Unknown correction | Passed within component scope | Both new actual-native-outcome controls passed, as did the original cancellation/old-Store control. This does not establish the original CLI availability gate |
-| Remaining workspace and original CLI availability | Inconclusive while running | No terminal result is inferred from earlier passes or native component controls |
+| Registry Known/Unknown correction | Passed within component scope | Both new actual-native-outcome controls passed, as did the original cancellation/old-Store control. Original CLI availability separately passed below |
+| Remaining workspace and original CLI availability | Passed within scope | 1,062/0/6 across 129 summaries and 1,068 unique case rows. Actual native CLI target6/0/0 includes the unchanged healthy-existing-read/fresh-ACK/full-readback gate after fifth metadata-voter addition. No DATA relocation |
 | Physical expansion, complete corpus, convergence, capacity and production admission | Not tested by this run | Original Azure qualification remains failed; no new VMs |
 
 Native full raw log: **206,768,590 bytes**, SHA256
@@ -38,6 +39,18 @@ retain exact case names, raw offsets, original errors and reached operations.
 Direct stderr and libtest output interleave: an adjacent test name alone is not
 used to attribute a diagnostic. Failed scenarios remain failed; intended fault
 phases not reached remain not tested. No timeout or assertion has been relaxed.
+
+REST job `132975184518` full raw log: **163,814,084 bytes**, SHA256
+`8d8fe385b3751a3378e572a5a8ff733753ac476ad0360661b9ac7f306137cd5c`;
+gzip SHA256 `e04a56108ad47949dbe67c6995872ae0caeb7e55d1c4b0b7ab7e9b74d81ae931`.
+Independent complete-stream/result receipt SHA256
+`52e61381401d2dd96f14c5cce0c9b32278875655597f636f03a2c1f58e388193`
+retains all summaries and case rows. The six native CLI pass rows are
+raw799889–799894; its target summary at raw799896 is 6/0/0 in 125.26 seconds.
+The original fifth-voter availability gate is raw799894. This is a real
+four-process metadata-only scenario; DATA assignments remain unchanged and
+no relocation or populated DATA cold restart is established. A passing
+promoted metadata-voter restart is not a DATA-host restart qualification.
 
 The source-pinned issue reports below describe observed failures, not passing
 fixes. Corrective implementation and its future execution remain separate.
@@ -56,8 +69,9 @@ python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/required
 ```
 
 The workflow's existing chaos-helper build remains a prerequisite. No manual
-dispatch, rerun or cancellation was used. Complete final run/artifact inventory
-is not claimed while the remaining workspace job is live. Passing components
+dispatch, rerun or cancellation was used. The sole collector exited naturally;
+complete final artifact inventory still requires its frozen-archive review.
+Passing components
 and earlier revisions cannot qualify this failed assembled native candidate.
 
 ### Local corrective source after the complete d3 failure

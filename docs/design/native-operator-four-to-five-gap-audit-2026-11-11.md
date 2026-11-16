@@ -17,6 +17,11 @@ No source-only finding below establishes a passing runtime scenario. Thirty-four
 inspected Joined/inventory/page source files were independently compared with
 this public candidate and matched byte-for-byte; comparison receipt SHA-256 is
 `4df3fd63465b2190aa36eba5e2767af14b42d66050f765cba0d59dd30350c9e6`.
+The complete source62b run also failed a metadata-only sixth-node join on
+`native bootstrap service busy`; the unchanged registry healthy-read/fresh-ACK
+gate separately passed. See the [exact failed process, original artifacts and
+bounded source correction](native-520-regression-findings.md). No DATA relocation
+was attempted by that failed join, and the source correction is uncompiled/unrun.
 
 Adding several DATA ranges to node5 requires more than repeating FIRST. Node5
 is born Registered with empty INITIAL ancestry; after its first installed range,

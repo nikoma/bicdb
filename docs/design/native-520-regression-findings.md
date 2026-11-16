@@ -4,19 +4,18 @@ This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe64
 
 ## Actual execution
 
-### Source62b: test compilation failed; useful application jobs retained
+### Source62b: complete failed run; compilation and bootstrap availability
 
 Exact candidate **1.0.520-beta / `62b602ca852a4183c4aa7630e2593e10446ff35c`**,
-tree `d659588bb66fb527720903064000e831c7c6c76a`, runs at actual pull-request
+tree `d659588bb66fb527720903064000e831c7c6c76a`, ran at actual pull-request
 checkout `16e5a38962fc650f7ba065278b471278e01a0b16`, with the same tree.
-At **2026-11-16 01:17 UTC**, automatic
+All jobs in automatic
 [Tests43780143089](https://github.com/nikoma/bicdb/actions/runs/43780143089)
-remains in progress: remaining-workspace is still collecting evidence. SQL
-completed successfully at **01:12:42 UTC**.
-[Rails43780143098](https://github.com/nikoma/bicdb/actions/runs/43780143098)
-completed successfully. No jobs were manually dispatched, rerun or cancelled.
-The complete run archive is not yet frozen. The table records only terminal
-jobs and does not transfer any result from source4f.
+and [Rails43780143098](https://github.com/nikoma/bicdb/actions/runs/43780143098)
+finished naturally by **2026-11-16 01:42:37 UTC**: seven passed, four failed and
+four optional jobs skipped. Tests failed; Rails passed. The sole collector exited
+naturally and the complete archive is frozen. No jobs were manually dispatched,
+rerun or cancelled. No source4f result transfers to this head.
 
 | Scope | Classification | Exact observed result and limit |
 | --- | --- | --- |
@@ -26,7 +25,9 @@ jobs and does not transfer any result from source4f.
 | PGwire `133015259877` | Passed within scope | 511 passed / 0 failed / 2 ignored, 28 summaries and 513 unique cases. These are generic SQL/single-primary application checks, not native distributed SQL qualification |
 | SQL `133015259879` | Passed within scope | 2,682 passed / 0 failed / 4 ignored across 282 summaries; 2,686 case rows / 2,685 bare names. Separate targets share one bare name; no deduplication of executed cases. This is not transparent native distributed SQL acceptance |
 | Rails `133015237665` | Passed within scope | 20 runs / 100 assertions / zero failures, errors or skips; 24 reports and cable messages, zero failed jobs, two overlapping workers. Standalone restart/application acceptance |
-| Corrected test compilation and native recovery runtime | Not tested | Private one-line source correction is reviewed, not compiled or executed |
+| Remaining workspace `133015259884` | **Failed bootstrap availability** | 950 passed / 1 failed / 2 ignored, 96 summaries and 953 unique cases. Native CLI target5/1 failed its sixth-node join after metadata registration; native factory/voter admission was not reached. Later workspace/offline steps were not reached |
+| Original registry healthy-read/fresh-ACK CLI gate | Passed within current bounded scope | The unchanged gate passed at raw800718. This metadata-only membership change does not move DATA or qualify cold DATA recovery |
+| Corrected compilation, bounded bootstrap wait and native recovery runtime | Not tested | The one-line test correction and separately reviewed bootstrap correction below have not compiled or executed |
 | Physical DATA movement, fault-safe convergence, capacity, RPO/RTO and production qualification | Not tested by this run | Original Azure qualification remains failed |
 
 The E0308 is a test-source type error, not a production-library compile error:
@@ -45,6 +46,45 @@ all-target command in `.github/workflows/tests.yml` is:
 python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/required-ci-pressure/alltargets.jsonl" -- cargo check --workspace --all-targets --locked
 ```
 
+The second failure is reproducible by the unchanged
+`native_metadata_operator_actual_cli_single_join_fresh_becomes_local_metadata_voter`
+case in `crates/bicdb-cli/tests/native_metadata_operator_cli.rs`. It starts four
+metadata hosts, joins/promotes the fifth, performs a real metadata election,
+then joins node `n5` using the original `n0` seed hint. At raw800724 the original
+assertion at line845:13 reports `real native process5 exited`. The failure-only
+artifact confirms that this is the **sixth** process, not slot4/fifth:
+
+```text
+Error: cluster error: native host bootstrap: fresh learner current metadata unavailable: cluster error: cluster node n0 rejected bootstrap RPC cluster_data_operation_failed: cluster error: native host bootstrap: native bootstrap service busy
+```
+
+The process first reported `metadata_identity_committed=true`,
+`metadata_role=learner`, `native_birth_bound=false`, `topology_generation=5` and
+`data_serving=false`. That earlier metadata-registration outcome is not native
+factory, voter or DATA success. Slot5 exited with code1 before diagnostic
+cleanup; slots0–4 were still alive and were SIGKILLed only by the failure-capture
+cleanup. No data rollback, false absence, network partition, particular lock
+holder or hold duration is established by this failure.
+
+The source path is `operator_learner/discovery.rs::discover` → original seed
+bootstrap fetch → `NativeMetadataRegistrationController::bootstrap` in
+`provisional_listener/registration.rs:151–169`. Discovery's first seed fetch has
+a 500ms child of the original parent. The server receives a finite request token,
+but the controller tried the service lock once and immediately rejected it.
+With no successful snapshot, discovery has no additional routes to queue.
+Bootstrap snapshots are routing DATA; fresh OWN and factory admission follow.
+
+[Correction `d60369a7b0ef7a89abb2e840713eb1e82c2ebb2c`](native-bootstrap-finite-service-wait-4f01.md),
+with control/documentation child `4e3cf9abe63ba8d9870d91a59a746e61ea96b857`,
+uses the existing bounded actual-service identity helper for an already finite
+original caller. It releases the service guard before MStore acquisition.
+Unbounded callers retain the exact instantaneous error. It adds no RPC retry,
+proposal, cached-snapshot fallback or longer request/CLI window. Four genuine
+normal-host control definitions exercise release, sampled-live cancellation,
+expiry and original unbounded refusal. They are **not executed**. The original
+six CLI assertions remain the process-level acceptance gate; source inspection
+does not prove the observed lock would have cleared within the request budget.
+
 Complete original raw logs, retained before any source correction push:
 
 | Job | Raw bytes | Raw SHA-256 |
@@ -54,6 +94,7 @@ Complete original raw logs, retained before any source correction push:
 | Serial Native | 1,357,577 | `aa7ad2d2bb4937b72a50957275569630788812188ebf0192e20763dcd6e8978c` |
 | PGwire | 1,508,453 | `1ad8eb4aad06a50fb299467bd4b156c0b782a4d79145de030d50e581c0bf8ae4` |
 | SQL | 348,968,500 | `11141b9ec262eb7396ef41bf27cfaa950eb86d9912ba58338863d469e5a9cf6d` |
+| Remaining workspace | 101,339,886 | `c1f96ad340c1289ba9d7c88aa412ffa7699309374fc6373fb2ed6cdf6e275568` |
 | Rails | 1,373,002 | `f0b0278bcd9664e43869ce1c0830f58d0fa9d2469ef24ccd272c8730dc13f60b` |
 
 The original Rails artifact `14188416877` contains 16 members / 13,112 ZIP
@@ -72,6 +113,24 @@ The first root row parser omitted two ignored rows with comma-delimited
 reasons; the preserved original full-raw/summary receipt still counted all four
 ignored tests in the 282 summaries. The corrected inventory retains both rows
 and agrees with the independent stream review; no test result was changed.
+
+The complete read-only archive has **99 files / 96 premanifest files**, eleven
+full gzip logs and eight original ZIPs/62 members. Manifest SHA-256:
+`f7518c6138d7e007912f7a22acc8c136072125831fdbddc8b60dc78783c6439e`.
+Independent complete stored/raw/API/ZIP CRC/member verification receipt:
+`1633ce08cd2194fb7eb9af8c3589563f199d19c59cb3acd5dc932fb5164a9f89`.
+Root's final file/readonly/checkout/process closure receipt:
+`99020f8fb864b4e599579bc006d7703e36e28382031c0209642bb8d15458fe53`.
+Ten checkout-bearing logs match `16e5`; the selector log has no checkout.
+Both positive integrity verification and wrong-manifest refusal were checked.
+
+Original failure ZIP `14190647770` contains 38 members / 87,566 bytes, SHA-256
+`e20f4e07eb8f18487c2db51350442712e88eb62602f1456ddb2a814c435aea77`.
+Its 34 allowlisted file hashes reconcile with the process manifest. Conditional
+missing paths, including node5's not-created native root/status, remain explicitly
+listed. This is an allowlisted stopped-process diagnostic capture, not a complete
+DB image or campaign ACK ledger; DB trees and TLS keys/certificates are excluded.
+Failed scenarios and all predecessor archives remain unchanged.
 
 The [separate ordinary-PG entry inspection](ordinary-postgresql-native-entry-62b602ca.md)
 pins the same source and distinguishes native Strong admission from local SQL.

@@ -33,22 +33,41 @@ independent-host HA, current binary qualification or full64-range convergence.
 ## Current candidate execution — source62b, 2026-11-16 UTC
 
 Candidate **1.0.520-beta / `62b602ca852a4183c4aa7630e2593e10446ff35c`**,
-tree `d659588bb66fb527720903064000e831c7c6c76a`, executes at PR checkout
+tree `d659588bb66fb527720903064000e831c7c6c76a`, executed at PR checkout
 `16e5a38962fc650f7ba065278b471278e01a0b16` with that same tree. This is
 the prepared correction below, now submitted to automatic CI. It is not merged,
-released, deployed or qualified. At the **2026-11-16 01:17 UTC checkpoint**,
+released, deployed or qualified. All jobs finished naturally by
+**2026-11-16 01:42:37 UTC**: seven passed, four failed and four optional jobs
+skipped. The complete assembled run failed.
 SQL passed **2,682/0/4**, PGwire passed **511/0/2**, and Rails passed
 **20 runs / 100 assertions**, with
 zero failures, errors or skips. Four static jobs passed. All-target, Core and
 serial Native jobs **failed compilation on the same one E0308** in a new test:
 the topology's `u64` start-token map key was passed where `RangeId` was required.
 Those jobs executed no Core/native test cases; their failure says nothing about
-whether the intended runtime corrections pass. The remaining-workspace job was
-still running; its result must not be inferred from preceding runs.
+whether the intended runtime corrections pass. Remaining-workspace failed
+**950/1/2** on a sixth-node metadata join: its original seed returned
+`native bootstrap service busy`, then the learner process exited after metadata
+identity registration and before native birth/factory/voter admission. The
+original registry healthy-read/fresh-ACK gate separately passed unchanged.
+Neither scenario moves DATA. The lock holder/duration and any data-loss or
+partition diagnosis are not established.
 The one-line correction in `f70c40967279c309a53e203e35a2dc20266cff14` selects
 the actual range descriptor's `.id`; it changes no production API, assertion or
 deadline and has not compiled or executed at this checkpoint. See the
 [exact current execution and reproducer](design/native-520-regression-findings.md).
+The separate [bounded bootstrap correction](design/native-bootstrap-finite-service-wait-4f01.md)
+uses the same original finite request while acquiring actual service identity,
+releases the service guard before MStore, and preserves unbounded refusal. It
+does not retry RPCs, extend deadlines or weaken the original process assertions.
+Its four control definitions are uncompiled/unrun; it is not a qualified fix.
+
+The final archive is immutable: **99 files, eleven complete logs, eight original
+ZIPs/62 members**. Manifest SHA-256
+`f7518c6138d7e007912f7a22acc8c136072125831fdbddc8b60dc78783c6439e`;
+independent full verification
+`1633ce08cd2194fb7eb9af8c3589563f199d19c59cb3acd5dc932fb5164a9f89`.
+The original Azure qualification remains failed; no new infrastructure was used.
 
 The separately pinned [ordinary PostgreSQL entry audit](design/ordinary-postgresql-native-entry-62b602ca.md)
 finds no mandatory synchronous native-profile guard in generic pgwire startup.

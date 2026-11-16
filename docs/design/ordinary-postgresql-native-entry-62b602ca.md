@@ -147,8 +147,10 @@ raw local get path above:
 serving/physical/history generations, catalogue checksum and a mutation-gate
 observation stamp. These are necessary local evidence and invalidation seams;
 neither a local observation nor a decoded wire fact is a read permit.
-This protocol protects its own successful response from false absence. Ordinary
-SQL execution has no call to this finalizer at the inspected source.
+These inspected checks refuse failed readiness/currentness before constructing
+the typed point result. This is not a general proof of read linearizability,
+corruption handling or runtime qualification. Ordinary SQL execution has no call
+to this finalizer at the inspected source.
 
 ## SQL routing, queries and transactions: implementation versus abstraction
 

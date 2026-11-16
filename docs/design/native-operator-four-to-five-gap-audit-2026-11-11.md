@@ -6,7 +6,46 @@ components and an automatic four-to-five-node operator candidate. No build,
 database open, process experiment, VM action or deployment was performed for
 this audit.
 
-## Current source boundary at `4f33a8b016a9` — 2026-11-15
+## Current source boundary at `62b602ca852a` — 2026-11-16
+
+Exact inspected candidate: **1.0.520-beta /
+`62b602ca852a4183c4aa7630e2593e10446ff35c`**, tree
+`d659588bb66fb527720903064000e831c7c6c76a`. This is a source-integration
+inspection, not a movement experiment. Its Core/native CI jobs failed test
+compilation before any cases ran; see the [exact current execution](native-520-regression-findings.md).
+No source-only finding below establishes a passing runtime scenario. Thirty-four
+inspected Joined/inventory/page source files were independently compared with
+this public candidate and matched byte-for-byte; comparison receipt SHA-256 is
+`4df3fd63465b2190aa36eba5e2767af14b42d66050f765cba0d59dd30350c9e6`.
+
+Adding several DATA ranges to node5 requires more than repeating FIRST. Node5
+is born Registered with empty INITIAL ancestry; after its first installed range,
+the actual retained transfer creates a Joined owner. Empty INITIAL ancestry is
+then historical identity, not empty current DATA or permission to run FIRST again.
+
+| Required boundary | Actual implementation and source | Finding classification and next deterministic check |
+| --- | --- | --- |
+| Original Joined additional-range origin and selected preflight | [Joined receive](../../crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/joined_data/receive.rs), its row/native/catalogue scopes, and runtime N-to-A transfer are implemented. They retain actual original FIRST owner, same installed State/open/runtime and selected exclusion; do not describe the entire Joined receiver as missing | **Not tested as complete expansion.** Drive a genuine Registered-to-Joined-to-second-range scenario while target-led first-range ACK/full Strong continue; preserve original lifetimes and budgets |
+| Complete accepted/Unknown selected-attempt inventory | Proposal CURRENT/archive records are keyed by opaque A in both `registered-remote-image-proposal/{A}/...` and `joined-remote-image-proposal-v2/{A}/...`. Existing row/native/catalogue absence does not enumerate them; warm A/NativeBegun can also precede visible records | **Failed source requirement: producer missing.** Complete both histories under original selected N and actual warm custody, refusing selected accepted/Unknown, orphan or malformed state while unrelated ranges progress. A new empty index or missing cache is insufficient |
+| Strict bounded protected-history inspection | Generic page prefix iteration bounds values, but can map stale/dead/missing locators or malformed version headers to no visible row. A raw snapshot is not a vacuum-retention pin; syntactically decoded headers and generic transaction-status defaults are not complete history-integrity proof | **Failed source prerequisite for that inventory; runtime scenario not tested.** Distinguish legitimate invisible/aborted history from unreadable or indeterminate history with checked physical/transaction provenance. Do not change generic iterator behavior or silently certify absence |
+| Joined materialized NEW and same-A joint custody | [Joined target evidence](../../crates/bicdb-core/src/distribution_data/native_joint_handoff/joined_target.rs) and [Joined joint owner](../../crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/joined_data/receive/joint_owner.rs) exist. Repository-wide call search finds declarations/reexports and definitions, but no consumers of `ActualServiceNativeJoinedJointNewEvidence`, `take_joined_remote_joint_target`, `joined_remote_joint_owner` or `closed_publication_lease` | **Failed source integration requirement; kernels implemented.** A normal caller must consume their actual materialized image/OLD proof/fresh authority and retain the same A; a declaration or decoded role does not close this gate |
+| Joined target preparation, Open, release and A retirement | [Remote preparation](../../crates/bicdb-core/src/distribution_data/native_joint_handoff/remote_serving_preparation.rs) and [remote release](../../crates/bicdb-core/src/distribution_data/native_joint_handoff/bridge/remote_release.rs) admit Registered/Survivor owners. The generic image-release bridge explicitly refuses Joined; no Joined post-activation consumer was found across host/runtime/image/native joint/handoff source. Joined runtime retires empty pre-transfer cells but has no post-consumption A-release path | **Failed source integration requirement.** Add a genuine same-owner Joined activation/release consumer and prove actual unique exclusion retirement plus target-led ACK/Strong. Generic bridge refusal alone was not used to infer repository-wide absence |
+| OLD/source retirement | Original source/export retirement has separate implementations, including `remote_serving_owner/release.rs`, `reference_retirement.rs`, `joint/remote_new/participant/retirement.rs` and `initial_data/source_discovery/export_retirement.rs` | **Not tested as complete expansion by this inspection.** Missing Joined target release does not negate those existing source-retirement kernels; their full integration needs its own evidence |
+| Cold DATA and automatic periodic scheduling | The normal cold DATA host, current-joint new-open rebind and complete periodic placement/resume/repair wiring remain missing. Existing learner cold reopen deliberately rejects DATA ownership | **Failed source integration requirement; physical acceptance not tested.** A metadata-only reopen or manually driven finite steps cannot substitute for automatic fault-safe DATA recovery and redistribution |
+
+The repository-wide call-site check is reproducible at the pinned source:
+
+```sh
+rg -n 'ActualServiceNativeJoinedJointNewEvidence|take_joined_remote_joint_target|joined_remote_joint_owner|closed_publication_lease' crates --glob '*.rs'
+```
+
+The visibility/transaction observations above identify requirements for a new
+protected absence producer. They are **not** a reproduced current Strong-read
+failure or an attribution of the original Azure unreadable records to bit
+corruption. Normal reads, native Strong and physical recovery retain their own
+contracts and qualification gates. No original Azure result is changed.
+
+## Previous complete source boundary at `4f33a8b016a9` — 2026-11-15
 
 This additive update inspects candidate **1.0.520-beta /
 `4f33a8b016a999d43410ca8698270dc01fbeffd6`**, tree

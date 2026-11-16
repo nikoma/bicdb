@@ -41,6 +41,8 @@ fn run(mode: u8) {
         assert_eq!(data["original_parent_deadline_unchanged"], true);
         assert_eq!(original.deadline(), deadline);
         assert!(data["original_control_error"].is_null());
+        assert!(data["before_native_error"].is_null());
+        assert!(data["before_metadata_error"].is_null());
         assert!(data["after_native_error"].is_null());
         assert!(data["after_metadata_error"].is_null());
         assert_eq!(data["bootstrap_called_once"], true);
@@ -77,7 +79,7 @@ fn run(mode: u8) {
             );
             if mode == 0 {
                 assert!(control["original_error"].is_null());
-                original.check()?;
+                assert_eq!(data["original_parent_live_at_bootstrap_return"], true);
                 let snapshot: crate::ClusterBootstrapSnapshot =
                     serde_json::from_value(control["returned_data"].clone())?;
                 snapshot.validate()?;

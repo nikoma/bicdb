@@ -14,23 +14,27 @@ impl NativeMetadataControlHost {
             .as_ref()
             .ok_or_else(|| invalid("actual bootstrap controller absent"))?;
         let metadata = || -> Result<serde_json::Value> {
-            // Diagnostic reads occur outside the held service guard and use
-            // no acceptance deadline or metadata publication operation.
-            let store = self
-                .backend
-                .lock_metadata(&CancellationToken::uncancelable())?;
+            // Separate finite forensic budget; it neither replaces nor renews
+            // the original bootstrap token, including after cancel/expiry.
+            let diagnostic = CancellationToken::uncancelable()
+                .child_with_deadline(Instant::now() + Duration::from_millis(500));
+            let store = self.backend.lock_metadata(&diagnostic)?;
             Ok(
                 serde_json::json!({"status":store.status(),"C":store.committed_topology(),
                 "store_id":store.test_native_metadata_identity()}),
             )
         };
-        let before_native = self.test_request_native_counters(range)?;
-        let before_metadata = metadata()?;
+        let before_native = self.test_request_native_counters(range);
+        let before_metadata = metadata();
         let original_deadline = parent.deadline();
+        let bootstrap_calls = std::cell::Cell::new(0_u32);
+        let parent_live_at_return = std::cell::Cell::new(None::<bool>);
         let actual = if mode == 3 {
             let held = self.backend.service.lock();
             let original = CancellationToken::uncancelable();
+            bootstrap_calls.set(bootstrap_calls.get() + 1);
             let result = controller.bootstrap(&original);
+            parent_live_at_return.set(Some(original.check().is_ok()));
             let returned = serde_json::json!({"actual_original_instant_busy":true,
                 "actual_returned_ok":result.is_ok(),"original_error":result.as_ref().err().map(ToString::to_string),
                 "unbounded_parent":original.deadline().is_none()});
@@ -41,7 +45,14 @@ impl NativeMetadataControlHost {
                 &self.backend.service,
                 parent,
                 mode,
-                |original| controller.bootstrap(original),
+                |original| {
+                    bootstrap_calls.set(bootstrap_calls.get() + 1);
+                    let result = controller.bootstrap(original);
+                    // Sample acceptance liveness before holder cleanup or any
+                    // forensic reads; those may lawfully outlast this caller.
+                    parent_live_at_return.set(Some(original.check().is_ok()));
+                    result
+                },
             )
         };
         // Preserve the actual result before these separate read diagnostics.
@@ -49,12 +60,16 @@ impl NativeMetadataControlHost {
         let after_metadata = metadata();
         Ok(serde_json::json!({"actual_control":actual.as_ref().ok(),
             "original_control_error":actual.as_ref().err().map(ToString::to_string),
-            "before_native":before_native,"after_native":after_native.as_ref().ok(),
+            "before_native":before_native.as_ref().ok(),"after_native":after_native.as_ref().ok(),
+            "before_native_error":before_native.as_ref().err().map(ToString::to_string),
             "after_native_error":after_native.as_ref().err().map(ToString::to_string),
-            "before_metadata":before_metadata,"after_metadata":after_metadata.as_ref().ok(),
+            "before_metadata":before_metadata.as_ref().ok(),"after_metadata":after_metadata.as_ref().ok(),
+            "before_metadata_error":before_metadata.as_ref().err().map(ToString::to_string),
             "after_metadata_error":after_metadata.as_ref().err().map(ToString::to_string),
             "original_parent_deadline_unchanged":parent.deadline()==original_deadline,
-            "routing_DATA_only":true,"bootstrap_called_once":true,
+            "routing_DATA_only":true,"bootstrap_called_once":bootstrap_calls.get()==1,
+            "original_parent_live_at_bootstrap_return":parent_live_at_return.get(),
+            "diagnostic_metadata_budget_ms":500,
             "controller_store_open_id":controller.store_open_id,
             "actual_open_live_after":controller.actual_open.require_live().is_ok(),
             "same_bound_service_after":controller.require_service(&self.backend.service,controller.store_open_id).is_ok()}))

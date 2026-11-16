@@ -2,8 +2,11 @@
 
 Base source: `4f01b680462e164ee821c93d7e5acf5625cc1521`.
 
-The observed current-main REST trial failed while another process fetched native
-bootstrap routing data: `NativeMetadataRegistrationController::bootstrap` used
+The observed **unmerged** `62b602ca852a4183c4aa7630e2593e10446ff35c`
+trial (Tests run `43780143089`, REST job `133015259884`) failed while another
+process fetched native bootstrap routing data. Remote main was still
+`1.0.519-beta` at `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`;
+this was not a current-main test result. The relevant path was: `NativeMetadataRegistrationController::bootstrap` used
 instantaneous service `try_lock`, even though the actual transport supplied a
 finite original request. A busy service could therefore reject discovery before
 that original budget elapsed. This isolated patch addresses that source path;
@@ -53,3 +56,23 @@ Independent source review, complete preceding failure archive verification and
 root approval remain necessary before composition/publication. Page checked-DATA,
 cold-open, Joined metadata/inventory, ordinary PostgreSQL guard, full Joined target
 release/controller and physical scale-out work are excluded from this patch.
+
+## Control-only correction after d603 review
+
+The original d603 production change is preserved byte-for-byte. Its opening
+provenance incorrectly called the unmerged 62b trial current-main. Its metadata
+forensics could wait without a diagnostic bound, and its positive liveness check
+ran after cleanup/forensic IO, potentially rejecting a lawful live bootstrap
+return merely because the original token expired later. This child corrects only
+those documentation/control limitations.
+
+Before-native/metadata diagnostics retain their exact Results instead of returning
+before the controlled call; strict diagnostic assertions run after its retained
+outcome. Metadata diagnostics use a separate explicitly forensic 500 ms token.
+The actual bootstrap call count and original-parent liveness are captured at the
+controller return, before cleanup or after-diagnostics; positive acceptance asserts
+that captured liveness. Actual finite bootstrap still receives its unchanged
+original 500 ms token. Existing failed-slice/live-cut and exact cancellation/
+expiry assertions remain. A diagnostic token does not promise hard IO preemption
+or substitute for a bootstrap request, and no captured historical hold duration
+establishes that this change necessarily closes the observed trial failure.

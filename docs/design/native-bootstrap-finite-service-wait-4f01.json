@@ -12,7 +12,7 @@
     {
       "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data/request_wait_controls.rs",
       "base_sha256": "02a4ee2cd142f3b5d6ef8cc2073e3c2419b16e50f4edb865888991f9a79791b9",
-      "head_sha256": "bc70e5c49cc12faa7e2d36da80677d69c5f5337570f1b04e9e5fcaa752b4d575",
+      "head_sha256": "f76ee2025499b43055641706e99d3e57eb1dd4d5362e4be2b155fe0e81ce055a",
       "inverse_entire_original_file_exact": true
     },
     {
@@ -30,7 +30,7 @@
   ],
   "new_test_file": {
     "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests/bootstrap_service_wait_tests.rs",
-    "sha256": "b727554f58c97b46b6e196bebd6591a35a43bc1778ed9394d793eec2977b5333",
+    "sha256": "cb9c9d2cc5b10cb5820b68831fd17892feec3836c61bd7e8ef6bed2ee9df0a78",
     "controls_defined": 4
   },
   "validation": {
@@ -56,5 +56,19 @@
     "other bootstrap/status/registry paths",
     "existing CLI assertions",
     "Page kernel/cold/Joined/PG features"
-  ]
+  ],
+  "control_only_child": {
+    "parent_commit": "d60369a7b0ef7a89abb2e840713eb1e82c2ebb2c",
+    "production_registration_exact_parent": true,
+    "observed_failure_source": "62b602ca852a4183c4aa7630e2593e10446ff35c",
+    "tests_run": 43780143089,
+    "rest_job": 133015259884,
+    "main_source_version": "1.0.519-beta",
+    "main_commit": "587dd6e4775e454cc9e8224d5fed76e8795c6ff6",
+    "diagnostic_metadata_budget_ms": 500,
+    "bootstrap_original_budget_ms": 500,
+    "before_diagnostics_errors_retained": true,
+    "positive_liveness_sample": "actual controller return before cleanup/after-diagnostics",
+    "runtime_validation": "not run"
+  }
 }

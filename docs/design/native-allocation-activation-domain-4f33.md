@@ -56,8 +56,12 @@ Serving construction uses this typed projection instead of its ad hoc learner
 filter, retaining its original actual Store writer selection. Activation's
 existing native read has no Store argument; it selects the actual DB-installed
 State privately and never fabricates a Store or exports an owner getter. ONLY a
-NormalRecovery current-serving range mismatch may consume this allocation
-projection. The actual effective native descriptor must still match exactly.
+NormalRecovery current-serving range mismatch with exactly one Learner and
+only Voter/Learner roles may consume this allocation projection. Ordinary
+all-voter and malformed mismatches return false without an allocation audit
+lookup, preserving the original generic refusal. The three newly introduced
+hook/cache reads use nonwaiting `try_read` and static busy refusals; the inherited
+full validator remains unchanged. The actual effective native descriptor must still match exactly.
 Every original checksum/session/history/receipt/local-visibility/base check and
 full metadata observer comparison remains. A failure still precedes NEW
 activation-decision IO, although earlier native completion/serving effects may
@@ -82,8 +86,12 @@ Role/OWN/Frozen/policy, cache, pending flag or certificate is fabricated or set.
 The exact intended returned class is required; unrelated service/timeout/IO
 errors cannot qualify it. Native next-XID/next-LSN/durable-LSN and actual decision
 record remain unchanged around the comparison. Full actual Result is retained
-before its DATA projection; reporting/formatting happens after DB/journal unwind
-and before assertions/follow-up/cleanup. Selected and untouched ordinary 2s SDK
+before its DATA projection, separately from any fallible post-comparison record
+read or mismatch. The new diagnostic formats both retained Results after
+DB/journal unwind and reports them before assertions/follow-up/cleanup; each
+control additionally requires the secondary forensic error to be null. This is
+not a claim that inherited validation is formatter-free: its health-error
+formatting remains unchanged. Selected and untouched ordinary 2s SDK
 ACK/Strong calls remain required after the probes.
 
 These negatives are comparison components before new decision IO, not claims of
@@ -102,3 +110,13 @@ formatting, source inverse/preservation, relative-link, version/diff checks are
 performed. No Cargo/compiler/Rust tests/SDK/DB/CI/push/version/physical action is
 performed. Source coherence does not establish budget fit, successful FIRST,
 zero-ACK-loss, full corpus, crash recovery or production readiness.
+
+## Narrow correction after frozen 48dd review
+
+The original `48dd84d63e178679fd8804b4a91b319144a05499` freeze and its
+CHANGES REQUIRED reviews remain intact. This successor limits allocation
+fallback shape, replaces only the three new blocking reads, narrows diagnostic
+formatting claims, and preserves the original comparison Result independently
+of later forensic failures. The original four control definitions, all prior
+assertions and windows remain; no additional runtime control is claimed.
+These corrections have source/format checks only, with no compilation or run.

@@ -167,7 +167,24 @@ impl NativeActivationDecisionRecord {
             if !matches!(
                 self.scope.purpose,
                 MetadataRecoveryRolePurpose::NormalRecovery
-            ) {
+            ) || self
+                .range
+                .replicas
+                .iter()
+                .filter(|r| r.role == RangeReplicaRole::Learner)
+                .count()
+                != 1
+                || self
+                    .range
+                    .replicas
+                    .iter()
+                    .any(|r| !matches!(r.role, RangeReplicaRole::Voter | RangeReplicaRole::Learner))
+                || !self
+                    .range
+                    .replicas
+                    .iter()
+                    .any(|r| r.role == RangeReplicaRole::Voter)
+            {
                 return Ok(false);
             }
             db.require_actual_allocation_native_serving_match(&self.range, native_range)?;

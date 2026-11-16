@@ -57,6 +57,10 @@ fn run(modes: &[u8]) {
                 "source_mode":mode,"actual_destination":node(leader),"actual_retained_owner":node(owner),
                 "claim_DATA_not_Role_or_modified_native_record":true,
                 "negative_scope":"shared production comparison before new decision IO, not a new activation RPC"}));
+            assert_eq!(
+                observed["postcomparison_forensic_error"],
+                serde_json::Value::Null
+            );
             assert_eq!(observed["native_before"], observed["native_after"]);
             assert_eq!(
                 observed["decision_before_sha256"],

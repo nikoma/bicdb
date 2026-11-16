@@ -18,7 +18,12 @@ impl NativeWriterHostState {
         db: &BicDb,
         metadata: &RangeDescriptor,
     ) -> Result<()> {
-        let original = db.commit_admission.read().native_writer().cloned();
+        let original = db
+            .commit_admission
+            .try_read()
+            .ok_or_else(|| invalid("allocation projection installed hook busy"))?
+            .native_writer()
+            .cloned();
         if original
             .as_ref()
             .is_none_or(|state| !Arc::ptr_eq(state, self))
@@ -32,7 +37,10 @@ impl NativeWriterHostState {
         // This cache alone grants nothing: the original full validator below
         // still checks actual DB/open/schema/registration/health/pending/audit.
         {
-            let cache = self.registry_extension.read();
+            let cache = self
+                .registry_extension
+                .try_read()
+                .ok_or_else(|| invalid("allocation projection original audit busy"))?;
             if cache
                 .as_ref()
                 .and_then(|v| v.facts().ranges.get(&metadata.id))
@@ -191,7 +199,8 @@ impl BicDb {
     ) -> Result<()> {
         let writer = self
             .commit_admission
-            .read()
+            .try_read()
+            .ok_or_else(|| invalid("allocation projection installed hook busy"))?
             .native_writer()
             .cloned()
             .ok_or_else(|| {
@@ -219,7 +228,7 @@ impl InstalledNativeWriterHostGuard {
         RangeDescriptor,
         RangeDescriptor,
         String,
-        String,
+        Result<String>,
         String,
         [u64; 2],
     )> {

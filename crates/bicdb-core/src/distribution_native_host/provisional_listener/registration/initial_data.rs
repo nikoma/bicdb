@@ -1362,14 +1362,16 @@ impl NativeMetadataControlHost {
                 .ok_or_else(|| invalid("actual allocation comparison DB busy"))?;
             writer.test_allocation_activation_domain_comparison(&db, range, mode)?
         };
-        // Actual DB/journal guards have unwound. No Error is formatted or
-        // JSON emitted by the actual native/projector scope above.
+        // Actual DB/journal guards have unwound before this new diagnostic
+        // formats either retained Result or emits JSON. Inherited validation's
+        // health-error formatting is unchanged.
         let value = serde_json::json!({"actual_returned_ok":actual.is_ok(),
             "actual_original_error":actual.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),
             "actual_exact_error_class":match &actual {Err(crate::BicDbError::Cluster(e))=>Some(e.as_str()),_=>None},
             "native_before":before,"native_after":after,"actual_full_metadata":metadata,
             "actual_effective_native":native,"untrusted_metadata_claim":metadata_claim,"untrusted_native_claim":native_claim,
-            "decision_before_sha256":decision_before,"decision_after_sha256":decision_after,
+            "decision_before_sha256":decision_before,"decision_after_sha256":decision_after.as_ref().ok(),
+            "postcomparison_forensic_error":decision_after.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),
             "actual_scope_configuration_sha256":scope_sha,"actual_decision_xid_and_R":native_point,
             "mode":mode,"comparison_component_not_new_Role_or_mutation_permission":true});
         parent.check()?;

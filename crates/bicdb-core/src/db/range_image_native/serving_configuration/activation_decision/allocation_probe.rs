@@ -16,7 +16,7 @@ impl BicDb {
         RangeDescriptor,
         RangeDescriptor,
         String,
-        String,
+        Result<String>,
         String,
         [u64; 2],
     )> {
@@ -87,20 +87,27 @@ impl BicDb {
             ]
         };
         let before = clock();
-        // SAME production projector, with a real retained owner. Its Result
-        // stays original and is formatted only after this scope unwinds.
+        // SAME production projector, with a real retained owner. This facade's
+        // retained-result diagnostic is formatted only after scope unwind;
+        // inherited health validation may still format its own errors here.
         let actual = writer
             .allocation_serving_domain(self, &metadata_claim)
             .and_then(|domain| domain.require_native_match(self, &native_claim));
         let after = clock();
-        let actual_after: NativeActivationDecisionRecord = self
-            .read_native_range_image_record(&decision_key(range))?
-            .ok_or_else(|| invalid("actual activation decision disappeared after comparison"))?;
-        if actual_after != record {
-            return Err(invalid(
-                "actual activation decision changed during comparison",
-            ));
-        }
+        // A later forensic failure must not discard the actual comparison.
+        let decision_after = (|| -> Result<String> {
+            let actual_after: NativeActivationDecisionRecord = self
+                .read_native_range_image_record(&decision_key(range))?
+                .ok_or_else(|| {
+                    invalid("actual activation decision disappeared after comparison")
+                })?;
+            if actual_after != record {
+                return Err(invalid(
+                    "actual activation decision changed during comparison",
+                ));
+            }
+            Ok(actual_after.checksum_sha256)
+        })();
         Ok((
             actual,
             before,
@@ -110,7 +117,7 @@ impl BicDb {
             metadata_claim,
             native_claim,
             record.checksum_sha256,
-            actual_after.checksum_sha256,
+            decision_after,
             record.scope.range_configuration_sha256,
             [record.native_page_xid, record.range_index],
         ))

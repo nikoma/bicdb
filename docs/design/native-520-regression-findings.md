@@ -4,6 +4,70 @@ This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe64
 
 ## Actual execution
 
+### Source62b: test compilation failed; useful application jobs retained
+
+Exact candidate **1.0.520-beta / `62b602ca852a4183c4aa7630e2593e10446ff35c`**,
+tree `d659588bb66fb527720903064000e831c7c6c76a`, runs at actual pull-request
+checkout `16e5a38962fc650f7ba065278b471278e01a0b16`, with the same tree.
+At **2026-11-16 00:58 UTC**, automatic
+[Tests43780143089](https://github.com/nikoma/bicdb/actions/runs/43780143089)
+remains in progress: SQL and remaining-workspace are still collecting evidence.
+[Rails43780143098](https://github.com/nikoma/bicdb/actions/runs/43780143098)
+completed successfully. No jobs were manually dispatched, rerun or cancelled.
+The complete run archive is not yet frozen. The table records only terminal
+jobs and does not transfer any result from source4f.
+
+| Scope | Classification | Exact observed result and limit |
+| --- | --- | --- |
+| Four static jobs | Passed within scope | Formatting, licensing, public-dependency and selector checks; no native runtime evidence |
+| All-target `133015237885` | Failed | One E0308 in `committed_publication_wait_tests.rs:28:73`; zero cases/summaries. Following no-default consumer check skipped |
+| Core `133015259927` and serial Native `133015259888` | Failed prerequisite; runtime not tested | Actual chaos-helper builds passed; lib-test compilation failed on the same E0308. No Core/native case executed |
+| PGwire `133015259877` | Passed within scope | 511 passed / 0 failed / 2 ignored, 28 summaries and 513 unique cases. These are generic SQL/single-primary application checks, not native distributed SQL qualification |
+| Rails `133015237665` | Passed within scope | 20 runs / 100 assertions / zero failures, errors or skips; 24 reports and cable messages, zero failed jobs, two overlapping workers. Standalone restart/application acceptance |
+| Corrected test compilation and native recovery runtime | Not tested | Private one-line source correction is reviewed, not compiled or executed |
+| Physical DATA movement, fault-safe convergence, capacity, RPO/RTO and production qualification | Not tested by this run | Original Azure qualification remains failed |
+
+The E0308 is a test-source type error, not a production-library compile error:
+`ClusterTopology::ranges` is keyed by **u64 start tokens**, whereas the helper
+requires **RangeId**. The new test used `*ranges.keys().next().unwrap()`.
+Correction `f70c40967279c309a53e203e35a2dc20266cff14` reads
+`ranges.values().next().unwrap().id`, preserving the same first map entry.
+No token cast, privacy relaxation, production API change, timeout increase or
+assertion removal is involved. Removing that one-line replacement restores the
+entire source62b test file. The unchanged all-target CI command is the smallest
+compiler reproducer; normal serial-native CI remains the runtime acceptance
+gate after compilation succeeds. Neither was run locally. The exact unchanged
+all-target command in `.github/workflows/tests.yml` is:
+
+```sh
+python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/required-ci-pressure/alltargets.jsonl" -- cargo check --workspace --all-targets --locked
+```
+
+Complete original raw logs, retained before any source correction push:
+
+| Job | Raw bytes | Raw SHA-256 |
+| --- | ---: | --- |
+| All-target | 1,388,506 | `a6b99d88ca79110ff13523bf4da9996de8201e20a071834457f6b6101049b930` |
+| Core | 2,517,974 | `a31e2d425530a84f8b8cbf3d6187ae457b3251d9330a178555348ad0b59cb60c` |
+| Serial Native | 1,357,577 | `aa7ad2d2bb4937b72a50957275569630788812188ebf0192e20763dcd6e8978c` |
+| PGwire | 1,508,453 | `1ad8eb4aad06a50fb299467bd4b156c0b782a4d79145de030d50e581c0bf8ae4` |
+| Rails | 1,373,002 | `f0b0278bcd9664e43869ce1c0830f58d0fa9d2469ef24ccd272c8730dc13f60b` |
+
+The original Rails artifact `14188416877` contains 16 members / 13,112 ZIP
+bytes, SHA-256 `d5e9f9358773c9ac1b198d4c1bad8dc81ac09012885119da3ad37fb6a03f1c8a`.
+The actual CI debug binary SHA-256 is
+`d79c6da545d36fc2cc3aef430664862331b9e2983898e425be7943b2128553c6`;
+the executable is not retained in that ZIP and is not a release or deployment.
+Independent full Rails-log/ZIP verification receipt SHA-256:
+`b302bce83cfc3c6f936a12be0f890e68c5d4b6733e0825f9ad36e3ca52135267`.
+
+The [separate ordinary-PG entry inspection](ordinary-postgresql-native-entry-62b602ca.md)
+pins the same source and distinguishes native Strong admission from local SQL.
+Its startup-order/embedding finding is **inconclusive as a runtime defect**:
+source proves a missing mandatory admission boundary and a conditional exposure
+path, but no incorrect SQL result was executed. Its proposed explicit guard and
+actual-native-root controls remain not tested.
+
 The [prepared correction composition after source4f](native-4f-runtime-corrections.md)
 records its exact implementing commits, source-only reviews and unchanged
 validation/qualification gates. Its compilation and runtime execution are still

@@ -30,7 +30,36 @@ visibility/catch-up cases, and its hot fixture used4000ms rather than the
 candidate's1500ms. Counts are not an interchangeable benchmark or proof of
 independent-host HA, current binary qualification or full64-range convergence.
 
-## Prepared source correction after 4f — 2026-11-16 UTC
+## Current candidate execution — source62b, 2026-11-16 UTC
+
+Candidate **1.0.520-beta / `62b602ca852a4183c4aa7630e2593e10446ff35c`**,
+tree `d659588bb66fb527720903064000e831c7c6c76a`, executes at PR checkout
+`16e5a38962fc650f7ba065278b471278e01a0b16` with that same tree. This is
+the prepared correction below, now submitted to automatic CI. It is not merged,
+released, deployed or qualified. At the **2026-11-16 00:58 UTC checkpoint**,
+PGwire passed **511/0/2**, and Rails passed **20 runs / 100 assertions**, with
+zero failures, errors or skips. Four static jobs passed. All-target, Core and
+serial Native jobs **failed compilation on the same one E0308** in a new test:
+the topology's `u64` start-token map key was passed where `RangeId` was required.
+Those jobs executed no Core/native test cases; their failure says nothing about
+whether the intended runtime corrections pass. SQL and remaining-workspace jobs
+were still running and their results must not be inferred from preceding runs.
+The one-line correction in `f70c40967279c309a53e203e35a2dc20266cff14` selects
+the actual range descriptor's `.id`; it changes no production API, assertion or
+deadline and has not compiled or executed at this checkpoint. See the
+[exact current execution and reproducer](design/native-520-regression-findings.md).
+
+The separately pinned [ordinary PostgreSQL entry audit](design/ordinary-postgresql-native-entry-62b602ca.md)
+finds no mandatory synchronous native-profile guard in generic pgwire startup.
+The CLI binds before its asynchronous generic supervisor can refuse a born-v2
+metadata store; public empty-service/shared embedding paths can omit that
+supervisor. If local SQL setup succeeds, this is a **source-level potential
+exposure**, not a reproduced incorrect read. Ordinary local reads do not consume
+the native Strong point-read protocol. A mandatory admission guard is proposed,
+not delivered by this audit. This strengthens the existing unsupported-native-
+SQL boundary; it does not establish transparent distributed SQL.
+
+## Prepared source correction after 4f — historical source checkpoint
 
 The [three-part runtime correction](design/native-4f-runtime-corrections.md)
 addresses original-window contention, the full-metadata/effective-native
@@ -40,7 +69,7 @@ Rust compilation and runtime acceptance remain **not tested** at this prepared
 checkpoint. The preceding failed execution below remains unchanged; no physical
 or production gate is closed by preparing this source.
 
-## Current execution — source4f native failed, 2026-11-15 UTC
+## Previous complete execution — source4f native failed, 2026-11-15 UTC
 
 Candidate **1.0.520-beta / `4f33a8b016a999d43410ca8698270dc01fbeffd6`**,
 tree `4c87ba7caed1e5a9043eac854d7bdf15ac00b15d`, runs at actual PR checkout

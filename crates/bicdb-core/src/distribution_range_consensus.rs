@@ -146,6 +146,7 @@ use recovery_state::RecoveryFenceRecord;
 pub(crate) use recovery_state::{
     HistoricalRangeCertification, RecoveryFenceScope, RecoveryImageInstallSessionObservation,
     RecoveryLocalHistoricalApplyObservation, RecoveryResolvedCatalogObservation,
+    UnfinishedNormalRecoveryV1,
 };
 
 mod native_limits;

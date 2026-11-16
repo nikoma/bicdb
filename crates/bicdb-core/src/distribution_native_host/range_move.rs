@@ -68,6 +68,10 @@ const STAGES: [Stage; 10] = [
     Stage::ActivationRecorded,
     Stage::SourceRetired,
 ];
+/// The operator notes one move keeps. A note with a measured time differs
+/// on every repetition; the bound keeps the status small.
+const MAX_NOTES: usize = 8;
+
 fn stage_name(stage: Stage) -> &'static str {
     match stage {
         Stage::TargetAdmitted => "target_admitted",
@@ -111,6 +115,11 @@ pub struct NativeRangeMoveStatus {
     pub waiting: Option<String>,
     /// Why the controller is paused: the precondition does not hold.
     pub paused: Option<String>,
+    /// Conditions of this move that failed no step but that the operator
+    /// must know: the learner allocation was proposed without the write
+    /// hold, or the hold ended before this node published the allocation.
+    /// Kept for the lifetime of the move; each text once.
+    pub notes: Vec<String>,
     /// Steps that passed the precondition and the backoff.
     pub attempts: u64,
     pub completed: bool,
@@ -295,6 +304,7 @@ where
     last_error: Option<String>,
     waiting: Option<String>,
     paused: Option<String>,
+    notes: Vec<String>,
     attempts: u64,
     failures: u32,
     retry_at: Option<Instant>,
@@ -344,6 +354,7 @@ where
             last_error: None,
             waiting: None,
             paused: None,
+            notes: Vec::new(),
             attempts: 0,
             failures: 0,
             retry_at: None,
@@ -375,6 +386,7 @@ where
             last_error: self.last_error.clone(),
             waiting: self.waiting.clone(),
             paused: self.paused.clone(),
+            notes: self.notes.clone(),
             attempts: self.attempts,
             completed: self.completed,
             aborted: self.aborted,
@@ -481,6 +493,16 @@ where
         let driven = self
             .driver()
             .drive_until(hosts.metadata(), Some(next), parent);
+        for note in self
+            .handoff
+            .as_mut()
+            .map(NativeJoinedDataHandoff::take_notes)
+            .unwrap_or_default()
+        {
+            if !self.notes.contains(&note) && self.notes.len() < MAX_NOTES {
+                self.notes.push(note);
+            }
+        }
         super::joined_data_handoff::trace(started, || {
             format!(
                 "step to {} -> {}",

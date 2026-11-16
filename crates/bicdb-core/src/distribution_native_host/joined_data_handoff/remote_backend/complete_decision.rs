@@ -47,7 +47,67 @@ use crate::distribution_range_handoff::{
 /// Publications towards the missing members inside one call.
 const DECISION_PUBLICATION_ROUNDS: usize = 2;
 
+/// One decision exchange with one member, as this coordinator, with its
+/// time reported to the move trace. A free function over the transport so
+/// that the exchanges of one round can run on scoped threads.
+fn decision_exchange(
+    transport: &TcpClusterRelocationTransport,
+    metadata_leader: &ClusterNodeId,
+    recipient: &ClusterNodeId,
+    manifest: &NativeRemoteImageManifestV1,
+    phase: Uuid,
+    operation: NativeRemoteNewOperationV1,
+    token: &CancellationToken,
+) -> Result<crate::distribution_transport::AuthenticatedNativeRemoteNewFrame> {
+    let started = Instant::now();
+    let name = match &operation {
+        NativeRemoteNewOperationV1::Materialize => "materialize",
+        NativeRemoteNewOperationV1::Observe => "observe",
+        NativeRemoteNewOperationV1::PrepareDecision { .. } => "prepare",
+        NativeRemoteNewOperationV1::PublishDecision { .. } => "publish",
+        NativeRemoteNewOperationV1::ObserveDecision => "observe-decision",
+    };
+    let answer = transport.remote_joint_decision_exchange(
+        metadata_leader,
+        recipient,
+        manifest,
+        phase,
+        operation,
+        token,
+    );
+    trace(started, || {
+        format!(
+            "decision {name} of {recipient}: {}",
+            match &answer {
+                Ok(_) => "ok".to_string(),
+                Err(error) => format!("error {error}"),
+            }
+        )
+    });
+    answer
+}
+
 impl RemoteJoinedHandoffBackend {
+    fn decision_exchange(
+        &self,
+        metadata_leader: &ClusterNodeId,
+        recipient: &ClusterNodeId,
+        manifest: &NativeRemoteImageManifestV1,
+        phase: Uuid,
+        operation: NativeRemoteNewOperationV1,
+        token: &CancellationToken,
+    ) -> Result<crate::distribution_transport::AuthenticatedNativeRemoteNewFrame> {
+        decision_exchange(
+            &self.transport,
+            metadata_leader,
+            recipient,
+            manifest,
+            phase,
+            operation,
+            token,
+        )
+    }
+
     /// Test only: see `decision_publish_fault`.
     #[cfg(test)]
     pub(crate) fn test_decision_publish_fault(
@@ -77,19 +137,28 @@ impl RemoteJoinedHandoffBackend {
         let mut round =
             NativeRemoteJointDecisionCertificateRound::begin(plan, manifest.clone(), phase, token)?;
         let mut missing = Vec::new();
-        for id in publishers {
-            match self.transport.remote_joint_decision_exchange(
+        // Read-only and one member's own fact each: every member re-proves
+        // its own durable decision and reads no other member, so the
+        // requests are sent at once. The frames are counted in the order of
+        // `publishers`, as before.
+        let transport: &TcpClusterRelocationTransport = &self.transport;
+        let observe = |id: &ClusterNodeId| {
+            decision_exchange(
+                transport,
                 &members.metadata_leader,
                 id,
                 manifest,
                 phase,
                 NativeRemoteNewOperationV1::ObserveDecision,
                 token,
-            ) {
+            )
+        };
+        for (id, answer) in member_fan_out(publishers, &observe) {
+            match answer {
                 Ok(frame) => round.record(frame)?,
                 Err(error) => {
                     parent.check()?;
-                    missing.push((id.clone(), format!("observe decision: {error}")));
+                    missing.push((id, format!("observe decision: {error}")));
                 }
             }
         }
@@ -119,8 +188,7 @@ impl RemoteJoinedHandoffBackend {
         let mut round = NativeRemoteNewRound::begin(plan.clone(), manifest.clone(), phase, token)?;
         for id in publishers {
             let frame = self
-                .transport
-                .remote_joint_decision_exchange(
+                .decision_exchange(
                     &members.metadata_leader,
                     id,
                     manifest,
@@ -158,8 +226,17 @@ impl RemoteJoinedHandoffBackend {
     ) -> Result<BTreeMap<ClusterNodeId, String>> {
         let facts = self.decision_fact_set(plan, manifest, phase, publishers, members, token)?;
         let mut failures = BTreeMap::new();
+        // Every preparation before any publication. A member publishes over
+        // the fact set it fetches itself, and that set must show the
+        // preparation (the pin handoff) of EVERY new member; a member asked
+        // to publish while another new member is not yet prepared refuses
+        // with "requires actual participant pin handoff", and its
+        // preparation attempt, of which a participant has eight for its
+        // lifetime, is spent for nothing. This is the order of the
+        // transport's own decision round.
+        let mut prepared = Vec::new();
         for id in missing {
-            if let Err(error) = self.transport.remote_joint_decision_exchange(
+            match self.decision_exchange(
                 &members.metadata_leader,
                 id,
                 manifest,
@@ -169,9 +246,13 @@ impl RemoteJoinedHandoffBackend {
                 },
                 token,
             ) {
-                failures.insert(id.clone(), format!("prepare: {error}"));
-                continue;
+                Ok(_) => prepared.push(id),
+                Err(error) => {
+                    failures.insert(id.clone(), format!("prepare: {error}"));
+                }
             }
+        }
+        for id in prepared {
             #[cfg(test)]
             if self
                 .decision_publish_fault
@@ -185,7 +266,7 @@ impl RemoteJoinedHandoffBackend {
                 continue;
             }
             // A lost reply may still be durable: the observation decides.
-            if let Err(error) = self.transport.remote_joint_decision_exchange(
+            if let Err(error) = self.decision_exchange(
                 &members.metadata_leader,
                 id,
                 manifest,

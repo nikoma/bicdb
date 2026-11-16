@@ -2052,7 +2052,11 @@ impl ClusterDataNodeService {
         &self,
         range: &RangeDescriptor,
         caller: &ClusterNodeId,
-    ) -> Result<(u64, bool, bool)> {
+    ) -> Result<(
+        u64,
+        bool,
+        Option<crate::distribution_range_consensus::UnfinishedNormalRecoveryV1>,
+    )> {
         self.require_catalog_storage_policy()?;
         if &range.leader != caller {
             return Err(data_error(format!(
@@ -2076,7 +2080,7 @@ impl ClusterDataNodeService {
         Ok((
             self.range_writes.progress(range.id).current_epoch,
             unfinished,
-            self.range_writes.normal_recovery_unfinished(range.id),
+            self.range_writes.unfinished_normal_recovery(range.id),
         ))
     }
 

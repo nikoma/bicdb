@@ -40,10 +40,12 @@ After an actual successful response and original-peer-open validation, retain
 cursor progress before late outer checks. Fresh final native/data-quorum and
 metadata publication checks remain separate.
 
-An error does not advance the cursor or become success. This change does not
-claim to implement all uncertain-outcome recovery; original protocol restrictions
-still apply. Nor does it relax metadata-only stable-audit refusal during active
-relocation. Those failures need their own exact causal trace.
+An unsuccessful or unvalidated recipient result does not advance the cursor or
+become success. A late outer error preserves both the already validated success
+and the original caller's error. This change does not claim to implement all
+uncertain-outcome recovery; original protocol restrictions still apply. Nor does
+it relax metadata-only stable-audit refusal during active relocation. Those
+failures need their own exact causal trace.
 
 The next deterministic control must cancel an original turn immediately after a
 genuine validated recipient success, prove the retained cursor and original

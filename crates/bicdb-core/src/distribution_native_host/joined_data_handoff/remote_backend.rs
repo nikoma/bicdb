@@ -239,6 +239,21 @@ fn repeat_pause(repeated: u32) -> Duration {
         Some(doubled) => first.saturating_mul(1u32 << doubled.min(8)).min(last),
     }
 }
+/// How many members are asked at once for a step with two observation
+/// windows around a durable write (publication, Open, release, writer
+/// policy). Such a member reads every other member twice, and a member that
+/// is busy with its own step answers "busy" and is asked again. Measured
+/// between five processes: two members at once finish in about 1.1 s where
+/// one after the other needs 1.5 s, but three members' publications at once
+/// needed 2.2 to 2.3 s where one after the other needs 1.7 s, almost all of
+/// it repetitions of busy members. So two.
+const WINDOWED_STEPS_AT_ONCE: usize = 2;
+/// A preparation (the member's own local work) and a custody retirement
+/// (one read of every other member, no durable write of the bridge) are
+/// sent to every member together: three at once were measured at 0.33 s and
+/// 0.62 s where one after the other needs 0.65 s and 1.0 s.
+const EVERY_MEMBER_AT_ONCE: usize = usize::MAX;
+
 /// One independent exchange per member, each on its own scoped thread; all
 /// of them have returned before this function does and the results keep the
 /// order of `nodes`. One member, or a thread that cannot be started, runs
@@ -2513,8 +2528,34 @@ impl RemoteJoinedHandoffBackend {
     /// keeps no per-request state beyond an atomic request counter, and the
     /// write coordinator already calls the same transport type from scoped
     /// threads for its voter exchanges.
+    ///
+    /// `at_once` bounds how many members are asked together; the members
+    /// are taken in the order of `nodes`, and a group starts when the group
+    /// before it completed. See `WINDOWED_STEPS_AT_ONCE`.
     #[allow(clippy::too_many_arguments)]
     fn complete_bridge_steps(
+        &self,
+        members: &RemoteMembers,
+        decision: &RemoteBridgeDecision,
+        nodes: &[ClusterNodeId],
+        at_once: usize,
+        operation: &NativeJointHandoffStepOperationV1,
+        phase: &CancellationToken,
+        what: &str,
+        counted: &(dyn Fn(AuthenticatedNativeJointBridgeStepFrame) -> Result<()> + Sync),
+    ) -> Result<Vec<(ClusterNodeId, NativeJointHandoffStepOutcomeV1)>> {
+        let mut outcomes = Vec::with_capacity(nodes.len());
+        for group in nodes.chunks(at_once.max(1)) {
+            outcomes.extend(self.complete_bridge_step_group(
+                members, decision, group, operation, phase, what, counted,
+            )?);
+        }
+        Ok(outcomes)
+    }
+
+    /// One group of `complete_bridge_steps`: all of `nodes` at once.
+    #[allow(clippy::too_many_arguments)]
+    fn complete_bridge_step_group(
         &self,
         members: &RemoteMembers,
         decision: &RemoteBridgeDecision,
@@ -2656,6 +2697,7 @@ impl RemoteJoinedHandoffBackend {
             members,
             &decision,
             &asked,
+            EVERY_MEMBER_AT_ONCE,
             &operation,
             &phase,
             "OLD custody retirement",
@@ -2672,7 +2714,7 @@ impl RemoteJoinedHandoffBackend {
         let phase = bounded(parent, BRIDGE_PHASE);
         let mut outcomes = Vec::new();
         // The target first and alone, as before; then the surviving members
-        // at once.
+        // two at a time.
         for group in target_then_survivors(&order, &self.target) {
             let asked = group
                 .iter()
@@ -2683,6 +2725,7 @@ impl RemoteJoinedHandoffBackend {
                 members,
                 &decision,
                 &asked,
+                WINDOWED_STEPS_AT_ONCE,
                 &operation,
                 &phase,
                 "bridge release",
@@ -2734,9 +2777,9 @@ impl RemoteJoinedHandoffBackend {
         };
         let phase = bounded(parent, BRIDGE_PHASE);
         let mut outcomes = Vec::new();
-        // The surviving members at once: each reads every other member's
-        // audited release, which the release phase left, and installs only
-        // its own policy. The target follows when all of them completed: its
+        // The surviving members two at a time: each reads every other
+        // member's audited release, which the release phase left, and
+        // installs only its own policy. The target follows when all of them completed: its
         // host replaces its DATA owner and rebinds its listener for the
         // command, and a surviving member that asked it meanwhile would be
         // refused.
@@ -2749,6 +2792,7 @@ impl RemoteJoinedHandoffBackend {
             members,
             decision,
             &survivors,
+            WINDOWED_STEPS_AT_ONCE,
             &operation,
             &phase,
             "writer policy",
@@ -2938,6 +2982,7 @@ impl RemoteJoinedHandoffBackend {
             members,
             decision,
             new,
+            EVERY_MEMBER_AT_ONCE,
             &operation,
             &phase,
             "bridge preparation",
@@ -2954,13 +2999,14 @@ impl RemoteJoinedHandoffBackend {
             &phase,
         )?);
         // Every member reads every other member's preparation, which the
-        // phase before left and a publication does not change: at once.
-        // Each frame is counted inside its own freshness window, on the
-        // thread that received it.
+        // phase before left and a publication does not change: two at a
+        // time, in node order. Each frame is counted inside its own
+        // freshness window, on the thread that received it.
         self.complete_bridge_steps(
             members,
             decision,
             new,
+            WINDOWED_STEPS_AT_ONCE,
             &operation,
             &phase,
             "bridge publication",
@@ -2979,13 +3025,14 @@ impl RemoteJoinedHandoffBackend {
         let phase = bounded(parent, BRIDGE_PHASE);
         let mut opened = Vec::new();
         // The target first and alone, as before; then the surviving members
-        // at once: each reads every other member's confirmed bridge, which
-        // the publication phase left and an Open does not change.
+        // two at a time: each reads every other member's confirmed bridge,
+        // which the publication phase left and an Open does not change.
         for group in target_then_survivors(order, &self.target) {
             opened.extend(self.complete_bridge_steps(
                 members,
                 decision,
                 &group,
+                WINDOWED_STEPS_AT_ONCE,
                 &operation,
                 &phase,
                 "bridge open",

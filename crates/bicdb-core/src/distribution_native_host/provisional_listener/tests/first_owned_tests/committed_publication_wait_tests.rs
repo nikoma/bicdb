@@ -22,7 +22,7 @@ fn run(mode: u8) {
     let mut five = Five::start(&mut report)
         .unwrap_or_else(|e| panic!("actual publication fixture prerequisite: {e}"));
     let actual = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<()> {
-        let range = *five.topology.ranges.keys().next().unwrap();
+        let range = five.topology.ranges.values().next().unwrap().id;
         let data = report
             .data_call("actual_committed_publication_original_service_wait", || {
                 five.sources[0].test_committed_publication_request_wait(range, mode, &five.lifetime)

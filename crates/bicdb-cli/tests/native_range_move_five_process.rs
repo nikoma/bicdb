@@ -1035,13 +1035,13 @@ fn follow_move(
 /// refused before anything is committed, for the reason named in
 /// `SECOND_MOVE_REFUSAL`, and the cluster stays as it was. `true`: the second
 /// move completes and the sixth node leads the second range.
-const EXPECT_SECOND_MOVE: bool = false;
+const EXPECT_SECOND_MOVE: bool = true;
 /// THE switch of the sixth node's join. `false`: the metadata leader refuses
 /// to make the sixth node a metadata voter after the completed move, for the
 /// reason named in `SIXTH_VOTER_REFUSAL`; the node stays a learner and every
 /// range keeps serving. `true`: it becomes a voter and every range keeps
 /// serving.
-const EXPECT_SIXTH_VOTER: bool = false;
+const EXPECT_SIXTH_VOTER: bool = true;
 /// What the metadata leader reports when it refuses the sixth node.
 const SIXTH_VOTER_REFUSAL: &str = "a further metadata voter is refused";
 /// What the coordinator reports for the second move today: after one

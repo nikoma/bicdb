@@ -895,6 +895,7 @@ pub fn run(command: Command) -> Result<()> {
             let mut command_error: Option<String> = None;
             let mut refusal: Option<String> = None;
             let mut last_refresh = Instant::now();
+            let mut registry_error: Option<String> = None;
             let mut stopping = false;
             while lifetime.check().is_ok() && !stopping {
                 match pending_request(&command_file, sequence) {
@@ -1023,7 +1024,20 @@ pub fn run(command: Command) -> Result<()> {
                         // outcome is the joined DATA status section only.
                         let token =
                             lifetime.child_with_deadline(Instant::now() + Duration::from_secs(5));
-                        let _ = host.refresh_joined_data_registry(&token);
+                        // A refusal is reported on stderr, once per distinct
+                        // error.
+                        match host.refresh_joined_data_registry(&token) {
+                            Ok(()) => registry_error = None,
+                            Err(e) => {
+                                let text = e.to_string();
+                                if registry_error.as_ref() != Some(&text) {
+                                    eprintln!(
+                                        "native metadata host: joined DATA writer registry refresh: {text}"
+                                    );
+                                    registry_error = Some(text);
+                                }
+                            }
+                        }
                     }
                     write(
                         &status_file,

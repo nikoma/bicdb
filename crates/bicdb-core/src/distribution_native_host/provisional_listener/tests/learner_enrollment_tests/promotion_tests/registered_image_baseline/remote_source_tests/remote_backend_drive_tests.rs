@@ -1691,16 +1691,28 @@ fn after_completed_move(
         "without a completed committed handoff",
     );
 
-    let refusal = committed
+    // The metadata leader's precheck of a further voter reads the same
+    // record: the completed handoff admits it, the same handoff unfinished or
+    // without its scope refuses it, and nothing is changed.
+    committed
         .require_metadata_voter_addition_publishable()
-        .unwrap_err()
-        .to_string();
-    assert!(
-        refusal.contains("a further metadata voter is refused")
-            && refusal.contains(&format!("of range {}", range.id))
-            && refusal.contains("Nothing was committed"),
-        "{refusal}"
-    );
+        .unwrap();
+    for (topology, reason) in [
+        (&unfinished, "it is not finished"),
+        (&without_scope, "its record was certified without the scope"),
+    ] {
+        let refusal = topology
+            .require_metadata_voter_addition_publishable()
+            .unwrap_err()
+            .to_string();
+        assert!(
+            refusal.contains("a further metadata voter is refused")
+                && refusal.contains(&format!("of range {}", range.id))
+                && refusal.contains(reason)
+                && refusal.contains("Nothing was committed"),
+            "{refusal}"
+        );
+    }
     assert_eq!(metadata[0].lock().committed_topology(), &committed);
 }
 

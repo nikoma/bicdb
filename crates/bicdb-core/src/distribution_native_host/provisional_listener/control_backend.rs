@@ -109,9 +109,18 @@ impl NativeMetadataControlBackend {
             proof.require_database(&db)?;
         }
         {
-            let store = metadata
-                .try_lock()
-                .ok_or_else(|| invalid("registered control store busy"))?;
+            // The original OWN and caller bound this same-open validation.
+            // A metadata worker may briefly own the Store; wait without any
+            // service/DB guard and never replace the original observation.
+            let request = parent.child_with_deadline(observed.deadline());
+            let store = loop {
+                request.check()?;
+                observed.require_live_request(business)?;
+                if let Some(store) = metadata.try_lock_for(Duration::from_millis(5)) {
+                    break store;
+                }
+            };
+            request.check()?;
             store.require_listener_database(&open)?;
             proof.require_current(&store)?;
             if store.status().node_id != node_id {

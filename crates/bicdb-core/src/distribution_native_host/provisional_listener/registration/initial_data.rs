@@ -1230,13 +1230,25 @@ impl NativeMetadataControlHost {
             .as_mut()
             .unwrap()
             .restore_lost_listener(&self.network, parent)?;
-        let leader = self
+        let controller = self
             .controller
             .as_ref()
-            .ok_or_else(|| invalid("actual control provider absent"))?
-            .bootstrap(parent)?
-            .metadata_leader_id
-            .ok_or_else(|| invalid("current metadata leader unknown for DATA open"))?;
+            .ok_or_else(|| invalid("actual control provider absent"))?;
+        let leader = loop {
+            parent.check()?;
+            // This is an actual owned metadata observation, not election or
+            // DATA readiness. An in-progress election may temporarily have no
+            // routing hint while this original finite open still has time.
+            if let Some(leader) = controller.bootstrap(parent)?.metadata_leader_id {
+                break leader;
+            }
+            if parent.deadline().is_none() {
+                return Err(invalid("current metadata leader unknown for DATA open"));
+            }
+            // bootstrap released its service/metadata guards before returning.
+            // No request deadline is replaced and no failed RPC is replayed.
+            std::thread::sleep(Duration::from_millis(5));
+        };
         self.data
             .as_mut()
             .unwrap()

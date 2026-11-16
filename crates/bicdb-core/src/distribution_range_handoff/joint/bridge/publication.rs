@@ -310,7 +310,7 @@ impl NativeJointPublishedServingQuorum {
         let result = NativeJointOpenAdmission {
             open_phase: None,
             attempted: std::sync::atomic::AtomicBool::new(false),
-            quorum: self.clone(),
+            authority: NativeJointOpenAuthority::Local(self.clone()),
             local,
             receipt,
             fresh,
@@ -323,16 +323,31 @@ impl NativeJointPublishedServingQuorum {
 
 /// Actual fresh post-publication authority plus independently published NEW
 /// native quorum. No metadata/counter payload can construct this admission.
+enum NativeJointOpenAuthority {
+    Local(Arc<NativeJointPublishedServingQuorum>),
+    #[cfg(feature = "tls-replication")]
+    Remote {
+        quorum: Arc<crate::distribution_range_handoff::NativeRemoteBridgeQuorum>,
+        request: crate::distribution_native_host::NativeRemoteOpenRequestAdmission,
+    },
+}
 pub(crate) struct NativeJointOpenAdmission {
     open_phase: Option<Arc<NativeJointOpenPhaseQuorum>>,
     attempted: std::sync::atomic::AtomicBool,
-    quorum: Arc<NativeJointPublishedServingQuorum>,
+    authority: NativeJointOpenAuthority,
     pub(super) local: Arc<NativeJointPreparedServingObservation>,
     receipt: Arc<crate::db::NativeJointServingBridgeReceipt>,
     fresh: CommittedNativeJointDecisionObservation,
     cancellation: crate::CancellationToken,
 }
 impl NativeJointOpenAdmission {
+    /// Producer-sealed preparation ancestry only; no raw token or new phase.
+    pub(crate) fn original_preparation_memory_lifetime(
+        &self,
+    ) -> Result<crate::cancellation::CancellationLifetime> {
+        self.local.actual.retained_activation_memory_lifetime()
+    }
+
     #[cfg(feature = "tls-replication")]
     pub(crate) fn retain_registered_release_owner(
         &self,
@@ -374,7 +389,7 @@ impl NativeJointOpenAdmission {
     ) -> Result<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt> {
         parent.check()?;
         self.require_live()?;
-        if self.open_phase.is_some()
+        if self.has_fresh_open_phase()
             && self
                 .attempted
                 .swap(true, std::sync::atomic::Ordering::AcqRel)
@@ -383,7 +398,7 @@ impl NativeJointOpenAdmission {
                 "fresh open admission already attempted activation/recovery",
             ));
         }
-        if self.open_phase.is_none() {
+        if !self.has_fresh_open_phase() {
             self.require_external_publications_current()?;
         }
         let mut service = self
@@ -394,7 +409,11 @@ impl NativeJointOpenAdmission {
         service.persist_local_native_joint_activation(self, &self.local.actual, parent)
     }
     pub(crate) fn data(&self) -> &NativeJointDecisionData {
-        self.quorum.data()
+        match &self.authority {
+            NativeJointOpenAuthority::Local(quorum) => quorum.data(),
+            #[cfg(feature = "tls-replication")]
+            NativeJointOpenAuthority::Remote { .. } => self.fresh.data(),
+        }
     }
     pub(crate) fn committed(&self) -> &CommittedNativeJointDecisionObservation {
         &self.fresh
@@ -408,11 +427,53 @@ impl NativeJointOpenAdmission {
     pub(crate) fn cancellation(&self) -> &crate::CancellationToken {
         &self.cancellation
     }
+    /// SAME actual service/DB borrow, before the final foreign sweep. The
+    /// original phase-owner validator already performs the complete physical
+    /// writer-domain check; retain its opaque identities together rather than
+    /// repeating that full read twice through the separate legacy getters.
+    /// This is no cached currentness grant: final foreign/native/gate/domain
+    /// and publication checks remain at their original effect boundaries.
+    pub(crate) fn original_owner_and_domain_for_activation(
+        &self,
+        database: &crate::BicDb,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+    ) -> Result<(
+        crate::db::NativeJointPhaseOwner,
+        crate::db::NativeJointWriterDomain,
+        std::path::PathBuf,
+    )> {
+        #[cfg(test)]
+        let mut trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "open-original-owner-and-domain-full-validation",
+            self.receipt.local_node_id(),
+            &self.cancellation,
+        );
+        self.require_live()?;
+        let actual = self
+            .local
+            .actual
+            .require_original_phase_owner(database, store)?;
+        let (original, root) = self.local.actual.original_phase_owner_for_continuation()?;
+        let domain = self.local.actual.writer_domain().clone();
+        if !actual.same_actual(&original) || !original.same_actual(&domain.phase_owner()) {
+            return Err(invalid("joint activation changed preparation writer"));
+        }
+        self.require_live()?;
+        #[cfg(test)]
+        trace.complete();
+        Ok((original, domain, root))
+    }
     pub(crate) fn original_writer_domain_for_activation(
         &self,
         database: &crate::BicDb,
         store: &crate::distribution_range_consensus::RangeWriteStore,
     ) -> Result<crate::db::NativeJointWriterDomain> {
+        #[cfg(test)]
+        let mut trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "open-original-writer-domain-full-validation",
+            self.receipt.local_node_id(),
+            &self.cancellation,
+        );
         self.require_live()?;
         self.local
             .actual
@@ -420,6 +481,8 @@ impl NativeJointOpenAdmission {
         let domain = self.local.actual.writer_domain().clone();
         domain.require_current(database, store, self.data().activation_range())?;
         self.require_live()?;
+        #[cfg(test)]
+        trace.complete();
         Ok(domain)
     }
     pub(crate) fn original_phase_owner_for_activation(
@@ -427,6 +490,12 @@ impl NativeJointOpenAdmission {
         database: &crate::BicDb,
         store: &crate::distribution_range_consensus::RangeWriteStore,
     ) -> Result<(crate::db::NativeJointPhaseOwner, std::path::PathBuf)> {
+        #[cfg(test)]
+        let mut trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "open-original-phase-owner-full-validation",
+            self.receipt.local_node_id(),
+            &self.cancellation,
+        );
         self.require_live()?;
         let actual = self
             .local
@@ -437,6 +506,8 @@ impl NativeJointOpenAdmission {
             return Err(invalid("joint activation changed preparation writer"));
         }
         self.require_live()?;
+        #[cfg(test)]
+        trace.complete();
         Ok((original, root))
     }
     pub(crate) fn require_live(&self) -> Result<()> {
@@ -453,7 +524,15 @@ impl NativeJointOpenAdmission {
             ));
         }
         let (term, index, context) = self.fresh.metadata_anchor();
-        for receipt in self.quorum.receipts.values() {
+        let quorum = match &self.authority {
+            NativeJointOpenAuthority::Local(quorum) => quorum,
+            #[cfg(feature = "tls-replication")]
+            NativeJointOpenAuthority::Remote { quorum, request } => {
+                request.require_current(&self.fresh)?;
+                return quorum.require_post_all(&self.fresh);
+            }
+        };
+        for receipt in quorum.receipts.values() {
             let (observed_term, observed_index, observed_context) = receipt.metadata_anchor();
             if term < observed_term || index < observed_index || context == observed_context {
                 return Err(invalid(
@@ -465,9 +544,17 @@ impl NativeJointOpenAdmission {
     }
     pub(crate) fn require_external_publications_current(&self) -> Result<()> {
         self.require_live()?;
-        for (node, receipt) in &self.quorum.receipts {
+        let quorum = match &self.authority {
+            NativeJointOpenAuthority::Local(quorum) => quorum,
+            #[cfg(feature = "tls-replication")]
+            NativeJointOpenAuthority::Remote { quorum, request } => {
+                request.require_current(&self.fresh)?;
+                return quorum.require_post_all(&self.fresh);
+            }
+        };
+        for (node, receipt) in &quorum.receipts {
             if node != self.receipt.local_node_id() {
-                let service = self.quorum.prepared.observations[node]
+                let service = quorum.prepared.observations[node]
                     .service
                     .try_lock()
                     .ok_or_else(|| invalid("joint open native peer service busy"))?;
@@ -476,9 +563,7 @@ impl NativeJointOpenAdmission {
                 } else {
                     service.require_joint_bridge_with_writer_domain(
                         receipt,
-                        self.quorum.prepared.observations[node]
-                            .actual
-                            .writer_domain(),
+                        quorum.prepared.observations[node].actual.writer_domain(),
                     )?;
                 }
             }
@@ -495,10 +580,23 @@ impl NativeJointOpenAdmission {
         if let Some(phase) = &self.open_phase {
             phase.require_local_native_scope(self.receipt.local_node_id(), store, scope)?;
         }
+        #[cfg(feature = "tls-replication")]
+        if let NativeJointOpenAuthority::Remote { quorum, .. } = &self.authority {
+            self.local
+                .require_local_open_scope(scope, store, &self.fresh, self.receipt.clone())?;
+            self.local
+                .actual
+                .require_remote_open_member(scope, store, quorum, &self.receipt)?;
+        }
         Ok(())
     }
     pub(crate) fn has_fresh_open_phase(&self) -> bool {
         self.open_phase.is_some()
+            || match &self.authority {
+                NativeJointOpenAuthority::Local(_) => false,
+                #[cfg(feature = "tls-replication")]
+                NativeJointOpenAuthority::Remote { .. } => true,
+            }
     }
     pub(crate) fn require_local_open_preparation(
         &self,
@@ -507,6 +605,152 @@ impl NativeJointOpenAdmission {
         self.require_live()?;
         if let Some(phase) = &self.open_phase {
             phase.require_member_with_service(self.receipt.local_node_id(), service)?;
+        }
+        #[cfg(feature = "tls-replication")]
+        if matches!(&self.authority, NativeJointOpenAuthority::Remote { .. }) {
+            self.local
+                .require_open_phase_current(service, &self.fresh, self.receipt.clone())?;
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+impl NativeJointPublishedServingQuorum {
+    pub(crate) fn test_owned_activation_state(
+        &self,
+        node: &ClusterNodeId,
+    ) -> Result<serde_json::Value> {
+        let original = self
+            .prepared
+            .observations
+            .get(node)
+            .ok_or_else(|| invalid("actual activation test member absent"))?;
+        let service = original
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("actual activation test service busy"))?;
+        original.actual.test_owned_activation_state(&service)
+    }
+    pub(crate) fn test_owned_activation_later_io(
+        &self,
+        node: &ClusterNodeId,
+    ) -> Result<serde_json::Value> {
+        let original = self
+            .prepared
+            .observations
+            .get(node)
+            .ok_or_else(|| invalid("actual activation test member absent"))?;
+        let mut service = original
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("actual activation test service busy"))?;
+        original.actual.test_owned_activation_later_io(&mut service)
+    }
+    pub(crate) fn test_owned_activation_foreign(
+        &self,
+        node: &ClusterNodeId,
+    ) -> Result<serde_json::Value> {
+        let original = self
+            .prepared
+            .observations
+            .get(node)
+            .ok_or_else(|| invalid("actual activation test member absent"))?;
+        let foreign = self
+            .prepared
+            .observations
+            .iter()
+            .find(|(id, _)| *id != node)
+            .map(|(_, v)| v)
+            .ok_or_else(|| invalid("actual foreign activation test member absent"))?;
+        let service = original
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("actual activation test service busy"))?;
+        original.actual.test_owned_activation_foreign(
+            &service,
+            &self.receipts[node],
+            &foreign.actual,
+        )
+    }
+}
+
+#[cfg(test)]
+impl NativeJointOpenAdmission {
+    pub(crate) fn test_stale_activation_owner_comparison(&self) -> Result<serde_json::Value> {
+        self.require_live()?;
+        let service = self
+            .local
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("actual stale activation comparison service busy"))?;
+        self.local
+            .actual
+            .test_stale_activation_comparison(&service, self)
+    }
+}
+
+impl NativeJointOpenAdmission {
+    /// No hash/serde/physical acquisition inside a short final guard. The
+    /// full actual Role/OWN/domain/ALL proofs precede this boundary.
+    pub(crate) fn require_operation_request_memory(&self) -> Result<()> {
+        self.cancellation.check()?;
+        self.fresh.require_publication_request_memory()?;
+        #[cfg(feature = "tls-replication")]
+        if let NativeJointOpenAuthority::Remote { request, .. } = &self.authority {
+            request.require_memory_current()?;
+        }
+        Ok(())
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn from_actual_remote_bridge(
+        quorum: Arc<crate::distribution_range_handoff::NativeRemoteBridgeQuorum>,
+        local: super::NativeRemoteOpenObservation,
+        request: crate::distribution_native_host::NativeRemoteOpenRequestAdmission,
+    ) -> Result<Self> {
+        local.require_current()?;
+        quorum.require_post_all(&local.fresh)?;
+        request.require_current(&local.fresh)?;
+        let result = Self {
+            open_phase: None,
+            attempted: std::sync::atomic::AtomicBool::new(false),
+            cancellation: request
+                .bound_request()
+                .child_with_deadline(local.fresh.deadline()),
+            local: local.local,
+            receipt: local.native,
+            fresh: local.fresh,
+            authority: NativeJointOpenAuthority::Remote { quorum, request },
+        };
+        result.require_live()?;
+        Ok(result)
+    }
+}
+
+#[cfg(feature = "tls-replication")]
+impl NativeJointOpenAdmission {
+    pub(crate) fn require_original_remote_open_observation(
+        &self,
+        observed: &super::NativeRemoteOpenObservation,
+    ) -> Result<()> {
+        if !matches!(&self.authority, NativeJointOpenAuthority::Remote { .. })
+            || !Arc::ptr_eq(&self.local.actual, &observed.local.actual)
+            || !Arc::ptr_eq(&self.receipt, &observed.native)
+        {
+            return Err(invalid(
+                "Open resolution replaced actual prepared/native bridge owners",
+            ));
+        }
+        self.require_operation_request_memory()?;
+        observed.require_memory_current()
+    }
+}
+
+impl NativeJointOpenAdmission {
+    pub(crate) fn note_remote_open_effect_entered(&self) -> Result<()> {
+        #[cfg(feature = "tls-replication")]
+        if let NativeJointOpenAuthority::Remote { request, .. } = &self.authority {
+            request.note_actual_effect_entered()?;
         }
         Ok(())
     }

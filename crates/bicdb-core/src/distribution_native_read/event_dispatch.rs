@@ -142,6 +142,46 @@ impl NativeStrongEventDispatcher {
         });
         Ok(generation)
     }
+    /// Guard-free INITIAL continuation only. Preserve the original finite
+    /// parent while waiting for actual service/DB and binding contention.
+    /// No binding lock is held during service validation (read workers use
+    /// the opposite order for their final generation check).
+    pub(crate) fn publish_bounded_initial(
+        self: &Arc<Self>,
+        coordinator: &Arc<Coordinator>,
+        host: &Arc<InstalledNativeWriterHostGuard>,
+        parent: &CancellationToken,
+    ) -> Result<Uuid> {
+        parent.check()?;
+        let runtime = self
+            .runtime
+            .upgrade()
+            .ok_or_else(|| invalid("Strong dispatcher runtime ended"))?;
+        self.require_runtime(&runtime)?;
+        coordinator.validate_strong_event_dispatch_install_bounded(&runtime, host, parent)?;
+        let mut binding = loop {
+            parent.check()?;
+            if let Some(binding) = self.binding.try_lock_for(Duration::from_millis(5)) {
+                break binding;
+            }
+        };
+        parent.check()?;
+        let generation = Uuid::now_v7();
+        *binding = Some(Binding {
+            generation,
+            coordinator: Arc::downgrade(coordinator),
+            host: Arc::downgrade(host),
+        });
+        Ok(generation)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_actual_binding_generation(&self) -> Result<Option<Uuid>> {
+        let binding = self
+            .binding
+            .try_lock()
+            .ok_or_else(|| invalid("actual dispatcher test binding busy"))?;
+        Ok(binding.as_ref().map(|b| b.generation))
+    }
     pub(crate) fn active_workers(&self) -> usize {
         self.active.load(Ordering::Acquire)
     }

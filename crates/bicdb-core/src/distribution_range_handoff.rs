@@ -28,7 +28,7 @@ pub(crate) use joint::{
     NativeJointPreparedServingRound, NativeJointPreparedServingVoteData,
     NativeJointPublishedServingQuorum, NativeJointReleaseAdmission, NativeJointReleaseContinuation,
     NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
-    NativeJointServingPublicationRound,
+    NativeJointServingPublicationRound, NativeRemotePreparedObservation,
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use joint::{
@@ -39,13 +39,18 @@ pub(crate) use joint::{
 pub(crate) use joint::{NativeJointPhaseTrace, NativeRefreshTraceContext};
 #[cfg(feature = "tls-replication")]
 pub(crate) use joint::{
-    NativeRemoteDecisionAdmission, NativeRemoteDecisionBindingV1, NativeRemoteDecisionReceiptV1,
-    NativeRemoteDecisionSourceData, NativeRemoteDecisionSourceRequestV1,
+    NativeMetadataOwnerCatalogueScope, NativeRemoteActivatedMetadataProof,
+    NativeRemoteAllOpenQuorum, NativeRemoteAllOpenRetirementAdmission, NativeRemoteAllOpenRound,
+    NativeRemoteAllReleasedQuorum, NativeRemoteAllReleasedRound, NativeRemoteCatalogueDecisionV1,
+    NativeRemoteCatalogueRound, NativeRemoteDecisionAdmission, NativeRemoteDecisionBindingV1,
+    NativeRemoteDecisionReceiptV1, NativeRemoteDecisionSourceData,
+    NativeRemoteDecisionSourceRequestV1, NativeRemoteDualDurableDecision,
     NativeRemoteJointDecisionCertificate, NativeRemoteJointDecisionCertificateRound,
     NativeRemoteNewFactSetV1, NativeRemoteNewHandoffV1, NativeRemoteNewMaterializedQuorum,
     NativeRemoteNewOperationV1, NativeRemoteNewParticipant, NativeRemoteNewPinHandoffPermit,
     NativeRemoteNewReplyV1, NativeRemoteNewRequestV1, NativeRemoteNewRound,
-    NativeRemoteNewSnapshotV1, NativeRemoteNewTargetPinIssuance,
+    NativeRemoteNewSnapshotV1, NativeRemoteNewTargetPinIssuance, NativeRemoteOldRetirementSlot,
+    NativeRemotePreparedQuorum, NativeRemotePreparedRound, NativeRemoteServingReadAdmission,
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use joint::{
@@ -1761,3 +1766,12 @@ fn pending_handoff_configuration(
     request.validate()?;
     Ok((request, new_range, old_voters))
 }
+
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint::{NativeRemoteBridgeAdmission, NativeRemoteBridgeReadAdmission};
+
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint::NativeRemoteOpenObservation;
+
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint::{NativeRemoteBridgeQuorum, NativeRemoteBridgeRound};

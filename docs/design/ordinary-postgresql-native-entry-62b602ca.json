@@ -1,0 +1,322 @@
+{
+  "format": "bicdb.source-inspection/v1",
+  "source_commit": "62b602ca852a4183c4aa7630e2593e10446ff35c",
+  "source_version": "1.0.520-beta",
+  "source_state": "candidate_not_newly_qualified",
+  "main_reference": "587dd6e4775e454cc9e8224d5fed76e8795c6ff6",
+  "inspection_scope": "ordinary_postgresql_entry_and_native_read_admission",
+  "rust_tests_executed": false,
+  "database_or_sdk_executed": false,
+  "physical_experiment_executed": false,
+  "production_action": false,
+  "files": [
+    {
+      "path": "crates/bicdb-cli/src/main.rs",
+      "sha256": "dc023d98b0d7176d2916d040639da09dc0e5f1ceb65a18cad0e1b172043aab9d",
+      "references": {
+        "prepare_server_command": [
+          5933,
+          8920
+        ],
+        "run_serve_command": [
+          5948,
+          9093
+        ],
+        "cli_host_services": [
+          9080,
+          9411
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-cli/src/native_metadata_command.rs",
+      "sha256": "5a938de63caa5cc637feda0b6c03d26abc3a8c52bcf551974789ed3b1c640d6e",
+      "references": {
+        "pub enum Command": [
+          19
+        ],
+        "OpenInitialData": [
+          196,
+          218
+        ],
+        "data_serving": [
+          248,
+          500,
+          549,
+          599,
+          713,
+          777,
+          849,
+          977
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-pgwire/src/lib.rs",
+      "sha256": "674131a7eacf002e5a91b589d9d5caf4a0be14a8ace36a186576e507b1582424",
+      "references": {
+        "pub fn serve_cluster_with_host_services": [
+          1261
+        ],
+        "fn open_with_startup_gate": [
+          1279
+        ],
+        "pub fn serve(": [
+          1230
+        ],
+        "pub fn serve_with_host_services": [
+          1235
+        ],
+        "pub fn serve_listener_with_config": [
+          1361
+        ],
+        "pub fn serve_existing_listener": [
+          1388
+        ],
+        "async fn serve_existing_listener_async": [
+          1481
+        ],
+        "fn database_config_for_server": [
+          475
+        ],
+        "pub fn start_distribution_controller": [
+          1167
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-pgwire/src/server_cluster.rs",
+      "sha256": "7840c1c93d88e980c49f7e51fb97978b8dac5dd95201cfd41a9993aa44201b2f",
+      "references": {
+        "pub fn open(": [
+          751,
+          1942
+        ],
+        "pub fn open_with_shared": [
+          771
+        ],
+        "pub fn open_with_cluster_router": [
+          783
+        ],
+        "pub fn route_cluster_point": [
+          1049
+        ],
+        "pub fn plan_cluster_point_query": [
+          1069
+        ],
+        "pub fn plan_cluster_scatter_query": [
+          1086
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-pgwire/src/checkpoint_driver.rs",
+      "sha256": "059ad193367694b57d1be277e70f59c0b2b27e459edfe600c7b783fd06fa0486",
+      "references": {
+        "fn start_distribution_supervisor_with_listener": [
+          1040
+        ],
+        "MetadataConsensusStore::open": [
+          1122
+        ],
+        "install_commit_admission": [
+          1306
+        ],
+        "pub(crate) fn start_background_tasks_for_scope": [
+          117
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_consensus.rs",
+      "sha256": "4b560788337a660841cf787a8a4c3ae0f75966be68a57ad9b436cb796b8522ad",
+      "references": {
+        "pub fn open(": [
+          1591
+        ],
+        "born-v2 metadata requires actual native": [
+          1601
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/db/access_mutation.rs",
+      "sha256": "cc02a79f71372162e245e795e3564982963b8937ee2b93e3f65320558350da44",
+      "references": {
+        "pub fn get(": [
+          6
+        ],
+        "pub fn get_unchecked": [
+          39
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/db/commit_snapshot.rs",
+      "sha256": "495bb933a3c086ce9c9f677acf34d1d43702df7935f5906f7872061a797a6b24",
+      "references": {
+        "pub(crate) fn collection_state(": [
+          3237
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_events.rs",
+      "sha256": "fe3f2ea78dfa9d3c21c130ec7fbc93d0f14f57d2abbf07acb6634b547542f83c",
+      "references": {
+        "pub fn get_strong": [
+          1097
+        ],
+        "strong_point_read_unavailable: born-v2 Get": [
+          1233
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_read/event_dispatch.rs",
+      "sha256": "d8f80ae6ee1044e2add4ec4f7184e5f5b82ac2a6aef43cdc7be479041e2510cf",
+      "references": {
+        "pub(crate) struct NativeStrongEventDispatcher": [
+          24
+        ],
+        "pub(crate) fn prepare_publication": [
+          60
+        ],
+        "pub(crate) fn dispatch": [
+          242
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_read/strong.rs",
+      "sha256": "1b2cea0c3984168d2db4ef0becfe32f0e3796efe1d42f4e6db973297d433e51e",
+      "references": {
+        "pub(crate) fn require_metadata": [
+          42
+        ],
+        "pub(crate) struct NativeStrongPointReadValue": [
+          119
+        ],
+        "pub(crate) fn capture_actual_point_read": [
+          149
+        ],
+        "pub(crate) fn finalize": [
+          256
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/native_read.rs",
+      "sha256": "25ddb2a6596fdc524966b577b0c86c80fecdef924168ecd68105dbb12ecb3628",
+      "references": {
+        "pub(crate) struct NativeReadLocalDbSequence": [
+          14
+        ],
+        "pub(crate) struct NativeRangeReadPhysical": [
+          62
+        ],
+        "pub(crate) fn require_lifetime": [
+          126
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/db/record_read_snapshot.rs",
+      "sha256": "abf6b52158b64bb940a050100f97386a33ce4ae82a648e75eac0742e87f231f7",
+      "references": {
+        "struct RecordReadSnapshotState": [
+          14
+        ],
+        "read snapshot belongs to a different database": [
+          64
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_query.rs",
+      "sha256": "3f4ba08a2694662a163f7ddb7cd41b2ac88f5c1539ac18483d4eb69caedbaa44",
+      "references": {
+        "pub trait DistributedCommitProtocol": [
+          1054
+        ],
+        "pub fn execute_distributed_transaction": [
+          1122
+        ],
+        "impl DistributedCommitProtocol": [
+          1602
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+      "sha256": "2b76024cdb8d6b10e524088af7650719b03d082afb51b8eff491088f691a6311",
+      "references": {
+        "fn resolve_range": [
+          3232
+        ],
+        "cross-range write rejected": [
+          3242
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-sql/src/oracle.rs",
+      "sha256": "008753e6ae1e3007326af352535d8b52ceecc460cbf1aa3495118a301091d7ae",
+      "references": {
+        "pub fn ensure_database_profile": [
+          508
+        ],
+        "fn ensure_database_profile_inner": [
+          549
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-sql/src/session/partition_admission.rs",
+      "sha256": "2a876810488e2d81717e6152f07d737c3811214685fa214841d2dce78fcc9314",
+      "references": {
+        "pub fn ensure_sql_partition_admission": [
+          450
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-sql/src/session/partition_admission/catalog.rs",
+      "sha256": "c26fb565140b86bd11982fa186505600d7f8eaf3eff864fab856c9f7e1848614",
+      "references": {
+        "fn validate(": [
+          220
+        ],
+        "fn needs_repair": [
+          284
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-sql/src/session/rename_journal.rs",
+      "sha256": "cf82814e36d1968bc78d3c5de7475ed2b27cfceb333795a015f0c44c247d50ec",
+      "references": {
+        "fn initialize_identities": [
+          165
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-pgwire/src/distribution_controller.rs",
+      "sha256": "5b7b37a7262a653ef95724152df89e1bdf5bd005e62d79e63105d6b2094c78ac",
+      "references": {
+        "impl PgWireHostService": [
+          64
+        ],
+        "fn start(": [
+          69
+        ]
+      }
+    }
+  ],
+  "finding_classification": {
+    "generic_cli_sql_exposure": "potential_source_ordering_window_not_executed",
+    "public_embedding_supervisor_bypass": "source_present_not_runtime_demonstrated",
+    "native_strong_false_absence_guard": "implemented_event_point_contract_not_general_sql"
+  }
+}

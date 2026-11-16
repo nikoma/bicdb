@@ -871,3 +871,14 @@ fn plan_learner_allocation(
     proposed.validate()?;
     Ok(proposed)
 }
+
+/// Existing pure allocation planner DATA for the actual-host acceptance setup.
+/// This does not commit metadata or create a Role/OLD/native permission.
+#[cfg(test)]
+pub(in crate::distribution_native_host) fn test_first_allocation_candidate(
+    current: &ClusterTopology,
+    range: RangeId,
+    target: &ClusterNodeId,
+) -> Result<ClusterTopology> {
+    plan_learner_allocation(current, range, target)
+}

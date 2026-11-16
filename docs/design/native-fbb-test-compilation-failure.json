@@ -1,0 +1,170 @@
+{
+  "source": "fbbadef57c5532af6acbc0f3e2016b332a3d16ab",
+  "tree": "06fe10ab222543a91be665514626fb50c610c2a7",
+  "actual_checkout": "24c2e1987ac1596adb1fec42b7cff868540d02aa",
+  "run": 43675202613,
+  "classification": "FAILED bicdb-core(lib test) compilation; actual Core/native tests NOT EXECUTED",
+  "failed_compiler_jobs": [
+    {
+      "job": 132693705881,
+      "name": "Community-only workspace compiles, tests included",
+      "conclusion": "failure",
+      "raw_bytes": 1193853,
+      "raw_sha256": "63efaed493a816ac69840fa4bd0ff96cf4815374ca715436a561439cac977e1f",
+      "gzip_sha256": "732f2907944b1d48dafeea340fb047e1b0541a6079b3724736bbf46956f12b0c",
+      "errors": [
+        {
+          "line": 12137,
+          "exact": "2026-11-15T04:08:44.6501192Z error[E0425]: cannot find function `range` in this scope"
+        },
+        {
+          "line": 12169,
+          "exact": "2026-11-15T04:08:44.7210152Z error[E0425]: cannot find function `range` in this scope"
+        },
+        {
+          "line": 12201,
+          "exact": "2026-11-15T04:08:44.7921320Z error[E0425]: cannot find function `range` in this scope"
+        },
+        {
+          "line": 12233,
+          "exact": "2026-11-15T04:08:44.8623640Z error[E0425]: cannot find function `range` in this scope"
+        },
+        {
+          "line": 12265,
+          "exact": "2026-11-15T04:08:44.9325309Z error[E0425]: cannot find function `range` in this scope"
+        },
+        {
+          "line": 12362,
+          "exact": "2026-11-15T04:08:59.2138646Z error[E0609]: no field `service` on type `&provisional_listener::registration::initial_data::NativeInitialDataHost`"
+        },
+        {
+          "line": 12373,
+          "exact": "2026-11-15T04:09:00.9827622Z error[E0308]: mismatched types"
+        },
+        {
+          "line": 12382,
+          "exact": "2026-11-15T04:09:00.9854821Z error[E0308]: mismatched types"
+        }
+      ],
+      "actual_test_summaries": 0
+    },
+    {
+      "job": 132693725771,
+      "name": "bicdb-core native multi-node (serial)",
+      "conclusion": "failure",
+      "raw_bytes": 1148130,
+      "raw_sha256": "9431dad37dc1a10686bd6825a40b06321075223dd0481f06a20ba00be7467240",
+      "gzip_sha256": "55c69ec757b90de726192f9c9ac15a03d0fca67aa1101ea89cf32a81e18dc0f4",
+      "errors": [
+        {
+          "line": 11092,
+          "exact": "2026-11-15T04:15:33.2851122Z error[E0425]: cannot find function `range` in this scope"
+        },
+        {
+          "line": 11124,
+          "exact": "2026-11-15T04:15:33.3469651Z error[E0425]: cannot find function `range` in this scope"
+        },
+        {
+          "line": 11156,
+          "exact": "2026-11-15T04:15:33.4085252Z error[E0425]: cannot find function `range` in this scope"
+        },
+        {
+          "line": 11188,
+          "exact": "2026-11-15T04:15:33.4708665Z error[E0425]: cannot find function `range` in this scope"
+        },
+        {
+          "line": 11220,
+          "exact": "2026-11-15T04:15:33.5332909Z error[E0425]: cannot find function `range` in this scope"
+        },
+        {
+          "line": 11523,
+          "exact": "2026-11-15T04:15:46.3132870Z error[E0609]: no field `service` on type `&provisional_listener::registration::initial_data::NativeInitialDataHost`"
+        },
+        {
+          "line": 11534,
+          "exact": "2026-11-15T04:15:47.9409072Z error[E0308]: mismatched types"
+        },
+        {
+          "line": 11543,
+          "exact": "2026-11-15T04:15:47.9439934Z error[E0308]: mismatched types"
+        }
+      ],
+      "actual_test_summaries": 0
+    },
+    {
+      "job": 132693725811,
+      "name": "bicdb-core",
+      "conclusion": "failure",
+      "raw_bytes": 2089341,
+      "raw_sha256": "715c52fb38131ef2805d798b0d57016a8920073fd26698177440b21d1187eb4a",
+      "gzip_sha256": "9556570c2dd35d989ee6d2ec307663121c31a96faa9ed4bbcde40eaa56acb42e",
+      "errors": [
+        {
+          "line": 21232,
+          "exact": "2026-11-15T04:16:46.6820961Z error[E0425]: cannot find function `range` in this scope"
+        },
+        {
+          "line": 21264,
+          "exact": "2026-11-15T04:16:46.7459315Z error[E0425]: cannot find function `range` in this scope"
+        },
+        {
+          "line": 21296,
+          "exact": "2026-11-15T04:16:46.8096154Z error[E0425]: cannot find function `range` in this scope"
+        },
+        {
+          "line": 21328,
+          "exact": "2026-11-15T04:16:46.8732437Z error[E0425]: cannot find function `range` in this scope"
+        },
+        {
+          "line": 21360,
+          "exact": "2026-11-15T04:16:46.9360678Z error[E0425]: cannot find function `range` in this scope"
+        },
+        {
+          "line": 21457,
+          "exact": "2026-11-15T04:16:59.6487923Z error[E0609]: no field `service` on type `&provisional_listener::registration::initial_data::NativeInitialDataHost`"
+        },
+        {
+          "line": 21468,
+          "exact": "2026-11-15T04:17:01.2510918Z error[E0308]: mismatched types"
+        },
+        {
+          "line": 21477,
+          "exact": "2026-11-15T04:17:01.2535939Z error[E0308]: mismatched types"
+        }
+      ],
+      "actual_test_summaries": 0
+    }
+  ],
+  "source_pins": [
+    {
+      "path": "crates/bicdb-core/src/distribution_range_mutation.rs",
+      "blob": "a547f50fc5066924a0d3c3dca8afd24ad9e0b59d",
+      "sha256": "a732c6a349dcec3ea17f9caa0f4015059846b656d3cc6b4d9ed13a1066a4595b"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data/old_step.rs",
+      "blob": "4a8c15fd0e82a7cdf21e0a5514b714fdf1c1ad36",
+      "sha256": "40a74630ebe8e74971dc1081111391fb29ce9d472027bd6c903227101d31c5e5"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data.rs",
+      "blob": "05d252f6a01db6984e2ab602f01fd5615c75a484",
+      "sha256": "6413b31236f44ed149be957cdea170112b4f0c165831b8cc7888281e88a858ed"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "blob": "cf6375af6ed2cb3f803cf599711e20d2123b25eb",
+      "sha256": "71ff269a4f928099c39ae7ebe4a270c80a766451467319665bba813d489be436"
+    }
+  ],
+  "correction": "75ed90d49a73c50dce400e8020b5d2947d206f69",
+  "correction_status": "Source-only reviewed and standalone formatted; uncompiled/unexecuted. No assertion, timeout or production behavior change.",
+  "other_results_at_capture": {
+    "Rails_132693705618": "PASSED build and application steps",
+    "PGwire_132693725786": "PASSED",
+    "SQL_132693725826": "LIVE; no terminal result claimed",
+    "workspace_132693725819": "LIVE; no terminal result claimed"
+  },
+  "qualification": "NOT QUALIFIED; no physical or SDK workload qualification",
+  "classification_receipt_sha256": "6070cc15ff3f44f4bf95e3f6a884579d51b75c8c5ac5e983c720227af3712910"
+}

@@ -39,6 +39,8 @@ pub(crate) use learner_cold::NativeColdLearnerMetadataHost;
 #[cfg(feature = "tls-replication")]
 mod learner_birth;
 #[cfg(feature = "tls-replication")]
+use learner_birth::NativeFirstJoinFreshReceiverOrigin;
+#[cfg(feature = "tls-replication")]
 pub(crate) use learner_birth::{
     NativeLearnerBirthObservation, NativeLearnerBirthProvider, NativeLearnerBirthRequest,
     NativeLearnerBirthResponse, NativeUnassignedLearnerHost,
@@ -66,6 +68,37 @@ pub(crate) use provisional_listener::{
 };
 #[cfg(feature = "tls-replication")]
 mod joined_data_handoff;
+#[cfg(feature = "tls-replication")]
+mod remote_first;
+#[cfg(feature = "tls-replication")]
+mod remote_serving;
+#[cfg(feature = "tls-replication")]
+pub(crate) use provisional_listener::NativeFirstCoordinatorAction;
+#[cfg(feature = "tls-replication")]
+pub(crate) use provisional_listener::NativeRemoteActivationScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use provisional_listener::NativeRemoteMembershipScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use provisional_listener::{
+    NativeRemoteLocalServingPolicy, NativeRemoteSuccessorReadRegistration,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_first::{
+    NativeFirstReceiveOperationV1, NativeFirstReceiveReplyV1, NativeFirstReceiveRequestV1,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_serving::{
+    NativeRemoteBridgeReadRequestAdmission, NativeRemoteBridgeRequestAdmission,
+    NativeRemoteLocalPolicyAuthority, NativeRemoteOpenRequestAdmission,
+    NativeRemotePreparationAdmission, NativeRemotePreparationProcess,
+    NativeRemotePreparationReadAdmission, NativeRemoteReleaseRequestAdmission,
+    NativeRemoteReleasedPolicyAuditV1, NativeRemoteServingQueue,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_serving::{
+    NativeRemoteServingOperationV1, NativeRemoteServingPointV1, NativeRemoteServingReplyV1,
+    NativeRemoteServingRequestV1,
+};
 #[cfg(feature = "tls-replication")]
 mod metadata_supervisor;
 #[cfg(feature = "tls-replication")]

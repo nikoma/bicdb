@@ -1,5 +1,139 @@
 # HA and horizontal scaling: evidence checkpoint, November 14, 2026
 
+## Latest observation — November 15, 2026: source6de partial CI
+
+Delivered remote main is **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**,
+not the historical517 checkpoint below. Its post-merge Native job passed
+348/0/1; the separate remaining-workspace job failed its replicated application
+reopen on `Address already in use`. These separate results do not establish an
+unconditionally green or qualified release.
+
+Current draft **1.0.520-beta / `6de646beb603accf39358017d8e0c83c39c741b1`**
+passed workspace/no-default compilation, PGwire511/0/2 and Rails20 runs /
+100 assertions. Core subsequently failed legacy primary-record-only FORMAT
+preservation after its read, mutation refusal and index-byte assertions passed.
+SQL completed2,682/0/4; Native and remaining-workspace are still pending. This is not a complete
+HA acceptance result. INITIAL diagnostics are not a socket fix, and the new
+Open/identity-wait corrections still require their actual native controls.
+
+The preceding **1.0.520-beta / `7c77418656a41ec6e25c7601319e061c328f48e1`** has
+workspace/no-default compilation, PGwire511/0/2, SQL2,682/0/4 and Rails20 runs /
+100 assertions passing. Core library passed975/0/8, including visibility8,
+Standard3, bootstrap11 and new rekey4 controls; the job later failed a backup
+capability-vector assertion. Its subsequent verify/restore assertions were not
+reached. The test-only correction is local and not tested. Native has now failed363/45/1, including startup/earlier FIRST failures and hot
+catalogue Open timeouts; a large-head fault was not reached. Separate native-local
+and combined Strong components passed in their own scopes. Remaining-workspace
+completed 1,062/0/6, including original Cell key rotation; the overall candidate
+still failed Core and Native. Full identities,
+complete terminal logs and exact limits are in the
+[520 regression findings](design/native-520-regression-findings.md).
+
+The separately reviewed remote preparation/Open/release source is locally
+composed but not compiled or executed. Actual Serving publication, complete
+controller recovery, repeated relocation, cold association and cleanup remain
+open. The [deferred final-tail bootstrap proposal](design/bootstrap-deferred-final-tail-7c.md)
+is a design, not a fix; its native final acknowledged-prefix minter is missing.
+
+The single-primary streaming findings [190](https://github.com/nikoma/bicdb/issues/190),
+[191](https://github.com/nikoma/bicdb/issues/191) and
+[192](https://github.com/nikoma/bicdb/issues/192) remain open in GitHub at this
+observation. Native range and Cell component passes do not close them.
+The original Azure qualification remains failed. No new physical run, stable
+five-node capacity gain, measured production RPO/RTO or production admission is
+established. Source delivery, a binary, a release and deployment remain separate.
+
+## Historical checkpoints retained below
+
+The [private current-main integration checkpoint](design/native-main517-integration-contract.md)
+records source changes and controls awaiting runtime validation. Its inherited
+package label and source checks are not delivered-main or qualification results.
+
+Earlier delivered-main observation, November 15 02:13 UTC:
+**1.0.517-beta**, `bde74650c40934096e1cc6c6e75a3ea3c4643cf4`, merged through
+[PR206](https://github.com/nikoma/bicdb/pull/206). Its tree
+`7ee0e1f37c310612165b56e3ca0c1dc10a8e0e9c` is identical to source
+`23e2b7682ccbfd5db8fbca93e9fc2740f842aefc`, whose normal
+[required CI](https://github.com/nikoma/bicdb/actions/runs/43659430043) passed,
+including native **337 passed /zero failed /one ignored**. The
+[complete source-pinned CI evidence](design/main517-native-ci-evidence.md)
+retains actual hot/fifth/Strong results and their exact settings. At the later
+November 15 03:03 UTC checkpoint, the separate
+[post-merge native job](https://github.com/nikoma/bicdb/actions/runs/43666718926/job/132667643050)
+had **failed**. Retained logs subsequently established native **335/2/1** and a
+Core concurrent-backup failure; the evidence page records exact boundaries and
+next deterministic tests. Complete archive finalization remains pending while
+remaining-workspace CI is live. The pre-merge pass remains a separate
+result, and main is not unconditionally CI-green. Source delivery does not establish a
+new binary, release, deployment, automatic remote operator, physical expansion
+or production qualification.
+
+PR206 uses a different native validation setting: the hot fixture's configured
+IO/OWN ceiling is four seconds, versus source881's original 1.5 seconds, and
+the native job additionally optimizes workspace code. Its older source line
+does not contain nine source881 cases: eight later negative controls and one
+supervisor short-reader case. This is a separate
+passing result; it does not retroactively pass the failed source881 run below
+or prove the original windows on the composed current-main source. Complete
+source-pinned CI capture and reconciliation are retained separately.
+
+Earlier delivered-main observation, November 15 00:15 UTC: **1.0.514-beta**,
+`7fc833e3a9130ea710a0fbbfbaba6b065eedf8d3`. Its normal
+[required CI](https://github.com/nikoma/bicdb/actions/runs/43636965492) and
+[Rails checks](https://github.com/nikoma/bicdb/actions/runs/43636965456) passed.
+That documentation merge did not deliver the separate candidate repairs,
+a new optimized binary, physical expansion or production qualification.
+
+The separate [source881 native acceptance](design/native-881-failed-acceptance.md)
+finished with **325 passed /21 failed /one ignored**. This blocks acceptance;
+all other required jobs and Rails passed on that exact source.
+Seven failures were preparation timeouts, nine were first-publication timeouts,
+three were diagnostic/history assertions and two were remote API timeouts.
+The two remote cases retained actual known native commits, so their API errors
+are not rollback evidence. Six focused Strong/routing cases passed on this exact
+source, within their component scope. No physical qualification follows.
+
+The separate [source2d379 ledger acceptance](design/native-ledger-2d379-failed-acceptance.md)
+finished with **330 passed /16 failed /one ignored** in Native; all other
+executed required jobs and Rails passed, including seven actual ledger parser
+controls. Ten publication timeouts retain actual post-native-commit evidence;
+two markerless timeouts remain effect-inconclusive. Two archive controls, one
+S2 Start prerequisite and one known-native-commit API timeout complete the
+sixteen failures. The complete original capture and independent verification
+remain separate from later repairs and physical qualification.
+
+The separate [sourcef516 ordinary visibility controls](design/visibility-f516-eight-core-controls.md)
+actually passed all eight cases in normal Core CI, including the original
+five-second uncertain-outcome bound and deferred-index/replay controls.
+Compilation and the nondefault consumer also passed. That test checkout used
+the earlier main514 base; it does not establish current-main517 integration,
+native-local or physical acceptance. Its SQL generic postcommit error control
+also passed. Its Native job subsequently **failed: 332 passed /15 failed /one
+ignored**; the new native-local control reached the physical gap but failed its
+required diagnostic probe. The proposed test-only cross-thread probe correction
+has not been executed. The remaining cold WAL/job-intent gap is explicitly open.
+
+Earlier separate candidate feedback: [native c05 acceptance](design/native-c05-acceptance-result.md)
+finished with **331 passed /15 failed /one ignored**. Four remote-decision
+controls passed, but native acceptance failed. The later source follow-up is
+not a tested fix, physical expansion or production qualification. This result
+does not rewrite the earlier source-pinned checkpoints below.
+
+Earlier separate candidate feedback: [native 1fc acceptance](design/native-1fc-acceptance-result.md)
+finished with **330 passed /16 failed /one ignored**. All other non-skipped
+required jobs and Rails passed. That tested head failed acceptance; later
+follow-ups must be assessed separately. The older source-pinned checkpoints
+below retain their original scope.
+
+The separate [source881 Strong-read inspection](design/native-strong-read-source-boundary-881.md)
+traces the explicit native quorum, materialization, snapshot and routing barriers.
+It retains six exact historical c05 focused passes, while the full c05 run
+remains failed. It found no confirmed error-to-successful-absence conversion in
+that inspected chain; this is not a linearizability proof, an explanation of
+the original Azure records, or current-release qualification. The combined
+actual catch-up-gap and same-stale-gateway transition remains an unexecuted
+acceptance requirement at that source checkpoint.
+
 Status checkpoint: November14, 2026, 18:56UTC. Running jobs below are not
 classified as passes; later completion does not rewrite the pinned failures.
 
@@ -459,3 +593,208 @@ fully converged five-node comparison at the same workload and latency/error
 budget. The production gate remains zero lost acknowledged commits, correct
 read consistency/routing, bounded fault-safe rebalance and measured sustained
 throughput gain after convergence.
+
+## Later terminal follow-up: PR201
+
+This follow-up preserves the earlier18:56UTC checkpoint above. The remaining
+workspace job132526673940 completed successfully at19:12:58UTC on November14.
+PR201's required run43621069383 is now terminal **failed** because its native
+job remains330 passed/13 failed/one ignored; all other non-skipped jobs passed,
+as did the separate Rails run. None of these results tests the changed515
+integration candidate.
+
+The complete locally restricted archive retains eleven full gzip job logs and
+eight unique original ZIPs. All stored/decompressed hashes and ZIP CRCs were
+verified;344 unique native test names reconcile to330 passes/13 failures/one
+ignored. Four skipped manual jobs have no log; no non-skipped log or partial
+download is missing. Canonical manifest SHA256:
+`735a9da19fe68b84b95b2e821a588cc7bf2fd70f7af0e13a68c6ee5fab9350bd`;
+complete verification SHA256:
+`c58958d3a133249d389da504e292560f71cd6be69009a8c91b4e93a5083927bf`.
+Local restricted modes do not imply owner-only GitHub artifact access. The
+original failed source and all prior classifications remain unchanged.
+
+## Later terminal follow-up: PR203
+
+Delivered source is now **1.0.514-beta**, `7fc833e3a9130ea710a0fbbfbaba6b065eedf8d3`;
+PR202 delivered this documentation checkpoint and synchronized version metadata.
+It changed no runtime behavior. Its required PR checks passed. The separate
+push checks are a distinct run and are not implied by the PR result.
+
+The changed native candidate in [PR203](https://github.com/nikoma/bicdb/pull/203)
+is **unmerged 1.0.515-beta**, source
+`7b965c6854843b7a127a5575214deddee2bc2c36`, actual CI checkout
+`316c34d465b186a7c3a72b069a3696d70919f19d`, identical tree
+`dbb9160973c722fc63b3b13546ce0194c41281c9`. It includes the main513 backend
+refactor, retained native handoff batch, own-Controlled-guard lifetime repair,
+StoreABA diagnostic correction and post-WAL failure observations. None of the
+following evidence establishes a delivered runtime fix or physical qualification.
+
+[Required run43632072415](https://github.com/nikoma/bicdb/actions/runs/43632072415)
+is terminal **failed**. Its serial native job132560706302 reports **329 passed,
+14 failed, one ignored**, in3856.86s. This duration is not RTO. Core, SQL,
+PostgreSQL-wire, compilation and the remaining workspace passed; the latter
+completed at20:52:24UTC. The separate Rails run43632072572 reports20 runs,
+100 assertions, zero failures/errors/skips. These passes do not override the
+failed native acceptance tests.
+
+| Finding | Classification | Actual evidence and limit |
+| --- | --- | --- |
+| Six collection negative controls | Passed | All six exercised Registered n4 refusal, including StoreABA. They do not exercise successful survivor n2/n1 publication or full serving availability. |
+| Separately retained Controlled callback | Passed | Core's two-Controlled regression preserves refusal while another actual callback remains; the same Frozen owner is retained. |
+| Twelve original hot serving scenarios | Failed | All panic at `hot_policy_tests.rs:863`, during `publication.publish_actual_local_member`, with `QueryTimedOut`. |
+| Three native-commit/postcondition cuts | Failed | Native commit returned before `complete_postcondition` timed out. Historical readback DATA is present; successful publication/recovery is unproven. |
+| Eight post-preflight cuts | Failed | Final foreign validation and journal preflight complete; timeout precedes the WAL-entry marker. No marker does not prove absence of prior native effects. |
+| One early-ALL cut | Failed | Foreign prepared n4 validation expires before journal entry. Later early-ALL admission assertion is not tested. |
+| Foreign-MStore writer-domain scenario | Failed | An incidental fixture `try_lock().unwrap()` fails before the intended foreign-MStore cut. The intended safety rejection is not tested. |
+| Closed-ingress metadata recovery | Failed | A newly elected leader lacks the committed current-term anchor before the wait expires. Later ingress rebind/worker resume is not tested. |
+| CPU versus disk cause; two additional failures' causal schedules | Inconclusive | Traces locate stages, but no controlled causal reproduction or profile establishes the cause. |
+| Later Open, ALL-release, FIRST/new-DATA APP and full Strong assertions | Not tested | The twelve whole-test failures stop before these assertions. |
+| Physical fault-safe scale-out, stable five-node throughput, current physical RPO/RTO | Not tested | No replacement Azure cluster or new qualification run is implied by CI. |
+
+The three post-WAL cases are
+`native_registered_fifth_remote_hot_closed_actual_mstore_contention_same_own_progress`,
+`native_registered_fifth_remote_hot_data_lost_committed_decision_reply_keeps_same_attempt`
+and `native_registered_fifth_prepared_fresh_actual_expired_round_then_new_collection`.
+Each reports n2/range1/native xid36, matching expected CURRENT/archive checksums
+and equal raw record hashes, durableLSN160, nextLSN161 and nextXid37. The gate
+reports Controlled0, no capture pin, no poisoning and the original Frozen owner
+retained. These are helper-reported readback facts, **not independently
+cold-opened database reconciliation**. The failed API call does not establish
+rollback, durable-data loss or permission to execute a new logical transaction.
+WAL begins with9/11/19ms left and takes5088/5117/4911us. The physical
+postcondition starts with3/5/13ms left and takes approximately76–77ms. Observed
+cancellation-request bits are false; the original deadline expires. These
+measurements identify a finite-window failure, not its CPU/I/O cause.
+
+Earlier assertions did execute before these later failures: CLOSED audit
+reply-loss and both CLOSED MStore controls; both Registered DECISION same-attempt
+lost-reply retries; and genuine new collection after an expired round. These
+are bounded partial passes, not twelve wholly untested fault scenarios or
+successful end-to-end serving tests.
+
+The additional RF3 failure is
+`native_writer_data_domain_actual_foreign_mstore_refuses_without_native_change`,
+at `writer_data_domain_fact_tests.rs:102`, before owned-member observation and
+before the deliberate foreign-MStore fault; the member ordinal and lock holder
+were not retained. The additional supervisor failure is
+`native_owned_metadata_supervisor_closed_ingress_cannot_hold_leadership_same_worker_resumes`:
+the wait at `metadata_supervisor_tests.rs:205` follows actual n2 election and
+stopping n2 ingress. Final n0 is Leader/term3/commit0/log2/last-term3; n1 is
+Follower/term3/commit1/log1/last-term1. Neither an unanchored Leader status nor
+the observed store-busy messages prove successful recovery or its failure cause.
+
+Reproduction remains the exact source's unchanged serial native CI target;
+all344 actual case names and complete failure sections are retained. See the
+[executed issue195 update](https://github.com/nikoma/bicdb/issues/195#issuecomment-6884036164)
+for source identity, cuts and the next isolated checks. A standalone filtered
+pass would not replace the original serial-suite result.
+
+The smallest next tests must preserve original deadlines and application
+assertions. Validate one publication with the exact held journal/DB/Frozen
+owner, independently reread post-write physical state and retain complete
+foreign validation plus fresh request/MStore/Role checks. Corrupt CURRENT,
+archive or a retained middle history entry; change the actual owner/slot; and
+hold another Controlled callback: each must refuse without false Serving or
+Strong readiness. Exercise the original positive serving path after those
+controls. For the RF3 setup, distinguish original-OWN acquisition from the
+deliberate foreign-MStore rejection. For the supervisor, control the suspected
+MStore contention schedule and independently verify current-term anchoring;
+do not widen deadlines, remove assertions or classify failures as flakiness.
+
+Native raw log13,364,752 bytes has SHA256
+`e4d350e73723c7ab8da14bdca191b8aaa2ac3df72cf6e629a9a6ae1d10d5d903`;
+gzip SHA256
+`c53e857455bd226d131468b0e40dde9ee3ef8e7db46b423deef313844cf38977`.
+The failure classification SHA256 is
+`411f65f5bacbf9b89f0da545435158a1e563170708a6198185064c005d34e855`;
+the independently source-pinned cut matrix SHA256 is
+`734ffe4fa2821063b85ce63d7f3f68b1b810afc77cbdd1f6e042768cc0a46250`.
+The complete restricted archive retains eleven full gzip logs and eight unique
+original artifact ZIPs. Offline rehashing, ZIP API-digest/CRC checks and all
+fifteen job states (four skipped) reconcile without a missing non-skipped log.
+Canonical manifest SHA256:
+`1a8fc56fbd309a7e8d4960399920c24030be7d3d766a457b9dcdfde8d745fcf0`;
+complete archive verification SHA256:
+`cdc84cacc4de953d2d76f2686927628c6f58ac6b5ce63f713bf4b777b2243c93`.
+All prior failed candidates and the failed Azure experiment remain unchanged.
+
+## Source-only operational follow-up: candidate1fc
+
+This follow-up inspects candidate **1.0.515-beta**,
+`1fcfdc3adf7e38422173e072e6fec4ad56e48188`, tree
+`9d24cdf8cac1d9db4da35227182c71ff72a1bb7e`. Delivered main at this checkpoint
+remains **1.0.514-beta**, `7fc833e3a9130ea710a0fbbfbaba6b065eedf8d3`.
+Several candidate paths below are absent or changed on that delivered main;
+their source implementation must not be described as an already delivered
+runtime. The candidate's all-targets workspace/consumer compile check and
+Rails20-run/100-assertion check passed; native/runtime acceptance is still
+running at this checkpoint. This review executes no SDK or physical test.
+
+The separate main514 push run43636965492 completed successfully at21:38:07UTC,
+as did Rails43636965456. Its status-only terminal capture has manifest SHA256
+`185b0d28a3c456b54cb874237a5c4dc65b55cb47bc1e57800ee564c160ce84cc`;
+these main514 results do not test candidate1fc. Its earlier successful PR202
+raw logs remain a separate archive.
+
+The [scoped publication correction](design/native-publication-scoped-validation.md)
+and [same-round supervisor admission](design/native203-supervisor-bounded-store-admission.md)
+remain subject to that actual CI result. Passing compilation does not close
+either the original failures or the following operational gaps.
+
+### Readiness is three different contracts
+
+| Indicator | Actual candidate source contract | Practical limit |
+| --- | --- | --- |
+| Replica observation | `joined_data/registered.rs::registered_range_status` reads actual native applied position, invalidation and Pending state against the retained bridge floor. | `replica_ready_observed` does not compare with a fresh globally committed head; it is not proof of current catch-up. INITIAL status lacks equivalent numeric replica diagnostics. |
+| Recovered leader observation | `distribution_range_consensus.rs::recover_local_leadership` fills recovered-epoch state only after actual prefix/tail recovery. Current writer/fences remain independently required. | A recovered map/status observation is not a fresh lease or future read permission. A follower can bind DATA without inventing local leader authority. |
+| Strong request admission | `distribution_native_read/event_dispatch.rs`, `distribution_range_recovery/runtime/strong_point_read.rs`, and `distribution_native_read/{strong,quorum}.rs` acquire fresh routing MQ, distinct read MQ, actual matching range quorum/history, a materialized snapshot at the required floor and a distinct final MQ/currentness proof. | Every Strong request builds its own proof. Published sockets, image bytes, metadata leadership and earlier readiness observations cannot substitute. Status explicitly requires a new request-bound barrier. |
+
+The typed SDK/transport/dispatcher path is a genuine production entry for
+explicitly opened native DATA. Only an actual observed Strong result becomes
+the tagged present/absent value; redirect and unavailable remain distinct.
+`event_wire.rs` rejects a legacy value for an explicit Strong request and
+distinguishes present JSON null from absence. These are source-confirmed
+guards, **not** proof that physical failover never produces a false absence.
+They also do not establish ordinary PostgreSQL/HTTP transparency.
+
+### Operational blockers and their next tests
+
+| Boundary | Classification at candidate1fc | Required next evidence |
+| --- | --- | --- |
+| Automatic full remote movement into Joined Serving | Source-confirmed integration gap | A normal process must drive genuine target ownership, remote phases, Serving/Open/release and terminal cleanup. `joined_data_handoff.rs` explicitly excludes a production caller; the CLI currently exposes INITIAL DATA open and Registered replica-only open. Fixture adapters are not an automatic operator. |
+| Permanent loss of an original replica during remote replacement | Unsupported remote lane | `joint/remote_old_collect.rs::NativeRemoteOldRound::finish` requires responses from **all** original OLD members and explicitly refuses unavailable/minority-tail histories. A surviving majority alone cannot complete this path. A separately sealed unavailable-member protocol must preserve actual committed/uncertain/sparse obligations and old-writer fencing; lowering the existing count is not that protocol. |
+| Cold DATA continuation after original owner/process loss | Source-confirmed integration gap | Recover the exact persisted intent/native outcomes under new actual authority and ownership. Metadata-only reopen cannot recreate Serving. Pending Registered-row retention deliberately refuses before generic replay; this is quarantine, not evidence of data loss or bounded recovery. |
+| Automatic hot-origin repair | Implemented bounded subset | `initial_data/hot_recovery.rs` retains original INITIAL ownership and the same epoch for a supported next unmaterialized Pending command. Materialized Pending, other lineage, unresolved earlier replica debt and new-session cases refuse; this is not general new-leader/cold repair. |
+| Ready/lag observability | Incomplete observation contract | Export actual applied and freshly observed committed positions separately, with observation identity/age. Do not turn a historical floor or cached status into Strong permission. |
+
+The donor's actual `collect_remote_old_for_source` loops over every original
+OLD member and aborts on a failed request. Dead-replica planning exists, but no
+sealed dead-member/minority-tail substitute feeds this certificate. The local
+old-owner round's different majority API cannot be reconstructed from remote
+reply DATA. Generic decommission also refuses remaining replicas/active moves;
+it does not prove this native replacement lane works after permanent loss.
+
+New rebalance plans already receive a stable `handoff_session` from
+`distribution.rs::apply_rebalance_plan`. The definition-only legacy session
+initializer is not evidence that every new plan lacks a session. The missing
+normal FIRST chain concerns actual coordinator/recipient-owned producers and
+continuations. Its current plan factory requires the genuine range-leader
+requester; the donor can be a different member. An authenticated donor or
+manifest cannot impersonate that coordinator. Existing receive preparation
+also requires mutable actual host ownership, not a host reconstructed by a
+wire listener from request DATA.
+
+The smallest read-consistency controls are an actual authority change after
+snapshot/before final MQ, and an actual newly selected leader held below the
+required materialization position. Require the latest acknowledged value or
+bounded typed unavailable/redirect, never successful false absence. Full
+movement acceptance additionally needs the genuine remote Joined producer,
+stale-route refresh, retained ACK/attempt reconciliation, crash/cold recovery
+and observed convergence. None was executed by this source review.
+
+The independently pinned [27-file readiness review](design/native-readiness-1fc-source-audit.json)
+has SHA256
+`479f9424f2f8724090e770704f8ca8342fe3bb90d342e99c236a4586992dad58`.
+It establishes source/callgraph findings only. Physical RPO/RTO, sustained
+capacity gain and production admission remain unqualified.

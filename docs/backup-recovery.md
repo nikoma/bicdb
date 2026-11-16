@@ -215,6 +215,16 @@ readers may use memory proportional to the archive size. Stable OS-owned lock
 inodes are retained across releases; an unlocked file left by a crash does not
 block normal writes or the next backup.
 
+At source **1.0.517-beta / `bde74650c409`**, the legacy path-only paged backup
+has an open concurrent-write exclusion defect. A current-main CI run failed
+its unchanged concurrent backup/restore acceptance case with
+`source file paged/store.wal changed while the backup was streaming`.
+The [source-pinned issue](design/legacy-standard-live-backup-defect.md) records
+the incomplete physical gate, original assertions and required deterministic
+test. The strict changed-file refusal remains. The owned online-capture
+protocol described above has separate CI evidence; it does not repair or
+qualify concurrent legacy creation.
+
 Core audit-event PITR and commit-log archive PITR are distinct recovery paths.
 Audit-event PITR requires audit events to have been enabled before capture.
 Schema migration records are included with the database's durable records.

@@ -6,6 +6,9 @@ use crate::distribution_consensus::{
     HostMetadataReadObservation, NativeMetadataPublicationGuard,
     NativeOwnedMetadataMemberObservation,
 };
+mod request_wait;
+#[cfg(test)]
+mod waiting_tests;
 
 pub(crate) struct ActualNativeJointMetadataPoint {
     registration: Arc<NativeMetadataIngressRegistration>,
@@ -19,6 +22,12 @@ pub(crate) struct ActualNativeJointMetadataPoint {
     phase: CancellationToken,
 }
 pub(crate) struct ActualNativeJointMetadataPublicationGuard<'a> {
+    point: &'a ActualNativeJointMetadataPoint,
+    version: NativeMetadataPublicationGuard<'a>,
+}
+/// Allocation cache publication uses the SAME actual version, independently
+/// of readonly observer guards. This type grants no native or metadata effect.
+pub(crate) struct ActualNativeJointMetadataAllocationPublicationGuard<'a> {
     point: &'a ActualNativeJointMetadataPoint,
     version: NativeMetadataPublicationGuard<'a>,
 }
@@ -55,6 +64,16 @@ impl ActualNativeJointMetadataPoint {
         };
         metadata.require_listener_database(&self.database)?;
         self.member.require_current(&metadata)?;
+        self.require_current_memory()
+    }
+    /// Necessary comparison against an ALREADY held actual MStore. No latch
+    /// acquisition, Role, publication or database permission is issued here.
+    pub(crate) fn require_current_metadata_store(
+        &self,
+        actual: &crate::MetadataConsensusStore,
+    ) -> Result<()> {
+        actual.require_listener_database(&self.database)?;
+        self.member.require_current(actual)?;
         self.require_current_memory()
     }
     /// Immutable protected owner/open/birth/namespaces + actual version. This
@@ -98,6 +117,41 @@ impl ActualNativeJointMetadataPoint {
         guard.require_current_memory()?;
         Ok(guard)
     }
+    /// Necessary atomic lifetime/version refusals only. Full current native,
+    /// service, metadata and original OWN checks precede the short guard.
+    pub(crate) fn require_allocation_publication_memory(&self) -> Result<()> {
+        self.phase.check()?;
+        self.database.require_allocation_publication_memory()?;
+        self.slot.require_live()?;
+        self.registration.require_current_memory(&self.metadata)?;
+        self.member.publication_version().require_current_memory()
+    }
+    pub(crate) fn try_allocation_publication_guard(
+        &self,
+    ) -> Result<ActualNativeJointMetadataAllocationPublicationGuard<'_>> {
+        // Preserve detailed original point/health refusal OUTSIDE the guard.
+        self.require_current_memory()?;
+        let version = self.member.publication_version().try_publication_guard()?;
+        let guard = ActualNativeJointMetadataAllocationPublicationGuard {
+            point: self,
+            version,
+        };
+        guard.require_memory()?;
+        Ok(guard)
+    }
+}
+impl ActualNativeJointMetadataAllocationPublicationGuard<'_> {
+    pub(crate) fn require_memory(&self) -> Result<()> {
+        self.point.phase.check()?;
+        self.point
+            .database
+            .require_allocation_publication_memory()?;
+        self.point.slot.require_live()?;
+        self.point
+            .registration
+            .require_current_memory(&self.point.metadata)?;
+        self.version.require_current_memory()
+    }
 }
 impl ActualNativeJointMetadataPublicationGuard<'_> {
     pub(crate) fn require_current_memory(&self) -> Result<()> {
@@ -119,12 +173,54 @@ impl ClusterDataNodeService {
         business: Uuid,
         parent: &CancellationToken,
     ) -> Result<Option<Arc<ActualNativeJointMetadataPoint>>> {
+        Self::capture_actual_joint_metadata_point_inner(service, own, business, parent, None)
+    }
+    /// Only for a caller proven outside service/DB/MStore scopes. The SAME
+    /// original request and OWN bound this service-identity acquisition; no
+    /// metadata observation or native operation is retried or refreshed.
+    pub(crate) fn capture_actual_joint_metadata_point_waiting(
+        service: &Arc<Mutex<Self>>,
+        own: &HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<Option<Arc<ActualNativeJointMetadataPoint>>> {
+        parent.check()?;
+        own.require_live_request(business)?;
+        if parent.deadline().is_none() {
+            return Err(data_error(
+                "waiting joint metadata identity requires original finite request",
+            ));
+        }
+        let wait = parent.child_with_deadline(own.deadline());
+        Self::capture_actual_joint_metadata_point_inner(service, own, business, parent, Some(&wait))
+    }
+    fn capture_actual_joint_metadata_point_inner(
+        service: &Arc<Mutex<Self>>,
+        own: &HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+        identity_wait: Option<&CancellationToken>,
+    ) -> Result<Option<Arc<ActualNativeJointMetadataPoint>>> {
         parent.check()?;
         own.require_live_request(business)?;
         let (registration, database, slot) = {
-            let actual = service
-                .try_lock()
-                .ok_or_else(|| data_error("joint metadata service identity busy"))?;
+            let actual = match identity_wait {
+                None => service
+                    .try_lock()
+                    .ok_or_else(|| data_error("joint metadata service identity busy"))?,
+                Some(wait) => loop {
+                    wait.check()?;
+                    own.require_live_request(business)?;
+                    if let Some(actual) = service.try_lock_for(std::time::Duration::from_millis(5))
+                    {
+                        wait.check()?;
+                        own.require_live_request(business)?;
+                        break actual;
+                    }
+                    #[cfg(test)]
+                    waiting_tests::after_actual_contention(service)?;
+                },
+            };
             let database = actual.listener_open_guard();
             let slot = actual.native_replica_listener_store_open_guard();
             // Explicit legacy metadata-init0 fixtures have no protected native

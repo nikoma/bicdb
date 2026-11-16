@@ -213,6 +213,38 @@ pub(crate) struct NativeClosedWriterDomain {
     survivor_frozen: Option<Weak<crate::distribution_range_mutation::FrozenRangeMutationPermit>>,
 }
 impl NativeClosedWriterDomain {
+    /// Test-owned corruption of the exact original protected archive, while
+    /// the caller holds this genuine scope/journal and Controlled admission.
+    #[cfg(test)]
+    pub(in crate::db::range_image_native) fn test_remove_archive_after_scope(
+        &self,
+        scope: &crate::db::NativeJointPreparedPublicationScope<'_>,
+        controlled: &crate::distribution_range_mutation::ControlledFrozenMutationPermit,
+        parent: &CancellationToken,
+    ) -> Result<u64> {
+        let db = scope.database();
+        parent.check()?;
+        let archive_key = archive(self.writer.record.generation, self.record.sequence);
+        let original: ClosedDomainRecord = db
+            .read_native_range_image_record(&archive_key)?
+            .ok_or_else(|| invalid("test scope original CLOSED archive missing"))?;
+        if original != self.record {
+            return Err(invalid("test scope CLOSED archive differs from original"));
+        }
+        db.range_mutation_gate().validate(
+            self.data().old_range().id,
+            &crate::distribution_range_mutation::RangeMutationAuthority::Controlled(controlled),
+        )?;
+        db.in_paged_transaction(|paged, xid| {
+            parent.check()?;
+            paged
+                .store()
+                .delete(xid, &native_key(&archive_key))
+                .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
+            Ok(())
+        })?
+        .ok_or_else(|| invalid("test scope page store absent"))
+    }
     #[cfg(test)]
     pub(crate) fn test_closed_record_evidence(&self) -> Result<serde_json::Value> {
         Ok(serde_json::to_value(&self.record)?)
@@ -288,6 +320,95 @@ impl NativeClosedWriterDomain {
         // other caller checks quiescence (or its read pin) beside this call.
         db.range_mutation_gate()
             .validate_frozen(data.old_range().id, frozen)
+    }
+    pub(in crate::db::range_image_native) fn require_publication_identity(
+        &self,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+        data: &NativeJointDecisionData,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        if self.data() != data
+            || self
+                .survivor_frozen
+                .as_ref()
+                .is_none_or(|original| !std::ptr::eq(original.as_ptr(), frozen))
+            || self.slot.id() != store.native_writer_store_open_id()
+            || !Arc::ptr_eq(&self.writer, &store.native_writer_host_state()?)
+            || frozen.owner() != data.promise().session_id
+            || !data
+                .old_members()
+                .contains_key(&self.writer.record.facts.local_node_id)
+        {
+            return Err(invalid(
+                "CLOSED historical catalogue changed original owner/decision/Store/freeze",
+            ));
+        }
+        Ok(())
+    }
+    /// Select only the genuine optional survivor comparison profile. This
+    /// predicate is not authority; all other CLOSED profiles keep full checks.
+    pub(in crate::db::range_image_native) fn has_survivor_comparison_binding(&self) -> bool {
+        self.survivor_frozen.is_some()
+            && self
+                .data()
+                .old_members()
+                .contains_key(&self.writer.record.facts.local_node_id)
+    }
+    /// Same-original identity ONLY for permissionless collection/own-pin drain
+    /// and fresh service entry. No CLOSED native materialization is attested.
+    pub(in crate::db::range_image_native) fn require_preparation_collection_identity(
+        &self,
+        db: &BicDb,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+        range: &RangeDescriptor,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        if crate::distribution_native_read::canonical_range(range) != *self.range() {
+            return Err(invalid("CLOSED writer changed its selected range"));
+        }
+        self.require_lifetime()?;
+        self.require_publication_identity(store, self.data(), frozen)?;
+        self.open.require_database(db)?;
+        self.writer.require_original_identity_database(db)?;
+        self.writer.require_verified_registry_database(db)?;
+        db.range_mutation_gate()
+            .validate_quiescent_frozen(self.data().old_range().id, frozen)?;
+        self.require_lifetime()
+    }
+    pub(in crate::db::range_image_native) fn require_current_for_publication(
+        &self,
+        scope: &crate::db::NativeJointPreparedPublicationScope<'_>,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+        range: &RangeDescriptor,
+    ) -> Result<()> {
+        let db = scope.database();
+        // Only an original no-image OLD survivor has this comparison binding.
+        // A real installed-image CLOSED owner keeps its original full path;
+        // absence of this optional optimization is never a new refusal.
+        if !self.has_survivor_comparison_binding() {
+            return self.require_current_for_store(db, store, range);
+        }
+        scope.require_closed_source_lineage(db, store, self)?;
+        if crate::distribution_native_read::canonical_range(range) != *self.range() {
+            return Err(invalid("CLOSED writer changed its selected range"));
+        }
+        self.require_lifetime()?;
+        self.open.require_database(db)?;
+        self.writer.require_original_identity_database(db)?;
+        self.writer.require_verified_registry_database(db)?;
+        self.record.validate(&self.writer.record)?;
+        require_closed_record_current_inner(
+            db,
+            &self.writer,
+            &self.record,
+            Some((self, scope, store)),
+        )?;
+        self.require_lifetime()?;
+        store.require_closed_writer_promise(
+            self.data(),
+            &self.record.local.local_promise,
+            self.record.local.old_close_sha256.as_deref(),
+        )
     }
     pub(crate) fn require_current_for_store(
         &self,

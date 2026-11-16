@@ -232,6 +232,7 @@ struct CheckpointFreshness {
 /// The write-ahead log.
 #[derive(Debug)]
 pub struct Wal {
+    physical_gate: crate::physical_gate::PhysicalGate,
     path: PathBuf,
     file: Mutex<File>,
     /// Fixed segment size; `0` = one unbounded active file (legacy). When an
@@ -363,6 +364,10 @@ impl std::fmt::Debug for SyncState {
 }
 
 impl Wal {
+    pub fn physical_gate(&self) -> &crate::physical_gate::PhysicalGate {
+        &self.physical_gate
+    }
+
     /// Open or create a log with one unbounded active file.
     pub fn open(path: impl AsRef<Path>, fsync: bool) -> Result<Self> {
         Self::open_with_segments(path, fsync, 0)
@@ -395,6 +400,8 @@ impl Wal {
                 std::fs::create_dir_all(parent).map_err(|e| PageError::io(parent, e))?;
             }
         }
+        let physical_gate = crate::physical_gate::PhysicalGate::for_file(&path)?;
+        let _physical = physical_gate.shared()?;
         let file = OpenOptions::new()
             .read(true)
             .write(true)
@@ -419,6 +426,7 @@ impl Wal {
         };
 
         Ok(Self {
+            physical_gate,
             path,
             file: Mutex::new(file),
             segment_bytes,
@@ -493,6 +501,7 @@ impl Wal {
         max_files: usize,
         deadline: std::time::Instant,
     ) -> Result<Vec<(PathBuf, File, u64)>> {
+        let _physical = self.physical_gate.shared()?;
         let _writer = self.file.lock();
         let mut paths = self.sealed_segment_paths();
         paths.push(self.path.clone());
@@ -532,6 +541,7 @@ impl Wal {
     /// disabled: sealed files next to a legacy-layout store would be
     /// invisible to a pre-segmentation engine.
     pub fn seal_active(&self) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         if self.segment_bytes == 0 {
             return Err(PageError::InvalidMaintenanceLimits {
                 reason: "WAL segmentation is disabled for this store (legacy monolithic \
@@ -550,6 +560,7 @@ impl Wal {
     /// Seal the active file: make it durable, rename it to the next sealed
     /// sequence, and start a fresh active file. Caller holds the file mutex.
     fn seal_active_locked(&self, file: &mut File, active_bytes: u64) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         self.health.check()?;
         if self.fsync {
             crate::test_faults::io_fault("page_log.seal_sync", &self.path)
@@ -631,6 +642,7 @@ impl Wal {
         transaction: u64,
         payload: &[u8],
     ) -> Result<Lsn> {
+        let _physical = self.physical_gate.shared()?;
         let mut body = Vec::with_capacity(16 + payload.len());
         body.extend_from_slice(&page_id.to_le_bytes());
         body.extend_from_slice(&transaction.to_le_bytes());
@@ -701,6 +713,7 @@ impl Wal {
 
     /// Log a full page after-image.
     pub fn log_page_image(&self, page_id: PageId, transaction: u64, image: &[u8]) -> Result<Lsn> {
+        let _physical = self.physical_gate.shared()?;
         self.append(RecordKind::PageImage, page_id, transaction, image)
     }
 
@@ -708,6 +721,7 @@ impl Wal {
     ///
     /// Returns after the commit record is on disk, never before.
     pub fn commit(&self, transaction: u64) -> Result<Lsn> {
+        let _physical = self.physical_gate.shared()?;
         let lsn = self.append_commit(transaction)?;
         // Recorded before the sync: the record is in the log whether or not
         // the fsync below succeeds, and it is the record's existence that
@@ -721,6 +735,7 @@ impl Wal {
     /// on it surviving a crash. Only for transactions whose redo is durable
     /// elsewhere, so that losing this record loses nothing.
     pub fn commit_unsynced(&self, transaction: u64) -> Result<Lsn> {
+        let _physical = self.physical_gate.shared()?;
         let lsn = self.append_commit(transaction)?;
         self.deferred_commit_lsn.fetch_max(lsn, Ordering::AcqRel);
         Ok(lsn)
@@ -736,6 +751,7 @@ impl Wal {
     /// page reaches the page file the log is synced through the deferred
     /// commits that may have logged it (WAL before data, I5).
     pub fn sync_deferred_commits(&self) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         let lsn = self.deferred_commit_lsn.load(Ordering::Acquire);
         if lsn == 0 {
             return Ok(());
@@ -757,6 +773,7 @@ impl Wal {
     }
 
     fn append_commit(&self, transaction: u64) -> Result<Lsn> {
+        let _physical = self.physical_gate.shared()?;
         if !self.committed_this_generation.lock().insert(transaction) {
             return Err(PageError::InvalidMaintenanceLimits {
                 reason: format!(
@@ -791,6 +808,7 @@ impl Wal {
     /// commit-then-abort pair as corruption and refuses to open, so the pair
     /// must be unwritable in the first place.
     pub fn abort(&self, transaction: u64) -> Result<Lsn> {
+        let _physical = self.physical_gate.shared()?;
         if self.committed_this_generation.lock().contains(transaction) {
             return Ok(self.next_lsn().saturating_sub(1));
         }
@@ -804,6 +822,7 @@ impl Wal {
     /// record is on disk. It simply may be another thread's `fsync` that put it
     /// there.
     pub fn sync_through(&self, lsn: Lsn) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         let mut state = self.sync_state.lock();
         loop {
             // Durability published before any failure is real: a successful
@@ -876,6 +895,7 @@ impl Wal {
 
     /// Make everything appended so far durable.
     pub fn sync(&self) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         let target = self.next_lsn.load(Ordering::Acquire).saturating_sub(1);
         self.sync_through(target)
     }
@@ -893,6 +913,7 @@ impl Wal {
     /// both checkpoint paths guarantee by holding the store's writer gate
     /// with no dirty page left.
     pub fn checkpoint(&self, redo_lsn: Lsn, root_page: PageId) -> Result<Lsn> {
+        let _physical = self.physical_gate.shared()?;
         let lsn = self.append(RecordKind::Checkpoint, root_page, redo_lsn, &[])?;
         self.sync_through(lsn)?;
         self.redo_lsn.store(redo_lsn, Ordering::Release);
@@ -919,6 +940,7 @@ impl Wal {
     /// This compatibility helper materializes the returned records. Startup
     /// recovery uses the bounded streaming scanner directly and never calls it.
     pub fn read_all(&self) -> Result<(Vec<WalRecord>, u64)> {
+        let _physical = self.physical_gate.shared()?;
         let mut records = Vec::new();
         let scan = self.scan_records(
             MAX_WAL_RECORD_BYTES - RECORD_HEADER_BYTES,
@@ -942,6 +964,7 @@ impl Wal {
     /// payloads. Verification uses the same bounded streaming decoder as
     /// recovery and refuses sealed corruption or LSN gaps.
     pub fn verify_integrity(&self) -> Result<u64> {
+        let _physical = self.physical_gate.shared()?;
         Ok(self
             .scan_records(
                 MAX_WAL_RECORD_BYTES - RECORD_HEADER_BYTES,
@@ -959,6 +982,7 @@ impl Wal {
         start_xid: u64,
         end_xid: u64,
     ) -> Result<(Vec<(u64, TxStatus)>, u64)> {
+        let _physical = self.physical_gate.shared()?;
         if start_xid >= end_xid {
             return Err(PageError::InvalidMaintenanceLimits {
                 reason: "WAL outcome range must have start_xid < end_xid".to_string(),
@@ -1007,6 +1031,7 @@ impl Wal {
     where
         F: FnMut(WalRecordView<'_>) -> Result<()>,
     {
+        let _physical = self.physical_gate.shared()?;
         self.scan_records_checked(max_body_bytes, truncate_torn_tail, |_| Ok(()), visit)
     }
 
@@ -1023,6 +1048,7 @@ impl Wal {
         F: FnMut(WalRecordView<'_>) -> Result<()>,
         C: FnOnce(&WalScanReport) -> Result<()>,
     {
+        let _physical = self.physical_gate.shared()?;
         let max_body_bytes = max_body_bytes.min(MAX_WAL_RECORD_BYTES - RECORD_HEADER_BYTES);
         let mut file = self.file.lock();
         let mut scan = WalScanReport::default();
@@ -1101,6 +1127,7 @@ impl Wal {
 
     /// Discard a torn tail so later appends are contiguous.
     pub fn truncate_torn_tail(&self) -> Result<u64> {
+        let _physical = self.physical_gate.shared()?;
         Ok(self
             .scan_records(MAX_WAL_RECORD_BYTES - RECORD_HEADER_BYTES, true, |_| Ok(()))?
             .truncated_bytes)
@@ -1131,6 +1158,7 @@ impl Wal {
     /// failure records a durability failure (sites `page_log.reset_unlink`,
     /// `page_log.reset_dir_sync`, `page_log.reset`, `page_log.reset_sync`).
     pub fn reset(&self) -> Result<bool> {
+        let _physical = self.physical_gate.shared()?;
         let mut file = self.file.lock();
         // A fenced store never discards its log: after a failure the page
         // file's durability is unproven, and the log is the redo. A failure
@@ -1233,6 +1261,7 @@ impl Wal {
     /// Classify the log against the page file's horizon before recovery
     /// touches anything. Read-only. See [`ResetShape`].
     fn reset_shape(&self, max_body_bytes: usize, horizon: Lsn) -> Result<ResetShape> {
+        let _physical = self.physical_gate.shared()?;
         if horizon == 0 {
             return Ok(ResetShape::Normal);
         }
@@ -1305,6 +1334,7 @@ impl Wal {
     /// [`ResetShape::StaleSealedBeforeActive`]) without touching the active
     /// file, then sync the directory. Fails closed. Returns how many went.
     fn drop_stale_sealed_segments(&self) -> Result<u64> {
+        let _physical = self.physical_gate.shared()?;
         let _file = self.file.lock();
         self.health.check()?;
         let mut sealed = self.sealed.lock();
@@ -1342,6 +1372,7 @@ impl Wal {
     /// starts with nothing confirmed, so it keeps every sealed segment until
     /// the archiver confirms it again.
     pub fn enable_archive_retention(&self) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         // In memory first: from here on nothing unconfirmed is deleted, even
         // if persisting the setting fails below.
         self.archive_retention.store(true, Ordering::Release);
@@ -1372,6 +1403,7 @@ impl Wal {
     /// Turn archive retention off (archiving was stopped on purpose): the
     /// next checkpoint deletes sealed segments whether archived or not.
     pub fn disable_archive_retention(&self) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         let marker = archive_retention_marker(&self.path);
         for path in [marker.clone(), archive_confirmed_path(&self.path)] {
             match std::fs::remove_file(&path) {
@@ -1425,6 +1457,7 @@ impl Wal {
     /// Refused once the archiver failed on this handle: a later "successful"
     /// step proves nothing about the bytes the failure may have dropped.
     pub fn mark_archived_through(&self, sequence: u64) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         if let Some(failure) = self.archive_health.failure() {
             return Err(PageError::ArchiveFailed {
                 site: failure.site,
@@ -1810,6 +1843,7 @@ pub(crate) fn recover_with_outcomes(
     wal: &Wal,
     store: &crate::manager::PageStore,
 ) -> Result<(RecoveryReport, RecoveredOutcomes)> {
+    let _physical = wal.physical_gate().shared()?;
     let started = Instant::now();
     let wal_bytes_scanned = wal.size_bytes();
     let max_body_bytes = RECORD_FIXED_BODY_BYTES.saturating_add(store.page_size() as usize);
@@ -2066,6 +2100,7 @@ impl Checkpointer {
     /// eligible for writeback, so no dirty page can reach disk ahead of its log
     /// record.
     pub fn log_and_write(&self, page_id: PageId, transaction: u64, image: &[u8]) -> Result<Lsn> {
+        let _physical = self.wal.physical_gate().shared()?;
         let lsn = self.wal.log_page_image(page_id, transaction, image)?;
         let mut guard = self.pool.get_mut(page_id)?;
         guard.bytes_mut().copy_from_slice(image);
@@ -2095,6 +2130,7 @@ impl Checkpointer {
     /// above this checkpoint's redo point, and recovery replays it: the redo
     /// point comes from the checkpoint record, not from the horizon.
     pub fn checkpoint(&self, root_page: PageId) -> Result<CheckpointReport> {
+        let _physical = self.wal.physical_gate().shared()?;
         let redo_lsn = self.wal.next_lsn();
         self.wal.sync()?;
         crate::test_faults::crash_point("checkpoint.after_wal_sync");
@@ -2110,6 +2146,7 @@ impl Checkpointer {
     /// recovery time grows with total writes rather than with the post-checkpoint
     /// suffix — which is the gate Phase 3 is judged by.
     pub fn checkpoint_and_truncate(&self, root_page: PageId) -> Result<CheckpointReport> {
+        let _physical = self.wal.physical_gate().shared()?;
         let redo_lsn = self.wal.next_lsn();
         self.wal.sync()?;
         crate::test_faults::crash_point("checkpoint.after_wal_sync");
@@ -2135,6 +2172,7 @@ impl Checkpointer {
         pages_flushed: u64,
         truncate: bool,
     ) -> Result<CheckpointReport> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.wal.sync()?;
         self.pool.store().flush()?;
         let wal_bytes_before = self.wal.size_bytes();

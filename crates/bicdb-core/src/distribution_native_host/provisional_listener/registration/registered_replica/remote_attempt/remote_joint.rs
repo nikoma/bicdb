@@ -4,6 +4,7 @@ use super::*;
 mod export_new;
 mod first_data_policy;
 mod remote_new;
+mod remote_serving;
 pub(crate) use first_data_policy::NativeRegisteredServingDataPolicyOrigin;
 mod release;
 use crate::db::{
@@ -187,8 +188,32 @@ impl NativeRegisteredRemoteJointTarget {
         self.preflight.original.store.require_live()?;
         self.preflight.native().require_current(db)?;
         db.validate_range_image_bindings(self.preflight.bindings())?;
-        self.base.require_current(db, self.preflight.native())?;
-        self.catalogue.require_current(store, db, &self.base)
+        // The catalogue's full check includes this exact physical base under
+        // its original native admission. Prove it is the SAME preflight,
+        // rather than traversing installed history twice in one local check.
+        self.catalogue.require_current_for_original_preflight(
+            store,
+            db,
+            &self.base,
+            &self.preflight,
+        )
+    }
+    /// Only a private actual retained activation comparison can enter this
+    /// necessary read path. Generic materialization/currentness stays strict.
+    pub(crate) fn require_owned_activation_identity(
+        &self,
+        db: &BicDb,
+        store: &RangeWriteStore,
+        comparison: &crate::distribution_range_consensus::NativeJointActivationComparison<'_>,
+    ) -> Result<()> {
+        comparison.require_registered_target(db, store, self)?;
+        self.preflight.require_original_process()?;
+        self.preflight.original.database.require_database(db)?;
+        self.preflight.original.store.require_live()?;
+        self.preflight.native().require_current(db)?;
+        db.validate_range_image_bindings(self.preflight.bindings())?;
+        self.catalogue
+            .require_owned_activation_identity(store, db, &self.base, &self.preflight)
     }
     pub(crate) fn require_joint_lifetime(
         &self,

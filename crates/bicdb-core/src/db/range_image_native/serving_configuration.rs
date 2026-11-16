@@ -23,8 +23,6 @@ pub(crate) use activation_decision::NativeActivationDecisionReceipt;
 pub(crate) use joint_handoff::test_remote_joint_decision_cut;
 #[cfg(feature = "tls-replication")]
 pub(crate) use joint_handoff::NativeRegisteredJointDecisionAttempt;
-#[cfg(feature = "tls-replication")]
-pub(crate) use joint_handoff::NativeRemoteJointDecisionAttempt;
 pub(in crate::db::range_image_native) use joint_handoff::{
     NativeClosedWriterFact, NativeClosedWriterPoint, NativeJointServingDomain,
 };
@@ -33,7 +31,11 @@ pub(crate) use joint_handoff::{
     NativeJointDecisionReceipt, NativeJointHistoricalCutScope, NativeJointOldCloseReceipt,
     NativeJointOldCloseRecordData, NativeJointOldPhysicalProof,
     NativeJointPreparedPublicationScope, NativeJointServingBridgeReceipt,
-    NativeJointServingPreparation,
+    NativeJointServingPreparation, NativeRemoteJointPreparationAttempt,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint_handoff::{
+    NativeRemoteCataloguePhysicalPoint, NativeRemoteJointDecisionAttempt,
 };
 
 #[cfg(test)]
@@ -48,7 +50,7 @@ pub(super) struct NativeRecoveredServingConfiguration {
     physical_base_sha256: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     joint_decision_sha256: Option<String>,
-    scope: RecoveryFenceScope,
+    pub(super) scope: RecoveryFenceScope,
     range: RangeDescriptor,
     local_node_id: ClusterNodeId,
     local_member_incarnation: u64,
@@ -393,11 +395,15 @@ impl BicDb {
             .serving
             .as_ref()
             .ok_or_else(|| invalid("activated anchor has no actual native serving record"))?;
+        let allocation_reader = format::native_writer_allocation_policy_active(self.data_path())?;
         let canonical = |range: &RangeDescriptor| {
             let mut r = range.clone();
             r.approximate_bytes = 0;
             r.approximate_qps = 0;
             r.replicas.sort_by_key(|r| r.id);
+            if allocation_reader {
+                r.replicas.retain(|r| r.role == RangeReplicaRole::Voter);
+            }
             r
         };
         let native = self.native_recovery_admission(
@@ -692,6 +698,19 @@ impl BicDb {
         canonical_range.approximate_bytes = 0;
         canonical_range.approximate_qps = 0;
         canonical_range.replicas.sort_by_key(|replica| replica.id);
+        // Only a real SAME-State allocation audit may use an effective voter
+        // descriptor while the current metadata range also names a learner.
+        // The actual closed native quorum/physical scope above remains mandatory.
+        #[cfg(feature = "tls-replication")]
+        if canonical_range
+            .replicas
+            .iter()
+            .any(|r| r.role != RangeReplicaRole::Voter)
+        {
+            let writer = store.native_writer_host_state()?;
+            let allocation = writer.allocation_serving_domain(self, fresh.current_range())?;
+            canonical_range = allocation.effective_native_range(self)?.clone();
+        }
         let mut record = NativeRecoveredServingConfiguration {
             format_version: 1,
             birth_id: lineage.birth.birth_id,
@@ -821,3 +840,6 @@ mod activated_anchor_tests;
 
 #[cfg(test)]
 mod serving_read_scope_tests;
+
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint_handoff::NativeRemoteJointBridgeAttempt;

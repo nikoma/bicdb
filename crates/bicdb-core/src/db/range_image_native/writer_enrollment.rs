@@ -42,6 +42,8 @@ pub(crate) use data_domains::{
     NativeWriterDataDomainTransition, NativeWriterHistoricalPredecessor,
     NativeWriterServingDomainPublication,
 };
+#[cfg(feature = "tls-replication")]
+mod allocation_serving_domain;
 mod joint_phase_owner;
 pub(crate) use joint_phase_owner::NativeJointPhaseOwner;
 #[cfg(feature = "tls-replication")]
@@ -76,6 +78,7 @@ mod remote_old_decision;
 #[cfg(feature = "tls-replication")]
 pub(crate) use remote_old_decision::NativeRemoteOldDecisionWriterScope;
 mod registry_refresh;
+
 #[cfg(feature = "tls-replication")]
 pub(crate) use assigned_install::NativeAssignedWriterInstallAttempt;
 #[cfg(feature = "tls-replication")]
@@ -139,6 +142,17 @@ pub(crate) struct NativeWriterHostState {
     registry_extension:
         parking_lot::RwLock<Option<Arc<registry_refresh::VerifiedRegistryExtension>>>,
     registry_publication_pending: std::sync::atomic::AtomicBool,
+    registry_attempt: parking_lot::Mutex<Option<registry_refresh::RetainedRegistryAttempt>>,
+    #[cfg(feature = "tls-replication")]
+    allocation_attempt: parking_lot::Mutex<Option<registry_refresh::RetainedAllocationAttempt>>,
+    #[cfg(all(test, feature = "tls-replication"))]
+    allocation_fault: std::sync::atomic::AtomicU8,
+    #[cfg(all(test, feature = "tls-replication"))]
+    allocation_cut: parking_lot::Mutex<Option<registry_refresh::AllocationCut>>,
+    #[cfg(all(test, feature = "tls-replication"))]
+    allocation_recovery_hold: std::sync::atomic::AtomicBool,
+    #[cfg(all(test, feature = "tls-replication"))]
+    allocation_recovery_cut: std::sync::atomic::AtomicU64,
     #[cfg(feature = "tls-replication")]
     data_domains: parking_lot::RwLock<data_domains::WriterDataDomains>,
 }
@@ -231,6 +245,12 @@ impl NativeWriterHostState {
         self.record.coordinator_id
     }
     pub(crate) fn require_range_id(&self, range: RangeId) -> Result<()> {
+        if self
+            .registry_publication_pending
+            .load(std::sync::atomic::Ordering::Acquire)
+        {
+            return Err(invalid("native writer policy publication unresolved"));
+        }
         #[cfg(feature = "tls-replication")]
         if self.effective_serving_data_range(range)?.is_some() {
             return Ok(());
@@ -241,6 +261,12 @@ impl NativeWriterHostState {
         Ok(())
     }
     pub(crate) fn require_range(&self, range: &RangeDescriptor) -> Result<()> {
+        if self
+            .registry_publication_pending
+            .load(std::sync::atomic::Ordering::Acquire)
+        {
+            return Err(invalid("native writer policy publication unresolved"));
+        }
         #[cfg(feature = "tls-replication")]
         if let Some(actual) = self.effective_serving_data_range(range.id)? {
             if crate::distribution_native_read::canonical_range(range) != actual {
@@ -250,12 +276,23 @@ impl NativeWriterHostState {
             }
             return Ok(());
         }
-        self.record.facts.require_range(range)
+        if let Some(verified) = self.registry_extension.read().as_ref() {
+            verified.facts().require_range(range)
+        } else {
+            self.record.facts.require_range(range)
+        }
     }
     pub(crate) fn require_command(
         &self,
         command: &crate::distribution_range_consensus::RangeWriteCommand,
     ) -> Result<()> {
+        if self
+            .registry_publication_pending
+            .load(std::sync::atomic::Ordering::Acquire)
+        {
+            return Err(invalid("native writer policy publication unresolved"));
+        }
+
         #[cfg(feature = "tls-replication")]
         if let Some(actual) = self.effective_serving_data_range(command.range_id)? {
             if actual.epoch != command.range_epoch || actual.leader != command.leader_node_id {
@@ -265,9 +302,9 @@ impl NativeWriterHostState {
             }
             return Ok(());
         }
-        let range = self
-            .record
-            .facts
+        let verified = self.registry_extension.read();
+        let facts = verified.as_ref().map_or(&self.record.facts, |v| v.facts());
+        let range = facts
             .ranges
             .get(&command.range_id)
             .ok_or_else(|| invalid("native command range absent from host policy"))?;
@@ -855,7 +892,25 @@ impl BicDb {
                 state.require_database(self, &serving)?;
                 continue;
             }
-            state.require_database(self, range)?;
+            // A SAME-State allocation audit can advance this descriptor's
+            // epoch without creating a joint Serving domain. Select its
+            // already-verified policy DATA instead of asking the current
+            // writer to accept the original policy's obsolete epoch. The
+            // ordinary database check below still validates the actual hook,
+            // pending bit and complete durable current/archive audit chain;
+            // the coordinator separately requires native serving readiness.
+            let allocation = state
+                .registry_extension
+                .read()
+                .as_ref()
+                .and_then(|verified| verified.facts().ranges.get(&range.id).cloned());
+            let actual = allocation.as_ref().unwrap_or(range);
+            if !actual.contains_token(token) {
+                return Err(invalid(
+                    "application mutation is outside the verified allocation range",
+                ));
+            }
+            state.require_database(self, actual)?;
         }
         Ok(())
     }
@@ -961,6 +1016,17 @@ impl BicDb {
             coordinator: Arc::downgrade(&authority),
             registry_extension: parking_lot::RwLock::new(None),
             registry_publication_pending: std::sync::atomic::AtomicBool::new(false),
+            registry_attempt: parking_lot::Mutex::new(None),
+            #[cfg(feature = "tls-replication")]
+            allocation_attempt: parking_lot::Mutex::new(None),
+            #[cfg(all(test, feature = "tls-replication"))]
+            allocation_fault: std::sync::atomic::AtomicU8::new(0),
+            #[cfg(all(test, feature = "tls-replication"))]
+            allocation_cut: parking_lot::Mutex::new(None),
+            #[cfg(all(test, feature = "tls-replication"))]
+            allocation_recovery_hold: std::sync::atomic::AtomicBool::new(false),
+            #[cfg(all(test, feature = "tls-replication"))]
+            allocation_recovery_cut: std::sync::atomic::AtomicU64::new(0),
             #[cfg(feature = "tls-replication")]
             data_domains: parking_lot::RwLock::new(Default::default()),
         });

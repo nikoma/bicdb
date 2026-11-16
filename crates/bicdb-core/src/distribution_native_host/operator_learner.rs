@@ -47,6 +47,253 @@ enum NativeLearnerLifecycle {
     Cold(NativeColdLearnerMetadataHost),
 }
 impl NativeMetadataLearnerHost {
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_actual_registered_partial_drain_cancel(
+        &mut self,
+        range: crate::RangeId,
+        phase: Uuid,
+        peer: ClusterNodeId,
+        business: Uuid,
+        ready: std::sync::mpsc::SyncSender<
+            Arc<crate::distribution_transport::InitialTransitionControl>,
+        >,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => host
+                .test_registered_image_control_mut()?
+                .test_actual_registered_partial_drain_cancel(
+                    range, phase, peer, business, ready, parent,
+                ),
+            NativeLearnerLifecycle::Cold(_) => Err(invalid("partial drain cannot cast cold owner")),
+        }
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_actual_registered_policy_drain_cancel(
+        &mut self,
+        range: crate::RangeId,
+        phase: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => host
+                .test_registered_image_control_mut()?
+                .test_actual_registered_policy_drain_cancel(range, phase, parent),
+            NativeLearnerLifecycle::Cold(_) => Err(invalid("drain control cannot cast cold owner")),
+        }
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_registered_policy_socket_profile(
+        &self,
+        range: crate::RangeId,
+        phase: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        match &self.host {
+            NativeLearnerLifecycle::Fresh(host) => host
+                .test_registered_image_control()?
+                .test_registered_policy_socket_profile(range, phase, parent),
+            NativeLearnerLifecycle::Cold(_) => Err(invalid("read profile cannot cast cold owner")),
+        }
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_remote_release_control(
+        &mut self,
+        range: crate::RangeId,
+        mode: Option<u8>,
+    ) -> Result<serde_json::Value> {
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => host
+                .test_registered_image_control_mut()?
+                .test_remote_release_control(range, mode),
+            NativeLearnerLifecycle::Cold(_) => {
+                Err(invalid("release control cannot cast cold owner to Fresh"))
+            }
+        }
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_local_policy_generic_refusal(
+        &self,
+        range: crate::RangeId,
+        phase: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        match &self.host {
+            NativeLearnerLifecycle::Fresh(host) => host
+                .test_registered_image_control()?
+                .test_local_policy_generic_refusal(range, phase, parent),
+            NativeLearnerLifecycle::Cold(_) => {
+                Err(invalid("generic refusal cannot cast cold owner"))
+            }
+        }
+    }
+    pub(crate) fn advance_finite_remote_serving_policy(
+        &mut self,
+        range: crate::RangeId,
+        phase: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        parent.check()?;
+        if self.stopped {
+            return Err(invalid("stopped learner cannot advance local Policy"));
+        }
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => {
+                host.advance_finite_remote_serving_policy(range, phase, parent)
+            }
+            NativeLearnerLifecycle::Cold(_) => Err(invalid(
+                "cold learner cannot reconstruct finite released Policy ownership",
+            )),
+        }
+    }
+    pub(crate) fn retire_finite_remote_open_references(
+        &mut self,
+        range: crate::RangeId,
+        phase: uuid::Uuid,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        if self.stopped {
+            return Err(invalid(
+                "reference retirement original learner host stopped",
+            ));
+        }
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => {
+                host.retire_finite_remote_open_references(range, phase, parent)
+            }
+            NativeLearnerLifecycle::Cold(_) => Err(invalid(
+                "reference retirement requires original Fresh owner; cold reconstruction unsupported",
+            )),
+        }
+    }
+    pub(crate) fn poll_finite_remote_serving(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<usize> {
+        parent.check()?;
+        if self.stopped {
+            return Err(invalid("remote serving original learner host stopped"));
+        }
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host)=>host.poll_finite_remote_serving(parent),
+            NativeLearnerLifecycle::Cold(_)=>Err(invalid("remote serving finite continuation needs original Fresh owner; cold reconstruction unsupported")),
+        }
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_remote_open_control(
+        &mut self,
+        range: crate::RangeId,
+        mode: Option<u8>,
+    ) -> Result<serde_json::Value> {
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => host
+                .test_registered_image_control_mut()?
+                .test_remote_open_control(range, mode),
+            NativeLearnerLifecycle::Cold(_) => {
+                Err(invalid("Open control cannot cast cold owner to Fresh"))
+            }
+        }
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_remote_bridge_control(
+        &mut self,
+        range: crate::RangeId,
+        arm: Option<u8>,
+    ) -> Result<serde_json::Value> {
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => host
+                .test_registered_image_control_mut()?
+                .test_remote_bridge_control(range, arm),
+            NativeLearnerLifecycle::Cold(_) => Err(invalid(
+                "bridge fault control cannot cast cold owner to Fresh",
+            )),
+        }
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_remote_preparation_control(
+        &mut self,
+        range: crate::RangeId,
+        arm: Option<u8>,
+    ) -> Result<serde_json::Value> {
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => host
+                .test_registered_image_control_mut()?
+                .test_remote_preparation_control(range, arm),
+            NativeLearnerLifecycle::Cold(_) => Err(invalid(
+                "remote preparation control cannot cast cold owner to Fresh",
+            )),
+        }
+    }
+    /// Receive-only queue service on this SAME actual node-owner thread.
+    /// Each entry still owns its original authenticated request deadline.
+    /// This never chooses placement or initiates an OLD freeze automatically.
+    pub fn poll_native_first_receiver(&mut self, parent: &CancellationToken) -> Result<bool> {
+        parent.check()?;
+        if self.stopped {
+            return Err(invalid("FIRST receiver owner stopped"));
+        }
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => host.poll_native_first_receiver(parent),
+            NativeLearnerLifecycle::Cold(host) => host.poll_native_first_receiver(parent),
+        }
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_first_receiver_arm(
+        &self,
+        fault: crate::distribution_native_host::remote_first::NativeFirstIngressFault,
+    ) -> Result<()> {
+        match &self.host {
+            NativeLearnerLifecycle::Fresh(host) => host
+                .test_registered_image_control()?
+                .test_first_receiver_arm(fault),
+            NativeLearnerLifecycle::Cold(_) => {
+                Err(invalid("FIRST test never casts cold owner to Fresh"))
+            }
+        }
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_first_receiver_barrier(
+        &self,
+        op: crate::distribution_native_host::NativeFirstReceiveOperationV1,
+    ) -> Result<crate::distribution_native_host::remote_first::NativeFirstIngressBarrier> {
+        match &self.host {
+            NativeLearnerLifecycle::Fresh(host) => host
+                .test_registered_image_control()?
+                .test_first_receiver_barrier(op),
+            NativeLearnerLifecycle::Cold(_) => {
+                Err(invalid("FIRST test never casts cold owner to Fresh"))
+            }
+        }
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_first_receiver_snapshot(
+        &self,
+    ) -> Result<serde_json::Value> {
+        match &self.host {
+            NativeLearnerLifecycle::Fresh(host) => host
+                .test_registered_image_control()?
+                .test_first_receiver_snapshot(),
+            NativeLearnerLifecycle::Cold(_) => {
+                Err(invalid("FIRST test never casts cold owner to Fresh"))
+            }
+        }
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_first_native_decision(
+        &self,
+        range: crate::RangeId,
+        arm: Option<u8>,
+    ) -> Result<serde_json::Value> {
+        let NativeLearnerLifecycle::Fresh(host) = &self.host else {
+            return Err(invalid("FIRST test never casts cold owner to Fresh"));
+        };
+        let actual = host.test_registered_image_control()?;
+        if let Some(code) = arm {
+            actual.test_arm_remote_native_decision_cut(range, code)?;
+        }
+        actual.test_remote_native_decision_evidence(range)
+    }
     pub fn start_fresh_metadata_only(
         root: &Path,
         cluster: crate::ClusterId,
@@ -381,8 +628,12 @@ impl NativeMetadataLearnerHost {
             (schema, ids)
         };
         let metadata = match &self.host {
-            NativeLearnerLifecycle::Fresh(host) => host.owned_metadata_snapshot(&token)?,
-            NativeLearnerLifecycle::Cold(host) => host.owned_metadata_snapshot(&token)?,
+            NativeLearnerLifecycle::Fresh(host) => {
+                host.owned_metadata_snapshot(&observed, business, &token)?
+            }
+            NativeLearnerLifecycle::Cold(host) => {
+                host.owned_metadata_snapshot(&observed, business, &token)?
+            }
         };
         let (metadata_store_id, metadata, listener) = match metadata {
             Some((id, status, listener)) => (Some(id), Some(status), listener),
@@ -605,5 +856,21 @@ impl NativeMetadataLearnerHost {
         }
         self.stopped = true;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+impl NativeMetadataLearnerHost {
+    pub(in crate::distribution_native_host) fn test_first_cross_protocol_target_snapshot(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<serde_json::Value> {
+        let NativeLearnerLifecycle::Fresh(host) = &self.host else {
+            return Err(invalid(
+                "cross-protocol control cannot cast cold owner to Fresh",
+            ));
+        };
+        host.test_registered_image_control()?
+            .test_first_cross_protocol_target_snapshot(range)
     }
 }

@@ -191,6 +191,7 @@ impl LocalJoinedHandoffBackend {
         self.custody_cut = Some(cut);
         self.custody_trace_enabled = true;
     }
+
     #[cfg(test)]
     pub(super) fn test_custody_snapshot(&self) -> serde_json::Value {
         let image = self.image.as_ref().map(|(frozen, image)| {
@@ -204,6 +205,7 @@ impl LocalJoinedHandoffBackend {
             "source_cut_rounds":self.cut_round_starts,"publication_rounds":self.publication_starts,
             "trace":self.custody_trace})
     }
+
     #[cfg(test)]
     fn test_custody_cut(
         &mut self,

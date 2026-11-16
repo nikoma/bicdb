@@ -365,6 +365,10 @@ impl BicDb {
     /// lie before `keep_from`. Never drops a frame a standby has not yet
     /// acknowledged: the cut moves back to that standby's position instead.
     pub(crate) fn cut_transaction_log(&self, keep_from: u64, dropped_through: u64) -> Result<()> {
+        let _physical = self
+            .physical_gate
+            .shared()
+            .map_err(|e| BicDbError::Backup(e.to_string()))?;
         // Native receipts may still be between actual WAL delivery and their
         // ordered page-prefix callback. Keep their exact source bytes/inode;
         // a later empty-file sync must never stand in for that transaction.

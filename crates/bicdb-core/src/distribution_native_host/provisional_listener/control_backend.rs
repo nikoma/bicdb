@@ -109,9 +109,18 @@ impl NativeMetadataControlBackend {
             proof.require_database(&db)?;
         }
         {
-            let store = metadata
-                .try_lock()
-                .ok_or_else(|| invalid("registered control store busy"))?;
+            // The original OWN and caller bound this same-open validation.
+            // A metadata worker may briefly own the Store; wait without any
+            // service/DB guard and never replace the original observation.
+            let request = parent.child_with_deadline(observed.deadline());
+            let store = loop {
+                request.check()?;
+                observed.require_live_request(business)?;
+                if let Some(store) = metadata.try_lock_for(Duration::from_millis(5)) {
+                    break store;
+                }
+            };
+            request.check()?;
             store.require_listener_database(&open)?;
             proof.require_current(&store)?;
             if store.status().node_id != node_id {
@@ -166,11 +175,18 @@ impl NativeMetadataControlBackend {
     }
     pub(super) fn publish_committed_metadata(&self, parent: &CancellationToken) -> Result<()> {
         parent.check()?;
-        let actual = self
-            .service
-            .try_lock()
-            .ok_or_else(|| invalid("control service busy before publication"))?
-            .listener_open_guard();
+        // Publication reads the already committed topology. Wait only on an
+        // existing finite request; never renew a proposal or hold service and
+        // metadata guards together. Unbounded callers retain instantaneous
+        // contention refusal.
+        let actual = if parent.deadline().is_some() {
+            ClusterDataNodeService::capture_actual_listener_identity_waiting(&self.service, parent)?
+        } else {
+            self.service
+                .try_lock()
+                .ok_or_else(|| invalid("control service busy before publication"))?
+                .listener_open_guard()
+        };
         let topology = {
             let store = self.lock_metadata(parent)?;
             store.require_listener_database(&actual)?;

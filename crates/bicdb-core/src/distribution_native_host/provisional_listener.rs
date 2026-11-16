@@ -13,12 +13,18 @@ mod metadata_startup;
 mod registration;
 pub(crate) use learner_enrollment::NativeLearnerMetadataEnrollment;
 pub(crate) use metadata_startup::NativeInitialWriterEnrollment;
+#[cfg(test)]
+pub(in crate::distribution_native_host) use registration::test_arm_remote_metadata_head_drift;
+pub(crate) use registration::NativeFirstCatalogueCertificationIntent;
+pub(crate) use registration::NativeFirstCoordinatorAction;
 pub(crate) use registration::NativeInitialOldConstraintStep;
 pub use registration::NativeJoinedDataStatus;
 pub(crate) use registration::NativeJoinedRangeReceivePreflight;
 pub(crate) use registration::NativeJoinedRemoteInstallPreflight;
 pub(in crate::distribution_native_host) use registration::NativeMetadataMaintenanceReport;
 pub use registration::NativeRegisteredReplicaReceiverStatus;
+pub(crate) use registration::NativeRemoteActivationScope;
+pub(crate) use registration::NativeRemoteMembershipScope;
 #[cfg(test)]
 pub(crate) use registration::{
     after_remote_native_old_wal, before_native_old_wal, CancelOldOwnBeforeNativeWal,
@@ -40,6 +46,9 @@ pub(crate) use registration::{
 };
 pub use registration::{NativeInitialDataRangeStatus, NativeInitialDataStatus};
 pub(crate) use registration::{NativeJoinedRemoteJointOwner, NativeJoinedRemoteMaterializedOwner};
+pub(crate) use registration::{
+    NativeRemoteLocalServingPolicy, NativeRemoteSuccessorReadRegistration,
+};
 
 pub(crate) struct NativeProvisionalHost {
     listener: Option<ClusterDataServerHandle>,

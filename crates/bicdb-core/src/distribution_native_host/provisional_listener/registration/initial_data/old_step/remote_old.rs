@@ -141,6 +141,7 @@ impl NativeInitialDataAdmission {
                     let actual_runtime = Arc::new(NativeJointHandoffRuntime::new(service.clone())?);
                     let held = Arc::new(Mutex::new(RetainedInitialOld {
                         remote_new: None,
+                        remote_retired: false,
                         predecessor: Some(step.historical_predecessor().clone()),
                         writer: step.writer.clone(),
                         plan_sha256: request.scope_sha256.clone(),
@@ -158,7 +159,9 @@ impl NativeInitialDataAdmission {
             let mut held = retained
                 .try_lock()
                 .ok_or_else(|| invalid("OLD source operation already active"))?;
-            if held.plan_sha256 != request.scope_sha256 || !Arc::ptr_eq(&held.writer, &step.writer)
+            if held.remote_retired
+                || held.plan_sha256 != request.scope_sha256
+                || !Arc::ptr_eq(&held.writer, &step.writer)
             {
                 return Err(invalid("OLD source retains another exact session"));
             }
@@ -292,6 +295,7 @@ impl NativeInitialDataAdmission {
                 let runtime = Arc::new(NativeJointHandoffRuntime::new(service.clone())?);
                 let owner = Arc::new(Mutex::new(RetainedInitialOld {
                     remote_new: None,
+                    remote_retired: false,
                     predecessor: Some(step.historical_predecessor().clone()),
                     writer: Arc::clone(step.writer_snapshot()),
                     plan_sha256: request.scope_sha256.clone(),
@@ -310,7 +314,8 @@ impl NativeInitialDataAdmission {
             let mut held = retained
                 .try_lock()
                 .ok_or_else(|| invalid("OLD constraint operation already active"))?;
-            if held.plan_sha256 != request.scope_sha256
+            if held.remote_retired
+                || held.plan_sha256 != request.scope_sha256
                 || !Arc::ptr_eq(&held.writer, step.writer_snapshot())
                 || held.actual.is_some()
                 || held.outcome.is_some()
@@ -376,7 +381,7 @@ impl NativeInitialDataAdmission {
             let held = held
                 .try_lock()
                 .ok_or_else(|| invalid("OLD source retained operation busy at observation"))?;
-            if held.plan_sha256 != request.scope_sha256 {
+            if held.remote_retired || held.plan_sha256 != request.scope_sha256 {
                 return Err(invalid("OLD observation changed retained scope"));
             }
             (
@@ -521,12 +526,29 @@ impl NativeInitialDataAdmission {
             member.require_current(&store)?;
         }
         if let Some(actual) = actual {
-            actual.require_current()?;
+            actual.require_current_for_request(
+                &token
+                    .child_linked_to(&own.original_request_cancellation())
+                    .child_with_deadline(own.deadline()),
+            )?;
         } else {
             let s = service.try_lock().ok_or_else(|| {
                 invalid("OLD actual constraint service busy before readonly reply")
             })?;
             constraint_owner.as_ref().unwrap().actual_facts(&s)?;
+        }
+        // The bounded service observation may yield to other work. With all
+        // service/DB/pin guards now dropped, recheck the SAME original MStore
+        // member before returning its authenticated historical frame.
+        {
+            let store = loop {
+                token.check()?;
+                own.require_live_request(own_business)?;
+                if let Some(store) = metadata.try_lock_for(METADATA_LOCK_POLL) {
+                    break store;
+                }
+            };
+            member.require_current(&store)?;
         }
         self.require_live()?;
         token.check()?;

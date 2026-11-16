@@ -6,6 +6,226 @@ components and an automatic four-to-five-node operator candidate. No build,
 database open, process experiment, VM action or deployment was performed for
 this audit.
 
+## Last complete execution at d74 — 2026-11-16
+
+Source **1.0.520-beta / `d74d363addb35b5b97308b1afcc1c2231e021d29`**,
+tree `51aa988b08c42f8a935f43e54a37d8fd4eda51c2`, completed its normal CI
+with **10 passing jobs, one failed job and four optional skips**. Native compiled
+and failed397/93/1, with989 filtered. Remaining-workspace passed1062/0/6,
+including native CLI6/0,84 Python and two Node cases. Core, SQL, PGwire and Rails
+passed within their separate scopes. See the [full failure inventory, exact
+source cuts and original archive](native-d74-runtime-findings.md).
+
+These are runtime component and metadata/initial-DATA CLI results. They do not
+demonstrate protected-native fifth-node DATA relocation, complete cold recovery,
+fault-safe convergence or capacity gain. Source corrections above that failed
+revision remain uncompiled/unexecuted until their own exact-source run. Joined
+additional-range NEW/native-decision/catalogue/pin-release and the automatic
+controller remain open integration requirements; prior source kernels do not
+close them. Main remains519; no release, deployment or new VMs were produced.
+
+## Previous source boundary at `62b602ca852a` — 2026-11-16
+
+Exact inspected candidate: **1.0.520-beta /
+`62b602ca852a4183c4aa7630e2593e10446ff35c`**, tree
+`d659588bb66fb527720903064000e831c7c6c76a`. This is a source-integration
+inspection, not a movement experiment. Its Core/native CI jobs failed test
+compilation before any cases ran; see the [exact current execution](native-520-regression-findings.md).
+No source-only finding below establishes a passing runtime scenario. Thirty-four
+inspected Joined/inventory/page source files were independently compared with
+this public candidate and matched byte-for-byte; comparison receipt SHA-256 is
+`4df3fd63465b2190aa36eba5e2767af14b42d66050f765cba0d59dd30350c9e6`.
+The complete source62b run also failed a metadata-only sixth-node join on
+`native bootstrap service busy`; the unchanged registry healthy-read/fresh-ACK
+gate separately passed. See the [exact failed process, original artifacts and
+bounded source correction](native-520-regression-findings.md). No DATA relocation
+was attempted by that failed join, and the source correction is uncompiled/unrun.
+
+Adding several DATA ranges to node5 requires more than repeating FIRST. Node5
+is born Registered with empty INITIAL ancestry; after its first installed range,
+the actual retained transfer creates a Joined owner. Empty INITIAL ancestry is
+then historical identity, not empty current DATA or permission to run FIRST again.
+
+| Required boundary | Actual implementation and source | Finding classification and next deterministic check |
+| --- | --- | --- |
+| Original Joined additional-range origin and selected preflight | [Joined receive](../../crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/joined_data/receive.rs), its row/native/catalogue scopes, and runtime N-to-A transfer are implemented. They retain actual original FIRST owner, same installed State/open/runtime and selected exclusion; do not describe the entire Joined receiver as missing | **Not tested as complete expansion.** Drive a genuine Registered-to-Joined-to-second-range scenario while target-led first-range ACK/full Strong continue; preserve original lifetimes and budgets |
+| Complete accepted/Unknown selected-attempt inventory | Proposal CURRENT/archive records are keyed by opaque A in both `registered-remote-image-proposal/{A}/...` and `joined-remote-image-proposal-v2/{A}/...`. Existing row/native/catalogue absence does not enumerate them; warm A/NativeBegun can also precede visible records | **Failed source requirement: producer missing.** Complete both histories under original selected N and actual warm custody, refusing selected accepted/Unknown, orphan or malformed state while unrelated ranges progress. A new empty index or missing cache is insufficient |
+| Strict bounded protected-history inspection | Generic page prefix iteration bounds values, but can map stale/dead/missing locators or malformed version headers to no visible row. A raw snapshot is not a vacuum-retention pin; syntactically decoded headers and generic transaction-status defaults are not complete history-integrity proof | **Failed source prerequisite for that inventory; runtime scenario not tested.** Distinguish legitimate invisible/aborted history from unreadable or indeterminate history with checked physical/transaction provenance. Do not change generic iterator behavior or silently certify absence |
+| Joined materialized NEW and same-A joint custody | [Joined target evidence](../../crates/bicdb-core/src/distribution_data/native_joint_handoff/joined_target.rs) and [Joined joint owner](../../crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/joined_data/receive/joint_owner.rs) exist. Repository-wide call search finds declarations/reexports and definitions, but no consumers of `ActualServiceNativeJoinedJointNewEvidence`, `take_joined_remote_joint_target`, `joined_remote_joint_owner` or `closed_publication_lease` | **Failed source integration requirement; kernels implemented.** A normal caller must consume their actual materialized image/OLD proof/fresh authority and retain the same A; a declaration or decoded role does not close this gate |
+| Joined target preparation, Open, release and A retirement | [Remote preparation](../../crates/bicdb-core/src/distribution_data/native_joint_handoff/remote_serving_preparation.rs) and [remote release](../../crates/bicdb-core/src/distribution_data/native_joint_handoff/bridge/remote_release.rs) admit Registered/Survivor owners. The generic image-release bridge explicitly refuses Joined; no Joined post-activation consumer was found across host/runtime/image/native joint/handoff source. Joined runtime retires empty pre-transfer cells but has no post-consumption A-release path | **Failed source integration requirement.** Add a genuine same-owner Joined activation/release consumer and prove actual unique exclusion retirement plus target-led ACK/Strong. Generic bridge refusal alone was not used to infer repository-wide absence |
+| OLD/source retirement | Original source/export retirement has separate implementations, including `remote_serving_owner/release.rs`, `reference_retirement.rs`, `joint/remote_new/participant/retirement.rs` and `initial_data/source_discovery/export_retirement.rs` | **Not tested as complete expansion by this inspection.** Missing Joined target release does not negate those existing source-retirement kernels; their full integration needs its own evidence |
+| Cold DATA and automatic periodic scheduling | The normal cold DATA host, current-joint new-open rebind and complete periodic placement/resume/repair wiring remain missing. Existing learner cold reopen deliberately rejects DATA ownership | **Failed source integration requirement; physical acceptance not tested.** A metadata-only reopen or manually driven finite steps cannot substitute for automatic fault-safe DATA recovery and redistribution |
+
+The repository-wide call-site check is reproducible at the pinned source:
+
+```sh
+rg -n 'ActualServiceNativeJoinedJointNewEvidence|take_joined_remote_joint_target|joined_remote_joint_owner|closed_publication_lease' crates --glob '*.rs'
+```
+
+The visibility/transaction observations above identify requirements for a new
+protected absence producer. They are **not** a reproduced current Strong-read
+failure or an attribution of the original Azure unreadable records to bit
+corruption. Normal reads, native Strong and physical recovery retain their own
+contracts and qualification gates. No original Azure result is changed.
+
+## Previous complete source boundary at `4f33a8b016a9` — 2026-11-15
+
+This additive update inspects candidate **1.0.520-beta /
+`4f33a8b016a999d43410ca8698270dc01fbeffd6`**, tree
+`4c87ba7caed1e5a9043eac854d7bdf15ac00b15d`. It supersedes the historical
+NOT IMPLEMENTED/NOT WIRED assessments below only for the specific components
+listed here. Main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
+The candidate's normal [Tests43767288668](https://github.com/nikoma/bicdb/actions/runs/43767288668)
+is still running at the **2026-11-15 22:54 UTC** evidence checkpoint. Its complete all-target compilation and
+no-default consumer checks passed; [Rails43767288693](https://github.com/nikoma/bicdb/actions/runs/43767288693)
+also passed its actual 20 runs/100 assertions, zero failures/errors/skips and
+24 completed reports/cable messages. Nonserial Core passed 1,875/0/16 across
+138 main-suite summaries, plus one separately isolated child pass. SQL passed
+2,682/0/4 across 282 summaries. Serial Native and the remaining workspace,
+including the unchanged CLI availability control, remain pending. None of
+these component results establishes their outcome or physical qualification.
+
+At the **2026-11-15 23:30 UTC** checkpoint, the serial native job
+[`132975184551`](https://github.com/nikoma/bicdb/actions/runs/43767288668/job/132975184551)
+completed with **387 passed, 84 failed, 1 ignored**, 989 filtered, in
+2,971.93 seconds. This is a runtime failure after successful compilation.
+The complete 472-case inventory assigns 67 failures to FIRST tests and 17
+to learner/hot-policy tests. Observed failure sites include initial fixture
+readiness/control-service contention, activation/history validation and actual
+request timeouts. They are separate observations, not a demonstrated common
+root cause. This candidate cannot merge on these results. The remaining
+workspace job, including the original CLI availability control, is still running.
+
+Both new registry controls executed and passed:
+`native_initial_registry_real_native_sync_unknown_retains_same_owner_and_denies_app`
+and `native_initial_registry_same_known_api_late_cancel_fresh_read_no_replay_and_sdk_strong`.
+The original registry cancellation/old-Store control also passed. These component
+passes establish neither the pending CLI outcome nor complete relocation.
+The full native raw log is 206,768,590 bytes, SHA256
+`b2c2ccb8bb005fbd8970824f90a962ccb02c56882571b5297aef05b485efd5c4`;
+its retained gzip SHA256 is
+`5e7c581c16af9f3e295202c5ec9bacd8ca163a275e639ce4ef7af641067f0db8`.
+The complete outcome inventory SHA256 is
+`3a1fef2bf4e14be7baeb159a083dc27df46209d4136fb5cbec5af2444ee77c07`.
+Failed scenarios remain **failed** even when their prerequisite prevented them
+from reaching the intended injected fault; the unreached guarantee is **not
+tested** by that scenario.
+
+The final normal run completed naturally by **2026-11-15 23:59:13 UTC**.
+Remaining-workspace passed **1,062/0/6** across 129 summaries; the actual native
+CLI target passed **6/0/0**. Its original healthy-existing-read/fresh-ACK/full-
+readback gate after adding a fifth metadata voter passed with unchanged windows.
+The complete 163,814,084-byte REST raw log SHA256 is
+`8d8fe385b3751a3378e572a5a8ff733753ac476ad0360661b9ac7f306137cd5c`;
+independent complete-stream/result receipt SHA256 is
+`52e61381401d2dd96f14c5cce0c9b32278875655597f636f03a2c1f58e388193`.
+This supersedes the pending CLI state in the earlier checkpoints, within its
+bounded metadata-only scope. DATA assignments did not move. The entire run
+still failed Native; no complete relocation or physical qualification follows.
+The complete 96-file read-only archive manifest SHA256 is
+`320733868a453f83a4aa3eb885c44126e438a12615a6e6482073016c6677d608`;
+independent full-archive verification receipt SHA256 is
+`3fcef4de7951cdd47f9ea857d8bb25b583c1cd68581582de0f1a6a61082ffa81`.
+
+| Boundary | Implemented source | Actual executed evidence and classification |
+| --- | --- | --- |
+| Initial native DATA and explicit Strong point access | Public retained host/CLI open paths, actual coordinator/runtime/listener and request-scoped Strong protocol exist | **Passed within predecessor scope:** d3's REST CLI target passed the actual four-process APP/Strong case. This is not a passing current-candidate or movement result |
+| Fifth metadata voter and original writer refresh | Automatic metadata enrollment/promotion and registry refresh exist | **Passed within current4f scope:** the unchanged CLI healthy-old-read/fresh-ACK/readback control passed after fifth metadata-voter addition. Historical d3 failed with all four writers pending; that result remains retained. Neither case moves DATA |
+| Retained registry correction | Current source retains the original publisher/native outcome and separates maintenance identity from strict APP/Strong admission | **Passed within component/CLI scope:** both new actual commit-outcome controls, original cancellation/old-Store control and original CLI ten-second health gate passed. The complete native suite still failed |
+| Registered fifth replica receiver | Fresh/registered retained receiver and public join path exist | **Passed within predecessor scope:** d3's CLI receiver case passed with DATA serving false. Receiver ingress or metadata voting does not establish populated DATA ownership |
+| Native image/joint/Open/policy/release steps | Finite internal native host consumers exist, including actual remote-serving participants | **Failed current native acceptance:** 67 FIRST and 17 learner/hot-policy cases failed. Some intended phases were not reached. Individual passing controls do not establish complete relocation, cleanup, cold recovery or replacement |
+| Multiple native ranges on the joining target | The inspected FIRST planner requires a target with no range replicas; FIRST receiver enrollment rejects an existing DATA owner or another retained receive attempt | **Not implemented by iterating FIRST:** a populated-target admission/continuation producer is still required. This does not claim a first complete handoff passed |
+| Automatic native DATA placement and repair after one join | The public operator loop maintains metadata and initial writer/hot recovery; finite native relocation consumers are not a complete periodic placement controller | **Not implemented as the complete native operator path inspected here; not tested** for automatic full-range four-to-five convergence. This is a functional integration gap as well as a qualification gap |
+| Complete external campaign and capacity comparison | Bounded SDK/receipt/reconciliation components exist | **Not tested:** no current full-dataset physical expansion, complete campaign-wide ledger or stable post-convergence throughput gain |
+
+Compilation job `132975145942` full raw-log SHA256 is
+`7e415d496e305e3bac5c8d282b1a042627f0168e433b5b7ad16071dbce6c0a6d`.
+Rails job `132975145225` full raw-log SHA256 is
+`bd9877aa33953ce0036748fe2bf8a24fc20ea3a7c46dd116eaf89c0243fedf63`;
+its original 16-member ZIP/API digest is
+`b8a98a1e172f507ef7e1786b74ca1e6242f27bf5c340544cf9a57f3174a674f1`.
+Independent complete-log/original-ZIP review receipt SHA256
+`30e45c3483eb13e8c55aac2d0e24a54dd7ae7886ab9ae77637090eb6ecac0d54`
+pins actual checkout `2f42e67a11c5d8f81d79e170edd0814d4a741d2d` to the
+candidate tree. The Rails artifact records its CI-built debug binary hash;
+no binary file, release or deployment is produced by this document.
+
+Core job `132975184546` full raw-log SHA256 is
+`0e5b45cd82677876404904215e50895c87116f1e60aef47d5483840020a6094e`;
+its 139 raw summaries include the extra child execution. Independent accounting
+receipt SHA256 `7ce6ca81ae5f70e194fb477b5bc531e00840ce810d993d93ebc2bdf1fb0516d1`
+separates that child from the 1,875 main-suite passes. Serial native namespaces
+are excluded from this Core job. SQL job `132975184578` full 348,522,627-byte
+raw-log SHA256 is `e710b5e959f0ba12763f7047d469a99b2d073f156220312b9932266eafa96610`;
+complete-stream receipt SHA256
+`efc3be20d387920fa3fc6a17565316500f684d833937d17046410c0d79c63e4d`
+retains 2,686 result rows, including two distinct integration tests sharing one
+bare function name. These counts are not physical HA or scaling measurements.
+
+The precise automatic/native distinction matters. The existing generic
+`TransportClusterRelocationDriver` and placement planner are real implementations;
+the original Azure trial observed automatic movement with the older generic
+runtime and still failed qualification. Their existence does not wire the
+protected native path described by this audit.
+
+Source anchors for the current native operator boundary are:
+
+- [CLI maintenance loop](../../crates/bicdb-cli/src/native_metadata_command.rs):
+  the initial-host periodic turn starts the metadata supervisor, maintains
+  metadata membership, refreshes the initial writer registry and reports status.
+  It does not schedule new native range placements.
+- [Public host and finite internal methods](../../crates/bicdb-core/src/distribution_native_host/operator.rs):
+  `advance_finite_remote_membership`, `drive_finite_remote_release`,
+  `advance_finite_remote_serving_policy` and `poll_finite_remote_serving` remain
+  crate-internal consumers. `status` explicitly limits its initial DATA contract
+  to point access; a published dispatcher is not request-scoped Strong readiness.
+- [Owned participant polling](../../crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/remote_serving_owner.rs):
+  a finite actor turn progresses retained actual participants. It does not
+  periodically create placement plans. Existing worker polling after a retained
+  operation starts is distinct from automatic cluster-wide placement.
+- [Protected handoff enforcement](../../crates/bicdb-core/src/distribution/native_joint_handoff.rs):
+  `require_legacy_relocation_mutation` refuses generic membership/cleanup for
+  enforced native voters and requires the typed actual OLD/NEW data-quorum path.
+  Removing that refusal would bypass the intended safety contract.
+- [Unchanged CLI availability assertion](../../crates/bicdb-cli/tests/native_metadata_operator_cli/writer_registry_refresh_baseline.rs)
+  and [complete d3 findings](native-520-regression-findings.md): original ACK and
+  Strong value preceded the fifth voter; later reads were Unavailable and fresh
+  writes had no ACK. No false absence was observed. Unavailable reads prove
+  neither acknowledged-data loss nor survival.
+
+Two further source boundaries prevent treating this as only a missing scheduler.
+[The FIRST allocation planner](../../crates/bicdb-core/src/distribution_native_host/joined_data_handoff.rs)
+rejects a target already holding any range replica. [FIRST receiver enrollment](../../crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica/first_receive.rs)
+rejects an existing DATA owner or another retained attempt/image/step/target.
+Those are deliberate restrictions of this initial lane. A normal expansion
+that assigns several ranges to the same new node needs actual populated-target
+admission and per-range continuation; deleting these checks or looping the first
+control is not that producer. This does not imply all 64 ranges must move.
+
+The [alternate remote joined-handoff backend](../../crates/bicdb-core/src/distribution_native_host/joined_data_handoff/remote_backend.rs)
+also contains explicit unimplemented source transfer, decision, candidate,
+activation and serving stages. It cannot substitute for the finite FIRST
+consumers or complete the operator by being selected. [The actual FIRST
+allocation acceptance facade](../../crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/first_coordinator/acceptance.rs)
+is a test-only module; its real metadata proposal/heartbeat/read observations
+do not constitute a public automatic placement caller.
+
+The next operator gate remains a complete automatic operation, not a manual
+sequence of finite internal calls: one ordinary join, actual assigned image and
+joint activation, safe source retirement, bounded resumption/diagnosis, healthy
+reads and fresh ACKs, then restored replication after another tolerated failure.
+All 64 ranges, the complete intended corpus, raw attempts/uncertainty and final
+reads must remain in the evidence. A source-only component, passing refusal,
+small smoke or generic planner test cannot close this gate. Populated cold
+recovery, ordinary distributed SQL and production admission remain separate.
+
+The original Azure result stays failed and its verified teardown unchanged.
+No resources were provisioned or new spending authorization inferred. See the
+[current HA audit](../ha-horizontal-scaling-audit-2026-11-10.md) and
+[registry publication correction](native-registry-pending-owned-publication.md)
+for their distinct source/runtime scopes. All older dated sections below retain
+their original revision and evidence meaning.
+
 ## Exact source scope
 
 | Source | Exact revision | Scope |

@@ -9,9 +9,15 @@ use std::sync::Arc;
 
 mod phase;
 mod preparation_custody;
+#[cfg(feature = "tls-replication")]
+mod remote_open;
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_open::NativeRemoteOpenObservation;
 mod publication;
 pub(crate) use phase::{NativeJointPreparationPhaseQuorum, NativeJointPreparationPhaseRound};
-pub(crate) use preparation_custody::NativeJointPreparationCustody;
+pub(crate) use preparation_custody::{
+    NativeJointPreparationCustody, NativeRemotePreparedObservation,
+};
 pub(crate) use publication::{
     NativeJointActivatedQuorum, NativeJointOpenAdmission, NativeJointOpenPhaseQuorum,
     NativeJointOpenPhaseRound, NativeJointPublishedServingQuorum, NativeJointReleaseAdmission,
@@ -126,6 +132,18 @@ impl NativeJointPreparedServingObservation {
                 .actual
                 .require_current_under_fresh_phase(service, fresh),
         }
+    }
+    fn borrow_fresh_collection<'a>(
+        &'a self,
+        service: &'a ClusterDataNodeService,
+        fresh: &'a CommittedNativeJointDecisionObservation,
+    ) -> Result<crate::distribution_data::NativeJointPreparationCollectionBorrow<'a>> {
+        if let Some(custody) = &self.custody {
+            custody.require_actual(&self.actual)?;
+            custody.require_service(&self.service)?;
+        }
+        self.actual
+            .borrow_preparation_collection(service, fresh, self.custody.as_deref())
     }
     fn release_fresh_pin(
         &self,
@@ -628,6 +646,72 @@ impl NativeJointActivationAdmission {
     pub(crate) fn has_fresh_publication_phase(&self) -> bool {
         self.phase.is_some()
     }
+    /// Exact borrowed service/preparation binding before the fresh scoped
+    /// publisher performs ALL foreign and local physical validations.
+    pub(crate) fn require_fresh_publication_service_identity(
+        &self,
+        service: &ClusterDataNodeService,
+        actual: &ActualServiceNativeJointPreparedEvidence,
+    ) -> Result<()> {
+        self.require_live()?;
+        let phase = self
+            .phase
+            .as_ref()
+            .ok_or_else(|| invalid("identity-only publication requires actual fresh phase"))?;
+        if !std::ptr::eq(actual, self.local.actual.as_ref())
+            || !std::ptr::eq(service, self.local.service.data_ptr())
+        {
+            return Err(invalid(
+                "fresh publication substituted original service/preparation",
+            ));
+        }
+        let identity = self
+            .local
+            .borrow_fresh_collection(service, &self.fresh)?
+            .into_comparison_identity()?;
+        phase.require_local_publication_identity(self.local.local_node_id(), &identity)?;
+        self.require_live()
+    }
+    /// Component negative over genuine retained owners only. Returns DATA;
+    /// neither a service, preparation nor identity capability escapes.
+    #[cfg(test)]
+    pub(crate) fn test_fresh_publication_identity_substitutions(
+        &self,
+        foreign_service: &Arc<Mutex<ClusterDataNodeService>>,
+    ) -> Result<serde_json::Value> {
+        self.require_live()?;
+        if Arc::ptr_eq(foreign_service, &self.local.service) {
+            return Err(invalid(
+                "publication identity control requires genuine other service",
+            ));
+        }
+        let foreign = foreign_service
+            .try_lock()
+            .ok_or_else(|| invalid("publication identity control foreign service busy"))?;
+        let foreign_result =
+            self.require_fresh_publication_service_identity(&foreign, &self.local.actual);
+        drop(foreign);
+        let local = self
+            .local
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("publication identity control original service busy"))?;
+        let other = self
+            .quorum
+            .observations
+            .iter()
+            .find(|(id, _)| *id != self.local.local_node_id())
+            .map(|(_, member)| member)
+            .ok_or_else(|| invalid("publication identity control other preparation absent"))?;
+        let other_result = self.require_fresh_publication_service_identity(&local, &other.actual);
+        Ok(
+            serde_json::json!({"foreign_service_error":foreign_result.as_ref().err().map(ToString::to_string),
+            "foreign_service_returned_success":foreign_result.is_ok(),
+            "other_actual_preparation_error":other_result.as_ref().err().map(ToString::to_string),
+            "other_actual_preparation_returned_success":other_result.is_ok(),
+            "scope":"real retained-owner identity component, no authority/payload constructor"}),
+        )
+    }
     pub(crate) fn require_publication_service_entry(
         &self,
         service: &ClusterDataNodeService,
@@ -773,3 +857,8 @@ impl NativeJointActivationAdmission {
         Ok(result)
     }
 }
+
+#[cfg(feature = "tls-replication")]
+pub(crate) use preparation_custody::{
+    NativeRemoteBridgeAdmission, NativeRemoteBridgeReadAdmission,
+};

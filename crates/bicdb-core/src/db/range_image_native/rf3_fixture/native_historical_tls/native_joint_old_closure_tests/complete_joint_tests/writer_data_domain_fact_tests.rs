@@ -44,7 +44,7 @@ pub(super) fn exercise(
         owners.keys().cloned().collect::<Vec<_>>(),
         data.new_members().keys().cloned().collect::<Vec<_>>()
     );
-    for (local, (actual_service, lease)) in owners {
+    for (member_ordinal, (local, (actual_service, lease))) in owners.into_iter().enumerate() {
         let native = fixture.native.databases[&local]
             .read()
             .native_recovery_admission(
@@ -97,17 +97,48 @@ pub(super) fn exercise(
                 parent,
             )
             .unwrap();
-        let owned = fixture.metadata[&local]
-            .try_lock()
+        // SAME original OWN/business/deadline. The production capture owns
+        // the actual attached MStore/slot and bounds its member acquisition;
+        // instantaneous test-thread mutex availability is not authority.
+        let capture_entered = std::time::Instant::now();
+        let captured =
+            crate::distribution_data::ClusterDataNodeService::capture_actual_joint_metadata_point(
+                &actual_service,
+                &own,
+                business,
+                parent,
+            );
+        let capture_returned = std::time::Instant::now();
+        if !matches!(&captured, Ok(Some(_))) {
+            // Failure-only observation AFTER the original producer returned.
+            // This availability is diagnostic-time, not the original holder.
+            let immediate_available_after_return = fixture.metadata[&local].try_lock().is_some();
+            eprintln!(
+                "RF3_OWNED_METADATA_POINT_CAPTURE {}",
+                serde_json::json!({
+                    "member_ordinal":member_ordinal,"node":local,"original_OWN_context":own.context_id(),
+                    "capture_elapsed_us":capture_returned.duration_since(capture_entered).as_micros(),
+                    "OWN_remaining_us_at_capture_entry":own.deadline().saturating_duration_since(capture_entered).as_micros(),
+                    "OWN_remaining_us_at_capture_return":own.deadline().saturating_duration_since(capture_returned).as_micros(),
+                    "diagnostic_mstore_immediate_available_after_return":immediate_available_after_return,
+                    "missing_actual_point":matches!(&captured, Ok(None)),
+                    "original_error":captured.as_ref().err().map(ToString::to_string),
+                    "new_OWN_or_deadline_issued":false,
+                })
+            );
+        }
+        let owned = captured
             .unwrap()
-            .observe_owned_native_metadata_member(&own, business, parent)
-            .unwrap();
+            .expect("born-enforced RF3 fixture requires actual native MStore point");
         {
             let db = fixture.native.databases[&local].try_read().unwrap();
             let _journal = db.try_native_image_journal().unwrap();
             // The real native-WAL callback must recheck the protected original
             // owner without recursively acquiring this same journal.
-            owned.require_database_point(&db).unwrap();
+            // require_native_point invokes the SAME member's
+            // require_database_point and additionally checks the retained
+            // actual database/slot/version. It does not reacquire this journal.
+            owned.require_native_point(&db).unwrap();
         }
         let policy = crate::db::NativeWriterDataDomainPolicy::from_actual(
             &actual_service,

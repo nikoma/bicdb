@@ -14,7 +14,7 @@ pub(crate) use registered::NativeRegisteredJointDecisionAttempt;
 #[cfg(all(test, feature = "tls-replication"))]
 pub(crate) use remote::test_remote_joint_decision_cut;
 #[cfg(feature = "tls-replication")]
-pub(crate) use remote::NativeRemoteJointDecisionAttempt;
+pub(crate) use remote::{NativeRemoteCataloguePhysicalPoint, NativeRemoteJointDecisionAttempt};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]

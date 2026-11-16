@@ -255,11 +255,20 @@ impl BicDb {
         self.schema_compatibility_fingerprint()?;
         self.require_normal_native_range_mutation_allowed(command.range_id)?;
         let actual = self.current_native_range_source_lineage(command.range_id)?;
+        self.require_allocation_origin_configuration(intent.range(), &actual)?;
+        let actual_intent = intent.bind_recovered_allocation(&actual);
+        let intent = &actual_intent;
         intent.validate_native_configuration(&actual)?;
         if command.index <= actual.range_index() {
             return self.native_replica_materialization(&actual, intent.range(), Some(command));
         }
         intent.validate_native_base(&actual)?;
+        // Same-open/record-selected loss after the real local CQ and normal
+        // admission checks. No recovery Apply is intercepted or guard waited on.
+        #[cfg(test)]
+        if self.test_refuse_native_replica_before_apply(admission, &actual) {
+            return Err(invalid("injected actual ordinary CQ before local WAL"));
+        }
         let mut transaction = self.begin_transaction()?;
         let result = (|| {
             let pending =
@@ -289,11 +298,19 @@ impl BicDb {
             }
             parent.check()?;
             admission.require_live()?;
-            let sequence = self.commit_transaction(&mut transaction)?;
+            let local =
+                super::super::super::native_wal_apply::NativeWalApplyPreparation::for_pending(
+                    self,
+                    &transaction,
+                    &pending,
+                    authority,
+                )?;
+            let sequence =
+                self.commit_transaction_with_native_preparation(&mut transaction, &local)?;
             self.tx_log.write_durable(sequence)?;
             let receipt = transaction.mint_native_wal_apply_receipt()?;
             self.record_native_range_materialized(&pending, &receipt, authority)?;
-            transaction.finalize_commit_admission()?;
+            transaction.finalize_native_local_apply(&local, Some(&receipt))?;
             transaction.finalize_committed_broker_outbox();
             transaction.finalize_committed_memory_jobs()?;
             self.complete_native_range_command_with_evidence(

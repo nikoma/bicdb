@@ -19,6 +19,42 @@ pub(super) struct RemoteNewRecipientMetadata {
     database: ClusterServiceOpenGuard,
 }
 impl RemoteNewRecipientMetadata {
+    fn identity_request(
+        parent: &CancellationToken,
+        own: &HostMetadataReadObservation,
+        role: Option<&RecoveryRoleAdmission>,
+    ) -> CancellationToken {
+        parent
+            .child_linked_to(&own.original_request_cancellation())
+            .child_with_deadline(
+                role.map_or(own.deadline(), |role| role.deadline().min(own.deadline())),
+            )
+    }
+    #[cfg(test)]
+    pub(super) fn test_identity_own_cancel(
+        service: &Arc<Mutex<ClusterDataNodeService>>,
+        own: &HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        own.require_live_request(business)?;
+        let actual = ClusterDataNodeService::test_actual_request_service_wait_cancel_own(
+            service,
+            parent,
+            own,
+            |original| {
+                let identity = Self::identity_request(original, own, None);
+                ClusterDataNodeService::capture_actual_listener_identity_waiting(service, &identity)
+                    .map(|_| ())
+            },
+        );
+        Ok(serde_json::json!({"actual_control":actual.as_ref().ok(),
+            "original_control_error":actual.as_ref().err().map(ToString::to_string),
+            "outer_caller_still_live":parent.check().is_ok(),
+            "actual_OWN_original_cancelled":own.original_request_cancellation().is_cancel_requested(),
+            "actual_OWN_live_after":own.require_live_request(business).is_ok(),
+            "actual_OWN_context":own.context_id(),"no_fresh_OWN_or_Role_issued_during_wait":true}))
+    }
     #[allow(clippy::too_many_arguments)]
     pub(super) fn acquire(
         provider: &Arc<crate::distribution_metadata_read_provider::MetadataReadProvider>,
@@ -119,10 +155,15 @@ impl RemoteNewRecipientMetadata {
             let plan = crate::distribution_range_handoff::NativeJointHandoffPlan::from_actual_role_and_own(role, &own, business)?;
             request.require_plan(&plan)?;
         }
-        let database = service
-            .try_lock()
-            .ok_or_else(|| invalid("remote NEW actual service busy before MStore"))?
-            .listener_open_guard();
+        // No table/service/DB/MStore guard is held. Preserve this exact
+        // acquisition's caller, OWN and (when present) witnessed Role window.
+        let identity = Self::identity_request(parent, &own, role.as_deref());
+        let database =
+            ClusterDataNodeService::capture_actual_listener_identity_waiting(service, &identity)?;
+        own.require_live_request(business)?;
+        if let Some(role) = &role {
+            role.require_own_host_metadata(&own, business)?;
+        }
         let member = {
             let store = loop {
                 parent.check()?;
@@ -134,8 +175,8 @@ impl RemoteNewRecipientMetadata {
             store.require_listener_database(&database)?;
             store.observe_owned_native_metadata_member(&own, business, parent)?
         };
-        let point = ClusterDataNodeService::capture_actual_joint_metadata_point(
-            service, &own, business, parent,
+        let point = ClusterDataNodeService::capture_actual_joint_metadata_point_waiting(
+            service, &own, business, &identity,
         )?
         .ok_or_else(|| invalid("remote NEW requires real current native MStore point"))?;
         let result = Self {

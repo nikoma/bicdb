@@ -3,10 +3,19 @@
 use super::*;
 
 pub(crate) struct NativeJointServingPolicyAdmission {
-    phase: Arc<NativeJointReleasePhaseQuorum>,
+    authority: PolicyAuthority,
     local: ClusterNodeId,
     post: ActualServiceNativeJointReleaseEvidence,
     cancellation: crate::CancellationToken,
+}
+enum PolicyAuthority {
+    Local(Arc<NativeJointReleasePhaseQuorum>),
+    #[cfg(feature = "tls-replication")]
+    Remote {
+        owner: Arc<crate::distribution_data::NativeRemoteReleaseOwner>,
+        proof: Arc<crate::distribution_range_handoff::NativeRemoteAllReleasedQuorum>,
+        request: crate::distribution_native_host::NativeRemoteLocalPolicyAuthority,
+    },
 }
 impl NativeJointReleasePhaseQuorum {
     #[cfg(feature = "tls-replication")]
@@ -76,7 +85,7 @@ impl NativeJointReleasePhaseQuorum {
             cancellation: self
                 .cancellation
                 .child_with_deadline(post.committed().deadline()),
-            phase: self.clone(),
+            authority: PolicyAuthority::Local(self.clone()),
             local,
             post,
         };
@@ -85,6 +94,73 @@ impl NativeJointReleasePhaseQuorum {
     }
 }
 impl NativeJointServingPolicyAdmission {
+    #[cfg(test)]
+    pub(crate) fn test_policy_trace_clocks(&self) -> crate::native_policy_trace::Clocks {
+        let mut clocks = crate::native_policy_trace::Clocks {
+            admission: self.cancellation.deadline(),
+            post_own: Some(self.post.committed().deadline()),
+            ..Default::default()
+        };
+        match &self.authority {
+            PolicyAuthority::Local(phase) => {
+                clocks.authority = "actual_local_ALL_released";
+                clocks.all_phase = phase.cancellation.deadline();
+                clocks.role_source = "local phase retains no distinct Role object; OWN is not Role";
+            }
+            #[cfg(feature = "tls-replication")]
+            PolicyAuthority::Remote { request, .. } => {
+                let (role, own) = request.test_policy_trace_deadlines();
+                clocks.authority = "actual_remote_ALL_released_local_policy";
+                clocks.role = Some(role);
+                clocks.role_own = Some(own);
+                clocks.role_source = "same actual private local-policy Role";
+                // No ALL-frame deadline getter/proof is manufactured here.
+            }
+        }
+        clocks
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn from_actual_remote_all_released(
+        proof: Arc<crate::distribution_range_handoff::NativeRemoteAllReleasedQuorum>,
+        observed: crate::distribution_data::NativeRemoteReleaseObservation,
+        participant: &Arc<crate::distribution_range_handoff::NativeRemoteNewParticipant>,
+        request: crate::distribution_native_host::NativeRemoteLocalPolicyAuthority,
+    ) -> Result<Self> {
+        let owner = observed.owner().clone();
+        owner.require_participant(participant)?;
+        request.require_successor(&owner)?;
+        proof.require_original(participant, &owner)?;
+        proof.require_local_observation(&observed)?;
+        request.require_current(observed.actual().committed())?;
+        observed.inspect(
+            |scope, store, _, _, _, _| {
+                request.require_scope(observed.actual().committed(), scope, store)
+            },
+            || request.require_memory_current(),
+        )?;
+        let cancellation = request
+            .bound_request()
+            .child_with_deadline(observed.actual().committed().deadline());
+        let local = owner.native().local_node_id().clone();
+        let post = observed.into_admission_post(&owner)?;
+        let result = Self {
+            authority: PolicyAuthority::Remote {
+                owner,
+                proof,
+                request,
+            },
+            local,
+            post,
+            cancellation,
+        };
+        result.require_external_current()?;
+        Ok(result)
+    }
+
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn bound_policy_request(&self) -> crate::CancellationToken {
+        self.cancellation.child()
+    }
     pub(crate) fn historical_native_bridge(
         &self,
     ) -> Arc<crate::db::NativeJointServingBridgeReceipt> {
@@ -96,7 +172,11 @@ impl NativeJointServingPolicyAdmission {
         self.post.historical_released_publication_point()
     }
     pub(crate) fn data(&self) -> &NativeJointDecisionData {
-        &self.phase.continuation.data
+        match &self.authority {
+            PolicyAuthority::Local(phase) => &phase.continuation.data,
+            #[cfg(feature = "tls-replication")]
+            PolicyAuthority::Remote { owner, .. } => owner.native().data(),
+        }
     }
     pub(crate) fn native(&self) -> &crate::db::NativeJointServingBridgeReceipt {
         self.post.native()
@@ -111,9 +191,23 @@ impl NativeJointServingPolicyAdmission {
     }
     pub(crate) fn require_live(&self) -> Result<()> {
         self.cancellation.check()?;
-        self.phase.require_live()?;
-        for member in self.phase.members.values() {
-            member.require_released_open()?;
+        match &self.authority {
+            PolicyAuthority::Local(phase) => {
+                phase.require_live()?;
+                for member in phase.members.values() {
+                    member.require_released_open()?;
+                }
+            }
+            #[cfg(feature = "tls-replication")]
+            PolicyAuthority::Remote {
+                owner,
+                proof,
+                request,
+            } => {
+                owner.require_memory_lifetime()?;
+                proof.require_live()?;
+                request.require_memory_current()?;
+            }
         }
         self.post.require_released_open()?;
         self.cancellation.check()
@@ -121,8 +215,27 @@ impl NativeJointServingPolicyAdmission {
     /// Before taking any local service/DB/journal guard.
     pub(crate) fn require_external_current(&self) -> Result<()> {
         self.require_live()?;
-        for node in self.phase.members.keys() {
-            self.phase.require_member_current(node)?;
+        match &self.authority {
+            PolicyAuthority::Local(phase) => {
+                for node in phase.members.keys() {
+                    phase.require_member_current(node)?;
+                }
+            }
+            #[cfg(feature = "tls-replication")]
+            PolicyAuthority::Remote {
+                owner,
+                proof,
+                request,
+            } => {
+                proof.require_post_all(self.post.committed())?;
+                request.require_current(self.post.committed())?;
+                owner.with_current_owner(|same, actual| {
+                    let service = same
+                        .try_lock()
+                        .ok_or_else(|| invalid("Policy original current service busy"))?;
+                    self.post.require_current(&service, actual)
+                })?;
+            }
         }
         self.require_live()
     }
@@ -135,8 +248,28 @@ impl NativeJointServingPolicyAdmission {
         db: &crate::BicDb,
         original: &Arc<crate::db::NativeWriterHostState>,
     ) -> Result<()> {
+        #[cfg(feature = "tls-replication")]
+        if let PolicyAuthority::Remote { owner, request, .. } = &self.authority {
+            self.require_live()?;
+            request.require_service(actual)?;
+            if !Arc::ptr_eq(service, owner.service())
+                || !Arc::ptr_eq(original, owner.domain().actual_writer()?)
+            {
+                return Err(invalid(
+                    "Policy changed actual original survivor State/service",
+                ));
+            }
+            let scope = self.native().historical_cut_scope(db)?;
+            return actual.with_writer_data_domain_store(db, |store| {
+                self.require_local_with_store_scope(store, &scope)
+            });
+        }
+        let PolicyAuthority::Local(phase) = &self.authority else {
+            return Err(invalid("local Policy quorum absent"));
+        };
+
         self.require_live()?;
-        let member = &self.phase.continuation.members[&self.local];
+        let member = &phase.continuation.members[&self.local];
         if !Arc::ptr_eq(service, &member.service)
             || !Arc::ptr_eq(original, member.writer.actual_writer()?)
         {
@@ -146,7 +279,7 @@ impl NativeJointServingPolicyAdmission {
         }
         let scope = self.native().historical_cut_scope(db)?;
         let owner = NativeJointReleaseOwnerView::Dropped(&member.activation);
-        self.phase.members[&self.local].require_current_with_scope(actual, &scope, owner)?;
+        phase.members[&self.local].require_current_with_scope(actual, &scope, owner)?;
         self.post
             .require_current_with_scope(actual, &scope, owner)?;
         self.require_live()
@@ -159,8 +292,30 @@ impl NativeJointServingPolicyAdmission {
         db: &crate::BicDb,
         original: &Arc<crate::distribution_native_host::NativeRegisteredRemoteJointOwner>,
     ) -> Result<()> {
+        if let PolicyAuthority::Remote { owner, request, .. } = &self.authority {
+            self.require_live()?;
+            request.require_service(actual)?;
+            let expected = owner.domain().phase_owner();
+            if !Arc::ptr_eq(service, owner.service())
+                || !expected.same_actual(&crate::db::NativeJointPhaseOwner::Registered(
+                    Arc::downgrade(original),
+                ))
+            {
+                return Err(invalid(
+                    "Policy changed actual original Registered receiver/service",
+                ));
+            }
+            let scope = self.native().historical_cut_scope(db)?;
+            return actual.with_writer_data_domain_store(db, |store| {
+                self.require_local_with_store_scope(store, &scope)
+            });
+        }
+        let PolicyAuthority::Local(phase) = &self.authority else {
+            return Err(invalid("local Registered Policy quorum absent"));
+        };
+
         self.require_live()?;
-        let member = &self.phase.continuation.members[&self.local];
+        let member = &phase.continuation.members[&self.local];
         let crate::db::NativeJointPhaseOwner::Registered(owner) = &member.writer else {
             return Err(invalid(
                 "Registered first policy cannot use an existing writer's admission",
@@ -175,7 +330,7 @@ impl NativeJointServingPolicyAdmission {
         }
         let scope = self.native().historical_cut_scope(db)?;
         let dropped = NativeJointReleaseOwnerView::Dropped(&member.activation);
-        self.phase.members[&self.local].require_current_with_scope(actual, &scope, dropped)?;
+        phase.members[&self.local].require_current_with_scope(actual, &scope, dropped)?;
         self.post
             .require_current_with_scope(actual, &scope, dropped)?;
         self.require_live()
@@ -208,19 +363,31 @@ impl NativeJointServingPolicyAdmission {
         self.post.actual_released_publication_point()
     }
     pub(crate) fn require_publication_request_memory(&self) -> Result<()> {
-        self.cancellation.check()?;
-        self.phase.cancellation.check()?;
-        self.phase.continuation.caller.check()?;
-        if self
-            .phase
-            .continuation
-            .original_cancel
-            .is_cancel_requested()
+        #[cfg(feature = "tls-replication")]
+        if let PolicyAuthority::Remote {
+            owner,
+            proof,
+            request,
+        } = &self.authority
         {
+            self.cancellation.check()?;
+            owner.require_memory_lifetime()?;
+            proof.require_live()?;
+            request.require_memory_current()?;
+            return self.post.committed().require_publication_request_memory();
+        }
+        let PolicyAuthority::Local(phase) = &self.authority else {
+            return Err(invalid("local Policy memory quorum absent"));
+        };
+
+        self.cancellation.check()?;
+        phase.cancellation.check()?;
+        phase.continuation.caller.check()?;
+        if phase.continuation.original_cancel.is_cancel_requested() {
             return Err(crate::BicDbError::QueryCanceled);
         }
         self.post.committed().require_publication_request_memory()?;
-        for member in self.phase.members.values() {
+        for member in phase.members.values() {
             member.committed().require_publication_request_memory()?;
         }
         Ok(())
@@ -236,14 +403,29 @@ impl NativeJointServingPolicyAdmission {
         store: &crate::distribution_range_consensus::RangeWriteStore,
         scope: &crate::db::NativeJointHistoricalCutScope<'_>,
     ) -> Result<()> {
+        #[cfg(feature = "tls-replication")]
+        if let PolicyAuthority::Remote { owner, request, .. } = &self.authority {
+            self.require_live()?;
+            request.require_scope(self.post.committed(), scope, store)?;
+            self.post.require_current_with_store_scope(
+                store,
+                scope,
+                NativeJointReleaseOwnerView::Dropped(owner.activation()),
+            )?;
+            return self.require_live();
+        }
+        let PolicyAuthority::Local(phase) = &self.authority else {
+            return Err(invalid("local Policy scoped quorum absent"));
+        };
+
         self.require_live()?;
         self.post
             .committed()
             .require_native_publication_metadata(scope.database(), store)?;
         let owner = NativeJointReleaseOwnerView::Dropped(
-            &self.phase.continuation.members[&self.local].activation,
+            &phase.continuation.members[&self.local].activation,
         );
-        self.phase.members[&self.local].require_current_with_store_scope(store, scope, owner)?;
+        phase.members[&self.local].require_current_with_store_scope(store, scope, owner)?;
         self.post
             .require_current_with_store_scope(store, scope, owner)?;
         self.require_live()
@@ -256,9 +438,17 @@ impl NativeJointServingPolicyAdmission {
         self.post.observe_released_continuity(store)
     }
     pub(crate) fn open_quorum_audit(&self) -> Result<serde_json::Value> {
+        #[cfg(feature = "tls-replication")]
+        if let PolicyAuthority::Remote { proof, .. } = &self.authority {
+            self.require_live()?;
+            return proof.historical_audit();
+        }
+        let PolicyAuthority::Local(phase) = &self.authority else {
+            return Err(invalid("local Policy audit quorum absent"));
+        };
+
         self.require_live()?;
-        let members = self
-            .phase
+        let members = phase
             .members
             .iter()
             .map(|(node, member)| Ok((node.clone(), member.writer_domain_audit()?)))

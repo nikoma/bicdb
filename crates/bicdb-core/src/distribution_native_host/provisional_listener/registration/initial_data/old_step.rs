@@ -4,7 +4,11 @@ use super::*;
 mod constraint_step;
 mod remote_new;
 mod remote_old;
+mod remote_serving;
+mod request_wait;
 pub(crate) use constraint_step::NativeInitialOldConstraintStep;
+#[cfg(test)]
+mod first_reply_loss;
 #[cfg(test)]
 mod sink_test;
 use crate::distribution_consensus::{
@@ -64,7 +68,8 @@ impl NativeInitialDataAdmission {
                     let held = held
                         .try_lock()
                         .ok_or_else(|| invalid("OLD predecessor original owner busy"))?;
-                    if held.plan_sha256 != plan.checksum_sha256()?
+                    if held.remote_retired
+                        || held.plan_sha256 != plan.checksum_sha256()?
                         || !Arc::ptr_eq(&held.writer, writer)
                     {
                         return Err(invalid(
@@ -332,6 +337,7 @@ impl NativeInitialOldStep<'_> {
 /// An uncertain producer never removes this owner or invents an observation.
 pub(super) struct RetainedInitialOld {
     remote_new: Option<Arc<crate::distribution_range_handoff::NativeRemoteNewParticipant>>,
+    remote_retired: bool,
     predecessor: Option<Arc<crate::db::NativeWriterHistoricalPredecessor>>,
     writer: Arc<crate::db::NativeWriterHostState>,
     plan_sha256: String,
@@ -347,6 +353,41 @@ pub(super) struct RetainedInitialOld {
 pub(super) type RetainedInitialOldTable =
     Mutex<BTreeMap<crate::RangeId, Arc<Mutex<RetainedInitialOld>>>>;
 impl NativeInitialDataHost {
+    pub(in crate::distribution_native_host) fn retained_remote_release_runtime(
+        &self,
+        participant: &Arc<crate::distribution_range_handoff::NativeRemoteNewParticipant>,
+    ) -> Result<Arc<crate::distribution_range_handoff::NativeJointHandoffRuntime>> {
+        if self.stopping {
+            return Err(invalid(
+                "stopping INITIAL host cannot transfer release custody",
+            ));
+        }
+        let admission = self
+            .admission
+            .as_ref()
+            .ok_or_else(|| invalid("release original INITIAL admission absent"))?;
+        let table = self
+            .old_closures
+            .try_lock()
+            .ok_or_else(|| invalid("release original OLD table busy"))?;
+        let entry = table
+            .get(&participant.snapshot().binding.range_id)
+            .ok_or_else(|| invalid("release original OLD table entry absent"))?
+            .try_lock()
+            .ok_or_else(|| invalid("release original OLD entry busy"))?;
+        admission.require_remote_new_original_memory(&entry.writer)?;
+        if entry
+            .remote_new
+            .as_ref()
+            .is_none_or(|original| !Arc::ptr_eq(original, participant))
+            || entry.remote_retired
+        {
+            return Err(invalid(
+                "release runtime capture changed original participant or retired slot",
+            ));
+        }
+        Ok(entry.runtime.clone())
+    }
     pub(super) fn retained_actual_old_source(
         &self,
         range: crate::RangeId,
@@ -372,7 +413,9 @@ impl NativeInitialDataHost {
         let owner = owner
             .try_lock()
             .ok_or_else(|| invalid("actual OLD donor closure still active"))?;
-        if !Arc::ptr_eq(&owner.writer, &self.admission_for_old_step()?.writer()) {
+        if owner.remote_retired
+            || !Arc::ptr_eq(&owner.writer, &self.admission_for_old_step()?.writer())
+        {
             return Err(invalid("retained OLD source original writer replaced"));
         }
         let actual = owner
@@ -422,6 +465,7 @@ impl NativeInitialDataHost {
                 }
                 let owner = Arc::new(Mutex::new(RetainedInitialOld {
                     remote_new: None,
+                    remote_retired: false,
                     predecessor: Some(step.predecessor.clone()),
                     writer: step.writer.clone(),
                     plan_sha256: digest.clone(),
@@ -439,7 +483,8 @@ impl NativeInitialDataHost {
         let mut owner = retained
             .try_lock()
             .ok_or_else(|| invalid("actual OLD operation already active"))?;
-        if owner.plan_sha256 != digest
+        if owner.remote_retired
+            || owner.plan_sha256 != digest
             || !Arc::ptr_eq(&owner.runtime, &runtime)
             || !Arc::ptr_eq(&owner.writer, &step.writer)
         {
@@ -508,23 +553,101 @@ impl NativeMetadataControlHost {
         range: crate::RangeId,
         phase: &crate::distribution_range_handoff::NativeJointReleasePhaseQuorum,
     ) -> Result<()> {
-        let initial = self
-            .data
-            .as_ref()
-            .ok_or_else(|| invalid("actual INITIAL survivor absent"))?;
-        // The phase revalidates this observation for the post-open point.
-        let actual = initial.retained_old_source_identity(range)?;
-        phase.require_actual_old_owner_retirement(&actual)?;
-        let mut entries = initial
+        crate::native_policy_trace::root!(
+            phase.test_retirement_trace_seed(self.backend.node_id.to_string(), range),
+            {
+                let initial = self
+                    .data
+                    .as_ref()
+                    .ok_or_else(|| invalid("actual INITIAL survivor absent"))?;
+                // The phase revalidates this observation for the post-open point.
+                let actual = crate::native_policy_trace::stage!(
+                    "actual_OLD_source_identity",
+                    initial.retained_old_source_identity(range)
+                )?;
+                crate::native_policy_trace::stage!(
+                    "actual_local_phase_OLD_owner_current",
+                    phase.require_actual_old_owner_retirement(&actual)
+                )?;
+                let mut entries = initial
+                    .old_closures
+                    .try_lock()
+                    .ok_or_else(|| invalid("actual survivor OLD table busy"))?;
+                let retained = entries
+                    .get(&range)
+                    .ok_or_else(|| invalid("actual survivor OLD entry missing"))?;
+                let entry = retained
+                    .try_lock()
+                    .ok_or_else(|| invalid("actual survivor OLD entry active"))?;
+                if entry
+                    .actual
+                    .as_ref()
+                    .is_none_or(|old| !Arc::ptr_eq(old, &actual))
+                    || entry.outcome.is_some()
+                {
+                    return Err(invalid(
+                        "cannot retire an uncertain/replaced OLD native outcome",
+                    ));
+                }
+                drop(entry);
+                entries.remove(&range);
+                #[cfg(test)]
+                crate::native_policy_trace::note("actual_OLD_observation_table_removed");
+                Ok(())
+            }
+        )
+    }
+}
+
+impl NativeInitialDataAdmission {
+    /// Consume only obsolete original-phase references after genuine remote
+    /// ALL Open. The SAME table entry keeps runtime, participant, native
+    /// outcome/status and cleanup custody; None can never mean fresh work.
+    pub(crate) fn retire_remote_old_original_after_all_open(
+        &self,
+        slot: &mut crate::distribution_range_handoff::NativeRemoteOldRetirementSlot<'_>,
+        phase: &crate::distribution_range_handoff::NativeRemoteAllOpenRetirementAdmission<'_>,
+    ) -> Result<()> {
+        let participant = slot.participant();
+        phase.require_current()?;
+        phase.require_original_participant(participant)?;
+        let table = self
             .old_closures
+            .upgrade()
+            .ok_or_else(|| invalid("ALL Open original OLD table ended"))?;
+        let entry = table
             .try_lock()
-            .ok_or_else(|| invalid("actual survivor OLD table busy"))?;
-        let retained = entries
-            .get(&range)
-            .ok_or_else(|| invalid("actual survivor OLD entry missing"))?;
-        let entry = retained
+            .ok_or_else(|| invalid("ALL Open original OLD table busy"))?
+            .get(&phase.manifest().capture_range.id)
+            .cloned()
+            .ok_or_else(|| invalid("ALL Open original OLD entry absent"))?;
+        let mut entry = entry
             .try_lock()
-            .ok_or_else(|| invalid("actual survivor OLD entry active"))?;
+            .ok_or_else(|| invalid("ALL Open original OLD operation busy"))?;
+        self.require_remote_new_original_memory(&entry.writer)?;
+        if entry
+            .remote_new
+            .as_ref()
+            .is_none_or(|p| !std::ptr::eq(p.as_ref(), participant))
+        {
+            return Err(invalid(
+                "ALL Open replaced original retained remote participant",
+            ));
+        }
+        if entry.remote_retired {
+            if !slot.is_empty() {
+                return Err(invalid(
+                    "ALL Open retired participant recovered original OLD reference",
+                ));
+            }
+            return Ok(());
+        }
+        let actual = entry
+            .actual
+            .as_ref()
+            .cloned()
+            .ok_or_else(|| invalid("ALL Open original host OLD absent"))?;
+        slot.require_actual(&actual)?;
         if entry
             .actual
             .as_ref()
@@ -532,16 +655,54 @@ impl NativeMetadataControlHost {
             || entry.outcome.is_some()
         {
             return Err(invalid(
-                "cannot retire an uncertain/replaced OLD native outcome",
+                "ALL Open cannot retire replaced or uncertain OLD outcome",
             ));
         }
+        // The actual admission holds the SAME listener/open/slot; bind the
+        // newly captured metadata point to those physical owners outside the
+        // short gate, without reviving original OLD Role/current Pending.
+        {
+            let service = self
+                .service
+                .upgrade()
+                .ok_or_else(|| invalid("ALL Open original service ended"))?;
+            let service = service
+                .try_lock()
+                .ok_or_else(|| invalid("ALL Open original service busy"))?;
+            let database = service.database();
+            let db = database
+                .try_read()
+                .ok_or_else(|| invalid("ALL Open original DB busy"))?;
+            service.with_writer_data_domain_store(&db, |store| {
+                phase.require_database_store(&db, store)
+            })?;
+        }
+        let survivor = phase.manifest().new_members.contains_key(actual.node_id());
+        let frozen = actual.borrow_remote_all_open_retirement(phase)?;
+        let removed = {
+            let _version = phase.publication_guard()?;
+            phase.require_memory_current()?;
+            slot.participant().require_lifetime_memory()?;
+            self.require_remote_new_original_memory(&entry.writer)?;
+            // Only final survivors drain the host's OLD and constraint
+            // observation Arcs. Retired sources retain CLOSED cleanup owners.
+            let old = if survivor { entry.actual.take() } else { None };
+            let constraints = if survivor {
+                entry.constraint_owner.take()
+            } else {
+                None
+            };
+            let original = slot.take_and_retire();
+            entry.remote_retired = true;
+            (old, constraints, original)
+        };
+        drop(frozen);
         drop(entry);
-        entries.remove(&range);
+        // All actual destructors run outside metadata, gate and table guards.
+        drop(removed);
+        drop(actual);
         Ok(())
     }
-}
-
-impl NativeInitialDataAdmission {
     pub(super) fn retained_actual_old_source(
         &self,
         range: crate::RangeId,
@@ -560,7 +721,7 @@ impl NativeInitialDataAdmission {
         let owner = owner
             .try_lock()
             .ok_or_else(|| invalid("actual OLD donor closure still active"))?;
-        if !Arc::ptr_eq(&owner.writer, &self.writer()) {
+        if owner.remote_retired || !Arc::ptr_eq(&owner.writer, &self.writer()) {
             return Err(invalid("retained OLD source original writer replaced"));
         }
         let actual = owner
@@ -616,6 +777,46 @@ impl NativeMetadataControlHost {
             "constraints":held.constraints,
             "constraint_frozen":held.constraint_owner.as_ref().map(|p|p.test_original_frozen_custody()),
             "actual_closed_frozen":held.actual.as_ref().map(|p|p.test_original_frozen_custody()),
-            "actual_close_present":held.actual.is_some(),"outcome_present":held.outcome.is_some()}))
+            "actual_close_present":held.actual.is_some(),"original_remote_retired":held.remote_retired,"outcome_present":held.outcome.is_some()}))
+    }
+}
+
+#[cfg(test)]
+impl NativeMetadataControlHost {
+    pub(crate) fn test_actual_old_retirement_configuration(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<serde_json::Value> {
+        let initial = self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("actual ORIGINAL data owner absent"))?;
+        let actual = initial.retained_old_source_identity(range)?;
+        let database = initial
+            .initial
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("actual retirement control service busy"))?
+            .database();
+        let (strict_configuration_error, successor, plan) = {
+            let db = database
+                .try_read()
+                .ok_or_else(|| invalid("actual retirement control DB busy"))?;
+            let lineage = db.current_native_range_source_lineage(range)?;
+            let result = actual.plan().require_old_native_configuration(&lineage);
+            (
+                result.as_ref().err().map(ToString::to_string),
+                lineage.native_joint_successor_plan_sha256()?,
+                actual.plan().checksum_sha256()?,
+            )
+        };
+        let strict = actual.require_current();
+        let retirement = actual.require_current_after_joint_open();
+        Ok(
+            serde_json::json!({"original_plan":plan,"actual_successor_plan":successor,
+            "strict_configuration_error":strict_configuration_error,"strict_original_returned_ok":strict.is_ok(),
+            "strict_original_error":strict.as_ref().err().map(ToString::to_string),"retirement_returned_ok":retirement.is_ok(),
+            "retirement_error":retirement.as_ref().err().map(ToString::to_string),"DATA_only":true}),
+        )
     }
 }

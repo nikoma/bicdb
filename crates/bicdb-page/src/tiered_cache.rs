@@ -122,6 +122,7 @@ struct CacheState {
 #[derive(Debug)]
 pub struct TieredExtentCache {
     root: PathBuf,
+    physical_gate: crate::physical_gate::PhysicalGate,
     store: LocalImmutableExtentStore,
     limits: TieredExtentCacheLimits,
     state: Mutex<CacheState>,
@@ -141,10 +142,14 @@ impl TieredExtentCache {
         reject_unsafe_directory_if_present(&root, "cache root")?;
         fs::create_dir_all(&root).map_err(|error| PageError::io(&root, error))?;
         reject_unsafe_directory(&root, "cache root")?;
+        let physical_gate =
+            crate::physical_gate::PhysicalGate::for_file(&root.join(".cache-bind"))?;
+        let _physical = physical_gate.shared()?;
         let lock = DirectoryLock::acquire(&root)?;
         cleanup_incomplete(&root, limits.max_incomplete_cleanup)?;
         let store = LocalImmutableExtentStore::open(&root, fsync)?;
         let mut cache = Self {
+            physical_gate,
             root,
             store,
             limits,
@@ -189,6 +194,7 @@ impl TieredExtentCache {
         destination: &mut dyn Write,
         storage_limits: &TieredStorageLimits,
     ) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         descriptor.validate(storage_limits)?;
         let pin = self.ensure_cached(provider, descriptor, storage_limits)?;
         let result = self
@@ -214,6 +220,7 @@ impl TieredExtentCache {
         buffer: &mut [u8],
         storage_limits: &TieredStorageLimits,
     ) -> Result<PageHeader> {
+        let _physical = self.physical_gate.shared()?;
         descriptor.validate(storage_limits)?;
         if !descriptor.contains(page_id) {
             return Err(cache_error(format!(
@@ -254,6 +261,7 @@ impl TieredExtentCache {
     /// Evict one exact object. Pinned or currently hydrating objects are never
     /// unlinked and cause a fail-closed busy error instead.
     pub fn evict(&self, key: &ExtentObjectKey) -> Result<bool> {
+        let _physical = self.physical_gate.shared()?;
         key.sha256()?;
         let mut state = self.state.lock();
         if state.hydrating.contains(key) {
@@ -428,6 +436,7 @@ impl TieredExtentCache {
         descriptor: &PageExtentDescriptor,
         storage_limits: &TieredStorageLimits,
     ) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         let mut backoff_ms = self.limits.retry_initial_backoff_ms;
         for attempt in 1..=self.limits.provider_max_attempts {
             match self.hydrate_once(provider, descriptor, storage_limits) {
@@ -457,6 +466,7 @@ impl TieredExtentCache {
         descriptor: &PageExtentDescriptor,
         storage_limits: &TieredStorageLimits,
     ) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         let (staging_path, mut staging) = create_hydration_file(&self.root)?;
         let guard = StagingGuard(staging_path.clone());
         provider.read_verified(&descriptor.object, &mut staging, storage_limits)?;
@@ -481,6 +491,7 @@ impl TieredExtentCache {
     }
 
     fn evict_until_admitted(&self, state: &mut CacheState, bytes: u64) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         loop {
             let projected_bytes = state
                 .resident_bytes
@@ -517,6 +528,7 @@ impl TieredExtentCache {
         key: &ExtentObjectKey,
         corruption: bool,
     ) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         let entry = state
             .entries
             .get(key)
@@ -536,6 +548,7 @@ impl TieredExtentCache {
     }
 
     fn release_pin(&self, key: &ExtentObjectKey, invalidate: bool) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         let mut state = self.state.lock();
         let entry = state
             .entries
@@ -557,6 +570,7 @@ impl TieredExtentCache {
     }
 
     fn discover_existing(&mut self) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         let namespace = self.root.join("sha256");
         let mut state = self.state.lock();
         for prefix_entry in

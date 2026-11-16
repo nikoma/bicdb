@@ -55,6 +55,51 @@ impl NativeReadQuorumCandidate {
         }
         Ok(NativeHotRecoveredReadQuorum { enrolled, open })
     }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn into_allocation_recovered_open(
+        self,
+        service: &crate::ClusterDataNodeService,
+        fresh: &RecoveryRoleAdmission,
+        scope: &RecoveryFenceScope,
+        parent: &CancellationToken,
+    ) -> Result<NativeHotRecoveredReadQuorum> {
+        scope.require_role(fresh)?;
+        if self.scope().range != canonical_range(fresh.current_range())
+            || self.scope().members != *fresh.member_credentials()
+            || self.scope().restore_activation.as_ref() != fresh.restore_activation()
+            || Some(self.scope().schema_sha256.as_str()) != fresh.expected_schema_sha256()
+        {
+            return Err(invalid(
+                "hot repaired readQQ differs from independently fresh recovery role",
+            ));
+        }
+        let open = service.observe_allocation_recovered_open(fresh, scope, parent)?;
+        if !open.matches_point(self.point()) {
+            return Err(invalid(
+                "hot readQQ does not match actual opened native history",
+            ));
+        }
+        let enrolled = self.check_enrolled_voter_births()?;
+        for node in enrolled.candidate.scope().members.keys() {
+            let topology = enrolled
+                .candidate
+                .round
+                .metadata
+                .committed_topology(enrolled.candidate.round.business)?;
+            if topology.nodes[node]
+                .native_store_birth_v1
+                .as_ref()
+                .is_none_or(|birth| {
+                    birth.abort_protocol_version() != 1 || birth.writer_enforcement_version() != 1
+                })
+            {
+                return Err(invalid(
+                    "hot recovery requires from-birth enforced current-voter custody",
+                ));
+            }
+        }
+        Ok(NativeHotRecoveredReadQuorum { enrolled, open })
+    }
 }
 impl NativeHotRecoveredReadQuorum {
     pub(crate) fn require_current(

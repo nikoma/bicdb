@@ -263,6 +263,45 @@ pub(crate) struct FrozenRangeMutationIdentity {
     lease: Uuid,
 }
 impl FrozenRangeMutationIdentity {
+    /// Necessary SAME original gate/owner/lease comparison while its ACTUAL
+    /// controlled writer is retained. This grants no new mutation admission.
+    pub(crate) fn require_same_controlled(
+        &self,
+        permit: &FrozenRangeMutationPermit,
+        controlled: &ControlledFrozenMutationPermit,
+    ) -> Result<()> {
+        if !Weak::ptr_eq(&self.inner, &Arc::downgrade(&permit.inner))
+            || self.inner.upgrade().is_none()
+            || self.range_id != permit.range_id
+            || self.owner != permit.owner
+            || self.lease != permit.lease
+            || !Arc::ptr_eq(&permit.inner, &controlled.inner)
+            || controlled.range_id != self.range_id
+            || controlled.owner != self.owner
+            || controlled.owner_lease != self.lease
+        {
+            return Err(invalid(
+                "retained activation changed actual controlled gate/lease/owner",
+            ));
+        }
+        let ranges = permit.inner.ranges.lock();
+        let state = ranges
+            .get(&self.range_id)
+            .ok_or_else(|| invalid("retained activation controlled state absent"))?;
+        if state.poisoned
+            || state.frozen_owner_dropped
+            || state.frozen != Some((self.owner, self.lease))
+            || !state.active.is_empty()
+            || state.controlled.len() != 1
+            || !state.controlled.contains(&controlled.lease)
+            || state.capture_pin.is_some()
+        {
+            return Err(invalid(
+                "retained activation original controlled owner ended or changed",
+            ));
+        }
+        Ok(())
+    }
     /// Compare the original private gate/range/owner/lease while that ACTUAL
     /// gate is already held. Unlike require_same_current this never relocks it.
     pub(crate) fn require_in_owner_publication(
@@ -1328,6 +1367,27 @@ mod tests {
     }
 
     #[test]
+    fn dropping_own_controlled_callback_keeps_another_callback_and_frozen_owner() {
+        let gate = RangeMutationGate::default();
+        let id = range(1);
+        let frozen = gate.try_freeze(id, Uuid::now_v7()).unwrap();
+        let owner = frozen.owner();
+        let own = gate.try_controlled_mutation(&frozen).unwrap();
+        let other = gate.try_controlled_mutation(&frozen).unwrap();
+        let own_claim = RangeMutationAuthority::Controlled(&own).claim();
+        drop(own);
+        assert!(gate.validate_claim(&own_claim).is_err());
+        gate.validate_controlled(id, &other).unwrap();
+        assert!(gate.validate_quiescent_frozen(id, &frozen).is_err());
+        assert!(gate.try_enter(id).is_err());
+        assert_eq!(frozen.owner(), owner);
+        drop(other);
+        gate.validate_quiescent_frozen(id, &frozen).unwrap();
+        gate.validate_frozen(id, &frozen).unwrap();
+        assert_eq!(frozen.owner(), owner);
+    }
+
+    #[test]
     fn owned_permits_cross_threads_and_capture_drains_the_last_callback() {
         assert_send_sync::<RangeMutationGate>();
         assert_send_sync::<RangeMutationPermit>();
@@ -1537,5 +1597,53 @@ mod native_read_stamp_tests {
             .unwrap()
             .require_current()
             .unwrap();
+    }
+    #[test]
+    fn activation_identity_accepts_only_original_live_controlled_lease() {
+        let gate = RangeMutationGate::default();
+        let owner = Uuid::now_v7();
+        let frozen = gate.try_freeze(RangeId::new(1).unwrap(), owner).unwrap();
+        let identity = frozen.observe_identity().unwrap();
+        let foreign = gate.try_freeze(RangeId::new(2).unwrap(), owner).unwrap();
+        let control = gate.try_controlled_mutation(&frozen).unwrap();
+        let other = gate.try_controlled_mutation(&foreign).unwrap();
+        identity.require_same_controlled(&frozen, &control).unwrap();
+        let concurrent = gate.try_controlled_mutation(&frozen).unwrap();
+        assert!(identity.require_same_controlled(&frozen, &control).is_err());
+        drop(concurrent);
+        identity.require_same_controlled(&frozen, &control).unwrap();
+        assert!(identity.require_same_current(&frozen).is_err());
+        assert!(identity.require_same_controlled(&frozen, &other).is_err());
+        assert!(identity.require_same_controlled(&foreign, &other).is_err());
+        drop(other);
+        drop(control);
+        identity.require_same_current(&frozen).unwrap();
+    }
+    #[test]
+    fn activation_comparison_identity_does_not_retain_actual_frozen_owner() {
+        let gate = RangeMutationGate::default();
+        let frozen = Arc::new(
+            gate.try_freeze(RangeId::new(1).unwrap(), Uuid::now_v7())
+                .unwrap(),
+        );
+        let identity = frozen.observe_identity().unwrap();
+        let weak = Arc::downgrade(&frozen);
+        let control = gate.try_controlled_mutation(&frozen).unwrap();
+        identity.require_same_controlled(&frozen, &control).unwrap();
+        drop(frozen);
+        assert!(weak.upgrade().is_none());
+        {
+            let states = gate.inner.ranges.lock();
+            assert!(states[&RangeId::new(1).unwrap()].frozen_owner_dropped);
+        }
+        drop(control);
+        let replacement = gate
+            .try_freeze(RangeId::new(1).unwrap(), identity.owner)
+            .unwrap();
+        assert!(identity.require_same_current(&replacement).is_err());
+        let next_control = gate.try_controlled_mutation(&replacement).unwrap();
+        assert!(identity
+            .require_same_controlled(&replacement, &next_control)
+            .is_err());
     }
 }

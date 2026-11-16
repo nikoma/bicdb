@@ -11,7 +11,572 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
-## Current evidence checkpoint — 2026-11-14 UTC
+## Delivered main and candidate scope — 2026-11-15 UTC
+
+Delivered main is **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
+Its selected [native-component CI job132700843200](https://github.com/nikoma/bicdb/actions/runs/43677527718/job/132700843200)
+actually passed348/0/1:348 executed passes, one listed ignored case and944
+filtered. Its349 listed case results are not349 executed passes. The complete
+13,543,529-byte raw log SHA256 is
+`da06ccedd111fc3d420c9ffb4f70691702f9ee1d7a31d2872af0dd9ce0305f10`;
+scoped archive manifest SHA256
+`7eefde57b7e1023328b6b0ffbe107793f80319323d439444e54faeda42d42bfe`.
+A fresh local recheck reused the original eleven-file archive and independently
+verified its full case inventory/source/tree; receipt SHA256
+`587a8a037b808129076021a19e1327f45a96695c3cf71e6987ea62fb6a985be2`.
+This does not make main's whole CI green: its remaining-workspace job failed an
+AppHost AddressInUse control. The main suite lacks the later FIRST/local
+visibility/catch-up cases, and its hot fixture used4000ms rather than the
+candidate's1500ms. Counts are not an interchangeable benchmark or proof of
+independent-host HA, current binary qualification or full64-range convergence.
+
+## Last complete candidate execution — source d74, 2026-11-16 UTC
+
+The preceding PR207 source was **1.0.520-beta /
+`d74d363addb35b5b97308b1afcc1c2231e021d29`**, tree
+`51aa988b08c42f8a935f43e54a37d8fd4eda51c2`. Its actual CI merge checkout
+`0408b5ca6758927032b5536dbdb968683ca9813e` has that tree and the exact
+main519/candidate parents. Main remains the separately identified 519 revision
+above. The candidate is draft and unmerged; no release or deployment follows.
+
+At the **2026-11-16 03:29 UTC** checkpoint, automatic
+[Tests43790716008](https://github.com/nikoma/bicdb/actions/runs/43790716008)
+remains running. All-target compilation and the following no-default workflow
+consumer passed. PGwire passed **511/0/2**, with 28 summaries and 513 distinct
+listed cases. [Rails43790719012](https://github.com/nikoma/bicdb/actions/runs/43790719012)
+passed **20 runs/100 assertions/0 failures, errors or skips**; its application
+checks include 24 reports/messages, two overlapping workers and its existing
+single-database SIGKILL/restart scenario. The tested debug binary hash is
+`de63fce23b8ef2338547fead2dd81c9df05db02aa04cea50a85aa98cb5a6d26f`;
+the evidence ZIP retains reports/logs, not a released executable. Independent
+complete-log/original-ZIP review receipt:
+`8e95e3ea54fb79879961e4f016747ec4ed9d550f67de824d516990e60f04e33b`;
+independent full PGwire case inventory:
+`31e2a859c63131af45ef16998f283e5e78f153282d2f577a03d033d9cc74129f`.
+Nonserial Core passed **1,875/0/16** across 138 main-suite summaries,
+plus one genuine isolated subprocess pass. The combined log therefore has 139
+summaries and **1,876/0/16**; the subprocess result must not be counted twice.
+Independent whole-log/case review receipt:
+`7525b96f56bee02132f37b6a32959683b1991ab4966e6023a4fa654eca52b491`.
+SQL passed **2,682/0/4** across 282 summaries; independent whole-log/case
+review receipt:
+`9431c921e47099ae79267822fae5acd28f9ce4518cac9a05673e7dc98805117c`.
+Serial Native and remaining-workspace jobs are still running, and the complete
+run archive remains pending. These partial passes do not qualify distributed HA.
+
+At **2026-11-16 03:30:21 UTC**, the
+[serial Native job133048283864](https://github.com/nikoma/bicdb/actions/runs/43790716008/job/133048283864)
+finished **failed: 397 passed, 93 failed, 1 ignored**, with 989 filtered,
+in 3,656.27 seconds. The complete original log is 174,365,442 bytes, SHA256
+`0fb6aca4e8deb61f9d3fe1ff331d30041e19f4fefe7650bf9ff29f3d2e781f4f`.
+Independent full-log/hash/491-unique-case/93-panic-context reconciliation receipt:
+`58aac5bd3c0c5fbe36d34fe2cf8af32f10e643d492cc7b3123487b0d6123600c`.
+The failed scenarios comprise 68 FIRST-family, 24 hot-policy and one metadata
+supervisor case. This is a runtime failure, not a compilation failure or an
+unavailable CI result. The candidate cannot merge on these results.
+
+Three new bootstrap service-wait controls passed. The cancellation control
+failed its fixture prerequisite with `current metadata leader unknown for DATA
+open`, before the intended held-service cut; its cancellation guarantee is
+**not tested** by that failed scenario. Allocation/SDK cases reported range-policy
+configuration mismatches; FIRST/hot cases include timeouts and active-relocation
+registry refusals. These errors do not establish a common root cause or durable
+data loss. The remaining-workspace job and final complete archive are still
+pending; source fixes must preserve the original failed execution and assertions.
+
+The final remaining-workspace job completed **success at 03:40:01 UTC**:
+**1,062/0/6** across 129 Rust summaries, with 1,068 unique listed cases.
+Its unchanged native CLI target passed **6/0/0**; the downstream Python suites
+passed 47, 3 and 34 tests, and Node TAP passed 2/0. Independent whole REST log
+verification:
+`250bb5c5a5d011735786ba2f115ca9dd1a7843a4a50276947d98c06269a0b2ad`.
+The six CLI cases cover initial DATA, metadata registration/promotion/reopen,
+replica-only refusal and registry/read availability. They do not relocate DATA
+onto a fifth server. Their three allowlisted client journals contain 629 rows;
+these are not a complete cluster-wide or Azure qualification ledger.
+Independent CLI/Python/TAP/journal byte and row checks:
+`aad7623d0fdeb04d1912dfe136554bb68a6bd045dfbc289d09a26b7da2c51064`.
+
+Across Tests and Rails, the final result is **10 passed jobs, 1 failed job,
+4 optional skipped jobs**. The failed run is now frozen read-only: **95 files,
+92 premanifest files, 11 complete logs, 8 original ZIPs/28 members**. Manifest:
+`91110f4182a22d401e9c4dc4976815608ceccce78c6fd184963abd4a9129a015`.
+Independent complete archive verification:
+`cfd7e447d059be3ef7bb1b0f9d1443dddcaa63d0e120411a52787372d8101145`;
+exact closure, checkout/source/parent bindings and wrong-manifest control:
+`1373fa9e38d513cdebbaaa84ccf4da919ca0868a43f09554af213bfc6c017203`.
+No passing component reclassifies the native job or complete run as passing.
+
+The [complete d74 findings and reproducers](design/native-d74-runtime-findings.md)
+include the full491-case inventory and all93 original failures with source paths,
+errors and reached/unreached cuts. The current descriptor, recovery-turn and
+startup corrections described there remain source-only; this failed historical
+execution does not compile or test those later changes.
+
+## Previous complete candidate execution — source62b, 2026-11-16 UTC
+
+Candidate **1.0.520-beta / `62b602ca852a4183c4aa7630e2593e10446ff35c`**,
+tree `d659588bb66fb527720903064000e831c7c6c76a`, executed at PR checkout
+`16e5a38962fc650f7ba065278b471278e01a0b16` with that same tree. This is
+the prepared correction below, now submitted to automatic CI. It is not merged,
+released, deployed or qualified. All jobs finished naturally by
+**2026-11-16 01:42:37 UTC**: seven passed, four failed and four optional jobs
+skipped. The complete assembled run failed.
+SQL passed **2,682/0/4**, PGwire passed **511/0/2**, and Rails passed
+**20 runs / 100 assertions**, with
+zero failures, errors or skips. Four static jobs passed. All-target, Core and
+serial Native jobs **failed compilation on the same one E0308** in a new test:
+the topology's `u64` start-token map key was passed where `RangeId` was required.
+Those jobs executed no Core/native test cases; their failure says nothing about
+whether the intended runtime corrections pass. Remaining-workspace failed
+**950/1/2** on a sixth-node metadata join: its original seed returned
+`native bootstrap service busy`, then the learner process exited after metadata
+identity registration and before native birth/factory/voter admission. The
+original registry healthy-read/fresh-ACK gate separately passed unchanged.
+Neither scenario moves DATA. The lock holder/duration and any data-loss or
+partition diagnosis are not established.
+The one-line correction in `f70c40967279c309a53e203e35a2dc20266cff14` selects
+the actual range descriptor's `.id`; it changes no production API, assertion or
+deadline and has not compiled or executed at this checkpoint. See the
+[exact current execution and reproducer](design/native-520-regression-findings.md).
+The separate [bounded bootstrap correction](design/native-bootstrap-finite-service-wait-4f01.md)
+uses the same original finite request while acquiring actual service identity,
+releases the service guard before MStore, and preserves unbounded refusal. It
+does not retry RPCs, extend deadlines or weaken the original process assertions.
+Its four control definitions are uncompiled/unrun; it is not a qualified fix.
+
+The final archive is immutable: **99 files, eleven complete logs, eight original
+ZIPs/62 members**. Manifest SHA-256
+`f7518c6138d7e007912f7a22acc8c136072125831fdbddc8b60dc78783c6439e`;
+independent full verification
+`1633ce08cd2194fb7eb9af8c3589563f199d19c59cb3acd5dc932fb5164a9f89`.
+The original Azure qualification remains failed; no new infrastructure was used.
+
+The separately pinned [ordinary PostgreSQL entry audit](design/ordinary-postgresql-native-entry-62b602ca.md)
+finds no mandatory synchronous native-profile guard in generic pgwire startup.
+The CLI binds before its asynchronous generic supervisor can refuse a born-v2
+metadata store; public empty-service/shared embedding paths can omit that
+supervisor. If local SQL setup succeeds, this is a **source-level potential
+exposure**, not a reproduced incorrect read. Ordinary local reads do not consume
+the native Strong point-read protocol. A mandatory admission guard is proposed,
+not delivered by this audit. This strengthens the existing unsupported-native-
+SQL boundary; it does not establish transparent distributed SQL.
+
+## Prepared source correction after 4f — historical source checkpoint
+
+The [three-part runtime correction](design/native-4f-runtime-corrections.md)
+addresses original-window contention, the full-metadata/effective-native
+descriptor contradiction and repeated first-policy validation cost. Source
+reviews, recursive formatting and version synchronization passed. Corrected
+Rust compilation and runtime acceptance remain **not tested** at this prepared
+checkpoint. The preceding failed execution below remains unchanged; no physical
+or production gate is closed by preparing this source.
+
+## Previous complete execution — source4f native failed, 2026-11-15 UTC
+
+Candidate **1.0.520-beta / `4f33a8b016a999d43410ca8698270dc01fbeffd6`**,
+tree `4c87ba7caed1e5a9043eac854d7bdf15ac00b15d`, runs at actual PR checkout
+`2f42e67a11c5d8f81d79e170edd0814d4a741d2d` with the same tree. All jobs
+finished naturally by **2026-11-15 23:59:13 UTC**: ten passed, one failed and
+four optional jobs skipped across Tests and Rails. All-target/no-default
+compilation, nonserial Core, SQL, PGwire and Rails passed within their
+respective scopes. Serial native
+runtime **failed: 387 passed, 84 failed, 1 ignored**, 989 filtered, in
+2,971.93 seconds. Remaining-workspace passed **1,062/0/6** across 129 summaries.
+The candidate cannot merge on these results.
+These failures concern the protected native virtual-range host fixtures. The
+legacy/file-shipping, single-primary streaming, Cell and application-fleet modes
+retain their separate evidence and qualification boundaries below.
+
+The 84 failures comprise 67 FIRST cases and 17 learner/hot-policy cases.
+Several fail before their intended handoff/fault phase: failed scenarios remain
+failed, while their unreached guarantees remain not tested. Source inspection
+confirmed a full-metadata-versus-effective-native range descriptor mismatch
+during activation and premature service/cleanup contention refusals. Separate
+hot-policy traces show repeated validations consuming the original admission
+window; a complete common cause is not established. Both new registry Known/
+Unknown controls and the original cancellation/old-Store control passed, but
+these component results do not establish complete relocation.
+
+The original native CLI target separately passed **6/0/0**. Its actual
+healthy-existing-read/fresh-ACK/full-readback gate after adding a fifth metadata
+voter passed with its unchanged ten-second requirement and two-second SDK calls.
+This closes the observed registry-only availability regression for that bounded
+same-runner scenario: four original DATA writer processes plus a fifth metadata
+process. It is not DATA redistribution, populated DATA restart,
+full-dataset acknowledged-commit reconciliation or physical qualification.
+REST's complete 163,814,084-byte raw log SHA256 is
+`8d8fe385b3751a3378e572a5a8ff733753ac476ad0360661b9ac7f306137cd5c`;
+independent complete-stream/result receipt SHA256 is
+`52e61381401d2dd96f14c5cce0c9b32278875655597f636f03a2c1f58e388193`.
+
+The complete 206,768,590-byte native raw log SHA256 is
+`b2c2ccb8bb005fbd8970824f90a962ccb02c56882571b5297aef05b485efd5c4`;
+whole-log outcome inventory SHA256 is
+`3a1fef2bf4e14be7baeb159a083dc27df46209d4136fb5cbec5af2444ee77c07`.
+The final read-only archive contains 96 files, eleven full logs and eight
+original ZIPs/28 members; manifest SHA256 is
+`320733868a453f83a4aa3eb885c44126e438a12615a6e6482073016c6677d608`.
+Independent complete-archive verification passed; its receipt SHA256 is
+`3fcef4de7951cdd47f9ea857d8bb25b583c1cd68581582de0f1a6a61082ffa81`.
+See [exact failed cases, source causes and unchanged reproducers](design/native-520-regression-findings.md)
+and the [current operator integration boundary](design/native-operator-four-to-five-gap-audit-2026-11-11.md).
+The older generic placement/relocation implementation and original Azure movement
+are distinct from the protected native operator. Finite native handoff consumers
+exist; an automatic full-range placement/repair loop, populated-target DATA
+admission and complete cold restart integration remain open. No full 64-range/
+8 GiB campaign, fault-safe convergence, stable post-convergence throughput gain,
+physical RPO/RTO, transparent general PostgreSQL application contract or production
+admission is established. Original Azure qualification and teardown are unchanged.
+
+## Previous complete execution — sourced3 failed, 2026-11-15 UTC
+
+Draft **1.0.520-beta / `d3af39c107951802a612d31b42e70fd4bc90e71c`** finished
+all jobs: seven passed, four failed and four optional jobs skipped. Formatting,
+SQL2682/0/4, PGwire511/0/2 and Rails20runs/100assertions passed. All-target,
+Core and serial Native test compilation failed on one private response-validator
+call; Core/native helpers built but zero Core/native controls ran. The following
+no-default consumer check was skipped. Remaining-workspace failed950/1/2 on its
+native CLI metadata-registry addition availability control. Before the fifth
+metadata voter, the actual APP ACK and full Strong read succeeded. Afterward,
+old-ACK reads returned Unavailable and fresh writes received no ACK; all four
+original writer policies remained publication-pending. No false absence was
+observed, no DATA move was attempted, and the original ten-second healthy receipt
+requirement failed. This is an availability defect, not proof of durable loss.
+
+The complete read-only archive contains99files,11full logs and8original ZIPs/
+59members; manifest SHA256
+`e6f530e22fcac189270c191c09cfef78074e2863ed0e1eb099e273e496cd8ac3`.
+Full independent integrity verification passed. Minimal source corrections for
+the private validator and two test-control defects are reviewed, uncompiled and
+unrun. The additional production registry self-refusal requires its own
+original-owner/Known-outcome fix; ordinary APP/Strong fences must stay strict.
+See the [actual source identities, exact failure and unchanged reproducers](design/native-520-regression-findings.md).
+At that completed d3 checkpoint, candidate7e99's396/55/1 was the last executed
+native result for the candidate line; main519's older348/0/1 did not qualify
+the successor. Source4f's later runtime result is recorded above.
+
+A local [registry publication correction](design/native-registry-pending-owned-publication.md)
+is composed with the minimal compiler/test-control fixes. It keeps the strict
+APP/Strong fence while retaining the original publisher and actual native
+outcome. Formatting and source review are separate from its still-unexecuted
+original CLI regression and new Known/Unknown component controls. No passing
+corrected-runtime result is established.
+
+[External-ledger experiment readiness](../scripts/platform/native-sdk-ledger/README.md#experiment-readiness-source-d3)
+is another open gate: bounded tooling has no actual SDK/collector end-to-end
+result or full-dataset campaign checker. ACK-only samples cannot replace complete
+attempt/uncertainty evidence; instrumented SDK timings include fsync/collector
+overhead. No current physical RPO/RTO, converged4→5 expansion, stable capacity
+gain, general distributed SQL or production admission is established. The
+original failed Azure result and verified deletion remain unchanged.
+
+## Previous complete execution — sourcee2 compilation failed, 2026-11-15 UTC
+
+Delivered main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
+Draft **1.0.520-beta / `e2adb410befd41bd475f015fd6590c33d1afaa4f`** finished
+all normal CI jobs: three passed, eight failed and four optional jobs skipped.
+Two Core library errors (`Debug` and observer visibility) blocked all-target,
+Core, Native, SQL, PGwire and Rails. Formatting separately failed child-module
+resolution. Core/native executed zero tests; Rails application acceptance was
+not reached. Remaining-workspace passed 564 Lua/Page/Script/Workflow/Extension
+cases before its Core dependency failed; it is a failed job, not a complete pass.
+
+The complete read-only archive contains 85 files, eleven full logs and six
+original ZIPs/six members; manifest SHA256
+`37696582e5b1fedfd039e9ad57e6266a8b6d0ae5695dae82d62980f9f9f4ba9d`.
+Full independent integrity verification passed. A reviewed three-file source
+correction passes recursive formatting, but has not compiled or executed.
+See the [exact classifications, source pins and smallest next checks](design/native-520-regression-findings.md)
+and [current-source distributed SQL design audit](design/distributed-sql-main519-e2-execution-checkpoint.md).
+No previous runtime result transfers to this successor. Physical scale-out,
+RPO/RTO, post-convergence throughput and production admission remain unqualified;
+the original failed Azure evidence and verified teardown are unchanged.
+
+## Previous complete execution — source7e99 native failed, 2026-11-15 UTC
+
+Delivered main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
+Draft **1.0.520-beta / `7e99c9c96970b78a44402c975627c64e001adffa`** passed
+all-target/no-default compilation, Core1873/0/16, SQL2682/0/4, PGwire511/0/2,
+remaining-workspace1062/0/6 and Rails20 runs/100 assertions. The separately
+selected serial native job **failed396/55/1**: 34 FIRST and 21 HOT failures.
+Every job finished naturally; ten passed, one failed and four optional jobs were
+skipped. Component successes do not clear the failed native or whole-HA gate.
+
+The failures expose original-window exhaustion during catalogue Open, actual
+service/maintenance contention, stale writer policy after learner allocation,
+rapid metadata socket-probe exhaustion and an incorrect numeric-XID test
+expectation. Remote bridge RPC timeouts and intervening-IO diagnostic refusal
+also remain unresolved; the fixes in preparation do not establish their closure.
+No failure is silently reclassified as a successful refusal or acknowledged loss.
+See the [exact findings, source identities and next controls](design/native-520-regression-findings.md).
+
+The complete archive is frozen and independently verified: 101 files, eleven
+full gzip logs and eight original ZIPs/28 members. Its manifest SHA256 is
+`124bdadc431992c03a89035e8879944acd20e732b8c31d3e9995ba5775ccf9fa`.
+At that checkpoint, focused corrective source was uncompiled and unrun. No converged four-to-five-node
+expansion, sustained five-node capacity gain, physical RPO/RTO or production
+qualification has been established. The original Azure run remains a failed
+qualification; its 23 resources were deleted and no new infrastructure was
+provisioned for this run.
+
+## Previous complete execution — source700 failed, 2026-11-15 UTC
+
+Draft520 `700726e90f041815b132cda4f87ca92337f55baa` advanced past the three
+sourcebd09 library diagnostics. All-target, Core and Native jobs then failed on
+eighteen test-compilation errors: seventeen missing `BTreeMap` references and
+one private-field access in a test diagnostic. None executed Core/native tests
+or the new stage clocks. Native's production helper build, PGwire511/0/2 and the
+separate Rails build/application twenty runs/one hundred assertions passed.
+SQL passed2,682/0/4; remaining-workspace passed1,062/0/6 plus offline tooling.
+All jobs completed naturally; the overall Tests workflow failed. No overall
+passing result is claimed. A minimal source-reviewed correction retains private ownership,
+original assertions and deadlines; it has not compiled or executed. See the
+[exact source, logs and reproducer](design/native-520-regression-findings.md).
+The frozen99-file archive includes eleven full logs and eight original ZIPs /
+27 members; independent full-archive integrity and wrong-digest controls passed.
+Main remains519. Physical scale-out, production qualification and the original
+failed Azure result remain unchanged.
+
+## Previous complete execution — sourcebd09 failed, 2026-11-15 UTC
+
+Draft520 `bd09a77e8e72bb88e73c395b9629d96812061c30` failed all-target and Rails
+compilation on two unresolved `BicDb` types and an incomplete generic-recovery
+purpose match. Those jobs executed no tests; no-default consumer and Rails
+application acceptance were not reached. Core and Native also failed their
+helper library build on those same errors; no test-only compilation, runtime
+control or new timing diagnostic executed. SQL and PGwire likewise failed
+library compilation with zero executed cases. Remaining-workspace passed508
+component cases before the common purpose-match compilation failure; full
+workspace/offline acceptance was not reached. All jobs are terminal and the
+collector exited normally. The complete93-file archive is frozen and verified,
+including eleven full logs and six original ZIPs/six members. Local source
+corrections qualify the types and explicitly refuse the narrow serving purposes
+at the generic consumer; they are uncompiled and unexecuted. Source6de passes
+below do not transfer to this successor. Main remains519; no binary, deployment,
+physical or production gate is cleared by this source checkpoint.
+
+## Previous complete execution — source6de failed, 2026-11-15 UTC
+
+Delivered main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
+Current draft520 `6de646beb603accf39358017d8e0c83c39c741b1` passed workspace /
+no-default compilation, PGwire511/0/2 and Rails20 runs/100 assertions. Core
+subsequently failed legacy primary-record-only FORMAT preservation. Native
+completed375/37/1 and failed; remaining-workspace passed1,062/0/6. SQL completed
+2,682/0/4. The native failures include twenty setup prerequisites, one later
+Strong-read timeout and sixteen later policy/retry/retirement failures. A
+same-service identity expiry component passed; its release/cancellation controls
+failed setup. Every required job is terminal and the overall Tests run failed.
+The sole collector exited normally. The complete frozen archive was independently
+verified: 101 files, eleven full logs and eight original ZIPs / 28 members.
+Compilation and partial component passes do not qualify full HA.
+
+Preceding520 candidate `7c77418656a41ec6e25c7601319e061c328f48e1` passed workspace
+and no-default compilation, PGwire511/0/2 and Rails20 runs/100 assertions.
+Core library passed975/0/8; visibility8, Standard3, bootstrap11 and new Cell
+rekey4 controls passed. Its later backup assertion failed because the expected
+capability vector omits mandatory `physical_backup_gate_v1`; subsequent restore
+assertions were not reached in that run. Source6de corrected both expectations
+and passed the original full encrypted backup/verify/restore case; that component
+pass does not qualify all backups. SQL passed2,682/0/4, including the actual committed-error/DDL
+cleanup and SQLSTATE controls. Native failed363/45/1. The failures include INITIAL startup and later
+FIRST prerequisites, hot catalogue Open timeouts and a fault that never fired.
+Separate typed-local/combined-Strong components passed within their own scope.
+Remaining-workspace completed 1,062/0/6, including original Cell key rotation.
+Core and Native failures still block the candidate. Current exact source/tree/log identities and limits are in
+the [regression findings](design/native-520-regression-findings.md).
+
+The [Cell contract](design/cell-rotation-physical-gate-lifecycle.md) does not close
+cross-call source-head or cold-association gaps. No whole HA, converged physical
+expansion, sustained capacity gain, RPO/RTO or production gate is cleared.
+The original Azure qualification remains failed. Source, CI acceptance, binary,
+deployment and production qualification remain separate.
+
+## Historical completed execution — head2ce failed, 2026-11-15 UTC
+
+Remote main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
+Unmerged520 source `2ce4c48202d4d1bb1ef759b08a41dc36f431af6d` passed PGwire
+511/0/2 and separate Rails application20/100 checks, including process-kill
+recovery. All-target, Core and Native failed test compilation on an unconstrained
+channel type; no actual Core/Native cases executed. SQL passed 2,682/0/4, including
+the real known-committed finalization-error cleanup and SQLSTATE controls. These
+do not execute Core's timed-Unknown or distributed HA paths. Remaining-workspace
+failed 851/1/1 on signed Cell key rotation with a missing enrolled physical gate;
+the repair is composed as unexecuted source. Page checksum/profile and retained-claim
+controls passed. Later CLI/AppHost controls were not reached. The narrow local
+test correction is source-reviewed only. The complete archive is frozen and
+independently verified; successful component checks do not clear the failed gate.
+See the [exact findings](design/native-520-regression-findings.md) for pins and
+independent evidence scopes. The candidate remains unmerged; strong-read,
+bounded relocation, cold recovery, physical expansion and capacity qualification
+remain open. The failed Azure baseline is unchanged.
+
+The [physical backup/bootstrap review](design/standard-live-backup-physical-gate.md)
+also retains a confirmed source gap: after an initial no-clobber refusal, a
+fresh finish can adopt and replace an unrelated target created after staging.
+Same-attempt ownership does not persist original-target or renamed-predecessor
+association across calls/restarts. Runtime reproduction is **not tested** and
+the cold-recovery protocol remains blocked; this is not a proven Azure cause.
+
+Cell/offline encryption rotation has a separate
+[Prepared source-head enforcement gap](design/cell-key-rotation-prepared-source-head-gap.md).
+The same implementation exists in merged main519 and candidate2ce. A staged
+digest does not establish inclusion of source writes accepted between calls;
+the retired old ciphertext may retain them. This is a source finding with an
+unexecuted regression, not measured durable erasure. Repairing the new gate
+integration failure does not qualify this cold-resume scenario.
+
+## Earlier execution checkpoint — head0a failed, 2026-11-15 UTC
+
+Remote main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
+Unmerged520 source `0a04ccc06db33a04d254a5e00776248d7ea1772a` failed its normal
+workflows. Six jobs failed Core guard compilation before database acceptance.
+Remaining-workspace executed383 passes/1 failure; Page unit346/0 includes the new
+actual checksum/no-repair control. A later old-format expectation failed against
+the mandatory new gated signature. Paired/later assertions were not reached.
+The archive is complete and independently verified in the
+[exact findings](design/native-520-regression-findings.md). Follow-up guard/profile
+corrections remain uncompiled and unexecuted. Native/Strong/ACK, physical expansion,
+cold recovery and sustained capacity qualification remain open.
+
+## Earlier execution checkpoint — composed520 compilation failed, 2026-11-15 UTC
+
+Delivered main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
+Composed520 source `8bc2df66361a3d4307b2943439a8a9d2b4fa0b92` failed its normal
+Tests43693587297 and Rails43693587277 workflows on a shared Page E0308 decoder
+argument mismatch. Core and Native helper builds failed before any test cases;
+SQL, PGwire/Oracle, Rails runtime and the nondefault check were not reached.
+Five earlier remaining-workspace Lua cases passed. Full evidence is frozen and
+independently verified in the [regression findings](design/native-520-regression-findings.md).
+The local call-order/checksum correction and its new genuine corruption control
+are uncompiled and unexecuted. No HA, physical or production gate is cleared.
+
+## Earlier execution checkpoint — candidate326 failed, 2026-11-15 UTC
+
+Delivered main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
+Its completed post-merge Tests run43677527718 failed the application-state
+test's final replicated reopen on `Address already in use`. The earlier
+no-listener and standalone queued-job assertions passed; later replicated
+application assertions were not reached. Its complete Native log has now been
+independently reconciled: **348 passed / 0 failed / 1 ignored**, across 349
+unique cases. Candidate326 added 51 Native cases, 26 of which failed; a passing
+older job supplies no coverage for those new cases. The single shared failing
+name also has changed exercise code. These remain CI results, not physical or
+whole-release qualification.
+
+Candidate **1.0.520-beta / `326c363477477950f76bdb51fe6425cab85dc362`** passed
+all-target/nondefault compilation, Core, SQL, PGwire/Oracle and Rails checks.
+Native execution failed **372 passed / 27 failed / 1 ignored**. Some failures
+occurred before their intended fault/read/write cuts; genuine passed components
+remain separate from the failed end-to-end result. The remaining-workspace job
+also failed a CLI join test on a busy owned-learner status read. It stopped
+before the main519 application-state port-bind test, which remains separately
+unresolved. The [exact regression findings](design/native-520-regression-findings.md)
+record source identities, raw-log hashes, passed/failed/inconclusive/not-tested
+boundaries, unexecuted source/test corrections and next deterministic controls.
+
+The subsequent correction batch is locally composed but has no new executed
+result at this checkpoint. It retains distinct range-leader and metadata-owner
+authority, original request windows, and genuine new refusal/ownership controls.
+Same-attempt bootstrap namespace and preimage protection do not supply missing
+cross-call target intent or cold replaced-tree association. Those remain open
+recovery blockers. Source review and formatting/version checks are not runtime
+qualification.
+
+The candidate remains unmerged. Complete remote Serving, bounded automatic
+controller convergence, cold recovery, physical four-to-five expansion and
+post-convergence throughput gain remain open. The original Azure qualification
+remains **failed**. Earlier checkpoint statuses below are historical snapshots.
+
+## Later source checkpoint — main519, 2026-11-15 UTC
+
+Remote main advanced to **1.0.519-beta /
+`587dd6e4775e454cc9e8224d5fed76e8795c6ff6`** through PR208. It adds metadata/backend
+seams, an authenticated recipient target-install step, native-decision certificate
+support and metadata completion/source-retirement records. The
+[519 release contract](releases/1.0.519-beta.md) explicitly leaves most remote
+backend stages unimplemented and lists restart, unavailable-source, second-move
+and retained-row limitations. These additions do not establish an operator's
+automatic fault-safe rebalance. A metadata `Completed` record does not establish
+physical source deletion, capacity gain or production qualification.
+
+GitHub metadata reports successful required PR208 checks and an identical tested
+head/merge tree (`e88a49e83f7f92fc1fea6293b88eb3bfb21bf7c9`). This checkpoint
+has not independently revalidated raw case counts/cuts. Main519's post-merge
+Tests run43677527718 was still live at inspection; its Rails run43677527740
+reported success. Earlier same-tree passes and later execution remain separate.
+At the subsequent metadata inspection, Core, PGwire and SQL also reported
+success; native multi-node and remaining workspace were still live. This is
+job-status evidence, not an independently reconciled case inventory or a
+physical qualification result.
+
+The prior518 composition and reviewed eight-error correction are being integrated
+above519 as a **520 candidate**. Its own exact-source compilation/runtime remain
+pending. Source review now checks the shared FIRST/member-step install custody
+and two real-path exclusion controls; both controls remain unexecuted. The
+[integration record](design/native-current-main520-integration.json) pins that
+review separately from historical CI. The
+[520 candidate boundary](releases/1.0.520-beta.md) preserves these
+limits and historical results. The original Azure scale-out qualification is
+still **failed**, and no new independent-machine expansion or stable five-node
+throughput comparison has passed. Source517 and candidate518 observations below
+remain historical evidence with their original identities.
+
+The first normal520 composition, source307a, subsequently **failed production
+library compilation** on one missing main519 retirement-state field. Its narrow
+fresh-state initializer correction is source-reviewed but uncompiled. See the
+[520 notes](releases/1.0.520-beta.md) for exact source and correction identities;
+none of the earlier passing results clears this failure.
+
+At the later terminal capture of sourcefbb run43675202613, SQL and remaining
+workspace also passed. Its overall Tests result remains failed on the three
+test-compilation jobs; no Core/native controls ran. The
+[fbb finding](design/native-fbb-test-compilation-failure.md) records the actual
+schedule-control pass and full raw log identity. The separate
+[draft209 review](design/native-draft209-source-review.md) distinguishes reusable
+source mechanisms from incompatible recovery paths and unfinished controller
+stages. That draft is neither delivered main nor qualification evidence.
+
+## Earlier evidence checkpoint — main517, 2026-11-15 UTC
+
+Remote main inspected for this checkpoint is **1.0.517-beta /
+`bde74650c40934096e1cc6c6e75a3ea3c4643cf4`**. Its pre-merge native suite passed
+337/0/1 under the recorded four-second fixture, but its same-tree post-merge run
+failed **335/2/1**, and the Core concurrent-backup test failed. These are
+separate results; the earlier pass does not clear the later failures. The
+[exact main517 CI contract](design/main517-native-ci-evidence.md) records their
+source identities and boundaries. They establish neither physical qualification
+nor an explanation of the original Azure failure.
+
+The unmerged **1.0.518-beta** composition preserves the original 1.5-second hot
+fixture and all nine controls absent from main517's passing inventory. Source
+`785ef07ad52fea1bca7f16143179558f606ea890` failed library compilation. Corrected
+source `fbbadef57c5532af6acbc0f3e2016b332a3d16ab` passed Rails and PGwire, but
+all-target, Core and Native jobs failed on eight test-only compiler errors;
+actual Core/native controls did not execute. SQL/workspace were still running
+at the finding capture. The [source785](design/native-785-compilation-failure.md)
+and [sourcefbb](design/native-fbb-test-compilation-failure.md) findings preserve
+exact errors and distinguish unexecuted controls from failed runtime tests.
+Its reviewed correction needs its own exact-source compilation and execution.
+
+| Boundary | Classification at this checkpoint |
+| --- | --- |
+| main517 post-merge native suite and concurrent Standard backup | **Failed** CI; precise intended downstream cuts may remain unreached |
+| fbb Rails and PGwire | **Passed**, their actual hosted CI scope only |
+| fbb all-target/Core/native test compilation | **Failed**; new native controls **not tested** by those jobs |
+| Complete remote Serving, automatic native controller convergence, cold/permanently unavailable OLD recovery and cleanup | **Incomplete / not qualified**; source primitives and in-process fixtures do not establish operator delivery |
+| Independent-machine fault-safe four-to-five expansion and stable post-convergence capacity gain | **Not tested** on the current artifact; original Azure scale-out qualification remains **failed** |
+
+The [Standard live-backup defect](design/legacy-standard-live-backup-defect.md)
+is open. Existing owned online capture has a distinct passing test contract;
+it does not repair the original Standard success/restore requirement. The
+[ledger result](design/native-ledger-2d379-failed-acceptance.md) establishes seven
+actual Rust receipt-parser passes on historical source2d379, with no SDK/server
+workload or physical durability inference. Source versions, successful hosted
+application checks and tool-verifier success do not imply a built release,
+verified deployment, production admission or sustained throughput gain.
+
+## Earlier evidence checkpoint — 2026-11-14 UTC
 
 The [November14 checkpoint](ha-current-source-audit-2026-11-14.md) inspects
 main513 and separately records the failed streaming363 and native201 candidates,

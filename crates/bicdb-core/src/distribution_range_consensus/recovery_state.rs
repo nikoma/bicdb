@@ -86,6 +86,7 @@ impl RecoveryFenceScope {
             || matches!(
                 self.purpose,
                 MetadataRecoveryRolePurpose::ObserveFencedRecovery { .. }
+                    | MetadataRecoveryRolePurpose::NativeJointServingPhase { .. }
             )
             || self.configuration_sha256.len() != 64
             || self.range_configuration_sha256.len() != 64

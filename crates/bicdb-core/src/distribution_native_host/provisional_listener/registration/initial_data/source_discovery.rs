@@ -31,7 +31,7 @@ impl NativeInitialDataAdmission {
             .upgrade()
             .ok_or_else(|| invalid("actual donor source process absent"))?
             .require_original_process()?;
-        let actual = self.retained_actual_old_source(range)?;
+        let actual = self.retained_actual_old_source_for_request(range, &token)?;
         let plan = actual.plan().clone();
         let leader = provider
             .current_metadata_leader_hint(&token)?
@@ -85,7 +85,7 @@ impl NativeInitialDataAdmission {
             .upgrade()
             .ok_or_else(|| invalid("actual donor source process absent after OLD fetch"))?
             .require_original_process()?;
-        actual.require_current()?;
+        actual.require_current_for_request(&token)?;
         for frame in &frames {
             frame.require_request_live()?;
         }
@@ -119,13 +119,16 @@ impl NativeInitialDataAdmission {
                 "remote OLD final metadata regressed or selected phase changed",
             ));
         }
+        let final_request = token
+            .child_linked_to(&final_own.original_request_cancellation())
+            .child_with_deadline(final_own.deadline());
         let mut round =
             NativeRemoteOldRound::begin(actual.clone(), final_own, final_business, &token)?;
         for frame in frames {
             round.record(frame)?;
         }
         let result = round.finish()?;
-        actual.require_current()?;
+        actual.require_current_for_request(&final_request)?;
         self.require_live()?;
         self.image_sources
             .upgrade()
@@ -157,20 +160,110 @@ struct SourceDiscoveryAdmission<'a> {
     caller: &'a CancellationToken,
 }
 impl SourceDiscoveryAdmission<'_> {
+    /// Wait only within this original request/OWN. No service, DB, journal or
+    /// publication-version guard may span this private MStore acquisition.
+    fn lock_original_metadata(
+        &self,
+        stage: &'static str,
+    ) -> Result<parking_lot::MutexGuard<'_, crate::MetadataConsensusStore>> {
+        self.caller.check()?;
+        self.own.require_live_request(self.business)?;
+        self.member.publication_version().require_current_memory()?;
+        #[cfg(test)]
+        let mut diagnostics = self
+            .original
+            .image_sources
+            .upgrade()
+            .and_then(|registry| registry.test_take_source_metadata_wait(stage))
+            .map(|(before, busy, failure)| (Some(before), Some(busy), Some(failure)));
+        #[cfg(test)]
+        if let Some((before, _, _)) = &mut diagnostics {
+            if let Some(callback) = before.take() {
+                callback(
+                    self.caller,
+                    self.own.deadline(),
+                    self.test_metadata_wait_data(stage, false),
+                );
+            }
+        }
+        let result = (|| loop {
+            self.caller.check()?;
+            self.own.require_live_request(self.business)?;
+            self.member.publication_version().require_current_memory()?;
+            let deadline = self
+                .caller
+                .deadline()
+                .map_or(self.own.deadline(), |d| d.min(self.own.deadline()));
+            let remaining = deadline
+                .checked_duration_since(Instant::now())
+                .filter(|d| !d.is_zero())
+                .ok_or(BicDbError::QueryTimedOut)?;
+            let store = self
+                .metadata
+                .try_lock_for(remaining.min(Duration::from_millis(5)));
+            // Cancellation/expiry or an actual authority change during the
+            // wait must refuse even when the mutex became available.
+            self.caller.check()?;
+            self.own.require_live_request(self.business)?;
+            self.member.publication_version().require_current_memory()?;
+            if let Some(store) = store {
+                return Ok(store);
+            }
+            #[cfg(test)]
+            if let Some((_, busy, _)) = &mut diagnostics {
+                if let Some(callback) = busy.take() {
+                    callback(
+                        self.caller,
+                        self.own.deadline(),
+                        self.test_metadata_wait_data(stage, true),
+                    );
+                }
+            }
+        })();
+        #[cfg(test)]
+        if let (Some((_, _, failure)), Err(error)) = (&mut diagnostics, &result) {
+            if let Some(callback) = failure.take() {
+                callback(match error {
+                    BicDbError::QueryCanceled => "QueryCanceled",
+                    BicDbError::QueryTimedOut => "QueryTimedOut",
+                    _ => "OtherActualError",
+                });
+            }
+        }
+        #[cfg(not(test))]
+        let _ = stage;
+        result
+    }
+    #[cfg(test)]
+    fn test_metadata_wait_data(&self, stage: &'static str, busy: bool) -> serde_json::Value {
+        let now = Instant::now();
+        serde_json::json!({
+            "stage":stage,"actual_failed_lock_wait":busy,
+            "actual_own_context":self.own.context_id(),
+            "actual_own_original_request_live":self.own.original_request_cancellation().check().is_ok(),
+            "actual_own_remaining_us":self.own.deadline().saturating_duration_since(now).as_micros(),
+            "actual_server_caller_remaining_us":self.caller.deadline().map(|d|d.saturating_duration_since(now).as_micros()),
+            "actual_server_caller_cancel_requested":self.caller.is_cancel_requested(),
+            "comparison_DATA_not_authority":true
+        })
+    }
     fn require_current(&self) -> Result<()> {
         self.caller.check()?;
         self.original.require_live()?;
-        self.old.require_current()?;
+        self.own.require_live_request(self.business)?;
+        self.old.require_current_for_request(
+            &self
+                .caller
+                .child_linked_to(&self.own.original_request_cancellation())
+                .child_with_deadline(self.own.deadline()),
+        )?;
         self.old.plan().require_source_host_metadata(
             &self.own,
             self.business,
             self.old.node_id(),
         )?;
         {
-            let store = self
-                .metadata
-                .try_lock()
-                .ok_or_else(|| invalid("source discovery metadata busy at boundary"))?;
+            let store = self.lock_original_metadata("boundary")?;
             store.require_listener_database(&self.original.database)?;
             self.member.require_current(&store)?;
         }
@@ -191,10 +284,7 @@ impl SourceDiscoveryAdmission<'_> {
             self.member.require_database(&db)?;
         }
         {
-            let store = self
-                .metadata
-                .try_lock()
-                .ok_or_else(|| invalid("source discovery metadata busy after local check"))?;
+            let store = self.lock_original_metadata("after_local_check")?;
             self.member.require_current(&store)?;
         }
         self.original.require_live()?;
@@ -229,7 +319,7 @@ impl NativeInitialDataAdmission {
             .upgrade()
             .ok_or_else(|| invalid("original donor registry ended"))?;
         registry.require_original_process()?;
-        let old = self.retained_actual_old_source(request.range_id)?;
+        let old = self.retained_actual_old_source_for_request(request.range_id, parent)?;
         request.require_plan(old.plan())?;
         let observer_birth = match caller {
             DiscoveryCaller::Target => {
@@ -421,6 +511,21 @@ impl NativeInitialDataAdmission {
 }
 #[cfg(test)]
 impl NativeMetadataControlHost {
+    pub(crate) fn test_arm_source_metadata_wait(
+        &self,
+        after_local: bool,
+        before: Box<dyn FnOnce(&CancellationToken, Instant, serde_json::Value) + Send>,
+        busy: Box<dyn FnOnce(&CancellationToken, Instant, serde_json::Value) + Send>,
+        failure: Box<dyn FnOnce(&'static str) + Send>,
+    ) -> Result<()> {
+        self.data
+            .as_ref()
+            .ok_or_else(|| invalid("actual donor absent"))?
+            .image_sources
+            .as_ref()
+            .ok_or_else(|| invalid("original donor registry absent"))?
+            .test_arm_source_metadata_wait(after_local, before, busy, failure)
+    }
     pub(crate) fn test_source_discovery_state(
         &self,
         range: crate::RangeId,

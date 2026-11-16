@@ -5,13 +5,20 @@ use crate::distribution_consensus::{MetadataReadObservation, MetadataRecoveryRol
 use crate::distribution_range_recovery::RecoveryRoleAdmission;
 use recovery_state::RecoveryFencePhase;
 
+enum RecoveredOrigin {
+    Command(RangeWriteCommand),
+    #[cfg(feature = "tls-replication")]
+    Allocation {
+        writer: Arc<crate::db::NativeWriterHostState>,
+    },
+}
 pub(crate) struct NativeHotRecoveredOpen {
     store_open: Uuid,
     store_slot: crate::distribution_data::RangeWriteServiceSlotGuard,
     database_open: String,
     scope: RecoveryFenceScope,
     range: RangeDescriptor,
-    command: RangeWriteCommand,
+    origin: RecoveredOrigin,
     decision: crate::db::NativeActivationDecisionReceipt,
     point: (u64, String, String),
     min_metadata: (u64, u64),
@@ -74,7 +81,21 @@ impl NativeHotRecoveredOpen {
         }
         self.decision.require_current(db)?;
         let lineage = db.current_native_range_source_lineage(range.id)?;
-        db.require_native_command_materialized(&lineage, &self.command)?;
+        match &self.origin {
+            RecoveredOrigin::Command(command) => {
+                db.require_native_command_materialized(&lineage, command)?
+            }
+            #[cfg(feature = "tls-replication")]
+            RecoveredOrigin::Allocation { writer } => {
+                let actual = store.native_writer_host_state()?;
+                if !Arc::ptr_eq(&actual, writer) {
+                    return Err(range_write_error(
+                        "allocation recovered-open original writer changed",
+                    ));
+                }
+                writer.require_allocation_native_range(db, range)?;
+            }
+        }
         store.require_actual_abort_controls_covered(db, range.id, lineage.range_index())?;
         if lineage.range_index() != self.point.0
             || lineage.logical_genesis_sha256() != self.point.1
@@ -153,7 +174,7 @@ impl RangeWriteStore {
             database_open: db.incarnation_id().to_owned(),
             scope: scope.clone(),
             range: crate::distribution_native_read::canonical_range(fresh.current_range()),
-            command: command.clone(),
+            origin: RecoveredOrigin::Command(command.clone()),
             decision,
             point: (
                 p.range_index(),
@@ -168,6 +189,90 @@ impl RangeWriteStore {
                 "hot recovered-open point differs from selected committed command",
             ));
         }
+        fact.require_current(db, self, fresh.current_range())?;
+        fresh.require_live_request()?;
+        Ok(fact)
+    }
+    /// Read-only minter from ACTUAL allocation policy and completed native
+    /// activation. Historical command authority is neither needed nor invented.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn observe_allocation_recovered_open(
+        &self,
+        db: &crate::BicDb,
+        fresh: &RecoveryRoleAdmission,
+        scope: &RecoveryFenceScope,
+        store_slot: crate::distribution_data::RangeWriteServiceSlotGuard,
+        parent: &CancellationToken,
+    ) -> Result<NativeHotRecoveredOpen> {
+        parent.check()?;
+        store_slot.require_live()?;
+        if store_slot.id() != self.open_id {
+            return Err(range_write_error(
+                "hot recovered-open requires actual current service Store slot",
+            ));
+        }
+        fresh.require_live_request()?;
+        scope.require_role(fresh)?;
+        if !matches!(fresh.purpose(), MetadataRecoveryRolePurpose::NormalRecovery)
+            || fresh.current_range().leader != *fresh.local_node_id()
+        {
+            return Err(range_write_error(
+                "hot repair only supports actual original same-epoch NormalRecovery leader",
+            ));
+        }
+        self.require_actual_native_activated_open(scope.range_id)?;
+        let native = db.native_recovery_admission(
+            fresh.cluster_id(),
+            fresh.bootstrap_id(),
+            fresh.local_node_id(),
+            fresh.local_member_incarnation(),
+        )?;
+        self.require_native_recovery_identity(fresh, &native)?;
+        let saved = self
+            .catalog
+            .recovery_fences
+            .get(&scope.range_id)
+            .ok_or_else(|| range_write_error("hot repair actual activation absent"))?;
+        let RecoveryFencePhase::NativeActivated(a) = &saved.phase else {
+            return Err(range_write_error("hot repair is not activated"));
+        };
+        if !saved.scope.same_session(scope) {
+            return Err(range_write_error(
+                "hot repair actual activation belongs to another session",
+            ));
+        }
+        let p = &a.completed.point;
+        let decision = db.observe_native_activation_decision_for_role(
+            fresh,
+            scope,
+            &a.native_activation_sha256,
+            &a.completed.native_serving_sha256,
+            p.range_index(),
+            p.logical_genesis_sha256(),
+            p.logical_history_sha256(),
+        )?;
+        let fact = NativeHotRecoveredOpen {
+            store_open: self.open_id,
+            store_slot,
+            database_open: db.incarnation_id().to_owned(),
+            scope: scope.clone(),
+            range: crate::distribution_native_read::canonical_range(fresh.current_range()),
+            origin: RecoveredOrigin::Allocation {
+                writer: {
+                    let writer = self.native_writer_host_state()?;
+                    writer.require_allocation_native_range(db, fresh.current_range())?;
+                    writer
+                },
+            },
+            decision,
+            point: (
+                p.range_index(),
+                p.logical_genesis_sha256().to_owned(),
+                p.logical_history_sha256().to_owned(),
+            ),
+            min_metadata: (fresh.metadata_term(), fresh.metadata_read_index()),
+            cancellation: parent.child_with_deadline(fresh.deadline()),
+        };
         fact.require_current(db, self, fresh.current_range())?;
         fresh.require_live_request()?;
         Ok(fact)

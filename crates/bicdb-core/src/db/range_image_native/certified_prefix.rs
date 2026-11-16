@@ -9,16 +9,22 @@ use crate::distribution_range_mutation::RangeMutationAuthority;
 mod no_data;
 use no_data::NativeNoDataPrefixEvidence;
 pub(crate) use no_data::NativeRecoveryAbortedReceipt;
+#[cfg(test)]
+mod applying_guard_probe;
 mod ordinary_apply;
 #[cfg(test)]
 mod origin_fault;
 mod recovery_apply;
+#[cfg(test)]
+mod replica_apply_fault;
 pub(crate) use ordinary_apply::NativeReplicaMaterialization;
 #[cfg(test)]
 pub(in crate::db) use origin_fault::test_record_origin_release;
 #[cfg(test)]
 pub(crate) use origin_fault::{NativeOriginAppSpan, NativeOriginFaultArm, NativeOriginFaultProbe};
 pub(crate) use recovery_apply::{KnownNativeRecoveryPrefix, NativeRecoveryAppliedReceipt};
+#[cfg(test)]
+pub(crate) use replica_apply_fault::NativeReplicaApplyFaultArm;
 
 fn pending_key(range: RangeId) -> String {
     format!("pending:{}", range.get())
@@ -45,6 +51,8 @@ pub(in crate::db) struct NativeRangeScopeRegistry {
     entries: BTreeMap<u64, NativeCommandScope>,
     #[cfg(test)]
     origin_fault: Option<Arc<NativeOriginFaultProbe>>,
+    #[cfg(test)]
+    replica_apply_fault: Option<Arc<replica_apply_fault::NativeReplicaApplyFault>>,
 }
 #[derive(Debug)]
 struct NativeCommandScopeLease {
@@ -760,11 +768,18 @@ impl BicDb {
                     )?,
                 }
             }
-            let sequence = self.commit_transaction(&mut transaction)?;
+            let local = super::super::native_wal_apply::NativeWalApplyPreparation::for_pending(
+                self,
+                &transaction,
+                &pending,
+                authority,
+            )?;
+            let sequence =
+                self.commit_transaction_with_native_preparation(&mut transaction, &local)?;
             self.tx_log.write_durable(sequence)?;
             let receipt = transaction.mint_native_wal_apply_receipt()?;
             self.record_native_range_materialized(&pending, &receipt, authority)?;
-            transaction.finalize_commit_admission()?;
+            transaction.finalize_native_local_apply(&local, Some(&receipt))?;
             transaction.finalize_committed_broker_outbox();
             transaction.finalize_committed_memory_jobs()?;
             self.complete_native_range_command(&pending, certificate, &receipt, authority)
@@ -970,6 +985,8 @@ impl BicDb {
             ));
         }
         self.check_recovery_state()?;
+        #[cfg(test)]
+        applying_guard_probe::at_actual_apply(self, own, &lineage);
         Ok(lineage)
     }
     pub(crate) fn current_native_range_source_lineage(
@@ -1015,6 +1032,7 @@ impl BicDb {
             .try_lock_for(NATIVE_COMMAND_JOURNAL_WAIT)
             .ok_or_else(|| invalid("native journal busy; retry before decision"))?;
         let lineage = self.current_native_range_source_lineage(intent.range().id)?;
+        self.require_allocation_origin_configuration(intent.range(), &lineage)?;
         intent.validate_native_base(&lineage)?;
         let (global_image_generation, range_image_generation) =
             self.native_range_image_generations(&lineage.birth, intent.range().id)?;
@@ -1082,6 +1100,73 @@ impl BicDb {
             transaction_id: local_transaction_id,
             lease,
         })
+    }
+
+    /// Validate an original opaque pending owner BEFORE local row apply. No
+    /// receipt, quorum, Serving or renewed role is produced by this comparison.
+    pub(in crate::db) fn require_native_pending_transaction(
+        &self,
+        pending: &NativeRangePendingApply,
+        transaction: &Transaction,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<()> {
+        self.range_mutations
+            .validate(pending.pending.range_id, authority)?;
+        if pending.database_incarnation != self.incarnation
+            || pending.pending.expected_local_transaction_id != transaction.id().0
+            || pending._scope.transaction_id != transaction.id().0
+            || !Arc::ptr_eq(&pending._scope.registry, &self.native_range_command_scopes)
+            || super::super::native_wal_apply::actual_transaction_mutations_sha256(transaction)?
+                != pending.intent.mutations_sha256()
+        {
+            return Err(invalid(
+                "native local preparation changed original Tx/open/mutations/scope",
+            ));
+        }
+        {
+            let registry = self.native_range_command_scopes.lock();
+            let entry = registry
+                .entries
+                .get(&transaction.id().0)
+                .ok_or_else(|| invalid("native local preparation original scope absent"))?;
+            if entry.lease != pending._scope.lease
+                || !entry.armed
+                || entry.database_incarnation != self.incarnation
+                || entry.mutations_sha256 != pending.intent.mutations_sha256()
+            {
+                return Err(invalid("native local preparation original scope changed"));
+            }
+        }
+        let _journal = self
+            .native_range_image_journal
+            .try_lock_for(NATIVE_COMMAND_JOURNAL_WAIT)
+            .ok_or_else(|| invalid("native local preparation journal busy"))?;
+        if self.native_range_image_installing(pending.pending.range_id)? {
+            return Err(invalid("native local preparation range installing"));
+        }
+        let birth = self
+            .read_native_birth()?
+            .ok_or_else(|| invalid("native local preparation birth absent"))?;
+        let current: PendingNativeRangeCommand = self
+            .read_native_range_image_record(&pending_key(pending.pending.range_id))?
+            .ok_or_else(|| invalid("native local preparation pending absent"))?;
+        current.validate()?;
+        let mut original = current.clone();
+        original.materialized = None;
+        original.checksum_sha256 = original.checksum()?;
+        if original != pending.pending
+            || current.birth_id != birth.birth_id
+            || self.native_range_image_generations(&birth, current.range_id)?
+                != (
+                    current.global_image_generation,
+                    current.range_image_generation,
+                )
+        {
+            return Err(invalid(
+                "native local preparation protected pending/base changed",
+            ));
+        }
+        Ok(())
     }
 
     fn require_native_pending(
@@ -1295,6 +1380,51 @@ impl BicDb {
         })?
         .ok_or_else(|| invalid("native completion has no page store"))?;
         proof.require_live()?;
+        Ok(())
+    }
+}
+
+impl BicDb {
+    /// The allocation audit admits recovery but cannot itself authorize a new
+    /// native origin epoch. Even a generic recovered-epoch marker is insufficient.
+    pub(crate) fn require_allocation_origin_configuration(
+        &self,
+        range: &crate::RangeDescriptor,
+        lineage: &SourceRangeImageLineage,
+    ) -> Result<()> {
+        if lineage.current_database_incarnation != self.incarnation_id() {
+            return Err(invalid(
+                "allocation origin lineage belongs to another actual open",
+            ));
+        }
+        if format::native_writer_allocation_policy_active(self.data_path())?
+            && crate::distribution_native_read::canonical_range(lineage.native_write_range()?)
+                != crate::distribution_native_read::canonical_range(range)
+        {
+            return Err(invalid("allocation origin requires actual completed native serving configuration, not a policy/epoch marker"));
+        }
+        Ok(())
+    }
+}
+
+impl BicDb {
+    /// Necessary exact predecessor constraint over actual protected native
+    /// lineage. Physical capture may be older; effective serving epoch may not
+    /// be discarded or normalized to a policy descriptor.
+    pub(crate) fn require_native_allocation_predecessor(
+        &self,
+        lineage: &SourceRangeImageLineage,
+        before: &crate::RangeDescriptor,
+    ) -> Result<()> {
+        if lineage.current_database_incarnation != self.incarnation_id()
+            || crate::distribution_native_read::canonical_range(lineage.native_write_range()?)
+                != crate::distribution_native_read::canonical_range(before)
+            || lineage.current_joint_decision_sha256().is_some()
+        {
+            return Err(invalid(
+                "allocation actual native predecessor requires distinct transition proof",
+            ));
+        }
         Ok(())
     }
 }

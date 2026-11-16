@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-page"
-version = "1.0.519-beta"
+version = "1.0.520-beta"
 edition.workspace = true
 license-file.workspace = true
 rust-version.workspace = true
@@ -11,6 +11,11 @@ rust-version.workspace = true
 # Deliberately has NO dependency on bicdb-core. The page store is testable,
 # benchmarkable, and licence-auditable on its own, and keeping the edge
 # one-directional stops record semantics leaking into the storage layer.
+
+[features]
+default = []
+# Passive selected-thread DATA; never part of the normal production build.
+physical-gate-observation = []
 
 [dependencies]
 crc32fast.workspace = true

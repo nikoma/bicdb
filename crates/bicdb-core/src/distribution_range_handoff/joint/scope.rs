@@ -96,6 +96,57 @@ impl NativeJointScopeData {
         role.require_own_host_metadata(own, business)?;
         Ok(result)
     }
+    /// READ-only comparison for a real metadata-owner catalogue observer.
+    /// This does not construct the range-leader plan or a recovery Role.
+    pub(super) fn from_actual_catalogue_owner(
+        own: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        relocation_id: RelocationId,
+    ) -> Result<Self> {
+        own.require_live_request(business)?;
+        if own.requester_node_id() != own.metadata_leader_id() {
+            return Err(invalid(
+                "catalogue scope requires actual metadata-owner OWN",
+            ));
+        }
+        let topology = own.committed_topology(business)?;
+        let relocation = topology
+            .relocations
+            .get(&relocation_id)
+            .ok_or_else(|| invalid("catalogue scope actual Pending relocation absent"))?;
+        let range = topology
+            .range_by_id(relocation.range_id)
+            .ok_or_else(|| invalid("catalogue scope actual Pending range absent"))?;
+        if relocation.learner_epoch != range.epoch
+            || !matches!(
+                relocation.phase,
+                crate::distribution::RelocationPhase::LearnerAllocated
+                    | crate::distribution::RelocationPhase::SnapshotCopying
+                    | crate::distribution::RelocationPhase::CatchingUp
+                    | crate::distribution::RelocationPhase::ReadyToPromote
+            )
+        {
+            return Err(invalid(
+                "catalogue scope selected Pending phase/epoch changed",
+            ));
+        }
+        let (promise, activation, _) = super::super::pending_handoff_configuration(
+            topology,
+            relocation_id,
+            relocation,
+            range,
+            own.restore_activation(business)?,
+        )?;
+        let result = Self::from_actual_configuration(
+            topology,
+            range,
+            &activation,
+            promise,
+            own.restore_activation(business)?.cloned(),
+        )?;
+        own.require_live_request(business)?;
+        Ok(result)
+    }
     fn from_actual_configuration(
         topology: &crate::ClusterTopology,
         range: &RangeDescriptor,

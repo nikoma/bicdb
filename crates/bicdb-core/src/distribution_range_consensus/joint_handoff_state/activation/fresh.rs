@@ -27,10 +27,43 @@ impl RangeWriteStore {
         database: &crate::BicDb,
         admission: &NativeJointOpenAdmission,
     ) -> Result<Option<NativeJointCatalogueActivationReceipt>> {
+        #[cfg(test)]
+        let mut trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "open-existing-activation-recovery-lookup",
+            &self.catalog.node_id,
+            admission.cancellation(),
+        );
         admission.require_live()?;
         admission
             .committed()
             .require_native_publication_metadata(database, self)?;
+        let range = admission.data().old_range().id;
+        // Absence grants no receipt or permission. With NO retained owner,
+        // uncertainty, activated Open or image-install intent there is no
+        // recovery operation to validate. The distinct new-publication path
+        // below still performs every original full owner/domain/foreign/
+        // native/gate check before any memory or IO effect. In particular an
+        // owned original/candidate ambiguity must never take this shortcut.
+        let no_activation = self
+            .catalog
+            .native_joint_handoffs
+            .as_ref()
+            .and_then(|m| m.get(&range))
+            .and_then(|s| s.serving_activation.as_ref())
+            .is_none();
+        if no_activation
+            && self.owned_joint_activation.is_none()
+            && !self.recovery_persistence_uncertain
+            && !self.native_joint_activated_opens.contains_key(&range)
+            && !self.catalog.image_install_intents.contains_key(&range)
+        {
+            admission.require_live()?;
+            #[cfg(test)]
+            trace.complete();
+            #[cfg(test)]
+            test_cuts::after_actual_absence()?;
+            return Ok(None);
+        }
         let (writer, writer_root) =
             admission.original_phase_owner_for_activation(database, self)?;
         let writer_domain = admission.original_writer_domain_for_activation(database, self)?;
@@ -47,6 +80,8 @@ impl RangeWriteStore {
             .and_then(|s| s.serving_activation.as_ref())
             .is_none()
         {
+            #[cfg(test)]
+            trace.complete();
             return Ok(None);
         }
         admission.require_external_publications_current()?;
@@ -88,6 +123,8 @@ impl RangeWriteStore {
             .committed()
             .require_native_publication_metadata(database, self)?;
         let _version = admission.committed().native_publication_guard()?;
+        #[cfg(test)]
+        trace.complete();
         Ok(Some(receipt))
     }
     #[allow(clippy::too_many_arguments)]
@@ -102,9 +139,8 @@ impl RangeWriteStore {
         parent: &CancellationToken,
     ) -> Result<NativeJointCatalogueActivationReceipt> {
         parent.check()?;
-        let (writer, writer_root) =
-            admission.original_phase_owner_for_activation(database, self)?;
-        let writer_domain = admission.original_writer_domain_for_activation(database, self)?;
+        let (writer, writer_domain, writer_root) =
+            admission.original_owner_and_domain_for_activation(database, self)?;
 
         // Nonwaiting cross-service checks happen BEFORE this local journal.
         #[cfg(test)]
@@ -170,6 +206,7 @@ impl RangeWriteStore {
         }
         let gate = database.range_mutation_gate();
         gate.validate_quiescent_frozen(range, frozen)?;
+        self.retain_owned_activation(database, admission, &writer_domain, image, frozen)?;
         let controlled = gate.try_controlled_mutation(frozen)?;
         gate.validate(range, &RangeMutationAuthority::Controlled(&controlled))?;
         writer_domain.require_current(database, self, data.activation_range())?;
@@ -190,30 +227,18 @@ impl RangeWriteStore {
                 "fresh activation changed permanent plan/session/nonce",
             ));
         }
-        self.recovery_persistence_uncertain = true;
-        state.serving_activation = Some(candidate.clone());
-        // Missing raw log is possible only at an actually verified genesis
-        // cut; the local scope/opaque catalogue checks above reject a nonzero
-        // native prefix with such missing raw history.
-        self.catalog
-            .ranges
-            .entry(range)
-            .or_insert_with(|| RangeWriteLog {
-                current_epoch: data.activation_range().epoch,
-                last_index: 0,
-                resolved_through: 0,
-                compacted_through: 0,
-                entries: BTreeMap::new(),
-            })
-            .current_epoch = data.activation_range().epoch;
-        if existing.is_none() && image.is_some() {
-            self.catalog.image_install_intents.remove(&range);
-        }
-        let persisted = self.persist_native_joint(database, range);
+        let persisted = self.write_owned_activation_from_admission(
+            database,
+            admission,
+            &writer_domain,
+            image,
+            frozen,
+            &controlled,
+            parent,
+        );
         #[cfg(test)]
         eprintln!("ACTUAL_JOINT_OPEN_CATALOGUE_PERSIST node={} success={} uncertain={} range={} scoped=true",self.catalog.node_id,persisted.is_ok(),self.recovery_persistence_uncertain,range);
         persisted?;
-        self.recovery_persistence_uncertain = false;
         drop(controlled);
         #[cfg(test)]
         test_cuts::after_persist()?;

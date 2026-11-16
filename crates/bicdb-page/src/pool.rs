@@ -509,6 +509,8 @@ impl Frame {
 pub struct PageGuard {
     frame: Arc<Frame>,
     guard: ArcRwLockReadGuard<RawRwLock, Vec<u8>>,
+    // Last: release the page latch before the physical write/eviction scope.
+    _physical: crate::physical_gate::PhysicalWriteGuard,
 }
 
 impl PageGuard {
@@ -559,6 +561,7 @@ struct UpgradableInner {
     dirty_index: Arc<Mutex<BTreeSet<PageId>>>,
     acquired_at_millis: u64,
     releases: Arc<AtomicU64>,
+    physical: crate::physical_gate::PhysicalWriteGuard,
 }
 
 impl std::fmt::Debug for PageGuardUpgradable {
@@ -599,6 +602,7 @@ impl PageGuardUpgradable {
             dirty_index: inner.dirty_index,
             releases: inner.releases,
             dirty_started_at_millis: inner.acquired_at_millis,
+            _physical: inner.physical,
         }
     }
 }
@@ -631,6 +635,7 @@ pub struct PageGuardMut {
     /// Earliest instant at which this writable guard could have modified the
     /// page. Using acquisition rather than drop time makes age conservative.
     dirty_started_at_millis: u64,
+    _physical: crate::physical_gate::PhysicalWriteGuard,
 }
 
 impl std::fmt::Debug for PageGuardMut {
@@ -1197,6 +1202,7 @@ impl BufferPool {
     }
 
     pub(crate) fn allocate_unreachable(&self, page_type: PageType) -> Result<UnreachablePage> {
+        let _physical = self.store.physical_gate().shared()?;
         Ok(UnreachablePage {
             page_id: self.store.allocate(page_type)?,
         })
@@ -1205,6 +1211,7 @@ impl BufferPool {
     /// Seal a fresh, unrooted allocation before publishing any parent link.
     /// Consuming the allocation capability enforces the caller lifecycle.
     pub(crate) fn seal_unreachable_page(&self, page: UnreachablePage) -> Result<()> {
+        let _physical = self.store.physical_gate().shared()?;
         {
             let page_id = page.page_id;
             let barrier = self.barrier.lock().clone();
@@ -1227,6 +1234,7 @@ impl BufferPool {
     /// Caller holds the structure lock and has durably cut every replacement
     /// reference. This chain is now unreachable, including by old snapshots.
     pub(crate) fn retire_overflow_after_durable_cut(&self, head: PageId) -> Result<()> {
+        let _physical = self.store.physical_gate().shared()?;
         let mut page_id = head;
         while page_id != 0 {
             let next = {
@@ -1250,6 +1258,7 @@ impl BufferPool {
     /// These are unadopted structural frees: no durable free-list head names
     /// them, and their previous parent references were already cut durably.
     pub(crate) fn seal_unadopted_structural_free(&self, page_id: PageId) -> Result<()> {
+        let _physical = self.store.physical_gate().shared()?;
         self.seal_unreachable_page(UnreachablePage { page_id })
     }
 
@@ -1282,6 +1291,7 @@ impl BufferPool {
 
     /// Run the barrier for a page about to be written.
     fn barrier_for(&self, page_id: PageId, transaction: u64, bytes: &[u8]) -> Result<()> {
+        let _physical = self.store.physical_gate().shared()?;
         let barrier = self.barrier.lock().clone();
         match barrier {
             Some(barrier) => barrier.before_writeback(page_id, transaction, bytes),
@@ -1369,22 +1379,26 @@ impl BufferPool {
 
     /// Pin a page for reading, loading it from disk on a miss.
     pub fn get(&self, page_id: PageId) -> Result<PageGuard> {
+        let _physical = self.store.physical_gate().shared()?;
         self.get_in_class(page_id, CacheClass::Search)
     }
 
     /// Read a page for a document-body / bulk-scan workload. The page competes
     /// only inside the streaming budget and can never displace a search page.
     pub fn get_streaming(&self, page_id: PageId) -> Result<PageGuard> {
+        let _physical = self.store.physical_gate().shared()?;
         self.get_in_class(page_id, CacheClass::Streaming)
     }
 
     /// Read a small, hot structural page. It competes only inside the metadata
     /// budget, and no other class can evict it.
     pub fn get_metadata(&self, page_id: PageId) -> Result<PageGuard> {
+        let _physical = self.store.physical_gate().shared()?;
         self.get_in_class(page_id, CacheClass::Metadata)
     }
 
     pub fn get_in_class(&self, page_id: PageId, class: CacheClass) -> Result<PageGuard> {
+        let _physical = self.store.physical_gate().shared()?;
         let frame = self.acquire_in_class(page_id, class)?;
         let data = frame.data.clone();
         let guard = match data.try_read_arc() {
@@ -1396,11 +1410,16 @@ impl BufferPool {
                 guard
             }
         };
-        Ok(PageGuard { frame, guard })
+        Ok(PageGuard {
+            frame,
+            guard,
+            _physical,
+        })
     }
 
     /// Pin a page for writing, loading it from disk on a miss.
     pub fn get_mut(&self, page_id: PageId) -> Result<PageGuardMut> {
+        let _physical = self.store.physical_gate().shared()?;
         if self.read_only {
             return Err(PageError::ReadOnlyPageSource { page_id });
         }
@@ -1422,6 +1441,7 @@ impl BufferPool {
             dirty_index: self.dirty_index.clone(),
             releases: self.write_guard_releases.clone(),
             dirty_started_at_millis,
+            _physical,
         })
     }
 
@@ -1429,6 +1449,7 @@ impl BufferPool {
     /// miss. See [`PageGuardUpgradable`]: unlike [`Self::get_mut`], dropping
     /// the guard without upgrading never marks the page dirty.
     pub fn get_upgradable(&self, page_id: PageId) -> Result<PageGuardUpgradable> {
+        let _physical = self.store.physical_gate().shared()?;
         if self.read_only {
             return Err(PageError::ReadOnlyPageSource { page_id });
         }
@@ -1451,6 +1472,7 @@ impl BufferPool {
                 dirty_index: self.dirty_index.clone(),
                 acquired_at_millis,
                 releases: self.write_guard_releases.clone(),
+                physical: _physical,
             }),
         })
     }
@@ -1458,6 +1480,7 @@ impl BufferPool {
     /// Stage a page for WAL-backed free-list adoption at commit/checkpoint.
     /// The superblock is deliberately untouched here.
     pub fn free_page(&self, page_id: PageId) -> Result<()> {
+        let _physical = self.store.physical_gate().shared()?;
         if !self.wal_managed_frees.load(Ordering::Acquire) {
             return self.free_page_immediate(page_id);
         }
@@ -1466,6 +1489,7 @@ impl BufferPool {
     }
 
     fn free_page_immediate(&self, page_id: PageId) -> Result<()> {
+        let _physical = self.store.physical_gate().shared()?;
         if self.read_only {
             return Err(PageError::ReadOnlyPageSource { page_id });
         }
@@ -1512,6 +1536,7 @@ impl BufferPool {
         page_id: PageId,
         transaction: u64,
     ) -> Result<()> {
+        let _physical = self.store.physical_gate().shared()?;
         if self.read_only {
             return Err(PageError::ReadOnlyPageSource { page_id });
         }
@@ -1553,10 +1578,12 @@ impl BufferPool {
 
     /// Resolve a page to a pinned frame.
     fn acquire(&self, page_id: PageId) -> Result<Arc<Frame>> {
+        let _physical = self.store.physical_gate().shared()?;
         self.acquire_in_class(page_id, CacheClass::Search)
     }
 
     fn acquire_in_class(&self, page_id: PageId, class: CacheClass) -> Result<Arc<Frame>> {
+        let _physical = self.store.physical_gate().shared()?;
         // Cancellation is an I/O-saving courtesy, not a correctness need
         // (`read_ahead_step` re-checks residency); never pay the queue mutex
         // on this hottest-of-paths when the queue is empty.
@@ -1714,6 +1741,7 @@ impl BufferPool {
         wanted: PageId,
         class: CacheClass,
     ) -> Result<Arc<RwLock<Vec<u8>>>> {
+        let _physical = self.store.physical_gate().shared()?;
         if !self.no_steal.load(Ordering::Acquire) {
             return self.evict_one_pass(shard, wanted, class, true);
         }
@@ -1762,6 +1790,7 @@ impl BufferPool {
         target: &mut Shard,
         wanted: PageId,
     ) -> Result<Option<Arc<RwLock<Vec<u8>>>>> {
+        let _physical = self.store.physical_gate().shared()?;
         let target_index = self
             .shards
             .iter()
@@ -1808,6 +1837,7 @@ impl BufferPool {
 
     /// Return the emergency frames once a structural cut made them evictable.
     pub(crate) fn trim_emergency_frames(&self) -> Result<()> {
+        let _physical = self.store.physical_gate().shared()?;
         for index in 0..self.shards.len() {
             let mut shard = self.lock_shard(&self.shards[index]);
             while shard.resident.len() + shard.loading.len() + shard.free.len() > shard.capacity {
@@ -1834,6 +1864,7 @@ impl BufferPool {
         class: CacheClass,
         final_pass: bool,
     ) -> Result<Arc<RwLock<Vec<u8>>>> {
+        let _physical = self.store.physical_gate().shared()?;
         let count_failure = |metrics: &PoolMetrics| {
             if final_pass {
                 metrics.admission_failures.fetch_add(1, Ordering::Relaxed);
@@ -1920,6 +1951,7 @@ impl BufferPool {
     }
 
     fn evict_from_metadata(&self, shard: &mut Shard) -> Result<Option<Arc<RwLock<Vec<u8>>>>> {
+        let _physical = self.store.physical_gate().shared()?;
         for _ in 0..shard.metadata.len() {
             let Some(candidate) = shard.metadata.pop_front() else {
                 break;
@@ -1951,6 +1983,7 @@ impl BufferPool {
         &self,
         shard: &mut Shard,
     ) -> Result<Option<Arc<RwLock<Vec<u8>>>>> {
+        let _physical = self.store.physical_gate().shared()?;
         if shard.metadata.len() <= shard.metadata_capacity {
             return Ok(None);
         }
@@ -1974,6 +2007,7 @@ impl BufferPool {
     }
 
     fn evict_from_streaming(&self, shard: &mut Shard) -> Result<Option<Arc<RwLock<Vec<u8>>>>> {
+        let _physical = self.store.physical_gate().shared()?;
         for _ in 0..shard.streaming.len() {
             let Some(candidate) = shard.streaming.pop_front() else {
                 break;
@@ -2015,6 +2049,7 @@ impl BufferPool {
     }
 
     fn evict_from_probationary(&self, shard: &mut Shard) -> Result<Option<Arc<RwLock<Vec<u8>>>>> {
+        let _physical = self.store.physical_gate().shared()?;
         for _ in 0..shard.probationary.len() {
             let Some(candidate) = shard.probationary.pop_front() else {
                 break;
@@ -2029,6 +2064,7 @@ impl BufferPool {
     }
 
     fn evict_from_protected(&self, shard: &mut Shard) -> Result<Option<Arc<RwLock<Vec<u8>>>>> {
+        let _physical = self.store.physical_gate().shared()?;
         // CLOCK second chance: one full sweep clearing reference bits, then a
         // second sweep that will find a victim among what it cleared.
         for _ in 0..shard.protected.len() * 2 {
@@ -2062,6 +2098,7 @@ impl BufferPool {
         shard: &mut Shard,
         page_id: PageId,
     ) -> Result<Option<Arc<RwLock<Vec<u8>>>>> {
+        let _physical = self.store.physical_gate().shared()?;
         let Some(frame) = shard.resident.get(&page_id).cloned() else {
             return Ok(None);
         };
@@ -2133,6 +2170,7 @@ impl BufferPool {
     /// append plus fsync, which is the difference between a page-granular
     /// pause and a pool-wide stall.
     fn write_back_frame(&self, page_id: PageId, frame: &Arc<Frame>) -> Result<bool> {
+        let _physical = self.store.physical_gate().shared()?;
         self.write_back_frame_with(page_id, frame, true)
     }
 
@@ -2145,6 +2183,7 @@ impl BufferPool {
         frame: &Arc<Frame>,
         allow_unlogged: bool,
     ) -> Result<bool> {
+        let _physical = self.store.physical_gate().shared()?;
         let mut bytes = self.write_frame_data(&frame.data);
         // Re-check under the latch: another writeback (or an eviction) may
         // have flushed this frame while we waited.
@@ -2270,6 +2309,7 @@ impl BufferPool {
     /// in memory. Without a barrier nothing is ever logged, so this is
     /// [`Self::flush_all`].
     pub fn flush_logged(&self) -> Result<u64> {
+        let _physical = self.store.physical_gate().shared()?;
         if !self.no_steal.load(Ordering::Acquire) {
             return self.flush_all();
         }
@@ -2299,6 +2339,7 @@ impl BufferPool {
 
     /// Write every dirty page back and fsync. Used at checkpoint.
     pub fn flush_all(&self) -> Result<u64> {
+        let _physical = self.store.physical_gate().shared()?;
         let mut flushed = 0u64;
         for shard in self.shards.iter() {
             // Snapshot the dirty frames under the shard lock, then flush them
@@ -2342,6 +2383,7 @@ impl BufferPool {
         cursor: WritebackCursor,
         limits: WritebackLimits,
     ) -> Result<WritebackStepReport> {
+        let _physical = self.store.physical_gate().shared()?;
         self.writeback_step_with(cursor, limits, true)
     }
 
@@ -2355,6 +2397,7 @@ impl BufferPool {
         cursor: WritebackCursor,
         limits: WritebackLimits,
     ) -> Result<WritebackStepReport> {
+        let _physical = self.store.physical_gate().shared()?;
         let include_unlogged = !self.no_steal.load(Ordering::Acquire);
         self.writeback_step_with(cursor, limits, include_unlogged)
     }
@@ -2365,6 +2408,7 @@ impl BufferPool {
         limits: WritebackLimits,
         include_unlogged: bool,
     ) -> Result<WritebackStepReport> {
+        let _physical = self.store.physical_gate().shared()?;
         limits.validate(self.page_size)?;
         self.metrics.writeback_steps.fetch_add(1, Ordering::Relaxed);
         let started = Instant::now();
@@ -2615,6 +2659,7 @@ impl BufferPool {
     /// the later foreground access remains responsible for surfacing the exact
     /// corruption or I/O error.
     pub fn read_ahead_step(&self, limits: ReadAheadLimits) -> Result<ReadAheadStepReport> {
+        let _physical = self.store.physical_gate().shared()?;
         limits.validate(self.page_size)?;
         self.metrics
             .read_ahead_steps
@@ -2815,6 +2860,7 @@ impl BufferPool {
     /// the roadmap's "warming must be cancellable, rate-limited, and lower
     /// priority than foreground reads" applied at its simplest.
     pub fn warm(&self, page_id: PageId) -> Result<bool> {
+        let _physical = self.store.physical_gate().shared()?;
         match self.get(page_id) {
             Ok(_) => Ok(true),
             Err(PageError::PoolExhausted { .. }) => Ok(false),

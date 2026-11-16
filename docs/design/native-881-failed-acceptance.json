@@ -1,0 +1,503 @@
+{
+  "schema": "bicdb.native881.failed-acceptance.v1",
+  "source_version": "1.0.515-beta",
+  "source_sha": "881087806b3a5a9792b3e0ba46ba1ba1f2dd0617",
+  "source_tree": "41268f7bbd0b206294ab82b8b5ad9e88084a8a40",
+  "actual_checkout_sha": "962e751180f486207358b2a848c4a5c3e947ca91",
+  "job_url": "https://github.com/nikoma/bicdb/actions/runs/43657802254/job/132640172256",
+  "result": "failed",
+  "counts": {
+    "failed": 21,
+    "filtered": 941,
+    "ignored": 1,
+    "passed": 325,
+    "seconds": 4394.18
+  },
+  "duration_scope": "test runner wall time; NOT RTO or throughput",
+  "binary_sha256": null,
+  "binary_evidence_scope": "test executable hash not retained; no independently deployed optimized binary qualified",
+  "failure_kind_counts": {
+    "actual_middle_history_fault_then_timeout": 1,
+    "exact_refusal_detail_mismatch": 1,
+    "fresh_count_refusal_detail_mismatch": 1,
+    "preparation_timeout": 7,
+    "publication_timeout": 9,
+    "remote_native_first_rpc_timeout": 1,
+    "remote_native_same_attempt_retry_rpc_timeout": 1
+  },
+  "failed_tests": [
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_metadata_tests::native_registered_fifth_remote_hot_closed_actual_mstore_contention_same_own_progress",
+      "classification": "failed",
+      "kind": "publication_timeout",
+      "raw_block_lines": [
+        18586,
+        18834
+      ],
+      "cut_maturity": "Actual fresh collection/activation completed; first local n2 publish returns QueryTimedOut. FIRST/ALL-release/Joined APP+Strong later cuts not reached.",
+      "original_error_lines": [
+        "2026-11-15T01:48:45.6188521Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T01:48:45.6189547Z note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+        "2026-11-15T01:48:45.6190128Z "
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_metadata_tests::native_registered_fifth_remote_hot_closed_actual_mstore_wait_expired_own_refuses",
+      "classification": "failed",
+      "kind": "preparation_timeout",
+      "raw_block_lines": [
+        18835,
+        19050
+      ],
+      "cut_maturity": "Actual n4 prepare API QueryTimedOut before this participant custody/count; planned downstream cut unproven.",
+      "original_error_lines": [
+        "2026-11-15T01:48:45.6383726Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T01:48:45.6383973Z ",
+        "2026-11-15T01:48:45.6384889Z ---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_tests::native_registered_fifth_remote_hot_closed_audit_native_reply_lost_same_attempt_retry stdout ----"
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_tests::native_registered_fifth_remote_hot_closed_audit_native_reply_lost_same_attempt_retry",
+      "classification": "failed",
+      "kind": "publication_timeout",
+      "raw_block_lines": [
+        19051,
+        19255
+      ],
+      "cut_maturity": "Actual fresh collection/activation completed; first local n2 publish returns QueryTimedOut. FIRST/ALL-release/Joined APP+Strong later cuts not reached.",
+      "original_error_lines": [
+        "2026-11-15T01:48:45.6516068Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T01:48:45.6516309Z ",
+        "2026-11-15T01:48:45.6517368Z ---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::collection_binding_tests::native_registered_fifth_collection_actual_controlled_writer_after_collection_refuses_publication stdout ----"
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::collection_binding_tests::native_registered_fifth_collection_actual_controlled_writer_after_collection_refuses_publication",
+      "classification": "failed",
+      "kind": "preparation_timeout",
+      "raw_block_lines": [
+        19256,
+        19461
+      ],
+      "cut_maturity": "Actual n4 prepare API QueryTimedOut before this participant custody/count; planned downstream cut unproven.",
+      "original_error_lines": [
+        "2026-11-15T01:48:45.6640623Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T01:48:45.6640862Z ",
+        "2026-11-15T01:48:45.6641933Z ---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::collection_binding_tests::native_registered_fifth_collection_actual_foreign_archive_after_collection_refuses_publication stdout ----"
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::collection_binding_tests::native_registered_fifth_collection_actual_foreign_archive_after_collection_refuses_publication",
+      "classification": "failed",
+      "kind": "exact_refusal_detail_mismatch",
+      "raw_block_lines": [
+        19462,
+        19657
+      ],
+      "cut_maturity": "Actual after-collection foreign archive fault and Registered n4 publisher refusal reached. Expected old archive detail differs; later assertions were not executed.",
+      "original_error_lines": [
+        "2026-11-15T01:48:45.6931086Z assertion failed: matches!(error, BicDbError::Cluster(ref d) if d ==",
+        "2026-11-15T01:48:45.6931323Z     \"native range image: NEW joint preparation immutable archive missing\")",
+        "2026-11-15T01:48:45.6931331Z "
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::collection_binding_tests::native_registered_fifth_collection_actual_store_aba_after_collection_refuses_publication",
+      "classification": "failed",
+      "kind": "preparation_timeout",
+      "raw_block_lines": [
+        19658,
+        19922
+      ],
+      "cut_maturity": "Actual n4 prepare API QueryTimedOut before this participant custody/count; planned downstream cut unproven.",
+      "original_error_lines": [
+        "2026-11-15T01:48:45.6995962Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T01:48:45.6995967Z ",
+        "2026-11-15T01:48:45.6996864Z ---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_first_policy_real_caller_expiry_fresh_same_xid stdout ----"
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_first_policy_real_caller_expiry_fresh_same_xid",
+      "classification": "failed",
+      "kind": "publication_timeout",
+      "raw_block_lines": [
+        19923,
+        20122
+      ],
+      "cut_maturity": "Actual fresh collection/activation completed; first local n2 publish returns QueryTimedOut. FIRST/ALL-release/Joined APP+Strong later cuts not reached.",
+      "original_error_lines": [
+        "2026-11-15T01:48:45.7051505Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T01:48:45.7051510Z ",
+        "2026-11-15T01:48:45.7052385Z ---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_follower_binds_without_fake_leader_ready stdout ----"
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_follower_binds_without_fake_leader_ready",
+      "classification": "failed",
+      "kind": "preparation_timeout",
+      "raw_block_lines": [
+        20123,
+        20275
+      ],
+      "cut_maturity": "Actual n4 prepare API QueryTimedOut before this participant custody/count; planned downstream cut unproven.",
+      "original_error_lines": [
+        "2026-11-15T01:48:45.7097121Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T01:48:45.7097125Z ",
+        "2026-11-15T01:48:45.7098031Z ---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_lost_committed_decision_reply_keeps_same_attempt stdout ----"
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_lost_committed_decision_reply_keeps_same_attempt",
+      "classification": "failed",
+      "kind": "publication_timeout",
+      "raw_block_lines": [
+        20276,
+        20429
+      ],
+      "cut_maturity": "Actual fresh collection/activation completed; first local n2 publish returns QueryTimedOut. FIRST/ALL-release/Joined APP+Strong later cuts not reached.",
+      "original_error_lines": [
+        "2026-11-15T01:48:45.7143965Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T01:48:45.7143970Z ",
+        "2026-11-15T01:48:45.7144826Z ---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_original_client_ack_and_full_strong stdout ----"
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_original_client_ack_and_full_strong",
+      "classification": "failed",
+      "kind": "publication_timeout",
+      "raw_block_lines": [
+        20430,
+        20580
+      ],
+      "cut_maturity": "Actual fresh collection/activation completed; first local n2 publish returns QueryTimedOut. FIRST/ALL-release/Joined APP+Strong later cuts not reached.",
+      "original_error_lines": [
+        "2026-11-15T01:48:45.7190209Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T01:48:45.7190213Z ",
+        "2026-11-15T01:48:45.7191177Z ---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::fresh_collection_tests::native_registered_fifth_prepared_fresh_actual_expired_round_then_new_collection stdout ----"
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::fresh_collection_tests::native_registered_fifth_prepared_fresh_actual_expired_round_then_new_collection",
+      "classification": "failed",
+      "kind": "publication_timeout",
+      "raw_block_lines": [
+        20581,
+        20835
+      ],
+      "cut_maturity": "Actual fresh collection/activation completed; first local n2 publish returns QueryTimedOut. FIRST/ALL-release/Joined APP+Strong later cuts not reached.",
+      "original_error_lines": [
+        "2026-11-15T01:48:45.7256268Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T01:48:45.7256276Z ",
+        "2026-11-15T01:48:45.7257968Z ---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::fresh_collection_tests::native_registered_fifth_prepared_fresh_actual_missing_archive_refuses_count stdout ----"
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::fresh_collection_tests::native_registered_fifth_prepared_fresh_actual_missing_archive_refuses_count",
+      "classification": "failed",
+      "kind": "fresh_count_refusal_detail_mismatch",
+      "raw_block_lines": [
+        20836,
+        21011
+      ],
+      "cut_maturity": "Source-correlated real archive removal/full count refusal; old expected substring propagates actual scope-pointer/archive error to unwrap96. No successful count/native grant.",
+      "original_error_lines": [
+        "2026-11-15T01:48:45.7308197Z called `Result::unwrap()` on an `Err` value: Cluster(\"native range image: publication scope lost actual preparation pointer/archive\")",
+        "2026-11-15T01:48:45.7308204Z ",
+        "2026-11-15T01:48:45.7309122Z ---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::fresh_collection_tests::native_registered_fifth_prepared_fresh_actual_original_session_cancel_refuses stdout ----"
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::fresh_collection_tests::native_registered_fifth_prepared_fresh_actual_original_session_cancel_refuses",
+      "classification": "failed",
+      "kind": "preparation_timeout",
+      "raw_block_lines": [
+        21012,
+        21181
+      ],
+      "cut_maturity": "Actual n4 prepare API QueryTimedOut before this participant custody/count; planned downstream cut unproven.",
+      "original_error_lines": [
+        "2026-11-15T01:48:45.7355554Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T01:48:45.7355559Z ",
+        "2026-11-15T01:48:45.7356475Z ---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::local_term_tests::native_registered_fifth_remote_hot_local_term_after_policy_readback_refuses_hook stdout ----"
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::local_term_tests::native_registered_fifth_remote_hot_local_term_after_policy_readback_refuses_hook",
+      "classification": "failed",
+      "kind": "preparation_timeout",
+      "raw_block_lines": [
+        21182,
+        21406
+      ],
+      "cut_maturity": "Actual n4 prepare API QueryTimedOut before this participant custody/count; planned downstream cut unproven.",
+      "original_error_lines": [
+        "2026-11-15T01:48:45.7411307Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T01:48:45.7411311Z ",
+        "2026-11-15T01:48:45.7412150Z ---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_actual_original_a_through_first_policy stdout ----"
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_actual_original_a_through_first_policy",
+      "classification": "failed",
+      "kind": "publication_timeout",
+      "raw_block_lines": [
+        21407,
+        21733
+      ],
+      "cut_maturity": "Actual fresh collection/activation completed; first local n2 publish returns QueryTimedOut. FIRST/ALL-release/Joined APP+Strong later cuts not reached.",
+      "original_error_lines": [
+        "2026-11-15T01:48:45.7487568Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T01:48:45.7487572Z ",
+        "2026-11-15T01:48:45.7488408Z ---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_early_all_released_admission_refuses stdout ----"
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_early_all_released_admission_refuses",
+      "classification": "failed",
+      "kind": "publication_timeout",
+      "raw_block_lines": [
+        21734,
+        21862
+      ],
+      "cut_maturity": "Actual fresh collection/activation completed; first local n2 publish returns QueryTimedOut. FIRST/ALL-release/Joined APP+Strong later cuts not reached.",
+      "original_error_lines": [
+        "2026-11-15T01:48:45.7530043Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T01:48:45.7530047Z ",
+        "2026-11-15T01:48:45.7530984Z ---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_lost_committed_decision_reply_same_native_attempt stdout ----"
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_lost_committed_decision_reply_same_native_attempt",
+      "classification": "failed",
+      "kind": "publication_timeout",
+      "raw_block_lines": [
+        21863,
+        21992
+      ],
+      "cut_maturity": "Actual fresh collection/activation completed; first local n2 publish returns QueryTimedOut. FIRST/ALL-release/Joined APP+Strong later cuts not reached.",
+      "original_error_lines": [
+        "2026-11-15T01:48:45.7573972Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T01:48:45.7573976Z ",
+        "2026-11-15T01:48:45.7574925Z ---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::publication_scope_tests::native_registered_fifth_publication_closed_archive_after_scope_refuses_before_bridge_wal stdout ----"
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::publication_scope_tests::native_registered_fifth_publication_closed_archive_after_scope_refuses_before_bridge_wal",
+      "classification": "failed",
+      "kind": "preparation_timeout",
+      "raw_block_lines": [
+        21993,
+        22198
+      ],
+      "cut_maturity": "Actual n4 prepare API QueryTimedOut before this participant custody/count; planned downstream cut unproven.",
+      "original_error_lines": [
+        "2026-11-15T01:48:45.7633501Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T01:48:45.7633506Z ",
+        "2026-11-15T01:48:45.7634441Z ---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::publication_scope_tests::native_registered_fifth_publication_retained_middle_history_after_scope_refuses stdout ----"
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::publication_scope_tests::native_registered_fifth_publication_retained_middle_history_after_scope_refuses",
+      "classification": "failed",
+      "kind": "actual_middle_history_fault_then_timeout",
+      "raw_block_lines": [
+        22199,
+        22446
+      ],
+      "cut_maturity": "ActualR3/interior1/fault completed under scope, then QueryTimedOut instead of expected history error; later gate/clock assertions unexecuted.",
+      "original_error_lines": [
+        "2026-11-15T01:48:45.7737370Z assertion failed: matches!(error,BicDbError::Cluster(ref d) if",
+        "2026-11-15T01:48:45.7737625Z     d==&format!(\"native range image: native logical history is incomplete at index {index}\"))",
+        "2026-11-15T01:48:45.7737630Z "
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_donor_provenance_and_native_target_record",
+      "classification": "failed",
+      "kind": "remote_native_first_rpc_timeout",
+      "raw_block_lines": [
+        22447,
+        22656
+      ],
+      "cut_maturity": "Actual first native transaction committed per compact evidence; normal successful API/read-fence cut not reached.",
+      "original_error_lines": [
+        "2026-11-15T01:48:45.7774973Z actual native publication must succeed before reader-fence controls: Io(Custom { kind: TimedOut, error: \"cluster RPC deadline expired\" })",
+        "2026-11-15T01:48:45.7774978Z ",
+        "2026-11-15T01:48:45.7776302Z ---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_postcommit_cancel_reconciles_same_xid stdout ----"
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_postcommit_cancel_reconciles_same_xid",
+      "classification": "failed",
+      "kind": "remote_native_same_attempt_retry_rpc_timeout",
+      "raw_block_lines": [
+        22657,
+        22897
+      ],
+      "cut_maturity": "Actual postcommit cancel2 fired; first native commit returned; SAME native outcome/body/xid and gates assertions240\u2013245 passed before retry unwrap249 timeout. No successful reconciliation reply.",
+      "original_error_lines": [
+        "2026-11-15T01:48:45.7815925Z called `Result::unwrap()` on an `Err` value: Io(Custom { kind: TimedOut, error: \"cluster RPC deadline expired\" })",
+        "2026-11-15T01:48:45.7815996Z ",
+        "2026-11-15T01:48:45.7816000Z "
+      ]
+    }
+  ],
+  "source_pins": [
+    {
+      "blob": "1627a1890d23628e13b55a49d9ff5705cec5112d",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "sha256": "eb4f3535b0e2e0fc009a17dca14a2a1cfba5417efa500eacc4f69636c58bb358"
+    },
+    {
+      "blob": "04f5e71e2b1ff22a73dc90d5164251df3e051e51",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests/collection_binding_tests.rs",
+      "sha256": "d3bf1559b7db4a24275e4f15928f0bc9165fb385b65b80c7aac6ec12a6c0157c"
+    },
+    {
+      "blob": "8d19c426686202d59d708737e6d454c528aad669",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests/fresh_collection_tests.rs",
+      "sha256": "dc531f32e24709aa9dce70a64a85f7db03782dc3ea406a6dd6e3413300a527e9"
+    },
+    {
+      "blob": "31fc19f21dc7e0523cf6cbe4792997157c9b7dbd",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests/publication_scope_tests.rs",
+      "sha256": "bcd763fdd2c720efd5ea97306c1b2edd91b53aec69cc680a0ca57a3c94159885"
+    },
+    {
+      "blob": "9928c9c40b8183c600d07557cb3b240865e8ffaa",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests/remote_decision_tests.rs",
+      "sha256": "fd7f424a0a828751280ebed34a65613b36bd59deb78c8153ba23fc5903a6760b"
+    },
+    {
+      "blob": "5744d533cd93a73a361a36bd01b205566e4615c6",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests/remote_decision_tests/failure_evidence.rs",
+      "sha256": "4c687e5e54f876de735bb01b8aa01e9bbac681abfa0dbe653769ca62a403f96b"
+    },
+    {
+      "blob": "bba59ef8a46aa890a1624d9a042aeba90697af7a",
+      "path": "crates/bicdb-core/src/db/range_image_native/serving_configuration/joint_handoff/bridge/activation.rs",
+      "sha256": "29a65fee236945e7e1864ca3afd3df499ae035968d36d611c34356616427f0c7"
+    },
+    {
+      "blob": "19d64aa2803aa6f670828cd545796be7d8214a9f",
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/trace.rs",
+      "sha256": "9a13662ce9f52bb8a6f8e181d33bee0bb70c4c3ba889c301b1e6b39e4f7f489b"
+    }
+  ],
+  "exact_source_focused_strong_passes": [
+    {
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::after_transfer::native_strong_point_after_actual_same_voter_leader_transfer_and_recovery_reads_acked_value",
+      "outcome": "ok",
+      "raw_line": 17977
+    },
+    {
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::endpoint_tests::native_event_endpoint_explicit_strong_actual_born1_refuses_without_legacy_downgrade",
+      "outcome": "ok",
+      "raw_line": 17983
+    },
+    {
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::endpoint_tests::native_event_endpoint_routing_retries_do_not_renew_original_deadline_or_become_absence",
+      "outcome": "ok",
+      "raw_line": 17985
+    },
+    {
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::endpoint_tests::stale_gateway_tests::native_event_endpoint_same_stale_gateway_preserves_full_acked_value_after_real_transfer",
+      "outcome": "ok",
+      "raw_line": 17987
+    },
+    {
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_strong_point_fresh_born2_actual_tls_ack_value_and_absence_with_local_b",
+      "outcome": "ok",
+      "raw_line": 18029
+    },
+    {
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_strong_point_raw_cq_or_pending_native_cannot_return_old_row_or_absence",
+      "outcome": "ok",
+      "raw_line": 18032
+    }
+  ],
+  "old_and_new_same347names": true,
+  "changes_from_c05": [
+    {
+      "881": "FAILED",
+      "c05": "ok",
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::collection_binding_tests::native_registered_fifth_collection_actual_controlled_writer_after_collection_refuses_publication"
+    },
+    {
+      "881": "FAILED",
+      "c05": "ok",
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::collection_binding_tests::native_registered_fifth_collection_actual_foreign_archive_after_collection_refuses_publication"
+    },
+    {
+      "881": "FAILED",
+      "c05": "ok",
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::collection_binding_tests::native_registered_fifth_collection_actual_store_aba_after_collection_refuses_publication"
+    },
+    {
+      "881": "FAILED",
+      "c05": "ok",
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::fresh_collection_tests::native_registered_fifth_prepared_fresh_actual_missing_archive_refuses_count"
+    },
+    {
+      "881": "FAILED",
+      "c05": "ok",
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::fresh_collection_tests::native_registered_fifth_prepared_fresh_actual_original_session_cancel_refuses"
+    },
+    {
+      "881": "ok",
+      "c05": "FAILED",
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::prepared_candidate_tests::native_registered_fifth_prepared_candidate_actual_foreign_service_refuses_count"
+    },
+    {
+      "881": "ok",
+      "c05": "FAILED",
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::prepared_candidate_tests::native_registered_fifth_prepared_candidate_actual_missing_archive_refuses_count"
+    },
+    {
+      "881": "FAILED",
+      "c05": "ok",
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::publication_scope_tests::native_registered_fifth_publication_closed_archive_after_scope_refuses_before_bridge_wal"
+    },
+    {
+      "881": "FAILED",
+      "c05": "ok",
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_donor_provenance_and_native_target_record"
+    },
+    {
+      "881": "FAILED",
+      "c05": "ok",
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_postcommit_cancel_reconciles_same_xid"
+    }
+  ],
+  "original_raw_log": {
+    "bytes": 13733863,
+    "sha256": "3695b6287ae9de98689a60b7f449cabdae2f444ff3083da7e25e3345ec16832e"
+  },
+  "lossless_gzip": {
+    "bytes": 1965512,
+    "sha256": "c5b3457192c023b9e13ba07573b99adb9569db5a0d2c23b436a2a27d9ede2313"
+  },
+  "classifier_sha256": "0f3403c6f33e7673c4b7c9d9596ea60808b7e83c46bf873eca2a93399b8294c8",
+  "clock_control_sha256": "28979247d7f58b974276b721f287907e2a12b3d2c2072583cc33fc344ac0304a",
+  "compact_remote_native_sha256": "702d725b83ade00a2b245db65ae610094b2d73a97fcef0213b6975379ee22bb2",
+  "root_raw_and_case_verification_sha256": "09a2e0370d7b175aa8a8ad4f5b600e84ed088e65dc9e308a59d2c9aeb9febaba",
+  "original_run_archive_status_at_checkpoint": "all jobs terminal; complete originals frozen and independently verified",
+  "physical_scale_out": "not_tested",
+  "production_qualified": false,
+  "verified_deployment": false,
+  "causality": "inconclusive; timeout/absentmarker is not rollback/noeffect/loss. Two remote cases retain actualknownnativecommits.",
+  "original_Azure_result": "failed and unchanged",
+  "other_required_jobs_and_Rails": "passed on exactsource881; cannot repair failedNative",
+  "archive": {
+    "manifest_files": 87,
+    "full_original_lossless_logs": 11,
+    "original_unique_ZIPs": 8,
+    "ZIP_members": 28,
+    "missing": 0,
+    "partials": 0,
+    "manifest_sha256": "d368dafef3ecaa4f6bdf38454557a04c9ba6bc87bec0a24be7d72c3d28cb3644",
+    "verification_sha256": "e8053fe60a2983cab25c0d64e46f52b6fc4489ff4fc4004b172708b754931db5",
+    "root_independent_verification_sha256": "55c1e2557a31a5029eccf8443c277eb70c3957ac8f92491d3fb8331ca574cc31",
+    "DB_open_or_extraction": false
+  }
+}

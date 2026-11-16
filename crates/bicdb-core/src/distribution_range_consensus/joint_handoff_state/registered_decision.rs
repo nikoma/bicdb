@@ -265,6 +265,7 @@ impl NativeRegisteredDecisionCataloguePublication {
             error_sha256: None,
         });
         let last = self.outcomes.len() - 1;
+        let generation = store.note_catalogue_write_entered()?;
         let result = crate::storage::replace_durably(
             &store.root.join(DEFAULT_RANGE_WRITE_LOG),
             crate::storage::ReplaceContents::Plain(&self.bytes),
@@ -274,7 +275,10 @@ impl NativeRegisteredDecisionCataloguePublication {
         );
         // Record the actual IO result BEFORE readback, cancellation or authority checks.
         match result {
-            Ok(()) => self.outcomes[last].succeeded = true,
+            Ok(()) => {
+                store.note_catalogue_write_returned_ok(generation);
+                self.outcomes[last].succeeded = true;
+            }
             Err(error) => {
                 use sha2::Digest;
                 self.outcomes[last].error_sha256 = Some(hex::encode(sha2::Sha256::digest(

@@ -1,9 +1,13 @@
 //! Public metadata-only owner. Configuration DTOs never become birth/vote/data
 //! proofs; every action consumes the existing actual native producer.
+mod allocation_policy;
 use super::*;
 use crate::{ClusterNetworkTransportConfig, DistributionConfig, MetadataConsensusStatus};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
+
+#[cfg(test)]
+mod first_acceptance;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -107,6 +111,315 @@ pub struct NativeMetadataHost {
     last_metadata_promotion: Option<serde_json::Value>,
 }
 impl NativeMetadataHost {
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_remote_activation_state(
+        &self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_ref()
+            .ok_or_else(|| invalid("actual activation metadata control absent"))?
+            .test_remote_activation_state(relocation, phase)
+    }
+    /// Finite metadata-only completion component on the SAME original
+    /// certification owner. It does not retire a source or grant Serving.
+    pub(crate) fn record_finite_remote_activation(
+        &mut self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual remote activation metadata control absent"))?
+            .record_finite_remote_activation(relocation, phase, parent)
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_registered_successor_read_dispatch(
+        &self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+        node: &ClusterNodeId,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_ref()
+            .ok_or_else(|| invalid("actual read coordinator absent"))?
+            .test_registered_successor_read_dispatch(relocation, phase, node, parent)
+    }
+    /// Finite internal component only. No periodic automatic placement entry.
+    pub(crate) fn begin_finite_remote_first(
+        &mut self,
+        relocation: crate::distribution::RelocationId,
+        donor: ClusterNodeId,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual control owner absent"))?
+            .begin_finite_remote_first(relocation, donor, parent)
+    }
+    pub(crate) fn drive_finite_remote_first(
+        &mut self,
+        range: crate::RangeId,
+        action: NativeFirstCoordinatorAction,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual control owner absent"))?
+            .drive_finite_remote_first(range, action, parent)
+    }
+    pub(crate) fn first_catalogue_certification_intent(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<super::provisional_listener::NativeFirstCatalogueCertificationIntent> {
+        self.control
+            .as_ref()
+            .ok_or_else(|| invalid("actual FIRST control owner absent"))?
+            .first_catalogue_certification_intent(range)
+    }
+    pub(crate) fn certify_finite_remote_catalogue(
+        &mut self,
+        intent: super::provisional_listener::NativeFirstCatalogueCertificationIntent,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual metadata control owner absent"))?
+            .certify_finite_remote_catalogue(intent, parent)
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_remote_preparation_control(
+        &mut self,
+        range: crate::RangeId,
+        arm: Option<u8>,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual preparation control host absent"))?
+            .test_remote_preparation_control(range, arm)
+    }
+    pub(crate) fn drive_finite_remote_preparation(
+        &mut self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+        node: &ClusterNodeId,
+        resolve: bool,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual metadata control owner absent"))?
+            .drive_finite_remote_preparation(relocation, phase, node, resolve, parent)
+    }
+    pub(crate) fn drive_finite_remote_bridge(
+        &mut self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+        node: &ClusterNodeId,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual metadata control owner absent"))?
+            .drive_finite_remote_bridge(relocation, phase, node, parent)
+    }
+    pub(crate) fn resolve_finite_remote_bridge(
+        &mut self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+        node: &ClusterNodeId,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual metadata control owner absent"))?
+            .resolve_finite_remote_bridge(relocation, phase, node, parent)
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_remote_bridge_control(
+        &mut self,
+        range: crate::RangeId,
+        arm: Option<u8>,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual bridge control host absent"))?
+            .test_remote_bridge_control(range, arm)
+    }
+    pub(crate) fn drive_finite_remote_open(
+        &mut self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+        node: &ClusterNodeId,
+        reconcile: bool,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual Open control owner absent"))?
+            .drive_finite_remote_open(relocation, phase, node, reconcile, parent)
+    }
+    /// Actual finite owner-local DATA policy/recovery transition, never a
+    /// diagnostic Ready setter or a queued remote mutation callback.
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_local_policy_generic_refusal(
+        &self,
+        range: crate::RangeId,
+        phase: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_ref()
+            .ok_or_else(|| invalid("actual Policy host absent"))?
+            .test_local_policy_generic_refusal(range, phase, parent)
+    }
+    pub(crate) fn advance_finite_remote_serving_policy(
+        &mut self,
+        range: crate::RangeId,
+        phase: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        let request = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual local Policy host absent"))?
+            .advance_finite_remote_serving_policy(range, phase, &request)
+    }
+    pub(crate) fn drive_finite_remote_release(
+        &mut self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+        node: &ClusterNodeId,
+        reconcile: bool,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual Release metadata owner absent"))?
+            .drive_finite_remote_release(relocation, phase, node, reconcile, parent)
+    }
+    pub(crate) fn inspect_finite_remote_released(
+        &self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+        node: &ClusterNodeId,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_ref()
+            .ok_or_else(|| invalid("actual released observation metadata owner absent"))?
+            .inspect_finite_remote_released(relocation, phase, node, parent)
+    }
+    pub(crate) fn inspect_finite_remote_open(
+        &self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+        node: &ClusterNodeId,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_ref()
+            .ok_or_else(|| invalid("actual Open control owner absent"))?
+            .inspect_finite_remote_open(relocation, phase, node, parent)
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_remote_open_control(
+        &mut self,
+        range: crate::RangeId,
+        mode: Option<u8>,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual Open control owner absent"))?
+            .test_remote_open_control(range, mode)
+    }
+    pub(crate) fn retire_finite_remote_open_references(
+        &mut self,
+        range: crate::RangeId,
+        phase: uuid::Uuid,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual reference retirement control host absent"))?
+            .advance_remote_all_open_reference_retirement(range, phase, parent)
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_remote_release_control(
+        &mut self,
+        range: crate::RangeId,
+        mode: Option<u8>,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual release control host absent"))?
+            .test_remote_release_control(range, mode)
+    }
+    pub(crate) fn poll_finite_remote_serving(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<usize> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual serialized native control host absent"))?
+            .poll_finite_remote_serving(parent)
+    }
+    pub(crate) fn observe_finite_remote_native_decisions(
+        &mut self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual metadata control host absent"))?
+            .observe_finite_remote_native_decisions(relocation, phase, parent)
+    }
+    pub(crate) fn advance_finite_remote_membership(
+        &mut self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual metadata control owner absent"))?
+            .advance_finite_remote_membership(relocation, phase, parent)
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_first_catalogue_collection_refusal(
+        &mut self,
+        range: crate::RangeId,
+        mode: u8,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual FIRST control owner absent"))?
+            .test_first_catalogue_collection_refusal(range, mode, parent)
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_metadata_owner_catalogue_scope(
+        &self,
+        range_leader: &Self,
+        intent: &super::provisional_listener::NativeFirstCatalogueCertificationIntent,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_ref()
+            .ok_or_else(|| invalid("actual metadata scope owner absent"))?
+            .test_metadata_owner_catalogue_scope(
+                range_leader
+                    .control
+                    .as_ref()
+                    .ok_or_else(|| invalid("actual range scope owner absent"))?,
+                intent,
+                parent,
+            )
+    }
     pub fn start_fresh_metadata_only(
         root: &Path,
         plan: NativeMetadataBootstrapPlan,
@@ -281,11 +594,16 @@ impl NativeMetadataHost {
         &mut self,
         parent: &CancellationToken,
     ) -> Result<NativeMetadataHostStatus> {
+        // One original maintenance window includes the returned diagnostic.
+        // The controller's worker may retain an in-flight mutation after this
+        // expires; status must neither renew that work nor replay it.
+        let token = parent.child_with_deadline(Instant::now() + Duration::from_millis(900));
+        token.check()?;
         let controller = self
             .control
             .as_ref()
             .ok_or_else(|| invalid("actual native control owner required for maintenance"))?;
-        self.last_metadata_maintenance = Some(match controller.maintain_joins(parent) {
+        self.last_metadata_maintenance = Some(match controller.maintain_joins(&token) {
             Ok(report) => {
                 let value = serde_json::to_value(&report)?;
                 if report.stage == "promoted_and_installed" {
@@ -298,7 +616,7 @@ impl NativeMetadataHost {
             }
         });
         // Fresh diagnostic currentness, not a renewal of timed-out mutation.
-        self.status(parent)
+        self.status(&token)
     }
     /// Each finite action preserves its original caller deadline, including
     /// all network/IO/drain work. Failures retain actual owners for retry.

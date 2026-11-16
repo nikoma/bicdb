@@ -113,7 +113,9 @@ impl NativeRemoteDecisionSourceData {
     }
 }
 
-pub(crate) use super::participant::decision::NativeRemoteDecisionAdmission;
+pub(crate) use super::participant::decision::{
+    NativeRemoteDecisionAdmission, NativeRemoteServingReadAdmission,
+};
 
 /// Historical actual native WAL readback, NOT a joint durability quorum/vote.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]

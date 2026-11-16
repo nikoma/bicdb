@@ -256,7 +256,31 @@ impl PagedRecords {
     /// Open or create paged record storage under `dir`, recovering if needed.
     pub fn open(dir: impl AsRef<Path>, options: PagedRecordsOptions) -> Result<Self> {
         let dir = dir.as_ref();
-        let store_options = PagedStoreOptions::default()
+        let (store, _recovery) =
+            PagedStore::open(dir, Self::store_options(&options)).map_err(page_error)?;
+        Self::from_open_store(dir, store)
+    }
+
+    /// Core retains this exact claim before publishing its physical FORMAT
+    /// enrollment. Refusals before transfer preserve its original Some owner.
+    pub(crate) fn open_with_directory_claim(
+        dir: impl AsRef<Path>,
+        options: PagedRecordsOptions,
+        claim: &mut Option<bicdb_page::DirectoryLock>,
+    ) -> Result<Self> {
+        let dir = dir.as_ref();
+        let (store, _recovery) =
+            PagedStore::open_with_directory_claim(dir, Self::store_options(&options), claim)
+                .map_err(page_error)?;
+        Self::from_open_store(dir, store)
+    }
+
+    pub(crate) fn validate_open_options(options: &PagedRecordsOptions) -> Result<()> {
+        PagedStore::validate_open_options(&Self::store_options(options)).map_err(page_error)
+    }
+
+    fn store_options(options: &PagedRecordsOptions) -> PagedStoreOptions {
+        PagedStoreOptions::default()
             .with_page_size(options.page_size)
             .with_buffer_pool_bytes(options.buffer_pool_bytes)
             .with_read_ahead_queue_pages(options.read_ahead_queue_pages)
@@ -264,8 +288,10 @@ impl PagedRecords {
             .with_wal_max_bytes(options.wal_max_bytes)
             .with_wal_segment_bytes(options.wal_segment_bytes)
             .with_extent_bytes(options.extent_bytes)
-            .with_accept_legacy_meta(options.accept_legacy_meta);
-        let (store, _recovery) = PagedStore::open(dir, store_options).map_err(page_error)?;
+            .with_accept_legacy_meta(options.accept_legacy_meta)
+    }
+
+    fn from_open_store(dir: &Path, store: PagedStore) -> Result<Self> {
         let aliases = load_nearby_index_aliases(dir)?;
         Ok(Self {
             opened_directory: std::fs::canonicalize(dir)?,
@@ -465,8 +491,8 @@ impl PagedRecords {
     /// Hold the store's writer lock across a whole multi-operation
     /// transaction — see `PagedStore::write_guard` for why interleaving two
     /// mirrored commit batches is corruption rather than mere contention.
-    pub fn write_guard(&self) -> impl Drop + '_ {
-        self.store.write_guard()
+    pub fn write_guard(&self) -> Result<impl Drop + '_> {
+        self.store.write_guard().map_err(page_error)
     }
 
     pub fn commit(&self, transaction: Xid) -> Result<()> {

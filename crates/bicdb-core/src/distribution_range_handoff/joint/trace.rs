@@ -1,6 +1,7 @@
 //! Test-only diagnostic spans. They observe real work/budgets, including early
 //! error returns, without changing cancellation, deadlines or authority.
 use crate::{CancellationToken, ClusterNodeId};
+use std::io::Write;
 use std::time::Instant;
 
 #[derive(Clone)]
@@ -69,7 +70,8 @@ impl NativeJointPhaseTrace {
             deadline: token.deadline(),
             completed: false,
         };
-        eprintln!(
+        let _ =
+            writeln!(std::io::stderr().lock(),
             "ACTUAL_JOINT_COMPONENT begin stage={stage} node={node} remaining_ms={:?} canceled={}",
             result.remaining(),
             token.is_cancel_requested()
@@ -89,7 +91,7 @@ impl NativeJointPhaseTrace {
             deadline: Some(deadline),
             completed: false,
         };
-        eprintln!("ACTUAL_JOINT_COMPONENT begin stage={stage} node={node} remaining_ms={:?} canceled=unknown",result.remaining());
+        let _ = writeln!(std::io::stderr().lock(),"ACTUAL_JOINT_COMPONENT begin stage={stage} node={node} remaining_ms={:?} canceled=unknown",result.remaining());
         result
     }
     fn remaining(&self) -> Option<u128> {
@@ -102,6 +104,6 @@ impl NativeJointPhaseTrace {
 }
 impl Drop for NativeJointPhaseTrace {
     fn drop(&mut self) {
-        eprintln!("ACTUAL_JOINT_COMPONENT end stage={} node={} elapsed_us={} remaining_ms={:?} canceled={:?} completed={} query_budget_active={} query_budget_error={:?}",self.stage,self.node,self.started.elapsed().as_micros(),self.remaining(),self.token.as_ref().map(|token|token.is_cancel_requested()),self.completed,crate::query_budget::active(),crate::query_budget::check().err().map(|error|error.to_string()));
+        let _ = writeln!(std::io::stderr().lock(),"ACTUAL_JOINT_COMPONENT end stage={} node={} elapsed_us={} remaining_ms={:?} canceled={:?} completed={} query_budget_active={} query_budget_error={:?}",self.stage,self.node,self.started.elapsed().as_micros(),self.remaining(),self.token.as_ref().map(|token|token.is_cancel_requested()),self.completed,crate::query_budget::active(),crate::query_budget::check().err().map(|error|error.to_string()));
     }
 }

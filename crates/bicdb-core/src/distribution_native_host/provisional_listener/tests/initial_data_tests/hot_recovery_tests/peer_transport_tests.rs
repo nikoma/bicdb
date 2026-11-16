@@ -5,6 +5,8 @@ use crate::distribution_range_recovery::RecoveryEpochFenceRequest;
 use crate::distribution_transport::{HotRecoveryPeerFailure, HotRecoveryPhaseRequest};
 use std::io;
 use std::net::{TcpListener, TcpStream};
+mod bounded_leadership_tests;
+mod dispatcher_publication_tests;
 
 pub(crate) struct SocketFault {
     stop: Arc<AtomicBool>,

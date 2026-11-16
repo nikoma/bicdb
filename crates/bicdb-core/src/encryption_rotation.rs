@@ -14,6 +14,10 @@ use crate::encryption::{
 };
 use crate::error::{BicDbError, Result};
 use crate::{large_value, storage};
+mod ownership;
+use ownership::RotationTreeOwner;
+#[cfg(test)]
+mod physical_gate_tests;
 
 const ROTATION_FORMAT: &str = "bicdb.bound-key-rotation/v1";
 const MESH_SIGNING_KEY_FILE: &str = "mesh_signing_key.json";
@@ -81,14 +85,17 @@ struct StageCounters {
     attachment_chunks: u64,
 }
 
-/// Crash-safe, offline rotation for one cell-bound encrypted database.
+/// Checkpointed, offline rotation for one cell-bound encrypted database.
 ///
 /// The source database is held under its kernel directory lock. A complete
 /// replacement tree is authenticated under the retiring key and written under
 /// the next key before any namespace switch occurs. Activation is two atomic
 /// same-filesystem renames with a durable journal between them. Reinvoking the
-/// function after either rename deterministically resumes; mixed-key trees are
-/// never opened or published. The retired ciphertext tree is intentionally
+/// function can resume from the recorded checkpoints. The journal binds the
+/// key transition and prepared tree, but not a later source head after a
+/// stopped Prepared call: the source must remain unchanged between calls.
+/// This is not an HA history-loss or general cold-association certificate.
+/// The retired ciphertext tree is intentionally
 /// retained until an external KMS/recovery authority confirms old-key
 /// retirement.
 pub fn rotate_bound_database_encryption(
@@ -134,7 +141,18 @@ pub fn rotate_bound_database_encryption(
     reject_symlink_if_exists(&retired_path, "database rotation retired tree")?;
     reject_symlink_if_exists(&journal_path, "database rotation journal")?;
 
+    let mut original_owner: Option<RotationTreeOwner> = None;
+    let mut staged_owner: Option<RotationTreeOwner> = None;
+
     if !journal_path.exists() {
+        if !source_path.is_dir() {
+            return Err(BicDbError::EncryptionKeyInvalid(format!(
+                "database rotation source {} is not a directory",
+                source_path.display()
+            )));
+        }
+        let source = RotationTreeOwner::existing(&source_path, "database rotation source")?;
+        let source_scope = source.borrow()?;
         if let Some(metadata) = encryption::load_metadata(&source_path)? {
             if metadata.binding.as_ref() == Some(&new_binding) {
                 return Ok(BoundEncryptionRotationReport {
@@ -151,12 +169,6 @@ pub fn rotate_bound_database_encryption(
                 });
             }
         }
-        if !source_path.is_dir() {
-            return Err(BicDbError::EncryptionKeyInvalid(format!(
-                "database rotation source {} is not a directory",
-                source_path.display()
-            )));
-        }
         if staging_path.exists() || retired_path.exists() {
             return Err(BicDbError::EncryptionKeyInvalid(
                 "rotation staging/retired path exists without its journal; operator inspection is required"
@@ -164,11 +176,6 @@ pub fn rotate_bound_database_encryption(
             ));
         }
 
-        let _source_lock = bicdb_page::DirectoryLock::acquire(&source_path).map_err(|error| {
-            BicDbError::EncryptionKeyInvalid(format!(
-                "database must be closed before key rotation: {error}"
-            ))
-        })?;
         let source_metadata = encryption::load_metadata(&source_path)?.ok_or_else(|| {
             BicDbError::EncryptionKeyInvalid(
                 "bound key rotation source has no encryption metadata".to_string(),
@@ -184,6 +191,12 @@ pub fn rotate_bound_database_encryption(
             BicDbError::EncryptionKeyInvalid("encryption key version exhausted".to_string())
         })?;
         create_restricted_directory(&staging_path)?;
+        let created = bicdb_page::DirectoryHandleObservation::capture(&staging_path)
+            .map_err(|error| BicDbError::EncryptionKeyInvalid(error.to_string()))?;
+        #[cfg(test)]
+        physical_gate_tests::after_stage_creation(&staging_path);
+        let stage = RotationTreeOwner::fresh(&staging_path, &created)?;
+        let stage_scope = stage.borrow()?;
         let (new_runtime, new_metadata) =
             encryption::runtime_for_rotation_target(&staging_path, &new_config, next_key_version)?;
         let stage_result = stage_tree(
@@ -196,7 +209,10 @@ pub fn rotate_bound_database_encryption(
         let counters = match stage_result {
             Ok(counters) => counters,
             Err(error) => {
-                let _ = fs::remove_dir_all(&staging_path);
+                // Never remove a path merely because this call tried to stage
+                // there. Only this successfully authorized SAME fresh owner
+                // can clean its still-matched directory.
+                let _ = stage.cleanup_fresh(&staging_path);
                 return Err(error);
             }
         };
@@ -217,31 +233,63 @@ pub fn rotate_bound_database_encryption(
             staged_tree_sha256,
         };
         persist_journal(&journal_path, &journal, options.fsync)?;
+        drop(stage_scope);
+        drop(source_scope);
+        staged_owner = Some(stage);
+        original_owner = Some(source);
     }
 
     let mut journal = load_journal(&journal_path)?;
     validate_journal(&journal, &database_name, &old_binding, &new_binding)?;
+    if journal.checkpoint != BoundEncryptionRotationCheckpoint::Activated {
+        if staged_owner.is_none() {
+            staged_owner = Some(RotationTreeOwner::existing(
+                &staging_path,
+                "rotation staging database",
+            )?);
+        }
+        let stage = staged_owner.as_ref().unwrap();
+        let _scope = stage.borrow()?;
+        stage.require_at(&staging_path)?;
+        if tree_digest_hex(&staging_path)? != journal.staged_tree_sha256 {
+            return Err(BicDbError::TamperEvidence {
+                path: staging_path.clone(),
+                message: "prepared rotation tree digest changed".to_string(),
+            });
+        }
+    }
     if journal.checkpoint == BoundEncryptionRotationCheckpoint::Prepared
         && options.stop_after == Some(BoundEncryptionRotationCheckpoint::Prepared)
     {
         return Ok(report(&journal, false, source_path, retired_path));
     }
     if journal.checkpoint == BoundEncryptionRotationCheckpoint::Prepared {
-        let _source_lock = bicdb_page::DirectoryLock::acquire(&source_path).map_err(|error| {
-            BicDbError::EncryptionKeyInvalid(format!(
-                "database must remain closed during key rotation: {error}"
-            ))
-        })?;
-        if tree_digest_hex(&staging_path)? != journal.staged_tree_sha256 {
-            return Err(BicDbError::TamperEvidence {
-                path: staging_path,
-                message: "prepared rotation tree digest changed".to_string(),
-            });
+        if original_owner.is_none() {
+            original_owner = Some(RotationTreeOwner::existing(
+                &source_path,
+                "database rotation source",
+            )?);
         }
+        original_owner.as_ref().unwrap().require_at(&source_path)?;
+        let source_metadata = encryption::load_metadata(&source_path)?.ok_or_else(|| {
+            BicDbError::EncryptionKeyInvalid(
+                "prepared rotation source has no encryption metadata".into(),
+            )
+        })?;
+        if source_metadata.version != 2 || source_metadata.binding.as_ref() != Some(&old_binding) {
+            return Err(BicDbError::EncryptionKeyInvalid(
+                "prepared rotation source changed its retiring encryption binding".into(),
+            ));
+        }
+        // No lexical EX borrow spans the move. The actual EX still excludes
+        // physical writers until the namespace operation completes; no new
+        // path-based shared acquisition is performed against that old binding.
         fs::rename(&source_path, &retired_path)?;
+        original_owner.as_ref().unwrap().require_at(&retired_path)?;
         sync_directory(&parent, options.fsync)?;
         journal.checkpoint = BoundEncryptionRotationCheckpoint::SourceRetired;
         persist_journal(&journal_path, &journal, options.fsync)?;
+        original_owner.as_mut().unwrap().release_physical();
         if options.stop_after == Some(BoundEncryptionRotationCheckpoint::SourceRetired) {
             return Ok(report(&journal, false, source_path, retired_path));
         }
@@ -255,17 +303,42 @@ pub fn rotate_bound_database_encryption(
                     .to_string(),
             ));
         }
-        let _retired_lock = bicdb_page::DirectoryLock::acquire(&retired_path).map_err(|error| {
-            BicDbError::EncryptionKeyInvalid(format!(
-                "retired database lock could not be reacquired during rotation recovery: {error}"
-            ))
+        if original_owner.is_none() {
+            original_owner = Some(RotationTreeOwner::existing(
+                &retired_path,
+                "retired rotation database",
+            )?);
+        }
+        original_owner.as_ref().unwrap().require_at(&retired_path)?;
+        let retired_metadata = encryption::load_metadata(&retired_path)?.ok_or_else(|| {
+            BicDbError::EncryptionKeyInvalid(
+                "retired rotation source has no encryption metadata".into(),
+            )
         })?;
+        if retired_metadata.version != 2 || retired_metadata.binding.as_ref() != Some(&old_binding)
+        {
+            return Err(BicDbError::EncryptionKeyInvalid(
+                "retired rotation source changed its retiring encryption binding".into(),
+            ));
+        }
         fs::rename(&staging_path, &source_path)?;
+        staged_owner.as_ref().unwrap().require_at(&source_path)?;
+        // Old physical scopes/bindings are gone before installed-name
+        // acquisition below. Keep the SAME real directory claims throughout.
+        staged_owner.as_mut().unwrap().release_physical();
+        original_owner.as_mut().unwrap().release_physical();
         sync_directory(&parent, options.fsync)?;
         journal.checkpoint = BoundEncryptionRotationCheckpoint::Activated;
         persist_journal(&journal_path, &journal, options.fsync)?;
     }
 
+    let mut active_owner = if let Some(stage) = staged_owner {
+        stage
+    } else {
+        RotationTreeOwner::existing(&source_path, "activated rotation database")?
+    };
+    active_owner.enter_physical(&source_path)?;
+    let _active_scope = active_owner.borrow()?;
     let active_metadata = encryption::load_metadata(&source_path)?.ok_or_else(|| {
         BicDbError::EncryptionKeyInvalid(
             "activated rotation tree has no encryption metadata".to_string(),

@@ -10,6 +10,8 @@ use std::sync::Weak;
 mod cleanup;
 mod hot_recovery;
 mod old_step;
+#[cfg(test)]
+mod request_wait_controls;
 mod writer_data_domain;
 use cleanup::{NativeInitialDataCleanup, NativeInitialDataCleanupSender};
 use hot_recovery::NativeHotRecoveryMaintenance;
@@ -70,6 +72,38 @@ pub(crate) struct NativeInitialDataAdmission {
     old_transport: Weak<TcpClusterRelocationTransport>,
 }
 impl NativeInitialDataAdmission {
+    /// Necessary readonly identity of a real Registered successor's installed
+    /// listener, including while its APP dispatcher is deliberately closed.
+    /// Generic INITIAL/APP lifetime checks below remain unchanged and strict.
+    pub(crate) fn require_registered_successor_listener_memory(
+        &self,
+        original: &Arc<crate::distribution_native_host::NativeRegisteredRemoteJointOwner>,
+    ) -> Result<()> {
+        original.require_first_policy_attempt_lifetime()?;
+        self.require_live()?;
+        if self
+            .service
+            .upgrade()
+            .is_none_or(|s| !Arc::ptr_eq(&s, original.service()))
+        {
+            return Err(invalid(
+                "Registered successor listener changed actual service",
+            ));
+        }
+        let expected = original
+            .terminal_writer()
+            .ok_or_else(|| invalid("Registered successor listener terminal writer absent"))?;
+        let actual = self
+            .writer
+            .try_read()
+            .ok_or_else(|| invalid("Registered successor listener writer identity busy"))?;
+        if !Arc::ptr_eq(&actual, expected) {
+            return Err(invalid(
+                "Registered successor listener changed actual installed writer",
+            ));
+        }
+        expected.require_remote_new_registration_memory()
+    }
     /// Necessary original INITIAL process/slot/writer identity only. All
     /// metadata/native proof is independent; this memory check creates none.
     pub(crate) fn require_remote_new_original_memory(
@@ -459,6 +493,11 @@ impl NativeInitialDataHost {
         let admission = self.admission.as_ref().unwrap();
         admission.require_live()?;
         if self.drained.is_none() {
+            #[cfg(test)]
+            self.old_listener
+                .as_ref()
+                .ok_or_else(|| invalid("actual old INITIAL listener absent"))?
+                .test_before_initial_data_drain(parent)?;
             self.drained = Some(
                 self.old_listener
                     .as_mut()
@@ -496,7 +535,7 @@ impl NativeInitialDataHost {
         parent.check()?;
         let already_published = self.published.load(Ordering::Acquire);
         let dispatcher = self.dispatcher.as_ref().unwrap();
-        dispatcher.publish(&enrollment.coordinator, &enrollment.guard)?;
+        dispatcher.publish_bounded_initial(&enrollment.coordinator, &enrollment.guard, parent)?;
         if let Err(error) = parent.check().and_then(|_| admission.require_live()) {
             // APP and typed Get are still fenced by published=false. Clearing
             // this first unpublished slot cannot revoke an acknowledged APP.
@@ -748,20 +787,37 @@ impl NativeInitialDataHost {
             }
             None => false,
         };
+        // Routing is DATA only. Never retain its read guard across the actual
+        // native observation; a queued routing writer must not form a lock cycle.
+        let current = self.initial.topology.try_read().map(|c| c.clone());
         let ranges = self
             .genesis
             .values()
-            .map(|proof| NativeInitialDataRangeStatus {
-                range_id: proof.range().id,
-                epoch: proof.range().epoch,
-                local_leader: proof.range().leader == self.initial.seed.spec.node_id,
-                leader_admission_observed: self.enrollment.as_ref().is_some_and(|owner| {
-                    owner
-                        .coordinator
-                        .initial_data_leader_admission_observed(proof.range())
-                }),
+            .map(|proof| {
+                let selected = current
+                    .as_ref()
+                    .and_then(|c| c.range_by_id(proof.range().id));
+                let descriptor = selected.unwrap_or(proof.range());
+                NativeInitialDataRangeStatus {
+                    range_id: descriptor.id,
+                    epoch: descriptor.epoch,
+                    local_leader: descriptor.leader == self.initial.seed.spec.node_id,
+                    leader_admission_observed: selected.is_some()
+                        && if descriptor.epoch > proof.range().epoch {
+                            self.hot_recovery
+                                .as_ref()
+                                .is_some_and(|hot| hot.allocation_open_observed(descriptor))
+                        } else {
+                            self.enrollment.as_ref().is_some_and(|owner| {
+                                owner
+                                    .coordinator
+                                    .initial_data_leader_admission_observed(descriptor)
+                            })
+                        },
+                }
             })
             .collect();
+        drop(current);
         Ok(NativeInitialDataStatus {
             receiver_listening: self.listener.is_some(),
             writer_policy_current,
@@ -882,7 +938,7 @@ impl NativeInitialDataHost {
                 .ok_or_else(|| invalid("leader recovery requires the retained writer"))?
                 .coordinator,
         );
-        let recovered = coordinator.recover_local_leadership(64)?;
+        let recovered = coordinator.recover_native_local_leadership_bounded(64, parent)?;
         parent.check()?;
         Ok(recovered)
     }
@@ -1101,6 +1157,17 @@ fn network_address(
 }
 
 impl NativeMetadataControlHost {
+    pub(crate) fn observe_initial_data_allocation(
+        &self,
+        range: crate::RangeId,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        self.data
+            .as_ref()
+            .and_then(|d| d.hot_recovery.as_ref())
+            .ok_or_else(|| invalid("allocation observation original maintenance owner absent"))?
+            .observe_allocation_epoch(range, parent)
+    }
     /// See `NativeInitialDataHost::refresh_data_policy`.
     pub(crate) fn refresh_initial_data_policy(&mut self, parent: &CancellationToken) -> Result<()> {
         self.data
@@ -1128,12 +1195,17 @@ impl NativeMetadataControlHost {
         &mut self,
         parent: &CancellationToken,
     ) -> Result<()> {
+        // The manual API also accepts a process parent without a deadline.
+        // Anchor ONE finite turn before registry and maintenance, using their
+        // existing five-second bound; never renew it after either operation.
+        let request = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        request.check()?;
         if let Some(data) = self.data.as_mut() {
-            let registry = data.refresh_registry(parent);
+            let registry = data.refresh_registry(&request);
             let hot = data
                 .hot_recovery
                 .as_ref()
-                .map_or(Ok(()), |h| h.tick(parent));
+                .map_or(Ok(()), |h| h.tick_for_request(&request));
             registry?;
             hot?;
         }
@@ -1158,13 +1230,25 @@ impl NativeMetadataControlHost {
             .as_mut()
             .unwrap()
             .restore_lost_listener(&self.network, parent)?;
-        let leader = self
+        let controller = self
             .controller
             .as_ref()
-            .ok_or_else(|| invalid("actual control provider absent"))?
-            .bootstrap(parent)?
-            .metadata_leader_id
-            .ok_or_else(|| invalid("current metadata leader unknown for DATA open"))?;
+            .ok_or_else(|| invalid("actual control provider absent"))?;
+        let leader = loop {
+            parent.check()?;
+            // This is an actual owned metadata observation, not election or
+            // DATA readiness. An in-progress election may temporarily have no
+            // routing hint while this original finite open still has time.
+            if let Some(leader) = controller.bootstrap(parent)?.metadata_leader_id {
+                break leader;
+            }
+            if parent.deadline().is_none() {
+                return Err(invalid("current metadata leader unknown for DATA open"));
+            }
+            // bootstrap released its service/metadata guards before returning.
+            // No request deadline is replaced and no failed RPC is replayed.
+            std::thread::sleep(Duration::from_millis(5));
+        };
         self.data
             .as_mut()
             .unwrap()
@@ -1178,6 +1262,185 @@ impl NativeMetadataControlHost {
                 }
             }
         }
+        Ok(())
+    }
+    #[cfg(test)]
+    pub(crate) fn test_initial_allocation_inventory(&self) -> Result<serde_json::Value> {
+        let data = self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("allocation inventory original DATA absent"))?;
+        let db = data
+            .initial
+            .seed
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("allocation inventory actual DB busy"))?;
+        data.enrollment
+            .as_ref()
+            .ok_or_else(|| invalid("allocation inventory original enrollment absent"))?
+            .guard
+            .test_allocation_physical_inventory(&db)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_initial_allocation_reader_barrier(&self) -> Result<()> {
+        let data = self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("allocation reader barrier original DATA absent"))?;
+        let db = data
+            .initial
+            .seed
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("allocation reader barrier actual DB busy"))?;
+        crate::format::test_reader_without_allocation_policy_feature(db.data_path())
+    }
+    #[cfg(test)]
+    pub(crate) fn test_initial_allocation_generic_recovery(
+        &self,
+        range: crate::RangeId,
+        parent: &CancellationToken,
+    ) -> Result<bool> {
+        let data = self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("allocation original DATA owner absent"))?;
+        let current = data
+            .initial
+            .topology
+            .try_read()
+            .and_then(|c| c.range_by_id(range).cloned())
+            .ok_or_else(|| invalid("allocation actual current selected range absent"))?;
+        data.enrollment
+            .as_ref()
+            .ok_or_else(|| invalid("allocation original enrollment absent"))?
+            .coordinator
+            .recover_native_range_leadership_bounded(&current, parent)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_initial_allocation_native_point(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<serde_json::Value> {
+        let data = self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("allocation native point original DATA absent"))?;
+        let db = data
+            .initial
+            .seed
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("allocation native point actual DB busy"))?;
+        let point = db.current_native_range_source_lineage(range)?;
+        Ok(
+            serde_json::json!({"actual_range":point.native_write_range()?,"range_index":point.range_index(),
+            "history":point.logical_history_sha256(),"native_receipt":point.native_receipt_sha256(),
+            "same_open":db.incarnation_id(),"read_only_DATA_not_ready":true}),
+        )
+    }
+    #[cfg(test)]
+    pub(crate) fn test_allocation_activation_domain_comparison(
+        &self,
+        writer: &crate::db::InstalledNativeWriterHostGuard,
+        range: crate::RangeId,
+        mode: u8,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        parent.check()?;
+        let data = self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("actual allocation DATA owner absent"))?;
+        let (
+            actual,
+            before,
+            after,
+            metadata,
+            native,
+            metadata_claim,
+            native_claim,
+            decision_before,
+            decision_after,
+            scope_sha,
+            native_point,
+        ) = {
+            let db = data
+                .initial
+                .seed
+                .database
+                .try_read()
+                .ok_or_else(|| invalid("actual allocation comparison DB busy"))?;
+            writer.test_allocation_activation_domain_comparison(&db, range, mode)?
+        };
+        // Actual DB/journal guards have unwound before this new diagnostic
+        // formats either retained Result or emits JSON. Inherited validation's
+        // health-error formatting is unchanged.
+        let value = serde_json::json!({"actual_returned_ok":actual.is_ok(),
+            "actual_original_error":actual.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),
+            "actual_exact_error_class":match &actual {Err(crate::BicDbError::Cluster(e))=>Some(e.as_str()),_=>None},
+            "native_before":before,"native_after":after,"actual_full_metadata":metadata,
+            "actual_effective_native":native,"untrusted_metadata_claim":metadata_claim,"untrusted_native_claim":native_claim,
+            "decision_before_sha256":decision_before,"decision_after_sha256":decision_after.as_ref().ok(),
+            "postcomparison_forensic_error":decision_after.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),
+            "actual_scope_configuration_sha256":scope_sha,"actual_decision_xid_and_R":native_point,
+            "mode":mode,"comparison_component_not_new_Role_or_mutation_permission":true});
+        parent.check()?;
+        Ok(value)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_initial_allocation_foreign_owner(
+        &self,
+        foreign: &Arc<crate::db::InstalledNativeWriterHostGuard>,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        let data = self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("allocation real initial DATA owner absent"))?;
+        let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        let coordinator = &data
+            .enrollment
+            .as_ref()
+            .ok_or_else(|| invalid("allocation real enrollment absent"))?
+            .coordinator;
+        let business = Uuid::now_v7();
+        let leader = data
+            .initial
+            .provider
+            .current_metadata_leader_hint(&token)?
+            .ok_or_else(|| invalid("allocation real metadata leader absent"))?;
+        let own = data.initial.transport.acquire_host_metadata_observation(
+            &leader,
+            business,
+            Duration::from_secs(5),
+            &token,
+        )?;
+        let point = ClusterDataNodeService::capture_actual_joint_metadata_point_waiting(
+            &data.initial.service,
+            &own,
+            business,
+            &token,
+        )?
+        .ok_or_else(|| invalid("allocation actual metadata point absent"))?;
+        let db = data
+            .initial
+            .seed
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("allocation actual DB busy"))?;
+        // Prepare only: the real factory must refuse the OTHER actual guard
+        // before any allocation native publication method can be called.
+        ClusterDataNodeService::prepare_native_writer_allocation_refresh(
+            &data.initial.service,
+            &db,
+            coordinator,
+            foreign,
+            own,
+            business,
+            point,
+        )?;
         Ok(())
     }
     #[cfg(test)]
@@ -1506,5 +1769,84 @@ impl NativeMetadataControlHost {
         );
         admission.require_listener(&data.initial.service, runtime)?;
         parent.check()
+    }
+}
+
+#[cfg(test)]
+impl NativeMetadataControlHost {
+    pub(in crate::distribution_native_host) fn test_initial_listener_transition_controls(
+        &self,
+    ) -> Result<(
+        crate::distribution_transport::InitialTransitionControl,
+        crate::distribution_transport::InitialTransitionControl,
+    )> {
+        if self.data.is_some() || self.controller.is_none() {
+            return Err(invalid(
+                "initial transition hook requires original running pre-DATA owner",
+            ));
+        }
+        // This actual INITIAL factory, service/DB/open and metadata controller
+        // already exist. No host/launch is synthesized from a request DTO.
+        self.backend.initial_data_launch()?;
+        let old = self
+            .listener
+            .as_ref()
+            .ok_or_else(|| invalid("actual original control listener absent"))?;
+        Ok((
+            old.test_initial_transition_control(),
+            self.backend.transport.test_initial_transition_control(),
+        ))
+    }
+    pub(in crate::distribution_native_host) fn test_initial_transition_snapshot(
+        &self,
+    ) -> serde_json::Value {
+        let ready_ranges: Vec<_> = self
+            .data
+            .as_ref()
+            .and_then(|d| d.enrollment.as_ref())
+            .map(|enrollment| {
+                enrollment
+                    .coordinator
+                    .test_initial_genesis_recovered_epochs()
+                    .keys()
+                    .copied()
+                    .collect()
+            })
+            .unwrap_or_default();
+        serde_json::json!({"actual_initial_owner_retained":self.data.is_some(),
+            "actual_enrollment_retained":self.data.as_ref().is_some_and(|d|d.enrollment.is_some()),
+            "actual_old_listener_drained":self.data.as_ref().is_some_and(|d|d.drained.is_some()),
+            "actual_DATA_listener_retained":self.data.as_ref().is_some_and(|d|d.listener.is_some()),
+            "actual_APP_published":self.data.as_ref().is_some_and(|d|d.published.load(Ordering::Acquire)),
+            "actual_genesis_ready_ranges":ready_ranges,
+            "actual_stopping":self.data.as_ref().map(|d|d.stopping)})
+    }
+}
+
+impl NativeInitialDataHost {
+    pub(in super::super) fn capture_remote_policy_read_route(
+        &self,
+        backend: &Arc<NativeMetadataControlBackend>,
+        participant: &Arc<crate::distribution_range_handoff::NativeRemoteNewParticipant>,
+        successor: &Arc<crate::distribution_data::NativeRemoteReleaseOwner>,
+    ) -> Result<Arc<super::remote_serving_successor_read::NativeRemoteSuccessorReadRegistration>>
+    {
+        if self.stopping {
+            return Err(invalid("stopping actual host cannot retain Policy reader"));
+        }
+        let runtime = self
+            .runtime
+            .as_ref()
+            .ok_or_else(|| invalid("Policy original INITIAL runtime absent"))?;
+        self.admission
+            .as_ref()
+            .ok_or_else(|| invalid("Policy original INITIAL admission absent"))?
+            .require_listener(&self.initial.service, runtime)?;
+        super::remote_serving_successor_read::NativeRemoteSuccessorReadRegistration::capture(
+            backend,
+            runtime,
+            participant,
+            successor,
+        )
     }
 }

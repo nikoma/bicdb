@@ -687,5 +687,9 @@ fn script_schedules_fire_as_the_schedule_identity_and_write_declared_sql() {
         "{:?}",
         rows[0]
     );
+    // A committed SQL row is visible before the scheduler necessarily drops
+    // its invocation lease. Stop and join the real background work before the
+    // existing disable assertion, whose contract requires quiescence.
+    runtime.stop_background_supervisors_for_test();
     runtime.disable("notes").unwrap();
 }

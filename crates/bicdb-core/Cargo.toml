@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-core"
-version = "1.0.519-beta"
+version = "1.0.520-beta"
 edition.workspace = true
 license-file.workspace = true
 rust-version.workspace = true
@@ -19,8 +19,8 @@ osm-import = ["dep:osmpbfreader"]
 compression = ["dep:zstd"]
 
 [dependencies]
-bicdb-lua = { path = "../bicdb-lua", version = "1.0.519-beta", optional = true }
-bicdb-page = { path = "../bicdb-page", version = "1.0.519-beta" }
+bicdb-lua = { path = "../bicdb-lua", version = "1.0.520-beta", optional = true }
+bicdb-page = { path = "../bicdb-page", version = "1.0.520-beta" }
 argon2.workspace = true
 bigdecimal = "=0.4.10"
 chacha20poly1305.workspace = true
@@ -59,6 +59,7 @@ zstd = { workspace = true, optional = true }
 libc.workspace = true
 
 [dev-dependencies]
+bicdb-page = { path = "../bicdb-page", version = "1.0.520-beta", features = ["physical-gate-observation"] }
 crossbeam-skiplist.workspace = true
 protobuf.workspace = true
 rcgen = "0.13"

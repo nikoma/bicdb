@@ -116,3 +116,49 @@ impl BicDb {
         Ok(scope)
     }
 }
+
+impl BicDb {
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn with_original_old_serving_read<R>(
+        &self,
+        writer: &Arc<NativeWriterHostState>,
+        plan: &crate::distribution_range_handoff::NativeJointHandoffPlan,
+        native: &NativeJointOldCloseReceipt,
+        promise: &NativeJointOldPromiseReceipt,
+        frozen: &FrozenRangeMutationPermit,
+        store: &RangeWriteStore,
+        phase: &crate::distribution_range_handoff::NativeRemoteServingReadAdmission<'_>,
+        inspect: impl FnOnce() -> Result<R>,
+    ) -> Result<R> {
+        phase.require_old_parts(self, writer, native, promise, frozen)?;
+        let _admission = self
+            .serializable_commit_admission
+            .try_read()
+            .ok_or_else(|| invalid("serving original OLD read admission busy"))?;
+        let identity = self.borrow_original_native_writer_identity(writer.clone())?;
+        let journal = self.try_native_image_journal()?;
+        let require = || -> Result<()> {
+            phase.require_old_parts(self, writer, native, promise, frozen)?;
+            identity.require_database(self)?;
+            journal.require_database(self)?;
+            writer.require_store(self.data_path(), store.native_writer_store_open_id())?;
+            if !Arc::ptr_eq(&store.native_writer_host_state()?, writer) {
+                return Err(invalid("serving original OLD read replaced Store State"));
+            }
+            native.require_closed_fact_current(self, plan, promise, store)?;
+            self.range_mutation_gate()
+                .validate_quiescent_frozen(phase.data().old_range().id, frozen)?;
+            phase.require_native(self, store)
+        };
+        require()?;
+        let result = inspect();
+        match result {
+            Err(primary) => Err(primary),
+            Ok(value) => {
+                require()?;
+                phase.parent().check()?;
+                Ok(value)
+            }
+        }
+    }
+}

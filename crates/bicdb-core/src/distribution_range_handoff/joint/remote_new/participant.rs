@@ -2,6 +2,7 @@
 //! never a durable DECISION journal or a cold-recovery capability.
 use super::*;
 pub(super) mod decision;
+mod retirement;
 use crate::distribution_consensus::HostMetadataReadObservation;
 use crate::distribution_data::{ActualNativeJointMetadataPoint, ClusterDataNodeService};
 use crate::distribution_native_host::{
@@ -14,12 +15,13 @@ use crate::distribution_transport::{
     AuthenticatedNativeRemoteNewFactSet, AuthenticatedNativeSourceExportTerminal,
 };
 use parking_lot::Mutex;
+pub(crate) use retirement::NativeRemoteOldRetirementSlot;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
 enum OriginalParticipant {
     Old {
-        actual: Arc<NativeJointOldObservation>,
+        actual: Mutex<Option<Arc<NativeJointOldObservation>>>,
         admission: Arc<NativeInitialDataAdmission>,
         writer: Arc<crate::db::NativeWriterHostState>,
         process: Arc<crate::distribution_range_image::NativeRemoteImageSourceRegistry>,
@@ -28,7 +30,7 @@ enum OriginalParticipant {
         owner: Weak<NativeRegisteredRemoteJointOwner>,
         target: Arc<NativeRegisteredRemoteJointTarget>,
         service: Arc<Mutex<ClusterDataNodeService>>,
-        frozen: Arc<NativeImageInstallFreeze>,
+        frozen: Mutex<Option<Arc<NativeImageInstallFreeze>>>,
         pin: Mutex<Option<Arc<SourceCaptureReadPin>>>,
     },
 }
@@ -65,8 +67,21 @@ pub(crate) struct NativeRemoteNewParticipant {
     requests: Mutex<BTreeMap<Uuid, Vec<u8>>>,
     handoff: Mutex<RetainedHandoff>,
     handoff_started: AtomicBool,
+    original_retired: AtomicBool,
     progress: PinProgress,
     decision: Mutex<decision::DecisionCustody>,
+    serving_queue: Arc<crate::distribution_native_host::NativeRemoteServingQueue>,
+    // Weak observation route only. The actual serialized host retains custody;
+    // a listener cannot reconstruct a preparation or keep its owner alive.
+    remote_bridge: Mutex<
+        Option<(
+            Weak<crate::distribution_range_handoff::NativeJointPreparationCustody>,
+            Weak<crate::db::NativeJointServingBridgeReceipt>,
+        )>,
+    >,
+    remote_prepared:
+        Mutex<Option<Weak<crate::distribution_range_handoff::NativeJointPreparationCustody>>>,
+    remote_release: Mutex<Option<Weak<crate::distribution_data::NativeRemoteReleaseOwner>>>,
 }
 impl NativeRemoteNewParticipant {
     #[allow(clippy::too_many_arguments)]
@@ -149,7 +164,7 @@ impl NativeRemoteNewParticipant {
             )?,
             snapshot,
             original: OriginalParticipant::Old {
-                actual,
+                actual: Mutex::new(Some(actual)),
                 admission,
                 writer,
                 process,
@@ -157,8 +172,13 @@ impl NativeRemoteNewParticipant {
             requests: Mutex::new(BTreeMap::new()),
             handoff: Mutex::new(Default::default()),
             handoff_started: AtomicBool::new(false),
+            original_retired: AtomicBool::new(false),
             progress: Default::default(),
             decision: Mutex::new(Default::default()),
+            serving_queue: Arc::default(),
+            remote_prepared: Mutex::new(None),
+            remote_bridge: Mutex::new(None),
+            remote_release: Mutex::new(None),
         })
     }
 
@@ -267,17 +287,56 @@ impl NativeRemoteNewParticipant {
                 owner: Arc::downgrade(owner),
                 target,
                 service: owner.service().clone(),
-                frozen,
+                frozen: Mutex::new(Some(frozen)),
                 pin: Mutex::new(Some(pin)),
             },
             requests: Mutex::new(BTreeMap::new()),
             handoff: Mutex::new(Default::default()),
             handoff_started: AtomicBool::new(false),
+            original_retired: AtomicBool::new(false),
             progress: Default::default(),
             decision: Mutex::new(Default::default()),
+            serving_queue: Arc::default(),
+            remote_prepared: Mutex::new(None),
+            remote_bridge: Mutex::new(None),
+            remote_release: Mutex::new(None),
         })
     }
 
+    fn require_original_active(&self) -> Result<()> {
+        if self.original_retired.load(Ordering::Acquire) {
+            return Err(invalid(
+                "remote original NEW/DECISION APIs permanently retired after ALL Open",
+            ));
+        }
+        Ok(())
+    }
+    /// Only a clone of the SAME live original owner. Once retired, old NEW,
+    /// DECISION and catalogue paths cannot reconstruct an owner from DATA.
+    pub(super) fn original_old(&self) -> Result<Arc<NativeJointOldObservation>> {
+        match &self.original {
+            OriginalParticipant::Old { actual, .. } => actual
+                .try_lock()
+                .ok_or_else(|| invalid("remote original OLD custody busy"))?
+                .as_ref()
+                .cloned()
+                .ok_or_else(|| invalid("remote original OLD custody permanently retired")),
+            _ => Err(invalid("remote participant is not original OLD")),
+        }
+    }
+    pub(super) fn original_registered_freeze(&self) -> Result<Arc<NativeImageInstallFreeze>> {
+        match &self.original {
+            OriginalParticipant::Registered { frozen, .. } => frozen
+                .try_lock()
+                .ok_or_else(|| invalid("remote original target freeze custody busy"))?
+                .as_ref()
+                .cloned()
+                .ok_or_else(|| invalid("remote original target freeze permanently transferred")),
+            _ => Err(invalid(
+                "remote participant is not original Registered target",
+            )),
+        }
+    }
     pub(crate) fn snapshot(&self) -> &NativeRemoteNewSnapshotV1 {
         &self.snapshot
     }
@@ -285,6 +344,7 @@ impl NativeRemoteNewParticipant {
         self.handoff_started.load(Ordering::Acquire)
     }
     pub(crate) fn require_request(&self, request: &NativeRemoteNewRequestV1) -> Result<()> {
+        self.require_original_active()?;
         request.require_shape()?;
         if request.phase_id != self.snapshot.phase_id
             || self.manifest_bytes
@@ -370,17 +430,18 @@ impl NativeRemoteNewParticipant {
     /// Called only outside metadata/native publication guards. Read-only
     /// observation after handoff verifies the retained freeze, never repins.
     pub(crate) fn require_current(&self, parent: &CancellationToken) -> Result<()> {
+        self.require_original_active()?;
         parent.check()?;
         self.require_lifetime_memory()?;
         match &self.original {
-            OriginalParticipant::Old { actual, .. } => actual.require_current()?,
+            OriginalParticipant::Old { .. } => self.original_old()?.require_current()?,
             OriginalParticipant::Registered {
                 target,
                 service,
-                frozen,
                 pin,
                 ..
             } => {
+                let frozen = self.original_registered_freeze()?;
                 let service = service
                     .try_lock()
                     .ok_or_else(|| invalid("remote NEW current target service busy"))?;
@@ -529,7 +590,8 @@ impl NativeRemoteNewParticipant {
         }
         permit.require_memory_current()?;
         match &self.original {
-            OriginalParticipant::Old { actual, .. } => {
+            OriginalParticipant::Old { .. } => {
+                let actual = self.original_old()?;
                 // The source's outstanding S2 capture clones prevent this
                 // take. Only actual prior export retirement lets it drain.
                 let dropped = actual.take_remote_new_decision_pin(&permit)?;
@@ -611,7 +673,7 @@ impl NativeRemoteNewParticipant {
             old_read_pin_detached: old,
             target_materialization_pin_detached: target_materialization,
             target_export_pin_detached: target_export,
-            original_freeze_retained: true,
+            original_freeze_retained: !self.original_retired.load(Ordering::Acquire),
         }))
     }
 }
@@ -654,7 +716,8 @@ impl NativeRemoteNewParticipant {
             "old_pin_reference_detached":self.progress.old.load(Ordering::Acquire),
             "target_materialization_reference_detached":self.progress.target_materialization.load(Ordering::Acquire),
             "target_export_reference_detached":self.progress.target_export.load(Ordering::Acquire),
-            "original_freeze_still_retained":true,"RAM_custody_not_native_decision":true,
+            "original_freeze_still_retained":!self.original_retired.load(Ordering::Acquire),
+            "original_phase_retired":self.original_retired.load(Ordering::Acquire),"RAM_custody_not_native_decision":true,
             "not_a_Ready_or_Serving_grant":true,
         }))
     }
@@ -739,7 +802,11 @@ impl NativeRemoteNewPinHandoffPermit<'_> {
         old: &NativeJointOldObservation,
     ) -> Result<()> {
         match &self.participant.original {
-            OriginalParticipant::Old { actual, .. } if std::ptr::eq(actual.as_ref(), old) => Ok(()),
+            OriginalParticipant::Old { .. }
+                if std::ptr::eq(self.participant.original_old()?.as_ref(), old) =>
+            {
+                Ok(())
+            }
             _ => Err(invalid(
                 "remote pin handoff changed original actual OLD owner",
             )),
@@ -774,5 +841,15 @@ impl NativeRemoteNewPinHandoffPermit<'_> {
             .progress
             .target_export
             .store(true, Ordering::Release);
+    }
+}
+
+impl NativeRemoteNewParticipant {
+    /// Ownership/access to the SAME queue only. Every consumer still checks
+    /// actual authenticated work and its physical successor at use.
+    pub(crate) fn retained_serving_queue(
+        &self,
+    ) -> Arc<crate::distribution_native_host::NativeRemoteServingQueue> {
+        self.serving_queue.clone()
     }
 }

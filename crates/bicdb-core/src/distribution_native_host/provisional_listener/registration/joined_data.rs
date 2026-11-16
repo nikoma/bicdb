@@ -411,6 +411,29 @@ impl NativeJoinedDataHost {
 }
 impl NativeMetadataControlHost {
     #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_registered_policy_socket_profile(
+        &self,
+        range: crate::RangeId,
+        phase: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        let decision =
+            self.test_registered_policy_successor_decision_sha256(range, phase, parent)?;
+        let joined = self.joined.as_ref().unwrap();
+        let old = self
+            .replica
+            .as_ref()
+            .ok_or_else(|| invalid("actual original Registered listener owner absent"))?;
+        Ok(serde_json::json!({"actual_Registered_Joined_owner":true,
+            "actual_replacement_listener_bound":joined.listener.is_some(),
+            "actual_APP_dispatcher_published":joined.published.load(Ordering::Acquire),
+            "actual_original_drained_owner_verified":true,
+            "original_listeners":old.test_retained_listener_presence(),
+            "actual_native_decision":decision,
+            "actual_original_install_evidence":self.test_registered_first_policy_evidence()?,
+            "readonly_DATA_not_policy_authority":true}))
+    }
+    #[cfg(test)]
     pub(in crate::distribution_native_host) fn test_registered_first_policy_evidence(
         &self,
     ) -> Result<serde_json::Value> {
@@ -569,5 +592,80 @@ impl NativeMetadataControlHost {
             Arc::clone(&owner.parts.runtime),
             Arc::clone(&owner.parts.backend.transport),
         ))
+    }
+}
+
+impl NativeMetadataControlHost {
+    /// SAME actual transferred Installed guard/coordinator before deciding an
+    /// old installer is no longer the owner. A None Assigned slot is never
+    /// enough; no empty-hook validation is retried or weakened.
+    pub(in crate::distribution_native_host) fn require_same_remote_registered_joined_policy(
+        &self,
+        successor: &Arc<crate::distribution_data::NativeRemoteReleaseOwner>,
+        range: crate::RangeId,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        successor.require_memory_lifetime()?;
+        let joined = self
+            .joined
+            .as_ref()
+            .ok_or_else(|| invalid("Policy original Joined owner absent"))?;
+        let original = joined
+            .registered
+            .as_ref()
+            .ok_or_else(|| invalid("Policy cannot cast a generic Joined owner"))?;
+        original.require_original_lifetime()?;
+        let owner = original.registered_owner();
+        if !successor.domain().phase_owner().same_actual(
+            &crate::db::NativeJointPhaseOwner::Registered(Arc::downgrade(&owner)),
+        ) || !Arc::ptr_eq(successor.service(), &joined.parts.backend.service)
+            || original.range.id != range
+            || original.range != *successor.native().data().activation_range()
+            || original.historical_native_bridge().checksum_sha256()
+                != successor.native().checksum_sha256()
+        {
+            return Err(invalid(
+                "Policy changed original transferred Joined/native/Registered owner",
+            ));
+        }
+        original
+            .drained
+            .require_service(&joined.parts.backend.service)?;
+        original.drained.require_store(joined.parts.store.id())?;
+        let enrollment = joined
+            .enrollment
+            .as_ref()
+            .ok_or_else(|| invalid("Policy transferred Joined Installed enrollment absent"))?;
+        if !Arc::ptr_eq(&enrollment.guard, &original.guard)
+            || !Arc::ptr_eq(&enrollment.coordinator, &original.coordinator)
+        {
+            return Err(invalid(
+                "Policy replaced actual transferred guard/coordinator",
+            ));
+        }
+        let db = joined
+            .parts
+            .factory
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("Policy original Joined DB busy"))?;
+        original
+            .guard
+            .require_for_coordinator(&db, &original.range, &original.coordinator)?;
+        parent.check()
+    }
+}
+
+impl NativeMetadataControlHost {
+    pub(in crate::distribution_native_host) fn publish_remote_registered_joined_data(
+        &mut self,
+        policy: &crate::distribution_range_handoff::NativeJointServingPolicyAdmission,
+        parent: &CancellationToken,
+    ) -> Result<usize> {
+        self.joined
+            .as_mut()
+            .ok_or_else(|| invalid("actual original Joined owner absent for local Policy"))?
+            .publish_registered_with_policy(parent, policy)
     }
 }

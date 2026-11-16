@@ -276,7 +276,20 @@ fn run(
                 }
                 _ => unreachable!(),
             };
-            if !error.to_string().contains(expected) {
+            let expected_refusal = if matches!(case, SourceCase::TargetPreparedFreshMissingArchive)
+            {
+                // Physical deletion is established above and the original
+                // record/archive and live-request assertions below remain.
+                // Either exact archive check can be reached first by the
+                // current collection implementation; unrelated errors fail.
+                matches!(&error, crate::BicDbError::Cluster(detail)
+                    if matches!(detail.as_str(),
+                        "native range image: NEW joint preparation immutable archive missing"
+                        | "native range image: publication scope lost actual preparation pointer/archive"))
+            } else {
+                error.to_string().contains(expected)
+            };
+            if !expected_refusal {
                 return Err(error);
             }
             if before_request["remaining_us"].as_u64().unwrap_or(0) == 0

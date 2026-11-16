@@ -307,6 +307,37 @@ impl NativeRemoteOldCutCertificate {
     pub(crate) fn selected_source_id(&self) -> &ClusterNodeId {
         self.source.node_id()
     }
+    /// Historical association of THIS genuine retained certificate. Called
+    /// before the short ALL-Open retirement gate, never to issue new OLD,
+    /// native, catalogue or Serving authority or revive the old Role.
+    pub(crate) fn require_all_open_retirement_identity(
+        &self,
+        manifest: &crate::distribution_range_image::NativeRemoteImageManifestV1,
+    ) -> Result<()> {
+        manifest.require_shape()?;
+        crate::distribution_range_image::NativeSourceExportBindingV1::from_manifest(manifest)?
+            .require_plan(&self.plan)?;
+        if self.digest != manifest.old_quorum_sha256
+            || self.facts != manifest.actual_old_closures
+            || self.peers.len() != manifest.old_members.len()
+            || self.constraints.len() != self.peers.len()
+            || self.source.node_id() != &manifest.source_id
+            || self.source.materialized_facts() != manifest.actual_old_closures[&manifest.source_id]
+            || self.source.range_index() != manifest.range_index
+            || self.source.logical_genesis_sha256() != manifest.h0
+            || self.source.logical_history_sha256() != manifest.h
+            || self
+                .peers
+                .get(&manifest.source_id)
+                .and_then(|p| p.reply().closed_native_record.as_ref())
+                != Some(&manifest.source_old_close_record)
+        {
+            return Err(invalid(
+                "ALL Open retirement changed genuine original donor certificate/cut",
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn require_current(&self) -> Result<()> {
         self.source.require_current()?;
         if self.peers.len() != self.plan.old_members().len()

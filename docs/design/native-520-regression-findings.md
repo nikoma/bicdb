@@ -1,0 +1,1260 @@
+# Native 520 candidate regression findings
+
+This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe6425cab85dc362`**, tree `66972d1997cc2c4626aa1a02ae94dd13d880329b`, and retains later exact-source checkpoints separately. Source326 is a failed CI candidate, not a qualified release. Its tested pull-request checkout was `44d50d087cd1e4fefdba93e3f539b1806f232f83`, with that same tree. Corrections retain their individual compilation and execution status below; an earlier passing result is not inherited by a successor. The original Azure qualification remains failed and its evidence is unchanged.
+
+## Actual execution
+
+### Source d74: complete failed native execution after compilation
+
+The [full d74 runtime report](native-d74-runtime-findings.md) pins source
+`d74d363addb35b5b97308b1afcc1c2231e021d29`, its actual merge checkout,
+all491 listed native cases and all93 original failures with source/error/cut
+bindings. Native failed397/93/1 after compilation; remaining-workspace passed
+1062/0/6 and CLI6/0. The complete assembled run has10 passing jobs, one failed
+Native job and four optional skips. Original raw logs and ZIPs are frozen and
+independently verified. Earlier results below remain historical.
+
+The prepared current-descriptor, per-operation recovery-authority and startup
+wait corrections retain their own source-only status. None was executed by the
+historical d74 run. Intended fault assertions unreached because of a prerequisite
+remain not tested; no common root cause or acknowledged-data loss is inferred.
+
+### Source62b: complete failed run; compilation and bootstrap availability
+
+Exact candidate **1.0.520-beta / `62b602ca852a4183c4aa7630e2593e10446ff35c`**,
+tree `d659588bb66fb527720903064000e831c7c6c76a`, ran at actual pull-request
+checkout `16e5a38962fc650f7ba065278b471278e01a0b16`, with the same tree.
+All jobs in automatic
+[Tests43780143089](https://github.com/nikoma/bicdb/actions/runs/43780143089)
+and [Rails43780143098](https://github.com/nikoma/bicdb/actions/runs/43780143098)
+finished naturally by **2026-11-16 01:42:37 UTC**: seven passed, four failed and
+four optional jobs skipped. Tests failed; Rails passed. The sole collector exited
+naturally and the complete archive is frozen. No jobs were manually dispatched,
+rerun or cancelled. No source4f result transfers to this head.
+
+| Scope | Classification | Exact observed result and limit |
+| --- | --- | --- |
+| Four static jobs | Passed within scope | Formatting, licensing, public-dependency and selector checks; no native runtime evidence |
+| All-target `133015237885` | Failed | One E0308 in `committed_publication_wait_tests.rs:28:73`; zero cases/summaries. Following no-default consumer check skipped |
+| Core `133015259927` and serial Native `133015259888` | Failed prerequisite; runtime not tested | Actual chaos-helper builds passed; lib-test compilation failed on the same E0308. No Core/native case executed |
+| PGwire `133015259877` | Passed within scope | 511 passed / 0 failed / 2 ignored, 28 summaries and 513 unique cases. These are generic SQL/single-primary application checks, not native distributed SQL qualification |
+| SQL `133015259879` | Passed within scope | 2,682 passed / 0 failed / 4 ignored across 282 summaries; 2,686 case rows / 2,685 bare names. Separate targets share one bare name; no deduplication of executed cases. This is not transparent native distributed SQL acceptance |
+| Rails `133015237665` | Passed within scope | 20 runs / 100 assertions / zero failures, errors or skips; 24 reports and cable messages, zero failed jobs, two overlapping workers. Standalone restart/application acceptance |
+| Remaining workspace `133015259884` | **Failed bootstrap availability** | 950 passed / 1 failed / 2 ignored, 96 summaries and 953 unique cases. Native CLI target5/1 failed its sixth-node join after metadata registration; native factory/voter admission was not reached. Later workspace/offline steps were not reached |
+| Original registry healthy-read/fresh-ACK CLI gate | Passed within current bounded scope | The unchanged gate passed at raw800718. This metadata-only membership change does not move DATA or qualify cold DATA recovery |
+| Corrected compilation, bounded bootstrap wait and native recovery runtime | Not tested | The one-line test correction and separately reviewed bootstrap correction below have not compiled or executed |
+| Physical DATA movement, fault-safe convergence, capacity, RPO/RTO and production qualification | Not tested by this run | Original Azure qualification remains failed |
+
+The E0308 is a test-source type error, not a production-library compile error:
+`ClusterTopology::ranges` is keyed by **u64 start tokens**, whereas the helper
+requires **RangeId**. The new test used `*ranges.keys().next().unwrap()`.
+Correction `f70c40967279c309a53e203e35a2dc20266cff14` reads
+`ranges.values().next().unwrap().id`, preserving the same first map entry.
+No token cast, privacy relaxation, production API change, timeout increase or
+assertion removal is involved. Removing that one-line replacement restores the
+entire source62b test file. The unchanged all-target CI command is the smallest
+compiler reproducer; normal serial-native CI remains the runtime acceptance
+gate after compilation succeeds. Neither was run locally. The exact unchanged
+all-target command in `.github/workflows/tests.yml` is:
+
+```sh
+python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/required-ci-pressure/alltargets.jsonl" -- cargo check --workspace --all-targets --locked
+```
+
+The second failure is reproducible by the unchanged
+`native_metadata_operator_actual_cli_single_join_fresh_becomes_local_metadata_voter`
+case in `crates/bicdb-cli/tests/native_metadata_operator_cli.rs`. It starts four
+metadata hosts, joins/promotes the fifth, performs a real metadata election,
+then joins node `n5` using the original `n0` seed hint. At raw800724 the original
+assertion at line845:13 reports `real native process5 exited`. The failure-only
+artifact confirms that this is the **sixth** process, not slot4/fifth:
+
+```text
+Error: cluster error: native host bootstrap: fresh learner current metadata unavailable: cluster error: cluster node n0 rejected bootstrap RPC cluster_data_operation_failed: cluster error: native host bootstrap: native bootstrap service busy
+```
+
+The process first reported `metadata_identity_committed=true`,
+`metadata_role=learner`, `native_birth_bound=false`, `topology_generation=5` and
+`data_serving=false`. That earlier metadata-registration outcome is not native
+factory, voter or DATA success. Slot5 exited with code1 before diagnostic
+cleanup; slots0–4 were still alive and were SIGKILLed only by the failure-capture
+cleanup. No data rollback, false absence, network partition, particular lock
+holder or hold duration is established by this failure.
+
+The source path is `operator_learner/discovery.rs::discover` → original seed
+bootstrap fetch → `NativeMetadataRegistrationController::bootstrap` in
+`provisional_listener/registration.rs:151–169`. Discovery's first seed fetch has
+a 500ms child of the original parent. The server receives a finite request token,
+but the controller tried the service lock once and immediately rejected it.
+With no successful snapshot, discovery has no additional routes to queue.
+Bootstrap snapshots are routing DATA; fresh OWN and factory admission follow.
+
+[Correction `d60369a7b0ef7a89abb2e840713eb1e82c2ebb2c`](native-bootstrap-finite-service-wait-4f01.md),
+with control/documentation child `4e3cf9abe63ba8d9870d91a59a746e61ea96b857`,
+uses the existing bounded actual-service identity helper for an already finite
+original caller. It releases the service guard before MStore acquisition.
+Unbounded callers retain the exact instantaneous error. It adds no RPC retry,
+proposal, cached-snapshot fallback or longer request/CLI window. Four genuine
+normal-host control definitions exercise release, sampled-live cancellation,
+expiry and original unbounded refusal. They are **not executed**. The original
+six CLI assertions remain the process-level acceptance gate; source inspection
+does not prove the observed lock would have cleared within the request budget.
+
+Complete original raw logs, retained before any source correction push:
+
+| Job | Raw bytes | Raw SHA-256 |
+| --- | ---: | --- |
+| All-target | 1,388,506 | `a6b99d88ca79110ff13523bf4da9996de8201e20a071834457f6b6101049b930` |
+| Core | 2,517,974 | `a31e2d425530a84f8b8cbf3d6187ae457b3251d9330a178555348ad0b59cb60c` |
+| Serial Native | 1,357,577 | `aa7ad2d2bb4937b72a50957275569630788812188ebf0192e20763dcd6e8978c` |
+| PGwire | 1,508,453 | `1ad8eb4aad06a50fb299467bd4b156c0b782a4d79145de030d50e581c0bf8ae4` |
+| SQL | 348,968,500 | `11141b9ec262eb7396ef41bf27cfaa950eb86d9912ba58338863d469e5a9cf6d` |
+| Remaining workspace | 101,339,886 | `c1f96ad340c1289ba9d7c88aa412ffa7699309374fc6373fb2ed6cdf6e275568` |
+| Rails | 1,373,002 | `f0b0278bcd9664e43869ce1c0830f58d0fa9d2469ef24ccd272c8730dc13f60b` |
+
+The original Rails artifact `14188416877` contains 16 members / 13,112 ZIP
+bytes, SHA-256 `d5e9f9358773c9ac1b198d4c1bad8dc81ac09012885119da3ad37fb6a03f1c8a`.
+The actual CI debug binary SHA-256 is
+`d79c6da545d36fc2cc3aef430664862331b9e2983898e425be7943b2128553c6`;
+the executable is not retained in that ZIP and is not a release or deployment.
+Independent full Rails-log/ZIP verification receipt SHA-256:
+`b302bce83cfc3c6f936a12be0f890e68c5d4b6733e0825f9ad36e3ca52135267`.
+
+SQL's independent complete-stream/control receipt SHA-256 is
+`a720664ee9fddc1585f5c26d23f9014eaaaaef31c6d4de0ea29bbe67a8d12886`;
+root's corrected full case inventory SHA-256 is
+`9d709e91323589a4bc379d375d487445d047eeeff54587275fa7a18b7e2159b5`.
+The first root row parser omitted two ignored rows with comma-delimited
+reasons; the preserved original full-raw/summary receipt still counted all four
+ignored tests in the 282 summaries. The corrected inventory retains both rows
+and agrees with the independent stream review; no test result was changed.
+
+The complete read-only archive has **99 files / 96 premanifest files**, eleven
+full gzip logs and eight original ZIPs/62 members. Manifest SHA-256:
+`f7518c6138d7e007912f7a22acc8c136072125831fdbddc8b60dc78783c6439e`.
+Independent complete stored/raw/API/ZIP CRC/member verification receipt:
+`1633ce08cd2194fb7eb9af8c3589563f199d19c59cb3acd5dc932fb5164a9f89`.
+Root's final file/readonly/checkout/process closure receipt:
+`99020f8fb864b4e599579bc006d7703e36e28382031c0209642bb8d15458fe53`.
+Ten checkout-bearing logs match `16e5`; the selector log has no checkout.
+Both positive integrity verification and wrong-manifest refusal were checked.
+
+Original failure ZIP `14190647770` contains 38 members / 87,566 bytes, SHA-256
+`e20f4e07eb8f18487c2db51350442712e88eb62602f1456ddb2a814c435aea77`.
+Its 34 allowlisted file hashes reconcile with the process manifest. Conditional
+missing paths, including node5's not-created native root/status, remain explicitly
+listed. This is an allowlisted stopped-process diagnostic capture, not a complete
+DB image or campaign ACK ledger; DB trees and TLS keys/certificates are excluded.
+Failed scenarios and all predecessor archives remain unchanged.
+
+The [separate ordinary-PG entry inspection](ordinary-postgresql-native-entry-62b602ca.md)
+pins the same source and distinguishes native Strong admission from local SQL.
+Its startup-order/embedding finding is **inconclusive as a runtime defect**:
+source proves a missing mandatory admission boundary and a conditional exposure
+path, but no incorrect SQL result was executed. Its proposed explicit guard and
+actual-native-root controls remain not tested.
+
+The [prepared correction composition after source4f](native-4f-runtime-corrections.md)
+records its exact implementing commits, source-only reviews and unchanged
+validation/qualification gates. Its compilation and runtime execution are still
+not tested at that prepared checkpoint. The executed source4f result below is
+the preceding failed candidate, not a passing result for the correction.
+
+### Source4f: complete run failed native runtime; remaining workspace passed
+
+Candidate **1.0.520-beta / `4f33a8b016a999d43410ca8698270dc01fbeffd6`**,
+tree `4c87ba7caed1e5a9043eac854d7bdf15ac00b15d`, executed at actual PR
+checkout `2f42e67a11c5d8f81d79e170edd0814d4a741d2d` with the same tree.
+All jobs in normal
+[Tests43767288668](https://github.com/nikoma/bicdb/actions/runs/43767288668)
+and Rails43767288693 finished naturally by **2026-11-15 23:59:13 UTC**:
+ten passed, one failed and four optional jobs skipped. Native failed;
+remaining-workspace passed. The candidate remains draft and unmerged. Main is still
+**1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
+
+| Scope | Classification | Observed result and limit |
+| --- | --- | --- |
+| All-target and no-default consumer compilation | Passed | Both checks ran successfully. Compilation does not establish runtime HA |
+| Nonserial Core | Passed within scope | 1,875/0/16 across 138 main-suite summaries plus one separately isolated child pass. The serial native namespaces are excluded |
+| SQL | Passed within scope | 2,682/0/4 across 282 summaries. Two integration targets share a bare test name and both actually ran |
+| PGwire | Passed within scope | 511/0/2, including separate Oracle HR 50/0 and embedded HA 11/0; not a complete Oracle-profile qualification |
+| Rails | Passed within scope | 20 runs/100 assertions, no failures/errors/skips; 24 reports and cable messages. Standalone application acceptance, not distributed HA |
+| Serial native job `132975184551` | **Failed** | 387 passed / 84 failed / 1 ignored, 989 filtered, 2,971.93 seconds. All 472 listed cases accounted for; 67 FIRST failures and 17 learner/hot-policy failures |
+| Registry Known/Unknown correction | Passed within component scope | Both new actual-native-outcome controls passed, as did the original cancellation/old-Store control. Original CLI availability separately passed below |
+| Remaining workspace and original CLI availability | Passed within scope | 1,062/0/6 across 129 summaries and 1,068 unique case rows. Actual native CLI target6/0/0 includes the unchanged healthy-existing-read/fresh-ACK/full-readback gate after fifth metadata-voter addition. No DATA relocation |
+| Physical expansion, complete corpus, convergence, capacity and production admission | Not tested by this run | Original Azure qualification remains failed; no new VMs |
+
+Native full raw log: **206,768,590 bytes**, SHA256
+`b2c2ccb8bb005fbd8970824f90a962ccb02c56882571b5297aef05b485efd5c4`;
+gzip SHA256 `5e7c581c16af9f3e295202c5ec9bacd8ca163a275e639ce4ef7af641067f0db8`.
+Independent whole-log outcome inventory SHA256
+`3a1fef2bf4e14be7baeb159a083dc27df46209d4136fb5cbec5af2444ee77c07`
+and independently matched FIRST actual-cut projection SHA256
+`2cefb4dc4497e3ec367c9a8420a0b61d7f42b42333d48e0e6b64ddb3f8e31dea`
+retain exact case names, raw offsets, original errors and reached operations.
+Direct stderr and libtest output interleave: an adjacent test name alone is not
+used to attribute a diagnostic. Failed scenarios remain failed; intended fault
+phases not reached remain not tested. No timeout or assertion has been relaxed.
+
+REST job `132975184518` full raw log: **163,814,084 bytes**, SHA256
+`8d8fe385b3751a3378e572a5a8ff733753ac476ad0360661b9ac7f306137cd5c`;
+gzip SHA256 `e04a56108ad47949dbe67c6995872ae0caeb7e55d1c4b0b7ab7e9b74d81ae931`.
+Independent complete-stream/result receipt SHA256
+`52e61381401d2dd96f14c5cce0c9b32278875655597f636f03a2c1f58e388193`
+retains all summaries and case rows. The six native CLI pass rows are
+raw799889–799894; its target summary at raw799896 is 6/0/0 in 125.26 seconds.
+The original fifth-voter availability gate is raw799894. This uses five database
+processes on one CI runner: four original DATA writers plus a fifth metadata
+member. DATA assignments remain unchanged and
+no relocation or populated DATA cold restart is established. A passing
+promoted metadata-voter restart is not a DATA-host restart qualification.
+
+The complete archive is frozen read-only: **96 files / 93 premanifest files**,
+eleven full gzip logs and eight original ZIPs/28 members. Manifest SHA256
+`320733868a453f83a4aa3eb885c44126e438a12615a6e6482073016c6677d608`.
+Independent full-byte/source/API inventory/ZIP CRC and member verification
+receipt SHA256 is
+`3fcef4de7951cdd47f9ea857d8bb25b583c1cd68581582de0f1a6a61082ffa81`.
+Independent checkout/Core/actual-CLI-journal closure receipt SHA256 is
+`577042963b63640ce044f917d0609a272f236f6564bccc8323d3bcad2248fd9c`.
+Ten checkout-bearing logs agree on `2f42`; the selector log has no checkout.
+Core's generic timestamp parser misses one interleaved parent row; its separate
+deinterleaved classification retains all 1,891 main case names, 1,875/0/16,
+plus the isolated child pass. Earlier explicit child accounting remains valid.
+
+The actual CLI ZIP contains three instrumented journals/593 rows, not wire
+coverage for all six CLI cases. The registry journal has 54 rows/ten logical
+operations: two bootstrap-data results, two real USER_ACKs, three present full-
+value Strong results and three expected receiver refusals. Both ACK payload
+hashes and every Strong full value reconcile within that journal. The same
+original SDK/caller `n0` routes actual original-key requests to `n0` and fresh-key
+requests to `n2`; this is not proof of one SQL endpoint or SQL forwarding. These
+are same-runner CI journals, not the independent physical campaign collector.
+
+The source-pinned issue reports below describe observed failures, not passing
+fixes. Corrective implementation and its future execution remain separate.
+
+| Issue and reproducible trigger | Evidence and source cause | Next smallest deterministic test |
+| --- | --- | --- |
+| Activation rejects a lawful allocated range before FIRST starts | 26 cases stop during post-allocation writer refresh with `activation decision differs from actual native serving/history`. [Serving publication](../../crates/bicdb-core/src/db/range_image_native/serving_configuration.rs) verifies the actual SAME-State allocation and records the effective three DATA voters; [activation construction](../../crates/bicdb-core/src/db/range_image_native/serving_configuration/activation_decision.rs) records the full metadata range, including its learner, then directly compares that four-entry descriptor to the native three-voter descriptor. This confirmed descriptor mismatch is not proof of data loss | Perform actual allocation, completion and activation with unchanged full metadata/learner scope and verified effective native voters; require both exact descriptors, fresh role and original authority. Negative shape/epoch/authority cases must refuse before new decision IO. Existing later handoff controls must then reach their actual cuts |
+| Finite metadata maintenance loses its bounded wait before status/publication | Three allocation controls fail setup with `native control status service busy`; two others fail publication with `control service busy before publication`. The [operator maintenance](../../crates/bicdb-core/src/distribution_native_host/operator.rs) calls status with the original uncancelable parent after an internally bounded controller operation. [Committed publication](../../crates/bicdb-core/src/distribution_native_host/provisional_listener/control_backend.rs) uses an immediate service try-lock. These are observed early lock refusals, not demonstrated native sync Unknown outcomes | Hold the actual service guard, start one finite original operation, then separately release, cancel or expire it. Preserve the original end-to-end deadline and issued operation; do not reissue a committed metadata proposal or replace a positive availability assertion with refusal |
+| Concurrent initial DATA startup refuses singleton cleanup initialization | One allocation control fails its fixture prerequisite with `initial DATA cleanup worker is being initialized; retry`; the process-global worker is still initializing. No underlying worker startup failure is demonstrated | Contend actual initialization with concurrent ordinary host startup under their original finite parents; start exactly one worker, retain real startup errors and verify bounded cancellation/expiry without holding service/DB locks while waiting |
+| Learner/hot-policy acceptance does not finish | 17 failed cases include actual `QueryTimedOut`, an unreached native boundary and an unfired expected fault cut. Their source causes are still under investigation; a common explanation is not established | Isolate the first failed original operation and actual reached phase before changing code. Preserve all original 5-second policy, 2-second SDK and injected-fault assertions; execute the later fault only after its real prerequisite succeeds |
+
+The unchanged serial-job reproducer is recorded below, **not run locally**:
+
+```sh
+python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/required-ci-pressure/native.jsonl" -- cargo test --config 'profile.dev.package."*".opt-level=2' --config profile.dev.opt-level=1 -p bicdb-core --lib --locked -- distribution_native_host:: range_image_native::rf3_fixture:: --test-threads=1
+```
+
+The workflow's existing chaos-helper build remains a prerequisite. No manual
+dispatch, rerun or cancellation was used. The sole collector exited naturally;
+complete final artifact inventory and integrity review passed as scoped above.
+Passing components
+and earlier revisions cannot qualify this failed assembled native candidate.
+
+### Local corrective source after the complete d3 failure
+
+The corrective composition at `0bc9f88e3a5fb89951d2b4ea8937e4ab1baf8bab`
+includes the separately frozen registry fix
+`b821a97e1f0ae7ddd7974a9e96a53e0ba81f6797`, alongside the minimal validator
+and test-cut corrections below. Its [retained registry publication contract](native-registry-pending-owned-publication.md)
+separates the publisher's original-identity preflight from ordinary APP/Strong
+admission, retains the actual native API outcome before late checks and refuses
+to adopt Unknown outcomes from visible bytes. The original CLI healthy-read/
+fresh-ACK assertions and two-second SDK calls remain unchanged. Two new
+same-process component controls cover actual Known-return cancellation and
+native sync Unknown. This composition has passed source formatting, preservation
+and version checks; it has **not compiled or executed**. Source review and these
+new test definitions do not repair the retained d3 result or establish HA.
+
+### Sourced3: complete failed run; registry-only availability failed
+
+Public draft **1.0.520-beta / `d3af39c107951802a612d31b42e70fd4bc90e71c`**,
+tree `a80a2894bf8d852641788f23cca142d7f1fb977b`, runs at actual PR checkout
+`7d5f1066dc3c1a666b4daa1d5f1468ee1ebf6595` with the same tree in normal
+[Tests43757717285](https://github.com/nikoma/bicdb/actions/runs/43757717285) and
+[Rails43757717284](https://github.com/nikoma/bicdb/actions/runs/43757717284).
+All jobs finished naturally and the sole collector exited. Tests **failed**;
+Rails passed. Across both runs, seven jobs passed, four failed and four optional
+jobs were skipped. SQL132945377726 completed successfully; remaining-workspace
+132945377712 executed a failing native CLI availability control. There was no
+manual workflow dispatch, rerun or cancellation. Main remains
+**1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
+The source is unmerged and not production-qualified.
+
+| Scope | Classification | Actual result and limit |
+| --- | --- | --- |
+| All-target132945355208 | Failed | Exactly one E0624: TLS probe control at `distribution_metadata_read_provider/tests/tls/probe_rebind_tests.rs:570` calls private `MetadataReadAcquireResponse::validate` at `distribution_consensus.rs:818`; zero executed cases/summaries. The following no-Core-default consumer step was skipped |
+| Core132945377727 and Native132945377679 | Failed prerequisite; runtime not tested | Actual production chaos-helper builds passed. Their subsequent library-test compilation failed on that same E0624. Zero Core/native cases and no new native phase, health or allocation cuts executed |
+| Formatting and three static jobs | Passed within scope | Nested-module resolution now succeeds. Dependency, licensing and selector checks passed; these do not execute native acceptance |
+| PGwire132945377717 | Passed within scope | 511 passed / 0 failed / 2 ignored, 513 unique cases across 28 summaries. Separate Oracle HR target 50/0, embedded HA 11/0, verification 3/0 and protocol target 195/0. These targets do not all run under one Oracle profile |
+| Rails132945355061 | Passed within scope | 20 runs / 100 assertions, zero failures/errors/skips; 24 reports, 24 cable messages, zero failed jobs, two overlapping workers; migration/seed/HTTP/WebSocket and standalone restart acceptance |
+| SQL132945377726 | Passed within scope | 2,682 passed / 0 failed / 4 ignored across 282 summaries; 2,686 result rows / 2,685 unique names. Actual committed-error DDL/row/GUC cleanup and durability SQLSTATE controls passed |
+| Remaining-workspace132945377712 | **Failed availability** | 950 passed / 1 failed / 2 ignored across 96 summaries, 953 unique cases. Native CLI target5/1 failed its actual healthy-old-read/fresh-ACK/readback gate after metadata-only fifth-voter addition. No DATA relocation was attempted; later AppHost and offline Python/Node steps were not reached |
+| Full corrected native runtime, physical expansion and production qualification | Not tested | Component passes do not clear these gates |
+
+The complete frozen archive contains **99 files / 96 premanifest files**,
+eleven full gzip logs and eight original ZIPs/59 members. Manifest SHA256
+`e6f530e22fcac189270c191c09cfef78074e2863ed0e1eb099e273e496cd8ac3`.
+Independent root full-archive receipt SHA256
+`a2c7b56d4f2d02bd3b219d0de8eed86578c6ba4f229eb4780f568c1242e42d94`
+verifies complete job/artifact inventories, stored/raw log hashes, original
+ZIP/API digest/size, CRC/member hashes and source/tree. Capture-side positive
+and deliberately wrong-digest refusal controls are retained. All eight actual
+upload IDs match the captured API/ZIP inventory. Ten checkout-bearing logs
+use the exact merge checkout; the selector job has no checkout. The canonical
+archive is read-only and every predecessor archive is unchanged.
+
+The runtime failure is
+`writer_registry_refresh_baseline::native_metadata_registry_addition_actual_cli_requires_healthy_existing_read_and_fresh_ack`
+at `crates/bicdb-cli/tests/native_metadata_operator_cli/writer_registry_refresh_baseline.rs:463`.
+The original public APP ACK and full Strong value succeeded before the fifth
+metadata voter. After that real registry-only addition, DATA assignments and
+all four original writer bindings stayed unchanged. Both rounds' existing-ACK
+reads returned typed Unavailable/WriterAdmission; both fresh writes received no
+user ACK and remain `NO_USER_ACK_OUTCOME_UNKNOWN`. All four registry publications
+were pending with no verified extension. The original ten-second healthy-triple
+receipt never arrived. `observed_false_absence=false` and
+`observed_wrong_value=false` describe only those observed calls; unavailable
+reads establish neither durable acknowledged-data loss nor survival.
+
+REST full raw log: 101,326,215 bytes, SHA256
+`9de5435590ccdf2df531ffcdba1ec16d535adfa6d07598545f8019cb2c0219bf`;
+gzip SHA256 `8f31670a2b013c7d21ad7022d339144d0a9f1d564cc3fec0ea060b81a4837c07`.
+Independent root complete-stream/result projection SHA256
+`ca97e587bd6191719d34b0e7f931e355ed7f0d6a6b6ed425a0a542c25eb2d964`
+retains original operation errors and the four actual after-health bindings.
+Terminal row is raw799516, panic799519–799520, final target summary799529.
+The original CLI journal has586 rows/562 RPC phases. CI output can be buffered;
+raw log timestamps are not independent phase timing. The test retains actual
+monotonic API-receipt elapsed fields and its original two-second SDK calls.
+Five other native CLI cases passed, including four-process APP/Strong and the
+bounded registered/promoted metadata restart cases; those do not establish
+populated DATA cold recovery. AppRuntime159/0/1 and Cell40/0/0 are component
+passes in the prefix, not full workspace or production qualification. This is
+neither the historical main519 AppHost AddressInUse failure nor a compile error.
+
+Source trace identifies a candidate regression in the registry-only publisher:
+`refresh_metadata_registry` sets the registry-pending fence, then its final
+`with_current_for_publication` calls the origin validator, which reaches
+`require_original_database` and the newly strict `require_range`. That getter
+refuses the very pending flag that the publisher must resolve. Fresh retry
+preparation encounters the same refusal. The APP/Strong pending fence is valid;
+a correction must use a separate original-owner refresh preflight and actual
+retained native outcomes. A visible CURRENT record or Committed status alone
+cannot turn a native API error into Known. No such production correction is
+included in the minimal `980b` compile/test-control unit below; the corrective
+batch is incomplete until this availability defect is fixed and tested.
+
+The unchanged focused reproducer is:
+
+```sh
+cargo test -p bicdb-cli --test native_metadata_operator_cli --locked writer_registry_refresh_baseline::native_metadata_registry_addition_actual_cli_requires_healthy_existing_read_and_fresh_ack -- --exact --test-threads=1
+```
+
+It is recorded, not run locally. Preserve the full original ten-second healthy
+receipt requirement, both two-second read/write probes, existing ACK value,
+same-owner checks and all refusal/uncertainty assertions. Do not replace this
+positive availability assertion with a passing refusal.
+
+SQL's complete original raw log is 348,523,507 bytes, SHA256
+`7fd5480f8ea9df1520232e719d10db31af32ab313c961ac3d808e2e35c15ba37`;
+gzip SHA256 `6e60d96808e6834e35a358d50a27ddc5e02ca88c4713cd7092ddf10bc8bd1a6b`.
+Independent root full-stream receipt SHA256
+`67c528dad91850983e6d7296f7efa0c8bae6014eb6c7a079cdd31a715b2d4a41`
+verifies every byte and all case/summaries. The genuine post-commit in-memory
+model dimension error preserves SQL DDL/row/GUC and original error at raw14372;
+its separate SQLSTATE control passed at raw13829. That unit checks constructed
+error mappings; neither control injects disk EIO. This is local SQL acceptance on d3,
+not Core's unexecuted native/timed-Unknown controls or general distributed SQL.
+The same bare name appears in two distinct test targets; both cases executed.
+Bare-name uniqueness is not case identity across binaries, and these are not
+independent physical trials.
+
+The actual all-target raw log is 1,395,187 bytes, SHA256
+`2ee177da3d88f9a99bda3abc8148b3dc02610f3b8c4eab8802f1933f580c25f9`;
+independent root scope receipt
+`5e54cf183a7ad6b0f5666792b6e887ba0e25c38fb469b4c6376ed66f50e68516`.
+Native raw SHA256
+`06c9b16a1a3b3d4b0749346c8820276b134e1df22f87c40cfa6e8545970a4c15`;
+Core raw SHA256
+`7f5a312c73a1a33492d92b968a8542374d2411e4ee11ba6db5bb250caeca3a44`.
+Core independent root scope receipt
+`2dab64fdc41ae10a172af6c0b2d56f3aba3ee751dc4ecf45dafdff854ff710ee`.
+The earlier two e2 library diagnostics are absent from these builds; that is
+not an all-profile/compiler-suite pass. The last executed native result remains
+source7e99's 396/55/1 below, not a result of d3 or its successor.
+
+Rails raw SHA256
+`0091f1f9da70bdb845d03342426c3cf58ac54fc3c2b331f3e811ec56d68214fc`;
+its original artifact `14179176774` has 16 members and API/archive digest
+`1bfb03f86ce500e96dd7d643fbc99ff8651b07cbe2ec070ed330584fd1a453c0`.
+Independent root full-log/artifact receipt SHA256
+`9e7cb3491818e36244139f80d858a09c6a5a63acf0c5ab5d0b1b77a6eeeaeb4d`.
+The CI report hashes its actual debug executable as
+`0de8eeeef2bb63a9328c4b7b2d59b6fcfa46496adf4e6d8be4aad12cb76af709`;
+the executable itself is not in that evidence ZIP and is not a released or
+verified deployment binary. The harness requests KILL of the actual child
+before queue/cache-canary reconciliation; no independent kernel signal-delivery
+receipt is retained. This is standalone application restart acceptance, not
+native HA, independent-machine or Azure fault qualification.
+
+The smallest reproducer is the unchanged workflow all-target command:
+
+```sh
+cargo check --workspace --all-targets --locked
+```
+
+The existing memory wrapper remains required in CI. No local Cargo/compiler or
+Rust test was executed. The separate minimal successor is
+`980b5983c927859c6218edc78e17b68d71eae2ac`, built on the test-control correction
+`24a7fd168dcfdca8ac39fe96c6a36c9909b994e7`:
+
+| Finding | Classification and correction | Next smallest actual test |
+| --- | --- | --- |
+| Sibling TLS control cannot call the complete response validator | Failed compilation, confirmed by full original log. Permit only its actual crate ancestor via `pub(super)`; the complete validator body, original assertion, proof-producing path and authenticated transport checks remain unchanged. It returns response-DATA validation only and mints no authority | Exact corrected all-target compilation, then unchanged real TLS rebind/cancellation controls in Core; the no-default consumer check must run separately |
+| Test mode 4 consumed before its actual final publication cut | Failed source contract; runtime not tested. This is not an observed d3 runtime failure. Preserve modes 2 and 4 until their existing later producers; no production behavior or guard weakening | Actual held-version health control must retain live parent/OWN, genuine Known XID, fired count and exact atomic refusal |
+| Later mode-0 native attempt overwrites mode-1 original pre-IO XID 0 | Failed source contract; runtime not tested. This is not an observed d3 runtime failure. Post-native stamping requires this invocation's mode 3 and its retained mode-3 cut | Existing pre-IO control must retain XID 0 after genuine fresh completion; mode 2 must reuse its exact Known XID and mode 3 must retain named-fault/Unknown evidence |
+| Relationship to the original Azure temporary unreadability | Inconclusive | Missing original route/error/epoch/watermark/restoration evidence cannot be reconstructed by these source fixes |
+
+See the [test-cut preservation unit](native-allocation-test-cut-retention-d3.md)
+and [validator visibility unit](native-metadata-probe-rebind-validation-visibility-d3.md).
+Root reviews `ac4979d2e340d1aafb4962194c5e31019ab4602dc77327e80e1340fdff4f83f4`
+and `d776749d9f0702f37d949aa825c17eef4c2c5dcc61a98f8859cc8fc16e0619d4`
+reverse only the declared gated edits/visibility token to recover the original
+whole files. Independent peer reviews are
+`509062b7fd536916bc74d72cf6ba31ac31010fa40251da983f73dd8585563661` and
+`a9ac157b5c758559ace0ec44eea4b5282c17e6301226c69a010f35508ccec6bd`.
+Original assertions, full validation, fault counts, request/SDK windows and
+later APP/Strong tails remain intact. Standalone formatting and source review
+pass within their recorded scope; corrected compilation/runtime are **not tested**.
+The separate RegistryAfterAllocation source unit is excluded from this minimal
+successor. No original Azure or production gate changes.
+
+### Sourcee2: completed run failed compilation; native execution not reached
+
+The assembled runtime correction candidate **1.0.520-beta /
+`e2adb410befd41bd475f015fd6590c33d1afaa4f`**, tree
+`11e9da9b2888e9be5f7f7e4cb5c0ff00515a36f4`, ran at actual PR checkout
+`6e8e67d1d646a8373ad6cc9798682469892936f0` with the same tree. Both normal
+[Tests43755322556](https://github.com/nikoma/bicdb/actions/runs/43755322556) and
+[Rails43755322604](https://github.com/nikoma/bicdb/actions/runs/43755322604)
+finished naturally and failed. Across both runs: three jobs passed, eight
+failed and four optional jobs were skipped. Main remains **1.0.519-beta /
+`587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**. No source merge, release,
+deployment or physical qualification is established by this run.
+
+| Scope | Classification | Exact evidence and boundary |
+| --- | --- | --- |
+| All-target132938046568 | Failed | Library E0277: `RetainedAllocationAttempt` lacks `Debug`, required by `NativeWriterHostState`; E0624: `observe_allocation_epoch` is inaccessible to its ancestor-module caller |
+| Formatting132938046653 | Failed | Module resolution seeks `complete_joint_tests/combined_domain_tests.rs`; actual tracked child is `complete_joint_tests/open_adversarial_tests/combined_domain_tests.rs`. This is a path-resolution failure, not a whitespace diff |
+| Core132938081301 and Native132938081253 | Failed prerequisite; runtime not tested | Same two library errors while building the chaos helper; zero executed Core/native cases, runtime steps skipped. Neither original controls nor new phase clocks ran |
+| SQL132938081309 and PGwire132938081280 | Failed prerequisite; runtime not tested | Same two errors; zero executed cases/summaries. No PostgreSQL or Oracle acceptance result at this source |
+| Rails132938046486 | Failed prerequisite; application not tested | Same two errors building the CLI; Rails application step skipped, zero application runs |
+| Remaining workspace132938081249 | Failed after a passing prefix | 564 unique cases passed, zero failed/ignored across 40 summaries: Lua5, Page499, Script4, Workflow1, Extension55. Then the Core dependency of `bicdb-sync --lib` failed on the same two errors. Sync runtime and later AppHost/CLI/Cell targets were not reached |
+| Dependency boundary, licensing and selector jobs | Passed within their scope | Three static jobs; selector validation does not check out or execute the repository |
+| Automatic expansion, fault-safe convergence, sustained five-node throughput and production admission | Not tested | Earlier component passes and the 564-case prefix do not clear these gates |
+
+The complete archive is frozen read-only after the sole collector exited
+naturally: **85 total regular files / 82 premanifest files**, eleven complete
+gzip logs and six original ZIPs/six members. Manifest SHA256
+`37696582e5b1fedfd039e9ad57e6266a8b6d0ae5695dae82d62980f9f9f4ba9d`.
+Independent full-archive receipt SHA256
+`5a0597924590576225d45b8c1d728c3afe5520128191553015d61fceccc3f5b5`
+verifies stored/decompressed hashes, source/tree identity, complete API
+inventories, original ZIP sizes/digests, CRCs and member hashes. Capture-side
+positive and deliberate wrong-digest refusal checks are retained; original
+archives are unchanged. Native raw SHA256
+`e5a6ee96f534e5cbc3c49b5c4b4a346e597d883e7c4990575c3f3deede7bbd97`;
+REST raw SHA256
+`e875c1bf9a39cc0e63022bec15ee23b5756a3b4915fa1ad720a9b796c7619bd3`.
+Independent REST scope receipt SHA256
+`b3638e95cc2b48e2be7c9dee23c837819ff970cc64a999f56cf74b82a387fda4`.
+
+The separate three-file source correction is
+`f4569d983fc04116a9dddeef769eb18fb1d2126e`:
+
+- Derive `Debug` for the retained attempt. Source review additionally found
+  its test-only `AllocationCut` also requires `Debug`; that second derive is a
+  source-discovered dependency, **not an observed CI diagnostic**.
+- Permit the existing read-only observer only within its actual `initial_data`
+  ancestor. Its body, original caller and finite request contract are unchanged.
+- Add the exact child `#[path]`; the child tests and their assertions are unchanged.
+
+Independent source review SHA256
+`ee1216c7fb5bba025e3840d08e19e5687e8f100f2dfdd6b10cdeb43910933cf4`
+compares all three whole files back to e2 after reversing only those edits,
+and seven unchanged supporting files. A full recursive standalone
+`rustfmt --edition 2021 --check crates/bicdb-core/src/lib.rs` passes on the
+correction. This is **passed formatting/source review, untested compilation and
+runtime**, not compiler approval. No local Cargo build or Rust test was run.
+
+The smallest next check is normal PR CI on the corrected tree: resolve the
+module graph and both derives/visibility under all-target compilation, then
+execute Core, serial native, SQL, PGwire and Rails without changing their
+selectors, original timeouts, fault assertions or SDK tails. Runtime failures
+must retain their own original errors and reached-cut evidence. The source7e99
+native failures below remain the last executed native result and are not
+reclassified as repaired by this compiler correction.
+
+The independent [distributed SQL checkpoint](distributed-sql-main519-e2-execution-checkpoint.md)
+pins the actual local PGwire path and missing durable coordinator/shared-view
+producers. It is source/design evidence, not SQL implementation or acceptance.
+The original Azure unreadable-record cause remains **inconclusive**; its
+scale-out qualification remains **failed**.
+
+### Source7e99: full compilation passed; native runtime failed
+
+Previous completed draft PR207 source **1.0.520-beta /
+`7e99c9c96970b78a44402c975627c64e001adffa`**, tree
+`8022e9f6e6d51f9eb4691ca877c328229b29c3b1`, ran at actual merge checkout
+`4c46808e3bbef80e5792cce2cbd9de8203839bbe` with the same tree. All jobs in
+[Tests43737698638](https://github.com/nikoma/bicdb/actions/runs/43737698638) and
+[Rails43737698666](https://github.com/nikoma/bicdb/actions/runs/43737698666)
+finished naturally. Ten jobs passed, one failed and four optional jobs were
+skipped. The Tests workflow **failed**; Rails passed. Main remains **1.0.519-beta /
+`587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**. This candidate is unmerged and
+is neither a published release nor a verified deployment.
+
+| Exact-head scope | Classification | Actual result |
+| --- | --- | --- |
+| Workspace all-targets and no-Core-default compilation | Passed | The eighteen source700 test-compilation diagnostics are absent |
+| Core job | Passed | 1,873 passed / 0 failed / 16 ignored across 139 summaries; includes the actual legacy primary-only FORMAT and backup refusal control |
+| SQL job | Passed | 2,682 / 0 / 4 across 282 summaries; actual committed-error cleanup and SQLSTATE controls passed |
+| PGwire job | Passed | 511 / 0 / 2 across 28 summaries, including its separate Oracle HR target |
+| Rails application | Passed | 20 runs, 100 assertions, no failures/errors/skips; process-kill queue/cache and HTTP/WebSocket checks |
+| Remaining workspace | Passed | 1,062 / 0 / 6 across 129 summaries; Python suites 47/3/34 and Node 2/0 also passed |
+| Serial native job | **Failed** | 396 / 55 / 1; 452 unique cases, 986 filtered; 34 FIRST and 21 HOT failures |
+| Independent physical expansion, stable five-node throughput, production admission | Not tested | No qualification gate is cleared |
+
+Core contains one genuinely repeated child case. SQL has one bare name shared
+by two distinct test targets; both source-defined cases executed. These are
+result rows, not counts of independent physical trials.
+Core's pass does not substitute for its separately selected failed native job.
+The three INITIAL socket-transition, three dispatcher-publication and three
+same-service identity-wait controls passed in the native job. No new first-policy
+stage marker was reached in the failed HOT cases, so older first-policy failures
+cannot be declared resolved.
+
+The complete frozen archive has **101 regular files / 98 premanifest files**,
+eleven complete gzip logs and eight original ZIPs / 28 members. Manifest SHA256:
+`124bdadc431992c03a89035e8879944acd20e732b8c31d3e9995ba5775ccf9fa`.
+Root independently verified the full inventories, source/tree identity,
+stored/decompressed log hashes, API ZIP sizes/digests, CRCs and member hashes;
+receipt SHA256 `a08a618b81bee40e26723a5ee01e8f3309d39a6b1237b63e1c37bef017a2abe3`.
+Capture-side positive and deliberately wrong-manifest controls are retained;
+the collector exited naturally and the canonical archive is read-only.
+Native raw log is 70,455,181 bytes, SHA256
+`b59d517171ecf60921177338f5593bef6422806caeecdb72ecd005f2a866c8db`;
+gzip is 5,595,906 bytes, SHA256
+`7b7df7c518c498dd6409604b548791ae9fd62c1620865c829d3b906557d9542c`.
+Complete native classification SHA256:
+`9f195fa10e66d20f96d0a6715eb68a8c1f52c8a9b2a61464e3ccc5e98edc9f95`;
+original FIRST-error projection SHA256:
+`7e1441e68f48597ad1bc8ed9023eacbe8be4b2732ccf0411a6fb7ca2cf27475e`.
+The original failed Azure archive and all predecessor archives are unchanged.
+
+The reproducible native command remains:
+
+```sh
+cargo test --config 'profile.dev.package."*".opt-level=2' --config profile.dev.opt-level=1 -p bicdb-core --lib --locked -- distribution_native_host:: range_image_native::rf3_fixture:: --test-threads=1
+```
+
+It is recorded from CI, not executed locally. The native helper build and test
+compilation passed before the runtime failures. Every future result must name
+its own version, commit and tested tree; this run is not an inherited pass.
+
+| Failure group | Classification | Next smallest deterministic check |
+| --- | --- | --- |
+| First local HOT catalogue Open | Failed | All 21 ran out of original proof time before the final local native scope; twenty final foreign sweeps began with 87–222 ms and consumed 94,470–297,515 microseconds. Test the [combined full domain validation](native-hot-open-combined-domain-7e99.md) under the unchanged 1500 ms listener window and original final fault/SDK assertions |
+| FIRST service/maintenance/status contention | Failed | Hold the actual service or same maintenance State; require finite original-caller continuation, cancellation and refusal on expiry. A completed Open must not be replayed merely to obtain final status |
+| Two cross-protocol cases' later SDK append | Failed | Actual range policy is epoch 1 while the committed learner allocation requires epoch 2. Test the [same-worker first-allocation policy continuation](native-live-allocation-first-lane-source-unit.md) with unchanged SDK calls; do not replace the writer, relax exact epoch checks or treat registry refresh as readiness |
+| Metadata probe attempts exhausted rapidly | Failed | Retain actual errors and test [same-context paced real-TLS retries](native-metadata-probe-exhaustion-7e99.md). The original listener-reset cause remains inconclusive |
+| Final-WAL test compares numeric XID with boolean | Failed | Require the actual [protected committed XID](native-7e99-first-final-xid-control.md); preserve all later fault, denial and SDK assertions |
+| Remote bridge RPC deadlines and absent native attempt | Failed | Use the [test-only phase diagnostics](native-remote-bridge-budget-evidence-7e99.md) for actual ALL-prepared collection, post-ALL local observation and native entry under the original request. The wait fixes do not establish closure; an intended native fault not reached is not a passed control |
+| Catalogue intervening-IO forensic continuation | Failed | Retain original IO uncertainty and diagnostic refusal separately; execute the [retained uncertain test-arm correction](native-7e99-catalogue-uncertain-control-arming.md) without weakening production getters |
+| Relationship of these failures to the original Azure unreadable ACKs | Inconclusive | No retained evidence establishes the same cause, consistency mode or restoration event |
+| Corrective runtime source, complete rebalance and physical qualification | Not tested after correction | Source review and formatting are not compilation, runtime acceptance or physical evidence |
+
+The [runtime source composition](native-7e99-runtime-fix-composition.md) is kept
+separate from this immutable failed run. Removing repeated observations, waiting under an original finite caller,
+adding socket pacing and fixing an incorrect assertion do not by themselves
+prove the original full native cases now pass. Unknown native IO remains
+unknown; no proof window, quorum, original assertion or production gate is
+relaxed. Automatic source retirement/completion, repeated-move custody,
+coordinator restart, source loss and populated cold recovery remain open.
+
+### Source700: complete failed run; Core/Native test execution not reached
+
+Draft PR207 source **1.0.520-beta /
+`700726e90f041815b132cda4f87ca92337f55baa`**, tree
+`aacb16996f71880683459fc127482ef9ce4d3130`, follows the complete failed sourcebd09
+run below. Normal [Tests43728210745](https://github.com/nikoma/bicdb/actions/runs/43728210745)
+and [Rails43728210770](https://github.com/nikoma/bicdb/actions/runs/43728210770)
+check out `939038eb35677874c941c2d1220cd0a7d6548b40` with the same tree.
+All jobs completed naturally. The overall Tests workflow failed; the separate
+Rails workflow passed. Component passes do not replace the failed native gate.
+
+All-target132854681021, Native132854704823 and Core132854704889 failed test compilation with the
+same eighteen diagnostics: seventeen missing `BTreeMap` references (eight E0433,
+nine E0425) in four FIRST child test modules, and E0616 for private
+`NativeRemoteLocalServing.release` access at `registration/joined_data.rs:423`.
+All three complete logs contain zero executed test-case rows and zero runtime
+summaries. Native's production chaos-helper build passed before its test build
+failed; no native control or passive stage clock executed. The earlier three
+library diagnostics are absent from these logs. Rails132854680904 passed its
+build and application step: twenty runs, one hundred assertions, zero failures,
+errors or skips, including process-kill queue/cache recovery, twenty-four reports
+and twenty-four cable messages. PGwire132854704821 passed 511/0/2 across
+twenty-eight summaries. Those component/application results are separate from
+native HA. SQL132854704853 passed 2,682/0/4 across 282 summaries.
+Remaining-workspace132854704890 passed 1,062/0/6 across 129 summaries, plus
+Python47/3/34 and Node2 checks. These are case-result rows across targets, not
+independent physical trials. All jobs are terminal and the sole collector
+exited naturally. No earlier runtime result is inherited by this source.
+Earlier revisions' passing results are not substituted for current results.
+
+Complete all-target raw1,406,089 bytes SHA-256
+`a28f1c7e66fbf60d9582b4fcf4958883a668e00f71b8899a093d2a153606fa36`;
+Native raw1,370,551 bytes
+`ba2b0397c287f6b4a4766c45b8ae53bbca74ca235ef561be325c6afb6a47a634`.
+Core raw2,530,065 bytes
+`8d29ecce91fb41c05d3a82248a9e1337b19c3f1f999cc7110ad83645c6dd59a3`;
+PGwire raw1,505,387 bytes
+`089d3952eac7fd42cf75db47a2251ad7b8eb6ca9ebd4b44a8acdeddde3a37c17`.
+SQL raw348,134,743 bytes
+`5e14590a67119a81948dc96547f0ca0fc39a39526454400c2b4a3741d7d6d8a8`;
+gzip SHA-256
+`dccba560ced4616bfe53ac46848668073a519dda9eb0362a3af5c0acd9eba5ff`.
+Independent complete-log SQL receipt:
+`81445498781347c9278f5dfc90ef1ed903dac488b8b6963e6431ba192a7593df`.
+Its actual committed-sync DimensionMismatch/DDL-cleanup control passed at
+raw14369. That SQL pass does not execute Core's timed-Unknown or native
+multi-node paths and does not establish general multi-range SQL transactions.
+Remaining-workspace raw163,621,423 bytes
+`1389576968fc64270ea80b40ec64c2bd77c556050bbca00edc49cbc4cc9bd721`;
+gzip SHA-256
+`c4eb9cb101cd9b47a3dfbe1c8d6dd4c5e01c1a5da4712ca3fe978e5b1c25135e`.
+Independent complete-log remaining-workspace scope receipt:
+`5cf5ba0b699ad8d84a45df4f5e029a8a5d804102148bc4dddff7b437a27f8cf9`.
+Rails original artifact14167656585 contains sixteen verified members; ZIP SHA-256
+`a419978095b8b02c2c280c77d36448c00128395c624d918fa75fbcf5150e29a8`.
+Its exercised CI debug binary SHA-256 is
+`49107b5b027681de969ed77834881a6f2076dbc8c65fa84cf312485f67e6296c`;
+that is not an optimized physical-qualification binary, release or deployment.
+Independent root Core/PGwire complete-log and Rails artifact verification receipt:
+`f867fe41c4f62a780aec9481fbb03710cf2ab9c585d634fe06e3df5c6174370e`.
+The independent all-target eighteen-error classification receipt is
+`c65a1869996c882dad275eccb53ea6153701dda5f68dfe44dbb925219e52f85a`;
+the capture-side Native prerequisite classifier is
+`c8887ade3e6e4f7ff48b9db5e94c69e0a18e323bff5872c0df739af531656265`.
+No useful job was cancelled or restarted to publish a correction.
+
+The whole archive is frozen after natural collector exit: 96 premanifest /
+99 total files, eleven complete log gzips and eight original artifact ZIPs /
+27 members. Manifest SHA-256
+`09374b4a4045c38fc58daeb48334113639c107fa40adaaf236e584ca3ebdab59`;
+capture-side verification
+`90f853e2531a8e824ca326c3fe1f05bb56b869ada3d0dc7cdc6ba4481756f615`;
+independent root complete-archive verification
+`6d506225335eb08fdc2ffaf1dc81e43e2fea115bd7c6c35ab58b0001aa5017ee`.
+All actual job/artifact IDs, stored/decompressed hashes, API ZIP digests,
+CRCs and member hashes were checked. A wrong expected manifest digest was
+rejected; negative-control receipt SHA-256
+`96e222957f832f7491455e5720cf597dd7591f2ecfa1348dec3b1fe6fc4650df`.
+These originals receive no later writes. The separate source-only correction
+does not reclassify this failed run or execute its intended native cuts.
+
+The reproducible issue is **failed test compilation**, not a demonstrated native
+runtime failure. At the pinned source, the actual failing workflow command is
+`cargo check --workspace --all-targets --locked`; the native command is
+`cargo test --config 'profile.dev.package."*".opt-level=2' --config profile.dev.opt-level=1 -p bicdb-core --lib --locked -- distribution_native_host:: range_image_native::rf3_fixture:: --test-threads=1`.
+These commands are recorded from remote CI, not rerun locally. The next smallest
+deterministic check is compilation of the corrected Core test target, followed
+by the unchanged native selectors and required broad suites.
+
+Isolated source correction `c072c75ea802ea528c6985c55bb4407fd05c00f0`
+adds the single parent `BTreeMap` import inherited through the four unchanged
+`super::*` chains. It moves the diagnostic's same successor lookup and original
+Joined-owner validation into the actual private owning module, returning only
+the decision checksum string DATA. The release field stays private; original
+assertions, deadlines, errors and diagnostic JSON values remain intact. This is
+**source-reviewed; not compiled or executed**. Standalone formatting and diff
+checks pass. Independent source-review receipt:
+`94ef95d6a59b1d1622e2e911dc74fc09c04b7d8da98d9cb0af415eb0e439b897`.
+Root whole-source inverse and actual Native-log review:
+`bc7546d3c3d2ab01c82dc5b6cad9fa2de4e05ce3e9e5c6cf3e073d6af8fbba54`.
+It establishes no HA, physical or production qualification and does not alter
+the original failed Azure evidence.
+
+### Sourcebd09: complete failed run; Native/Core execution not reached
+
+Draft PR207 source **1.0.520-beta /
+`bd09a77e8e72bb88e73c395b9629d96812061c30`**, tree
+`c8b9d8d64a7593211cf3ebd1eaa7bddd45747909`, was published only after source6de
+completed and its full archive was frozen. Normal
+[Tests43726287929](https://github.com/nikoma/bicdb/actions/runs/43726287929) and
+[Rails43726288005](https://github.com/nikoma/bicdb/actions/runs/43726288005)
+check out actual merge `cb8c3b61bf70105f79af059f07b6a54704fa6ca6`, whose tree
+matches the public source exactly.
+
+All-target132848817942 and Rails132848817906 failed Core compilation on the same
+three diagnostics: two E0425 unresolved `BicDb` types in
+`joint/bridge/preparation_custody.rs:452,567`, and E0004 at
+`db/native_recovery_ready.rs:1947` for the new `NativeJointServingPhase` and
+`NativeJointLocalServingPolicy` purposes. Both complete logs contain **zero
+test-case rows and zero runtime summaries**. The no-default consumer and Rails
+application steps were not reached, not passed. SQL and PGwire have also failed
+library compilation on those same three errors, with zero cases/summaries. Core and
+Native subsequently failed the chaos-helper library build on the same three
+errors, before test-only compilation or runtime: both contain zero executed
+cases/summaries and their actual test steps were skipped. Remaining-workspace
+failed later on the same E0004 purpose match after 508 actual passing component
+cases across 34 summaries. It did not reach the complete workspace or offline
+tooling acceptance step. All jobs are terminal; the overall candidate failed.
+No earlier passing result is inherited.
+
+All-target complete raw95,210 bytes, SHA-256
+`820b96be94fac96483bc256dc83b9dec9a82ce235fece4bb0f47c24f93cd3d23`;
+Rails raw108,757 bytes,
+`58d95fb772cca5b3ec6ff295116a78727337c755b1c794bd69790a14ad9aa56c`.
+Independent root complete-log compiler/result-scope receipt:
+`3b93957ad58c70cb15089f17410ef00a77b28cc0dd7308c25fca0e60cde7854a`.
+Native raw158,473 bytes SHA-256
+`efd16c221c341dc70b2a499baf3b85e0e23b9e9b902891eba340c42f82180164`;
+Core raw158,940 bytes
+`c73885f57fafc73d1421eaf1486056a9dd6d77e29cd6a5c5ea7db2b8fd746367`.
+Independent complete-log prerequisite classifiers respectively:
+`5a2a7eb6ab05ccd8b58f861fe9312d7a95ed031ee9339903caefdcdc5b20a917`,
+`efd0809531ff318680355331462ef6182d66d47a3312f73b94f68df5c7452b0a`.
+The new controls and stage clocks remain unassessed; helper build failure is
+not a Native runtime failure at any intended fault cut.
+Remaining-workspace raw2,543,803 bytes SHA-256
+`85b3bd3445c6802b0dc9d22c8eff340cdab23306f9fdf6b45a306226b2ecb5a8`;
+root partial-runtime/cut receipt
+`108eb5e13154ddcd614bebecf3d70ba09ce2560c04ba73e6d1e5469e8404729c`.
+The full failed-job classifier SHA-256 is
+`4e4da738eeba1c6d8e73c4b4b64e3376b7bed2436aff1849fb4f5a2acc11fe8b`.
+Its six zero-case compilation failures remain separate from those real partial
+component passes: Lua five, Page499 and Script four; Cell/AppHost/CLI and the
+offline acceptance step were not reached. The sole collector exited naturally;
+the complete archive is frozen: 90 premanifest / 93 total files, eleven full
+logs and six original ZIPs / six members. Manifest SHA-256
+`7a8a4d589be1a09312e6d404d9a6af71a35968c2880d37066fc8a62afe0ceb2b`;
+capture verification
+`dcc41dbed64e642ff88eede95629608e69bed0722ab7af00d8802f6cce3768f1`.
+All actual job/artifact identities, raw/stored hashes, ZIP CRCs and member
+hashes were verified, and a wrong expected manifest hash was rejected. No
+useful job was cancelled or restarted to publish a correction.
+
+Local corrective source `c62f0fb4c` qualifies both parameters as `crate::BicDb`
+and explicitly refuses both narrow serving purposes in the generic recovery
+readiness consumer before Frozen validation and new source-pin/readiness
+construction. The caller's Frozen input already exists; this is not a global
+no-effect claim. It assigns no
+generic recovery owner to either purpose. At this historical correction
+checkpoint, only standalone formatting and diff checks had run. Source700
+subsequently built the production library/helper and application but failed
+test compilation, as recorded above; no native runtime acceptance follows.
+This compile defect supplies no runtime proof of an authority bypass or of HA
+acceptance. The original failed source and all original assertions remain intact.
+
+### Source6de: Core and Native failed; compilation, SQL, PGwire and Rails passed
+
+Historical draft PR207 source was **1.0.520-beta /
+`6de646beb603accf39358017d8e0c83c39c741b1`**, tree
+`de0b68af8d158f39358604590769afb8237115f0`. Normal
+[Tests43714999361](https://github.com/nikoma/bicdb/actions/runs/43714999361) and
+[Rails43714999384](https://github.com/nikoma/bicdb/actions/runs/43714999384)
+checked out `7714bd37b9cfe87658e3baadd1f906a187a06b58` with that identical tree.
+Workspace/all-target and no-default consumer compilation passed. PGwire completed
+511 passed / 0 failed / 2 ignored across 28 summaries. Rails completed 20 runs /
+100 assertions, zero failures/errors/skips, including actual process-kill queue
+and cache recovery, 24 completed reports and 24 cable messages. Core has failed
+at the legacy primary-record-only format-preservation assertion described below.
+SQL completed 2,682/0/4, Native failed 375/37/1 and remaining-workspace passed
+1,062/0/6. All required jobs are terminal; the overall Tests run failed. No overall
+pass or inherited Native acceptance is claimed.
+
+This successor composes the two backup-vector expectations, all-worker INITIAL
+failure evidence, duplicate-validation reduction and same-OWN FIRST identity
+wait described below. Compilation does not establish that the four new control
+definitions or original 45 failed native cases passed. The original failed Azure
+qualification and all physical/production gates remain unchanged.
+
+Complete raw log hashes: all-targets 2,781,766 bytes,
+`16e875783c19e0ff58ef486753c8548823bfbf9ae96ea7c819d71cc94e054b66`;
+PGwire 1,320,138 bytes,
+`40c26cd3ab5fb44e10bd46cc84375e608cb3a31ad2ae4ae29ce927ae16e80345`;
+Rails 1,184,666 bytes,
+`5fee47ff0fff5b4da39044378d73dcb2e1c1877e0641e2691d30c9700797212d`.
+Independent complete-log receipts respectively:
+`9a5bb9b2ba34088f04bc4fc8bb3d864b18f7f104396d9d520c90841633995c16`,
+`332574d8c7116d551187e1bda23a92294e9ec565828409767cb08f3405f445e4`,
+`74bf19aebe1ae949eaeb1ce5b817fee943a1b4a14f139670d1e407d71c56c104`.
+Rails built and exercised a CI debug binary with SHA-256
+`64e18a818ebade9ebfbca810f4932bd132bf827ff4a1dfffbb9279483dda9245`.
+This is not a retained optimized physical-qualification binary or published
+release/deployment. The sole collector exited normally after every job became
+terminal. The complete archive is frozen: 98 premanifest files, 101 total files,
+11 complete raw-log gzips and eight original artifact ZIPs / 28 members.
+Canonical manifest SHA-256:
+`48e180b4f4c6e48e061837fd00fb3634887aeba467b7b954d9f49dc01c401b5c`;
+complete-capture verification:
+`fe16354e66e73842e13417d3a329338d7939d6766fb224c82720ee20643680cf`;
+independent root full-archive rehash/inventory/ZIP verification:
+`1e8b772a079138d6c392ba918e683c8242d676751466d09f105ea21473a4c8e2`.
+Every non-skipped job and original artifact ID is covered. No useful run was
+cancelled or restarted, and these immutable originals receive no later writes.
+
+The Core job executed 1,300 passing / one failing / 13 ignored case-result rows
+across 38 summaries; these are executed rows, not 1,300 independent trials.
+Library975/0/8 and visibility8, Standard3, bootstrap11 and rekey4 controls passed.
+The original full encrypted backup/verify/restore case now passed at raw24404;
+the 40-definition backup inventory has 32 actual passes and eight unexecuted
+definitions. This is component coverage, not a physical backup certificate.
+
+The failure is
+`index_disabled_primary_handle_preserves_legacy_predicates_and_refuses_mutations`
+at `crates/bicdb-core/tests/decimal_predicate_generations.rs:118`. Its actual
+main482 legacy fixture retains its verified original hashes. Opening with
+`with_secondary_indexes(false)` reads the acknowledged row, refuses the
+duplicate mutation as primary-record-only, preserves duplicate absence and
+leaves `indexes.json` byte-identical; those assertions passed before FORMAT
+equality failed. The actual FORMAT differs only by adding
+`physical_backup_gate_v1`. Classification: **failed legacy export metadata
+preservation; implementation boundary under investigation**. No acknowledged-row
+loss, broken uniqueness or physical-recovery result follows from that failure.
+The original fixture and byte-equality assertion remain intact; they are not
+silently adjusted to accept an upgrade by a primary-only export handle.
+
+Complete Core raw log: 2,516,374 bytes, SHA-256
+`d6c409afc703404fc1bded0b8d1266022fbfcfcfa887d2b5f2eda9322a9b7117`;
+gzip SHA-256 `013d775639fab566d50f435149f7497928a5dd17ce258b0711733f7b33cba67b`.
+Independent complete-log verification receipt SHA-256:
+`0f3d65f50ac123aa2f69947c7ca12751deaef9d3773659ebc3b55d8918a430bd`;
+original assertion/cut classifier SHA-256:
+`4babc8214096f5504a0e7c166bb81666b2e4a8990978f259968fe7974df03578`.
+Later targets not reached by this failed Core job receive no passing coverage.
+
+The isolated [primary-only enrollment correction](primary-only-export-physical-format-enrollment.md)
+(`4829efc186c58951aba87d9a946255baa209939b`, descriptor child
+`058586f90026ea44ba510ac8183cfbc8fb33d4ed`) leaves new Core FORMAT enrollment
+off for the mutation-fenced primary-only profile. Existing enrollment still
+requires its actual inode and unchanged-file/parent durability barriers; normal
+indexed enrollment and actual WAL/Page recovery remain unchanged. Three genuine
+controls are defined for exact legacy bytes/live-backup refusal, missing enrolled
+inode and existing-enrollment sync failures. Classification: **source correction;
+not compiled or executed**. Original test/fixture bytes remain intact. Root and
+independent source-review receipts respectively:
+`3dc3f6a23cd53cc7f302e275f3e4ff2614f6463f946e072a00f775036bbb6436`,
+`12d78f3206e9ef4aa3d1fcaf27aa6bc80e2b70ea72a06796ba0f6fab963ffae3`.
+The failed source6de result is not reclassified by this untested successor.
+
+Source6de SQL completed 282 summaries and 2,682 passing / zero failing / four
+ignored case-result rows. Raw log: 295,903,295 bytes, SHA-256
+`8591bf8f284cbb0ee3dd03ca0858154104d465e3385373860f4d7019b881414c`;
+gzip SHA-256 `f18c2b482c81846d34744e39172ab82741c37818c8068fa9ed650bfab9ccdf0f`.
+Independent complete raw-hash, checkout, summary and case verification receipt:
+`baad4882d9065bde1168575947729dc0f605c3145e85329a07a53d90be8c59fd`.
+The real known-committed error/DDL cleanup control passed at raw12418 and the
+SQLSTATE mapping control at11875. This is component acceptance on source6de;
+it does not test the later primary-only correction or remote Serving composition,
+establish general distributed SQL, or override the failed Core job.
+
+Source6de Native job132814521759 completed **375 passed / 37 failed / one
+ignored**, 413 unique case-result rows, in 3,033.13 seconds. This is a failed CI
+cohort, not a physical failover measurement. Complete raw log: 103,678,832 bytes,
+SHA-256 `aec6a2b77679171285c9210039b7359df71339c604f0f189d1bef588bb27754d`;
+gzip SHA-256 `3ab11e1e4093f1b3a5d9689b21f342bae840e0bc41a5733565e7bfb87c15215b`.
+Independent complete raw-hash, summary and unique-case receipt SHA-256:
+`4352596d7ac6d5c3d1369e5eca8501bf7b9cc5055c8e53a3673dcadf4a70f06a`.
+
+| Actual boundary | Classification | Result and next evidence needed |
+| --- | --- | --- |
+| FIRST setup prerequisites | **Failed** | Twenty cases stop during setup: nineteen connection resets and one `service busy publishing Strong dispatcher`. These do not execute their intended later faults. Preserve the new all-worker returns and identify the first failing actor before changing timeouts. |
+| FIRST over-512 exercise | **Failed** | Initial SDK work is reached, then the original full Strong RPC times out before the intended relocation exercise. Its budget and assertions remain intact; the cause is not established. |
+| Hot Registered continuation | **Failed** | Fourteen cases reach actual Open then fail the first Registered policy helper; one fails a fresh same-candidate policy retry; one large unrelated-catalogue case reaches survivor OLD-observation retirement before failing. These are distinct cuts, not sixteen Open failures. The later source-only serving corrections have not executed. |
+| Same-service identity wait expiry | **Passed, component CI scope** | The actual held-service/original-parent expiry control passes. It stops before ALL-OLD effects and establishes no full relocation acceptance. |
+| Same-service identity wait release/cancellation | **Inconclusive for intended control** | Their cases fail setup: release on dispatcher publication contention and cancellation on connection reset. Intended held-lock outcomes are not tested by those failed executions. |
+| Stale-gateway/catch-up and independent follower Apply | **Passed, component CI scope** | The original stale gateway recovers the full acknowledged payload during the real CQ gap/transfer (raw17424); follower Apply finishes before another range's global gap closes (17492). These do not execute the failed full host lifecycle. |
+| Remote decision and final-frame metadata contention | **Passed, component CI scope** | All four remote-decision controls pass (22955–22970), including actual commit-sync Unknown with retained XID and postcommit cancellation reconciliation. All three final-frame metadata wait/release/cancel/expiry controls pass (23015–23025). Their original authority and attempt boundaries remain separate from the first genesis metadata read. |
+| Integrated bounded recovery, automatic convergence and physical expansion | **Not tested** | New source composition is outside source6de. No physical loss, RPO/RTO, routing or capacity gate is cleared. |
+
+The counts alone do not prove an improvement over source7c: source6de defines
+four additional controls, and the reached failure cuts differ. Per-case cause
+classification remains in progress. No error/no-effect, lost-ACK or stale-route
+cause is inferred from a timeout or a missing diagnostic marker.
+
+The complete 37-failure case/cut classifier SHA-256 is
+`8524f2d09dc06b6030f91ff9a90e54ffa8b685b76088758d60c3990fe61c992a`.
+Root independently matched all 413 actual names/lines/outcomes, all 37 failed
+names, six exact source-file hashes and the cut category totals; receipt
+`e0eba12c30ce0b26d3e791df37fdcdeec82bc446692c96d2ec01e3397e45fce6`.
+All 409 source7c names remain: 361 pass in both, 33 fail in both, twelve change
+from fail to pass, two change from pass to fail and one remains ignored. Of the
+four additional definitions, two pass and two fail setup. These differing-source
+outcomes are neither a causal comparison nor a scaling measurement.
+
+The nineteen setup-reset cases retain 47 `INITIAL_NATIVE_READ_FAILURE`
+events at `first_metadata`: 46 connection resets and one connection refusal.
+Their original five-second parents still have 4,944,640–4,958,254 microseconds
+remaining and are not cancelled. Original-parent expiry therefore does not
+explain these immediate failures. Source inspection distinguishes the public
+genesis `MetadataReadAcquire` path from enrollment's existing opt-in
+`HostMetadataReadAcquire` socket recovery. Existing listener-transition controls
+select the latter; their passes do not cover the former. A listener replacement
+is a source susceptibility, **not a proven historical server-side reset cause**.
+The next smallest deterministic control must drive the real genesis request
+into the actual old listener backlog, perform shutdown/rebind on that same
+metadata host, and require either a fresh authenticated read under the original
+finite parent or the original cancel/expiry refusal before readiness publication.
+Semantic, identity and mutation errors must remain terminal; increasing setup
+budgets or serializing the fixture would not prove that recovery contract.
+
+Source6de remaining-workspace job132814521575 passed **1,062 / zero / six**
+case-result rows across 129 Rust summaries. Separate Python groups passed
+47 platform, three Oracle HR and 34 Oracle reference controls; two notebook
+Node controls passed. Complete raw log: 148,746,194 bytes, SHA-256
+`6f43dcb5eff8acfc649f56e97ac3fb9e8e7c6e3baa96c46681b09f787da5181b`;
+gzip SHA-256 `0e5fe3135641f773e166ea27ca85b6bbe46fae38a0dabdf0f729fb34cedbb30a`.
+Root complete raw/summary/case verification receipt:
+`52dc8d00019b86153e16c30903470a5876bfe86f6b2834575abbf631afc02c81`.
+These component and tooling passes do not repair failed Core/Native acceptance,
+execute the later startup corrections or qualify physical HA.
+
+### Completed source7c: Core and Native failed; workspace and application components passed
+
+Candidate **1.0.520-beta / `7c77418656a41ec6e25c7601319e061c328f48e1`**,
+tree `df63298f61b0a4cdd56f0caabc694d888c38dbda`, was checked out by CI as
+`25b2a1454450bd591364ce9d026a8469ab03c2fe` with the identical tree.
+This is a completed failed execution checkpoint of [Tests43704937146](https://github.com/nikoma/bicdb/actions/runs/43704937146),
+not a qualified release. The complete archive is frozen and independently verified.
+
+| Scope | Classification | Result and limit |
+| --- | --- | --- |
+| Workspace/all-target and no-default Core consumer | **Passed compilation** | Test channel type correction compiles. Compilation does not execute HA cases. |
+| Core | **Failed** | Library 975 passed / 0 failed / 8 ignored. All eight visibility, three Standard, eleven bootstrap and four new rekey controls passed. Later backup target: 9 passed / 1 failed; 30 additional backup cases were not executed. |
+| PGwire | **Passed, CI scope** | 511 passed / 0 failed / 2 ignored; Oracle HR50, embedded HA11, verification3 and protocol195 are separate component scopes. |
+| Rails | **Passed, application CI scope** | 20 runs / 100 assertions, zero failures/errors/skips, including process-kill recovery. |
+| SQL | **Passed, CI scope** | 2,682 passed / 0 failed / 4 ignored across 282 summaries; actual committed-error/DDL cleanup and SQLSTATE controls passed. This is not distributed SQL or Native timed-Unknown acceptance. |
+| Native multi-node | **Failed** | 363 passed / 45 failed / 1 ignored; 409 unique outcomes. Exact failure cuts and separate passed components are retained below. |
+| Remaining workspace | **Passed, CI scope** | 1,062 passed / 0 failed / 6 ignored across 129 summaries and 1,068 unique cases. Original Cell key rotation and CLI/application component controls passed. This does not qualify distributed movement or close the cross-call source gaps. |
+| Independent physical expansion | **Not tested** | Original Azure qualification remains failed; no stable five-node throughput gain or production admission. |
+
+The backup failure is `encrypted_full_backup_verifies_and_restores_records`
+at `crates/bicdb-core/tests/backup.rs:235`: actual capabilities include
+`physical_backup_gate_v1` alongside `format_metadata_v2`, while the assertion
+expects only the latter. Backup creation returned successfully; later plaintext,
+verification and restore assertions were **not reached**, so this is not an
+observed restore failure or data-loss result. Source correction
+`2e4ddcbe882632613d89b8415f2d33f9f71a9f66` changes only the two exact expected
+capability vectors. It is **not tested** and remains local while useful CI jobs
+finish. Historical input fixtures and all restore/payload assertions are retained.
+
+Complete Core raw log: 2,433,064 bytes, SHA-256
+`fea8f65fa0a030ae47609fd9da94e2ffa00ae2f2f922dd881eca134c220c96d7`.
+Complete SQL raw log: 295,655,118 bytes, SHA-256
+`742b900d47cd4d90c1b1649df51a302da61cc5e065ad24c7704567e24835b5c1`.
+Independent full-log/checkout/case/summary receipt SHA-256:
+`9eab149b2dcf9c05431732937167488bdba3ee9a1b73662d68deb97e5ec47a94`.
+
+The remaining-workspace raw log is 148,670,739 bytes, SHA-256
+`f933b3483fbf5fb787b4a17727535bf0c400f2f92c3c9034e4d4f4ff50e251e9`;
+gzip SHA-256 `c05b2c9566a77d8403100193f28a7ebdc9fb3962647dbdc5f2cccd80f4cd5081`.
+Independent complete raw-hash, checkout, case and summary receipt SHA-256:
+`577502e55151eaea63fd08a4d1472f68db7d2f5db01001b9d584d26123d79554`.
+Original Cell signed key rotation passed at raw307786, and the original schedule
+identity/SQL control passed at283067. These execute the source7c corrections;
+they do not inherit success for the later local backup, diagnostic, Open-budget
+or FIRST contention changes, which remain uncompiled and unexecuted.
+
+Passing same-attempt controls do not close the documented cross-call bootstrap
+association or Prepared-rekey source-head gaps.
+The [deferred final-tail design](bootstrap-deferred-final-tail-7c.md) specifies
+both ordinary absent/existing-target association and latest closed-target
+finalization. It is **not implemented or tested**; native final acknowledged-prefix
+coverage remains an explicit missing producer. The separate
+[root-local fence refinement](bootstrap-root-local-fence-refinement.md) specifies
+shared IO exclusion, ancestor Page admission and pending-marker/FI ordering;
+it is **design only**, with runtime wiring and crash qualification outstanding.
+
+### Completed source7c Native job: exact failure boundaries
+
+[Native132783896405](https://github.com/nikoma/bicdb/actions/runs/43704937146/job/132783896405)
+compiled and ran **363 passed / 45 failed / 1 ignored**, with 983 filtered out.
+This is a failed acceptance result. Its complete raw log is 42,835,265 bytes,
+SHA-256 `d64ff32826c1acd4a59aa4819be4ea0933a9ed5c8effa4b1ae6201d99aa83172`;
+gzip 3,594,128 bytes, SHA-256
+`e8808425833f37cc6acacf5d161c627982daaf5f90d1091abb7fc5b4f5b46110`.
+Independent full-log/case inventory receipt:
+`c7883e3929c3f6027a078b885bf2a7edad409be14cb150de661095d2d0575172`.
+The complete archive contains 96 premanifest files, 99 total, 11 full gzip logs
+and eight original ZIPs/28 members, with no missing or partial captures. Manifest
+SHA-256: `d2da4de6a06ae9b6fd8663c64e90e5b8cbd0ad1f8fea411a6d20462baf6b7967`;
+independent full-archive verification receipt SHA-256:
+`39a3508a61ea7ea7017cae52ffaa44a001d9b2744d27537c6940d3785002881b`.
+Verification covers every stored/raw hash, exact source/tree inventories,
+original ZIP API digests/sizes, CRC and member hashes. The verifier passed its
+positive control and rejected a wrong manifest digest. The sole collector
+exited naturally; no job was cancelled or restarted. Archive integrity preserves
+the failed result and does not qualify the database or untested successors.
+
+| Actual failed scope | Classification | Observed cut and limit |
+| --- | --- | --- |
+| 21 FIRST startup cases | **Failed prerequisite; later cuts not tested** | Normal parallel INITIAL DATA opening returned ConnectionReset/ConnectionRefused. Intended later FIRST/fault assertions were not reached. Exact inner read/socket cause remains inconclusive. |
+| Cross retained-discovery exclusion | **Partial pass, later failed** | Opposing FIRST refusal and before/after positions passed; later original SDK APPEND failed with a range-policy refresh refusal. |
+| Over512 | **Partial pass, later failed before allocation** | 45 APP acknowledgments and 44 full Strong reads passed; the next Strong call hit its original two-second RPC deadline. The over512 transfer/fault cut was not reached. This is not observed successful absence or proven data loss. |
+| Catalogue rename-unknown | **Partial pass, later failed** | Two APP/full-Strong pairs and allocation/enrollment prerequisites passed; ALL_OLD_close failed `joint metadata service identity busy` before the catalogue fault. |
+| 20 hot catalogue Open cases | **Failed** | `hot_policy_tests.rs:991`: first `actual_catalogue_open` returned QueryTimedOut. Release/policy and their later selected APP/Strong tails were not reached. Trace intervals do not establish CPU/IO root cause or absence of effects. |
+| Large unrelated-head activation | **Failed, intended fault not tested** | `activation_owned_tests.rs:127` expected fault-fired1, observed0. Intended owned-IO/Unknown/refsync assertions were not reached. |
+
+Separate current-source component passes include typed native-local follower
+apply (raw17516), combined stale-gateway/catch-up-gap transfer recovery17448,
+source-frame controls21135/21138/21141 and post-scope archive/middle-history
+controls20953/20956. They do not qualify the failed cases' unreached tails or a
+physical/operator expansion. All400 earlier326 names and all349 main519 names
+are present, but changed helpers/budgets preclude causal or performance inference
+from matching names alone.
+
+The comprehensive 45-case/source-cut classifier SHA-256 is
+`f88af999ada1689060b5bce34fc3134dae5eec78b0225c70c48d8c76ddde9311`.
+Direct stderr events precede buffered failure footers; the separately retained
+serial-case projection SHA-256 is
+`72cb76e227e01c8adec6fc1b18a83b3d57a3fcb77a10a9cfecb9356ae30664ac`.
+
+The [INITIAL diagnostic correction](native-initial-open-failure-evidence.md)
+retains every real worker result and read failure boundary without retries or
+budget changes; it does **not** fix the socket failures. Separate source
+`fe8618729236c63446830254f76a9a560e87ff4a` removes redundant Open validation and
+adds a genuine cancellation control, retaining original1500ms windows and full
+publication/owned-IO checks. It is **not compiled or executed**; saved time and
+sufficiency to resolve the 21 hot failures remain unproven. No failed case is
+reclassified as passing by these untested source changes.
+
+The separate [FIRST same-OWN identity wait](native-first-same-own-metadata-identity-wait.md),
+source `90259379d227d66fad18adde38b0748b2c6fe6ca`, addresses the observed immediate
+service-identity contention refusal. Only the guard-free FIRST coordinator uses
+bounded acquisition of the same service mutex, under its original request and
+OWN deadlines; the original one-shot API and subsequent mutation/intent/RPC
+paths remain unchanged. Three genuine held-service controls are defined for
+release, cancellation and expiry. Classification: **source change; not compiled
+or tested**. The historical holder remains unidentified, and the original
+catalogue-rename acceptance is still failed at the earlier cut. This is neither
+a mutation retry nor proof of bounded end-to-end relocation.
+
+Independent full-source review receipt SHA-256:
+`4a73eaa9d56ac436408b82b9f6f8d6c043b762c0241a4047a77a6fac7aebafd6`.
+That review checks the protected metadata-capture suffix and the FIRST
+coordinator's unchanged mutation paths; it does not execute the controls.
+
+### Historical pre-CI review of the source7c corrections
+
+The pending batch composes test-channel correction
+`781b4e8029f0e8c747fee69252c94a9f04992103` and Cell gate-lifecycle correction
+`118bb5ecd7fe0e2fe720cd42b163f4522e5a6d22` (reviewed leaf
+`ff791fd2883a3f5b44b238727c1fbfaca9430e94`). The
+[Cell correction contract](cell-rotation-physical-gate-lifecycle.md) retains
+actual closed root/stage claims, a new stage gate before FORMAT copying, and
+strict retry/activation checks. It adds four Core and one Page control while
+preserving original tests. Formatting, source pins and independent source
+review passed; compilation and every old/new runtime control are **not tested**
+on this batch. Earlier component passes below do not qualify it.
+
+### Completed head2ce: application passes, HA compilation and Cell rotation failures
+
+This is a **completed, failed CI checkpoint**, not a qualified release.
+Source **`2ce4c48202d4d1bb1ef759b08a41dc36f431af6d`**, tree
+`f4d72164c2a2a906857b179d44df216d4457b9f8`, was the public PR207 head at that checkpoint. Actual
+checkout `e1ef338cb41d51d4d9dfbc8660502e4afbc3f366` has that identical tree.
+[Tests43696050976](https://github.com/nikoma/bicdb/actions/runs/43696050976)
+failed; Rails completed successfully. All logs and original artifacts are
+frozen and independently verified. No useful job was cancelled or restarted.
+
+| Scope | Classification | Exact result and limit |
+| --- | --- | --- |
+| All-target, Core and Native | **Failed compilation** | Core test `storage.rs:2910` has E0282 for an unconstrained `mpsc::channel()` payload. Core/Native helper builds passed, but library-test compilation failed with zero actual Core/Native cases. The nondefault-consumer check was skipped. |
+| PGwire | **Passed, CI scope** | 511 passed / 0 failed / 2 ignored across target summaries. Separate Oracle HR: 50/0; embedded HA: 11/0; verification: 3/0. These do not exercise the complete distributed handoff or physical expansion. |
+| Rails | **Passed, application CI scope** | [Rails43696050973](https://github.com/nikoma/bicdb/actions/runs/43696050973): 20 runs, 100 assertions, zero failures/errors/skips; real queue/cache process-kill recovery, 24 completed reports and 24 cable messages. This does not qualify distributed HA. |
+| SQL | **Passed, CI scope** | 2,682 passed / 0 failed / 4 ignored across 282 summaries. The actual committed-finalization error/DDL cleanup and SQLSTATE mapping controls passed. This is not timed visibility-Unknown or distributed SQL acceptance. |
+| Remaining workspace | **Failed** | 851 passed / 1 failed / 1 ignored across 61 summaries and 853 unique case names. Cell signed key rotation failed at `bicdb-cell/src/lib.rs:7589` with `Database(Backup("enrolled physical backup gate is missing"))`; Cell target 39/1/0. Activated/reopen/canary tails and later CLI/AppHost targets were not reached. |
+| Page components | **Passed, CI scope** | Checksum/no-repair at raw1396, paired segmented/monolithic gated profiles2649, tracked relayout3855, retained claims4350/4351 and moved-claim4512. Page unit346/0 plus integration152/0. This does not execute Core's backup/bootstrap or HA controls. |
+| Physical expansion and release qualification | **Not tested** | No new Azure experiment, stable five-node throughput comparison or production admission. |
+
+The completed raw PGwire log is 1,323,097 bytes, SHA-256
+`6ad1a62b5f5256fbbf176f7e04061ab74cec6592889a835f2c88f0a923d3f099`;
+Rails is 1,185,534 bytes, SHA-256
+`3978cc0707f57abac7640839e1b0b20f9bce7c88bb941d94167f40246a4a691c`.
+SQL is 295,664,542 bytes, SHA-256
+`59c5698e2bb6ea488349669edee4ec3488d9f9dcd70eebb6c39e1abcf8976bf6`;
+its complete gzip is 35,058,855 bytes, SHA-256
+`29d2eb64d5706bb9f71f54b9cfd3a2670645e489e2ca460706887cfd4cbc3d74`.
+Independent raw-hash/case/summary receipt SHA-256:
+`3aa6a420f16ac32430ab6c0e02d0369af98865008be70e684e2b316dc431ee54`.
+The committed-error case passed at raw line12410; SQLSTATE mapping at11867.
+The former uses real public transaction/model APIs and checks the original
+`BicDbError::Memory` containing the synchronous indexing DimensionMismatch
+detail, detached committed transaction/DDL undo, preserved row/DDL/GUC after
+later ROLLBACK and a fresh SQL session, and healthy recovery with a failed
+derived job. It does not invoke the separate Core timed-Unknown cut or establish
+HA/failover behavior. Core's eight visibility controls remain unexecuted here.
+Remaining-workspace raw log is 39,194,032 bytes, SHA-256
+`2c5178564320d017b562fb54dad65516f9c7b20edc31214c45577d470dccb535`;
+gzip SHA-256 `a6fd268fc6662bac8629ae8cca9b5b1558844b0f41a9e4fb25c57eafd6b7329f`.
+Independent full-log/case/cut receipt SHA-256:
+`5065ceb6c7b6a55740e36d475e4ffd9496df20f5526280c3c628a1de6735aa74`.
+The failed Cell unwrap/error is at raw307795–307796; the raw error does not name
+the internal rotation path or checkpoint. Source inspection finds that rotation
+deliberately omits the source gate while copying enrolled FORMAT into a fresh
+stage; later guarded stage writes then require a gate that was not initialized.
+This is an integration defect repaired at source through actual stage ownership
+and a new stable gate; the mandatory check remains. The composed correction
+above remains uncompiled/unexecuted. Core visibility/Standard/bootstrap
+and the later CLI/application-port acceptance remain **not tested** here.
+
+The complete archive contains 89 premanifest files, 92 total, 11 complete gzip
+logs and seven original ZIPs/24 members, with no missing or partial captures.
+Manifest SHA-256:
+`eaf355e7d77c1b41813a16547d4bc1848be9bf0fe7085a6e65939aa68b1b36e5`;
+independent full-archive verification receipt SHA-256:
+`74af72b27b7d31c39c3d9f4e67dbef702d7b79ef67ee4d8566c2afe6c794893b`.
+Verification covers exact source/tree/API inventories, every stored/raw hash,
+original ZIP API digest/size, CRC and member hashes. The original collector
+exited naturally; no replacement collector was started. Archive integrity does
+not qualify database behavior or the local successor fixes.
+
+Local correction **`781b4e8029f0e8c747fee69252c94a9f04992103`** specifies
+`mpsc::channel::<()>()` in the failed test. Only dropping the sender releases the
+existing receive; no payload is sent. The actual thread-held shared guard,
+timeouts, ordering and assertions remain unchanged. This correction has source
+review and standalone formatting only; it has not been compiled or executed.
+The smallest next check is compilation of the actual Core test target followed
+by the unchanged backup exclusion control and required broad suites. The
+original FIRST/Strong/ACK, cold recovery and controller gates remain open.
+
+An independent source review also confirms the existing
+[cross-call bootstrap association gap](standard-live-backup-physical-gate.md):
+an originally absent target can be created and acknowledged by a normal opener,
+survive the first install's no-replace refusal, then be claimed and replaced by
+a distinct finish call after that owner closes. The original live-owner race
+control stops before this fresh call. Classification: **failed source safety
+review; runtime reproduction not tested**. The next deterministic regression
+must retain both real acknowledged records and the first error, close the real
+owner, invoke a distinct finish and require target/stage preservation plus safe
+subsequent recovery. Original-target and renamed-predecessor association must
+survive restart; a RAM flag or newly acquired DirectoryLock does not supply it.
+This is not an established cause of the historical Azure visibility failures.
+
+The separate [Prepared key-rotation source-head gap](cell-key-rotation-prepared-source-head-gap.md)
+also remains open: per-call closed ownership does not prevent ordinary source
+writes between preparation and a later resume. The staged digest alone cannot
+prove inclusion of those writes. Its deterministic regression is unexecuted;
+the retained retired ciphertext distinguishes active-view rollback risk from
+durable erasure. The physical-gate repair does not close this boundary.
+
+### Earlier head0a: Core guard compilation and Page profile assertion failures
+
+Source **`0a04ccc06db33a04d254a5e00776248d7ea1772a`**, tree `06a13e5accafa331271049a9ae44f1bf3628661a`, failed [Tests 43694564959](https://github.com/nikoma/bicdb/actions/runs/43694564959) and [Rails 43694565004](https://github.com/nikoma/bicdb/actions/runs/43694565004). Actual checkout `8295fbbb5e0c724ddbfe2d6325c30805b847a568` has the identical tree. Six jobs failed Core `E0277` at `paged_collection.rs:494`: the facade promises `Result<impl Drop>`, but the new owning Page guard has field cleanup without an explicit `Drop` implementation. Core and Native stopped in projection-helper compilation with zero actual cases; SQL, PGwire/Oracle, Rails and nondefault runtime acceptance were not reached.
+
+Remaining-workspace reached **384 case-result lines: 383 passed, 1 failed**, over 11 target summaries. Page unit tests passed **346/0**, including the new `physical_gate_profile_requires_actual_page_checksum_and_never_repairs_it` at raw line1358. This is an executed checksum/read-only component result. The later `extent_segments` target failed **6/1** at its original `segmented_superblock_uses_v2_magic_and_legacy_stays_v1` assertion137: actual `BICDBPG6`, expected `BICDBPG2`. The paired monolithic assertion142 was not reached. Later retained-claim, CLI and application-port acceptance was not reached. Do not classify this workspace result as another compile failure or infer a data-loss/transaction outcome from the format assertion.
+
+The complete archive is frozen: 86 premanifest files, 89 total, 11 full gzip logs and six original ZIPs/six members. Manifest SHA-256: `8584a08b5c072b0c2b5f82490e18e02949c3973f5553d2da40960a56b1f10d3b`; independent full-archive receipt SHA-256: `7536d815a45611a893c724dd03a3a29f1f2ebafaecc42c7ade97a2953449a7d7`; independent seven-job raw execution classification SHA-256: `95a8a1e5aca4120836e7518e1e2ac89f4955e90138d9bbc00b2c2b07cee11a27`. Workspace raw SHA-256: `d2d755c06f12a42d2bbcfb6c5bc1dafa9da3978e24d313aad36c1af250de4902`, 750,532 bytes. Native raw SHA-256: `952d8b089c42d2fb54bcdc54026df439559d1e35b7a799a6c7ba55915f5ff73e`, 157,798 bytes. The collector exited naturally after complete capture; no jobs were restarted or cancelled.
+
+Source correction `5e292cf7c1a58d92e72b3cb1523ef7356e9c43ef` preserves the facade's opaque public API and adds explicit `Drop` to its real owning guard. Its original writer/physical fields and automatic release order remain unchanged. The paired [profile test correction](page-gated-profile-test-correction.md), unit `e8acc74054aa69c5e43eb395bae199fb03d7ddba`, requires exact mandatory gated profiles5/6/7/8 while retaining original layout/relayout/reopen assertions and historical input fixtures. The tracked-output mismatch was found by source inspection after the actual first failure; it was not executed in this run. Those successors are uncompiled/unexecuted at this checkpoint. Source-byte comparisons with the historical accepted set are not execution of an old binary. Complete exact-source CI and original HA acceptance remain required.
+
+### Later composed head8bc: compilation failed before HA acceptance
+
+Composed source **`8bc2df66361a3d4307b2943439a8a9d2b4fa0b92`**, tree `ce2dcceb3f8c0fddb34ce64dfc7566018c848637`, failed [Tests43693587297](https://github.com/nikoma/bicdb/actions/runs/43693587297) and [Rails43693587277](https://github.com/nikoma/bicdb/actions/runs/43693587277). Actual checkout `6b96f5507e0619bef1c7284282885dd2372eb9f2` has that exact tree. Seven jobs failed the same production Page `E0308`: `manager.rs:2841` passed `decode_superblock(path, &bytes, size)` while its actual signature at line2748 requires bytes, path, size. This is an executed compiler failure, not failed HA assertions or unavailable CI.
+
+Core and Native failed while building their projection helper, with **zero actual case or summary lines** and their test steps skipped. PGwire/Oracle, SQL, Rails runtime and the nondefault consumer check were not reached. Remaining-workspace retained five earlier successful Lua runtime/workflow cases before hitting the same Page compile error; CLI election, original app-port and new port-owner diagnostics were not reached. Older326 passes below cannot be inherited by changed8bc source.
+
+The complete8bc archive is frozen: 86 premanifest files, 89 total, 11 full gzip logs, six original ZIPs/six members, no missing/partial captures. Manifest SHA-256: `e2db464029f39830458c18f96199a4be8f4f130d7f68c5623efbc12fb64bf18f`; independent full-archive verification receipt SHA-256: `0f0b0020eb55fcbb7d72f5cb96050c60da37825632277977cbecd613e40db575`. Raw Core log: 109,705 bytes, SHA-256 `1a008f0b229143caeb218b50e179f2632de1c916432450eca81e28f0a804df0a`; Native: 110,193 bytes, SHA-256 `d684e10250e6ee87e75296c26ea9330cc1f04ebb3a64bbc0d7b1ba801285ab05`. The collector exited naturally; no useful job was cancelled or restarted.
+
+Local successor **`327a8935f15dc3a3deba018ed1722a5321a17680`** corrects the argument order. Source review also found a separate missing precondition: the shared decoder assumes a page whose checksum/trailer was already verified. The reader-fence helper now calls the actual page verifier before decoding. A genuine fsynced Page file under actual EX is checked, damaged in its body while preserving profile/size, required to return `ChecksumMismatch` without repair, restored and reopened. This corruption control is **not executed**, and the missing check is a source finding rather than observed corruption. The successor has formatting/preservation review only; compilation and all original/new acceptance remain pending.
+
+### Earlier source326: executed runtime results
+
+[Tests run 43682851011](https://github.com/nikoma/bicdb/actions/runs/43682851011) passed all-target and nondefault-consumer compilation, Core, SQL and PGwire/Oracle checks. [Rails run 43682850892](https://github.com/nikoma/bicdb/actions/runs/43682850892) passed its actual application checks. These are separate scopes.
+
+[Native job 132717026027](https://github.com/nikoma/bicdb/actions/runs/43682851011/job/132717026027) failed: **372 passed, 27 failed, 1 ignored**, with 956 filtered out, in 2,334.11 seconds. All 400 individual result lines and the complete raw log were independently verified. The raw log is 35,508,424 bytes, SHA-256 `3deb1461fa4fb269c54e3a6adacafa91623e8f6c69ba221fae7777ca06e38046`; its retained gzip is 3,239,240 bytes, SHA-256 `4d1f868fec4fc19118f3b236d34d75572ba261359a58ab97c2e4fa2a7ad2f4f2`. Independent result receipt SHA-256: `9a214208afd00ddf37d714e1f6a17428d99408d41bd5d97f0db0405238c34942`.
+
+The [remaining-workspace job 132717026000](https://github.com/nikoma/bicdb/actions/runs/43682851011/job/132717026000) also failed, independently of the native suite. It failed `native_metadata_operator_actual_cli_single_join_fresh_becomes_local_metadata_voter` at `crates/bicdb-cli/tests/native_metadata_operator_cli.rs:76`: `operator elect failed: Error: native metadata action refused: "cluster error: native host bootstrap: owned learner metadata status busy"`. The CLI target finished 5 passed / 1 failed. Its actual schedule control had passed earlier; the main519 application-state port-bind test was not reached and receives no candidate326 passing coverage.
+
+The complete workspace raw log is 91,375,658 bytes, SHA-256 `71db759ba79963909dbc6f6edcd3fbf41d23271f6f60d0512329e1b79e2c05da`; retained gzip SHA-256 `118ddf7b4e851d0725c303d11fb3c6a105264a24ac2e8764e791fcb0c144457a`. Independent raw-log/failure-cut receipt SHA-256: `94b12a7d243b250b5c361bab6afaa3a131c4e783df41413b2df9eb908ac1c0d7`.
+
+All jobs have terminated. The complete candidate archive is frozen: 98 premanifest files, 101 total files, 11 full gzip logs and eight original artifact ZIPs containing 61 members, with no missing or partial captures. Manifest SHA-256: `1d92548c8b49f6089eb32d3b03260a35f4721cab4aaeb34a05aee8e80828891e`; independent full-archive verification receipt SHA-256: `952619a06d69e84ce753c44576c2e27f4ff3f1638d1d8998f12938a705c97658`. Verification covers stored and decompressed hashes, exact API source/job/artifact inventories, ZIP API digests/sizes, CRC and member hashes. The collector exited naturally; no useful job was cancelled or restarted. Archive integrity does not qualify database behavior.
+
+| Finding | Classification | What the evidence establishes |
+|---|---|---|
+| Entire native suite | **Failed** | Twenty-seven actual test failures; this candidate cannot pass its merge gate. |
+| Remaining workspace | **Failed** | The CLI join test failed on a busy owned-learner metadata status read. Later application-state tests were not reached. |
+| Real follower apply with another range's global visibility gap | **Passed, component scope** | `native_local_rf3_real_follower_apply_completes_before_other_range_global_gap_closes` passed, raw line 17254. This does not qualify the complete handoff or physical deployment. |
+| Partial-setup cleanup phase check | **Failed test; source correction untested** | Actual JSON phase was `stopped`; the assertion expected `Stopped`. The existing enum has `serde(rename_all = "snake_case")`. The control did not establish its complete two-cut cleanup result. |
+| Two surviving-leader hot controls | **Failed tests; downstream guarantees not tested in these invocations** | Their first genuine recovery call passed `recovered >= 1`. An immediately repeated recovery returned zero; the second assertion failed before the applying probe and subsequent acknowledged-payload/Strong checks. |
+| Other FIRST/cross-protocol failures | **Failed tests; causes under investigation** | Actual errors include connection reset/refusal during initial-data opening, changed range configuration, changed source metadata, absent original native decision and changed metadata acquisition authority. An expected injected fault return must be distinguished from the eventual unexpected test failure. |
+| Metadata-owner catalogue certification | **Failed path with a source authority mismatch** | The metadata owner asks for a range-leader-only metadata observation to construct its collection plan. A metadata leader distinct from the range leader cannot pass that request's authority check. This requires a separate read-only certification scope, not a weaker range-leader predicate. |
+| Large unrelated-catalogue control | **Failed test with passed earlier components; timeout cause inconclusive** | The real directory-sync fault fired once; fresh recovery, same native/Frozen ownership and retained-intent size above the former 8 MiB aggregate cap passed. Large-entry preservation verification then passed. The test later ended with `QueryTimedOut` at `hot_policy_tests/data_tests.rs:105` during DATA-policy installation. This is not complete capacity/DATA-availability qualification, evidence of acknowledged-data loss or proof of a particular performance bottleneck. |
+| Physical expansion, cold recovery and sustained capacity gain | **Not tested by this run** | These are in-process CI controls; they do not replace the independent four-to-five-node experiment. |
+
+## Reproducible test corrections
+
+### Follow-up source status at the source326 checkpoint
+
+At this historical checkpoint the public candidate was `326c363477477950f76bdb51fe6425cab85dc362`, with the failed execution above. The following corrections were separate source units without compilation or runtime results at that checkpoint. Later exact-source execution is recorded above; it does not establish unexecuted acceptance cuts:
+
+| Source unit | Source status | Remaining execution gate |
+|---|---|---|
+| Owned-learner status acquisition, `6c29102c617564fb3a87e73abc8959b03c7b1798`, composed locally as `e4edfe0790f2d699a58d3649a3d240f6fe183b34` | Bounded wait on the same actual metadata mutex, using the existing caller/OWN window. Release, cancellation and expiry controls defined. The original election is not repeated. | Compile and execute those controls and the unchanged failing CLI test. Cold status uses the helper but has no separate executed held-lock control. |
+| Initial listener transition, `a179fce0f8b5304848af5ed4f50b2c8f1c1c57ea` | Locally composed source unit. Only the pre-enrollment read retries privately identified socket failures within the original action deadline and actual service open/slot. Accepted authenticated worker drain and an unaccepted backlog socket have distinct controls. | Compile, reach both actual socket cuts, then pass unchanged full initial-data/FIRST acceptance. The component fixture retains later genesis errors and does not assert full DATA readiness. |
+| Backup/bootstrap ownership, `38d15efbb815e673859ebfd8b67a450acdba322d` plus `d6760a938ceb6983abcc28196239864a7764ad13` and `c81a26981ddc86c2215040e11041d3c91a7cad76` | Locally composed source units. Retained physical custody covers selected writers and both restore codecs' HA/READY tails. Namespace publication uses actual held owners and atomic no-replace renames; an interrupted predecessor remains until parent sync. | Compile and execute genuine contention, retained-child, both-codec interruption, namespace/preimage cuts and original backup/bootstrap regressions. Cross-call target intent and replaced-tree logical association remain open cold-protocol blockers. Windows held-handle rename and old pre-format bootstrap remain unqualified. |
+| Final source-frame metadata acquisition, `62313619ddd7fa2625067e169c95218e65cd5e06`; controls `72740ea03f02370920dc8fb7d5510741b30fea93` plus `048be25abc9ef7679e31b4c78e1dc9fe23b94dc0` | Locally composed correction and three genuine final-frame held-lock control definitions. The child signals the actual server result only after releasing the session mutex, avoiding a false diagnostic-busy race. | Compile and execute real same-session release, caller cancellation with OWN live, and original earliest-scope expiry; retain separate wire/server outcomes and the full unchanged frame/payload assertions. Independent OWN-only expiry is not established by the coupled expiry definition. |
+| Metadata-owner catalogue certification, `8ea6251fab97b913efdf807d30223ce8810135b4` | Locally composed source unit. Distinct read-only actual metadata-owner scope; strict range-leader/native-role factories preserved. Separate TLS guard and new-control expiry/guard-lifetime corrections are retained. | Compile and execute distinct-owner, foreign-owner, cancellation, coupled-expiry, exact ancestry and metadata-version controls plus full FIRST acceptance. Independent OWN-only expiry and bounded progress under unrelated metadata churn are not established. |
+
+Independent source review is partial and does not substitute for these gates. No replacement CI candidate, new binary, merged correction or physical experiment is established by these source units.
+
+The cleanup failure is in `crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs`, test `native_first_partial_normal_setup_error_and_panic_stop_returned_supervisors`. Raw lines 21756–21759 show the assertion and its two values. `distribution_native_host/operator.rs` declares the serialized phase convention; `operator/first_acceptance.rs::test_first_stop_state` serializes the actual enum. Local correction `378e62bb9acb2af4e21ae96e1f6a9e8594336c0f` changes only the expected string to `stopped`. Actual stop success, absent supervisor and stopped control-listener assertions remain required.
+
+The two hot failures are `native_registered_fifth_remote_hot_data_follower_binds_without_fake_leader_ready` and `native_registered_fifth_remote_hot_surviving_leader_actual_pending_callback_rejects_foreign_open`. Both execute `hot_policy_tests/data_tests.rs::exercise`. At the tested source it called the same surviving leader's `recover_initial_data_leadership` twice, with no intervening epoch change. `distribution_range_consensus.rs::recover_local_leadership` selects only epochs absent from `recovered_epochs` and counts newly completed recoveries. Thus zero from the second call does not establish failure of the first recovery. Raw failure lines 89543–89544 and 117867–117868 precede the applying probe and original-payload read loop.
+
+Local correction `b1f84e02e8deebef5c54f4e35c3207510effe9d8` invokes that real recovery once through the existing operation ledger, retains its actual `(leader, recovered)` result and requires both original positive-count assertions. It retains the original five-second recovery budget, follower-not-leader checks, foreign-open probe and complete subsequent ACK/Strong/write assertions. No production authority or readiness is synthesized. Passing source checks do not establish passing execution.
+
+The smallest next controls are the existing exact cleanup test and the two exact hot tests on the corrected source. They must reach their intended fault/read/write cuts and complete all original assertions. A missing cut remains a failing or inconclusive prerequisite. Do not extend their deadlines, skip their assertions or treat a safe refusal as successful recovery.
+
+For the initial-data connection failures, the next deterministic test should hold a real peer at the control-to-DATA listener transition while another host performs its original finite `OpenInitialData` action. Preserve the actual transport error, retained owner and original deadline; then prove bounded continuation with that owner after the listener resumes. The current logs alone do not identify the causal interleaving. For changed-metadata failures, independently advance unrelated metadata and selected range membership at explicit barriers; distinguish legitimate invalidation from unnecessary failure under unrelated progress before changing any freshness rule.
+
+The FIRST failure inventory is 17 setup failures before the requested exercise, one cross-protocol exercise failure, five other exercise failures and one cleanup serialization mismatch. At raw line 20448 a genuine OLD-recipient native-decision request returned service contention; its subsequent known read at line 20451 failed because original D was absent. That sequence must be distinguished from a retained unknown attempt. The three passing FIRST cases were lost-Close read-only resolution, native-decision reply-loss read-only resolution and server-cancelled queued-request handling. These individual controls do not turn the failed suite into a passing handoff qualification.
+
+The exact source of `source metadata changed before frame` is another important distinction: `distribution_range_image/remote_source.rs` returned that text when its final metadata `try_lock()` failed, before `proof.require_current` could check freshness. The matching runtime error therefore establishes mutex contention at that point, rather than an observed topology change. Local source correction `62313619ddd7fa2625067e169c95218e65cd5e06` waits on that same metadata owner within the minimum original caller, OWN and source-session windows. It rechecks cancellation/expiry after acquisition and retains the unchanged physical/native freshness predicates. It also applies those original-window checks to the earlier metadata acquisition in that same observation. Formatting passed; actual held-lock release/cancellation/expiry controls and compilation remain pending. This is not a blanket retry of source frames or native mutations.
+
+The errors at raw lines 20124 and 20728 occurred in `actual_metadata_owner_independent_dual_durability_certification`. At the tested source, `distribution_native_host/provisional_listener/registration/first_catalogue_certification.rs:123` calls `acquire_metadata_read_observation` with the metadata owner's node ID and the selected capture range, then starts `NativeJointOldRound` to obtain a plan. `distribution_consensus.rs::validate_acquire_requester` requires that requester to be the range's leader. The FIRST fixture deliberately selects a range whose leader differs from the metadata leader. The certification path therefore applies the wrong authority requirement for that supported role separation. This is distinct from a busy mutex and must not receive a generic transport retry.
+
+The correction needs a distinct read-only catalogue-certification scope produced from the actual metadata owner's HostOWN and protected metadata context. It must compare the complete pending manifest, birth/pin/schema/restore identities and original OLD-close ancestry, independently collect actual recipient native/catalogue durability, and retain fresh metadata-owner validation before proposing the candidate. It must not convert a HostOWN observation into a recovery role, local OLD quorum or native mutation plan. The composed [source contract](metadata-owner-catalogue-certification-scope.md), final unit `8ea6251fab97b913efdf807d30223ce8810135b4`, defines that path and genuine refusal controls while preserving the existing distinct-leader tests. Neither fixture co-location nor a weaker `validate_acquire_requester` is used. Compilation and execution remain **not tested**. Its original protected metadata version deliberately fails closed on unrelated changes; this is not bounded-convergence qualification.
+
+## Follow-up bootstrap source gap
+
+Review of the unexecuted `38d15efbb815e673859ebfd8b67a450acdba322d` unit confirmed that optional ownership captured for an absent old/replaced tree did not authorize later mutation of a newly appearing tree. `finish_standby_bootstrap` could subsequently use fresh path-presence checks to rename/remove it; its completion helper could also remove the current replaced path without an actual retained owner. A normal Core opener which passed its bootstrap preflight before staging appeared can create that root in the intervening window. An optional absent conventional Page child has a related standalone-Page-open race. These are confirmed source gaps; a runtime failure or historical data-loss cause has **not been tested**.
+
+The corrective source units `d6760a938ceb6983abcc28196239864a7764ad13` and `c81a26981ddc86c2215040e11041d3c91a7cad76` retain actual owner/FD identity across moves, use atomic no-replace publication, refuse newly present unowned trees and reserve the conventional child through a genuine DirectoryLock. The separate moved-path observation preserves the strict writer-transfer validator and opens no extra Unix `store.lock` descriptor. Genuine normal Core/Page controls are defined at the preflight, custody and completion boundaries. They retain full locally committed payloads; they are not HA/SDK ACK or physical evidence. A repeated second-rename/parent-sync fault control also requires the original predecessor to remain until the durability cut. All these definitions remain **not tested**.
+
+These changes close only the examined same-attempt source gaps. They do not persist the original target intent across calls: after the initial no-clobber error and a competing owner's later close, a fresh installer may claim that newly existing root while READY remains. A physical claim also does not prove the logical association of a replaced tree after a crash. Those explicit cold/recovery protocol blockers remain open; passing the new controls cannot establish their closure. See the [physical-gate contract](standard-live-backup-physical-gate.md).
+
+## Separate main519 workspace failure
+
+Main **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`** has a failed post-merge [Tests run 43677527718](https://github.com/nikoma/bicdb/actions/runs/43677527718). Its [Native job 132700843200](https://github.com/nikoma/bicdb/actions/runs/43677527718/job/132700843200) completed **348 passed, 0 failed, 1 ignored**, with 944 filtered out, in 2,183.25 seconds. The entire log and all 349 unique case results have now been independently reviewed and reconciled. Remaining-workspace job `132700843144` failed `unmigrated_legacy_jobs_are_rejected_before_any_state_listener_starts` at `crates/bicdb-app-host/tests/replicated_state.rs:313`, on the final replicated reopen: `Address already in use (os error 98)`.
+
+All 349 main519 Native case names also ran in candidate326. Candidate326 added 51 cases: 25 passed and 26 failed. Of its 27 failures, 26 therefore have neither a test definition nor an actual execution in main519. Only `native_registered_fifth_remote_hot_data_follower_binds_without_fake_leader_ready` existed and passed in main519. That wrapper retained its name/body, but its candidate exercise added the second positive recovery-count assertion which failed before the original downstream probe/read checks. The common hot fixture budget also differs between the revisions (main519 4,000 ms; candidate326 1,500 ms). A matching name is not equivalent source/cut coverage; these facts do not by themselves identify a runtime regression or attribute a failure to that budget. The candidate's failed acceptance gate remains failed.
+
+The separately frozen main519 Native scope contains 11 payload files, one manifest and one verification receipt; it does not claim to archive the other jobs or artifacts. Its raw Native log is 13,543,529 bytes, SHA-256 `da06ccedd111fc3d420c9ffb4f70691702f9ee1d7a31d2872af0dd9ce0305f10`; retained gzip SHA-256 `0aebda0d45fff90cb09f1530418ccd43a838997c2f646651bd60ffc3342f55ec`. Manifest SHA-256: `7eefde57b7e1023328b6b0ffbe107793f80319323d439444e54faeda42d42bfe`. The complete 27-case comparison matrix SHA-256 is `bff00b6060c94094de4bb6dfbb68ce0feb68c8d0d1319a4340a3f62331b4c832`; independent full-log/archive/case comparison receipt SHA-256 is `c99505e1ce75810637baf4eacd850dee47fe11ff3da4f0b925afb4c220c9e28a`. This is executed CI evidence, not physical or whole-release qualification.
+
+The earlier no-listener bind assertion at line 306 and standalone migration/queued-job assertion at lines 310–311 had succeeded. The final prepare, consume and sync-policy assertions after line 313 were not reached. The test's port helper releases its reservation listeners before reuse; a port collision is plausible, but the competing owner was not recorded and the cause remains **inconclusive**. Do not relabel this as a schedule failure, unavailable CI or a demonstrated replication defect. The candidate326 test source is byte-identical and its actual result must be recorded separately.
+
+The complete main519 workspace raw log is 134,690,258 bytes, SHA-256 `a080beeb01ecf60d3f360b44f48125a129dc4a131fd03039ef80336ee6358311`; retained gzip SHA-256 `59bed3b33e4c6e99e48b90b1d57c56f5e64a674afeeec59bc80a2ddd163770a0`. The smallest deterministic diagnostic is to introduce a known competing port owner at an explicit reservation/reopen barrier and capture both the bind owner and exact startup stage, while retaining the original migration, no-listener, binding and queued-job assertions. Merely rerunning until green would not explain the failure.
+
+A new, uncompiled control is defined in `crates/bicdb-app-host/tests/explicit_port_owner/mod.rs`. It retains a genuine competing listener acquired after the actual standalone job migration, requires the exact typed `PgWireError::Io(AddrInUse)` from the original failed replicated open, and records the persisted replica binding. That binding is an important possible startup effect: its initializer runs before HA listener binding. The control then releases only its own listener and requires a distinct open with the exact same replica configuration, followed by the original job-consumption and sync-policy checks. It preserves the old error and does not replay a transaction or claim that the failed startup was effect-free. The original failing test body remains unchanged. This definition is **not tested**; even a passing control would establish this known-owner scenario, not identify the unrecorded owner in the historical main519 run.
+
+The next smallest CLI status control should hold the actual learner metadata mutex during a finite status/election action, release it and require completion with the same original caller. Separate real cancellation and expiry cuts must return their exact errors without starting or repeating an election. A generic busy-string retry would not establish this contract.
+
+Source tracing places this busy status refresh after `elect_metadata_control` returned successfully. The CLI's `operator elect failed` message therefore does not prove that no election happened. A correction must wait for the original status read within its original caller/OWN window and preserve the actual election result; it must not repeat the election to make the CLI command appear successful.
+
+No new binary, deployment, Azure allocation, production admission, RPO/RTO result or post-convergence throughput measurement follows from these findings.

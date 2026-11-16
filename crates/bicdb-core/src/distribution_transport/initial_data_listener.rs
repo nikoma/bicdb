@@ -39,6 +39,7 @@ pub(super) fn require_request(
     admission.require_live()?;
     match request {
         ClusterDataRequest::NativeRemoteImageSourceFrame { .. }
+        | ClusterDataRequest::NativeRemoteServing { .. }
         | ClusterDataRequest::NativeRemoteOld { .. }
         | ClusterDataRequest::NativeRemoteNew { .. }
         | ClusterDataRequest::NativeSourceExportRetirement { .. }

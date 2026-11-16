@@ -20,6 +20,11 @@ pub const MIN_WRITE_FORMAT_VERSION: u32 = 2;
 /// silently reading it as `embedded_memory`. The compatibility fence therefore
 /// holds for binaries already in the field, not just future ones.
 pub const SERVER_PAGED_FEATURE_FLAG: &str = "server_paged_storage";
+/// An opened writer participates in the root-inode physical backup cut across
+/// Core WAL, page apply, eviction, recovery and maintenance. Old readers must
+/// refuse this root before recovery, not merely ignore a lock-file marker.
+pub const PHYSICAL_BACKUP_GATE_FEATURE_FLAG: &str =
+    bicdb_page::physical_gate::PHYSICAL_GATE_READER_FEATURE;
 
 pub const ONLINE_BACKUP_EXTENT_FEATURE_FLAG: &str = "online_backup_extent_tracking_v1";
 pub const UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG: &str = "unique_nulls_not_distinct_v1";
@@ -51,6 +56,7 @@ pub const NATIVE_RECOVERY_SERVING_FEATURE_FLAG: &str = "native_recovery_serving_
 /// Local decision-catalogue custody contract; old writers must refuse.
 pub const NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG: &str = "native_catalogue_custody_v1";
 pub const NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG: &str = "native_writer_enrollment_v1";
+pub const NATIVE_WRITER_ALLOCATION_POLICY_FEATURE_FLAG: &str = "native_writer_allocation_policy_v1";
 pub const NATIVE_JOINT_DATA_HANDOFF_FEATURE_FLAG: &str = "native_joint_data_handoff_v1";
 /// Local qualified recovery in an already activated joint domain.
 pub const NATIVE_CURRENT_JOINT_RECOVERY_FEATURE_FLAG: &str = "native_current_joint_recovery_v1";
@@ -86,7 +92,12 @@ pub const NATIVE_JOINED_REMOTE_RECEIVE_V2_FEATURE_FLAG: &str = "native_joined_re
 pub const NATIVE_JOINED_REMOTE_IMAGE_FEATURE_FLAG: &str = "native_joined_remote_image_v1";
 /// Required companion provenance for genuine remote native DECISION.
 pub const NATIVE_REMOTE_JOINT_DECISION_FEATURE_FLAG: &str = "native_remote_joint_decision_v1";
+/// Root-local unresolved job semantics. Whole-root backups retain this fence;
+/// it is not a portable row-image capability or a job-replay permission.
+pub const MEMORY_JOB_OUTCOME_UNKNOWN_FEATURE_FLAG: &str = "memory_job_outcome_unknown_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
+    MEMORY_JOB_OUTCOME_UNKNOWN_FEATURE_FLAG,
+    PHYSICAL_BACKUP_GATE_FEATURE_FLAG,
     NATIVE_JOINED_REMOTE_IMAGE_FEATURE_FLAG,
     NATIVE_REMOTE_JOINT_DECISION_FEATURE_FLAG,
     NATIVE_JOINED_REMOTE_RECEIVE_V2_FEATURE_FLAG,
@@ -118,6 +129,7 @@ const KNOWN_FEATURE_FLAGS: &[&str] = &[
     CURRENT_IMAGE_PROPOSAL_FEATURE_FLAG,
     NATIVE_RECOVERY_SERVING_FEATURE_FLAG,
     NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG,
+    NATIVE_WRITER_ALLOCATION_POLICY_FEATURE_FLAG,
     NATIVE_JOINT_DATA_HANDOFF_FEATURE_FLAG,
     NATIVE_CURRENT_JOINT_RECOVERY_FEATURE_FLAG,
     NATIVE_ABORT_HISTORY_FEATURE_FLAG,
@@ -220,6 +232,39 @@ pub(crate) fn install_replicated_reader_features(root: &Path, features: &[String
         root,
         &features.iter().map(String::as_str).collect::<Vec<_>>(),
     )
+}
+
+/// Unconditional durable reader barrier BEFORE an unresolved job sidecar can
+/// be published. Re-fsync even when a prior uncertain rename left the bit visible.
+pub(crate) fn enable_memory_job_outcome_unknown(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    metadata
+        .feature_flags
+        .insert(MEMORY_JOB_OUTCOME_UNKNOWN_FEATURE_FLAG.into());
+    persist_metadata_with(root, &metadata, true, |path, bytes, fsync| {
+        // Same ordered atomic replacement as write_atomic; a named site makes
+        // the actual barrier's failure observable in scoped I/O controls.
+        storage::replace_durably(
+            path,
+            storage::ReplaceContents::Plain(bytes),
+            fsync,
+            "memory_jobs.outcome_unknown.format",
+            storage::FailClosed::No,
+        )
+    })
+}
+#[cfg(test)]
+pub(crate) fn test_reader_without_memory_job_outcome_unknown(root: &Path) -> Result<()> {
+    let metadata = read_or_legacy_metadata(root)?;
+    let without: Vec<_> = KNOWN_FEATURE_FLAGS
+        .iter()
+        .copied()
+        .filter(|feature| *feature != MEMORY_JOB_OUTCOME_UNKNOWN_FEATURE_FLAG)
+        .collect();
+    validate_supported_with_flags(&metadata, &without)
 }
 
 fn enable_feature_flags(root: &Path, features: &[&str]) -> Result<()> {
@@ -749,6 +794,9 @@ fn persist_metadata_with(
     let fsync = fsync
         || metadata
             .feature_flags
+            .contains(PHYSICAL_BACKUP_GATE_FEATURE_FLAG)
+        || metadata
+            .feature_flags
             .contains(LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG)
         || metadata
             .feature_flags
@@ -770,7 +818,10 @@ fn persist_metadata_with(
             .contains(NATIVE_METADATA_STORE_FEATURE_FLAG)
         || metadata
             .feature_flags
-            .contains(NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG);
+            .contains(NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG)
+        || metadata
+            .feature_flags
+            .contains(MEMORY_JOB_OUTCOME_UNKNOWN_FEATURE_FLAG);
     write(
         &metadata_path(root),
         &serde_json::to_vec_pretty(metadata)?,
@@ -1006,6 +1057,44 @@ pub(crate) fn enable_native_writer_enrollment(root: &Path) -> Result<()> {
         .feature_flags
         .insert(NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG.into());
     persist_metadata(root, &metadata, true)
+}
+
+/// Reader barrier BEFORE a SAME-open allocation-policy audit. A flag alone
+/// cannot create a writer, epoch policy, recovered prefix or Ready proof.
+pub(crate) fn enable_native_writer_allocation_policy(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "allocation policy needs enforced native writer".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_WRITER_ALLOCATION_POLICY_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+#[cfg(test)]
+pub(crate) fn test_reader_without_allocation_policy_feature(root: &Path) -> Result<()> {
+    let metadata = read_or_legacy_metadata(root)?;
+    let old = KNOWN_FEATURE_FLAGS
+        .iter()
+        .copied()
+        .filter(|f| *f != NATIVE_WRITER_ALLOCATION_POLICY_FEATURE_FLAG)
+        .collect::<Vec<_>>();
+    validate_supported_with_flags(&metadata, &old)
+}
+pub(crate) fn native_writer_allocation_policy_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_WRITER_ALLOCATION_POLICY_FEATURE_FLAG))
 }
 
 /// Fresh factory only; existing roots cannot obtain bootstrap authority from it.
@@ -2147,6 +2236,403 @@ mod joined_unsupported_reader_tests {
             assert_eq!(
                 serde_json::to_value(before).unwrap(),
                 serde_json::to_value(after).unwrap()
+            );
+        }
+    }
+}
+
+/// Called only after actual root/Page ownership and root physical SH. A
+/// primary-record-only export must not upgrade the legacy FORMAT contract.
+/// This does not omit recovery I/O or grant Standard live-backup admission.
+pub(crate) fn prepare_physical_backup_gate_for_open(root: &Path, enroll_new: bool) -> Result<()> {
+    if enroll_new {
+        return enable_physical_backup_gate(root);
+    }
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(PHYSICAL_BACKUP_GATE_FEATURE_FLAG)
+    {
+        return Ok(());
+    }
+    // Preserve the exact existing bytes, but never promote a visible flag
+    // from an earlier failed sync to durable enrollment without a NEW actual
+    // file/directory barrier. Existing missing-gate refusal already ran.
+    let path = root.join(FORMAT_METADATA_FILE);
+    // Existing-only and nontruncating. Unix can sync the read-only actual
+    // descriptor; only Windows needs write access for FlushFileBuffers.
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    options.write(true);
+    let file = options.open(&path)?;
+    bicdb_page::test_faults::io_fault("physical_gate.existing.file_sync", &path)?;
+    file.sync_all()?;
+    bicdb_page::test_faults::io_fault("physical_gate.existing.dir_sync", &path)?;
+    storage::sync_parent_directory(&path)
+}
+
+/// Called only after actual directory ownership and root physical SH admission.
+pub(crate) fn enable_physical_backup_gate(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    metadata
+        .feature_flags
+        .insert(PHYSICAL_BACKUP_GATE_FEATURE_FLAG.into());
+    // Unconditional actual file+directory durability. Visible same bytes from
+    // an earlier failed sync cannot establish enrollment on a later open.
+    persist_metadata_with(root, &metadata, true, |path, bytes, sync| {
+        storage::replace_durably(
+            path,
+            storage::ReplaceContents::Plain(bytes),
+            sync,
+            "physical_gate.enroll",
+            storage::FailClosed::No,
+        )
+    })
+}
+
+pub(crate) fn require_physical_backup_gate(root: &Path) -> Result<()> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(PHYSICAL_BACKUP_GATE_FEATURE_FLAG)
+    {
+        return Err(BicDbError::Backup(
+            "an already-open legacy writer is not enrolled in the physical backup gate; close and reopen with a supporting writer before a Standard live backup".into(),
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod physical_backup_gate_tests {
+    use super::*;
+
+    #[test]
+    fn actual_open_enrolls_reader_fence_and_an_older_capability_set_refuses() {
+        let directory = tempfile::tempdir().unwrap();
+        let db = crate::BicDb::open(directory.path()).unwrap();
+        let metadata = read_or_legacy_metadata(directory.path()).unwrap();
+        assert!(metadata
+            .feature_flags
+            .contains(PHYSICAL_BACKUP_GATE_FEATURE_FLAG));
+        require_physical_backup_gate(directory.path()).unwrap();
+        let old_flags: Vec<_> = KNOWN_FEATURE_FLAGS
+            .iter()
+            .copied()
+            .filter(|flag| *flag != PHYSICAL_BACKUP_GATE_FEATURE_FLAG)
+            .collect();
+        let error = validate_supported_with_flags(&metadata, &old_flags).unwrap_err();
+        assert!(matches!(error, BicDbError::FormatCompatibility(_)));
+        // This is a current-reader capability simulation, not an old binary.
+        drop(db);
+        crate::BicDb::open(directory.path()).unwrap();
+    }
+    #[test]
+    fn actual_page_read_uses_enrolled_core_root_despite_a_real_child_gate_inode() {
+        use std::sync::{Arc, Mutex};
+        let directory = tempfile::tempdir().unwrap();
+        let config = crate::DbConfig::default()
+            .with_fsync(true)
+            .with_storage_mode(StorageMode::ServerPaged);
+        let mut db = crate::BicDb::open_with_config(directory.path(), config.clone()).unwrap();
+        db.create_collection("physical_gate_rows").unwrap();
+        db.insert("physical_gate_rows", crate::Record::new("one"))
+            .unwrap();
+        db.close().unwrap();
+        // An actual independent coordination inode in the Page directory.
+        // No metadata/status is fabricated or changed to select a branch.
+        let child =
+            bicdb_page::physical_gate::PhysicalGate::at_root(&directory.path().join("paged"))
+                .unwrap();
+        drop(child);
+        let db = crate::BicDb::open_with_config(directory.path(), config).unwrap();
+        let observations = Arc::new(Mutex::new(Vec::new()));
+        let observed = Arc::clone(&observations);
+        let _watch = crate::storage::backup_gate_observation::arm(
+            directory.path(),
+            false,
+            Box::new(move |event| observed.lock().unwrap().push(event)),
+        )
+        .unwrap();
+        db.verify_paged_storage_integrity(8).unwrap();
+        assert!(observations
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|event| event.acquired
+                && !event.exclusive
+                && event.gate == directory.path().join(crate::storage::BACKUP_WRITE_GATE)));
+        assert!(db.get("physical_gate_rows", "one").unwrap().is_some());
+    }
+    #[test]
+    fn already_visible_reader_flag_does_not_skip_the_actual_enrollment_barrier() {
+        let directory = tempfile::tempdir().unwrap();
+        crate::BicDb::open(directory.path())
+            .unwrap()
+            .close()
+            .unwrap();
+        let before = read_or_legacy_metadata(directory.path()).unwrap();
+        assert!(before
+            .feature_flags
+            .contains(PHYSICAL_BACKUP_GATE_FEATURE_FLAG));
+        let failure = bicdb_page::test_faults::arm_io_failure(
+            "physical_gate.enroll.dir_sync",
+            directory.path(),
+            1,
+            true,
+        );
+        // Same visible flag, actual replacement/dir-sync failure: no writer
+        // may be returned. This does not promote readable bytes to durability.
+        assert!(crate::BicDb::open(directory.path()).is_err());
+        assert!(crate::BicDb::open(directory.path()).is_err());
+        assert!(read_or_legacy_metadata(directory.path())
+            .unwrap()
+            .feature_flags
+            .contains(PHYSICAL_BACKUP_GATE_FEATURE_FLAG));
+        drop(failure);
+        crate::BicDb::open(directory.path())
+            .unwrap()
+            .close()
+            .unwrap();
+    }
+    #[test]
+    fn live_current_standalone_page_owner_prevents_core_and_standard_enrollment() {
+        let directory = tempfile::tempdir().unwrap();
+        let archive_directory = tempfile::tempdir().unwrap();
+        let paged_dir = directory.path().join("paged");
+        let (standalone, _) = bicdb_page::PagedStore::open(
+            &paged_dir,
+            bicdb_page::PagedStoreOptions::default().with_buffer_pool_bytes(1024 * 1024),
+        )
+        .unwrap();
+        let xid = standalone.begin();
+        standalone
+            .put(xid, b"original standalone", b"full original payload")
+            .unwrap();
+        standalone.commit(xid).unwrap();
+        // This is the CURRENT engine's actual gated Page profile, not a
+        // fabricated old header or an assumed absence of Page enrollment.
+        bicdb_page::manager::require_physical_gate_profile(&paged_dir.join("store.pages")).unwrap();
+        assert!(load_metadata(directory.path()).unwrap().is_none());
+        let page_before = std::fs::read(paged_dir.join("store.pages")).unwrap();
+        let wal_before = std::fs::read(paged_dir.join("store.wal")).unwrap();
+        let issued = standalone.transactions().next_xid();
+        let lsn = standalone.wal().next_lsn();
+        let config = crate::DbConfig::default()
+            .with_storage_mode(StorageMode::ServerPaged)
+            .with_paged_buffer_pool_bytes(1024 * 1024);
+        let refused = crate::BicDb::open_with_config(directory.path(), config)
+            .err()
+            .expect("actual live child must refuse Core open");
+        eprintln!("ACTUAL_LIVE_CURRENT_CHILD_CORE_REFUSAL {refused:?}");
+        assert!(
+            matches!(refused, BicDbError::PagedStorage(ref detail) if detail.contains("page store is already open"))
+        );
+        assert!(
+            load_metadata(directory.path()).unwrap().is_none(),
+            "no new Core FORMAT enrollment"
+        );
+
+        // No FORMAT means Standard actually defaults to EmbeddedMemory.
+        // It must still acquire the existing conventional child, not ignore it.
+        let archive = archive_directory.path().join("must-not-exist.bicbackup");
+        let refused = crate::backup::create_backup(
+            directory.path(),
+            &archive,
+            crate::backup::BackupCreateOptions {
+                passphrase: "synthetic-enrollment-test".into(),
+                base_backup: None,
+            },
+        )
+        .unwrap_err();
+        eprintln!("ACTUAL_LIVE_CURRENT_CHILD_STANDARD_REFUSAL {refused:?}");
+        assert!(
+            matches!(refused, BicDbError::Backup(ref detail) if detail.contains("not enrolled"))
+        );
+        assert!(load_metadata(directory.path()).unwrap().is_none());
+        assert!(!archive.exists());
+        assert_eq!(
+            std::fs::read(paged_dir.join("store.pages")).unwrap(),
+            page_before
+        );
+        assert_eq!(
+            std::fs::read(paged_dir.join("store.wal")).unwrap(),
+            wal_before
+        );
+        assert_eq!(standalone.transactions().next_xid(), issued);
+        assert_eq!(standalone.wal().next_lsn(), lsn);
+        assert_eq!(
+            standalone.get(b"original standalone").unwrap(),
+            Some(b"full original payload".to_vec())
+        );
+        let next = standalone.begin();
+        standalone
+            .put(
+                next,
+                b"after refusal",
+                b"same actual original owner continues",
+            )
+            .unwrap();
+        standalone.commit(next).unwrap();
+        assert_eq!(
+            standalone.get(b"after refusal").unwrap(),
+            Some(b"same actual original owner continues".to_vec())
+        );
+    }
+
+    #[test]
+    fn closed_current_page_child_transfers_original_claim_into_real_core_store() {
+        let directory = tempfile::tempdir().unwrap();
+        let paged_dir = directory.path().join("paged");
+        let (standalone, _) = bicdb_page::PagedStore::open(
+            &paged_dir,
+            bicdb_page::PagedStoreOptions::default().with_buffer_pool_bytes(1024 * 1024),
+        )
+        .unwrap();
+        drop(standalone);
+        assert!(load_metadata(directory.path()).unwrap().is_none());
+        let config = crate::DbConfig::default()
+            .with_storage_mode(StorageMode::ServerPaged)
+            .with_paged_buffer_pool_bytes(1024 * 1024)
+            .with_fsync(true);
+        let mut db = crate::BicDb::open_with_config(directory.path(), config.clone()).unwrap();
+        require_physical_backup_gate(directory.path()).unwrap();
+        db.create_collection("claim_transfer").unwrap();
+        let record = crate::Record::new("after actual transfer")
+            .with_metadata(serde_json::json!({"full":true,"nullable":null}))
+            .with_payload(b"actual complete Core payload".to_vec());
+        db.insert("claim_transfer", record.clone()).unwrap();
+        assert_eq!(
+            db.get("claim_transfer", &record.id)
+                .unwrap()
+                .unwrap()
+                .as_ref(),
+            &record
+        );
+        assert!(matches!(
+            bicdb_page::PagedStore::open(
+                &paged_dir,
+                bicdb_page::PagedStoreOptions::default().with_buffer_pool_bytes(1024 * 1024)
+            ),
+            Err(bicdb_page::PageError::AlreadyOpen { .. })
+        ));
+        db.close().unwrap();
+        let db = crate::BicDb::open_with_config(directory.path(), config).unwrap();
+        assert_eq!(
+            db.get("claim_transfer", &record.id)
+                .unwrap()
+                .unwrap()
+                .as_ref(),
+            &record
+        );
+    }
+
+    #[test]
+    fn auxiliary_page_reader_barrier_failure_cannot_publish_core_enrollment() {
+        let directory = tempfile::tempdir().unwrap();
+        let paged_dir = directory.path().join("paged");
+        let (standalone, _) = bicdb_page::PagedStore::open(
+            &paged_dir,
+            bicdb_page::PagedStoreOptions::default().with_buffer_pool_bytes(1024 * 1024),
+        )
+        .unwrap();
+        drop(standalone);
+        assert!(load_metadata(directory.path()).unwrap().is_none());
+        let failure = bicdb_page::test_faults::arm_io_failure(
+            "physical_gate.page_fence.sync",
+            directory.path(),
+            1,
+            true,
+        );
+        let refused = crate::BicDb::open(directory.path())
+            .err()
+            .expect("actual auxiliary Page sync failure must refuse memory-mode enrollment");
+        eprintln!(
+            "ACTUAL_AUXILIARY_PAGE_FENCE_FAILURE {refused:?} fired={}",
+            failure.fired()
+        );
+        assert!(
+            failure.fired() > 0,
+            "required actual sync fault cut was not reached"
+        );
+        assert!(load_metadata(directory.path()).unwrap().is_none());
+        drop(failure);
+        let db = crate::BicDb::open(directory.path()).unwrap();
+        require_physical_backup_gate(directory.path()).unwrap();
+        bicdb_page::manager::require_physical_gate_profile(&paged_dir.join("store.pages")).unwrap();
+        db.close().unwrap();
+    }
+
+    #[test]
+    fn primary_only_existing_enrollment_requires_real_unchanged_format_sync() {
+        for site in [
+            "physical_gate.existing.file_sync",
+            "physical_gate.existing.dir_sync",
+        ] {
+            let directory = tempfile::tempdir().unwrap();
+            let config = crate::DbConfig::default()
+                .with_storage_mode(StorageMode::ServerPaged)
+                .with_paged_buffer_pool_bytes(1024 * 1024)
+                .with_fsync(true);
+            let mut db = crate::BicDb::open_with_config(directory.path(), config.clone()).unwrap();
+            db.create_collection("enrolled_export").unwrap();
+            let original = crate::Record::new("before_export")
+                .with_metadata(serde_json::json!({"full":[null,true,19]}));
+            db.insert("enrolled_export", original.clone()).unwrap();
+            db.close().unwrap();
+            let before = std::fs::read(directory.path().join(FORMAT_METADATA_FILE)).unwrap();
+            require_physical_backup_gate(directory.path()).unwrap();
+            let failure = bicdb_page::test_faults::arm_io_failure(site, directory.path(), 1, true);
+            for _ in 0..2 {
+                let error = crate::BicDb::open_with_config(
+                    directory.path(),
+                    config.clone().with_secondary_indexes(false),
+                )
+                .err()
+                .expect("actual enrolled sync failure must refuse the primary-only open");
+                eprintln!(
+                    "PRIMARY_ONLY_EXISTING_ENROLLMENT_REFUSAL site={site} error={error:?} fired={}",
+                    failure.fired()
+                );
+                assert!(
+                    matches!(error, crate::BicDbError::Io(_)),
+                    "actual sync error must remain typed IO"
+                );
+                assert!(
+                    failure.fired() > 0,
+                    "actual selected enrollment sync cut was not reached"
+                );
+                assert_eq!(
+                    std::fs::read(directory.path().join(FORMAT_METADATA_FILE)).unwrap(),
+                    before
+                );
+            }
+            drop(failure);
+            let db = crate::BicDb::open_with_config(
+                directory.path(),
+                config.with_secondary_indexes(false),
+            )
+            .unwrap();
+            assert_eq!(
+                db.get("enrolled_export", &original.id)
+                    .unwrap()
+                    .unwrap()
+                    .as_ref(),
+                &original
+            );
+            require_physical_backup_gate(directory.path()).unwrap();
+            db.close().unwrap();
+            assert_eq!(
+                std::fs::read(directory.path().join(FORMAT_METADATA_FILE)).unwrap(),
+                before
             );
         }
     }

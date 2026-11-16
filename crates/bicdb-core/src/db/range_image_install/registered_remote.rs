@@ -228,7 +228,9 @@ impl RegisteredRemoteBasePublication {
             .ok_or_else(|| invalid("Registered native base page store absent"))?;
         // Same order as in_paged_transaction: actual native exclusion is held
         // by context; this serializes terminal outcome/current-key inspection.
-        let _writer = paged.write_guard();
+        let _writer = paged
+            .write_guard()
+            .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
         Self::require_healthy(db)?;
         if paged
             .store()

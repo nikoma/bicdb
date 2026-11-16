@@ -18,6 +18,10 @@ use parking_lot::Mutex;
 use std::collections::BTreeMap;
 mod discovery;
 mod export_retirement;
+#[cfg(test)]
+mod frame_metadata_wait_controls;
+#[cfg(test)]
+mod metadata_wait_controls;
 pub(crate) use discovery::{
     ActualNativeSourceDiscovery, NativeSourceDiscoveryOperationV1, NativeSourceDiscoveryReplyV1,
     NativeSourceDiscoveryRequestV1,
@@ -290,6 +294,9 @@ impl ActualSourceOld {
     }
 }
 pub(crate) struct NativeRemoteImageSourceSession {
+    #[cfg(test)]
+    frame_metadata_wait:
+        std::sync::OnceLock<frame_metadata_wait_controls::FrameMetadataWaitControl>,
     admission: Arc<NativeInitialDataAdmission>,
     runtime: Arc<RangeRecoveryRuntime>,
     service: Arc<Mutex<ClusterDataNodeService>>,
@@ -334,6 +341,8 @@ impl NativeRemoteImageSourceSession {
             old,
             target_attempt,
             source_session: Uuid::now_v7(),
+            #[cfg(test)]
+            frame_metadata_wait: Default::default(),
             original_session: original_session.clone(),
             actual_open: None,
             slot: None,
@@ -547,8 +556,26 @@ impl NativeRemoteImageSourceSession {
         let proof = {
             let metadata = loop {
                 parent.check()?;
+                self.original_session.check()?;
                 own.require_live_request(business)?;
-                if let Some(metadata) = self.metadata.try_lock_for(Duration::from_millis(5)) {
+                let deadline = parent
+                    .deadline()
+                    .map_or(own.deadline(), |deadline| deadline.min(own.deadline()));
+                let deadline = self
+                    .original_session
+                    .deadline()
+                    .map_or(deadline, |session| session.min(deadline));
+                let remaining = deadline
+                    .checked_duration_since(Instant::now())
+                    .filter(|remaining| !remaining.is_zero())
+                    .ok_or(BicDbError::QueryTimedOut)?;
+                let metadata = self
+                    .metadata
+                    .try_lock_for(remaining.min(Duration::from_millis(5)));
+                parent.check()?;
+                self.original_session.check()?;
+                own.require_live_request(business)?;
+                if let Some(metadata) = metadata {
                     break metadata;
                 }
             };
@@ -570,10 +597,39 @@ impl NativeRemoteImageSourceSession {
             capture.validate(&db)?;
         }
         {
-            let metadata = self
-                .metadata
-                .try_lock()
-                .ok_or_else(|| invalid("source metadata changed before frame"))?;
+            // The DB read scope above has ended. A heartbeat briefly owning
+            // this mutex is contention, not proof that the selected metadata
+            // changed. Keep the original request/OWN bounds while acquiring
+            // the same Store, then perform the unchanged freshness check.
+            #[cfg(test)]
+            self.test_before_frame_final_metadata_lock(own, business, parent);
+            let metadata = loop {
+                parent.check()?;
+                self.original_session.check()?;
+                own.require_live_request(business)?;
+                let deadline = parent
+                    .deadline()
+                    .map_or(own.deadline(), |deadline| deadline.min(own.deadline()));
+                let deadline = self
+                    .original_session
+                    .deadline()
+                    .map_or(deadline, |session| session.min(deadline));
+                let remaining = deadline
+                    .checked_duration_since(Instant::now())
+                    .filter(|remaining| !remaining.is_zero())
+                    .ok_or(BicDbError::QueryTimedOut)?;
+                let metadata = self
+                    .metadata
+                    .try_lock_for(remaining.min(Duration::from_millis(5)));
+                parent.check()?;
+                self.original_session.check()?;
+                own.require_live_request(business)?;
+                if let Some(metadata) = metadata {
+                    break metadata;
+                }
+                #[cfg(test)]
+                self.test_frame_final_metadata_busy(own, business, parent);
+            };
             proof.require_current(&metadata)?;
         }
         self.admission
@@ -696,11 +752,35 @@ pub(crate) struct NativeRemoteImageSourceRegistry {
     export_callback_final_own_remaining_us: std::sync::atomic::AtomicU64,
     #[cfg(test)]
     export_work_diagnostics: export_retirement::ExportWorkDiagnostics,
+    #[cfg(test)]
+    metadata_wait_control:
+        std::sync::OnceLock<Mutex<Option<metadata_wait_controls::SourceMetadataWaitControl>>>,
     transport: Arc<TcpClusterRelocationTransport>,
     provider: Arc<crate::distribution_metadata_read_provider::MetadataReadProvider>,
     original_process: std::sync::OnceLock<CancellationToken>,
 }
 impl NativeRemoteImageSourceRegistry {
+    /// Select only an existing actual discovery owner. A manifest does not
+    /// create a source, certificate, replacement capture or registry entry.
+    pub(crate) fn retire_original_source_after_all_open(
+        &self,
+        phase: &crate::distribution_range_handoff::NativeRemoteAllOpenRetirementAdmission<'_>,
+    ) -> Result<()> {
+        self.require_original_process()?;
+        phase.require_current()?;
+        let attempt = self
+            .discoveries
+            .try_lock()
+            .ok_or_else(|| invalid("ALL Open actual source discovery table busy"))?
+            .get(&phase.manifest().capture_range.id)
+            .cloned()
+            .ok_or_else(|| invalid("ALL Open original source discovery absent"))?;
+        let source = attempt
+            .source()?
+            .ok_or_else(|| invalid("ALL Open original retained source absent"))?;
+        source.retire_remote_old_export_after_all_open(phase)
+    }
+
     pub(crate) fn new(
         transport: Arc<TcpClusterRelocationTransport>,
         provider: Arc<crate::distribution_metadata_read_provider::MetadataReadProvider>,
@@ -724,6 +804,8 @@ impl NativeRemoteImageSourceRegistry {
             export_callback_final_own_remaining_us: std::sync::atomic::AtomicU64::new(0),
             #[cfg(test)]
             export_work_diagnostics: Default::default(),
+            #[cfg(test)]
+            metadata_wait_control: std::sync::OnceLock::new(),
             transport,
             provider,
             original_process: std::sync::OnceLock::new(),
@@ -909,7 +991,24 @@ impl NativeRemoteImageSourceRegistry {
         let mut actual = session
             .try_lock()
             .ok_or_else(|| invalid("source image operation already active"))?;
-        actual.observe_frame(target, request, &own, request.business, &token)
+        let result = actual.observe_frame(target, request, &own, request.business, &token);
+        #[cfg(test)]
+        {
+            let returned = actual.test_take_frame_wait_return(
+                &result,
+                request,
+                &own,
+                request.business,
+                &token,
+            );
+            // The callback can publish a test completion signal. Release the
+            // actual session first so observers can take their strict snapshot.
+            drop(actual);
+            if let Some((callback, facts)) = returned {
+                callback(facts);
+            }
+        }
+        result
     }
 }
 
@@ -1060,6 +1159,88 @@ impl NativeRetainedRemoteImageSource {
         };
         source.original_session.cancel();
         source.old = retired;
+        Ok(())
+    }
+    /// Distinct remote ALL-Open path. Only the obsolete certificate/capture
+    /// reference retires; a source leaving NEW keeps its actual CLOSED runtime
+    /// and storage. No native mutation or Frozen release is performed here.
+    pub(crate) fn retire_remote_old_export_after_all_open(
+        &self,
+        phase: &crate::distribution_range_handoff::NativeRemoteAllOpenRetirementAdmission<'_>,
+    ) -> Result<()> {
+        phase.require_current()?;
+        self.registry.require_original_process()?;
+        self.require_completed_export_manifest(phase.manifest())?;
+        let old = {
+            let source = self
+                .session
+                .try_lock()
+                .ok_or_else(|| invalid("remote ALL Open source custody busy"))?;
+            match &source.old {
+                ActualSourceOld::Remote(old) => old.clone(),
+                ActualSourceOld::RetiredJoint { .. } => return Ok(()),
+                _ => return Err(invalid("remote ALL Open cannot cast a local OLD quorum")),
+            }
+        };
+        phase.require_source_certificate(&old)?;
+        // Allocate identity-only replacement BEFORE the final short guard.
+        let replacement = ActualSourceOld::RetiredJoint {
+            plan: old.plan(),
+            source: old.selected_source_id().clone(),
+        };
+        let mut source = self
+            .session
+            .try_lock()
+            .ok_or_else(|| invalid("remote ALL Open source exporter still active"))?;
+        if source.capture.is_some()
+            || !source.published
+            || source.source_session != phase.manifest().source_session
+            || source.target_attempt != phase.manifest().target_attempt
+            || source
+                .manifest
+                .as_ref()
+                .is_none_or(|m| m.checksum_sha256 != phase.manifest().checksum_sha256)
+            || !matches!(&source.old, ActualSourceOld::Remote(actual) if Arc::ptr_eq(actual, &old))
+        {
+            return Err(invalid("remote ALL Open changed actual source session/certificate or retained export reader"));
+        }
+        // Bind the fresh point to this actual DB/Store outside the version
+        // guard. The same session latch prevents replacement until the take.
+        {
+            let service = source
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("remote ALL Open source service busy"))?;
+            let database = service.database();
+            let db = database
+                .try_read()
+                .ok_or_else(|| invalid("remote ALL Open source DB busy"))?;
+            service.with_writer_data_domain_store(&db, |store| {
+                phase.require_database_store(&db, store)
+            })?;
+        }
+        let removed = {
+            let _version = phase.publication_guard()?;
+            phase.require_memory_current()?;
+            self.registry.require_original_process()?;
+            source
+                .actual_open
+                .as_ref()
+                .ok_or_else(|| invalid("remote ALL Open source open identity absent"))?
+                .require_live()?;
+            source
+                .slot
+                .as_ref()
+                .ok_or_else(|| invalid("remote ALL Open source Store identity absent"))?
+                .require_live()?;
+            source.original_session.cancel();
+            std::mem::replace(&mut source.old, replacement)
+        };
+        drop(source);
+        // Destruction may take range/native locks. Never perform it under the
+        // metadata guard or exporter latch. Late failures cannot restore OLD.
+        drop(removed);
+        drop(old);
         Ok(())
     }
     /// Revokes only this actual source session's child, never its process or

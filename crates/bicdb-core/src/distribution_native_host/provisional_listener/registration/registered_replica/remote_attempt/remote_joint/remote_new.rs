@@ -65,6 +65,9 @@ impl NativeRegisteredReplicaAdmission {
                 &request.operation,
                 NativeRemoteNewOperationV1::Materialize
                     | NativeRemoteNewOperationV1::PublishDecision { .. }
+                    | NativeRemoteNewOperationV1::ObserveKnownDecision { .. }
+                    | NativeRemoteNewOperationV1::PublishCatalogue { .. }
+                    | NativeRemoteNewOperationV1::ObserveCatalogue { .. }
             ),
             &token,
         )?;
@@ -128,10 +131,53 @@ impl NativeRegisteredReplicaAdmission {
             held.as_ref().unwrap().clone()
         };
         state.retain_request(request)?;
-        state.require_current(&token)?;
+        let catalogue_request = matches!(
+            &request.operation,
+            NativeRemoteNewOperationV1::PublishCatalogue { .. }
+                | NativeRemoteNewOperationV1::ObserveCatalogue { .. }
+        );
+        if catalogue_request {
+            state.require_lifetime_memory()?;
+        } else {
+            state.require_current(&token)?;
+        }
         first.require_current()?;
         let mut native_decision = None;
-        let current = if matches!(
+        let mut catalogue_decision = None;
+        let current = if catalogue_request {
+            let actual = state.catalogue_decision(
+                request,
+                first
+                    .role
+                    .as_ref()
+                    .ok_or_else(|| invalid("remote catalogue actual Role absent"))?,
+                &first.own,
+                first.business,
+                &first.point,
+                &token,
+            )?;
+            native_decision = Some(actual.native.clone());
+            catalogue_decision = Some(actual);
+            first
+        } else if matches!(
+            &request.operation,
+            NativeRemoteNewOperationV1::ObserveKnownDecision { .. }
+        ) {
+            native_decision = Some(
+                state.observe_known_remote_decision(
+                    request,
+                    first
+                        .role
+                        .as_ref()
+                        .ok_or_else(|| invalid("remote DECISION observation actual Role absent"))?,
+                    &first.own,
+                    first.business,
+                    &first.point,
+                    &token,
+                )?,
+            );
+            first
+        } else if matches!(
             &request.operation,
             NativeRemoteNewOperationV1::PublishDecision { .. }
         ) {
@@ -262,6 +308,7 @@ impl NativeRegisteredReplicaAdmission {
             snapshot: state.snapshot().clone(),
             handoff: state.handoff_outcome()?,
             native_decision,
+            catalogue_decision,
             native_decision_body,
             metadata_term: current.own.term(),
             metadata_read_index: current.own.read_index(),
@@ -272,6 +319,8 @@ impl NativeRegisteredReplicaAdmission {
         reply.require_request(request)?;
         current.require_current()?;
         token.check()?;
+        #[cfg(test)]
+        state.test_after_success_reply(&reply)?;
         Ok(reply)
     }
 }
@@ -283,6 +332,36 @@ impl NativeMetadataControlHost {
         range: crate::RangeId,
         code: u8,
     ) -> Result<()> {
+        if matches!(code, 7 | 8) {
+            // Scheduling only on the SAME retained uncertain catalogue. The
+            // ordinary getter must continue refusing this fenced Store; do
+            // not obtain/reconstruct a current owner or change its health.
+            // The existing catalogue arm validates pending owned uncertainty.
+            let phase = {
+                let receiver = self
+                    .replica
+                    .as_ref()
+                    .ok_or_else(|| invalid("remote DECISION original receiver absent"))?;
+                let owner = {
+                    let table = receiver
+                        .remote_joint_targets
+                        .try_lock()
+                        .ok_or_else(|| invalid("remote DECISION retained owner table busy"))?;
+                    table
+                        .get(&range)
+                        .cloned()
+                        .ok_or_else(|| invalid("remote DECISION original owner absent"))?
+                };
+                let held = owner
+                    .remote_new
+                    .try_lock()
+                    .ok_or_else(|| invalid("remote DECISION original phase busy"))?;
+                held.as_ref()
+                    .cloned()
+                    .ok_or_else(|| invalid("remote DECISION original phase absent"))?
+            };
+            return phase.test_arm_remote_decision_cut(code);
+        }
         let owner = self.registered_remote_joint_owner(range)?;
         let phase = owner
             .remote_new

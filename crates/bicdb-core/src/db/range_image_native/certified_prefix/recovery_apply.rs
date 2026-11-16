@@ -690,14 +690,22 @@ impl BicDb {
                 }
             }
             cancellation.check()?;
-            let sequence = self.commit_transaction(&mut transaction)?;
+            let local =
+                super::super::super::native_wal_apply::NativeWalApplyPreparation::for_pending(
+                    self,
+                    &transaction,
+                    &pending,
+                    &authority,
+                )?;
+            let sequence =
+                self.commit_transaction_with_native_preparation(&mut transaction, &local)?;
             self.tx_log.write_durable(sequence)?;
             let receipt = transaction.mint_native_wal_apply_receipt()?;
             known
                 .catalog
                 .require_current(store, self, native, role, admission)?;
             self.record_native_range_materialized(&pending, &receipt, &authority)?;
-            transaction.finalize_commit_admission()?;
+            transaction.finalize_native_local_apply(&local, Some(&receipt))?;
             transaction.finalize_committed_broker_outbox();
             transaction.finalize_committed_memory_jobs()?;
             self.complete_native_range_command(&pending, &certificate, &receipt, &authority)?;

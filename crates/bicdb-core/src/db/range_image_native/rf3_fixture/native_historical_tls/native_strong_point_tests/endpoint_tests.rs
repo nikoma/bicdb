@@ -533,6 +533,7 @@ fn native_event_endpoint_routing_retries_do_not_renew_original_deadline_or_becom
     fixture.idle();
 }
 
+mod catchup_transfer_tests;
 mod stale_gateway_tests;
 
 mod missing_catalogue_tests;

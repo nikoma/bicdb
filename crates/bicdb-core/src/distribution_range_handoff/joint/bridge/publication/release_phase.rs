@@ -57,11 +57,20 @@ pub(crate) struct NativeJointReleasePhaseQuorum {
 /// One distinct post-all-member MQ and one release attempt. It never renews
 /// the old receipt, supplies a Frozen or authorizes a different/new open.
 pub(crate) struct NativeJointReleaseAdmission {
-    phase: Arc<NativeJointReleasePhaseQuorum>,
+    authority: ReleaseAuthority,
     local: ClusterNodeId,
     post: ActualServiceNativeJointReleaseEvidence,
     cancellation: crate::CancellationToken,
     attempted: std::sync::atomic::AtomicBool,
+}
+enum ReleaseAuthority {
+    Local(Arc<NativeJointReleasePhaseQuorum>),
+    #[cfg(feature = "tls-replication")]
+    Remote {
+        owner: Arc<crate::distribution_data::NativeRemoteReleaseOwner>,
+        proof: Arc<crate::distribution_range_handoff::NativeRemoteAllOpenQuorum>,
+        request: crate::distribution_native_host::NativeRemoteReleaseRequestAdmission,
+    },
 }
 impl NativeJointPublishedServingQuorum {
     pub(crate) fn retain_release_continuation(
@@ -411,8 +420,11 @@ impl NativeJointReleasePhaseQuorum {
         &self,
         old: &Arc<NativeJointOldObservation>,
     ) -> Result<()> {
-        self.require_live()?;
-        old.require_current_after_joint_open()?;
+        crate::native_policy_trace::stage!("retirement_original_phase_live", self.require_live())?;
+        crate::native_policy_trace::stage!(
+            "retirement_actual_OLD_post_open_scope",
+            old.require_current_after_joint_open()
+        )?;
         if !self
             .continuation
             .data
@@ -425,9 +437,32 @@ impl NativeJointReleasePhaseQuorum {
             return Err(invalid("joint retirement must retain retired-source freeze and exact original survivor facts"));
         }
         for node in self.members.keys() {
-            self.require_member_current(node)?;
+            crate::native_policy_trace::stage!(
+                "retirement_actual_foreign_member_current",
+                self.require_member_current(node)
+            )?;
         }
         self.require_live()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_retirement_trace_seed(
+        &self,
+        node: String,
+        range: crate::RangeId,
+    ) -> crate::native_policy_trace::Seed {
+        crate::native_policy_trace::Seed::new(
+            "local_OLD_observation_retirement",
+            node,
+            range,
+            &self.cancellation,
+            crate::native_policy_trace::Clocks {
+                authority: "actual_local_release_phase",
+                all_phase: self.cancellation.deadline(),
+                role_source: "local phase retains no distinct Role object; OWN is not Role",
+                ..Default::default()
+            },
+        )
     }
 
     fn require_live(&self) -> Result<()> {
@@ -509,7 +544,7 @@ impl NativeJointReleasePhaseQuorum {
             cancellation: self
                 .cancellation
                 .child_with_deadline(post.committed().deadline()),
-            phase: self.clone(),
+            authority: ReleaseAuthority::Local(self.clone()),
             local: node,
             post,
             attempted: std::sync::atomic::AtomicBool::new(false),
@@ -519,6 +554,70 @@ impl NativeJointReleasePhaseQuorum {
     }
 }
 impl NativeJointReleaseAdmission {
+    #[cfg(all(test, feature = "tls-replication"))]
+    pub(crate) fn test_remote_release_original_windows(&self) -> Result<serde_json::Value> {
+        match &self.authority {
+            ReleaseAuthority::Remote { request, .. } => Ok(request.test_original_windows()),
+            _ => Err(invalid(
+                "actual remote release clock needs original remote admission",
+            )),
+        }
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn from_actual_remote_all_open(
+        proof: Arc<crate::distribution_range_handoff::NativeRemoteAllOpenQuorum>,
+        observed: crate::distribution_data::NativeRemoteReleaseObservation,
+        participant: &Arc<crate::distribution_range_handoff::NativeRemoteNewParticipant>,
+        request: crate::distribution_native_host::NativeRemoteReleaseRequestAdmission,
+    ) -> Result<Self> {
+        let owner = observed.owner().clone();
+        owner.require_participant(participant)?;
+        request.require_successor(&owner)?;
+        participant.require_remote_release_proof(&proof)?;
+        proof.require_release_observation(&observed)?;
+        request.require_current(observed.actual().committed())?;
+        observed.inspect(
+            |scope, store, _head, _activation, _frozen, _released| {
+                request.require_scope(observed.actual().committed(), scope, store)
+            },
+            || request.require_memory_current(),
+        )?;
+        let cancellation = request
+            .bound_request()
+            .child_with_deadline(observed.actual().committed().deadline());
+        let local = owner.native().local_node_id().clone();
+        let post = observed.into_admission_post(&owner)?;
+        let result = Self {
+            authority: ReleaseAuthority::Remote {
+                owner,
+                proof,
+                request,
+            },
+            local,
+            post,
+            cancellation,
+            attempted: std::sync::atomic::AtomicBool::new(false),
+        };
+        result.require_external_current()?;
+        Ok(result)
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_remote_successor(
+        &self,
+        actual: &crate::distribution_data::NativeRemoteReleaseOwner,
+    ) -> Result<()> {
+        self.require_live()?;
+        match &self.authority {
+            ReleaseAuthority::Remote { owner, request, .. }
+                if std::ptr::eq(owner.as_ref(), actual) =>
+            {
+                request.require_successor(actual)
+            }
+            _ => Err(invalid(
+                "remote release transfer changed actual sealed successor/admission",
+            )),
+        }
+    }
     pub(crate) fn native_publication_guard(
         &self,
     ) -> Result<Option<crate::distribution_data::ActualNativeJointMetadataPublicationGuard<'_>>>
@@ -526,7 +625,13 @@ impl NativeJointReleaseAdmission {
         self.post.committed().native_publication_guard()
     }
     pub(crate) fn writer_domain(&self) -> &crate::db::NativeJointWriterDomain {
-        &self.phase.continuation.members[&self.local].writer_domain
+        match &self.authority {
+            ReleaseAuthority::Local(phase) => {
+                &phase.continuation.members[&self.local].writer_domain
+            }
+            #[cfg(feature = "tls-replication")]
+            ReleaseAuthority::Remote { owner, .. } => owner.domain(),
+        }
     }
 
     pub(crate) fn native(&self) -> &crate::db::NativeJointServingBridgeReceipt {
@@ -539,7 +644,22 @@ impl NativeJointReleaseAdmission {
     }
     pub(crate) fn require_live(&self) -> Result<()> {
         self.cancellation.check()?;
-        self.phase.require_live()?;
+        match &self.authority {
+            ReleaseAuthority::Local(phase) => phase.require_live()?,
+            #[cfg(feature = "tls-replication")]
+            ReleaseAuthority::Remote {
+                owner,
+                proof,
+                request,
+            } => {
+                owner.require_memory_lifetime()?;
+                proof.require_live()?;
+                request.require_memory_current()?;
+                // The same actual physical/domain checks run at each scoped
+                // boundary. Final version guards only check original memory.
+                return self.post.committed().require_publication_point_memory();
+            }
+        }
         self.post.require_live()
     }
     pub(crate) fn require_recipient(
@@ -548,10 +668,17 @@ impl NativeJointReleaseAdmission {
         native: &crate::db::NativeJointServingBridgeReceipt,
     ) -> Result<()> {
         self.require_live()?;
-        let member = &self.phase.continuation.members[&self.local];
-        if !Arc::ptr_eq(service, &member.service)
-            || native.checksum_sha256() != member.native.checksum_sha256()
-            || native.native_database_incarnation() != member.native.native_database_incarnation()
+        let (actual_service, actual_native) = match &self.authority {
+            ReleaseAuthority::Local(phase) => {
+                let member = &phase.continuation.members[&self.local];
+                (&member.service, &member.native)
+            }
+            #[cfg(feature = "tls-replication")]
+            ReleaseAuthority::Remote { owner, .. } => (owner.service(), owner.native()),
+        };
+        if !Arc::ptr_eq(service, actual_service)
+            || native.checksum_sha256() != actual_native.checksum_sha256()
+            || native.native_database_incarnation() != actual_native.native_database_incarnation()
             || native.local_node_id() != &self.local
         {
             return Err(invalid(
@@ -568,7 +695,19 @@ impl NativeJointReleaseAdmission {
     ) -> Result<()> {
         self.require_live()?;
         service.require_joint_release_metadata_point(self.post.committed(), scope.database())?;
-        self.phase.members[&self.local].require_current_with_scope(service, scope, owner)?;
+        match &self.authority {
+            ReleaseAuthority::Local(phase) => {
+                phase.members[&self.local].require_current_with_scope(service, scope, owner)?
+            }
+            #[cfg(feature = "tls-replication")]
+            ReleaseAuthority::Remote { request, .. } => {
+                service.require_remote_release_request_scope(
+                    request,
+                    self.post.committed(),
+                    scope,
+                )?;
+            }
+        }
         self.post
             .require_current_with_scope(service, scope, owner)?;
         self.require_live()
@@ -583,16 +722,43 @@ impl NativeJointReleaseAdmission {
         self.post
             .committed()
             .require_native_publication_metadata(scope.database(), store)?;
-        self.phase.members[&self.local].require_current_with_store_scope(store, scope, owner)?;
+        match &self.authority {
+            ReleaseAuthority::Local(phase) => {
+                phase.members[&self.local].require_current_with_store_scope(store, scope, owner)?
+            }
+            #[cfg(feature = "tls-replication")]
+            ReleaseAuthority::Remote { request, .. } => {
+                request.require_scope(self.post.committed(), scope, store)?
+            }
+        }
         self.post
             .require_current_with_store_scope(store, scope, owner)?;
         self.require_live()
     }
     pub(crate) fn require_external_current(&self) -> Result<()> {
         self.require_live()?;
-        for node in self.phase.members.keys() {
-            if node != &self.local {
-                self.phase.require_member_current(node)?;
+        match &self.authority {
+            ReleaseAuthority::Local(phase) => {
+                for node in phase.members.keys() {
+                    if node != &self.local {
+                        phase.require_member_current(node)?;
+                    }
+                }
+            }
+            #[cfg(feature = "tls-replication")]
+            ReleaseAuthority::Remote {
+                owner,
+                proof,
+                request,
+            } => {
+                proof.require_post_all(self.post.committed())?;
+                request.require_current(self.post.committed())?;
+                owner.with_current_owner(|same, actual| {
+                    let service = same
+                        .try_lock()
+                        .ok_or_else(|| invalid("remote Release current service busy"))?;
+                    self.post.require_current(&service, actual)
+                })?;
             }
         }
         self.require_live()
@@ -606,7 +772,14 @@ impl NativeJointReleaseAdmission {
             return Err(invalid("joint release admission already attempted"));
         }
         self.require_external_current()?;
-        let member = &self.phase.continuation.members[&self.local];
+        #[cfg(feature = "tls-replication")]
+        if let ReleaseAuthority::Remote { owner, .. } = &self.authority {
+            return owner.release_actual(self);
+        }
+        let ReleaseAuthority::Local(phase) = &self.authority else {
+            return Err(invalid("local release phase absent"));
+        };
+        let member = &phase.continuation.members[&self.local];
         match &member.owner {
             ReleaseOwner::Survivor(runtime) => {
                 runtime.release_with_fresh_phase(self, member.activation.clone())
@@ -632,7 +805,12 @@ impl NativeJointReleaseAdmission {
             return Err(invalid("joint release admission already attempted"));
         }
         self.require_external_current()?;
-        let member = &self.phase.continuation.members[&self.local];
+        let ReleaseAuthority::Local(phase) = &self.authority else {
+            return Err(invalid(
+                "local release fault control requires actual local phase",
+            ));
+        };
+        let member = &phase.continuation.members[&self.local];
         match &member.owner {
             ReleaseOwner::Image(owner) => owner
                 .try_lock()

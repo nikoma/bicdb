@@ -175,10 +175,33 @@ pub enum MemoryJobStatus {
     Failed,
     ModelMissing,
     Stale,
+    /// A real derived write returned uncertainty. Ordinary workers must not
+    /// replay it or infer its outcome from an equal projected payload.
+    OutcomeUnknown,
+}
+
+/// Exact diagnostic identity returned by a real unresolved derived write.
+/// This DATA is not a receipt or permission to replay the original command.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MemoryJobWriteUncertainty {
+    pub transaction_id: Option<u64>,
+    pub sequence: Option<u64>,
+    pub incarnation: String,
+    pub error: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MemoryIndexJob {
+    /// Comparison DATA from the original committed transaction. A worker must
+    /// not read below this contiguous visibility floor. Legacy/visible-scan
+    /// jobs have no floor; this field grants no transaction or native authority.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_commit_seq: Option<u64>,
+    /// All observed unresolved in-flight derived writes. OutcomeUnknown is a
+    /// new strict status so an older reader cannot ignore this marker and run
+    /// the job. Reconciliation of these original outcomes is not implemented.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unresolved_derived_writes: Vec<MemoryJobWriteUncertainty>,
     pub job_id: Uuid,
     pub index_name: String,
     pub collection: String,
@@ -197,6 +220,17 @@ pub struct MemoryIndexProcessReport {
     pub processed: usize,
     pub failed: usize,
     pub pending: usize,
+    /// Retained unresolved jobs, excluded from ordinary pending-job execution.
+    #[serde(default)]
+    pub unresolved: usize,
+    /// Selected jobs not executed because ownership/current status/source
+    /// visibility deferred them. This is not successful Sync completion.
+    #[serde(default)]
+    pub deferred: usize,
+    /// Subset deferred because another same-open worker owns the actual job,
+    /// or the bounded 4096-claim admission cap was reached.
+    #[serde(default)]
+    pub claim_deferred: usize,
     /// Why jobs failed, most recent last.
     ///
     /// The counts alone are not actionable: "indexing failed for 1 job(s)" gives

@@ -5,7 +5,8 @@ use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 #[cfg(test)]
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::{Duration, Instant};
+#[cfg(test)]
+use std::time::Duration;
 
 use crc32fast::Hasher;
 #[cfg(feature = "mmap")]
@@ -31,13 +32,22 @@ pub(crate) const BACKUP_ONLINE_LOCK: &str = ".backup-online.lock";
 /// separate file is never removed: replacing or unlinking a locked inode would
 /// let a new opener lock a different inode and recreate the TOCTOU this gate
 /// exists to close.
-pub(crate) const BACKUP_WRITE_GATE: &str = ".backup-write.lock";
-const BACKUP_LOCK_WAIT_TIMEOUT: Duration = Duration::from_secs(30);
+pub(crate) const BACKUP_WRITE_GATE: &str = bicdb_page::physical_gate::PHYSICAL_GATE_FILE;
 
 #[derive(Debug)]
 pub(crate) struct BackupGateGuard {
-    _file: File,
+    gate: bicdb_page::physical_gate::PhysicalBackupGuard,
 }
+
+impl BackupGateGuard {
+    pub(crate) fn borrow(&self) -> Result<bicdb_page::physical_gate::PhysicalBackupBorrow<'_>> {
+        self.gate
+            .borrow()
+            .map_err(|e| BicDbError::Backup(e.to_string()))
+    }
+}
+
+pub(crate) type BackupWriteGuard = bicdb_page::physical_gate::PhysicalWriteGuard;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum AppendSyncMode {
@@ -434,6 +444,7 @@ fn write_append_failure_marker(path: &Path, acknowledged_len: u64) -> Result<()>
 /// after the failed bytes; and every open runs recovery before it appends.
 /// So everything past the recorded length belongs to failed appends.
 fn apply_append_failure_marker(file: &File, path: &Path) -> Result<()> {
+    let _physical = acquire_backup_write_guard(path)?;
     let marker_path = append_failure_marker_path(path);
     let bytes = match fs::read(&marker_path) {
         Ok(bytes) => bytes,
@@ -521,6 +532,7 @@ impl AppendHandle {
 /// Opens (creating if needed) an append-only log handle using the requested sync
 /// mode. Durable handles use O_DSYNC on Unix and explicit sync elsewhere.
 pub(crate) fn open_append_handle(path: &Path, fsync: bool) -> Result<AppendHandle> {
+    let _physical = acquire_backup_write_guard(path)?;
     ensure_parent(path)?;
     let sync_mode = if fsync {
         AppendSyncMode::OpenDataSync
@@ -771,18 +783,33 @@ pub(crate) fn append_sync_mode_counts() -> (usize, usize) {
 pub(crate) fn initialize_backup_write_gate(db_path: &Path) -> Result<()> {
     fs::create_dir_all(db_path)?;
     let path = db_path.join(BACKUP_WRITE_GATE);
-    drop(open_backup_gate(&path)?);
+    if !path.try_exists()? {
+        let metadata = crate::format::read_or_legacy_metadata(db_path)?;
+        if metadata
+            .feature_flags
+            .contains(crate::format::PHYSICAL_BACKUP_GATE_FEATURE_FLAG)
+        {
+            return Err(BicDbError::Backup(
+                "enrolled physical backup gate is missing; refusing replacement inode".into(),
+            ));
+        }
+    }
+    bicdb_page::physical_gate::PhysicalGate::at_root(db_path)
+        .map_err(|e| BicDbError::Backup(e.to_string()))?;
     Ok(())
 }
 
 /// Hold shared authority for the complete physical write. The guard, not an
 /// earlier path-existence check, closes the writer/backup acquisition race.
-pub(crate) fn acquire_backup_write_guard(path: &Path) -> Result<Option<BackupGateGuard>> {
-    let Some(gate) = backup_write_gate_path(path) else {
+pub(crate) fn acquire_backup_write_guard(path: &Path) -> Result<Option<BackupWriteGuard>> {
+    let Some(gate) = backup_write_gate_path(path)? else {
         // Low-level storage unit tests and standalone codecs may not belong to
         // an opened database. Real database opens always initialize the gate.
         return Ok(None);
     };
+    if !gate.try_exists()? {
+        return Err(BicDbError::Backup("physical backup gate is missing".into()));
+    }
     // `backup_gate.timeout` (tests only), keyed by the file about to be
     // written: report the timeout at once, as if a backup had held the
     // gate for the whole wait.
@@ -792,119 +819,67 @@ pub(crate) fn acquire_backup_write_guard(path: &Path) -> Result<Option<BackupGat
             gate.display()
         )));
     }
-    acquire_backup_gate(&gate, false).map(Some)
+    bicdb_page::physical_gate::PhysicalGate::at_root(
+        gate.parent()
+            .ok_or_else(|| BicDbError::Backup("physical gate has no root".into()))?,
+    )
+    .and_then(|gate| gate.shared())
+    .map(Some)
+    .map_err(|e| BicDbError::Backup(e.to_string()))
 }
 
-pub(crate) fn acquire_database_backup_write_guard(db_path: &Path) -> Result<BackupGateGuard> {
+pub(crate) fn acquire_database_backup_write_guard(db_path: &Path) -> Result<BackupWriteGuard> {
     initialize_backup_write_gate(db_path)?;
-    acquire_backup_gate(&db_path.join(BACKUP_WRITE_GATE), false)
+    bicdb_page::physical_gate::PhysicalGate::at_root(db_path)
+        .and_then(|gate| gate.shared())
+        .map_err(|e| BicDbError::Backup(e.to_string()))
 }
 
 pub(crate) fn acquire_database_backup_exclusive_guard(db_path: &Path) -> Result<BackupGateGuard> {
     initialize_backup_write_gate(db_path)?;
-    acquire_backup_gate(&db_path.join(BACKUP_WRITE_GATE), true)
+    bicdb_page::physical_gate::PhysicalGate::at_root(db_path)
+        .and_then(|gate| gate.exclusive())
+        .map(|gate| BackupGateGuard { gate })
+        .map_err(|e| BicDbError::Backup(e.to_string()))
 }
 
-fn acquire_backup_gate(path: &Path, exclusive: bool) -> Result<BackupGateGuard> {
-    let started = Instant::now();
-    loop {
-        match try_acquire_backup_gate(path, exclusive) {
-            Ok(Some(file)) => return Ok(BackupGateGuard { _file: file }),
-            Ok(None) => {}
-            Err(error) => return Err(error),
-        }
-        if started.elapsed() >= BACKUP_LOCK_WAIT_TIMEOUT {
-            return Err(BicDbError::Backup(format!(
-                "timed out waiting for {} backup I/O gate {}",
-                if exclusive { "exclusive" } else { "shared" },
-                path.display()
-            )));
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    }
-}
-
-#[cfg(unix)]
-fn try_acquire_backup_gate(path: &Path, exclusive: bool) -> Result<Option<File>> {
-    use std::os::fd::AsRawFd;
-
-    let file = open_backup_gate(path)?;
-    let operation = if exclusive {
-        libc::LOCK_EX
-    } else {
-        libc::LOCK_SH
-    };
-    let result = unsafe { libc::flock(file.as_raw_fd(), operation | libc::LOCK_NB) };
-    if result == 0 {
-        return Ok(Some(file));
-    }
-    let error = std::io::Error::last_os_error();
-    if error.raw_os_error() == Some(libc::EWOULDBLOCK) || error.raw_os_error() == Some(libc::EAGAIN)
-    {
-        return Ok(None);
-    }
-    Err(error.into())
-}
-
-#[cfg(windows)]
-fn try_acquire_backup_gate(path: &Path, exclusive: bool) -> Result<Option<File>> {
-    use std::os::windows::fs::OpenOptionsExt;
-
-    let mut options = std::fs::OpenOptions::new();
-    options.create(true).read(true).write(true);
-    if exclusive {
-        options.share_mode(0);
-    }
-    match options.open(path) {
-        Ok(file) => Ok(Some(file)),
-        Err(error)
-            if matches!(
-                error.kind(),
-                std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::WouldBlock
-            ) =>
-        {
-            Ok(None)
-        }
-        Err(error) => Err(error.into()),
-    }
-}
-
-#[cfg(not(any(unix, windows)))]
-fn try_acquire_backup_gate(path: &Path, _exclusive: bool) -> Result<Option<File>> {
-    open_backup_gate(path).map(Some)
-}
-
-fn open_backup_gate(path: &Path) -> Result<File> {
-    if let Ok(metadata) = fs::symlink_metadata(path) {
-        if metadata.file_type().is_symlink() || !metadata.is_file() {
-            return Err(BicDbError::Backup(format!(
-                "backup I/O gate {} is not a regular file",
-                path.display()
-            )));
+fn backup_write_gate_path(path: &Path) -> Result<Option<PathBuf>> {
+    let parent = bicdb_page::physical_gate::physical_parent_for_file(path)
+        .map_err(|error| BicDbError::Backup(error.to_string()))?;
+    // A standalone child inode cannot shadow the enclosing enrolled Core
+    // domain. Resolve all enrollment first, exactly as Page's resolver does.
+    // Walk the complete input path: depth is not permission to omit a gate.
+    for root in parent.ancestors() {
+        if crate::format::load_metadata(root)?.is_some_and(|metadata| {
+            metadata
+                .feature_flags
+                .contains(crate::format::PHYSICAL_BACKUP_GATE_FEATURE_FLAG)
+        }) {
+            let gate = root.join(BACKUP_WRITE_GATE);
+            return match fs::symlink_metadata(&gate) {
+                Ok(_) => Ok(Some(gate)),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Err(
+                    BicDbError::Backup("enrolled physical backup gate is missing".into()),
+                ),
+                Err(error) => Err(error.into()),
+            };
         }
     }
-    let mut options = OpenOptions::new();
-    options.create(true).read(true).write(true);
-    #[cfg(unix)]
-    options.custom_flags(libc::O_NOFOLLOW).mode(0o600);
-    let file = options.open(path)?;
-    if !file.metadata()?.is_file() {
-        return Err(BicDbError::Backup(format!(
-            "backup I/O gate {} is not a regular file",
-            path.display()
-        )));
+    // Preserve standalone/legacy-codec behavior only after proving there is
+    // no enclosing enrolled Core root. Actual acquisition still checks inode
+    // identity and obtains the kernel lock before any physical mutation.
+    for root in parent.ancestors() {
+        let gate = root.join(BACKUP_WRITE_GATE);
+        if bicdb_page::physical_gate::PhysicalGate::retained_at_root(root).is_some() {
+            return Ok(Some(gate));
+        }
+        match fs::symlink_metadata(&gate) {
+            Ok(_) => return Ok(Some(gate)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
     }
-    Ok(file)
-}
-
-fn backup_write_gate_path(path: &Path) -> Option<PathBuf> {
-    // The nearest initialized database wins. This also covers deeply nested
-    // content-addressed blob paths without guessing storage directory names.
-    path.ancestors()
-        .skip(1)
-        .take(16)
-        .map(|ancestor| ancestor.join(BACKUP_WRITE_GATE))
-        .find(|candidate| candidate.is_file())
+    Ok(None)
 }
 
 pub(crate) fn read_frames(
@@ -913,6 +888,7 @@ pub(crate) fn read_frames(
     read_mode: SegmentReadMode,
     encryption: &EncryptionRuntime,
 ) -> Result<RecoveredFrames> {
+    let _physical_recovery = acquire_backup_write_guard(path)?;
     ensure_parent(path)?;
     let file = OpenOptions::new()
         .create(true)
@@ -964,6 +940,7 @@ pub(crate) fn stream_frames(
     encryption: &EncryptionRuntime,
     visit: impl FnMut(u64, Vec<u8>) -> Result<()>,
 ) -> Result<u64> {
+    let _physical = acquire_backup_write_guard(path)?;
     ensure_parent(path)?;
     let file = OpenOptions::new()
         .create(true)
@@ -1123,6 +1100,7 @@ fn stream_frames_from_file(
 /// unchanged and the open fails with `Corruption`. [`salvage_frame_log`] is
 /// the explicit operator action that accepts the loss.
 fn settle_recovered_tail(file: &File, path: &Path, valid_up_to: u64, file_len: u64) -> Result<()> {
+    let _physical = acquire_backup_write_guard(path)?;
     if valid_up_to < file_len {
         if let Some(next) = first_valid_frame_after(file, valid_up_to, file_len)? {
             return Err(mid_file_damage(path, valid_up_to, next, file_len));
@@ -1224,6 +1202,7 @@ pub struct FrameLogSalvage {
 /// after the damage; use it only when no backup can restore them. Run it
 /// with the database closed. A log without damage is left unchanged.
 pub fn salvage_frame_log(path: &Path) -> Result<FrameLogSalvage> {
+    let _physical = acquire_backup_write_guard(path)?;
     let mut file = OpenOptions::new().read(true).write(true).open(path)?;
     apply_append_failure_marker(&file, path)?;
     let file_len = file.metadata()?.len();
@@ -1530,6 +1509,7 @@ pub(crate) fn read_frames_from(
     expected_kind: FrameKind,
     encryption: &EncryptionRuntime,
 ) -> Result<RecoveredFrames> {
+    let _physical = acquire_backup_write_guard(path)?;
     let mut file = OpenOptions::new().read(true).write(true).open(path)?;
     apply_append_failure_marker(&file, path)?;
     let file_len = file.metadata()?.len();
@@ -1801,6 +1781,7 @@ fn read_frames_mmap(
 }
 
 pub(crate) fn sync_file(path: &Path) -> Result<()> {
+    let _physical = acquire_backup_write_guard(path)?;
     ensure_parent(path)?;
     let file = OpenOptions::new()
         .create(true)
@@ -1822,6 +1803,7 @@ pub(crate) fn sync_file(path: &Path) -> Result<()> {
 /// Uses a read-only descriptor so a read-only directory still opens; a
 /// missing log has nothing to sync.
 pub(crate) fn sync_transaction_log_at_open(path: &Path) -> Result<()> {
+    let _physical = acquire_backup_write_guard(path)?;
     let file = match File::open(path) {
         Ok(file) => file,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
@@ -1940,6 +1922,7 @@ pub(crate) fn replace_durably(
     site: &str,
     policy: FailClosed<'_>,
 ) -> Result<()> {
+    let _physical = acquire_backup_write_guard(path)?;
     if let Some(health) = policy.health() {
         health.check().map_err(crate::error::durability_error)?;
     }
@@ -2924,15 +2907,311 @@ mod tests {
 
         let write_path = storage_path.clone();
         let (writer_tx, writer_rx) = mpsc::channel();
-        std::thread::spawn(move || {
+        let (release_tx, release_rx) = mpsc::channel::<()>();
+        let worker = std::thread::spawn(move || {
             let guard = acquire_backup_write_guard(&write_path)
                 .unwrap()
                 .expect("opened databases have a write gate");
-            writer_tx.send(guard).unwrap();
+            // Actual SH stays on its acquiring thread. Only readiness DATA
+            // crosses the channel; no detached TLS permission is created.
+            writer_tx.send(()).unwrap();
+            let _ = release_rx.recv_timeout(Duration::from_secs(2));
+            drop(guard);
         });
         assert!(writer_rx.recv_timeout(Duration::from_millis(50)).is_err());
         drop(backup);
-        drop(writer_rx.recv_timeout(Duration::from_secs(2)).unwrap());
+        writer_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        drop(release_tx);
+        worker.join().unwrap();
+    }
+
+    #[cfg(unix)]
+    fn actual_core_atomic_helper_root_exclusion(with_child_gate: bool) {
+        use std::os::unix::fs::MetadataExt;
+        use std::sync::mpsc;
+
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().canonicalize().unwrap();
+        let mut db = crate::BicDb::open(&root).unwrap();
+        db.create_collection("root_cut_values").unwrap();
+        db.insert("root_cut_values", crate::Record::new("acknowledged"))
+            .unwrap();
+        crate::format::require_physical_backup_gate(&root).unwrap();
+
+        let mut parent = root.join("deep_core_payload");
+        for level in 0..20 {
+            parent.push(format!("level-{level}"));
+        }
+        fs::create_dir_all(&parent).unwrap();
+        let path = parent.join("actual-core-atomic.json");
+        let original = b"{\"value\":\"before\"}\n";
+        let replacement = b"{\"value\":\"after actual helper\"}\n";
+        write_atomic(&path, original, true).unwrap();
+        assert!(
+            path.ancestors()
+                .position(|candidate| candidate == root)
+                .unwrap()
+                > 16
+        );
+
+        // The child is a genuine distinct inode and an actual SH when selected,
+        // not a DTO or a table flag. It must not govern this Core file.
+        let child_gate = if with_child_gate {
+            Some(bicdb_page::physical_gate::PhysicalGate::at_root(&parent).unwrap())
+        } else {
+            None
+        };
+        let child_shared = child_gate.as_ref().map(|gate| gate.shared().unwrap());
+        let root_metadata = fs::metadata(root.join(BACKUP_WRITE_GATE)).unwrap();
+        let root_identity = (root_metadata.dev(), root_metadata.ino());
+        let child_identity = child_gate.as_ref().map(|_| {
+            let metadata = fs::metadata(parent.join(BACKUP_WRITE_GATE)).unwrap();
+            (metadata.dev(), metadata.ino())
+        });
+        if let Some(identity) = child_identity {
+            assert_ne!(identity, root_identity);
+        }
+
+        let worker_root = root.clone();
+        let worker_path = path.clone();
+        let (contention_tx, contention_rx) = mpsc::channel();
+        let observed = std::thread::scope(|scope| {
+            // This lexical owner drops before scope's automatic joins on
+            // unwinding. The worker receives paths/DATA, never the EX owner.
+            let _exclusive_observer =
+                backup_gate_observation::arm(&root, true, Box::new(|_| {})).unwrap();
+            let exclusive = acquire_database_backup_exclusive_guard(&root).unwrap();
+            let snapshots = backup_gate_observation::live_exclusive_guards(&root);
+            let worker = scope.spawn(move || -> Result<()> {
+                let _shared_observer = backup_gate_observation::arm(
+                    &worker_root,
+                    false,
+                    Box::new(move |event| {
+                        if !event.acquired && !event.released {
+                            let _ = contention_tx.send(event);
+                        }
+                    }),
+                )?;
+                // The real production helper, through replace_durably and
+                // acquire_backup_write_guard. No test lock substitutes for it.
+                write_atomic(&worker_path, replacement, true)
+            });
+            // Preserve every observation/error before assertions. A missing
+            // syscall cut is a red prerequisite, not success inferred from Err.
+            let contention = contention_rx.recv_timeout(Duration::from_secs(5));
+            let live_before = snapshots.len() == 1 && snapshots[0].is_live();
+            let before_release = fs::read(&path);
+            let live_after = snapshots.len() == 1 && snapshots[0].is_live();
+            drop(exclusive);
+            let result = worker.join();
+            (
+                snapshots,
+                contention,
+                live_before,
+                before_release,
+                live_after,
+                result,
+            )
+        });
+        let (snapshots, contention, live_before, before_release, live_after, result) = observed;
+        let after_release = fs::read(&path);
+        eprintln!("ACTUAL_CORE_ATOMIC_GATE_CUT {{child_gate:{with_child_gate}, root_identity:{root_identity:?}, child_identity:{child_identity:?}, ex:{snapshots:?}, contention:{contention:?}, live_before:{live_before}, live_after:{live_after}, before:{before_release:?}, result:{result:?}, after:{after_release:?}}}");
+        assert!(
+            live_before && live_after,
+            "INCONCLUSIVE: actual EX lifetime not retained at the read cut"
+        );
+        let event = contention
+            .expect("INCONCLUSIVE: helper did not reach actual enclosing-root SH contention");
+        assert_eq!(event.gate, root.join(BACKUP_WRITE_GATE));
+        assert_eq!(event.file_identity, Some(root_identity));
+        assert!(!event.exclusive && !event.acquired && !event.released);
+        assert_eq!(before_release.unwrap(), original);
+        result
+            .expect("actual worker panic")
+            .expect("actual helper must complete after root EX release");
+        assert_eq!(after_release.unwrap(), replacement);
+        assert!(db.get("root_cut_values", "acknowledged").unwrap().is_some());
+        drop(child_shared);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn direct_page_directory_alias_keeps_page_and_atomic_writers_in_actual_core_domain() {
+        use std::os::unix::fs::{symlink, MetadataExt};
+        use std::sync::mpsc;
+
+        let directory = tempfile::tempdir().unwrap();
+        let external = tempfile::tempdir().unwrap();
+        let root = directory.path().canonicalize().unwrap();
+        let paged = root.join("paged");
+        fs::create_dir_all(&paged).unwrap();
+        let child_gate = bicdb_page::physical_gate::PhysicalGate::at_root(&paged).unwrap();
+        let (original, _) = bicdb_page::PagedStore::open(
+            &paged,
+            bicdb_page::PagedStoreOptions::default().with_buffer_pool_bytes(1024 * 1024),
+        )
+        .unwrap();
+        let xid = original.begin();
+        original
+            .put(xid, b"original", b"complete original standalone payload")
+            .unwrap();
+        original.commit(xid).unwrap();
+        drop(original);
+        // A real auxiliary Page child is enrolled by real Core Memory open.
+        // Retain its older distinct gate to expose wrong alias-domain selection.
+        let db = crate::BicDb::open(&root).unwrap();
+        crate::format::require_physical_backup_gate(&root).unwrap();
+        db.close().unwrap();
+        let alias = external.path().join("direct-page-alias");
+        symlink(&paged, &alias).unwrap();
+        let atomic = alias.join("alias-atomic.json");
+        let original_atomic = b"{\"value\":\"before\"}\n";
+        let replacement = b"{\"value\":\"after exact root exclusion\"}\n";
+        write_atomic(&atomic, original_atomic, true).unwrap();
+        let metadata = fs::metadata(root.join(BACKUP_WRITE_GATE)).unwrap();
+        let root_identity = (metadata.dev(), metadata.ino());
+        let child_metadata = fs::metadata(paged.join(BACKUP_WRITE_GATE)).unwrap();
+        assert_ne!(root_identity, (child_metadata.dev(), child_metadata.ino()));
+        let page_before = fs::read(paged.join("store.pages")).unwrap();
+        let wal_before = fs::read(paged.join("store.wal")).unwrap();
+        let (page_tx, page_rx) = mpsc::channel();
+        let (atomic_tx, atomic_rx) = mpsc::channel();
+        let page_root = root.clone();
+        let atomic_root = root.clone();
+        let page_alias = alias.clone();
+        let atomic_path = atomic.clone();
+        let observed = std::thread::scope(|scope| {
+            // Scope cleanup releases the real EX before automatic joins,
+            // including on unwinding. No EX permission crosses to workers.
+            let _observer = backup_gate_observation::arm(&root, true, Box::new(|_| {})).unwrap();
+            let exclusive = acquire_database_backup_exclusive_guard(&root).unwrap();
+            let snapshots = backup_gate_observation::live_exclusive_guards(&root);
+            let page_worker = scope.spawn(move || -> bicdb_page::Result<Vec<u8>> {
+                let _observer = backup_gate_observation::arm(
+                    &page_root,
+                    false,
+                    Box::new(move |event| {
+                        if !event.acquired && !event.released {
+                            let _ = page_tx.send(event);
+                        }
+                    }),
+                )
+                .map_err(|error| bicdb_page::PageError::BackupSnapshot {
+                    reason: error.to_string(),
+                })?;
+                let (store, _) = bicdb_page::PagedStore::open(
+                    &page_alias,
+                    bicdb_page::PagedStoreOptions::default().with_buffer_pool_bytes(1024 * 1024),
+                )?;
+                assert_eq!(
+                    store.get(b"original")?,
+                    Some(b"complete original standalone payload".to_vec())
+                );
+                let xid = store.begin();
+                store.put(
+                    xid,
+                    b"after-root-ex",
+                    b"complete Page payload after actual exclusion",
+                )?;
+                store.commit(xid)?;
+                Ok(store
+                    .get(b"after-root-ex")?
+                    .expect("actual committed value"))
+            });
+            let atomic_worker = scope.spawn(move || -> Result<()> {
+                let _observer = backup_gate_observation::arm(
+                    &atomic_root,
+                    false,
+                    Box::new(move |event| {
+                        if !event.acquired && !event.released {
+                            let _ = atomic_tx.send(event);
+                        }
+                    }),
+                )?;
+                write_atomic(&atomic_path, replacement, true)
+            });
+            let page_contention = page_rx.recv_timeout(Duration::from_secs(5));
+            let atomic_contention = atomic_rx.recv_timeout(Duration::from_secs(5));
+            let live_before = snapshots.len() == 1 && snapshots[0].is_live();
+            let pages = fs::read(paged.join("store.pages"));
+            let wal = fs::read(paged.join("store.wal"));
+            let bytes = fs::read(&atomic);
+            let live_after = snapshots.len() == 1 && snapshots[0].is_live();
+            drop(exclusive);
+            let page_result = page_worker.join();
+            let atomic_result = atomic_worker.join();
+            (
+                page_contention,
+                atomic_contention,
+                snapshots,
+                live_before,
+                pages,
+                wal,
+                bytes,
+                live_after,
+                page_result,
+                atomic_result,
+            )
+        });
+        let (
+            page_cut,
+            atomic_cut,
+            snapshots,
+            live_before,
+            pages,
+            wal,
+            bytes,
+            live_after,
+            page_result,
+            atomic_result,
+        ) = observed;
+        eprintln!("ACTUAL_DIRECT_PAGE_ALIAS_ROOT_EX {{root_identity:{root_identity:?}, ex:{snapshots:?}, page_cut:{page_cut:?}, atomic_cut:{atomic_cut:?}, live_before:{live_before}, live_after:{live_after}, page_result:{page_result:?}, atomic_result:{atomic_result:?}}}");
+        assert!(
+            live_before && live_after,
+            "INCONCLUSIVE: same actual EX was not live across byte reads"
+        );
+        for cut in [page_cut, atomic_cut] {
+            let cut =
+                cut.expect("INCONCLUSIVE: actual alias writer did not reach root SH contention");
+            assert_eq!(cut.gate, root.join(BACKUP_WRITE_GATE));
+            assert_eq!(cut.file_identity, Some(root_identity));
+            assert!(!cut.exclusive && !cut.acquired && !cut.released);
+        }
+        assert_eq!(pages.unwrap(), page_before);
+        assert_eq!(wal.unwrap(), wal_before);
+        assert_eq!(bytes.unwrap(), original_atomic);
+        assert_eq!(
+            page_result.expect("actual Page worker panic").unwrap(),
+            b"complete Page payload after actual exclusion".to_vec()
+        );
+        atomic_result.expect("actual atomic worker panic").unwrap();
+        assert_eq!(fs::read(&atomic).unwrap(), replacement);
+        let (reopened, _) = bicdb_page::PagedStore::open(
+            &alias,
+            bicdb_page::PagedStoreOptions::default().with_buffer_pool_bytes(1024 * 1024),
+        )
+        .unwrap();
+        assert_eq!(
+            reopened.get(b"original").unwrap(),
+            Some(b"complete original standalone payload".to_vec())
+        );
+        assert_eq!(
+            reopened.get(b"after-root-ex").unwrap(),
+            Some(b"complete Page payload after actual exclusion".to_vec())
+        );
+        drop(child_gate);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn backup_gate_core_atomic_helper_enrollment_precedes_real_child_inode() {
+        actual_core_atomic_helper_root_exclusion(true);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn backup_gate_core_atomic_helper_finds_enrollment_beyond_sixteen_ancestors() {
+        actual_core_atomic_helper_root_exclusion(false);
     }
 
     // ---- Torn-tail recovery and failed-append repair of the generic frame
@@ -3465,3 +3744,8 @@ mod tests {
         assert!(!health.is_failed());
     }
 }
+
+// The actual descriptor and lifetime now belong to the shared Page primitive.
+// Core tests observe only its DATA; no synthetic Core gate readiness exists.
+#[cfg(test)]
+pub(crate) use bicdb_page::physical_gate::observation as backup_gate_observation;

@@ -1,6 +1,25 @@
 //! Original service/DB/Store consumer for the DISTINCT remote native publisher.
 use super::*;
 impl ClusterDataNodeService {
+    pub(crate) fn observe_known_remote_decision(
+        original: &Arc<Mutex<Self>>,
+        receipt: &crate::db::NativeJointDecisionReceipt,
+        attempt: &crate::db::NativeRemoteJointDecisionAttempt,
+        metadata: &ActualNativeJointMetadataPoint,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        let service = original
+            .try_lock()
+            .ok_or_else(|| data_error("remote DECISION readonly original service busy"))?;
+        let database = checked_database_read(&service.db, &service.storage_policy)?;
+        service.require_native_catalog_database(&database)?;
+        metadata.require_native_store_point(&database, &service.range_writes)?;
+        database.observe_known_remote_native_decision(receipt, attempt)?;
+        metadata.require_native_store_point(&database, &service.range_writes)?;
+        parent.check()
+    }
+
     pub(crate) fn publish_remote_registered_decision(
         service: &Arc<Mutex<Self>>,
         target: &Arc<crate::distribution_native_host::NativeRegisteredRemoteJointTarget>,
@@ -52,6 +71,127 @@ impl ClusterDataNodeService {
             &self.range_writes,
             admission,
             attempt,
+            parent,
+        )
+    }
+}
+impl ClusterDataNodeService {
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn confirm_remote_registered_decision_catalogue(
+        original: &Arc<Mutex<Self>>,
+        target: &crate::distribution_native_host::NativeRegisteredRemoteJointTarget,
+        frozen: &FrozenRangeMutationPermit,
+        admission: &crate::distribution_range_handoff::NativeRemoteDecisionAdmission<'_>,
+        retained: &mut Option<
+            crate::distribution_range_consensus::NativeRemoteDecisionCataloguePublication,
+        >,
+        observe_only: bool,
+        parent: &CancellationToken,
+    ) -> Result<String> {
+        admission.require_current()?;
+        admission.metadata().require_external_current()?;
+        let mut service = original
+            .try_lock()
+            .ok_or_else(|| data_error("remote catalogue original Registered service busy"))?;
+        let database_arc = service.db.clone();
+        let database = checked_database_read(&database_arc, &service.storage_policy)?;
+        // Only this sealed original-candidate path may cross the generic
+        // catalogue-uncertainty refusal. Physical/known-outcome checks remain
+        // in the retained sink; no healthy flag is temporarily changed.
+        service.storage_policy.require_database(&database)?;
+        service
+            .range_writes
+            .require_actual_abort_catalogue(&database)?;
+        database.confirm_remote_registered_decision_catalogue(
+            target,
+            frozen,
+            service.range_writes.current_mut(),
+            admission,
+            retained,
+            observe_only,
+            parent,
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn confirm_remote_old_decision_catalogue(
+        &mut self,
+        writer: &crate::db::NativeWriterHostState,
+        native: &crate::db::NativeJointOldCloseReceipt,
+        promise: &NativeJointOldPromiseReceipt,
+        frozen: &FrozenRangeMutationPermit,
+        admission: &crate::distribution_range_handoff::NativeRemoteDecisionAdmission<'_>,
+        retained: &mut Option<
+            crate::distribution_range_consensus::NativeRemoteDecisionCataloguePublication,
+        >,
+        observe_only: bool,
+        parent: &CancellationToken,
+    ) -> Result<String> {
+        admission.require_current()?;
+        admission.metadata().require_external_current()?;
+        let database_arc = self.db.clone();
+        let database = checked_database_read(&database_arc, &self.storage_policy)?;
+        self.storage_policy.require_database(&database)?;
+        self.range_writes
+            .require_actual_abort_catalogue(&database)?;
+        database.confirm_remote_old_decision_catalogue(
+            writer,
+            native,
+            promise,
+            frozen,
+            self.range_writes.current_mut(),
+            admission,
+            retained,
+            observe_only,
+            parent,
+        )
+    }
+}
+impl ClusterDataNodeService {
+    pub(crate) fn recover_known_remote_registered_decision(
+        original: &Arc<Mutex<Self>>,
+        target: &crate::distribution_native_host::NativeRegisteredRemoteJointTarget,
+        frozen: &FrozenRangeMutationPermit,
+        admission: &crate::distribution_range_handoff::NativeRemoteDecisionAdmission<'_>,
+        parent: &CancellationToken,
+    ) -> Result<crate::db::NativeJointDecisionReceipt> {
+        admission.known_read_attempt()?;
+        admission.require_current()?;
+        admission.metadata().require_external_current()?;
+        let service = original
+            .try_lock()
+            .ok_or_else(|| data_error("known native read original Registered service busy"))?;
+        let database = checked_database_read(&service.db, &service.storage_policy)?;
+        service.require_native_catalog_database(&database)?;
+        database.recover_known_remote_registered_decision(
+            target,
+            frozen,
+            &service.range_writes,
+            admission,
+            parent,
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn recover_known_remote_old_decision(
+        &self,
+        writer: &crate::db::NativeWriterHostState,
+        native: &crate::db::NativeJointOldCloseReceipt,
+        promise: &NativeJointOldPromiseReceipt,
+        frozen: &FrozenRangeMutationPermit,
+        admission: &crate::distribution_range_handoff::NativeRemoteDecisionAdmission<'_>,
+        parent: &CancellationToken,
+    ) -> Result<crate::db::NativeJointDecisionReceipt> {
+        admission.known_read_attempt()?;
+        admission.require_current()?;
+        admission.metadata().require_external_current()?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
+        self.require_native_catalog_database(&database)?;
+        database.recover_known_remote_old_decision(
+            writer,
+            native,
+            promise,
+            frozen,
+            &self.range_writes,
+            admission,
             parent,
         )
     }

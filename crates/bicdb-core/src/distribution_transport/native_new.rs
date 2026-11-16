@@ -5,6 +5,7 @@ use crate::distribution_range_handoff::{
     NativeRemoteNewFactSetV1, NativeRemoteNewOperationV1, NativeRemoteNewReplyV1,
     NativeRemoteNewRequestV1,
 };
+use sha2::Digest;
 
 /// Recipient-independent callbacks, not a decoded quorum or local owner. The
 /// actual request tokens remain held through the participant's final sink.
@@ -666,7 +667,10 @@ impl TcpClusterRelocationTransport {
             ));
         }
         if let NativeRemoteNewOperationV1::PrepareDecision { facts }
-        | NativeRemoteNewOperationV1::PublishDecision { facts } = &request.operation
+        | NativeRemoteNewOperationV1::PublishDecision { facts }
+        | NativeRemoteNewOperationV1::ObserveKnownDecision { facts }
+        | NativeRemoteNewOperationV1::PublishCatalogue { facts }
+        | NativeRemoteNewOperationV1::ObserveCatalogue { facts } = &request.operation
         {
             if reply.handoff.as_ref().is_none_or(|handoff| {
                 handoff.fact_set_sha256 != facts.checksum_sha256
@@ -689,5 +693,115 @@ impl TcpClusterRelocationTransport {
             actual_peer_incarnation: peer.member_incarnation(),
             actual_peer_birth,
         })
+    }
+}
+
+/// ONLY an actual pinned request below constructs this distinct opaque
+/// dual-durability observation. It is not a decoded local native receipt.
+pub(crate) struct AuthenticatedNativeRemoteCatalogueFrame {
+    catalogue: crate::distribution_range_handoff::NativeRemoteCatalogueDecisionV1,
+    original_request: CancellationToken,
+    actual_observer: ClusterNodeId,
+    manifest_sha256: String,
+    phase_id: Uuid,
+    fact_set_sha256: String,
+    original_request_sha256: String,
+    metadata_context_id: Uuid,
+}
+impl AuthenticatedNativeRemoteCatalogueFrame {
+    pub(crate) fn require_request_live(&self) -> Result<()> {
+        self.original_request.check()
+    }
+    pub(crate) fn actual_observer(&self) -> &ClusterNodeId {
+        &self.actual_observer
+    }
+    pub(crate) fn catalogue(
+        &self,
+    ) -> &crate::distribution_range_handoff::NativeRemoteCatalogueDecisionV1 {
+        &self.catalogue
+    }
+    pub(crate) fn require_manifest(
+        &self,
+        mf: &crate::distribution_range_image::NativeRemoteImageManifestV1,
+        facts: &NativeRemoteNewFactSetV1,
+    ) -> Result<()> {
+        self.require_request_live()?;
+        if self.manifest_sha256 != mf.checksum_sha256
+            || self.phase_id != facts.phase_id
+            || self.fact_set_sha256 != facts.checksum_sha256
+        {
+            return Err(transport_error(
+                "actual compact catalogue witness changed original request binding",
+            ));
+        }
+        self.catalogue.require_manifest_summary(mf, facts)
+    }
+    pub(crate) fn retained_encoded_bytes(&self) -> Result<usize> {
+        Ok(crate::distribution_range_image::bounded_json(
+            &(
+                &self.catalogue,
+                &self.actual_observer,
+                &self.manifest_sha256,
+                self.phase_id,
+                &self.fact_set_sha256,
+                &self.original_request_sha256,
+                self.metadata_context_id,
+            ),
+            64 * 1024,
+        )?
+        .len())
+    }
+}
+impl TcpClusterRelocationTransport {
+    pub(crate) fn request_remote_native_catalogue(
+        &self,
+        node: &ClusterNodeId,
+        request: &NativeRemoteNewRequestV1,
+        own: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<AuthenticatedNativeRemoteCatalogueFrame> {
+        let facts = match &request.operation {
+            NativeRemoteNewOperationV1::PublishCatalogue { facts }
+            | NativeRemoteNewOperationV1::ObserveCatalogue { facts } => facts,
+            _ => {
+                return Err(transport_error(
+                    "dual-durable exchange requires explicit catalogue operation",
+                ))
+            }
+        };
+        let actual = self.request_remote_native_new(node, request, own, business, parent)?;
+        actual.require_request_live()?;
+        actual
+            .reply()
+            .catalogue_decision
+            .as_ref()
+            .ok_or_else(|| {
+                transport_error("actual catalogue recipient omitted known durable outcome")
+            })?
+            .require_request(request, facts)?;
+        parent.check()?;
+        let AuthenticatedNativeRemoteNewFrame {
+            mut reply,
+            original_request,
+            actual_observer,
+            ..
+        } = actual;
+        // Drop repeated MF/snapshot copies only AFTER full authenticated
+        // request/reply validation. The remaining sealed witness keeps exact
+        // request correlation + request token, not decoded authority.
+        let catalogue = reply.catalogue_decision.take().unwrap();
+        let compact = AuthenticatedNativeRemoteCatalogueFrame {
+            catalogue,
+            original_request,
+            actual_observer,
+            manifest_sha256: request.manifest.checksum_sha256.clone(),
+            phase_id: request.phase_id,
+            fact_set_sha256: facts.checksum_sha256.clone(),
+            original_request_sha256: hex::encode(sha2::Sha256::digest(request.exact_bytes()?)),
+            metadata_context_id: reply.metadata_context_id,
+        };
+        compact.retained_encoded_bytes()?;
+        Ok(compact)
     }
 }

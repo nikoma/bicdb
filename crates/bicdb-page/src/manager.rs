@@ -36,6 +36,38 @@ const SUPERBLOCK_MAGIC_SEGMENTED: [u8; 8] = *b"BICDBPG2";
 // Older page engines must not modify files without marking tracked extents.
 const SUPERBLOCK_MAGIC_TRACKED: [u8; 8] = *b"BICDBPG3";
 const SUPERBLOCK_MAGIC_TRACKED_MONOLITHIC: [u8; 8] = *b"BICDBPG4";
+// Mandatory reader fence: old Page writers must refuse before WAL recovery.
+// The payload/layout is unchanged; all four existing profiles remain distinct.
+const SUPERBLOCK_MAGIC_GATED: [u8; 8] = *b"BICDBPG5";
+const SUPERBLOCK_MAGIC_GATED_SEGMENTED: [u8; 8] = *b"BICDBPG6";
+const SUPERBLOCK_MAGIC_GATED_TRACKED: [u8; 8] = *b"BICDBPG7";
+const SUPERBLOCK_MAGIC_GATED_TRACKED_MONOLITHIC: [u8; 8] = *b"BICDBPG8";
+
+fn gated_superblock_magic(segmented: bool, tracked: bool) -> &'static [u8; 8] {
+    match (segmented, tracked) {
+        (false, false) => &SUPERBLOCK_MAGIC_GATED,
+        (true, false) => &SUPERBLOCK_MAGIC_GATED_SEGMENTED,
+        (true, true) => &SUPERBLOCK_MAGIC_GATED_TRACKED,
+        (false, true) => &SUPERBLOCK_MAGIC_GATED_TRACKED_MONOLITHIC,
+    }
+}
+
+fn superblock_profile(magic: &[u8]) -> Option<(bool, bool)> {
+    if magic == SUPERBLOCK_MAGIC || magic == SUPERBLOCK_MAGIC_GATED {
+        Some((false, false))
+    } else if magic == SUPERBLOCK_MAGIC_SEGMENTED || magic == SUPERBLOCK_MAGIC_GATED_SEGMENTED {
+        Some((false, true))
+    } else if magic == SUPERBLOCK_MAGIC_TRACKED || magic == SUPERBLOCK_MAGIC_GATED_TRACKED {
+        Some((true, true))
+    } else if magic == SUPERBLOCK_MAGIC_TRACKED_MONOLITHIC
+        || magic == SUPERBLOCK_MAGIC_GATED_TRACKED_MONOLITHIC
+    {
+        Some((true, false))
+    } else {
+        None
+    }
+}
+
 /// Smallest legal extent: keeps segment counts sane and guarantees the
 /// superblock page fits in segment 0 at any page size.
 pub const MIN_EXTENT_BYTES: u64 = 1024 * 1024;
@@ -711,6 +743,7 @@ fn validate_free_list_metadata(meta: &Superblock) -> Result<()> {
 /// the read path.
 #[derive(Debug)]
 pub struct PageStore {
+    physical_gate: crate::physical_gate::PhysicalGate,
     backup_format: AtomicBool,
     extent_tracker: Mutex<Option<crate::extent_tracking::ExtentTracker>>,
     /// Serializes physical page overwrites with snapshot reads/capture only.
@@ -756,6 +789,29 @@ pub struct PageStore {
 }
 
 impl PageStore {
+    fn persist_physical_reader_fence(&self) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
+        self.write_superblock()?;
+        crate::test_faults::io_fault("physical_gate.page_fence.sync", &self.path)
+            .map_err(|e| PageError::io(&self.path, e))?;
+        self.segments.read()[0]
+            .sync_all()
+            .map_err(|e| PageError::io(&self.path, e))?;
+        #[cfg(unix)]
+        if let Some(parent) = self.path.parent() {
+            crate::test_faults::io_fault("physical_gate.page_fence.dir_sync", &self.path)
+                .map_err(|e| PageError::io(&self.path, e))?;
+            File::open(parent)
+                .and_then(|file| file.sync_all())
+                .map_err(|e| PageError::io(parent, e))?;
+        }
+        Ok(())
+    }
+
+    pub fn physical_gate(&self) -> &crate::physical_gate::PhysicalGate {
+        &self.physical_gate
+    }
+
     /// Open an existing page store using the page size encoded in its
     /// superblock. Intended for verification tooling that must not guess the
     /// database's creation-time page size.
@@ -778,11 +834,7 @@ impl PageStore {
         file.read_exact(&mut prefix)
             .map_err(|e| PageError::io(path, e))?;
         let body = &prefix[PAGE_HEADER_BYTES..];
-        if body[0..8] != SUPERBLOCK_MAGIC
-            && body[0..8] != SUPERBLOCK_MAGIC_SEGMENTED
-            && body[0..8] != SUPERBLOCK_MAGIC_TRACKED
-            && body[0..8] != SUPERBLOCK_MAGIC_TRACKED_MONOLITHIC
-        {
+        if superblock_profile(&body[0..8]).is_none() {
             let mut found = [0u8; 4];
             found.copy_from_slice(&body[0..4]);
             return Err(PageError::NotAPageFile {
@@ -814,6 +866,8 @@ impl PageStore {
             }
         }
 
+        let physical_gate = crate::physical_gate::PhysicalGate::for_file(&path)?;
+        let _physical = physical_gate.shared()?;
         let file = OpenOptions::new()
             .read(true)
             .write(true)
@@ -825,6 +879,7 @@ impl PageStore {
 
         let store = if len == 0 {
             let store = Self {
+                physical_gate: physical_gate.clone(),
                 backup_format: AtomicBool::new(false),
                 extent_tracker: Mutex::new(None),
                 backup: Mutex::new(None),
@@ -845,10 +900,11 @@ impl PageStore {
                 faults: FaultInjection::default(),
                 health: crate::health::DurabilityHealth::new(),
             };
-            store.write_superblock()?;
+            store.persist_physical_reader_fence()?;
             store
         } else {
             let mut store = Self {
+                physical_gate: physical_gate.clone(),
                 backup_format: AtomicBool::new(false),
                 extent_tracker: Mutex::new(None),
                 backup: Mutex::new(None),
@@ -881,6 +937,7 @@ impl PageStore {
             *store.meta.lock() = superblock;
             store.page_size = options.page_size;
             store.open_existing_segments(superblock.page_count)?;
+            store.persist_physical_reader_fence()?;
             if store.backup_format.load(Ordering::Acquire) {
                 // Validate the physical format before touching its tracker,
                 // then durably reset uncertainty before any WAL replay writes.
@@ -905,6 +962,7 @@ impl PageStore {
         journal_path: &Path,
         limits: crate::backup::PageBackupLimits,
     ) -> Result<crate::backup::PageBackupSnapshot> {
+        let _physical = self.physical_gate.shared()?;
         limits.validate(self.page_size)?;
         let capture_started = Instant::now();
         // Match the allocator's meta -> physical-write lock order.
@@ -998,6 +1056,7 @@ impl PageStore {
     /// tail reclamation removes them). A REQUIRED segment that is missing is
     /// store corruption and fails closed.
     fn open_existing_segments(&mut self, page_count: u64) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         let extent_pages = match (
             self.extent_pages(),
             self.migration_target_pages.load(Ordering::Acquire),
@@ -1057,6 +1116,7 @@ impl PageStore {
     /// Create segment files up through `index` (write path only — reads of a
     /// missing segment are out-of-bounds by construction).
     fn ensure_segment(&self, index: usize) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         if index < self.segments.read().len() {
             return Ok(());
         }
@@ -1115,6 +1175,7 @@ impl PageStore {
     /// smaller than the still-present physical tail. Exposing both figures is
     /// what lets operators detect and safely schedule another reclamation pass.
     pub fn file_size_bytes(&self) -> Result<u64> {
+        let _physical = self.physical_gate.shared()?;
         let segments = self.segments.read();
         let mut total = 0u64;
         for (index, file) in segments.iter().enumerate() {
@@ -1149,6 +1210,7 @@ impl PageStore {
     /// orphan scanner. A crash after this publication leaks space but can never
     /// expose a live page through the allocator.
     pub(crate) fn detach_free_list_for_recovery(&self) -> Result<u64> {
+        let _physical = self.physical_gate.shared()?;
         let detached = {
             let mut meta = self.meta.lock();
             validate_free_list_metadata(&meta)?;
@@ -1184,6 +1246,7 @@ impl PageStore {
     /// Returns the number of pages detached (0 when the head is sound or the
     /// list is empty).
     pub(crate) fn detach_stale_free_list_for_recovery(&self) -> Result<u64> {
+        let _physical = self.physical_gate.shared()?;
         let head = {
             let meta = self.meta.lock();
             validate_free_list_metadata(&meta)?;
@@ -1219,6 +1282,7 @@ impl PageStore {
     /// checksum and trailer, so a crash leaves either the old root or the new
     /// one — never a mixture, and never a root pointing at a half-built tree.
     pub fn publish_root(&self, root_page: PageId, checkpoint_lsn: u64) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         {
             let mut meta = self.meta.lock();
             meta.root_page = root_page;
@@ -1235,6 +1299,7 @@ impl PageStore {
     /// `next_page` header field, so the free list costs no separate structure
     /// and survives restart without a rebuild.
     pub fn allocate(&self, page_type: PageType) -> Result<PageId> {
+        let _physical = self.physical_gate.shared()?;
         if matches!(page_type, PageType::Superblock | PageType::Free) {
             return Err(PageError::InvalidAllocationPageType {
                 page_type: page_type as u8,
@@ -1327,6 +1392,7 @@ impl PageStore {
     /// pre-fill, and it is what makes the >4 GiB / >1 TiB offset tests runnable
     /// in CI (see `tests/large_offsets.rs`).
     pub fn reserve(&self, page_count: u64) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         let mut meta = self.meta.lock();
         if page_count <= meta.page_count {
             return Ok(());
@@ -1343,6 +1409,7 @@ impl PageStore {
     /// crash-leftover longer tail is reclaimed by checkpoint truncation, not
     /// here.
     fn extend_to(&self, page_count: u64) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         let extent_pages = self.extent_pages();
         if extent_pages == 0 {
             // Monolithic — including mid-migration, where the un-migrated
@@ -1389,6 +1456,7 @@ impl PageStore {
 
     /// Return a page to the free list.
     pub fn free(&self, page_id: PageId) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         if page_id == SUPERBLOCK_PAGE_ID {
             return Err(PageError::UnexpectedPageType {
                 page_id,
@@ -1445,6 +1513,7 @@ impl PageStore {
     /// and a crash before it leaves the pages typed Free but unlisted, which
     /// leaks them (consistent) rather than corrupting the list.
     pub fn adopt_free_pages(&self, new_head: PageId, count: u64) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         if count > MAX_FREE_LIST_ADOPTION_PAGES {
             return Err(PageError::InvalidMaintenanceLimits {
                 reason: format!(
@@ -1549,6 +1618,7 @@ impl PageStore {
     ///
     /// The caller must hold exclusive ownership of the database directory.
     pub fn truncate_free_list_at_corruption(&self, apply: bool) -> Result<FreeListTruncateReport> {
+        let _physical = self.physical_gate.shared()?;
         let mut meta = self.meta.lock();
         let advertised = meta.free_page_count;
         let page_count = meta.page_count;
@@ -1646,6 +1716,7 @@ impl PageStore {
     /// requires an operator-supplied count as a fencing token. The caller must
     /// hold exclusive ownership of the database directory.
     pub fn abandon_detached_free_page_count(&self, expected_count: u64) -> Result<u64> {
+        let _physical = self.physical_gate.shared()?;
         let abandoned = {
             let mut meta = self.meta.lock();
             if meta.free_list_head != 0 {
@@ -1681,6 +1752,7 @@ impl PageStore {
     /// `max_visits` budget is exhausted and the walk defers with `Ok(None)`,
     /// so a cyclic list surfaces as "too large" rather than spinning forever.
     pub fn free_list_members(&self, max_visits: u64) -> Result<Option<Vec<PageId>>> {
+        let _physical = self.physical_gate.shared()?;
         let mut members: Vec<PageId> = Vec::new();
         let mut cursor = self.meta.lock().free_list_head;
         while cursor != 0 {
@@ -1715,6 +1787,7 @@ impl PageStore {
         max_pages: u64,
         max_read_bytes: u64,
     ) -> Result<Option<FreePageExtents>> {
+        let _physical = self.physical_gate.shared()?;
         self.free_page_extents_while(max_pages, max_read_bytes, || true)
     }
 
@@ -1728,6 +1801,7 @@ impl PageStore {
         max_read_bytes: u64,
         mut continue_scan: impl FnMut() -> bool,
     ) -> Result<Option<FreePageExtents>> {
+        let _physical = self.physical_gate.shared()?;
         let meta = loop {
             if !continue_scan() {
                 return Ok(None);
@@ -1837,6 +1911,7 @@ impl PageStore {
     /// pages (i.e. run at a checkpoint that truncated the log) — otherwise
     /// recovery would re-extend the file.
     pub fn truncate_trailing_free_pages(&self) -> Result<u64> {
+        let _physical = self.physical_gate.shared()?;
         Ok(self
             .truncate_trailing_free_pages_bounded(TailReclaimLimits::default())?
             .pages_truncated)
@@ -1855,6 +1930,7 @@ impl PageStore {
     /// harmless metadata no-op. Unsupported platforms/filesystems report
     /// `supported: false` and punch nothing.
     pub fn punch_free_pages_bounded(&self, max_pages: u64) -> Result<HolePunchReport> {
+        let _physical = self.physical_gate.shared()?;
         const KEEP_BYTES: u64 = 4_096;
         let mut report = HolePunchReport {
             supported: cfg!(target_os = "linux"),
@@ -1962,6 +2038,7 @@ impl PageStore {
         &self,
         limits: TailReclaimLimits,
     ) -> Result<TailReclaimReport> {
+        let _physical = self.physical_gate.shared()?;
         limits.validate(self.page_size)?;
         self.metrics
             .tail_reclaim_attempts
@@ -2151,6 +2228,7 @@ impl PageStore {
     /// DELETE every trailing segment file (the whole point of extents: space
     /// comes back to the filesystem one file at a time).
     fn truncate_layout_to(&self, page_count: u64) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         let extent_pages = self.extent_pages();
         if extent_pages == 0 {
             let bytes = page_count
@@ -2190,6 +2268,7 @@ impl PageStore {
     /// have already moved. Idempotent for the same target; refused when the
     /// store is already segmented or migrating to a different size.
     pub fn begin_extent_migration(&self, extent_bytes: u64) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         validate_extent_bytes(extent_bytes, self.page_size)?;
         if extent_bytes == 0 {
             return Err(PageError::InvalidExtentBytes {
@@ -2231,6 +2310,7 @@ impl PageStore {
     /// into the batch being copied wait, for the batch's duration. Call
     /// repeatedly (a maintenance loop) until `complete`.
     pub fn advance_extent_migration(&self, max_pages: u64) -> Result<ExtentMigrationReport> {
+        let _physical = self.physical_gate.shared()?;
         // The copy syncs segment descriptors the checkpoint also syncs, so a
         // failure here consumes the same writeback error: it must fence.
         self.health.check()?;
@@ -2354,6 +2434,7 @@ impl PageStore {
 
     /// Read a page into `buffer`, verifying checksum and torn-write trailer.
     pub fn read_page(&self, page_id: PageId, buffer: &mut [u8]) -> Result<PageHeader> {
+        let _physical = self.physical_gate.shared()?;
         debug_assert_eq!(buffer.len(), self.page_size as usize);
         let page_count = self.meta.lock().page_count;
         if page_id >= page_count {
@@ -2368,6 +2449,7 @@ impl PageStore {
     /// Read without the page-count bound check — used for the superblock during
     /// open, before the page count is known.
     fn read_page_unchecked(&self, page_id: PageId, buffer: &mut [u8]) -> Result<PageHeader> {
+        let _physical = self.physical_gate.shared()?;
         let (segment, offset) = self.locate(page_id);
         let started = Instant::now();
         let got = {
@@ -2426,6 +2508,7 @@ impl PageStore {
     /// Read only a page's header. Still reads a whole page from the OS — the
     /// point is avoiding a caller-side buffer, not avoiding I/O.
     pub fn read_header(&self, page_id: PageId) -> Result<PageHeader> {
+        let _physical = self.physical_gate.shared()?;
         let mut buffer = vec![0u8; self.page_size as usize];
         self.read_page_unchecked(page_id, &mut buffer)
     }
@@ -2436,6 +2519,7 @@ impl PageStore {
     /// callers cannot forget to finalize, which would produce a page that reads
     /// back as corrupt.
     pub fn write_page(&self, page_id: PageId, buffer: &mut [u8]) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         debug_assert_eq!(buffer.len(), self.page_size as usize);
         let generation = {
             let mut meta = self.meta.lock();
@@ -2446,18 +2530,19 @@ impl PageStore {
     }
 
     fn write_page_raw(&self, page_id: PageId, buffer: &mut [u8], generation: u64) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         // A fenced store writes no page: the writeback barrier's "logged
         // implies durable" premise no longer holds once the log failed, so a
         // page could reach the file ahead of the only record that redoes it.
         self.health.check()?;
-        if page_id == SUPERBLOCK_PAGE_ID && self.backup_format.load(Ordering::Acquire) {
-            let magic = if self.extent_pages() == 0
-                && self.migration_target_pages.load(Ordering::Acquire) == 0
-            {
-                &SUPERBLOCK_MAGIC_TRACKED_MONOLITHIC
-            } else {
-                &SUPERBLOCK_MAGIC_TRACKED
-            };
+        if page_id == SUPERBLOCK_PAGE_ID {
+            // Sticky across old WAL page images, checkpoint, migration and
+            // raw superblock writes. Never erase mandatory gate semantics.
+            let magic = gated_superblock_magic(
+                self.extent_pages() != 0
+                    || self.migration_target_pages.load(Ordering::Acquire) != 0,
+                self.backup_format.load(Ordering::Acquire),
+            );
             buffer[PAGE_HEADER_BYTES..PAGE_HEADER_BYTES + 8].copy_from_slice(magic);
         }
         page::finalize(buffer, generation);
@@ -2502,6 +2587,7 @@ impl PageStore {
     }
 
     pub fn sync(&self) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         if !self.fsync {
             return Ok(());
         }
@@ -2514,6 +2600,7 @@ impl PageStore {
     }
 
     fn sync_data_observed(&self) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         self.health.check()?;
         let started = Instant::now();
         let mut dirty = self.dirty_segments.lock();
@@ -2543,6 +2630,7 @@ impl PageStore {
 
     /// Flush the superblock and fsync. Call at checkpoint.
     pub fn flush(&self) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         self.write_superblock()?;
         self.sync()
     }
@@ -2550,6 +2638,7 @@ impl PageStore {
     /// Read just enough of page 0 to learn the file's real page size, and
     /// report a mismatch against `expected` in terms an operator can act on.
     fn probe_page_size(&self, expected: u32) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         const PROBE_BYTES: usize = MIN_PAGE_SIZE as usize;
         let mut probe = [0u8; PROBE_BYTES];
         let got = {
@@ -2574,11 +2663,7 @@ impl PageStore {
             });
         }
         let body = &probe[PAGE_HEADER_BYTES..];
-        if body[0..8] != SUPERBLOCK_MAGIC
-            && body[0..8] != SUPERBLOCK_MAGIC_SEGMENTED
-            && body[0..8] != SUPERBLOCK_MAGIC_TRACKED
-            && body[0..8] != SUPERBLOCK_MAGIC_TRACKED_MONOLITHIC
-        {
+        if superblock_profile(&body[0..8]).is_none() {
             let mut found = [0u8; 4];
             found.copy_from_slice(&body[0..4]);
             return Err(PageError::NotAPageFile {
@@ -2598,6 +2683,7 @@ impl PageStore {
     }
 
     fn write_superblock(&self) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         let meta = *self.meta.lock();
         self.write_superblock_meta(&meta)
     }
@@ -2606,28 +2692,17 @@ impl PageStore {
     /// metadata mutex across its detach/rewrite/publish sequence, so calling
     /// `write_superblock` there would recursively lock the mutex.
     fn write_superblock_meta(&self, meta: &Superblock) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         let mut page = vec![0u8; self.page_size as usize];
         PageHeader::new(SUPERBLOCK_PAGE_ID, PageType::Superblock, self.page_size).encode(&mut page);
 
         let body = &mut page[PAGE_HEADER_BYTES..];
         let extent_pages = self.extent_pages();
         let migration_target = self.migration_target_pages.load(Ordering::Acquire);
-        // The v2 magic gates every state a pre-segmentation engine would
-        // misread — including a migration in progress, where some pages
-        // already live in segment files a v1 reader knows nothing about.
-        if extent_pages == 0 && migration_target == 0 {
-            body[0..8].copy_from_slice(if self.backup_format.load(Ordering::Acquire) {
-                &SUPERBLOCK_MAGIC_TRACKED_MONOLITHIC
-            } else {
-                &SUPERBLOCK_MAGIC
-            });
-        } else {
-            body[0..8].copy_from_slice(if self.backup_format.load(Ordering::Acquire) {
-                &SUPERBLOCK_MAGIC_TRACKED
-            } else {
-                &SUPERBLOCK_MAGIC_SEGMENTED
-            });
-        }
+        body[0..8].copy_from_slice(gated_superblock_magic(
+            extent_pages != 0 || migration_target != 0,
+            self.backup_format.load(Ordering::Acquire),
+        ));
         body[8..12].copy_from_slice(&self.page_size.to_le_bytes());
         body[12..20].copy_from_slice(&meta.page_count.to_le_bytes());
         body[20..28].copy_from_slice(&meta.free_list_head.to_le_bytes());
@@ -2647,6 +2722,7 @@ impl PageStore {
     }
 
     fn read_superblock(&self, expected_page_size: u32) -> Result<Superblock> {
+        let _physical = self.physical_gate.shared()?;
         // Probe the page size before attempting a full-page read.
         //
         // Without this, opening a 4 KiB file with an 8 KiB option reads past the
@@ -2684,21 +2760,14 @@ pub(crate) fn decode_superblock(
     }
 
     let body = &page[PAGE_HEADER_BYTES..];
-    let tracked =
-        body[0..8] == SUPERBLOCK_MAGIC_TRACKED || body[0..8] == SUPERBLOCK_MAGIC_TRACKED_MONOLITHIC;
-    let segmented =
-        body[0..8] == SUPERBLOCK_MAGIC_SEGMENTED || body[0..8] == SUPERBLOCK_MAGIC_TRACKED;
-    if !segmented
-        && body[0..8] != SUPERBLOCK_MAGIC
-        && body[0..8] != SUPERBLOCK_MAGIC_TRACKED_MONOLITHIC
-    {
+    let Some((tracked, segmented)) = superblock_profile(&body[0..8]) else {
         let mut found = [0u8; 4];
         found.copy_from_slice(&body[0..4]);
         return Err(PageError::NotAPageFile {
             path: path.to_path_buf(),
             found,
         });
-    }
+    };
     let page_size = u32::from_le_bytes(body[8..12].try_into().unwrap());
     if page_size != expected_page_size {
         return Err(PageError::PageSizeMismatch {
@@ -2735,6 +2804,63 @@ pub(crate) fn decode_superblock(
     ))
 }
 
+/// Verify the mandatory Page reader fence without opening a Page writer or
+/// mutating recovery state. Backup callers retain their actual root EX cut;
+/// enrollment callers retain their actual Page claim and physical scope.
+pub fn require_physical_gate_profile(path: &Path) -> Result<()> {
+    use std::io::Read;
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW);
+    }
+    let mut file = options.open(path).map_err(|e| PageError::io(path, e))?;
+    if !file
+        .metadata()
+        .map_err(|e| PageError::io(path, e))?
+        .is_file()
+    {
+        return Err(PageError::BackupSnapshot {
+            reason: "Page gate enrollment source is not a regular file".into(),
+        });
+    }
+    let mut prefix = [0; PAGE_HEADER_BYTES + 12];
+    file.read_exact(&mut prefix)
+        .map_err(|e| PageError::io(path, e))?;
+    let size = u32::from_le_bytes(
+        prefix[PAGE_HEADER_BYTES + 8..PAGE_HEADER_BYTES + 12]
+            .try_into()
+            .unwrap(),
+    );
+    page::validate_page_size(size)?;
+    let mut bytes = vec![0; size as usize];
+    bytes[..prefix.len()].copy_from_slice(&prefix);
+    file.read_exact(&mut bytes[prefix.len()..])
+        .map_err(|e| PageError::io(path, e))?;
+    // The shared decoder assumes a verified complete page. Keep the reader
+    // fence fail-closed on corruption without opening/recovering a Page writer.
+    page::verify(&bytes, SUPERBLOCK_PAGE_ID)?;
+    decode_superblock(&bytes, path, size)?;
+    let magic = &bytes[PAGE_HEADER_BYTES..PAGE_HEADER_BYTES + 8];
+    if [
+        SUPERBLOCK_MAGIC_GATED,
+        SUPERBLOCK_MAGIC_GATED_SEGMENTED,
+        SUPERBLOCK_MAGIC_GATED_TRACKED,
+        SUPERBLOCK_MAGIC_GATED_TRACKED_MONOLITHIC,
+    ]
+    .iter()
+    .any(|profile| magic == profile)
+    {
+        Ok(())
+    } else {
+        Err(PageError::BackupSnapshot {
+            reason: "legacy Page writer is not enrolled in the physical backup gate".into(),
+        })
+    }
+}
+
 /// Offline page-file relayout: rewrite a store between the monolithic and
 /// extent-segmented layouts (or between extent sizes) without touching the
 /// WAL — WAL records address page ids, which are layout-independent, so a
@@ -2758,6 +2884,8 @@ pub fn convert_extent_layout(
     target_extent_bytes: u64,
     fsync: bool,
 ) -> Result<()> {
+    let gate = crate::physical_gate::PhysicalGate::for_file(base)?;
+    let _physical = gate.shared()?;
     validate_extent_bytes(target_extent_bytes, page_size)?;
     repair_interrupted_relayout(base)?;
     let source = PageStore::open(
@@ -2804,6 +2932,7 @@ pub fn convert_extent_layout(
         )
     };
     let target = PageStore {
+        physical_gate: source.physical_gate.clone(),
         backup_format: AtomicBool::new(source.backup_format.load(Ordering::Acquire)),
         extent_tracker: Mutex::new(None),
         backup: Mutex::new(None),
@@ -2905,6 +3034,8 @@ pub fn convert_extent_layout(
 /// is renamed back. A staging directory with no parked files means the swap
 /// never started; it is deleted.
 pub fn repair_interrupted_relayout(base: &Path) -> Result<()> {
+    let gate = crate::physical_gate::PhysicalGate::for_file(base)?;
+    let _physical = gate.shared()?;
     let mut index = 0usize;
     let mut restored = false;
     loop {
@@ -2985,6 +3116,9 @@ fn validate_write_completion(page_id: PageId, requested: usize, written: usize) 
         })
     }
 }
+
+#[cfg(test)]
+mod physical_gate_profile_tests;
 
 #[cfg(test)]
 mod tests {

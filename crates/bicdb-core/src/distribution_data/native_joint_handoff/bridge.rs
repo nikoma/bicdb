@@ -7,12 +7,22 @@ use crate::distribution_range_image_install::{
     NativeImageCatalogueFinalization, NativeImageInstallFreeze, NativeJointImageMaterialization,
 };
 
+#[cfg(test)]
+mod activation_controls;
+mod collection_binding;
 mod image_release;
+pub(crate) use collection_binding::{
+    NativeJointPreparationCollectionBorrow, NativeJointPreparationCollectionIdentity,
+};
 pub(super) mod preparation_origin;
 mod release;
+#[cfg(feature = "tls-replication")]
+mod remote_release;
 pub(crate) use image_release::NativeJointImageReleaseOwner;
 use preparation_origin::{CompletedPreparationOrigin, PreparedHistory, PreparingOrigin};
 pub(crate) use release::{ActualServiceNativeJointReleaseEvidence, NativeJointReleaseOwnerView};
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_release::{NativeRemoteReleaseObservation, NativeRemoteReleaseOwner};
 
 /// Keep the actual owner alive, including an installer's nonextractable
 /// recovery lease. No raw Frozen is created from a metadata plan or number.
@@ -79,6 +89,10 @@ pub(crate) struct ActualServiceNativeJointPreparedEvidence {
     pub(super) pin: parking_lot::Mutex<Option<SourceCaptureReadPin>>,
 }
 impl ActualServiceNativeJointPreparedEvidence {
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_remote_preparation_participant(&self, sha: &str) -> Result<()> {
+        self.origin.require_remote_participant(sha)
+    }
     pub(crate) fn require_original_preparation_session(&self) -> Result<()> {
         self.origin.require_session()
     }
@@ -90,6 +104,12 @@ impl ActualServiceNativeJointPreparedEvidence {
     }
     pub(crate) fn preparation_memory_lifetime(&self) -> crate::cancellation::CancellationLifetime {
         self.origin.memory_lifetime()
+    }
+    pub(crate) fn retained_activation_memory_lifetime(
+        &self,
+    ) -> Result<crate::cancellation::CancellationLifetime> {
+        self.origin.require_actual(self)?;
+        Ok(self.origin.memory_lifetime())
     }
     pub(crate) fn require_original_writer_lifetime(&self) -> Result<()> {
         self.writer_domain.require_lifetime(
@@ -128,6 +148,47 @@ impl ActualServiceNativeJointPreparedEvidence {
         self.require_original_writer_lifetime()?;
         Ok(self.writer.clone())
     }
+    /// Returns the SAME identity for comparison only. No current physical
+    /// materialization/Serving grant is produced by this necessary check.
+    fn require_original_phase_owner_for_collection(
+        &self,
+        database: &BicDb,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+    ) -> Result<crate::db::NativeJointPhaseOwner> {
+        self.require_original_writer_lifetime()?;
+        self.writer_domain.require_preparation_collection_identity(
+            database,
+            store,
+            self.committed.data().activation_range(),
+            self.lease.try_frozen()?,
+        )?;
+        if !self.writer.same_actual(&self.writer_domain.phase_owner()) {
+            return Err(data_error(
+                "joint preparation changed original actual phase owner",
+            ));
+        }
+        self.require_original_writer_lifetime()?;
+        Ok(self.writer.clone())
+    }
+    fn require_original_phase_owner_with_publication_scope(
+        &self,
+        scope: &crate::db::NativeJointPreparedPublicationScope<'_>,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+    ) -> Result<crate::db::NativeJointPhaseOwner> {
+        self.require_original_writer_lifetime()?;
+        self.writer_domain.require_current_with_publication_scope(
+            scope,
+            store,
+            self.committed.data().activation_range(),
+        )?;
+        if !self.writer.same_actual(&self.writer_domain.phase_owner()) {
+            return Err(data_error(
+                "joint preparation changed original actual phase owner",
+            ));
+        }
+        self.require_original_writer_lifetime()?;
+        Ok(self.writer.clone())
+    }
     pub(crate) fn original_phase_owner_for_continuation(
         &self,
     ) -> Result<(crate::db::NativeJointPhaseOwner, std::path::PathBuf)> {
@@ -152,25 +213,15 @@ impl ActualServiceNativeJointPreparedEvidence {
         );
         let database = checked_database_read(&service.db, &service.storage_policy)?;
         service.require_native_catalog_database(&database)?;
-        self.writer_domain.require_current(
-            &database,
-            &service.range_writes,
-            self.committed.data().activation_range(),
-        )?;
         if self.prepared.local_node_id() != &service.node_id {
+            // Preserve the original actual writer/store refusal. This extra
+            // validation is only on the foreign-service rejection path; it
+            // cannot authorize this service or replace the final local scope.
+            self.require_original_phase_owner(&database, &service.range_writes)?;
             return Err(data_error(
                 "joint bridge preparation belongs to another service",
             ));
         }
-        self.require_original_phase_owner(&database, &service.range_writes)?;
-        self.prepared.require_current(
-            &database,
-            &service.range_writes,
-            &self.committed,
-            &self.catalogue,
-            self.lease.image(),
-            self.lease.frozen(),
-        )?;
         let pin = self
             .pin
             .try_lock()
@@ -184,7 +235,34 @@ impl ActualServiceNativeJointPreparedEvidence {
                 self.lease.frozen(),
             )?;
         }
-        self.require_original_phase_owner(&database, &service.range_writes)?;
+        self.prepared
+            .require_original_protected_records(&database)?;
+        // One actual journal-held physical observation covers this local
+        // validation only. The constructor checks the real preparation,
+        // catalogue, native lineage and every retained history entry. A
+        // retained source-read pin is permitted by quiescent Frozen and is
+        // independently checked above; it is neither drained nor replaced.
+        // Original CLOSED counters/CURRENT/archive/promise and writer identity
+        // are still reread before and after under the same scope. No scope or
+        // local proof escapes to authorize another participant or request.
+        let scope = self.prepared.publication_read_scope(
+            &database,
+            &service.range_writes,
+            &self.committed,
+            &self.catalogue,
+            self.lease.image(),
+            self.lease.frozen(),
+        )?;
+        self.require_original_phase_owner_with_publication_scope(&scope, &service.range_writes)?;
+        if let Some(pin) = pin.as_ref() {
+            gate.validate_source_capture_read_pin(self.committed.data().old_range().id, pin)?;
+        } else {
+            gate.validate_quiescent_frozen(
+                self.committed.data().old_range().id,
+                self.lease.frozen(),
+            )?;
+        }
+        self.require_original_phase_owner_with_publication_scope(&scope, &service.range_writes)?;
         #[cfg(test)]
         trace.complete();
         Ok(())
@@ -215,17 +293,14 @@ impl ActualServiceNativeJointPreparedEvidence {
     ) -> Result<crate::db::NativeJointPhaseOwner> {
         let database = checked_database_read(&service.db, &service.storage_policy)?;
         service.require_native_catalog_database(&database)?;
-        // In-memory binding of the FRESH range only. The full writer-domain
-        // re-read that used to run here was repeated, with nothing in
-        // between, by `require_original_phase_owner` on the next line under
-        // this same database read guard; the fresh/original decision
-        // equality below ties the two ranges together.
+        // Bind the fresh range to the SAME original writer-domain lifetime.
+        // The complete current physical owner is checked under the actual
+        // publication scope below, on both sides of the Frozen/pin check.
         self.writer_domain.require_lifetime(
             self.catalogue.database_root(),
             self.catalogue.store_open_id(),
             fresh.data().activation_range(),
         )?;
-        self.require_original_phase_owner(&database, &service.range_writes)?;
         history.require_current(self, &database)?;
         fresh.require_current(&database)?;
         let old = self.committed.metadata_anchor();
@@ -248,14 +323,6 @@ impl ActualServiceNativeJointPreparedEvidence {
                 "fresh joint phase changed original decision/open or reused old metadata",
             ));
         }
-        self.prepared.require_current(
-            &database,
-            &service.range_writes,
-            fresh,
-            &self.catalogue,
-            self.lease.image(),
-            self.lease.frozen(),
-        )?;
         let pin = self
             .pin
             .try_lock()
@@ -266,7 +333,28 @@ impl ActualServiceNativeJointPreparedEvidence {
         } else {
             gate.validate_quiescent_frozen(fresh.data().old_range().id, self.lease.frozen())?;
         }
-        self.require_original_phase_owner(&database, &service.range_writes)
+        // The foreign participant must still validate its OWN complete physical
+        // point. Keep that one independently read point under its actual journal
+        // while validating the same original phase owner on both sides. This
+        // does not reuse the publisher's local scope or a cached numeric floor.
+        // Original-history and fresh protected-decision checks above remain;
+        // publication_read_scope rereads preparation CURRENT/archive, catalogue,
+        // lineage and every retained resolution with the fresh actual request.
+        let scope = self.prepared.publication_read_scope(
+            &database,
+            &service.range_writes,
+            fresh,
+            &self.catalogue,
+            self.lease.image(),
+            self.lease.frozen(),
+        )?;
+        self.require_original_phase_owner_with_publication_scope(&scope, &service.range_writes)?;
+        if let Some(pin) = pin.as_ref() {
+            gate.validate_source_capture_read_pin(fresh.data().old_range().id, pin)?;
+        } else {
+            gate.validate_quiescent_frozen(fresh.data().old_range().id, self.lease.frozen())?;
+        }
+        self.require_original_phase_owner_with_publication_scope(&scope, &service.range_writes)
     }
     pub(crate) fn require_current_under_open_phase(
         &self,
@@ -487,7 +575,7 @@ impl ActualServiceNativeJointPreparedEvidence {
         fresh: &CommittedNativeJointDecisionObservation,
         history: PreparedHistory<'_>,
     ) -> Result<crate::db::NativeJointPhaseOwner> {
-        self.require_original_phase_owner(scope.database(), store)?;
+        self.require_original_phase_owner_with_publication_scope(scope, store)?;
         history.require_publication_scope(self, scope)?;
         fresh.require_current_with_publication_scope(scope)?;
         scope.require_owned_preparation(
@@ -507,7 +595,7 @@ impl ActualServiceNativeJointPreparedEvidence {
                 "publication requires original actual read pins released",
             ));
         }
-        self.require_original_phase_owner(scope.database(), store)
+        self.require_original_phase_owner_with_publication_scope(scope, store)
     }
     pub(crate) fn require_phase_writer_lifetime(
         &self,
@@ -618,6 +706,30 @@ impl ClusterDataNodeService {
         parent.check()?;
         host.require_live_request(business)?;
         let database = checked_database_read(&self.db, &self.storage_policy)?;
+        if self.range_writes.needs_owned_activation_recovery() {
+            actual.require_original_preparation_session()?;
+            actual.require_original_writer_lifetime()?;
+            if actual.prepared.native_database_incarnation() != database.incarnation_id()
+                || actual.prepared.checksum_sha256() != native.native_preparation_sha256()
+                || actual.committed.data() != native.data()
+            {
+                return Err(data_error(
+                    "owned activation retry substituted actual preparation/open",
+                ));
+            }
+            self.range_writes
+                .current_mut()
+                .retry_owned_activation_from_actual_host(
+                    &database,
+                    host,
+                    business,
+                    native,
+                    &actual.writer_domain,
+                    actual.lease.try_frozen()?,
+                    point,
+                    parent,
+                )?;
+        }
         actual.require_original_phase_owner(&database, &self.range_writes)?;
         match point {
             Some(point) => {
@@ -660,22 +772,67 @@ impl ClusterDataNodeService {
             admission.cancellation(),
         );
         parent.check()?;
-        if !admission.has_fresh_open_phase() {
+        let recovering_owned_activation = self.range_writes.needs_owned_activation_recovery();
+        if !admission.has_fresh_open_phase() && !recovering_owned_activation {
             admission.require_external_publications_current()?;
             admission.require_local_open_preparation(self)?;
         }
         let database = checked_database_read(&self.db, &self.storage_policy)?;
-        actual.require_original_phase_owner(&database, &self.range_writes)?;
+        if self.range_writes.needs_owned_activation_recovery() {
+            actual.require_original_preparation_session()?;
+            actual.require_original_writer_lifetime()?;
+            if actual.prepared.native_database_incarnation() != database.incarnation_id()
+                || actual.prepared.checksum_sha256()
+                    != admission.native_receipt().native_preparation_sha256()
+                || actual.committed.data() != admission.data()
+            {
+                return Err(data_error(
+                    "owned activation retry substituted actual preparation/open",
+                ));
+            }
+            self.range_writes
+                .current_mut()
+                .retry_owned_activation_from_admission(
+                    &database,
+                    admission,
+                    &actual.writer_domain,
+                    actual.lease.try_frozen()?,
+                    parent,
+                )?;
+        }
+        if !admission.has_fresh_open_phase() && recovering_owned_activation {
+            admission.require_external_publications_current()?;
+            admission.require_local_open_preparation(self)?;
+        }
         self.storage_policy.require_database(&database)?;
         self.range_writes
             .current_mut()
             .refsync_native_joint_catalogue_activation(&database, admission)?;
         self.require_native_catalog_database(&database)?;
-        actual.writer_domain.require_current(
-            &database,
-            &self.range_writes,
-            admission.data().activation_range(),
-        )?;
+        #[cfg(test)]
+        let mut domain_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "open-service-original-phase-owner-and-domain",
+            &self.node_id,
+            admission.cancellation(),
+        );
+        // This is the SAME full domain check the earlier phase-owner call
+        // performed, plus its original owner/process equality. The intervening
+        // storage/refsync/catalogue checks are read-only (refsync only refuses
+        // uncertainty). Validate once here, immediately before recovery or
+        // new publication, rather than twice under this same service/DB scope.
+        // The owned-Unknown retry above retains its independent actual sink
+        // checks; no uncertain state gains a new-publication exception.
+        if actual.committed.data() != admission.data() {
+            return Err(data_error(
+                "joint Open changed original prepared decision/domain",
+            ));
+        }
+        actual.require_original_phase_owner(&database, &self.range_writes)?;
+        #[cfg(test)]
+        {
+            domain_trace.complete();
+            drop(domain_trace);
+        }
         if actual.prepared.local_node_id() != &self.node_id {
             return Err(data_error(
                 "joint catalogue activation targets another actual service",
@@ -685,6 +842,7 @@ impl ClusterDataNodeService {
             .range_writes
             .recover_native_joint_catalogue_activation(&database, admission)?
         {
+            admission.note_remote_open_effect_entered()?;
             self.range_writes
                 .current_mut()
                 .install_native_joint_activated_open(
@@ -713,6 +871,7 @@ impl ClusterDataNodeService {
                 actual.lease.try_frozen()?,
                 parent,
             )?;
+        admission.note_remote_open_effect_entered()?;
         self.range_writes
             .current_mut()
             .install_native_joint_activated_open(&database, &receipt, actual.lease.try_frozen()?)?;
@@ -768,14 +927,23 @@ impl ClusterDataNodeService {
         );
         parent.check()?;
         admission.require_publication_service_entry(self)?;
+        if admission.has_fresh_publication_phase() {
+            // Its checked database borrow ends before taking the final borrow;
+            // never recursively read-lock a DB with a waiting writer.
+            admission.require_fresh_publication_service_identity(self, actual)?;
+        }
         let database = checked_database_read(&self.db, &self.storage_policy)?;
-        actual.require_original_phase_owner(&database, &self.range_writes)?;
-        self.require_native_catalog_database(&database)?;
-        actual.writer_domain.require_current(
-            &database,
-            &self.range_writes,
-            admission.data().activation_range(),
-        )?;
+        if admission.has_fresh_publication_phase() {
+            self.require_native_catalog_database(&database)?;
+        } else {
+            actual.require_original_phase_owner(&database, &self.range_writes)?;
+            self.require_native_catalog_database(&database)?;
+            actual.writer_domain.require_current(
+                &database,
+                &self.range_writes,
+                admission.data().activation_range(),
+            )?;
+        }
         if actual.prepared.local_node_id() != &self.node_id {
             return Err(data_error(
                 "joint native bridge publishes on another actual service",
@@ -805,14 +973,9 @@ impl ClusterDataNodeService {
         if admission.has_fresh_publication_phase() {
             // Final foreign sweep and all local proof checks are inside the
             // scoped native reader. It never recreates an absent receipt.
+            admission.require_fresh_publication_service_identity(self, actual)?;
             let database = checked_database_read(&self.db, &self.storage_policy)?;
             self.require_native_catalog_database(&database)?;
-            actual.require_original_phase_owner(&database, &self.range_writes)?;
-            actual.writer_domain.require_current(
-                &database,
-                &self.range_writes,
-                admission.data().activation_range(),
-            )?;
             return database.recover_scoped_native_joint_bridge(
                 admission,
                 &actual.prepared,
@@ -1132,5 +1295,71 @@ impl ClusterDataNodeService {
             ));
         }
         receipt.require_current(&database)
+    }
+}
+
+#[cfg(feature = "tls-replication")]
+impl ActualServiceNativeJointPreparedEvidence {
+    /// Fixed readonly wire-final boundary: full same-owner physical proof stays
+    /// lexically held through the short memory-only metadata publication guard.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn require_remote_prepared_wire_boundary(
+        &self,
+        service: &ClusterDataNodeService,
+        fresh: &CommittedNativeJointDecisionObservation,
+        custody: &crate::distribution_range_handoff::NativeJointPreparationCustody,
+        role: &RecoveryRoleAdmission,
+        own: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        metadata: &ActualNativeJointMetadataPoint,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        let history = PreparedHistory::Custody(custody);
+        let database = checked_database_read(&service.db, &service.storage_policy)?;
+        service.require_native_catalog_database(&database)?;
+        history.require_current(self, &database)?;
+        fresh.require_current(&database)?;
+        role.require_own_host_metadata(own, business)?;
+        metadata.require_request(own, business)?;
+        metadata.require_native_store_point(&database, &service.range_writes)?;
+        let scope = self.prepared.publication_read_scope(
+            &database,
+            &service.range_writes,
+            fresh,
+            &self.catalogue,
+            self.lease.image(),
+            self.lease.try_frozen()?,
+        )?;
+        self.require_original_phase_owner_with_publication_scope(&scope, &service.range_writes)?;
+        fresh.require_current_with_publication_scope(&scope)?;
+        let pin = self
+            .pin
+            .try_lock()
+            .ok_or_else(|| data_error("remote prepared final pin owner busy"))?;
+        if let Some(pin) = pin.as_ref() {
+            database
+                .range_mutation_gate()
+                .validate_source_capture_read_pin(fresh.data().old_range().id, pin)?;
+        } else {
+            database
+                .range_mutation_gate()
+                .validate_quiescent_frozen(fresh.data().old_range().id, self.lease.try_frozen()?)?;
+        }
+        parent.check()?;
+        role.require_live_request()?;
+        own.require_live_request(business)?;
+        self.origin.require_actual(self)?;
+        let version = metadata.try_publication_guard()?;
+        // No hashing, topology validation, callback, IO, or serialization below.
+        parent.check()?;
+        role.require_live_request()?;
+        own.require_live_request(business)?;
+        metadata.require_current_memory()?;
+        fresh.require_publication_point_memory()?;
+        self.origin.require_actual(self)?;
+        drop(version);
+        drop(pin);
+        drop(scope);
+        Ok(())
     }
 }

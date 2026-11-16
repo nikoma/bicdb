@@ -1,6 +1,15 @@
 //! Existing Registered member control transition; never a fresh-voter factory.
 use super::*;
 impl NativeColdLearnerMetadataHost {
+    pub(in crate::distribution_native_host) fn poll_native_first_receiver(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<bool> {
+        let Some(control) = self.control.as_mut() else {
+            return Ok(false);
+        };
+        control.poll_first_receive(parent)
+    }
     pub(in crate::distribution_native_host) fn metadata_control_owned(&self) -> bool {
         self.control.as_ref().is_some_and(|c| c.is_running())
     }

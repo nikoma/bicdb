@@ -35,6 +35,19 @@ impl ClusterServiceOpenGuard {
         }
         self.health.check().map_err(crate::error::durability_error)
     }
+    /// Necessary SAME-open atomic refusal for allocation cache publication.
+    /// Generic health failure details are checked before the version guard.
+    pub(crate) fn require_allocation_publication_memory(&self) -> Result<()> {
+        if self.open.upgrade().is_none() {
+            return Err(data_error("cluster service actual database open ended"));
+        }
+        if self.health.is_failed() {
+            return Err(BicDbError::PagedStorage(
+                "actual allocation database durability is fenced; details deferred".into(),
+            ));
+        }
+        Ok(())
+    }
     /// Bound to this actual service/open, the actual attached metadata Arc and
     /// current range Store slot. No topology declaration can register ingress.
     pub(crate) fn register_metadata_ingress(

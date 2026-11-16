@@ -299,6 +299,7 @@ impl NativeJoinedRemoteInstallingPublication {
         // Exact original/candidate bytes already retained before memory/IO.
         store.catalog = pending.candidate.clone();
         store.recovery_persistence_uncertain = true;
+        let generation = store.note_catalogue_write_entered()?;
         crate::storage::replace_durably(
             &store.root.join(DEFAULT_RANGE_WRITE_LOG),
             crate::storage::ReplaceContents::Plain(&pending.bytes),
@@ -306,6 +307,7 @@ impl NativeJoinedRemoteInstallingPublication {
             "joined_remote_install.catalogue",
             crate::storage::FailClosed::No,
         )?;
+        store.note_catalogue_write_returned_ok(generation);
         self.fence.read_disk_current(store)?;
         self.fence.require_identity(store, db, scope, receipt)?;
         store.recovery_persistence_uncertain = false;

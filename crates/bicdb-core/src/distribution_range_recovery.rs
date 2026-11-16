@@ -508,6 +508,14 @@ impl RecoveryRoleAdmission {
                 "read-only observation cannot authorize recovery mutations",
             ));
         }
+        if matches!(
+            purpose,
+            MetadataRecoveryRolePurpose::NativeJointLocalServingPolicy { .. }
+        ) {
+            return Err(invalid(
+                "local-policy purpose cannot authorize generic recovery mutations",
+            ));
+        }
         Self::from_scoped_witness(
             witness,
             actual_initiator,
@@ -585,7 +593,11 @@ impl RecoveryRoleAdmission {
         let relocation = match purpose {
             MetadataRecoveryRolePurpose::NormalRecovery
             | MetadataRecoveryRolePurpose::CurrentJointRecovery { .. } => None,
-            MetadataRecoveryRolePurpose::CommittedHandoff { relocation_id, .. } => Some(
+            MetadataRecoveryRolePurpose::CommittedHandoff { relocation_id, .. }
+            | MetadataRecoveryRolePurpose::NativeJointServingPhase { relocation_id, .. }
+            | MetadataRecoveryRolePurpose::NativeJointLocalServingPolicy {
+                relocation_id, ..
+            } => Some(
                 topology
                     .relocations
                     .get(relocation_id)
@@ -921,6 +933,12 @@ impl RecoveryObservationRoleAdmission {
             }),
             MetadataRecoveryRolePurpose::ObserveFencedRecovery { .. } => {
                 return Err(invalid("recursive observation scope refused"))
+            }
+            MetadataRecoveryRolePurpose::NativeJointServingPhase { .. }
+            | MetadataRecoveryRolePurpose::NativeJointLocalServingPolicy { .. } => {
+                return Err(invalid(
+                    "serving phase intent cannot mint recovery observation scope",
+                ));
             }
         };
         Ok(MetadataRecoveryRolePurpose::ObserveFencedRecovery {
@@ -1472,3 +1490,8 @@ pub(crate) fn test_recovery_metadata_cluster(
         .map(|node| Ok((node.clone(), Arc::new(peers.provider(node)?))))
         .collect()
 }
+
+#[cfg(feature = "tls-replication")]
+mod local_serving_policy;
+#[cfg(feature = "tls-replication")]
+pub(crate) use local_serving_policy::NativeLocalServingPolicyRoleAdmission;

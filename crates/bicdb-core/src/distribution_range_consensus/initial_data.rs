@@ -98,15 +98,116 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
                 .map(|d| d.min(Duration::from_secs(5)))
                 .ok_or(BicDbError::QueryTimedOut)
         };
-        let business = Uuid::now_v7();
-        let first = self.transport.acquire_metadata_read_observation(
-            metadata_leader,
-            business,
-            range.id,
-            range.epoch,
-            remaining()?,
-            parent,
-        )?;
+        // Reject an unbounded caller before any same-owner lock wait.
+        remaining()?;
+        // Retain the actual original open/Store slot before a first READ can
+        // encounter the metadata leader's control-to-DATA listener transition.
+        // Neither a socket failure nor a new READ can replace these owners.
+        let (open, slot) = {
+            let service = loop {
+                parent.check()?;
+                if let Some(service) = self.local_service.try_lock_for(Duration::from_millis(5)) {
+                    break service;
+                }
+            };
+            (
+                service.listener_open_guard(),
+                service.native_replica_listener_store_open_guard(),
+            )
+        };
+        let require_original = || -> Result<()> {
+            loop {
+                parent.check()?;
+                open.require_live()?;
+                slot.require_live()?;
+                runtime.require_point_read_service(&self.local_service, &self.local_node_id)?;
+                let service = loop {
+                    parent.check()?;
+                    if let Some(service) = self.local_service.try_lock_for(Duration::from_millis(5))
+                    {
+                        break service;
+                    }
+                };
+                let database = service.database();
+                let database = database
+                    .try_read()
+                    .ok_or_else(|| range_write_error("initial first READ original DB busy"))?;
+                open.require_database(&database)?;
+                if service.native_initial_listener_store_open_id() != slot.id() {
+                    return Err(range_write_error(
+                        "initial first READ original Store changed",
+                    ));
+                }
+                let Some(topology) = self.topology.try_read() else {
+                    // A routing writer may itself need this service/DB. Never
+                    // wait for it while retaining either guard, nor turn busy
+                    // into absent/current. Every retry uses the original token.
+                    drop(database);
+                    drop(service);
+                    parent.check()?;
+                    std::thread::sleep(Duration::from_millis(2));
+                    continue;
+                };
+                host.require_for_coordinator_with_topology(&database, range, self, &topology)?;
+                genesis.require_current(&database, &topology)?;
+                return parent.check();
+            }
+        };
+        #[cfg(test)]
+        self.transport.test_before_initial_genesis_read(parent)?;
+        let (first, business) = loop {
+            require_original()?;
+            let business = Uuid::now_v7();
+            let actual = self
+                .transport
+                .acquire_initial_genesis_metadata_read_observation(
+                    metadata_leader,
+                    business,
+                    range.id,
+                    range.epoch,
+                    remaining()?,
+                    parent,
+                );
+            #[cfg(test)]
+            self.transport
+                .test_initial_genesis_read_return(&actual, business, range, parent)?;
+            match actual {
+                Ok(first) => {
+                    require_original()?;
+                    break (first, business);
+                }
+                Err(error) => {
+                    #[cfg(test)]
+                    initial_read_failure(
+                        "first_metadata",
+                        &self.local_node_id,
+                        range,
+                        parent,
+                        &error,
+                    );
+                    let transient =
+                        crate::distribution_transport::HotRecoveryPeerFailure::from_error(&error)
+                            .is_some_and(|failure| {
+                                matches!(
+                                    failure.kind(),
+                                    std::io::ErrorKind::ConnectionReset
+                                        | std::io::ErrorKind::ConnectionRefused
+                                        | std::io::ErrorKind::ConnectionAborted
+                                        | std::io::ErrorKind::BrokenPipe
+                                        | std::io::ErrorKind::UnexpectedEof
+                                )
+                            });
+                    if !transient {
+                        return Err(error);
+                    }
+                    require_original()?;
+                    // Pacing and every new authenticated READ consume the SAME
+                    // original absolute action. No native/host install repeats.
+                    std::thread::sleep(Duration::from_millis(2));
+                    parent.check()?;
+                }
+            }
+        };
         {
             let service = loop {
                 parent.check()?;
@@ -125,16 +226,45 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
         // pending/control checks come from the existing sealed read producer.
         // A decoded list, raw progress0, or NativeOriginStatus cannot replace it.
         let collected = runtime
-            .acquire_native_read_candidate(first, business, Uuid::now_v7(), parent)?
-            .into_initial_data_genesis(genesis)?;
-        let final_metadata = self.transport.acquire_metadata_read_observation(
-            metadata_leader,
-            business,
-            range.id,
-            range.epoch,
-            remaining()?,
-            parent,
-        )?;
+            .acquire_native_read_candidate(first, business, Uuid::now_v7(), parent)
+            .map_err(|error| {
+                #[cfg(test)]
+                initial_read_failure(
+                    "actual_native_read_candidate",
+                    &self.local_node_id,
+                    range,
+                    parent,
+                    &error,
+                );
+                error
+            })?
+            .into_initial_data_genesis(genesis)
+            .map_err(|error| {
+                #[cfg(test)]
+                initial_read_failure(
+                    "initial_genesis_comparison",
+                    &self.local_node_id,
+                    range,
+                    parent,
+                    &error,
+                );
+                error
+            })?;
+        let final_metadata = self
+            .transport
+            .acquire_metadata_read_observation(
+                metadata_leader,
+                business,
+                range.id,
+                range.epoch,
+                remaining()?,
+                parent,
+            )
+            .map_err(|error| {
+                #[cfg(test)]
+                initial_read_failure("final_metadata", &self.local_node_id, range, parent, &error);
+                error
+            })?;
         let service = loop {
             parent.check()?;
             if let Some(service) = self.local_service.try_lock_for(Duration::from_millis(5)) {
@@ -183,4 +313,69 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
             })
             && self.recovered_epochs.lock().get(&range.id) == Some(&range.epoch)
     }
+    /// Exact stored marker DATA for reached-cut tests; no topology try-read
+    /// can turn contention into a misleading absent-marker observation.
+    #[cfg(test)]
+    pub(crate) fn test_initial_genesis_recovered_epochs(&self) -> BTreeMap<RangeId, u64> {
+        self.recovered_epochs.lock().clone()
+    }
+}
+
+#[cfg(test)]
+fn initial_read_failure(
+    stage: &str,
+    node: &ClusterNodeId,
+    range: &RangeDescriptor,
+    parent: &CancellationToken,
+    error: &BicDbError,
+) {
+    use std::io::Write as _;
+    // Keep this projection local: host-private protocol helpers do not become
+    // public for logging. Formatting/writing DATA must not replace the error.
+    struct Prefix {
+        text: String,
+        complete: bool,
+    }
+    impl std::fmt::Write for Prefix {
+        fn write_str(&mut self, text: &str) -> std::fmt::Result {
+            if !self.complete {
+                return Ok(());
+            }
+            let mut end = (4096 - self.text.len()).min(text.len());
+            while !text.is_char_boundary(end) {
+                end -= 1;
+            }
+            self.text.push_str(&text[..end]);
+            self.complete &= end == text.len();
+            Ok(())
+        }
+    }
+    let mut prefix = Prefix {
+        text: String::new(),
+        complete: true,
+    };
+    let formatted = std::fmt::write(&mut prefix, format_args!("{error}")).is_ok();
+    let io_kind = match error {
+        BicDbError::Io(io) => Some(format!("{:?}", io.kind())),
+        _ => None,
+    };
+    let io_os_code = match error {
+        BicDbError::Io(io) => io.raw_os_error(),
+        _ => None,
+    };
+    let event = serde_json::json!({
+        "stage":stage,"node":node,"range":range.id,"epoch":range.epoch,
+        "actual_original_remaining_us":parent.deadline().map(|d|d.saturating_duration_since(Instant::now()).as_micros()),
+        "actual_original_cancelled":parent.is_cancel_requested(),
+        "error_kind":format!("{:?}",std::mem::discriminant(error)),
+        "io_kind":io_kind,"io_os_code":io_os_code,
+        "display_prefix":prefix.text,"prefix_incomplete":!prefix.complete,
+        "display_format_complete":formatted,
+        "diagnostic_only_not_authority_or_no_effect":true,
+    });
+    let _ = writeln!(
+        std::io::stderr().lock(),
+        "INITIAL_NATIVE_READ_FAILURE {}",
+        event
+    );
 }

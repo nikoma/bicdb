@@ -40,6 +40,41 @@ impl NativeRegisteredRemoteCatalogueMaterialization {
     pub(crate) fn store_open_id(&self) -> Uuid {
         self.store_open
     }
+    /// Validate the physical base through the SAME original preflight that
+    /// the target owns. The full currentness path below checks that base,
+    /// native admission, namespace bindings, catalogue and durable store; a
+    /// caller need not perform another complete base-history traversal first.
+    /// This exact Arc comparison is not a currentness or Serving proof.
+    pub(crate) fn require_current_for_original_preflight(
+        &self,
+        store: &RangeWriteStore,
+        db: &crate::BicDb,
+        physical: &NativeInstalledRangeImageBase,
+        original: &Arc<NativeRegisteredRemoteInstallPreflight>,
+    ) -> Result<()> {
+        if !Arc::ptr_eq(&self.preflight, original) {
+            return Err(range_write_error(
+                "Registered joint catalogue changed actual original preflight",
+            ));
+        }
+        self.require_current(store, db, physical)
+    }
+    /// Purpose-specific same-original physical comparison under an owned
+    /// activation intent; this asserts NO catalogue durability or Serving.
+    pub(crate) fn require_owned_activation_identity(
+        &self,
+        store: &RangeWriteStore,
+        db: &crate::BicDb,
+        physical: &NativeInstalledRangeImageBase,
+        original: &Arc<NativeRegisteredRemoteInstallPreflight>,
+    ) -> Result<()> {
+        if !Arc::ptr_eq(&self.preflight, original) {
+            return Err(range_write_error(
+                "activation comparison changed original Registered preflight",
+            ));
+        }
+        self.require_identity_point(store, db, physical)
+    }
     pub(crate) fn require_current(
         &self,
         store: &RangeWriteStore,

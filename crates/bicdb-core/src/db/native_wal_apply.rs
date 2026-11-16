@@ -248,6 +248,171 @@ impl TxLogHandle {
         })
     }
 }
+/// Private pre-effect profile retaining the actual original native producer.
+/// No public constructor/serde/Clone, numeric-floor or flag-only admission.
+/// This grants LOCAL WAL/apply completion, never range QQ/Serving or an
+/// ordinary SQL global-visibility ACK.
+pub(super) struct NativeWalApplyPreparation<'a> {
+    owner: NativeLocalOwner<'a>,
+}
+enum NativeLocalOwner<'a> {
+    Pending {
+        pending: &'a range_image_native::NativeRangePendingApply,
+        authority: &'a crate::distribution_range_mutation::RangeMutationAuthority<'a>,
+    },
+    #[cfg(feature = "tls-replication")]
+    Registered(Arc<range_image_native::NativeRegisteredRemoteRowTransactionGrant>),
+    #[cfg(feature = "tls-replication")]
+    Joined(Arc<range_image_native::NativeJoinedRemoteRowTransactionGrant>),
+}
+impl<'a> NativeWalApplyPreparation<'a> {
+    pub(super) fn for_pending(
+        db: &BicDb,
+        tx: &Transaction,
+        pending: &'a range_image_native::NativeRangePendingApply,
+        authority: &'a crate::distribution_range_mutation::RangeMutationAuthority<'a>,
+    ) -> Result<Self> {
+        if tx.state != TxState::Pending {
+            return Err(BicDbError::TransactionNotPending);
+        }
+        let actual = Self {
+            owner: NativeLocalOwner::Pending { pending, authority },
+        };
+        actual.require_current(db, tx)?;
+        Ok(actual)
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(super) fn for_registered(
+        db: &BicDb,
+        tx: &Transaction,
+        actual: Arc<range_image_native::NativeRegisteredRemoteRowTransactionGrant>,
+    ) -> Result<Self> {
+        if tx.state != TxState::Pending {
+            return Err(BicDbError::TransactionNotPending);
+        }
+        let actual = Self {
+            owner: NativeLocalOwner::Registered(actual),
+        };
+        actual.require_current(db, tx)?;
+        Ok(actual)
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(super) fn for_joined(
+        db: &BicDb,
+        tx: &Transaction,
+        actual: Arc<range_image_native::NativeJoinedRemoteRowTransactionGrant>,
+    ) -> Result<Self> {
+        if tx.state != TxState::Pending {
+            return Err(BicDbError::TransactionNotPending);
+        }
+        let actual = Self {
+            owner: NativeLocalOwner::Joined(actual),
+        };
+        actual.require_current(db, tx)?;
+        Ok(actual)
+    }
+    pub(super) fn require_current(&self, db: &BicDb, tx: &Transaction) -> Result<()> {
+        if !std::ptr::eq(tx.db.as_ptr(), db)
+            || !Arc::ptr_eq(&tx.catalog_admission, &db.catalog_admission)
+            || !Arc::ptr_eq(&tx.tx_states, &db.tx_states)
+        {
+            return Err(BicDbError::Unsupported(
+                "native local preparation belongs to another actual DB transaction".into(),
+            ));
+        }
+        match &self.owner {
+            NativeLocalOwner::Pending { pending, authority } => {
+                if tx.native_image_row_grant.is_some() {
+                    return Err(BicDbError::Cluster(
+                        "native pending completion mixed image grant".into(),
+                    ));
+                }
+                #[cfg(feature = "tls-replication")]
+                if tx.native_registered_remote_row_grant.is_some()
+                    || tx.native_joined_remote_row_grant.is_some()
+                {
+                    return Err(BicDbError::Cluster(
+                        "native pending completion mixed remote row grant".into(),
+                    ));
+                }
+                db.require_native_pending_transaction(pending, tx, authority)
+            }
+            #[cfg(feature = "tls-replication")]
+            NativeLocalOwner::Registered(actual) => {
+                if tx.native_image_row_grant.is_some()
+                    || tx.native_joined_remote_row_grant.is_some()
+                {
+                    return Err(BicDbError::Cluster(
+                        "native Registered completion mixed image owner".into(),
+                    ));
+                }
+                if !tx
+                    .native_registered_remote_row_grant
+                    .as_ref()
+                    .is_some_and(|original| Arc::ptr_eq(original, actual))
+                {
+                    return Err(BicDbError::Cluster(
+                        "native local apply substituted Registered owner".into(),
+                    ));
+                }
+                actual.require_current(db, tx)
+            }
+            #[cfg(feature = "tls-replication")]
+            NativeLocalOwner::Joined(actual) => {
+                if tx.native_image_row_grant.is_some()
+                    || tx.native_registered_remote_row_grant.is_some()
+                {
+                    return Err(BicDbError::Cluster(
+                        "native Joined completion mixed image owner".into(),
+                    ));
+                }
+                if !tx
+                    .native_joined_remote_row_grant
+                    .as_ref()
+                    .is_some_and(|original| Arc::ptr_eq(original, actual))
+                {
+                    return Err(BicDbError::Cluster(
+                        "native local apply substituted Joined owner".into(),
+                    ));
+                }
+                actual.require_current(db, tx)
+            }
+        }
+    }
+    pub(super) fn require_applied(
+        &self,
+        db: &BicDb,
+        tx: &Transaction,
+        receipt: Option<&NativeWalApplyReceipt>,
+    ) -> Result<()> {
+        self.require_current(db, tx)?;
+        if tx.state != TxState::Committed {
+            return Err(BicDbError::TransactionNotPending);
+        }
+        match &self.owner {
+            NativeLocalOwner::Pending { .. } => {
+                let receipt = receipt.ok_or_else(|| {
+                    BicDbError::Cluster("native local completion lacks actual WAL receipt".into())
+                })?;
+                db.validate_native_wal_apply_receipt(receipt)?;
+                if receipt.transaction_id() != tx.id.0
+                    || Some(receipt.sequence()) != tx.committed_seq
+                    || receipt.mutations_sha256() != actual_transaction_mutations_sha256(tx)?
+                {
+                    return Err(BicDbError::Cluster(
+                        "native local completion substituted original Tx/WAL/mutations".into(),
+                    ));
+                }
+                Ok(())
+            }
+            #[cfg(feature = "tls-replication")]
+            NativeLocalOwner::Registered(actual) => actual.require_applied_known(db, tx),
+            #[cfg(feature = "tls-replication")]
+            NativeLocalOwner::Joined(actual) => actual.require_applied_known(db, tx),
+        }
+    }
+}
+
 impl Transaction {
     pub(super) fn mint_native_wal_apply_receipt(&self) -> Result<NativeWalApplyReceipt> {
         if self.state != TxState::Committed {

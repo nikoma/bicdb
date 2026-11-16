@@ -100,3 +100,47 @@ these guards. Relayout invalidates the journal identity before changing files.
 There is no implicit downgrade after enabling tracking: use a compatible binary
 for the database, its restored copies and branches. v1-v3 backup readers remain
 available, but an artifact's source-format feature flags still apply.
+
+## Mandatory physical backup gate profiles
+
+Sources implementing `physical_backup_gate_v1` retain the four existing page
+layout/tracking combinations with mandatory reader-fenced magics:
+
+| Layout | Tracking | Current magic |
+| --- | --- | --- |
+| Monolithic | Untracked | `BICDBPG5` |
+| Segmented | Untracked | `BICDBPG6` |
+| Segmented | Tracked | `BICDBPG7` |
+| Monolithic | Tracked | `BICDBPG8` |
+
+The earlier `BICDBPG\0`/`BICDBPG2`/`BICDBPG3`/`BICDBPG4` values describe
+pre-gate inputs. Current owning-engine opens validate those inputs and publish
+the mandatory fence before later writes; tracking, extent routing and relayout
+remain distinct. The new values are outside the prior decoder's accepted
+magic set. Exact current-output tests therefore require 5/6/7/8, while tests
+which intentionally read historical artifacts retain their original bytes.
+The byte/source compatibility assertions in those tests do not execute or
+qualify a historical reader binary. See the [physical gate contract](design/standard-live-backup-physical-gate.md)
+and the [520 test-oracle correction](design/page-gated-profile-test-correction.md).
+
+### Live native allocation-policy audit (source-only candidate)
+
+The private first-allocation continuation adds the sticky local
+`native_writer_allocation_policy_v1` reader requirement before publishing a
+version2 `AllocationEpoch` writer audit. Version1 registry records keep their
+original strict layout and registry-only meaning. The new audit preserves the
+original registration, writer State, DB/Store and coordinator; it is not a
+portable lease or permission to reconstruct them after restart. Native
+CURRENT/archive/ancestry and the actual committed XID must match before the
+live verified cache can use the exact new descriptor.
+
+An attempted FORMAT flag or visible audit bytes do not establish Ready,
+successful fsync, native Serving, APP or Strong. Unknown native IO remains
+blocked; real closed native readiness, completion, activation and fresh
+quorums are separate gates. The controlled old-feature-set validator definition
+is not execution of an old binary. Backward-binary, mixed-artifact, restore and
+cold continuation qualification have not been run for this profile. The
+[implementation boundary](design/native-live-allocation-first-lane-source-unit.md)
+also records the unimplemented RegistryAfterAllocation/repeated-cohort and
+shared-history capacity gates; this profile does not establish scalable
+add-node delivery.

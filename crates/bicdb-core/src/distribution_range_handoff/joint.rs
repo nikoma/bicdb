@@ -50,13 +50,18 @@ pub(crate) use materialized::{
 mod remote_new;
 #[cfg(feature = "tls-replication")]
 pub(crate) use remote_new::{
-    NativeRemoteDecisionAdmission, NativeRemoteDecisionBindingV1, NativeRemoteDecisionReceiptV1,
-    NativeRemoteDecisionSourceData, NativeRemoteDecisionSourceRequestV1,
+    NativeMetadataOwnerCatalogueScope, NativeRemoteActivatedMetadataProof,
+    NativeRemoteAllOpenQuorum, NativeRemoteAllOpenRetirementAdmission, NativeRemoteAllOpenRound,
+    NativeRemoteAllReleasedQuorum, NativeRemoteAllReleasedRound, NativeRemoteCatalogueDecisionV1,
+    NativeRemoteCatalogueRound, NativeRemoteDecisionAdmission, NativeRemoteDecisionBindingV1,
+    NativeRemoteDecisionReceiptV1, NativeRemoteDecisionSourceData,
+    NativeRemoteDecisionSourceRequestV1, NativeRemoteDualDurableDecision,
     NativeRemoteJointDecisionCertificate, NativeRemoteJointDecisionCertificateRound,
     NativeRemoteNewFactSetV1, NativeRemoteNewHandoffV1, NativeRemoteNewMaterializedQuorum,
     NativeRemoteNewOperationV1, NativeRemoteNewParticipant, NativeRemoteNewPinHandoffPermit,
     NativeRemoteNewReplyV1, NativeRemoteNewRequestV1, NativeRemoteNewRound,
-    NativeRemoteNewSnapshotV1, NativeRemoteNewTargetPinIssuance,
+    NativeRemoteNewSnapshotV1, NativeRemoteNewTargetPinIssuance, NativeRemoteOldRetirementSlot,
+    NativeRemotePreparedQuorum, NativeRemotePreparedRound, NativeRemoteServingReadAdmission,
 };
 
 #[cfg(feature = "tls-replication")]
@@ -83,10 +88,19 @@ pub(crate) use bridge::{
     NativeJointPreparedServingVoteData, NativeJointPublishedServingQuorum,
     NativeJointReleaseAdmission, NativeJointReleaseContinuation, NativeJointReleasePhaseQuorum,
     NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
-    NativeJointServingPublicationRound,
+    NativeJointServingPublicationRound, NativeRemotePreparedObservation,
 };
 
 #[cfg(test)]
 mod trace;
 #[cfg(test)]
 pub(crate) use trace::{NativeJointPhaseTrace, NativeRefreshTraceContext};
+
+#[cfg(feature = "tls-replication")]
+pub(crate) use bridge::{NativeRemoteBridgeAdmission, NativeRemoteBridgeReadAdmission};
+
+#[cfg(feature = "tls-replication")]
+pub(crate) use bridge::NativeRemoteOpenObservation;
+
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_new::{NativeRemoteBridgeQuorum, NativeRemoteBridgeRound};

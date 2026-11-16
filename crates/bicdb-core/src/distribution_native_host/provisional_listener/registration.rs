@@ -10,10 +10,23 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 mod assigned_data;
+mod first_catalogue_certification;
+mod first_coordinator;
+#[cfg(test)]
+pub(in crate::distribution_native_host) use first_catalogue_certification::test_cuts::arm as test_arm_remote_metadata_head_drift;
+pub(crate) use first_catalogue_certification::NativeFirstCatalogueCertificationIntent;
+pub(crate) use first_catalogue_certification::NativeRemoteActivationScope;
+pub(crate) use first_catalogue_certification::NativeRemoteMembershipScope;
 mod initial_data;
 mod remote_new_metadata;
+mod remote_serving_metadata;
+mod remote_serving_owner;
+pub(crate) use remote_serving_owner::NativeRemoteLocalServingPolicy;
+mod remote_serving_successor_read;
 pub(crate) use assigned_data::NativeAssignedDataAdmission;
 use assigned_data::NativeAssignedDataHost;
+pub(crate) use first_coordinator::NativeFirstCoordinatorAction;
+pub(crate) use remote_serving_successor_read::NativeRemoteSuccessorReadRegistration;
 mod data_owner;
 mod joined_data;
 pub(crate) use data_owner::NativeDataOwnerAdmission;
@@ -137,12 +150,20 @@ impl NativeMetadataRegistrationController {
     }
     pub(crate) fn bootstrap(&self, parent: &CancellationToken) -> Result<ClusterBootstrapSnapshot> {
         parent.check()?;
-        let actual = self
-            .backend
-            .service
-            .try_lock()
-            .ok_or_else(|| invalid("native bootstrap service busy"))?
-            .listener_open_guard();
+        let actual = if parent.deadline().is_some() {
+            // Bootstrap routing DATA only. Reuse the caller's finite request;
+            // release the actual service guard before acquiring metadata.
+            ClusterDataNodeService::capture_actual_listener_identity_waiting(
+                &self.backend.service,
+                parent,
+            )?
+        } else {
+            self.backend
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("native bootstrap service busy"))?
+                .listener_open_guard()
+        };
         let store = self.backend.lock_metadata(parent)?;
         store.require_listener_database(&actual)?;
         let status = store.status();
@@ -416,6 +437,17 @@ pub(crate) struct NativeMetadataControlHost {
     backend: Arc<NativeMetadataControlBackend>,
     data: Option<NativeInitialDataHost>,
     data_process: std::sync::OnceLock<CancellationToken>,
+    remote_serving_process: std::sync::OnceLock<CancellationToken>,
+    #[cfg(test)]
+    remote_preparation_test: BTreeMap<crate::RangeId, u8>,
+    #[cfg(test)]
+    remote_host_poll_cuts: BTreeMap<crate::RangeId, serde_json::Value>,
+    remote_serving:
+        BTreeMap<(crate::RangeId, Uuid), remote_serving_owner::NativeRemoteLocalServing>,
+    remote_reference_retirement:
+        BTreeMap<(crate::RangeId, Uuid), remote_serving_owner::NativeRemoteReferenceRetirement>,
+    // Scheduling DATA only: never a native/metadata/readiness grant.
+    remote_serving_poll_cursor: Option<(crate::RangeId, Uuid)>,
     replica: Option<NativeRegisteredReplicaReceiver>,
     assigned: Option<NativeAssignedDataHost>,
     joined: Option<NativeJoinedDataHost>,
@@ -425,6 +457,11 @@ pub(crate) struct NativeMetadataControlHost {
     listener: Option<ClusterDataServerHandle>,
     network: ClusterNetworkTransportConfig,
     config: DistributionConfig,
+    first_coordinators: BTreeMap<crate::RangeId, first_coordinator::NativeFirstCoordinator>,
+    remote_catalogue_certifications: BTreeMap<
+        (crate::distribution::RelocationId, Uuid),
+        first_catalogue_certification::NativeFirstCatalogueCertificationAttempt,
+    >,
 }
 impl NativeMetadataControlHost {
     pub(crate) fn new(
@@ -439,6 +476,14 @@ impl NativeMetadataControlHost {
             ))),
             data: None,
             data_process: std::sync::OnceLock::new(),
+            remote_serving_process: std::sync::OnceLock::new(),
+            remote_serving: BTreeMap::new(),
+            remote_reference_retirement: BTreeMap::new(),
+            remote_serving_poll_cursor: None,
+            #[cfg(test)]
+            remote_preparation_test: BTreeMap::new(),
+            #[cfg(test)]
+            remote_host_poll_cuts: BTreeMap::new(),
             replica: None,
             assigned: None,
             joined: None,
@@ -448,6 +493,8 @@ impl NativeMetadataControlHost {
             listener: None,
             network,
             config,
+            first_coordinators: BTreeMap::new(),
+            remote_catalogue_certifications: BTreeMap::new(),
         }
     }
     pub(in crate::distribution_native_host) fn from_registered_member(
@@ -460,6 +507,14 @@ impl NativeMetadataControlHost {
             backend: Arc::new(backend),
             data: None,
             data_process: std::sync::OnceLock::new(),
+            remote_serving_process: std::sync::OnceLock::new(),
+            remote_serving: BTreeMap::new(),
+            remote_reference_retirement: BTreeMap::new(),
+            remote_serving_poll_cursor: None,
+            #[cfg(test)]
+            remote_preparation_test: BTreeMap::new(),
+            #[cfg(test)]
+            remote_host_poll_cuts: BTreeMap::new(),
             replica: None,
             assigned: None,
             joined: None,
@@ -469,6 +524,8 @@ impl NativeMetadataControlHost {
             listener: None,
             network,
             config,
+            first_coordinators: BTreeMap::new(),
+            remote_catalogue_certifications: BTreeMap::new(),
         }
     }
     pub(in crate::distribution_native_host) fn is_running(&self) -> bool {
@@ -811,6 +868,39 @@ impl NativeMetadataControlHost {
         }
         Ok(())
     }
+    pub(in crate::distribution_native_host) fn capture_remote_preparation_process(
+        &self,
+        participant: &Arc<crate::distribution_range_handoff::NativeRemoteNewParticipant>,
+        original_step: &crate::distribution_native_host::remote_serving::NativeRemoteServingIngress,
+    ) -> Result<Arc<crate::distribution_native_host::NativeRemotePreparationProcess>> {
+        original_step.require_request()?;
+        participant.serving_queue_for_original(
+            &original_step.request,
+            &original_step.role,
+            &original_step.own,
+            original_step.business,
+            &original_step.point,
+        )?;
+        participant.require_lifetime_memory()?;
+        if participant.snapshot().node_id != self.backend.node_id {
+            return Err(invalid(
+                "remote preparation producer is not this actual recipient host",
+            ));
+        }
+        let actual = self
+            .data_process
+            .get()
+            .ok_or_else(|| invalid("remote preparation original host process absent"))?;
+        actual.check()?;
+        let process = self.remote_serving_process.get_or_init(|| actual.child());
+        process.check()?;
+        crate::distribution_native_host::NativeRemotePreparationProcess::capture_from_original(
+            process,
+            &self.backend.service,
+            participant,
+            &original_step.request.decision_sha256,
+        )
+    }
     pub(crate) fn maintain_joins(
         &self,
         parent: &CancellationToken,
@@ -825,12 +915,21 @@ impl NativeMetadataControlHost {
         parent: &CancellationToken,
     ) -> Result<crate::MetadataConsensusStatus> {
         parent.check()?;
-        let actual = self
-            .backend
-            .service
-            .try_lock()
-            .ok_or_else(|| invalid("native control status service busy"))?
-            .listener_open_guard();
+        let actual = if parent.deadline().is_some() {
+            // Status only: a finite action may have already completed its
+            // transition. Wait on its SAME token instead of replaying it.
+            ClusterDataNodeService::capture_actual_listener_identity_waiting(
+                &self.backend.service,
+                parent,
+            )?
+        } else {
+            // Preserve the existing instantaneous unbounded-caller API.
+            self.backend
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("native control status service busy"))?
+                .listener_open_guard()
+        };
         let store = self.backend.lock_metadata(parent)?;
         store.require_listener_database(&actual)?;
         Ok(store.status())
@@ -856,6 +955,16 @@ impl NativeMetadataControlHost {
         self.backend.heartbeat(parent)
     }
     pub(crate) fn stop(&mut self, parent: &CancellationToken) -> Result<()> {
+        // Revoke continuation use before any fallible worker/listener stop.
+        if let Some(process) = self.remote_serving_process.get() {
+            process.cancel();
+        }
+        for attempt in self.remote_catalogue_certifications.values_mut() {
+            attempt.stopped = true;
+        }
+        for operation in self.first_coordinators.values() {
+            operation.stop_original_process();
+        }
         if let Some(assigned) = self.assigned.as_mut() {
             assigned.stop(parent)?;
         }

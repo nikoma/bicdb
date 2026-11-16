@@ -178,7 +178,7 @@ fn extent_epochs_survive_reopen_and_distinguish_writes_after_the_cut() {
 }
 
 #[test]
-fn tracked_page_format_fences_old_writers_and_survives_relayout() {
+fn mandatory_tracked_profiles_preserve_relayout_and_old_magic_separation() {
     let root = tempfile::tempdir().unwrap();
     let store = open(root.path());
     let page_size = store.page_size();
@@ -192,19 +192,43 @@ fn tracked_page_format_fences_old_writers_and_survives_relayout() {
         let bytes = std::fs::read(&path).unwrap();
         bytes[PAGE_HEADER_BYTES..PAGE_HEADER_BYTES + 8].to_vec()
     };
-    assert_eq!(magic(), b"BICDBPG3"); // old engines recognize only PG0/PG2
+    // This is a byte/source compatibility assertion, not historical-binary
+    // execution: main519's literal accepted set was PG0/PG2/PG3/PG4.
+    let pre_gate_magics = [*b"BICDBPG\0", *b"BICDBPG2", *b"BICDBPG3", *b"BICDBPG4"];
+    let assert_current_profile = |expected: &[u8; 8], stage: &str| {
+        let actual = magic();
+        eprintln!("ACTUAL_MANDATORY_TRACKED_PROFILE stage={stage} bytes={actual:?}");
+        assert_eq!(
+            actual.as_slice(),
+            expected.as_slice(),
+            "exact mandatory profile at {stage}"
+        );
+        assert!(
+            pre_gate_magics
+                .iter()
+                .all(|old| old.as_slice() != actual.as_slice()),
+            "current tracked output must be outside the pre-gate accepted byte set at {stage}"
+        );
+        actual
+    };
+    let tracked_segmented = assert_current_profile(b"BICDBPG7", "initial-tracked-segmented");
     let store = PageStore::open_existing_auto(&path, true).unwrap();
     store.flush().unwrap();
     drop(store);
-    assert_eq!(magic(), b"BICDBPG3");
+    assert_current_profile(b"BICDBPG7", "reopened-tracked-segmented");
     bicdb_page::convert_extent_layout(&path, page_size, 0, true).unwrap();
-    assert_eq!(magic(), b"BICDBPG4");
+    let tracked_monolithic = assert_current_profile(b"BICDBPG8", "relayout-tracked-monolithic");
+    assert_ne!(
+        tracked_segmented, tracked_monolithic,
+        "tracking and reader fencing must preserve the layout distinction"
+    );
     let store = PageStore::open_existing_auto(&path, true).unwrap();
     assert_eq!(store.extent_pages(), 0);
     drop(store);
     bicdb_page::convert_extent_layout(&path, page_size, 1024 * 1024, true).unwrap();
-    assert_eq!(magic(), b"BICDBPG3");
+    assert_current_profile(b"BICDBPG7", "relayout-back-tracked-segmented");
     let store = PageStore::open_existing_auto(&path, true).unwrap();
+    assert_eq!(store.extent_pages(), (1024 * 1024) / u64::from(page_size));
     let snapshot = store
         .begin_backup_snapshot(
             &root.path().join("after-relayout"),

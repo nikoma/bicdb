@@ -217,6 +217,87 @@ fn sha256_hex(value: &str) -> bool {
             .bytes()
             .all(|v| v.is_ascii_digit() || (b'a'..=b'f').contains(&v))
 }
+
+#[cfg(feature = "tls-replication")]
+impl DistributionStore {
+    /// Distinct actual metadata-owner remote proof; never a JSON-to-local-D
+    /// conversion. Only the activation record changes, not membership/data.
+    pub(crate) fn record_native_remote_joint_activation(
+        &mut self,
+        scope: &crate::distribution_native_host::NativeRemoteActivationScope<'_>,
+        actor: &ClusterNodeId,
+        now_ms: u64,
+    ) -> Result<()> {
+        if !self.ephemeral {
+            return Err(cluster_error(
+                "remote activation requires actual consensus-proposal view",
+            ));
+        }
+        self.ensure_actor(actor)?;
+        scope.require_view(&self.topology, actor)?;
+        let mf = scope.manifest();
+        let plan = self
+            .topology
+            .relocations
+            .get(&mf.relocation_id)
+            .ok_or_else(|| cluster_error("remote activation original relocation absent"))?;
+        let record = plan
+            .native_joint_handoff_v1
+            .as_ref()
+            .ok_or_else(|| cluster_error("remote activation original decision absent"))?;
+        let range = self
+            .topology
+            .range_by_id(mf.capture_range.id)
+            .ok_or_else(|| cluster_error("remote activation current range absent"))?;
+        if record.immutable_binding() != scope.certified().immutable_binding()
+            || record.stage() != NativeJointHandoffStageV1::AwaitingActivation
+            || plan.id != mf.relocation_id
+            || plan.plan_id != mf.plan_id
+            || plan.range_id != mf.capture_range.id
+            || plan.learner_epoch != mf.capture_range.epoch
+            || plan.handoff_session.as_ref().is_none_or(|session| {
+                session.session_id != mf.handoff_session || session.nonce != mf.nonce
+            })
+            || plan.phase != RelocationPhase::CleaningUp
+            || plan.promoted_epoch != Some(mf.activation_range.epoch)
+            || plan.source.as_ref() != Some(scope.retired_source()?)
+            || plan.target != mf.target_id
+            || crate::distribution_native_read::canonical_range(range)
+                != crate::distribution_native_read::canonical_range(&mf.activation_range)
+            || !range.replicas.iter().any(|replica| {
+                replica.id == plan.target_replica_id
+                    && replica.node_id == mf.target_id
+                    && replica.role == RangeReplicaRole::Voter
+            })
+        {
+            return Err(cluster_error(
+                "remote activation changed exact certified final membership",
+            ));
+        }
+        let mut next = record.clone();
+        next.record_activation(
+            scope.certified().decision_sha256(),
+            scope.activation_sha256(),
+        )?;
+        let plan = self
+            .topology
+            .relocations
+            .get_mut(&mf.relocation_id)
+            .unwrap();
+        plan.native_joint_handoff_v1 = Some(next);
+        plan.updated_at_ms = now_ms;
+        scope.require_request()?;
+        self.commit_change(
+            actor.clone(),
+            now_ms,
+            format!(
+                "{} actual remote ALL-released activation recorded; source retirement pending",
+                mf.relocation_id
+            ),
+        )?;
+        Ok(())
+    }
+}
 /// Sequential proposals and authoritative snapshot jumps preserve every known
 /// decision and tombstone. Stage data alone never authorizes a runtime action.
 pub(crate) fn validate_native_joint_handoff_preservation(
@@ -718,6 +799,138 @@ impl DistributionStore {
     }
 }
 
+#[cfg(feature = "tls-replication")]
+impl DistributionStore {
+    /// Membership-only transition from the SAME actual metadata owner's
+    /// certified history. The scope has no DTO constructor and does not mint a
+    /// physical preparation, Open, writer, or release grant.
+    pub(crate) fn advance_native_remote_membership_frozen(
+        &mut self,
+        scope: &crate::distribution_native_host::NativeRemoteMembershipScope<'_>,
+        actor: &ClusterNodeId,
+        now_ms: u64,
+    ) -> Result<u64> {
+        if !self.ephemeral {
+            return Err(cluster_error(
+                "remote membership requires actual consensus proposal view",
+            ));
+        }
+        self.ensure_actor(actor)?;
+        scope.require_view(&self.topology, actor)?;
+        let mf = scope.manifest();
+        let plan = self
+            .topology
+            .relocations
+            .get(&mf.relocation_id)
+            .ok_or_else(|| cluster_error("remote membership original relocation absent"))?;
+        let record = plan
+            .native_joint_handoff_v1
+            .as_ref()
+            .ok_or_else(|| cluster_error("remote membership actual certification absent"))?;
+        if record.immutable_binding() != scope.certified().immutable_binding()
+            || plan.plan_id != mf.plan_id
+            || plan.range_id != mf.capture_range.id
+            || plan.learner_epoch != mf.capture_range.epoch
+            || plan.target != mf.target_id
+            || plan
+                .handoff_session
+                .as_ref()
+                .is_none_or(|s| s.session_id != mf.handoff_session || s.nonce != mf.nonce)
+        {
+            return Err(cluster_error(
+                "remote membership changed original certified plan/decision",
+            ));
+        }
+        let canonical = |r: &RangeDescriptor| {
+            let mut r = r.clone();
+            r.approximate_bytes = 0;
+            r.approximate_qps = 0;
+            r.replicas.sort_by_key(|x| x.id);
+            r
+        };
+        let mut union = mf.capture_range.clone();
+        let target = union
+            .replicas
+            .iter_mut()
+            .find(|r| r.id == plan.target_replica_id && r.node_id == mf.target_id)
+            .ok_or_else(|| cluster_error("remote membership original target replica absent"))?;
+        if target.role != RangeReplicaRole::Learner {
+            return Err(cluster_error(
+                "remote membership original target was not learner",
+            ));
+        }
+        target.role = RangeReplicaRole::Voter;
+        union.epoch = union
+            .epoch
+            .checked_add(1)
+            .ok_or_else(|| cluster_error("remote union epoch overflow"))?;
+        union.leader = mf.activation_range.leader.clone();
+        let current = self
+            .topology
+            .range_by_id(mf.capture_range.id)
+            .ok_or_else(|| cluster_error("remote membership original range absent"))?;
+        let (expected, next, stage, phase) = match record.stage {
+            NativeJointHandoffStageV1::Certified => (
+                &mf.capture_range,
+                union.clone(),
+                NativeJointHandoffStageV1::PromotedFrozen,
+                RelocationPhase::Promoted,
+            ),
+            NativeJointHandoffStageV1::PromotedFrozen => (
+                &union,
+                mf.activation_range.clone(),
+                NativeJointHandoffStageV1::AwaitingActivation,
+                RelocationPhase::CleaningUp,
+            ),
+            _ => {
+                return Err(cluster_error(
+                    "remote membership is not at the exact original frozen predecessor stage",
+                ))
+            }
+        };
+        if canonical(current) != canonical(expected)
+            || next.epoch
+                != current
+                    .epoch
+                    .checked_add(1)
+                    .ok_or_else(|| cluster_error("remote membership epoch overflow"))?
+        {
+            return Err(cluster_error(
+                "remote membership changed exact original current/next configuration",
+            ));
+        }
+        let epoch = next.epoch;
+        let range = self
+            .topology
+            .ranges
+            .values_mut()
+            .find(|r| r.id == mf.capture_range.id)
+            .unwrap();
+        *range = next;
+        let plan = self
+            .topology
+            .relocations
+            .get_mut(&mf.relocation_id)
+            .unwrap();
+        plan.phase = phase;
+        plan.promoted_epoch = Some(epoch);
+        plan.updated_at_ms = now_ms;
+        plan.native_joint_handoff_v1.as_mut().unwrap().stage = stage;
+        // Fresh request remains mandatory after planning/allocation. Physical
+        // permissions remain fenced throughout both metadata-only stages.
+        scope.require_request()?;
+        self.commit_change(
+            actor.clone(),
+            now_ms,
+            format!(
+                "{} native remote membership {stage:?}; all writers remain frozen",
+                mf.relocation_id
+            ),
+        )?;
+        Ok(epoch)
+    }
+}
+
 impl DistributionStore {
     pub(super) fn require_legacy_relocation_mutation(
         &self,
@@ -755,6 +968,136 @@ impl DistributionStore {
             }
         }
         Ok(())
+    }
+}
+
+// DISTINCT actual remote aggregation; no constructor or conversion into the
+// local NativeJointDurableDecision. This stage leaves all writers frozen.
+#[cfg(feature = "tls-replication")]
+impl NativeJointHandoffMetadataV1 {
+    pub(crate) fn from_actual_remote_decision(
+        proof: &crate::distribution_range_handoff::NativeRemoteDualDurableDecision,
+    ) -> Result<Self> {
+        proof.require_current()?;
+        let actual = proof.data();
+        let result = Self {
+            version: 1,
+            session_id: actual.promise().session_id,
+            nonce: actual.promise().nonce,
+            decision_sha256: actual.checksum_sha256().into(),
+            old_configuration_sha256: actual.promise().old_config_sha256.clone(),
+            new_configuration_sha256: actual.promise().new_config_sha256.clone(),
+            range_index: actual.range_index(),
+            logical_genesis_sha256: actual.logical_genesis_sha256().into(),
+            logical_history_sha256: actual.logical_history_sha256().into(),
+            source_snapshot_db_sequence: actual.source_snapshot_db_sequence()?,
+            target_local_snapshot_db_sequence: actual.target_local_snapshot_db_sequence()?,
+            stage: NativeJointHandoffStageV1::Certified,
+            activated_quorum_sha256: None,
+            source_cleanup_sha256: None,
+        };
+        Ok(result)
+    }
+}
+#[cfg(feature = "tls-replication")]
+impl DistributionStore {
+    fn require_remote_joint_metadata_observation(
+        &self,
+        proof: &crate::distribution_range_handoff::NativeRemoteDualDurableDecision,
+        fresh: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+    ) -> Result<()> {
+        if !self.ephemeral {
+            return Err(cluster_error("native joint metadata requires an ephemeral consensus-proposal view; local topology-file publication is insufficient"));
+        }
+        fresh.require_live_request(business)?;
+        proof.require_current()?;
+        if fresh.requester_node_id() != proof.actual_observer()
+            || fresh.metadata_leader_id() != proof.actual_observer()
+        {
+            return Err(cluster_error(
+                "remote handoff proof must be independently fetched by the actual metadata leader",
+            ));
+        }
+        let observed = fresh.committed_topology(business)?;
+        if observed != &self.topology {
+            return Err(cluster_error(
+                "joint metadata builder is not the actual fresh committed topology",
+            ));
+        }
+        proof
+            .data()
+            .require_metadata_domain(observed, fresh.restore_activation(business)?)
+    }
+    pub(crate) fn certify_native_remote_joint_handoff(
+        &mut self,
+        proof: &crate::distribution_range_handoff::NativeRemoteDualDurableDecision,
+        fresh: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        actor: &ClusterNodeId,
+        now_ms: u64,
+    ) -> Result<bool> {
+        self.ensure_actor(actor)?;
+        self.require_remote_joint_metadata_observation(proof, fresh, business)?;
+        let data = proof.data();
+        let id = data.promise().relocation_id;
+        let canonical = |range: &RangeDescriptor| {
+            let mut r = range.clone();
+            r.approximate_bytes = 0;
+            r.approximate_qps = 0;
+            r.replicas.sort_by_key(|r| r.id);
+            r
+        };
+        let range = self
+            .topology
+            .range_by_id(data.old_range().id)
+            .ok_or_else(|| cluster_error("joint old range absent"))?;
+        let record = NativeJointHandoffMetadataV1::from_actual_remote_decision(proof)?;
+        if let Some(existing) = &self.topology.relocations[&id].native_joint_handoff_v1 {
+            if existing.immutable_binding() != record.immutable_binding() {
+                return Err(cluster_error(
+                    "different native joint decision already pending",
+                ));
+            }
+            return Ok(false);
+        }
+        if canonical(range) != *data.old_range() {
+            return Err(cluster_error(
+                "joint old metadata configuration changed before certification",
+            ));
+        }
+        let plan = self
+            .topology
+            .relocations
+            .get_mut(&id)
+            .ok_or_else(|| cluster_error("joint plan absent"))?;
+        if !matches!(
+            plan.phase,
+            RelocationPhase::LearnerAllocated
+                | RelocationPhase::SnapshotCopying
+                | RelocationPhase::CatchingUp
+                | RelocationPhase::ReadyToPromote
+        ) {
+            return Err(cluster_error(
+                "joint certification is not at its exact pending learner phase",
+            ));
+        }
+        plan.native_joint_handoff_v1 = Some(record);
+        plan.phase = RelocationPhase::ReadyToPromote;
+        plan.updated_at_ms = now_ms;
+        plan.last_error = None;
+        plan.resume_phase = None;
+        self.topology.format_version = self
+            .topology
+            .format_version
+            .max(NATIVE_JOINT_HANDOFF_TOPOLOGY_FORMAT_VERSION);
+        fresh.require_live_request(business)?;
+        self.commit_change(
+            actor.clone(),
+            now_ms,
+            format!("{id} native OLD/NEW data decision durably certified"),
+        )?;
+        Ok(true)
     }
 }
 

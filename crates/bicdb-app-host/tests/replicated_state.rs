@@ -17,6 +17,8 @@ use bicdb_pgwire::{AllowedStandby, FailoverConfig, HaPeer, HaServerConfig, HaSer
 use bicdb_sql::SqlSession;
 use serde_json::json;
 
+mod explicit_port_owner;
+
 fn ports(count: usize) -> Vec<u16> {
     let listeners: Vec<_> = (0..count)
         .map(|_| TcpListener::bind("127.0.0.1:0").unwrap())

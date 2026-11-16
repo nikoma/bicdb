@@ -1,0 +1,1564 @@
+{
+  "schema_version": 1,
+  "observed_at_utc": "2026-11-15T20:14:44.189776+00:00",
+  "classification": "SOURCE/DESIGN ONLY; no distributed SQL runtime feature, compiler/test/CI/physical execution, version, push or deployment produced",
+  "sources": {
+    "main502": {
+      "sha": "629857f5eaaeee5f5a9124d505406d8cd6a29535",
+      "tree": "33480d5ab92f676ded81906093f1d648cf96e860",
+      "version": "1.0.502-beta"
+    },
+    "main519": {
+      "sha": "587dd6e4775e454cc9e8224d5fed76e8795c6ff6",
+      "tree": "e88a49e83f7f92fc1fea6293b88eb3bfb21bf7c9",
+      "version": "1.0.519-beta"
+    },
+    "candidate_e2": {
+      "sha": "e2adb410befd41bd475f015fd6590c33d1afaa4f",
+      "tree": "11e9da9b2888e9be5f7f7e4cb5c0ff00515a36f4",
+      "version": "1.0.520-beta"
+    }
+  },
+  "source_pins": [
+    {
+      "path": "crates/bicdb-pgwire/src/lib.rs",
+      "versions": {
+        "main502": {
+          "exists": true,
+          "blob": "2b5eb58f812ac2352ad80ec87601f1d865bdd6ab",
+          "bytes": 210356,
+          "lines": 5362,
+          "sha256": "f1bae040c48b7aa97fda0d1d59e25c194173d395d35044c731bd40e801d62de9"
+        },
+        "main519": {
+          "exists": true,
+          "blob": "2b5eb58f812ac2352ad80ec87601f1d865bdd6ab",
+          "bytes": 210356,
+          "lines": 5362,
+          "sha256": "f1bae040c48b7aa97fda0d1d59e25c194173d395d35044c731bd40e801d62de9"
+        },
+        "candidate_e2": {
+          "exists": true,
+          "blob": "be13efaeef19b8e3179575d67aeefcdec230758c",
+          "bytes": 210710,
+          "lines": 5367,
+          "sha256": "674131a7eacf002e5a91b589d9d5caf4a0be14a8ace36a186576e507b1582424"
+        }
+      },
+      "same_main519_e2": false,
+      "same_main502_main519": true
+    },
+    {
+      "path": "crates/bicdb-pgwire/src/query_exec.rs",
+      "versions": {
+        "main502": {
+          "exists": true,
+          "blob": "5b8d412d85bd16e34dfdff0c05f6c032678ba8d0",
+          "bytes": 14122,
+          "lines": 418,
+          "sha256": "5ce7b5fd977387e88cd9942f7d148be24b1053fa073f1369cbc0b2cf959f87d0"
+        },
+        "main519": {
+          "exists": true,
+          "blob": "5b8d412d85bd16e34dfdff0c05f6c032678ba8d0",
+          "bytes": 14122,
+          "lines": 418,
+          "sha256": "5ce7b5fd977387e88cd9942f7d148be24b1053fa073f1369cbc0b2cf959f87d0"
+        },
+        "candidate_e2": {
+          "exists": true,
+          "blob": "5b8d412d85bd16e34dfdff0c05f6c032678ba8d0",
+          "bytes": 14122,
+          "lines": 418,
+          "sha256": "5ce7b5fd977387e88cd9942f7d148be24b1053fa073f1369cbc0b2cf959f87d0"
+        }
+      },
+      "same_main519_e2": true,
+      "same_main502_main519": true
+    },
+    {
+      "path": "crates/bicdb-pgwire/src/server_cluster.rs",
+      "versions": {
+        "main502": {
+          "exists": true,
+          "blob": "ae2b588f426f2f03173e571eab12e7974730f3dd",
+          "bytes": 123451,
+          "lines": 3261,
+          "sha256": "7840c1c93d88e980c49f7e51fb97978b8dac5dd95201cfd41a9993aa44201b2f"
+        },
+        "main519": {
+          "exists": true,
+          "blob": "ae2b588f426f2f03173e571eab12e7974730f3dd",
+          "bytes": 123451,
+          "lines": 3261,
+          "sha256": "7840c1c93d88e980c49f7e51fb97978b8dac5dd95201cfd41a9993aa44201b2f"
+        },
+        "candidate_e2": {
+          "exists": true,
+          "blob": "ae2b588f426f2f03173e571eab12e7974730f3dd",
+          "bytes": 123451,
+          "lines": 3261,
+          "sha256": "7840c1c93d88e980c49f7e51fb97978b8dac5dd95201cfd41a9993aa44201b2f"
+        }
+      },
+      "same_main519_e2": true,
+      "same_main502_main519": true
+    },
+    {
+      "path": "crates/bicdb-pgwire/src/sql_parsing.rs",
+      "versions": {
+        "main502": {
+          "exists": true,
+          "blob": "148ad58c55a540a89f2b6d341dc5da3ddc2c0ed1",
+          "bytes": 165485,
+          "lines": 4277,
+          "sha256": "5293602e4e9361060b23d7d7f60fd567dcb4073b451aa7041a5984b7cb5211ef"
+        },
+        "main519": {
+          "exists": true,
+          "blob": "148ad58c55a540a89f2b6d341dc5da3ddc2c0ed1",
+          "bytes": 165485,
+          "lines": 4277,
+          "sha256": "5293602e4e9361060b23d7d7f60fd567dcb4073b451aa7041a5984b7cb5211ef"
+        },
+        "candidate_e2": {
+          "exists": true,
+          "blob": "e46bff129a02bb67acae604cdbc854b7c6eea479",
+          "bytes": 168117,
+          "lines": 4331,
+          "sha256": "2b62b18d1161772c8831a90c8f3f83f4d4551129477aee9eca74016fbf4e813d"
+        }
+      },
+      "same_main519_e2": false,
+      "same_main502_main519": true
+    },
+    {
+      "path": "crates/bicdb-sql/src/session.rs",
+      "versions": {
+        "main502": {
+          "exists": true,
+          "blob": "8d64c1dd11a6ef44f9ba2162e692e3fce163ff64",
+          "bytes": 282944,
+          "lines": 7198,
+          "sha256": "86d1f7ebf6b1b4ca0aac15d701088b2b9b07e742994ad0f2c350228b89902886"
+        },
+        "main519": {
+          "exists": true,
+          "blob": "8d64c1dd11a6ef44f9ba2162e692e3fce163ff64",
+          "bytes": 282944,
+          "lines": 7198,
+          "sha256": "86d1f7ebf6b1b4ca0aac15d701088b2b9b07e742994ad0f2c350228b89902886"
+        },
+        "candidate_e2": {
+          "exists": true,
+          "blob": "f1e0e00abca335f85d293ee9c1f0701f98899236",
+          "bytes": 285054,
+          "lines": 7239,
+          "sha256": "407094b50ce4753b71e32562255f8c17d9ffd21ce9ebbe227c48bfaab2e27d1e"
+        }
+      },
+      "same_main519_e2": false,
+      "same_main502_main519": true
+    },
+    {
+      "path": "crates/bicdb-sql/src/session/committed_error_tests.rs",
+      "versions": {
+        "main502": {
+          "exists": false
+        },
+        "main519": {
+          "exists": false
+        },
+        "candidate_e2": {
+          "exists": true,
+          "blob": "e8e61b5eccc247cfd97a4d5ad1d96f8d45c0a7fb",
+          "bytes": 6828,
+          "lines": 170,
+          "sha256": "e62ca0841453b1b37da10b88a457a8a0caf35326fb2cd8d4715a193ffb78bf43"
+        }
+      },
+      "same_main519_e2": null,
+      "same_main502_main519": null
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_query.rs",
+      "versions": {
+        "main502": {
+          "exists": true,
+          "blob": "2c9390f0b0f75789160df64129f9da2b142767ec",
+          "bytes": 61225,
+          "lines": 1762,
+          "sha256": "3f4ba08a2694662a163f7ddb7cd41b2ac88f5c1539ac18483d4eb69caedbaa44"
+        },
+        "main519": {
+          "exists": true,
+          "blob": "2c9390f0b0f75789160df64129f9da2b142767ec",
+          "bytes": 61225,
+          "lines": 1762,
+          "sha256": "3f4ba08a2694662a163f7ddb7cd41b2ac88f5c1539ac18483d4eb69caedbaa44"
+        },
+        "candidate_e2": {
+          "exists": true,
+          "blob": "2c9390f0b0f75789160df64129f9da2b142767ec",
+          "bytes": 61225,
+          "lines": 1762,
+          "sha256": "3f4ba08a2694662a163f7ddb7cd41b2ac88f5c1539ac18483d4eb69caedbaa44"
+        }
+      },
+      "same_main519_e2": true,
+      "same_main502_main519": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_gateway.rs",
+      "versions": {
+        "main502": {
+          "exists": true,
+          "blob": "989f312ad7ce4d19d4dfbcb284c80fde99291019",
+          "bytes": 22690,
+          "lines": 632,
+          "sha256": "331ba5f601b8463230224f29bb44c32f2c41b0227564e9c4e76f65eeb68bf4cd"
+        },
+        "main519": {
+          "exists": true,
+          "blob": "989f312ad7ce4d19d4dfbcb284c80fde99291019",
+          "bytes": 22690,
+          "lines": 632,
+          "sha256": "331ba5f601b8463230224f29bb44c32f2c41b0227564e9c4e76f65eeb68bf4cd"
+        },
+        "candidate_e2": {
+          "exists": true,
+          "blob": "989f312ad7ce4d19d4dfbcb284c80fde99291019",
+          "bytes": 22690,
+          "lines": 632,
+          "sha256": "331ba5f601b8463230224f29bb44c32f2c41b0227564e9c4e76f65eeb68bf4cd"
+        }
+      },
+      "same_main519_e2": true,
+      "same_main502_main519": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_routing.rs",
+      "versions": {
+        "main502": {
+          "exists": true,
+          "blob": "ae6b8bd94e308c7a1175d84a246150c8d97c9bd2",
+          "bytes": 32020,
+          "lines": 939,
+          "sha256": "66fc2fe3ba49495af537c1e3f8478cda17f33c83805134dfc00b5b052f891f4b"
+        },
+        "main519": {
+          "exists": true,
+          "blob": "ae6b8bd94e308c7a1175d84a246150c8d97c9bd2",
+          "bytes": 32020,
+          "lines": 939,
+          "sha256": "66fc2fe3ba49495af537c1e3f8478cda17f33c83805134dfc00b5b052f891f4b"
+        },
+        "candidate_e2": {
+          "exists": true,
+          "blob": "ae6b8bd94e308c7a1175d84a246150c8d97c9bd2",
+          "bytes": 32020,
+          "lines": 939,
+          "sha256": "66fc2fe3ba49495af537c1e3f8478cda17f33c83805134dfc00b5b052f891f4b"
+        }
+      },
+      "same_main519_e2": true,
+      "same_main502_main519": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+      "versions": {
+        "main502": {
+          "exists": true,
+          "blob": "8bad54d896c4e727f5696b9f0442a4d49aaa7d93",
+          "bytes": 266694,
+          "lines": 6678,
+          "sha256": "c3c2b3aff37423cfafafb54d3892d4c1989b26602c27b3aa566e2297cb80603b"
+        },
+        "main519": {
+          "exists": true,
+          "blob": "152caa77154cb6654858c2e69375c4bcde1fda14",
+          "bytes": 270615,
+          "lines": 6764,
+          "sha256": "b31bf46bf046aa62df6f2104929890866a150e57d150e38dd97e3e33d1489eb9"
+        },
+        "candidate_e2": {
+          "exists": true,
+          "blob": "497fac9f0704d4e57f93562ffe64e14ccb4935f1",
+          "bytes": 278755,
+          "lines": 6955,
+          "sha256": "2b76024cdb8d6b10e524088af7650719b03d082afb51b8eff491088f691a6311"
+        }
+      },
+      "same_main519_e2": false,
+      "same_main502_main519": false
+    },
+    {
+      "path": "crates/bicdb-core/src/db/record_read_snapshot.rs",
+      "versions": {
+        "main502": {
+          "exists": true,
+          "blob": "2154cc5e975538b2f7dc7ff6aaa322719d713746",
+          "bytes": 19346,
+          "lines": 466,
+          "sha256": "abf6b52158b64bb940a050100f97386a33ce4ae82a648e75eac0742e87f231f7"
+        },
+        "main519": {
+          "exists": true,
+          "blob": "2154cc5e975538b2f7dc7ff6aaa322719d713746",
+          "bytes": 19346,
+          "lines": 466,
+          "sha256": "abf6b52158b64bb940a050100f97386a33ce4ae82a648e75eac0742e87f231f7"
+        },
+        "candidate_e2": {
+          "exists": true,
+          "blob": "2154cc5e975538b2f7dc7ff6aaa322719d713746",
+          "bytes": 19346,
+          "lines": 466,
+          "sha256": "abf6b52158b64bb940a050100f97386a33ce4ae82a648e75eac0742e87f231f7"
+        }
+      },
+      "same_main519_e2": true,
+      "same_main502_main519": true
+    },
+    {
+      "path": "crates/bicdb-core/src/db/collection_write_identity.rs",
+      "versions": {
+        "main502": {
+          "exists": true,
+          "blob": "fd61631e5076395f1a89547a77aef8eae1815a7c",
+          "bytes": 2990,
+          "lines": 83,
+          "sha256": "36cae938d1220ad175190f12715440f65a65d4de3239271df1b4cd3ea00ebb72"
+        },
+        "main519": {
+          "exists": true,
+          "blob": "fd61631e5076395f1a89547a77aef8eae1815a7c",
+          "bytes": 2990,
+          "lines": 83,
+          "sha256": "36cae938d1220ad175190f12715440f65a65d4de3239271df1b4cd3ea00ebb72"
+        },
+        "candidate_e2": {
+          "exists": true,
+          "blob": "fd61631e5076395f1a89547a77aef8eae1815a7c",
+          "bytes": 2990,
+          "lines": 83,
+          "sha256": "36cae938d1220ad175190f12715440f65a65d4de3239271df1b4cd3ea00ebb72"
+        }
+      },
+      "same_main519_e2": true,
+      "same_main502_main519": true
+    },
+    {
+      "path": "crates/bicdb-core/src/db.rs",
+      "versions": {
+        "main502": {
+          "exists": true,
+          "blob": "438bee22451068c9c61936219babcdb254aa8002",
+          "bytes": 1445746,
+          "lines": 36149,
+          "sha256": "7b577da2bc21f000768c020d5d47f49e3da0a0016efdfb7a452eab55a4ae967e"
+        },
+        "main519": {
+          "exists": true,
+          "blob": "eb9bba6622f9cb0b172abf601c7d91f0d9f3a30a",
+          "bytes": 1458492,
+          "lines": 36417,
+          "sha256": "ab3865caa2bc6a80ec5f9364f73d9339a2f7785885f7b01e7f7e902c5aef572c"
+        },
+        "candidate_e2": {
+          "exists": true,
+          "blob": "0c9918943e08997ce2578ccb0ec4176ac89c53e2",
+          "bytes": 1477854,
+          "lines": 36826,
+          "sha256": "4363607189e26ada36581d0d449432e4f22639fd0fbcc2b7a73242315777054d"
+        }
+      },
+      "same_main519_e2": false,
+      "same_main502_main519": false
+    },
+    {
+      "path": "crates/bicdb-core/src/db/spatial_paged.rs",
+      "versions": {
+        "main502": {
+          "exists": true,
+          "blob": "62522c4c0111997a27ec55192a80570ac53e9c3b",
+          "bytes": 145470,
+          "lines": 3123,
+          "sha256": "434f491ca283d1cb57c2d77e7c08ade94f50c4f4147e369bec924578765de228"
+        },
+        "main519": {
+          "exists": true,
+          "blob": "6deffce19caf69f6093e529d56c18ce9003824be",
+          "bytes": 148192,
+          "lines": 3183,
+          "sha256": "065d4258ba052d3bbd5e9ab01f3fb9bf2f28f02b1bc5d8d30249cd3dc031559d"
+        },
+        "candidate_e2": {
+          "exists": true,
+          "blob": "15b8c09735770179625a7533e17f1a5413d0d41d",
+          "bytes": 150714,
+          "lines": 3239,
+          "sha256": "c825ec4873a8e0b3605d1e88632edb335fbd61daf15d871c638f3a5da63ee1c4"
+        }
+      },
+      "same_main519_e2": false,
+      "same_main502_main519": false
+    },
+    {
+      "path": "crates/bicdb-core/src/db/commit_snapshot.rs",
+      "versions": {
+        "main502": {
+          "exists": true,
+          "blob": "fae9e2193bf629bb506dfc8722b3341a4b073dc0",
+          "bytes": 154351,
+          "lines": 3561,
+          "sha256": "9b49e9c869de933674ad68037494f903cbcc9c9f8dad05da5bb997dccb5c309f"
+        },
+        "main519": {
+          "exists": true,
+          "blob": "fae9e2193bf629bb506dfc8722b3341a4b073dc0",
+          "bytes": 154351,
+          "lines": 3561,
+          "sha256": "9b49e9c869de933674ad68037494f903cbcc9c9f8dad05da5bb997dccb5c309f"
+        },
+        "candidate_e2": {
+          "exists": true,
+          "blob": "21b475f70a4f1e2b41a77f8122d9417c7b2f3783",
+          "bytes": 155084,
+          "lines": 3582,
+          "sha256": "495bb933a3c086ce9c9f677acf34d1d43702df7935f5906f7872061a797a6b24"
+        }
+      },
+      "same_main519_e2": false,
+      "same_main502_main519": true
+    },
+    {
+      "path": "crates/bicdb-core/src/db/commit_admission_hook.rs",
+      "versions": {
+        "main502": {
+          "exists": true,
+          "blob": "88114ab5f51ca0a80a328321d901200c975dec6e",
+          "bytes": 3230,
+          "lines": 91,
+          "sha256": "43d409f9035b54e60b5d5c316c59fdd9b9ef2719c9d9f53eebae52e4c7d86a6b"
+        },
+        "main519": {
+          "exists": true,
+          "blob": "a62d70db2acc268b1b350e04f75cd1f5a7466843",
+          "bytes": 4744,
+          "lines": 128,
+          "sha256": "ae1ecf7738fd574b28d98a1488d8e12b4ec2417ecbe8bcd76fd02ce93777d72c"
+        },
+        "candidate_e2": {
+          "exists": true,
+          "blob": "a62d70db2acc268b1b350e04f75cd1f5a7466843",
+          "bytes": 4744,
+          "lines": 128,
+          "sha256": "ae1ecf7738fd574b28d98a1488d8e12b4ec2417ecbe8bcd76fd02ce93777d72c"
+        }
+      },
+      "same_main519_e2": true,
+      "same_main502_main519": false
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/writer_enrollment.rs",
+      "versions": {
+        "main502": {
+          "exists": true,
+          "blob": "07bc3a46c0c8ffa722b0ea6666081b2ba32e25dc",
+          "bytes": 34229,
+          "lines": 805,
+          "sha256": "84b8651483df30a4523d68f8dc9e9a758aa99c315c791647a25178c7e052ed9b"
+        },
+        "main519": {
+          "exists": true,
+          "blob": "16790bdf36111f64c0e16b1117d2b2d6ae1154a3",
+          "bytes": 42913,
+          "lines": 994,
+          "sha256": "3cc0b56d09a5d4380ef8f4c8e31dd8e4103e9f073e08c9b21ac7764ae72a0fb5"
+        },
+        "candidate_e2": {
+          "exists": true,
+          "blob": "94cf5cb314312c6f2040330c8d6ac6b481d190cf",
+          "bytes": 45032,
+          "lines": 1038,
+          "sha256": "acf372d8dc2e4134eb2816a0a6910c2b1e107c892083e84f167432b5193901a5"
+        }
+      },
+      "same_main519_e2": false,
+      "same_main502_main519": false
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_read/strong.rs",
+      "versions": {
+        "main502": {
+          "exists": true,
+          "blob": "a3c25c661bd335894675fcc442b6152493cba416",
+          "bytes": 13010,
+          "lines": 331,
+          "sha256": "1b2cea0c3984168d2db4ef0becfe32f0e3796efe1d42f4e6db973297d433e51e"
+        },
+        "main519": {
+          "exists": true,
+          "blob": "a3c25c661bd335894675fcc442b6152493cba416",
+          "bytes": 13010,
+          "lines": 331,
+          "sha256": "1b2cea0c3984168d2db4ef0becfe32f0e3796efe1d42f4e6db973297d433e51e"
+        },
+        "candidate_e2": {
+          "exists": true,
+          "blob": "a3c25c661bd335894675fcc442b6152493cba416",
+          "bytes": 13010,
+          "lines": 331,
+          "sha256": "1b2cea0c3984168d2db4ef0becfe32f0e3796efe1d42f4e6db973297d433e51e"
+        }
+      },
+      "same_main519_e2": true,
+      "same_main502_main519": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_events.rs",
+      "versions": {
+        "main502": {
+          "exists": true,
+          "blob": "2b74233b982cf253112824bdd76d1052bf69967e",
+          "bytes": 35079,
+          "lines": 863,
+          "sha256": "1a7d2fcef974e75b72392e7bf28fac1c07f57a87c81e5d947ae1a69627ba6079"
+        },
+        "main519": {
+          "exists": true,
+          "blob": "6e542245476df617e29ac5e7fd1a8764eaf7ad35",
+          "bytes": 60119,
+          "lines": 1437,
+          "sha256": "fe3f2ea78dfa9d3c21c130ec7fbc93d0f14f57d2abbf07acb6634b547542f83c"
+        },
+        "candidate_e2": {
+          "exists": true,
+          "blob": "6e542245476df617e29ac5e7fd1a8764eaf7ad35",
+          "bytes": 60119,
+          "lines": 1437,
+          "sha256": "fe3f2ea78dfa9d3c21c130ec7fbc93d0f14f57d2abbf07acb6634b547542f83c"
+        }
+      },
+      "same_main519_e2": true,
+      "same_main502_main519": false
+    },
+    {
+      "path": "crates/bicdb-core/src/query_budget.rs",
+      "versions": {
+        "main502": {
+          "exists": true,
+          "blob": "09e076d8766d19ec3fa97145e5fa941c0b87e028",
+          "bytes": 3966,
+          "lines": 133,
+          "sha256": "23e01d6e1e82de338624128fbde21a456d6754a709b311f7c587fa8750e1969e"
+        },
+        "main519": {
+          "exists": true,
+          "blob": "03153c51450aef4871edc87f0d7e1c7bafcfa2a7",
+          "bytes": 6540,
+          "lines": 214,
+          "sha256": "7edb9fa9683c2d933b6dcbc2d2d3f5f84861ea08431a39dcb288bf08be46be4d"
+        },
+        "candidate_e2": {
+          "exists": true,
+          "blob": "03153c51450aef4871edc87f0d7e1c7bafcfa2a7",
+          "bytes": 6540,
+          "lines": 214,
+          "sha256": "7edb9fa9683c2d933b6dcbc2d2d3f5f84861ea08431a39dcb288bf08be46be4d"
+        }
+      },
+      "same_main519_e2": true,
+      "same_main502_main519": false
+    },
+    {
+      "path": "crates/bicdb-sql/src/session/transaction_defaults.rs",
+      "versions": {
+        "main502": {
+          "exists": true,
+          "blob": "319b8c3aed20e4270290e0acbf474dc75f979d0e",
+          "bytes": 19175,
+          "lines": 513,
+          "sha256": "4da3915468c9674a6b0df8987180907056f59c617e77c899f376f5723bd35961"
+        },
+        "main519": {
+          "exists": true,
+          "blob": "319b8c3aed20e4270290e0acbf474dc75f979d0e",
+          "bytes": 19175,
+          "lines": 513,
+          "sha256": "4da3915468c9674a6b0df8987180907056f59c617e77c899f376f5723bd35961"
+        },
+        "candidate_e2": {
+          "exists": true,
+          "blob": "319b8c3aed20e4270290e0acbf474dc75f979d0e",
+          "bytes": 19175,
+          "lines": 513,
+          "sha256": "4da3915468c9674a6b0df8987180907056f59c617e77c899f376f5723bd35961"
+        }
+      },
+      "same_main519_e2": true,
+      "same_main502_main519": true
+    },
+    {
+      "path": "docs/distributed-sql-design-2026-11-11.md",
+      "versions": {
+        "main502": {
+          "exists": true,
+          "blob": "bd4eef3632793de01b9e902d898b32e138d7f82a",
+          "bytes": 32830,
+          "lines": 440,
+          "sha256": "96d486f2d3222474aa10990fa72a3e3dc944916f7e815debfce5d8717743c39e"
+        },
+        "main519": {
+          "exists": true,
+          "blob": "bd4eef3632793de01b9e902d898b32e138d7f82a",
+          "bytes": 32830,
+          "lines": 440,
+          "sha256": "96d486f2d3222474aa10990fa72a3e3dc944916f7e815debfce5d8717743c39e"
+        },
+        "candidate_e2": {
+          "exists": true,
+          "blob": "bd4eef3632793de01b9e902d898b32e138d7f82a",
+          "bytes": 32830,
+          "lines": 440,
+          "sha256": "96d486f2d3222474aa10990fa72a3e3dc944916f7e815debfce5d8717743c39e"
+        }
+      },
+      "same_main519_e2": true,
+      "same_main502_main519": true
+    },
+    {
+      "path": "docs/design/distributed-sql-minimum-execution-contract.md",
+      "versions": {
+        "main502": {
+          "exists": true,
+          "blob": "fa9799f9c057905e41ab8fd79474aea18b7d5192",
+          "bytes": 16741,
+          "lines": 219,
+          "sha256": "648176995615fb021b07b2b708aca2d261abb44c511f6a8e2b9827df4a100835"
+        },
+        "main519": {
+          "exists": true,
+          "blob": "81915c87c3e94731e70f3a6888c551a9d197ace8",
+          "bytes": 19197,
+          "lines": 256,
+          "sha256": "28d100e00be3c6c69a45f6ebbfbb76876782cc275d7eed911dc2991d19c47dc0"
+        },
+        "candidate_e2": {
+          "exists": true,
+          "blob": "3073a6c7ae140d67a1871894700f974e9d308b1c",
+          "bytes": 21531,
+          "lines": 295,
+          "sha256": "0335f6c3f39198c30a0335c7149aeb88fa2bcd115cae677e7d64c24920c8ea7d"
+        }
+      },
+      "same_main519_e2": false,
+      "same_main502_main519": false
+    },
+    {
+      "path": "docs/design/distributed-sql-main502-source-and-context-checkpoint.json",
+      "versions": {
+        "main502": {
+          "exists": false
+        },
+        "main519": {
+          "exists": true,
+          "blob": "0ebba8ea5ee3d169b49ff6902f8c764d80c30e4c",
+          "bytes": 5334,
+          "lines": 101,
+          "sha256": "a8f8bf32ee218735cde9feb346205641925b852779e75ada59930023471ae62e"
+        },
+        "candidate_e2": {
+          "exists": true,
+          "blob": "0ebba8ea5ee3d169b49ff6902f8c764d80c30e4c",
+          "bytes": 5334,
+          "lines": 101,
+          "sha256": "a8f8bf32ee218735cde9feb346205641925b852779e75ada59930023471ae62e"
+        }
+      },
+      "same_main519_e2": true,
+      "same_main502_main519": null
+    },
+    {
+      "path": "docs/design/distributed-sql-main517-candidate518-checkpoint.json",
+      "versions": {
+        "main502": {
+          "exists": false
+        },
+        "main519": {
+          "exists": false
+        },
+        "candidate_e2": {
+          "exists": true,
+          "blob": "142601349c9142eacf14d37aa8f12e01dc789726",
+          "bytes": 15657,
+          "lines": 402,
+          "sha256": "ce1243136287c8751fa8e2455c5acc757eab33bdaf1db24ff19a540abf30a999"
+        }
+      },
+      "same_main519_e2": null,
+      "same_main502_main519": null
+    }
+  ],
+  "line_anchors": [
+    {
+      "path": "crates/bicdb-pgwire/src/lib.rs",
+      "symbol_or_cut": "fn execute_server_query(",
+      "anchors": {
+        "main519": [
+          {
+            "line": 3386,
+            "source": "fn execute_server_query("
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 3386,
+            "source": "fn execute_server_query("
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-pgwire/src/lib.rs",
+      "symbol_or_cut": "fn execute_server_db_sql_for_state_inner(",
+      "anchors": {
+        "main519": [
+          {
+            "line": 4132,
+            "source": "fn execute_server_db_sql_for_state_inner("
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 4132,
+            "source": "fn execute_server_db_sql_for_state_inner("
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-pgwire/src/lib.rs",
+      "symbol_or_cut": "fn execute_server_transaction_sql(",
+      "anchors": {
+        "main519": [
+          {
+            "line": 4498,
+            "source": "fn execute_server_transaction_sql("
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 4503,
+            "source": "fn execute_server_transaction_sql("
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-pgwire/src/lib.rs",
+      "symbol_or_cut": "fn sql_session_for_server",
+      "anchors": {
+        "main519": [
+          {
+            "line": 4683,
+            "source": "fn sql_session_for_server<'db>(server: &PgWireServer, db: &'db mut BicDb) -> SqlSession<'db> {"
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 4688,
+            "source": "fn sql_session_for_server<'db>(server: &PgWireServer, db: &'db mut BicDb) -> SqlSession<'db> {"
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-pgwire/src/lib.rs",
+      "symbol_or_cut": "if durability.is_ok() && admission_finalization.is_ok() && finalization.is_ok()",
+      "anchors": {
+        "main519": [],
+        "candidate_e2": [
+          {
+            "line": 4389,
+            "source": "                if durability.is_ok() && admission_finalization.is_ok() && finalization.is_ok() {"
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-pgwire/src/query_exec.rs",
+      "symbol_or_cut": "pub(crate) fn execute_server_virtual_query_cancellable(",
+      "anchors": {
+        "main519": [
+          {
+            "line": 229,
+            "source": "pub(crate) fn execute_server_virtual_query_cancellable("
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 229,
+            "source": "pub(crate) fn execute_server_virtual_query_cancellable("
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-pgwire/src/server_cluster.rs",
+      "symbol_or_cut": "pub fn plan_cluster_point_query(",
+      "anchors": {
+        "main519": [
+          {
+            "line": 1069,
+            "source": "    pub fn plan_cluster_point_query("
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 1069,
+            "source": "    pub fn plan_cluster_point_query("
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-pgwire/src/server_cluster.rs",
+      "symbol_or_cut": "pub fn plan_cluster_scatter_query(",
+      "anchors": {
+        "main519": [
+          {
+            "line": 1086,
+            "source": "    pub fn plan_cluster_scatter_query("
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 1086,
+            "source": "    pub fn plan_cluster_scatter_query("
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-pgwire/src/server_cluster.rs",
+      "symbol_or_cut": "pub fn plan_cluster_shard_local_write",
+      "anchors": {
+        "main519": [
+          {
+            "line": 1103,
+            "source": "    pub fn plan_cluster_shard_local_write<Write>("
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 1103,
+            "source": "    pub fn plan_cluster_shard_local_write<Write>("
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-pgwire/src/sql_parsing.rs",
+      "symbol_or_cut": "pub(crate) fn commit_buffered_transaction(",
+      "anchors": {
+        "main519": [
+          {
+            "line": 332,
+            "source": "pub(crate) fn commit_buffered_transaction("
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 351,
+            "source": "pub(crate) fn commit_buffered_transaction("
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-pgwire/src/sql_parsing.rs",
+      "symbol_or_cut": "fn commit_error_with_catalog_cleanup(",
+      "anchors": {
+        "main519": [],
+        "candidate_e2": [
+          {
+            "line": 334,
+            "source": "fn commit_error_with_catalog_cleanup("
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-sql/src/session.rs",
+      "symbol_or_cut": "fn acquire_postgres_statement_snapshot(",
+      "anchors": {
+        "main519": [
+          {
+            "line": 3972,
+            "source": "    fn acquire_postgres_statement_snapshot("
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 3974,
+            "source": "    fn acquire_postgres_statement_snapshot("
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-sql/src/session.rs",
+      "symbol_or_cut": "pub(crate) fn commit(&mut self)",
+      "anchors": {
+        "main519": [
+          {
+            "line": 4456,
+            "source": "    pub(crate) fn commit(&mut self) -> Result<SqlResult> {"
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 4458,
+            "source": "    pub(crate) fn commit(&mut self) -> Result<SqlResult> {"
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_query.rs",
+      "symbol_or_cut": "pub trait DistributedShardExecutor",
+      "anchors": {
+        "main519": [
+          {
+            "line": 225,
+            "source": "pub trait DistributedShardExecutor<Query, Row>: Sync {"
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 225,
+            "source": "pub trait DistributedShardExecutor<Query, Row>: Sync {"
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_query.rs",
+      "symbol_or_cut": "pub fn execute_scatter_gather",
+      "anchors": {
+        "main519": [
+          {
+            "line": 259,
+            "source": "pub fn execute_scatter_gather<Query, Row, Executor>("
+          },
+          {
+            "line": 444,
+            "source": "pub fn execute_scatter_gather_governed<Query, Row, Executor>("
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 259,
+            "source": "pub fn execute_scatter_gather<Query, Row, Executor>("
+          },
+          {
+            "line": 444,
+            "source": "pub fn execute_scatter_gather_governed<Query, Row, Executor>("
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_query.rs",
+      "symbol_or_cut": "pub struct DistributedNumericAggregate",
+      "anchors": {
+        "main519": [
+          {
+            "line": 717,
+            "source": "pub struct DistributedNumericAggregate {"
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 717,
+            "source": "pub struct DistributedNumericAggregate {"
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_query.rs",
+      "symbol_or_cut": "pub trait DistributedCommitProtocol",
+      "anchors": {
+        "main519": [
+          {
+            "line": 1054,
+            "source": "pub trait DistributedCommitProtocol<Write> {"
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 1054,
+            "source": "pub trait DistributedCommitProtocol<Write> {"
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_query.rs",
+      "symbol_or_cut": "pub fn execute_distributed_transaction",
+      "anchors": {
+        "main519": [
+          {
+            "line": 1122,
+            "source": "pub fn execute_distributed_transaction<Write, Protocol>("
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 1122,
+            "source": "pub fn execute_distributed_transaction<Write, Protocol>("
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_query.rs",
+      "symbol_or_cut": "impl DistributedCommitProtocol",
+      "anchors": {
+        "main519": [
+          {
+            "line": 1602,
+            "source": "    impl DistributedCommitProtocol<&'static str> for RecordingCommitProtocol {"
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 1602,
+            "source": "    impl DistributedCommitProtocol<&'static str> for RecordingCommitProtocol {"
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_gateway.rs",
+      "symbol_or_cut": "pub trait ClusterPointConnection",
+      "anchors": {
+        "main519": [
+          {
+            "line": 27,
+            "source": "pub trait ClusterPointConnection<Request, Response>: Send {"
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 27,
+            "source": "pub trait ClusterPointConnection<Request, Response>: Send {"
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_gateway.rs",
+      "symbol_or_cut": "pub trait ClusterPointConnector",
+      "anchors": {
+        "main519": [
+          {
+            "line": 39,
+            "source": "pub trait ClusterPointConnector<Request, Response>: Send + Sync + 'static {"
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 39,
+            "source": "pub trait ClusterPointConnector<Request, Response>: Send + Sync + 'static {"
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_gateway.rs",
+      "symbol_or_cut": "impl ClusterPointConnector<String, String> for FakeConnector",
+      "anchors": {
+        "main519": [
+          {
+            "line": 506,
+            "source": "    impl ClusterPointConnector<String, String> for FakeConnector {"
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 506,
+            "source": "    impl ClusterPointConnector<String, String> for FakeConnector {"
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+      "symbol_or_cut": "pub enum RangeWriteState",
+      "anchors": {
+        "main519": [
+          {
+            "line": 272,
+            "source": "pub enum RangeWriteState {"
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 276,
+            "source": "pub enum RangeWriteState {"
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+      "symbol_or_cut": "fn resolve_range(",
+      "anchors": {
+        "main519": [
+          {
+            "line": 3106,
+            "source": "    fn resolve_range(&self, intent: &CommitAdmissionIntent) -> Result<RangeDescriptor> {"
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 3232,
+            "source": "    fn resolve_range(&self, intent: &CommitAdmissionIntent) -> Result<RangeDescriptor> {"
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+      "symbol_or_cut": "fn admit_with_database(",
+      "anchors": {
+        "main519": [
+          {
+            "line": 3578,
+            "source": "    fn admit_with_database("
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 3765,
+            "source": "    fn admit_with_database("
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/db/record_read_snapshot.rs",
+      "symbol_or_cut": "pub struct RecordReadSnapshot",
+      "anchors": {
+        "main519": [
+          {
+            "line": 11,
+            "source": "pub struct RecordReadSnapshot(Arc<RecordReadSnapshotState>);"
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 11,
+            "source": "pub struct RecordReadSnapshot(Arc<RecordReadSnapshotState>);"
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/db/record_read_snapshot.rs",
+      "symbol_or_cut": "fn read_record_unchecked(",
+      "anchors": {
+        "main519": [
+          {
+            "line": 61,
+            "source": "    fn read_record_unchecked(&self, db: &BicDb, id: &str) -> Result<Option<Arc<Record>>> {"
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 61,
+            "source": "    fn read_record_unchecked(&self, db: &BicDb, id: &str) -> Result<Option<Arc<Record>>> {"
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/db/record_read_snapshot.rs",
+      "symbol_or_cut": "pub fn capture_record_prefix_snapshot_unchecked(",
+      "anchors": {
+        "main519": [
+          {
+            "line": 98,
+            "source": "    pub fn capture_record_prefix_snapshot_unchecked("
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 98,
+            "source": "    pub fn capture_record_prefix_snapshot_unchecked("
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/db.rs",
+      "symbol_or_cut": "pub fn commit_with_sequence_in_place",
+      "anchors": {
+        "main519": [],
+        "candidate_e2": [
+          {
+            "line": 19810,
+            "source": "    pub fn commit_with_sequence_in_place(&mut self) -> Result<u64> {"
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/db.rs",
+      "symbol_or_cut": "pub fn finalize_commit_admission(",
+      "anchors": {
+        "main519": [
+          {
+            "line": 19546,
+            "source": "    pub fn finalize_commit_admission(&mut self) -> Result<()> {"
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 19887,
+            "source": "    pub fn finalize_commit_admission(&mut self) -> Result<()> {"
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/db.rs",
+      "symbol_or_cut": "pub fn finalize_committed_memory_jobs(",
+      "anchors": {
+        "main519": [
+          {
+            "line": 19655,
+            "source": "    pub fn finalize_committed_memory_jobs(&self) -> Result<()> {"
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 20050,
+            "source": "    pub fn finalize_committed_memory_jobs(&self) -> Result<()> {"
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/db.rs",
+      "symbol_or_cut": "pub fn finalize_committed_broker_outbox(",
+      "anchors": {
+        "main519": [
+          {
+            "line": 19673,
+            "source": "    pub fn finalize_committed_broker_outbox(&self) {"
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 20077,
+            "source": "    pub fn finalize_committed_broker_outbox(&self) {"
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/db/spatial_paged.rs",
+      "symbol_or_cut": "pub(super) fn commit_transaction_inner(",
+      "anchors": {
+        "main519": [
+          {
+            "line": 2597,
+            "source": "    pub(super) fn commit_transaction_inner("
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 2619,
+            "source": "    pub(super) fn commit_transaction_inner("
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/db/spatial_paged.rs",
+      "symbol_or_cut": "match self.tx_log.write_durable(commit_seq)",
+      "anchors": {
+        "main519": [
+          {
+            "line": 2930,
+            "source": "        match self.tx_log.write_durable(commit_seq) {"
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 2962,
+            "source": "        match self.tx_log.write_durable(commit_seq) {"
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/db/spatial_paged.rs",
+      "symbol_or_cut": "self.apply_committed_record_writes(",
+      "anchors": {
+        "main519": [
+          {
+            "line": 2983,
+            "source": "            self.apply_committed_record_writes("
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 3017,
+            "source": "            self.apply_committed_record_writes("
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/db/spatial_paged.rs",
+      "symbol_or_cut": "self.mark_committed_seq(commit_seq)",
+      "anchors": {
+        "main519": [
+          {
+            "line": 2921,
+            "source": "                self.mark_committed_seq(commit_seq);"
+          },
+          {
+            "line": 2941,
+            "source": "                    self.mark_committed_seq(commit_seq);"
+          },
+          {
+            "line": 3065,
+            "source": "        self.mark_committed_seq(commit_seq);"
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 2953,
+            "source": "                self.mark_committed_seq(commit_seq);"
+          },
+          {
+            "line": 2973,
+            "source": "                    self.mark_committed_seq(commit_seq);"
+          },
+          {
+            "line": 3099,
+            "source": "        self.mark_committed_seq(commit_seq);"
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/writer_enrollment.rs",
+      "symbol_or_cut": "pub(in crate::db) fn require_enforced_transaction_preflight(",
+      "anchors": {
+        "main519": [
+          {
+            "line": 804,
+            "source": "    pub(in crate::db) fn require_enforced_transaction_preflight("
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 838,
+            "source": "    pub(in crate::db) fn require_enforced_transaction_preflight("
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_read/strong.rs",
+      "symbol_or_cut": "pub(crate) struct NativeStrongPointReadRequest",
+      "anchors": {
+        "main519": [
+          {
+            "line": 14,
+            "source": "pub(crate) struct NativeStrongPointReadRequest {"
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 14,
+            "source": "pub(crate) struct NativeStrongPointReadRequest {"
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_read/strong.rs",
+      "symbol_or_cut": "pub(crate) fn capture_actual_point_read",
+      "anchors": {
+        "main519": [
+          {
+            "line": 149,
+            "source": "    pub(crate) fn capture_actual_point_read<T: RangeWriteTransport>("
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 149,
+            "source": "    pub(crate) fn capture_actual_point_read<T: RangeWriteTransport>("
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_read/strong.rs",
+      "symbol_or_cut": "pub(crate) fn finalize<",
+      "anchors": {
+        "main519": [
+          {
+            "line": 256,
+            "source": "    pub(crate) fn finalize<T: RangeWriteTransport>("
+          }
+        ],
+        "candidate_e2": [
+          {
+            "line": 256,
+            "source": "    pub(crate) fn finalize<T: RangeWriteTransport>("
+          }
+        ]
+      }
+    }
+  ],
+  "trait_implementation_inventory": {
+    "main519": [
+      "587dd6e4775e454cc9e8224d5fed76e8795c6ff6:crates/bicdb-core/src/distribution_gateway.rs:506:    impl ClusterPointConnector<String, String> for FakeConnector {",
+      "587dd6e4775e454cc9e8224d5fed76e8795c6ff6:crates/bicdb-core/src/distribution_query.rs:1231:    impl DistributedShardExecutor<(), u64> for CountingExecutor {",
+      "587dd6e4775e454cc9e8224d5fed76e8795c6ff6:crates/bicdb-core/src/distribution_query.rs:1389:    impl DistributedShardExecutor<(), ()> for SlowExecutor {",
+      "587dd6e4775e454cc9e8224d5fed76e8795c6ff6:crates/bicdb-core/src/distribution_query.rs:1602:    impl DistributedCommitProtocol<&'static str> for RecordingCommitProtocol {"
+    ],
+    "candidate_e2": [
+      "e2adb410befd41bd475f015fd6590c33d1afaa4f:crates/bicdb-core/src/distribution_gateway.rs:506:    impl ClusterPointConnector<String, String> for FakeConnector {",
+      "e2adb410befd41bd475f015fd6590c33d1afaa4f:crates/bicdb-core/src/distribution_query.rs:1231:    impl DistributedShardExecutor<(), u64> for CountingExecutor {",
+      "e2adb410befd41bd475f015fd6590c33d1afaa4f:crates/bicdb-core/src/distribution_query.rs:1389:    impl DistributedShardExecutor<(), ()> for SlowExecutor {",
+      "e2adb410befd41bd475f015fd6590c33d1afaa4f:crates/bicdb-core/src/distribution_query.rs:1602:    impl DistributedCommitProtocol<&'static str> for RecordingCommitProtocol {"
+    ]
+  },
+  "implemented_delta": [
+    {
+      "scope": "unchanged local/generic boundaries",
+      "fact": "No ordinary-PGwire transparent distributed SQL attachment or production distributed shard/commit/connector implementation found. Six named planner/executor/router/gateway/local-snapshot files are exact main519 to e2.",
+      "paths": [
+        "crates/bicdb-pgwire/src/query_exec.rs",
+        "crates/bicdb-pgwire/src/server_cluster.rs",
+        "crates/bicdb-core/src/distribution_query.rs",
+        "crates/bicdb-core/src/distribution_gateway.rs",
+        "crates/bicdb-core/src/distribution_routing.rs",
+        "crates/bicdb-core/src/db/record_read_snapshot.rs",
+        "crates/bicdb-core/src/db/collection_write_identity.rs",
+        "crates/bicdb-core/src/db/commit_admission_hook.rs",
+        "crates/bicdb-core/src/distribution_native_read/strong.rs",
+        "crates/bicdb-core/src/distribution_events.rs",
+        "crates/bicdb-core/src/query_budget.rs",
+        "crates/bicdb-sql/src/session/transaction_defaults.rs",
+        "docs/distributed-sql-design-2026-11-11.md",
+        "docs/design/distributed-sql-main502-source-and-context-checkpoint.json"
+      ]
+    },
+    {
+      "scope": "local commit uncertainty and cleanup",
+      "fact": "e2 retains SAME actual Transaction state across result, keeps committed DDL/GUC obligations after actual Committed+Err, and gates PGwire successful last_commit_seq on durability/admission/memory finalizers; does not establish a cross-range SQL decision."
+    },
+    {
+      "scope": "native range admission",
+      "fact": "resolve_range refuses a multi-range final-row intent, validates actual local leader/voter/schema; native Prepared and local receipt/finalizer states remain distinct from durable invisible SQL intents and global decisions."
+    },
+    {
+      "scope": "point Strong",
+      "fact": "Actual native Strong consuming path binds one fresh range/point and protected local snapshot. Neither per-point proof nor local RecordReadSnapshot supplies exact shared S for joins."
+    }
+  ],
+  "missing_actual_producers": [
+    "PGwire gateway execution before local DB guard, shared by simple/extended protocols, retaining app security/GUC/portal/TxID/operation context.",
+    "Persistent logical object/backing/schema and reader/writer capability contract for every admitted API; no local bypass.",
+    "Quorum replicated SQL transaction registry with durable enlist/freeze/exact terminal decision and recovery enumeration/lookup independent of client.",
+    "Invisible per-range SQL participant intents and durable conflict/constraint/effect claims; all contacted uncertain recipients discoverable after prepare reply loss.",
+    "Exact global decision S visibility frontier and retained per-range S-to-B_r mapping/version pins, protected by fresh actual Native authority.",
+    "Exact range-filtered SQL relational fragments/joins, complete-result merge, type/RLS semantics, derived index/FTS/effect visibility and movement/backup/recovery retention."
+  ],
+  "architecture_order": [
+    "persistent schema/admission and wire/format contract",
+    "gateway and scoped typed fragments",
+    "durable registry/enlist/freeze and participant intents",
+    "terminal decision and independent same-operation resolution",
+    "all-required apply receipts plus SQL frontier/exact view pins",
+    "relational operators and isolated SQL feature gates",
+    "later intent/history-aware movement and lifecycle/GC"
+  ],
+  "acceptance_contract": {
+    "client": "Unchanged stock PostgreSQL single-endpoint transaction, account debit/credit and receipt insert spanning ranges chosen by fixture only. No app range IDs or per-range client retries.",
+    "crash": "Actual durable participant prepare/lost reply, coordinator process crash before/after real decision quorum, delayed participant apply, restart independent roots and exact same transaction/digest resolution.",
+    "zero_partial_business_commit": "Completed SQL results are one exact S (all old/all new) or error; physical partial apply remains invisible. Final decision resolves all participants. Every acknowledged exact debit/credit/receipt/effect survives; unknown caller outcome not equated with abort.",
+    "ledger": "Fsynced external intent before COMMIT and ACK after success; compare exact per-operation payloads/effects, not totals alone.",
+    "index_FTS_outbox": "Actual mandatory derived obligations at same view/decision; no approximate f64/FTS helper substituted for exact SQL; preserve enforced native broker-effect preflight refusal until replicated effects exist.",
+    "faults_not_tests_run": [
+      "after durable prepare before reply",
+      "after durable terminal decision before apply/COMMIT reply",
+      "after one apply before other applies/frontier",
+      "during index/constraint/effect materialization",
+      "registry/participant restart and stale actor/open refusal"
+    ]
+  },
+  "actual_e2_CI_scope": {
+    "alltargets": 132938046568,
+    "Rails": 132938046486,
+    "format": 132938046653,
+    "Native": 132938081253,
+    "Core": 132938081301,
+    "library_errors": [
+      "E0277 RetainedAllocationAttempt lacks Debug",
+      "E0624 observe_allocation_epoch private"
+    ],
+    "Native_Core_execution": "helper library prerequisite failed; zero actual case rows/summaries, downstream tests skipped",
+    "REST": {
+      "job": 132938081249,
+      "conclusion": "failure",
+      "actual_unique_cases": 564,
+      "passed": 564,
+      "failed": 0,
+      "ignored": 0,
+      "summaries": 40,
+      "packages": {
+        "bicdb-lua": 5,
+        "bicdb-page": 499,
+        "bicdb-script": 4,
+        "bicdb-workflow": 1,
+        "bicdb-extension": 55
+      },
+      "failed_cut": "bicdb-sync --lib Core library dependency same E0277/E0624 before remaining package execution",
+      "scope": "passing prefix only, not full REST or distributed SQL acceptance"
+    },
+    "archive_scope": "Completed individual local logs only; full archive finalization/verification separate",
+    "source_only_correction": "f4569d983fc04116a9dddeef769eb18fb1d2126e is separately reviewed; no compiled/runtime success inferred"
+  },
+  "limits": [
+    "No transparent distributed SQL, production 2PC, common snapshots, cross-range serializable isolation or elastic capacity established.",
+    "Locality is optional optimization; correctness invariant under forced separation.",
+    "Source negative inventories are bounded to tracked source revisions, not external downstream code.",
+    "Current native/controller/source-loss/cold/repeated movement/cleanup/physical gates remain independent and open.",
+    "No global decision/capability can be minted from decoded topology, DTO, localWALcounter, metadata majority, Native Ready or range receipt."
+  ],
+  "validation": {
+    "JSON_parse": true,
+    "source_revision_and_hash_pins": true,
+    "source_comparison_and_implementation_inventory": true,
+    "relative_link_and_git_diff_checks": "recorded in external freeze receipt after artifact generation",
+    "compiler_or_Rust_tests_executed": false,
+    "runtime_implemented": false,
+    "CI_actions": false,
+    "push": false,
+    "version_bump": false
+  }
+}

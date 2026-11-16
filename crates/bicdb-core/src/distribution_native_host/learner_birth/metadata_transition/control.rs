@@ -1,6 +1,50 @@
 //! Existing Registered member control transition; never a fresh-voter factory.
 use super::*;
 impl NativeUnassignedLearnerHost {
+    pub(in crate::distribution_native_host) fn advance_finite_remote_serving_policy(
+        &mut self,
+        range: crate::RangeId,
+        phase: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        let request = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        self.metadata_transition
+            .control
+            .as_mut()
+            .ok_or_else(|| invalid("actual Registered local Policy host absent"))?
+            .advance_finite_remote_serving_policy(range, phase, &request)
+    }
+
+    pub(in crate::distribution_native_host) fn retire_finite_remote_open_references(
+        &mut self,
+        range: crate::RangeId,
+        phase: uuid::Uuid,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        self.metadata_transition
+            .control
+            .as_mut()
+            .ok_or_else(|| invalid("reference retirement actual original control absent"))?
+            .advance_remote_all_open_reference_retirement(range, phase, parent)
+    }
+    pub(in crate::distribution_native_host) fn poll_finite_remote_serving(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<usize> {
+        match self.metadata_transition.control.as_mut() {
+            Some(control) => control.poll_finite_remote_serving(parent),
+            None => Ok(0),
+        }
+    }
+    pub(in crate::distribution_native_host) fn poll_native_first_receiver(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<bool> {
+        let Some(control) = self.metadata_transition.control.as_mut() else {
+            return Ok(false);
+        };
+        control.poll_first_receive(parent)
+    }
     #[cfg(test)]
     pub(in crate::distribution_native_host) fn test_registered_image_control_mut(
         &mut self,
@@ -242,13 +286,20 @@ impl NativeUnassignedLearnerHost {
         parent: &CancellationToken,
     ) -> Result<()> {
         self.validate_owned_metadata_member(observed, business, parent)?;
+        let origin = self.first_receiver_origin();
         self.metadata_transition
             .control
             .as_mut()
             .ok_or_else(|| {
                 invalid("actual Registered metadata control required before replica receiver")
             })?
-            .open_registered_replica_receiver(&self.provider.factory, observed, business, parent)
+            .open_registered_replica_receiver_from_join_fresh(
+                origin,
+                &self.provider.factory,
+                observed,
+                business,
+                parent,
+            )
     }
     pub(in crate::distribution_native_host) fn replica_receiver_status(
         &self,

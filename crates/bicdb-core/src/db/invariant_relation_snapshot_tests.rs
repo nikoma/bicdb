@@ -179,7 +179,7 @@ fn raw_invariant_escaped_writer_forces_fresh_complete_scans_and_never_resets() {
     {
         // The actual escaped low-level writer is not excluded by core
         // Serializable admission. It must make memo reuse ineligible.
-        let _write = raw.write_guard();
+        let _write = raw.write_guard().unwrap();
         let (xid, _) = raw.begin();
         raw.put(xid, "roots", &Record::new("raw-added")).unwrap();
         raw.commit(xid).unwrap();

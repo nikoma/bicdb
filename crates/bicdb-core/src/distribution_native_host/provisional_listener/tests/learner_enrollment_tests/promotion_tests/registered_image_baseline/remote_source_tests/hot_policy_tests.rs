@@ -11,12 +11,20 @@ use crate::distribution_range_handoff::{
     NativeJointPreparedServingRound,
 };
 
+mod activation_owned_tests;
+mod collection_binding_tests;
+mod entry_scope_tests;
 mod fresh_collection_tests;
 mod new_decision_round_tests;
 mod prepared_candidate_tests;
+mod publication_scope_tests;
 
 pub(in super::super) fn is_hot_policy(case: SourceCase) -> bool {
-    prepared_candidate_tests::is_case(case)
+    entry_scope_tests::is_case(case)
+        || activation_owned_tests::is_case(case)
+        || publication_scope_tests::is_case(case)
+        || prepared_candidate_tests::is_case(case)
+        || collection_binding_tests::is_case(case)
         || fresh_collection_tests::is_case(case)
         || new_decision_round_tests::is_case(case)
         || source_export_retirement_tests::is_case(case)
@@ -35,6 +43,8 @@ pub(in super::super) fn is_hot_policy(case: SourceCase) -> bool {
                 | SourceCase::TargetHotDataReplyLost
                 | SourceCase::TargetHotDataFirstCallerExpired
                 | SourceCase::TargetHotDataFollower
+                | SourceCase::TargetHotDataFollowerApplyingGuard
+                | SourceCase::TargetHotRetirementOwnSuccessor
                 | SourceCase::TargetHotDecisionTermBeforePut
                 | SourceCase::TargetHotDecisionTermAfterCommit
                 | SourceCase::TargetHotFirstPolicyTermBeforeHook
@@ -78,6 +88,12 @@ fn operation<T>(
     ledger.push(serde_json::json!({"operation":name,"outcome":"not_started","effect_unknown_on_error":false}));
     evidence(&output.join("registered-hot-policy-ledger.json"), ledger)?;
     let result = call();
+    if let Some(actual) = BicDb::test_take_native_joint_post_wal_failure() {
+        // The actual publisher has returned and its service/DB guards are
+        // gone. Persist forensic DATA before the original caller assertion.
+        eprintln!("NATIVE_POST_WAL_FAILURE {actual}");
+        ledger[at]["post_wal_failure_observation"] = actual;
+    }
     ledger[at]["outcome"] = if result.is_ok() {
         "returned"
     } else {
@@ -301,6 +317,13 @@ pub(in super::super) fn exercise(
             .count(),
         1
     );
+    let large_head_records = if matches!(case, SourceCase::TargetActivationLargeHeadDirSyncRetry) {
+        Some(activation_owned_tests::prepare_large_head(
+            services, pending, &untouched, output,
+        ))
+    } else {
+        None
+    };
     for source in controls.iter() {
         source.bind_initial_image_source_process(process).unwrap();
     }
@@ -642,6 +665,16 @@ pub(in super::super) fn exercise(
     let current = metadata[0].lock().committed_topology().clone();
     assert_eq!(current.range_by_id(untouched.id), Some(&untouched));
     let preparation_session = process.child();
+    // The new ancestry control gives the ACTUAL producer a child BEFORE
+    // effects; the independent aggregate/fresh-phase caller stays its parent.
+    let producer_session = if matches!(
+        case,
+        SourceCase::TargetCollectionProducerCanceled | SourceCase::TargetActivationProducerCanceled
+    ) {
+        preparation_session.child()
+    } else {
+        preparation_session.clone()
+    };
     let mut preparation_custody = Vec::new();
     let mut original_round: Option<NativeJointPreparedServingRound> = None;
     let mut closed_control_ran = false;
@@ -748,12 +781,12 @@ pub(in super::super) fn exercise(
                     closed,
                     committed,
                     lease,
-                    &preparation_session,
+                    &producer_session,
                 ),
                 None => actual.prepare_local_registered_joint_serving(
                     committed,
                     lease,
-                    &preparation_session,
+                    &producer_session,
                 ),
             };
             preparation_step!(6, 7, "prepare_local_joint_serving", prepare()).unwrap()
@@ -828,6 +861,9 @@ pub(in super::super) fn exercise(
     drop(preparation_custody);
     let mut publication = prepared.resume_native_publication().unwrap();
     for local in data.new_members().keys() {
+        if collection_binding_tests::is_case(case) && *local != node(4) {
+            continue; // new faults target the genuine Registered fifth member
+        }
         let mut phase = prepared
             .begin_fresh_preparation_phase(Duration::from_secs(4))
             .unwrap();
@@ -842,6 +878,34 @@ pub(in super::super) fn exercise(
         let admission = phase
             .acquire_local_activation(&all_clients[i], &node(0))
             .unwrap();
+        if publication_scope_tests::is_case(case) {
+            publication_scope_tests::exercise(
+                case,
+                &admission,
+                &mut publication,
+                services,
+                process,
+                output,
+            );
+            return;
+        }
+        if collection_binding_tests::is_case(case) {
+            collection_binding_tests::exercise(
+                case,
+                &phase,
+                &admission,
+                &mut publication,
+                &producer_session,
+                &preparation_session,
+                &original,
+                services,
+                metadata,
+                process,
+                output,
+                acknowledged,
+            );
+            return;
+        }
         operation(output, &mut ledger, "fresh_actual_native_bridge", || {
             publication.publish_actual_local_member(&admission, process)
         })
@@ -866,6 +930,7 @@ pub(in super::super) fn exercise(
     };
     let mut activations = BTreeMap::new();
     let mut release_owner = None;
+    let mut large_head_control_ran = false;
     for local in data.new_members().keys() {
         let mut phase = published
             .begin_fresh_open_phase(Duration::from_secs(4))
@@ -879,20 +944,110 @@ pub(in super::super) fn exercise(
         let phase = Arc::new(phase.finish().unwrap());
         let i = (0..5).find(|i| node(*i) == *local).unwrap();
         let admission = phase.acquire_local_open(&all_clients[i], &node(0)).unwrap();
-        let receipt = Arc::new(
-            operation(output, &mut ledger, "actual_catalogue_open", || {
-                admission.persist_local_catalogue_activation(process)
-            })
-            .unwrap(),
-        );
-        if i == 4 {
+        if matches!(case, SourceCase::TargetActivationAbsentThenCanceled) {
+            let actual_database = services[i].lock().database();
+            activation_owned_tests::absent_then_canceled(
+                &published,
+                local,
+                &admission,
+                &actual_database,
+                process,
+                output,
+            );
+            return;
+        }
+        let is_large_head_member =
+            matches!(case, SourceCase::TargetActivationLargeHeadDirSyncRetry)
+                && !large_head_control_ran
+                && i != 4
+                && untouched
+                    .replicas
+                    .iter()
+                    .any(|r| r.node_id == *local && r.role == crate::RangeReplicaRole::Voter);
+        let run_activation_control = is_large_head_member
+            || (i == 4
+                && activation_owned_tests::is_case(case)
+                && !matches!(case, SourceCase::TargetActivationLargeHeadDirSyncRetry));
+        let receipt = if run_activation_control {
+            let actual_database = services[i].lock().database();
+            let Some((receipt, actual_release_owner)) = activation_owned_tests::activate(
+                case,
+                local,
+                &published,
+                &admission,
+                &all_clients,
+                &actual_database,
+                &producer_session,
+                process,
+                output,
+            ) else {
+                return;
+            };
+            if let Some(owner) = actual_release_owner {
+                release_owner = Some(owner);
+            }
+            if is_large_head_member {
+                large_head_control_ran = true;
+                activation_owned_tests::verify_large_head(
+                    services,
+                    pending,
+                    &untouched,
+                    large_head_records.as_ref().unwrap(),
+                    output,
+                );
+            }
+            receipt
+        } else {
+            Arc::new(
+                operation(output, &mut ledger, "actual_catalogue_open", || {
+                    admission.persist_local_catalogue_activation(process)
+                })
+                .unwrap(),
+            )
+        };
+        if i == 4 && release_owner.is_none() {
             release_owner = Some(
                 admission
                     .retain_registered_release_owner(receipt.clone())
                     .unwrap(),
             );
         }
+        if matches!(case, SourceCase::TargetActivationLaterSameBytes) && i != 4 {
+            let actual_database = services[i].lock().database();
+            activation_owned_tests::later_same_bytes(
+                &published,
+                local,
+                &all_clients,
+                &actual_database,
+                output,
+            );
+            return;
+        }
+        if matches!(case, SourceCase::TargetActivationLawfulOtherRange)
+            && i != 4
+            && untouched
+                .replicas
+                .iter()
+                .any(|r| r.node_id == *local && r.role == crate::RangeReplicaRole::Voter)
+        {
+            activation_owned_tests::lawful_other_range(
+                &published,
+                local,
+                &all_clients,
+                original_gateway,
+                &current,
+                &untouched,
+                output,
+            );
+            return;
+        }
         activations.insert(local.clone(), receipt);
+    }
+    if matches!(case, SourceCase::TargetActivationLargeHeadDirSyncRetry) {
+        assert!(
+            large_head_control_ran,
+            "actual large-head survivor activation control never reached"
+        );
     }
     let continuation = Arc::new(
         published
@@ -919,6 +1074,28 @@ pub(in super::super) fn exercise(
         evidence(&output.join("registered-hot-policy-early.json"),&serde_json::json!({"exact_error":error.to_string(),
             "writer_installed":factory.database.read().commit_admission_ready(),"original_a_retained":true,"application_tested":false})).unwrap();
         assert!(!factory.database.read().commit_admission_ready());
+    }
+    if matches!(case, SourceCase::TargetHotRetirementOwnSuccessor) {
+        let actual=data.new_members().keys().filter(|id|**id!=node(4)).map(|id| {
+            let index=(0..4).find(|i|node(*i)==*id).unwrap();
+            let returned=controls[index].test_actual_old_retirement_configuration(selected);
+            serde_json::json!({"node":id,"actual":returned.as_ref().ok(),"error":returned.as_ref().err().map(ToString::to_string)})
+        }).collect::<Vec<_>>();
+        evidence(&output.join("actual-own-successor-retirement-before-assertions.json"),&serde_json::json!({
+            "members":actual,"actual_native_global_decision":data.checksum_sha256(),"ordinary_guard_relaxed":false,
+            "second_handoff_or_registry_reclamation_tested":false})).unwrap();
+        for entry in actual {
+            assert!(entry["error"].is_null());
+            assert_eq!(entry["actual"]["retirement_returned_ok"], true);
+            assert_eq!(entry["actual"]["strict_original_returned_ok"], false);
+            assert!(entry["actual"]["strict_configuration_error"]
+                .as_str()
+                .is_some_and(|e| e.contains("exact committed learner-allocation ancestry")));
+            assert_eq!(
+                entry["actual"]["actual_successor_plan"],
+                entry["actual"]["original_plan"]
+            );
+        }
     }
     retained
         .retire_old_export_custody_after_joint_open(&phase)
@@ -968,6 +1145,21 @@ pub(in super::super) fn exercise(
                 .acquire_local_writer_policy(&all_clients[i], &node(0))
                 .unwrap(),
         );
+        if i == 4 && entry_scope_tests::is_case(case) {
+            entry_scope_tests::exercise(
+                case,
+                target_control,
+                selected,
+                admission,
+                metadata[i].clone(),
+                factory,
+                &current,
+                ranges,
+                output,
+                &mut ledger,
+            );
+            return;
+        }
         if i == 4 && matches!(case, SourceCase::TargetHotFirstPolicyTermBeforeHook) {
             let before = local_term_tests::snapshot(target_control, factory, &current, ranges);
             let request = budget(5000);
@@ -1085,3 +1277,11 @@ mod catalogue_tests;
 mod closed_tests;
 
 mod closed_metadata_tests;
+
+#[test]
+fn native_registered_fifth_remote_hot_retirement_own_successor_keeps_predecessor_guard_strict() {
+    run_registered_image_baseline_with_source(
+        Case::Required,
+        Some(SourceCase::TargetHotRetirementOwnSuccessor),
+    );
+}

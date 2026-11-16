@@ -267,6 +267,15 @@ impl NativeRegisteredReplicaAdmission {
                 "joint handoff step cannot replace an existing DATA owner",
             ));
         }
+        // FIRST's original host retains the actual owner strongly. Its
+        // shared Weak claim is denial-only and is never cleared/replaced by
+        // this protocol, even after owner expiry. Refuse BEFORE creating a
+        // driver position, discovering another attempt or mutating native.
+        if held.first_receive_claim.is_some() {
+            return Err(invalid(
+                "joint handoff step cannot adopt FIRST-owned install custody",
+            ));
+        }
         let RegisteredRemoteInstallTables {
             remote_attempts,
             remote_images,

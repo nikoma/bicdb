@@ -21,7 +21,10 @@ pub enum TransactionOutcome {
         sequence: u64,
     },
     Aborted,
-    /// A decision may have persisted but the live database requires recovery.
+    /// Commit completion is unresolved: the live database may require recovery,
+    /// or durable local apply may have exhausted its original visibility wait.
+    /// A healthy prefix can later advance without reopening; this observation
+    /// remains uncertain and never becomes an ACK merely from later visibility.
     /// Callers must not infer that the writes were rolled back.
     RecoveryRequired {
         sequence: u64,

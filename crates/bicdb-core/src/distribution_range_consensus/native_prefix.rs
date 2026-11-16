@@ -462,6 +462,17 @@ impl NativeRangeCommandIntent {
             scope_sha256: hex::encode(Sha256::digest(scope)),
         })
     }
+    /// Bind only a separately completed actual native serving configuration.
+    /// The original expected predecessor remains strict without that proof.
+    pub(crate) fn bind_recovered_allocation(&self, source: &SourceRangeImageLineage) -> Self {
+        let mut result = self.clone();
+        if !self.historical_recovery {
+            if let Some(actual) = source.recovered_allocation_serving_range(&self.range) {
+                result.expected_base = actual.clone();
+            }
+        }
+        result
+    }
     pub(crate) fn validate_native_base(&self, lineage: &SourceRangeImageLineage) -> Result<()> {
         if lineage.range_index().checked_add(1) != Some(self.range_index) {
             return Err(range_write_error(
@@ -523,7 +534,7 @@ impl NativeRangeCommandIntent {
         plan.origin_scope_version = crate::distribution_native_apply::NATIVE_ORIGIN_SCOPE_VERSION;
         plan.restore_activation = source.restore_activation().cloned();
         plan.scope_sha256 = plan.origin_scope_v2()?;
-        Ok(plan)
+        Ok(plan.bind_recovered_allocation(source))
     }
     fn origin_scope_v2(&self) -> Result<String> {
         let mut range = self.range.clone();

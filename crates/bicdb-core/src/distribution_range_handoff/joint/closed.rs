@@ -6,6 +6,8 @@ use crate::distribution_range_mutation::{FrozenRangeMutationPermit, SourceCaptur
 use crate::distribution_range_recovery::RecoveryRoleAdmission;
 use parking_lot::Mutex;
 use std::sync::Arc;
+#[cfg(feature = "tls-replication")]
+mod source_request;
 
 pub(crate) struct NativeJointOldObservation {
     plan: Arc<NativeJointHandoffPlan>,
@@ -54,6 +56,23 @@ impl NativeJointOldObservation {
         // Return the actual pin AFTER the short version guard; its Drop may
         // acquire the range gate, and must never run under that guard.
         Ok(dropped)
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn borrow_remote_all_open_retirement(
+        &self,
+        phase: &crate::distribution_range_handoff::NativeRemoteAllOpenRetirementAdmission<'_>,
+    ) -> Result<crate::distribution_range_mutation::FrozenRangeCurrentPublication<'_>> {
+        phase.require_original_frozen_owner(self.node_id(), self.frozen.owner())?;
+        let pin = self
+            .pin
+            .try_lock()
+            .ok_or_else(|| invalid("ALL Open original OLD pin busy"))?;
+        if pin.is_some() {
+            return Err(invalid(
+                "ALL Open cannot retire original OLD with an outstanding capture pin",
+            ));
+        }
+        self.frozen.try_current_publication()
     }
     pub(super) fn actual_service(&self) -> &Arc<Mutex<ClusterDataNodeService>> {
         &self.service
@@ -464,6 +483,114 @@ impl NativeJointOldObservation {
             ));
         }
         Ok(())
+    }
+    /// Actual read of the original permanent closure under the same hook,
+    /// native journal and fresh post-membership metadata constraints. It does
+    /// not revive the old OLD-role request or mint a serving lease.
+    pub(super) fn observe_remote_serving_decision<R>(
+        &self,
+        writer: &Arc<crate::db::NativeWriterHostState>,
+        scope: &crate::distribution_range_handoff::NativeRemoteServingReadAdmission<'_>,
+        inspect: impl FnOnce(
+            &crate::BicDb,
+            &crate::distribution_range_consensus::RangeWriteStore,
+            &FrozenRangeMutationPermit,
+        ) -> Result<R>,
+    ) -> Result<R> {
+        scope.require_memory_current()?;
+        let pin = self
+            .pin
+            .try_lock()
+            .ok_or_else(|| invalid("serving original OLD pin busy"))?;
+        if pin.is_some() {
+            return Err(invalid(
+                "serving native decision read requires actual prior pin handoff",
+            ));
+        }
+        let service = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("serving original OLD service busy"))?;
+        let database = service.database();
+        let db = database
+            .try_read()
+            .ok_or_else(|| invalid("serving original OLD DB busy"))?;
+        service.require_native_catalog_database(&db)?;
+        service.with_writer_data_domain_store(&db, |store| {
+            db.with_original_old_serving_read(
+                writer,
+                &self.plan,
+                &self.native,
+                &self.promise,
+                &self.frozen,
+                store,
+                scope,
+                || inspect(&db, store, &self.frozen),
+            )
+        })
+    }
+    pub(super) fn confirm_remote_decision_catalogue(
+        &self,
+        writer: &crate::db::NativeWriterHostState,
+        admission: &super::remote_new::NativeRemoteDecisionAdmission<'_>,
+        retained: &mut Option<
+            crate::distribution_range_consensus::NativeRemoteDecisionCataloguePublication,
+        >,
+        observe_only: bool,
+        parent: &crate::CancellationToken,
+    ) -> Result<String> {
+        admission.require_old_parts(&self.native, &self.promise, &self.frozen, writer)?;
+        let pin = self
+            .pin
+            .try_lock()
+            .ok_or_else(|| invalid("remote OLD catalogue original pin busy"))?;
+        if pin.is_some() {
+            return Err(invalid(
+                "remote OLD catalogue requires original ALL pin handoff",
+            ));
+        }
+        let mut service = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("remote OLD catalogue original service busy"))?;
+        service.confirm_remote_old_decision_catalogue(
+            writer,
+            &self.native,
+            &self.promise,
+            &self.frozen,
+            admission,
+            retained,
+            observe_only,
+            parent,
+        )
+    }
+    pub(super) fn recover_known_remote_decision(
+        &self,
+        writer: &crate::db::NativeWriterHostState,
+        admission: &super::remote_new::NativeRemoteDecisionAdmission<'_>,
+        parent: &crate::CancellationToken,
+    ) -> Result<crate::db::NativeJointDecisionReceipt> {
+        admission.known_read_attempt()?;
+        admission.require_old_parts(&self.native, &self.promise, &self.frozen, writer)?;
+        let pin = self
+            .pin
+            .try_lock()
+            .ok_or_else(|| invalid("known remote OLD original pin busy"))?;
+        if pin.is_some() {
+            return Err(invalid("known remote OLD read requires actual pin handoff"));
+        }
+        let service = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("known remote OLD original service busy"))?;
+        service.recover_known_remote_old_decision(
+            writer,
+            &self.native,
+            &self.promise,
+            &self.frozen,
+            admission,
+            parent,
+        )
     }
     /// Read-only re-proof of this original owner's committed remote DECISION.
     pub(super) fn observe_remote_decision(

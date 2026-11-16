@@ -31,6 +31,12 @@ impl std::fmt::Debug for RegisteredRemoteImageInstallFreeze {
     }
 }
 impl RegisteredRemoteImageInstallFreeze {
+    /// Diagnostic DATA only: consumed custody is None, and no currentness or
+    /// raw Frozen permit is returned. Normal authority access stays strict.
+    #[cfg(test)]
+    pub(crate) fn test_retained_frozen_owner(&self) -> Option<Uuid> {
+        self.custody.as_ref().map(|custody| custody.frozen.owner())
+    }
     fn custody(&self) -> Result<&Arc<RegisteredRemoteFreezeCustody>> {
         self.custody.as_ref().ok_or_else(|| {
             invalid("Registered actual A freeze already consumed by original joint release")

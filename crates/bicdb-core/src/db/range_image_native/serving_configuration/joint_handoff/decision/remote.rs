@@ -4,6 +4,9 @@ use super::*;
 #[cfg(test)]
 mod reader_controls;
 use crate::distribution_range_handoff::NativeRemoteDecisionAdmission;
+mod catalogue;
+mod known_read;
+pub(crate) use catalogue::NativeRemoteCataloguePhysicalPoint;
 
 #[derive(Debug)]
 enum RemoteOutcome {
@@ -206,6 +209,47 @@ impl RemotePhysicalScope<'_> {
     }
 }
 impl BicDb {
+    /// Readback of an actual successful return retained by the original RAM
+    /// participant. No format write, native begin/put/commit, or unknown upgrade.
+    pub(crate) fn observe_known_remote_native_decision(
+        &self,
+        receipt: &NativeJointDecisionReceipt,
+        attempt: &NativeRemoteJointDecisionAttempt,
+    ) -> Result<()> {
+        self.require_registered_joint_decision_storage_healthy()?;
+        let xid = attempt.actual_committed_xid()?;
+        let actual = attempt
+            .native
+            .as_ref()
+            .ok_or_else(|| invalid("remote DECISION actual native attempt absent"))?;
+        receipt.require_current(self)?;
+        if receipt.record != actual.record
+            || receipt.record.decision != attempt.expected
+            || bounded_json(&receipt.record, MAX_NATIVE_RECEIPT_BYTES)? != actual.bytes
+            || receipt.record.native_page_xid != xid
+            || self
+                .paged_records
+                .as_ref()
+                .ok_or_else(|| invalid("remote DECISION native store absent"))?
+                .store()
+                .transactions()
+                .status(xid)
+                != bicdb_page::TxStatus::Committed
+        {
+            return Err(invalid(
+                "remote DECISION readonly exact original CURRENT/archive/xid not proven",
+            ));
+        }
+        let provenance = self.require_remote_native_decision_provenance(&receipt.record)?;
+        if actual.provenance.as_ref() != Some(&provenance)
+            || bounded_json(&provenance, MAX_NATIVE_RECEIPT_BYTES)? != actual.provenance_bytes
+        {
+            return Err(invalid(
+                "remote DECISION readonly original protected provenance changed",
+            ));
+        }
+        self.require_registered_joint_decision_storage_healthy()
+    }
     pub(super) fn require_remote_native_decision_profile(
         &self,
         record: &NativeJointDecisionRecord,
@@ -375,6 +419,7 @@ impl BicDb {
         attempt: &mut NativeRemoteJointDecisionAttempt,
         parent: &CancellationToken,
     ) -> Result<NativeJointDecisionReceipt> {
+        admission.require_native_mutation()?;
         physical.require_current(self, store, admission)?;
         let metadata = admission.metadata();
         metadata.require_native_store_point(self, store)?;
@@ -446,7 +491,9 @@ impl BicDb {
                 .paged_records
                 .as_ref()
                 .ok_or_else(|| invalid("remote DECISION native page store absent"))?;
-            let _writer = paged.write_guard();
+            let _writer = paged
+                .write_guard()
+                .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
             self.require_registered_joint_decision_storage_healthy()?;
             admission.require_memory_current()?;
             let (xid, _) = paged.begin();

@@ -1,0 +1,2290 @@
+{
+  "source": "d74d363addb35b5b97308b1afcc1c2231e021d29",
+  "job": 133048283864,
+  "original_raw_sha256": "0fb6aca4e8deb61f9d3fe1ff331d30041e19f4fefe7650bf9ff29f3d2e781f4f",
+  "serial_association_limit": "Direct-report serial intervals can include next-test startup rows before the preceding console result is printed. Original panic error and exact source order remain authoritative; stage attribution uses matching actual failure and caller source, never test-name expectations.",
+  "actual_result": {
+    "passed": 397,
+    "failed": 93,
+    "ignored": 1,
+    "unique_cases": 491,
+    "summaries": 1,
+    "filtered_out": 989,
+    "elapsed_seconds": 3656.27
+  },
+  "group_counts": {
+    "allocation domain prerequisite (4)": 4,
+    "allocation generic-marker wrong refusal (1)": 1,
+    "allocation late SDK tail (3)": 3,
+    "bootstrap setup (1)": 1,
+    "cross-protocol registry prerequisite (2)": 2,
+    "FIRST post-placement registry prerequisite (54)": 54,
+    "FIRST population Strong (1)": 1,
+    "FIRST setup (1)": 1,
+    "FIRST OLD constrain prerequisite (1)": 1,
+    "HOT catalogue activation (23)": 23,
+    "HOT large-head no fault (1)": 1,
+    "supervisor anchored progress (1)": 1
+  },
+  "source_pins": [
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests/allocation_policy_tests/activation_domain_tests.rs",
+      "blob": "97207f8871d6c81f9379cbe11b1292474a5b32f2",
+      "sha256": "8e01dae5b36efc9b79aabc839c79ca2011f9b1fb6440293d9d594aa614b01d40",
+      "bytes": 6625,
+      "lines": 150,
+      "anchors": [
+        {
+          "start": 139,
+          "end": 150
+        },
+        {
+          "start": 23,
+          "end": 39
+        }
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests/allocation_policy_tests.rs",
+      "blob": "00f678b6eab7329244a347ccc11b9b52410cccf0",
+      "sha256": "d8af35d1109516f3a8ad15cd9ece8795717daf175d9d9aa660be923e7329bf3c",
+      "bytes": 17217,
+      "lines": 391,
+      "anchors": [
+        {
+          "start": 195,
+          "end": 211
+        },
+        {
+          "start": 40,
+          "end": 56
+        }
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests/bootstrap_service_wait_tests.rs",
+      "blob": "900a82193581526410a62f5acff86d6a4c03f62c",
+      "sha256": "cb9c9d2cc5b10cb5820b68831fd17892feec3836c61bd7e8ef6bed2ee9df0a78",
+      "bytes": 5296,
+      "lines": 121,
+      "anchors": [
+        {
+          "start": 20,
+          "end": 36
+        }
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests/cross_protocol_tests.rs",
+      "blob": "14ef23fe4dcb30a46cc7d197c56b5d3bb7bbe24e",
+      "sha256": "e07b6931841a6b223f1f13a9f1ddebd00d9f51393ce621205bdb0893075fcb53",
+      "bytes": 19775,
+      "lines": 425,
+      "anchors": [
+        {
+          "start": 70,
+          "end": 86
+        }
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "blob": "00f64795c59e2fa3e1a6b3257aa1cf7fb884d252",
+      "sha256": "d7b61fa791886dbad7e2210abca0aa83901d5686e382aa57b78bdcc869fc91f1",
+      "bytes": 107380,
+      "lines": 2373,
+      "anchors": [
+        {
+          "start": 761,
+          "end": 777
+        },
+        {
+          "start": 747,
+          "end": 763
+        },
+        {
+          "start": 848,
+          "end": 864
+        },
+        {
+          "start": 852,
+          "end": 868
+        },
+        {
+          "start": 865,
+          "end": 881
+        },
+        {
+          "start": 225,
+          "end": 241
+        }
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "blob": "21a16483470b059736b33857a6f77cd228df6584",
+      "sha256": "ea01b038f2f327404557a9057f7c1cea98d524db48a317b17fe3589621d2da3b",
+      "bytes": 48969,
+      "lines": 1287,
+      "anchors": [
+        {
+          "start": 997,
+          "end": 1013
+        }
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests/activation_owned_tests.rs",
+      "blob": "b1480832b62bececc6045f8d996ccef621bf5253",
+      "sha256": "36e5790f641634e466bf0ab0109098e19c967ca9c931aba673af14305095562f",
+      "bytes": 27073,
+      "lines": 567,
+      "anchors": [
+        {
+          "start": 130,
+          "end": 146
+        }
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/metadata_supervisor_tests.rs",
+      "blob": "4d70387c2d7230e5d7f0b16ebfc41af70a9530a6",
+      "sha256": "8eea5afbf179a5420b890e9c98355872bb554ae5f999f4e1b07fce84c9178daa",
+      "bytes": 19451,
+      "lines": 507,
+      "anchors": [
+        {
+          "start": 106,
+          "end": 122
+        }
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/metadata_supervisor_tests/snapshot_reader_tests.rs",
+      "blob": "e399b1ef9a7f123bf7d4cd291407ecd6dd975cc7",
+      "sha256": "5bb704ab34f1c65cca52b9d35d76a1f2760e00d7a7d290bee0b9a40efd80c2cf",
+      "bytes": 10773,
+      "lines": 207,
+      "anchors": [
+        {
+          "start": 157,
+          "end": 173
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::allocation_policy_tests::activation_domain_tests::native_allocation_actual_activation_refuses_changed_effective_native_claim",
+      "panic_raw_line": 659925,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests/allocation_policy_tests/activation_domain_tests.rs",
+      "source_line": 147,
+      "source_column": 20,
+      "classification_group": "allocation domain prerequisite (4)",
+      "source_cut_classification": "Actual allocation mode0 prerequisite reaches its selected-after SDK APP, which returns n1 rangeconfigurationchanged. Intended activation-domain comparison/probe is UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: range configuration changed; refresh actual host metadata policy\")",
+      "matching_failed_actual_call": {
+        "line": 262738,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1662544,
+          "error": {
+            "display_bytes": 185,
+            "display_format_complete": true,
+            "display_prefix": "cluster error: cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: range configuration changed; refresh actual host metadata policy",
+            "display_sha256": "581f4049b3d5a5517c6d2cc268b98d2cf95a945ed8a2a8fb622dff33a5f3ef21",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "original_sdk_actual_APPEND"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::allocation_policy_tests::activation_domain_tests::native_allocation_actual_activation_refuses_changed_metadata_shape_learner_and_epoch",
+      "panic_raw_line": 661149,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests/allocation_policy_tests/activation_domain_tests.rs",
+      "source_line": 147,
+      "source_column": 20,
+      "classification_group": "allocation domain prerequisite (4)",
+      "source_cut_classification": "Actual allocation mode0 prerequisite reaches its selected-after SDK APP, which returns n1 rangeconfigurationchanged. Intended activation-domain comparison/probe is UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: range configuration changed; refresh actual host metadata policy\")",
+      "matching_failed_actual_call": {
+        "line": 263834,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1635471,
+          "error": {
+            "display_bytes": 185,
+            "display_format_complete": true,
+            "display_prefix": "cluster error: cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: range configuration changed; refresh actual host metadata policy",
+            "display_sha256": "581f4049b3d5a5517c6d2cc268b98d2cf95a945ed8a2a8fb622dff33a5f3ef21",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "original_sdk_actual_APPEND"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::allocation_policy_tests::activation_domain_tests::native_allocation_actual_activation_refuses_other_retained_installed_writer_state",
+      "panic_raw_line": 662325,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests/allocation_policy_tests/activation_domain_tests.rs",
+      "source_line": 147,
+      "source_column": 20,
+      "classification_group": "allocation domain prerequisite (4)",
+      "source_cut_classification": "Actual allocation mode0 prerequisite reaches its selected-after SDK APP, which returns n1 rangeconfigurationchanged. Intended activation-domain comparison/probe is UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: range configuration changed; refresh actual host metadata policy\")",
+      "matching_failed_actual_call": {
+        "line": 264930,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1637124,
+          "error": {
+            "display_bytes": 185,
+            "display_format_complete": true,
+            "display_prefix": "cluster error: cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: range configuration changed; refresh actual host metadata policy",
+            "display_sha256": "581f4049b3d5a5517c6d2cc268b98d2cf95a945ed8a2a8fb622dff33a5f3ef21",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "original_sdk_actual_APPEND"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::allocation_policy_tests::activation_domain_tests::native_allocation_actual_activation_retains_full_metadata_and_effective_native_voters",
+      "panic_raw_line": 663634,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests/allocation_policy_tests/activation_domain_tests.rs",
+      "source_line": 147,
+      "source_column": 20,
+      "classification_group": "allocation domain prerequisite (4)",
+      "source_cut_classification": "Actual allocation mode0 prerequisite reaches its selected-after SDK APP, which returns n1 rangeconfigurationchanged. Intended activation-domain comparison/probe is UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: range configuration changed; refresh actual host metadata policy\")",
+      "matching_failed_actual_call": {
+        "line": 266028,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1635115,
+          "error": {
+            "display_bytes": 185,
+            "display_format_complete": true,
+            "display_prefix": "cluster error: cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: range configuration changed; refresh actual host metadata policy",
+            "display_sha256": "581f4049b3d5a5517c6d2cc268b98d2cf95a945ed8a2a8fb622dff33a5f3ef21",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "original_sdk_actual_APPEND"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::allocation_policy_tests::native_initial_live_allocation_actual_generic_epoch_marker_cannot_replace_native_serving",
+      "panic_raw_line": 663760,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests/allocation_policy_tests.rs",
+      "source_line": 203,
+      "source_column": 9,
+      "classification_group": "allocation generic-marker wrong refusal (1)",
+      "source_cut_classification": "Actual generic recovery/held selected range and APP refusal reached; exact intended native-serving refusal assertion fails because the actual error is n1 rangeconfigurationchanged.",
+      "original_error": "must reach the actual native configuration check after genuine generic recovery: Err(Cluster(\"cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: range configuration changed; refresh actual host metadata policy\"))",
+      "matching_failed_actual_call": {
+        "line": 266174,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1658549,
+          "error": {
+            "display_bytes": 185,
+            "display_format_complete": true,
+            "display_prefix": "cluster error: cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: range configuration changed; refresh actual host metadata policy",
+            "display_sha256": "581f4049b3d5a5517c6d2cc268b98d2cf95a945ed8a2a8fb622dff33a5f3ef21",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "allocation_actual_sdk_requires_native_serving"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::allocation_policy_tests::native_initial_live_allocation_known_native_postcheck_cancel_reconciles_without_replay",
+      "panic_raw_line": 665047,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests/allocation_policy_tests.rs",
+      "source_line": 48,
+      "source_column": 30,
+      "classification_group": "allocation late SDK tail (3)",
+      "source_cut_classification": "Exercise reaches selected-after original SDK APP after allocation/worker path; APP returns n1 rangeconfigurationchanged. Full selected/untouched post-allocation SDK tail is not accepted.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: range configuration changed; refresh actual host metadata policy\")",
+      "matching_failed_actual_call": {
+        "line": 267543,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1676959,
+          "error": {
+            "display_bytes": 185,
+            "display_format_complete": true,
+            "display_prefix": "cluster error: cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: range configuration changed; refresh actual host metadata policy",
+            "display_sha256": "581f4049b3d5a5517c6d2cc268b98d2cf95a945ed8a2a8fb622dff33a5f3ef21",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "original_sdk_actual_APPEND"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::allocation_policy_tests::native_initial_live_allocation_pre_io_cancel_retains_original_candidate",
+      "panic_raw_line": 666364,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests/allocation_policy_tests.rs",
+      "source_line": 48,
+      "source_column": 30,
+      "classification_group": "allocation late SDK tail (3)",
+      "source_cut_classification": "Exercise reaches selected-after original SDK APP after allocation/worker path; APP returns n1 rangeconfigurationchanged. Full selected/untouched post-allocation SDK tail is not accepted.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: range configuration changed; refresh actual host metadata policy\")",
+      "matching_failed_actual_call": {
+        "line": 268636,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1633247,
+          "error": {
+            "display_bytes": 185,
+            "display_format_complete": true,
+            "display_prefix": "cluster error: cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: range configuration changed; refresh actual host metadata policy",
+            "display_sha256": "581f4049b3d5a5517c6d2cc268b98d2cf95a945ed8a2a8fb622dff33a5f3ef21",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "original_sdk_actual_APPEND"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::allocation_policy_tests::native_initial_live_allocation_preserves_state_worker_and_real_sdk_strong",
+      "panic_raw_line": 667647,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests/allocation_policy_tests.rs",
+      "source_line": 48,
+      "source_column": 30,
+      "classification_group": "allocation late SDK tail (3)",
+      "source_cut_classification": "Exercise reaches selected-after original SDK APP after allocation/worker path; APP returns n1 rangeconfigurationchanged. Full selected/untouched post-allocation SDK tail is not accepted.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: range configuration changed; refresh actual host metadata policy\")",
+      "matching_failed_actual_call": {
+        "line": 269732,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1595604,
+          "error": {
+            "display_bytes": 185,
+            "display_format_complete": true,
+            "display_prefix": "cluster error: cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: range configuration changed; refresh actual host metadata policy",
+            "display_sha256": "581f4049b3d5a5517c6d2cc268b98d2cf95a945ed8a2a8fb622dff33a5f3ef21",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "original_sdk_actual_APPEND"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::bootstrap_service_wait_tests::native_bootstrap_finite_original_service_wait_cancels",
+      "panic_raw_line": 667653,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests/bootstrap_service_wait_tests.rs",
+      "source_line": 28,
+      "source_column": 33,
+      "classification_group": "bootstrap setup (1)",
+      "source_cut_classification": "Five::start DATA-open prerequisite fails with currentmetadata leaderunknown; selected held-service cancellation action/cut is UNREACHED.",
+      "original_error": "actual bootstrap fixture prerequisite: cluster error: native host bootstrap: current metadata leader unknown for DATA open",
+      "matching_failed_actual_call": {
+        "line": 269813,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 0,
+          "error": {
+            "display_bytes": 176,
+            "display_format_complete": true,
+            "display_prefix": "cluster error: cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: read authority requires a committed current-term leadership anchor",
+            "display_sha256": "62e43d9e2d306f592a3b3c4f43b2af4de4c5d40b8c4cfc024fed57f3c1f8d2ba",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "normal_initial_data_return"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::cross_protocol_tests::native_first_actual_enrollment_blocks_authenticated_other_step_before_effects",
+      "panic_raw_line": 668765,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests/cross_protocol_tests.rs",
+      "source_line": 78,
+      "source_column": 30,
+      "classification_group": "cross-protocol registry prerequisite (2)",
+      "source_cut_classification": "exercise_order returns during real cross_actual_registry_refresh. Later FIRST-versus-step arbitration cuts/assertions are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 271541,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1422905,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "cross_actual_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::cross_protocol_tests::native_first_actual_retained_discovery_step_blocks_new_first_enrollment_before_effects",
+      "panic_raw_line": 669911,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests/cross_protocol_tests.rs",
+      "source_line": 78,
+      "source_column": 30,
+      "classification_group": "cross-protocol registry prerequisite (2)",
+      "source_cut_classification": "exercise_order returns during real cross_actual_registry_refresh. Later FIRST-versus-step arbitration cuts/assertions are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"metadata consensus: writer registry refresh refuses active DATA relocation\")",
+      "matching_failed_actual_call": {
+        "line": 272586,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1387063,
+          "error": {
+            "display_bytes": 89,
+            "display_format_complete": true,
+            "display_prefix": "cluster error: metadata consensus: writer registry refresh refuses active DATA relocation",
+            "display_sha256": "c6651b11a03a85d4f7502d150e4c2e3fe59a38ec021ab5b0435a0ff276d69220",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "cross_actual_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::metadata_identity_tests::native_first_actual_same_service_identity_wait_original_cancel_refuses",
+      "panic_raw_line": 670999,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 273631,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1337774,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::metadata_identity_tests::native_first_actual_same_service_identity_wait_original_expiry_refuses",
+      "panic_raw_line": 671630,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native range image: native writer policy publication unresolved\")",
+      "matching_failed_actual_call": {
+        "line": 273892,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 569029,
+          "error": {
+            "display_bytes": 153,
+            "display_format_complete": true,
+            "display_prefix": "cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native range image: native writer policy publication unresolved",
+            "display_sha256": "b93ee5832fd3fc380c2fe290df0f7878514e2ac1d25b31e72b0c5af3e69b99ea",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::metadata_identity_tests::native_first_actual_same_service_identity_wait_releases_to_original_own",
+      "panic_raw_line": 672722,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 274937,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1376049,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_all_open_retirement_and_unique_release_component",
+      "panic_raw_line": 672822,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"metadata consensus: writer registry refresh refuses active DATA relocation\")",
+      "matching_failed_actual_call": {
+        "line": 275066,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 43574,
+          "error": {
+            "display_bytes": 89,
+            "display_format_complete": true,
+            "display_prefix": "cluster error: metadata consensus: writer registry refresh refuses active DATA relocation",
+            "display_sha256": "c6651b11a03a85d4f7502d150e4c2e3fe59a38ec021ab5b0435a0ff276d69220",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_concurrent_new_sequence_cannot_replace_admitted_original",
+      "panic_raw_line": 673945,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 276111,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1239579,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_final_wal_cancel_retains_xid_and_blocks_next_mutation",
+      "panic_raw_line": 675092,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 277157,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1281510,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_host_poll_cancel_refuses_prepare_while_original_tls_request_is_live",
+      "panic_raw_line": 676215,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 278202,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1362285,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_host_poll_expiry_refuses_prepare_while_original_tls_request_is_live",
+      "panic_raw_line": 677336,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 279247,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1251092,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_later_same_byte_failed_io_refuses_readonly_open_projection",
+      "panic_raw_line": 678481,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"metadata consensus: writer registry refresh refuses active DATA relocation\")",
+      "matching_failed_actual_call": {
+        "line": 280294,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1365089,
+          "error": {
+            "display_bytes": 89,
+            "display_format_complete": true,
+            "display_prefix": "cluster error: metadata consensus: writer registry refresh refuses active DATA relocation",
+            "display_sha256": "c6651b11a03a85d4f7502d150e4c2e3fe59a38ec021ab5b0435a0ff276d69220",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_local_policy_refuses_real_unreleased_member_without_native_write",
+      "panic_raw_line": 679569,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 281339,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1368421,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_lost_close_readonly_resolves_original_record_without_replay",
+      "panic_raw_line": 680549,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 282351,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1110388,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_lost_enroll_reply_readonly_recovers_same_original_a",
+      "panic_raw_line": 681643,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 283399,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1323526,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_lost_source_start_reply_describe_same_export_a",
+      "panic_raw_line": 682736,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 284444,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1342237,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_metadata_activation_refuses_original_unreleased_recipient_before_proposal",
+      "panic_raw_line": 683883,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 285490,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1335159,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_metadata_owner_catalogue_scope_keeps_range_authority_and_refuses_stale_owner",
+      "panic_raw_line": 684938,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 286536,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1442390,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_metadata_owner_outside_final_voters_records_released_activation",
+      "panic_raw_line": 686070,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 287584,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1319631,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_native_decision_reply_loss_readonly_same_original_xid",
+      "panic_raw_line": 687223,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 288630,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1304286,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_native_sync_unknown_blocks_observation_and_new_mutation",
+      "panic_raw_line": 688325,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"metadata consensus: writer registry refresh refuses active DATA relocation\")",
+      "matching_failed_actual_call": {
+        "line": 289675,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1327386,
+          "error": {
+            "display_bytes": 89,
+            "display_format_complete": true,
+            "display_prefix": "cluster error: metadata consensus: writer registry refresh refuses active DATA relocation",
+            "display_sha256": "c6651b11a03a85d4f7502d150e4c2e3fe59a38ec021ab5b0435a0ff276d69220",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_open_directory_sync_unknown_requires_new_owned_fsync",
+      "panic_raw_line": 689407,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 290723,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1299974,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_open_observation_survives_stock_sdk_other_range_head_progress",
+      "panic_raw_line": 690547,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 291770,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1341389,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_open_post_io_server_cancel_resolves_owned_without_native_replay",
+      "panic_raw_line": 691620,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"metadata consensus: writer registry refresh refuses active DATA relocation\")",
+      "matching_failed_actual_call": {
+        "line": 292816,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1437424,
+          "error": {
+            "display_bytes": 89,
+            "display_format_complete": true,
+            "display_prefix": "cluster error: metadata consensus: writer registry refresh refuses active DATA relocation",
+            "display_sha256": "c6651b11a03a85d4f7502d150e4c2e3fe59a38ec021ab5b0435a0ff276d69220",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_registered_cancelled_closed_drain_resumes_same_installed_owner",
+      "panic_raw_line": 692761,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 293861,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1421506,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_registered_drop_cancel_retains_owner_then_reconciles",
+      "panic_raw_line": 693749,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 294872,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1217173,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_registered_replacement_socket_policy_read_and_original_denial",
+      "panic_raw_line": 694863,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 295918,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1288936,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_registered_shutdown_active_authenticated_peer_cancel_then_same_owner_resume",
+      "panic_raw_line": 695974,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 296964,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1313864,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_release_refuses_missing_real_open_before_successor",
+      "panic_raw_line": 697079,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 298009,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1413345,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_released_owners_to_serving_original_sdk_ack_full_strong",
+      "panic_raw_line": 698161,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 299054,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1241463,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_remote_all_bridge_and_owned_open",
+      "panic_raw_line": 699298,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 300102,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1305846,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_server_cancelled_queued_request_no_effect_fresh_step",
+      "panic_raw_line": 700432,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 301147,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1343943,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_server_expired_queued_request_no_effect_fresh_step",
+      "panic_raw_line": 701571,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 302194,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1255844,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_actual_target_s2_reply_loss_describe_same_terminal_then_native_decision",
+      "panic_raw_line": 701668,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"metadata consensus: writer registry refresh refuses active DATA relocation\")",
+      "matching_failed_actual_call": {
+        "line": 302323,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 49591,
+          "error": {
+            "display_bytes": 89,
+            "display_format_complete": true,
+            "display_prefix": "cluster error: metadata consensus: writer registry refresh refuses active DATA relocation",
+            "display_sha256": "c6651b11a03a85d4f7502d150e4c2e3fe59a38ec021ab5b0435a0ff276d69220",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_metadata_selected_commit_survives_actual_other_range_head_changes",
+      "panic_raw_line": 702810,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"metadata consensus: writer registry refresh refuses active DATA relocation\")",
+      "matching_failed_actual_call": {
+        "line": 303368,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1298608,
+          "error": {
+            "display_bytes": 89,
+            "display_format_complete": true,
+            "display_prefix": "cluster error: metadata consensus: writer registry refresh refuses active DATA relocation",
+            "display_sha256": "c6651b11a03a85d4f7502d150e4c2e3fe59a38ec021ab5b0435a0ff276d69220",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_normal_hosts_actual_leader_nonleader_donor_to_materialized",
+      "panic_raw_line": 703438,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 304097,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 734149,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_normal_hosts_to_actual_recipient_native_decision",
+      "panic_raw_line": 704541,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 305144,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1451717,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_over_512_real_row_steps_compact_and_refuse_consumed_sequence",
+      "panic_raw_line": 705515,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST population Strong (1)",
+      "source_cut_classification": "Over512 population loop reaches successful APP then full Strong times out (IO cluster RPC deadline); later512 compaction/consumed-sequence cut is UNREACHED. This is unavailable/error, not successful absence.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: Io(Custom { kind: TimedOut, error: \"cluster RPC deadline expired\" })",
+      "matching_failed_actual_call": {
+        "line": 305796,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 2001256,
+          "error": {
+            "display_bytes": 38,
+            "display_format_complete": true,
+            "display_prefix": "io error: cluster RPC deadline expired",
+            "display_sha256": "743fce7fdc3f1f63d50a0ac6011632f2f90620fa1a66f4e421a2d06ed60f70da",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "original_sdk_actual_full_Strong"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_remote_all_actual_preparations_then_target_native_bridge",
+      "panic_raw_line": 706644,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 306967,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1338787,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_remote_bridge_commit_sync_unknown_remains_blocked",
+      "panic_raw_line": 707777,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 308012,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1355164,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_remote_bridge_postcommit_server_cancel_resolves_same_native_xid",
+      "panic_raw_line": 708934,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 309057,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1283358,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_remote_bridge_refuses_actual_unprepared_final_member",
+      "panic_raw_line": 710079,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"metadata consensus: writer registry refresh refuses active DATA relocation\")",
+      "matching_failed_actual_call": {
+        "line": 310103,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1251380,
+          "error": {
+            "display_bytes": 89,
+            "display_format_complete": true,
+            "display_prefix": "cluster error: metadata consensus: writer registry refresh refuses active DATA relocation",
+            "display_sha256": "c6651b11a03a85d4f7502d150e4c2e3fe59a38ec021ab5b0435a0ff276d69220",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_remote_catalogue_actual_dirsync_unknown_same_candidate_retry",
+      "panic_raw_line": 711189,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 311148,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1362655,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_remote_catalogue_actual_duplicate_recipient_refused",
+      "panic_raw_line": 711885,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 311878,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 622906,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_remote_catalogue_actual_expired_frame_new_collection_refused",
+      "panic_raw_line": 712482,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native range image: native writer policy publication unresolved\")",
+      "matching_failed_actual_call": {
+        "line": 312142,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 526715,
+          "error": {
+            "display_bytes": 153,
+            "display_format_complete": true,
+            "display_prefix": "cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native range image: native writer policy publication unresolved",
+            "display_sha256": "b93ee5832fd3fc380c2fe290df0f7878514e2ac1d25b31e72b0c5af3e69b99ea",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_remote_catalogue_actual_foreign_disk_preimage_not_overwritten",
+      "panic_raw_line": 713595,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 313188,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1424715,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_remote_catalogue_actual_frame_wrong_expected_body_refused",
+      "panic_raw_line": 714712,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 314233,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1375471,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_remote_catalogue_actual_intervening_io_cannot_clear_old_uncertainty",
+      "panic_raw_line": 715805,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 315278,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1320260,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_remote_catalogue_actual_known_commit_late_error_fresh_readback",
+      "panic_raw_line": 716922,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 316323,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1375283,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_remote_catalogue_actual_postclone_cancel_no_io_same_candidate_retry",
+      "panic_raw_line": 716955,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 755,
+      "source_column": 13,
+      "classification_group": "FIRST setup (1)",
+      "source_cut_classification": "Five::start returns registered control store busy before exercise; intended postclone-cancel/noIO catalogue cut is UNREACHED.",
+      "original_error": "actual normal FIRST prerequisite: cluster error: native host bootstrap: registered control store busy",
+      "matching_failed_actual_call": {
+        "line": 316418,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 31784,
+          "error": {
+            "display_bytes": 67,
+            "display_format_complete": true,
+            "display_prefix": "cluster error: native host bootstrap: registered control store busy",
+            "display_sha256": "0475302d86a3f3bc7756191aeff2a61570cb19807ca4ec2cf707f8b095b46538",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "normal_registered_control"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_remote_catalogue_actual_recipients_and_metadata_certified",
+      "panic_raw_line": 717055,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"metadata consensus: writer registry refresh refuses active DATA relocation\")",
+      "matching_failed_actual_call": {
+        "line": 316549,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 24839,
+          "error": {
+            "display_bytes": 89,
+            "display_format_complete": true,
+            "display_prefix": "cluster error: metadata consensus: writer registry refresh refuses active DATA relocation",
+            "display_sha256": "c6651b11a03a85d4f7502d150e4c2e3fe59a38ec021ab5b0435a0ff276d69220",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_remote_catalogue_actual_rename_unknown_original_disk_same_candidate_retry",
+      "panic_raw_line": 718043,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 317561,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1131288,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_remote_catalogue_actual_reply_loss_same_known_candidate",
+      "panic_raw_line": 718099,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native range image: native writer policy publication unresolved\")",
+      "matching_failed_actual_call": {
+        "line": 317693,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 72221,
+          "error": {
+            "display_bytes": 153,
+            "display_format_complete": true,
+            "display_prefix": "cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native range image: native writer policy publication unresolved",
+            "display_sha256": "b93ee5832fd3fc380c2fe290df0f7878514e2ac1d25b31e72b0c5af3e69b99ea",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_remote_prepare_actual_commit_sync_unknown_cannot_be_read_as_success",
+      "panic_raw_line": 719210,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 318739,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1412096,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_remote_prepare_actual_postcommit_server_cancel_known_read_no_replay",
+      "panic_raw_line": 720346,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 319784,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1417213,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::native_first_remote_registered_prepare_uses_actual_owner_and_tls_caller",
+      "panic_raw_line": 721495,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 320831,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1299349,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::request_wait_tests::native_first_actual_closed_old_service_cancel_preserves_native",
+      "panic_raw_line": 722585,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 321877,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1333784,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::request_wait_tests::native_first_actual_closed_old_service_earliest_original_expiry",
+      "panic_raw_line": 723691,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 322922,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1360950,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::request_wait_tests::native_first_actual_closed_old_service_release_full_observation",
+      "panic_raw_line": 724925,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST OLD constrain prerequisite (1)",
+      "source_cut_classification": "Actual FIRST factory/exercise proceeds to ALL_OLD_constrain; n1 rangeconfigurationchanged prevents intended old-service held wait/full observation cut.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: range configuration changed; refresh actual host metadata policy\")",
+      "matching_failed_actual_call": {
+        "line": 324018,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 47265,
+          "error": {
+            "display_bytes": 185,
+            "display_format_complete": true,
+            "display_prefix": "cluster error: cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: range configuration changed; refresh actual host metadata policy",
+            "display_sha256": "581f4049b3d5a5517c6d2cc268b98d2cf95a945ed8a2a8fb622dff33a5f3ef21",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_ALL_OLD_constrain"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::first_owned_tests::request_wait_tests::native_first_actual_remote_new_identity_own_cancel_refuses_while_caller_live",
+      "panic_raw_line": 726078,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "source_line": 769,
+      "source_column": 30,
+      "classification_group": "FIRST post-placement registry prerequisite (54)",
+      "source_cut_classification": "Original selected+untouched SDK baseline and actual allocation commit reached; registry refresh returns error BEFORE actual_range_leader_factory. Later case-specific FIRST, D, catalogue, Open/Release/fault cuts are UNREACHED.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": {
+        "line": 325450,
+        "data": {
+          "boundary": "actual_call_returned",
+          "elapsed_us": 1261095,
+          "error": {
+            "display_bytes": 40,
+            "display_format_complete": true,
+            "display_prefix": "canceling statement due to query timeout",
+            "display_sha256": "ee94b8eebe056046dd3354952cca841c163c89386b784ea0fe3c380fb8a09d4e",
+            "prefix_incomplete": false,
+            "retained_error_or_authority": false
+          },
+          "ok": false,
+          "stage": "actual_post_placement_registry_refresh"
+        }
+      }
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::activation_owned_tests::native_registered_fifth_activation_actual_directory_sync_unknown_same_owner_fresh_retry",
+      "panic_raw_line": 727455,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "source_line": 1005,
+      "source_column": 18,
+      "classification_group": "HOT catalogue activation (23)",
+      "source_cut_classification": "Actual default member actual_catalogue_open persistence API returns QueryTimedOut at1005. Target n4 owned-activation/first-policy/data/readiness or case-specific later cuts are UNREACHED; timeout alone does not prove IO/noeffect cause.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": null
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::activation_owned_tests::native_registered_fifth_activation_actual_foreign_owner_and_gate_refused",
+      "panic_raw_line": 728821,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "source_line": 1005,
+      "source_column": 18,
+      "classification_group": "HOT catalogue activation (23)",
+      "source_cut_classification": "Actual default member actual_catalogue_open persistence API returns QueryTimedOut at1005. Target n4 owned-activation/first-policy/data/readiness or case-specific later cuts are UNREACHED; timeout alone does not prove IO/noeffect cause.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": null
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::activation_owned_tests::native_registered_fifth_activation_actual_large_unrelated_catalogue_unknown_refsync",
+      "panic_raw_line": 731050,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests/activation_owned_tests.rs",
+      "source_line": 138,
+      "source_column": 9,
+      "classification_group": "HOT large-head no fault (1)",
+      "source_cut_classification": "Actual owned activation write invoked on n2; raw730254 retains QueryTimedOut and fault_fired0. Intended directory-sync fault is UNREACHED; assertion requires1. No storage-cause or successful refsync qualification.",
+      "original_error": "assertion `left == right` failed",
+      "matching_failed_actual_call": null
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::activation_owned_tests::native_registered_fifth_activation_actual_later_same_bytes_io_cannot_reuse_verified_owner",
+      "panic_raw_line": 732402,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "source_line": 1005,
+      "source_column": 18,
+      "classification_group": "HOT catalogue activation (23)",
+      "source_cut_classification": "Actual default member actual_catalogue_open persistence API returns QueryTimedOut at1005. Target n4 owned-activation/first-policy/data/readiness or case-specific later cuts are UNREACHED; timeout alone does not prove IO/noeffect cause.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": null
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::activation_owned_tests::native_registered_fifth_activation_actual_original_producer_cancel_refuses_retry",
+      "panic_raw_line": 733866,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "source_line": 1005,
+      "source_column": 18,
+      "classification_group": "HOT catalogue activation (23)",
+      "source_cut_classification": "Actual default member actual_catalogue_open persistence API returns QueryTimedOut at1005. Target n4 owned-activation/first-policy/data/readiness or case-specific later cuts are UNREACHED; timeout alone does not prove IO/noeffect cause.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": null
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::activation_owned_tests::native_registered_fifth_activation_actual_rename_unknown_same_owner_fresh_retry",
+      "panic_raw_line": 735106,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "source_line": 1005,
+      "source_column": 18,
+      "classification_group": "HOT catalogue activation (23)",
+      "source_cut_classification": "Actual default member actual_catalogue_open persistence API returns QueryTimedOut at1005. Target n4 owned-activation/first-policy/data/readiness or case-specific later cuts are UNREACHED; timeout alone does not prove IO/noeffect cause.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": null
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::activation_owned_tests::native_registered_fifth_activation_actual_unrelated_range_head_refuses_old_comparison",
+      "panic_raw_line": 736434,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "source_line": 1005,
+      "source_column": 18,
+      "classification_group": "HOT catalogue activation (23)",
+      "source_cut_classification": "Actual default member actual_catalogue_open persistence API returns QueryTimedOut at1005. Target n4 owned-activation/first-policy/data/readiness or case-specific later cuts are UNREACHED; timeout alone does not prove IO/noeffect cause.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": null
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_metadata_tests::native_registered_fifth_remote_hot_closed_actual_mstore_contention_same_own_progress",
+      "panic_raw_line": 737948,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "source_line": 1005,
+      "source_column": 18,
+      "classification_group": "HOT catalogue activation (23)",
+      "source_cut_classification": "Actual default member actual_catalogue_open persistence API returns QueryTimedOut at1005. Target n4 owned-activation/first-policy/data/readiness or case-specific later cuts are UNREACHED; timeout alone does not prove IO/noeffect cause.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": null
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_metadata_tests::native_registered_fifth_remote_hot_closed_actual_mstore_wait_expired_own_refuses",
+      "panic_raw_line": 739325,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "source_line": 1005,
+      "source_column": 18,
+      "classification_group": "HOT catalogue activation (23)",
+      "source_cut_classification": "Actual default member actual_catalogue_open persistence API returns QueryTimedOut at1005. Target n4 owned-activation/first-policy/data/readiness or case-specific later cuts are UNREACHED; timeout alone does not prove IO/noeffect cause.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": null
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_tests::native_registered_fifth_remote_hot_closed_audit_native_reply_lost_same_attempt_retry",
+      "panic_raw_line": 740634,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "source_line": 1005,
+      "source_column": 18,
+      "classification_group": "HOT catalogue activation (23)",
+      "source_cut_classification": "Actual default member actual_catalogue_open persistence API returns QueryTimedOut at1005. Target n4 owned-activation/first-policy/data/readiness or case-specific later cuts are UNREACHED; timeout alone does not prove IO/noeffect cause.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": null
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_first_policy_real_caller_expiry_fresh_same_xid",
+      "panic_raw_line": 742095,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "source_line": 1005,
+      "source_column": 18,
+      "classification_group": "HOT catalogue activation (23)",
+      "source_cut_classification": "Actual default member actual_catalogue_open persistence API returns QueryTimedOut at1005. Target n4 owned-activation/first-policy/data/readiness or case-specific later cuts are UNREACHED; timeout alone does not prove IO/noeffect cause.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": null
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_follower_binds_without_fake_leader_ready",
+      "panic_raw_line": 743594,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "source_line": 1005,
+      "source_column": 18,
+      "classification_group": "HOT catalogue activation (23)",
+      "source_cut_classification": "Actual default member actual_catalogue_open persistence API returns QueryTimedOut at1005. Target n4 owned-activation/first-policy/data/readiness or case-specific later cuts are UNREACHED; timeout alone does not prove IO/noeffect cause.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": null
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_lost_committed_decision_reply_keeps_same_attempt",
+      "panic_raw_line": 745059,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "source_line": 1005,
+      "source_column": 18,
+      "classification_group": "HOT catalogue activation (23)",
+      "source_cut_classification": "Actual default member actual_catalogue_open persistence API returns QueryTimedOut at1005. Target n4 owned-activation/first-policy/data/readiness or case-specific later cuts are UNREACHED; timeout alone does not prove IO/noeffect cause.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": null
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_original_client_ack_and_full_strong",
+      "panic_raw_line": 746381,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "source_line": 1005,
+      "source_column": 18,
+      "classification_group": "HOT catalogue activation (23)",
+      "source_cut_classification": "Actual default member actual_catalogue_open persistence API returns QueryTimedOut at1005. Target n4 owned-activation/first-policy/data/readiness or case-specific later cuts are UNREACHED; timeout alone does not prove IO/noeffect cause.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": null
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_surviving_leader_actual_pending_callback_rejects_foreign_open",
+      "panic_raw_line": 747782,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "source_line": 1005,
+      "source_column": 18,
+      "classification_group": "HOT catalogue activation (23)",
+      "source_cut_classification": "Actual default member actual_catalogue_open persistence API returns QueryTimedOut at1005. Target n4 owned-activation/first-policy/data/readiness or case-specific later cuts are UNREACHED; timeout alone does not prove IO/noeffect cause.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": null
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::entry_scope_tests::native_registered_first_policy_actual_entry_caller_cancel_refuses_before_native",
+      "panic_raw_line": 749117,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "source_line": 1005,
+      "source_column": 18,
+      "classification_group": "HOT catalogue activation (23)",
+      "source_cut_classification": "Actual default member actual_catalogue_open persistence API returns QueryTimedOut at1005. Target n4 owned-activation/first-policy/data/readiness or case-specific later cuts are UNREACHED; timeout alone does not prove IO/noeffect cause.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": null
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::entry_scope_tests::native_registered_first_policy_actual_entry_earliest_window_expiry_refuses_before_native",
+      "panic_raw_line": 750343,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "source_line": 1005,
+      "source_column": 18,
+      "classification_group": "HOT catalogue activation (23)",
+      "source_cut_classification": "Actual default member actual_catalogue_open persistence API returns QueryTimedOut at1005. Target n4 owned-activation/first-policy/data/readiness or case-specific later cuts are UNREACHED; timeout alone does not prove IO/noeffect cause.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": null
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::entry_scope_tests::native_registered_first_policy_actual_entry_metadata_term_change_refuses_before_native",
+      "panic_raw_line": 751607,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "source_line": 1005,
+      "source_column": 18,
+      "classification_group": "HOT catalogue activation (23)",
+      "source_cut_classification": "Actual default member actual_catalogue_open persistence API returns QueryTimedOut at1005. Target n4 owned-activation/first-policy/data/readiness or case-specific later cuts are UNREACHED; timeout alone does not prove IO/noeffect cause.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": null
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::fresh_collection_tests::native_registered_fifth_prepared_fresh_actual_expired_round_then_new_collection",
+      "panic_raw_line": 752877,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "source_line": 1005,
+      "source_column": 18,
+      "classification_group": "HOT catalogue activation (23)",
+      "source_cut_classification": "Actual default member actual_catalogue_open persistence API returns QueryTimedOut at1005. Target n4 owned-activation/first-policy/data/readiness or case-specific later cuts are UNREACHED; timeout alone does not prove IO/noeffect cause.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": null
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::local_term_tests::native_registered_fifth_remote_hot_local_term_after_policy_readback_refuses_hook",
+      "panic_raw_line": 754188,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "source_line": 1005,
+      "source_column": 18,
+      "classification_group": "HOT catalogue activation (23)",
+      "source_cut_classification": "Actual default member actual_catalogue_open persistence API returns QueryTimedOut at1005. Target n4 owned-activation/first-policy/data/readiness or case-specific later cuts are UNREACHED; timeout alone does not prove IO/noeffect cause.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": null
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_actual_original_a_through_first_policy",
+      "panic_raw_line": 755681,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "source_line": 1005,
+      "source_column": 18,
+      "classification_group": "HOT catalogue activation (23)",
+      "source_cut_classification": "Actual default member actual_catalogue_open persistence API returns QueryTimedOut at1005. Target n4 owned-activation/first-policy/data/readiness or case-specific later cuts are UNREACHED; timeout alone does not prove IO/noeffect cause.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": null
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_early_all_released_admission_refuses",
+      "panic_raw_line": 756910,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "source_line": 1005,
+      "source_column": 18,
+      "classification_group": "HOT catalogue activation (23)",
+      "source_cut_classification": "Actual default member actual_catalogue_open persistence API returns QueryTimedOut at1005. Target n4 owned-activation/first-policy/data/readiness or case-specific later cuts are UNREACHED; timeout alone does not prove IO/noeffect cause.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": null
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_lost_committed_decision_reply_same_native_attempt",
+      "panic_raw_line": 758242,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "source_line": 1005,
+      "source_column": 18,
+      "classification_group": "HOT catalogue activation (23)",
+      "source_cut_classification": "Actual default member actual_catalogue_open persistence API returns QueryTimedOut at1005. Target n4 owned-activation/first-policy/data/readiness or case-specific later cuts are UNREACHED; timeout alone does not prove IO/noeffect cause.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": null
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_retirement_own_successor_keeps_predecessor_guard_strict",
+      "panic_raw_line": 759714,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "source_line": 1005,
+      "source_column": 18,
+      "classification_group": "HOT catalogue activation (23)",
+      "source_cut_classification": "Actual default member actual_catalogue_open persistence API returns QueryTimedOut at1005. Target n4 owned-activation/first-policy/data/readiness or case-specific later cuts are UNREACHED; timeout alone does not prove IO/noeffect cause.",
+      "original_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "matching_failed_actual_call": null
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::metadata_supervisor_tests::snapshot_reader_tests::native_owned_metadata_supervisor_short_snapshot_readers_preserve_anchor_progress",
+      "panic_raw_line": 759723,
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/metadata_supervisor_tests.rs",
+      "source_line": 114,
+      "source_column": 13,
+      "classification_group": "supervisor anchored progress (1)",
+      "source_cut_classification": "Real competing readers/busy and original round cancellation/expiry are recorded. After old listener drain,12s anchored-leader wait fails (leader term2 commit0); later freshMQ/final denial assertions are UNREACHED.",
+      "original_error": "actual automatic TLS election never committed its current-term anchor: [MetadataConsensusStatus { cluster_id: ClusterId(\"native-bootstrap-actual-tls\"), node_id: ClusterNodeId(\"n0\"), role: Leader, current_term: 2, voted_for: Some(ClusterNodeId(\"n0\")), leader_id: Some(ClusterNodeId(\"n0\")), commit_index: 0, last_log_index: 2, last_log_term: 2, topology_generation: 1, voters: [ClusterNodeId(\"n0\"), ClusterNodeId(\"n1\"), ClusterNodeId(\"n2\")], learners: [] }, MetadataConsensusStatus { cluster_id: ClusterId(\"native-bootstrap-actual-tls\"), node_id: ClusterNodeId(\"n1\"), role: Follower, current_term: 2, voted_for: Some(ClusterNodeId(\"n0\")), leader_id: Some(ClusterNodeId(\"n0\")), commit_index: 1, last_log_index: 1, last_log_term: 1, topology_generation: 1, voters: [ClusterNodeId(\"n0\"), ClusterNodeId(\"n1\"), ClusterNodeId(\"n2\")], learners: [] }]",
+      "matching_failed_actual_call": null
+    }
+  ],
+  "scope": "Complete actual93 failure table with exact original errors/panic lines, actual direct-call stage correlation and pinned source order. No common-cause inference; no case-specific prerequisite is qualified from its test name. Direct-report serial intervals can include next-test startup rows before preceding console output; exact panic and matching source/error are authoritative. Whole Native job failed; passes remain separate. No private cold/Joined source qualification or successful-absence/ACKloss/Azure claim."
+}

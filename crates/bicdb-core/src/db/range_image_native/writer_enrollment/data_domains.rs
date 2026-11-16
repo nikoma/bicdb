@@ -289,6 +289,20 @@ fn require_closed_record_current(
     writer: &NativeWriterHostState,
     record: &ClosedDomainRecord,
 ) -> Result<()> {
+    require_closed_record_current_inner(db, writer, record, None)
+}
+/// Private only: the optional borrow is constructed from an actual CLOSED
+/// owner and an already validated publication scope, never a DTO/lineage input.
+fn require_closed_record_current_inner(
+    db: &BicDb,
+    writer: &NativeWriterHostState,
+    record: &ClosedDomainRecord,
+    publication: Option<(
+        &NativeClosedWriterDomain,
+        &crate::db::NativeJointPreparedPublicationScope<'_>,
+        &crate::distribution_range_consensus::RangeWriteStore,
+    )>,
+) -> Result<()> {
     record.validate(&writer.record)?;
     require_original_metadata_store(db, record)?;
     if !crate::format::native_writer_data_domain_active(db.data_path())? {
@@ -332,7 +346,13 @@ fn require_closed_record_current(
             "writer CLOSED audit changed protected joint decision",
         ));
     }
-    let actual = db.current_native_range_source_lineage(record.decision.old_range().id)?;
+    let independent;
+    let actual = if let Some((domain, scope, store)) = publication {
+        scope.require_closed_source_lineage(db, store, domain)?
+    } else {
+        independent = db.current_native_range_source_lineage(record.decision.old_range().id)?;
+        &independent
+    };
     let point = &record.local;
     if actual.base.checksum_sha256 != point.physical_base_sha256
         || actual.base.local_namespace_ids != point.namespace_ids

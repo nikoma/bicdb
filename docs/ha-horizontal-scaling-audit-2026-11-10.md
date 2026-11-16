@@ -60,7 +60,8 @@ The original native CLI target separately passed **6/0/0**. Its actual
 healthy-existing-read/fresh-ACK/full-readback gate after adding a fifth metadata
 voter passed with its unchanged ten-second requirement and two-second SDK calls.
 This closes the observed registry-only availability regression for that bounded
-four-process scenario; it is not DATA redistribution, populated DATA restart,
+same-runner scenario: four original DATA writer processes plus a fifth metadata
+process. It is not DATA redistribution, populated DATA restart,
 full-dataset acknowledged-commit reconciliation or physical qualification.
 REST's complete 163,814,084-byte raw log SHA256 is
 `8d8fe385b3751a3378e572a5a8ff733753ac476ad0360661b9ac7f306137cd5c`;

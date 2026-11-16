@@ -47,8 +47,9 @@ Independent complete-stream/result receipt SHA256
 `52e61381401d2dd96f14c5cce0c9b32278875655597f636f03a2c1f58e388193`
 retains all summaries and case rows. The six native CLI pass rows are
 raw799889–799894; its target summary at raw799896 is 6/0/0 in 125.26 seconds.
-The original fifth-voter availability gate is raw799894. This is a real
-four-process metadata-only scenario; DATA assignments remain unchanged and
+The original fifth-voter availability gate is raw799894. This uses five database
+processes on one CI runner: four original DATA writers plus a fifth metadata
+member. DATA assignments remain unchanged and
 no relocation or populated DATA cold restart is established. A passing
 promoted metadata-voter restart is not a DATA-host restart qualification.
 

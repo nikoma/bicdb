@@ -4,6 +4,21 @@ This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe64
 
 ## Actual execution
 
+### Source d74: complete failed native execution after compilation
+
+The [full d74 runtime report](native-d74-runtime-findings.md) pins source
+`d74d363addb35b5b97308b1afcc1c2231e021d29`, its actual merge checkout,
+all491 listed native cases and all93 original failures with source/error/cut
+bindings. Native failed397/93/1 after compilation; remaining-workspace passed
+1062/0/6 and CLI6/0. The complete assembled run has10 passing jobs, one failed
+Native job and four optional skips. Original raw logs and ZIPs are frozen and
+independently verified. Earlier results below remain historical.
+
+The prepared current-descriptor, per-operation recovery-authority and startup
+wait corrections retain their own source-only status. None was executed by the
+historical d74 run. Intended fault assertions unreached because of a prerequisite
+remain not tested; no common root cause or acknowledged-data loss is inferred.
+
 ### Source62b: complete failed run; compilation and bootstrap availability
 
 Exact candidate **1.0.520-beta / `62b602ca852a4183c4aa7630e2593e10446ff35c`**,

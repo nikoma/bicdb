@@ -6,7 +6,25 @@ components and an automatic four-to-five-node operator candidate. No build,
 database open, process experiment, VM action or deployment was performed for
 this audit.
 
-## Current source boundary at `62b602ca852a` — 2026-11-16
+## Last complete execution at d74 — 2026-11-16
+
+Source **1.0.520-beta / `d74d363addb35b5b97308b1afcc1c2231e021d29`**,
+tree `51aa988b08c42f8a935f43e54a37d8fd4eda51c2`, completed its normal CI
+with **10 passing jobs, one failed job and four optional skips**. Native compiled
+and failed397/93/1, with989 filtered. Remaining-workspace passed1062/0/6,
+including native CLI6/0,84 Python and two Node cases. Core, SQL, PGwire and Rails
+passed within their separate scopes. See the [full failure inventory, exact
+source cuts and original archive](native-d74-runtime-findings.md).
+
+These are runtime component and metadata/initial-DATA CLI results. They do not
+demonstrate protected-native fifth-node DATA relocation, complete cold recovery,
+fault-safe convergence or capacity gain. Source corrections above that failed
+revision remain uncompiled/unexecuted until their own exact-source run. Joined
+additional-range NEW/native-decision/catalogue/pin-release and the automatic
+controller remain open integration requirements; prior source kernels do not
+close them. Main remains519; no release, deployment or new VMs were produced.
+
+## Previous source boundary at `62b602ca852a` — 2026-11-16
 
 Exact inspected candidate: **1.0.520-beta /
 `62b602ca852a4183c4aa7630e2593e10446ff35c`**, tree

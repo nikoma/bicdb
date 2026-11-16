@@ -30,7 +30,90 @@ visibility/catch-up cases, and its hot fixture used4000ms rather than the
 candidate's1500ms. Counts are not an interchangeable benchmark or proof of
 independent-host HA, current binary qualification or full64-range convergence.
 
-## Current candidate execution — source62b, 2026-11-16 UTC
+## Last complete candidate execution — source d74, 2026-11-16 UTC
+
+The preceding PR207 source was **1.0.520-beta /
+`d74d363addb35b5b97308b1afcc1c2231e021d29`**, tree
+`51aa988b08c42f8a935f43e54a37d8fd4eda51c2`. Its actual CI merge checkout
+`0408b5ca6758927032b5536dbdb968683ca9813e` has that tree and the exact
+main519/candidate parents. Main remains the separately identified 519 revision
+above. The candidate is draft and unmerged; no release or deployment follows.
+
+At the **2026-11-16 03:29 UTC** checkpoint, automatic
+[Tests43790716008](https://github.com/nikoma/bicdb/actions/runs/43790716008)
+remains running. All-target compilation and the following no-default workflow
+consumer passed. PGwire passed **511/0/2**, with 28 summaries and 513 distinct
+listed cases. [Rails43790719012](https://github.com/nikoma/bicdb/actions/runs/43790719012)
+passed **20 runs/100 assertions/0 failures, errors or skips**; its application
+checks include 24 reports/messages, two overlapping workers and its existing
+single-database SIGKILL/restart scenario. The tested debug binary hash is
+`de63fce23b8ef2338547fead2dd81c9df05db02aa04cea50a85aa98cb5a6d26f`;
+the evidence ZIP retains reports/logs, not a released executable. Independent
+complete-log/original-ZIP review receipt:
+`8e95e3ea54fb79879961e4f016747ec4ed9d550f67de824d516990e60f04e33b`;
+independent full PGwire case inventory:
+`31e2a859c63131af45ef16998f283e5e78f153282d2f577a03d033d9cc74129f`.
+Nonserial Core passed **1,875/0/16** across 138 main-suite summaries,
+plus one genuine isolated subprocess pass. The combined log therefore has 139
+summaries and **1,876/0/16**; the subprocess result must not be counted twice.
+Independent whole-log/case review receipt:
+`7525b96f56bee02132f37b6a32959683b1991ab4966e6023a4fa654eca52b491`.
+SQL passed **2,682/0/4** across 282 summaries; independent whole-log/case
+review receipt:
+`9431c921e47099ae79267822fae5acd28f9ce4518cac9a05673e7dc98805117c`.
+Serial Native and remaining-workspace jobs are still running, and the complete
+run archive remains pending. These partial passes do not qualify distributed HA.
+
+At **2026-11-16 03:30:21 UTC**, the
+[serial Native job133048283864](https://github.com/nikoma/bicdb/actions/runs/43790716008/job/133048283864)
+finished **failed: 397 passed, 93 failed, 1 ignored**, with 989 filtered,
+in 3,656.27 seconds. The complete original log is 174,365,442 bytes, SHA256
+`0fb6aca4e8deb61f9d3fe1ff331d30041e19f4fefe7650bf9ff29f3d2e781f4f`.
+Independent full-log/hash/491-unique-case/93-panic-context reconciliation receipt:
+`58aac5bd3c0c5fbe36d34fe2cf8af32f10e643d492cc7b3123487b0d6123600c`.
+The failed scenarios comprise 68 FIRST-family, 24 hot-policy and one metadata
+supervisor case. This is a runtime failure, not a compilation failure or an
+unavailable CI result. The candidate cannot merge on these results.
+
+Three new bootstrap service-wait controls passed. The cancellation control
+failed its fixture prerequisite with `current metadata leader unknown for DATA
+open`, before the intended held-service cut; its cancellation guarantee is
+**not tested** by that failed scenario. Allocation/SDK cases reported range-policy
+configuration mismatches; FIRST/hot cases include timeouts and active-relocation
+registry refusals. These errors do not establish a common root cause or durable
+data loss. The remaining-workspace job and final complete archive are still
+pending; source fixes must preserve the original failed execution and assertions.
+
+The final remaining-workspace job completed **success at 03:40:01 UTC**:
+**1,062/0/6** across 129 Rust summaries, with 1,068 unique listed cases.
+Its unchanged native CLI target passed **6/0/0**; the downstream Python suites
+passed 47, 3 and 34 tests, and Node TAP passed 2/0. Independent whole REST log
+verification:
+`250bb5c5a5d011735786ba2f115ca9dd1a7843a4a50276947d98c06269a0b2ad`.
+The six CLI cases cover initial DATA, metadata registration/promotion/reopen,
+replica-only refusal and registry/read availability. They do not relocate DATA
+onto a fifth server. Their three allowlisted client journals contain 629 rows;
+these are not a complete cluster-wide or Azure qualification ledger.
+Independent CLI/Python/TAP/journal byte and row checks:
+`aad7623d0fdeb04d1912dfe136554bb68a6bd045dfbc289d09a26b7da2c51064`.
+
+Across Tests and Rails, the final result is **10 passed jobs, 1 failed job,
+4 optional skipped jobs**. The failed run is now frozen read-only: **95 files,
+92 premanifest files, 11 complete logs, 8 original ZIPs/28 members**. Manifest:
+`91110f4182a22d401e9c4dc4976815608ceccce78c6fd184963abd4a9129a015`.
+Independent complete archive verification:
+`cfd7e447d059be3ef7bb1b0f9d1443dddcaa63d0e120411a52787372d8101145`;
+exact closure, checkout/source/parent bindings and wrong-manifest control:
+`1373fa9e38d513cdebbaaa84ccf4da919ca0868a43f09554af213bfc6c017203`.
+No passing component reclassifies the native job or complete run as passing.
+
+The [complete d74 findings and reproducers](design/native-d74-runtime-findings.md)
+include the full491-case inventory and all93 original failures with source paths,
+errors and reached/unreached cuts. The current descriptor, recovery-turn and
+startup corrections described there remain source-only; this failed historical
+execution does not compile or test those later changes.
+
+## Previous complete candidate execution — source62b, 2026-11-16 UTC
 
 Candidate **1.0.520-beta / `62b602ca852a4183c4aa7630e2593e10446ff35c`**,
 tree `d659588bb66fb527720903064000e831c7c6c76a`, executed at PR checkout

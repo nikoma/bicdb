@@ -291,28 +291,30 @@ impl NativeHotRecoveryMaintenance {
             &job.range,
             parent,
         )?;
-        let role = self.fresh_role(&job.range, job.scope.recovery_nonce, parent)?;
-        job.scope.require_role(&role)?;
-        let token = parent.child_with_deadline(role.deadline());
         loop {
+            // The original caller bounds this complete turn. Each distinct
+            // recipient operation obtains its own fresh authority inside that
+            // unchanged bound; a previous operation's short Role is not the
+            // lifetime of the retained multi-phase job.
+            self.live(parent)?;
+            let role = self.fresh_role(&job.range, job.scope.recovery_nonce, parent)?;
+            job.scope.require_role(&role)?;
+            let token = parent.child_with_deadline(role.deadline());
             self.live(&token)?;
             role.require_live_request()?;
             held.require_actual_store_slot()?;
             if job.phase == AllocationPhase::Publish {
-                let fresh = self.fresh_role(&job.range, job.scope.recovery_nonce, &token)?;
                 self.coordinator.publish_allocation_native_recovery(
                     &self.runtime,
                     &self.host,
                     &held,
-                    &fresh,
+                    &role,
                     &job.scope,
                     &token,
                 )?;
                 return Ok(());
             }
             if job.position == job.members.len() {
-                let fresh = self.fresh_role(&job.range, job.scope.recovery_nonce, &token)?;
-                job.scope.require_role(&fresh)?;
                 held.require_actual_store_slot()?;
                 job.phase = match job.phase {
                     AllocationPhase::Fence => AllocationPhase::Prepare,
@@ -369,10 +371,14 @@ impl NativeHotRecoveryMaintenance {
             } else {
                 job.peer_opens.insert(node, actual_open);
             }
+            // The actual validated successful recipient result belongs to
+            // this job even if the outer caller expires immediately after it.
+            // Retain that progress before late checks, so the next turn does
+            // not repeat an already successful Fence/Prepare/Complete/Activate.
+            job.position += 1;
             self.live(&token)?;
             role.require_live_request()?;
             held.require_actual_store_slot()?;
-            job.position += 1;
         }
     }
 }

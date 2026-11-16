@@ -892,7 +892,25 @@ impl BicDb {
                 state.require_database(self, &serving)?;
                 continue;
             }
-            state.require_database(self, range)?;
+            // A SAME-State allocation audit can advance this descriptor's
+            // epoch without creating a joint Serving domain. Select its
+            // already-verified policy DATA instead of asking the current
+            // writer to accept the original policy's obsolete epoch. The
+            // ordinary database check below still validates the actual hook,
+            // pending bit and complete durable current/archive audit chain;
+            // the coordinator separately requires native serving readiness.
+            let allocation = state
+                .registry_extension
+                .read()
+                .as_ref()
+                .and_then(|verified| verified.facts().ranges.get(&range.id).cloned());
+            let actual = allocation.as_ref().unwrap_or(range);
+            if !actual.contains_token(token) {
+                return Err(invalid(
+                    "application mutation is outside the verified allocation range",
+                ));
+            }
+            state.require_database(self, actual)?;
         }
         Ok(())
     }

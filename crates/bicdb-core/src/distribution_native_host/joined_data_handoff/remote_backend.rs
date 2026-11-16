@@ -242,17 +242,21 @@ fn repeat_pause(repeated: u32) -> Duration {
 /// How many members are asked at once for a step with two observation
 /// windows around a durable write (publication, Open, release, writer
 /// policy). Such a member reads every other member twice, and a member that
-/// is busy with its own step answers "busy" and is asked again. Measured
+/// is busy with its own step answers "busy" and is asked again; so does the
+/// metadata leader beyond four metadata reads at a time. Measured
 /// between five processes: two members at once finish in about 1.1 s where
 /// one after the other needs 1.5 s, but three members' publications at once
 /// needed 2.2 to 2.3 s where one after the other needs 1.7 s, almost all of
 /// it repetitions of busy members. So two.
 const WINDOWED_STEPS_AT_ONCE: usize = 2;
-/// A preparation (the member's own local work) and a custody retirement
-/// (one read of every other member, no durable write of the bridge) are
-/// sent to every member together: three at once were measured at 0.33 s and
-/// 0.62 s where one after the other needs 0.65 s and 1.0 s.
-const EVERY_MEMBER_AT_ONCE: usize = usize::MAX;
+/// How many members are asked at once for a preparation (the member's own
+/// local work), a custody retirement (one read of every other member, no
+/// durable write under observation) or the read-only release observation.
+/// Three at once were measured at 0.33 s and 0.62 s where one after the
+/// other needs 0.65 s and 1.0 s. Not more than the measured three: every
+/// request takes metadata reads on the metadata leader, which admits four
+/// at a time and refuses the rest as busy.
+const LIGHT_STEPS_AT_ONCE: usize = 3;
 
 /// One independent exchange per member, each on its own scoped thread; all
 /// of them have returned before this function does and the results keep the
@@ -2635,7 +2639,7 @@ impl RemoteJoinedHandoffBackend {
         let decision_sha256 = decision.checksum_sha256().to_owned();
 
         // What the members already hold decides what is sent.
-        // Read-only, one request per member, all at once.
+        // Read-only, one request per member, three at a time.
         let phase = bounded(parent, BRIDGE_PHASE);
         let mut observed = Vec::new();
         {
@@ -2650,11 +2654,13 @@ impl RemoteJoinedHandoffBackend {
                     &phase,
                 )
             };
-            for (node, answer) in member_fan_out(&new, &observe) {
-                let answer = answer.map_err(|error| {
-                    stage_error(&format!("release observation of {node}"), error)
-                })?;
-                observed.push((node, answer));
+            for group in new.chunks(LIGHT_STEPS_AT_ONCE) {
+                for (node, answer) in member_fan_out(group, &observe) {
+                    let answer = answer.map_err(|error| {
+                        stage_error(&format!("release observation of {node}"), error)
+                    })?;
+                    observed.push((node, answer));
+                }
             }
         }
         self.bridge_observed = observed.clone();
@@ -2687,7 +2693,7 @@ impl RemoteJoinedHandoffBackend {
         };
         let phase = bounded(parent, BRIDGE_PHASE);
         // Every member proves every new member durably open itself and
-        // retires only its own custody: at once.
+        // retires only its own custody: three at a time.
         let asked = new
             .iter()
             .filter(|node| !released(node))
@@ -2697,7 +2703,7 @@ impl RemoteJoinedHandoffBackend {
             members,
             &decision,
             &asked,
-            EVERY_MEMBER_AT_ONCE,
+            LIGHT_STEPS_AT_ONCE,
             &operation,
             &phase,
             "OLD custody retirement",
@@ -2977,12 +2983,12 @@ impl RemoteJoinedHandoffBackend {
             decision_sha256: decision_sha256.to_owned(),
         };
         let phase = bounded(parent, BRIDGE_PHASE);
-        // A preparation is the member's own local work: at once.
+        // A preparation is the member's own local work: three at a time.
         self.complete_bridge_steps(
             members,
             decision,
             new,
-            EVERY_MEMBER_AT_ONCE,
+            LIGHT_STEPS_AT_ONCE,
             &operation,
             &phase,
             "bridge preparation",

@@ -48,8 +48,7 @@ use crate::distribution_range_handoff::{
 const DECISION_PUBLICATION_ROUNDS: usize = 2;
 
 /// One decision exchange with one member, as this coordinator, with its
-/// time reported to the move trace. A free function over the transport so
-/// that the exchanges of one round can run on scoped threads.
+/// time reported to the move trace.
 fn decision_exchange(
     transport: &TcpClusterRelocationTransport,
     metadata_leader: &ClusterNodeId,
@@ -137,28 +136,27 @@ impl RemoteJoinedHandoffBackend {
         let mut round =
             NativeRemoteJointDecisionCertificateRound::begin(plan, manifest.clone(), phase, token)?;
         let mut missing = Vec::new();
-        // Read-only and one member's own fact each: every member re-proves
-        // its own durable decision and reads no other member, so the
-        // requests are sent at once. The frames are counted in the order of
-        // `publishers`, as before.
-        let transport: &TcpClusterRelocationTransport = &self.transport;
-        let observe = |id: &ClusterNodeId| {
-            decision_exchange(
-                transport,
+        // One member after the other, although the observation is read-only:
+        // each exchange takes a metadata read on the metadata leader for this
+        // coordinator and one for the answering member, and the leader
+        // admits four at a time. Sent together, an observation was refused
+        // as "bounded acquisition capacity is busy" in a measured move; a
+        // refused observation counts as a missing decision, which costs the
+        // member a repeated preparation (it has eight for its lifetime) and
+        // can fail the step. The four observations take about 0.15 s.
+        for id in publishers {
+            match self.decision_exchange(
                 &members.metadata_leader,
                 id,
                 manifest,
                 phase,
                 NativeRemoteNewOperationV1::ObserveDecision,
                 token,
-            )
-        };
-        for (id, answer) in member_fan_out(publishers, &observe) {
-            match answer {
+            ) {
                 Ok(frame) => round.record(frame)?,
                 Err(error) => {
                     parent.check()?;
-                    missing.push((id, format!("observe decision: {error}")));
+                    missing.push((id.clone(), format!("observe decision: {error}")));
                 }
             }
         }

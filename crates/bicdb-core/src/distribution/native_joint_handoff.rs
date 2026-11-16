@@ -970,6 +970,56 @@ impl DistributionStore {
     }
 }
 
+impl RangeRelocation {
+    /// The range change of a completed native joint handoff, exactly as this
+    /// committed record states it: the old range at the learner epoch and
+    /// the final range at the activation epoch, both from the scope the
+    /// certification wrote. An error for every other relocation: one that is
+    /// not a native joint handoff, is not `Completed` with its source
+    /// retirement recorded (`Cleaned`), or was certified without its scope.
+    ///
+    /// The caller decides where the record came from; reading it grants
+    /// nothing. Metadata consensus accepted the scope only together with the
+    /// dual quorum decision whose scope it equals, never changes it
+    /// afterwards, and never evicts a native joint record.
+    pub(crate) fn completed_native_joint_change(
+        &self,
+    ) -> Result<(&RangeDescriptor, &RangeDescriptor)> {
+        let refuse = |why: &str| {
+            cluster_error(format!(
+                "{} of range {} ({:?}) is not a completed native joint handoff with its certified scope: {why}",
+                self.id, self.range_id, self.phase
+            ))
+        };
+        let record = self
+            .native_joint_handoff_v1
+            .as_ref()
+            .ok_or_else(|| refuse("it carries no joint handoff record"))?;
+        record.validate_for(self)?;
+        if self.phase != RelocationPhase::Completed
+            || record.stage != NativeJointHandoffStageV1::Cleaned
+            || self.resume_phase.is_some()
+        {
+            return Err(refuse("it is not finished"));
+        }
+        let scope = record
+            .certified_scope
+            .as_ref()
+            .ok_or_else(|| refuse("its record was certified without the scope"))?;
+        let (old, activation) = (scope.old_range(), scope.activation_range());
+        if self.expected_epoch.checked_add(1) != Some(self.learner_epoch)
+            || old.epoch != self.learner_epoch
+            || Some(activation.epoch) != self.learner_epoch.checked_add(2)
+            || self.promoted_epoch != Some(activation.epoch)
+            || old.id != self.range_id
+            || activation.id != self.range_id
+        {
+            return Err(refuse("its epochs differ from its certified scope"));
+        }
+        Ok((old, activation))
+    }
+}
+
 impl ClusterTopology {
     /// Asked by the metadata leader, of its own committed configuration,
     /// before it proposes a further metadata voter.

@@ -605,6 +605,16 @@ impl NativeWriterHostState {
         }
         Ok(Some(verified.record.range.clone()))
     }
+    /// The ranges with a published or unresolved DATA-domain continuation.
+    pub(super) fn serving_data_ranges(&self) -> Vec<RangeId> {
+        let domains = self.data_domains.read();
+        domains
+            .serving
+            .keys()
+            .chain(domains.pending.iter())
+            .copied()
+            .collect()
+    }
     pub(super) fn require_serving_data_database(&self, db: &BicDb, range: RangeId) -> Result<()> {
         self.require_serving_data_database_applying(db, range, None)
     }

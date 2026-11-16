@@ -1456,30 +1456,241 @@ pub(super) fn exercise(
 }
 
 /// What a completed move leaves for the next membership change of the
-/// cluster. No member can publish a further metadata voter into its writer
-/// policy (its registry refresh names the changed range configuration), so
-/// the metadata leader refuses to propose one, from its own committed
-/// configuration and before anything is proposed.
+/// cluster: every member (the retired source, the member outside the moved
+/// range, the survivors and the target) publishes a registry successor of
+/// its SAME writer whose DATA part is the committed configuration, accepted
+/// only through the completed handoff its own quorum read records. The
+/// successor rule is then asked directly, with the real records, for what it
+/// must refuse.
 fn after_completed_move(
     metadata: &[Arc<Mutex<crate::MetadataConsensusStore>>],
+    services: &[Arc<Mutex<crate::ClusterDataNodeService>>],
     controls: &[NativeMetadataControlHost],
+    target_control: &NativeMetadataControlHost,
+    factory: &Arc<crate::distribution_native_host::NativeUnassignedLearnerFactory>,
     range: &crate::RangeDescriptor,
+    new: &[ClusterNodeId],
 ) {
+    use crate::distribution_native_writer::HostWriterPolicyFacts;
     let committed = metadata[0].lock().committed_topology().clone();
+    let moved = committed.range_by_id(range.id).unwrap().clone();
+    let facts = |value: &serde_json::Value| -> HostWriterPolicyFacts {
+        serde_json::from_value(value["facts"].clone()).unwrap()
+    };
+    let mut survivor = None;
     for (i, control) in controls.iter().enumerate() {
-        let error = control
+        let database = services[i].lock().database();
+        let original = database
+            .read()
+            .test_current_native_writer_policy_projection()
+            .unwrap();
+        let before = database
+            .read()
+            .test_current_native_writer_registry_audit()
+            .unwrap();
+        control
             .test_force_initial_data_registry_refresh(&budget(20_000))
+            .unwrap_or_else(|error| panic!("node{i} registry refresh after the move: {error}"));
+        let accepted = database
+            .read()
+            .test_current_native_writer_registry_audit()
+            .unwrap()
+            .expect("a published registry successor");
+        assert_eq!(
+            accepted["sequence"].as_u64().unwrap(),
+            before
+                .as_ref()
+                .map_or(0, |b| b["sequence"].as_u64().unwrap())
+                + 1,
+            "node{i}"
+        );
+        let (old_facts, new_facts) = (facts(&original), facts(&accepted));
+        // The enrolled policy record is untouched; the successor names the
+        // committed configuration of the moved range and nothing else new.
+        assert_eq!(
+            database
+                .read()
+                .test_current_native_writer_policy_projection()
+                .unwrap(),
+            original,
+            "node{i}"
+        );
+        assert_eq!(new_facts.ranges[&range.id].epoch, moved.epoch, "node{i}");
+        assert_eq!(new_facts.ranges[&range.id].leader, node(4), "node{i}");
+        assert_eq!(
+            old_facts.ranges[&range.id].epoch + 3,
+            moved.epoch,
+            "node{i}"
+        );
+        for (id, other) in &new_facts.ranges {
+            if *id != range.id {
+                assert_eq!(&old_facts.ranges[id], other, "node{i} range {id}");
+            }
+        }
+        assert_eq!(new_facts.metadata_voters, old_facts.metadata_voters);
+        // A repeated refresh reuses the same audit.
+        control
+            .test_force_initial_data_registry_refresh(&budget(20_000))
+            .unwrap();
+        assert_eq!(
+            database
+                .read()
+                .test_current_native_writer_registry_audit()
+                .unwrap()
+                .unwrap(),
+            accepted,
+            "node{i}"
+        );
+        eprintln!(
+            "AFTER_COMPLETED_MOVE node{i} voter_of_moved_range={} registry sequence {}",
+            new.contains(&node(i)),
+            accepted["sequence"]
+        );
+        if new.contains(&node(i)) {
+            survivor = Some((old_facts, new_facts));
+        }
+    }
+    // The target keeps its exact FIRST writer and refreshes it the same way.
+    target_control
+        .test_force_joined_data_registry_refresh(&budget(20_000))
+        .unwrap_or_else(|error| panic!("target registry refresh after the move: {error}"));
+    assert!(factory
+        .database
+        .read()
+        .test_current_native_writer_registry_audit()
+        .unwrap()
+        .is_some());
+
+    // The rule itself, on a survivor's real enrolled and accepted facts.
+    let (old_facts, new_facts) = survivor.expect("a surviving member of the moved range");
+    new_facts
+        .require_registry_successor(&old_facts, &committed)
+        .unwrap();
+    let refused = |new: &HostWriterPolicyFacts,
+                   old: &HostWriterPolicyFacts,
+                   topology: &ClusterTopology,
+                   expected: &str| {
+        let error = new
+            .require_registry_successor(old, topology)
             .unwrap_err()
             .to_string();
-        eprintln!("AFTER_COMPLETED_MOVE node{i} registry refresh: {error}");
         assert!(
-            error.contains("registry extension changed original DATA")
-                || error.contains(
-                    "range configuration differs from verified SAME-State Serving policy"
-                ),
-            "node{i}: {error}"
+            error.contains("registry extension changed original DATA") && error.contains(expected),
+            "expected {expected:?}: {error}"
         );
-    }
+    };
+    let relocation = committed
+        .relocations
+        .values()
+        .find(|plan| plan.range_id == range.id)
+        .unwrap()
+        .clone();
+    // No record of the handoff.
+    let mut absent = committed.clone();
+    absent.relocations.remove(&relocation.id);
+    refused(
+        &new_facts,
+        &old_facts,
+        &absent,
+        "without a completed committed handoff",
+    );
+    // The same handoff, not finished.
+    let mut unfinished = committed.clone();
+    unfinished
+        .relocations
+        .get_mut(&relocation.id)
+        .unwrap()
+        .phase = RelocationPhase::CleaningUp;
+    refused(&new_facts, &old_facts, &unfinished, "it is not finished");
+    // The same handoff, recorded without its certified scope.
+    let mut scopeless = serde_json::to_value(&relocation).unwrap();
+    let record = scopeless["native_joint_handoff_v1"]
+        .as_object_mut()
+        .unwrap();
+    assert!(record.remove("certified_scope").is_some());
+    record.insert("version".into(), serde_json::json!(1));
+    let mut without_scope = committed.clone();
+    without_scope
+        .relocations
+        .insert(relocation.id, serde_json::from_value(scopeless).unwrap());
+    refused(
+        &new_facts,
+        &old_facts,
+        &without_scope,
+        "certified without the scope",
+    );
+    // A successor that names another configuration than the committed one.
+    let mut other = new_facts.clone();
+    other.ranges.get_mut(&range.id).unwrap().epoch += 1;
+    refused(
+        &other,
+        &old_facts,
+        &committed,
+        "is not the committed configuration",
+    );
+    let mut other = new_facts.clone();
+    other.ranges.get_mut(&range.id).unwrap().leader = node(0);
+    refused(
+        &other,
+        &old_facts,
+        &committed,
+        "is not the committed configuration",
+    );
+    // A predecessor that was not the handoff's old configuration: another
+    // leader, another voter set, another epoch.
+    let mut foreign = old_facts.clone();
+    foreign.ranges.get_mut(&range.id).unwrap().leader = node(4);
+    refused(
+        &new_facts,
+        &foreign,
+        &committed,
+        "does not continue the previously accepted configuration",
+    );
+    let mut foreign = old_facts.clone();
+    foreign.ranges.get_mut(&range.id).unwrap().replicas.pop();
+    refused(
+        &new_facts,
+        &foreign,
+        &committed,
+        "does not continue the previously accepted configuration",
+    );
+    let mut foreign = old_facts.clone();
+    foreign.ranges.get_mut(&range.id).unwrap().epoch -= 1;
+    refused(
+        &new_facts,
+        &foreign,
+        &committed,
+        "without a completed committed handoff",
+    );
+    // A range that appears or disappears.
+    let mut fewer = new_facts.clone();
+    fewer.ranges.remove(&range.id);
+    refused(
+        &fewer,
+        &old_facts,
+        &committed,
+        "a range appeared or disappeared",
+    );
+    // An untouched range that differs is not excused by the handoff of
+    // another range.
+    let untouched = *new_facts.ranges.keys().find(|id| **id != range.id).unwrap();
+    let mut other = new_facts.clone();
+    other.ranges.get_mut(&untouched).unwrap().epoch += 1;
+    refused(
+        &other,
+        &old_facts,
+        &committed,
+        "is not the committed configuration",
+    );
+    let mut foreign = old_facts.clone();
+    foreign.ranges.get_mut(&untouched).unwrap().epoch -= 1;
+    refused(
+        &new_facts,
+        &foreign,
+        &committed,
+        "without a completed committed handoff",
+    );
+
     let refusal = committed
         .require_metadata_voter_addition_publishable()
         .unwrap_err()
@@ -1788,7 +1999,15 @@ fn whole_move(
         acknowledged,
     );
     if matches!(case, SourceCase::RemoteBackendOneDrive) {
-        after_completed_move(metadata, controls, range);
+        after_completed_move(
+            metadata,
+            services,
+            controls,
+            &*target_control,
+            factory,
+            range,
+            &new,
+        );
     }
     let commands = target_control
         .test_registered_bridge_host_commands()

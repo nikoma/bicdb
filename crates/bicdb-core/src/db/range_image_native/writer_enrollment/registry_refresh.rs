@@ -35,6 +35,13 @@ impl RegistryExtensionRecord {
             MAX_EXTENSION_BYTES,
         )?)))
     }
+    /// The committed configuration of this record's own stored quorum read.
+    /// `validate` binds it to the record; this only decodes it.
+    fn audit_topology(&self) -> Result<crate::ClusterTopology> {
+        let audit: HostMetadataReadAcquireResponse =
+            serde_json::from_value(self.metadata_audit.clone())?;
+        Ok(audit.evidence.committed_topology)
+    }
     fn validate(&self, original: &NativeWriterPolicyRecord) -> Result<()> {
         if self.version != 1
             || self.sequence == 0
@@ -53,10 +60,13 @@ impl RegistryExtensionRecord {
         {
             return Err(invalid("damaged/orphan native writer registry extension"));
         }
-        self.facts.require_registry_successor(&original.facts)?;
         let audit: HostMetadataReadAcquireResponse =
             serde_json::from_value(self.metadata_audit.clone())?;
         audit.validate(&audit.request)?;
+        // A DATA change is accepted only as this record's own stored quorum
+        // read shows it completed; see `require_registry_successor`.
+        self.facts
+            .require_registry_successor(&original.facts, &audit.evidence.committed_topology)?;
         if audit.request.requester_node_id != self.facts.local_node_id
             || audit.request.requester_incarnation != self.facts.local_incarnation
             || audit.evidence.context_id != self.metadata_context_id
@@ -190,7 +200,9 @@ impl NativeWriterHostState {
             {
                 return Err(invalid("native registry audit ancestry changed"));
             }
-            entry.facts.require_registry_successor(&previous_facts)?;
+            entry
+                .facts
+                .require_registry_successor(&previous_facts, &entry.audit_topology()?)?;
             previous_sha = entry.checksum_sha256.clone();
             previous_facts = entry.facts.clone();
             previous_term = entry.metadata_term;
@@ -227,15 +239,17 @@ impl InstalledNativeWriterHostGuard {
                 "registry refresh is not original installed coordinator",
             ));
         }
-        let range = self
-            .state
-            .record
-            .facts
-            .ranges
-            .values()
-            .next()
-            .ok_or_else(|| invalid("registry refresh has no original DATA policy"))?;
-        self.state.require_original_database(database, range)
+        if self.state.record.facts.ranges.is_empty() {
+            return Err(invalid("registry refresh has no original DATA policy"));
+        }
+        // The original writer identity, and every range this writer answers
+        // for: an unresolved DATA publication on ANY of them refuses, and
+        // every published Serving audit is re-proved against the actual
+        // database. (This used to name the first enrolled range only, with
+        // its enrolled descriptor, which a member that had published a
+        // Serving audit for that range could never satisfy again.)
+        self.state.require_original_identity_database(database)?;
+        self.state.require_every_serving_data_database(database)
     }
     /// All network work is completed; actual service/slot is rechecked with
     /// nonwaiting local borrows. Gate->journal->native WAL; no journal reentry.
@@ -253,13 +267,46 @@ impl InstalledNativeWriterHostGuard {
             .ok_or_else(|| invalid("registry refresh actual admission gate busy"))?;
         prepared.require_current(database, coordinator, self)?;
         let policy = prepared.policy();
+        // The configuration of the SAME fresh quorum read the policy was
+        // sealed from; the record written below stores exactly this audit.
+        let committed = {
+            let audit: HostMetadataReadAcquireResponse =
+                serde_json::from_value(prepared.audit().clone())?;
+            audit.validate(&audit.request)?;
+            if audit.evidence.context_id != policy.metadata_context_id()
+                || audit.evidence.term != policy.metadata_term()
+                || audit.evidence.read_index != policy.metadata_read_index()
+            {
+                return Err(invalid(
+                    "registry refresh audit is not the policy's own metadata read",
+                ));
+            }
+            audit.evidence.committed_topology
+        };
         policy
             .facts()
-            .require_registry_successor(&self.state.record.facts)?;
+            .require_registry_successor(&self.state.record.facts, &committed)?;
+        // A range this member votes in must be one its own writer state
+        // answers for under exactly the committed configuration: the
+        // enrolled policy, or the Serving audit it published itself as a new
+        // member of the handoff that changed the range. A member that is not
+        // a voter of a changed range (the retired source, a member outside
+        // the range) records the change and gains nothing on that range.
+        for range in policy.facts().ranges.values() {
+            if range
+                .replicas
+                .iter()
+                .any(|replica| replica.node_id == self.state.record.facts.local_node_id)
+            {
+                self.state.require_range(range)?;
+            }
+        }
         let _journal = database.try_native_image_journal()?;
         let previous = self.state.load_registry_chain(database)?;
         if let Some(previous) = &previous {
-            policy.facts().require_registry_successor(&previous.facts)?;
+            policy
+                .facts()
+                .require_registry_successor(&previous.facts, &committed)?;
             if policy.metadata_term() < previous.metadata_term
                 || policy.metadata_read_index() < previous.metadata_read_index
             {

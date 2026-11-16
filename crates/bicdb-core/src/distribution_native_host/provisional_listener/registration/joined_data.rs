@@ -34,6 +34,10 @@ pub struct NativeJoinedDataStatus {
     /// Observational range/epoch/watermarks; no shared future Strong-ready bit.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub registered_range: Option<serde_json::Value>,
+    /// The outcome of this owner's last writer registry refresh, if it ever
+    /// needed one. Diagnostic DATA only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub registry_refresh_last_attempt: Option<serde_json::Value>,
 }
 
 pub(super) struct NativeJoinedDataHost {
@@ -50,6 +54,7 @@ pub(super) struct NativeJoinedDataHost {
     registered: Option<assigned_data::NativeRegisteredJoinedDataTransfer>,
     selected_range: Option<crate::RangeDescriptor>,
     remote_attempts: BTreeMap<crate::RangeId, receive::NativeJoinedRemoteInstallAttempt>,
+    registry_refresh_last_attempt: Option<serde_json::Value>,
 }
 impl Drop for NativeJoinedDataHost {
     fn drop(&mut self) {
@@ -88,6 +93,7 @@ impl NativeJoinedDataHost {
             registered: None,
             selected_range: None,
             remote_attempts: BTreeMap::new(),
+            registry_refresh_last_attempt: None,
         })
     }
     /// Infallible owner retention immediately after the source moved its real
@@ -113,6 +119,7 @@ impl NativeJoinedDataHost {
             stopping: false,
             selected_range: Some(transfer.range.clone()),
             remote_attempts: BTreeMap::new(),
+            registry_refresh_last_attempt: None,
             registered: Some(transfer),
         }
     }
@@ -368,6 +375,97 @@ impl NativeJoinedDataHost {
         self.published.store(true, Ordering::Release);
         Ok(recovered)
     }
+    /// Process-owned maintenance of this owner's installed writer: publish a
+    /// further metadata voter into the SAME writer's registry, exactly as an
+    /// initial data owner does (`NativeInitialDataHost::refresh_registry`).
+    /// The writer, its coordinator and its policy record are not replaced;
+    /// nothing is re-enrolled. It creates no role, Ready or permission:
+    /// every request keeps its own fresh proofs.
+    fn refresh_registry(&mut self, parent: &CancellationToken) -> Result<()> {
+        parent.check()?;
+        if self.stopping || self.enrollment.is_none() || self.admission.is_none() {
+            return Ok(());
+        }
+        let admission = self.admission.as_ref().unwrap();
+        admission.require_live()?;
+        // Cached C only skips unnecessary maintenance; it publishes nothing.
+        if self
+            .parts
+            .backend
+            .topology
+            .try_read()
+            .is_some_and(|c| admission.writer().require_topology(&c).is_ok())
+        {
+            return Ok(());
+        }
+        let result = self.perform_registry_refresh(parent);
+        self.registry_refresh_last_attempt = Some(match &result {
+            Ok(()) => serde_json::json!({"result":"verified_same_writer_registry_audit_published",
+                "scope":"metadata-only policy facts; not Ready or a new role"}),
+            Err(error) => {
+                serde_json::json!({"result":"refused_or_pending","error":error.to_string()})
+            }
+        });
+        result
+    }
+    fn perform_registry_refresh(&self, parent: &CancellationToken) -> Result<()> {
+        let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        token.check()?;
+        self.parts.database.require_live()?;
+        self.parts.store.require_live()?;
+        let (route, current) = {
+            let metadata = self.parts.backend.lock_metadata(&token)?;
+            metadata.require_listener_database(&self.parts.database)?;
+            let status = metadata.status();
+            (
+                if status.role == MetadataConsensusRole::Leader {
+                    status.node_id
+                } else {
+                    status
+                        .leader_id
+                        .ok_or_else(|| invalid("registry refresh metadata leader unknown"))?
+                },
+                metadata.committed_topology().clone(),
+            )
+        };
+        // Owned committed C is routing DATA only. Fresh authority is obtained
+        // below with no DB/service/metadata guard across the network.
+        self.parts.backend.transport.install_topology(current)?;
+        let business = Uuid::now_v7();
+        let metadata = self
+            .parts
+            .backend
+            .transport
+            .acquire_host_metadata_observation(&route, business, Duration::from_secs(5), &token)?;
+        let current = metadata.committed_topology(business)?.clone();
+        let enrollment = self
+            .enrollment
+            .as_ref()
+            .ok_or_else(|| invalid("registry refresh original enrollment ended"))?;
+        let database = self
+            .parts
+            .factory
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("registry refresh actual database busy"))?;
+        self.parts.database.require_database(&database)?;
+        let prepared = ClusterDataNodeService::prepare_native_writer_registry_refresh(
+            &self.parts.backend.service,
+            &database,
+            &enrollment.coordinator,
+            &enrollment.guard,
+            metadata,
+            business,
+        )?;
+        // Installs routing facts only, never a recovery or serving grant.
+        self.parts.backend.transport.install_topology(current)?;
+        enrollment.guard.refresh_metadata_registry(
+            &database,
+            &enrollment.coordinator,
+            prepared,
+            &token,
+        )
+    }
     fn status(&self) -> NativeJoinedDataStatus {
         NativeJoinedDataStatus {
             receiver_listening: self.listener.is_some(),
@@ -375,6 +473,7 @@ impl NativeJoinedDataHost {
             dispatcher_published: self.published.load(Ordering::Acquire),
             stopping: self.stopping,
             registered_range: self.registered_range_status(),
+            registry_refresh_last_attempt: self.registry_refresh_last_attempt.clone(),
         }
     }
     pub(super) fn stop(&mut self, parent: &CancellationToken) -> Result<()> {
@@ -518,6 +617,27 @@ impl NativeMetadataControlHost {
             .as_mut()
             .ok_or_else(|| invalid("retained joined DATA owner absent"))?
             .publish(parent)
+    }
+    /// Process-owned finite maintenance of a joined DATA owner's writer
+    /// registry; a member without a joined owner does nothing.
+    pub(in crate::distribution_native_host) fn refresh_joined_data_registry(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        match self.joined.as_mut() {
+            Some(owner) => owner.refresh_registry(parent),
+            None => Ok(()),
+        }
+    }
+    #[cfg(test)]
+    pub(crate) fn test_force_joined_data_registry_refresh(
+        &self,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        self.joined
+            .as_ref()
+            .ok_or_else(|| invalid("test needs the joined DATA owner"))?
+            .perform_registry_refresh(parent)
     }
     pub(in crate::distribution_native_host) fn joined_data_status(
         &self,

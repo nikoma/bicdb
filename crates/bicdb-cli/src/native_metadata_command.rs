@@ -1017,6 +1017,14 @@ pub fn run(command: Command) -> Result<()> {
                             error = Some(e.to_string());
                         }
                     }
+                    if automatic_metadata {
+                        // A distinct finite process-maintenance attempt of a
+                        // member that owns DATA through a range move; its
+                        // outcome is the joined DATA status section only.
+                        let token =
+                            lifetime.child_with_deadline(Instant::now() + Duration::from_secs(5));
+                        let _ = host.refresh_joined_data_registry(&token);
+                    }
                     write(
                         &status_file,
                         &Reply {

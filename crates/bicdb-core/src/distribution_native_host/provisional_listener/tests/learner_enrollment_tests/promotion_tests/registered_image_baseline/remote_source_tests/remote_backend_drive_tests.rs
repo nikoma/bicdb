@@ -1455,6 +1455,44 @@ pub(super) fn exercise(
     assert_eq!(members!().host_commands(), commands);
 }
 
+/// What a completed move leaves for the next membership change of the
+/// cluster. No member can publish a further metadata voter into its writer
+/// policy (its registry refresh names the changed range configuration), so
+/// the metadata leader refuses to propose one, from its own committed
+/// configuration and before anything is proposed.
+fn after_completed_move(
+    metadata: &[Arc<Mutex<crate::MetadataConsensusStore>>],
+    controls: &[NativeMetadataControlHost],
+    range: &crate::RangeDescriptor,
+) {
+    let committed = metadata[0].lock().committed_topology().clone();
+    for (i, control) in controls.iter().enumerate() {
+        let error = control
+            .test_force_initial_data_registry_refresh(&budget(20_000))
+            .unwrap_err()
+            .to_string();
+        eprintln!("AFTER_COMPLETED_MOVE node{i} registry refresh: {error}");
+        assert!(
+            error.contains("registry extension changed original DATA")
+                || error.contains(
+                    "range configuration differs from verified SAME-State Serving policy"
+                ),
+            "node{i}: {error}"
+        );
+    }
+    let refusal = committed
+        .require_metadata_voter_addition_publishable()
+        .unwrap_err()
+        .to_string();
+    assert!(
+        refusal.contains("a further metadata voter is refused")
+            && refusal.contains(&format!("of range {}", range.id))
+            && refusal.contains("Nothing was committed"),
+        "{refusal}"
+    );
+    assert_eq!(metadata[0].lock().committed_topology(), &committed);
+}
+
 /// The whole move from the committed learner allocation, by one coordinator:
 /// either one `drive()` of one handoff object, or the production controller
 /// stepping it. The original client's acceptance runs around it.
@@ -1749,6 +1787,9 @@ fn whole_move(
         &new,
         acknowledged,
     );
+    if matches!(case, SourceCase::RemoteBackendOneDrive) {
+        after_completed_move(metadata, controls, range);
+    }
     let commands = target_control
         .test_registered_bridge_host_commands()
         .unwrap();

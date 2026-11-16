@@ -970,6 +970,31 @@ impl DistributionStore {
     }
 }
 
+impl ClusterTopology {
+    /// Asked by the metadata leader, of its own committed configuration,
+    /// before it proposes a further metadata voter.
+    ///
+    /// Every data-owning member publishes a new metadata voter into its
+    /// writer policy by its own registry refresh, and refuses Strong reads
+    /// and appends on every range from the moment the committed voter set
+    /// differs from the one its policy names until that refresh succeeds.
+    /// The refresh is refused while a data relocation is unfinished, and it
+    /// accepts a range configuration other than the enrolled one only as
+    /// far as the member can verify the change itself. A voter proposed
+    /// while a relocation is recorded that the members cannot follow would
+    /// therefore stop every range of the cluster. This names the first such
+    /// relocation; it reads committed configuration only and changes nothing.
+    pub(crate) fn require_metadata_voter_addition_publishable(&self) -> Result<()> {
+        if let Some(plan) = self.relocations.values().next() {
+            return Err(cluster_error(format!(
+                "a further metadata voter is refused: {} of range {} ({:?}) changed or is changing a data range configuration, and the data owners' writer policies cannot publish a new metadata voter after that; admitting the voter would make every range refuse Strong reads and appends. Nothing was committed",
+                plan.id, plan.range_id, plan.phase
+            )));
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod native_joint_handoff_completion_tests {
     use super::*;
@@ -1063,6 +1088,31 @@ mod native_joint_handoff_completion_tests {
         let plan = plan(record);
         topology.relocations.insert(plan.id, plan);
         topology
+    }
+
+    /// The metadata leader's precheck of a further voter: a configuration
+    /// without any relocation admits it, a recorded relocation refuses it by
+    /// name and the refusal changes nothing.
+    #[test]
+    fn native_joint_handoff_completion_refuses_a_further_metadata_voter_after_a_relocation() {
+        let cleaned = record(NativeJointHandoffStageV1::Cleaned);
+        let mut topology = topology(&cleaned);
+        let before = topology.clone();
+        let error = topology
+            .require_metadata_voter_addition_publishable()
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains("a further metadata voter is refused")
+                && error.contains("relocation-1 of range r1")
+                && error.contains("Nothing was committed"),
+            "{error}"
+        );
+        assert_eq!(topology, before);
+        topology.relocations.clear();
+        topology
+            .require_metadata_voter_addition_publishable()
+            .unwrap();
     }
 
     /// A record certified without its scope stays valid and keeps its exact

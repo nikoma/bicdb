@@ -53,6 +53,11 @@ impl MetadataConsensusStore {
             ));
         }
         self.require_current_native_append_ack(target, reply)?;
+        // Decided from this leader's own committed configuration, before
+        // anything is proposed: see the callee.
+        self.state
+            .committed_topology
+            .require_metadata_voter_addition_publishable()?;
         if reply
             .native_receiver
             .as_ref()
@@ -121,6 +126,9 @@ impl MetadataConsensusStore {
             }
             return Ok(None); // Fresh committed status only; no new mutation.
         }
+        self.state
+            .committed_topology
+            .require_metadata_voter_addition_publishable()?;
         if self.state.committed_topology != proof.topology
             || self.state.commit_index != proof.index
             || self.match_index.get(&proof.node).copied().unwrap_or(0) < proof.index

@@ -30,6 +30,16 @@ visibility/catch-up cases, and its hot fixture used4000ms rather than the
 candidate's1500ms. Counts are not an interchangeable benchmark or proof of
 independent-host HA, current binary qualification or full64-range convergence.
 
+## Prepared source correction after 4f — 2026-11-16 UTC
+
+The [three-part runtime correction](design/native-4f-runtime-corrections.md)
+addresses original-window contention, the full-metadata/effective-native
+descriptor contradiction and repeated first-policy validation cost. Source
+reviews, recursive formatting and version synchronization passed. Corrected
+Rust compilation and runtime acceptance remain **not tested** at this prepared
+checkpoint. The preceding failed execution below remains unchanged; no physical
+or production gate is closed by preparing this source.
+
 ## Current execution — source4f native failed, 2026-11-15 UTC
 
 Candidate **1.0.520-beta / `4f33a8b016a999d43410ca8698270dc01fbeffd6`**,

@@ -4,6 +4,12 @@ This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe64
 
 ## Actual execution
 
+The [prepared correction composition after source4f](native-4f-runtime-corrections.md)
+records its exact implementing commits, source-only reviews and unchanged
+validation/qualification gates. Its compilation and runtime execution are still
+not tested at that prepared checkpoint. The executed source4f result below is
+the preceding failed candidate, not a passing result for the correction.
+
 ### Source4f: complete run failed native runtime; remaining workspace passed
 
 Candidate **1.0.520-beta / `4f33a8b016a999d43410ca8698270dc01fbeffd6`**,

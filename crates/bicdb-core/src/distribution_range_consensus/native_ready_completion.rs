@@ -317,6 +317,12 @@ impl RangeWriteStore {
             );
         self.persist_recovery_catalog_with(write)?;
         #[cfg(test)]
+        if test_take_completion_refresh_failure(fresh.local_node_id(), scope.range_id) {
+            return Err(range_write_error(
+                "injected failure after the durable catalogue completion, before the binding refresh",
+            ));
+        }
+        #[cfg(test)]
         {
             persist_trace.complete();
             drop(persist_trace);
@@ -358,4 +364,28 @@ impl RangeWriteStore {
         }
         Ok(receipt)
     }
+}
+
+#[cfg(test)]
+static TEST_COMPLETION_REFRESH_FAILURE: std::sync::Mutex<Option<(ClusterNodeId, RangeId)>> =
+    std::sync::Mutex::new(None);
+/// Test only: the next local Complete of `range` at `node` fails once, after
+/// its catalogue completion is durable and before the retained binding is
+/// refreshed (as a busy native journal or an expired budget would make it).
+#[cfg(test)]
+pub(crate) fn test_arm_completion_refresh_failure(node: ClusterNodeId, range: RangeId) {
+    *TEST_COMPLETION_REFRESH_FAILURE.lock().unwrap() = Some((node, range));
+}
+#[cfg(test)]
+pub(crate) fn test_completion_refresh_failure_armed() -> bool {
+    TEST_COMPLETION_REFRESH_FAILURE.lock().unwrap().is_some()
+}
+#[cfg(test)]
+fn test_take_completion_refresh_failure(node: &ClusterNodeId, range: RangeId) -> bool {
+    let mut armed = TEST_COMPLETION_REFRESH_FAILURE.lock().unwrap();
+    if armed.as_ref() == Some(&(node.clone(), range)) {
+        *armed = None;
+        return true;
+    }
+    false
 }

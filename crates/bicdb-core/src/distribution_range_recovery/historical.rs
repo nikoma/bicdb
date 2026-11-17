@@ -152,6 +152,24 @@ impl HistoricalCommandDecisionRound {
         self.votes.insert(node, compact_vote(observation));
         Ok(())
     }
+    /// Diagnostic only: each observed voter's raw state for the command.
+    pub(crate) fn vote_summary(&self) -> String {
+        let votes = self
+            .votes
+            .iter()
+            .map(|(node, vote)| {
+                let state = vote
+                    .state
+                    .map_or_else(|| "absent".to_owned(), |s| format!("{s:?}"));
+                format!("{node}={state}")
+            })
+            .collect::<Vec<_>>();
+        format!(
+            "[{}] (a decision needs a certificate or {} Commit votes)",
+            votes.join(" "),
+            self.authority.member_credentials().len() / 2 + 1
+        )
+    }
     pub(super) fn is_ready(&self) -> bool {
         let q = self.authority.member_credentials().len() / 2 + 1;
         self.votes.len() >= q

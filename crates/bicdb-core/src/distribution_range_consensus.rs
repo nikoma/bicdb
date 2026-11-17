@@ -110,6 +110,10 @@ mod native_activation_domain_tests;
 pub(crate) use native_activation::NativeActivationReceipt;
 use native_activation::NATIVE_ACTIVATED_FORMAT;
 mod native_ready_completion;
+#[cfg(test)]
+pub(crate) use native_ready_completion::{
+    test_arm_completion_refresh_failure, test_completion_refresh_failure_armed,
+};
 mod native_ready_prepare;
 #[cfg(test)]
 pub(crate) use native_ready_catalog::native_ready_test_command;

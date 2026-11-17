@@ -999,6 +999,78 @@ fn native_initial_member_restart_ever_commit_unvoted_leader_tail_stays_refused()
     );
 }
 
+/// The reopened leader's hot recovery session (an abort, then a forward
+/// recovery) reaches a follower's Complete, which makes its catalogue
+/// completion durable and then fails before it refreshes the follower's
+/// retained preparation binding. The next Complete repairs the binding the
+/// way a re-sent Prepare does, and the range recovers.
+#[test]
+fn native_initial_member_restart_follower_complete_interrupted_after_catalogue() {
+    use crate::distribution_range_consensus::native_abort::{
+        test_arm_native_admission_stop, test_native_admission_stop_armed, TestNativeAdmissionStop,
+    };
+    use crate::distribution_range_consensus::{
+        test_arm_completion_refresh_failure, test_completion_refresh_failure_armed,
+    };
+    let mut cluster = Cluster::new();
+    let topology = cluster.topology(0);
+    let metadata_leader = cluster.metadata_leader().expect("a metadata leader");
+    let led = topology
+        .ranges
+        .values()
+        .find(|range| range.leader != node(metadata_leader))
+        .expect("a range not led by the metadata leader")
+        .clone();
+    let victim = (0..4).find(|&i| node(i) == led.leader).unwrap();
+    let follower = (0..4)
+        .find(|&i| i != victim && led.replicas.iter().any(|r| r.node_id == node(i)))
+        .unwrap();
+    let client = cluster.client(metadata_leader);
+    let mut counter = 0u64;
+    let mut acknowledged = Vec::new();
+    for (point, present) in [
+        (TestNativeAdmissionStop::AfterCommitQuorum, true),
+        (TestNativeAdmissionStop::AfterPrepareQuorum, false),
+    ] {
+        let key = key_in(&topology, led.id, &mut counter);
+        append(&mut cluster, &client, &key, Duration::from_secs(30)).unwrap();
+        acknowledged.push(key);
+        let stopped = key_in(&topology, led.id, &mut counter);
+        test_arm_native_admission_stop(led.id, point);
+        let error = client
+            .append("items", &stopped, value(&stopped))
+            .expect_err("a stopped admission is never acknowledged");
+        assert!(
+            !test_native_admission_stop_armed(),
+            "the stop did not fire: {error}"
+        );
+        test_arm_completion_refresh_failure(node(follower), led.id);
+        cluster.crash(victim);
+        cluster.reopen(victim);
+        let key = key_in(&topology, led.id, &mut counter);
+        append(&mut cluster, &client, &key, Duration::from_secs(60)).unwrap_or_else(|error| {
+            panic!("write after the interrupted follower Complete ({point:?}) failed: {error}")
+        });
+        assert!(
+            !test_completion_refresh_failure_armed(),
+            "the follower's Complete was not interrupted ({point:?})"
+        );
+        acknowledged.push(key);
+        assert_eq!(
+            read(&mut cluster, &client, &stopped, Duration::from_secs(30)).unwrap(),
+            present.then(|| value(&stopped)),
+            "{point:?}: a Commit-quorum write is present, an aborted one absent"
+        );
+    }
+    for key in &acknowledged {
+        assert_eq!(
+            read(&mut cluster, &client, key, Duration::from_secs(30)).unwrap(),
+            Some(value(key)),
+            "acknowledged row {key} must be readable"
+        );
+    }
+}
+
 /// A range whose leader ended with a write that a Commit quorum had voted
 /// for is recovered forward by a hot recovery session (or, with the write
 /// only Prepared, aborted by one), which leaves that session's durable

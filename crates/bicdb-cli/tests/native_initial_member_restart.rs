@@ -42,7 +42,7 @@ const RESTART_TIMEOUT: Duration = Duration::from_secs(120);
 /// How long appends on a range with a surviving quorum may be refused in a
 /// row after a member was killed. Not a product promise: wide enough for a
 /// busy test host, and it fails when the range stays unavailable.
-const MAX_STALL: Duration = Duration::from_secs(60);
+const MAX_STALL: Duration = Duration::from_secs(20);
 
 /// How often the range leader is killed while a client appends to its range.
 const LEADER_KILL_ROUNDS: usize = 3;
@@ -630,6 +630,36 @@ fn append_within(gateway: &ClusterEventClient, key: &str, timeout: Duration) -> 
         }
     }
 }
+/// TEMPORARY DIAGNOSTIC: prints the first exchanges of an observed client.
+struct PrintExchanges(std::sync::atomic::AtomicUsize);
+impl bicdb_core::ClusterRpcEvidenceObserver for PrintExchanges {
+    fn record(&self, evidence: &bicdb_core::ClusterRpcEvidence) -> std::io::Result<()> {
+        if self.0.fetch_add(1, Ordering::SeqCst) < 60 {
+            let frame = evidence
+                .raw_frame
+                .as_ref()
+                .map(|bytes| {
+                    String::from_utf8_lossy(bytes)
+                        .chars()
+                        .filter(|c| !c.is_control())
+                        .take(700)
+                        .collect::<String>()
+                })
+                .unwrap_or_default();
+            println!(
+                "RESTART_RPC {} {} -> {} elapsed={:.1}ms errors={:?} frame={frame}",
+                evidence.phase,
+                evidence.operation,
+                evidence.destination,
+                evidence.elapsed_ns as f64 / 1e6,
+                evidence.error_chain
+            );
+        }
+        Ok(())
+    }
+}
+/// Strong reads that had to be repeated, with the refusal that caused it.
+static REPEATED_READS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 fn read_within(
     gateway: &ClusterEventClient,
     key: &str,
@@ -640,7 +670,17 @@ fn read_within(
         match gateway.get_strong("items", key) {
             Ok(value) => return Ok(value),
             Err(error) if begun.elapsed() >= timeout => return Err(error.to_string()),
-            Err(_) => {
+            Err(error) => {
+                let mut repeated = REPEATED_READS.lock().unwrap();
+                if repeated.len() < 12 {
+                    println!(
+                        "RESTART_M Strong read of {key} repeated after {:.2}s: {}",
+                        begun.elapsed().as_secs_f64(),
+                        error.to_string().chars().take(700).collect::<String>()
+                    );
+                }
+                repeated.push(format!("{key}: {error}"));
+                drop(repeated);
                 let _ = gateway.refresh();
                 std::thread::sleep(Duration::from_millis(200));
             }
@@ -968,6 +1008,12 @@ fn native_initial_member_restart_four_process_kill_and_reopen() {
         "{} RESTART_M every range accepts appends after all restarts",
         stamp(cluster.started)
     );
+    let after = after
+        .with_rpc_evidence_observer(
+            Arc::new(PrintExchanges(AtomicUsize::new(0))),
+            bicdb_core::ClusterRpcEvidenceLimits::default(),
+        )
+        .unwrap();
     let mut slowest = (Duration::ZERO, String::new());
     let reads_begun = Instant::now();
     for key in &acknowledged {
@@ -980,6 +1026,14 @@ fn native_initial_member_restart_four_process_kill_and_reopen() {
         if begun.elapsed() > slowest.0 {
             slowest = (begun.elapsed(), key.clone());
         }
+    }
+    {
+        let repeated = REPEATED_READS.lock().unwrap();
+        println!(
+            "{} RESTART_M Strong reads that had to be repeated: {}",
+            stamp(cluster.started),
+            repeated.len()
+        );
     }
     println!(
         "{} RESTART_M all {} acknowledged rows are readable after the kills and restarts ({:.2}s in all, slowest read {:.2}s, {})",

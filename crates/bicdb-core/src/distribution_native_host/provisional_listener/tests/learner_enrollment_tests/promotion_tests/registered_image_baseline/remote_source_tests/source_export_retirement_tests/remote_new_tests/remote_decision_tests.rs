@@ -207,6 +207,36 @@ pub(super) fn exercise(
     if code == Some(1) || code == Some(3) {
         assert!(retry.is_err());
     } else {
+        // A committed decision is repeated from the durable record: more
+        // repetitions than the context cap take no further context.
+        assert_eq!(native_after["retained_request_contexts"], 1);
+        for round in 0..10 {
+            let again = exchange(
+                &clients[0],
+                &mf.target_id,
+                &request(
+                    mf,
+                    phase,
+                    NewOp::PublishDecision {
+                        facts: facts.clone(),
+                    },
+                ),
+                ledger,
+                output,
+            )
+            .unwrap_or_else(|error| panic!("repeated publication {round}: {error}"));
+            let reply = again.reply().native_decision.clone().unwrap();
+            assert_eq!(reply.native_page_xid, original_xid);
+        }
+        let repeated = target
+            .test_remote_native_decision_evidence(mf.capture_range.id)
+            .unwrap();
+        assert_eq!(repeated["retained_request_contexts"], 1);
+        assert_eq!(repeated["native"], native_first["native"]);
+        assert_eq!(
+            repeated["retained_encoded_bytes"],
+            native_after["retained_encoded_bytes"]
+        );
         let reply = retry.unwrap().reply().native_decision.clone().unwrap();
         assert_eq!(reply.native_page_xid, original_xid);
         assert_eq!(

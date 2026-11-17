@@ -240,7 +240,8 @@ impl ActualNativeSourceDiscovery {
 
 pub(crate) struct NativeSourceDiscoveryAttempt {
     binding: NativeSourceDiscoveryRequestV1,
-    requests: Mutex<BTreeMap<Uuid, Vec<u8>>>,
+    // Exact request bytes and the end of the request's own budget.
+    requests: Mutex<BTreeMap<Uuid, (Vec<u8>, Instant)>>,
     driving: AtomicBool,
     source: Mutex<Option<Arc<NativeRetainedRemoteImageSource>>>,
 }
@@ -375,19 +376,28 @@ impl NativeRemoteImageSourceRegistry {
             .requests
             .try_lock()
             .ok_or_else(|| invalid("source discovery request custody busy"))?;
-        if let Some(old) = issued.get(&request.challenge) {
+        if let Some((old, _)) = issued.get(&request.challenge) {
             if old != &bytes {
                 return Err(invalid(
                     "source discovery challenge reused with different exact request bytes",
                 ));
             }
         } else {
+            // An exact request is bound while its own budget can still be running:
+            // its reply, if any, was bound to its exact bytes, and nothing here is
+            // retained for it afterwards. A request whose budget ended frees its
+            // slot, so repetition over time cannot use the table up.
+            let now = Instant::now();
+            issued.retain(|_, (_, live_until)| now < *live_until);
             if issued.len() >= 64 {
                 return Err(invalid(
-                    "source discovery request custody capacity; retained requests not evicted",
+                    "source discovery request custody busy: 64 exact requests are still running; none is evicted",
                 ));
             }
-            issued.insert(request.challenge, bytes);
+            issued.insert(
+                request.challenge,
+                (bytes, now + Duration::from_millis(request.budget_ms)),
+            );
         }
         drop(issued);
         Ok(attempt)

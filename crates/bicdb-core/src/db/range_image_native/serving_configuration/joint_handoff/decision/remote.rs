@@ -67,6 +67,9 @@ impl RemoteDecisionProvenance {
         Ok(())
     }
 }
+/// Budget a publication must still have when it begins the single native
+/// attempt: enough for its checks and two puts on a slow host.
+const REMOTE_NATIVE_BEGIN_MARGIN: std::time::Duration = std::time::Duration::from_millis(750);
 fn remote_current(range: RangeId) -> String {
     format!("joint-handoff/remote-decision/current/{range}")
 }
@@ -116,6 +119,11 @@ impl NativeRemoteJointDecisionAttempt {
             .as_ref()
             .ok_or_else(|| invalid("remote native provenance unframed"))?
             .checksum_sha256)
+    }
+    /// Whether the single native attempt was ever begun (an xid was issued),
+    /// whatever its outcome.
+    pub(crate) fn native_begun(&self) -> bool {
+        self.issued_xid.is_some() || self.native.is_some()
     }
     pub(crate) fn actual_committed_xid(&self) -> Result<u64> {
         match self.native.as_ref().map(|n| &n.outcome) {
@@ -449,6 +457,18 @@ impl BicDb {
             let _writer = paged.write_guard();
             self.require_registered_joint_decision_storage_healthy()?;
             admission.require_memory_current()?;
+            // The single native attempt is never replaced, so a request that
+            // could run out of its budget between begin and put would end the
+            // participant's decision for good. Such a request is not begun:
+            // it leaves nothing behind and a repetition starts it in time.
+            if parent.deadline().is_some_and(|deadline| {
+                deadline.saturating_duration_since(std::time::Instant::now())
+                    < REMOTE_NATIVE_BEGIN_MARGIN
+            }) {
+                return Err(invalid(
+                    "remote DECISION not begun: too little of the request budget is left on this busy member; a repetition begins it",
+                ));
+            }
             let (xid, _) = paged.begin();
             attempt.issued_xid = Some(xid);
             record.native_page_xid = xid;

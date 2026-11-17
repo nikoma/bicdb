@@ -4022,6 +4022,26 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             )));
         }
 
+        #[cfg(test)]
+        if native_database.is_some()
+            && native_abort::test_take_native_admission_stop(
+                range.id,
+                native_abort::TestNativeAdmissionStop::AfterCommitQuorum,
+            )
+        {
+            self.recovered_epochs.lock().remove(&range.id);
+            return Err(self.retain_native_uncertain_admission(
+                &command,
+                mutation,
+                admission_rejection,
+                BicDbError::CommitOutcomeUnknown {
+                    sequence: None,
+                    transaction_id: Some(command.transaction_id),
+                    incarnation: self.local_incarnation.clone(),
+                    detail: "injected admission stop AfterCommitQuorum".into(),
+                },
+            ));
+        }
         // The leader persists the quorum certificate before any replica is
         // allowed to apply. From this point onward the command must be
         // recovered/applied and may not be overtaken by a later command.

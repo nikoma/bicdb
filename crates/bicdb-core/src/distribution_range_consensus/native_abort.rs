@@ -1613,6 +1613,7 @@ pub(crate) enum TestNativeAdmissionStop {
     AfterLocalPrepare,
     AfterPrepareQuorum,
     AfterLocalCommit,
+    AfterCommitQuorum,
 }
 #[cfg(test)]
 static TEST_NATIVE_ADMISSION_STOP: std::sync::Mutex<Option<(RangeId, TestNativeAdmissionStop)>> =

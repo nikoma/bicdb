@@ -553,6 +553,15 @@ impl NativeHotRecoveryMaintenance {
             });
         }
         self.record(detail);
+        if result.is_ok() && job.abort {
+            let done = state
+                .jobs
+                .remove(&range.id)
+                .expect("actual abort job retained");
+            self.record(serde_json::json!({"phase":"abort_activated_ordinary_leadership_recovery_next","range_id":range.id,"abort":true,
+                "command_id":done.command.command_id,"followers_not_activated":done.recipient_next.keys().filter(|n| **n != done.range.leader).collect::<Vec<_>>(),"diagnostic_not_authority":true}));
+            return Ok(());
+        }
         if result.is_ok() {
             let published = state
                 .jobs
@@ -700,6 +709,13 @@ impl NativeHotRecoveryMaintenance {
                 }
                 self.live(&phase_parent)?;
                 fresh.require_live_request()?;
+                if job.abort && job.phase == Phase::Activate {
+                    // The hot publication proves an APPLIED command; an
+                    // aborted slot is published by the ordinary leadership
+                    // recovery over the activated session, as after any
+                    // completed abort. Nothing is granted here.
+                    return Ok(());
+                }
                 job.position = 0;
                 cooldown_probe = false;
                 job.phase_observed.clear();

@@ -914,3 +914,110 @@ fn native_initial_member_restart_prepared_only_leader_tail_is_aborted() {
         );
     }
 }
+
+/// A range whose leader ended with a write that a Commit quorum had voted
+/// for is recovered forward by a hot recovery session, which leaves that
+/// session's durable activation with every member. Then each follower is
+/// dropped without a stop and reopened: its new process holds the durable
+/// activation but took no part in it, so it has no activation of its own.
+/// With both followers restarted, the range must again serve Strong reads
+/// (a read majority needs a restarted follower) and accept writes.
+#[test]
+fn native_initial_member_restart_followers_of_a_session_recovered_range_serve_again() {
+    use crate::distribution_range_consensus::native_abort::{
+        test_arm_native_admission_stop, test_native_admission_stop_armed, TestNativeAdmissionStop,
+    };
+    let mut cluster = Cluster::new();
+    let topology = cluster.topology(0);
+    let metadata_leader = cluster.metadata_leader().expect("a metadata leader");
+    // Prefer a range the metadata leader is not a member of: then no
+    // restart below also moves metadata leadership.
+    let led = topology
+        .ranges
+        .values()
+        .find(|range| {
+            !range
+                .replicas
+                .iter()
+                .any(|r| r.node_id == node(metadata_leader))
+        })
+        .or_else(|| {
+            topology
+                .ranges
+                .values()
+                .find(|range| range.leader != node(metadata_leader))
+        })
+        .expect("a range not led by the metadata leader")
+        .clone();
+    let leader = (0..4).find(|&i| node(i) == led.leader).unwrap();
+    let followers = (0..4)
+        .filter(|&i| i != leader && led.replicas.iter().any(|r| r.node_id == node(i)))
+        .collect::<Vec<_>>();
+    assert_eq!(followers.len(), 2);
+    eprintln!(
+        "RESTART_TEST range={} leader=n{leader} followers={followers:?} metadata_leader=n{metadata_leader}",
+        led.id
+    );
+    let client = cluster.client(metadata_leader);
+    let mut counter = 0u64;
+    let mut acknowledged = Vec::new();
+    let key = key_in(&topology, led.id, &mut counter);
+    append(&mut cluster, &client, &key, Duration::from_secs(30)).unwrap();
+    acknowledged.push(key);
+    // The leader ends after a Commit quorum voted for this write: the
+    // reopened leader recovers it forward through a hot recovery session.
+    let decided = key_in(&topology, led.id, &mut counter);
+    test_arm_native_admission_stop(led.id, TestNativeAdmissionStop::AfterCommitQuorum);
+    let error = client
+        .append("items", &decided, value(&decided))
+        .expect_err("a stopped admission is never acknowledged");
+    assert!(
+        !test_native_admission_stop_armed(),
+        "the stop did not fire: {error}"
+    );
+    cluster.crash(leader);
+    cluster.reopen(leader);
+    let key = key_in(&topology, led.id, &mut counter);
+    append(&mut cluster, &client, &key, Duration::from_secs(60))
+        .unwrap_or_else(|error| panic!("write after the forward recovery failed: {error}"));
+    acknowledged.push(key);
+    let hot = cluster
+        .host(leader)
+        .status(&budget(1000))
+        .unwrap()
+        .initial_data
+        .unwrap()
+        .hot_recovery_last_attempt;
+    eprintln!("RESTART_TEST hot recovery of the reopened leader: {hot:?}");
+    assert!(
+        hot.is_some(),
+        "the reopened leader must have recovered through a hot recovery session"
+    );
+    assert_eq!(
+        read(&mut cluster, &client, &decided, Duration::from_secs(30)).unwrap(),
+        Some(value(&decided)),
+        "the write decided by a Commit quorum must be present"
+    );
+    // Both followers restart, one after the other, with no write between.
+    for &follower in &followers {
+        cluster.crash(follower);
+        cluster.reopen(follower);
+        eprintln!("RESTART_TEST follower n{follower} reopened");
+    }
+    for key in &acknowledged {
+        assert_eq!(
+            read(&mut cluster, &client, key, Duration::from_secs(60)).unwrap(),
+            Some(value(key)),
+            "acknowledged row {key} must be readable with both followers restarted"
+        );
+    }
+    for _ in 0..2 {
+        let key = key_in(&topology, led.id, &mut counter);
+        append(&mut cluster, &client, &key, Duration::from_secs(60))
+            .unwrap_or_else(|error| panic!("write with both followers restarted failed: {error}"));
+        assert_eq!(
+            read(&mut cluster, &client, &key, Duration::from_secs(30)).unwrap(),
+            Some(value(&key))
+        );
+    }
+}

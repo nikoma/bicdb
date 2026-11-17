@@ -1528,6 +1528,21 @@ fn after_completed_move(
             }
         }
         assert_eq!(new_facts.metadata_voters, old_facts.metadata_voters);
+        // Recording the change grants nothing: only a voter of the moved
+        // range that published its own Serving audit answers for the moved
+        // configuration; the retired source and the member outside the range
+        // still refuse it from their writer state.
+        let writer = services[i]
+            .lock()
+            .range_writes
+            .native_writer_host_state()
+            .unwrap();
+        assert_eq!(
+            writer.require_range(&moved).is_ok(),
+            new.contains(&node(i)),
+            "node{i}: {:?}",
+            writer.require_range(&moved)
+        );
         // A repeated refresh reuses the same audit.
         control
             .test_force_initial_data_registry_refresh(&budget(20_000))
@@ -1618,6 +1633,76 @@ fn after_completed_move(
         &old_facts,
         &without_scope,
         "certified without the scope",
+    );
+    // The same handoff, failed (aborted).
+    let mut failed = committed.clone();
+    failed.relocations.get_mut(&relocation.id).unwrap().phase = RelocationPhase::Failed;
+    refused(&new_facts, &old_facts, &failed, "it is not finished");
+    // Completed, but its source retirement not recorded, or resumable.
+    let mut uncleaned = serde_json::to_value(&relocation).unwrap();
+    uncleaned["native_joint_handoff_v1"]["stage"] =
+        serde_json::to_value(NativeJointHandoffStageV1::AwaitingCleanup).unwrap();
+    let mut not_cleaned = committed.clone();
+    not_cleaned
+        .relocations
+        .insert(relocation.id, serde_json::from_value(uncleaned).unwrap());
+    refused(&new_facts, &old_facts, &not_cleaned, "");
+    let mut resumable = committed.clone();
+    resumable
+        .relocations
+        .get_mut(&relocation.id)
+        .unwrap()
+        .resume_phase = Some(RelocationPhase::CleaningUp);
+    refused(&new_facts, &old_facts, &resumable, "it is not finished");
+    // Epochs that differ from the certified scope.
+    let mut epochs = committed.clone();
+    let plan = epochs.relocations.get_mut(&relocation.id).unwrap();
+    plan.promoted_epoch = plan.promoted_epoch.map(|epoch| epoch + 1);
+    refused(&new_facts, &old_facts, &epochs, "");
+    // Two handoffs from the same configuration.
+    let mut twice = committed.clone();
+    let mut second = relocation.clone();
+    second.id = crate::RelocationId::new(
+        committed
+            .relocations
+            .keys()
+            .map(|id| id.get())
+            .max()
+            .unwrap()
+            + 1,
+    )
+    .unwrap();
+    twice.relocations.insert(second.id, second);
+    refused(
+        &new_facts,
+        &old_facts,
+        &twice,
+        "does not continue the previously accepted configuration",
+    );
+    // Back from the moved configuration to the old one (epoch regression).
+    let mut back = committed.clone();
+    let key = *back
+        .ranges
+        .iter()
+        .find(|(_, r)| r.id == range.id)
+        .unwrap()
+        .0;
+    back.ranges.insert(key, range.clone());
+    refused(&old_facts, &new_facts, &back, "");
+    refused(
+        &old_facts,
+        &new_facts,
+        &committed,
+        "is not the committed configuration",
+    );
+    // A range this member never recorded.
+    let mut fewer_old = old_facts.clone();
+    fewer_old.ranges.remove(&range.id);
+    refused(
+        &new_facts,
+        &fewer_old,
+        &committed,
+        "a range appeared or disappeared",
     );
     // A successor that names another configuration than the committed one.
     let mut other = new_facts.clone();

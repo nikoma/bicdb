@@ -117,6 +117,11 @@ impl NativeRemoteJointDecisionAttempt {
             .ok_or_else(|| invalid("remote native provenance unframed"))?
             .checksum_sha256)
     }
+    /// Whether the single native attempt was ever begun (an xid was issued),
+    /// whatever its outcome.
+    pub(crate) fn native_begun(&self) -> bool {
+        self.issued_xid.is_some() || self.native.is_some()
+    }
     pub(crate) fn actual_committed_xid(&self) -> Result<u64> {
         match self.native.as_ref().map(|n| &n.outcome) {
             Some(RemoteOutcome::Committed { xid }) if self.issued_xid == Some(*xid) => Ok(*xid),

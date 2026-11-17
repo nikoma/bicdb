@@ -49,7 +49,27 @@ struct RetainedPrepareAttempt {
     metadata: Arc<ActualNativeJointMetadataPoint>,
     request: CancellationToken,
     source_export_terminal: Option<AuthenticatedNativeSourceExportTerminal>,
+    // The exact request of this attempt and what its retention costs.
+    challenge: Uuid,
+    encoded_bytes: usize,
+    // Set when this attempt established the fact-set intent or detached a
+    // pin. An attempt that authorized neither holds no obligation.
+    effect: AtomicBool,
 }
+/// One exact request. `held` binds it for the participant's lifetime: the
+/// request created the participant or belongs to a retained attempt. Any
+/// other request is bound only while its own budget can still be running.
+struct RetainedRequest {
+    bytes: Vec<u8>,
+    live_until: Instant,
+    held: bool,
+}
+/// Exact requests kept at once: the held ones plus those still inside their
+/// own budget. Held ones are bounded by the attempt and decision caps.
+const MAX_RETAINED_REQUESTS: usize = 64;
+/// Preparation attempts kept at once. Only an attempt that established the
+/// intent or detached a pin stays; see `release_spent_attempts`.
+const MAX_PREPARE_ATTEMPTS: usize = 8;
 #[derive(Default)]
 struct RetainedHandoff {
     intent: Option<NativeRemoteNewFactSetV1>,
@@ -62,11 +82,22 @@ pub(crate) struct NativeRemoteNewParticipant {
     manifest_bytes: Vec<u8>,
     snapshot: NativeRemoteNewSnapshotV1,
     original: OriginalParticipant,
-    requests: Mutex<BTreeMap<Uuid, Vec<u8>>>,
+    requests: Mutex<BTreeMap<Uuid, RetainedRequest>>,
     handoff: Mutex<RetainedHandoff>,
     handoff_started: AtomicBool,
     progress: PinProgress,
     decision: Mutex<decision::DecisionCustody>,
+    // One preparation and one publication at a time do the member's own
+    // callbacks and Role acquisition; see `begin_work`.
+    working: [AtomicBool; 2],
+}
+/// Held by the one request that currently prepares (or publishes) on this
+/// participant, from before its callbacks until its sink returned.
+pub(crate) struct NativeRemoteNewWork<'a>(&'a AtomicBool);
+impl Drop for NativeRemoteNewWork<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
 }
 impl NativeRemoteNewParticipant {
     #[allow(clippy::too_many_arguments)]
@@ -154,11 +185,12 @@ impl NativeRemoteNewParticipant {
                 writer,
                 process,
             },
-            requests: Mutex::new(BTreeMap::new()),
+            requests: Mutex::new(Self::creating_request(request)?),
             handoff: Mutex::new(Default::default()),
             handoff_started: AtomicBool::new(false),
             progress: Default::default(),
             decision: Mutex::new(Default::default()),
+            working: Default::default(),
         })
     }
 
@@ -270,11 +302,12 @@ impl NativeRemoteNewParticipant {
                 frozen,
                 pin: Mutex::new(Some(pin)),
             },
-            requests: Mutex::new(BTreeMap::new()),
+            requests: Mutex::new(Self::creating_request(request)?),
             handoff: Mutex::new(Default::default()),
             handoff_started: AtomicBool::new(false),
             progress: Default::default(),
             decision: Mutex::new(Default::default()),
+            working: Default::default(),
         })
     }
 
@@ -321,27 +354,143 @@ impl NativeRemoteNewParticipant {
             .try_lock()
             .ok_or_else(|| invalid("remote NEW exact-request custody busy"))?;
         if let Some(old) = requests.get(&request.challenge) {
-            if old != &bytes {
+            if old.bytes != bytes {
                 return Err(invalid("remote NEW challenge changed exact request"));
             }
-        } else {
-            if requests.len() >= 64 {
-                return Err(invalid(
-                    "remote NEW request capacity; no eviction or replacement",
-                ));
+            return Ok(());
+        }
+        // A request that is neither held nor still inside its own budget can
+        // no longer be running: nothing was retained for it and its reply, if
+        // any, was bound to its exact bytes. Its slot is free again. A held
+        // request is never released here.
+        let now = Instant::now();
+        requests.retain(|_, kept| kept.held || now < kept.live_until);
+        if requests.len() >= MAX_RETAINED_REQUESTS {
+            return Err(invalid(
+                "remote NEW request custody busy: 64 exact requests are retained or still running; no held request is evicted or replaced",
+            ));
+        }
+        let used = requests
+            .values()
+            .try_fold(self.manifest_bytes.len(), |sum, b| {
+                sum.checked_add(b.bytes.len())
+            })
+            .and_then(|sum| sum.checked_add(handoff.encoded_frame_bytes))
+            .and_then(|sum| sum.checked_add(bytes.len()))
+            .ok_or_else(|| invalid("remote NEW exact request custody byte overflow"))?;
+        if used > 8 * 1024 * 1024 {
+            return Err(invalid(
+                "remote NEW exact request custody exhausted (8MiB); no eviction",
+            ));
+        }
+        requests.insert(
+            request.challenge,
+            RetainedRequest {
+                bytes,
+                live_until: now + Duration::from_millis(request.budget_ms),
+                held: false,
+            },
+        );
+        Ok(())
+    }
+    /// The request that creates the participant is held for its lifetime.
+    fn creating_request(
+        request: &NativeRemoteNewRequestV1,
+    ) -> Result<BTreeMap<Uuid, RetainedRequest>> {
+        Ok(BTreeMap::from([(
+            request.challenge,
+            RetainedRequest {
+                bytes: request.custody_bytes()?,
+                live_until: Instant::now() + Duration::from_millis(request.budget_ms),
+                held: true,
+            },
+        )]))
+    }
+    /// Bind or unbind the exact request of an attempt or decision context.
+    /// Lock order: the handoff or decision custody first, then this table.
+    pub(super) fn hold_request(&self, challenge: Uuid, held: bool) -> Result<()> {
+        let mut requests = self
+            .requests
+            .try_lock()
+            .ok_or_else(|| invalid("remote NEW exact-request custody busy"))?;
+        if let Some(kept) = requests.get_mut(&challenge) {
+            kept.held = held;
+        }
+        Ok(())
+    }
+    /// A caller that stopped waiting repeats its request while the earlier
+    /// one may still be running here, inside its own budget. The repetition
+    /// is refused as busy instead of starting the same callbacks a second
+    /// time: the earlier request either completes (the next repetition finds
+    /// its retained outcome) or ends with its budget.
+    pub(crate) fn begin_work(
+        &self,
+        request: &NativeRemoteNewRequestV1,
+    ) -> Result<NativeRemoteNewWork<'_>> {
+        let (slot, busy) = match &request.operation {
+            NativeRemoteNewOperationV1::PrepareDecision { .. } => (
+                &self.working[0],
+                "remote NEW participant busy: an earlier preparation of this phase is still running",
+            ),
+            NativeRemoteNewOperationV1::PublishDecision { .. } => (
+                &self.working[1],
+                "remote NEW participant busy: an earlier publication of this phase is still running",
+            ),
+            _ => return Err(invalid("remote NEW work needs a preparation or publication")),
+        };
+        slot.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .map_err(|_| invalid(busy))?;
+        let work = NativeRemoteNewWork(slot);
+        // A member whose own work outlasts its caller's network deadline,
+        // still inside the request's own budget.
+        #[cfg(test)]
+        if self
+            .cut
+            .compare_exchange(3, 0, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            std::thread::sleep(Duration::from_millis(2000));
+        }
+        Ok(work)
+    }
+    /// The handoff this participant already completed for exactly this fact
+    /// set, for a repeated preparation: the same DATA an observation returns.
+    /// It takes no attempt, acquires no Role and detaches nothing. `None`
+    /// when there is nothing complete to repeat (the ordinary path decides).
+    pub(crate) fn repeated_prepare_outcome(
+        &self,
+        request: &NativeRemoteNewRequestV1,
+    ) -> Result<Option<NativeRemoteNewHandoffV1>> {
+        self.require_request(request)?;
+        let NativeRemoteNewOperationV1::PrepareDecision { facts } = &request.operation else {
+            return Err(invalid("remote pin handoff needs exact prepare operation"));
+        };
+        let Some(retained) = self.handoff.try_lock() else {
+            return Ok(None);
+        };
+        if retained.intent.as_ref() != Some(facts) {
+            return Ok(None);
+        }
+        Ok(self.outcome_of(&retained))
+    }
+    /// An attempt that left the sink without establishing the intent and
+    /// without detaching a pin authorized nothing: no retained outcome rests
+    /// on its Role, callbacks or request. It is released when the next
+    /// attempt enters, so a preparation that was refused (a busy service, an
+    /// expired request) does not use up the participant. An attempt that had
+    /// any effect is never released.
+    fn release_spent_attempts(&self, retained: &mut RetainedHandoff) -> Result<()> {
+        let mut released = Vec::new();
+        retained.attempts.retain(|attempt| {
+            let keep = attempt.effect.load(Ordering::Acquire);
+            if !keep {
+                released.push((attempt.challenge, attempt.encoded_bytes));
             }
-            let used = requests
-                .values()
-                .try_fold(self.manifest_bytes.len(), |sum, b| sum.checked_add(b.len()))
-                .and_then(|sum| sum.checked_add(handoff.encoded_frame_bytes))
-                .and_then(|sum| sum.checked_add(bytes.len()))
-                .ok_or_else(|| invalid("remote NEW exact request custody byte overflow"))?;
-            if used > 8 * 1024 * 1024 {
-                return Err(invalid(
-                    "remote NEW exact request custody exhausted (8MiB); no eviction",
-                ));
-            }
-            requests.insert(request.challenge, bytes);
+            keep
+        });
+        for (challenge, bytes) in released {
+            retained.encoded_frame_bytes = retained.encoded_frame_bytes.saturating_sub(bytes);
+            self.hold_request(challenge, false)?;
         }
         Ok(())
     }
@@ -453,6 +602,15 @@ impl NativeRemoteNewParticipant {
             }
         }
         self.require_current(parent)?;
+        // A request that is already dead is refused before anything is
+        // retained for it: it is not started rather than started and lost.
+        role.require_live_request()?;
+        own.require_live_request(business)?;
+        metadata.require_current_memory()?;
+        if let Some(terminal) = &source_export_terminal {
+            terminal.require_request_live()?;
+        }
+        parent.check()?;
         let mut retained = self
             .handoff
             .try_lock()
@@ -463,12 +621,18 @@ impl NativeRemoteNewParticipant {
                     "remote NEW cannot choose a different fact set after uncertain handoff",
                 ));
             }
-        } else {
-            retained.intent = Some(facts.clone());
+            // The same fact set, already handed off completely (by a request
+            // whose caller may have stopped waiting): the retained outcome is
+            // the answer. No further attempt is taken and nothing is detached.
+            if let Some(outcome) = self.outcome_of(&retained) {
+                return Ok(outcome);
+            }
         }
-        // An error is not permission to evict an earlier retained observation.
-        // Each genuinely fresh request gets at most one bounded attempt.
-        if retained.attempts.len() >= 8 {
+        // An error is not permission to evict an earlier retained observation
+        // that established the intent or detached a pin. Each genuinely fresh
+        // request gets at most one bounded attempt.
+        self.release_spent_attempts(&mut retained)?;
+        if retained.attempts.len() >= MAX_PREPARE_ATTEMPTS {
             return Err(invalid(
                 "remote NEW handoff attempt custody exhausted (8); no reset or eviction",
             ));
@@ -488,7 +652,7 @@ impl NativeRemoteNewParticipant {
             .try_lock()
             .ok_or_else(|| invalid("remote NEW retained request-byte custody busy"))?
             .values()
-            .try_fold(0usize, |sum, b| sum.checked_add(b.len()))
+            .try_fold(0usize, |sum, b| sum.checked_add(b.bytes.len()))
             .ok_or_else(|| invalid("remote NEW request byte count overflow"))?;
         let next_bytes = retained
             .encoded_frame_bytes
@@ -509,7 +673,14 @@ impl NativeRemoteNewParticipant {
             metadata,
             request: parent.child(),
             source_export_terminal,
+            challenge: request.challenge,
+            encoded_bytes,
+            effect: AtomicBool::new(retained.intent.is_none()),
         });
+        self.hold_request(request.challenge, true)?;
+        if retained.intent.is_none() {
+            retained.intent = Some(facts.clone());
+        }
         retained.attempts.push(attempt.clone());
         retained.encoded_frame_bytes += encoded_bytes;
         // Complete exact intent, authenticated observations, original native
@@ -560,9 +731,13 @@ impl NativeRemoteNewParticipant {
                     let _version = attempt.metadata.try_publication_guard()?;
                     permit.require_memory_current()?;
                     let taken = pin.take();
-                    self.progress
+                    if !self
+                        .progress
                         .target_materialization
-                        .store(true, Ordering::Release);
+                        .swap(true, Ordering::AcqRel)
+                    {
+                        attempt.effect.store(true, Ordering::Release);
+                    }
                     taken
                 };
                 drop(pin);
@@ -592,9 +767,10 @@ impl NativeRemoteNewParticipant {
             .handoff
             .try_lock()
             .ok_or_else(|| invalid("remote handoff outcome custody busy"))?;
-        let Some(intent) = &retained.intent else {
-            return Ok(None);
-        };
+        Ok(self.outcome_of(&retained))
+    }
+    fn outcome_of(&self, retained: &RetainedHandoff) -> Option<NativeRemoteNewHandoffV1> {
+        let intent = retained.intent.as_ref()?;
         let old = self.progress.old.load(Ordering::Acquire);
         let target_materialization = self.progress.target_materialization.load(Ordering::Acquire);
         let target_export = self.progress.target_export.load(Ordering::Acquire);
@@ -603,16 +779,16 @@ impl NativeRemoteNewParticipant {
             OriginalParticipant::Registered { .. } => target_materialization && target_export,
         };
         if !complete {
-            return Ok(None);
+            return None;
         }
-        Ok(Some(NativeRemoteNewHandoffV1 {
+        Some(NativeRemoteNewHandoffV1 {
             snapshot_sha256: self.snapshot.checksum_sha256.clone(),
             fact_set_sha256: intent.checksum_sha256.clone(),
             old_read_pin_detached: old,
             target_materialization_pin_detached: target_materialization,
             target_export_pin_detached: target_export,
             original_freeze_retained: true,
-        }))
+        })
     }
 }
 
@@ -626,6 +802,12 @@ impl NativeRemoteNewParticipant {
                 Ordering::AcqRel,
                 Ordering::Acquire,
             )
+            .map_err(|_| invalid("remote NEW actual cancellation cut already armed"))?;
+        Ok(())
+    }
+    pub(crate) fn test_arm_slow_handoff(&self) -> Result<()> {
+        self.cut
+            .compare_exchange(0, 3, Ordering::AcqRel, Ordering::Acquire)
             .map_err(|_| invalid("remote NEW actual cancellation cut already armed"))?;
         Ok(())
     }
@@ -650,6 +832,7 @@ impl NativeRemoteNewParticipant {
                 "original_request_expired":a.request.deadline().is_some_and(|d|Instant::now()>=d),
                 "original_role_context":a.role.context_id(),"original_own_context":a.own.context_id(),
                 "source_export_terminal_retained":a.source_export_terminal.is_some(),
+                "established_intent_or_detached_a_pin":a.effect.load(Ordering::Acquire),
             })).collect::<Vec<_>>(),
             "old_pin_reference_detached":self.progress.old.load(Ordering::Acquire),
             "target_materialization_reference_detached":self.progress.target_materialization.load(Ordering::Acquire),
@@ -767,12 +950,18 @@ impl NativeRemoteNewPinHandoffPermit<'_> {
         self.participant.progress.old.load(Ordering::Acquire)
     }
     pub(in crate::distribution_range_handoff::joint) fn record_old_detached(&self) {
-        self.participant.progress.old.store(true, Ordering::Release);
+        if !self.participant.progress.old.swap(true, Ordering::AcqRel) {
+            self.attempt.effect.store(true, Ordering::Release);
+        }
     }
     pub(crate) fn record_target_export_detached(&self) {
-        self.participant
+        if !self
+            .participant
             .progress
             .target_export
-            .store(true, Ordering::Release);
+            .swap(true, Ordering::AcqRel)
+        {
+            self.attempt.effect.store(true, Ordering::Release);
+        }
     }
 }

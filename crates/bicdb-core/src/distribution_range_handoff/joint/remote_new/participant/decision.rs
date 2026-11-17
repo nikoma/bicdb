@@ -11,7 +11,16 @@ struct DecisionContext {
     business: Uuid,
     metadata: Arc<ActualNativeJointMetadataPoint>,
     caller: CancellationToken,
+    // The exact request of this context and what its retention costs.
+    challenge: Uuid,
+    encoded_bytes: usize,
+    // Set when this context fixed the expected body or the native attempt
+    // began under it. A context that did neither holds no obligation.
+    effect: AtomicBool,
 }
+/// Publication contexts kept at once. Only a context that fixed the body or
+/// began the single native attempt stays; see `release_spent_contexts`.
+const MAX_DECISION_CONTEXTS: usize = 8;
 #[derive(Default)]
 pub(super) struct DecisionCustody {
     expected: Option<NativeJointDecisionData>,
@@ -219,7 +228,16 @@ impl NativeRemoteNewParticipant {
                 "remote DECISION cannot replace its original native body",
             ));
         }
-        if retained.contexts.len() >= 8
+        // A request that is already dead is refused before anything is
+        // retained for it: it is not started rather than started and lost.
+        role.require_live_request()?;
+        own.require_live_request(business)?;
+        fetched.require_request_live()?;
+        source.require_request_live()?;
+        metadata.require_current_memory()?;
+        parent.check()?;
+        self.release_spent_contexts(&mut retained)?;
+        if retained.contexts.len() >= MAX_DECISION_CONTEXTS
             || retained
                 .encoded_bytes
                 .checked_add(additional)
@@ -237,7 +255,11 @@ impl NativeRemoteNewParticipant {
             business,
             metadata,
             caller: parent.child(),
+            challenge: request.challenge,
+            encoded_bytes: additional,
+            effect: AtomicBool::new(retained.expected.is_none()),
         });
+        self.hold_request(request.challenge, true)?;
         retained.expected.get_or_insert_with(|| data.clone());
         retained.contexts.push(context.clone());
         retained.encoded_bytes += additional;
@@ -284,11 +306,36 @@ impl NativeRemoteNewParticipant {
         if let Some(owner) = &original_registered_owner {
             owner.require_first_policy_attempt_lifetime()?;
         }
-        let receipt=match &self.original {
-            OriginalParticipant::Registered {target,service,frozen,..}=>crate::distribution_data::ClusterDataNodeService::publish_remote_registered_decision(
-                service,target,frozen.try_as_frozen()?,&admission,retained.native.as_mut().unwrap(),parent)?,
-            OriginalParticipant::Old {actual,writer,..}=>actual.publish_remote_decision(writer,&admission,retained.native.as_mut().unwrap(),parent)?,
+        let begun = retained.native.as_ref().unwrap().native_begun();
+        let published = match &self.original {
+            OriginalParticipant::Registered {
+                target,
+                service,
+                frozen,
+                ..
+            } => frozen.try_as_frozen().and_then(|frozen| {
+                crate::distribution_data::ClusterDataNodeService::publish_remote_registered_decision(
+                    service,
+                    target,
+                    frozen,
+                    &admission,
+                    retained.native.as_mut().unwrap(),
+                    parent,
+                )
+            }),
+            OriginalParticipant::Old { actual, writer, .. } => actual.publish_remote_decision(
+                writer,
+                &admission,
+                retained.native.as_mut().unwrap(),
+                parent,
+            ),
         };
+        // Recorded on every exit: the context under which the single native
+        // attempt began is the one its outcome rests on.
+        if !begun && retained.native.as_ref().unwrap().native_begun() {
+            context.effect.store(true, Ordering::Release);
+        }
+        let receipt = published?;
         admission.require_current()?;
         context.metadata.require_external_current()?;
         parent.check()?;
@@ -313,6 +360,65 @@ impl NativeRemoteNewParticipant {
 }
 
 impl NativeRemoteNewParticipant {
+    /// A context that neither fixed the expected body nor saw the native
+    /// attempt begin authorized nothing: the durable outcome does not rest
+    /// on its Role, callbacks or request. It is released when the next
+    /// publication enters, so a publication that was refused before the
+    /// native begin (a busy service, an expired request) does not use up the
+    /// participant. A context that had either effect is never released.
+    fn release_spent_contexts(&self, retained: &mut DecisionCustody) -> Result<()> {
+        let mut released = Vec::new();
+        retained.contexts.retain(|context| {
+            let keep = context.effect.load(Ordering::Acquire);
+            if !keep {
+                released.push((context.challenge, context.encoded_bytes));
+            }
+            keep
+        });
+        for (challenge, bytes) in released {
+            retained.encoded_bytes = retained.encoded_bytes.saturating_sub(bytes);
+            self.hold_request(challenge, false)?;
+        }
+        Ok(())
+    }
+    /// A repeated publication of the decision this participant ALREADY
+    /// committed for exactly this fact set (by a request whose caller may
+    /// have stopped waiting). The answer is the read-only re-proof of the
+    /// durable record, the same one a decision observation returns. It takes
+    /// no context, acquires no pin and writes nothing. `None` when no
+    /// committed decision exists (the ordinary path decides).
+    pub(crate) fn repeated_publish_receipt(
+        &self,
+        request: &NativeRemoteNewRequestV1,
+        parent: &CancellationToken,
+    ) -> Result<Option<NativeRemoteDecisionReceiptV1>> {
+        self.require_request(request)?;
+        let NativeRemoteNewOperationV1::PublishDecision { facts } = &request.operation else {
+            return Err(invalid(
+                "remote DECISION needs its explicit production operation",
+            ));
+        };
+        {
+            let Some(retained) = self.decision.try_lock() else {
+                return Ok(None);
+            };
+            if retained
+                .native
+                .as_ref()
+                .is_none_or(|native| native.actual_committed_xid().is_err())
+            {
+                return Ok(None);
+            }
+        }
+        let (handoff, receipt, _) = self.committed_decision(request, parent)?;
+        if handoff.fact_set_sha256 != facts.checksum_sha256 {
+            return Err(invalid(
+                "remote DECISION changed actual observer/original pin intent",
+            ));
+        }
+        receipt.require_request(request, facts)?;
+        Ok(Some(receipt))
+    }
     /// READ-ONLY: the original participant re-proves that the native DECISION
     /// it already durably committed still exists with its exact bytes/xid and
     /// protected provenance, then returns the same receipt DATA plus the exact
@@ -331,6 +437,21 @@ impl NativeRemoteNewParticipant {
                 "durable DECISION observation needs its explicit read-only operation",
             ));
         }
+        let (handoff, reply, expected) = self.committed_decision(request, parent)?;
+        reply.require_observation(request, &handoff.fact_set_sha256)?;
+        Ok((reply, expected))
+    }
+    /// The read-only re-proof itself, shared by the decision observation and
+    /// by a repeated publication. The caller binds the receipt to its request.
+    fn committed_decision(
+        &self,
+        request: &NativeRemoteNewRequestV1,
+        parent: &CancellationToken,
+    ) -> Result<(
+        NativeRemoteNewHandoffV1,
+        NativeRemoteDecisionReceiptV1,
+        NativeJointDecisionData,
+    )> {
         let handoff = self
             .handoff_outcome()?
             .ok_or_else(|| invalid("observed DECISION original pin handoff incomplete"))?;
@@ -381,10 +502,11 @@ impl NativeRemoteNewParticipant {
             native_page_xid: attempt.actual_committed_xid()?,
             remote_provenance_sha256: attempt.actual_provenance_sha256()?.to_string(),
         };
-        reply.require_observation(request, &handoff.fact_set_sha256)?;
         self.require_lifetime_memory()?;
         parent.check()?;
-        Ok((reply, expected.clone()))
+        let expected = expected.clone();
+        drop(retained);
+        Ok((handoff, reply, expected))
     }
 }
 

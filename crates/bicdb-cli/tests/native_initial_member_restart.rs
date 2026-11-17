@@ -1181,7 +1181,16 @@ fn native_initial_member_restart_four_process_leader_killed_under_writes() {
         }
         if recovered {
             recovered_rounds += 1;
-            assert_eq!(status["host"]["data_serving"], true, "{status}");
+            // The status file is rewritten every half second: it may still
+            // show the state before the recovery that the appends observed.
+            cluster.wait(
+                "the restarted leader's status to report data serving",
+                Duration::from_secs(10),
+                |cluster| match cluster.status(leader) {
+                    Some(status) if status["host"]["data_serving"] == true => Ok(()),
+                    other => Err(format!("{other:?}")),
+                },
+            );
             acknowledged.extend(range_rows);
         } else {
             refused_rounds += 1;

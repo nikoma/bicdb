@@ -692,11 +692,11 @@ impl NativeHotRecoveryMaintenance {
                 // BEFORE the fence: every member's Commit refuses while a
                 // recovery context of the range is active.
                 let outcome = self.redrive_commit_round(&range, &command, parent);
-                let short = match &outcome {
+                let short = match outcome {
                     Ok((committed, refused, quorum)) => {
                         self.record(serde_json::json!({"phase":"commit_redrive","range_id":range.id,"command_id":command.command_id,
                             "commit_votes":committed,"quorum":quorum,"refused":refused,"diagnostic_not_authority":true}));
-                        committed.len() < *quorum
+                        committed.len() < quorum
                     }
                     Err(error) => {
                         self.record(serde_json::json!({"phase":"candidate_refused","range_id":range.id,"command_id":command.command_id,

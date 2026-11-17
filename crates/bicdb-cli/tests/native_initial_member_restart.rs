@@ -1132,6 +1132,7 @@ fn native_initial_member_restart_four_process_leader_killed_under_writes() {
         let begun = Instant::now();
         let mut seen_state: Option<String> = None;
         let mut seen_abort = false;
+        let mut seen_redrive = false;
         let (recovered, status) = loop {
             let status = cluster.status(leader).unwrap();
             let attempt = &status["host"]["initial_data"]["reopened_leader_recovery_last_attempt"];
@@ -1151,6 +1152,8 @@ fn native_initial_member_restart_four_process_leader_killed_under_writes() {
             }
             let hot = &status["host"]["initial_data"]["hot_recovery_last_attempt"];
             seen_abort |= hot["abort"] == true && hot["range_id"] == led.id.get();
+            seen_redrive |= (hot["commit_redriven"] == true || hot["phase"] == "commit_redrive")
+                && hot["range_id"] == led.id.get();
             if writer.acknowledged() > before + 3 {
                 break (true, status);
             }
@@ -1160,12 +1163,15 @@ fn native_initial_member_restart_four_process_leader_killed_under_writes() {
             cluster.require_alive("waiting for appends after the leader restart");
             std::thread::sleep(POLL);
         };
-        let state = match (&seen_state, seen_abort) {
+        let mut state = match (&seen_state, seen_abort) {
             (Some(state), true) => format!("{state} tail aborted"),
             (None, true) => "tail aborted".to_owned(),
             (Some(state), false) => format!("{state} tail"),
             (None, false) => "no unfinished tail seen".to_owned(),
         };
+        if seen_redrive {
+            state.push_str(", own Commit round re-driven");
+        }
         *kill_states.entry(state.clone()).or_default() += 1;
         let attempts = writer.finish();
         let diagnostic =

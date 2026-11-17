@@ -857,12 +857,15 @@ fn native_initial_member_restart_prepared_only_leader_tail_is_aborted() {
     let mut lost = Vec::new();
     let mut recovered_forward = Vec::new();
     for point in [
-        TestNativeAdmissionStop::AfterPrepareQuorum,
-        TestNativeAdmissionStop::AfterLocalPrepare,
-        TestNativeAdmissionStop::AfterWriterStart,
+        // First, while the victim is not yet a reopened owner: its own hot
+        // recovery then cannot start the forward recovery before the crash
+        // (an interrupted recovery session is a different state).
         // Not aborted (every committer is ever-Commit): recovered forward,
         // decided by the Commit votes of a fenced member quorum.
         TestNativeAdmissionStop::AfterCommitQuorum,
+        TestNativeAdmissionStop::AfterPrepareQuorum,
+        TestNativeAdmissionStop::AfterLocalPrepare,
+        TestNativeAdmissionStop::AfterWriterStart,
     ] {
         let key = key_in(&topology, led.id, &mut counter);
         append(&mut cluster, &client, &key, Duration::from_secs(30)).unwrap();

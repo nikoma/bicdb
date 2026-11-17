@@ -1063,6 +1063,35 @@ impl RangeWriteStore {
         command: &RangeWriteCommand,
         authority: &RangeMutationAuthority<'_>,
     ) -> Result<String> {
+        if let Some(existing) = self.reopened_native_abort_slot(database, range, command)? {
+            return Ok(existing);
+        }
+        let receipt = database.persist_reopened_native_no_effect(
+            command,
+            &self.catalog.node_id,
+            range,
+            authority,
+        )?;
+        let slot = self
+            .catalog
+            .native_abort_protocol
+            .as_mut()
+            .and_then(|p| p.ranges.get_mut(&range.id))
+            .and_then(|r| r.slots.get_mut(&command.index))
+            .ok_or_else(|| range_write_error("reopened abort slot vanished"))?;
+        slot.no_effect_sha256 = Some(receipt.clone());
+        self.persist_recovery_catalog()?;
+        Ok(receipt)
+    }
+    /// The raw/mirror shape check of `reopened_native_abort_candidate`:
+    /// `Some` with the existing intent's checksum, `None` when one may be
+    /// produced, an error for every other state.
+    pub(crate) fn reopened_native_abort_slot(
+        &self,
+        database: &crate::BicDb,
+        range: &RangeDescriptor,
+        command: &RangeWriteCommand,
+    ) -> Result<Option<String>> {
         self.require_native_catalog_durability(database.data_path())?;
         self.require_actual_abort_catalogue(database)?;
         let progress = self.progress(range.id);
@@ -1095,27 +1124,9 @@ impl RangeWriteStore {
                 "reopened abort slot shows a Commit vote, a promise or another command",
             ));
         }
-        if let Some(existing) = &slot.no_effect_sha256 {
-            // An earlier attempt of this open, or of an earlier one, already
-            // published it; the candidate observation re-proves it.
-            return Ok(existing.clone());
-        }
-        let receipt = database.persist_reopened_native_no_effect(
-            command,
-            &self.catalog.node_id,
-            range,
-            authority,
-        )?;
-        let slot = self
-            .catalog
-            .native_abort_protocol
-            .as_mut()
-            .and_then(|p| p.ranges.get_mut(&range.id))
-            .and_then(|r| r.slots.get_mut(&command.index))
-            .ok_or_else(|| range_write_error("reopened abort slot vanished"))?;
-        slot.no_effect_sha256 = Some(receipt.clone());
-        self.persist_recovery_catalog()?;
-        Ok(receipt)
+        // An earlier attempt of this open, or of an earlier one, may already
+        // have published it; the candidate observation re-proves it.
+        Ok(slot.no_effect_sha256.clone())
     }
 }
 

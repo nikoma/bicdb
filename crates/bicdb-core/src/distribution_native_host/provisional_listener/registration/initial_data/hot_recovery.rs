@@ -477,6 +477,20 @@ impl NativeHotRecoveryMaintenance {
             if state.jobs.len() + state.replica_debts.len() >= MAX_JOBS {
                 return Err(invalid("hot DATA retained job bound exhausted"));
             }
+            // The abort candidate is produced BEFORE the fence: a recovery
+            // fence freezes the range's mutation gate, and the producer's
+            // write carries an ordinary counted lease. No job exists until
+            // the actual durable intent does.
+            let abort_candidate = if abort {
+                let mut service = self
+                    .initial
+                    .service
+                    .try_lock()
+                    .ok_or_else(|| invalid("hot abort candidate actual service busy"))?;
+                Some(service.reopened_native_abort_candidate(&range, &command)?)
+            } else {
+                None
+            };
             let role = self.fresh_role(&range, Uuid::now_v7(), parent)?;
             let scope = RecoveryFenceScope::from_role(&role)?;
             let mut members = role
@@ -503,7 +517,7 @@ impl NativeHotRecoveryMaintenance {
                     replica_binding: None,
                     peer_opens: BTreeMap::new(),
                     abort,
-                    abort_candidate: None,
+                    abort_candidate,
                 },
             );
             selected = Some(range);

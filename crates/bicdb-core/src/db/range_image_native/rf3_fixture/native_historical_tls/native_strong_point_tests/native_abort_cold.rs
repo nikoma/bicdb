@@ -733,19 +733,11 @@ fn native_abort_reopened_no_effect_producer_refuses_other_states() {
         .promise_native_abort(&node("n0"), &request, &super::native_abort_tests::token())
         .unwrap();
     fixture.idle();
-    let db = fixture.native.databases[&node("n0")].read();
-    let permit = db.range_mutation_gate().try_enter(range.id).unwrap();
-    let error = db
-        .persist_reopened_native_no_effect(
-            &command,
-            &node("n0"),
-            &range,
-            &crate::distribution_range_mutation::RangeMutationAuthority::Mutation(&permit),
-        )
+    let error = fixture.native.services[&node("n0")]
+        .lock()
+        .reopened_native_abort_candidate(&range, &command)
         .unwrap_err();
-    assert!(error.to_string().contains("conflicts"), "{error}");
-    drop(permit);
-    drop(db);
+    assert!(error.to_string().contains("promise"), "{error}");
     fixture.native.root.disable_cleanup(false);
     fixture._keys.disable_cleanup(false);
 }

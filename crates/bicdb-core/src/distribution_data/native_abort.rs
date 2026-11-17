@@ -64,6 +64,15 @@ impl ClusterDataNodeService {
         let db = try_database_read(&database)?;
         self.require_native_catalog_database(&db)?;
         self.require_native_writer_host_for_range(&db, range)?;
+        // An existing intent needs no new write (and no lease: a recovery
+        // fence freezes the range's mutation gate).
+        if let Some(existing) = self
+            .range_writes
+            .current_mut()
+            .reopened_native_abort_slot(&db, range, command)?
+        {
+            return Ok(existing);
+        }
         // A counted mutation lease, as every slot write carries. Admissions
         // are excluded by the caller's range reservation and the unrecovered
         // epoch, not by this lease.

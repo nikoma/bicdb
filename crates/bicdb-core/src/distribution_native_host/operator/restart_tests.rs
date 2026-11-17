@@ -916,17 +916,30 @@ fn native_initial_member_restart_prepared_only_leader_tail_is_aborted() {
 }
 
 /// A range whose leader ended with a write that a Commit quorum had voted
-/// for is recovered forward by a hot recovery session, which leaves that
-/// session's durable activation with every member. Then each follower is
+/// for is recovered forward by a hot recovery session (or, with the write
+/// only Prepared, aborted by one), which leaves that session's durable
+/// activation with every member. Then each follower is
 /// dropped without a stop and reopened: its new process holds the durable
 /// activation but took no part in it, so it has no activation of its own.
 /// With both followers restarted, the range must again serve Strong reads
 /// (a read majority needs a restarted follower) and accept writes.
 #[test]
 fn native_initial_member_restart_followers_of_a_session_recovered_range_serve_again() {
+    use crate::distribution_range_consensus::native_abort::TestNativeAdmissionStop;
+    followers_of_a_session_recovered_range_serve_again(TestNativeAdmissionStop::AfterCommitQuorum);
+}
+#[test]
+fn native_initial_member_restart_followers_of_a_session_aborted_range_serve_again() {
+    use crate::distribution_range_consensus::native_abort::TestNativeAdmissionStop;
+    followers_of_a_session_recovered_range_serve_again(TestNativeAdmissionStop::AfterPrepareQuorum);
+}
+fn followers_of_a_session_recovered_range_serve_again(
+    stop: crate::distribution_range_consensus::native_abort::TestNativeAdmissionStop,
+) {
     use crate::distribution_range_consensus::native_abort::{
         test_arm_native_admission_stop, test_native_admission_stop_armed, TestNativeAdmissionStop,
     };
+    let forward = stop == TestNativeAdmissionStop::AfterCommitQuorum;
     let mut cluster = Cluster::new();
     let topology = cluster.topology(0);
     let metadata_leader = cluster.metadata_leader().expect("a metadata leader");
@@ -967,7 +980,7 @@ fn native_initial_member_restart_followers_of_a_session_recovered_range_serve_ag
     // The leader ends after a Commit quorum voted for this write: the
     // reopened leader recovers it forward through a hot recovery session.
     let decided = key_in(&topology, led.id, &mut counter);
-    test_arm_native_admission_stop(led.id, TestNativeAdmissionStop::AfterCommitQuorum);
+    test_arm_native_admission_stop(led.id, stop);
     let error = client
         .append("items", &decided, value(&decided))
         .expect_err("a stopped admission is never acknowledged");
@@ -995,8 +1008,8 @@ fn native_initial_member_restart_followers_of_a_session_recovered_range_serve_ag
     );
     assert_eq!(
         read(&mut cluster, &client, &decided, Duration::from_secs(30)).unwrap(),
-        Some(value(&decided)),
-        "the write decided by a Commit quorum must be present"
+        forward.then(|| value(&decided)),
+        "the write decided by a Commit quorum is present, an aborted one absent"
     );
     // Both followers restart, one after the other, with no write between.
     for &follower in &followers {

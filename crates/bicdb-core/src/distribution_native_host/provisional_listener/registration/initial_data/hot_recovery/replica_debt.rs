@@ -83,6 +83,9 @@ impl ReplicaDebt {
     pub(super) fn rearm_requested(&self) -> bool {
         self.rearm
     }
+    pub(super) fn request_rearm(&mut self) {
+        self.rearm = true;
+    }
     fn settled(&self, node: &ClusterNodeId) -> bool {
         !self.pending.contains(node)
             && !self.semantic_veto.contains_key(node)

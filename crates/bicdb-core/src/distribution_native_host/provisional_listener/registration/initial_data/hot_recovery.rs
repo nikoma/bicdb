@@ -716,12 +716,31 @@ impl NativeHotRecoveryMaintenance {
         }
         self.record(detail);
         if result.is_ok() && job.abort {
-            let done = state
+            let mut done = state
                 .jobs
                 .remove(&range.id)
                 .expect("actual abort job retained");
+            let not_activated = done
+                .recipient_next
+                .keys()
+                .filter(|n| **n != done.range.leader)
+                .cloned()
+                .collect::<Vec<_>>();
             self.record(serde_json::json!({"phase":"abort_activated_ordinary_leadership_recovery_next","range_id":range.id,"abort":true,
-                "command_id":done.command.command_id,"followers_not_activated":done.recipient_next.keys().filter(|n| **n != done.range.leader).collect::<Vec<_>>(),"diagnostic_not_authority":true}));
+                "command_id":done.command.command_id,"followers_not_activated":not_activated,"diagnostic_not_authority":true}));
+            // Tracking only: the activated members are re-observed like
+            // those of a published session, so that one restarted later is
+            // re-armed. The aborted command is never materialized at a
+            // follower: no follower is left owing a phase of this session.
+            // One that was not activated in it holds no activation of this
+            // open either; it is re-armed by a fresh session once the range
+            // is admitted again.
+            done.recipient_next.clear();
+            let mut debt = replica_debt::ReplicaDebt::from_published(done);
+            if !not_activated.is_empty() {
+                debt.request_rearm();
+            }
+            state.replica_debts.insert(range.id, debt);
             return Ok(());
         }
         if result.is_ok() {
@@ -881,7 +900,17 @@ impl NativeHotRecoveryMaintenance {
                     // The hot publication proves an APPLIED command; an
                     // aborted slot is published by the ordinary leadership
                     // recovery over the activated session, as after any
-                    // completed abort. Nothing is granted here.
+                    // completed abort. Nothing is granted here. The binding
+                    // only lets the session's members be tracked afterwards.
+                    if job.replica_binding.is_none() {
+                        job.replica_binding = Some(self.coordinator.capture_hot_replica_binding(
+                            &self.runtime,
+                            &self.host,
+                            &held,
+                            &fresh,
+                            &phase_parent,
+                        )?);
+                    }
                     return Ok(());
                 }
                 if job.rearm && job.phase == Phase::Fence {

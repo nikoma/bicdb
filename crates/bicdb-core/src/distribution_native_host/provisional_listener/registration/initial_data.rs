@@ -626,6 +626,17 @@ impl NativeInitialDataHost {
                 .count()
         };
         if pending(&coordinator) == 0 {
+            // A refusal shown earlier is stale once every led range is
+            // admitted again (here, or by the hot recovery's publication).
+            if self
+                .reopened_leader_recovery_last_attempt
+                .as_ref()
+                .is_some_and(|last| last["result"] != "recovered")
+            {
+                self.reopened_leader_recovery_last_attempt = Some(serde_json::json!({
+                    "result": "recovered", "still_unrecovered": 0,
+                    "scope": "every led range is admitted again in this process; diagnostic, not authority"}));
+            }
             return Ok(0);
         }
         let outcome = coordinator.recover_reopened_local_leadership(64);

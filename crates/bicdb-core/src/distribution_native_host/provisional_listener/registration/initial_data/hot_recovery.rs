@@ -69,6 +69,15 @@ struct Job {
     abort: bool,
     /// Checksum of the origin's actual Core no-effect intent, once known.
     abort_candidate: Option<String>,
+    /// A fresh session WITHOUT a command (Fence, Prepare, Complete, Activate)
+    /// at the origin's fenced native point, for an admitted range one of
+    /// whose members holds a durable activation that its current process
+    /// never armed (`native_activation_dormant`): such a member refuses the
+    /// range until a session activates it in its own open. Nothing is
+    /// published: the leader's admission of the range is never withdrawn.
+    rearm: bool,
+    /// Re-arm only: each fenced member's clean native index (Fence reply).
+    fenced: BTreeMap<ClusterNodeId, Option<u64>>,
 }
 #[derive(Default)]
 struct State {
@@ -424,6 +433,116 @@ impl NativeHotRecoveryMaintenance {
         }
         Ok(Some(command))
     }
+    /// An admitted led range needs a fresh re-arm session when one of its
+    /// members holds a durable activation that its current process never
+    /// armed: this node itself (`native_activation_dormant`, read locally),
+    /// or a follower whose re-observation of the converged session refused
+    /// for exactly that reason. A retained, not converged session is never
+    /// replaced (its physical obligations stay with it). Scheduling only.
+    fn rearm_wanted(&self, state: &State, range: &crate::RangeDescriptor) -> bool {
+        match state.replica_debts.get(&range.id) {
+            Some(debt) if !debt.converged() => return false,
+            Some(debt) if debt.rearm_requested() => return true,
+            _ => {}
+        }
+        self.initial
+            .service
+            .try_lock()
+            .is_some_and(|service| service.native_activation_dormant(range.id))
+    }
+    /// The re-arm session's provisional anchor: this origin's own Applied
+    /// command at its native point, when its raw log is resolved exactly
+    /// there with nothing pending. The anchor is fixed again from the fenced
+    /// origin (`anchor_rearm`); every phase reproves the point itself.
+    fn rearm_candidate(
+        &self,
+        range: &crate::RangeDescriptor,
+        token: &CancellationToken,
+    ) -> Result<Option<RangeWriteCommand>> {
+        self.live(token)?;
+        let service = self
+            .initial
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("hot re-arm candidate actual service busy"))?;
+        let db = self
+            .initial
+            .seed
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("hot re-arm candidate actual DB busy"))?;
+        self.host
+            .require_for_coordinator(&db, range, &self.coordinator)?;
+        let prefix = db.native_range_prefix_observation(range.id)?;
+        let Some(index) = prefix.native_applied_index else {
+            return Ok(None);
+        };
+        let progress = service.range_write_progress(range.id);
+        if prefix.invalidated
+            || prefix.pending_command_index.is_some()
+            || prefix.materialized_pending_index.is_some()
+            || progress.resolved_through != index
+            || progress.last_index != index
+        {
+            return Ok(None);
+        }
+        self.own_applied_command(&service, range, index)
+    }
+    fn own_applied_command(
+        &self,
+        service: &crate::ClusterDataNodeService,
+        range: &crate::RangeDescriptor,
+        index: u64,
+    ) -> Result<Option<RangeWriteCommand>> {
+        let Some(entry) = service
+            .probe_range_write_for_peer(range, &self.initial.seed.spec.node_id, index)?
+            .entry
+        else {
+            return Ok(None);
+        };
+        entry.command.validate()?;
+        if entry.state != RangeWriteState::Applied
+            || entry.command.index != index
+            || entry.command.range_id != range.id
+            || entry.command.range_epoch != range.epoch
+        {
+            return Ok(None);
+        }
+        Ok(Some(entry.command))
+    }
+    /// After the re-arm Fence: the session's point is the FENCED origin's
+    /// clean native index (no admission can move it any more). A follower
+    /// fenced at another point is not sent this session's Prepare (it would
+    /// refuse it); it is continued as replica debt through the completed
+    /// materialization of the anchor command, like any follower that missed
+    /// the session's early phases.
+    fn anchor_rearm(&self, job: &mut Job) -> Result<()> {
+        let origin = &self.initial.seed.spec.node_id;
+        let index = job.fenced.get(origin).copied().flatten().ok_or_else(|| {
+            invalid("hot re-arm: the fenced origin is not at a clean native point")
+        })?;
+        if index != job.command.index {
+            let service = self
+                .initial
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("hot re-arm anchor actual service busy"))?;
+            job.command = self
+                .own_applied_command(&service, &job.range, index)?
+                .ok_or_else(|| {
+                    invalid("hot re-arm: the fenced origin point is not its own Applied command")
+                })?;
+        }
+        for (node, fenced) in &job.fenced {
+            if node != origin
+                && *fenced != Some(index)
+                && job.recipient_next.get(node) == Some(&Phase::Prepare)
+            {
+                job.recipient_next.insert(node.clone(), Phase::Certify);
+            }
+        }
+        Ok(())
+    }
     pub(super) fn tick(&self, parent: &CancellationToken) -> Result<()> {
         self.live(parent)?;
         let mut state = self
@@ -462,10 +581,12 @@ impl NativeHotRecoveryMaintenance {
             // SKIP ONLY: this cached scheduling hint never grants APP/Strong
             // or repairs a Pending. Actual Unknown release clears readiness;
             // retained jobs always continue through all fresh proof boundaries.
-            if self
+            // An admitted range is passed over unless one of its members
+            // holds a durable activation its current process never armed.
+            let rearm = self
                 .coordinator
-                .initial_data_leader_admission_observed(&range)
-            {
+                .initial_data_leader_admission_observed(&range);
+            if rearm && !self.rearm_wanted(&state, &range) {
                 continue;
             }
             // Do not discard an older session's frozen/uncaught-up physical
@@ -483,12 +604,18 @@ impl NativeHotRecoveryMaintenance {
                 state.cursor = (at + 1) % ranges.len();
                 return Err(invalid("new origin recovery with retained replica session debt needs explicit continuation; old debt is preserved"));
             }
-            let (command, abort) = match self.candidate(&range, parent) {
+            let candidate = if rearm {
+                self.rearm_candidate(&range, parent)
+                    .map(|command| command.map(|command| (command, false)))
+            } else {
+                self.candidate(&range, parent)
+            };
+            let (command, abort) = match candidate {
                 Ok(Some(candidate)) => candidate,
                 Ok(None) => continue,
                 Err(error) => {
                     state.cursor = (at + 1) % ranges.len();
-                    self.record(serde_json::json!({"phase":"candidate_refused","range_id":range.id,
+                    self.record(serde_json::json!({"phase":"candidate_refused","range_id":range.id,"rearm":rearm,
                         "error":error.to_string().chars().take(4096).collect::<String>(),"diagnostic_not_authority":true}));
                     return Err(error);
                 }
@@ -551,6 +678,8 @@ impl NativeHotRecoveryMaintenance {
                     peer_opens: BTreeMap::new(),
                     abort,
                     abort_candidate,
+                    rearm,
+                    fenced: BTreeMap::new(),
                 },
             );
             selected = Some(range);
@@ -574,7 +703,7 @@ impl NativeHotRecoveryMaintenance {
         };
         let job = state.jobs.get_mut(&range.id).unwrap();
         let result = self.run_job(job, parent);
-        let mut detail = serde_json::json!({"range_id":range.id,"epoch":job.range.epoch,"abort":job.abort,"recovery_nonce":job.scope.recovery_nonce,
+        let mut detail = serde_json::json!({"range_id":range.id,"epoch":job.range.epoch,"abort":job.abort,"rearm":job.rearm,"recovery_nonce":job.scope.recovery_nonce,
             "command_id":job.command.command_id,"command_sha256":job.command.checksum_sha256,"phase":format!("{:?}",job.phase),"position":job.position,
             "completed":result.is_ok(),"phase_observed":job.phase_observed,"semantic_veto":job.semantic_veto.iter().map(|(n,p)|(n.to_string(),format!("{p:?}"))).collect::<BTreeMap<_,_>>(),"remaining_ms":parent.deadline().map(|d|d.saturating_duration_since(Instant::now()).as_millis()),"diagnostic_not_authority":true});
         if let Err(error) = &result {
@@ -685,6 +814,12 @@ impl NativeHotRecoveryMaintenance {
                     &fresh,
                     &phase_parent,
                 )?;
+                if job.rearm {
+                    // The members are activated in their current opens; the
+                    // range was admitted before and its admission is kept.
+                    // The binding continues the session as replica debt.
+                    return Ok(());
+                }
                 self.coordinator.publish_hot_native_recovery(
                     &self.runtime,
                     &self.host,
@@ -749,11 +884,15 @@ impl NativeHotRecoveryMaintenance {
                     // completed abort. Nothing is granted here.
                     return Ok(());
                 }
+                if job.rearm && job.phase == Phase::Fence {
+                    self.anchor_rearm(job)?;
+                }
                 job.position = 0;
                 cooldown_probe = false;
                 job.phase_observed.clear();
                 job.phase = match job.phase {
                     Phase::Fence if job.abort => Phase::AbortResolve,
+                    Phase::Fence if job.rearm => Phase::Prepare,
                     Phase::Fence => Phase::Certify,
                     Phase::Certify => Phase::Apply,
                     Phase::Apply => Phase::Prepare,
@@ -827,14 +966,19 @@ impl NativeHotRecoveryMaintenance {
                     Duration::from_millis(io_ms),
                     &phase_parent,
                 )
-                .map(|receipt| receipt.observed_open().clone());
+                .map(|receipt| {
+                    (
+                        receipt.observed_open().clone(),
+                        receipt.fenced_clean_native_index(),
+                    )
+                });
             // Expired caller/role or changed original service slot aborts the
             // whole attempt regardless of any shorter peer socket timeout.
             self.live(&phase_parent)?;
             role.require_live_request()?;
             held.require_actual_store_slot()?;
             match result {
-                Ok(actual_open) => {
+                Ok((actual_open, fenced_index)) => {
                     if let Some(original) = job.peer_opens.get(&node) {
                         if let Err(error) = original.require_same(&actual_open) {
                             job.semantic_veto.insert(node.clone(), job.phase);
@@ -848,6 +992,9 @@ impl NativeHotRecoveryMaintenance {
                         Phase::Fence => {
                             let next = if job.abort {
                                 Phase::AbortResolve
+                            } else if job.rearm {
+                                job.fenced.insert(node.clone(), fenced_index);
+                                Phase::Prepare
                             } else {
                                 Phase::Certify
                             };

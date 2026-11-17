@@ -528,6 +528,38 @@ impl RangeWriteStore {
     pub(crate) fn require_actual_native_activated_open(&self, range: RangeId) -> Result<()> {
         self.native_activated_open_allowed(range)
     }
+    /// Scheduling DATA only, never a permission: this Store holds a durable
+    /// normal-recovery activation of `range` and THIS open armed nothing for
+    /// it. That is the state of a member whose earlier process took part in
+    /// the session and ended. The durable record alone never arms an open
+    /// (see `native_activated_open_allowed`); the range stays refused here
+    /// until a fresh recovery session fences, prepares, completes and
+    /// activates it in this open. Any handoff, backup, image or joint state
+    /// is left to its own owner.
+    pub(crate) fn native_activation_dormant(&self, range: RangeId) -> bool {
+        self.catalog
+            .recovery_fences
+            .get(&range)
+            .is_some_and(|saved| {
+                matches!(saved.phase, RecoveryFencePhase::NativeActivated(_))
+                    && matches!(
+                        saved.scope.purpose,
+                        crate::distribution_consensus::MetadataRecoveryRolePurpose::NormalRecovery
+                    )
+            })
+            && !self.native_activated_opens.contains_key(&range)
+            && !self.catalog.handoff_promises.contains_key(&range)
+            && !self.catalog.backup_fences.contains_key(&range)
+            && !self.catalog.image_install_intents.contains_key(&range)
+            && self
+                .catalog
+                .native_joint_handoffs
+                .as_ref()
+                .is_none_or(|states| !states.contains_key(&range))
+            && self
+                .selected_current_joint_scope(range)
+                .is_ok_and(|scope| scope.is_none())
+    }
     pub(crate) fn invalidate_native_activation_open(&mut self, range: RangeId) {
         self.native_activated_opens.remove(&range);
     }

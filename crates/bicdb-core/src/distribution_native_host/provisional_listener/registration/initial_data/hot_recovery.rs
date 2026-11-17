@@ -78,6 +78,17 @@ struct Job {
     rearm: bool,
     /// Re-arm only: each fenced member's clean native index (Fence reply).
     fenced: BTreeMap<ClusterNodeId, Option<u64>>,
+    /// Diagnostic only: the first error each peer returned in each phase.
+    first_peer_errors: BTreeMap<String, String>,
+}
+impl Job {
+    fn note_peer_error(&mut self, node: &ClusterNodeId, error: &crate::BicDbError) {
+        let key = format!("{node}:{:?}", self.phase);
+        if self.first_peer_errors.len() < 16 && !self.first_peer_errors.contains_key(&key) {
+            let message = error.to_string().chars().take(900).collect::<String>();
+            self.first_peer_errors.insert(key, message);
+        }
+    }
 }
 #[derive(Default)]
 struct State {
@@ -680,6 +691,7 @@ impl NativeHotRecoveryMaintenance {
                     abort_candidate,
                     rearm,
                     fenced: BTreeMap::new(),
+                    first_peer_errors: BTreeMap::new(),
                 },
             );
             selected = Some(range);
@@ -705,7 +717,7 @@ impl NativeHotRecoveryMaintenance {
         let result = self.run_job(job, parent);
         let mut detail = serde_json::json!({"range_id":range.id,"epoch":job.range.epoch,"abort":job.abort,"rearm":job.rearm,"recovery_nonce":job.scope.recovery_nonce,
             "command_id":job.command.command_id,"command_sha256":job.command.checksum_sha256,"phase":format!("{:?}",job.phase),"position":job.position,
-            "completed":result.is_ok(),"phase_observed":job.phase_observed,"semantic_veto":job.semantic_veto.iter().map(|(n,p)|(n.to_string(),format!("{p:?}"))).collect::<BTreeMap<_,_>>(),"remaining_ms":parent.deadline().map(|d|d.saturating_duration_since(Instant::now()).as_millis()),"diagnostic_not_authority":true});
+            "completed":result.is_ok(),"phase_observed":job.phase_observed,"semantic_veto":job.semantic_veto.iter().map(|(n,p)|(n.to_string(),format!("{p:?}"))).collect::<BTreeMap<_,_>>(),"remaining_ms":parent.deadline().map(|d|d.saturating_duration_since(Instant::now()).as_millis()),"first_peer_errors":job.first_peer_errors,"diagnostic_not_authority":true});
         if let Err(error) = &result {
             let message = error.to_string();
             detail["error"] = serde_json::json!(if message.len() <= 4096 {
@@ -1050,6 +1062,7 @@ impl NativeHotRecoveryMaintenance {
                     job.peer_retry_after.remove(&node);
                 }
                 Err(error) => {
+                    job.note_peer_error(&node, &error);
                     if let Some(peer) = HotRecoveryPeerFailure::from_error(&error) {
                         #[cfg(test)]
                         eprintln!("NATIVE_HOT_PEER_UNAVAILABLE node={} target={} phase={:?} kind={:?} may_have_dispatched={} count_success=false", self.initial.seed.spec.node_id,node,job.phase,peer.kind(),peer.may_have_dispatched());

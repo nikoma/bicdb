@@ -192,8 +192,8 @@ impl Sessions {
             .iter()
             .map(|h| {
                 format!(
-                    "r{} {} by {}:{} for {}ms",
-                    h.range.0,
+                    "{} {} by {}:{} for {}ms",
+                    h.range,
                     if h.exclusive { "exclusive" } else { "observer" },
                     h.at.file().rsplit('/').next().unwrap_or(h.at.file()),
                     h.at.line(),
@@ -203,8 +203,8 @@ impl Sessions {
             .collect::<Vec<_>>()
             .join(", ");
         format!(
-            "receiver recovery context/range is busy: r{}: {reason}; held: [{held}]",
-            range.0
+            "receiver recovery context/range is busy: {}: {reason}; held: [{held}]",
+            range
         )
     }
 }

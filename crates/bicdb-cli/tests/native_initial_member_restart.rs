@@ -1020,12 +1020,32 @@ fn native_initial_member_restart_four_process_kill_and_reopen() {
 /// keep accepting appends, an append acknowledged before the kill is never
 /// lost, and nothing unacknowledged is reported as acknowledged.
 ///
-/// What is NOT promised yet: that the killed leader's own range accepts
-/// appends again. The ordinary leader recovery refuses a log tail that was
-/// in flight at the kill (it needs the native tail recovery, which no host
-/// drives after a restart). The range then stays refusing appends and the
-/// member says so in its status. The test accepts exactly these two
-/// outcomes and prints which one occurred in each round.
+/// A command the killed leader's own log certifies committed (raw entry
+/// QuorumCommitted/Applied just above the native prefix) is recovered forward
+/// by the hot recovery, and the range accepts appends again.
+///
+/// What is NOT promised yet: recovery of a tail WITHOUT that certificate in
+/// the leader's own log (prepared only). It needs the native abort or a
+/// recovery sourced from a follower, which no host drives after a restart.
+/// The range then stays refusing appends and the member says so in its
+/// status. The test accepts exactly these outcomes and prints which one
+/// occurred in each round.
+/// The member's own diagnostic names a first unresolved entry that its log
+/// certifies committed.
+fn committed_tail(attempt: &Value) -> bool {
+    attempt["unrecovered_ranges"]
+        .as_array()
+        .is_some_and(|ranges| {
+            ranges.iter().any(|range| {
+                matches!(
+                    range["first_unresolved_state"].as_str(),
+                    Some("QuorumCommitted" | "Applied")
+                ) && range["native_pending_command_index"].is_null()
+                    && range["native_materialized_pending_index"].is_null()
+                    && range["native_prefix_invalidated"] == false
+            })
+        })
+}
 #[test]
 fn native_initial_member_restart_four_process_leader_killed_under_writes() {
     let mut cluster = start_four_initial_members();
@@ -1120,11 +1140,14 @@ fn native_initial_member_restart_four_process_leader_killed_under_writes() {
             if begun.elapsed() > LEADER_RECOVERY_PATIENCE {
                 break (false, status);
             }
+            // A tail that is certified committed in the killed leader's own
+            // log is recovered forward by the hot recovery: wait for it.
             if attempt["result"] == "refused_or_pending"
                 && attempt["error"].as_str().is_some_and(|error| {
                     error.contains("native unresolved leader tail")
                         || error.contains("unfinished command")
                 })
+                && !committed_tail(attempt)
                 && begun.elapsed() > Duration::from_secs(10)
             {
                 break (false, status);
@@ -1163,9 +1186,14 @@ fn native_initial_member_restart_four_process_leader_killed_under_writes() {
         } else {
             refused_rounds += 1;
             unrecovered.push(led.id);
-            // Not recovered: the member must say so, and must say why.
+            // Not recovered: the member must say so, and must say why, and
+            // the reason must not be a tail its own log certifies committed.
             assert_eq!(status["host"]["data_serving"], false, "{status}");
             assert_eq!(diagnostic["result"], "refused_or_pending", "{status}");
+            assert!(
+                !committed_tail(&diagnostic),
+                "a certified committed tail must be recovered forward: {status}"
+            );
             assert!(
                 diagnostic["unrecovered_ranges"]
                     .as_array()

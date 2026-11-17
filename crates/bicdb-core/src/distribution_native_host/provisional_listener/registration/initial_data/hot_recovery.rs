@@ -267,7 +267,7 @@ impl NativeHotRecoveryMaintenance {
             .require_for_coordinator(&db, range, &self.coordinator)?;
         let prefix = db.native_range_prefix_observation(range.id)?;
         let Some(index) = prefix.pending_command_index else {
-            return Ok(None);
+            return self.reopened_committed_candidate(&service, &prefix, range);
         };
         if prefix.invalidated
             || prefix.materialized_pending_index.is_some()
@@ -292,6 +292,54 @@ impl NativeHotRecoveryMaintenance {
             ));
         }
         self.live(token)?;
+        Ok(Some(entry.command))
+    }
+    /// REOPENED owner only. The earlier process of this node ended after its
+    /// own raw log recorded the next command with a commit certificate
+    /// (QuorumCommitted/Applied) and before it wrote the native Pending, so
+    /// the native prefix ends just below that command. That command is
+    /// committed; it may only be recovered forward, never aborted. It is
+    /// proposed to the SAME fenced session as a Pending one (Fence, Certify,
+    /// Apply, Prepare, Complete, Activate, Publish), in which every member
+    /// re-proves the command from its own durable state. Every other state
+    /// (no certificate, materialized or invalidated prefix, a gap) stays
+    /// unsupported and is not proposed.
+    fn reopened_committed_candidate(
+        &self,
+        service: &crate::ClusterDataNodeService,
+        prefix: &crate::db::NativeRangePrefixObservation,
+        range: &crate::RangeDescriptor,
+    ) -> Result<Option<RangeWriteCommand>> {
+        if !self.initial.reopened()
+            || prefix.invalidated
+            || prefix.materialized_pending_index.is_some()
+        {
+            return Ok(None);
+        }
+        let Some(index) = prefix.native_applied_index.and_then(|r| r.checked_add(1)) else {
+            return Ok(None);
+        };
+        let progress = service.range_write_progress(range.id);
+        if progress.resolved_through.checked_add(1) != Some(index) || progress.last_index < index {
+            return Ok(None);
+        }
+        let Some(entry) = service
+            .probe_range_write_for_peer(range, &self.initial.seed.spec.node_id, index)?
+            .entry
+        else {
+            return Ok(None);
+        };
+        entry.command.validate()?;
+        if !matches!(
+            entry.state,
+            RangeWriteState::QuorumCommitted | RangeWriteState::Applied
+        ) || entry.command.index != index
+            || entry.command.range_id != range.id
+            || entry.command.range_epoch != range.epoch
+            || entry.command.leader_node_id != self.initial.seed.spec.node_id
+        {
+            return Ok(None);
+        }
         Ok(Some(entry.command))
     }
     pub(super) fn tick(&self, parent: &CancellationToken) -> Result<()> {

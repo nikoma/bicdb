@@ -166,9 +166,102 @@ impl HostWriterPolicyFacts {
         crate::distribution_range_image::bounded_json(&facts, 256 * 1024)?;
         Ok(facts)
     }
-    /// Additions only, with ALL original and previously added identities and
-    /// the original DATA policy unchanged. Neither facts object mints a grant.
-    pub(crate) fn require_registry_successor(&self, previous: &Self) -> Result<()> {
+    /// The DATA part of a registry successor.
+    ///
+    /// What the rule protects. A registry successor is a metadata-only
+    /// change: it adds metadata voters and their identities and must never
+    /// be the way a DATA configuration reaches a writer. A writer's
+    /// permission to acknowledge on a range comes only from the policy it
+    /// was enrolled with, or from the Serving audit it published itself as a
+    /// new member of a handoff; a successor's `ranges` are never consulted
+    /// for that. If a successor could carry an arbitrary range change, a
+    /// member would record, as "its" domain, a voter set it never enrolled
+    /// for and never took part in forming, and every later successor would
+    /// be measured against that record.
+    ///
+    /// So a range is either exactly the previous one, or it is reached from
+    /// the previous one through completed native joint handoffs that
+    /// `committed` itself records: for each step exactly one relocation of
+    /// that range whose allocation expected the current epoch, `Completed`
+    /// with its source retirement recorded, whose certified scope names the
+    /// current voters (at the learner epoch, one above) as its old range and
+    /// the next configuration as its final range. `committed` is the
+    /// configuration of this member's own fresh quorum read (or the audit of
+    /// that read it stored itself); nothing here comes from a request. The
+    /// chain must end at the range `committed` has now. No range appears or
+    /// disappears. Any other difference is refused as before.
+    ///
+    /// This grants nothing: `require_range` and `require_command` keep
+    /// answering from the enrolled policy or the member's own Serving audit.
+    fn require_data_successor(&self, previous: &Self, committed: &ClusterTopology) -> Result<()> {
+        if self.ranges == previous.ranges {
+            return Ok(());
+        }
+        let refuse = |detail: String| {
+            invalid(format!(
+                "registry extension changed original DATA/birth/schema/restore/member domain: {detail}"
+            ))
+        };
+        if committed.cluster_id != self.cluster_id
+            || committed.range_image_bootstrap_id != Some(self.bootstrap_id)
+            || !self.ranges.keys().eq(previous.ranges.keys())
+        {
+            return Err(refuse("a range appeared or disappeared, or the committed configuration is of another cluster".into()));
+        }
+        for (id, range) in &self.ranges {
+            if committed.range_by_id(*id).map(canonical_range).as_ref() != Some(range) {
+                return Err(refuse(format!(
+                    "range {id} is not the committed configuration"
+                )));
+            }
+            let mut current = previous.ranges[id].clone();
+            let mut steps = 0;
+            while &current != range {
+                let mut next = None;
+                for plan in committed
+                    .relocations
+                    .values()
+                    .filter(|plan| plan.range_id == *id && plan.expected_epoch == current.epoch)
+                {
+                    let (old, activation) = plan
+                        .completed_native_joint_change()
+                        .map_err(|error| refuse(error.to_string()))?;
+                    let mut old = canonical_range(old);
+                    old.epoch = plan.expected_epoch;
+                    let activation = canonical_range(activation);
+                    if old != current || activation.epoch <= current.epoch || next.is_some() {
+                        return Err(refuse(format!(
+                            "{} of range {id} does not continue the previously accepted configuration at epoch {}",
+                            plan.id, current.epoch
+                        )));
+                    }
+                    next = Some(activation);
+                }
+                steps += 1;
+                current = match next {
+                    Some(next) if steps <= 64 => next,
+                    _ => {
+                        return Err(refuse(format!(
+                            "range {id} changed from epoch {} to epoch {} without a completed committed handoff from the previously accepted configuration",
+                            current.epoch, range.epoch
+                        )))
+                    }
+                };
+            }
+        }
+        Ok(())
+    }
+    /// Additions only, with ALL original and previously added identities
+    /// unchanged, and the DATA policy either unchanged or changed exactly by
+    /// completed handoffs `committed` records (`require_data_successor`).
+    /// `committed` is the configuration this successor was read from.
+    /// Neither facts object mints a grant.
+    pub(crate) fn require_registry_successor(
+        &self,
+        previous: &Self,
+        committed: &ClusterTopology,
+    ) -> Result<()> {
+        self.require_data_successor(previous, committed)?;
         if self.cluster_id != previous.cluster_id
             || self.bootstrap_id != previous.bootstrap_id
             || self.local_node_id != previous.local_node_id
@@ -177,7 +270,6 @@ impl HostWriterPolicyFacts {
             || self.local_birth_sha256 != previous.local_birth_sha256
             || self.schema_sha256 != previous.schema_sha256
             || self.restore_activation != previous.restore_activation
-            || self.ranges != previous.ranges
             || !previous.metadata_voters.is_subset(&self.metadata_voters)
             || self.metadata_voters.len() > 64
             || previous

@@ -203,6 +203,12 @@ const ALLOCATION_HOLD_WAIT: Duration = Duration::from_secs(5);
 /// How long the admission hold is kept after the allocation committed, until
 /// this node's own published configuration shows it.
 const ALLOCATION_PUBLISH_WAIT: Duration = Duration::from_secs(10);
+/// How long the hold is kept after a commit attempt whose outcome is not
+/// known. The allocation may still commit; a hold that ended at once would
+/// admit a command under the previous descriptor, and that command would
+/// straddle the allocation if it then commits. The wait is bounded because
+/// the hold refuses every write and point read of the range.
+const ALLOCATION_UNKNOWN_WAIT: Duration = Duration::from_secs(10);
 /// This node's write coordinator of the ranges it leads.
 pub(crate) type LocalRangeWriter =
     crate::distribution_range_consensus::RangeWriteCoordinator<TcpClusterRelocationTransport>;
@@ -232,6 +238,77 @@ fn repeat_pause(repeated: u32) -> Duration {
         None => Duration::ZERO,
         Some(doubled) => first.saturating_mul(1u32 << doubled.min(8)).min(last),
     }
+}
+/// How many members are asked at once for a step with two observation
+/// windows around a durable write (publication, Open, release, writer
+/// policy). Such a member reads every other member twice, and a member that
+/// is busy with its own step answers "busy" and is asked again; so does the
+/// metadata leader beyond four metadata reads at a time. Measured
+/// between five processes: two members at once finish in about 1.1 s where
+/// one after the other needs 1.5 s, but three members' publications at once
+/// needed 2.2 to 2.3 s where one after the other needs 1.7 s, almost all of
+/// it repetitions of busy members. So two.
+const WINDOWED_STEPS_AT_ONCE: usize = 2;
+/// How many members are asked at once for a preparation (the member's own
+/// local work), a custody retirement (one read of every other member, no
+/// durable write under observation) or the read-only release observation.
+/// Three at once were measured at 0.33 s and 0.62 s where one after the
+/// other needs 0.65 s and 1.0 s. Not more than the measured three: every
+/// request takes metadata reads on the metadata leader, which admits four
+/// at a time and refuses the rest as busy.
+const LIGHT_STEPS_AT_ONCE: usize = 3;
+
+/// One independent exchange per member, each on its own scoped thread; all
+/// of them have returned before this function does and the results keep the
+/// order of `nodes`. One member, or a thread that cannot be started, runs
+/// on the calling thread. A worker that panicked is an error of its member.
+fn member_fan_out<R: Send>(
+    nodes: &[ClusterNodeId],
+    exchange: &(dyn Fn(&ClusterNodeId) -> Result<R> + Sync),
+) -> Vec<(ClusterNodeId, Result<R>)> {
+    if nodes.len() < 2 {
+        return nodes
+            .iter()
+            .map(|node| (node.clone(), exchange(node)))
+            .collect();
+    }
+    std::thread::scope(|scope| {
+        let started = nodes
+            .iter()
+            .map(|node| {
+                let worker = std::thread::Builder::new()
+                    .name("range-move-member-step".into())
+                    .spawn_scoped(scope, move || exchange(node));
+                (node, worker)
+            })
+            .collect::<Vec<_>>();
+        started
+            .into_iter()
+            .map(|(node, worker)| {
+                let answer = match worker {
+                    Ok(worker) => worker.join().unwrap_or_else(|_| {
+                        Err(remote_error(format!(
+                            "the request worker of member {node} panicked"
+                        )))
+                    }),
+                    Err(_) => exchange(node),
+                };
+                (node.clone(), answer)
+            })
+            .collect()
+    })
+}
+/// The order of an Open or a release: the target alone, then the surviving
+/// members together. `order` names the target first.
+fn target_then_survivors(
+    order: &[ClusterNodeId],
+    target: &ClusterNodeId,
+) -> Vec<Vec<ClusterNodeId>> {
+    let (first, rest): (Vec<_>, Vec<_>) = order.iter().cloned().partition(|node| node == target);
+    [first, rest]
+        .into_iter()
+        .filter(|group| !group.is_empty())
+        .collect()
 }
 fn remote_error(detail: impl Into<String>) -> BicDbError {
     BicDbError::Cluster(format!("remote joined handoff backend: {}", detail.into()))
@@ -419,6 +496,11 @@ pub(crate) struct RemoteJoinedHandoffBackend {
     /// The admission hold of the allocation being proposed. Held only
     /// between `before_allocation` and `after_allocation` of one call.
     allocation_hold: Option<RangeAllocationHold<TcpClusterRelocationTransport>>,
+    /// How long the hold waits for this node's published change after a
+    /// committed allocation and after one of unknown outcome.
+    allocation_waits: (Duration, Duration),
+    /// Operator notes since the last `take_notes`.
+    notes: Vec<String>,
     /// Range, relocation and decision digest of the committed handoff record
     /// the last `resync` read.
     committed_record: Option<(RangeId, RelocationId, String)>,
@@ -480,6 +562,8 @@ impl RemoteJoinedHandoffBackend {
             local: None,
             local_writer: None,
             allocation_hold: None,
+            allocation_waits: (ALLOCATION_PUBLISH_WAIT, ALLOCATION_UNKNOWN_WAIT),
+            notes: Vec::new(),
             committed_record: None,
             decision_body: None,
             activation: None,
@@ -509,6 +593,13 @@ impl RemoteJoinedHandoffBackend {
     /// moved range is between its admission and its local completion.
     pub(crate) fn with_local_writer(mut self, writer: Arc<LocalRangeWriter>) -> Self {
         self.local_writer = Some(writer);
+        self
+    }
+    /// Test only: shorter waits of the allocation hold for this node's
+    /// published change (after a commit, after an unknown outcome).
+    #[cfg(test)]
+    pub(crate) fn test_allocation_waits(mut self, committed: Duration, unknown: Duration) -> Self {
+        self.allocation_waits = (committed, unknown);
         self
     }
     /// Test only: a shorter wait for a pending host command of the target.
@@ -910,6 +1001,16 @@ impl RemoteJoinedHandoffBackend {
         range: &RangeDescriptor,
         token: &CancellationToken,
     ) -> std::result::Result<NativeRangeMoveProbeRoleV1, String> {
+        self.probe_reply(node, range, token).map(|reply| reply.role)
+    }
+    /// The same probe with the member's whole reply.
+    fn probe_reply(
+        &self,
+        node: &ClusterNodeId,
+        range: &RangeDescriptor,
+        token: &CancellationToken,
+    ) -> std::result::Result<crate::distribution_transport::NativeRangeMoveProbeReplyV1, String>
+    {
         let mut round = 0;
         loop {
             round += 1;
@@ -917,7 +1018,7 @@ impl RemoteJoinedHandoffBackend {
                 .transport
                 .native_range_move_probe(node, range.id, range.epoch, token)
             {
-                Ok(reply) => return Ok(reply.role),
+                Ok(reply) => return Ok(reply),
                 Err(error) => {
                     let text = error.to_string();
                     if round >= 3 || !text.contains("busy") || token.check().is_err() {
@@ -943,19 +1044,26 @@ impl RemoteJoinedHandoffBackend {
     }
     /// The first voter of the committed range that holds an unfinished
     /// native command or an unfinished normal recovery of it, with which of
-    /// the two, asked read-only. A voter that does not answer as one is an
-    /// error.
+    /// the two, asked read-only. An unfinished recovery is named as the
+    /// member reported its record (epoch, record, phase, who fenced it), so
+    /// that an operator knows which record on which member blocks the move.
+    /// A voter that does not answer as one is an error.
     fn unfinished_command_voter(
         &self,
         range: &RangeDescriptor,
         parent: &CancellationToken,
-    ) -> Result<Option<(ClusterNodeId, &'static str)>> {
+    ) -> Result<Option<(ClusterNodeId, String)>> {
         for replica in &range.replicas {
             if replica.role != RangeReplicaRole::Voter {
                 continue;
             }
             let node = &replica.node_id;
-            match self.probe(node, range, &bounded(parent, REQUEST)) {
+            let reply = self.probe_reply(node, range, &bounded(parent, REQUEST));
+            let record = reply
+                .as_ref()
+                .ok()
+                .and_then(|reply| reply.unfinished_recovery_record.clone());
+            match reply.map(|reply| reply.role) {
                 Ok(NativeRangeMoveProbeRoleV1::Voter {
                     unfinished_command: false,
                     unfinished_recovery: false,
@@ -964,9 +1072,15 @@ impl RemoteJoinedHandoffBackend {
                 Ok(NativeRangeMoveProbeRoleV1::Voter {
                     unfinished_command: true,
                     ..
-                }) => return Ok(Some((node.clone(), "write command"))),
+                }) => return Ok(Some((node.clone(), "write command".into()))),
                 Ok(NativeRangeMoveProbeRoleV1::Voter { .. }) => {
-                    return Ok(Some((node.clone(), "recovery")))
+                    return Ok(Some((
+                        node.clone(),
+                        match record {
+                            Some(record) => format!("recovery ({record})"),
+                            None => "recovery (the member did not name its record)".into(),
+                        },
+                    )))
                 }
                 Ok(NativeRangeMoveProbeRoleV1::RegisteredReplicaReceiver) => {
                     return Err(remote_error(format!(
@@ -1324,25 +1438,67 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
                 range.id
             )));
         }
+        if hold.is_none() {
+            // The hold is this node's own write coordinator's; a host that
+            // was given none proposes the allocation without it, and says so.
+            self.notes.push(format!(
+                "the learner allocation of range {} is proposed without a write hold: this node has no write coordinator of its own ranges (it is not an initial data owner). A write in flight on this node when the allocation commits is left unfinished; the source cut then refuses by name, and the move must be aborted and started again",
+                range.id
+            ));
+        }
         self.allocation_hold = hold;
         Ok(())
     }
 
     /// The allocation commit attempt is over. After a commit the hold is
     /// kept until this node's own published configuration shows the changed
-    /// range, so that no command is admitted under the previous descriptor;
-    /// then, and after a failed attempt at once, it is released.
+    /// range, so that no command is admitted under the previous descriptor.
+    /// After an attempt whose outcome is not known the allocation may still
+    /// commit, so the hold is kept the same way, bounded. Only an attempt
+    /// that cannot commit any more releases the hold at once.
+    ///
+    /// The wait is bounded because the hold refuses the range's writes. When
+    /// it ends without the published change, the hold is released and the
+    /// fact is kept as an operator note: a command admitted from then on
+    /// under the previous descriptor straddles the allocation if it commits,
+    /// and the source cut refuses such a move by name.
     fn after_allocation(
         &mut self,
         range: &RangeDescriptor,
-        committed: bool,
+        outcome: AllocationCommitOutcome,
         parent: &CancellationToken,
     ) {
-        if let Some(hold) = self.allocation_hold.take() {
-            if committed {
-                hold.wait_published_change(range, ALLOCATION_PUBLISH_WAIT, parent);
-            }
+        let Some(hold) = self.allocation_hold.take() else {
+            return;
+        };
+        let (wait, what) = match outcome {
+            AllocationCommitOutcome::NotCommitted => return,
+            AllocationCommitOutcome::Committed => (
+                self.allocation_waits.0,
+                "the learner allocation is committed",
+            ),
+            AllocationCommitOutcome::Unknown => (
+                self.allocation_waits.1,
+                "the outcome of the learner allocation commit is not known and it may still commit",
+            ),
+        };
+        let started = Instant::now();
+        let published = hold.wait_published_change(range, wait, parent);
+        trace(started, || {
+            format!("allocation hold: {what}; published change seen={published}")
+        });
+        if !published {
+            self.notes.push(format!(
+                "the write hold of range {} ended after {} ms although this node had not published the changed range: {what}. A write admitted on this node since then under the previous configuration is left unfinished by the allocation; the source cut then refuses by name, and the move must be aborted and started again",
+                range.id,
+                started.elapsed().as_millis()
+            ));
         }
+        drop(hold);
+    }
+
+    fn take_notes(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.notes)
     }
 
     /// Before the learner allocation is proposed: ask the target and every
@@ -1400,6 +1556,19 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
             }
             let token = bounded(parent, REQUEST);
             match self.probe(&replica.node_id, range, &token) {
+                Ok(NativeRangeMoveProbeRoleV1::Voter {
+                    writer_policy_refusal: Some(why),
+                    ..
+                }) => {
+                    return Err(refused(
+                        &replica.node_id,
+                        "voter",
+                        format!(
+                            "its installed writer policy does not cover the committed membership ({why}). A voter publishes a member that joined by its own registry refresh (its status reports the last attempt); until it has, it would refuse {} as the target of the image, and a refused image capture cannot be started again",
+                            self.target
+                        ),
+                    ))
+                }
                 Ok(NativeRangeMoveProbeRoleV1::Voter { durable_epoch, .. })
                     if durable_epoch <= range.epoch => {}
                 Ok(NativeRangeMoveProbeRoleV1::Voter { durable_epoch, .. }) => {
@@ -2159,10 +2328,32 @@ impl RemoteJoinedHandoffBackend {
         operation: &NativeJointHandoffStepOperationV1,
         parent: &CancellationToken,
     ) -> Result<AuthenticatedNativeJointBridgeStepFrame> {
+        Self::bridge_step_over(
+            &self.transport,
+            members,
+            decision,
+            recipient,
+            operation,
+            parent,
+        )
+    }
+
+    /// `bridge_step` over a transport alone: it reads nothing of this
+    /// object, so the steps of one phase can run on scoped threads. Every
+    /// call acquires its own fresh metadata observation and its own request
+    /// identity; nothing is shared between two members' requests.
+    fn bridge_step_over(
+        transport: &TcpClusterRelocationTransport,
+        members: &RemoteMembers,
+        decision: &dyn NativeJointBridgeDecision,
+        recipient: &ClusterNodeId,
+        operation: &NativeJointHandoffStepOperationV1,
+        parent: &CancellationToken,
+    ) -> Result<AuthenticatedNativeJointBridgeStepFrame> {
         let token = bounded(parent, REQUEST);
         let business = Uuid::now_v7();
         let started = Instant::now();
-        let own = self.transport.acquire_host_metadata_observation(
+        let own = transport.acquire_host_metadata_observation(
             &members.metadata_leader,
             business,
             REQUEST,
@@ -2175,8 +2366,9 @@ impl RemoteJoinedHandoffBackend {
             business,
             BRIDGE_REQUEST_MS,
         )?;
-        let answer =
-            self.bridge_step_request(recipient, decision, operation, &request, &own, &token);
+        let answer = Self::bridge_step_request(
+            transport, recipient, decision, operation, &request, &own, &token,
+        );
         trace(started, || {
             format!(
                 "bridge step {} of {recipient}: own metadata {} ms, then {}",
@@ -2192,7 +2384,7 @@ impl RemoteJoinedHandoffBackend {
     }
 
     fn bridge_step_request(
-        &self,
+        transport: &TcpClusterRelocationTransport,
         recipient: &ClusterNodeId,
         decision: &dyn NativeJointBridgeDecision,
         operation: &NativeJointHandoffStepOperationV1,
@@ -2201,38 +2393,30 @@ impl RemoteJoinedHandoffBackend {
         token: &CancellationToken,
     ) -> Result<AuthenticatedNativeJointBridgeStepFrame> {
         match operation {
-            NativeJointHandoffStepOperationV1::BridgePrepare { .. } => self
-                .transport
+            NativeJointHandoffStepOperationV1::BridgePrepare { .. } => transport
                 .request_native_joint_bridge_prepare(recipient, decision, request, own, token),
-            NativeJointHandoffStepOperationV1::BridgePublish { .. } => self
-                .transport
+            NativeJointHandoffStepOperationV1::BridgePublish { .. } => transport
                 .request_native_joint_bridge_publish(recipient, decision, request, own, token),
-            NativeJointHandoffStepOperationV1::BridgeOpen { .. } => self
-                .transport
-                .request_native_joint_bridge_open(recipient, decision, request, own, token),
-            NativeJointHandoffStepOperationV1::BridgePhaseObserve { kind, .. } => self
-                .transport
+            NativeJointHandoffStepOperationV1::BridgeOpen { .. } => {
+                transport.request_native_joint_bridge_open(recipient, decision, request, own, token)
+            }
+            NativeJointHandoffStepOperationV1::BridgePhaseObserve { kind, .. } => transport
                 .request_native_joint_bridge_phase_observation(
                     recipient, decision, *kind, request, own, token,
                 ),
-            NativeJointHandoffStepOperationV1::RetireOldCustody { .. } => self
-                .transport
+            NativeJointHandoffStepOperationV1::RetireOldCustody { .. } => transport
                 .request_native_joint_bridge_retire_old_custody(
                     recipient, decision, request, own, token,
                 ),
-            NativeJointHandoffStepOperationV1::BridgeRelease { .. } => self
-                .transport
+            NativeJointHandoffStepOperationV1::BridgeRelease { .. } => transport
                 .request_native_joint_bridge_release(recipient, decision, request, own, token),
-            NativeJointHandoffStepOperationV1::BridgeWriterPolicy { .. } => {
-                self.transport.request_native_joint_bridge_writer_policy(
+            NativeJointHandoffStepOperationV1::BridgeWriterPolicy { .. } => transport
+                .request_native_joint_bridge_writer_policy(
                     recipient, decision, request, own, token,
-                )
-            }
-            NativeJointHandoffStepOperationV1::TargetServe { .. } => self
-                .transport
+                ),
+            NativeJointHandoffStepOperationV1::TargetServe { .. } => transport
                 .request_native_joint_target_serve(recipient, decision, request, own, token),
-            NativeJointHandoffStepOperationV1::SourceRetire { .. } => self
-                .transport
+            NativeJointHandoffStepOperationV1::SourceRetire { .. } => transport
                 .request_native_joint_source_retire(recipient, decision, request, own, token),
             NativeJointHandoffStepOperationV1::TargetInstall { .. }
             | NativeJointHandoffStepOperationV1::SourceExportRetire { .. } => {
@@ -2262,6 +2446,25 @@ impl RemoteJoinedHandoffBackend {
         operation: &NativeJointHandoffStepOperationV1,
         phase: &CancellationToken,
     ) -> Result<AuthenticatedNativeJointBridgeStepFrame> {
+        Self::complete_bridge_step_over(
+            &self.transport,
+            members,
+            decision,
+            recipient,
+            operation,
+            phase,
+        )
+    }
+
+    /// `complete_bridge_step` over a transport alone; see `bridge_step_over`.
+    fn complete_bridge_step_over(
+        transport: &TcpClusterRelocationTransport,
+        members: &RemoteMembers,
+        decision: &dyn NativeJointBridgeDecision,
+        recipient: &ClusterNodeId,
+        operation: &NativeJointHandoffStepOperationV1,
+        phase: &CancellationToken,
+    ) -> Result<AuthenticatedNativeJointBridgeStepFrame> {
         let mut failures = 0;
         let mut repeated = 0u32;
         let mut last = String::from("no answer");
@@ -2269,7 +2472,8 @@ impl RemoteJoinedHandoffBackend {
             if phase.check().is_err() {
                 break;
             }
-            match self.bridge_step(members, decision, recipient, operation, phase) {
+            match Self::bridge_step_over(transport, members, decision, recipient, operation, phase)
+            {
                 Ok(frame) => {
                     failures = 0;
                     if frame.outcome().complete {
@@ -2304,6 +2508,121 @@ impl RemoteJoinedHandoffBackend {
         )))
     }
 
+    /// One step of one phase on several members at once: every member's
+    /// `complete_bridge_step` runs on its own scoped thread, and all of them
+    /// have returned before this function does. The answers keep the order of
+    /// `nodes`; what is returned is each member's completed outcome.
+    ///
+    /// What makes the members of one call independent. A member's step is
+    /// the member's own work under its own fresh role and metadata; what it
+    /// needs from the other members it reads itself, and it needs only what
+    /// the PREVIOUS phase left on them (their preparation for a publication,
+    /// their confirmed bridge for an Open, their confirmed Open for the
+    /// custody retirement and the release, their confirmed release for the
+    /// writer policy). The callers therefore keep every phase boundary: a
+    /// phase starts only when every member completed the one before. Inside
+    /// a phase nothing is skipped or merged; each member runs exactly the
+    /// request sequence it ran before, with both of its observation windows.
+    ///
+    /// What concurrency can cost, and never more than time. A member that is
+    /// asked for an observation while its own step holds its state answers
+    /// "busy", and a member's second window refuses when another member's
+    /// reported state changed between its two windows. Both leave the step
+    /// incomplete (fail closed) and `complete_bridge_step` repeats it, as it
+    /// always did. A member whose repetition ended with an error while its
+    /// neighbours were still running is asked once more alone, after all of
+    /// them returned, by the unchanged sequential rule; only that outcome is
+    /// an error of the phase. So a refusal that only the concurrent
+    /// neighbours caused cannot fail a move that the sequential order would
+    /// have completed.
+    ///
+    /// `counted` is called with each completed frame on the thread that
+    /// received it, at once, so that a frame is counted inside its own
+    /// freshness window.
+    ///
+    /// The transport is shared by reference. It is `Sync` (the scoped spawn
+    /// would not compile otherwise), it opens one connection per request and
+    /// keeps no per-request state beyond an atomic request counter, and the
+    /// write coordinator already calls the same transport type from scoped
+    /// threads for its voter exchanges.
+    ///
+    /// `at_once` bounds how many members are asked together; the members
+    /// are taken in the order of `nodes`, and a group starts when the group
+    /// before it completed. See `WINDOWED_STEPS_AT_ONCE`.
+    #[allow(clippy::too_many_arguments)]
+    fn complete_bridge_steps(
+        &self,
+        members: &RemoteMembers,
+        decision: &RemoteBridgeDecision,
+        nodes: &[ClusterNodeId],
+        at_once: usize,
+        operation: &NativeJointHandoffStepOperationV1,
+        phase: &CancellationToken,
+        what: &str,
+        counted: &(dyn Fn(AuthenticatedNativeJointBridgeStepFrame) -> Result<()> + Sync),
+    ) -> Result<Vec<(ClusterNodeId, NativeJointHandoffStepOutcomeV1)>> {
+        let mut outcomes = Vec::with_capacity(nodes.len());
+        for group in nodes.chunks(at_once.max(1)) {
+            outcomes.extend(self.complete_bridge_step_group(
+                members, decision, group, operation, phase, what, counted,
+            )?);
+        }
+        Ok(outcomes)
+    }
+
+    /// One group of `complete_bridge_steps`: all of `nodes` at once.
+    #[allow(clippy::too_many_arguments)]
+    fn complete_bridge_step_group(
+        &self,
+        members: &RemoteMembers,
+        decision: &RemoteBridgeDecision,
+        nodes: &[ClusterNodeId],
+        operation: &NativeJointHandoffStepOperationV1,
+        phase: &CancellationToken,
+        what: &str,
+        counted: &(dyn Fn(AuthenticatedNativeJointBridgeStepFrame) -> Result<()> + Sync),
+    ) -> Result<Vec<(ClusterNodeId, NativeJointHandoffStepOutcomeV1)>> {
+        let started = Instant::now();
+        let transport: &TcpClusterRelocationTransport = &self.transport;
+        let step = |node: &ClusterNodeId| -> Result<NativeJointHandoffStepOutcomeV1> {
+            let frame = Self::complete_bridge_step_over(
+                transport, members, decision, node, operation, phase,
+            )?;
+            let outcome = frame.outcome().clone();
+            counted(frame)?;
+            Ok(outcome)
+        };
+        let answers = member_fan_out(nodes, &step);
+        let mut outcomes = Vec::with_capacity(nodes.len());
+        let mut repeated = 0;
+        for (node, answer) in answers {
+            let outcome = match answer {
+                Ok(outcome) => outcome,
+                Err(first) => {
+                    if nodes.len() < 2 || phase.check().is_err() {
+                        return Err(stage_error(&format!("{what} of {node}"), first));
+                    }
+                    // Alone now: every other member of the phase returned.
+                    repeated += 1;
+                    trace(started, || {
+                        format!(
+                            "{what} of {node} failed beside its neighbours and is repeated alone: {first}"
+                        )
+                    });
+                    step(&node).map_err(|error| stage_error(&format!("{what} of {node}"), error))?
+                }
+            };
+            outcomes.push((node, outcome));
+        }
+        trace(started, || {
+            format!(
+                "phase {what}: {} members at once, {repeated} repeated alone",
+                nodes.len()
+            )
+        });
+        Ok(outcomes)
+    }
+
     /// Preparation, publication and Open on every new member of `decision`,
     /// then the custody retirement, the release and the writer policy.
     fn activate_new_members(
@@ -2333,13 +2652,29 @@ impl RemoteJoinedHandoffBackend {
         let decision_sha256 = decision.checksum_sha256().to_owned();
 
         // What the members already hold decides what is sent.
+        // Read-only, one request per member, three at a time.
         let phase = bounded(parent, BRIDGE_PHASE);
         let mut observed = Vec::new();
-        for node in &new {
-            let answer = self
-                .observe_member_release(members, &decision, node, &decision_sha256, &phase)
-                .map_err(|error| stage_error(&format!("release observation of {node}"), error))?;
-            observed.push((node.clone(), answer));
+        {
+            let transport: &TcpClusterRelocationTransport = &self.transport;
+            let observe = |node: &ClusterNodeId| -> Result<Option<bool>> {
+                Self::observe_member_release(
+                    transport,
+                    members,
+                    &decision,
+                    node,
+                    &decision_sha256,
+                    &phase,
+                )
+            };
+            for group in new.chunks(LIGHT_STEPS_AT_ONCE) {
+                for (node, answer) in member_fan_out(group, &observe) {
+                    let answer = answer.map_err(|error| {
+                        stage_error(&format!("release observation of {node}"), error)
+                    })?;
+                    observed.push((node, answer));
+                }
+            }
         }
         self.bridge_observed = observed.clone();
         let every_open = observed.iter().all(|(_, answer)| answer.is_some());
@@ -2370,15 +2705,24 @@ impl RemoteJoinedHandoffBackend {
             decision_sha256: decision_sha256.clone(),
         };
         let phase = bounded(parent, BRIDGE_PHASE);
-        let mut retired = Vec::new();
-        for node in new.iter().filter(|node| !released(node)) {
-            self.complete_bridge_step(members, &decision, node, &operation, &phase)
-                .map_err(|error| {
-                    stage_error(&format!("OLD custody retirement of {node}"), error)
-                })?;
-            retired.push(node.clone());
-        }
-        self.bridge_retired = retired;
+        // Every member proves every new member durably open itself and
+        // retires only its own custody: three at a time.
+        let asked = new
+            .iter()
+            .filter(|node| !released(node))
+            .cloned()
+            .collect::<Vec<_>>();
+        self.complete_bridge_steps(
+            members,
+            &decision,
+            &asked,
+            LIGHT_STEPS_AT_ONCE,
+            &operation,
+            &phase,
+            "OLD custody retirement",
+            &|_| Ok(()),
+        )?;
+        self.bridge_retired = asked;
 
         // A released surviving member answers the repeated request from
         // what it retained, re-read under its own lock. A target that is
@@ -2388,19 +2732,31 @@ impl RemoteJoinedHandoffBackend {
         let operation = NativeJointHandoffStepOperationV1::BridgeRelease { decision_sha256 };
         let phase = bounded(parent, BRIDGE_PHASE);
         let mut outcomes = Vec::new();
-        for node in &order {
-            if *node == self.target && target_released {
-                continue;
+        // The target first and alone, as before; then the surviving members
+        // two at a time.
+        for group in target_then_survivors(&order, &self.target) {
+            let asked = group
+                .iter()
+                .filter(|node| !(**node == self.target && target_released))
+                .cloned()
+                .collect::<Vec<_>>();
+            for (node, outcome) in self.complete_bridge_steps(
+                members,
+                &decision,
+                &asked,
+                WINDOWED_STEPS_AT_ONCE,
+                &operation,
+                &phase,
+                "bridge release",
+                &|_| Ok(()),
+            )? {
+                if outcome.released != Some(true) {
+                    return Err(remote_error(format!(
+                        "new member {node} completed its release step without reporting itself released"
+                    )));
+                }
+                outcomes.push((node, outcome));
             }
-            let frame = self
-                .complete_bridge_step(members, &decision, node, &operation, &phase)
-                .map_err(|error| stage_error(&format!("bridge release of {node}"), error))?;
-            if frame.outcome().released != Some(true) {
-                return Err(remote_error(format!(
-                    "new member {node} completed its release step without reporting itself released"
-                )));
-            }
-            outcomes.push((node.clone(), frame.outcome().clone()));
         }
         self.bridge_released = outcomes;
         #[cfg(test)]
@@ -2440,16 +2796,33 @@ impl RemoteJoinedHandoffBackend {
         };
         let phase = bounded(parent, BRIDGE_PHASE);
         let mut outcomes = Vec::new();
-        for node in new.iter().filter(|node| **node != self.target) {
-            let frame = self
-                .complete_bridge_step(members, decision, node, &operation, &phase)
-                .map_err(|error| stage_error(&format!("writer policy of {node}"), error))?;
-            if frame.outcome().writer_policy_installed != Some(true) {
+        // The surviving members two at a time: each reads every other
+        // member's audited release, which the release phase left, and
+        // installs only its own policy. The target follows when all of them completed: its
+        // host replaces its DATA owner and rebinds its listener for the
+        // command, and a surviving member that asked it meanwhile would be
+        // refused.
+        let survivors = new
+            .iter()
+            .filter(|node| **node != self.target)
+            .cloned()
+            .collect::<Vec<_>>();
+        for (node, outcome) in self.complete_bridge_steps(
+            members,
+            decision,
+            &survivors,
+            WINDOWED_STEPS_AT_ONCE,
+            &operation,
+            &phase,
+            "writer policy",
+            &|_| Ok(()),
+        )? {
+            if outcome.writer_policy_installed != Some(true) {
                 return Err(remote_error(format!(
                     "new member {node} completed its writer policy step without reporting the policy installed"
                 )));
             }
-            outcomes.push((node.clone(), frame.outcome().clone()));
+            outcomes.push((node, outcome));
         }
         let target = self.target.clone();
         let mut answer =
@@ -2576,7 +2949,7 @@ impl RemoteJoinedHandoffBackend {
     /// released. Any other refusal is repeated a bounded number of times
     /// and then returned: an unknown answer never counts as "not open".
     fn observe_member_release(
-        &self,
+        transport: &TcpClusterRelocationTransport,
         members: &RemoteMembers,
         decision: &RemoteBridgeDecision,
         node: &ClusterNodeId,
@@ -2590,7 +2963,7 @@ impl RemoteJoinedHandoffBackend {
         let mut failures = 0;
         loop {
             phase.check()?;
-            match self.bridge_step(members, decision, node, &operation, phase) {
+            match Self::bridge_step_over(transport, members, decision, node, &operation, phase) {
                 Ok(frame) => return Ok(Some(frame.outcome().released == Some(true))),
                 Err(error) if error.to_string().contains(RELEASE_NOT_OPEN) => return Ok(None),
                 Err(error) => {
@@ -2623,31 +2996,44 @@ impl RemoteJoinedHandoffBackend {
             decision_sha256: decision_sha256.to_owned(),
         };
         let phase = bounded(parent, BRIDGE_PHASE);
-        for node in new {
-            self.complete_bridge_step(members, decision, node, &operation, &phase)
-                .map_err(|error| stage_error(&format!("bridge preparation of {node}"), error))?;
-        }
+        // A preparation is the member's own local work: three at a time.
+        self.complete_bridge_steps(
+            members,
+            decision,
+            new,
+            LIGHT_STEPS_AT_ONCE,
+            &operation,
+            &phase,
+            "bridge preparation",
+            &|_| Ok(()),
+        )?;
 
         let operation = NativeJointHandoffStepOperationV1::BridgePublish {
             decision_sha256: decision_sha256.to_owned(),
         };
         let phase = bounded(parent, BRIDGE_PHASE);
-        let mut round = NativeRemoteBridgePublicationCertificateRound::begin(
+        let round = Mutex::new(NativeRemoteBridgePublicationCertificateRound::begin(
             decision.clone(),
             coordinator,
             &phase,
+        )?);
+        // Every member reads every other member's preparation, which the
+        // phase before left and a publication does not change: two at a
+        // time, in node order. Each frame is counted inside its own
+        // freshness window, on the thread that received it.
+        self.complete_bridge_steps(
+            members,
+            decision,
+            new,
+            WINDOWED_STEPS_AT_ONCE,
+            &operation,
+            &phase,
+            "bridge publication",
+            &|frame| round.lock().record(frame),
         )?;
-        for node in new {
-            let frame = self
-                .complete_bridge_step(members, decision, node, &operation, &phase)
-                .map_err(|error| stage_error(&format!("bridge publication of {node}"), error))?;
-            // Counted inside the frame's own freshness window.
-            round
-                .record(frame)
-                .map_err(|error| stage_error(&format!("bridge publication of {node}"), error))?;
-        }
         self.bridge_publication = Some(
             round
+                .into_inner()
                 .finish()
                 .map_err(|error| stage_error("bridge publication certificate", error))?,
         );
@@ -2657,11 +3043,20 @@ impl RemoteJoinedHandoffBackend {
         };
         let phase = bounded(parent, BRIDGE_PHASE);
         let mut opened = Vec::new();
-        for node in order {
-            let frame = self
-                .complete_bridge_step(members, decision, node, &operation, &phase)
-                .map_err(|error| stage_error(&format!("bridge open of {node}"), error))?;
-            opened.push((node.clone(), frame.outcome().clone()));
+        // The target first and alone, as before; then the surviving members
+        // two at a time: each reads every other member's confirmed bridge,
+        // which the publication phase left and an Open does not change.
+        for group in target_then_survivors(order, &self.target) {
+            opened.extend(self.complete_bridge_steps(
+                members,
+                decision,
+                &group,
+                WINDOWED_STEPS_AT_ONCE,
+                &operation,
+                &phase,
+                "bridge open",
+                &|_| Ok(()),
+            )?);
         }
         self.bridge_opened = opened;
         Ok(())
@@ -2732,5 +3127,94 @@ impl RemoteJoinedHandoffBackend {
         };
         self.decision_body = Some(body.clone());
         Ok(body)
+    }
+}
+
+#[cfg(test)]
+mod member_fan_out_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    fn nodes(count: usize) -> Vec<ClusterNodeId> {
+        (1..=count)
+            .map(|i| ClusterNodeId::new(format!("n{i}")).unwrap())
+            .collect()
+    }
+
+    /// Every member's exchange is in flight at the same time, each answer
+    /// stays with its member in the order asked, and one member's error is
+    /// that member's alone.
+    #[test]
+    fn native_remote_backend_member_fan_out_runs_members_at_once_and_keeps_their_order() {
+        let nodes = nodes(4);
+        let inside = AtomicUsize::new(0);
+        let together = AtomicUsize::new(0);
+        let exchange = |node: &ClusterNodeId| -> Result<String> {
+            let now = inside.fetch_add(1, Ordering::SeqCst) + 1;
+            together.fetch_max(now, Ordering::SeqCst);
+            // Stay until every member is inside, bounded.
+            let until = Instant::now() + Duration::from_secs(10);
+            while together.load(Ordering::SeqCst) < 4 && Instant::now() < until {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            inside.fetch_sub(1, Ordering::SeqCst);
+            if node.as_str() == "n3" {
+                return Err(remote_error("n3 refused"));
+            }
+            Ok(format!("answer of {node}"))
+        };
+        let answers = member_fan_out(&nodes, &exchange);
+        assert_eq!(together.load(Ordering::SeqCst), 4, "all four at once");
+        assert_eq!(
+            answers
+                .iter()
+                .map(|(node, _)| node.clone())
+                .collect::<Vec<_>>(),
+            nodes
+        );
+        for (node, answer) in &answers {
+            match node.as_str() {
+                "n3" => assert!(answer
+                    .as_ref()
+                    .unwrap_err()
+                    .to_string()
+                    .contains("n3 refused")),
+                _ => assert_eq!(answer.as_ref().unwrap(), &format!("answer of {node}")),
+            }
+        }
+        // One member runs on the calling thread; none is asked for none.
+        let caller = std::thread::current().id();
+        let single = member_fan_out(&nodes[..1], &|_: &ClusterNodeId| {
+            Ok(std::thread::current().id())
+        });
+        assert_eq!(single.len(), 1);
+        assert_eq!(*single[0].1.as_ref().unwrap(), caller);
+        assert!(member_fan_out(&[], &|_: &ClusterNodeId| Ok(())).is_empty());
+    }
+
+    /// An Open and a release keep the target first and alone.
+    #[test]
+    fn native_remote_backend_target_goes_first_and_alone_then_the_survivors_together() {
+        let all = nodes(4);
+        let target = all[3].clone();
+        let order = vec![
+            all[3].clone(),
+            all[0].clone(),
+            all[1].clone(),
+            all[2].clone(),
+        ];
+        assert_eq!(
+            target_then_survivors(&order, &target),
+            vec![vec![all[3].clone()], all[..3].to_vec()]
+        );
+        // A set without the target (it was observed released) is one group.
+        assert_eq!(
+            target_then_survivors(&all[..3], &target),
+            vec![all[..3].to_vec()]
+        );
+        assert_eq!(
+            target_then_survivors(&order[..1], &target),
+            vec![vec![target.clone()]]
+        );
     }
 }

@@ -742,7 +742,40 @@ mod superseded_recovery_tests {
         ] {
             catalog.recovery_fences.get_mut(&range()).unwrap().phase = phase.clone();
             assert!(unfinished(&catalog, range()), "{phase:?}");
+            // The record is named for the operator: its own epoch, the
+            // log's epoch, the record and who fenced it. The captured
+            // record is of epoch 1 under a log at epoch 4; it is reported,
+            // never ignored for being older than the log.
+            let named =
+                recovery_state::catalog_unfinished_normal_recovery(&catalog, range()).unwrap();
+            let fence = &catalog.recovery_fences[&range()];
+            assert_eq!(
+                (
+                    named.range_epoch,
+                    named.log_epoch,
+                    named.recovery_nonce,
+                    &named.initiator_node_id
+                ),
+                (
+                    1,
+                    4,
+                    fence.scope.recovery_nonce,
+                    &fence.scope.initiator_node_id
+                )
+            );
+            let text = named.to_string();
+            assert!(
+                text.contains(&format!("recovery record {}", fence.scope.recovery_nonce))
+                    && text.contains(&format!("in phase {}", named.phase))
+                    && text.contains("for range epoch 1")
+                    && text.contains("is at epoch 4"),
+                "{text}"
+            );
         }
+        assert_eq!(
+            recovery_state::catalog_unfinished_normal_recovery(&captured(), range()),
+            None
+        );
         catalog.recovery_fences.get_mut(&range()).unwrap().phase =
             RecoveryFencePhase::Completed { resolved_index: 7 };
         assert!(!unfinished(&catalog, range()));
@@ -794,6 +827,13 @@ mod superseded_recovery_tests {
                 .old_epoch = 0;
         });
         eprintln!("SUPERSEDED_RECOVERY earlier promise: {earlier}");
+        // Epoch 0 is no epoch: this promise is refused as a promise, before
+        // the bound on its start is read. The bound itself is pinned by
+        // `the_loader_accepts_a_superseded_recovery_only_up_to_the_promise_old_epoch`.
+        assert!(
+            earlier.contains("invalid permanent range handoff promise"),
+            "{earlier}"
+        );
         // The joint state of the promise's session is not retained.
         let other_session = refused(&|catalog| {
             catalog
@@ -805,6 +845,63 @@ mod superseded_recovery_tests {
                 .nonce = Uuid::now_v7();
         });
         eprintln!("SUPERSEDED_RECOVERY other session: {other_session}");
+        assert!(other_session.contains(disagrees), "{other_session}");
+        // The same for the other half of the session identity, and for a
+        // joint state that is not retained at all.
+        let other_id = refused(&|catalog| {
+            catalog
+                .native_joint_handoffs
+                .as_mut()
+                .unwrap()
+                .get_mut(&range())
+                .unwrap()
+                .session_id = Uuid::now_v7();
+        });
+        eprintln!("SUPERSEDED_RECOVERY other session id: {other_id}");
+        assert!(other_id.contains(disagrees), "{other_id}");
+        let no_state = refused(&|catalog| {
+            catalog
+                .native_joint_handoffs
+                .as_mut()
+                .unwrap()
+                .remove(&range());
+        });
+        eprintln!("SUPERSEDED_RECOVERY no joint state: {no_state}");
+        assert!(no_state.contains(disagrees), "{no_state}");
+        // The helper itself on the session binding: the promise supersedes
+        // the recovery only together with the joint state of its own
+        // session and nonce.
+        for change in [
+            (&|state: &mut NativeJointLocalState| state.nonce = Uuid::now_v7())
+                as &dyn Fn(&mut NativeJointLocalState),
+            &|state: &mut NativeJointLocalState| state.session_id = Uuid::now_v7(),
+        ] {
+            let mut catalog = captured();
+            change(
+                catalog
+                    .native_joint_handoffs
+                    .as_mut()
+                    .unwrap()
+                    .get_mut(&range())
+                    .unwrap(),
+            );
+            assert!(!joint_promise_supersedes_activated_recovery(
+                &catalog,
+                range(),
+                1,
+                7,
+                4
+            ));
+        }
+        let mut catalog = captured();
+        catalog.native_joint_handoffs.as_mut().unwrap().clear();
+        assert!(!joint_promise_supersedes_activated_recovery(
+            &catalog,
+            range(),
+            1,
+            7,
+            4
+        ));
         // The same catalogue at the recovery's own epoch without any promise
         // is the ordinary recovered state and loads.
         let mut ordinary = captured();
@@ -835,5 +932,34 @@ mod superseded_recovery_tests {
             3,
             4
         ));
+    }
+
+    /// The loader's `old_epoch` bound: an activated recovery is superseded
+    /// only by a promise that starts at or after the recovery's own epoch.
+    /// The captured promise starts at epoch 2 and activates epoch 4; the
+    /// recovery record is moved to each epoch around that start.
+    #[test]
+    fn the_loader_accepts_a_superseded_recovery_only_up_to_the_promise_old_epoch() {
+        let disagrees = "native preparation disagrees with actual resolved catalogue";
+        let with_recovery_epoch = |epoch: u64| {
+            let mut catalog = captured();
+            let fence = catalog.recovery_fences.get_mut(&range()).unwrap();
+            fence.scope.range_epoch = epoch;
+            for marker in fence.historical_certifications.values_mut() {
+                marker.range_epoch = epoch;
+            }
+            verify(catalog)
+        };
+        assert_eq!(captured().handoff_promises[&range()].old_epoch, 2);
+        // Below and exactly at the promise's start: superseded, loadable.
+        with_recovery_epoch(1).unwrap();
+        with_recovery_epoch(2).unwrap();
+        // Past the promise's start, up to and beyond its activation epoch:
+        // a recovery of such an epoch was not ended by this promise.
+        for epoch in [3, 5] {
+            let refused = with_recovery_epoch(epoch).unwrap_err().to_string();
+            eprintln!("SUPERSEDED_RECOVERY recovery epoch {epoch}: {refused}");
+            assert!(refused.contains(disagrees), "epoch {epoch}: {refused}");
+        }
     }
 }

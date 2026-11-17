@@ -21,6 +21,7 @@ import subprocess
 SERIAL_TARGETS = {
     ("bicdb-cli", "native_metadata_operator_cli"),
     ("bicdb-cli", "native_range_move_five_process"),
+    ("bicdb-cli", "native_initial_member_restart"),
 }
 
 

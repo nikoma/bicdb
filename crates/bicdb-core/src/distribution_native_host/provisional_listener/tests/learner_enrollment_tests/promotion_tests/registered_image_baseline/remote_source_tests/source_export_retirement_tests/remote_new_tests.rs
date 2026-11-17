@@ -21,7 +21,40 @@ pub(super) fn is_case(case: SourceCase) -> bool {
                 | SourceCase::TargetRemoteNewBeforeCancel
                 | SourceCase::TargetRemoteNewAfterCancel
                 | SourceCase::TargetRemoteNewChangedIntent
+                | SourceCase::TargetRemoteNewRepeatedPrepare
+                | SourceCase::TargetRemoteNewSlowPrepare
+                | SourceCase::TargetRemoteNewSpentAttempts
         )
+}
+/// A preparation that is repeated for the same fact set after it completed
+/// takes no further attempt, however often; and the exact-request table
+/// admits more requests over time than it holds at once.
+#[test]
+fn native_registered_fifth_remote_new_repeated_prepare_is_idempotent_and_takes_no_attempt() {
+    run_registered_image_baseline_with_source(
+        Case::Required,
+        Some(SourceCase::TargetRemoteNewRepeatedPrepare),
+    );
+}
+/// The caller's deadline expires while the member is still preparing. The
+/// member completes inside the request's own budget; a repetition during
+/// that time is refused as busy, and the repetition after it succeeds from
+/// the retained outcome.
+#[test]
+fn native_registered_fifth_remote_new_deadline_expired_mid_prepare_then_repeat_succeeds() {
+    run_registered_image_baseline_with_source(
+        Case::Required,
+        Some(SourceCase::TargetRemoteNewSlowPrepare),
+    );
+}
+/// More refused preparations than the attempt cap, none of which detached
+/// anything, do not use up the participant.
+#[test]
+fn native_registered_fifth_remote_new_refused_preparations_do_not_exhaust_attempts() {
+    run_registered_image_baseline_with_source(
+        Case::Required,
+        Some(SourceCase::TargetRemoteNewSpentAttempts),
+    );
 }
 #[test]
 fn native_registered_fifth_remote_new_actual_materialization_independent_fetch_all_pin_owners() {
@@ -59,6 +92,26 @@ fn native_registered_fifth_remote_new_actual_changed_valid_quorum_cannot_replace
     );
 }
 
+/// The same retained attempts: their number and their immutable custody. A
+/// later clock read of an old request's deadline is not compared.
+fn same_attempts(after: &serde_json::Value, before: &serde_json::Value) {
+    let after = after["attempts"].as_array().unwrap();
+    let before = before["attempts"].as_array().unwrap();
+    assert_eq!(after.len(), before.len());
+    for (after, before) in after.iter().zip(before) {
+        for key in [
+            "actual_independently_fetched_facts",
+            "actual_observer",
+            "original_request_cancelled",
+            "original_role_context",
+            "original_own_context",
+            "source_export_terminal_retained",
+            "established_intent_or_detached_a_pin",
+        ] {
+            assert_eq!(after[key], before[key], "{key}");
+        }
+    }
+}
 fn exchange(
     client: &TcpClusterRelocationTransport,
     recipient: &ClusterNodeId,
@@ -323,6 +376,123 @@ pub(super) fn exercise(
             assert!(gate_after[mf.target_id.as_str()]["capture_pin"].is_null());
         }
     }
+    if matches!(case, SourceCase::TargetRemoteNewSpentAttempts) {
+        // Ten preparations in a row end inside the sink before any pin is
+        // taken (more than the cap of eight). Only the first, which fixed
+        // the fact-set intent, stays retained.
+        for round in 0..10 {
+            target_control
+                .test_arm_remote_new_cancel_at_handoff(mf.capture_range.id, false)
+                .unwrap();
+            let refused = exchange(
+                &clients[0],
+                &mf.target_id,
+                &request(
+                    mf,
+                    phase_id,
+                    NewOp::PrepareDecision {
+                        facts: facts.clone(),
+                    },
+                ),
+                &mut ledger,
+                output,
+            );
+            assert!(refused.is_err(), "round {round}");
+            let after = target_control
+                .test_remote_new_phase_evidence(mf.capture_range.id)
+                .unwrap();
+            let attempts = after["attempts"].as_array().unwrap();
+            assert_eq!(attempts.len(), if round == 0 { 1 } else { 2 }, "{after}");
+            assert_eq!(attempts[0]["established_intent_or_detached_a_pin"], true);
+            assert_eq!(after["target_materialization_reference_detached"], false);
+            assert_eq!(after["target_export_reference_detached"], false);
+            assert_eq!(
+                gates(services, factory, mf.capture_range.id, mf),
+                gate_before
+            );
+        }
+    }
+    if matches!(case, SourceCase::TargetRemoteNewSlowPrepare) {
+        target_control
+            .test_arm_remote_new_slow_handoff(mf.capture_range.id)
+            .unwrap();
+        let parent = budget(5000);
+        let (mq, own_business) = own(&clients[0], &parent);
+        // The caller waits 1.2 s; the member's sink alone takes 2 s of the
+        // request's 4 s budget.
+        let caller = budget(1200);
+        let slow = request(
+            mf,
+            phase_id,
+            NewOp::PrepareDecision {
+                facts: facts.clone(),
+            },
+        );
+        let started = Instant::now();
+        let lost =
+            clients[0].request_remote_native_new(&mf.target_id, &slow, &mq, own_business, &caller);
+        let lost = lost.err().map(|e| e.to_string());
+        eprintln!(
+            "REMOTE_NEW_SLOW_PREPARE caller={lost:?} after={:?}",
+            started.elapsed()
+        );
+        assert!(lost.is_some(), "the caller's deadline expired first");
+        assert!(started.elapsed() < Duration::from_millis(1900));
+        // The member is still working: a repetition is refused as busy and
+        // does not start the same work a second time.
+        let busy = exchange(
+            &clients[0],
+            &mf.target_id,
+            &request(
+                mf,
+                phase_id,
+                NewOp::PrepareDecision {
+                    facts: facts.clone(),
+                },
+            ),
+            &mut ledger,
+            output,
+        )
+        .err()
+        .map(|e| e.to_string())
+        .expect("a repetition while the member still prepares is refused");
+        assert!(
+            busy.contains("busy: an earlier preparation of this phase is still running"),
+            "{busy}"
+        );
+        std::thread::sleep(Duration::from_millis(3500).saturating_sub(started.elapsed()));
+        let after = target_control
+            .test_remote_new_phase_evidence(mf.capture_range.id)
+            .unwrap();
+        // Completed and retained, by the request whose caller had gone.
+        let attempts = after["attempts"].as_array().unwrap();
+        assert_eq!(attempts.len(), 1, "{after}");
+        assert_eq!(attempts[0]["original_request_cancelled"], false);
+        assert_eq!(after["target_export_reference_detached"], true);
+        assert_eq!(after["target_materialization_reference_detached"], true);
+        let repeated = exchange(
+            &clients[0],
+            &mf.target_id,
+            &request(
+                mf,
+                phase_id,
+                NewOp::PrepareDecision {
+                    facts: facts.clone(),
+                },
+            ),
+            &mut ledger,
+            output,
+        )
+        .unwrap();
+        assert_eq!(
+            repeated.reply().handoff.as_ref().unwrap().fact_set_sha256,
+            facts.checksum_sha256
+        );
+        let after = target_control
+            .test_remote_new_phase_evidence(mf.capture_range.id)
+            .unwrap();
+        assert_eq!(after["attempts"].as_array().unwrap().len(), 1, "{after}");
+    }
     let mut replies = BTreeMap::new();
     for id in &participants {
         let actual = exchange(
@@ -346,6 +516,80 @@ pub(super) fn exercise(
     let first = target_control
         .test_remote_new_phase_evidence(mf.capture_range.id)
         .unwrap();
+    if matches!(case, SourceCase::TargetRemoteNewSpentAttempts) {
+        // The refused ones are gone; the one that fixed the intent and the
+        // one that detached the pins remain.
+        assert_eq!(first["attempts"].as_array().unwrap().len(), 2, "{first}");
+    }
+    if matches!(case, SourceCase::TargetRemoteNewRepeatedPrepare) {
+        // More repetitions than the attempt cap, on every participant.
+        for round in 0..12 {
+            for id in &participants {
+                let actual = exchange(
+                    &clients[0],
+                    id,
+                    &request(
+                        mf,
+                        phase_id,
+                        NewOp::PrepareDecision {
+                            facts: facts.clone(),
+                        },
+                    ),
+                    &mut ledger,
+                    output,
+                )
+                .unwrap_or_else(|error| panic!("round {round} {id}: {error}"));
+                assert_eq!(actual.reply().handoff, replies[id].handoff);
+                assert_eq!(actual.reply().snapshot, replies[id].snapshot);
+            }
+        }
+        let after = target_control
+            .test_remote_new_phase_evidence(mf.capture_range.id)
+            .unwrap();
+        assert_eq!(first["attempts"].as_array().unwrap().len(), 1, "{first}");
+        same_attempts(&after, &first);
+        assert_eq!(after["exact_intent"], first["exact_intent"]);
+        assert_eq!(
+            after["retained_encoded_frame_bytes"],
+            first["retained_encoded_frame_bytes"]
+        );
+        // A different fact set is still refused after the repetitions.
+        let mut wrong = facts.clone();
+        wrong.members.insert(mf.target_id.clone(), "0".repeat(64));
+        wrong.checksum_sha256 = wrong.checksum().unwrap();
+        assert!(exchange(
+            &clients[0],
+            &mf.target_id,
+            &request(mf, phase_id, NewOp::PrepareDecision { facts: wrong }),
+            &mut ledger,
+            output,
+        )
+        .is_err());
+        // The exact-request table: more requests than it holds at once are
+        // admitted over time, because a request that is neither held by an
+        // attempt nor still inside its own budget frees its slot.
+        // (An observation is admitted from a participant, as in a callback.)
+        let observer = (0..4)
+            .find(|i| mf.new_members.contains_key(&node(*i)))
+            .unwrap();
+        for sent in 0..80 {
+            let mut short = request(mf, phase_id, NewOp::Observe);
+            short.budget_ms = 500;
+            let parent = budget(5000);
+            let (mq, own_business) = own(&clients[observer], &parent);
+            clients[observer]
+                .request_remote_native_new(&mf.target_id, &short, &mq, own_business, &parent)
+                .unwrap_or_else(|error| panic!("observation {sent}: {error}"));
+        }
+        let after = target_control
+            .test_remote_new_phase_evidence(mf.capture_range.id)
+            .unwrap();
+        assert!(
+            after["retained_requests"].as_u64().unwrap() <= 64,
+            "{after}"
+        );
+        same_attempts(&after, &first);
+    }
     if matches!(case, SourceCase::TargetRemoteNewChangedIntent) {
         let mut changed: NativeRemoteNewFactSetV1 = facts.clone();
         let optional = mf

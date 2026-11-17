@@ -38,6 +38,8 @@ struct FakeState {
     allocation_refusals: VecDeque<String>,
     /// Every allocation hook call, in order.
     allocation_calls: Vec<String>,
+    /// Operator notes the backend hands out on the next take.
+    notes: Vec<String>,
 }
 struct FakeBackend {
     state: Arc<Mutex<FakeState>>,
@@ -106,13 +108,16 @@ impl JoinedHandoffBackend for FakeBackend {
     fn after_allocation(
         &mut self,
         range: &crate::RangeDescriptor,
-        committed: bool,
+        outcome: crate::distribution_native_host::joined_data_handoff::AllocationCommitOutcome,
         _parent: &CancellationToken,
     ) {
         self.state
             .lock()
             .allocation_calls
-            .push(format!("after epoch {} committed {committed}", range.epoch));
+            .push(format!("after epoch {} {outcome:?}", range.epoch));
+    }
+    fn take_notes(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.state.lock().notes)
     }
     fn members(
         &self,
@@ -742,9 +747,12 @@ fn native_range_move_allocation_is_proposed_only_when_the_backend_allows_it() {
         let before = format!("before epoch {}", range.epoch);
         assert_eq!(state.lock().allocation_calls, vec![before.clone()]);
 
-        // The backend allows it and the commit fails: the backend is told,
-        // nothing is committed, and the stage is repeated.
+        // The backend allows it and the commit fails: the backend is told
+        // (these hosts cannot say that the candidate can no longer commit,
+        // so the outcome is unknown), nothing is committed, and the stage is
+        // repeated. What the backend noted is kept in the status.
         state.lock().waiting = None;
+        state.lock().notes = vec!["the write hold ended early".into()];
         hosts.fail_commit = Some("proposal lost".into());
         controller.tick(&mut hosts, &parent);
         let status = controller.status();
@@ -758,19 +766,32 @@ fn native_range_move_allocation_is_proposed_only_when_the_backend_allows_it() {
             "{status:?}"
         );
         assert_eq!(hosts.commits, 0);
-        let failed = format!("after epoch {} committed false", range.epoch);
+        assert_eq!(status.notes, vec!["the write hold ended early".to_string()]);
+        let failed = format!("after epoch {} Unknown", range.epoch);
         assert_eq!(
             state.lock().allocation_calls,
             vec![before.clone(), before.clone(), failed.clone()]
         );
 
         // Allowed and committed: told so, with the descriptor before the
-        // allocation. A committed allocation is not asked about again.
+        // allocation. A committed allocation is not asked about again. A
+        // note is kept across steps and the same text is kept once.
+        state.lock().notes = vec![
+            "the write hold ended early".into(),
+            "proposed without a write hold".into(),
+        ];
         controller.tick(&mut hosts, &parent);
         let status = controller.status();
         assert_eq!(status.stage, Some("learner_allocated"));
         assert_eq!(hosts.commits, 1);
-        let done = format!("after epoch {} committed true", range.epoch);
+        assert_eq!(
+            status.notes,
+            vec![
+                "the write hold ended early".to_string(),
+                "proposed without a write hold".to_string()
+            ]
+        );
+        let done = format!("after epoch {} Committed", range.epoch);
         let expected = vec![before.clone(), before.clone(), failed, before, done];
         assert_eq!(state.lock().allocation_calls, expected);
         state

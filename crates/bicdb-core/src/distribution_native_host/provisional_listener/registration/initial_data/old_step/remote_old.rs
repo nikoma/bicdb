@@ -135,7 +135,9 @@ impl NativeInitialDataAdmission {
                 if let Some(old) = entries.get(&request.range_id) {
                     old.clone()
                 } else {
-                    if entries.len() >= 8 {
+                    if unfinished_old_owners(&entries, step.own.committed_topology(step.business)?)
+                        >= MAX_UNFINISHED_OLD_OWNERS
+                    {
                         return Err(invalid("OLD source owner capacity; no refusal eviction"));
                     }
                     let actual_runtime = Arc::new(NativeJointHandoffRuntime::new(service.clone())?);
@@ -274,6 +276,7 @@ impl NativeInitialDataAdmission {
         table: Arc<RetainedInitialOldTable>,
         token: &CancellationToken,
     ) -> Result<ActualNativeRemoteOldFrame> {
+        let own_topology = own.committed_topology(business)?.clone();
         let step =
             self.observe_initial_old_constraint_step(metadata.clone(), role, own, business, token)?;
         request.require_plan(step.plan())?;
@@ -284,7 +287,7 @@ impl NativeInitialDataAdmission {
             if let Some(owner) = entries.get(&request.range_id) {
                 owner.clone()
             } else {
-                if entries.len() >= 8 {
+                if unfinished_old_owners(&entries, &own_topology) >= MAX_UNFINISHED_OLD_OWNERS {
                     return Err(invalid(
                         "OLD constraint owner capacity; no refusal eviction",
                     ));

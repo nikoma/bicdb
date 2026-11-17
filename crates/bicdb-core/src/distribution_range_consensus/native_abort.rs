@@ -748,6 +748,26 @@ impl RangeWriteStore {
     pub(crate) fn requires_native_abort_tracking(&self) -> Result<bool> {
         crate::format::native_abort_history_active(&self.root)
     }
+    /// Read-only. The lowest writer-start slot of this range above the
+    /// given native index: a command of this node that started and is not
+    /// covered by the native prefix. It grants and resolves nothing.
+    pub(crate) fn native_abort_start_beyond(
+        &self,
+        range_id: RangeId,
+        native_index: u64,
+    ) -> Option<u64> {
+        self.catalog
+            .native_abort_protocol
+            .as_ref()
+            .and_then(|protocol| protocol.ranges.get(&range_id))
+            .and_then(|range| {
+                range
+                    .slots
+                    .range(native_index.saturating_add(1)..)
+                    .next()
+                    .map(|(index, _)| *index)
+            })
+    }
     pub(crate) fn has_native_abort_attempt(&self, command: &RangeWriteCommand) -> Result<bool> {
         let slot = self
             .catalog

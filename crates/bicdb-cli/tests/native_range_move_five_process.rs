@@ -1,10 +1,21 @@
-//! Five real processes: four initial members serve data, a fifth joins, and
+//! Five real processes (then a sixth): four initial members serve data, a
+//! fifth joins, and
 //! ONE range is moved onto it with the operator commands only
 //! (`bicdb cluster native-metadata …`). The test process is an operator and a
 //! client: it holds no member state, and everything it learns comes from the
 //! hosts' status files, the authenticated bootstrap read and the event client.
 //!
 //! The final assertions are one marked block switched by `EXPECT_COMPLETION`.
+//!
+//! After the completed move a sixth process joins
+//! (`second_move_onto_a_sixth_node`). `EXPECT_SIXTH_VOTER = false`: the
+//! members cannot publish a further metadata voter into their writer
+//! policies after a completed move, so the metadata leader refuses to make
+//! the sixth node a voter, by name and before anything is proposed; the test
+//! asserts the refusal, that the sixth node stays a learner and that every
+//! range still answers Strong reads and appends. `true`: the sixth node
+//! becomes a voter, every range stays available, and a second, different
+//! range is moved onto it (`EXPECT_SECOND_MOVE`).
 //!
 //! Availability of the moved range is measured: a second client does one
 //! Strong read and one append on the moved range about every 100 ms from
@@ -83,6 +94,12 @@ const BLOCK_PATIENCE: Duration = Duration::from_secs(90);
 /// range slows the very move it waits for. The outage boundaries are
 /// therefore measured to about half a second.
 const CLIENT_BACKOFF: Duration = Duration::from_millis(400);
+/// The availability client's request timeout once the move completed. On a
+/// slow test host the first appends through the new leader can take longer
+/// than the one second the client allows itself during the move (where a
+/// longer one only holds the members' data services for longer), and a
+/// client that always gives up first never sees one succeed.
+const AFTER_MOVE_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 /// What the availability client appends while the first move attempt runs.
 ///
 /// `true`: it appends through the whole move, from before `move-range`. The
@@ -158,7 +175,7 @@ struct Cluster {
     directory: Option<tempfile::TempDir>,
     root: PathBuf,
     children: Vec<(usize, Child)>,
-    sequences: [u64; 5],
+    sequences: [u64; 6],
     addresses: Vec<String>,
     config: DistributionConfig,
     started: Instant,
@@ -492,7 +509,7 @@ fn start_four_initial_members() -> Cluster {
     let ca = ca_params.self_signed(&ca_key).unwrap();
     std::fs::write(root.join("ca.pem"), ca.pem()).unwrap();
     // OS-assigned loopback ports, unique per run.
-    let listeners = (0..5)
+    let listeners = (0..6)
         .map(|_| TcpListener::bind("127.0.0.1:0").unwrap())
         .collect::<Vec<_>>();
     let addresses = listeners
@@ -500,7 +517,7 @@ fn start_four_initial_members() -> Cluster {
         .map(|listener| listener.local_addr().unwrap().to_string())
         .collect::<Vec<_>>();
     let mut members = Vec::new();
-    for i in 0..5 {
+    for i in 0..6 {
         let key = KeyPair::generate().unwrap();
         let mut params =
             CertificateParams::new(vec!["localhost".into(), "127.0.0.1".into()]).unwrap();
@@ -567,7 +584,7 @@ fn start_four_initial_members() -> Cluster {
         directory: Some(directory),
         root,
         children: Vec::new(),
-        sequences: [0; 5],
+        sequences: [0; 6],
         addresses,
         config,
         started: Instant::now(),
@@ -740,9 +757,13 @@ impl Availability {
             Arc::clone(&quiet),
         );
         let worker = std::thread::spawn(move || {
-            let gateway = ClusterEventClient::new(&config, topology.clone())
+            let moving = ClusterEventClient::new(&config, topology.clone())
                 .unwrap()
                 .with_request_timeout(Duration::from_secs(1))
+                .unwrap();
+            let after_move = ClusterEventClient::new(&config, topology.clone())
+                .unwrap()
+                .with_request_timeout(AFTER_MOVE_REQUEST_TIMEOUT)
                 .unwrap();
             let stage = || {
                 std::fs::read(&coordinator_status)
@@ -773,6 +794,11 @@ impl Availability {
                         break;
                     }
                 }
+                let gateway = if finished.is_some() {
+                    &after_move
+                } else {
+                    &moving
+                };
                 // Reads and writes of this round both start after `finished`
                 // was read, so a success counts as after completion.
                 let at = started.elapsed().as_secs_f64();
@@ -952,6 +978,472 @@ enum MoveOutcome {
     TimedOut,
 }
 
+/// Follow one further move on coordinator `l` until it completes, reports
+/// the same error for `patience`, or `timeout` passes. Returns whether it
+/// completed and the coordinator's last `range_move` section.
+fn follow_move(
+    cluster: &mut Cluster,
+    l: usize,
+    label: &str,
+    patience: Duration,
+    timeout: Duration,
+) -> (bool, Value) {
+    let started = cluster.started;
+    let begun = Instant::now();
+    let mut shown = Value::Null;
+    let mut stable: Option<(String, Instant)> = None;
+    let mut last = Value::Null;
+    loop {
+        cluster.require_alive(label);
+        if let Some(status) = cluster.status(l) {
+            let current = status["host"]["range_move"].clone();
+            let view = serde_json::json!({
+                "stage": current["stage"], "next_stage": current["next_stage"],
+                "last_error": current["last_error"], "paused": current["paused"],
+                "completed": current["completed"], "aborted": current["aborted"],
+            });
+            if view != shown {
+                println!(
+                    "{} XPROC_M {label} +{:.3}s stage={} next={} attempts={} completed={} paused={} last_error={}",
+                    stamp(started),
+                    begun.elapsed().as_secs_f64(),
+                    current["stage"],
+                    current["next_stage"],
+                    current["attempts"],
+                    current["completed"],
+                    current["paused"],
+                    current["last_error"]
+                );
+                shown = view;
+            }
+            if current["completed"] == true {
+                return (true, current);
+            }
+            let key = current["last_error"].as_str().map(|error| {
+                format!(
+                    "{}|{}",
+                    current["stage"],
+                    error
+                        .chars()
+                        .map(|c| if c.is_ascii_digit() { '#' } else { c })
+                        .collect::<String>()
+                )
+            });
+            match (&key, &stable) {
+                (Some(key), Some((held, since))) if key == held => {
+                    if since.elapsed() >= patience {
+                        return (false, current);
+                    }
+                }
+                (Some(key), _) => stable = Some((key.clone(), Instant::now())),
+                (None, _) => stable = None,
+            }
+            last = current;
+        }
+        if begun.elapsed() >= timeout {
+            return (false, last);
+        }
+        std::thread::sleep(PRODUCT_TICK / 2);
+    }
+}
+/// THE switch of the second move's assertions. `false`: the second move is
+/// refused before anything is committed, for the reason named in
+/// `SECOND_MOVE_REFUSAL`, and the cluster stays as it was. `true`: the second
+/// move completes and the sixth node leads the second range.
+const EXPECT_SECOND_MOVE: bool = true;
+/// THE switch of the sixth node's join. `false`: the metadata leader refuses
+/// to make the sixth node a metadata voter after the completed move, for the
+/// reason named in `SIXTH_VOTER_REFUSAL`; the node stays a learner and every
+/// range keeps serving. `true`: it becomes a voter and every range keeps
+/// serving.
+const EXPECT_SIXTH_VOTER: bool = true;
+/// What the metadata leader reports when it refuses the sixth node.
+const SIXTH_VOTER_REFUSAL: &str = "a further metadata voter is refused";
+/// What the coordinator reports for the second move today: after one
+/// completed move no original member can publish a newly joined node into
+/// its writer policy (its registry refresh accepts additions only while the
+/// range configuration is the one the policy was enrolled with).
+const SECOND_MOVE_REFUSAL: &str = "installed writer policy does not cover the committed membership";
+/// How long one Strong read and one append may take in the serving report.
+const SERVING_PROBE: Duration = Duration::from_secs(3);
+
+/// One Strong read of a known row and one append of a fresh row on every
+/// range, printed per range. Returns how many ranges refused either.
+fn serving_report(
+    gateway: &ClusterEventClient,
+    rows: &BTreeMap<RangeId, Vec<String>>,
+    topology: &ClusterTopology,
+    label: &str,
+    started: Instant,
+) -> usize {
+    let mut refused = 0;
+    let _ = gateway.refresh();
+    for (id, keys) in rows {
+        let read = strong_read(gateway, &keys[0], SERVING_PROBE);
+        let fresh = (0..10_000)
+            .map(|i| format!("{label}-{i}"))
+            .find(|key| range_of(topology, key) == *id)
+            .unwrap();
+        let begun = Instant::now();
+        let appended = loop {
+            match gateway.append("items", &fresh, row_value(&fresh)) {
+                Ok(_) => break Ok(()),
+                Err(error) if begun.elapsed() >= SERVING_PROBE => break Err(error.to_string()),
+                Err(_) => {
+                    let _ = gateway.refresh();
+                    std::thread::sleep(POLL);
+                }
+            }
+        };
+        if read != Ok(Some(row_value(&keys[0]))) || appended.is_err() {
+            refused += 1;
+        }
+        println!(
+            "{} XPROC_M SECOND SERVING {label} range {id}: Strong read ok={} ({}) append ok={} ({})",
+            stamp(started),
+            read == Ok(Some(row_value(&keys[0]))),
+            read.as_ref().map_or_else(|error| error.clone(), |_| String::new()),
+            appended.is_ok(),
+            appended.as_ref().map_or_else(|error| error.clone(), |_| String::new()),
+        );
+    }
+    println!(
+        "{} XPROC_M SECOND SERVING {label}: {refused} of {} ranges refuse a Strong read or an append",
+        stamp(started),
+        rows.len()
+    );
+    refused
+}
+
+/// After the first completed move: a sixth process joins and a second,
+/// different range is moved onto it by a coordinator that took part in the
+/// first move's cluster. Everything is done with the operator commands.
+fn second_move_onto_a_sixth_node(
+    cluster: &mut Cluster,
+    gateway: &ClusterEventClient,
+    rows: &BTreeMap<RangeId, Vec<String>>,
+    first: RangeId,
+    first_coordinator: usize,
+) {
+    const SIXTH: usize = 5;
+    let started = cluster.started;
+    let index_of = |id: &ClusterNodeId| (0..6).find(|i| &node(*i) == id).unwrap();
+    let (command, status) = cluster.paths(SIXTH);
+    let mut sixth = binary();
+    sixth
+        .args([
+            "cluster",
+            "native-metadata",
+            "join-fresh",
+            "--replica-receiver",
+        ])
+        .arg(cluster.root.join("db5"))
+        .arg("--cluster-id")
+        .arg(cluster.config.cluster_id.as_str())
+        .arg("--seed-node-id")
+        .arg(node(first_coordinator).as_str())
+        .arg("--seed-address")
+        .arg(&cluster.addresses[first_coordinator])
+        .arg("--node-id")
+        .arg("n5")
+        .arg("--address")
+        .arg(&cluster.addresses[SIXTH])
+        .arg("--capacity-bytes")
+        .arg((1u64 << 30).to_string())
+        .arg("--command-file")
+        .arg(&command)
+        .arg("--status-file")
+        .arg(&status)
+        .arg("--run-seconds")
+        .arg(HOST_RUN_SECONDS.to_string());
+    cluster.tls(&mut sixth, SIXTH);
+    cluster.spawn(SIXTH, sixth);
+    if !EXPECT_SIXTH_VOTER {
+        // The metadata leader names why it does not make the sixth node a
+        // voter, in its own status.
+        let refusal = cluster.wait(
+            "the metadata leader to refuse the sixth node as a metadata voter",
+            Duration::from_secs(120),
+            |cluster| {
+                let mut seen = Vec::new();
+                for i in 0..=FIFTH {
+                    let Some(status) = cluster.status(i) else {
+                        continue;
+                    };
+                    let error = find_key(&status, "last_metadata_maintenance")
+                        .and_then(|report| report["error"].as_str())
+                        .map(str::to_string);
+                    match error {
+                        Some(error) if error.contains(SIXTH_VOTER_REFUSAL) => return Ok(error),
+                        other => seen.push(format!("node{i}: {other:?}")),
+                    }
+                }
+                Err(seen.join("; "))
+            },
+        );
+        println!(
+            "{} XPROC_M SECOND sixth node refused as a metadata voter: {refusal}",
+            stamp(started)
+        );
+        assert!(refusal.contains("Nothing was committed"), "{refusal}");
+        // The refusal stands over further maintenance ticks, the node stays
+        // outside the voters, and every range answers as before.
+        std::thread::sleep(PRODUCT_TICK * 6);
+        let after = cluster.snapshot(first_coordinator).unwrap().topology;
+        assert!(
+            after
+                .nodes
+                .get(&node(SIXTH))
+                .is_none_or(|member| member.metadata_role != MetadataMemberRole::Voter),
+            "the sixth node became a metadata voter although the leader refuses it"
+        );
+        assert!(
+            !after.metadata_voters().contains(&node(SIXTH)),
+            "the sixth node is a metadata voter"
+        );
+        let refused = serving_report(gateway, rows, &after, "after-sixth-refused", started);
+        assert_eq!(
+            refused, 0,
+            "a range stopped serving although the sixth node was refused"
+        );
+        cluster.require_alive("the sixth node was refused as a metadata voter");
+        return;
+    }
+    cluster.wait(
+        "the sixth node to be a metadata voter with an open replica receiver",
+        Duration::from_secs(120),
+        |cluster| match cluster.status(SIXTH) {
+            Some(status)
+                if status["error"].is_null()
+                    && status["host"]["metadata_role"] == "voter"
+                    && status["host"]["replica_receiver"]["receiver_ready"] == true =>
+            {
+                Ok(())
+            }
+            Some(status) => Err(format!(
+                "phase={} role={} receiver={} error={}",
+                status["host"]["phase"],
+                status["host"]["metadata_role"],
+                status["host"]["replica_receiver"]["receiver_ready"],
+                status["error"]
+            )),
+            None => Err("no status file yet".into()),
+        },
+    );
+    let before = cluster.wait(
+        "committed metadata naming n5 a metadata voter outside every range",
+        Duration::from_secs(30),
+        |cluster| {
+            let snapshot = cluster.snapshot(first_coordinator)?;
+            let voter = snapshot
+                .topology
+                .nodes
+                .get(&node(SIXTH))
+                .is_some_and(|member| member.metadata_role == MetadataMemberRole::Voter);
+            if voter && snapshot.metadata_leader_id.is_some() {
+                Ok(snapshot)
+            } else {
+                Err(format!("n5 voter={voter}"))
+            }
+        },
+    );
+    println!("{} XPROC_M SECOND sixth node joined", stamp(started));
+    // The second range: not the first, and without the fifth node.
+    let second = before
+        .topology
+        .ranges
+        .values()
+        .find(|other| other.id != first && other.replicas.iter().all(|r| r.node_id != node(FIFTH)))
+        .expect("a range the first move did not touch")
+        .clone();
+    let l2 = index_of(&second.leader);
+    let metadata_leader = before.metadata_leader_id.clone().unwrap();
+    println!(
+        "{} XPROC_M SECOND range {} (epoch {}, replicas {:?}) is led by {}; metadata is led by {metadata_leader}",
+        stamp(started),
+        second.id,
+        second.epoch,
+        second.replicas.iter().map(|r| r.node_id.as_str().to_string()).collect::<Vec<_>>(),
+        second.leader
+    );
+    if second.leader != metadata_leader {
+        let to = second.leader.as_str().to_string();
+        let m = index_of(&metadata_leader);
+        let reply = cluster.operator(m, "transfer-metadata-leadership", &["--to", &to]);
+        assert!(
+            reply.ok && reply.status["error"].is_null(),
+            "{metadata_leader} refused transfer-metadata-leadership --to {to}: {} / {}",
+            reply.stderr.trim(),
+            reply.status["error"]
+        );
+    }
+    let what = format!(
+        "{}'s own status to show that it leads metadata",
+        second.leader
+    );
+    cluster.wait(&what, Duration::from_secs(30), |cluster| {
+        let status = cluster.status(l2).ok_or("no status")?;
+        if status["host"]["metadata_leader"] == second.leader.as_str()
+            && status["host"]["metadata"]["role"] == "leader"
+        {
+            Ok(())
+        } else {
+            Err(format!(
+                "metadata_leader={} role={}",
+                status["host"]["metadata_leader"], status["host"]["metadata"]["role"]
+            ))
+        }
+    });
+    // Each original member's maintenance (500 ms) has had time to publish
+    // the sixth node into its writer policy, or to refuse to.
+    std::thread::sleep(PRODUCT_TICK * 6);
+    let refresh = |cluster: &Cluster, i: usize| {
+        cluster
+            .status(i)
+            .as_ref()
+            .and_then(|status| find_key(status, "registry_refresh_last_attempt"))
+            .map_or("absent".to_string(), |value| value.to_string())
+    };
+    for i in 0..INITIAL_MEMBERS {
+        println!(
+            "XPROC_M SECOND node{i} registry_refresh_last_attempt before the second move: {}",
+            refresh(cluster, i)
+        );
+    }
+    let refused = serving_report(
+        gateway,
+        rows,
+        &before.topology,
+        "after-sixth-joined",
+        started,
+    );
+    assert_eq!(
+        refused, 0,
+        "a range stopped serving when the sixth node became a metadata voter"
+    );
+
+    let second_text = second.id.get().to_string();
+    let move_origin = Instant::now();
+    cluster.accepted_patiently(
+        l2,
+        "move-range",
+        &["--range-id", &second_text, "--target-node-id", "n5"],
+    );
+    let (completed, last) = follow_move(
+        cluster,
+        l2,
+        "SECOND_MOVE",
+        if EXPECT_SECOND_MOVE {
+            BLOCK_PATIENCE
+        } else {
+            Duration::from_secs(8)
+        },
+        MOVE_TIMEOUT,
+    );
+    println!(
+        "{} XPROC_M SECOND move outcome after {:.3}s: completed={completed} {last}",
+        stamp(started),
+        move_origin.elapsed().as_secs_f64()
+    );
+    for i in 0..INITIAL_MEMBERS {
+        println!(
+            "XPROC_M SECOND node{i} registry_refresh_last_attempt after the second move: {}",
+            refresh(cluster, i)
+        );
+    }
+    if EXPECT_SECOND_MOVE {
+        assert!(completed, "the second move did not complete: {last}");
+        for i in 0..6 {
+            let what = format!("node{i}'s committed metadata to show both finished moves");
+            cluster.wait(&what, Duration::from_secs(30), |cluster| {
+                let topology = cluster.snapshot(i)?.topology;
+                let moved = topology.range_by_id(second.id).ok_or("range absent")?;
+                let earlier = topology.range_by_id(first).ok_or("first range absent")?;
+                let voter = moved
+                    .replicas
+                    .iter()
+                    .any(|r| r.node_id == node(SIXTH) && r.role == RangeReplicaRole::Voter);
+                let retired = moved.replicas.iter().all(|r| r.node_id != second.leader);
+                let relocated = topology.relocations.values().any(|plan| {
+                    plan.range_id == second.id
+                        && plan.target == node(SIXTH)
+                        && plan.phase == RelocationPhase::Completed
+                });
+                if voter
+                    && moved.leader == node(SIXTH)
+                    && retired
+                    && relocated
+                    && earlier.leader == node(FIFTH)
+                    && assignment(&before.topology, first) == assignment(&topology, first)
+                {
+                    Ok(())
+                } else {
+                    Err(format!(
+                        "n5 voter={voter} leader={} source retired={retired} relocation completed={relocated} first range leader={}",
+                        moved.leader, earlier.leader
+                    ))
+                }
+            });
+        }
+    } else {
+        assert!(
+            !completed,
+            "the second move completed; set EXPECT_SECOND_MOVE = true"
+        );
+        // Refused by name before anything is committed: no stage beyond the
+        // target's admission, and the range exactly as it was.
+        assert!(
+            last["last_error"]
+                .as_str()
+                .is_some_and(|error| error.contains(SECOND_MOVE_REFUSAL)
+                    && error.contains("Nothing was committed")),
+            "the second move must be refused before the learner allocation for the known reason: {last}"
+        );
+        assert!(
+            last["stage"].is_null() || last["stage"] == "target_admitted",
+            "the refused second move went beyond the target's admission: {last}"
+        );
+        let unchanged = cluster.snapshot(l2).unwrap().topology;
+        assert_eq!(
+            assignment(&before.topology, second.id),
+            assignment(&unchanged, second.id),
+            "the refused second move changed its range"
+        );
+        // The operator's way out, and the host is free for another move.
+        let aborted = cluster.operator(l2, "move-range", &["--range-id", &second_text, "--abort"]);
+        println!(
+            "{} XPROC_M SECOND move-range --abort: ok={} error={} range_move={}",
+            stamp(started),
+            aborted.ok,
+            aborted.status["error"],
+            aborted.status["host"]["range_move"]
+        );
+        assert_eq!(
+            aborted.status["host"]["range_move"]["aborted"], true,
+            "the refused second move must be abortable: {}",
+            aborted.status["host"]["range_move"]
+        );
+        let after = cluster.snapshot(l2).unwrap().topology;
+        assert_eq!(
+            assignment(&before.topology, second.id),
+            assignment(&after, second.id),
+            "the abort of the refused second move changed its range"
+        );
+        println!(
+            "{} XPROC_M SECOND relocations of range {} after the abort: {:?}",
+            stamp(started),
+            second.id,
+            after
+                .relocations
+                .values()
+                .filter(|plan| plan.range_id == second.id)
+                .map(|plan| (plan.id, plan.phase, plan.target.as_str().to_string()))
+                .collect::<Vec<_>>()
+        );
+    }
+    cluster.require_alive("the second move ended");
+}
+
 #[test]
 fn native_range_move_five_process_operator_sequence() {
     // (a) Four initial members, mTLS, serving initial data.
@@ -1120,7 +1612,7 @@ fn native_range_move_five_process_operator_sequence() {
         .clone();
     let range = moved.id;
     let leader = moved.leader.clone();
-    let index_of = |id: &ClusterNodeId| (0..5).find(|i| &node(*i) == id).unwrap();
+    let index_of = |id: &ClusterNodeId| (0..6).find(|i| &node(*i) == id).unwrap();
     let l = index_of(&leader);
     let m = index_of(&metadata_leader);
     println!(
@@ -1676,6 +2168,8 @@ fn native_range_move_five_process_operator_sequence() {
             refused.is_err(),
             "the retired member {leader} still answers for range {range}: {refused:?}"
         );
+
+        second_move_onto_a_sixth_node(&mut cluster, &gateway, &rows, range, l);
     }
     // ===================================================================
     // (g) Teardown: `Cluster::drop` kills and waits for all five processes,

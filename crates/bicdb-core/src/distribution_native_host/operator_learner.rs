@@ -562,6 +562,20 @@ impl NativeMetadataLearnerHost {
             NativeLearnerLifecycle::Cold(host) => host.advance_joint_bridge_host_commands(process),
         }
     }
+    /// Process-owned finite maintenance, separate from request authority:
+    /// once this member owns DATA through a range move, publish a further
+    /// metadata voter into its retained writer's registry. Nothing is
+    /// re-enrolled and no role or permission is created.
+    pub fn refresh_joined_data_registry(&mut self, parent: &CancellationToken) -> Result<()> {
+        parent.check()?;
+        if self.stopped || !self.metadata_started {
+            return Ok(());
+        }
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => host.refresh_joined_data_registry(parent),
+            NativeLearnerLifecycle::Cold(host) => host.refresh_joined_data_registry(parent),
+        }
+    }
     pub fn maintain_metadata(
         &mut self,
         parent: &CancellationToken,

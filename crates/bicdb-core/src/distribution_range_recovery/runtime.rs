@@ -114,6 +114,10 @@ struct Sessions {
     replacing: BTreeMap<RangeId, current_image_replacement::InstallingReplacementSession>,
     active: BTreeSet<RangeId>,
     contexts: usize,
+    /// Diagnostic only: who holds each counted context and since when, so a
+    /// busy refusal names its holder. Never consulted for admission.
+    holders: Vec<ContextHolder>,
+    next_holder: u64,
     #[cfg(feature = "tls-replication")]
     registered_remote:
         BTreeMap<RangeId, Arc<registered_remote_transfer::RegisteredRemoteFreezeCustody>>,
@@ -162,15 +166,60 @@ pub(crate) struct RangeRecoveryRuntime {
     #[cfg(all(test, feature = "tls-replication"))]
     test_point_snapshot_barrier: Mutex<Option<Arc<strong_point_read::NativePointSnapshotBarrier>>>,
 }
+#[derive(Debug)]
+struct ContextHolder {
+    id: u64,
+    range: RangeId,
+    exclusive: bool,
+    at: &'static std::panic::Location<'static>,
+    since: Instant,
+}
+impl Sessions {
+    /// Diagnostic text of a refused reservation: which bound refused it and
+    /// who holds the contexts. DATA for an error message, never authority.
+    fn busy(&self, range: RangeId, exclusive: bool) -> String {
+        let reason = if self.current.get(&range).is_some_and(|s| s.frozen.is_none()) {
+            "range freeze is leased to an image installer"
+        } else if self.contexts >= MAX_CONTEXTS {
+            "all receiver contexts are in use"
+        } else if exclusive && self.active.contains(&range) {
+            "range has an exclusive context"
+        } else {
+            "all exclusive receiver contexts are in use"
+        };
+        let held = self
+            .holders
+            .iter()
+            .map(|h| {
+                format!(
+                    "r{} {} by {}:{} for {}ms",
+                    h.range.0,
+                    if h.exclusive { "exclusive" } else { "observer" },
+                    h.at.file().rsplit('/').next().unwrap_or(h.at.file()),
+                    h.at.line(),
+                    h.since.elapsed().as_millis()
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(
+            "receiver recovery context/range is busy: r{}: {reason}; held: [{held}]",
+            range.0
+        )
+    }
+}
 struct Operation {
     sessions: Arc<Mutex<Sessions>>,
     range: RangeId,
     exclusive: bool,
+    holder: u64,
 }
 impl Drop for Operation {
     fn drop(&mut self) {
         let mut sessions = self.sessions.lock();
         sessions.contexts -= 1;
+        let holder = self.holder;
+        sessions.holders.retain(|h| h.id != holder);
         if self.exclusive {
             sessions.active.remove(&self.range);
         }
@@ -927,15 +976,19 @@ impl RangeRecoveryRuntime {
     pub(crate) fn test_active_context_count(&self) -> usize {
         self.sessions.lock().contexts
     }
+    #[track_caller]
     fn reserve(&self, range: RangeId) -> Result<Arc<Operation>> {
         self.reserve_context(range, true)
     }
+    #[track_caller]
     fn reserve_observer(&self, range: RangeId) -> Result<Arc<Operation>> {
         self.reserve_context(range, false)
     }
+    #[track_caller]
     fn reserve_context(&self, range: RangeId, exclusive: bool) -> Result<Arc<Operation>> {
         self.reserve_context_locked(range, exclusive, self.sessions.lock())
     }
+    #[track_caller]
     fn try_reserve_point_context(&self, range: RangeId) -> Result<Arc<Operation>> {
         let sessions = self
             .sessions
@@ -943,6 +996,7 @@ impl RangeRecoveryRuntime {
             .ok_or_else(|| invalid("receiver contexts are busy before point-read admission"))?;
         self.reserve_context_locked(range, true, sessions)
     }
+    #[track_caller]
     fn reserve_context_locked(
         &self,
         range: RangeId,
@@ -958,13 +1012,23 @@ impl RangeRecoveryRuntime {
                 && (sessions.active.len() >= MAX_EXCLUSIVE_CONTEXTS
                     || !sessions.active.insert(range)))
         {
-            return Err(invalid("receiver recovery context/range is busy"));
+            return Err(invalid(&sessions.busy(range, exclusive)));
         }
         sessions.contexts += 1;
+        sessions.next_holder += 1;
+        let holder = sessions.next_holder;
+        sessions.holders.push(ContextHolder {
+            id: holder,
+            range,
+            exclusive,
+            at: std::panic::Location::caller(),
+            since: Instant::now(),
+        });
         Ok(Arc::new(Operation {
             sessions: Arc::clone(&self.sessions),
             range,
             exclusive,
+            holder,
         }))
     }
     fn frozen(

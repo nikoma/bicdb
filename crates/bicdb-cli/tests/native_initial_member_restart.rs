@@ -638,11 +638,30 @@ fn read_within(
     timeout: Duration,
 ) -> Result<Option<Value>, String> {
     let begun = Instant::now();
+    // Every refusal of this read, by its text without the per-attempt
+    // holder ages, so a give-up names what kept refusing it.
+    let mut refusals = std::collections::BTreeMap::<String, usize>::new();
     loop {
         match gateway.get_strong("items", key) {
             Ok(value) => return Ok(value),
-            Err(error) if begun.elapsed() >= timeout => return Err(error.to_string()),
+            Err(error) if begun.elapsed() >= timeout => {
+                *refusals
+                    .entry(refusal_kind(&error.to_string()))
+                    .or_default() += 1;
+                return Err(format!(
+                    "{error} (Strong read of {key} refused for {:.1}s: {})",
+                    begun.elapsed().as_secs_f64(),
+                    refusals
+                        .iter()
+                        .map(|(kind, n)| format!("{n}x {kind}"))
+                        .collect::<Vec<_>>()
+                        .join(" | ")
+                ));
+            }
             Err(error) => {
+                *refusals
+                    .entry(refusal_kind(&error.to_string()))
+                    .or_default() += 1;
                 let mut repeated = REPEATED_READS.lock().unwrap();
                 if repeated.len() < 12 {
                     println!(
@@ -658,6 +677,24 @@ fn read_within(
             }
         }
     }
+}
+/// A refusal without the holder ages ("for 123ms") of a busy reservation.
+fn refusal_kind(error: &str) -> String {
+    let mut kind = String::new();
+    let mut rest = error;
+    while let Some(at) = rest.find(" for ") {
+        kind.push_str(&rest[..at]);
+        let tail = &rest[at + 5..];
+        let digits = tail.bytes().take_while(u8::is_ascii_digit).count();
+        if digits > 0 && tail[digits..].starts_with("ms") {
+            rest = &tail[digits + 2..];
+        } else {
+            kind.push_str(" for ");
+            rest = tail;
+        }
+    }
+    kind.push_str(rest);
+    kind.chars().take(700).collect()
 }
 /// Next unused key of `prefix` that falls into `range`.
 fn key_in(topology: &ClusterTopology, range: RangeId, prefix: &str, counter: &mut u64) -> String {

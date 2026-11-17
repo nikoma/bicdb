@@ -7,14 +7,15 @@
 //!
 //! The final assertions are one marked block switched by `EXPECT_COMPLETION`.
 //!
-//! After the completed move a sixth process joins and a second, different
-//! range is moved onto it (`second_move_onto_a_sixth_node`, switched by
-//! `EXPECT_SECOND_MOVE`). Today that move is refused before anything is
-//! committed, by name; the test asserts the refusal, that the range is
-//! unchanged and that the move can be aborted. It also prints, without
-//! asserting it, what every range answers after the sixth node joined: the
-//! members cannot publish that node into their writer policies after a
-//! completed move, and they refuse Strong reads and appends from then on.
+//! After the completed move a sixth process joins
+//! (`second_move_onto_a_sixth_node`). `EXPECT_SIXTH_VOTER = false`: the
+//! members cannot publish a further metadata voter into their writer
+//! policies after a completed move, so the metadata leader refuses to make
+//! the sixth node a voter, by name and before anything is proposed; the test
+//! asserts the refusal, that the sixth node stays a learner and that every
+//! range still answers Strong reads and appends. `true`: the sixth node
+//! becomes a voter, every range stays available, and a second, different
+//! range is moved onto it (`EXPECT_SECOND_MOVE`).
 //!
 //! Availability of the moved range is measured: a second client does one
 //! Strong read and one append on the moved range about every 100 ms from
@@ -1034,7 +1035,15 @@ fn follow_move(
 /// refused before anything is committed, for the reason named in
 /// `SECOND_MOVE_REFUSAL`, and the cluster stays as it was. `true`: the second
 /// move completes and the sixth node leads the second range.
-const EXPECT_SECOND_MOVE: bool = false;
+const EXPECT_SECOND_MOVE: bool = true;
+/// THE switch of the sixth node's join. `false`: the metadata leader refuses
+/// to make the sixth node a metadata voter after the completed move, for the
+/// reason named in `SIXTH_VOTER_REFUSAL`; the node stays a learner and every
+/// range keeps serving. `true`: it becomes a voter and every range keeps
+/// serving.
+const EXPECT_SIXTH_VOTER: bool = true;
+/// What the metadata leader reports when it refuses the sixth node.
+const SIXTH_VOTER_REFUSAL: &str = "a further metadata voter is refused";
 /// What the coordinator reports for the second move today: after one
 /// completed move no original member can publish a newly joined node into
 /// its writer policy (its registry refresh accepts additions only while the
@@ -1042,6 +1051,54 @@ const EXPECT_SECOND_MOVE: bool = false;
 const SECOND_MOVE_REFUSAL: &str = "installed writer policy does not cover the committed membership";
 /// How long one Strong read and one append may take in the serving report.
 const SERVING_PROBE: Duration = Duration::from_secs(3);
+
+/// One Strong read of a known row and one append of a fresh row on every
+/// range, printed per range. Returns how many ranges refused either.
+fn serving_report(
+    gateway: &ClusterEventClient,
+    rows: &BTreeMap<RangeId, Vec<String>>,
+    topology: &ClusterTopology,
+    label: &str,
+    started: Instant,
+) -> usize {
+    let mut refused = 0;
+    let _ = gateway.refresh();
+    for (id, keys) in rows {
+        let read = strong_read(gateway, &keys[0], SERVING_PROBE);
+        let fresh = (0..10_000)
+            .map(|i| format!("{label}-{i}"))
+            .find(|key| range_of(topology, key) == *id)
+            .unwrap();
+        let begun = Instant::now();
+        let appended = loop {
+            match gateway.append("items", &fresh, row_value(&fresh)) {
+                Ok(_) => break Ok(()),
+                Err(error) if begun.elapsed() >= SERVING_PROBE => break Err(error.to_string()),
+                Err(_) => {
+                    let _ = gateway.refresh();
+                    std::thread::sleep(POLL);
+                }
+            }
+        };
+        if read != Ok(Some(row_value(&keys[0]))) || appended.is_err() {
+            refused += 1;
+        }
+        println!(
+            "{} XPROC_M SECOND SERVING {label} range {id}: Strong read ok={} ({}) append ok={} ({})",
+            stamp(started),
+            read == Ok(Some(row_value(&keys[0]))),
+            read.as_ref().map_or_else(|error| error.clone(), |_| String::new()),
+            appended.is_ok(),
+            appended.as_ref().map_or_else(|error| error.clone(), |_| String::new()),
+        );
+    }
+    println!(
+        "{} XPROC_M SECOND SERVING {label}: {refused} of {} ranges refuse a Strong read or an append",
+        stamp(started),
+        rows.len()
+    );
+    refused
+}
 
 /// After the first completed move: a sixth process joins and a second,
 /// different range is moved onto it by a coordinator that took part in the
@@ -1086,6 +1143,57 @@ fn second_move_onto_a_sixth_node(
         .arg(HOST_RUN_SECONDS.to_string());
     cluster.tls(&mut sixth, SIXTH);
     cluster.spawn(SIXTH, sixth);
+    if !EXPECT_SIXTH_VOTER {
+        // The metadata leader names why it does not make the sixth node a
+        // voter, in its own status.
+        let refusal = cluster.wait(
+            "the metadata leader to refuse the sixth node as a metadata voter",
+            Duration::from_secs(120),
+            |cluster| {
+                let mut seen = Vec::new();
+                for i in 0..=FIFTH {
+                    let Some(status) = cluster.status(i) else {
+                        continue;
+                    };
+                    let error = find_key(&status, "last_metadata_maintenance")
+                        .and_then(|report| report["error"].as_str())
+                        .map(str::to_string);
+                    match error {
+                        Some(error) if error.contains(SIXTH_VOTER_REFUSAL) => return Ok(error),
+                        other => seen.push(format!("node{i}: {other:?}")),
+                    }
+                }
+                Err(seen.join("; "))
+            },
+        );
+        println!(
+            "{} XPROC_M SECOND sixth node refused as a metadata voter: {refusal}",
+            stamp(started)
+        );
+        assert!(refusal.contains("Nothing was committed"), "{refusal}");
+        // The refusal stands over further maintenance ticks, the node stays
+        // outside the voters, and every range answers as before.
+        std::thread::sleep(PRODUCT_TICK * 6);
+        let after = cluster.snapshot(first_coordinator).unwrap().topology;
+        assert!(
+            after
+                .nodes
+                .get(&node(SIXTH))
+                .is_none_or(|member| member.metadata_role != MetadataMemberRole::Voter),
+            "the sixth node became a metadata voter although the leader refuses it"
+        );
+        assert!(
+            !after.metadata_voters().contains(&node(SIXTH)),
+            "the sixth node is a metadata voter"
+        );
+        let refused = serving_report(gateway, rows, &after, "after-sixth-refused", started);
+        assert_eq!(
+            refused, 0,
+            "a range stopped serving although the sixth node was refused"
+        );
+        cluster.require_alive("the sixth node was refused as a metadata voter");
+        return;
+    }
     cluster.wait(
         "the sixth node to be a metadata voter with an open replica receiver",
         Duration::from_secs(120),
@@ -1187,56 +1295,17 @@ fn second_move_onto_a_sixth_node(
             refresh(cluster, i)
         );
     }
-    // Reported, not asserted: what each range answers once the sixth node is
-    // a metadata voter that the members could not publish into their writer
-    // policies. Measured with EXPECT_SECOND_MOVE = false: every range then
-    // refuses Strong reads and appends ("current voter registry changed"),
-    // on the original members and on the fifth node alike.
-    let mut refused = 0;
-    let mut serving = |label: &str| {
-        let _ = gateway.refresh();
-        for (id, keys) in rows {
-            let read = strong_read(gateway, &keys[0], SERVING_PROBE);
-            let fresh = (0..10_000)
-                .map(|i| format!("{label}-{i}"))
-                .find(|key| range_of(&before.topology, key) == *id)
-                .unwrap();
-            let begun = Instant::now();
-            let appended = loop {
-                match gateway.append("items", &fresh, row_value(&fresh)) {
-                    Ok(_) => break Ok(()),
-                    Err(error) if begun.elapsed() >= SERVING_PROBE => break Err(error.to_string()),
-                    Err(_) => {
-                        let _ = gateway.refresh();
-                        std::thread::sleep(POLL);
-                    }
-                }
-            };
-            if read != Ok(Some(row_value(&keys[0]))) || appended.is_err() {
-                refused += 1;
-            }
-            println!(
-                "{} XPROC_M SECOND SERVING {label} range {id}: Strong read ok={} ({}) append ok={} ({})",
-                stamp(started),
-                read == Ok(Some(row_value(&keys[0]))),
-                read.as_ref().map_or_else(|error| error.clone(), |_| String::new()),
-                appended.is_ok(),
-                appended.as_ref().map_or_else(|error| error.clone(), |_| String::new()),
-            );
-        }
-    };
-    serving("after-sixth-joined");
-    println!(
-        "{} XPROC_M SECOND SERVING {refused} of {} ranges refuse a Strong read or an append after the sixth node joined",
-        stamp(started),
-        rows.len()
+    let refused = serving_report(
+        gateway,
+        rows,
+        &before.topology,
+        "after-sixth-joined",
+        started,
     );
-    if EXPECT_SECOND_MOVE {
-        assert_eq!(
-            refused, 0,
-            "a range stopped serving when the sixth node joined"
-        );
-    }
+    assert_eq!(
+        refused, 0,
+        "a range stopped serving when the sixth node became a metadata voter"
+    );
 
     let second_text = second.id.get().to_string();
     let move_origin = Instant::now();

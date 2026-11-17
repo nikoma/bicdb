@@ -235,6 +235,17 @@ impl NativeUnassignedLearnerHost {
 }
 
 impl NativeUnassignedLearnerHost {
+    /// Process-owned maintenance of this member's joined DATA writer
+    /// registry; nothing to do before it owns DATA.
+    pub(in crate::distribution_native_host) fn refresh_joined_data_registry(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        match self.metadata_transition.control.as_mut() {
+            Some(control) => control.refresh_joined_data_registry(parent),
+            None => Ok(()),
+        }
+    }
     /// Host-thread half of the joint handoff host commands of this member.
     pub(in crate::distribution_native_host) fn advance_joint_bridge_host_commands(
         &mut self,

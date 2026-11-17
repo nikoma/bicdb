@@ -1017,6 +1017,12 @@ impl ClusterDataNodeService {
     ) -> RangeWriteStore {
         self.range_writes.replace(replacement)
     }
+    #[cfg(test)]
+    pub(crate) fn test_native_writer_host_state(
+        &self,
+    ) -> Result<std::sync::Arc<crate::db::NativeWriterHostState>> {
+        self.range_writes.native_writer_host_state()
+    }
     pub(crate) fn initial_consensus_only(&self) -> bool {
         self.initial_consensus_only
     }

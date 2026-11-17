@@ -83,6 +83,12 @@ const BLOCK_PATIENCE: Duration = Duration::from_secs(90);
 /// range slows the very move it waits for. The outage boundaries are
 /// therefore measured to about half a second.
 const CLIENT_BACKOFF: Duration = Duration::from_millis(400);
+/// The availability client's request timeout once the move completed. On a
+/// slow test host the first appends through the new leader can take longer
+/// than the one second the client allows itself during the move (where a
+/// longer one only holds the members' data services for longer), and a
+/// client that always gives up first never sees one succeed.
+const AFTER_MOVE_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 /// What the availability client appends while the first move attempt runs.
 ///
 /// `true`: it appends through the whole move, from before `move-range`. The
@@ -740,9 +746,13 @@ impl Availability {
             Arc::clone(&quiet),
         );
         let worker = std::thread::spawn(move || {
-            let gateway = ClusterEventClient::new(&config, topology.clone())
+            let moving = ClusterEventClient::new(&config, topology.clone())
                 .unwrap()
                 .with_request_timeout(Duration::from_secs(1))
+                .unwrap();
+            let after_move = ClusterEventClient::new(&config, topology.clone())
+                .unwrap()
+                .with_request_timeout(AFTER_MOVE_REQUEST_TIMEOUT)
                 .unwrap();
             let stage = || {
                 std::fs::read(&coordinator_status)
@@ -773,6 +783,11 @@ impl Availability {
                         break;
                     }
                 }
+                let gateway = if finished.is_some() {
+                    &after_move
+                } else {
+                    &moving
+                };
                 // Reads and writes of this round both start after `finished`
                 // was read, so a success counts as after completion.
                 let at = started.elapsed().as_secs_f64();

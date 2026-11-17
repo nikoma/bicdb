@@ -479,20 +479,50 @@ impl NativeRemoteNewParticipant {
     /// attempt enters, so a preparation that was refused (a busy service, an
     /// expired request) does not use up the participant. An attempt that had
     /// any effect is never released.
-    fn release_spent_attempts(&self, retained: &mut RetainedHandoff) -> Result<()> {
-        let mut released = Vec::new();
+    ///
+    /// The attempts and the binding of their requests are released together
+    /// under the request table, or not at all while it is busy (the next
+    /// attempt releases them): a released attempt never leaves its request
+    /// held.
+    fn release_spent_attempts(&self, retained: &mut RetainedHandoff) {
+        // The effect flags change only under the handoff custody the caller
+        // holds. A request that an effective attempt shares stays held.
+        let effective = retained
+            .attempts
+            .iter()
+            .filter(|attempt| attempt.effect.load(Ordering::Acquire))
+            .map(|attempt| attempt.challenge)
+            .collect::<Vec<_>>();
+        let Some(mut requests) = self.requests.try_lock() else {
+            return;
+        };
+        let mut released = 0usize;
         retained.attempts.retain(|attempt| {
             let keep = attempt.effect.load(Ordering::Acquire);
             if !keep {
-                released.push((attempt.challenge, attempt.encoded_bytes));
+                released = released.saturating_add(attempt.encoded_bytes);
+                if !effective.contains(&attempt.challenge) {
+                    if let Some(kept) = requests.get_mut(&attempt.challenge) {
+                        kept.held = false;
+                    }
+                }
             }
             keep
         });
-        for (challenge, bytes) in released {
-            retained.encoded_frame_bytes = retained.encoded_frame_bytes.saturating_sub(bytes);
-            self.hold_request(challenge, false)?;
+        retained.encoded_frame_bytes = retained.encoded_frame_bytes.saturating_sub(released);
+    }
+    /// Unbind the exact requests of released decision contexts, all of them
+    /// or none: `false` while the request table is busy.
+    pub(super) fn release_requests(&self, challenges: &[Uuid]) -> bool {
+        let Some(mut requests) = self.requests.try_lock() else {
+            return false;
+        };
+        for challenge in challenges {
+            if let Some(kept) = requests.get_mut(challenge) {
+                kept.held = false;
+            }
         }
-        Ok(())
+        true
     }
     pub(crate) fn require_lifetime_memory(&self) -> Result<()> {
         match &self.original {
@@ -631,7 +661,7 @@ impl NativeRemoteNewParticipant {
         // An error is not permission to evict an earlier retained observation
         // that established the intent or detached a pin. Each genuinely fresh
         // request gets at most one bounded attempt.
-        self.release_spent_attempts(&mut retained)?;
+        self.release_spent_attempts(&mut retained);
         if retained.attempts.len() >= MAX_PREPARE_ATTEMPTS {
             return Err(invalid(
                 "remote NEW handoff attempt custody exhausted (8); no reset or eviction",

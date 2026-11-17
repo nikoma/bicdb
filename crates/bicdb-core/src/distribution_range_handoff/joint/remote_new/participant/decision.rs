@@ -236,7 +236,7 @@ impl NativeRemoteNewParticipant {
         source.require_request_live()?;
         metadata.require_current_memory()?;
         parent.check()?;
-        self.release_spent_contexts(&mut retained)?;
+        self.release_spent_contexts(&mut retained);
         if retained.contexts.len() >= MAX_DECISION_CONTEXTS
             || retained
                 .encoded_bytes
@@ -366,20 +366,37 @@ impl NativeRemoteNewParticipant {
     /// publication enters, so a publication that was refused before the
     /// native begin (a busy service, an expired request) does not use up the
     /// participant. A context that had either effect is never released.
-    fn release_spent_contexts(&self, retained: &mut DecisionCustody) -> Result<()> {
-        let mut released = Vec::new();
+    ///
+    /// The contexts and the binding of their requests are released together,
+    /// or not at all while the request table is busy (the next publication
+    /// releases them): a released context never leaves its request held.
+    fn release_spent_contexts(&self, retained: &mut DecisionCustody) {
+        // The effect flags change only under the decision custody the caller
+        // holds. A request that an effective context shares stays held.
+        let (effective, spent): (Vec<_>, Vec<_>) = retained
+            .contexts
+            .iter()
+            .partition(|context| context.effect.load(Ordering::Acquire));
+        if spent.is_empty() {
+            return;
+        }
+        let unbound = spent
+            .iter()
+            .map(|context| context.challenge)
+            .filter(|challenge| effective.iter().all(|kept| kept.challenge != *challenge))
+            .collect::<Vec<_>>();
+        if !self.release_requests(&unbound) {
+            return;
+        }
+        let mut released = 0usize;
         retained.contexts.retain(|context| {
             let keep = context.effect.load(Ordering::Acquire);
             if !keep {
-                released.push((context.challenge, context.encoded_bytes));
+                released = released.saturating_add(context.encoded_bytes);
             }
             keep
         });
-        for (challenge, bytes) in released {
-            retained.encoded_bytes = retained.encoded_bytes.saturating_sub(bytes);
-            self.hold_request(challenge, false)?;
-        }
-        Ok(())
+        retained.encoded_bytes = retained.encoded_bytes.saturating_sub(released);
     }
     /// A repeated publication of the decision this participant ALREADY
     /// committed for exactly this fact set (by a request whose caller may

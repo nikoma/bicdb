@@ -480,6 +480,8 @@ impl NativeHotRecoveryMaintenance {
                 Ok(None) => continue,
                 Err(error) => {
                     state.cursor = (at + 1) % ranges.len();
+                    self.record(serde_json::json!({"phase":"candidate_refused","range_id":range.id,
+                        "error":error.to_string().chars().take(4096).collect::<String>(),"diagnostic_not_authority":true}));
                     return Err(error);
                 }
             };
@@ -502,7 +504,15 @@ impl NativeHotRecoveryMaintenance {
                     .service
                     .try_lock()
                     .ok_or_else(|| invalid("hot abort candidate actual service busy"))?;
-                Some(service.reopened_native_abort_candidate(&range, &command)?)
+                match service.reopened_native_abort_candidate(&range, &command) {
+                    Ok(candidate) => Some(candidate),
+                    Err(error) => {
+                        drop(service);
+                        self.record(serde_json::json!({"phase":"abort_candidate_refused","range_id":range.id,"abort":true,
+                            "command_id":command.command_id,"error":error.to_string().chars().take(4096).collect::<String>(),"diagnostic_not_authority":true}));
+                        return Err(error);
+                    }
+                }
             } else {
                 None
             };

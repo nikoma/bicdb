@@ -915,16 +915,20 @@ fn native_initial_member_restart_prepared_only_leader_tail_is_aborted() {
     }
 }
 
-/// A range leader ends inside its own local Commit: the protected slot is
-/// marked ever-Commit, the raw Commit vote is not persisted and no Commit was
-/// sent. Nothing can decide that write: no member holds Commit evidence (the
-/// forward recovery needs it) and an ever-Commit slot is never aborted. The
-/// reopened leader's hot recovery refuses it with that reason and starts no
-/// session; the range keeps refusing writes.
-#[test]
-fn native_initial_member_restart_ever_commit_unvoted_leader_tail_stays_refused() {
+/// A range leader ends inside its own Commit round, after its protected slot
+/// was marked ever-Commit (it has chosen commit; the slot is never aborted)
+/// and before any Commit reached a follower: either its own raw Commit vote
+/// is durable (`AfterLocalCommit`, State A) or it is not (`AfterEverCommitMark`,
+/// State B). No client was acknowledged. The reopened leader's hot recovery
+/// finishes that Commit round before its session's fence (own vote, then the
+/// original Commit to the followers, each re-proving it), and the forward
+/// session decides the write from the members' durable Commit votes: the
+/// write is present and the range accepts writes again.
+fn ever_commit_leader_tail_is_committed_forward(
+    point: crate::distribution_range_consensus::native_abort::TestNativeAdmissionStop,
+) {
     use crate::distribution_range_consensus::native_abort::{
-        test_arm_native_admission_stop, test_native_admission_stop_armed, TestNativeAdmissionStop,
+        test_arm_native_admission_stop, test_native_admission_stop_armed,
     };
     let mut cluster = Cluster::new();
     let topology = cluster.topology(0);
@@ -938,10 +942,12 @@ fn native_initial_member_restart_ever_commit_unvoted_leader_tail_stays_refused()
     let victim = (0..4).find(|&i| node(i) == led.leader).unwrap();
     let client = cluster.client(metadata_leader);
     let mut counter = 0u64;
+    let mut acknowledged = Vec::new();
     let key = key_in(&topology, led.id, &mut counter);
     append(&mut cluster, &client, &key, Duration::from_secs(30)).unwrap();
+    acknowledged.push(key);
     let stopped = key_in(&topology, led.id, &mut counter);
-    test_arm_native_admission_stop(led.id, TestNativeAdmissionStop::AfterEverCommitMark);
+    test_arm_native_admission_stop(led.id, point);
     let error = client
         .append("items", &stopped, value(&stopped))
         .expect_err("a stopped admission is never acknowledged");
@@ -949,54 +955,43 @@ fn native_initial_member_restart_ever_commit_unvoted_leader_tail_stays_refused()
         !test_native_admission_stop_armed(),
         "the stop did not fire: {error}"
     );
-    eprintln!("RESTART_TEST AfterEverCommitMark: stopped append {stopped}: {error}");
+    eprintln!("RESTART_TEST {point:?}: stopped append {stopped}: {error}");
     cluster.crash(victim);
-    cluster.reopen_metadata(victim);
-    let until = Instant::now() + Duration::from_secs(30);
-    loop {
-        cluster.tick();
-        if cluster
-            .host(victim)
-            .apply(NativeMetadataHostAction::EnableControl, &budget(5000))
-            .is_ok()
-        {
-            break;
-        }
-        assert!(
-            Instant::now() < until,
-            "the reopened leader cannot enable control"
-        );
-        std::thread::sleep(Duration::from_millis(100));
-    }
-    let until = Instant::now() + Duration::from_secs(40);
-    let reason = "is ever-Commit while its raw entry is not committed";
-    let hot = loop {
-        let _ = cluster
-            .host(victim)
-            .apply(NativeMetadataHostAction::OpenInitialData, &budget(1500));
-        cluster.tick();
-        let hot = cluster
-            .host(victim)
-            .status(&budget(1000))
-            .ok()
-            .and_then(|s| s.initial_data)
-            .and_then(|d| d.hot_recovery_last_attempt);
-        if hot.as_ref().is_some_and(|h| h.to_string().contains(reason)) {
-            break hot.unwrap();
-        }
-        assert!(
-            Instant::now() < until,
-            "the reopened leader's hot recovery must refuse the ever-Commit tail by name: {hot:?}"
-        );
-        std::thread::sleep(Duration::from_millis(100));
-    };
-    eprintln!("RESTART_TEST hot recovery of the reopened leader: {hot}");
-    assert_eq!(hot["phase"], "candidate_refused", "no session is started");
-    let later = key_in(&topology, led.id, &mut counter);
-    assert!(
-        client.append("items", &later, value(&later)).is_err(),
-        "the range keeps refusing writes"
+    cluster.reopen(victim);
+    let key = key_in(&topology, led.id, &mut counter);
+    append(&mut cluster, &client, &key, Duration::from_secs(60)).unwrap_or_else(|error| {
+        panic!("write after the re-driven Commit ({point:?}) failed: {error}")
+    });
+    acknowledged.push(key);
+    let hot = cluster
+        .host(victim)
+        .status(&budget(1000))
+        .ok()
+        .and_then(|s| s.initial_data)
+        .and_then(|d| d.hot_recovery_last_attempt);
+    eprintln!("RESTART_TEST {point:?}: hot recovery of the reopened leader: {hot:?}");
+    assert_eq!(
+        read(&mut cluster, &client, &stopped, Duration::from_secs(30)).unwrap(),
+        Some(value(&stopped)),
+        "{point:?}: the write whose leader chose commit is present"
     );
+    for key in &acknowledged {
+        assert_eq!(
+            read(&mut cluster, &client, key, Duration::from_secs(30)).unwrap(),
+            Some(value(key)),
+            "acknowledged row {key} must be readable"
+        );
+    }
+}
+#[test]
+fn native_initial_member_restart_leader_own_commit_vote_tail_is_committed_forward() {
+    use crate::distribution_range_consensus::native_abort::TestNativeAdmissionStop;
+    ever_commit_leader_tail_is_committed_forward(TestNativeAdmissionStop::AfterLocalCommit);
+}
+#[test]
+fn native_initial_member_restart_ever_commit_unvoted_leader_tail_is_committed_forward() {
+    use crate::distribution_range_consensus::native_abort::TestNativeAdmissionStop;
+    ever_commit_leader_tail_is_committed_forward(TestNativeAdmissionStop::AfterEverCommitMark);
 }
 
 /// The reopened leader's hot recovery session (an abort, then a forward

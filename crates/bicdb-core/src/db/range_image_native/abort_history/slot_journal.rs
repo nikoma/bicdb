@@ -342,6 +342,13 @@ impl BicDb {
         }
         Ok((slot, birth))
     }
+    /// True when THIS open published the writer-start of slot `(range, index)`
+    /// (its transaction may still be running in this process).
+    pub(crate) fn native_abort_slot_started_this_open(&self, range: RangeId, index: u64) -> bool {
+        self.native_abort_slots_started_this_open
+            .lock()
+            .contains(&(range, index))
+    }
     /// The command of the protected slot `(range, index)`, when one exists.
     /// Scheduling input only; every producer re-proves the slot itself.
     pub(crate) fn native_abort_slot_command(

@@ -100,6 +100,74 @@ impl ClusterDataNodeService {
         drop(mutation);
         result
     }
+    /// REOPENED origin only: cast this node's own raw Commit vote for its
+    /// slot `command.index` that an EARLIER open left inside its local
+    /// Commit: the protected slot is already ever-Commit (the irrevocable
+    /// commit choice of the coordinator; it can no longer be aborted) and the
+    /// raw entry is still exactly this Prepared command as the first
+    /// unresolved index. The vote goes through the unchanged local Commit
+    /// path (`commit_native_range_write_with_context`), which re-proves the
+    /// slot, the raw entry, the absence of any promise/no-effect intent and
+    /// of an active recovery context, under a counted mutation lease.
+    pub(crate) fn reopened_native_commit_vote(
+        &mut self,
+        range: &RangeDescriptor,
+        command: &RangeWriteCommand,
+    ) -> Result<RangeWriteAck> {
+        let database = Arc::clone(&self.db);
+        let db = try_database_read(&database)?;
+        self.require_native_catalog_database(&db)?;
+        self.require_native_writer_host_for_range(&db, range)?;
+        command.validate()?;
+        if command.leader_node_id != self.node_id
+            || command.range_id != range.id
+            || command.range_epoch != range.epoch
+        {
+            return Err(data_error(
+                "reopened Commit vote: only this node's own same-epoch command",
+            ));
+        }
+        if db.native_abort_slot_started_this_open(range.id, command.index) {
+            return Err(data_error(
+                "reopened Commit vote: the slot was started by this open; only its own admission may decide it",
+            ));
+        }
+        let ever_commit = db.native_abort_slot_inventory()?.into_iter().any(|s| {
+            s.command == *command
+                && s.ever_commit
+                && s.no_effect_sha256.is_none()
+                && s.abort_promise_sha256.is_none()
+        });
+        if !ever_commit {
+            return Err(data_error(
+                "reopened Commit vote: the protected slot is not ever-Commit for exactly this command",
+            ));
+        }
+        let progress = self.range_write_progress(range.id);
+        let raw = self
+            .probe_range_write_for_peer(range, &self.node_id.clone(), command.index)?
+            .entry;
+        if progress.resolved_through.checked_add(1) != Some(command.index)
+            || progress.last_index != command.index
+            || !raw.is_some_and(|e| e.state == RangeWriteState::Prepared && e.command == *command)
+        {
+            return Err(data_error(
+                "reopened Commit vote: the raw log does not hold exactly this Prepared command as its only unresolved entry",
+            ));
+        }
+        let gate = self.range_mutations.clone();
+        let mutation = gate.try_enter(range.id)?;
+        let node = self.node_id.clone();
+        let result = self.commit_native_range_write_with_context(
+            &db,
+            range,
+            &node,
+            command,
+            &RangeMutationAuthority::Mutation(&mutation),
+        );
+        drop(mutation);
+        result
+    }
     pub(super) fn ensure_native_abort_prepare_start(
         &mut self,
         range: &RangeDescriptor,

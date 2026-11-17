@@ -272,6 +272,78 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
         }
         Ok(())
     }
+    /// REOPENED leader only, before any fence of its hot recovery session:
+    /// re-send the ORIGINAL Commit of its own unfinished command to every
+    /// other voter through the ordinary Commit request, exactly what its
+    /// earlier process would have sent next. Each receiver runs its unchanged
+    /// Commit checks (leader/epoch fencing, its own slot and raw entry for
+    /// this exact command, no abort promise or no-effect intent, no active
+    /// recovery context) and nothing here is a decision: the caller's forward
+    /// session decides from the members' durable votes as before. Returns the
+    /// voters whose validated reply carries a Commit vote and the refusals.
+    pub(crate) fn redrive_reopened_commit_votes(
+        &self,
+        command: &RangeWriteCommand,
+    ) -> Result<(BTreeSet<ClusterNodeId>, BTreeMap<ClusterNodeId, String>)> {
+        command.validate()?;
+        let range = self
+            .topology
+            .read_recursive()
+            .range_by_id(command.range_id)
+            .cloned()
+            .ok_or_else(|| range_write_error("commit re-drive: range is not routed"))?;
+        if range.leader != self.local_node_id
+            || command.leader_node_id != self.local_node_id
+            || command.range_epoch != range.epoch
+        {
+            return Err(range_write_error(
+                "commit re-drive: only the same-epoch leader re-sends its own Commit",
+            ));
+        }
+        if self.recovered_epochs.lock().get(&range.id) == Some(&range.epoch) {
+            return Err(range_write_error(
+                "commit re-drive: the range is admitted; an ordinary admission owns its slots",
+            ));
+        }
+        let voters = range
+            .replicas
+            .iter()
+            .filter(|r| r.role == RangeReplicaRole::Voter && r.node_id != self.local_node_id)
+            .map(|r| r.node_id.clone())
+            .collect::<Vec<_>>();
+        let mut committed = BTreeSet::new();
+        let mut refused = BTreeMap::new();
+        for (voter, ack) in voter_fan_out(&voters, true, |voter| {
+            self.transport.commit_range_write(voter, command)
+        }) {
+            match ack {
+                Some(Ok(ack))
+                    if self.validate_ack(&voter, command, &ack).is_ok()
+                        && matches!(
+                            ack.state,
+                            RangeWriteState::Committed
+                                | RangeWriteState::QuorumCommitted
+                                | RangeWriteState::Applied
+                        ) =>
+                {
+                    committed.insert(voter);
+                }
+                Some(Ok(ack)) => {
+                    refused.insert(
+                        voter,
+                        format!("reply without a Commit vote: {:?}", ack.state),
+                    );
+                }
+                Some(Err(error)) => {
+                    refused.insert(voter, error.to_string().chars().take(600).collect());
+                }
+                None => {
+                    refused.insert(voter, "voter exchange ended abnormally".into());
+                }
+            }
+        }
+        Ok((committed, refused))
+    }
 }
 #[cfg(test)]
 impl RangeWriteCoordinator<TcpClusterRelocationTransport> {

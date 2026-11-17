@@ -36,6 +36,23 @@ const MIN_PHASE_START_MS: u64 = 1000;
 /// origin Pending is noticed quickly; any real work keeps the longer pacing.
 const QUIET_PACING: Duration = Duration::from_millis(100);
 const WORK_PACING: Duration = Duration::from_millis(500);
+/// Commit re-drive attempts that reached no Commit quorum before the
+/// forward session is started anyway (it then decides from the members'
+/// durable votes, or refuses naming them). A short re-drive is retried first:
+/// the session's own fence makes every later Commit refuse.
+const MAX_SHORT_COMMIT_REDRIVES: u32 = 20;
+/// How a reopened leader's unfinished command is recovered.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Tail {
+    /// Recovered forward (Fence, Certify, Apply, ...).
+    Forward,
+    /// The leader's own Commit round is finished first (own Commit vote,
+    /// then the original Commit re-sent to every other voter), then the
+    /// command is recovered forward like `Forward`.
+    Redrive,
+    /// Aborted (Fence, AbortResolve, Prepare, ...).
+    Abort,
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Phase {
     Fence,
@@ -80,6 +97,9 @@ struct Job {
     fenced: BTreeMap<ClusterNodeId, Option<u64>>,
     /// Diagnostic only: the first error each peer returned in each phase.
     first_peer_errors: BTreeMap<String, String>,
+    /// Diagnostic only: the leader's own Commit round was re-driven before
+    /// this session's fence.
+    commit_redriven: bool,
 }
 impl Job {
     fn note_peer_error(&mut self, node: &ClusterNodeId, error: &crate::BicDbError) {
@@ -95,6 +115,8 @@ struct State {
     jobs: BTreeMap<crate::RangeId, Job>,
     replica_debts: BTreeMap<crate::RangeId, replica_debt::ReplicaDebt>,
     cursor: usize,
+    /// Commit re-drives per range that reached no Commit quorum so far.
+    short_commit_redrives: BTreeMap<crate::RangeId, u32>,
 }
 pub(super) struct NativeHotRecoveryMaintenance {
     initial: Arc<NativeInitialConsensusLaunch>,
@@ -273,13 +295,12 @@ impl NativeHotRecoveryMaintenance {
             &purpose,
         )
     }
-    /// The command to recover and whether it is aborted (true) or recovered
-    /// forward (false).
+    /// The command to recover and how.
     fn candidate(
         &self,
         range: &crate::RangeDescriptor,
         token: &CancellationToken,
-    ) -> Result<Option<(RangeWriteCommand, bool)>> {
+    ) -> Result<Option<(RangeWriteCommand, Tail)>> {
         self.live(token)?;
         let service = self
             .initial
@@ -296,12 +317,19 @@ impl NativeHotRecoveryMaintenance {
             .require_for_coordinator(&db, range, &self.coordinator)?;
         let prefix = db.native_range_prefix_observation(range.id)?;
         let Some(index) = prefix.pending_command_index else {
-            if let Some(command) = self.reopened_committed_candidate(&service, &prefix, range)? {
-                return Ok(Some((command, false)));
+            if let Some((command, own)) =
+                self.reopened_committed_candidate(&service, &prefix, range)?
+            {
+                // Only the leader's own (uncertified) Commit vote: finish its
+                // Commit round first.
+                let tail = if own == RangeWriteState::Committed {
+                    Tail::Redrive
+                } else {
+                    Tail::Forward
+                };
+                return Ok(Some((command, tail)));
             }
-            return Ok(self
-                .reopened_prepared_candidate(&service, &db, &prefix, range)?
-                .map(|command| (command, true)));
+            return self.reopened_prepared_candidate(&service, &db, &prefix, range);
         };
         if prefix.invalidated
             || prefix.materialized_pending_index.is_some()
@@ -326,7 +354,7 @@ impl NativeHotRecoveryMaintenance {
             ));
         }
         self.live(token)?;
-        Ok(Some((entry.command, false)))
+        Ok(Some((entry.command, Tail::Forward)))
     }
     /// REOPENED owner only. The earlier process of this node ended after its
     /// own raw log recorded the next command with its own Commit vote or a
@@ -345,7 +373,7 @@ impl NativeHotRecoveryMaintenance {
         service: &crate::ClusterDataNodeService,
         prefix: &crate::db::NativeRangePrefixObservation,
         range: &crate::RangeDescriptor,
-    ) -> Result<Option<RangeWriteCommand>> {
+    ) -> Result<Option<(RangeWriteCommand, RangeWriteState)>> {
         if !self.initial.reopened()
             || prefix.invalidated
             || prefix.materialized_pending_index.is_some()
@@ -382,7 +410,7 @@ impl NativeHotRecoveryMaintenance {
         {
             return Ok(None);
         }
-        Ok(Some(entry.command))
+        Ok(Some((entry.command, entry.state)))
     }
     /// REOPENED owner only. The earlier process of this node ended after its
     /// own raw log recorded the next command as Prepared and before its own
@@ -393,13 +421,17 @@ impl NativeHotRecoveryMaintenance {
     /// protocol, whose promise quorum re-proves the absence of any Commit at
     /// every member. Here only the raw shape is selected; the Core producer
     /// of the no-effect intent re-proves the protected slot itself.
+    ///
+    /// A Prepared slot that is already ever-Commit (the process ended inside
+    /// its local Commit) is never aborted: its Commit round is re-driven
+    /// (`Tail::Redrive`), since the coordinator chose commit irrevocably.
     fn reopened_prepared_candidate(
         &self,
         service: &crate::ClusterDataNodeService,
         db: &crate::BicDb,
         prefix: &crate::db::NativeRangePrefixObservation,
         range: &crate::RangeDescriptor,
-    ) -> Result<Option<RangeWriteCommand>> {
+    ) -> Result<Option<(RangeWriteCommand, Tail)>> {
         if !self.initial.reopened()
             || prefix.invalidated
             || prefix.materialized_pending_index.is_some()
@@ -413,7 +445,8 @@ impl NativeHotRecoveryMaintenance {
         if progress.resolved_through.checked_add(1) != Some(index) {
             return Ok(None);
         }
-        let command = if progress.last_index == index {
+        let prepared = progress.last_index == index;
+        let command = if prepared {
             let Some(entry) = service
                 .probe_range_write_for_peer(range, &self.initial.seed.spec.node_id, index)?
                 .entry
@@ -445,20 +478,25 @@ impl NativeHotRecoveryMaintenance {
         // The earlier process ended inside its own local Commit: after the
         // protected slot was marked ever-Commit and before its raw Commit
         // vote was persisted. The origin sends Commit only after that vote
-        // is durable, so no member holds a Commit vote or a certificate:
-        // the forward recovery (decided only from such evidence) cannot
-        // decide it, and an ever-Commit slot is never aborted.
+        // is durable, so no member holds a Commit vote or a certificate, and
+        // an ever-Commit slot is never aborted. Its Commit round is finished
+        // instead (own vote, then the original Commit to the followers).
         if db
             .native_abort_slot_inventory()?
             .iter()
             .any(|s| s.command.range_id == range.id && s.command.index == index && s.ever_commit)
         {
-            return Err(invalid(&format!(
-                "reopened leader slot {index} of range {} is ever-Commit while its raw entry is not committed: its earlier process ended inside its local Commit, before the Commit vote was durable and before any Commit was sent; no member holds Commit evidence, so the forward recovery cannot decide it, and an ever-Commit slot is never aborted; the range stays refused",
-                range.id
-            )));
+            if !prepared {
+                // Not reachable by the write order (the local Prepare
+                // precedes the ever-Commit mark); never guessed at.
+                return Err(invalid(&format!(
+                    "reopened leader slot {index} of range {} is ever-Commit without a raw Prepared entry; the range stays refused",
+                    range.id
+                )));
+            }
+            return Ok(Some((command, Tail::Redrive)));
         }
-        Ok(Some(command))
+        Ok(Some((command, Tail::Abort)))
     }
     /// An admitted led range needs a fresh re-arm session when one of its
     /// members holds a durable activation that its current process never
@@ -633,11 +671,11 @@ impl NativeHotRecoveryMaintenance {
             }
             let candidate = if rearm {
                 self.rearm_candidate(&range, parent)
-                    .map(|command| command.map(|command| (command, false)))
+                    .map(|command| command.map(|command| (command, Tail::Forward)))
             } else {
                 self.candidate(&range, parent)
             };
-            let (command, abort) = match candidate {
+            let (command, tail) = match candidate {
                 Ok(Some(candidate)) => candidate,
                 Ok(None) => continue,
                 Err(error) => {
@@ -648,6 +686,36 @@ impl NativeHotRecoveryMaintenance {
                 }
             };
             state.cursor = (at + 1) % ranges.len();
+            let abort = tail == Tail::Abort;
+            let commit_redriven = tail == Tail::Redrive;
+            if commit_redriven {
+                // BEFORE the fence: every member's Commit refuses while a
+                // recovery context of the range is active.
+                let outcome = self.redrive_commit_round(&range, &command, parent);
+                let short = match &outcome {
+                    Ok((committed, refused, quorum)) => {
+                        self.record(serde_json::json!({"phase":"commit_redrive","range_id":range.id,"command_id":command.command_id,
+                            "commit_votes":committed,"quorum":quorum,"refused":refused,"diagnostic_not_authority":true}));
+                        committed.len() < *quorum
+                    }
+                    Err(error) => {
+                        self.record(serde_json::json!({"phase":"candidate_refused","range_id":range.id,"command_id":command.command_id,
+                            "error":error.to_string().chars().take(4096).collect::<String>(),"diagnostic_not_authority":true}));
+                        return Err(error);
+                    }
+                };
+                if short {
+                    let attempts = state.short_commit_redrives.entry(range.id).or_insert(0);
+                    *attempts += 1;
+                    if *attempts < MAX_SHORT_COMMIT_REDRIVES {
+                        return Err(invalid(&format!(
+                            "commit re-drive of range {} command {} reached no Commit quorum (attempt {attempts}); retried before any fence",
+                            range.id, command.command_id
+                        )));
+                    }
+                }
+                state.short_commit_redrives.remove(&range.id);
+            }
             if let Some(retired) = state.replica_debts.remove(&range.id) {
                 self.record(
                     retired.diagnostic("converged_session_retired_for_new_actual_origin_pending"),
@@ -708,6 +776,7 @@ impl NativeHotRecoveryMaintenance {
                     rearm,
                     fenced: BTreeMap::new(),
                     first_peer_errors: BTreeMap::new(),
+                    commit_redriven,
                 },
             );
             selected = Some(range);
@@ -733,7 +802,7 @@ impl NativeHotRecoveryMaintenance {
         let result = self.run_job(job, parent);
         let mut detail = serde_json::json!({"range_id":range.id,"epoch":job.range.epoch,"abort":job.abort,"rearm":job.rearm,"recovery_nonce":job.scope.recovery_nonce,
             "command_id":job.command.command_id,"command_sha256":job.command.checksum_sha256,"phase":format!("{:?}",job.phase),"position":job.position,
-            "completed":result.is_ok(),"phase_observed":job.phase_observed,"semantic_veto":job.semantic_veto.iter().map(|(n,p)|(n.to_string(),format!("{p:?}"))).collect::<BTreeMap<_,_>>(),"remaining_ms":parent.deadline().map(|d|d.saturating_duration_since(Instant::now()).as_millis()),"first_peer_errors":job.first_peer_errors,"diagnostic_not_authority":true});
+            "completed":result.is_ok(),"commit_redriven":job.commit_redriven,"phase_observed":job.phase_observed,"semantic_veto":job.semantic_veto.iter().map(|(n,p)|(n.to_string(),format!("{p:?}"))).collect::<BTreeMap<_,_>>(),"remaining_ms":parent.deadline().map(|d|d.saturating_duration_since(Instant::now()).as_millis()),"first_peer_errors":job.first_peer_errors,"diagnostic_not_authority":true});
         if let Err(error) = &result {
             let message = error.to_string();
             detail["error"] = serde_json::json!(if message.len() <= 4096 {
@@ -1131,6 +1200,80 @@ impl NativeHotRecoveryMaintenance {
     }
 }
 impl NativeHotRecoveryMaintenance {
+    /// REOPENED leader only, before its session's fence: finish the Commit
+    /// round of its own command whose slot its earlier process marked
+    /// ever-Commit. The leader casts its own Commit vote when its raw entry
+    /// is still Prepared (`reopened_native_commit_vote` re-proves the slot),
+    /// then re-sends the original Commit to every other voter, each of which
+    /// re-proves it through its unchanged Commit receiver. Nothing here
+    /// decides the command: the forward session's Certify phase decides it
+    /// from the fenced members' durable votes. Returns the Commit votes
+    /// (own included), the refusals and the quorum. An error (the own vote
+    /// was refused) leaves the range refused by that reason.
+    #[allow(clippy::type_complexity)]
+    fn redrive_commit_round(
+        &self,
+        range: &crate::RangeDescriptor,
+        command: &RangeWriteCommand,
+        token: &CancellationToken,
+    ) -> Result<(BTreeSet<ClusterNodeId>, BTreeMap<String, String>, usize)> {
+        self.live(token)?;
+        let origin = self.initial.seed.spec.node_id.clone();
+        let own = {
+            let mut service = self
+                .initial
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("hot commit re-drive actual service busy"))?;
+            let entry = service
+                .probe_range_write_for_peer(range, &origin, command.index)?
+                .entry
+                .ok_or_else(|| invalid("hot commit re-drive: the raw entry vanished"))?;
+            if entry.command != *command {
+                return Err(invalid(
+                    "hot commit re-drive: the raw entry holds another command",
+                ));
+            }
+            match entry.state {
+                RangeWriteState::Prepared => service
+                    .reopened_native_commit_vote(range, command)
+                    .map_err(|error| {
+                        invalid(&format!(
+                            "reopened leader slot {} of range {} is ever-Commit while its raw entry is not committed, and casting its own Commit vote was refused: {error}; an ever-Commit slot is never aborted; the range stays refused",
+                            command.index, range.id
+                        ))
+                    })?
+                    .state,
+                state => state,
+            }
+        };
+        if !matches!(
+            own,
+            RangeWriteState::Committed
+                | RangeWriteState::QuorumCommitted
+                | RangeWriteState::Applied
+        ) {
+            return Err(invalid(&format!(
+                "hot commit re-drive: own vote state {own:?} is not a Commit vote"
+            )));
+        }
+        self.live(token)?;
+        let (mut committed, refused) = self.coordinator.redrive_reopened_commit_votes(command)?;
+        committed.insert(origin);
+        let voters = range
+            .replicas
+            .iter()
+            .filter(|r| r.role == crate::distribution::RangeReplicaRole::Voter)
+            .count();
+        Ok((
+            committed,
+            refused
+                .into_iter()
+                .map(|(node, error)| (node.to_string(), error))
+                .collect(),
+            voters / 2 + 1,
+        ))
+    }
     /// The abort of a Prepared-only slot, with the existing requests
     /// unchanged: the origin's own Core no-effect intent (the candidate), then
     /// resolution at the origin FIRST, which creates the permanent promises of

@@ -1140,8 +1140,13 @@ fn native_initial_member_restart_four_process_leader_killed_under_writes() {
                     ranges
                         .iter()
                         .find(|r| r["range_id"] == led.id.get())
-                        .and_then(|r| r["first_unresolved_state"].as_str())
-                        .map(str::to_owned)
+                        .and_then(|r| {
+                            r["first_unresolved_state"].as_str().map(str::to_owned).or_else(|| {
+                                r["unfinished_native_writer_start_index"]
+                                    .as_u64()
+                                    .map(|_| "WriterStartOnly".to_owned())
+                            })
+                        })
                 });
             }
             let hot = &status["host"]["initial_data"]["hot_recovery_last_attempt"];
@@ -1156,7 +1161,8 @@ fn native_initial_member_restart_four_process_leader_killed_under_writes() {
             std::thread::sleep(POLL);
         };
         let state = match (&seen_state, seen_abort) {
-            (_, true) => "Prepared tail aborted".to_owned(),
+            (Some(state), true) => format!("{state} tail aborted"),
+            (None, true) => "tail aborted".to_owned(),
             (Some(state), false) => format!("{state} tail"),
             (None, false) => "no unfinished tail seen".to_owned(),
         };

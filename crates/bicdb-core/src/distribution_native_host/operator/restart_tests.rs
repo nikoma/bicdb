@@ -830,7 +830,8 @@ fn native_initial_member_restart_whole_cluster_reopens_from_its_roots() {
 
 /// A range leader whose last write was only PREPARED when its process ended
 /// (its own raw log Prepared, its slot without a Commit vote, no native
-/// Pending), once with the followers prepared and once without. After the
+/// Pending), with the followers prepared, without, and with only the
+/// writer-start before the local Prepare. After the
 /// reopen, the hot recovery aborts that slot through the abort protocol and
 /// the range accepts writes again; the unacknowledged write is absent and
 /// every acknowledged row is readable.
@@ -856,6 +857,7 @@ fn native_initial_member_restart_prepared_only_leader_tail_is_aborted() {
     for point in [
         TestNativeAdmissionStop::AfterPrepareQuorum,
         TestNativeAdmissionStop::AfterLocalPrepare,
+        TestNativeAdmissionStop::AfterWriterStart,
     ] {
         let key = key_in(&topology, led.id, &mut counter);
         append(&mut cluster, &client, &key, Duration::from_secs(30)).unwrap();

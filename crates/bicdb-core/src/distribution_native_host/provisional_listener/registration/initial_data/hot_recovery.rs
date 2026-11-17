@@ -280,7 +280,7 @@ impl NativeHotRecoveryMaintenance {
                 return Ok(Some((command, false)));
             }
             return Ok(self
-                .reopened_prepared_candidate(&service, &prefix, range)?
+                .reopened_prepared_candidate(&service, &db, &prefix, range)?
                 .map(|command| (command, true)));
         };
         if prefix.invalidated
@@ -368,6 +368,7 @@ impl NativeHotRecoveryMaintenance {
     fn reopened_prepared_candidate(
         &self,
         service: &crate::ClusterDataNodeService,
+        db: &crate::BicDb,
         prefix: &crate::db::NativeRangePrefixObservation,
         range: &crate::RangeDescriptor,
     ) -> Result<Option<RangeWriteCommand>> {
@@ -381,25 +382,39 @@ impl NativeHotRecoveryMaintenance {
             return Ok(None);
         };
         let progress = service.range_write_progress(range.id);
-        if progress.resolved_through.checked_add(1) != Some(index) || progress.last_index != index {
+        if progress.resolved_through.checked_add(1) != Some(index) {
             return Ok(None);
         }
-        let Some(entry) = service
-            .probe_range_write_for_peer(range, &self.initial.seed.spec.node_id, index)?
-            .entry
-        else {
+        let command = if progress.last_index == index {
+            let Some(entry) = service
+                .probe_range_write_for_peer(range, &self.initial.seed.spec.node_id, index)?
+                .entry
+            else {
+                return Ok(None);
+            };
+            if entry.state != RangeWriteState::Prepared {
+                return Ok(None);
+            }
+            entry.command
+        } else if progress.last_index.checked_add(1) == Some(index) {
+            // Ended between the writer-start and the local Prepare: the
+            // command exists only in the protected slot.
+            let Some(command) = db.native_abort_slot_command(range.id, index)? else {
+                return Ok(None);
+            };
+            command
+        } else {
             return Ok(None);
         };
-        entry.command.validate()?;
-        if entry.state != RangeWriteState::Prepared
-            || entry.command.index != index
-            || entry.command.range_id != range.id
-            || entry.command.range_epoch != range.epoch
-            || entry.command.leader_node_id != self.initial.seed.spec.node_id
+        command.validate()?;
+        if command.index != index
+            || command.range_id != range.id
+            || command.range_epoch != range.epoch
+            || command.leader_node_id != self.initial.seed.spec.node_id
         {
             return Ok(None);
         }
-        Ok(Some(entry.command))
+        Ok(Some(command))
     }
     pub(super) fn tick(&self, parent: &CancellationToken) -> Result<()> {
         self.live(parent)?;

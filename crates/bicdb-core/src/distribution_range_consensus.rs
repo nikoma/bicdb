@@ -3715,6 +3715,26 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         } else {
             None
         };
+        #[cfg(test)]
+        if native_database.is_some()
+            && native_abort::test_take_native_admission_stop(
+                range.id,
+                native_abort::TestNativeAdmissionStop::AfterWriterStart,
+            )
+        {
+            self.recovered_epochs.lock().remove(&range.id);
+            return Err(self.retain_native_uncertain_admission(
+                &command,
+                mutation,
+                admission_rejection,
+                BicDbError::CommitOutcomeUnknown {
+                    sequence: None,
+                    transaction_id: Some(command.transaction_id),
+                    incarnation: self.local_incarnation.clone(),
+                    detail: "injected admission stop AfterWriterStart".into(),
+                },
+            ));
+        }
         let local_prepare = self.local_service.lock().prepare_range_write_with_mutation(
             &range,
             &self.local_node_id,

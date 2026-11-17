@@ -342,6 +342,22 @@ impl BicDb {
         }
         Ok((slot, birth))
     }
+    /// The command of the protected slot `(range, index)`, when one exists.
+    /// Scheduling input only; every producer re-proves the slot itself.
+    pub(crate) fn native_abort_slot_command(
+        &self,
+        range: RangeId,
+        index: u64,
+    ) -> Result<Option<crate::RangeWriteCommand>> {
+        let (birth, store) = self.abort_slot_identity()?;
+        let Some(slot) =
+            self.read_native_range_image_record::<NativeAbortSlotRecord>(&slot_key(range, index))?
+        else {
+            return Ok(None);
+        };
+        slot.validate(&birth, store)?;
+        Ok(Some(slot.command))
+    }
     pub(crate) fn native_abort_mark_ever_commit(
         &self,
         command: &crate::RangeWriteCommand,

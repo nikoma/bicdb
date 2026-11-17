@@ -1100,12 +1100,18 @@ impl RangeWriteStore {
             .ranges
             .get(&range.id)
             .and_then(|r| r.entries.get(&command.index));
+        // Either the raw log holds exactly this Prepared command as its only
+        // unresolved entry, or the process ended between the writer-start
+        // and the local Prepare and the raw log holds nothing at the index
+        // (no Prepare can then have been sent: the local one precedes them).
+        let prepared = progress.last_index == command.index
+            && raw.is_some_and(|e| e.state == RangeWriteState::Prepared && e.command == *command);
+        let unprepared = progress.last_index.checked_add(1) == Some(command.index) && raw.is_none();
         if progress.resolved_through.checked_add(1) != Some(command.index)
-            || progress.last_index != command.index
-            || raw.is_none_or(|e| e.state != RangeWriteState::Prepared || e.command != *command)
+            || !(prepared || unprepared)
         {
             return Err(range_write_error(
-                "reopened abort requires exactly one Prepared first unresolved entry",
+                "reopened abort requires exactly one Prepared first unresolved entry, or none after the writer-start",
             ));
         }
         let slot = self
@@ -1603,6 +1609,7 @@ impl RangeWriteStore {
 #[cfg(test)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TestNativeAdmissionStop {
+    AfterWriterStart,
     AfterLocalPrepare,
     AfterPrepareQuorum,
     AfterLocalCommit,

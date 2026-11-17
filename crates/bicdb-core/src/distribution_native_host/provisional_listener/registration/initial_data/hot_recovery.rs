@@ -442,6 +442,22 @@ impl NativeHotRecoveryMaintenance {
         {
             return Ok(None);
         }
+        // The earlier process ended inside its own local Commit: after the
+        // protected slot was marked ever-Commit and before its raw Commit
+        // vote was persisted. The origin sends Commit only after that vote
+        // is durable, so no member holds a Commit vote or a certificate:
+        // the forward recovery (decided only from such evidence) cannot
+        // decide it, and an ever-Commit slot is never aborted.
+        if db
+            .native_abort_slot_inventory()?
+            .iter()
+            .any(|s| s.command.range_id == range.id && s.command.index == index && s.ever_commit)
+        {
+            return Err(invalid(&format!(
+                "reopened leader slot {index} of range {} is ever-Commit while its raw entry is not committed: its earlier process ended inside its local Commit, before the Commit vote was durable and before any Commit was sent; no member holds Commit evidence, so the forward recovery cannot decide it, and an ever-Commit slot is never aborted; the range stays refused",
+                range.id
+            )));
+        }
         Ok(Some(command))
     }
     /// An admitted led range needs a fresh re-arm session when one of its

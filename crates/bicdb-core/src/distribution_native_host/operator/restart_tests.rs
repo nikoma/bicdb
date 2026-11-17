@@ -915,6 +915,90 @@ fn native_initial_member_restart_prepared_only_leader_tail_is_aborted() {
     }
 }
 
+/// A range leader ends inside its own local Commit: the protected slot is
+/// marked ever-Commit, the raw Commit vote is not persisted and no Commit was
+/// sent. Nothing can decide that write: no member holds Commit evidence (the
+/// forward recovery needs it) and an ever-Commit slot is never aborted. The
+/// reopened leader's hot recovery refuses it with that reason and starts no
+/// session; the range keeps refusing writes.
+#[test]
+fn native_initial_member_restart_ever_commit_unvoted_leader_tail_stays_refused() {
+    use crate::distribution_range_consensus::native_abort::{
+        test_arm_native_admission_stop, test_native_admission_stop_armed, TestNativeAdmissionStop,
+    };
+    let mut cluster = Cluster::new();
+    let topology = cluster.topology(0);
+    let metadata_leader = cluster.metadata_leader().expect("a metadata leader");
+    let led = topology
+        .ranges
+        .values()
+        .find(|range| range.leader != node(metadata_leader))
+        .expect("a range not led by the metadata leader")
+        .clone();
+    let victim = (0..4).find(|&i| node(i) == led.leader).unwrap();
+    let client = cluster.client(metadata_leader);
+    let mut counter = 0u64;
+    let key = key_in(&topology, led.id, &mut counter);
+    append(&mut cluster, &client, &key, Duration::from_secs(30)).unwrap();
+    let stopped = key_in(&topology, led.id, &mut counter);
+    test_arm_native_admission_stop(led.id, TestNativeAdmissionStop::AfterEverCommitMark);
+    let error = client
+        .append("items", &stopped, value(&stopped))
+        .expect_err("a stopped admission is never acknowledged");
+    assert!(
+        !test_native_admission_stop_armed(),
+        "the stop did not fire: {error}"
+    );
+    eprintln!("RESTART_TEST AfterEverCommitMark: stopped append {stopped}: {error}");
+    cluster.crash(victim);
+    cluster.reopen_metadata(victim);
+    let until = Instant::now() + Duration::from_secs(30);
+    loop {
+        cluster.tick();
+        if cluster
+            .host(victim)
+            .apply(NativeMetadataHostAction::EnableControl, &budget(5000))
+            .is_ok()
+        {
+            break;
+        }
+        assert!(
+            Instant::now() < until,
+            "the reopened leader cannot enable control"
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let until = Instant::now() + Duration::from_secs(40);
+    let reason = "is ever-Commit while its raw entry is not committed";
+    let hot = loop {
+        let _ = cluster
+            .host(victim)
+            .apply(NativeMetadataHostAction::OpenInitialData, &budget(1500));
+        cluster.tick();
+        let hot = cluster
+            .host(victim)
+            .status(&budget(1000))
+            .ok()
+            .and_then(|s| s.initial_data)
+            .and_then(|d| d.hot_recovery_last_attempt);
+        if hot.as_ref().is_some_and(|h| h.to_string().contains(reason)) {
+            break hot.unwrap();
+        }
+        assert!(
+            Instant::now() < until,
+            "the reopened leader's hot recovery must refuse the ever-Commit tail by name: {hot:?}"
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    };
+    eprintln!("RESTART_TEST hot recovery of the reopened leader: {hot}");
+    assert_eq!(hot["phase"], "candidate_refused", "no session is started");
+    let later = key_in(&topology, led.id, &mut counter);
+    assert!(
+        client.append("items", &later, value(&later)).is_err(),
+        "the range keeps refusing writes"
+    );
+}
+
 /// A range whose leader ended with a write that a Commit quorum had voted
 /// for is recovered forward by a hot recovery session (or, with the write
 /// only Prepared, aborted by one), which leaves that session's durable

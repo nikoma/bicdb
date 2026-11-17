@@ -38,6 +38,17 @@ impl ClusterDataNodeService {
         self.range_writes
             .preflight_actual_native_commit_entry(command)?;
         database.native_abort_mark_ever_commit(command, range, authority)?;
+        #[cfg(test)]
+        if command.leader_node_id == self.node_id
+            && crate::distribution_range_consensus::native_abort::test_take_native_admission_stop(
+                range.id,
+                crate::distribution_range_consensus::native_abort::TestNativeAdmissionStop::AfterEverCommitMark,
+            )
+        {
+            return Err(data_error(
+                "injected admission stop AfterEverCommitMark: raw Commit vote not persisted",
+            ));
+        }
         let state = self.range_writes.current_mut().commit(command)?;
         self.range_write_ack(command, state)
     }

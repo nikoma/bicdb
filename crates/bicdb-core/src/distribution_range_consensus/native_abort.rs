@@ -1612,6 +1612,9 @@ pub(crate) enum TestNativeAdmissionStop {
     AfterWriterStart,
     AfterLocalPrepare,
     AfterPrepareQuorum,
+    /// Inside the origin's local Commit: after the protected slot is marked
+    /// ever-Commit, before the raw Commit vote is persisted.
+    AfterEverCommitMark,
     AfterLocalCommit,
     AfterCommitQuorum,
 }

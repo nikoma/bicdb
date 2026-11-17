@@ -421,6 +421,7 @@ fn native_owned_metadata_supervisor_strict_metadata_reopen_preserves_protected_u
         seed,
         transport,
         provider,
+        reopened: _,
     } = old;
     let actual = service.lock().listener_open_guard();
     let (id, snapshot) = metadata
@@ -476,6 +477,7 @@ fn native_owned_metadata_supervisor_strict_metadata_reopen_preserves_protected_u
         seed,
         transport,
         provider,
+        reopened: false,
     });
     f.restart(1);
     f.start(0);

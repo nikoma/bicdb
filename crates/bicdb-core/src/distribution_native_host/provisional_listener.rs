@@ -7,6 +7,7 @@ use crate::distribution_transport::{
 use crate::{ClusterDataNodeService, ClusterNetworkTransportConfig};
 use parking_lot::Mutex;
 mod control_backend;
+mod initial_cold;
 pub(in crate::distribution_native_host) use control_backend::NativeMetadataControlBackend;
 mod learner_enrollment;
 mod metadata_startup;
@@ -184,6 +185,8 @@ pub(crate) struct NativeInitialConsensusLaunch {
     seed: Arc<NativeProvisionalNode>,
     transport: Arc<TcpClusterRelocationTransport>,
     provider: Arc<crate::distribution_metadata_read_provider::MetadataReadProvider>,
+    // Set only by the strict cold reopen of an already exposed root.
+    reopened: bool,
 }
 impl NativeInitialConsensusLaunch {
     pub(crate) fn start_metadata_listener(
@@ -309,6 +312,7 @@ impl NativeProvisionalHost {
             seed: Arc::clone(&self.seed),
             transport,
             provider,
+            reopened: false,
         })
     }
 }

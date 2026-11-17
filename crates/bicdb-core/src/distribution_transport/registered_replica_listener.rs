@@ -42,6 +42,7 @@ pub(super) fn require_request(request: &ClusterDataRequest) -> Result<()> {
         ClusterDataRequest::Ping | ClusterDataRequest::RegisterMetadataLearner {..}
         | ClusterDataRequest::FetchBootstrapSnapshot | ClusterDataRequest::ExportSchemaBundle {..}
         | ClusterDataRequest::MetadataVote {..} | ClusterDataRequest::MetadataAppend {..}
+        | ClusterDataRequest::MetadataLeadershipTransfer {..}
         | ClusterDataRequest::MetadataReadProbe {..} | ClusterDataRequest::MetadataReadAcquire {..}
         | ClusterDataRequest::HostMetadataReadAcquire {..}
         | ClusterDataRequest::AcquireMetadataRecoveryRole {..}
@@ -54,6 +55,8 @@ pub(super) fn require_request(request: &ClusterDataRequest) -> Result<()> {
         | ClusterDataRequest::ObserveNativeAbortPromise {..} | ClusterDataRequest::ResolveNativeAbort {..}
         | ClusterDataRequest::ApplyNativeOrigin {..} | ClusterDataRequest::ObserveNativeOrigin {..}
         | ClusterDataRequest::RangeWriteProgress {..} | ClusterDataRequest::ProbeRangeWrite {..}
+        // Read-only, answered to the committed range leader only.
+        | ClusterDataRequest::NativeRangeMoveProbe { .. }
         // Returns typed unavailable BEFORE latches, never a bare DB None.
         | ClusterDataRequest::NativeObserveRegisteredExportNew { .. }
         | ClusterDataRequest::NativeRemoteNew { .. }

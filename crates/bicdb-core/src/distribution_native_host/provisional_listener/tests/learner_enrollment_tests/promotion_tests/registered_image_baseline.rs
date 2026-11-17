@@ -208,6 +208,9 @@ fn run_registered_image_baseline_with_placement_and_source(
         Some(remote_source_tests::SourceCase::TwoRangeSourceReplyStall)
     );
     let single_range_move = hot_policy || two_range_stall;
+    // The remote backend issues the target fence itself, as the coordinator.
+    let backend_fences =
+        source_case.is_some_and(remote_source_tests::remote_backend_drive_tests::is_case);
     // A host metadata observation lives no longer than the serving
     // connection's I/O deadline, and a fresh preparation phase narrows itself
     // to its members' observations. The hot-policy cases run a complete phase
@@ -578,7 +581,14 @@ fn run_registered_image_baseline_with_placement_and_source(
             assert!(point["native_applied_index"].is_null());
         }
         let mut succeeded = 0;
-        for original in ranges.iter().take(if single_range_move { 1 } else { 2 }) {
+        let fixture_fences = if backend_fences {
+            0
+        } else if single_range_move {
+            1
+        } else {
+            2
+        };
+        for original in ranges.iter().take(fixture_fences) {
             for (i, guard) in original_writers.iter().enumerate() {
                 assert!(Arc::ptr_eq(
                     guard,
@@ -807,7 +817,7 @@ fn run_registered_image_baseline_with_placement_and_source(
             );
         }
         phase = "required_fence_acceptance";
-        assert_eq!(succeeded,if single_range_move {1} else {2},"REQUIRED genuine registered fifth CommittedHandoff fences unavailable; no INITIAL writer substitute");
+        assert_eq!(succeeded,fixture_fences,"REQUIRED genuine registered fifth CommittedHandoff fences unavailable; no INITIAL writer substitute");
         if two_range_stall {
             phase = "selected_actual_rows_transport_stall_other_populated_range_progress";
             remote_source_tests::two_range_stall_tests::exercise(

@@ -9,6 +9,9 @@ pub(crate) struct NativeMetadataSupervisorSnapshot {
     pub(crate) election_voters: BTreeSet<ClusterNodeId>,
     pub(crate) anchored: bool,
     pub(crate) voting_actor: bool,
+    /// The leader this node follows asked it to campaign now (an operator's
+    /// leadership transfer). Scheduling data only: the election is ordinary.
+    pub(crate) campaign_requested: bool,
 }
 impl MetadataConsensusStore {
     pub(crate) fn native_supervisor_snapshot(
@@ -72,6 +75,7 @@ impl MetadataConsensusStore {
                 topology: self.state.committed_topology.clone(),
                 election_voters,
                 voting_actor: self.require_native_metadata_actor_current(true).is_ok(),
+                campaign_requested: self.leadership_campaign_requested(),
                 anchored: self.state.current_term > 0
                     && self.state.commit_index > 0
                     && self.term_at(self.state.commit_index) == Some(self.state.current_term),

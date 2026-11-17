@@ -160,6 +160,48 @@ pub enum Command {
         #[arg(long, default_value_t = 5000)]
         timeout_ms: u64,
     },
+    /// Move ONE range onto a registered member through the joint handoff, or
+    /// abort that move before its source cut (--abort). Send it to the host
+    /// that is BOTH the metadata leader and the leader of the range; any other
+    /// host refuses. Prerequisite: the target is already registered and has
+    /// opened its replica receiver (open-replica-receiver). The request only
+    /// creates the controller; the serving host advances it one stage per
+    /// step and reports progress in the `range_move` status section.
+    MoveRange {
+        #[arg(long)]
+        command_file: PathBuf,
+        #[arg(long)]
+        status_file: PathBuf,
+        #[arg(long)]
+        sequence: u64,
+        #[arg(long)]
+        range_id: u64,
+        /// Required to start a move. With --abort it is not needed: a host
+        /// has at most one move, identified by its range.
+        #[arg(long)]
+        target_node_id: Option<String>,
+        #[arg(long)]
+        abort: bool,
+        #[arg(long, default_value_t = 5000)]
+        timeout_ms: u64,
+    },
+    /// Hand metadata leadership from the host that leads metadata now to
+    /// another metadata voter (--to), so that the metadata leader and the
+    /// leader of a range coincide before move-range. Send it to the current
+    /// metadata leader (`metadata_leader` in every host's status); any other
+    /// host refuses. Bounded: on failure the error says who leads.
+    TransferMetadataLeadership {
+        #[arg(long)]
+        command_file: PathBuf,
+        #[arg(long)]
+        status_file: PathBuf,
+        #[arg(long)]
+        sequence: u64,
+        #[arg(long)]
+        to: String,
+        #[arg(long, default_value_t = 5000)]
+        timeout_ms: u64,
+    },
     /// Register ONLY this TLS node's metadata learner CONFIG identity.
     Register {
         #[arg(long)]
@@ -246,6 +288,87 @@ struct Reply<'a, T: Serialize> {
     host: Option<&'a T>,
     error: Option<String>,
     data_serving: bool,
+}
+/// What the operator's command file holds for a host that last applied the
+/// sequence `applied`.
+enum Pending {
+    /// No file, or a command at or below `applied`: the one already
+    /// answered. A reused sequence is ignored here; the sending command
+    /// refuses it before it writes (see `require_next_sequence`).
+    Nothing,
+    /// The well-formed command with exactly the next sequence.
+    Next(Request),
+    /// A command the host refuses and ignores: unreadable, of an unsupported
+    /// version or budget, or with a skipped sequence. The text is recorded
+    /// in the status file. An operator's typo never ends the host.
+    Refused(String),
+}
+fn pending_request(command_file: &Path, applied: u64) -> Pending {
+    let bytes = match read_bounded(command_file, 16 * 1024) {
+        Ok(bytes) => bytes,
+        Err(_) if !command_file.exists() => return Pending::Nothing,
+        Err(error) => {
+            return Pending::Refused(format!(
+                "operator command refused and ignored: unreadable command file: {error}"
+            ))
+        }
+    };
+    let request: Request = match serde_json::from_slice(&bytes) {
+        Ok(request) => request,
+        Err(error) => {
+            return Pending::Refused(format!(
+                "operator command refused and ignored: malformed command file: {error}"
+            ))
+        }
+    };
+    if request.sequence <= applied {
+        return Pending::Nothing;
+    }
+    if request.version != 1 || !(1..=5000).contains(&request.budget_ms) {
+        return Pending::Refused(format!(
+            "operator command with sequence {} refused and ignored: unsupported version or budget",
+            request.sequence
+        ));
+    }
+    if request.sequence != applied + 1 {
+        return Pending::Refused(format!(
+            "operator command with sequence {} refused and ignored: the sequence must advance exactly one, to {}; the host keeps running and its last applied sequence is still {applied}",
+            request.sequence,
+            applied + 1
+        ));
+    }
+    Pending::Next(request)
+}
+/// Sender side, before the command file is written: `sequence` must be
+/// exactly one above the sequence the host last applied. A reused sequence
+/// would be ignored by the host while its old reply, which carries that
+/// sequence, would look like the answer to this command; a skipped one is
+/// refused by the host. An earlier command that is still being applied is
+/// waited for inside this command's own budget.
+fn require_next_sequence(status_file: &Path, sequence: u64, deadline: Instant) -> Result<()> {
+    loop {
+        let reply: serde_json::Value = serde_json::from_slice(
+            &read_bounded(status_file, 1024 * 1024)
+                .context("the host's status file is unreadable; is the host running?")?,
+        )?;
+        let applied = reply["sequence"]
+            .as_u64()
+            .context("the host's status file carries no applied sequence")?;
+        ensure!(
+            applied < sequence,
+            "sequence {sequence} was already used: the host last applied sequence {applied} and ignores a reused one, so nothing was sent; send the command with --sequence {}",
+            applied + 1
+        );
+        if applied + 1 == sequence {
+            return Ok(());
+        }
+        ensure!(
+            Instant::now() < deadline,
+            "sequence {sequence} skips ahead: the host last applied sequence {applied} and refuses a sequence that does not advance exactly one, so nothing was sent; send the command with --sequence {}",
+            applied + 1
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
 }
 fn read_bounded(path: &Path, max: u64) -> Result<Vec<u8>> {
     use std::io::Read;
@@ -502,20 +625,34 @@ pub fn run(command: Command) -> Result<()> {
             )?;
             let mut sequence = 0;
             let mut command_error: Option<String> = None;
+            let mut refusal: Option<String> = None;
+            let mut move_error: Option<String> = None;
             let mut last_tick = Instant::now();
             while lifetime.check().is_ok() && status.phase != NativeMetadataHostPhase::Stopped {
-                if command_file.exists() {
-                    let request: Request =
-                        serde_json::from_slice(&read_bounded(&command_file, 16 * 1024)?)?;
-                    ensure!(
-                        request.version == 1 && request.budget_ms > 0 && request.budget_ms <= 5000,
-                        "unsupported metadata operator request"
-                    );
-                    if request.sequence > sequence {
-                        ensure!(
-                            request.sequence == sequence + 1,
-                            "metadata operator sequence must advance exactly one"
-                        );
+                match pending_request(&command_file, sequence) {
+                    Pending::Nothing => {}
+                    Pending::Refused(text) => {
+                        // Recorded once per distinct refusal; the applied
+                        // sequence does not move and the host keeps running.
+                        if refusal.as_ref() != Some(&text) {
+                            eprintln!("native metadata host: {text}");
+                            command_error = Some(text.clone());
+                            write(
+                                &status_file,
+                                &Reply {
+                                    version: 1,
+                                    sequence,
+                                    process_id: std::process::id(),
+                                    host: Some(&status),
+                                    error: Some(text.clone()),
+                                    data_serving: status.data_serving,
+                                },
+                            )?;
+                            refusal = Some(text);
+                        }
+                    }
+                    Pending::Next(request) => {
+                        refusal = None;
                         let token = lifetime.child_with_deadline(
                             Instant::now() + Duration::from_millis(request.budget_ms),
                         );
@@ -575,6 +712,23 @@ pub fn run(command: Command) -> Result<()> {
                             }
                         }
                     }
+                    // Process-owned range-move scheduling: starts at most one
+                    // step on its own worker and never waits for it. Its
+                    // outcome is the `range_move` status section only.
+                    // A step that could not be started is reported on stderr,
+                    // once per distinct error.
+                    match host.advance_range_move(&lifetime) {
+                        Ok(()) => move_error = None,
+                        Err(error) => {
+                            let text = error.to_string();
+                            if move_error.as_ref() != Some(&text) {
+                                eprintln!(
+                                    "native metadata host: range move step not started: {text}"
+                                );
+                                move_error = Some(text);
+                            }
+                        }
+                    }
                     if !manual_enrollment {
                         // A distinct finite process-maintenance attempt. Public
                         // EventClient request budgets remain unchanged. No root
@@ -600,6 +754,30 @@ pub fn run(command: Command) -> Result<()> {
                         },
                     )?;
                     last_tick = Instant::now();
+                } else if host.range_move_step_due() {
+                    // The last step completed its stage: the next stage is
+                    // started now, not on the next tick. A blocked, waiting
+                    // or paused move keeps the tick cadence above. The stage
+                    // is published at once for whoever reads the status file.
+                    if host.advance_range_move(&lifetime).is_ok() {
+                        if let Ok(next) = host.status(
+                            &lifetime
+                                .child_with_deadline(Instant::now() + Duration::from_millis(250)),
+                        ) {
+                            status = next;
+                            write(
+                                &status_file,
+                                &Reply {
+                                    version: 1,
+                                    sequence,
+                                    process_id: std::process::id(),
+                                    host: Some(&status),
+                                    error: command_error.clone(),
+                                    data_serving: status.data_serving,
+                                },
+                            )?;
+                        }
+                    }
                 }
                 std::thread::sleep(Duration::from_millis(5));
             }
@@ -715,21 +893,32 @@ pub fn run(command: Command) -> Result<()> {
             )?;
             let mut sequence = 0;
             let mut command_error: Option<String> = None;
+            let mut refusal: Option<String> = None;
             let mut last_refresh = Instant::now();
             let mut stopping = false;
             while lifetime.check().is_ok() && !stopping {
-                if command_file.exists() {
-                    let request: Request =
-                        serde_json::from_slice(&read_bounded(&command_file, 16 * 1024)?)?;
-                    ensure!(
-                        request.version == 1 && (1..=5000).contains(&request.budget_ms),
-                        "unsupported learner command version/budget"
-                    );
-                    if request.sequence > sequence {
-                        ensure!(
-                            request.sequence == sequence + 1,
-                            "learner sequence must advance exactly one"
-                        );
+                match pending_request(&command_file, sequence) {
+                    Pending::Nothing => {}
+                    Pending::Refused(text) => {
+                        if refusal.as_ref() != Some(&text) {
+                            eprintln!("native metadata learner host: {text}");
+                            command_error = Some(text.clone());
+                            write(
+                                &status_file,
+                                &Reply {
+                                    version: 1,
+                                    sequence,
+                                    process_id: std::process::id(),
+                                    host: Some(&status),
+                                    error: Some(text.clone()),
+                                    data_serving: false,
+                                },
+                            )?;
+                            refusal = Some(text);
+                        }
+                    }
+                    Pending::Next(request) => {
+                        refusal = None;
                         let token = lifetime.child_with_deadline(
                             Instant::now() + Duration::from_millis(request.budget_ms),
                         );
@@ -835,7 +1024,7 @@ pub fn run(command: Command) -> Result<()> {
                             sequence,
                             process_id: std::process::id(),
                             host: Some(&status),
-                            error: if sequence > 0 {
+                            error: if sequence > 0 || refusal.is_some() {
                                 command_error.clone()
                             } else {
                                 error
@@ -844,6 +1033,14 @@ pub fn run(command: Command) -> Result<()> {
                         },
                     )?;
                     last_refresh = Instant::now();
+                }
+                // Process-owned joint handoff host commands of this member:
+                // at most one per pass, outcome retained for the
+                // coordinator's repeated step. Without a recorded command
+                // this reads one memory slot, so it is asked every pass and a
+                // recorded command does not wait for the next 500 ms tick.
+                if !stopping {
+                    let _ = host.advance_joint_bridge_host_commands(&lifetime);
                 }
                 std::thread::sleep(Duration::from_millis(5));
             }
@@ -870,6 +1067,7 @@ pub fn run(command: Command) -> Result<()> {
                 "operator command/status paths must differ"
             );
             let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+            require_next_sequence(&status_file, sequence, deadline)?;
             write(
                 &command_file,
                 &Request {
@@ -894,6 +1092,115 @@ pub fn run(command: Command) -> Result<()> {
                 ensure!(
                     Instant::now() < deadline,
                     "native metadata action timed out; actual pending state is retained"
+                );
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        }
+        Command::MoveRange {
+            command_file,
+            status_file,
+            sequence,
+            range_id,
+            target_node_id,
+            abort,
+            timeout_ms,
+        } => {
+            ensure!(
+                sequence > 0 && (1..=5000).contains(&timeout_ms),
+                "unsupported operator sequence/budget"
+            );
+            ensure!(
+                command_file != status_file,
+                "operator command/status paths must differ"
+            );
+            ensure!(
+                abort || target_node_id.is_some(),
+                "target-node-id is required to start a range move"
+            );
+            let range = bicdb_core::RangeId::new(range_id)?;
+            let action = match target_node_id {
+                Some(target) if !abort => NativeMetadataHostAction::MoveRange {
+                    range,
+                    target: ClusterNodeId::new(target)?,
+                },
+                _ => NativeMetadataHostAction::AbortMoveRange { range },
+            };
+            let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+            require_next_sequence(&status_file, sequence, deadline)?;
+            write(
+                &command_file,
+                &Request {
+                    version: 1,
+                    sequence,
+                    action,
+                    budget_ms: timeout_ms,
+                },
+            )?;
+            loop {
+                let reply: serde_json::Value =
+                    serde_json::from_slice(&read_bounded(&status_file, 1024 * 1024)?)?;
+                if reply["sequence"].as_u64() == Some(sequence) {
+                    ensure!(
+                        reply["error"].is_null(),
+                        "native range move refused: {}",
+                        reply["error"]
+                    );
+                    println!("{}", serde_json::to_string(&reply["host"]["range_move"])?);
+                    break;
+                }
+                ensure!(
+                    Instant::now() < deadline,
+                    "native range move request timed out; actual pending state is retained"
+                );
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        }
+        Command::TransferMetadataLeadership {
+            command_file,
+            status_file,
+            sequence,
+            to,
+            timeout_ms,
+        } => {
+            ensure!(
+                sequence > 0 && (1..=5000).contains(&timeout_ms),
+                "unsupported operator sequence/budget"
+            );
+            ensure!(
+                command_file != status_file,
+                "operator command/status paths must differ"
+            );
+            let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+            require_next_sequence(&status_file, sequence, deadline)?;
+            write(
+                &command_file,
+                &Request {
+                    version: 1,
+                    sequence,
+                    action: NativeMetadataHostAction::TransferMetadataLeadership {
+                        to: ClusterNodeId::new(to)?,
+                    },
+                    budget_ms: timeout_ms,
+                },
+            )?;
+            loop {
+                let reply: serde_json::Value =
+                    serde_json::from_slice(&read_bounded(&status_file, 1024 * 1024)?)?;
+                if reply["sequence"].as_u64() == Some(sequence) {
+                    ensure!(
+                        reply["error"].is_null(),
+                        "native metadata leadership transfer refused: {}",
+                        reply["error"]
+                    );
+                    println!(
+                        "{}",
+                        serde_json::to_string(&reply["host"]["last_metadata_leadership_transfer"])?
+                    );
+                    break;
+                }
+                ensure!(
+                    Instant::now() < deadline,
+                    "native metadata leadership transfer request timed out; read `metadata_leader` in the host status"
                 );
                 std::thread::sleep(Duration::from_millis(5));
             }

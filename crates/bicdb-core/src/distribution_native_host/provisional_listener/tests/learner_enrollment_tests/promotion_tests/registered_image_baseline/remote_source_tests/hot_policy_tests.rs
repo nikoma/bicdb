@@ -12,6 +12,7 @@ use crate::distribution_range_handoff::{
 };
 
 mod fresh_collection_tests;
+mod native_bridge_step_tests;
 mod new_decision_round_tests;
 mod prepared_candidate_tests;
 
@@ -21,6 +22,8 @@ pub(in super::super) fn is_hot_policy(case: SourceCase) -> bool {
         || new_decision_round_tests::is_case(case)
         || source_export_retirement_tests::is_case(case)
         || native_handoff_step_tests::is_case(case)
+        || remote_backend_drive_tests::is_case(case)
+        || native_bridge_step_tests::is_case(case)
         || catalogue_tests::is_catalogue_control(case)
         || matches!(
             case,
@@ -265,6 +268,26 @@ pub(in super::super) fn exercise(
             acknowledged,
             output,
             template,
+            process,
+        );
+        return;
+    }
+    if remote_backend_drive_tests::is_case(case) {
+        remote_backend_drive_tests::exercise(
+            case,
+            controls,
+            clients,
+            services,
+            metadata,
+            target,
+            target_control,
+            factory,
+            pending,
+            ranges,
+            acknowledged,
+            output,
+            template,
+            original_gateway,
             process,
         );
         return;
@@ -641,6 +664,28 @@ pub(in super::super) fn exercise(
     }
     let current = metadata[0].lock().committed_topology().clone();
     assert_eq!(current.range_by_id(untouched.id), Some(&untouched));
+    if native_bridge_step_tests::is_case(case) {
+        // From here ONLY step RPCs drive the members.
+        native_bridge_step_tests::exercise(
+            case,
+            decision,
+            controls,
+            &all_clients,
+            target_control,
+            &current,
+            selected,
+            output,
+            donor,
+            retained,
+            metadata,
+            template,
+            services,
+            original_gateway,
+            factory,
+            acknowledged,
+        );
+        return;
+    }
     let preparation_session = process.child();
     let mut preparation_custody = Vec::new();
     let mut original_round: Option<NativeJointPreparedServingRound> = None;
@@ -1076,7 +1121,7 @@ pub(in super::super) fn exercise(
     }
 }
 
-mod data_tests;
+pub(super) mod data_tests;
 
 mod local_term_tests;
 

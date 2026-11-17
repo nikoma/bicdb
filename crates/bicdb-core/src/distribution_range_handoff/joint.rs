@@ -7,6 +7,10 @@ fn invalid(detail: impl Into<String>) -> BicDbError {
 }
 mod scope;
 use scope::{canonical_range, NativeJointScopeData};
+mod certified_scope;
+pub(crate) use certified_scope::{
+    NativeJointBridgeDecision, NativeJointCertifiedScope, NativeJointCommittedDecision,
+};
 mod plan;
 pub(crate) use plan::NativeJointHandoffPlan;
 #[cfg(feature = "tls-replication")]
@@ -26,8 +30,19 @@ pub(crate) use remote_old::{
 mod remote_step;
 #[cfg(feature = "tls-replication")]
 pub(crate) use remote_step::{
-    NativeJointHandoffStepOperationV1, NativeJointHandoffStepOutcomeV1,
-    NativeJointHandoffStepReplyV1, NativeJointHandoffStepRequestV1, NativeJointHandoffStepStageV1,
+    NativeJointBridgePhaseKindV1, NativeJointHandoffStepOperationV1,
+    NativeJointHandoffStepOutcomeV1, NativeJointHandoffStepReplyV1,
+    NativeJointHandoffStepRequestV1, NativeJointHandoffStepStageV1,
+    NativeJointSourceRetirementDataV1, MAX_STEP_HOST_COMMAND_ERROR_BYTES,
+    MAX_STEP_WRITER_AUDIT_BYTES,
+};
+#[cfg(feature = "tls-replication")]
+mod remote_bridge_certificate;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use bridge::{test_arm_bridge_second_window_fault, NativeBridgeSecondWindowFault};
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_bridge_certificate::{
+    NativeRemoteBridgePublicationCertificate, NativeRemoteBridgePublicationCertificateRound,
 };
 #[cfg(feature = "tls-replication")]
 mod remote_old_collect;
@@ -74,16 +89,24 @@ mod committed;
 pub(crate) use committed::CommittedNativeJointDecisionObservation;
 
 mod bridge;
+pub(crate) use bridge::NativeJointActivationProof;
 pub(crate) use bridge::{
     NativeJointActivatedQuorum, NativeJointActivationAdmission, NativeJointOpenAdmission,
     NativeJointOpenPhaseQuorum, NativeJointOpenPhaseRound, NativeJointPreparationCustody,
-    NativeJointPreparationPhaseQuorum, NativeJointPreparationPhaseRound,
+    NativeJointPreparationPhaseFacts, NativeJointPreparationPhaseQuorum,
+    NativeJointPreparationPhaseRound, NativeJointPreparationRetainedFacts,
     NativeJointPreparedServingCandidate, NativeJointPreparedServingObservation,
     NativeJointPreparedServingQuorum, NativeJointPreparedServingRound,
     NativeJointPreparedServingVoteData, NativeJointPublishedServingQuorum,
     NativeJointReleaseAdmission, NativeJointReleaseContinuation, NativeJointReleasePhaseQuorum,
     NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
     NativeJointServingPublicationRound,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use bridge::{
+    NativeJointMemberRelease, NativeJointMemberReleaseOwner, NativeJointReleasePhaseFacts,
+    NativeJointRemoteOldRetirementProof, NativeRemoteBridgeReleased,
+    NativeRemoteJointActivationCertificate,
 };
 
 #[cfg(test)]

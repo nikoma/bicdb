@@ -39,6 +39,8 @@ use crate::distribution_range_mutation::{
 use crate::distribution_supervisor::ClusterBackupMetadata;
 use crate::error::{BicDbError, Result};
 
+mod allocation_hold;
+pub(crate) use allocation_hold::RangeAllocationHold;
 mod current_joint_recovery;
 mod native_image_base;
 use current_joint_recovery::{CurrentJointRecoveryState, CURRENT_JOINT_CATALOG_FORMAT};
@@ -6718,6 +6720,97 @@ mod tests {
             .unwrap_err();
         assert!(error.to_string().contains("repaired only 1/2 voters"));
         assert!(leader_service.lock().range_backup_fences().is_empty());
+    }
+    #[test]
+    fn allocation_hold_waits_for_the_active_command_and_refuses_new_admissions() {
+        let root = tempfile::tempdir().unwrap();
+        let topology = topology(1);
+        let cluster_id = topology.cluster_id.clone();
+        let range = topology.ranges.values().next().unwrap().clone();
+        let (_database, service) = open_range_node(root.path(), &cluster_id, &range.leader);
+        let coordinator = Arc::new(
+            RangeWriteCoordinator::new(
+                cluster_id,
+                range.leader.clone(),
+                Arc::new(RwLock::new(topology)),
+                service,
+                Arc::new(TestTransport { available: false }),
+            )
+            .unwrap(),
+        );
+        let token = CancellationToken::uncancelable();
+        // A command between its admission and its local completion holds
+        // the range: the hold is refused by name when its wait runs out and
+        // leaves that command's reservation in place.
+        let reservation = coordinator.reserve_range(range.id).unwrap();
+        let refused = coordinator
+            .hold_range_for_allocation(range.id, Duration::from_millis(100), &token)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            refused.contains("still holds write command reservation:")
+                && refused.contains("admission hold was not taken"),
+            "{refused}"
+        );
+        assert_eq!(coordinator.active_ranges.lock().len(), 1);
+        // A longer wait is granted when that command finishes.
+        let worker = Arc::clone(&coordinator);
+        let id = range.id;
+        let started = Instant::now();
+        let waiter = std::thread::spawn(move || {
+            let hold = worker
+                .hold_range_for_allocation(
+                    id,
+                    Duration::from_secs(20),
+                    &CancellationToken::uncancelable(),
+                )
+                .unwrap();
+            (started.elapsed(), hold)
+        });
+        std::thread::sleep(Duration::from_millis(200));
+        drop(reservation);
+        let (waited, hold) = waiter.join().unwrap();
+        assert!(waited >= Duration::from_millis(200), "{waited:?}");
+        assert_eq!(hold.range_id(), range.id);
+        // While it is held a new admission is refused before it prepares
+        // anything, a second hold is refused, and a cancelled parent ends
+        // the wait.
+        let admission = coordinator
+            .try_reserve_range(range.id)
+            .err()
+            .unwrap()
+            .to_string();
+        assert!(
+            admission.contains("range-move:allocation-hold:"),
+            "{admission}"
+        );
+        assert!(coordinator
+            .hold_range_for_allocation(range.id, Duration::from_millis(20), &token)
+            .is_err());
+        let cancelled = CancellationToken::uncancelable().child();
+        cancelled.cancel();
+        let ended = Instant::now();
+        assert!(coordinator
+            .hold_range_for_allocation(range.id, Duration::from_secs(30), &cancelled)
+            .is_err());
+        assert!(ended.elapsed() < Duration::from_secs(5));
+        // The published configuration still holds the descriptor: no change
+        // is reported. Once it holds another one, the change is.
+        assert!(!hold.wait_published_change(&range, Duration::from_millis(50), &token));
+        coordinator
+            .topology
+            .write()
+            .ranges
+            .values_mut()
+            .find(|candidate| candidate.id == range.id)
+            .unwrap()
+            .epoch += 1;
+        assert!(hold.wait_published_change(&range, Duration::from_secs(5), &token));
+        // Dropping the hold releases the range.
+        drop(hold);
+        assert!(coordinator.active_ranges.lock().is_empty());
+        drop(coordinator.try_reserve_range(range.id).unwrap());
+        assert!(coordinator.active_ranges.lock().is_empty());
     }
     #[test]
     fn waiting_writer_rechecks_invalidated_readiness_after_reservation() {

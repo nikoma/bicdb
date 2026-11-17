@@ -38,9 +38,19 @@ pub(super) fn require_request(
 ) -> Result<()> {
     admission.require_live()?;
     match request {
+        // The Joined continuation of an original Registered receiver: that
+        // receiver itself authorises and serves its bridge observations and
+        // host commands. It has no INITIAL source hosting authority.
+        ClusterDataRequest::NativeJointHandoffStep { .. }
+            if admission.registered_bridge_receiver().is_some() =>
+        {
+            Ok(())
+        }
         ClusterDataRequest::NativeRemoteImageSourceFrame { .. }
         | ClusterDataRequest::NativeRemoteOld { .. }
         | ClusterDataRequest::NativeRemoteNew { .. }
+        // A surviving member's own bounded bridge work; the request is identity DATA.
+        | ClusterDataRequest::NativeJointHandoffStep { .. }
         | ClusterDataRequest::NativeSourceExportRetirement { .. }
         | ClusterDataRequest::NativeSourceDiscovery { .. }
         | ClusterDataRequest::NativeDecisionSourceProvenance { .. } => admission.require_initial_source_hosting(),
@@ -49,6 +59,7 @@ pub(super) fn require_request(
         | ClusterDataRequest::FetchBootstrapSnapshot
         | ClusterDataRequest::ExportSchemaBundle { .. }
         | ClusterDataRequest::MetadataVote { .. }
+        | ClusterDataRequest::MetadataLeadershipTransfer { .. }
         | ClusterDataRequest::MetadataAppend { .. }
         | ClusterDataRequest::MetadataReadProbe { .. }
         | ClusterDataRequest::MetadataReadAcquire { .. }
@@ -78,6 +89,8 @@ pub(super) fn require_request(
         | ClusterDataRequest::ApplyNativeOrigin { .. }
         | ClusterDataRequest::ObserveNativeOrigin { .. }
         | ClusterDataRequest::RangeWriteProgress { .. }
+        // Read-only, answered to the committed range leader only.
+        | ClusterDataRequest::NativeRangeMoveProbe { .. }
         | ClusterDataRequest::ProbeRangeWrite { .. }
         // Typed Get executes the existing missing-dispatcher refusal until
         // publication; it NEVER falls through to an ordinary DB Get.

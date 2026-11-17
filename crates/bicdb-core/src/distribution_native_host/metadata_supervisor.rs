@@ -269,8 +269,10 @@ impl Driver {
             // current-term barrier instead of starting another term each tick.
             return self.replicate(&snapshot, parent);
         }
+        // A leadership transfer only removes the wait: the candidacy, the
+        // votes and the majorities below are those of every other election.
         if !snapshot.status.voters.contains(&snapshot.status.node_id)
-            || Instant::now() < self.election_at
+            || (Instant::now() < self.election_at && !snapshot.campaign_requested)
         {
             return Ok(());
         }

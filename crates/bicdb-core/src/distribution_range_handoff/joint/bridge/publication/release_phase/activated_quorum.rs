@@ -10,6 +10,54 @@ use sha2::{Digest, Sha256};
 /// so the same completed Open always yields the same record.
 const ACTIVATED_QUORUM_DOMAIN: &str = "bicdb-native-joint-activated-quorum-v1";
 
+/// `activated_quorum_sha256`: ONE function of the same durable facts for
+/// every proof kind. `members` is every member of the new set in node order
+/// with its member incarnation, its own durable native bridge receipt and
+/// its own durable catalogue activation.
+pub(super) fn activated_quorum_digest(
+    data: &NativeJointDecisionData,
+    members: &[(ClusterNodeId, u64, String, String)],
+) -> Result<String> {
+    Ok(hex::encode(Sha256::digest(serde_json::to_vec(&(
+        ACTIVATED_QUORUM_DOMAIN,
+        data.checksum_sha256(),
+        data.promise().relocation_id,
+        data.activation_range().id,
+        data.activation_range().epoch,
+        members,
+    ))?)))
+}
+
+/// Seal for [`NativeJointActivationProof`]: nameable only inside the joint
+/// handoff module tree, so no other module can supply an activation proof.
+pub(in crate::distribution_range_handoff::joint) mod activation_proof_seal {
+    pub trait Sealed {}
+}
+/// Exactly what the metadata activation record reads from a proof that
+/// EVERY member of the new set is durably activated, released and open. An
+/// implementor is a capability, never decoded DATA: it exists only where
+/// that all-released quorum was actually observed (every member's service
+/// in this process, or the observer's own member state plus
+/// transport-authenticated release frames of every other member).
+pub(crate) trait NativeJointActivationProof: activation_proof_seal::Sealed {
+    fn data(&self) -> &NativeJointDecisionData;
+    /// What `activated_quorum_sha256` records.
+    fn checksum_sha256(&self) -> &str;
+    fn require_current(&self) -> Result<()>;
+}
+impl activation_proof_seal::Sealed for NativeJointActivatedQuorum {}
+impl NativeJointActivationProof for NativeJointActivatedQuorum {
+    fn data(&self) -> &NativeJointDecisionData {
+        NativeJointActivatedQuorum::data(self)
+    }
+    fn checksum_sha256(&self) -> &str {
+        NativeJointActivatedQuorum::checksum_sha256(self)
+    }
+    fn require_current(&self) -> Result<()> {
+        NativeJointActivatedQuorum::require_current(self)
+    }
+}
+
 /// A live all-released phase of the original release continuation. It cannot
 /// be built from digests, replies or decoded state.
 pub(crate) struct NativeJointActivatedQuorum {
@@ -57,14 +105,7 @@ impl NativeJointReleasePhaseQuorum {
                 activation,
             ));
         }
-        let sha256 = hex::encode(Sha256::digest(serde_json::to_vec(&(
-            ACTIVATED_QUORUM_DOMAIN,
-            data.checksum_sha256(),
-            data.promise().relocation_id,
-            data.activation_range().id,
-            data.activation_range().epoch,
-            &members,
-        ))?));
+        let sha256 = activated_quorum_digest(data, &members)?;
         let result = NativeJointActivatedQuorum {
             phase: self.clone(),
             sha256,

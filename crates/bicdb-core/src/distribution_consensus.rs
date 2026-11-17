@@ -30,6 +30,10 @@ pub const METADATA_READ_ACQUISITION_PROTOCOL_VERSION: u32 = 1;
 mod publication_version;
 pub(crate) use publication_version::{NativeMetadataPublicationGuard, NativeMetadataVersionPoint};
 mod host_read;
+mod leadership_transfer;
+pub use leadership_transfer::{
+    MetadataLeadershipTransferRequest, MetadataLeadershipTransferResponse,
+};
 mod native_metadata_store;
 mod native_supervisor;
 pub(crate) use host_read::{
@@ -1313,6 +1317,14 @@ pub struct MetadataConsensusStatus {
     pub learners: Vec<ClusterNodeId>,
 }
 
+/// See `MetadataConsensusStore::proposal_fate`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum MetadataProposalFate {
+    Decided,
+    Superseded,
+    Pending,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct MetadataConsensusState {
     format_version: u32,
@@ -1347,6 +1359,7 @@ pub struct MetadataConsensusStore {
     state: MetadataConsensusState,
     match_index: BTreeMap<ClusterNodeId, u64>,
     last_leader_contact_ms: u64,
+    leadership_transfer: leadership_transfer::MetadataLeadershipTransferState,
     // Close phase versions before dropping the native metadata owner.
     publication_version: publication_version::MetadataPublicationVersionOwner,
     native_owner: Option<native_metadata_store::NativeMetadataStoreOwner>,
@@ -1561,6 +1574,7 @@ impl MetadataConsensusStore {
             state,
             match_index: BTreeMap::new(),
             last_leader_contact_ms: unix_time_ms(),
+            leadership_transfer: Default::default(),
             native_owner: None,
             publication_version: publication_version::MetadataPublicationVersion::new(),
         };
@@ -2094,6 +2108,7 @@ impl MetadataConsensusStore {
         if self.state.role != MetadataConsensusRole::Leader {
             return Err(metadata_error("only the leader can propose topology"));
         }
+        self.require_no_leadership_transfer()?;
         topology.validate()?;
         self.ensure_cluster(&topology.cluster_id)?;
         crate::distribution::validate_native_store_birth_transition(
@@ -2163,6 +2178,7 @@ impl MetadataConsensusStore {
                 "only the leader can propose restore activation",
             ));
         }
+        self.require_no_leadership_transfer()?;
         activation.validate()?;
         let topology = self
             .state
@@ -2692,6 +2708,27 @@ impl MetadataConsensusStore {
             .last()
             .map(|entry| entry.term)
             .unwrap_or(self.state.base_term)
+    }
+
+    /// What this node's own durable state says about an entry it proposed
+    /// at `index` in `term`. Read-only.
+    ///
+    /// `Decided`: this node's commit index covers `index`, so whichever entry
+    /// holds that index is final and the committed configuration is the
+    /// truth. `Superseded`: the entry is no longer in this node's log and an
+    /// entry of a later term is committed below it; no log that contains
+    /// that later entry can hold a `term` entry after it, so the proposal
+    /// can never commit. `Pending`: anything else, including an entry this
+    /// node lost without such a commit, which another member may still hold
+    /// and a later leader may still commit.
+    pub(crate) fn proposal_fate(&self, index: u64, term: u64) -> MetadataProposalFate {
+        if self.state.commit_index >= index {
+            return MetadataProposalFate::Decided;
+        }
+        if self.term_at(index) != Some(term) && self.state.base_term > term {
+            return MetadataProposalFate::Superseded;
+        }
+        MetadataProposalFate::Pending
     }
 
     fn term_at(&self, index: u64) -> Option<u64> {

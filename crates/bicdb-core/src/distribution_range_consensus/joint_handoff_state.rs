@@ -17,6 +17,7 @@ pub(crate) use registered_decision::{test_registered_decision_catalogue_cut, Cat
 mod bridge;
 pub(crate) use bridge::NativeJointBridgeCatalogue;
 mod activation;
+mod committed_confirmation;
 mod release;
 mod retirement;
 use activation::NativeJointCatalogueActivation;
@@ -67,6 +68,35 @@ impl NativeJointOldCatalogPreflight {
         }
         self.obligations.require_current(store)
     }
+}
+/// True when a durable joint handoff promise of `range` is what moved the
+/// local data epoch (`log_epoch`) past the epoch of a completed and activated
+/// normal recovery (`recovery_epoch`, anchored at `anchor_index`): the promise
+/// starts at or after that epoch, its cut covers the anchor, the log stands
+/// exactly at its activation epoch, and the same session's joint state is
+/// retained. The older anchor is then history of a superseded epoch, as
+/// `native_joint_covers_prior_recovery_context` already reads it.
+pub(super) fn joint_promise_supersedes_activated_recovery(
+    catalog: &RangeWriteCatalog,
+    range: RangeId,
+    recovery_epoch: u64,
+    anchor_index: u64,
+    log_epoch: u64,
+) -> bool {
+    catalog.handoff_promises.get(&range).is_some_and(|promise| {
+        promise.range_id == range
+            && recovery_epoch <= promise.old_epoch
+            && promise.old_epoch < promise.activation_epoch
+            && log_epoch == promise.activation_epoch
+            && promise.resolved_through >= anchor_index
+            && catalog
+                .native_joint_handoffs
+                .as_ref()
+                .and_then(|states| states.get(&range))
+                .is_some_and(|state| {
+                    state.session_id == promise.session_id && state.nonce == promise.nonce
+                })
+    })
 }
 impl RangeWriteStore {
     pub(crate) fn prepare_native_joint_old_close(
@@ -418,6 +448,7 @@ impl RangeWriteStore {
                 "joint old raw prefix changed before permanent fence",
             ));
         }
+        let previous = self.catalog.clone();
         super::image_install_certification::ensure_installing_certification_maps(&mut self.catalog);
         self.catalog
             .sparse_committed_decisions
@@ -449,6 +480,18 @@ impl RangeWriteStore {
             entries: BTreeMap::new(),
         });
         log.current_epoch = promise.activation_epoch;
+        // The permanent promise is never made durable inside a catalogue that
+        // this store's own loader refuses: such a file would end every later
+        // custody check and every reopen of this member, with the promise
+        // already permanent. Refused here, nothing was written and the
+        // previous catalogue is unchanged.
+        if let Err(error) = RangeWriteEnvelope::new(self.catalog.clone()).and_then(|e| e.verify()) {
+            self.catalog = previous;
+            return Err(range_write_error(format!(
+                "joint old close refused before the permanent promise: the fenced catalogue would not be loadable: {error}"
+            )));
+        }
+        drop(previous);
         // Rename/fsync ambiguity retains conservative in-memory promise/state.
         // No native closure or quorum observation is issued on this error.
         self.recovery_persistence_uncertain = true;
@@ -621,5 +664,176 @@ impl RangeWriteStore {
         self.recovery_persistence_uncertain = false;
         admission.require_live()?;
         receipt.require_current(database)
+    }
+}
+
+#[cfg(test)]
+mod superseded_recovery_tests {
+    use super::*;
+
+    /// The range catalogue an old voter made durable when its joint source
+    /// close advanced the range log from epoch 1 to the activation epoch 4
+    /// while the catalogue retained the activated record of a hot recovery
+    /// of epoch 1 (anchored at index 7; the promise's cut is index 8). Taken
+    /// from a five-process run; before the loader accepted this state the
+    /// member refused every later request of the range and could not reopen.
+    fn captured() -> RangeWriteCatalog {
+        let envelope: RangeWriteEnvelope = serde_json::from_slice(include_bytes!(
+            "testdata/joint_promise_over_activated_recovery.json"
+        ))
+        .unwrap();
+        envelope.catalog
+    }
+    fn verify(catalog: RangeWriteCatalog) -> Result<RangeWriteCatalog> {
+        RangeWriteEnvelope::new(catalog)?.verify()
+    }
+    fn range() -> RangeId {
+        RangeId::new(1).unwrap()
+    }
+
+    #[test]
+    fn joint_promise_over_an_activated_recovery_of_an_older_epoch_is_loadable() {
+        let catalog = captured();
+        let log = &catalog.ranges[&range()];
+        let promise = &catalog.handoff_promises[&range()];
+        let fence = &catalog.recovery_fences[&range()];
+        assert_eq!(
+            (
+                log.current_epoch,
+                promise.old_epoch,
+                promise.activation_epoch
+            ),
+            (4, 2, 4)
+        );
+        assert_eq!(fence.scope.range_epoch, 1);
+        assert!(matches!(
+            fence.phase,
+            recovery_state::RecoveryFencePhase::NativeActivated(_)
+        ));
+        assert!(joint_promise_supersedes_activated_recovery(
+            &catalog,
+            range(),
+            1,
+            7,
+            4
+        ));
+        assert_eq!(verify(catalog.clone()).unwrap(), catalog);
+    }
+
+    #[test]
+    fn a_normal_recovery_is_unfinished_until_it_is_activated_or_completed() {
+        use recovery_state::{
+            catalog_normal_recovery_unfinished as unfinished, RecoveryFencePhase,
+        };
+        let mut catalog = captured();
+        // Activated: finished. No record: nothing unfinished.
+        assert!(!unfinished(&catalog, range()));
+        assert!(!unfinished(&catalog, RangeId::new(3).unwrap()));
+        let activated = catalog.recovery_fences[&range()].phase.clone();
+        let RecoveryFencePhase::NativeActivated(point) = &activated else {
+            panic!("captured record is activated")
+        };
+        let completed = point.completed.clone();
+        // Fenced, prepared and completed-frozen recoveries are unfinished.
+        for phase in [
+            RecoveryFencePhase::Active,
+            RecoveryFencePhase::NativePrepared(completed.point.clone()),
+            RecoveryFencePhase::NativeCompleted(completed.clone()),
+        ] {
+            catalog.recovery_fences.get_mut(&range()).unwrap().phase = phase.clone();
+            assert!(unfinished(&catalog, range()), "{phase:?}");
+        }
+        catalog.recovery_fences.get_mut(&range()).unwrap().phase =
+            RecoveryFencePhase::Completed { resolved_index: 7 };
+        assert!(!unfinished(&catalog, range()));
+        // A prepared or completed-frozen recovery under the joint promise
+        // stays a catalogue the loader refuses: only the activated one is
+        // superseded by the promise.
+        for phase in [
+            RecoveryFencePhase::NativePrepared(completed.point.clone()),
+            RecoveryFencePhase::NativeCompleted(completed.clone()),
+        ] {
+            let mut frozen = captured();
+            frozen.recovery_fences.get_mut(&range()).unwrap().phase = phase.clone();
+            let refused = verify(frozen).unwrap_err().to_string();
+            assert!(
+                refused.contains("native preparation disagrees with actual resolved catalogue"),
+                "{phase:?}: {refused}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_activated_recovery_of_another_epoch_stays_refused_without_its_exact_joint_promise() {
+        let refused = |change: &dyn Fn(&mut RangeWriteCatalog)| {
+            let mut catalog = captured();
+            change(&mut catalog);
+            verify(catalog).unwrap_err().to_string()
+        };
+        let disagrees = "native preparation disagrees with actual resolved catalogue";
+        // The log stands beyond the promise's activation epoch.
+        let beyond = refused(&|catalog| {
+            catalog.ranges.get_mut(&range()).unwrap().current_epoch = 5;
+        });
+        assert!(beyond.contains(disagrees), "{beyond}");
+        // The promise's cut does not cover the recovery's anchor.
+        let uncovered = refused(&|catalog| {
+            catalog
+                .handoff_promises
+                .get_mut(&range())
+                .unwrap()
+                .resolved_through = 6;
+        });
+        assert!(uncovered.contains(disagrees), "{uncovered}");
+        // The promise starts before the recovery's epoch.
+        let earlier = refused(&|catalog| {
+            catalog
+                .handoff_promises
+                .get_mut(&range())
+                .unwrap()
+                .old_epoch = 0;
+        });
+        eprintln!("SUPERSEDED_RECOVERY earlier promise: {earlier}");
+        // The joint state of the promise's session is not retained.
+        let other_session = refused(&|catalog| {
+            catalog
+                .native_joint_handoffs
+                .as_mut()
+                .unwrap()
+                .get_mut(&range())
+                .unwrap()
+                .nonce = Uuid::now_v7();
+        });
+        eprintln!("SUPERSEDED_RECOVERY other session: {other_session}");
+        // The same catalogue at the recovery's own epoch without any promise
+        // is the ordinary recovered state and loads.
+        let mut ordinary = captured();
+        ordinary.handoff_promises.clear();
+        ordinary.native_joint_handoffs.as_mut().unwrap().clear();
+        ordinary.ranges.get_mut(&range()).unwrap().current_epoch = 1;
+        verify(ordinary).unwrap();
+        // The helper itself, on each binding.
+        let catalog = captured();
+        for (epoch, anchor, log, expected) in [
+            (1, 7, 4, true),
+            (2, 8, 4, true),
+            (3, 7, 4, false),
+            (1, 9, 4, false),
+            (1, 7, 5, false),
+            (1, 7, 2, false),
+        ] {
+            assert_eq!(
+                joint_promise_supersedes_activated_recovery(&catalog, range(), epoch, anchor, log),
+                expected,
+                "recovery epoch {epoch} anchor {anchor} log epoch {log}"
+            );
+        }
+        assert!(!joint_promise_supersedes_activated_recovery(
+            &catalog,
+            RangeId::new(3).unwrap(),
+            1,
+            3,
+            4
+        ));
     }
 }

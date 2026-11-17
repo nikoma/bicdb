@@ -41,8 +41,60 @@ pub struct NativeJointHandoffMetadataV1 {
     stage: NativeJointHandoffStageV1,
     activated_quorum_sha256: Option<String>,
     source_cleanup_sha256: Option<String>,
+    /// The scope of the certified decision: the old and the final range, the
+    /// old and the new member credentials, every enrolled birth and the
+    /// cluster, restore and relocation domain. Written by the certification,
+    /// which accepts it only when it equals the scope of the actual decision
+    /// proof, and never changed afterwards. The later membership stages can
+    /// be built from it alone. Present exactly on a record of version 2; a
+    /// version 1 record was certified without it and its membership stages
+    /// need the decision proof.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    certified_scope: Option<crate::distribution_range_handoff::NativeJointCertifiedScope>,
 }
+/// A record certified without its scope.
+const NATIVE_JOINT_HANDOFF_RECORD_WITHOUT_SCOPE: u32 = 1;
+/// A record that carries the scope of its certified decision.
+const NATIVE_JOINT_HANDOFF_RECORD_WITH_SCOPE: u32 = 2;
 impl NativeJointHandoffMetadataV1 {
+    pub(crate) fn certified_scope(
+        &self,
+    ) -> Option<&crate::distribution_range_handoff::NativeJointCertifiedScope> {
+        self.certified_scope.as_ref()
+    }
+    /// The committed scope belongs to exactly this record and relocation.
+    fn validate_certified_scope(&self, plan: &RangeRelocation) -> Result<()> {
+        let Some(scope) = &self.certified_scope else {
+            return Ok(());
+        };
+        scope.validate()?;
+        let promise = scope.promise();
+        if promise.relocation_id != plan.id
+            || promise.range_id != plan.range_id
+            || promise.plan_id != plan.plan_id
+            || promise.session_id != self.session_id
+            || promise.nonce != self.nonce
+            || promise.old_config_sha256 != self.old_configuration_sha256
+            || promise.new_config_sha256 != self.new_configuration_sha256
+            || promise.old_epoch != plan.learner_epoch
+            || Some(promise.activation_epoch) != plan.learner_epoch.checked_add(2)
+            || scope.old_range().id != plan.range_id
+            || scope.old_range().epoch != plan.learner_epoch
+            || scope.activation_range().id != plan.range_id
+            || scope.target() != &plan.target
+            || plan.source.as_ref() != Some(scope.old_source())
+            || !scope
+                .activation_range()
+                .replicas
+                .iter()
+                .any(|r| r.id == plan.target_replica_id && r.node_id == plan.target)
+        {
+            return Err(cluster_error(
+                "native joint handoff certified scope differs from its record or relocation",
+            ));
+        }
+        Ok(())
+    }
     pub fn session_id(&self) -> Uuid {
         self.session_id
     }
@@ -82,7 +134,12 @@ impl NativeJointHandoffMetadataV1 {
                 && s.bytes()
                     .all(|v| v.is_ascii_digit() || (b'a'..=b'f').contains(&v))
         };
-        if self.version != 1
+        self.validate_certified_scope(plan)?;
+        if !matches!(
+            self.version,
+            NATIVE_JOINT_HANDOFF_RECORD_WITHOUT_SCOPE | NATIVE_JOINT_HANDOFF_RECORD_WITH_SCOPE
+        ) || (self.version == NATIVE_JOINT_HANDOFF_RECORD_WITH_SCOPE)
+            != self.certified_scope.is_some()
             || plan.id.get() == 0
             || plan.range_id.get() == 0
             || plan.target_replica_id.get() == 0
@@ -210,6 +267,13 @@ impl NativeJointHandoffMetadataV1 {
         record.source_cleanup_sha256 = None;
         record
     }
+    /// The binding a version 1 record of the same decision has.
+    fn binding_without_scope(&self) -> Self {
+        let mut record = self.immutable_binding();
+        record.version = NATIVE_JOINT_HANDOFF_RECORD_WITHOUT_SCOPE;
+        record.certified_scope = None;
+        record
+    }
 }
 fn sha256_hex(value: &str) -> bool {
     value.len() == 64
@@ -263,7 +327,7 @@ impl NativeJointHandoffMetadataV1 {
         proof.require_current()?;
         let actual = proof.data();
         let result = Self {
-            version: 1,
+            version: NATIVE_JOINT_HANDOFF_RECORD_WITH_SCOPE,
             session_id: actual.promise().session_id,
             nonce: actual.promise().nonce,
             decision_sha256: actual.checksum_sha256().into(),
@@ -277,6 +341,8 @@ impl NativeJointHandoffMetadataV1 {
             stage: NativeJointHandoffStageV1::Certified,
             activated_quorum_sha256: None,
             source_cleanup_sha256: None,
+            // Nothing unproven enters metadata: the scope is the proof's own.
+            certified_scope: Some(actual.certified_scope()),
         };
         Ok(result)
     }
@@ -349,6 +415,15 @@ impl NativeJointHandoffMetadataV1 {
         Ok(())
     }
 }
+/// What the union and the final membership stages read of one decision.
+struct JointMembershipStage {
+    id: RelocationId,
+    decision_sha256: String,
+    range_id: RangeId,
+    /// The epoch of the old range, at which the target is the learner.
+    learner_epoch: u64,
+    activation_range: RangeDescriptor,
+}
 impl DistributionStore {
     fn require_joint_metadata_observation(
         &self,
@@ -410,7 +485,14 @@ impl DistributionStore {
             .ok_or_else(|| cluster_error("joint old range absent"))?;
         let record = NativeJointHandoffMetadataV1::from_actual_decision(proof)?;
         if let Some(existing) = &self.topology.relocations[&id].native_joint_handoff_v1 {
-            if existing.immutable_binding() != record.immutable_binding() {
+            // A record certified without its scope stays as it is; the same
+            // decision is recognised by every other bound value.
+            let same = if existing.certified_scope.is_some() {
+                existing.immutable_binding() == record.immutable_binding()
+            } else {
+                existing.immutable_binding() == record.binding_without_scope()
+            };
+            if !same {
                 return Err(cluster_error(
                     "different native joint decision already pending",
                 ));
@@ -455,18 +537,59 @@ impl DistributionStore {
         )?;
         Ok(true)
     }
-    pub(crate) fn promote_native_joint_handoff_frozen(
-        &mut self,
+    /// The values the union and the final membership stages read: from the
+    /// decision proof. When the committed record carries its certified scope
+    /// the proof must be of exactly that scope.
+    fn joint_membership_stage_from_proof(
+        &self,
         proof: &dyn crate::distribution_range_handoff::NativeJointDecisionProof,
         fresh: &crate::distribution_consensus::HostMetadataReadObservation,
         business: Uuid,
-        actor: &ClusterNodeId,
-        now_ms: u64,
-    ) -> Result<u64> {
-        self.ensure_actor(actor)?;
+    ) -> Result<JointMembershipStage> {
         self.require_joint_metadata_observation(proof, fresh, business)?;
         let data = proof.data();
         let id = data.promise().relocation_id;
+        if let Some(committed) = self
+            .topology
+            .relocations
+            .get(&id)
+            .and_then(|plan| plan.native_joint_handoff_v1.as_ref())
+            .and_then(|record| record.certified_scope())
+        {
+            if *committed != data.certified_scope() {
+                return Err(cluster_error(
+                    "joint decision proof differs from the committed certified scope",
+                ));
+            }
+        }
+        Ok(JointMembershipStage {
+            id,
+            decision_sha256: data.checksum_sha256().to_owned(),
+            range_id: data.old_range().id,
+            learner_epoch: data.old_range().epoch,
+            activation_range: data.activation_range().clone(),
+        })
+    }
+    /// The same values from the committed record alone. Metadata consensus
+    /// accepted the decision proof when it committed the record, and the
+    /// record's scope was the proof's; the builder must still be the fresh
+    /// committed configuration, in the unchanged domain of that scope.
+    fn joint_membership_stage_from_committed(
+        &self,
+        id: RelocationId,
+        fresh: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+    ) -> Result<JointMembershipStage> {
+        if !self.ephemeral {
+            return Err(cluster_error("native joint metadata requires an ephemeral consensus-proposal view; local topology-file publication is insufficient"));
+        }
+        fresh.require_live_request(business)?;
+        let observed = fresh.committed_topology(business)?;
+        if observed != &self.topology {
+            return Err(cluster_error(
+                "joint metadata builder is not the actual fresh committed topology",
+            ));
+        }
         let plan = self
             .topology
             .relocations
@@ -476,7 +599,66 @@ impl DistributionStore {
             .native_joint_handoff_v1
             .as_ref()
             .ok_or_else(|| cluster_error("joint decision not committed"))?;
-        if record.decision_sha256() != data.checksum_sha256()
+        record.validate_for(plan)?;
+        let scope = record.certified_scope().ok_or_else(|| {
+            cluster_error(
+                "the committed joint decision was certified without its scope; this membership stage requires the decision proof",
+            )
+        })?;
+        scope.require_metadata_domain(observed, fresh.restore_activation(business)?)?;
+        Ok(JointMembershipStage {
+            id,
+            decision_sha256: record.decision_sha256().to_owned(),
+            range_id: scope.old_range().id,
+            learner_epoch: scope.old_range().epoch,
+            activation_range: scope.activation_range().clone(),
+        })
+    }
+    pub(crate) fn promote_native_joint_handoff_frozen(
+        &mut self,
+        proof: &dyn crate::distribution_range_handoff::NativeJointDecisionProof,
+        fresh: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        actor: &ClusterNodeId,
+        now_ms: u64,
+    ) -> Result<u64> {
+        self.ensure_actor(actor)?;
+        let stage = self.joint_membership_stage_from_proof(proof, fresh, business)?;
+        self.promote_joint_frozen(stage, fresh, business, actor, now_ms)
+    }
+    /// The union membership of a decision that is already certified in the
+    /// committed metadata, built from the committed record alone.
+    pub(crate) fn promote_certified_native_joint_handoff_frozen(
+        &mut self,
+        id: RelocationId,
+        fresh: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        actor: &ClusterNodeId,
+        now_ms: u64,
+    ) -> Result<u64> {
+        self.ensure_actor(actor)?;
+        let stage = self.joint_membership_stage_from_committed(id, fresh, business)?;
+        self.promote_joint_frozen(stage, fresh, business, actor, now_ms)
+    }
+    fn promote_joint_frozen(
+        &mut self,
+        stage: JointMembershipStage,
+        fresh: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        actor: &ClusterNodeId,
+        now_ms: u64,
+    ) -> Result<u64> {
+        let id = stage.id;
+        let plan = self
+            .topology
+            .relocations
+            .get(&id)
+            .ok_or_else(|| cluster_error("joint plan absent"))?;
+        let record = plan
+            .native_joint_handoff_v1
+            .as_ref()
+            .ok_or_else(|| cluster_error("joint decision not committed"))?;
+        if record.decision_sha256() != stage.decision_sha256
             || record.stage != NativeJointHandoffStageV1::Certified
         {
             return Err(cluster_error(
@@ -488,9 +670,9 @@ impl DistributionStore {
             .topology
             .ranges
             .values_mut()
-            .find(|r| r.id == data.old_range().id)
+            .find(|r| r.id == stage.range_id)
             .ok_or_else(|| cluster_error("joint range absent"))?;
-        if range.epoch != data.old_range().epoch {
+        if range.epoch != stage.learner_epoch {
             return Err(cluster_error("joint learner epoch changed"));
         }
         let replica = range
@@ -502,7 +684,7 @@ impl DistributionStore {
             return Err(cluster_error("joint target is not pending learner"));
         }
         replica.role = RangeReplicaRole::Voter;
-        range.leader = data.activation_range().leader.clone();
+        range.leader = stage.activation_range.leader.clone();
         range.epoch = range
             .epoch
             .checked_add(1)
@@ -533,15 +715,42 @@ impl DistributionStore {
         now_ms: u64,
     ) -> Result<u64> {
         self.ensure_actor(actor)?;
-        self.require_joint_metadata_observation(proof, fresh, business)?;
-        let data = proof.data();
-        let id = data.promise().relocation_id;
-        let plan = &self.topology.relocations[&id];
+        let stage = self.joint_membership_stage_from_proof(proof, fresh, business)?;
+        self.finalize_joint_membership_frozen(stage, fresh, business, actor, now_ms)
+    }
+    /// The final membership of a decision whose union membership is already
+    /// committed, built from the committed record alone.
+    pub(crate) fn finalize_certified_native_joint_membership_frozen(
+        &mut self,
+        id: RelocationId,
+        fresh: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        actor: &ClusterNodeId,
+        now_ms: u64,
+    ) -> Result<u64> {
+        self.ensure_actor(actor)?;
+        let stage = self.joint_membership_stage_from_committed(id, fresh, business)?;
+        self.finalize_joint_membership_frozen(stage, fresh, business, actor, now_ms)
+    }
+    fn finalize_joint_membership_frozen(
+        &mut self,
+        stage: JointMembershipStage,
+        fresh: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        actor: &ClusterNodeId,
+        now_ms: u64,
+    ) -> Result<u64> {
+        let id = stage.id;
+        let plan = self
+            .topology
+            .relocations
+            .get(&id)
+            .ok_or_else(|| cluster_error("joint plan absent"))?;
         let record = plan
             .native_joint_handoff_v1
             .as_ref()
             .ok_or_else(|| cluster_error("joint union decision absent"))?;
-        if record.decision_sha256() != data.checksum_sha256()
+        if record.decision_sha256() != stage.decision_sha256
             || record.stage != NativeJointHandoffStageV1::PromotedFrozen
         {
             return Err(cluster_error(
@@ -552,12 +761,12 @@ impl DistributionStore {
             .topology
             .ranges
             .values_mut()
-            .find(|r| r.id == data.old_range().id)
+            .find(|r| r.id == stage.range_id)
             .ok_or_else(|| cluster_error("joint range absent"))?;
-        if range.epoch.checked_add(1) != Some(data.activation_range().epoch) {
+        if range.epoch.checked_add(1) != Some(stage.activation_range.epoch) {
             return Err(cluster_error("joint union epoch changed"));
         }
-        *range = data.activation_range().clone();
+        *range = stage.activation_range;
         let epoch = range.epoch;
         let plan = self.topology.relocations.get_mut(&id).unwrap();
         plan.phase = RelocationPhase::CleaningUp;
@@ -570,13 +779,15 @@ impl DistributionStore {
         Ok(epoch)
     }
     /// Record that every member of the new set durably activated the range
-    /// and was released. The proof is the live all-released quorum itself;
-    /// no digest is accepted from a caller. Membership does not change. This
+    /// and was released. The proof is the live all-released quorum itself
+    /// (every member's service in this process, or this member's own state
+    /// plus authenticated release frames of every other member); the trait
+    /// is sealed and no digest is accepted from a caller. Membership does not change. This
     /// permits the retirement of the old source and nothing else. Returns
     /// false, committing nothing, when this activation is already recorded.
     pub(crate) fn record_native_joint_activation(
         &mut self,
-        proof: &crate::distribution_range_handoff::NativeJointActivatedQuorum,
+        proof: &dyn crate::distribution_range_handoff::NativeJointActivationProof,
         fresh: &crate::distribution_consensus::HostMetadataReadObservation,
         business: Uuid,
         actor: &ClusterNodeId,
@@ -629,11 +840,12 @@ impl DistributionStore {
     /// Record the retired source's own durable retirement from the range and
     /// complete the relocation. The proof is the receipt the source's service
     /// issued after ITS OWN committed metadata read showed the recorded
-    /// activation quorum. Membership does not change and no row is deleted.
+    /// activation quorum: held in this process, or reported by the source
+    /// in an exchange the pinned transport authenticated (sealed trait). Membership does not change and no row is deleted.
     /// Returns false, committing nothing, when it is already recorded.
     pub(crate) fn complete_native_joint_source_retirement(
         &mut self,
-        proof: &crate::distribution_data::NativeJointSourceRetired,
+        proof: &dyn crate::distribution_data::NativeJointSourceRetirementProof,
         fresh: &crate::distribution_consensus::HostMetadataReadObservation,
         business: Uuid,
         actor: &ClusterNodeId,
@@ -783,6 +995,7 @@ mod native_joint_handoff_completion_tests {
                 .then(|| digest('a')),
             source_cleanup_sha256: (stage == NativeJointHandoffStageV1::Cleaned)
                 .then(|| digest('c')),
+            certified_scope: None,
         }
     }
     fn plan(record: &NativeJointHandoffMetadataV1) -> RangeRelocation {
@@ -850,6 +1063,52 @@ mod native_joint_handoff_completion_tests {
         let plan = plan(record);
         topology.relocations.insert(plan.id, plan);
         topology
+    }
+
+    /// A record certified without its scope stays valid and keeps its exact
+    /// bytes; the scope is required by, and only allowed on, version 2.
+    #[test]
+    fn native_joint_handoff_completion_record_version_binds_certified_scope_presence() {
+        use NativeJointHandoffStageV1::*;
+        for stage in [Certified, PromotedFrozen, AwaitingActivation, Cleaned] {
+            let legacy = record(stage);
+            legacy.validate_for(&plan(&legacy)).unwrap();
+            let json = serde_json::to_value(&legacy).unwrap();
+            assert!(
+                json.get("certified_scope").is_none(),
+                "a record without scope serializes as it always did"
+            );
+            assert_eq!(
+                serde_json::from_value::<NativeJointHandoffMetadataV1>(json).unwrap(),
+                legacy
+            );
+            assert!(NativeJointCommittedDecisionProbe::scope_of(&legacy).is_none());
+            let mut missing = legacy.clone();
+            missing.version = 2;
+            assert!(
+                missing.validate_for(&plan(&missing)).is_err(),
+                "version 2 requires its certified scope"
+            );
+            let mut unknown = legacy.clone();
+            unknown.version = 3;
+            assert!(unknown.validate_for(&plan(&unknown)).is_err());
+            // A later configuration may not turn a certified record into
+            // another version of itself.
+            let previous = topology(&legacy);
+            let next = topology(&missing);
+            assert!(validate_native_joint_handoff_preservation(&previous, &next).is_err());
+        }
+    }
+    struct NativeJointCommittedDecisionProbe;
+    impl NativeJointCommittedDecisionProbe {
+        fn scope_of(
+            record: &NativeJointHandoffMetadataV1,
+        ) -> Option<crate::distribution_range_handoff::NativeJointCommittedDecision> {
+            crate::distribution_range_handoff::NativeJointCommittedDecision::from_committed(&plan(
+                record,
+            ))
+            .unwrap()
+        }
     }
 
     #[test]

@@ -1,6 +1,7 @@
 //! Actual source-owner admission for ONLY OLD refusal/closure. Purpose/plan
 //! DATA alone is insufficient. No APP/Strong/image-row/Serving grant.
 use super::*;
+mod bridge_step;
 mod constraint_step;
 mod remote_new;
 mod remote_old;
@@ -542,6 +543,111 @@ impl NativeMetadataControlHost {
 }
 
 impl NativeInitialDataAdmission {
+    /// The runtime that owns this survivor's retained OLD freeze. Memory
+    /// custody of the original closure only; a missing or foreign closure
+    /// refuses and nothing is rebuilt from identity DATA.
+    pub(super) fn retained_old_runtime(
+        &self,
+        range: crate::RangeId,
+        plan_sha256: &str,
+    ) -> Result<Arc<crate::distribution_range_handoff::NativeJointHandoffRuntime>> {
+        let table = self
+            .old_closures
+            .upgrade()
+            .ok_or_else(|| invalid("actual survivor OLD table ended"))?;
+        let entries = table
+            .try_lock()
+            .ok_or_else(|| invalid("actual survivor OLD table busy"))?;
+        let owner = entries
+            .get(&range)
+            .ok_or_else(|| invalid("actual survivor retains no original OLD closure"))?
+            .try_lock()
+            .ok_or_else(|| invalid("actual survivor OLD closure still active"))?;
+        if !Arc::ptr_eq(&owner.writer, &self.writer())
+            || owner.plan_sha256 != plan_sha256
+            || owner.actual.is_none()
+            || owner.outcome.is_some()
+        {
+            return Err(invalid(
+                "actual survivor OLD closure has another writer/scope or is unresolved",
+            ));
+        }
+        Ok(owner.runtime.clone())
+    }
+    /// Whether this member still holds an OLD observation for `range`.
+    pub(super) fn retains_old_observation(&self, range: crate::RangeId) -> Result<bool> {
+        let table = self
+            .old_closures
+            .upgrade()
+            .ok_or_else(|| invalid("actual survivor OLD table ended"))?;
+        let entries = table
+            .try_lock()
+            .ok_or_else(|| invalid("actual survivor OLD table busy"))?;
+        Ok(entries.contains_key(&range))
+    }
+    /// The same retirement as `retire_initial_old_observation_after_joint_open`
+    /// when the other NEW members live in other processes. The proof is this
+    /// member's own; an already removed entry is success.
+    pub(super) fn retire_old_observation_after_remote_joint_open(
+        &self,
+        range: crate::RangeId,
+        proof: &crate::distribution_range_handoff::NativeJointRemoteOldRetirementProof,
+    ) -> Result<()> {
+        self.require_live()?;
+        let table = self
+            .old_closures
+            .upgrade()
+            .ok_or_else(|| invalid("actual survivor OLD table ended"))?;
+        // Original owner/writer/plan identity only; the proof revalidates
+        // this observation for the post-open point.
+        let actual = {
+            let entries = table
+                .try_lock()
+                .ok_or_else(|| invalid("actual survivor OLD table busy"))?;
+            let Some(owner) = entries.get(&range) else {
+                return Ok(());
+            };
+            let owner = owner
+                .try_lock()
+                .ok_or_else(|| invalid("actual survivor OLD closure still active"))?;
+            if !Arc::ptr_eq(&owner.writer, &self.writer()) {
+                return Err(invalid("retained OLD source original writer replaced"));
+            }
+            let actual = owner
+                .actual
+                .clone()
+                .ok_or_else(|| invalid("actual OLD survivor outcome remains uncertain"))?;
+            if actual.plan().checksum_sha256()? != owner.plan_sha256 {
+                return Err(invalid(
+                    "actual OLD survivor changed original local identity/scope",
+                ));
+            }
+            actual
+        };
+        proof.require_actual_old_owner_retirement(&actual)?;
+        let mut entries = table
+            .try_lock()
+            .ok_or_else(|| invalid("actual survivor OLD table busy"))?;
+        let retained = entries
+            .get(&range)
+            .ok_or_else(|| invalid("actual survivor OLD entry missing"))?;
+        let entry = retained
+            .try_lock()
+            .ok_or_else(|| invalid("actual survivor OLD entry active"))?;
+        if entry
+            .actual
+            .as_ref()
+            .is_none_or(|old| !Arc::ptr_eq(old, &actual))
+            || entry.outcome.is_some()
+        {
+            return Err(invalid(
+                "cannot retire an uncertain/replaced OLD native outcome",
+            ));
+        }
+        drop(entry);
+        entries.remove(&range);
+        Ok(())
+    }
     pub(super) fn retained_actual_old_source(
         &self,
         range: crate::RangeId,

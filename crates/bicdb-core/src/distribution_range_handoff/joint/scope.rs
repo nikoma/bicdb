@@ -291,6 +291,64 @@ impl NativeJointScopeData {
         }
         Ok(())
     }
+    /// The committed configuration is still in this scope's cluster, member
+    /// and relocation domain. The caller validates the scope itself first.
+    pub(super) fn require_metadata_domain(
+        &self,
+        topology: &crate::distribution::ClusterTopology,
+        restore: Option<&crate::distribution_consensus::MetadataRestoreActivation>,
+    ) -> Result<()> {
+        topology.validate()?;
+        if topology.cluster_id != self.cluster_id
+            || topology.range_image_bootstrap_id != Some(self.bootstrap_id)
+            || restore != self.restore_activation.as_ref()
+        {
+            return Err(invalid(
+                "joint metadata publication changed cluster/bootstrap/restore",
+            ));
+        }
+        for (id, birth) in &self.enrolled_births {
+            let node = topology
+                .nodes
+                .get(id)
+                .ok_or_else(|| invalid("joint enrolled member disappeared"))?;
+            if node.native_store_birth_v1.as_ref() != Some(birth)
+                || node.incarnation != birth.node_incarnation()
+                || node.lifecycle != crate::distribution::ClusterNodeLifecycle::Active
+                || node
+                    .labels
+                    .get(crate::distribution::SCHEMA_COMPATIBILITY_NODE_LABEL)
+                    != Some(&self.schema_sha256)
+            {
+                return Err(invalid("joint enrolled birth/incarnation/schema changed"));
+            }
+        }
+        for (id, expected) in self.old_members.iter().chain(self.new_members.iter()) {
+            let node = &topology.nodes[id];
+            if node.incarnation != expected.incarnation
+                || node.tls_certificate_sha256 != expected.tls_certificate_sha256
+                || node.pending_tls_certificate_sha256 != expected.pending_tls_certificate_sha256
+            {
+                return Err(invalid("joint data-voter credentials changed"));
+            }
+        }
+        let relocation = topology
+            .relocations
+            .get(&self.promise.relocation_id)
+            .ok_or_else(|| invalid("joint relocation disappeared"))?;
+        if relocation.range_id != self.promise.range_id
+            || relocation.plan_id != self.promise.plan_id
+            || relocation.source.as_ref() != Some(&self.old_source)
+            || relocation.target != self.target
+            || relocation.learner_epoch != self.promise.old_epoch
+            || relocation.handoff_session.as_ref().is_none_or(|s| {
+                s.session_id != self.promise.session_id || s.nonce != self.promise.nonce
+            })
+        {
+            return Err(invalid("joint committed relocation/session changed"));
+        }
+        Ok(())
+    }
     pub(super) fn checksum(&self) -> Result<String> {
         self.validate()?;
         Ok(hex::encode(sha2::Sha256::digest(

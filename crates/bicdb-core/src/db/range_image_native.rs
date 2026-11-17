@@ -94,14 +94,15 @@ pub(crate) use writer_enrollment::NativeRegisteredNoDomainScope;
 pub(crate) use writer_enrollment::NativeRegisteredRemoteAttemptScope;
 #[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeRegisteredRemoteMutationScope;
-pub(crate) use writer_enrollment::{
-    InstalledNativeWriterHostGuard, NativeRegisteredReceiverHook, NativeWriterHostState,
-};
 #[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::{
-    NativeClosedWriterDomain, NativeWriterClosedHistoricalReadScope, NativeWriterDataDomainPolicy,
+    require_remote_serving_member_audit, NativeClosedWriterDomain,
+    NativeWriterClosedHistoricalReadScope, NativeWriterDataDomainPolicy,
     NativeWriterDataDomainTransition, NativeWriterHistoricalPredecessor,
     NativeWriterServingDomainPublication,
+};
+pub(crate) use writer_enrollment::{
+    InstalledNativeWriterHostGuard, NativeRegisteredReceiverHook, NativeWriterHostState,
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::{

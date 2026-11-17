@@ -3,10 +3,20 @@
 use super::*;
 mod open_phase;
 mod release_phase;
+#[cfg(feature = "tls-replication")]
+mod remote_open;
 pub(crate) use open_phase::{NativeJointOpenPhaseQuorum, NativeJointOpenPhaseRound};
 pub(crate) use release_phase::{
     NativeJointActivatedQuorum, NativeJointReleaseAdmission, NativeJointReleaseContinuation,
     NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
+};
+
+pub(crate) use release_phase::NativeJointActivationProof;
+#[cfg(feature = "tls-replication")]
+pub(crate) use release_phase::{
+    NativeJointMemberRelease, NativeJointMemberReleaseOwner, NativeJointReleasePhaseFacts,
+    NativeJointRemoteOldRetirementProof, NativeRemoteBridgeReleased,
+    NativeRemoteJointActivationCertificate,
 };
 
 pub(crate) struct NativeJointServingPublicationRound {
@@ -57,19 +67,20 @@ impl NativeJointServingPublicationRound {
         admission: &NativeJointActivationAdmission,
         parent: &crate::CancellationToken,
     ) -> Result<()> {
-        if !Arc::ptr_eq(&self.prepared, &admission.quorum) {
+        let (quorum, phase) = admission.local_backing()?;
+        if !Arc::ptr_eq(&self.prepared, quorum) {
             return Err(invalid(
                 "native bridge publication changed its actual prepared quorum",
             ));
         }
-        if self.fresh_required && admission.phase.is_none() {
+        if self.fresh_required && phase.is_none() {
             return Err(invalid(
                 "resumed native publication requires new actual full phase authority",
             ));
         }
         admission.claim_publication_attempt()?;
         let local = admission.local.local_node_id().clone();
-        if admission.phase.is_some() && !self.receipts.contains_key(&local) {
+        if phase.is_some() && !self.receipts.contains_key(&local) {
             // ONE scoped native producer reconciles an actual old pointer or
             // publishes only if actually absent. Do not spend another complete
             // sweep on a separate absence probe after an unknown attempt.
@@ -110,9 +121,10 @@ impl NativeJointServingPublicationRound {
                 "native bridge publication changed decision or local native history",
             ));
         }
+        let phase = admission.local_backing()?.1.cloned();
         let retired = {
             let _version = admission.committed().native_publication_guard()?;
-            let old_phase = std::mem::replace(&mut self.phase, admission.phase.clone());
+            let old_phase = std::mem::replace(&mut self.phase, phase);
             self.pending.remove(&node);
             let old_receipt = self.receipts.insert(node, Arc::new(receipt));
             (old_phase, old_receipt)
@@ -128,7 +140,8 @@ impl NativeJointServingPublicationRound {
         admission: &NativeJointActivationAdmission,
         parent: &crate::CancellationToken,
     ) -> Result<String> {
-        if !Arc::ptr_eq(&self.prepared, &admission.quorum) || admission.phase.is_none() {
+        let (quorum, phase) = admission.local_backing()?;
+        if !Arc::ptr_eq(&self.prepared, quorum) || phase.is_none() {
             return Err(invalid("lost-reply control needs same actual fresh phase"));
         }
         admission.claim_publication_attempt()?;
@@ -308,9 +321,11 @@ impl NativeJointPublishedServingQuorum {
         };
         let cancellation = cancellation.child_with_deadline(fresh.deadline());
         let result = NativeJointOpenAdmission {
-            open_phase: None,
+            backing: OpenBacking::Local {
+                quorum: self.clone(),
+                open_phase: None,
+            },
             attempted: std::sync::atomic::AtomicBool::new(false),
-            quorum: self.clone(),
             local,
             receipt,
             fresh,
@@ -324,13 +339,27 @@ impl NativeJointPublishedServingQuorum {
 /// Actual fresh post-publication authority plus independently published NEW
 /// native quorum. No metadata/counter payload can construct this admission.
 pub(crate) struct NativeJointOpenAdmission {
-    open_phase: Option<Arc<NativeJointOpenPhaseQuorum>>,
+    backing: OpenBacking,
     attempted: std::sync::atomic::AtomicBool,
-    quorum: Arc<NativeJointPublishedServingQuorum>,
     pub(super) local: Arc<NativeJointPreparedServingObservation>,
     receipt: Arc<crate::db::NativeJointServingBridgeReceipt>,
     fresh: CommittedNativeJointDecisionObservation,
     cancellation: crate::CancellationToken,
+}
+/// What stands behind the admission for every NEW member other than the
+/// local one. The local member is always its actual retained preparation
+/// and its own actual durable bridge.
+enum OpenBacking {
+    /// Every member's actual service is reachable in this process.
+    Local {
+        quorum: Arc<NativeJointPublishedServingQuorum>,
+        open_phase: Option<Arc<NativeJointOpenPhaseQuorum>>,
+    },
+    /// Every other member is a transport-minted authenticated OPEN
+    /// observation this member collected itself inside one bounded window.
+    /// Private construction: only this member's own remote activation.
+    #[cfg(feature = "tls-replication")]
+    Remote(remote_open::RemoteOpenBacking),
 }
 impl NativeJointOpenAdmission {
     #[cfg(feature = "tls-replication")]
@@ -374,7 +403,7 @@ impl NativeJointOpenAdmission {
     ) -> Result<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt> {
         parent.check()?;
         self.require_live()?;
-        if self.open_phase.is_some()
+        if self.has_fresh_open_phase()
             && self
                 .attempted
                 .swap(true, std::sync::atomic::Ordering::AcqRel)
@@ -383,7 +412,7 @@ impl NativeJointOpenAdmission {
                 "fresh open admission already attempted activation/recovery",
             ));
         }
-        if self.open_phase.is_none() {
+        if !self.has_fresh_open_phase() {
             self.require_external_publications_current()?;
         }
         let mut service = self
@@ -394,7 +423,12 @@ impl NativeJointOpenAdmission {
         service.persist_local_native_joint_activation(self, &self.local.actual, parent)
     }
     pub(crate) fn data(&self) -> &NativeJointDecisionData {
-        self.quorum.data()
+        match &self.backing {
+            OpenBacking::Local { quorum, .. } => quorum.data(),
+            // The decision this member's own retained preparation protects.
+            #[cfg(feature = "tls-replication")]
+            OpenBacking::Remote(_) => self.local.data(),
+        }
     }
     pub(crate) fn committed(&self) -> &CommittedNativeJointDecisionObservation {
         &self.fresh
@@ -442,8 +476,18 @@ impl NativeJointOpenAdmission {
     pub(crate) fn require_live(&self) -> Result<()> {
         self.cancellation.check()?;
         self.fresh.require_metadata_current()?;
-        if let Some(phase) = &self.open_phase {
-            phase.require_post_quorum(&self.fresh)?;
+        match &self.backing {
+            OpenBacking::Local {
+                open_phase: Some(phase),
+                ..
+            } => phase.require_post_quorum(&self.fresh)?,
+            OpenBacking::Local {
+                open_phase: None, ..
+            } => {}
+            #[cfg(feature = "tls-replication")]
+            OpenBacking::Remote(remote) => {
+                remote.require_post_quorum(&self.local, &self.receipt, &self.fresh)?
+            }
         }
         if self.fresh.data() != self.data()
             || self.fresh.native_receipt().local_node_id() != self.receipt.local_node_id()
@@ -453,32 +497,55 @@ impl NativeJointOpenAdmission {
             ));
         }
         let (term, index, context) = self.fresh.metadata_anchor();
-        for receipt in self.quorum.receipts.values() {
-            let (observed_term, observed_index, observed_context) = receipt.metadata_anchor();
-            if term < observed_term || index < observed_index || context == observed_context {
-                return Err(invalid(
-                    "joint open metadata was not acquired after actual native NEW publication",
-                ));
+        let after_publication =
+            |(observed_term, observed_index, observed_context): (u64, u64, Uuid)| {
+                if term < observed_term || index < observed_index || context == observed_context {
+                    return Err(invalid(
+                        "joint open metadata was not acquired after actual native NEW publication",
+                    ));
+                }
+                Ok(())
+            };
+        match &self.backing {
+            OpenBacking::Local { quorum, .. } => {
+                for receipt in quorum.receipts.values() {
+                    after_publication(receipt.metadata_anchor())?;
+                }
+            }
+            #[cfg(feature = "tls-replication")]
+            OpenBacking::Remote(remote) => {
+                after_publication(self.receipt.metadata_anchor())?;
+                for anchor in remote.bridge_anchors()? {
+                    after_publication(anchor)?;
+                }
             }
         }
         Ok(())
     }
     pub(crate) fn require_external_publications_current(&self) -> Result<()> {
         self.require_live()?;
-        for (node, receipt) in &self.quorum.receipts {
+        let (quorum, open_phase) = match &self.backing {
+            OpenBacking::Local { quorum, open_phase } => (quorum, open_phase),
+            // No other member's lock is reachable from this process. Every
+            // other NEW member must still be inside the bounded window in
+            // which it re-proved, under ITS lock, the bridge counted here.
+            #[cfg(feature = "tls-replication")]
+            OpenBacking::Remote(remote) => {
+                return remote.require_external_current(self.data(), self.receipt.local_node_id())
+            }
+        };
+        for (node, receipt) in &quorum.receipts {
             if node != self.receipt.local_node_id() {
-                let service = self.quorum.prepared.observations[node]
+                let service = quorum.prepared.observations[node]
                     .service
                     .try_lock()
                     .ok_or_else(|| invalid("joint open native peer service busy"))?;
-                if let Some(phase) = &self.open_phase {
+                if let Some(phase) = open_phase {
                     phase.require_member_with_service(node, &service)?;
                 } else {
                     service.require_joint_bridge_with_writer_domain(
                         receipt,
-                        self.quorum.prepared.observations[node]
-                            .actual
-                            .writer_domain(),
+                        quorum.prepared.observations[node].actual.writer_domain(),
                     )?;
                 }
             }
@@ -492,21 +559,46 @@ impl NativeJointOpenAdmission {
     ) -> Result<()> {
         self.require_live()?;
         scope.require_native(&self.receipt)?;
-        if let Some(phase) = &self.open_phase {
-            phase.require_local_native_scope(self.receipt.local_node_id(), store, scope)?;
+        match &self.backing {
+            OpenBacking::Local {
+                open_phase: Some(phase),
+                ..
+            } => phase.require_local_native_scope(self.receipt.local_node_id(), store, scope)?,
+            OpenBacking::Local {
+                open_phase: None, ..
+            } => {}
+            #[cfg(feature = "tls-replication")]
+            OpenBacking::Remote(remote) => {
+                remote.require_local_native_scope(&self.local, &self.receipt, store, scope)?
+            }
         }
         Ok(())
     }
     pub(crate) fn has_fresh_open_phase(&self) -> bool {
-        self.open_phase.is_some()
+        match &self.backing {
+            OpenBacking::Local { open_phase, .. } => open_phase.is_some(),
+            // A remote window IS a distinct fresh full open phase.
+            #[cfg(feature = "tls-replication")]
+            OpenBacking::Remote(_) => true,
+        }
     }
     pub(crate) fn require_local_open_preparation(
         &self,
         service: &ClusterDataNodeService,
     ) -> Result<()> {
         self.require_live()?;
-        if let Some(phase) = &self.open_phase {
-            phase.require_member_with_service(self.receipt.local_node_id(), service)?;
+        match &self.backing {
+            OpenBacking::Local {
+                open_phase: Some(phase),
+                ..
+            } => phase.require_member_with_service(self.receipt.local_node_id(), service)?,
+            OpenBacking::Local {
+                open_phase: None, ..
+            } => {}
+            #[cfg(feature = "tls-replication")]
+            OpenBacking::Remote(remote) => {
+                remote.require_local_with_service(&self.local, &self.receipt, service)?
+            }
         }
         Ok(())
     }

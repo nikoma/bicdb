@@ -536,6 +536,16 @@ impl RangeWriteStore {
 // Actual retained Store/open diagnostics only, never a role/read/write grant.
 #[cfg(test)]
 impl RangeWriteStore {
+    pub(crate) fn test_require_catalogue_loadable(&self) -> Result<()> {
+        let bytes = fs::read(self.root.join(DEFAULT_RANGE_WRITE_LOG))?;
+        let stored = serde_json::from_slice::<RangeWriteEnvelope>(&bytes)?.verify()?;
+        if stored != self.catalog {
+            return Err(range_write_error(
+                "durable range catalogue differs from the open store",
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn test_native_replica_open_state(
         &self,
         range: RangeId,

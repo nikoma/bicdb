@@ -88,6 +88,7 @@ impl NativeDataListenerMode {
 mod initial_preparation;
 mod learner_birth;
 pub(crate) mod metadata_append;
+mod metadata_leadership_transfer;
 mod native_abort;
 mod native_activation;
 mod native_image_source;
@@ -97,6 +98,8 @@ pub(crate) use native_source_discovery::AuthenticatedNativeSourceDiscovery;
 pub(crate) use native_source_export::AuthenticatedRegisteredExportNew;
 mod native_handoff_step;
 mod native_new;
+mod native_range_move_probe;
+pub(crate) use native_range_move_probe::{NativeRangeMoveProbeReplyV1, NativeRangeMoveProbeRoleV1};
 mod native_old;
 use crate::distribution_native_host::{
     NativeInitialBirthOfferRequest, NativeInitialBirthOfferResponse,
@@ -132,7 +135,9 @@ pub(crate) use native_abort::{
 pub(crate) use native_image_source::AuthenticatedNativeRemoteImageSourceFrame;
 #[cfg(test)]
 pub(crate) mod native_image_response_stall;
-pub(crate) use native_handoff_step::AuthenticatedNativeJointHandoffStep;
+pub(crate) use native_handoff_step::{
+    AuthenticatedNativeJointBridgeStepFrame, AuthenticatedNativeJointHandoffStep,
+};
 pub(crate) use native_new::{
     AuthenticatedNativeRemoteDecisionSource, AuthenticatedNativeRemoteNewFactSet,
     AuthenticatedNativeRemoteNewFrame, AuthenticatedNativeSourceExportTerminal,
@@ -406,6 +411,10 @@ enum ClusterDataRequest {
     MetadataVote {
         request: MetadataVoteRequest,
     },
+    /// The metadata leader asks one caught-up voter to campaign now.
+    MetadataLeadershipTransfer {
+        request: crate::distribution_consensus::MetadataLeadershipTransferRequest,
+    },
     MetadataAppend {
         request: MetadataAppendRequest,
     },
@@ -518,6 +527,12 @@ enum ClusterDataRequest {
         range_id: crate::distribution::RangeId,
         range_epoch: u64,
     },
+    /// Read-only: what this member is for the range, answered to the range
+    /// leader of this member's own committed configuration only.
+    NativeRangeMoveProbe {
+        range_id: crate::distribution::RangeId,
+        range_epoch: u64,
+    },
     ApplyRangeWriteRepair {
         batch: RangeWriteRepairBatch,
         limits: RangeWriteRepairLimits,
@@ -565,6 +580,7 @@ impl ClusterDataRequest {
             | Self::NativeRemoteOld { .. }
             | Self::NativeRemoteNew { .. }
             | Self::NativeJointHandoffStep { .. }
+            | Self::NativeRangeMoveProbe { .. }
             | Self::NativeObserveRegisteredExportNew { .. }
             | Self::NativeSourceExportRetirement { .. }
             | Self::NativeSourceDiscovery { .. }
@@ -625,6 +641,7 @@ impl ClusterDataRequest {
             Self::FetchBootstrapSnapshot
             | Self::FetchTopology
             | Self::MetadataVote { .. }
+            | Self::MetadataLeadershipTransfer { .. }
             | Self::MetadataAppend { .. }
             | Self::MetadataReadProbe { .. }
             | Self::MetadataReadAcquire { .. }
@@ -653,6 +670,7 @@ impl ClusterDataRequest {
         matches!(
             self,
             Self::MetadataVote { .. }
+                | Self::MetadataLeadershipTransfer { .. }
                 | Self::MetadataAppend { .. }
                 | Self::MetadataReadProbe { .. }
                 | Self::MetadataReadAcquire { .. }
@@ -679,6 +697,7 @@ enum ClusterDataResponse {
     NativeRemoteOld(crate::distribution_range_handoff::NativeRemoteOldReplyV1),
     NativeRemoteNew(crate::distribution_range_handoff::NativeRemoteNewReplyV1),
     NativeJointHandoffStep(crate::distribution_range_handoff::NativeJointHandoffStepReplyV1),
+    NativeRangeMoveProbe(NativeRangeMoveProbeReplyV1),
     NativeSourceDiscovery(crate::distribution_range_image::NativeSourceDiscoveryReplyV1),
     NativeDecisionSourceProvenance(crate::distribution_range_image::NativeSourceDiscoveryReplyV1),
     NativeObserveRegisteredExportNew(
@@ -701,6 +720,7 @@ enum ClusterDataResponse {
     BootstrapSnapshot(ClusterBootstrapSnapshot),
     Topology(ClusterTopology),
     MetadataVote(MetadataVoteResponse),
+    MetadataLeadershipTransfer(crate::distribution_consensus::MetadataLeadershipTransferResponse),
     MetadataAppend(MetadataAppendResponse),
     MetadataReadProbe(MetadataReadProbeResponse),
     MetadataReadAcquire(MetadataReadAcquireResponse),
@@ -1513,6 +1533,7 @@ fn handle_cluster_data_connection(
                 ClusterDataRequest::Ping
                     | ClusterDataRequest::NativeInitialPreparation { .. }
                     | ClusterDataRequest::MetadataVote { .. }
+                    | ClusterDataRequest::MetadataLeadershipTransfer { .. }
                     | ClusterDataRequest::MetadataAppend { .. }
                     | ClusterDataRequest::MetadataReadProbe { .. }
                     | ClusterDataRequest::MetadataReadAcquire { .. }
@@ -1533,6 +1554,7 @@ fn handle_cluster_data_connection(
                         | ClusterDataRequest::FetchBootstrapSnapshot
                         | ClusterDataRequest::ExportSchemaBundle { .. }
                         | ClusterDataRequest::MetadataVote { .. }
+                        | ClusterDataRequest::MetadataLeadershipTransfer { .. }
                         | ClusterDataRequest::MetadataAppend { .. }
                         | ClusterDataRequest::MetadataReadProbe { .. }
                         | ClusterDataRequest::MetadataReadAcquire { .. }
@@ -1771,19 +1793,67 @@ fn handle_cluster_data_connection(
             let peer = authenticated_caller.as_ref().ok_or_else(|| {
                 transport_error("joint handoff step requires actual authenticated caller")
             })?;
-            let target = registered_replica.ok_or_else(|| {
-                transport_error(
-                    "joint handoff step requires its original immutable Registered owner",
-                )
-            })?;
             let parent =
                 CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
-            let reply = target.advance_joint_handoff_step(peer, &request, &parent)?;
+            // An original Registered receiver whose host became a DATA owner
+            // and rebound this socket keeps serving its own bridge
+            // observations and host commands, and nothing else.
+            let continued = match (initial_data, assigned_closed) {
+                (Some(joined), _) => joined.registered_bridge_receiver(),
+                (None, Some(assigned)) => assigned.registered_bridge_receiver(),
+                (None, None) => None,
+            };
+            if let Some(original) = continued {
+                let reply =
+                    native_handoff_step::repeat_busy_phase_observation(&request, &parent, || {
+                        original.advance_joint_bridge_step_as_data_owner(peer, &request, &parent)
+                    })?;
+                return Ok(ClusterDataResponse::NativeJointHandoffStep(reply));
+            }
+            if let Some(survivor) = initial_data {
+                // A surviving original member serves only the bridge steps of
+                // a committed decision; it refuses the install operation.
+                let reply =
+                    native_handoff_step::repeat_busy_phase_observation(&request, &parent, || {
+                        survivor.advance_joint_bridge_step(peer, &request, &parent)
+                    })?;
+                return Ok(ClusterDataResponse::NativeJointHandoffStep(reply));
+            }
+            let target = registered_replica.ok_or_else(|| {
+                transport_error(
+                    "joint handoff step requires its original immutable INITIAL or Registered owner",
+                )
+            })?;
+            let reply =
+                native_handoff_step::repeat_busy_phase_observation(&request, &parent, || {
+                    target.advance_joint_handoff_step(peer, &request, &parent)
+                })?;
             #[cfg(test)]
             if target.test_take_joint_handoff_step_reply_loss() {
                 suppress_actual_completion_reply.set(true);
             }
             return Ok(ClusterDataResponse::NativeJointHandoffStep(reply));
+        }
+        if let ClusterDataRequest::NativeRangeMoveProbe {
+            range_id,
+            range_epoch,
+        } = request.request
+        {
+            let peer = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("range move probe requires actual authenticated caller")
+            })?;
+            // Both admissions were proved live above; the probe is read-only.
+            return native_range_move_probe::answer(
+                peer,
+                &local_node_id,
+                topology,
+                service,
+                initial_data.is_some(),
+                registered_replica.is_some(),
+                range_id,
+                range_epoch,
+            )
+            .map(ClusterDataResponse::NativeRangeMoveProbe);
         }
         if let ClusterDataRequest::HostMetadataReadAcquire { request } = request.request {
             let provider = metadata_read_provider
@@ -2623,6 +2693,9 @@ fn dispatch_cluster_data_request(
         )),
         ClusterDataRequest::NativeJointHandoffStep { .. } => Err(transport_error(
             "joint handoff step requires its actual before-latch owner",
+        )),
+        ClusterDataRequest::NativeRangeMoveProbe { .. } => Err(transport_error(
+            "range move probe requires its actual before-latch owner",
         )),
         ClusterDataRequest::NativeEventGet(_) => Err(transport_error(
             "typed Get requires the before-latch dispatcher",
@@ -3600,6 +3673,28 @@ fn dispatch_cluster_data_request(
             }
             Ok(ClusterDataResponse::MetadataVote(
                 consensus.handle_vote_request(request)?,
+            ))
+        }
+        ClusterDataRequest::MetadataLeadershipTransfer { request } => {
+            // Identity DATA only. The caller was authenticated against its
+            // pinned membership certificate before dispatch; the store itself
+            // decides whether that caller is the leader it follows now.
+            if &request.leader_id != caller_node_id {
+                return Err(transport_error(
+                    "metadata leadership transfer leader does not match authenticated caller",
+                ));
+            }
+            let consensus = metadata_consensus
+                .ok_or_else(|| transport_error("metadata consensus is not active on this node"))?;
+            let mut consensus = consensus.lock();
+            if let Some(actual) = listener_database {
+                consensus.require_listener_database(actual)?;
+            }
+            Ok(ClusterDataResponse::MetadataLeadershipTransfer(
+                consensus.handle_leadership_transfer(
+                    &request,
+                    metadata_leadership_transfer::CAMPAIGN_WINDOW,
+                )?,
             ))
         }
         ClusterDataRequest::MetadataAppend { request } => {

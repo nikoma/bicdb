@@ -83,13 +83,15 @@ mod registered_remote_catalogue;
 mod registered_remote_installing;
 pub(crate) use native_durability::ClusterServiceOpenGuard;
 use native_durability::{checked_database_read, checked_database_write, ServiceStoragePolicy};
+#[cfg(feature = "tls-replication")]
+pub(crate) use native_joint_handoff::NativeRemoteJointSourceRetirementCertificate;
 pub(crate) use native_joint_handoff::{
     ActualServiceNativeJointCaptureInputs, ActualServiceNativeJointCommittedEvidence,
     ActualServiceNativeJointConstraints, ActualServiceNativeJointNewEvidence,
     ActualServiceNativeJointOldEvidence, ActualServiceNativeJointPreparedEvidence,
     ActualServiceNativeJointReleaseEvidence, NativeJointImageReleaseOwner,
     NativeJointIrrevocableFacts, NativeJointReleaseOwnerView, NativeJointServingLease,
-    NativeJointSourceRetired,
+    NativeJointSourceRetired, NativeJointSourceRetirementProof,
 };
 pub(crate) use native_writer::NativeWriterRegistryRefresh;
 mod current_image_replacement;
@@ -2036,6 +2038,46 @@ impl ClusterDataNodeService {
     ) -> Result<RangeWriteProgress> {
         self.validate_range_write_peer(range, caller)?;
         Ok(self.range_writes.progress(range.id))
+    }
+
+    /// The durable epoch of this voter's own range log, whether its database
+    /// holds an unfinished native command of the range, and whether its
+    /// range catalogue holds an unfinished normal recovery of it, answered to
+    /// the leader of `range` (the caller's descriptor is this member's own
+    /// published committed one). Read-only: unlike
+    /// `range_write_progress_for_peer` it does not require the installed
+    /// writer policy to name `range`, because it admits no write; the epoch
+    /// is what `range_write_progress` reports in-process.
+    pub(crate) fn range_move_voter_facts_for_leader(
+        &self,
+        range: &RangeDescriptor,
+        caller: &ClusterNodeId,
+    ) -> Result<(u64, bool, bool)> {
+        self.require_catalog_storage_policy()?;
+        if &range.leader != caller {
+            return Err(data_error(format!(
+                "node {caller} is not the current leader for {} epoch {}",
+                range.id, range.epoch
+            )));
+        }
+        if !range.replicas.iter().any(|replica| {
+            replica.node_id == self.node_id
+                && replica.role == crate::distribution::RangeReplicaRole::Voter
+        }) {
+            return Err(data_error(format!(
+                "node {} is not a voting replica for {}",
+                self.node_id, range.id
+            )));
+        }
+        let unfinished = checked_database_read(&self.db, &self.storage_policy)?
+            .native_range_prefix_observation(range.id)?
+            .pending_command_index
+            .is_some();
+        Ok((
+            self.range_writes.progress(range.id).current_epoch,
+            unfinished,
+            self.range_writes.normal_recovery_unfinished(range.id),
+        ))
     }
 
     pub fn install_range_backup_fence(

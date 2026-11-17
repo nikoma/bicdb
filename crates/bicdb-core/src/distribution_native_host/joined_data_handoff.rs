@@ -54,8 +54,9 @@
 //! supplies the same stages by asking the members to act; it must never build
 //! a local quorum, role or freeze object from reply data. Those objects exist
 //! only where the member's own service issued them.
-// No production caller yet: the driver is reached only from the in-process
-// multi-node fixture. Remove this once a controller drives it.
+// The production caller is `range_move` (the remote backend). The in-process
+// backend and its host surface are still reached only from the multi-node
+// fixture.
 #![allow(dead_code)]
 use super::*;
 use crate::distribution::{
@@ -76,6 +77,8 @@ pub(crate) use local_backend::LocalJoinedHandoffBackend;
 #[cfg(test)]
 pub(crate) use local_backend::TestHandoffCustodyCut;
 mod remote_backend;
+#[cfg(test)]
+pub(crate) use remote_backend::RemoteTestStop;
 pub(crate) use remote_backend::{
     RemoteJoinedHandoffBackend, RemoteMembers, RemoteOldCutObservation,
 };
@@ -103,6 +106,23 @@ fn stage_error(stage: &str, error: BicDbError) -> BicDbError {
 }
 fn bounded(parent: &CancellationToken, budget: Duration) -> CancellationToken {
     parent.child_with_deadline(Instant::now() + budget)
+}
+/// Operator diagnosis of where a move spends its time: one line per timed
+/// part on the host's standard error when `BICDB_RANGE_MOVE_TRACE` is set.
+/// Diagnostic text only; nothing reads it back.
+pub(crate) fn trace_enabled() -> bool {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var_os("BICDB_RANGE_MOVE_TRACE").is_some())
+}
+pub(crate) fn trace(started: Instant, what: impl FnOnce() -> String) {
+    if trace_enabled() {
+        eprintln!(
+            "RANGE_MOVE_TRACE unix_ms={} took_ms={} {}",
+            now_ms(),
+            started.elapsed().as_millis(),
+            what()
+        );
+    }
 }
 fn now_ms() -> u64 {
     std::time::SystemTime::now()
@@ -252,6 +272,42 @@ pub(crate) trait JoinedHandoffBackend {
     /// socket; a backend whose target stays a registered replica receiver
     /// until release admits it as such.
     fn admit_target(&mut self, hosts: &mut Self::Hosts, parent: &CancellationToken) -> Result<()>;
+    /// Called after `admit_target` while no relocation of the range onto
+    /// the target is committed, so always before the learner allocation is
+    /// proposed: ask the members, read-only, whether the move can start. An
+    /// error refuses the move with nothing committed. The in-process backend
+    /// holds its members' handles and needs nothing.
+    fn preflight(
+        &mut self,
+        _hosts: &mut Self::Hosts,
+        _range: &RangeDescriptor,
+        _parent: &CancellationToken,
+    ) -> Result<()> {
+        Ok(())
+    }
+    /// Called immediately before the learner allocation of `range` is
+    /// proposed, with nothing committed for the move. A backend whose
+    /// coordinator leads the range makes sure here that no write command of
+    /// the range straddles the commit; an error ends the call with nothing
+    /// committed. `after_allocation` follows every successful call.
+    fn before_allocation(
+        &mut self,
+        _hosts: &mut Self::Hosts,
+        _range: &RangeDescriptor,
+        _parent: &CancellationToken,
+    ) -> Result<()> {
+        Ok(())
+    }
+    /// The commit attempt that followed `before_allocation` is over.
+    /// `range` is the descriptor before the allocation; `committed` is false
+    /// when the proposal failed or its outcome is not known.
+    fn after_allocation(
+        &mut self,
+        _range: &RangeDescriptor,
+        _committed: bool,
+        _parent: &CancellationToken,
+    ) {
+    }
     /// Resolve the participating members of the committed relocation.
     fn members(
         &self,
@@ -357,6 +413,14 @@ pub(crate) trait JoinedHandoffBackend {
             "this backend does not produce the source retirement",
         ))
     }
+    /// Set when the last call of this backend ended only because a member
+    /// has not yet finished work that belongs to that member's own host
+    /// loop: what is awaited. The call is repeated unchanged; it is progress
+    /// of the member, not a failure of the handoff. `None` for every other
+    /// outcome.
+    fn waiting(&self) -> Option<String> {
+        None
+    }
 }
 
 /// One handoff of `range` onto `target`: the stage logic over a backend that
@@ -416,6 +480,10 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
             recovered: None,
             finished: None,
         }
+    }
+    /// The backend and what it retains, read-only.
+    pub(crate) fn backend(&self) -> &B {
+        &self.backend
     }
     /// True once the handoff reached the last stage its backend produces.
     pub(crate) fn completed(&self) -> bool {
@@ -631,16 +699,31 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
         self.backend
             .admit_target(hosts, parent)
             .map_err(|error| stage_error("target admission", error))?;
+        let mut topology = hosts.committed_topology()?;
+        if self.relocation(&topology).is_none() {
+            // Nothing is committed for this move yet: the members are asked
+            // before the allocation below can be proposed.
+            let range = self.range(&topology)?;
+            self.backend
+                .preflight(hosts, &range, parent)
+                .map_err(|error| stage_error("target admission", error))?;
+        }
         if until == Some(Stage::TargetAdmitted) {
             return Ok(Some(Stage::TargetAdmitted));
         }
         // Step 2: the committed learner allocation.
-        let mut topology = hosts.committed_topology()?;
         if self.relocation(&topology).is_none() {
             let candidate = plan_learner_allocation(&topology, self.range, &self.target)?;
-            hosts
-                .commit_topology(candidate, parent)
-                .map_err(|error| stage_error("learner allocation commit", error))?;
+            let before = self.range(&topology)?;
+            self.backend
+                .before_allocation(hosts, &before, parent)
+                .map_err(|error| stage_error("learner allocation", error))?;
+            let started = Instant::now();
+            let committed = hosts.commit_topology(candidate, parent);
+            self.backend
+                .after_allocation(&before, committed.is_ok(), parent);
+            committed.map_err(|error| stage_error("learner allocation commit", error))?;
+            trace(started, || "learner allocation commit".into());
             topology = hosts.committed_topology()?;
         }
         let mut relocation = self
@@ -745,6 +828,7 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
         parent: &CancellationToken,
     ) -> Result<()> {
         let actor = hosts.metadata_leader()?;
+        let started = Instant::now();
         let NativeJoinedDataPlanningView {
             mut view,
             fresh,
@@ -752,12 +836,25 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
         } = hosts
             .planning_view(&bounded(parent, REQUEST))
             .map_err(|error| stage_error("membership planning view", error))?;
+        trace(started, || {
+            format!("membership {committed:?} planning view")
+        });
         let now = now_ms();
+        let started = Instant::now();
         self.backend
             .stage_candidate(committed, &mut view, &fresh, business, &actor, now)?;
-        hosts
+        trace(started, || format!("membership {committed:?} candidate"));
+        let started = Instant::now();
+        let committed_result = hosts
             .commit_topology(view.topology().clone(), parent)
-            .map_err(|error| stage_error("membership commit", error))
+            .map_err(|error| stage_error("membership commit", error));
+        trace(started, || {
+            format!(
+                "membership {committed:?} commit ok={}",
+                committed_result.is_ok()
+            )
+        });
+        committed_result
     }
 }
 
@@ -789,7 +886,7 @@ pub(crate) fn test_plan_learner_allocation(
 /// One committed learner allocation of `target` on the range, retiring the
 /// current range leader. The target must be an enrolled member that is not a
 /// replica of any range.
-fn plan_learner_allocation(
+pub(super) fn plan_learner_allocation(
     current: &ClusterTopology,
     range_id: RangeId,
     target: &ClusterNodeId,

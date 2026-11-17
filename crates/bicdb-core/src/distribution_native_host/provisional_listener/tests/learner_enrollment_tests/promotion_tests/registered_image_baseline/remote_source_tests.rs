@@ -12,6 +12,7 @@ use crate::distribution_range_image::{
 use crate::distribution_transport::AuthenticatedNativeRemoteImageSourceFrame;
 mod constraint_then_close_tests;
 mod native_handoff_step_tests;
+pub(super) mod remote_backend_drive_tests;
 mod remote_backend_tests;
 mod source_discovery_tests;
 mod source_export_retirement_tests;
@@ -22,6 +23,13 @@ pub(super) enum SourceCase {
     RemoteBackendCloseRound,
     RemoteBackendResync,
     RemoteBackendDriverStub,
+    RemoteBackendFullDrive,
+    RemoteBackendRedrive,
+    RemoteBackendOneDrive,
+    RemoteBackendDecisionMissingNewMember,
+    RemoteBackendDecisionMissingSource,
+    RemoteBackendControllerWalk,
+    RemoteBackendNotRangeLeader,
     TwoRangeSourceReplyStall,
     TargetRemoteOldDecisionRetiree,
     TargetRemoteOldDecisionSurvivor,
@@ -144,6 +152,12 @@ pub(super) enum SourceCase {
     TargetHotDecisionCataloguePostTerm,
     NativeHandoffStepInstall,
     NativeHandoffStepRefusals,
+    NativeBridgeStepPrepareObserve,
+    NativeBridgeStepRefusals,
+    NativeBridgeStepPublish,
+    NativeBridgeStepPublishFaults,
+    NativeBridgeStepOpen,
+    NativeBridgeStepRelease,
 }
 pub(super) fn uses_original_sdk_rpc_observer(case: SourceCase) -> bool {
     hot_policy_tests::is_hot_policy(case)

@@ -68,8 +68,22 @@ pub(crate) struct NativeInitialDataAdmission {
     old_metadata: Weak<Mutex<crate::distribution_consensus::MetadataConsensusStore>>,
     old_provider: Weak<crate::distribution_metadata_read_provider::MetadataReadProvider>,
     old_transport: Weak<TcpClusterRelocationTransport>,
+    // The same retained continuation tables the owning host drives. Sharing
+    // changes who may run one bounded step, never what that step must prove.
+    writer_data_domains: Weak<Mutex<super::writer_data_domain::NativeHostWriterDataDomains>>,
+    bridge_steps: Weak<super::bridge_step::NativeBridgeMemberSteps>,
+    // Joined continuation of an original Registered receiver only: that
+    // receiver keeps serving its own bridge observations and host commands
+    // on this owner's socket. Empty on every INITIAL and generic Joined host.
+    registered_bridge: Weak<super::NativeRegisteredReplicaAdmission>,
 }
 impl NativeInitialDataAdmission {
+    /// The original Registered receiver whose step RPC this socket serves.
+    pub(crate) fn registered_bridge_receiver(
+        &self,
+    ) -> Option<Arc<super::NativeRegisteredReplicaAdmission>> {
+        self.registered_bridge.upgrade()
+    }
     /// Necessary original INITIAL process/slot/writer identity only. All
     /// metadata/native proof is independent; this memory check creates none.
     pub(crate) fn require_remote_new_original_memory(
@@ -138,6 +152,7 @@ impl NativeInitialDataAdmission {
         store_slot: crate::distribution_data::RangeWriteServiceSlotGuard,
         life: &Arc<AtomicBool>,
         published: Arc<AtomicBool>,
+        registered_bridge: Weak<super::NativeRegisteredReplicaAdmission>,
     ) -> Self {
         Self {
             service: Arc::downgrade(service),
@@ -157,6 +172,9 @@ impl NativeInitialDataAdmission {
             old_metadata: Weak::new(),
             old_provider: Weak::new(),
             old_transport: Weak::new(),
+            writer_data_domains: Weak::new(),
+            bridge_steps: Weak::new(),
+            registered_bridge,
         }
     }
     pub(crate) fn require_live(&self) -> Result<()> {
@@ -265,7 +283,8 @@ pub(super) struct NativeInitialDataHost {
     registry_refresh_last_attempt: Option<serde_json::Value>,
     image_sources: Option<Arc<crate::distribution_range_image::NativeRemoteImageSourceRegistry>>,
     old_closures: Arc<RetainedInitialOldTable>,
-    writer_data_domains: super::writer_data_domain::NativeHostWriterDataDomains,
+    writer_data_domains: Arc<Mutex<super::writer_data_domain::NativeHostWriterDataDomains>>,
+    bridge_steps: Arc<super::bridge_step::NativeBridgeMemberSteps>,
 }
 impl Drop for NativeInitialDataHost {
     fn drop(&mut self) {
@@ -313,6 +332,20 @@ impl NativeInitialDataHost {
             .ok_or_else(|| invalid("published DATA host lost retained maintenance owner"))?
             .start(process)
     }
+    /// The write coordinator of the ranges this open DATA owner leads.
+    pub(super) fn range_write_coordinator(
+        &self,
+    ) -> Option<
+        Arc<
+            crate::distribution_range_consensus::RangeWriteCoordinator<
+                TcpClusterRelocationTransport,
+            >,
+        >,
+    > {
+        self.enrollment
+            .as_ref()
+            .map(|enrollment| Arc::clone(&enrollment.coordinator))
+    }
     pub(super) fn is_running(&self) -> bool {
         // A failed finite drain retains the owner/handle for retry, but must
         // not let the CLI restart a metadata supervisor on a stopping socket.
@@ -332,6 +365,7 @@ impl NativeInitialDataHost {
             old_closures: Arc::new(Mutex::new(BTreeMap::new())),
             registry_refresh_last_attempt: None,
             writer_data_domains: Default::default(),
+            bridge_steps: Default::default(),
             genesis: BTreeMap::new(),
             runtime: None,
             dispatcher: None,
@@ -449,6 +483,9 @@ impl NativeInitialDataHost {
                 old_metadata: Arc::downgrade(&self.initial.metadata),
                 old_provider: Arc::downgrade(&self.initial.provider),
                 old_transport: Arc::downgrade(&self.initial.transport),
+                writer_data_domains: Arc::downgrade(&self.writer_data_domains),
+                bridge_steps: Arc::downgrade(&self.bridge_steps),
+                registered_bridge: Weak::new(),
             }));
         }
         if self.hot_recovery.is_none() {
@@ -1061,7 +1098,12 @@ impl NativeInitialDataHost {
             std::thread::sleep(Duration::from_millis(5));
         }
         if let Some(owner) = &self.enrollment {
-            if self.writer_data_domains.unresolved() {
+            // A busy table is a step still running: treated as unresolved.
+            if self
+                .writer_data_domains
+                .try_lock()
+                .is_none_or(|domains| domains.unresolved())
+            {
                 return Err(invalid("INITIAL unknown DATA-domain publication retained; explicit reconciliation required"));
             }
             let database = self
@@ -1387,6 +1429,15 @@ impl NativeMetadataControlHost {
             data.runtime.as_ref().unwrap().clone(),
             data.initial.transport.clone(),
         ))
+    }
+    /// One attempt of the hot DATA maintenance on the calling thread. No
+    /// process worker is bound or started.
+    pub(crate) fn test_hot_recovery_attempt(&self, parent: &CancellationToken) -> Result<()> {
+        self.data
+            .as_ref()
+            .and_then(|d| d.hot_recovery.as_ref())
+            .ok_or_else(|| invalid("published DATA host has no hot maintenance owner"))?
+            .tick(parent)
     }
     pub(crate) fn test_hot_worker_started(&self) -> bool {
         self.data

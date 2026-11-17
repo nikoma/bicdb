@@ -38,7 +38,8 @@ pub(crate) use original_identity::NativeOriginalWriterIdentityBorrow;
 mod data_domains;
 #[cfg(feature = "tls-replication")]
 pub(crate) use data_domains::{
-    NativeClosedWriterDomain, NativeWriterClosedHistoricalReadScope, NativeWriterDataDomainPolicy,
+    require_remote_serving_member_audit, NativeClosedWriterDomain,
+    NativeWriterClosedHistoricalReadScope, NativeWriterDataDomainPolicy,
     NativeWriterDataDomainTransition, NativeWriterHistoricalPredecessor,
     NativeWriterServingDomainPublication,
 };
@@ -141,8 +142,16 @@ pub(crate) struct NativeWriterHostState {
     registry_publication_pending: std::sync::atomic::AtomicBool,
     #[cfg(feature = "tls-replication")]
     data_domains: parking_lot::RwLock<data_domains::WriterDataDomains>,
+    /// Minted once with THIS registration object and never copied into
+    /// another: two states carry the same value exactly when they are the
+    /// same object. Memory-only identity DATA; it grants nothing.
+    registration_identity: Uuid,
 }
 impl NativeWriterHostState {
+    /// Identity DATA of this exact registration object.
+    pub(crate) fn registration_identity(&self) -> Uuid {
+        self.registration_identity
+    }
     /// Necessary memory-only original hook/coordinator/open/schema lifetime
     /// refusal at the remote read-pin handoff. No DB/native/MStore IO and no
     /// writer, read, metadata or serving authority is created by this check.
@@ -963,6 +972,7 @@ impl BicDb {
             registry_publication_pending: std::sync::atomic::AtomicBool::new(false),
             #[cfg(feature = "tls-replication")]
             data_domains: parking_lot::RwLock::new(Default::default()),
+            registration_identity: Uuid::now_v7(),
         });
         #[cfg(test)]
         if TEST_FAIL_HOST_POLICY_PUBLICATION.with(|flag| flag.replace(false)) {

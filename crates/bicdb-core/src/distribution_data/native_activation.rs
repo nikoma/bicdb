@@ -79,4 +79,9 @@ impl ClusterDataNodeService {
     ) -> Result<serde_json::Value> {
         self.range_writes.test_native_replica_open_state(range)
     }
+    /// The durable range catalogue is the one this service holds and its
+    /// own loader accepts it.
+    pub(crate) fn test_require_range_catalogue_loadable(&self) -> Result<()> {
+        self.range_writes.test_require_catalogue_loadable()
+    }
 }

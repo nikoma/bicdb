@@ -24,7 +24,11 @@ impl NativeInitialDataHost {
     ) -> Result<()> {
         parent.check()?;
         self.require_writer_data_owner()?;
-        self.writer_data_domains.require_new(range)?;
+        let mut domains = self
+            .writer_data_domains
+            .try_lock()
+            .ok_or_else(|| invalid("INITIAL DATA continuation table busy"))?;
+        domains.require_new(range)?;
         let enrollment = self
             .enrollment
             .as_ref()
@@ -54,7 +58,7 @@ impl NativeInitialDataHost {
             lease,
             parent,
         )?;
-        self.writer_data_domains.retain(range, attempt)
+        domains.retain(range, attempt)
     }
     pub(in super::super) fn advance_writer_closed_domain(
         &mut self,
@@ -62,22 +66,28 @@ impl NativeInitialDataHost {
         policy: &NativeWriterDataDomainPolicy,
     ) -> Result<()> {
         self.require_writer_data_owner()?;
-        self.writer_data_domains.advance_closed(
-            range,
-            &self
-                .enrollment
-                .as_ref()
-                .ok_or_else(|| invalid("INITIAL original enrollment absent"))?
-                .coordinator,
-            policy,
-        )
+        self.writer_data_domains
+            .try_lock()
+            .ok_or_else(|| invalid("INITIAL DATA continuation table busy"))?
+            .advance_closed(
+                range,
+                &self
+                    .enrollment
+                    .as_ref()
+                    .ok_or_else(|| invalid("INITIAL original enrollment absent"))?
+                    .coordinator,
+                policy,
+            )
     }
     pub(in super::super) fn closed_writer_domain(
         &self,
         range: crate::RangeId,
     ) -> Result<Arc<NativeClosedWriterDomain>> {
         self.require_writer_data_owner()?;
-        self.writer_data_domains.closed(range)
+        self.writer_data_domains
+            .try_lock()
+            .ok_or_else(|| invalid("INITIAL DATA continuation table busy"))?
+            .closed(range)
     }
     pub(in super::super) fn take_closed_joint_lease(
         &mut self,
@@ -92,7 +102,10 @@ impl NativeInitialDataHost {
             .database
             .try_read()
             .ok_or_else(|| invalid("INITIAL DATA custody DB busy"))?;
-        self.writer_data_domains.take_joint_lease(range, &db)
+        self.writer_data_domains
+            .try_lock()
+            .ok_or_else(|| invalid("INITIAL DATA continuation table busy"))?
+            .take_joint_lease(range, &db)
     }
     pub(in super::super) fn publish_writer_serving_domain(
         &mut self,
@@ -102,6 +115,8 @@ impl NativeInitialDataHost {
     ) -> Result<()> {
         self.require_writer_data_owner()?;
         self.writer_data_domains
+            .try_lock()
+            .ok_or_else(|| invalid("INITIAL DATA continuation table busy"))?
             .advance_serving(range, admission, policy)
     }
 }

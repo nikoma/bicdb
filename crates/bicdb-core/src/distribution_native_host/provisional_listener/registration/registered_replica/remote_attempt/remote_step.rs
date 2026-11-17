@@ -56,15 +56,12 @@ impl RegisteredTargetInstallStep {
             return completed.clone();
         }
         let manifest = self.source.as_ref().map(|source| source.manifest());
-        NativeJointHandoffStepOutcomeV1 {
-            binding_sha256: self.binding_sha256.clone(),
-            stage: self.stage,
-            complete: false,
-            manifest_sha256: manifest.map(|m| m.checksum_sha256.clone()),
-            source_session: manifest.map(|m| m.source_session),
-            range_index: None,
-            native_receipt_sha256: None,
-        }
+        NativeJointHandoffStepOutcomeV1::install(
+            self.binding_sha256.clone(),
+            self.stage,
+            manifest.map(|m| (m.checksum_sha256.clone(), m.source_session)),
+            None,
+        )
     }
 }
 
@@ -241,10 +238,42 @@ impl NativeRegisteredReplicaAdmission {
             .factory
             .upgrade()
             .ok_or_else(|| invalid("joint handoff step original target factory ended"))?;
-        let StepOperation::TargetInstall {
-            donor,
-            target_attempt,
-        } = &request.operation;
+        let (donor, target_attempt) = match &request.operation {
+            StepOperation::TargetInstall {
+                donor,
+                target_attempt,
+            } => (donor, target_attempt),
+            StepOperation::SourceExportRetire {
+                donor,
+                target_attempt,
+            } => {
+                return self.retire_joint_step_source_export(
+                    &backend,
+                    &runtime,
+                    &install,
+                    &factory,
+                    peer,
+                    request,
+                    donor,
+                    *target_attempt,
+                    &token,
+                )
+            }
+            StepOperation::BridgePrepare { .. }
+            | StepOperation::BridgePhaseObserve { .. }
+            | StepOperation::BridgePublish { .. }
+            | StepOperation::BridgeOpen { .. }
+            | StepOperation::RetireOldCustody { .. }
+            | StepOperation::BridgeRelease { .. }
+            | StepOperation::BridgeWriterPolicy { .. }
+            | StepOperation::TargetServe { .. }
+            | StepOperation::SourceRetire { .. } => {
+                // Bridge operations run after the membership is final and
+                // prove themselves against the committed decision, not a
+                // Pending plan.
+                return self.advance_joint_bridge_step(peer, request, &token);
+            }
+        };
         let binding_sha256 = request.binding()?;
         // Authenticate and verify against OWN committed metadata before any
         // retained state is created, read or disclosed.
@@ -386,6 +415,108 @@ impl NativeRegisteredReplicaAdmission {
             metadata_term: observed.0,
             metadata_read_index: observed.1,
             metadata_context_id: observed.2,
+            source_manifest: None,
+            writer_audit: None,
+            checksum_sha256: String::new(),
+        };
+        reply.checksum_sha256 = reply.checksum()?;
+        reply.require_request(request)?;
+        token.check()?;
+        Ok(reply)
+    }
+
+    /// Coordinator-triggered export retirement. This receiver must retain the
+    /// COMPLETED install of exactly this donor and attempt; it then sends the
+    /// existing target-to-donor retirement itself, under its own fresh
+    /// metadata observation. The donor observes this target's joint owner
+    /// over its own pinned transport before it retires anything, and answers
+    /// its retained terminal to a repeated request. Nothing is retained here:
+    /// the reply carries the original manifest as historical DATA only.
+    #[allow(clippy::too_many_arguments)]
+    fn retire_joint_step_source_export(
+        self: &Arc<Self>,
+        backend: &Arc<NativeMetadataControlBackend>,
+        runtime: &Arc<crate::distribution_range_recovery::RangeRecoveryRuntime>,
+        install: &RegisteredRemoteInstall,
+        factory: &Arc<crate::distribution_native_host::NativeUnassignedLearnerFactory>,
+        peer: &MetadataReadParticipant,
+        request: &NativeJointHandoffStepRequestV1,
+        donor: &ClusterNodeId,
+        target_attempt: Uuid,
+        token: &CancellationToken,
+    ) -> Result<NativeJointHandoffStepReplyV1> {
+        // Authenticate and verify against OWN committed metadata before any
+        // retained state is read or disclosed.
+        let first = self.acquire_joint_step_authority(backend, peer, request, token)?;
+        let local = backend.transport.local_metadata_read_participant();
+        let (source, completed) = {
+            let held = install.hold()?;
+            let step = held.remote_steps.get(&request.range_id).ok_or_else(|| {
+                invalid("joint handoff export retirement has no retained target install")
+            })?;
+            if &step.donor != donor || step.target_attempt != target_attempt {
+                return Err(invalid(
+                    "joint handoff export retirement names another donor/attempt than the retained target install",
+                ));
+            }
+            let completed = step.completed.clone().ok_or_else(|| {
+                invalid("joint handoff export retirement precedes the completed target install")
+            })?;
+            let source = step.source.clone().ok_or_else(|| {
+                invalid("joint handoff export retirement lost its original discovered source")
+            })?;
+            (source, completed)
+        };
+        // No install table, owner table or service latch spans the network
+        // work below: the donor calls back into this receiver.
+        let manifest = source.manifest().clone();
+        if &manifest.source_id != donor
+            || manifest.target_attempt != target_attempt
+            || &manifest.target_id != local.node_id()
+            || completed.manifest_sha256.as_ref() != Some(&manifest.checksum_sha256)
+        {
+            return Err(invalid(
+                "joint handoff export retirement retained another source manifest",
+            ));
+        }
+        let leader = backend
+            .provider
+            .current_metadata_leader_hint(token)?
+            .ok_or_else(|| {
+                invalid("joint handoff export retirement metadata leader unavailable")
+            })?;
+        let business = Uuid::now_v7();
+        let own = backend.transport.acquire_host_metadata_observation(
+            &leader,
+            business,
+            remaining(token)?.min(Duration::from_secs(5)),
+            token,
+        )?;
+        let retire = crate::distribution_range_image::NativeSourceExportRequestV1::from_manifest(
+            &manifest,
+            crate::distribution_range_image::NativeSourceExportOperationV1::Retire,
+            &own,
+            business,
+            remaining(token)?.as_millis().clamp(1, 4000) as u64,
+        )?;
+        backend
+            .transport
+            .request_remote_source_export_retirement(&manifest, &retire, &own, token)?;
+        first.role.require_live_request()?;
+        self.require_listener(&backend.service, runtime)?;
+        let mut reply = NativeJointHandoffStepReplyV1 {
+            request: request.clone(),
+            node_id: local.node_id().clone(),
+            birth: factory.actual_birth().clone(),
+            outcome: NativeJointHandoffStepOutcomeV1 {
+                binding_sha256: request.binding()?,
+                ..completed
+            },
+            metadata_term: own.term(),
+            metadata_read_index: own.read_index(),
+            metadata_context_id: own.context_id(),
+            source_manifest: Some(manifest),
+            writer_audit: None,
             checksum_sha256: String::new(),
         };
         reply.checksum_sha256 = reply.checksum()?;
@@ -481,6 +612,17 @@ impl NativeRegisteredReplicaAdmission {
         };
         match step.stage {
             Stage::Discovering | Stage::Complete => unreachable!("handled by the caller"),
+            Stage::BridgeWriterDomain
+            | Stage::BridgePreparation
+            | Stage::BridgePublication
+            | Stage::BridgeActivation
+            | Stage::BridgeRelease
+            | Stage::BridgeWriterPolicy
+            | Stage::BridgeHostCommand => {
+                return Err(invalid(
+                    "joint handoff step target install has no bridge stage",
+                ))
+            }
             Stage::Preparing => {
                 let transferred = custody.remote_attempts.get(&range).is_some_and(|retained| {
                     retained.lease.is_some() && Arc::ptr_eq(retained.preflight.source(), &source)
@@ -726,15 +868,15 @@ impl NativeRegisteredReplicaAdmission {
                 // The owner stays in this receiver's own table for the later
                 // decision step. Only historical identity leaves the process.
                 step.stage = Stage::Complete;
-                step.completed = Some(NativeJointHandoffStepOutcomeV1 {
-                    binding_sha256: step.binding_sha256.clone(),
-                    stage: Stage::Complete,
-                    complete: true,
-                    manifest_sha256: Some(source.manifest().checksum_sha256.clone()),
-                    source_session: Some(source.manifest().source_session),
-                    range_index: Some(range_index),
-                    native_receipt_sha256: Some(native_receipt_sha256),
-                });
+                step.completed = Some(NativeJointHandoffStepOutcomeV1::install(
+                    step.binding_sha256.clone(),
+                    Stage::Complete,
+                    Some((
+                        source.manifest().checksum_sha256.clone(),
+                        source.manifest().source_session,
+                    )),
+                    Some((range_index, native_receipt_sha256)),
+                ));
             }
         }
         Ok(())

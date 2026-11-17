@@ -64,7 +64,89 @@ impl NativeJointSourceRetired {
     }
 }
 
+/// Seal for [`NativeJointSourceRetirementProof`]: nameable only inside the
+/// DATA service module tree, so no other module can supply a proof.
+pub(in crate::distribution_data) mod source_retirement_seal {
+    pub trait Sealed {}
+}
+/// Exactly what the completing metadata stage reads from the retired
+/// source's retirement. An implementor is a capability, never decoded DATA:
+/// it exists only where the source's own service issued the receipt in this
+/// process, or where the pinned transport authenticated the source's reply.
+pub(crate) trait NativeJointSourceRetirementProof: source_retirement_seal::Sealed {
+    /// What `source_cleanup_sha256` records.
+    fn checksum_sha256(&self) -> &str;
+    fn cluster_id(&self) -> &crate::distribution::ClusterId;
+    fn node_id(&self) -> &ClusterNodeId;
+    fn node_incarnation(&self) -> u64;
+    fn relocation_id(&self) -> crate::distribution::RelocationId;
+    fn range_id(&self) -> RangeId;
+    fn session_id(&self) -> Uuid;
+    fn nonce(&self) -> Uuid;
+    fn activation_epoch(&self) -> u64;
+    fn decision_sha256(&self) -> &str;
+    fn activated_quorum_sha256(&self) -> &str;
+    fn require_current(&self) -> Result<()>;
+}
+impl source_retirement_seal::Sealed for NativeJointSourceRetired {}
+impl NativeJointSourceRetirementProof for NativeJointSourceRetired {
+    fn checksum_sha256(&self) -> &str {
+        NativeJointSourceRetired::checksum_sha256(self)
+    }
+    fn cluster_id(&self) -> &crate::distribution::ClusterId {
+        NativeJointSourceRetired::cluster_id(self)
+    }
+    fn node_id(&self) -> &ClusterNodeId {
+        NativeJointSourceRetired::node_id(self)
+    }
+    fn node_incarnation(&self) -> u64 {
+        NativeJointSourceRetired::node_incarnation(self)
+    }
+    fn relocation_id(&self) -> crate::distribution::RelocationId {
+        NativeJointSourceRetired::relocation_id(self)
+    }
+    fn range_id(&self) -> RangeId {
+        NativeJointSourceRetired::range_id(self)
+    }
+    fn session_id(&self) -> Uuid {
+        NativeJointSourceRetired::session_id(self)
+    }
+    fn nonce(&self) -> Uuid {
+        NativeJointSourceRetired::nonce(self)
+    }
+    fn activation_epoch(&self) -> u64 {
+        NativeJointSourceRetired::activation_epoch(self)
+    }
+    fn decision_sha256(&self) -> &str {
+        NativeJointSourceRetired::decision_sha256(self)
+    }
+    fn activated_quorum_sha256(&self) -> &str {
+        NativeJointSourceRetired::activated_quorum_sha256(self)
+    }
+    fn require_current(&self) -> Result<()> {
+        NativeJointSourceRetired::require_current(self)
+    }
+}
+
 impl ClusterDataNodeService {
+    /// The retired source's complete own step: confirm the committed
+    /// decision of `relocation` into its own catalogue from its own
+    /// protected native decision record (a source that took part in the
+    /// decision in-process already holds it and nothing is written), then
+    /// record its retirement. Both read the same own metadata read `own`.
+    pub(crate) fn retire_confirmed_native_joint_source(
+        service: &Arc<Mutex<Self>>,
+        own: &HostMetadataReadObservation,
+        business: Uuid,
+        relocation: crate::distribution::RelocationId,
+        range: RangeId,
+        parent: &CancellationToken,
+    ) -> Result<NativeJointSourceRetired> {
+        Self::confirm_committed_native_joint_decision(
+            service, own, business, relocation, range, parent,
+        )?;
+        Self::retire_actual_native_joint_source(service, own, business, range, parent)
+    }
     /// Record this member's retirement from `range` (or confirm the record it
     /// already holds) on its own committed metadata read `own`.
     pub(crate) fn retire_actual_native_joint_source(

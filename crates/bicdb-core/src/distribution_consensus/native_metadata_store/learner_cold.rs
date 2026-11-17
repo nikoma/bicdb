@@ -296,6 +296,7 @@ impl MetadataConsensusStore {
                     state: expected,
                     match_index: BTreeMap::new(),
                     last_leader_contact_ms: unix_time_ms(),
+                    leadership_transfer: Default::default(),
                     native_owner: owner,
                     publication_version:
                         super::super::publication_version::MetadataPublicationVersion::new(),

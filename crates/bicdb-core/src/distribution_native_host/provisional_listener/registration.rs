@@ -25,6 +25,9 @@ pub(crate) use joined_data::{
     NativeJoinedRangeReceiveRequest,
 };
 pub(crate) use joined_data::{NativeJoinedRemoteJointOwner, NativeJoinedRemoteMaterializedOwner};
+mod bridge_step;
+#[cfg(test)]
+pub(crate) use bridge_step::test_arm_writer_audit_substitute;
 mod registered_replica;
 mod writer_data_domain;
 use registered_replica::NativeRegisteredReplicaReceiver;
@@ -38,7 +41,9 @@ pub(crate) use registered_replica::{
     NativeRegisteredReplicaAdmission, NativeRegisteredSelectedRangeNoDomain,
     NativeRegisteredServingDataPolicyOrigin,
 };
+mod leadership_transfer;
 mod maintenance;
+mod range_move_hosts;
 use initial_data::NativeInitialDataHost;
 #[cfg(test)]
 pub(crate) use initial_data::{
@@ -49,6 +54,7 @@ pub(crate) use initial_data::{
     NativeInitialDataAdmission, NativeInitialOldConstraintStep, NativeInitialOldStep,
 };
 pub use initial_data::{NativeInitialDataRangeStatus, NativeInitialDataStatus};
+pub(in crate::distribution_native_host) use range_move_hosts::NativeLeaderRangeMoveHosts;
 mod schema_export;
 pub(crate) use maintenance::NativeMetadataMaintenanceReport;
 
@@ -597,6 +603,21 @@ impl NativeMetadataControlHost {
         step.require_live()?;
         Ok(result)
     }
+    /// This host's own write coordinator, when it is an open INITIAL DATA
+    /// owner: the one that admits the writes of the ranges this node leads.
+    pub(in crate::distribution_native_host) fn initial_range_write_coordinator(
+        &self,
+    ) -> Option<
+        Arc<
+            crate::distribution_range_consensus::RangeWriteCoordinator<
+                TcpClusterRelocationTransport,
+            >,
+        >,
+    > {
+        self.data
+            .as_ref()
+            .and_then(|data| data.range_write_coordinator())
+    }
     pub(crate) fn bind_initial_image_source_process(
         &self,
         process: &CancellationToken,
@@ -854,6 +875,15 @@ impl NativeMetadataControlHost {
     }
     pub(crate) fn heartbeat(&self, parent: &CancellationToken) -> Result<()> {
         self.backend.heartbeat(parent)
+    }
+    /// The same metadata heartbeat as `heartbeat`, as an owned handle for a
+    /// test host surface that cannot borrow this host.
+    #[cfg(test)]
+    pub(crate) fn test_heartbeat_handle(
+        &self,
+    ) -> Box<dyn Fn(&CancellationToken) -> Result<()> + Send + Sync> {
+        let backend = self.backend.clone();
+        Box::new(move |parent| backend.heartbeat(parent))
     }
     pub(crate) fn stop(&mut self, parent: &CancellationToken) -> Result<()> {
         if let Some(assigned) = self.assigned.as_mut() {

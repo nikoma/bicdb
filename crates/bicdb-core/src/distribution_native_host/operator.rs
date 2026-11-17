@@ -1,6 +1,11 @@
 //! Public metadata-only owner. Configuration DTOs never become birth/vote/data
 //! proofs; every action consumes the existing actual native producer.
+use super::range_move::{
+    request_range_move, request_range_move_abort, require_no_running_range_move,
+    NativeRangeMoveSlot, NativeRangeMoveStatus,
+};
 use super::*;
+use crate::distribution::RangeId;
 use crate::{ClusterNetworkTransportConfig, DistributionConfig, MetadataConsensusStatus};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
@@ -56,8 +61,33 @@ pub enum NativeMetadataHostAction {
     OpenReplicaReceiver,
     Heartbeat,
     StartLearnerMetadata,
-    EnrollLearner { node: ClusterNodeId },
-    CatchUpLearner { node: ClusterNodeId },
+    EnrollLearner {
+        node: ClusterNodeId,
+    },
+    CatchUpLearner {
+        node: ClusterNodeId,
+    },
+    /// Move ONE range onto a registered member through the joint handoff.
+    /// Accepted only on the node that is both the metadata leader and the
+    /// leader of the range; the target must already be registered and have
+    /// opened its replica receiver. The request only creates the controller:
+    /// the process loop advances it (`advance_range_move`).
+    MoveRange {
+        range: RangeId,
+        target: ClusterNodeId,
+    },
+    /// Abort this host's move of the range before its source cut.
+    AbortMoveRange {
+        range: RangeId,
+    },
+    /// Hand metadata leadership from THIS host to `to`, so that the metadata
+    /// leader and a range's leader coincide before `MoveRange`. Accepted only
+    /// on the current metadata leader; `to` must be another active metadata
+    /// voter. Bounded: on failure this host keeps leading where it still can
+    /// and the error says what happened.
+    TransferMetadataLeadership {
+        to: ClusterNodeId,
+    },
     Status,
     Stop,
 }
@@ -79,11 +109,19 @@ pub struct NativeMetadataHostStatus {
     pub node_id: ClusterNodeId,
     pub phase: NativeMetadataHostPhase,
     pub metadata: Option<MetadataConsensusStatus>,
+    /// The metadata leader as this node's own store knows it: this node when
+    /// it leads, else the leader it follows. `None` while none is known.
+    /// Diagnostic DATA only, never an authority.
+    pub metadata_leader: Option<ClusterNodeId>,
+    /// Outcome of the last `TransferMetadataLeadership` on this host.
+    pub last_metadata_leadership_transfer: Option<serde_json::Value>,
     pub last_enrolled_learner: Option<ClusterNodeId>,
     pub last_caught_up_learner_store_id: Option<Uuid>,
     pub last_metadata_maintenance: Option<serde_json::Value>,
     pub last_metadata_promotion: Option<serde_json::Value>,
     pub initial_data: Option<NativeInitialDataStatus>,
+    /// This host's range move, if one was requested. Diagnostic DATA only.
+    pub range_move: Option<NativeRangeMoveStatus>,
     pub data_serving: bool,
     pub data_refusal: &'static str,
 }
@@ -105,6 +143,8 @@ pub struct NativeMetadataHost {
     last_caught_up_learner_store_id: Option<Uuid>,
     last_metadata_maintenance: Option<serde_json::Value>,
     last_metadata_promotion: Option<serde_json::Value>,
+    last_metadata_leadership_transfer: Option<serde_json::Value>,
+    range_move: Option<NativeRangeMoveSlot>,
 }
 impl NativeMetadataHost {
     pub fn start_fresh_metadata_only(
@@ -189,6 +229,8 @@ impl NativeMetadataHost {
             last_caught_up_learner_store_id: None,
             last_metadata_maintenance: None,
             last_metadata_promotion: None,
+            last_metadata_leadership_transfer: None,
+            range_move: None,
         })
     }
     /// The process lifetime belongs here, never a bootstrap/action's 5s child.
@@ -254,12 +296,21 @@ impl NativeMetadataHost {
             version: 1,
             node_id: self.template.node_id.clone(),
             phase: self.phase,
+            metadata_leader: metadata.as_ref().and_then(|status| {
+                if status.role == crate::MetadataConsensusRole::Leader {
+                    Some(status.node_id.clone())
+                } else {
+                    status.leader_id.clone()
+                }
+            }),
+            last_metadata_leadership_transfer: self.last_metadata_leadership_transfer.clone(),
             metadata,
             last_enrolled_learner: self.last_enrolled_learner.clone(),
             last_caught_up_learner_store_id: self.last_caught_up_learner_store_id,
             last_metadata_maintenance: self.last_metadata_maintenance.clone(),
             last_metadata_promotion: self.last_metadata_promotion.clone(),
             initial_data,
+            range_move: self.range_move.as_ref().map(NativeRangeMoveSlot::status),
             data_serving,
             data_refusal: if data_serving {
                 "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported"
@@ -276,6 +327,28 @@ impl NativeMetadataHost {
             control.refresh_initial_data_registry(parent)?;
         }
         Ok(())
+    }
+    /// Process-owned scheduling of the host's range move: starts one step on
+    /// its own worker unless one is in flight, and never waits for it.
+    /// `process` is the process lifetime, not a request budget. The outcome
+    /// of every step is the `range_move` status section.
+    pub fn advance_range_move(&mut self, process: &CancellationToken) -> Result<()> {
+        if self.phase == NativeMetadataHostPhase::Stopped {
+            return Ok(());
+        }
+        match self.range_move.as_mut() {
+            Some(range_move) => range_move.advance(process),
+            None => Ok(()),
+        }
+    }
+    /// The host's range move completed a stage and its next step can start
+    /// now; see `advance_range_move`. Memory only.
+    pub fn range_move_step_due(&self) -> bool {
+        self.phase != NativeMetadataHostPhase::Stopped
+            && self
+                .range_move
+                .as_ref()
+                .is_some_and(NativeRangeMoveSlot::step_due)
     }
     pub fn maintain_metadata(
         &mut self,
@@ -430,7 +503,48 @@ impl NativeMetadataHost {
                         .catch_up_learner(&node, &token)?,
                 );
             }
+            NativeMetadataHostAction::MoveRange { range, target } => {
+                if self.phase != NativeMetadataHostPhase::InitialData {
+                    return Err(invalid(
+                        "range move requires the open INITIAL DATA owner of the range leader",
+                    ));
+                }
+                let control = self
+                    .control
+                    .as_ref()
+                    .ok_or_else(|| invalid("owned native metadata control required"))?;
+                request_range_move(&mut self.range_move, range, &target, &token, || {
+                    NativeRangeMoveSlot::start(control, range, target.clone())
+                })?;
+            }
+            NativeMetadataHostAction::AbortMoveRange { range } => {
+                request_range_move_abort(&mut self.range_move, range, &token)?;
+            }
+            NativeMetadataHostAction::TransferMetadataLeadership { to } => {
+                // Checked first: a transfer would strand this host's move.
+                let outcome = require_no_running_range_move(self.range_move.as_ref())
+                    .and_then(|()| {
+                        self.control.as_ref().ok_or_else(|| {
+                            invalid("metadata leadership transfer requires the owned native metadata control (enable-control)")
+                        })
+                    })
+                    .and_then(|control| control.transfer_metadata_leadership(&to, &token));
+                self.last_metadata_leadership_transfer = Some(match &outcome {
+                    Ok(report) => {
+                        serde_json::json!({"to": to, "transferred": true, "report": report})
+                    }
+                    Err(error) => serde_json::json!({
+                        "to": to,
+                        "transferred": false,
+                        "error": error.to_string().chars().take(2048).collect::<String>(),
+                    }),
+                });
+                outcome?;
+            }
             NativeMetadataHostAction::Stop => {
+                if let Some(range_move) = self.range_move.as_mut() {
+                    range_move.stop(&token)?;
+                }
                 if let Some(supervisor) = self.supervisor.as_mut() {
                     supervisor.stop(&token)?;
                 }

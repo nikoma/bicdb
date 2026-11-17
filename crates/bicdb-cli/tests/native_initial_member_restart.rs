@@ -630,34 +630,6 @@ fn append_within(gateway: &ClusterEventClient, key: &str, timeout: Duration) -> 
         }
     }
 }
-/// TEMPORARY DIAGNOSTIC: prints the first exchanges of an observed client.
-struct PrintExchanges(std::sync::atomic::AtomicUsize);
-impl bicdb_core::ClusterRpcEvidenceObserver for PrintExchanges {
-    fn record(&self, evidence: &bicdb_core::ClusterRpcEvidence) -> std::io::Result<()> {
-        if self.0.fetch_add(1, Ordering::SeqCst) < 60 {
-            let frame = evidence
-                .raw_frame
-                .as_ref()
-                .map(|bytes| {
-                    String::from_utf8_lossy(bytes)
-                        .chars()
-                        .filter(|c| !c.is_control())
-                        .take(700)
-                        .collect::<String>()
-                })
-                .unwrap_or_default();
-            println!(
-                "RESTART_RPC {} {} -> {} elapsed={:.1}ms errors={:?} frame={frame}",
-                evidence.phase,
-                evidence.operation,
-                evidence.destination,
-                evidence.elapsed_ns as f64 / 1e6,
-                evidence.error_chain
-            );
-        }
-        Ok(())
-    }
-}
 /// Strong reads that had to be repeated, with the refusal that caused it.
 static REPEATED_READS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 fn read_within(
@@ -1008,12 +980,6 @@ fn native_initial_member_restart_four_process_kill_and_reopen() {
         "{} RESTART_M every range accepts appends after all restarts",
         stamp(cluster.started)
     );
-    let after = after
-        .with_rpc_evidence_observer(
-            Arc::new(PrintExchanges(AtomicUsize::new(0))),
-            bicdb_core::ClusterRpcEvidenceLimits::default(),
-        )
-        .unwrap();
     let mut slowest = (Duration::ZERO, String::new());
     let reads_begun = Instant::now();
     for key in &acknowledged {

@@ -62,6 +62,12 @@ pub(crate) struct NativeRangeMoveProbeReplyV1 {
     pub range_id: RangeId,
     pub range_epoch: u64,
     pub role: NativeRangeMoveProbeRoleV1,
+    /// The record behind `unfinished_recovery`, so that the coordinator's
+    /// refusal can name it. Diagnostic DATA only; the refusal itself follows
+    /// the role's flag.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unfinished_recovery_record:
+        Option<crate::distribution_range_consensus::UnfinishedNormalRecoveryV1>,
 }
 
 /// The most bytes of a voter's own refusal text one probe reply carries.
@@ -95,6 +101,7 @@ pub(super) fn answer(
             peer.node_id()
         )));
     }
+    let mut unfinished_recovery_record = None;
     let role = if registered {
         NativeRangeMoveProbeRoleV1::RegisteredReplicaReceiver
     } else if initial {
@@ -107,19 +114,21 @@ pub(super) fn answer(
                 "range move probe: this member is a data owner but not a voter of range {range_id}, and it is not a registered replica receiver"
             )));
         }
-        let (durable_epoch, unfinished_command, unfinished_recovery, writer) = {
+        let (durable_epoch, unfinished_command, record, writer) = {
             let service = service
                 .try_lock_for(Duration::from_millis(500))
                 .ok_or_else(|| transport_error("range move probe: data service busy; repeat"))?;
-            let (epoch, command, recovery) =
+            let (epoch, command, record) =
                 service.range_move_voter_facts_for_leader(&range, peer.node_id())?;
             (
                 epoch,
                 command,
-                recovery,
+                record,
                 service.range_move_probe_writer_state(),
             )
         };
+        let unfinished_recovery = record.is_some();
+        unfinished_recovery_record = record;
         // This member's own installed policy against its own published
         // committed configuration, compared outside the service latch: a
         // report, never a grant.
@@ -153,6 +162,7 @@ pub(super) fn answer(
         range_id,
         range_epoch,
         role,
+        unfinished_recovery_record,
     })
 }
 

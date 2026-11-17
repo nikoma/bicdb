@@ -5,7 +5,7 @@
 //! compare.
 use super::*;
 use crate::distribution_native_host::joined_data_handoff::{
-    JoinedHandoffBackend, RemoteJoinedHandoffBackend,
+    AllocationCommitOutcome, JoinedHandoffBackend, RemoteJoinedHandoffBackend,
 };
 
 fn read(
@@ -303,7 +303,8 @@ fn native_remote_backend_probe_reports_unfinished_command_and_recovered_range_mo
             .initial_range_write_coordinator()
             .unwrap();
         let mut held = RemoteJoinedHandoffBackend::new(node(4), five.clients[leader].clone())
-            .with_local_writer(writer.clone());
+            .with_local_writer(writer.clone())
+            .test_allocation_waits(Duration::from_millis(400), Duration::from_millis(400));
         let not_proposed = held
             .before_allocation(five, &original, &budget(20_000))
             .unwrap_err()
@@ -396,7 +397,28 @@ fn native_remote_backend_probe_reports_unfinished_command_and_recovered_range_mo
                             original.epoch,
                             &budget(5000),
                         )
-                        .map(|reply| reply.role)
+                        .map(|reply| {
+                            // The record that names an unfinished recovery is
+                            // present exactly when the flag says so, and it
+                            // is a record of this range's recovery.
+                            let flagged = matches!(
+                                reply.role,
+                                Role::Voter {
+                                    unfinished_recovery: true,
+                                    ..
+                                }
+                            );
+                            assert_eq!(
+                                flagged,
+                                reply.unfinished_recovery_record.is_some(),
+                                "{reply:?}"
+                            );
+                            if let Some(record) = &reply.unfinished_recovery_record {
+                                eprintln!("REMOTE_BACKEND_UNFINISHED named recovery: {record}");
+                                assert!(!record.recovery_nonce.is_nil(), "{record:?}");
+                            }
+                            reply.role
+                        })
                 })
                 .collect::<Vec<_>>();
             seen_unfinished_recovery |= roles.iter().any(|role| {
@@ -490,10 +512,69 @@ fn native_remote_backend_probe_reports_unfinished_command_and_recovered_range_mo
                 }
             );
         }
-        held.after_allocation(&original, false, &budget(5000));
+        // An attempt that cannot commit any more releases the hold at once
+        // and leaves no note.
+        let started = Instant::now();
+        held.after_allocation(
+            &original,
+            AllocationCommitOutcome::NotCommitted,
+            &budget(5000),
+        );
+        assert!(started.elapsed() < Duration::from_millis(200));
+        assert!(held.take_notes().is_empty());
         append_until_acknowledged(&client, &key, &value);
         scenario.acknowledged.push((key, value));
+
+        // An attempt of unknown outcome keeps the hold for its bounded wait:
+        // the allocation may still commit. Nothing is committed here, so the
+        // published range never changes; the wait runs out, the hold is
+        // released and the fact is reported as an operator note. The same
+        // holds for a committed allocation this node did not publish in time.
+        for (outcome, text) in [
+            (AllocationCommitOutcome::Unknown, "is not known"),
+            (AllocationCommitOutcome::Committed, "is committed"),
+        ] {
+            held.before_allocation(five, &original, &budget(20_000))
+                .unwrap();
+            let started = Instant::now();
+            held.after_allocation(&original, outcome, &budget(5000));
+            assert!(
+                started.elapsed() >= Duration::from_millis(400),
+                "{outcome:?}: the hold was kept for its bounded wait"
+            );
+            let notes = held.take_notes();
+            eprintln!("REMOTE_BACKEND_UNFINISHED hold ended unpublished ({outcome:?}): {notes:?}");
+            assert!(
+                notes.len() == 1
+                    && notes[0].contains(&format!(
+                        "the write hold of range {} ended after",
+                        original.id
+                    ))
+                    && notes[0].contains("had not published the changed range")
+                    && notes[0].contains(text),
+                "{notes:?}"
+            );
+            drop(
+                writer
+                    .hold_range_for_allocation(original.id, Duration::from_secs(1), &budget(5000))
+                    .expect("the hold was released when its wait ended"),
+            );
+        }
         drop(held);
+
+        // A backend that was given no write coordinator proposes without the
+        // hold and says so; nothing is held.
+        let mut bare = RemoteJoinedHandoffBackend::new(node(4), five.clients[leader].clone());
+        bare.before_allocation(five, &original, &budget(20_000))
+            .unwrap();
+        let notes = bare.take_notes();
+        assert!(
+            notes.len() == 1 && notes[0].contains("is proposed without a write hold"),
+            "{notes:?}"
+        );
+        bare.after_allocation(&original, AllocationCommitOutcome::Committed, &budget(5000));
+        assert!(bare.take_notes().is_empty());
+        drop(bare);
 
         // A new handoff completes: every old voter's source close succeeds
         // over its retained recovery record, and the catalogue each of them

@@ -309,14 +309,16 @@ impl NativeHotRecoveryMaintenance {
         Ok(Some((entry.command, false)))
     }
     /// REOPENED owner only. The earlier process of this node ended after its
-    /// own raw log recorded the next command with a commit certificate
-    /// (QuorumCommitted/Applied) and before it wrote the native Pending, so
+    /// own raw log recorded the next command with its own Commit vote or a
+    /// commit certificate (Committed/QuorumCommitted/Applied) and before it
+    /// wrote the native Pending, so
     /// the native prefix ends just below that command. That command is
-    /// committed; it may only be recovered forward, never aborted. It is
+    /// never aborted; it may only be recovered forward, which the session's
+    /// Certify phase decides from fenced member votes or refuses. It is
     /// proposed to the SAME fenced session as a Pending one (Fence, Certify,
     /// Apply, Prepare, Complete, Activate, Publish), in which every member
     /// re-proves the command from its own durable state. Every other state
-    /// (no certificate, materialized or invalidated prefix, a gap) stays
+    /// (materialized or invalidated prefix, a gap) stays
     /// unsupported and is not proposed.
     fn reopened_committed_candidate(
         &self,
@@ -344,9 +346,15 @@ impl NativeHotRecoveryMaintenance {
             return Ok(None);
         };
         entry.command.validate()?;
+        // A Committed (uncertified) own vote is proposed too: the session's
+        // Certify phase decides it only from a fenced member quorum holding
+        // a certificate or Commit votes (`HistoricalCommandDecisionRound`),
+        // and refuses otherwise; it is never aborted (its slot is ever-Commit).
         if !matches!(
             entry.state,
-            RangeWriteState::QuorumCommitted | RangeWriteState::Applied
+            RangeWriteState::Committed
+                | RangeWriteState::QuorumCommitted
+                | RangeWriteState::Applied
         ) || entry.command.index != index
             || entry.command.range_id != range.id
             || entry.command.range_epoch != range.epoch

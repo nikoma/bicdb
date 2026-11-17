@@ -926,9 +926,10 @@ fn native_initial_member_restart_prepared_only_leader_tail_is_aborted() {
 /// write is present and the range accepts writes again.
 fn ever_commit_leader_tail_is_committed_forward(
     point: crate::distribution_range_consensus::native_abort::TestNativeAdmissionStop,
+    after_session: bool,
 ) {
     use crate::distribution_range_consensus::native_abort::{
-        test_arm_native_admission_stop, test_native_admission_stop_armed,
+        test_arm_native_admission_stop, test_native_admission_stop_armed, TestNativeAdmissionStop,
     };
     let mut cluster = Cluster::new();
     let topology = cluster.topology(0);
@@ -946,23 +947,36 @@ fn ever_commit_leader_tail_is_committed_forward(
     let key = key_in(&topology, led.id, &mut counter);
     append(&mut cluster, &client, &key, Duration::from_secs(30)).unwrap();
     acknowledged.push(key);
-    let stopped = key_in(&topology, led.id, &mut counter);
-    test_arm_native_admission_stop(led.id, point);
-    let error = client
-        .append("items", &stopped, value(&stopped))
-        .expect_err("a stopped admission is never acknowledged");
-    assert!(
-        !test_native_admission_stop_armed(),
-        "the stop did not fire: {error}"
-    );
-    eprintln!("RESTART_TEST {point:?}: stopped append {stopped}: {error}");
-    cluster.crash(victim);
-    cluster.reopen(victim);
-    let key = key_in(&topology, led.id, &mut counter);
-    append(&mut cluster, &client, &key, Duration::from_secs(60)).unwrap_or_else(|error| {
-        panic!("write after the re-driven Commit ({point:?}) failed: {error}")
-    });
-    acknowledged.push(key);
+    let mut points = vec![point];
+    if after_session {
+        // A first kill recovered by a session: the victim's process then
+        // holds that session's activation, which its next process finds
+        // durable but never armed.
+        points.insert(0, TestNativeAdmissionStop::AfterCommitQuorum);
+    }
+    let mut stopped = String::new();
+    for (round, point) in points.iter().copied().enumerate() {
+        if round > 0 {
+            acknowledged.push(stopped.clone());
+        }
+        stopped = key_in(&topology, led.id, &mut counter);
+        test_arm_native_admission_stop(led.id, point);
+        let error = client
+            .append("items", &stopped, value(&stopped))
+            .expect_err("a stopped admission is never acknowledged");
+        assert!(
+            !test_native_admission_stop_armed(),
+            "the stop did not fire: {error}"
+        );
+        eprintln!("RESTART_TEST {point:?}: stopped append {stopped}: {error}");
+        cluster.crash(victim);
+        cluster.reopen(victim);
+        let key = key_in(&topology, led.id, &mut counter);
+        append(&mut cluster, &client, &key, Duration::from_secs(60)).unwrap_or_else(|error| {
+            panic!("write after the re-driven Commit ({point:?}) failed: {error}")
+        });
+        acknowledged.push(key);
+    }
     let hot = cluster
         .host(victim)
         .status(&budget(1000))
@@ -986,12 +1000,31 @@ fn ever_commit_leader_tail_is_committed_forward(
 #[test]
 fn native_initial_member_restart_leader_own_commit_vote_tail_is_committed_forward() {
     use crate::distribution_range_consensus::native_abort::TestNativeAdmissionStop;
-    ever_commit_leader_tail_is_committed_forward(TestNativeAdmissionStop::AfterLocalCommit);
+    ever_commit_leader_tail_is_committed_forward(TestNativeAdmissionStop::AfterLocalCommit, false);
 }
 #[test]
 fn native_initial_member_restart_ever_commit_unvoted_leader_tail_is_committed_forward() {
     use crate::distribution_range_consensus::native_abort::TestNativeAdmissionStop;
-    ever_commit_leader_tail_is_committed_forward(TestNativeAdmissionStop::AfterEverCommitMark);
+    ever_commit_leader_tail_is_committed_forward(
+        TestNativeAdmissionStop::AfterEverCommitMark,
+        false,
+    );
+}
+/// The same, when the victim's previous process took part in a recovery
+/// session of the range (its activation is durable and never armed in the
+/// reopened process).
+#[test]
+fn native_initial_member_restart_ever_commit_unvoted_leader_tail_after_a_session() {
+    use crate::distribution_range_consensus::native_abort::TestNativeAdmissionStop;
+    ever_commit_leader_tail_is_committed_forward(
+        TestNativeAdmissionStop::AfterEverCommitMark,
+        true,
+    );
+}
+#[test]
+fn native_initial_member_restart_leader_own_commit_vote_tail_after_a_session() {
+    use crate::distribution_range_consensus::native_abort::TestNativeAdmissionStop;
+    ever_commit_leader_tail_is_committed_forward(TestNativeAdmissionStop::AfterLocalCommit, true);
 }
 
 /// The reopened leader's hot recovery session (an abort, then a forward

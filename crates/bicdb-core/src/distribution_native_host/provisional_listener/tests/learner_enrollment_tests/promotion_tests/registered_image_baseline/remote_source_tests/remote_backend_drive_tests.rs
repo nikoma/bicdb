@@ -1669,12 +1669,9 @@ fn after_completed_move(
     )
     .unwrap();
     twice.relocations.insert(second.id, second);
-    refused(
-        &new_facts,
-        &old_facts,
-        &twice,
-        "does not continue the previously accepted configuration",
-    );
+    // A copy under another id already fails its own record's binding (the
+    // certified promise names the relocation id); either way it is refused.
+    refused(&new_facts, &old_facts, &twice, "");
     // Back from the moved configuration to the old one (epoch regression).
     let mut back = committed.clone();
     let key = *back

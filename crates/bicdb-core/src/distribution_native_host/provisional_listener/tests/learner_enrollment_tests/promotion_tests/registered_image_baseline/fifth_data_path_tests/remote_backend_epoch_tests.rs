@@ -393,7 +393,28 @@ fn native_remote_backend_probe_reports_unfinished_command_and_recovered_range_mo
                             original.epoch,
                             &budget(5000),
                         )
-                        .map(|reply| reply.role)
+                        .map(|reply| {
+                            // The record that names an unfinished recovery is
+                            // present exactly when the flag says so, and it
+                            // is a record of this range's recovery.
+                            let flagged = matches!(
+                                reply.role,
+                                Role::Voter {
+                                    unfinished_recovery: true,
+                                    ..
+                                }
+                            );
+                            assert_eq!(
+                                flagged,
+                                reply.unfinished_recovery_record.is_some(),
+                                "{reply:?}"
+                            );
+                            if let Some(record) = &reply.unfinished_recovery_record {
+                                eprintln!("REMOTE_BACKEND_UNFINISHED named recovery: {record}");
+                                assert!(!record.recovery_nonce.is_nil(), "{record:?}");
+                            }
+                            reply.role
+                        })
                 })
                 .collect::<Vec<_>>();
             seen_unfinished_recovery |= roles.iter().any(|role| {

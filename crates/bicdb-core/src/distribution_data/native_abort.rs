@@ -52,6 +52,34 @@ impl ClusterDataNodeService {
             .current_mut()
             .finish_native_prepare_only_rejection(database, rejected, cleaned)
     }
+    /// REOPENED origin only: the candidate checksum for this node's own
+    /// Prepared-only slot left by an earlier process. See
+    /// `RangeWriteStore::reopened_native_abort_candidate`.
+    pub(crate) fn reopened_native_abort_candidate(
+        &mut self,
+        range: &RangeDescriptor,
+        command: &RangeWriteCommand,
+    ) -> Result<String> {
+        let database = Arc::clone(&self.db);
+        let db = try_database_read(&database)?;
+        self.require_native_catalog_database(&db)?;
+        self.require_native_writer_host_for_range(&db, range)?;
+        // A counted mutation lease, as every slot write carries. Admissions
+        // are excluded by the caller's range reservation and the unrecovered
+        // epoch, not by this lease.
+        let mutation = self.range_mutations.try_enter(range.id)?;
+        let result = self
+            .range_writes
+            .current_mut()
+            .reopened_native_abort_candidate(
+                &db,
+                range,
+                command,
+                &RangeMutationAuthority::Mutation(&mutation),
+            );
+        drop(mutation);
+        result
+    }
     pub(super) fn ensure_native_abort_prepare_start(
         &mut self,
         range: &RangeDescriptor,

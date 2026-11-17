@@ -268,6 +268,12 @@ impl BicDb {
                 "native slot writer-start already exists; cannot reassign",
             ));
         }
+        // Recorded BEFORE the durable write, under the same journal guard: a
+        // slot this open may still be working on is never mistaken for one an
+        // earlier process left, even when the write's outcome is uncertain.
+        self.native_abort_slots_started_this_open
+            .lock()
+            .insert((command.range_id, command.index));
         self.write_native_abort_slot(NativeAbortSlotRecord {
             store_id,
             birth_id: birth.birth_id,
@@ -301,6 +307,40 @@ impl BicDb {
             ));
         }
         Ok(())
+    }
+    /// The protected slot of `command`, only when an EARLIER open of this
+    /// directory published its writer-start and left it with no Commit vote,
+    /// no no-effect intent and no promise. A slot started by this open is
+    /// refused whatever its state: its transaction may still be running.
+    /// The caller holds the native journal.
+    pub(super) fn native_abort_slot_left_by_earlier_open(
+        &self,
+        command: &crate::RangeWriteCommand,
+    ) -> Result<(NativeAbortSlotRecord, NativeDatabaseBirth)> {
+        let (birth, store) = self.abort_slot_identity()?;
+        if self
+            .native_abort_slots_started_this_open
+            .lock()
+            .contains(&(command.range_id, command.index))
+        {
+            return Err(invalid(
+                "native slot was started by this open; only its own admission may clean it up",
+            ));
+        }
+        let slot: NativeAbortSlotRecord = self
+            .read_native_range_image_record(&slot_key(command.range_id, command.index))?
+            .ok_or_else(|| invalid("reopened no-effect has no protected writer-start"))?;
+        slot.validate(&birth, store)?;
+        if slot.command != *command
+            || slot.ever_commit
+            || slot.no_effect_sha256.is_some()
+            || slot.abort_promise_sha256.is_some()
+        {
+            return Err(invalid(
+                "reopened no-effect conflicts with the permanent native slot history",
+            ));
+        }
+        Ok((slot, birth))
     }
     pub(crate) fn native_abort_mark_ever_commit(
         &self,

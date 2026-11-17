@@ -827,3 +827,69 @@ fn native_initial_member_restart_whole_cluster_reopens_from_its_roots() {
         );
     }
 }
+
+/// A range leader whose last write was only PREPARED when its process ended
+/// (its own raw log Prepared, its slot without a Commit vote, no native
+/// Pending), once with the followers prepared and once without. After the
+/// reopen, the hot recovery aborts that slot through the abort protocol and
+/// the range accepts writes again; the unacknowledged write is absent and
+/// every acknowledged row is readable.
+#[test]
+fn native_initial_member_restart_prepared_only_leader_tail_is_aborted() {
+    use crate::distribution_range_consensus::native_abort::{
+        test_arm_native_admission_stop, test_native_admission_stop_armed, TestNativeAdmissionStop,
+    };
+    let mut cluster = Cluster::new();
+    let topology = cluster.topology(0);
+    let metadata_leader = cluster.metadata_leader().expect("a metadata leader");
+    let led = topology
+        .ranges
+        .values()
+        .find(|range| range.leader != node(metadata_leader))
+        .expect("a range not led by the metadata leader")
+        .clone();
+    let victim = (0..4).find(|&i| node(i) == led.leader).unwrap();
+    let client = cluster.client(metadata_leader);
+    let mut counter = 0u64;
+    let mut acknowledged = Vec::new();
+    let mut lost = Vec::new();
+    for point in [
+        TestNativeAdmissionStop::AfterPrepareQuorum,
+        TestNativeAdmissionStop::AfterLocalPrepare,
+    ] {
+        let key = key_in(&topology, led.id, &mut counter);
+        append(&mut cluster, &client, &key, Duration::from_secs(30)).unwrap();
+        acknowledged.push(key);
+        let stopped = key_in(&topology, led.id, &mut counter);
+        test_arm_native_admission_stop(led.id, point);
+        let error = client
+            .append("items", &stopped, value(&stopped))
+            .expect_err("a stopped admission is never acknowledged");
+        assert!(
+            !test_native_admission_stop_armed(),
+            "the stop did not fire: {error}"
+        );
+        eprintln!("RESTART_TEST {point:?}: stopped append {stopped}: {error}");
+        lost.push(stopped);
+        cluster.crash(victim);
+        cluster.reopen(victim);
+        let key = key_in(&topology, led.id, &mut counter);
+        append(&mut cluster, &client, &key, Duration::from_secs(60))
+            .unwrap_or_else(|error| panic!("write after the abort ({point:?}) failed: {error}"));
+        acknowledged.push(key);
+    }
+    for key in &acknowledged {
+        assert_eq!(
+            read(&mut cluster, &client, key, Duration::from_secs(30)).unwrap(),
+            Some(value(key)),
+            "acknowledged row {key} must be readable"
+        );
+    }
+    for key in &lost {
+        assert_eq!(
+            read(&mut cluster, &client, key, Duration::from_secs(30)).unwrap(),
+            None,
+            "the aborted write {key} must be absent"
+        );
+    }
+}

@@ -1049,6 +1049,76 @@ impl RangeWriteStore {
     }
 }
 
+impl RangeWriteStore {
+    /// REOPENED origin only. The candidate checksum of this node's own
+    /// unfinished slot `index`: the existing Core no-effect intent, or a new
+    /// one when the raw log holds exactly a Prepared entry for the slot's
+    /// command as the first unresolved index and the mirrored slot shows no
+    /// Commit vote, no promise and no intent. The Core producer re-proves the
+    /// slot from its protected journal (`persist_reopened_native_no_effect`).
+    pub(crate) fn reopened_native_abort_candidate(
+        &mut self,
+        database: &crate::BicDb,
+        range: &RangeDescriptor,
+        command: &RangeWriteCommand,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<String> {
+        self.require_native_catalog_durability(database.data_path())?;
+        self.require_actual_abort_catalogue(database)?;
+        let progress = self.progress(range.id);
+        let raw = self
+            .catalog
+            .ranges
+            .get(&range.id)
+            .and_then(|r| r.entries.get(&command.index));
+        if progress.resolved_through.checked_add(1) != Some(command.index)
+            || progress.last_index != command.index
+            || raw.is_none_or(|e| e.state != RangeWriteState::Prepared || e.command != *command)
+        {
+            return Err(range_write_error(
+                "reopened abort requires exactly one Prepared first unresolved entry",
+            ));
+        }
+        let slot = self
+            .catalog
+            .native_abort_protocol
+            .as_ref()
+            .and_then(|p| p.ranges.get(&range.id))
+            .and_then(|r| r.slots.get(&command.index))
+            .ok_or_else(|| range_write_error("reopened abort slot absent from the catalogue"))?;
+        if slot.ever_commit
+            || slot.promise.is_some()
+            || slot.command_sha256 != command.checksum_sha256
+            || slot.command_id != command.command_id
+        {
+            return Err(range_write_error(
+                "reopened abort slot shows a Commit vote, a promise or another command",
+            ));
+        }
+        if let Some(existing) = &slot.no_effect_sha256 {
+            // An earlier attempt of this open, or of an earlier one, already
+            // published it; the candidate observation re-proves it.
+            return Ok(existing.clone());
+        }
+        let receipt = database.persist_reopened_native_no_effect(
+            command,
+            &self.catalog.node_id,
+            range,
+            authority,
+        )?;
+        let slot = self
+            .catalog
+            .native_abort_protocol
+            .as_mut()
+            .and_then(|p| p.ranges.get_mut(&range.id))
+            .and_then(|r| r.slots.get_mut(&command.index))
+            .ok_or_else(|| range_write_error("reopened abort slot vanished"))?;
+        slot.no_effect_sha256 = Some(receipt.clone());
+        self.persist_recovery_catalog()?;
+        Ok(receipt)
+    }
+}
+
 /// Local evidence constructors are private to actual Store methods. The
 /// projection and original clock cannot be replaced by a caller's new request.
 #[derive(Debug)]
@@ -1513,4 +1583,40 @@ impl RangeWriteStore {
         slot.resolved_native_receipt_sha256 = Some(receipt.decision_sha256().into());
         self.persist_recovery_catalog()
     }
+}
+
+/// Test only: an admission that stops at a chosen point as if its process
+/// ended there. It returns an outcome-unknown error WITHOUT a prepare-only
+/// rejection, so no no-effect intent is written and the durable state is the
+/// one a process death at that point leaves.
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TestNativeAdmissionStop {
+    AfterLocalPrepare,
+    AfterPrepareQuorum,
+    AfterLocalCommit,
+}
+#[cfg(test)]
+static TEST_NATIVE_ADMISSION_STOP: std::sync::Mutex<Option<(RangeId, TestNativeAdmissionStop)>> =
+    std::sync::Mutex::new(None);
+#[cfg(test)]
+pub(crate) fn test_arm_native_admission_stop(range: RangeId, point: TestNativeAdmissionStop) {
+    *TEST_NATIVE_ADMISSION_STOP.lock().unwrap() = Some((range, point));
+}
+/// True once per arming, for the armed range and point.
+#[cfg(test)]
+pub(crate) fn test_take_native_admission_stop(
+    range: RangeId,
+    point: TestNativeAdmissionStop,
+) -> bool {
+    let mut armed = TEST_NATIVE_ADMISSION_STOP.lock().unwrap();
+    if *armed == Some((range, point)) {
+        *armed = None;
+        return true;
+    }
+    false
+}
+#[cfg(test)]
+pub(crate) fn test_native_admission_stop_armed() -> bool {
+    TEST_NATIVE_ADMISSION_STOP.lock().unwrap().is_some()
 }

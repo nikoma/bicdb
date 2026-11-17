@@ -41,6 +41,8 @@ enum Phase {
     Fence,
     Certify,
     Apply,
+    /// Abort of a Prepared-only slot: candidate, promises, resolution.
+    AbortResolve,
     Prepare,
     Complete,
     Activate,
@@ -62,6 +64,11 @@ struct Job {
     recipient_next: BTreeMap<ClusterNodeId, Phase>,
     replica_binding: Option<NativeHotReplicaBinding>,
     peer_opens: BTreeMap<ClusterNodeId, HotRecoveryPeerOpen>,
+    /// The command is aborted (Fence, AbortResolve, Prepare, ...) instead of
+    /// recovered forward (Fence, Certify, Apply, Prepare, ...).
+    abort: bool,
+    /// Checksum of the origin's actual Core no-effect intent, once known.
+    abort_candidate: Option<String>,
 }
 #[derive(Default)]
 struct State {
@@ -246,11 +253,13 @@ impl NativeHotRecoveryMaintenance {
             &purpose,
         )
     }
+    /// The command to recover and whether it is aborted (true) or recovered
+    /// forward (false).
     fn candidate(
         &self,
         range: &crate::RangeDescriptor,
         token: &CancellationToken,
-    ) -> Result<Option<RangeWriteCommand>> {
+    ) -> Result<Option<(RangeWriteCommand, bool)>> {
         self.live(token)?;
         let service = self
             .initial
@@ -267,7 +276,12 @@ impl NativeHotRecoveryMaintenance {
             .require_for_coordinator(&db, range, &self.coordinator)?;
         let prefix = db.native_range_prefix_observation(range.id)?;
         let Some(index) = prefix.pending_command_index else {
-            return self.reopened_committed_candidate(&service, &prefix, range);
+            if let Some(command) = self.reopened_committed_candidate(&service, &prefix, range)? {
+                return Ok(Some((command, false)));
+            }
+            return Ok(self
+                .reopened_prepared_candidate(&service, &prefix, range)?
+                .map(|command| (command, true)));
         };
         if prefix.invalidated
             || prefix.materialized_pending_index.is_some()
@@ -292,7 +306,7 @@ impl NativeHotRecoveryMaintenance {
             ));
         }
         self.live(token)?;
-        Ok(Some(entry.command))
+        Ok(Some((entry.command, false)))
     }
     /// REOPENED owner only. The earlier process of this node ended after its
     /// own raw log recorded the next command with a commit certificate
@@ -334,6 +348,51 @@ impl NativeHotRecoveryMaintenance {
             entry.state,
             RangeWriteState::QuorumCommitted | RangeWriteState::Applied
         ) || entry.command.index != index
+            || entry.command.range_id != range.id
+            || entry.command.range_epoch != range.epoch
+            || entry.command.leader_node_id != self.initial.seed.spec.node_id
+        {
+            return Ok(None);
+        }
+        Ok(Some(entry.command))
+    }
+    /// REOPENED owner only. The earlier process of this node ended after its
+    /// own raw log recorded the next command as Prepared and before its own
+    /// Commit vote: no member can have committed it (the origin durably marks
+    /// its slot ever-Commit before sending Commit to anyone) and Core wrote
+    /// nothing for it (application WAL follows the admission ticket, which
+    /// follows the local Commit). It is aborted through the existing abort
+    /// protocol, whose promise quorum re-proves the absence of any Commit at
+    /// every member. Here only the raw shape is selected; the Core producer
+    /// of the no-effect intent re-proves the protected slot itself.
+    fn reopened_prepared_candidate(
+        &self,
+        service: &crate::ClusterDataNodeService,
+        prefix: &crate::db::NativeRangePrefixObservation,
+        range: &crate::RangeDescriptor,
+    ) -> Result<Option<RangeWriteCommand>> {
+        if !self.initial.reopened()
+            || prefix.invalidated
+            || prefix.materialized_pending_index.is_some()
+        {
+            return Ok(None);
+        }
+        let Some(index) = prefix.native_applied_index.and_then(|r| r.checked_add(1)) else {
+            return Ok(None);
+        };
+        let progress = service.range_write_progress(range.id);
+        if progress.resolved_through.checked_add(1) != Some(index) || progress.last_index != index {
+            return Ok(None);
+        }
+        let Some(entry) = service
+            .probe_range_write_for_peer(range, &self.initial.seed.spec.node_id, index)?
+            .entry
+        else {
+            return Ok(None);
+        };
+        entry.command.validate()?;
+        if entry.state != RangeWriteState::Prepared
+            || entry.command.index != index
             || entry.command.range_id != range.id
             || entry.command.range_epoch != range.epoch
             || entry.command.leader_node_id != self.initial.seed.spec.node_id
@@ -401,8 +460,8 @@ impl NativeHotRecoveryMaintenance {
                 state.cursor = (at + 1) % ranges.len();
                 return Err(invalid("new origin recovery with retained replica session debt needs explicit continuation; old debt is preserved"));
             }
-            let command = match self.candidate(&range, parent) {
-                Ok(Some(command)) => command,
+            let (command, abort) = match self.candidate(&range, parent) {
+                Ok(Some(candidate)) => candidate,
                 Ok(None) => continue,
                 Err(error) => {
                     state.cursor = (at + 1) % ranges.len();
@@ -443,6 +502,8 @@ impl NativeHotRecoveryMaintenance {
                     recipient_next,
                     replica_binding: None,
                     peer_opens: BTreeMap::new(),
+                    abort,
+                    abort_candidate: None,
                 },
             );
             selected = Some(range);
@@ -466,7 +527,7 @@ impl NativeHotRecoveryMaintenance {
         };
         let job = state.jobs.get_mut(&range.id).unwrap();
         let result = self.run_job(job, parent);
-        let mut detail = serde_json::json!({"range_id":range.id,"epoch":job.range.epoch,"recovery_nonce":job.scope.recovery_nonce,
+        let mut detail = serde_json::json!({"range_id":range.id,"epoch":job.range.epoch,"abort":job.abort,"recovery_nonce":job.scope.recovery_nonce,
             "command_id":job.command.command_id,"command_sha256":job.command.checksum_sha256,"phase":format!("{:?}",job.phase),"position":job.position,
             "completed":result.is_ok(),"phase_observed":job.phase_observed,"semantic_veto":job.semantic_veto.iter().map(|(n,p)|(n.to_string(),format!("{p:?}"))).collect::<BTreeMap<_,_>>(),"remaining_ms":parent.deadline().map(|d|d.saturating_duration_since(Instant::now()).as_millis()),"diagnostic_not_authority":true});
         if let Err(error) = &result {
@@ -520,7 +581,7 @@ impl NativeHotRecoveryMaintenance {
                 },
                 activate: job.phase == Phase::Activate,
             },
-            Phase::Publish | Phase::Replica => unreachable!(),
+            Phase::AbortResolve | Phase::Publish | Phase::Replica => unreachable!(),
         }
     }
     fn run_job(&self, job: &mut Job, parent: &CancellationToken) -> Result<()> {
@@ -579,6 +640,18 @@ impl NativeHotRecoveryMaintenance {
                 )?;
                 return Ok(());
             }
+            if job.phase == Phase::AbortResolve {
+                self.run_abort_resolve(job, &phase_parent)?;
+                let fresh = self.fresh_role(&job.range, job.scope.recovery_nonce, &phase_parent)?;
+                job.scope.require_role(&fresh)?;
+                held.require_actual_store_slot()?;
+                fresh.require_live_request()?;
+                job.position = 0;
+                cooldown_probe = false;
+                job.phase_observed.clear();
+                job.phase = Phase::Prepare;
+                continue;
+            }
             if job.position == job.members.len() {
                 // This threshold schedules the NEXT real producer. It is NOT
                 // a QQ, role, recovered epoch or admission grant. Original
@@ -617,13 +690,14 @@ impl NativeHotRecoveryMaintenance {
                 cooldown_probe = false;
                 job.phase_observed.clear();
                 job.phase = match job.phase {
+                    Phase::Fence if job.abort => Phase::AbortResolve,
                     Phase::Fence => Phase::Certify,
                     Phase::Certify => Phase::Apply,
                     Phase::Apply => Phase::Prepare,
                     Phase::Prepare => Phase::Complete,
                     Phase::Complete => Phase::Activate,
                     Phase::Activate => Phase::Publish,
-                    Phase::Publish | Phase::Replica => unreachable!(),
+                    Phase::AbortResolve | Phase::Publish | Phase::Replica => unreachable!(),
                 };
                 continue;
             }
@@ -709,7 +783,12 @@ impl NativeHotRecoveryMaintenance {
                     job.phase_observed.insert(node.clone());
                     match job.phase {
                         Phase::Fence => {
-                            job.recipient_next.insert(node.clone(), Phase::Certify);
+                            let next = if job.abort {
+                                Phase::AbortResolve
+                            } else {
+                                Phase::Certify
+                            };
+                            job.recipient_next.insert(node.clone(), next);
                         }
                         Phase::Certify => {
                             job.recipient_next.insert(node.clone(), Phase::Apply);
@@ -726,7 +805,7 @@ impl NativeHotRecoveryMaintenance {
                         Phase::Activate => {
                             job.recipient_next.remove(&node);
                         }
-                        Phase::Publish | Phase::Replica => unreachable!(),
+                        Phase::AbortResolve | Phase::Publish | Phase::Replica => unreachable!(),
                     }
                     job.semantic_veto.remove(&node);
                     job.peer_retry_after.remove(&node);
@@ -781,6 +860,108 @@ impl NativeHotRecoveryMaintenance {
             }
             job.position += 1;
         }
+    }
+}
+impl NativeHotRecoveryMaintenance {
+    /// The abort of a Prepared-only slot, with the existing requests
+    /// unchanged: the origin's own Core no-effect intent (the candidate), then
+    /// resolution at the origin FIRST, which creates the permanent promises of
+    /// a member quorum (each member refuses with Irreversible on any Commit
+    /// evidence), then resolution at each fenced follower, which collects
+    /// those promises itself. Requires the origin plus a majority.
+    fn run_abort_resolve(&self, job: &mut Job, parent: &CancellationToken) -> Result<()> {
+        let origin = self.initial.seed.spec.node_id.clone();
+        if job.abort_candidate.is_none() {
+            self.live(parent)?;
+            let mut service = self
+                .initial
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("hot abort candidate actual service busy"))?;
+            job.abort_candidate =
+                Some(service.reopened_native_abort_candidate(&job.range, &job.command)?);
+        }
+        let order = std::iter::once(origin.clone())
+            .chain(
+                job.members
+                    .iter()
+                    .filter(|n| {
+                        **n != origin && job.recipient_next.get(*n) == Some(&Phase::AbortResolve)
+                    })
+                    .cloned(),
+            )
+            .collect::<Vec<_>>();
+        let mut failures = BTreeMap::new();
+        for node in order {
+            if job.phase_observed.contains(&node) {
+                continue;
+            }
+            let budget_ms = Self::remaining(parent)?;
+            if budget_ms < MIN_PHASE_START_MS {
+                return Err(crate::BicDbError::QueryTimedOut);
+            }
+            let request = crate::distribution_range_recovery::NativeAbortRequest {
+                scope: job.scope.clone(),
+                range_index: job.command.index,
+                origin_node_id: origin.clone(),
+                candidate_sha256: job.abort_candidate.clone(),
+                challenge: Uuid::now_v7(),
+                budget_ms: budget_ms.min(4500),
+            };
+            #[cfg(test)]
+            eprintln!("NATIVE_HOT_DATA_PHASE node={origin} target={node} phase=AbortResolve command={} nonce={} remaining_ms={budget_ms}", job.command.command_id, job.scope.recovery_nonce);
+            match self
+                .initial
+                .transport
+                .resolve_native_abort_at(&node, &request, parent)
+            {
+                Ok((index, _, _)) if index == job.command.index => {
+                    job.phase_observed.insert(node.clone());
+                    job.recipient_next.insert(node.clone(), Phase::Prepare);
+                    job.semantic_veto.remove(&node);
+                }
+                Ok((index, _, _)) => {
+                    return Err(invalid(&format!(
+                        "hot abort resolution at {node} returned index {index}"
+                    )));
+                }
+                Err(error) if node == origin => {
+                    let message = error.to_string();
+                    if message.contains("irreversible") {
+                        // A member holds Commit evidence: never abort. Only
+                        // the forward recovery may still decide this command.
+                        job.abort = false;
+                        job.phase = Phase::Certify;
+                        job.position = 0;
+                        job.phase_observed.clear();
+                        for next in job.recipient_next.values_mut() {
+                            if *next == Phase::AbortResolve {
+                                *next = Phase::Certify;
+                            }
+                        }
+                        return Err(invalid(&format!(
+                            "abort of a reopened Prepared slot refused by Commit evidence; only forward recovery may decide it: {message}"
+                        )));
+                    }
+                    return Err(error);
+                }
+                Err(error) => {
+                    failures.insert(
+                        node.to_string(),
+                        error.to_string().chars().take(1024).collect::<String>(),
+                    );
+                }
+            }
+            self.live(parent)?;
+        }
+        if job.phase_observed.len() < job.members.len() / 2 + 1
+            || !job.phase_observed.contains(&origin)
+        {
+            return Err(invalid(&format!(
+                "hot abort resolution lacks the origin plus a member majority: {failures:?}"
+            )));
+        }
+        Ok(())
     }
 }
 #[cfg(test)]

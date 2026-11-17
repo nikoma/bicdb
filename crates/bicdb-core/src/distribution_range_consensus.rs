@@ -3730,6 +3730,26 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             }
             return Err(error);
         }
+        #[cfg(test)]
+        if native_database.is_some()
+            && native_abort::test_take_native_admission_stop(
+                range.id,
+                native_abort::TestNativeAdmissionStop::AfterLocalPrepare,
+            )
+        {
+            self.recovered_epochs.lock().remove(&range.id);
+            return Err(self.retain_native_uncertain_admission(
+                &command,
+                mutation,
+                admission_rejection,
+                BicDbError::CommitOutcomeUnknown {
+                    sequence: None,
+                    transaction_id: Some(command.transaction_id),
+                    incarnation: self.local_incarnation.clone(),
+                    detail: "injected admission stop AfterLocalPrepare".into(),
+                },
+            ));
+        }
 
         let quorum = voters.len() / 2 + 1;
         let mut prepared = 1usize;
@@ -3850,6 +3870,26 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             )));
         }
 
+        #[cfg(test)]
+        if native_database.is_some()
+            && native_abort::test_take_native_admission_stop(
+                range.id,
+                native_abort::TestNativeAdmissionStop::AfterPrepareQuorum,
+            )
+        {
+            self.recovered_epochs.lock().remove(&range.id);
+            return Err(self.retain_native_uncertain_admission(
+                &command,
+                mutation,
+                admission_rejection,
+                BicDbError::CommitOutcomeUnknown {
+                    sequence: None,
+                    transaction_id: Some(command.transaction_id),
+                    incarnation: self.local_incarnation.clone(),
+                    detail: "injected admission stop AfterPrepareQuorum".into(),
+                },
+            ));
+        }
         // Native uncertainty starts BEFORE attempting the local Commit write:
         // persistence can succeed even when its error/reply is lost. No native
         // abort may be inferred from any failure after this boundary.
@@ -3900,6 +3940,26 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                 }));
             }
             return Err(error);
+        }
+        #[cfg(test)]
+        if native_database.is_some()
+            && native_abort::test_take_native_admission_stop(
+                range.id,
+                native_abort::TestNativeAdmissionStop::AfterLocalCommit,
+            )
+        {
+            self.recovered_epochs.lock().remove(&range.id);
+            return Err(self.retain_native_uncertain_admission(
+                &command,
+                mutation,
+                admission_rejection,
+                BicDbError::CommitOutcomeUnknown {
+                    sequence: None,
+                    transaction_id: Some(command.transaction_id),
+                    incarnation: self.local_incarnation.clone(),
+                    detail: "injected admission stop AfterLocalCommit".into(),
+                },
+            ));
         }
         let mut committed = 1usize;
         let mut committed_nodes = Vec::new();

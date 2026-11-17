@@ -321,6 +321,11 @@ impl NativeHotRecoveryMaintenance {
                         #[cfg(test)]
                         eprintln!("NATIVE_HOT_REPLICA_COMPLETED_MATERIALIZATION target={} range={} anchor={} actual_native_prepared=true no_active_fence_authority_cast=true no_leader_reservation=true",node,debt.range.id,debt.command.index);
                     }
+                    Some(Phase::AbortResolve) => {
+                        return Err(invalid(
+                            "catch-up of a follower that missed the abort resolution is not supported",
+                        ));
+                    }
                     Some(Phase::Publish | Phase::Replica) => {
                         return Err(invalid("invalid retained recipient phase"));
                     }

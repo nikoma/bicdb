@@ -129,7 +129,106 @@ impl BicDb {
         }
         let _journal = self.try_native_image_journal()?;
         self.require_native_abort_prepare_only_slot(rejected.command())?;
-        let key = no_effect_key(rejected.command().range_id, rejected.command().index);
+        self.publish_native_no_effect_under_journal(
+            NativeNoEffectIntentRecord {
+                version: 1,
+                command: rejected.command().clone(),
+                domain: rejected.domain().clone(),
+                birth_id: rejected.birth_id(),
+                birth_sha256: rejected.birth_sha256().into(),
+                origin_database_incarnation: rejected.database_incarnation().into(),
+                predecessor_index: rejected.predecessor_index(),
+                predecessor_history_sha256: rejected.predecessor_history_sha256().into(),
+                local_data_visibility: rejected.local_data_visibility(),
+                actual_native_page_xid: 0,
+                checksum_sha256: String::new(),
+            },
+            || cleaned.require_rejection(self, rejected),
+        )
+    }
+    /// REOPENED origin only: the Core no-effect intent of a command whose
+    /// writer-start an EARLIER open of this directory published and left
+    /// without any Commit vote.
+    ///
+    /// Why the intent is true: Core reserves a commit sequence, writes
+    /// application WAL and changes rows only after the range admission
+    /// returned its ticket (`db/spatial_paged.rs` commit), and the admission
+    /// returns a ticket only after the local Commit, which first durably sets
+    /// this slot's `ever_commit` (fsynced page commit) before any Commit is
+    /// sent to a follower. A slot without `ever_commit` therefore had no
+    /// application WAL, rows or effects, and its transaction's buffers and
+    /// locks were memory of a process that no longer exists. It is never
+    /// inferred from rows or a raw Abort: only from the monotone slot fact,
+    /// the exact native prefix just below the slot and an absent Pending.
+    pub(crate) fn persist_reopened_native_no_effect(
+        &self,
+        command: &crate::RangeWriteCommand,
+        local_node: &ClusterNodeId,
+        current_range: &crate::RangeDescriptor,
+        authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
+    ) -> Result<String> {
+        self.require_installed_native_writer_database_for_range(current_range)?;
+        self.range_mutations.validate(command.range_id, authority)?;
+        if !crate::format::native_abort_history_active(&self.path)? {
+            return Err(invalid("reopened no-effect producer lacks reader fence"));
+        }
+        if command.leader_node_id != *local_node
+            || command.range_id != current_range.id
+            || command.range_epoch != current_range.epoch
+        {
+            return Err(invalid(
+                "reopened no-effect requires this node's own same-epoch command",
+            ));
+        }
+        let prefix = self.native_range_prefix_observation(command.range_id)?;
+        if prefix.invalidated
+            || prefix.pending_command_index.is_some()
+            || prefix.materialized_pending_index.is_some()
+            || prefix.native_applied_index.and_then(|r| r.checked_add(1)) != Some(command.index)
+        {
+            return Err(invalid(
+                "reopened no-effect requires the native prefix just below the slot and no Pending",
+            ));
+        }
+        let source = self.current_native_range_source_lineage(command.range_id)?;
+        let _journal = self.try_native_image_journal()?;
+        let (slot, birth) = self.native_abort_slot_left_by_earlier_open(command)?;
+        if source.range_index().checked_add(1) != Some(command.index)
+            || slot.predecessor_index != source.range_index()
+            || slot.predecessor_history_sha256 != source.logical_history_sha256()
+            || source.birth.birth_id != birth.birth_id
+            || source.birth.checksum_sha256 != birth.checksum_sha256
+        {
+            return Err(invalid(
+                "reopened no-effect predecessor/birth differs from the slot",
+            ));
+        }
+        self.publish_native_no_effect_under_journal(
+            NativeNoEffectIntentRecord {
+                version: 1,
+                command: command.clone(),
+                domain: slot.domain.clone(),
+                birth_id: birth.birth_id,
+                birth_sha256: birth.checksum_sha256.clone(),
+                // The open that certifies the absence of effects.
+                origin_database_incarnation: self.incarnation.clone(),
+                predecessor_index: source.range_index(),
+                predecessor_history_sha256: source.logical_history_sha256().into(),
+                local_data_visibility: source.actual_local_visibility_sequence(),
+                actual_native_page_xid: 0,
+                checksum_sha256: String::new(),
+            },
+            || Ok(()),
+        )
+    }
+    /// The one durable publication of a Core no-effect intent. The caller
+    /// holds the native journal and has proven the slot's no-effect state.
+    fn publish_native_no_effect_under_journal(
+        &self,
+        mut record: NativeNoEffectIntentRecord,
+        after_write: impl FnOnce() -> Result<()>,
+    ) -> Result<String> {
+        let key = no_effect_key(record.command.range_id, record.command.index);
         if self
             .read_native_range_image_record::<NativeNoEffectIntentRecord>(&key)?
             .is_some()
@@ -138,19 +237,6 @@ impl BicDb {
                 "no-effect intent already exists; use actual recovery observation",
             ));
         }
-        let mut record = NativeNoEffectIntentRecord {
-            version: 1,
-            command: rejected.command().clone(),
-            domain: rejected.domain().clone(),
-            birth_id: rejected.birth_id(),
-            birth_sha256: rejected.birth_sha256().into(),
-            origin_database_incarnation: rejected.database_incarnation().into(),
-            predecessor_index: rejected.predecessor_index(),
-            predecessor_history_sha256: rejected.predecessor_history_sha256().into(),
-            local_data_visibility: rejected.local_data_visibility(),
-            actual_native_page_xid: 0,
-            checksum_sha256: String::new(),
-        };
         self.in_paged_transaction(|paged, xid| {
             record.actual_native_page_xid = xid;
             record.checksum_sha256 = record.checksum()?;
@@ -166,7 +252,7 @@ impl BicDb {
             Ok(())
         })?
         .ok_or_else(|| invalid("native no-effect intent has no actual page store"))?;
-        cleaned.require_rejection(self, rejected)?;
+        after_write()?;
         let actual: NativeNoEffectIntentRecord = self
             .read_native_range_image_record(&key)?
             .ok_or_else(|| invalid("actual durable no-effect intent missing after publication"))?;

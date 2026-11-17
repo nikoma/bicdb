@@ -1532,11 +1532,7 @@ fn after_completed_move(
         // range that published its own Serving audit answers for the moved
         // configuration; the retired source and the member outside the range
         // still refuse it from their writer state.
-        let writer = services[i]
-            .lock()
-            .range_writes
-            .native_writer_host_state()
-            .unwrap();
+        let writer = services[i].lock().test_native_writer_host_state().unwrap();
         assert_eq!(
             writer.require_range(&moved).is_ok(),
             new.contains(&node(i)),

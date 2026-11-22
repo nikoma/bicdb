@@ -839,16 +839,8 @@ fn native_initial_member_restart_whole_cluster_reopens_from_its_roots() {
 #[test]
 fn native_initial_member_restart_prepared_only_leader_tail_is_aborted() {
     use crate::distribution_range_consensus::native_abort::{
-        test_arm_native_admission_stop, test_freeze_hot_recovery_after_stop,
-        test_native_admission_stop_armed, test_thaw_hot_recovery, TestNativeAdmissionStop,
+        test_arm_native_admission_stop, test_native_admission_stop_armed, TestNativeAdmissionStop,
     };
-    struct Thaw;
-    impl Drop for Thaw {
-        fn drop(&mut self) {
-            test_thaw_hot_recovery();
-        }
-    }
-    let _thaw = Thaw;
     let mut cluster = Cluster::new();
     let topology = cluster.topology(0);
     let metadata_leader = cluster.metadata_leader().expect("a metadata leader");
@@ -937,8 +929,16 @@ fn ever_commit_leader_tail_is_committed_forward(
     after_session: bool,
 ) {
     use crate::distribution_range_consensus::native_abort::{
-        test_arm_native_admission_stop, test_native_admission_stop_armed, TestNativeAdmissionStop,
+        test_arm_native_admission_stop, test_freeze_hot_recovery_after_stop,
+        test_native_admission_stop_armed, test_thaw_hot_recovery, TestNativeAdmissionStop,
     };
+    struct Thaw;
+    impl Drop for Thaw {
+        fn drop(&mut self) {
+            test_thaw_hot_recovery();
+        }
+    }
+    let _thaw = Thaw;
     let mut cluster = Cluster::new();
     let topology = cluster.topology(0);
     let metadata_leader = cluster.metadata_leader().expect("a metadata leader");

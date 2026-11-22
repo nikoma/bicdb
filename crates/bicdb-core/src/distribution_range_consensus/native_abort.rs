@@ -1634,9 +1634,32 @@ pub(crate) fn test_take_native_admission_stop(
     let mut armed = TEST_NATIVE_ADMISSION_STOP.lock().unwrap();
     if *armed == Some((range, point)) {
         *armed = None;
+        let mut freeze = TEST_FREEZE_HOT_RECOVERY_AFTER_STOP.lock().unwrap();
+        if let Some((frozen, fired)) = freeze.as_mut() {
+            *fired |= *frozen == range;
+        }
         return true;
     }
     false
+}
+/// Test only: once the armed stop of `range` fires, the hot recovery of the
+/// range's leader does nothing more until `test_thaw_hot_recovery`, as if
+/// the process had ended at the stop (a real process death leaves no live
+/// process that could recover the tail in place).
+#[cfg(test)]
+static TEST_FREEZE_HOT_RECOVERY_AFTER_STOP: std::sync::Mutex<Option<(RangeId, bool)>> =
+    std::sync::Mutex::new(None);
+#[cfg(test)]
+pub(crate) fn test_freeze_hot_recovery_after_stop(range: RangeId) {
+    *TEST_FREEZE_HOT_RECOVERY_AFTER_STOP.lock().unwrap() = Some((range, false));
+}
+#[cfg(test)]
+pub(crate) fn test_hot_recovery_frozen(range: RangeId) -> bool {
+    *TEST_FREEZE_HOT_RECOVERY_AFTER_STOP.lock().unwrap() == Some((range, true))
+}
+#[cfg(test)]
+pub(crate) fn test_thaw_hot_recovery() {
+    *TEST_FREEZE_HOT_RECOVERY_AFTER_STOP.lock().unwrap() = None;
 }
 #[cfg(test)]
 pub(crate) fn test_native_admission_stop_armed() -> bool {

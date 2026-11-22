@@ -839,8 +839,16 @@ fn native_initial_member_restart_whole_cluster_reopens_from_its_roots() {
 #[test]
 fn native_initial_member_restart_prepared_only_leader_tail_is_aborted() {
     use crate::distribution_range_consensus::native_abort::{
-        test_arm_native_admission_stop, test_native_admission_stop_armed, TestNativeAdmissionStop,
+        test_arm_native_admission_stop, test_freeze_hot_recovery_after_stop,
+        test_native_admission_stop_armed, test_thaw_hot_recovery, TestNativeAdmissionStop,
     };
+    struct Thaw;
+    impl Drop for Thaw {
+        fn drop(&mut self) {
+            test_thaw_hot_recovery();
+        }
+    }
+    let _thaw = Thaw;
     let mut cluster = Cluster::new();
     let topology = cluster.topology(0);
     let metadata_leader = cluster.metadata_leader().expect("a metadata leader");
@@ -960,6 +968,9 @@ fn ever_commit_leader_tail_is_committed_forward(
             acknowledged.push(stopped.clone());
         }
         stopped = key_in(&topology, led.id, &mut counter);
+        // The victim's process "ends" at the stop: its hot recovery does
+        // nothing more until it is reopened.
+        test_freeze_hot_recovery_after_stop(led.id);
         test_arm_native_admission_stop(led.id, point);
         let error = client
             .append("items", &stopped, value(&stopped))
@@ -970,6 +981,7 @@ fn ever_commit_leader_tail_is_committed_forward(
         );
         eprintln!("RESTART_TEST {point:?}: stopped append {stopped}: {error}");
         cluster.crash(victim);
+        test_thaw_hot_recovery();
         cluster.reopen(victim);
         let key = key_in(&topology, led.id, &mut counter);
         append(&mut cluster, &client, &key, Duration::from_secs(60)).unwrap_or_else(|error| {

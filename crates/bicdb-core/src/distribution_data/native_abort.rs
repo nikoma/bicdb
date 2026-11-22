@@ -100,24 +100,21 @@ impl ClusterDataNodeService {
         drop(mutation);
         result
     }
-    /// REOPENED origin only: cast this node's own raw Commit vote for its
-    /// slot `command.index` that an EARLIER open left inside its local
-    /// Commit: the protected slot is already ever-Commit (the irrevocable
-    /// commit choice of the coordinator; it can no longer be aborted) and the
-    /// raw entry is still exactly this Prepared command as the first
-    /// unresolved index. The vote goes through the unchanged local Commit
-    /// path (`commit_native_range_write_with_context`), which re-proves the
-    /// slot, the raw entry, the absence of any promise/no-effect intent and
-    /// of an active recovery context, under a counted mutation lease.
-    pub(crate) fn reopened_native_commit_vote(
-        &mut self,
+    /// REOPENED origin only: re-prove that this node's own slot
+    /// `command.index` was left by an EARLIER open inside its local Commit:
+    /// the protected slot is ever-Commit for exactly this command (the
+    /// irrevocable commit choice of the coordinator; it can no longer be
+    /// aborted), with no no-effect intent and no abort promise, and the raw
+    /// entry is still exactly this Prepared command as the only unresolved
+    /// index. Read-only.
+    pub(crate) fn require_reopened_native_commit_slot(
+        &self,
+        db: &BicDb,
         range: &RangeDescriptor,
         command: &RangeWriteCommand,
-    ) -> Result<RangeWriteAck> {
-        let database = Arc::clone(&self.db);
-        let db = try_database_read(&database)?;
-        self.require_native_catalog_database(&db)?;
-        self.require_native_writer_host_for_range(&db, range)?;
+    ) -> Result<()> {
+        self.require_native_catalog_database(db)?;
+        self.require_native_writer_host_for_range(db, range)?;
         command.validate()?;
         if command.leader_node_id != self.node_id
             || command.range_id != range.id
@@ -155,6 +152,22 @@ impl ClusterDataNodeService {
                 "reopened Commit vote: the raw log does not hold exactly this Prepared command as its only unresolved entry",
             ));
         }
+        Ok(())
+    }
+    /// REOPENED origin only: cast this node's own raw Commit vote for the
+    /// slot proven by `require_reopened_native_commit_slot`. The vote goes
+    /// through the unchanged local Commit path
+    /// (`commit_native_range_write_with_context`), which re-proves the slot,
+    /// the raw entry, the absence of any promise/no-effect intent and of an
+    /// active recovery context, under a counted mutation lease.
+    pub(crate) fn reopened_native_commit_vote(
+        &mut self,
+        range: &RangeDescriptor,
+        command: &RangeWriteCommand,
+    ) -> Result<RangeWriteAck> {
+        let database = Arc::clone(&self.db);
+        let db = try_database_read(&database)?;
+        self.require_reopened_native_commit_slot(&db, range, command)?;
         let gate = self.range_mutations.clone();
         let mutation = gate.try_enter(range.id)?;
         let node = self.node_id.clone();

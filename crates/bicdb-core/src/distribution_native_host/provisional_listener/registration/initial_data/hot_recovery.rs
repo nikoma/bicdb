@@ -638,6 +638,11 @@ impl NativeHotRecoveryMaintenance {
         for offset in 0..ranges.len().min(MAX_IDLE_RANGE_SCAN) {
             let at = (first + offset) % ranges.len();
             let range = (*ranges[at]).clone();
+            #[cfg(test)]
+            if crate::distribution_range_consensus::native_abort::test_hot_recovery_frozen(range.id)
+            {
+                continue;
+            }
             if state.jobs.contains_key(&range.id) {
                 state.cursor = (at + 1) % ranges.len();
                 selected = Some(range);
@@ -1208,8 +1213,17 @@ impl NativeHotRecoveryMaintenance {
     /// re-proves it through its unchanged Commit receiver. Nothing here
     /// decides the command: the forward session's Certify phase decides it
     /// from the fenced members' durable votes. Returns the Commit votes
-    /// (own included), the refusals and the quorum. An error (the own vote
-    /// was refused) leaves the range refused by that reason.
+    /// (own included when cast), the refusals and the quorum. An error (the
+    /// slot proof or the own vote was refused) leaves the range refused by
+    /// that reason.
+    ///
+    /// When this node's store holds a durable activation of an earlier
+    /// session that this open never armed, its own Commit path refuses
+    /// (`require_no_active_recovery`) until a fresh session activates the
+    /// range here. The own vote is then not cast (the slot is still
+    /// re-proven ever-Commit, which is what forbids its abort); the Commit is
+    /// still re-sent to the other voters, whose own checks are unchanged,
+    /// and the session decides only from the votes that exist.
     #[allow(clippy::type_complexity)]
     fn redrive_commit_round(
         &self,
@@ -1219,6 +1233,12 @@ impl NativeHotRecoveryMaintenance {
     ) -> Result<(BTreeSet<ClusterNodeId>, BTreeMap<String, String>, usize)> {
         self.live(token)?;
         let origin = self.initial.seed.spec.node_id.clone();
+        let refusal = |error: crate::BicDbError| {
+            invalid(&format!(
+                "reopened leader slot {} of range {} is ever-Commit while its raw entry is not committed, and casting its own Commit vote was refused: {error}; an ever-Commit slot is never aborted; the range stays refused",
+                command.index, range.id
+            ))
+        };
         let own = {
             let mut service = self
                 .initial
@@ -1235,31 +1255,50 @@ impl NativeHotRecoveryMaintenance {
                 ));
             }
             match entry.state {
-                RangeWriteState::Prepared => service
-                    .reopened_native_commit_vote(range, command)
-                    .map_err(|error| {
-                        invalid(&format!(
-                            "reopened leader slot {} of range {} is ever-Commit while its raw entry is not committed, and casting its own Commit vote was refused: {error}; an ever-Commit slot is never aborted; the range stays refused",
-                            command.index, range.id
-                        ))
-                    })?
-                    .state,
-                state => state,
+                RangeWriteState::Prepared if service.native_activation_dormant(range.id) => {
+                    let db = self
+                        .initial
+                        .seed
+                        .database
+                        .try_read()
+                        .ok_or_else(|| invalid("hot commit re-drive actual DB busy"))?;
+                    service
+                        .require_reopened_native_commit_slot(&db, range, command)
+                        .map_err(refusal)?;
+                    None
+                }
+                RangeWriteState::Prepared => Some(
+                    service
+                        .reopened_native_commit_vote(range, command)
+                        .map_err(refusal)?
+                        .state,
+                ),
+                state => Some(state),
             }
         };
-        if !matches!(
-            own,
-            RangeWriteState::Committed
-                | RangeWriteState::QuorumCommitted
-                | RangeWriteState::Applied
-        ) {
-            return Err(invalid(&format!(
-                "hot commit re-drive: own vote state {own:?} is not a Commit vote"
-            )));
+        if let Some(own) = own {
+            if !matches!(
+                own,
+                RangeWriteState::Committed
+                    | RangeWriteState::QuorumCommitted
+                    | RangeWriteState::Applied
+            ) {
+                return Err(invalid(&format!(
+                    "hot commit re-drive: own vote state {own:?} is not a Commit vote"
+                )));
+            }
         }
         self.live(token)?;
-        let (mut committed, refused) = self.coordinator.redrive_reopened_commit_votes(command)?;
-        committed.insert(origin);
+        let (mut committed, mut refused) =
+            self.coordinator.redrive_reopened_commit_votes(command)?;
+        if own.is_some() {
+            committed.insert(origin);
+        } else {
+            refused.insert(
+                origin,
+                "own vote not cast: this store holds a durable activation of an earlier session that this open never armed".into(),
+            );
+        }
         let voters = range
             .replicas
             .iter()

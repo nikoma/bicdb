@@ -1369,17 +1369,32 @@ const MAX_SERVED_BUDGET: Duration = Duration::from_millis(5000);
 const SERVED_REPLY_MARGIN: Duration = Duration::from_millis(500);
 
 /// The own budget of a request that a receiver serves for that budget
-/// instead of the network deadline: a joint decision request and a joint
-/// handoff step. A member performs several bounded parts inside one such
-/// request (its own metadata reading, its callbacks to the other members,
-/// its local work); on a slow host they need longer than the network
-/// deadline, and a member cut off by it repeats the same parts on every
-/// repetition without ever finishing. The budget is request DATA that only
-/// bounds work: it grants nothing, and it is capped here.
+/// instead of the network deadline: a joint decision request, a joint
+/// handoff step and a host metadata acquisition. A member performs several
+/// bounded parts inside one such request (its own metadata reading, its
+/// callbacks to the other members, its local work); on a slow host they need
+/// longer than the network deadline, and a member cut off by it repeats the
+/// same parts on every repetition without ever finishing. The budget is
+/// request DATA that only bounds work: it grants nothing, and it is capped
+/// here.
+///
+/// A host metadata acquisition is listed because the member's work runs
+/// under the observation it returns: the leader bounds the observation's
+/// context by its own request deadline, so with the network deadline alone a
+/// member's observation lived at most that long (2 s on a native host)
+/// whatever budget the member asked for and whatever budget its step had.
+/// Every phase bounded by that observation (a preparation's native part, a
+/// publication or Open window) then ran out on a slow host on every
+/// repetition. The protocol already admits an observation of up to five
+/// seconds (the acquisition refuses a larger budget), and a transport with
+/// the default 30 s network deadline always granted that. This makes the
+/// requested budget, not the connection's I/O timeout, the bound; nothing a
+/// receiver checks changes.
 fn served_budget(request: &ClusterDataRequest) -> Option<Duration> {
     let budget_ms = match request {
         ClusterDataRequest::NativeRemoteNew { request } => request.budget_ms,
         ClusterDataRequest::NativeJointHandoffStep { request } => request.budget_ms,
+        ClusterDataRequest::HostMetadataReadAcquire { request } => request.budget_ms,
         _ => return None,
     };
     Some(Duration::from_millis(budget_ms).min(MAX_SERVED_BUDGET))
@@ -1897,8 +1912,11 @@ fn handle_cluster_data_connection(
             let caller = authenticated_caller.as_ref().ok_or_else(|| {
                 transport_error("host metadata acquisition requires authenticated membership")
             })?;
-            let cancellation =
-                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            // Served for the caller's own (capped) budget: see `served_budget`.
+            let cancellation = CancellationToken::new(
+                Arc::new(AtomicBool::new(false)),
+                Some(served_deadline(request_deadline, request.budget_ms)),
+            );
             return provider
                 .acquire_host_metadata(caller, request, &cancellation)
                 .map(ClusterDataResponse::HostMetadataReadAcquire);

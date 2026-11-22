@@ -214,6 +214,13 @@ impl NativeRegisteredReplicaAdmission {
     ) -> Result<(NativeJointHandoffStepOutcomeV1, (u64, u64, Uuid))> {
         let range = request.range_id;
         let anchor = fresh.anchor;
+        let part = std::cell::Cell::new(std::time::Instant::now());
+        let traced = |what: &str| {
+            crate::distribution_native_host::range_move_trace(
+                part.replace(std::time::Instant::now()),
+                || format!("member prepare part {range} registered: {what}"),
+            )
+        };
         // What this member's own fresh metadata shows finished is released
         // first and never counts against the capacity.
         let own_topology = fresh.own.committed_topology(fresh.business)?;
@@ -268,6 +275,7 @@ impl NativeRegisteredReplicaAdmission {
             range,
             token,
         )?;
+        traced("decision confirmed");
         // The real freeze the retained owner itself still holds; never one
         // rebuilt from a plan, a number or request DATA.
         let lease = NativeJointServingLease::Registered {
@@ -282,6 +290,7 @@ impl NativeRegisteredReplicaAdmission {
             business,
             token,
         )?;
+        traced("metadata point captured");
         let session = step.session().clone();
         let actual = {
             let service = backend
@@ -294,8 +303,10 @@ impl NativeRegisteredReplicaAdmission {
             )?;
             // The decision this member itself protected and sees committed.
             request.require_decision(committed.data())?;
+            traced("committed decision observed");
             service.prepare_local_registered_joint_serving(committed, lease, &session)?
         };
+        traced("native preparation");
         // Native facts/State/A/pin enter retained custody BEFORE any later
         // check or reply can fail.
         step.retain_custody(NativeJointPreparationCustody::retain(

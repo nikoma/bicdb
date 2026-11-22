@@ -157,8 +157,15 @@ impl RangeRecoveryRuntime {
             crate::distribution_native_read::trace::Span::current("read-service-wait");
         // STRONG_TRACE_END
         token.check()?;
+        let waited = Instant::now();
         let service = loop {
-            token.check()?;
+            if let Err(error) = token.check() {
+                return Err(invalid(&format!(
+                    "{error}: waited {}ms for the data service latch of {}",
+                    waited.elapsed().as_millis(),
+                    self.local_node_id
+                )));
+            }
             if let Some(service) = self.service.try_lock_for(LATCH_POLL) {
                 break service;
             }
@@ -303,6 +310,11 @@ let read_attempt = crate::distribution_native_read::trace::Span::current("read-a
 #[cfg(test)]
 crate::distribution_native_read::trace::Span::detail("read-attempt", format_args!("peer={} attempt={} queued_us={} request_budget_ms={} parent_deadline_us={:?} local={}", job.node, job.attempt, job.queued.elapsed().as_micros(), request.budget_ms, crate::distribution_native_read::trace::deadline_us(proof_token.deadline()), job.node == runtime.local_node_id));
 // STRONG_TRACE_END
+                        let started = Instant::now();
+                        let slice_ms = job
+                            .token
+                            .deadline()
+                            .map(|d| d.saturating_duration_since(started).as_millis());
                         let result = job.token.check().and_then(|_| {
                             if job.node == runtime.local_node_id {
                                 runtime.observe_current_native_range_inner(&request, &proof_token)
@@ -315,6 +327,13 @@ crate::distribution_native_read::trace::Span::detail("read-attempt", format_args
                                     })?
                                     .observe_current_native_range(&job.node, &request, &job.token)
                             }
+                        });
+                        // Diagnostic only: how long the refused probe ran.
+                        let result = result.map_err(|error| {
+                            invalid(&format!(
+                                "{error} (probe ran {}ms of a {slice_ms:?}ms slice)",
+                                started.elapsed().as_millis()
+                            ))
                         });
 
 // STRONG_TRACE_BEGIN

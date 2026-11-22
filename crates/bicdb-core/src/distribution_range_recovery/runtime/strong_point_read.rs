@@ -161,6 +161,10 @@ impl RangeRecoveryRuntime {
         let runtime = Arc::clone(self);
         let worker_token = token.clone();
         let (tx, rx) = mpsc::sync_channel(1);
+        // Diagnostic only: when each step of this read ended, for the text of
+        // a refusal. Never consulted for admission or currentness.
+        let begun = Instant::now();
+        let budget_ms = request.budget_ms;
 
         // STRONG_TRACE_BEGIN
         #[cfg(test)]
@@ -189,7 +193,12 @@ impl RangeRecoveryRuntime {
                 );
                 // STRONG_TRACE_END
 
-                let result = (|| {
+                let marks = std::cell::RefCell::new(Vec::<(&'static str, u128)>::new());
+                let mark = |step: &'static str| {
+                    marks.borrow_mut().push((step, begun.elapsed().as_millis()))
+                };
+                mark("worker started");
+                let mut result = (|| {
                     let check = |stage, error| NativeStrongPointReadUnavailable::new(stage, error);
                     worker_token
                         .check()
@@ -205,6 +214,7 @@ impl RangeRecoveryRuntime {
                     let _reservation = coordinator
                         .reserve_native_point_read(request.range_id, &worker_token)
                         .map_err(|e| check(NativeStrongReadStage::Reservation, e))?;
+                    mark("range admission");
 
                     // STRONG_TRACE_BEGIN
                     #[cfg(test)]
@@ -245,6 +255,7 @@ impl RangeRecoveryRuntime {
                         host.require_for_coordinator(&database, &range, &coordinator)
                             .map_err(|e| check(NativeStrongReadStage::WriterAdmission, e))?;
                     }
+                    mark("writer check");
                     let metadata_leader = first_metadata.metadata_leader_id().clone();
                     // Reuse ONE operation, including its local probe/final IO.
                     // No recursive fifth context or new recovery session is made.
@@ -263,6 +274,7 @@ impl RangeRecoveryRuntime {
                             Arc::clone(&operation),
                         )
                         .map_err(|e| check(NativeStrongReadStage::DataQuorum, e))?;
+                    mark("data quorum");
 
                     // STRONG_TRACE_BEGIN
                     #[cfg(test)]
@@ -309,6 +321,7 @@ impl RangeRecoveryRuntime {
                             )
                             .map_err(|e| check(NativeStrongReadStage::Snapshot, e))?
                     };
+                    mark("snapshot");
 
                     // STRONG_TRACE_BEGIN
                     #[cfg(test)]
@@ -360,6 +373,7 @@ impl RangeRecoveryRuntime {
                             &worker_token,
                         )
                         .map_err(|e| check(NativeStrongReadStage::FinalMetadata, e))?;
+                    mark("final metadata");
                     // STRONG_TRACE_BEGIN
                     #[cfg(test)]
                     drop(strong_final_metadata);
@@ -398,6 +412,18 @@ impl RangeRecoveryRuntime {
                         .finalize(final_metadata, &service, &coordinator, &worker_token)
                         .map_err(|e| check(NativeStrongReadStage::FinalCurrentness, e))
                 })();
+                if let Err(refusal) = &mut result {
+                    let steps = marks
+                        .borrow()
+                        .iter()
+                        .map(|(step, ms)| format!("{step} at {ms}ms"))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    refusal.detail.push_str(&format!(
+                        " [point read refused at {}ms of a {budget_ms}ms budget; {steps}]",
+                        begun.elapsed().as_millis()
+                    ));
+                }
                 // All actual local IO occurs on this worker. Its operation stays
                 // owned even when the caller abandons this bounded result channel.
 

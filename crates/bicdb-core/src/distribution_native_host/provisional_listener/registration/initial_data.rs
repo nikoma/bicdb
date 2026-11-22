@@ -639,11 +639,19 @@ impl NativeInitialDataHost {
             }
             return Ok(0);
         }
+        // The tails this attempt starts from (local reads only), so a
+        // recovered attempt still names what it recovered.
+        let tails = led
+            .iter()
+            .filter(|range| !coordinator.initial_data_leader_admission_observed(range))
+            .map(|range| self.reopened_tail_diagnostic(range))
+            .collect::<Vec<_>>();
         let outcome = coordinator.recover_reopened_local_leadership(64);
         let remaining = pending(&coordinator);
         self.reopened_leader_recovery_last_attempt = Some(match &outcome {
             Ok(recovered) => serde_json::json!({
                 "result": "recovered", "ranges": recovered, "still_unrecovered": remaining,
+                "recovered_tails": tails,
                 "scope": "ordinary leader recovery of this process; diagnostic, not authority"}),
             Err(error) => {
                 let unrecovered = led

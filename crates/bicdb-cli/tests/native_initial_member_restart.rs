@@ -1150,6 +1150,19 @@ fn native_initial_member_restart_four_process_leader_killed_under_writes() {
                         })
                 });
             }
+            if seen_state.is_none() {
+                // Recovered by the ordinary reopened leader recovery itself:
+                // its native prefix already covered its own certified entry.
+                seen_state = attempt["recovered_tails"].as_array().and_then(|ranges| {
+                    ranges
+                        .iter()
+                        .find(|r| {
+                            r["range_id"] == led.id.get()
+                                && r["tail_state"] == "native_completed_raw_unresolved"
+                        })
+                        .map(|_| "NativeCompletedRawUnresolved".to_owned())
+                });
+            }
             let hot = &status["host"]["initial_data"]["hot_recovery_last_attempt"];
             seen_abort |= hot["abort"] == true && hot["range_id"] == led.id.get();
             seen_redrive |= (hot["commit_redriven"] == true || hot["phase"] == "commit_redrive")

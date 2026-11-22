@@ -268,7 +268,16 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
         let database = database
             .try_read()
             .ok_or_else(|| range_write_error("reopened leader raw resolution database busy"))?;
-        service.resolve_reopened_native_completed_raw_entry(&database, range, authority)?;
+        let resolved =
+            service.resolve_reopened_native_completed_raw_entry(&database, range, authority)?;
+        #[cfg(test)]
+        if let Some(index) = resolved {
+            eprintln!(
+                "REOPENED_NATIVE_COMPLETED_RAW_RESOLVED range={} index={index}",
+                range.id
+            );
+        }
+        let _ = resolved;
         Ok(())
     }
 

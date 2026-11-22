@@ -1,16 +1,18 @@
 [package]
 name = "bicdb-core"
-version = "1.0.524"
+version = "1.0.525"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Storage engine of the BicDB database (internal crate; install `bicdb`)"
+description = "Storage engine of the BicDB database. Part of BicDB, one database for SQL (PostgreSQL protocol), a Redis-compatible cache, search and vectors; install `bicdb`"
+readme = "README.md"
+keywords = ["bicdb", "database", "sql", "embedded", "search"]
 categories = ["database-implementations"]
 # Build inputs only: test suites, fixtures and examples stay in the repository.
-include = ["/src/**", "/Cargo.toml", "/LICENSE", "/NOTICE", "/THIRD_PARTY_NOTICES.md"]
+include = ["/README.md", "/src/**", "/Cargo.toml", "/LICENSE", "/NOTICE", "/THIRD_PARTY_NOTICES.md"]
 
 [features]
 # Native deps are opt-out so the crate can build for wasm32-wasip1
@@ -26,8 +28,8 @@ osm-import = ["dep:osmpbfreader"]
 compression = ["dep:zstd"]
 
 [dependencies]
-bicdb-lua = { path = "../bicdb-lua", version = "=1.0.524", optional = true }
-bicdb-page = { path = "../bicdb-page", version = "=1.0.524" }
+bicdb-lua = { path = "../bicdb-lua", version = "=1.0.525", optional = true }
+bicdb-page = { path = "../bicdb-page", version = "=1.0.525" }
 argon2.workspace = true
 bigdecimal = "=0.4.10"
 chacha20poly1305.workspace = true

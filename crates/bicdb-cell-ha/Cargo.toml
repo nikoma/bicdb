@@ -1,19 +1,21 @@
 [package]
 name = "bicdb-cell-ha"
-version = "1.0.524"
+version = "1.0.525"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "High-availability control and fencing primitives for BicDB cells (internal crate; install `bicdb`)"
+description = "High-availability control and fencing primitives for BicDB cells. Part of BicDB, one database for SQL (PostgreSQL protocol), a Redis-compatible cache, search and vectors; install `bicdb`"
+readme = "README.md"
+keywords = ["bicdb", "database"]
 categories = ["database-implementations"]
 # Build inputs only: test suites, fixtures and examples stay in the repository.
-include = ["/src/**", "/Cargo.toml", "/LICENSE", "/NOTICE", "/THIRD_PARTY_NOTICES.md"]
+include = ["/README.md", "/src/**", "/Cargo.toml", "/LICENSE", "/NOTICE", "/THIRD_PARTY_NOTICES.md"]
 
 [dependencies]
-bicdb-core = { path = "../bicdb-core", version = "=1.0.524" }
+bicdb-core = { path = "../bicdb-core", version = "=1.0.525" }
 ciborium.workspace = true
 ed25519-dalek.workspace = true
 hex.workspace = true

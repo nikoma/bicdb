@@ -18,7 +18,7 @@ take a week than leave a report unanswered.
 
 ## Scope
 
-BicDB is beta software under active development. The boundaries we treat as
+BicDB is production software under active development. The boundaries we treat as
 security-relevant are:
 
 - **Multi-tenant isolation** — cross-tenant reads or writes, RLS bypass,

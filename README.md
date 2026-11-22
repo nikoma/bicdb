@@ -2,7 +2,10 @@
 
 ## One database. Not six services.
 
-**Beta · Built in Rust · From embedded applications to distributed clusters**
+**Built in Rust · In production · From embedded applications to distributed clusters**
+
+**In production.** BicDB is production software, not an experiment. It runs a
+search cluster with 2.1 billion records, health-record backends and field apps.
 
 BicDB is a next-generation database for AI-native applications. SQL, durable
 cache, queues, full-text search, vectors, spatial queries, and analytics share
@@ -177,8 +180,8 @@ psql -h 127.0.0.1 -p 5433 -U bicdb -d bicdb -c 'SELECT * FROM notes ORDER BY id;
 Stop the server with Ctrl-C. This loopback demo has no authentication configured;
 follow [server setup](SERVER_MODE.md) before exposing a service remotely.
 
-BicDB is **beta**, with a tested subset of PostgreSQL behavior. Read
-[current limitations](#current-limitations) before choosing it for critical data.
+BicDB implements a tested subset of PostgreSQL behavior. Read
+[current limitations](#current-limitations) for what is not covered yet.
 
 ## Coming from PostgreSQL?
 
@@ -549,7 +552,7 @@ checked-in evidence.
 
 ## Current limitations
 
-- BicDB is beta software. Rehearse backup/restore and failure procedures before
+- As with any database, rehearse backup/restore and failure procedures before
   making it the only copy of data you cannot recreate.
 - PostgreSQL compatibility is broad, not exhaustive. The generated report and
   client matrix are the source of truth; Prisma remains outside the passing

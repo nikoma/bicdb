@@ -15,6 +15,9 @@ search, vector search, spatial queries and analytics share one engine. Connect
 with PostgreSQL and Redis clients, run it as a server, or use it from the
 command line against a local data directory.
 
+**In production.** BicDB is production software, not an experiment. It runs a
+search cluster with 2.1 billion records, health-record backends and field apps.
+
 ```sh
 cargo install bicdb --locked
 bicdb --version

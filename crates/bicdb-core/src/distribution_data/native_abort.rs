@@ -100,6 +100,42 @@ impl ClusterDataNodeService {
         drop(mutation);
         result
     }
+    /// This node's own protected slot of `command` is ever-Commit for
+    /// exactly this command, with no no-effect intent and no abort promise.
+    /// Read-only. The ever-Commit mark is monotone and excludes both (see
+    /// `native_abort_mark_ever_commit` and the no-effect/promise producers),
+    /// so a Commit (re)sent to other voters after this can never meet an
+    /// abort this origin started.
+    pub(crate) fn require_own_ever_commit_slot(
+        &self,
+        range: &RangeDescriptor,
+        command: &RangeWriteCommand,
+    ) -> Result<()> {
+        let database = Arc::clone(&self.db);
+        let db = try_database_read(&database)?;
+        self.require_native_catalog_database(&db)?;
+        command.validate()?;
+        if command.leader_node_id != self.node_id || command.range_id != range.id {
+            return Err(data_error(
+                "own ever-Commit slot: only this node's own command of this range",
+            ));
+        }
+        Self::require_ever_commit_slot_in(&db, command)
+    }
+    fn require_ever_commit_slot_in(db: &BicDb, command: &RangeWriteCommand) -> Result<()> {
+        let ever_commit = db.native_abort_slot_inventory()?.into_iter().any(|s| {
+            s.command == *command
+                && s.ever_commit
+                && s.no_effect_sha256.is_none()
+                && s.abort_promise_sha256.is_none()
+        });
+        if !ever_commit {
+            return Err(data_error(
+                "reopened Commit vote: the protected slot is not ever-Commit for exactly this command",
+            ));
+        }
+        Ok(())
+    }
     /// REOPENED origin only: re-prove that this node's own slot
     /// `command.index` was left by an EARLIER open inside its local Commit:
     /// the protected slot is ever-Commit for exactly this command (the
@@ -129,17 +165,7 @@ impl ClusterDataNodeService {
                 "reopened Commit vote: the slot was started by this open; only its own admission may decide it",
             ));
         }
-        let ever_commit = db.native_abort_slot_inventory()?.into_iter().any(|s| {
-            s.command == *command
-                && s.ever_commit
-                && s.no_effect_sha256.is_none()
-                && s.abort_promise_sha256.is_none()
-        });
-        if !ever_commit {
-            return Err(data_error(
-                "reopened Commit vote: the protected slot is not ever-Commit for exactly this command",
-            ));
-        }
+        Self::require_ever_commit_slot_in(db, command)?;
         let progress = self.range_write_progress(range.id);
         let raw = self
             .probe_range_write_for_peer(range, &self.node_id.clone(), command.index)?

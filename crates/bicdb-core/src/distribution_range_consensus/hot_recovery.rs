@@ -272,7 +272,8 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
         }
         Ok(())
     }
-    /// REOPENED leader only, before any fence of its hot recovery session:
+    /// REOPENED leader only, before any fence of its hot recovery session,
+    /// and only once its own slot is ever-Commit:
     /// re-send the ORIGINAL Commit of its own unfinished command to every
     /// other voter through the ordinary Commit request, exactly what its
     /// earlier process would have sent next. Each receiver runs its unchanged
@@ -305,6 +306,12 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
                 "commit re-drive: the range is admitted; an ordinary admission owns its slots",
             ));
         }
+        // Commit is (re)sent only once this origin's own slot is durably
+        // ever-Commit (no no-effect intent, no promise): its abort is then
+        // impossible everywhere, exactly as for the original round.
+        self.local_service
+            .lock()
+            .require_own_ever_commit_slot(&range, command)?;
         let voters = range
             .replicas
             .iter()

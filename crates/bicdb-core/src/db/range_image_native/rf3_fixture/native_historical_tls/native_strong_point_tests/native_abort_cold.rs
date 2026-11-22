@@ -742,6 +742,81 @@ fn native_abort_reopened_no_effect_producer_refuses_other_states() {
     fixture._keys.disable_cleanup(false);
 }
 
+/// A follower holds an abort promise for the slot. Only the origin's abort
+/// round creates one, from the origin's Core no-effect intent, and that
+/// intent and the ever-Commit mark exclude each other at the origin. So the
+/// origin is not ever-Commit: its own Commit vote and the Commit re-drive are
+/// refused, and the follower's unchanged Commit receiver refuses the
+/// original Commit as well. No member is marked ever-Commit.
+#[test]
+fn native_abort_reopened_follower_promise_refuses_commit_redrive() {
+    use crate::distribution_range_consensus::RangeWriteTransport;
+    let fixture = EnforcedNetwork::new();
+    let range = fixture.ranges()[0].clone();
+    let (_, command) = stopped_append(
+        &fixture,
+        &range,
+        TestNativeAdmissionStop::AfterPrepareQuorum,
+        "prepared-then-follower-promise",
+    );
+    let fixture = reopen_stopped(fixture);
+    let range = current_range(&fixture, range.id);
+    let candidate = fixture.native.services[&node("n0")]
+        .lock()
+        .reopened_native_abort_candidate(&range, &command)
+        .unwrap();
+    let scope = fixture.actual_current_recovery_scope(&range);
+    let request = crate::distribution_range_recovery::NativeAbortRequest {
+        scope,
+        range_index: command.index,
+        origin_node_id: node("n0"),
+        candidate_sha256: Some(candidate),
+        challenge: Uuid::now_v7(),
+        budget_ms: 4500,
+    };
+    fixture.clients[&node("n0")]
+        .promise_native_abort(&node("n1"), &request, &super::native_abort_tests::token())
+        .unwrap();
+    fixture.idle();
+    let error = fixture.native.services[&node("n0")]
+        .lock()
+        .reopened_native_commit_vote(&range, &command)
+        .unwrap_err();
+    assert!(error.to_string().contains("not ever-Commit"), "{error}");
+    let error = fixture.coordinators[&node("n0")]
+        .redrive_reopened_commit_votes(&command)
+        .unwrap_err();
+    assert!(error.to_string().contains("not ever-Commit"), "{error}");
+    let error = fixture.clients[&node("n0")]
+        .commit_range_write(&node("n1"), &command)
+        .unwrap_err();
+    eprintln!("FOLLOWER_PROMISE_COMMIT_REFUSAL {error}");
+    assert!(
+        error.to_string().contains("AbortPromise")
+            || error.to_string().contains("no-effect/abort slot")
+            || error.to_string().contains("active recovery"),
+        "{error}"
+    );
+    fixture.idle();
+    for id in [node("n0"), node("n1"), node("n2")] {
+        let db = fixture.native.databases[&id].read();
+        let slot = db
+            .native_abort_slot_inventory()
+            .unwrap()
+            .into_iter()
+            .find(|s| s.command.range_id == range.id && s.command.index == command.index)
+            .unwrap();
+        assert!(!slot.ever_commit, "{id}");
+        assert_eq!(
+            slot.abort_promise_sha256.is_some(),
+            id == node("n1"),
+            "{id}"
+        );
+    }
+    fixture.native.root.disable_cleanup(false);
+    fixture._keys.disable_cleanup(false);
+}
+
 /// Followers holding Commit for the slot (which no real origin can cause:
 /// it marks ever-Commit before sending Commit): the abort is refused with
 /// Irreversible and no follower promises it. A native Pending at the origin

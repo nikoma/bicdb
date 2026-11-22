@@ -759,7 +759,7 @@ fn native_abort_reopened_follower_promise_refuses_commit_redrive() {
         TestNativeAdmissionStop::AfterPrepareQuorum,
         "prepared-then-follower-promise",
     );
-    let fixture = reopen_stopped(fixture);
+    let mut fixture = reopen_stopped(fixture);
     let range = current_range(&fixture, range.id);
     let candidate = fixture.native.services[&node("n0")]
         .lock()

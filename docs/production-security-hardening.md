@@ -24,7 +24,7 @@ BICDB_PROTECTED_FIELD_ENCRYPTION_KEY=<64-hex-characters-from-openssl-rand-hex-32
 BICDB_PROTECTED_LOOKUP_HMAC_KEY=<a-different-64-hex-random-key> \
 BICDB_BACKUP_KEY=... \
 BICDB_DB_KEY=... \
-cargo run -p bicdb-cli -- security production-gate /data/bicdb-production \
+cargo run -p bicdb -- security production-gate /data/bicdb-production \
   --profile regulated-data \
   --host 0.0.0.0 \
   --require-auth \
@@ -53,7 +53,7 @@ security work in issues #39-#41.
 Generate dependency evidence with:
 
 ```bash
-cargo run -p bicdb-cli -- security supply-chain-audit --json \
+cargo run -p bicdb -- security supply-chain-audit --json \
   > reports/dependency-audit.json
 ```
 

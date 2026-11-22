@@ -1,9 +1,19 @@
 [package]
-name = "bicdb-cli"
-version = "1.0.523-beta"
+name = "bicdb"
+version = "1.0.524"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "One database for SQL over the PostgreSQL wire protocol, a Redis-compatible cache, full-text, vector and geospatial search, time travel and live queries"
+documentation = "https://github.com/nikoma/bicdb/tree/main/docs"
+readme = "README.md"
+keywords = ["database", "postgres", "redis", "sql", "search"]
+categories = ["database-implementations", "command-line-utilities"]
+# Build inputs only: integration tests stay in the repository.
+include = ["/src/**", "/Cargo.toml", "/README.md", "/LICENSE", "/NOTICE", "/THIRD_PARTY_NOTICES.md"]
 
 [[bin]]
 name = "bicdb"
@@ -20,24 +30,24 @@ bench-comparison-engines = ["bench", "bicdb-bench/comparison-engines"]
 [dependencies]
 uuid.workspace = true
 anyhow.workspace = true
-bicdb-analytics = { path = "../bicdb-analytics", version = "1.0.523-beta" }
+bicdb-analytics = { path = "../bicdb-analytics", version = "1.0.524" }
 base64.workspace = true
-bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "1.0.523-beta" }
-bicdb-blob-s3 = { path = "../bicdb-blob-s3", version = "1.0.523-beta" }
-bicdb-bench = { path = "../bicdb-bench", version = "1.0.523-beta", optional = true }
-bicdb-cell = { path = "../bicdb-cell", version = "1.0.523-beta" }
-bicdb-core = { path = "../bicdb-core", version = "1.0.523-beta" }
-bicdb-pgwire = { path = "../bicdb-pgwire", version = "1.0.523-beta" }
-bicdb-page = { path = "../bicdb-page", version = "1.0.523-beta" }
-runtime-redis-provider = { package = "bicdb-provider-redis", path = "../bicdb-provider-redis", version = "1.0.523-beta" }
-runtime-email-provider = { package = "bicdb-provider-email", path = "../bicdb-provider-email", version = "1.0.523-beta" }
-runtime-grpc-provider = { package = "bicdb-provider-grpc", path = "../bicdb-provider-grpc", version = "1.0.523-beta" }
-runtime-tokenizer-provider = { package = "bicdb-provider-tokenizer", path = "../bicdb-provider-tokenizer", version = "1.0.523-beta" }
-runtime-embeddings-provider = { package = "bicdb-provider-embeddings", path = "../bicdb-provider-embeddings", version = "1.0.523-beta" }
-runtime-llm-provider = { package = "bicdb-provider-llm", path = "../bicdb-provider-llm", version = "1.0.523-beta" }
-bicdb-resp = { path = "../bicdb-resp", version = "1.0.523-beta" }
-bicdb-sql = { path = "../bicdb-sql", version = "1.0.523-beta" }
-bicdb-sync = { path = "../bicdb-sync", version = "1.0.523-beta" }
+bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "1.0.524" }
+bicdb-blob-s3 = { path = "../bicdb-blob-s3", version = "1.0.524" }
+bicdb-bench = { path = "../bicdb-bench", version = "1.0.524", optional = true }
+bicdb-cell = { path = "../bicdb-cell", version = "1.0.524" }
+bicdb-core = { path = "../bicdb-core", version = "1.0.524" }
+bicdb-pgwire = { path = "../bicdb-pgwire", version = "1.0.524" }
+bicdb-page = { path = "../bicdb-page", version = "1.0.524" }
+runtime-redis-provider = { package = "bicdb-provider-redis", path = "../bicdb-provider-redis", version = "1.0.524" }
+runtime-email-provider = { package = "bicdb-provider-email", path = "../bicdb-provider-email", version = "1.0.524" }
+runtime-grpc-provider = { package = "bicdb-provider-grpc", path = "../bicdb-provider-grpc", version = "1.0.524" }
+runtime-tokenizer-provider = { package = "bicdb-provider-tokenizer", path = "../bicdb-provider-tokenizer", version = "1.0.524" }
+runtime-embeddings-provider = { package = "bicdb-provider-embeddings", path = "../bicdb-provider-embeddings", version = "1.0.524" }
+runtime-llm-provider = { package = "bicdb-provider-llm", path = "../bicdb-provider-llm", version = "1.0.524" }
+bicdb-resp = { path = "../bicdb-resp", version = "1.0.524" }
+bicdb-sql = { path = "../bicdb-sql", version = "1.0.524" }
+bicdb-sync = { path = "../bicdb-sync", version = "1.0.524" }
 clap.workspace = true
 ctrlc.workspace = true
 crossterm.workspace = true

@@ -337,20 +337,20 @@ interface.
 Create or refresh a standby:
 
 ```bash
-cargo run -p bicdb-cli -- ha ship /srv/bicdb/primary /srv/bicdb/standby
+cargo run -p bicdb -- ha ship /srv/bicdb/primary /srv/bicdb/standby
 ```
 
 Inspect lag and readiness:
 
 ```bash
-cargo run -p bicdb-cli -- ha status /srv/bicdb/standby
-cargo run -p bicdb-cli -- ha status /srv/bicdb/standby --json
+cargo run -p bicdb -- ha status /srv/bicdb/standby
+cargo run -p bicdb -- ha status /srv/bicdb/standby --json
 ```
 
 Promote after fencing the old primary:
 
 ```bash
-cargo run -p bicdb-cli -- ha promote /srv/bicdb/standby
+cargo run -p bicdb -- ha promote /srv/bicdb/standby
 ```
 
 If the standby reports non-zero lag or an apply error, promotion fails unless

@@ -1,9 +1,16 @@
 [package]
 name = "bicdb-sql"
-version = "1.0.523-beta"
+version = "1.0.524"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "SQL engine of the BicDB database (internal crate; install `bicdb`)"
+categories = ["database-implementations"]
+# Build inputs only: test suites, fixtures and examples stay in the repository.
+include = ["/src/**", "/assets/**", "/Cargo.toml", "/LICENSE", "/NOTICE", "/THIRD_PARTY_NOTICES.md"]
 
 [features]
 # The adaptive engine's compiled-proc backend JITs procedures with wasmtime,
@@ -16,8 +23,8 @@ extension-host = ["bicdb-extension/host"]
 [dependencies]
 smallvec = "1"
 base64.workspace = true
-bicdb-core = { path = "../bicdb-core", version = "1.0.523-beta", default-features = false }
-bicdb-extension = { path = "../bicdb-extension", version = "1.0.523-beta", default-features = false }
+bicdb-core = { path = "../bicdb-core", version = "1.0.524", default-features = false }
+bicdb-extension = { path = "../bicdb-extension", version = "1.0.524", default-features = false }
 chrono = "0.4"
 chrono-tz = "0.10"
 crc32fast.workspace = true
@@ -56,6 +63,6 @@ wasmtime = { version = "48.0.3", optional = true }
 
 [dev-dependencies]
 # Deterministic I/O fault injection for tests/commit_outcome_resolution.rs.
-bicdb-page = { path = "../bicdb-page", version = "1.0.523-beta" }
+bicdb-page = { path = "../bicdb-page", version = "1.0.524" }
 tempfile.workspace = true
 wat = "1"

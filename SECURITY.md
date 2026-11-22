@@ -49,8 +49,8 @@ That distinction is the most useful thing a report can carry.
 
 ## Supported versions
 
-Only the latest beta release receives fixes. Version numbers are
-`1.0.x-beta`; see [CHANGELOG.md](CHANGELOG.md).
+Only the latest release receives fixes. Version numbers are `1.0.x` from
+`1.0.524` on (earlier releases used `1.0.x-beta`); see [CHANGELOG.md](CHANGELOG.md).
 
 ## Disclosure history
 

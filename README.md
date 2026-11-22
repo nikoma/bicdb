@@ -121,8 +121,18 @@ cd bicdb-1.0.438-beta-linux-x86_64
 ```
 
 See the [release notes](https://github.com/nikoma/bicdb/releases/tag/v1.0.438-beta)
-for Linux requirements. On other platforms, [build from source](#build-from-source);
-the initial compilation takes longer than this quickstart.
+for Linux requirements. On other platforms, install from crates.io or
+[build from source](#build-from-source); the initial compilation takes longer
+than this quickstart:
+
+```sh
+cargo install bicdb --locked
+bicdb --version
+```
+
+`cargo install` puts `bicdb` on your `PATH`; use `bicdb` in place of `./bicdb`
+in the quickstart. It needs the native build prerequisites listed under
+[build from source](#build-from-source).
 
 ### 2. Store two rows and search them
 
@@ -249,7 +259,7 @@ separation is not a Cell boundary. For hard Cell isolation, deploy one
 and cgroup resource limits; see the [Cell architecture](docs/bicdb-cell-application-architecture.md).
 
 ```bash
-cargo run --release -p bicdb-cli -- serve ./testdb --host 127.0.0.1 --port 5433
+cargo run --release -p bicdb -- serve ./testdb --host 127.0.0.1 --port 5433
 psql -h 127.0.0.1 -p 5433 -U bicdb -d bicdb
 ```
 
@@ -313,7 +323,7 @@ the operator/API contract for multi-day builds.
 ### Durable Redis cache
 
 ```bash
-cargo run --release -p bicdb-cli -- cache-serve ./cachedb --port 6379
+cargo run --release -p bicdb -- cache-serve ./cachedb --port 6379
 redis-cli SET greeting "hello" EX 300
 ```
 
@@ -518,8 +528,8 @@ restore drills, replication, HA, cluster operations, and incident handling.
 Developer `bench` and `compat` commands are optional:
 
 ```bash
-cargo build --release -p bicdb-cli --features bench
-cargo test -p bicdb-cli --features bench --test paged_recovery_cli
+cargo build --release -p bicdb --features bench
+cargo test -p bicdb --features bench --test paged_recovery_cli
 ```
 
 The default CLI excludes `bicdb-bench` and its benchmark-only dependencies.
@@ -561,13 +571,22 @@ checked-in evidence.
 
 Install the Rust toolchain from `rust-toolchain.toml` and native build
 prerequisites. On Ubuntu, these include `build-essential`, `pkg-config`,
-`libssl-dev`, `clang`, `libclang-dev`, and `cmake`. Then:
+`libssl-dev`, `clang`, `libclang-dev`, and `cmake`.
+
+The quickest source install is the published crate, which builds the same
+default CLI:
+
+```sh
+cargo install bicdb --locked
+```
+
+To build a checkout instead:
 
 ```sh
 git clone https://github.com/nikoma/bicdb.git
 cd bicdb
 git checkout v1.0.438-beta
-cargo build --locked --release -p bicdb-cli
+cargo build --locked --release --bin bicdb
 ./target/release/bicdb --version
 ```
 

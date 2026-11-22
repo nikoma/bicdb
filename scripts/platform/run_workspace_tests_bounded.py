@@ -19,8 +19,8 @@ import subprocess
 # in-process multi-node Core fixtures have their own serial job), so these
 # targets run their tests one at a time. Nothing is skipped.
 SERIAL_TARGETS = {
-    ("bicdb-cli", "native_metadata_operator_cli"),
-    ("bicdb-cli", "native_range_move_five_process"),
+    ("bicdb", "native_metadata_operator_cli"),
+    ("bicdb", "native_range_move_five_process"),
 }
 
 

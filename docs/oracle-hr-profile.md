@@ -19,7 +19,7 @@ remaining work beyond this first schema.
 Build and provision a new, dedicated standalone database:
 
 ```sh
-cargo build --locked -p bicdb-cli
+cargo build --locked -p bicdb
 target/debug/bicdb serve /tmp/new-bicdb-oracle-hr --port 5440 \
   --sql-profile oracle-hr-v1
 ```

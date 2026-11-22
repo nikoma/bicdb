@@ -1,10 +1,16 @@
 [package]
 name = "bicdb-script"
-version = "1.0.523-beta"
+version = "1.0.524"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
-description = "Bounded JavaScript execution and TypeScript compilation for BicDB workflows"
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Bounded JavaScript execution and TypeScript compilation for BicDB workflows (internal crate; install `bicdb`)"
+categories = ["database-implementations"]
+# Build inputs only: test suites, fixtures and examples stay in the repository.
+include = ["/src/**", "/Cargo.toml", "/LICENSE", "/NOTICE", "/THIRD_PARTY_NOTICES.md"]
 
 [dependencies]
 oxc_allocator = "=0.152.0"

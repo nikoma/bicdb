@@ -9,7 +9,7 @@ acknowledged write from every phase after recovery.
 Build a binary first:
 
 ```sh
-cargo build --release --locked -p bicdb-cli
+cargo build --release --locked -p bicdb
 ```
 
 ## Existing separate machines

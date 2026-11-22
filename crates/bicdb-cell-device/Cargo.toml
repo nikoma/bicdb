@@ -1,12 +1,19 @@
 [package]
 name = "bicdb-cell-device"
-version = "1.0.523-beta"
+version = "1.0.524"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Filtered offline device replicas for BicDB cells (internal crate; install `bicdb`)"
+categories = ["database-implementations"]
+# Build inputs only: test suites, fixtures and examples stay in the repository.
+include = ["/src/**", "/Cargo.toml", "/LICENSE", "/NOTICE", "/THIRD_PARTY_NOTICES.md"]
 
 [dependencies]
-bicdb-core = { path = "../bicdb-core", version = "1.0.523-beta", default-features = false, features = ["compression"] }
+bicdb-core = { path = "../bicdb-core", version = "1.0.524", default-features = false, features = ["compression"] }
 chacha20poly1305.workspace = true
 ciborium.workspace = true
 curve25519-dalek.workspace = true

@@ -107,7 +107,7 @@ source automatically.
 
 Required remote validation starts with Core/CLI all-target compilation and the
 isolated no-default/workflow consumer, then
-`cargo test -p bicdb-cli --test native_metadata_operator_cli --locked -- --nocapture`,
+`cargo test -p bicdb --test native_metadata_operator_cli --locked -- --nocapture`,
 plus the existing native registration/startup/owner/metadata-ACK controls on the
 same frozen source. Local formatting, diff and version checks are not test runs.
 

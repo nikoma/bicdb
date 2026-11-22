@@ -1,12 +1,19 @@
 [package]
 name = "bicdb-provider-email"
-version = "1.0.523-beta"
+version = "1.0.524"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "SMTP provider for the BicDB application host (internal crate; install `bicdb`)"
+categories = ["database-implementations"]
+# Build inputs only: test suites, fixtures and examples stay in the repository.
+include = ["/src/**", "/Cargo.toml", "/LICENSE", "/NOTICE", "/THIRD_PARTY_NOTICES.md"]
 
 [dependencies]
-bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "1.0.523-beta" }
+bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "1.0.524" }
 lettre.workspace = true
 url.workspace = true
 uuid.workspace = true

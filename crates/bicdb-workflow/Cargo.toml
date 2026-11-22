@@ -1,15 +1,21 @@
 [package]
 name = "bicdb-workflow"
-version = "1.0.523-beta"
+version = "1.0.524"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
-description = "Stored script versions and transactional workflow jobs for BicDB"
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Stored script versions and transactional workflow jobs for BicDB (internal crate; install `bicdb`)"
+categories = ["database-implementations"]
+# Build inputs only: test suites, fixtures and examples stay in the repository.
+include = ["/src/**", "/Cargo.toml", "/LICENSE", "/NOTICE", "/THIRD_PARTY_NOTICES.md"]
 
 [dependencies]
-bicdb-core = { path = "../bicdb-core", version = "1.0.523-beta", default-features = false }
-bicdb-lua = { path = "../bicdb-lua", version = "1.0.523-beta" }
-bicdb-script = { path = "../bicdb-script", version = "1.0.523-beta" }
+bicdb-core = { path = "../bicdb-core", version = "1.0.524", default-features = false }
+bicdb-lua = { path = "../bicdb-lua", version = "1.0.524" }
+bicdb-script = { path = "../bicdb-script", version = "1.0.524" }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

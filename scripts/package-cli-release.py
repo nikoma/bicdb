@@ -35,7 +35,7 @@ def main():
     metadata = json.loads(args.metadata.read_text())
     packages = {p['id']: p for p in metadata['packages']}
     nodes = {n['id']: n for n in metadata['resolve']['nodes']}
-    pending = [p['id'] for p in packages.values() if p['name'] == 'bicdb-cli']
+    pending = [p['id'] for p in packages.values() if p['name'] == 'bicdb']
     selected = set()
     while pending:
         pid = pending.pop()
@@ -116,7 +116,7 @@ stripped binary bytes. Test definitions are not execution evidence; this package
 does not grant production qualification or deployment authority.
 
 Source: https://github.com/nikoma/bicdb/tree/{args.revision}
-Build: cargo build --locked --release -p bicdb-cli (Rust 1.96.0)
+Build: cargo build --locked --release -p bicdb (Rust 1.96.0)
 Debug information was stripped from this copy. Default CLI features only.
 
 BicDB is licensed under Apache-2.0 (LICENSE, NOTICE). Independent dependencies retain

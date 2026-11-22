@@ -19,7 +19,7 @@ bicdb() {
   if [[ -n "${BICDB_BIN:-}" ]]; then
     "${BICDB_BIN}" "$@"
   else
-    cargo run -p bicdb-cli -- "$@"
+    cargo run -p bicdb -- "$@"
   fi
 }
 

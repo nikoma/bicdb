@@ -794,7 +794,10 @@ fn native_abort_reopened_follower_promise_refuses_commit_redrive() {
     assert!(
         error.to_string().contains("AbortPromise")
             || error.to_string().contains("no-effect/abort slot")
-            || error.to_string().contains("active recovery"),
+            || error.to_string().contains("active recovery")
+            // The promise round froze the follower's mutation gate for its
+            // session; the Commit receiver refuses before any write.
+            || error.to_string().contains("is frozen, draining, or invalid"),
         "{error}"
     );
     fixture.idle();

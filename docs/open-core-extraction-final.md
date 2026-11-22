@@ -196,7 +196,7 @@ recorded blockers were:
 
 This section records an earlier extraction campaign, not the current licensing
 status. The superseded release assessment is archived privately. See the
-[current licensing guide](licensing-faq.md) and [scope](../LICENSE-SCOPE.md).
+[current licensing guide](licensing-faq.md).
 
 ## 8. Private material that may later belong in public
 

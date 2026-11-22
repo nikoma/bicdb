@@ -154,11 +154,8 @@ class CapabilityManifestTests(unittest.TestCase):
         scripts.mkdir()
         for name in ('package-cli-release.py', 'capability_manifest.py'):
             shutil.copy2(SCRIPT.parent / name, scripts / name)
-        for name in ('LICENSE', 'LICENSE-SCOPE.md', 'NOTICE', 'THIRD_PARTY_NOTICES.md'):
+        for name in ('LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md'):
             (self.root / name).write_text('Fixture only\n')
-        for name in ('LICENSES', 'licensing'):
-            (self.root / name).mkdir()
-            (self.root / name / 'fixture.txt').write_text('Fixture only\n')
         (self.root / 'Cargo.lock').write_text('[[package]]\nname="bicdb-cli"\nversion="1.2.3-beta"\n')
         self.git('add', '.')
         self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.org', 'commit', '-qm', 'packaging fixture')

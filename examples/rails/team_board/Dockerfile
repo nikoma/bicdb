@@ -22,8 +22,7 @@ RUN bundle install --jobs 4
 
 FROM rails_dependencies AS demo
 COPY --from=engine /bicdb /usr/local/bin/bicdb
-COPY LICENSE LICENSE-SCOPE.md NOTICE THIRD_PARTY_NOTICES.md /usr/share/bicdb/
-COPY LICENSES /usr/share/bicdb/LICENSES
+COPY LICENSE NOTICE THIRD_PARTY_NOTICES.md /usr/share/bicdb/
 COPY examples/rails/team_board/ ./
 ENV BICDB_BIN=/usr/local/bin/bicdb BICDB_PORT=5433 BINDING=0.0.0.0 PORT=3000
 EXPOSE 3000

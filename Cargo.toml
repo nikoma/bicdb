@@ -37,7 +37,7 @@ resolver = "2"
 
 [workspace.package]
 edition = "2021"
-license-file = "LICENSE"
+license = "Apache-2.0"
 repository = "https://github.com/nikoma/bicdb"
 rust-version = "1.96"
 

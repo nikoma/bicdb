@@ -37,10 +37,14 @@ impl NativeInitialDataAdmission {
             .current_metadata_leader_hint(&token)?
             .ok_or_else(|| invalid("actual donor metadata leader unavailable"))?;
         let business = Uuid::now_v7();
+        // The leader serves an acquisition for the budget it is asked. This
+        // first observation only fixes the starting phase, so it asks for less
+        // than the remote reads live (4 s) and leaves room in this collector
+        // for the fresh final observation after them.
         let own = transport.acquire_host_metadata_observation(
             &leader,
             business,
-            Duration::from_secs(5),
+            Duration::from_secs(2),
             &token,
         )?;
         // This first fresh OWN binds the observation phase, not the final

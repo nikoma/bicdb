@@ -12,8 +12,8 @@ or run it as a server.
 Built for AI agents and developers who would rather build applications than
 operate a collection of databases, search services, and message brokers.
 
-**Source-available**, with commercial restrictions under the
-[BicDB License](LICENSE). See [license scope](#license).
+**Free and open source** under the [Apache License, Version 2.0](LICENSE).
+See [license](#license).
 
 [Download 1.0.438-beta](https://github.com/nikoma/bicdb/releases/tag/v1.0.438-beta)
 · [Quickstart](#five-minute-quickstart) · [Compatibility](POSTGRES_COMPATIBILITY.md)
@@ -596,20 +596,8 @@ findings and their remediation are recorded in
 
 ## License
 
-**Apache 2.0 + three exceptions:** [BicDB License 1.0](LICENSE)
-(`LicenseRef-BicDB-1.0`), source-available. The Apache text is included verbatim.
-These terms are operative now. This is not unmodified Apache-2.0 or an
-OSI-approved open-source license.
-
-Commercial applications, unlimited multi-tenant application SaaS, embedded
-application storage, consulting and support are permitted. General-purpose
-database hosting, commercial database-product sales and white-label removal of
-included-console identification require separate written commercial authorization.
-Independent applications need no BicDB logo or powered-by badge.
-
-See [LICENSE-SCOPE.md](LICENSE-SCOPE.md), the [guide and 18 scenarios](docs/licensing-faq.md),
-and [commercial licensing](docs/commercial-licensing.md). Separable SDKs, clients,
-connectors and third-party components retain their own licenses. Earlier Apache
-grants remain effective; no new Apache alternative is offered for newly covered
-rights. [NOTICE](NOTICE), [third-party notices](THIRD_PARTY_NOTICES.md) and the
-[transition record](docs/licensing-transition.md) explain that distinction.
+BicDB is free and open source software, licensed under the
+[Apache License, Version 2.0](LICENSE). You may use, modify and distribute it,
+and build commercial products and services with it. When you redistribute it,
+include the [LICENSE](LICENSE) and [NOTICE](NOTICE) files. Third-party
+components keep their own licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

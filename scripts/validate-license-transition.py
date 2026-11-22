@@ -1,74 +1,108 @@
 #!/usr/bin/env python3
-"""Check active license, mixed metadata, clause references and licensing links."""
+"""Check the Apache-2.0 license invariants, package metadata and licensing links.
+
+Invariants:
+- the root LICENSE is the verbatim, standard Apache License 2.0 text (hash-pinned,
+  including the appendix) and LICENSES/Apache-2.0.txt is identical to it;
+- the root NOTICE has exactly the owner-supplied text;
+- every Cargo package declares `license = "Apache-2.0"` (directly or through the
+  workspace) and none uses `license-file`; the npm client and other manifests
+  declare Apache-2.0;
+- deny.toml carries no first-party custom-license clarification or exception;
+- no tracked file outside historical records claims the retired custom license
+  identifier, and every SPDX header names Apache-2.0;
+- licensing documents have no broken relative links.
+Packaged LICENSE/NOTICE copies are checked by scripts/sync-package-licenses.py.
+"""
 import hashlib
 import json
 from pathlib import Path
 import re
+import subprocess
 import tomllib
 
 root = Path(__file__).resolve().parents[1]
 config = tomllib.loads((root / "licensing/transition.toml").read_text())
-identifier = "LicenseRef-BicDB-1.0"
+APACHE_SHA256 = "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+RETIRED = "LicenseRef-" + "BicDB-1.0"
+EXPECTED_NOTICE = """BicDB
+Copyright 2026 WalkNorth Inc. and Nikolai Manek
+https://bicdb.com
+
+BicDB is licensed under the Apache License,
+Version 2.0.
+
+Original software developed by WalkNorth Inc. and Nikolai Manek.
+"""
+
+# License record.
 assert config["status"] == "active"
-assert config["license_identifier"] == config["current_license"] == identifier
-assert config["license_file"] == "LICENSE"
-assert config["authorized_licensor"] and config["authority_record"]
-# Activation is revision-based, not a fabricated release number or retroactive date.
-assert re.fullmatch(r"[0-9a-f]{40}", config["first_covered_revision"])
-assert config["first_covered_revision"] in (root / "LICENSE-SCOPE.md").read_text()
-text = (root / "LICENSE").read_text()
-assert text.startswith("BicDB License 1.0\nApache 2.0 + three exceptions\n")
-assert identifier in text and "DRAFT" not in text
-assert hashlib.sha256((root / "LICENSE").read_bytes()).hexdigest() == config["license_sha256"]
-marker = "----- BEGIN VERBATIM APACHE LICENSE 2.0 -----\n"
-assert text.count(marker) == 1
-prefix, apache = (root / "LICENSE").read_bytes().split(marker.encode(), 1)
-assert apache == (root / "LICENSES/Apache-2.0.txt").read_bytes(), "Apache text must be verbatim"
-assert re.findall(rb"^([0-9]+)\. ", prefix, re.M) == [b"1", b"2", b"3"]
-assert b"own modifications under different terms" in prefix
-assert b"not unmodified Apache-2.0" in prefix
-assert "same community version" not in text
-assert hashlib.sha256((root / "LICENSES/Apache-2.0.txt").read_bytes()).hexdigest() == \
-    "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
-assert "Copyright 2026 WalkNorth, Inc. and Nikolai Manek" in (root / "NOTICE").read_text()
-assert "This product is licensed under the Apache" not in (root / "NOTICE").read_text()
+assert config["license_identifier"] == "Apache-2.0"
+assert config["license_file"] == "LICENSE" and config["notice_file"] == "NOTICE"
+assert config["license_sha256"] == APACHE_SHA256
+
+# Root LICENSE: verbatim Apache 2.0, nothing prepended or appended.
+license_bytes = (root / "LICENSE").read_bytes()
+assert hashlib.sha256(license_bytes).hexdigest() == APACHE_SHA256, \
+    "LICENSE must be the verbatim Apache License 2.0 text"
+assert license_bytes == (root / "LICENSES/Apache-2.0.txt").read_bytes()
+license_text = license_bytes.decode()
+assert license_text.lstrip().startswith("Apache License\n                           Version 2.0, January 2004")
+assert "END OF TERMS AND CONDITIONS" in license_text
+assert "APPENDIX: How to apply the Apache License to your work." in license_text
+
+# Root NOTICE: exactly the owner's text.
+assert (root / "NOTICE").read_text() == EXPECTED_NOTICE, "NOTICE must match the recorded text"
+
+# Cargo metadata.
 workspace = tomllib.loads((root / "Cargo.toml").read_text())["workspace"]
-assert workspace["package"].get("license-file") == "LICENSE"
-assert "license" not in workspace["package"]
-retained = set(config["retained_apache_packages"])
-packages = {}
+assert workspace["package"].get("license") == "Apache-2.0"
+assert "license-file" not in workspace["package"]
 for member in workspace["members"]:
     pkg = tomllib.loads((root / member / "Cargo.toml").read_text())["package"]
-    name = pkg["name"]
-    packages[name] = member
-    if name in retained:
-        assert pkg.get("license") == "Apache-2.0" and "license-file" not in pkg, name
-    else:
-        assert pkg.get("license-file") == {"workspace": True} and "license" not in pkg, name
-assert retained <= packages.keys()
-covered = packages.keys() - retained
-assert covered == set(config["covered_engine_packages"]), "Covered package inventory must match workspace"
-for path in config["retained_apache_paths"] + config["console_paths"]:
-    assert (root / path).exists(), path
-for path in ["web/bicdb-client", "abi", "examples", "jepsen"]:
-    assert (root / path / "LICENSE").read_bytes() == (root / "LICENSES/Apache-2.0.txt").read_bytes()
+    assert pkg.get("license") in ({"workspace": True}, "Apache-2.0"), f"{member}: license"
+    assert "license-file" not in pkg, f"{member}: license-file must not be used"
+
+# Other manifests.
+for path in config["package_paths"]:
+    assert (root / path).is_dir(), path
 client = json.loads((root / "web/bicdb-client/package.json").read_text())
 lock = json.loads((root / "web/bicdb-client/package-lock.json").read_text())
 assert client["license"] == lock["packages"][""]["license"] == "Apache-2.0"
 assert {"LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md", "docs/licensing-faq.md"} <= set(client["files"])
+assert ':license {:name "Apache-2.0"' in (root / "jepsen/bicdb/project.clj").read_text()
+assert "<name>Apache License, Version 2.0</name>" in (root / "examples/oracle/jdbc/pom.xml").read_text()
+
+# Dependency policy: Apache-2.0 allowed, no first-party custom-license carve-outs.
 deny = tomllib.loads((root / "deny.toml").read_text())["licenses"]
-assert identifier not in deny["allow"], "Do not allow this license on all dependencies"
-clarifications = {c["name"]: c for c in deny["clarify"] if c["expression"] == identifier}
-assert clarifications.keys() == covered
-exceptions = {c["name"] for c in deny["exceptions"] if identifier in c["allow"]}
-assert exceptions == covered
-for c in clarifications.values():
-    assert c["license-files"] == [{"path": "LICENSE", "hash": 0xf29e79cd}]
-# Check current licensing pages, leaving unrelated historical records untouched.
-documents = ["README.md", "CONTRIBUTING.md", "LICENSE-SCOPE.md", "docs/licensing-faq.md",
-             "docs/licensing-transition.md", "docs/commercial-licensing.md",
-             "docs/licensing-implementation-report.md", "licensing/packaging-proposal.md",
-             "licensing/contributor-agreement.draft.md", "web/bicdb-client/docs/licensing-faq.md"]
+assert "Apache-2.0" in deny["allow"]
+assert all(RETIRED not in c["expression"] for c in deny.get("clarify", []))
+assert all(RETIRED not in c["allow"] for c in deny.get("exceptions", []))
+
+# No tracked file outside historical records claims the retired identifier,
+# and every SPDX header names Apache-2.0.
+SPDX_HEADER = re.compile("SPDX-License-" + r"Identifier:\s*([^\s*\"'<>]+)")
+HISTORICAL_PREFIXES = ("docs/releases/", "docs/evidence/")
+tracked = subprocess.run(["git", "ls-files", "-z"], cwd=root, check=True,
+                         capture_output=True).stdout.decode().split("\0")
+for relative in filter(None, tracked):
+    if relative.startswith(HISTORICAL_PREFIXES):
+        continue
+    path = root / relative
+    if not path.is_file():
+        continue
+    try:
+        content = path.read_text()
+    except (UnicodeDecodeError, OSError):
+        continue
+    assert RETIRED not in content, f"{relative} references the retired custom license"
+    for spdx in SPDX_HEADER.findall(content):
+        assert spdx == "Apache-2.0", f"{relative}: SPDX identifier {spdx}"
+
+# Current licensing documents: relative links resolve.
+documents = ["README.md", "CONTRIBUTING.md", "THIRD_PARTY_NOTICES.md", "docs/licensing-faq.md",
+             "licensing/packaging-proposal.md",
+             "web/bicdb-client/docs/licensing-faq.md"]
 for relative in documents:
     path = root / relative
     content = path.read_text()
@@ -77,17 +111,10 @@ for relative in documents:
     for link in re.findall(r"\]\(([^)]+)\)", content):
         if "://" not in link and not link.startswith("#"):
             assert (path.parent / link.split("#", 1)[0]).exists(), f"Broken link: {relative}: {link}"
-    if relative != "licensing/contributor-agreement.draft.md":
-        for stale in ("draft-not-adopted", "current checkout retains", "not an operative replacement yet"):
-            assert stale not in content, f"Stale active status: {relative}"
-faq = (root / "docs/licensing-faq.md").read_text()
-assert faq.count("| Permitted under community terms |") == 10
-assert faq.count("| Separate commercial agreement required |") == 8
-for number in re.findall(r"Exception (\d+)", faq):
-    assert number in {"1", "2", "3"}, number
-version = tomllib.loads((root / "crates/bicdb-core/Cargo.toml").read_text())["package"]["version"]
+
 # Source versions advance at every merge. Download links must continue to
 # identify an actual published release rather than inventing that source tag.
+version = tomllib.loads((root / "crates/bicdb-core/Cargo.toml").read_text())["package"]["version"]
 readme = (root / "README.md").read_text()
 downloads = re.findall(
     r"\[Download ([0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?)\]"
@@ -103,4 +130,5 @@ assert version_components(published) <= version_components(version), "Published 
 assert (f"https://github.com/nikoma/bicdb/releases/download/v{published}/"
         f"bicdb-{published}-linux-x86_64.tar.gz") in readme
 assert (f"https://github.com/nikoma/bicdb/releases/download/v{published}/SHA256SUMS") in readme
-print(f"active license: {len(covered)} community packages, {len(retained)} Apache exceptions, notices, 18 scenarios and links passed")
+print(f"Apache-2.0 license: verbatim LICENSE, NOTICE, {len(workspace['members'])} Cargo packages, "
+      f"manifests, deny policy, {len(tracked) - 1} tracked files and licensing links passed")

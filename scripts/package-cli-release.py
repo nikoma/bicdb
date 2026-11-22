@@ -53,10 +53,8 @@ def main():
         stage.mkdir()
         shutil.copy2(args.binary, stage / 'bicdb')
         subprocess.run(['strip', '--strip-debug', str(stage / 'bicdb')], check=True)
-        for f in ['LICENSE', 'LICENSE-SCOPE.md', 'NOTICE', 'THIRD_PARTY_NOTICES.md', 'Cargo.lock']:
+        for f in ['LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md', 'Cargo.lock']:
             shutil.copy2(root / f, stage / f)
-        shutil.copytree(root / 'LICENSES', stage / 'LICENSES')
-        shutil.copytree(root / 'licensing', stage / 'licensing')
         notices = stage / 'third-party'
         notices.mkdir()
         index = []
@@ -65,7 +63,7 @@ def main():
             if not package['source']:
                 source = Path(package['manifest_path']).parent
                 for file in source.glob('*'):
-                    if file.is_file() and file.name in ('LICENSE', 'LICENSE-SCOPE.md', 'NOTICE', 'THIRD_PARTY_NOTICES.md'):
+                    if file.is_file() and file.name in ('LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md'):
                         dest = stage / 'component-notices' / package['name'] / file.name
                         dest.parent.mkdir(parents=True, exist_ok=True)
                         shutil.copy2(file, dest)
@@ -121,7 +119,7 @@ Source: https://github.com/nikoma/bicdb/tree/{args.revision}
 Build: cargo build --locked --release -p bicdb-cli (Rust 1.96.0)
 Debug information was stripped from this copy. Default CLI features only.
 
-LICENSE and LICENSE-SCOPE.md govern BicDB. Independent dependencies retain
+BicDB is licensed under Apache-2.0 (LICENSE, NOTICE). Independent dependencies retain
 their own terms. third-party/ contains notices and checksum-verified registry
 source archives from the CLI dependency closure, including build dependencies.
 These archives preserve upstream source and notices; the index records their

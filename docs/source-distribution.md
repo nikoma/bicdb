@@ -1,6 +1,6 @@
 # Source distribution notes
 
-The source snapshot contains the current BicDB license and scope notices,
+The source snapshot contains the current BicDB license (Apache-2.0) and notices,
 engineering documentation, tests, and selected historical benchmark evidence.
 
 ## Release capability declarations
@@ -32,7 +32,7 @@ Local database directories and backups (`testdb/`, `testdb-full.bicbackup`) are
 excluded and ignored. Tests should create their own temporary databases or use
 explicitly documented fixtures. Superseded source-release and Apache-readiness
 assessments are archived privately; current terms are in [LICENSE](../LICENSE)
-and [LICENSE-SCOPE.md](../LICENSE-SCOPE.md).
+and [NOTICE](../NOTICE).
 
 Public localhost TLS test keys remain in their documented fixture directory.
 They are intentionally public test data and must never secure a deployed service.

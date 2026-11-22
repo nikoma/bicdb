@@ -1,8 +1,8 @@
 [package]
 name = "bicdb-extension"
-version = "1.0.521-beta"
+version = "1.0.523-beta"
 edition.workspace = true
-license = "Apache-2.0"
+license.workspace = true
 rust-version.workspace = true
 description = "Versioned extension ABI, author SDK, and sandboxed host runtime for BicDB"
 

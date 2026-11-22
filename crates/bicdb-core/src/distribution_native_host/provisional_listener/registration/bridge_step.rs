@@ -485,10 +485,14 @@ pub(super) fn acquire_bridge_step_own(
         .current_metadata_leader_hint(token)?
         .ok_or_else(|| invalid("joint bridge step current metadata leader unavailable"))?;
     let business = Uuid::now_v7();
+    // Asked for the remainder plus the leader's reply margin, so that this
+    // member's observation lasts until its own step ends; see
+    // `observation_budget`.
     let own = transport.acquire_host_metadata_observation(
         &leader,
         business,
-        bridge_remaining(token)?.min(Duration::from_secs(5)),
+        (bridge_remaining(token)? + crate::distribution_transport::SERVED_REPLY_MARGIN)
+            .min(Duration::from_secs(5)),
         token,
     )?;
     let topology = own.committed_topology(business)?;

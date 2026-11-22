@@ -22,8 +22,11 @@ use crate::distribution_transport::{
 };
 use std::time::{Duration, Instant};
 
-/// One whole remote phase, as the in-process phase round is bounded.
-pub(super) const REMOTE_PHASE_BUDGET: Duration = Duration::from_secs(4);
+/// One whole remote phase, as the in-process phase round is bounded. A
+/// member's phase is also bounded by its own step request, which a receiver
+/// serves for at most 5 s less the reply margin; the phase does not end
+/// earlier than that request on its own.
+pub(super) const REMOTE_PHASE_BUDGET: Duration = Duration::from_secs(5);
 
 /// What one other NEW member reported about itself in one authenticated
 /// exchange: everything the in-process phase compares for that member.
@@ -227,6 +230,7 @@ impl RemotePreparationWindow {
         Ok(window)
     }
     /// EVERY other NEW member exactly once, each frame unchanged and live.
+    #[track_caller]
     pub(super) fn require_complete(&self, data: &NativeJointDecisionData) -> Result<()> {
         if data.new_members().contains_key(&self.observer) != self.member_observer
             || self.frames.keys().ne(data
@@ -249,6 +253,7 @@ impl RemotePreparationWindow {
         }
         Ok(())
     }
+    #[track_caller]
     pub(super) fn require_live(&self) -> Result<()> {
         for frame in self.frames.values() {
             frame.require_live()?;
@@ -311,6 +316,22 @@ fn observe_every_member(
             })
             .collect()
     })
+}
+
+/// The budget to ask the metadata leader for, so that the observation lives
+/// until `token`'s deadline. The leader serves an acquisition for its budget
+/// less the reply margin (`SERVED_REPLY_MARGIN`), and the observation's
+/// context ends there; asked for the bare remainder, every observation of a
+/// phase ended half a second before the phase, and a member observed inside
+/// another member's window (whose own step also ends half a second before
+/// that window) a whole second before. The margin is added back here, so
+/// the observation ends with `token` and never later: the acquisition is a
+/// child of `token`, and the protocol's five-second cap still applies.
+pub(crate) fn observation_budget(token: &crate::CancellationToken) -> Result<Duration> {
+    Ok(
+        (remaining(token)? + crate::distribution_transport::SERVED_REPLY_MARGIN)
+            .min(Duration::from_secs(5)),
+    )
 }
 
 pub(super) fn remaining(token: &crate::CancellationToken) -> Result<Duration> {
@@ -548,13 +569,24 @@ impl NativeJointPreparationCustody {
         self.require_remote_actor(client)?;
         let data = self.data();
         let phase = request.child_with_deadline(Instant::now() + REMOTE_PHASE_BUDGET);
+        let part = std::cell::Cell::new(Instant::now());
+        let traced = |what: &str, phase: &crate::CancellationToken| {
+            crate::distribution_native_host::range_move_trace(part.replace(Instant::now()), || {
+                format!(
+                    "member publication part: {what}; phase left {} ms",
+                    phase.deadline().map_or(0, |deadline| deadline
+                        .saturating_duration_since(Instant::now())
+                        .as_millis())
+                )
+            })
+        };
         // (1) Own pre-quorum phase observation. Actual TLS OWN and MStore
         // acquisition precede all engine guards.
         let business = Uuid::now_v7();
         let metadata = client.acquire_host_metadata_observation(
             metadata_leader,
             business,
-            remaining(&phase)?,
+            observation_budget(&phase)?,
             &phase,
         )?;
         let point = ClusterDataNodeService::capture_actual_joint_metadata_point(
@@ -587,6 +619,7 @@ impl NativeJointPreparationCustody {
         }
         let phase = phase.child_with_deadline(local_phase.deadline());
         phase.check()?;
+        traced("own pre-quorum observation", &phase);
         // (2) Every other NEW member, each under its own lock and metadata.
         let window = RemotePreparationWindow::collect(
             NativeJointBridgePhaseKindV1::Preparation,
@@ -596,6 +629,7 @@ impl NativeJointPreparationCustody {
             collector_business,
             &phase,
         )?;
+        traced("window of every other member", &phase);
         // (3) Only THIS member's read pin. It is a slot of this database's
         // own mutation gate; no other member's pin gates this journal. The
         // release validates this member completely before and after.
@@ -607,13 +641,14 @@ impl NativeJointPreparationCustody {
             self.actual
                 .release_read_pin_under_preparation_custody(&service, &local_phase, self)?;
         }
+        traced("own read pin released", &phase);
         window.require_live()?;
         // (4) Distinct post-quorum observation, no guard across the I/O.
         let business = Uuid::now_v7();
         let metadata = client.acquire_host_metadata_observation(
             metadata_leader,
             business,
-            remaining(&phase)?,
+            observation_budget(&phase)?,
             &phase,
         )?;
         let point = ClusterDataNodeService::capture_actual_joint_metadata_point(
@@ -655,11 +690,17 @@ impl NativeJointPreparationCustody {
             fresh,
             cancellation,
         };
+        traced("post-quorum observation", &phase);
         admission.require_live()?;
         admission.claim_publication_attempt()?;
         // (5) The unchanged scoped native publisher: final foreign boundary,
         // local journal scope, reconcile-or-write, post-write proof.
-        let receipt = admission.publish_local_native_bridge(parent)?;
+        let receipt = admission.publish_local_native_bridge(parent);
+        traced(
+            &format!("native publication ok={}", receipt.is_ok()),
+            &phase,
+        );
+        let receipt = receipt?;
         if receipt.data() != data || receipt.local_node_id() != self.local_node_id() {
             return Err(invalid(
                 "remote bridge publication changed decision or local native history",
@@ -701,7 +742,7 @@ impl NativeJointPreparationCustody {
         let own = client.acquire_host_metadata_observation(
             metadata_leader,
             business,
-            remaining(&phase)?,
+            observation_budget(&phase)?,
             &phase,
         )?;
         if own.term() < published.post_quorum.0

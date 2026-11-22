@@ -6,7 +6,8 @@
 //! authenticating that member in THIS member's own exchange, attesting that
 //! member's own durable bridge under ITS lock.
 use super::super::remote_publication::{
-    remaining, NativeJointBridgeMemberIdentity, RemotePreparationWindow, REMOTE_PHASE_BUDGET,
+    observation_budget, NativeJointBridgeMemberIdentity, RemotePreparationWindow,
+    REMOTE_PHASE_BUDGET,
 };
 use super::*;
 use crate::distribution_range_handoff::NativeJointBridgePhaseKindV1;
@@ -209,7 +210,7 @@ impl NativeJointPreparationCustody {
         let metadata = client.acquire_host_metadata_observation(
             metadata_leader,
             business,
-            remaining(&phase)?,
+            observation_budget(&phase)?,
             &phase,
         )?;
         let point = ClusterDataNodeService::capture_actual_joint_metadata_point(
@@ -267,7 +268,7 @@ impl NativeJointPreparationCustody {
         let metadata = client.acquire_host_metadata_observation(
             metadata_leader,
             business,
-            remaining(&phase)?,
+            observation_budget(&phase)?,
             &phase,
         )?;
         let point = ClusterDataNodeService::capture_actual_joint_metadata_point(
@@ -372,7 +373,7 @@ impl NativeJointPreparationCustody {
         let own = client.acquire_host_metadata_observation(
             metadata_leader,
             business,
-            remaining(&phase)?,
+            observation_budget(&phase)?,
             &phase,
         )?;
         if own.term() < opened.post_quorum.0

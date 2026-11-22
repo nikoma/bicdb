@@ -115,9 +115,12 @@ const INSTALL_STEP_CALLS: usize = 512;
 const INSTALL_STEP_FAILURES: usize = 4;
 /// Budget of one complete decision round (four requests per member).
 const DECISION_ROUND: Duration = Duration::from_secs(60);
-/// Receiver-side budget of one bridge step; receivers bound it to 5 s. A
-/// member performs several bounded parts inside one step.
-const BRIDGE_REQUEST_MS: u64 = 4500;
+/// Receiver-side budget of one bridge step: the 5 s every receiver bounds it
+/// to. A member performs several bounded parts inside one step, and a
+/// publication, Open or release window must hold from the member's first
+/// observation of another member until its own durable write: on a slow
+/// host every part of that budget is used.
+const BRIDGE_REQUEST_MS: u64 = 5000;
 /// Budget of one bridge phase (preparation, publication or Open) over every
 /// new member.
 const BRIDGE_PHASE: Duration = Duration::from_secs(90);

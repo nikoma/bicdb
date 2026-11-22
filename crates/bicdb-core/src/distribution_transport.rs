@@ -1366,7 +1366,7 @@ fn verify_destination_certificate(
 /// The longest own budget a receiver serves a request for.
 const MAX_SERVED_BUDGET: Duration = Duration::from_millis(5000);
 /// What a caller waits beyond a served budget for the reply itself.
-const SERVED_REPLY_MARGIN: Duration = Duration::from_millis(500);
+pub(crate) const SERVED_REPLY_MARGIN: Duration = Duration::from_millis(500);
 
 /// The own budget of a request that a receiver serves for that budget
 /// instead of the network deadline: a joint decision request, a joint

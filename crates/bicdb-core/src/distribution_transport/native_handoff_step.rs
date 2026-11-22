@@ -94,14 +94,18 @@ pub(crate) struct AuthenticatedNativeJointBridgeStepFrame {
 }
 impl AuthenticatedNativeJointBridgeStepFrame {
     /// Still inside the one bounded window this frame was observed in.
+    #[track_caller]
     pub(crate) fn require_live(&self) -> Result<()> {
+        let caller = std::panic::Location::caller();
         self.original_request.check()?;
         if Instant::now() >= self.window_deadline {
             crate::distribution_native_host::range_move_trace(Instant::now(), || {
                 let [own, request, member, sent] = self.window_origin;
                 format!(
-                    "joint bridge step frame of {} expired; at its arrival own metadata left {own} ms, request left {request} ms, member reported {member} ms {sent} ms before",
-                    self.actual_peer
+                    "joint bridge step frame of {} expired at {}:{}; at its arrival own metadata left {own} ms, request left {request} ms, member reported {member} ms {sent} ms before",
+                    self.actual_peer,
+                    caller.file(),
+                    caller.line()
                 )
             });
             return Err(transport_error(

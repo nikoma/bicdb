@@ -928,7 +928,7 @@ fn native_abort_reopened_unreconciled_intent_refuses_ever_commit_mark() {
         TestNativeAdmissionStop::AfterPrepareQuorum,
         "prepared-then-unreconciled-intent",
     );
-    let fixture = reopen_stopped(fixture);
+    let mut fixture = reopen_stopped(fixture);
     let range = current_range(&fixture, range.id);
     {
         let db = fixture.native.databases[&node("n0")].read();

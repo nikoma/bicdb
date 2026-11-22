@@ -120,6 +120,11 @@ impl ClusterDataNodeService {
                 "own ever-Commit slot: only this node's own command of this range",
             ));
         }
+        if db.native_abort_slot_started_this_open(range.id, command.index) {
+            return Err(data_error(
+                "own ever-Commit slot: the slot was started by this open; only its own admission may re-send its Commit",
+            ));
+        }
         Self::require_ever_commit_slot_in(&db, command)
     }
     fn require_ever_commit_slot_in(db: &BicDb, command: &RangeWriteCommand) -> Result<()> {

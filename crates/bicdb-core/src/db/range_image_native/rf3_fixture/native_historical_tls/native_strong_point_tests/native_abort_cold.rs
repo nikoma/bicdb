@@ -914,3 +914,55 @@ fn native_abort_reopened_follower_commit_evidence_refuses_abort() {
     fixture.native.root.disable_cleanup(false);
     fixture._keys.disable_cleanup(false);
 }
+
+/// The no-effect intent record is published before the slot's
+/// `no_effect_sha256` is reconciled. A durable intent whose slot field is not
+/// reconciled yet still refuses the ever-Commit mark.
+#[test]
+fn native_abort_reopened_unreconciled_intent_refuses_ever_commit_mark() {
+    let fixture = EnforcedNetwork::new();
+    let range = fixture.ranges()[0].clone();
+    let (_, command) = stopped_append(
+        &fixture,
+        &range,
+        TestNativeAdmissionStop::AfterPrepareQuorum,
+        "prepared-then-unreconciled-intent",
+    );
+    let fixture = reopen_stopped(fixture);
+    let range = current_range(&fixture, range.id);
+    {
+        let db = fixture.native.databases[&node("n0")].read();
+        let permit = db.range_mutation_gate().try_enter(range.id).unwrap();
+        let authority =
+            crate::distribution_range_mutation::RangeMutationAuthority::Mutation(&permit);
+        crate::BicDb::test_stop_next_no_effect_after_intent();
+        let error = db
+            .persist_reopened_native_no_effect(&command, &node("n0"), &range, &authority)
+            .unwrap_err();
+        assert!(error.to_string().contains("injected stop"), "{error}");
+        let slot = db
+            .native_abort_slot_inventory()
+            .unwrap()
+            .into_iter()
+            .find(|s| s.command == command)
+            .unwrap();
+        assert!(slot.no_effect_sha256.is_none());
+        assert!(!slot.ever_commit);
+        let error = db
+            .native_abort_mark_ever_commit(&command, &range, &authority)
+            .unwrap_err();
+        assert!(
+            error.to_string().contains("durable no-effect intent"),
+            "{error}"
+        );
+        let slot = db
+            .native_abort_slot_inventory()
+            .unwrap()
+            .into_iter()
+            .find(|s| s.command == command)
+            .unwrap();
+        assert!(!slot.ever_commit);
+    }
+    fixture.native.root.disable_cleanup(false);
+    fixture._keys.disable_cleanup(false);
+}

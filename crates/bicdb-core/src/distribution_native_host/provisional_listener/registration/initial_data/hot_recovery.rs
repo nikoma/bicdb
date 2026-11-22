@@ -318,7 +318,7 @@ impl NativeHotRecoveryMaintenance {
         let prefix = db.native_range_prefix_observation(range.id)?;
         let Some(index) = prefix.pending_command_index else {
             if let Some((command, own)) =
-                self.reopened_committed_candidate(&service, &prefix, range)?
+                self.reopened_committed_candidate(&service, &db, &prefix, range)?
             {
                 // Only the leader's own (uncertified) Commit vote: finish its
                 // Commit round first.
@@ -395,6 +395,7 @@ impl NativeHotRecoveryMaintenance {
     fn reopened_committed_candidate(
         &self,
         service: &crate::ClusterDataNodeService,
+        db: &crate::BicDb,
         prefix: &crate::db::NativeRangePrefixObservation,
         range: &crate::RangeDescriptor,
     ) -> Result<Option<(RangeWriteCommand, RangeWriteState)>> {
@@ -432,6 +433,11 @@ impl NativeHotRecoveryMaintenance {
             || entry.command.range_epoch != range.epoch
             || entry.command.leader_node_id != self.initial.seed.spec.node_id
         {
+            return Ok(None);
+        }
+        // Only a slot left by an EARLIER process is taken over; one this
+        // open started stays with its own retained admission.
+        if db.native_abort_slot_started_this_open(range.id, index) {
             return Ok(None);
         }
         Ok(Some((entry.command, entry.state)))
@@ -1297,7 +1303,23 @@ impl NativeHotRecoveryMaintenance {
                         .map_err(refusal)?
                         .state,
                 ),
-                state => Some(state),
+                state => {
+                    // As on the Prepared path: a slot this open started
+                    // stays with its own retained admission.
+                    let db = self
+                        .initial
+                        .seed
+                        .database
+                        .try_read()
+                        .ok_or_else(|| invalid("hot commit re-drive actual DB busy"))?;
+                    if db.native_abort_slot_started_this_open(range.id, command.index) {
+                        return Err(invalid(&format!(
+                            "hot commit re-drive: slot {} of range {} was started by this open; only its own admission may decide it",
+                            command.index, range.id
+                        )));
+                    }
+                    Some(state)
+                }
             }
         };
         if let Some(own) = own {

@@ -12,6 +12,18 @@ fn no_effect_key(range: RangeId, index: u64) -> String {
     format!("abort-no-effect:{range}:{index:020}")
 }
 const MAX_NO_EFFECT_BYTES: usize = 3 * 1024 * 1024;
+#[cfg(test)]
+thread_local! {
+    static TEST_STOP_AFTER_NO_EFFECT_INTENT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+#[cfg(test)]
+impl BicDb {
+    /// The next no-effect publication on this thread stops after its intent
+    /// record is durable and before the slot is reconciled, as a crash there.
+    pub(crate) fn test_stop_next_no_effect_after_intent() {
+        TEST_STOP_AFTER_NO_EFFECT_INTENT.with(|stop| stop.set(true));
+    }
+}
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct NativeNoEffectIntentRecord {
@@ -252,6 +264,12 @@ impl BicDb {
             Ok(())
         })?
         .ok_or_else(|| invalid("native no-effect intent has no actual page store"))?;
+        #[cfg(test)]
+        if TEST_STOP_AFTER_NO_EFFECT_INTENT.with(|stop| stop.replace(false)) {
+            return Err(invalid(
+                "injected stop after the no-effect intent, before slot reconciliation",
+            ));
+        }
         after_write()?;
         let actual: NativeNoEffectIntentRecord = self
             .read_native_range_image_record(&key)?

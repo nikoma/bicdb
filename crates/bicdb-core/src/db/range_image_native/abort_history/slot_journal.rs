@@ -387,6 +387,20 @@ impl BicDb {
                 "native Commit conflicts with permanent no-effect/abort slot",
             ));
         }
+        // The intent record is published before the slot field is
+        // reconciled (two steps); a durable intent alone already excludes
+        // the Commit.
+        if self
+            .read_native_range_image_record::<NativeNoEffectIntentRecord>(&no_effect_key(
+                command.range_id,
+                command.index,
+            ))?
+            .is_some()
+        {
+            return Err(invalid(
+                "native Commit conflicts with a durable no-effect intent for the slot",
+            ));
+        }
         if slot.ever_commit {
             return Ok(());
         }

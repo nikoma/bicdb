@@ -437,7 +437,7 @@ jobs:
             exit 2
           fi
           printf '%s\n' "$BICDB_CLI_TEST_TARGET" > "$RUNNER_TEMP/native-cli-evidence/cli-target.txt"
-          cargo test -p bicdb-cli --test "$BICDB_CLI_TEST_TARGET" --locked -- --list \
+          cargo test -p bicdb --test "$BICDB_CLI_TEST_TARGET" --locked -- --list \
             2>&1 | tee "$RUNNER_TEMP/native-cli-evidence/selected-tests.log"
           python3 - <<'PYCODE'
           import os, pathlib
@@ -460,7 +460,7 @@ jobs:
             mkdir -p "$BICDB_TEST_CLI_DB_EVIDENCE_ROOT"
           fi
           export BICDB_TEST_SOURCE_SHA="$GITHUB_SHA"
-          cargo test -p bicdb-cli --test "$BICDB_CLI_TEST_TARGET" --locked -- --nocapture --test-threads=1 \
+          cargo test -p bicdb --test "$BICDB_CLI_TEST_TARGET" --locked -- --nocapture --test-threads=1 \
             2>&1 | tee "$RUNNER_TEMP/native-cli-evidence/tests.log"
           python3 - <<'PYCODE'
           import os, pathlib, re

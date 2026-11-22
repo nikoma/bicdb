@@ -21,7 +21,7 @@ binding and deploys the app. Open the printed URL; Ctrl-C stops its services
 and retains data/logs at the printed path. It demonstrates functionality, with
 no node-failure resilience. Use the following operator steps for an RF=3 cluster.
 
-1. Build `bicdb` and `bic`: `cargo build --release --locked -p bicdb-cli -p bicdb-app-host`.
+1. Build `bicdb` and `bic`: `cargo build --release --locked -p bicdb -p bicdb-app-host`.
 2. Bootstrap a cluster with `--application-events`, join members and wait for
    healthy placement. A one-member local demonstration can use RF=1; an RF=3
    resilience demonstration needs at least three members.

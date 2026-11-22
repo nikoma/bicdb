@@ -21,7 +21,7 @@ BICDB_NIGHTMARE_MODE=full BICDB_NIGHTMARE_FUZZ_SEEDS=16 ./scripts/pg18-nightmare
 Direct CLI form:
 
 ```bash
-cargo run -p bicdb-cli --features bench -- compat nightmare ./tmp/pg18-nightmare \
+cargo run -p bicdb --features bench -- compat nightmare ./tmp/pg18-nightmare \
   --fixtures fixtures/pg18-nightmare \
   --json-out reports/pg18-nightmare/report.json \
   --markdown-out reports/pg18-nightmare/report.md \

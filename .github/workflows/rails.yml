@@ -48,7 +48,7 @@ jobs:
           bundler-cache: true
           working-directory: examples/rails/team_board
       - name: Build BicDB from the tested source
-        run: cargo build --locked -p bicdb-cli --bin bicdb
+        run: cargo build --locked -p bicdb --bin bicdb
       - name: Migrations, Rails tests, concurrent jobs, crash recovery and HTTP/WebSocket
         working-directory: examples/rails/team_board
         env:

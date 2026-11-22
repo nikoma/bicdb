@@ -330,7 +330,7 @@ sshpass -e rsync -av -e 'ssh -o StrictHostKeyChecking=no' \
   benchmark@192.0.2.10:/home/benchmark/bicdb-head/crates/bicdb-sql/src/lib.rs
 
 sshpass -e ssh -o StrictHostKeyChecking=no benchmark@192.0.2.10 \
-  'source /home/benchmark/.cargo/env 2>/dev/null || true; cd /home/benchmark/bicdb-head && cargo build --release -p bicdb-cli --bin bicdb'
+  'source /home/benchmark/.cargo/env 2>/dev/null || true; cd /home/benchmark/bicdb-head && cargo build --release -p bicdb --bin bicdb'
 ```
 
 Only sync files touched by the experiment. If the change spans many files, prefer

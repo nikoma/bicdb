@@ -8,7 +8,7 @@ COPY . .
 ENV CARGO_BUILD_JOBS=2 CARGO_PROFILE_RELEASE_DEBUG=0
 RUN --mount=type=cache,id=bicdb-rails-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=bicdb-rails-target,target=/source/target \
-    cargo build --locked --release -p bicdb-cli --bin bicdb \
+    cargo build --locked --release -p bicdb --bin bicdb \
     && cp target/release/bicdb /bicdb \
     && strip --strip-debug /bicdb
 

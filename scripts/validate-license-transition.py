@@ -62,6 +62,10 @@ for member in workspace["members"]:
     pkg = tomllib.loads((root / member / "Cargo.toml").read_text())["package"]
     assert pkg.get("license") in ({"workspace": True}, "Apache-2.0"), f"{member}: license"
     assert "license-file" not in pkg, f"{member}: license-file must not be used"
+    # A published crate's `include` list must keep the legal files in the .crate.
+    if pkg.get("publish", True) is not False and "include" in pkg:
+        for name in ("LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"):
+            assert f"/{name}" in pkg["include"], f"{member}: include must ship {name}"
 
 # Other manifests.
 for path in config["package_paths"]:

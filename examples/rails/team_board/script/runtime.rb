@@ -18,7 +18,7 @@ module DemoRuntime
     if ENV["BICDB_BIN"]
       binary = File.expand_path(ENV.fetch("BICDB_BIN"))
     else
-      system("cargo", "build", "--release", "--locked", "-p", "bicdb-cli", "--bin", "bicdb",
+      system("cargo", "build", "--release", "--locked", "-p", "bicdb", "--bin", "bicdb",
         chdir: REPOSITORY, exception: true)
       target = File.expand_path(ENV.fetch("CARGO_TARGET_DIR", "target"), REPOSITORY)
       binary = File.join(target, "release", "bicdb")

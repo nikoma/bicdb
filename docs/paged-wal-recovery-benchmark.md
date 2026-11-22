@@ -29,7 +29,7 @@ certified, and set limits from the deployment's recovery objective and memory
 envelope:
 
 ```bash
-cargo build --release -p bicdb-cli --features bench
+cargo build --release -p bicdb --features bench
 
 ./target/release/bicdb bench paged-recovery \
   --checkpointed-data-bytes 10737418240 \

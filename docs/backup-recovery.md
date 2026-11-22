@@ -242,19 +242,19 @@ within 90 minutes. Measure and tighten these limits for the target hardware.
 ```bash
 export BICDB_BACKUP_KEY='use-a-real-secret'
 
-cargo run -p bicdb-cli -- backup create ./appdb ./app-full.bicbackup
-cargo run -p bicdb-cli -- backup create ./appdb ./app-inc-001.bicbackup \
+cargo run -p bicdb -- backup create ./appdb ./app-full.bicbackup
+cargo run -p bicdb -- backup create ./appdb ./app-inc-001.bicbackup \
   --base ./app-full.bicbackup
 
-cargo run -p bicdb-cli -- backup verify ./app-full.bicbackup
-cargo run -p bicdb-cli -- backup verify ./app-full.bicbackup ./app-inc-001.bicbackup \
+cargo run -p bicdb -- backup verify ./app-full.bicbackup
+cargo run -p bicdb -- backup verify ./app-full.bicbackup ./app-inc-001.bicbackup \
   --json
 ```
 
 Restore the latest full backup:
 
 ```bash
-cargo run -p bicdb-cli -- backup restore ./app-full.bicbackup ./restore --force
+cargo run -p bicdb -- backup restore ./app-full.bicbackup ./restore --force
 ```
 
 ## Point-in-time recovery from the commit log archive
@@ -302,7 +302,7 @@ other way, use `bicdb backup restore <backup> <target> --log-archive DIR
 Restore to a Unix timestamp using audit-event PITR:
 
 ```bash
-cargo run -p bicdb-cli -- backup restore ./app-full.bicbackup ./restore-pitr \
+cargo run -p bicdb -- backup restore ./app-full.bicbackup ./restore-pitr \
   --force \
   --target-timestamp 1781913600 \
   --pitr-record-batch 1024 \
@@ -320,7 +320,7 @@ after inspecting that event rather than allowing an unbounded allocation.
 Run a fire drill and write machine-readable evidence:
 
 ```bash
-cargo run -p bicdb-cli -- backup drill ./app-full.bicbackup \
+cargo run -p bicdb -- backup drill ./app-full.bicbackup \
   --target ./drill-restore \
   --target-timestamp 1781913600 \
   --json-out ./backup-drill.json

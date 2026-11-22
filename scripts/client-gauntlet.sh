@@ -77,7 +77,7 @@ if [[ -z "${BICDB_DATABASE_URL:-}" ]]; then
     bicdb_port="$(choose_port)"
   fi
   bicdb_path="$work_dir/bicdb"
-  (cd "$repo_root" && cargo build --locked -q -p bicdb-cli)
+  (cd "$repo_root" && cargo build --locked -q -p bicdb)
   (
     "$target_dir/debug/bicdb" serve "$bicdb_path" --host 127.0.0.1 --port "$bicdb_port"
   ) >"$work_dir/bicdb.log" 2>&1 &

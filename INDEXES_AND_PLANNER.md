@@ -197,7 +197,7 @@ contract and ERP guidance.
 Run:
 
 ```bash
-cargo run -p bicdb-cli --features bench -- bench indexes --records 1000000 \
+cargo run -p bicdb --features bench -- bench indexes --records 1000000 \
   --json-out reports/indexes.json \
   --csv-out reports/indexes.csv
 ```

@@ -578,7 +578,7 @@ Open items (not GAPs yet: unexplained, no failing test in this suite):
     Then run debug builds of: the crash matrices
     (`cargo test -p bicdb-core --test commit_durability_crash`, which
     includes the bounded-supervisor runs), the pgwire suite, and the Rails
-    acceptance (`.github/workflows/rails.yml`: `cargo build -p bicdb-cli
+    acceptance (`.github/workflows/rails.yml`: `cargo build -p bicdb
     --bin bicdb`, then `BICDB_BIN=target/debug/bicdb bin/verify` in
     `examples/rails/team_board`).
 - **OPEN-2, "duplicate keys" after a kill and restart: explained, not a

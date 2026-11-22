@@ -1,9 +1,18 @@
 [package]
 name = "bicdb-cell"
-version = "1.0.523-beta"
+version = "1.0.525"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Cell construction boundary of the BicDB database. Part of BicDB, one database for SQL (PostgreSQL protocol), a Redis-compatible cache, search and vectors; install `bicdb`"
+readme = "README.md"
+keywords = ["bicdb", "database"]
+categories = ["database-implementations"]
+# Build inputs only: test suites, fixtures and examples stay in the repository.
+include = ["/README.md", "/src/**", "/Cargo.toml", "/LICENSE", "/NOTICE", "/THIRD_PARTY_NOTICES.md"]
 
 [[bin]]
 name = "bicdb-cell"
@@ -12,14 +21,14 @@ path = "src/main.rs"
 [dependencies]
 anyhow.workspace = true
 base64.workspace = true
-bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "1.0.523-beta" }
-bicdb-cell-admission = { path = "../bicdb-cell-admission", version = "1.0.523-beta" }
-bicdb-cell-ha = { path = "../bicdb-cell-ha", version = "1.0.523-beta" }
-bicdb-cell-device = { path = "../bicdb-cell-device", version = "1.0.523-beta" }
-bicdb-cell-grant = { path = "../bicdb-cell-grant", version = "1.0.523-beta" }
-bicdb-core = { path = "../bicdb-core", version = "1.0.523-beta", default-features = false, features = ["compression"] }
-bicdb-extension = { path = "../bicdb-extension", version = "1.0.523-beta" }
-bicdb-fleet = { path = "../bicdb-fleet", version = "1.0.523-beta" }
+bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "=1.0.525" }
+bicdb-cell-admission = { path = "../bicdb-cell-admission", version = "=1.0.525" }
+bicdb-cell-ha = { path = "../bicdb-cell-ha", version = "=1.0.525" }
+bicdb-cell-device = { path = "../bicdb-cell-device", version = "=1.0.525" }
+bicdb-cell-grant = { path = "../bicdb-cell-grant", version = "=1.0.525" }
+bicdb-core = { path = "../bicdb-core", version = "=1.0.525", default-features = false, features = ["compression"] }
+bicdb-extension = { path = "../bicdb-extension", version = "=1.0.525" }
+bicdb-fleet = { path = "../bicdb-fleet", version = "=1.0.525" }
 ciborium.workspace = true
 clap.workspace = true
 ctrlc.workspace = true

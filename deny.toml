@@ -128,7 +128,7 @@ name = "libsqlite3-sys"
 # comparing BicDB against them stays possible while depending on them for real
 # storage fails the gate.
 #
-# `bicdb-cli` exposes these tools only through its opt-in
+# `bicdb` (crates/bicdb-cli) exposes these tools only through its opt-in
 # `bench-comparison-engines` feature; ordinary production builds do not link
 # either comparison engine.
 [[bans.deny]]

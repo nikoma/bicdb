@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Synchronize the BicDB source version without changing dependency resolution.
 
+Versions are MAJOR.MINOR.PATCH with an optional pre-release suffix; since
+1.0.524 the source uses stable numbers (no `-beta`). The packages are the
+crates/ members named `bicdb` or `bicdb-*`.
+
 Published download URLs and historical evidence remain pinned to their releases.
 Use --check for a read-only consistency check. Coordinate the next version against
 remote main immediately before merging; parallel branches must not reuse it.
@@ -48,7 +52,8 @@ def main():
         before = path.read_text()
         data = tomllib.loads(before)
         package = data.get('package',{})
-        if path.relative_to(root).parts[0]=='crates' and package.get('name','').startswith('bicdb-'):
+        name = package.get('name','')
+        if path.relative_to(root).parts[0]=='crates' and (name=='bicdb' or name.startswith('bicdb-')):
             require(package.get('version')==current, 'mixed package version: '+str(path))
             release_names.add(package['name'])
         after = before
@@ -57,6 +62,23 @@ def main():
         if after!=before:
             planned[path]=after
     require(bool(release_names), 'no release packages found')
+    # Stable versions such as 1.0.524 are not unique strings: a third-party
+    # requirement may spell the same number. Accept a rewritten manifest only
+    # when every changed value is a BicDB package version or belongs to a
+    # dependency on a BicDB package (including `alias = { package = ... }`).
+    def internal_dependency(name, spec):
+        return name in release_names or (isinstance(spec,dict) and spec.get('package') in release_names)
+    def check_rewrite(before, after, path, trail=(), internal=False):
+        if isinstance(before,dict) and isinstance(after,dict) and before.keys()==after.keys():
+            dependency_table = bool(trail) and 'dependencies' in str(trail[-1])
+            for key in before:
+                check_rewrite(before[key], after[key], path, trail+(key,),
+                              internal_dependency(key, before[key]) if dependency_table else internal)
+            return
+        require(before==after or internal or trail==('package','version'),
+                'unexpected manifest rewrite: '+str(path)+' '+'.'.join(map(str,trail)))
+    for path,after in planned.items():
+        check_rewrite(tomllib.loads(path.read_text()), tomllib.loads(after), path)
     def check_internal_requirements(value, path):
         if isinstance(value,dict):
             for name,spec in value.items():

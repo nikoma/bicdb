@@ -269,7 +269,6 @@ impl NativeWriterServingDomainPublication {
                 record.native_page_xid = xid;
                 record.checksum_sha256 = record.checksum()?;
                 record.validate(&writer.record)?;
-                self.publication = Publication::Uncertain(record.clone());
                 let mut counter = AuditCounter {
                     version: 1,
                     original: record.original.clone(),
@@ -299,6 +298,15 @@ impl NativeWriterServingDomainPublication {
                 policy.require_local(db, actual_service, self.closed.slot.id())?;
                 self.closed.require_lifetime()?;
                 admission.require_live()?;
+                // Uncertain only from here: an error returned above aborts
+                // this transaction, so nothing of it is durable and the
+                // attempt stays Prepared (the next one takes a fresh
+                // sequence). Marked uncertain earlier, an attempt refused by
+                // a postcheck kept a record whose sequence the durable
+                // accounting never reached, and every later attempt refused
+                // with "accounting regressed". From here only the commit can
+                // fail, and its outcome is unknown.
+                self.publication = Publication::Uncertain(record.clone());
                 Ok(())
             })?
             .ok_or_else(|| invalid("Serving writer lost actual native page store"))?;

@@ -177,7 +177,13 @@ impl RemotePreparationWindow {
         let observer = client.local_metadata_read_participant().node_id().clone();
         let mut frames = BTreeMap::new();
         let mut identities = BTreeMap::new();
-        for node in data.new_members().keys().filter(|node| **node != observer) {
+        let nodes = data
+            .new_members()
+            .keys()
+            .filter(|node| **node != observer)
+            .cloned()
+            .collect::<Vec<_>>();
+        let observe = |node: &ClusterNodeId| -> Result<AuthenticatedNativeJointBridgeStepFrame> {
             let budget_ms = remaining(token)?.as_millis().clamp(1, 5000) as u64;
             let request = NativeJointHandoffStepRequestV1::from_decision(
                 data,
@@ -192,6 +198,11 @@ impl RemotePreparationWindow {
                 node, data, kind, &request, own, token,
             )?;
             frame.require_live()?;
+            Ok(frame)
+        };
+        for (node, frame) in observe_every_member(&nodes, &observe) {
+            let node = &node;
+            let frame = frame?;
             // The counted member is the peer this exchange authenticated.
             let actual = frame.actual_peer().clone();
             if &actual != node || frames.contains_key(&actual) {
@@ -250,6 +261,56 @@ impl RemotePreparationWindow {
             .map(|frame| frame.metadata_anchor().2)
             .collect()
     }
+}
+
+/// One observation exchange per member, each on its own scoped thread, so
+/// that every frame of one window is observed at about the same time. A
+/// window is complete only while EVERY frame is still inside its own bounded
+/// window; collected one after the other, the first frame's window had to
+/// outlast all later exchanges, which on a slow host it never did, and the
+/// same window was observed again on every repetition. Each exchange is the
+/// unchanged authenticated request of the sequential collection; the
+/// results keep the order of `nodes`, and the caller checks them in that
+/// order as before. A thread that cannot be started runs its exchange on the
+/// calling thread; a worker that panicked is an error of its member.
+fn observe_every_member(
+    nodes: &[ClusterNodeId],
+    observe: &(dyn Fn(&ClusterNodeId) -> Result<AuthenticatedNativeJointBridgeStepFrame> + Sync),
+) -> Vec<(
+    ClusterNodeId,
+    Result<AuthenticatedNativeJointBridgeStepFrame>,
+)> {
+    if nodes.len() < 2 {
+        return nodes
+            .iter()
+            .map(|node| (node.clone(), observe(node)))
+            .collect();
+    }
+    std::thread::scope(|scope| {
+        let started = nodes
+            .iter()
+            .map(|node| {
+                let worker = std::thread::Builder::new()
+                    .name("joint-window-observation".into())
+                    .spawn_scoped(scope, move || observe(node));
+                (node, worker)
+            })
+            .collect::<Vec<_>>();
+        started
+            .into_iter()
+            .map(|(node, worker)| {
+                let answer = match worker {
+                    Ok(worker) => worker.join().unwrap_or_else(|_| {
+                        Err(invalid(&format!(
+                            "the window observation worker of member {node} panicked"
+                        )))
+                    }),
+                    Err(_) => observe(node),
+                };
+                (node.clone(), answer)
+            })
+            .collect()
+    })
 }
 
 pub(super) fn remaining(token: &crate::CancellationToken) -> Result<Duration> {

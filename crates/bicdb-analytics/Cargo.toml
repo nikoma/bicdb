@@ -18,7 +18,7 @@ analytics = []
 
 [dependencies]
 arrow.workspace = true
-bicdb-core = { path = "../bicdb-core", version = "1.0.524" }
+bicdb-core = { path = "../bicdb-core", version = "=1.0.524" }
 datafusion.workspace = true
 hex.workspace = true
 serde.workspace = true

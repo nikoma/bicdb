@@ -13,7 +13,7 @@ categories = ["database-implementations"]
 include = ["/src/**", "/Cargo.toml", "/LICENSE", "/NOTICE", "/THIRD_PARTY_NOTICES.md"]
 
 [dependencies]
-bicdb-core = { path = "../bicdb-core", version = "1.0.524", default-features = false, features = ["compression"] }
+bicdb-core = { path = "../bicdb-core", version = "=1.0.524", default-features = false, features = ["compression"] }
 chacha20poly1305.workspace = true
 ciborium.workspace = true
 ed25519-dalek.workspace = true

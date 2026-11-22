@@ -19,11 +19,11 @@ include = ["/src/**", "/Cargo.toml", "/LICENSE", "/NOTICE", "/THIRD_PARTY_NOTICE
 allocation-counter = { workspace = true, optional = true }
 anyhow.workspace = true
 arrow.workspace = true
-bicdb-analytics = { path = "../bicdb-analytics", version = "1.0.524" }
-bicdb-core = { path = "../bicdb-core", version = "1.0.524" }
-bicdb-page = { path = "../bicdb-page", version = "1.0.524" }
-bicdb-pgwire = { path = "../bicdb-pgwire", version = "1.0.524" }
-bicdb-sql = { path = "../bicdb-sql", version = "1.0.524" }
+bicdb-analytics = { path = "../bicdb-analytics", version = "=1.0.524" }
+bicdb-core = { path = "../bicdb-core", version = "=1.0.524" }
+bicdb-page = { path = "../bicdb-page", version = "=1.0.524" }
+bicdb-pgwire = { path = "../bicdb-pgwire", version = "=1.0.524" }
+bicdb-sql = { path = "../bicdb-sql", version = "=1.0.524" }
 fjall = { workspace = true, optional = true }
 hex.workspace = true
 postgres = "0.19.14"

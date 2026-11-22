@@ -14,8 +14,8 @@ include = ["/src/**", "/Cargo.toml", "/LICENSE", "/NOTICE", "/THIRD_PARTY_NOTICE
 
 [dependencies]
 base64.workspace = true
-bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "1.0.524" }
-bicdb-extension = { path = "../bicdb-extension", version = "1.0.524" }
+bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "=1.0.524" }
+bicdb-extension = { path = "../bicdb-extension", version = "=1.0.524" }
 chrono.workspace = true
 hmac.workspace = true
 reqwest.workspace = true

@@ -13,9 +13,9 @@ categories = ["database-implementations"]
 include = ["/src/**", "/Cargo.toml", "/LICENSE", "/NOTICE", "/THIRD_PARTY_NOTICES.md"]
 
 [dependencies]
-bicdb-core = { path = "../bicdb-core", version = "1.0.524", default-features = false }
-bicdb-lua = { path = "../bicdb-lua", version = "1.0.524" }
-bicdb-script = { path = "../bicdb-script", version = "1.0.524" }
+bicdb-core = { path = "../bicdb-core", version = "=1.0.524", default-features = false }
+bicdb-lua = { path = "../bicdb-lua", version = "=1.0.524" }
+bicdb-script = { path = "../bicdb-script", version = "=1.0.524" }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

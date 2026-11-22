@@ -23,8 +23,8 @@ extension-host = ["bicdb-extension/host"]
 [dependencies]
 smallvec = "1"
 base64.workspace = true
-bicdb-core = { path = "../bicdb-core", version = "1.0.524", default-features = false }
-bicdb-extension = { path = "../bicdb-extension", version = "1.0.524", default-features = false }
+bicdb-core = { path = "../bicdb-core", version = "=1.0.524", default-features = false }
+bicdb-extension = { path = "../bicdb-extension", version = "=1.0.524", default-features = false }
 chrono = "0.4"
 chrono-tz = "0.10"
 crc32fast.workspace = true
@@ -63,6 +63,6 @@ wasmtime = { version = "48.0.3", optional = true }
 
 [dev-dependencies]
 # Deterministic I/O fault injection for tests/commit_outcome_resolution.rs.
-bicdb-page = { path = "../bicdb-page", version = "1.0.524" }
+bicdb-page = { path = "../bicdb-page", version = "=1.0.524" }
 tempfile.workspace = true
 wat = "1"

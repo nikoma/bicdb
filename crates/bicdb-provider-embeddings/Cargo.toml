@@ -13,5 +13,5 @@ categories = ["database-implementations"]
 include = ["/src/**", "/Cargo.toml", "/LICENSE", "/NOTICE", "/THIRD_PARTY_NOTICES.md"]
 
 [dependencies]
-bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "1.0.524" }
-bicdb-core = { path = "../bicdb-core", version = "1.0.524" }
+bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "=1.0.524" }
+bicdb-core = { path = "../bicdb-core", version = "=1.0.524" }

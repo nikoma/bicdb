@@ -667,7 +667,7 @@ fn read_within(
                     println!(
                         "RESTART_M Strong read of {key} repeated after {:.2}s: {}",
                         begun.elapsed().as_secs_f64(),
-                        error.to_string().chars().take(700).collect::<String>()
+                        error.to_string().chars().take(4000).collect::<String>()
                     );
                 }
                 repeated.push(format!("{key}: {error}"));
@@ -678,23 +678,30 @@ fn read_within(
         }
     }
 }
-/// A refusal without the holder ages ("for 123ms") of a busy reservation.
+/// A refusal with its numbers (holder ages, step times, slices) elided, so
+/// refusals of one kind group together. Names such as `n2` or `r1` stay.
 fn refusal_kind(error: &str) -> String {
     let mut kind = String::new();
-    let mut rest = error;
-    while let Some(at) = rest.find(" for ") {
-        kind.push_str(&rest[..at]);
-        let tail = &rest[at + 5..];
-        let digits = tail.bytes().take_while(u8::is_ascii_digit).count();
-        if digits > 0 && tail[digits..].starts_with("ms") {
-            rest = &tail[digits + 2..];
+    // Inside a digit run: whether it is kept (part of a name).
+    let mut run: Option<bool> = None;
+    let mut previous = ' ';
+    for c in error.chars() {
+        if c.is_ascii_digit() {
+            let keep = *run.get_or_insert(previous.is_ascii_alphabetic());
+            if keep {
+                kind.push(c);
+            } else if previous.is_ascii_digit() {
+                // Elided run continues.
+            } else {
+                kind.push('#');
+            }
         } else {
-            kind.push_str(" for ");
-            rest = tail;
+            run = None;
+            kind.push(c);
         }
+        previous = c;
     }
-    kind.push_str(rest);
-    kind.chars().take(700).collect()
+    kind.chars().take(4000).collect()
 }
 /// Next unused key of `prefix` that falls into `range`.
 fn key_in(topology: &ClusterTopology, range: RangeId, prefix: &str, counter: &mut u64) -> String {

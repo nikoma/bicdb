@@ -1186,11 +1186,14 @@ fn native_initial_member_restart_four_process_leader_killed_under_writes() {
                         .iter()
                         .find(|r| r["range_id"] == led.id.get())
                         .and_then(|r| {
-                            r["first_unresolved_state"].as_str().map(str::to_owned).or_else(|| {
-                                r["unfinished_native_writer_start_index"]
-                                    .as_u64()
-                                    .map(|_| "WriterStartOnly".to_owned())
-                            })
+                            r["first_unresolved_state"]
+                                .as_str()
+                                .map(str::to_owned)
+                                .or_else(|| {
+                                    r["unfinished_native_writer_start_index"]
+                                        .as_u64()
+                                        .map(|_| "WriterStartOnly".to_owned())
+                                })
                         })
                 });
             }

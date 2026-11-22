@@ -40,8 +40,6 @@ assert config["status"] == "active"
 assert config["license_identifier"] == "Apache-2.0"
 assert config["license_file"] == "LICENSE" and config["notice_file"] == "NOTICE"
 assert config["license_sha256"] == APACHE_SHA256
-assert config["previous_license_identifier"] == RETIRED
-assert re.fullmatch(r"[0-9a-f]{40}", config["previous_license_last_revision"])
 
 # Root LICENSE: verbatim Apache 2.0, nothing prepended or appended.
 license_bytes = (root / "LICENSE").read_bytes()
@@ -85,10 +83,6 @@ assert all(RETIRED not in c["allow"] for c in deny.get("exceptions", []))
 # and every SPDX header names Apache-2.0.
 SPDX_HEADER = re.compile("SPDX-License-" + r"Identifier:\s*([^\s*\"'<>]+)")
 HISTORICAL_PREFIXES = ("docs/releases/", "docs/evidence/")
-HISTORY_DOCUMENTS = {
-    "licensing/transition.toml", "docs/licensing-transition.md",
-    "docs/licensing-implementation-report.md",
-}
 tracked = subprocess.run(["git", "ls-files", "-z"], cwd=root, check=True,
                          capture_output=True).stdout.decode().split("\0")
 for relative in filter(None, tracked):
@@ -101,17 +95,13 @@ for relative in filter(None, tracked):
         content = path.read_text()
     except (UnicodeDecodeError, OSError):
         continue
-    if relative not in HISTORY_DOCUMENTS:
-        assert RETIRED not in content, f"{relative} references the retired custom license"
+    assert RETIRED not in content, f"{relative} references the retired custom license"
     for spdx in SPDX_HEADER.findall(content):
         assert spdx == "Apache-2.0", f"{relative}: SPDX identifier {spdx}"
-for history in ("docs/licensing-transition.md", "docs/licensing-implementation-report.md"):
-    assert "Apache-2.0" in (root / history).read_text(), history
 
 # Current licensing documents: relative links resolve.
 documents = ["README.md", "CONTRIBUTING.md", "THIRD_PARTY_NOTICES.md", "docs/licensing-faq.md",
-             "docs/licensing-transition.md", "docs/commercial-licensing.md",
-             "docs/licensing-implementation-report.md", "licensing/packaging-proposal.md",
+             "licensing/packaging-proposal.md",
              "web/bicdb-client/docs/licensing-faq.md"]
 for relative in documents:
     path = root / relative

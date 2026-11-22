@@ -10,10 +10,6 @@ license_file = "LICENSE"
 license_sha256 = "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
 notice_file = "NOTICE"
 relicense_source_version = "1.0.523-beta"
-# Historical record only: the custom license that preceded this relicensing.
-# The last main revision carrying it is the parent of the relicensing change.
-previous_license_identifier = "LicenseRef-BicDB-1.0"
-previous_license_last_revision = "147164244da0e984b959bcfbcc6348cb963f3d25"
 # Non-Cargo distributable directories that ship LICENSE and NOTICE copies
 # identical to the root files. Cargo workspace members are covered automatically.
 package_paths = ["web/bicdb-client", "abi", "examples", "jepsen"]

@@ -17,6 +17,4 @@ per shipped improvement; it does not carry semantic-versioning compatibility
 guarantees while the project is in beta.
 
 BicDB is licensed under the [Apache License, Version 2.0](LICENSE) from
-`1.0.523-beta` on. Earlier source versions carried the custom BicDB License 1.0;
-version numbers and historical release notes are not relabeled by the
-[transition](docs/licensing-transition.md).
+`1.0.523-beta` on.

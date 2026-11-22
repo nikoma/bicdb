@@ -10,7 +10,7 @@ Apache-2.0 lets you use, copy, modify, distribute and sublicense BicDB, in sourc
 or object form, for any purpose, including commercial use. That covers
 proprietary applications, SaaS of any size, embedding BicDB in a product, hosting
 BicDB for others, selling support, and publishing forks. There are no revenue,
-user, tenant or instance limits, and no separate commercial license is needed.
+user, tenant or instance limits.
 The license also carries an express patent grant from contributors (section 3).
 
 ## What you must do when you redistribute
@@ -39,9 +39,3 @@ warranties (sections 7 and 8).
 Dependencies and vendored components keep their own licenses. They are listed in
 [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md); binary distributors must
 reproduce the notices required by the exact components they ship.
-
-## Earlier versions
-
-Source versions before 1.0.523-beta were distributed under the custom BicDB
-License 1.0 (Apache 2.0 with additional restrictions). The
-[transition record](licensing-transition.md) keeps that history.

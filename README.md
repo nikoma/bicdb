@@ -12,7 +12,7 @@ or run it as a server.
 Built for AI agents and developers who would rather build applications than
 operate a collection of databases, search services, and message brokers.
 
-**Open source** under the [Apache License, Version 2.0](LICENSE).
+**Free and open source** under the [Apache License, Version 2.0](LICENSE).
 See [license](#license).
 
 [Download 1.0.438-beta](https://github.com/nikoma/bicdb/releases/tag/v1.0.438-beta)
@@ -596,13 +596,8 @@ findings and their remediation are recorded in
 
 ## License
 
-BicDB is licensed under the [Apache License, Version 2.0](LICENSE)
-(`Apache-2.0`), unmodified. See [NOTICE](NOTICE) for the attribution notice to
-retain when redistributing, and [third-party notices](THIRD_PARTY_NOTICES.md)
-for components that keep their own licenses. The [licensing guide](docs/licensing-faq.md)
-summarizes what that means in practice.
-
-From source version 1.0.523-beta on, the project is Apache-2.0. Earlier revisions
-were distributed under the custom BicDB License 1.0 (Apache 2.0 with additional
-restrictions); the [transition record](docs/licensing-transition.md) keeps that
-history. Historical release notes describe the license in force at their time.
+BicDB is free and open source software, licensed under the
+[Apache License, Version 2.0](LICENSE). You may use, modify and distribute it,
+and build commercial products and services with it. When you redistribute it,
+include the [LICENSE](LICENSE) and [NOTICE](NOTICE) files. Third-party
+components keep their own licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

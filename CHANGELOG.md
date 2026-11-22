@@ -16,8 +16,7 @@ BicDB is beta software and uses `1.0.x-beta`. The patch component increments
 per shipped improvement; it does not carry semantic-versioning compatibility
 guarantees while the project is in beta.
 
-The current covered source uses [BicDB License 1.0](LICENSE), beginning
-at the activation revision identified in [LICENSE-SCOPE.md](LICENSE-SCOPE.md).
-The Apache-era source grant began at `1.0.363-beta`; earlier copies retain their
-terms. Version numbers and historical release notes are not relabeled by the
+BicDB is licensed under the [Apache License, Version 2.0](LICENSE) from
+`1.0.523-beta` on. Earlier source versions carried the custom BicDB License 1.0;
+version numbers and historical release notes are not relabeled by the
 [transition](docs/licensing-transition.md).

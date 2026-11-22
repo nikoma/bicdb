@@ -1,67 +1,47 @@
-# Packaging BicDB License 1.0: Apache 2.0 + three exceptions
+# Packaging BicDB under Apache-2.0
 
-The simplified BicDB License is **active**. Its Apache baseline is verbatim;
-this document now records distribution rules. LICENSE-SCOPE.md and transition.toml
-identify the covered source revision and exclusions. No historical release is retagged.
+BicDB is licensed under the [Apache License, Version 2.0](../LICENSE). This page
+records how packages and artifacts carry the license and notices.
 
-## Cargo and mixed scope
+## Source of truth
 
-The workspace uses `license-file = "LICENSE"`; 20 covered engine packages inherit
-`license-file.workspace = true`. They do not declare an Apache alternative.
-The 11 retained SDK/connector/example packages explicitly declare Apache-2.0.
-The browser JavaScript client, ABI, examples and Jepsen harness retain their terms.
-See [scope](../LICENSE-SCOPE.md) for the exact boundaries.
+- `LICENSE` is the verbatim, standard Apache License 2.0 text (hash-pinned in
+  [transition.toml](transition.toml)); `LICENSES/Apache-2.0.txt` is an identical copy.
+- `NOTICE` is the project attribution notice that Apache section 4(d) requires
+  redistributions to keep.
+- `THIRD_PARTY_NOTICES.md` lists components that keep their own licenses.
 
-Each covered crate ships the community LICENSE, LICENSE-SCOPE.md, NOTICE,
-THIRD_PARTY_NOTICES.md, LICENSES/Apache-2.0.txt and licensing/NOTICE-Apache.txt.
-The latter two preserve earlier/underlying grants, not new Apache rights over the
-whole covered package. Retained Apache packages keep their existing legal texts.
-`scripts/sync-package-licenses.py` maintains this distinction; `--check` never writes.
+## Cargo
 
-Cargo includes the referenced custom license-file in archives and normalizes its
-path. Check both the normalized Cargo.toml and the actual text inside packages.
-No unsupported SPDX expression or “Apache WITH restrictions” is used to make tools
-pass. The custom identifier is not represented as SPDX-listed or OSI-approved.
-The appended Apache text must remain byte-identical to LICENSES/Apache-2.0.txt;
-its presence is not a separate grant without the three exceptions for covered code.
+The workspace declares `license = "Apache-2.0"` and every package inherits it with
+`license.workspace = true`. No package uses `license-file`. Each workspace member
+ships byte-identical `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` copies so
+they are included in its `.crate` archive. `scripts/sync-package-licenses.py`
+regenerates the copies; `--check` verifies them without writing. `deny.toml`
+needs no first-party clarification because every first-party package declares
+an SPDX-listed license.
 
-`deny.toml` uses hash-pinned license clarifications and explicit package-specific
-exceptions for the 20 first-party community packages. The dependency allowlist is
-unchanged: a new third-party package does not inherit those exceptions. A license
-change requires deliberate hash/config review, not a lower detection threshold.
+## npm, ABI, examples and Jepsen
 
-## npm and separate components
+`web/bicdb-client`, `abi`, `examples` and `jepsen` ship `LICENSE` and `NOTICE`
+copies identical to the root files (listed as `package_paths` in
+`transition.toml`). The npm client declares `"license": "Apache-2.0"` and lists
+its legal files in `files`. A separately supplied engine WASM binary carries the
+notices of that engine build.
 
-The client package's JavaScript remains Apache. Its independently supplied engine
-WASM binary carries the license of that engine build. If combining them, supply
-both sets of applicable terms and notices. The current npm files list contains no
-engine binary. Use `npm pack --dry-run --ignore-scripts --json` to inspect it.
-A new custom-license npm package would use `SEE LICENSE IN LICENSE` and ship its
-legal texts; none is introduced here. Jepsen's Apache link stays pinned to an
-immutable Apache-era license. The root license does not overwrite vendor notices.
+## Binary archives and containers
 
-## Other artifacts and source headers
+Release archives and container images carry `LICENSE`, `NOTICE` and
+`THIRD_PARTY_NOTICES.md`, plus any notices required by the exact third-party
+components they contain.
 
-Binary archives, containers and installers must carry the applicable LICENSE,
-scope, NOTICE, prior Apache and third-party texts. No current build/publish workflow
-for those artifacts or active SBOM generator was found. Existing published assets
-are untouched. A future SPDX SBOM should put the custom identifier/text in its
-extracted-license information; OCI labels may identify LicenseRef-BicDB-1.0
-with the shipped scope. Separate components still require separate license entries.
+## Source headers
 
-No blanket Apache source header was present on covered Rust implementation files.
-Package licenses and scope identify them; preserve existing third-party source
-comments. New covered first-party files may use this header:
+Source files need no per-file header; the package license applies. New files
+that carry an SPDX header use:
 
 ```text
-SPDX-License-Identifier: LicenseRef-BicDB-1.0
-See LICENSE and LICENSE-SCOPE.md; earlier and third-party grants remain intact.
+SPDX-License-Identifier: Apache-2.0
 ```
 
-Independent applications need no UI branding. No runtime license checks, telemetry,
-feature controls, frontend changes, release tags or package publication are added.
-
-References: [Cargo license-file](https://doc.rust-lang.org/cargo/reference/manifest.html#the-license-and-license-file-fields),
-[cargo-deny custom clarifications](https://embarkstudios.github.io/cargo-deny/checks/licenses/cfg.html),
-[npm license metadata](https://docs.npmjs.com/cli/v11/configuring-npm/package-json/#license),
-[SPDX custom license information](https://spdx.github.io/spdx-spec/v2.3/other-licensing-information-detected/).
+`scripts/validate-licensing.sh` checks these invariants in CI.

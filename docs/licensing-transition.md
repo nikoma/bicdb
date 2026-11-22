@@ -2,25 +2,30 @@
 
 ## Current terms
 
-The current developer-facing model is **Apache 2.0 + three exceptions**.
-The operative [BicDB License 1.0](../LICENSE), identifier `LicenseRef-BicDB-1.0`,
-uses that structure with the complete Apache 2.0 text appended verbatim. It remains
-source-available, not standard Apache-2.0 or an OSI-approved license.
+From source version `1.0.523-beta` on, BicDB is licensed under the
+[Apache License, Version 2.0](../LICENSE) (`Apache-2.0`), unmodified. The root
+[NOTICE](../NOTICE) carries the attribution notice. The custom BicDB License 1.0
+(`LicenseRef-BicDB-1.0`, Apache 2.0 plus three exceptions reserving managed
+database services, database-product/OEM sales and console white-labelling), its
+scope notice `LICENSE-SCOPE.md`, the per-package scope copies and the
+first-party cargo-deny carve-outs are retired. Every package, including the
+packages that were previously excluded from the custom license's scope, now
+declares Apache-2.0 and ships the same LICENSE and NOTICE.
 
-The exceptions reserve managed database services, commercial database products/OEM,
-and included-console attribution removal for white-label database distribution.
-The old same-license requirement for modifications is removed. Apache's own section
-4 permits different terms for the recipient's modifications, while applicable
-conditions on underlying BicDB code remain. Apache grants, warranties, patent terms,
-redistribution machinery and liability text are not rewritten. The previous custom
-30-day cure/reinstatement and custom patent language are not carried into this version.
+The repository owner directed this relicensing. The last main revision carrying
+the custom license is `previous_license_last_revision` in
+[transition.toml](../licensing/transition.toml). The sections below are the
+history of the earlier license and are kept unchanged as a record; they do not
+describe the current terms.
 
-The full notice/scope follows [LICENSE-SCOPE.md](../LICENSE-SCOPE.md). At adoption,
-it listed seventeen covered engine packages and eleven retained permissive packages.
-The three scripting engine packages inherit those existing terms; the current
-inventory records twenty covered packages and the same eleven exclusions.
-The browser client, ABI, examples, Jepsen harness, dependencies and vendor material
-keep their separate terms. The client license does not relicense an engine WASM binary.
+## Earlier license (historical)
+
+The earlier developer-facing model was **Apache 2.0 + three exceptions**:
+BicDB License 1.0, identifier `LicenseRef-BicDB-1.0`, with the complete Apache
+2.0 text appended verbatim. It was source-available, not standard Apache-2.0.
+At adoption, its scope notice listed seventeen covered engine packages and eleven
+retained permissive packages; the browser client, ABI, examples and Jepsen
+harness kept Apache-2.0.
 
 ## Revision history and prior rights
 
@@ -30,40 +35,24 @@ keep their separate terms. The client license does not relicense an engine WASM 
 - `4b9d7380` installed the first non-operative proposal for review.
 - `5dc999de025d684af23b8878e367afbfa692ce41` first committed Community License 1.0,
   merged to main at `155c3659`. That distinct license is not silently rewritten.
-- The new simplified license starts at `first_covered_revision` in
-  [transition.toml](../licensing/transition.toml), following baseline `894c114c`.
-  Its different identifier prevents two substantively different texts sharing a version.
+- The simplified BicDB License 1.0 started at revision
+  `a97028c4f3fb7b6d7e01618dca2434a848956621`, following baseline `894c114c`.
+- `1.0.523-beta` replaced it with unmodified Apache-2.0 for the whole repository.
 
-Earlier copies keep their received grants. Nobody's terms change automatically.
-Existing Apache permissions permit continuing earlier Apache code, including uses
-reserved for newly covered rights here. The preserved Apache text and notices are
-not a parallel unrestricted grant for newly covered BicDB rights. Independent
-implementations remain outside the license; no guarantee against copying is made.
+Copies received under an earlier license keep the grants they were received
+with; this relicensing does not rewrite them. Historical release notes and
+evidence describe the license in force at their time.
 
 ## Rights and contributions
 
-The licensors and limits of their authority are stated in
-[LICENSE-SCOPE.md](../LICENSE-SCOPE.md). This transition does not assert new
-assignments or alter third-party rights. Earlier source and artifact terms
-retain their historical meaning; a new source distribution does not itself
-establish the terms under which every earlier copy was delivered.
+The relicensing does not assert new assignments or alter third-party rights.
+Contributions are received under Apache section 5; see
+[CONTRIBUTING.md](../CONTRIBUTING.md). The earlier draft contributor agreement,
+which was never adopted, was retired with the custom license.
 
-The [prospective contributor agreement](../licensing/contributor-agreement.draft.md)
-remains a draft requiring affirmative acceptance. It does not secure consent
-from past contributors. Detailed internal provenance review records are retained
-privately; their removal from this snapshot does not resolve outstanding rights
-questions or change the operative license and scope notice.
+## References
 
-For commercial inquiries, see [commercial licensing](commercial-licensing.md).
-
-## References and verification
-
-[Apache text](https://www.apache.org/licenses/LICENSE-2.0.txt) and
-[Apache's modification FAQ](https://www.apache.org/foundation/license-faq.html#mod-license)
-were checked. The recognizable baseline is preserved verbatim; the additional
-conditions make the combined instrument a distinct license. Dify is inspiration,
-not authority to license BicDB; its tenant-count rule and patent assertion are absent.
-
-[Packaging rules](../licensing/packaging-proposal.md) cover custom license-file
-metadata, mixed-scope archives and hash-pinned first-party cargo-deny exceptions.
-[Implementation report](licensing-implementation-report.md) records the checks.
+[Apache text](https://www.apache.org/licenses/LICENSE-2.0.txt). Current
+[packaging rules](../licensing/packaging-proposal.md) describe how packages carry
+LICENSE and NOTICE. The [implementation report](licensing-implementation-report.md)
+records the earlier custom-license implementation.

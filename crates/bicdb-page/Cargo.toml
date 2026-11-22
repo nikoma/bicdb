@@ -1,8 +1,8 @@
 [package]
 name = "bicdb-page"
-version = "1.0.521-beta"
+version = "1.0.523-beta"
 edition.workspace = true
-license-file.workspace = true
+license.workspace = true
 rust-version.workspace = true
 
 # Phase 1 of docs/server-paged-storage-todo.md: the first-party page file and

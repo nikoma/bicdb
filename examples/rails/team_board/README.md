@@ -126,7 +126,6 @@ inherited Rails database-URL overrides so setup and rollback cannot be redirecte
 to an unrelated database.
 
 Run native qualification with `BICDB_BIN=/absolute/path/to/bicdb bin/verify`.
-The sample application is [Apache-2.0 licensed](../../../LICENSES/Apache-2.0.txt);
-BicDB retains its separate [source-available license](../../../LICENSE).
+The sample application and BicDB are [Apache-2.0 licensed](../../../LICENSE).
 The demo qualifies its recorded workload; it is not a certification of every
 Rails application or a production deployment configuration.

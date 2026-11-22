@@ -1,15 +1,15 @@
 [package]
 name = "bicdb-sync"
-version = "1.0.521-beta"
+version = "1.0.523-beta"
 edition.workspace = true
-license-file.workspace = true
+license.workspace = true
 rust-version.workspace = true
 
 [features]
 default = ["bicdb-core/default"]
 
 [dependencies]
-bicdb-core = { path = "../bicdb-core", version = "1.0.521-beta", default-features = false }
+bicdb-core = { path = "../bicdb-core", version = "1.0.523-beta", default-features = false }
 serde.workspace = true
 serde_json.workspace = true
 socket2 = { version = "0.5", features = ["all"] }

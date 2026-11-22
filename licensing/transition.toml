@@ -1,37 +1,19 @@
-# Operative community terms adopted on the repository owner's express instruction.
+# Machine-readable license record checked by scripts/validate-license-transition.py
+# and scripts/sync-package-licenses.py.
+#
+# BicDB is licensed under the Apache License, Version 2.0, unmodified.
 status = "active"
-license_name = "BicDB License 1.0"
-license_identifier = "LicenseRef-BicDB-1.0"
+license_name = "Apache License, Version 2.0"
+license_identifier = "Apache-2.0"
 license_file = "LICENSE"
-license_sha256 = "c4379b2deb21b6026a6bcfae2e6cb938422a020e791c6a2d8e9dff2d710ab81d"
-current_license = "LicenseRef-BicDB-1.0"
-inspected_main_revision = "ddca72365b1a4b265c1a473d16130072cbe71208"
-apache_grant_revision = "6aadb6da6e32c0c73cef77bad96889e9aca9baa6"
-apache_grant_source_version = "1.0.363-beta"
-# Unspecified release/contact fields do not defer the operative license.
-authorized_licensor = "WalkNorth, Inc. and Nikolai Manek, each solely for rights owned or authorized to license"
-authority_record = "Repository owner instruction: Apache 2.0 verbatim plus three exceptions; see docs/licensing-transition.md"
-activation_baseline_revision = "894c114c74fe810ee58f1f862ac4bacd1738ecac"
-previous_community_revision = "5dc999de025d684af23b8878e367afbfa692ce41"
-first_covered_revision = "a97028c4f3fb7b6d7e01618dca2434a848956621"
-first_covered_release = ""
-commercial_contact = ""
-notice_channel = ""
-# Leave separable SDK, connector and example code permissive; mixed host/SDK
-# package stays Apache as a whole until an evidenced separate scope decision.
-retained_apache_packages = [
-  "bicdb-extension", "bicdb-blob-s3", "bicdb-provider-redis",
-  "bicdb-provider-email", "bicdb-provider-grpc", "bicdb-provider-tokenizer",
-  "bicdb-provider-embeddings", "bicdb-provider-llm",
-  "bicdb-extension-example", "bicdb-website-host-example", "bicdb-website-renderer-example"
-]
-retained_apache_paths = ["web/bicdb-client", "abi", "examples", "jepsen"]
-# Explicit inventory of engine packages covered by the existing operative terms.
-covered_engine_packages = [
-  "bicdb-core", "bicdb-page", "bicdb-sync", "bicdb-sql", "bicdb-pgwire", "bicdb-resp",
-  "bicdb-wasm", "bicdb-analytics", "bicdb-bench", "bicdb-app-runtime",
-  "bicdb-cell", "bicdb-cell-admission", "bicdb-cell-device", "bicdb-cell-grant",
-  "bicdb-cell-ha", "bicdb-fleet", "bicdb-app-host", "bicdb-cli", "bicdb-lua", "bicdb-script", "bicdb-workflow"
-]
-# Included first-party administration frontend scope.
-console_paths = ["crates/bicdb-cli/src/tui.rs"]
+# SHA-256 of the standard https://www.apache.org/licenses/LICENSE-2.0.txt text.
+license_sha256 = "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+notice_file = "NOTICE"
+relicense_source_version = "1.0.523-beta"
+# Historical record only: the custom license that preceded this relicensing.
+# The last main revision carrying it is the parent of the relicensing change.
+previous_license_identifier = "LicenseRef-BicDB-1.0"
+previous_license_last_revision = "147164244da0e984b959bcfbcc6348cb963f3d25"
+# Non-Cargo distributable directories that ship LICENSE and NOTICE copies
+# identical to the root files. Cargo workspace members are covered automatically.
+package_paths = ["web/bicdb-client", "abi", "examples", "jepsen"]

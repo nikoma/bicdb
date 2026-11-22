@@ -1,4 +1,10 @@
-# Simplified BicDB License implementation
+# Simplified BicDB License implementation (historical)
+
+> **Superseded.** From source version 1.0.523-beta, BicDB is licensed under
+> unmodified Apache-2.0; see [LICENSE](../LICENSE) and the
+> [transition record](licensing-transition.md). This report describes the earlier
+> custom license and is kept as a record. Its statements about the "operative"
+> license refer to that earlier state.
 
 The operative license now reads **BicDB License 1.0 — Apache 2.0 + three exceptions**,
 with identifier `LicenseRef-BicDB-1.0`. The complete Apache text is appended verbatim.

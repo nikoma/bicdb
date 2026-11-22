@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Validate operative community terms, separate grants and packaged notices.
+# Validate the Apache-2.0 license invariants, metadata and packaged legal copies.
 set -euo pipefail
 cd "$(git -C "$(dirname "$0")/.." rev-parse --show-toplevel)"
 python3 scripts/validate-license-transition.py

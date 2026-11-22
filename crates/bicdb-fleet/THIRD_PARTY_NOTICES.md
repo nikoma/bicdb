@@ -1,6 +1,6 @@
 # BicDB third-party notices
 
-BicDB itself is licensed under the terms in [LICENSE](LICENSE). Third-party
+BicDB itself is licensed under the Apache License, Version 2.0 ([LICENSE](LICENSE)). Third-party
 components remain under their respective licenses.
 
 The Rust dependency graph is recorded exactly in `Cargo.lock`. It is
@@ -46,7 +46,7 @@ license files supplied with those components.
 `crates/bicdb-sql/src/pg_hash.rs` adapts PostgreSQL's
 `src/common/hashfn.c` extended hash algorithm to Rust. That file retains the
 PostgreSQL License and attribution inline; its separately licensed code is not
-relicensed under the BicDB product restrictions. Binary distributors must also
+relicensed under Apache-2.0. Binary distributors must also
 retain that notice. The source is PostgreSQL's `REL_17_STABLE` branch.
 
 ```text

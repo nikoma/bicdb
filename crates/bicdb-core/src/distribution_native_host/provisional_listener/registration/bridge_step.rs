@@ -630,6 +630,7 @@ pub(super) fn observe_bridge_phase(
     kind: NativeJointBridgePhaseKindV1,
     fresh: BridgeStepOwn,
     writer_audit: &mut Option<serde_json::Value>,
+    served_from: Instant,
     token: &CancellationToken,
 ) -> Result<(NativeJointHandoffStepOutcomeV1, (u64, u64, Uuid))> {
     enum Retained {
@@ -695,11 +696,20 @@ pub(super) fn observe_bridge_phase(
         ));
     }
     let BridgeStepOwn { own, business, .. } = fresh;
+    // The reported window counts from `served_from`, the instant this
+    // member began serving the request. The observer adds it to the instant
+    // the request LEFT, which is not later than `served_from`, so the frame
+    // still closes no later than this member's own observation. Counted from
+    // the reply instead, every frame lost the whole time this member spent
+    // observing (about a second on a slow host) on top of the observer's
+    // round trip, and a window of two or three members never held.
     let window = |deadline: Instant| -> Result<u64> {
-        Ok(deadline
+        deadline
             .checked_duration_since(Instant::now())
             .filter(|left| !left.is_zero())
-            .ok_or(BicDbError::QueryTimedOut)?
+            .ok_or(BicDbError::QueryTimedOut)?;
+        Ok(deadline
+            .saturating_duration_since(served_from)
             .as_millis()
             .clamp(1, 5000) as u64)
     };

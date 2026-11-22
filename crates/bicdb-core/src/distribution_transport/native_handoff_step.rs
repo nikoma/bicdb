@@ -604,9 +604,10 @@ impl TcpClusterRelocationTransport {
                 "joint bridge step actual response/metadata identity regressed",
             ));
         }
-        // The window can only shrink: the member's reported remainder counts
-        // from the instant BEFORE this request left, which is earlier than
-        // when the member measured it, so the member's own observation
+        // The window can only shrink: the member reports the remainder of
+        // its own observation counted from the instant it began serving this
+        // request, and it is counted here from the instant BEFORE this
+        // request left, which is not later, so the member's own observation
         // cannot have expired while this frame still reads as live.
         let mut window_deadline = own.deadline();
         if let Some(deadline) = token.deadline() {

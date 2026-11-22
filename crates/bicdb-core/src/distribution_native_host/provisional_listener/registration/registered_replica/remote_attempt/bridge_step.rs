@@ -25,6 +25,9 @@ impl NativeRegisteredReplicaAdmission {
         request: &NativeJointHandoffStepRequestV1,
         token: &CancellationToken,
     ) -> Result<NativeJointHandoffStepReplyV1> {
+        // After the request arrived, so not earlier than the instant it left
+        // its observer: see `observe_bridge_phase`.
+        let served_from = Instant::now();
         self.require_live()?;
         let backend = self
             .backend
@@ -66,6 +69,7 @@ impl NativeRegisteredReplicaAdmission {
                 *kind,
                 fresh,
                 &mut writer_audit,
+                served_from,
                 token,
             )?,
             // Both transitions drain and rebind the listener serving this

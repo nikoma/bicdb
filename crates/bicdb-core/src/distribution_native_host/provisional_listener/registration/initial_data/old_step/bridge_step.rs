@@ -35,6 +35,9 @@ impl NativeInitialDataAdmission {
         request: &NativeJointHandoffStepRequestV1,
         parent: &CancellationToken,
     ) -> Result<NativeJointHandoffStepReplyV1> {
+        // After the request arrived, so not earlier than the instant it left
+        // its observer: see `observe_bridge_phase`.
+        let served_from = std::time::Instant::now();
         let token = request.cancellation(parent)?;
         if request.operation.bridge_decision_sha256().is_none() {
             return Err(invalid(
@@ -84,6 +87,7 @@ impl NativeInitialDataAdmission {
                 *kind,
                 fresh,
                 &mut writer_audit,
+                served_from,
                 &token,
             )?,
             // A survivor keeps its writer State and socket: its own retained

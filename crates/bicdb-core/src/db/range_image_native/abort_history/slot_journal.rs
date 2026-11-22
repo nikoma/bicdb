@@ -65,7 +65,35 @@ impl NativeAbortSlotRecord {
         Ok(())
     }
 }
+/// The birth and StoreID every protected slot record of ONE open database
+/// must carry, read and checked against its on-disk range catalogue once,
+/// so a check over many slots does not re-read that whole catalogue per slot.
+/// Data for validation only; it admits nothing by itself.
+pub(crate) struct NativeAbortSlotIdentity {
+    incarnation: String,
+    birth: NativeDatabaseBirth,
+    store_id: Uuid,
+}
 impl BicDb {
+    pub(crate) fn native_abort_slot_identity(&self) -> Result<NativeAbortSlotIdentity> {
+        let (birth, store_id) = self.abort_slot_identity()?;
+        Ok(NativeAbortSlotIdentity {
+            incarnation: self.incarnation_id().to_owned(),
+            birth,
+            store_id,
+        })
+    }
+    fn require_own_slot_identity<'i>(
+        &self,
+        identity: &'i NativeAbortSlotIdentity,
+    ) -> Result<(&'i NativeDatabaseBirth, Uuid)> {
+        if identity.incarnation != self.incarnation_id() {
+            return Err(invalid(
+                "abort slot identity belongs to another open database",
+            ));
+        }
+        Ok((&identity.birth, identity.store_id))
+    }
     fn abort_slot_identity(&self) -> Result<(NativeDatabaseBirth, Uuid)> {
         let birth = self
             .read_native_birth()?
@@ -84,11 +112,17 @@ impl BicDb {
         Ok((birth, store))
     }
     pub(crate) fn native_abort_slot_inventory(&self) -> Result<Vec<NativeAbortSlotRecord>> {
+        self.native_abort_slot_inventory_for(&self.native_abort_slot_identity()?)
+    }
+    pub(crate) fn native_abort_slot_inventory_for(
+        &self,
+        identity: &NativeAbortSlotIdentity,
+    ) -> Result<Vec<NativeAbortSlotRecord>> {
         #[cfg(test)]
         let slots_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
             "refresh-all-abort-slot-inventory",
         );
-        let (birth, store_id) = self.abort_slot_identity()?;
+        let (birth, store_id) = self.require_own_slot_identity(identity)?;
         let index: Inventory = self
             .read_native_range_image_record(INVENTORY_KEY)?
             .unwrap_or_default();
@@ -117,7 +151,7 @@ impl BicDb {
                 let record: NativeAbortSlotRecord = self
                     .read_native_range_image_record(&slot_key(*range, *slot))?
                     .ok_or_else(|| invalid("protected slot inventory has missing record"))?;
-                record.validate(&birth, store_id)?;
+                record.validate(birth, store_id)?;
                 if record.command.range_id != *range
                     || record.command.index != *slot
                     || record.checksum_sha256 != *sha
@@ -611,20 +645,32 @@ impl BicDb {
         range: RangeId,
         index: u64,
     ) -> Result<Option<NativeAbortPermanentPromise>> {
-        let (birth, store_id) = self.abort_slot_identity()?;
+        self.observe_actual_native_abort_promise_for(
+            &self.native_abort_slot_identity()?,
+            range,
+            index,
+        )
+    }
+    pub(crate) fn observe_actual_native_abort_promise_for(
+        &self,
+        identity: &NativeAbortSlotIdentity,
+        range: RangeId,
+        index: u64,
+    ) -> Result<Option<NativeAbortPermanentPromise>> {
+        let (birth, store_id) = self.require_own_slot_identity(identity)?;
         let slot: Option<NativeAbortSlotRecord> =
             self.read_native_range_image_record(&slot_key(range, index))?;
         let Some(slot) = slot else {
             return Ok(None);
         };
-        slot.validate(&birth, store_id)?;
+        slot.validate(birth, store_id)?;
         let Some(_) = slot.abort_promise_sha256 else {
             return Ok(None);
         };
         let promise: NativeAbortPermanentPromise = self
             .read_native_range_image_record(&promise_key(range, index))?
             .ok_or_else(|| invalid("permanent native promise audit missing"))?;
-        promise.validate(&birth, &slot)?;
+        promise.validate(birth, &slot)?;
         Ok(Some(promise))
     }
     pub(crate) fn persist_actual_native_abort_promise(

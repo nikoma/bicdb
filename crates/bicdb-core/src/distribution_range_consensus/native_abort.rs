@@ -666,7 +666,13 @@ impl RangeWriteStore {
         if db.native_abort_catalogue_store_id()?.is_none() {
             return Ok(());
         }
-        let actual = db.native_abort_slot_inventory()?;
+        // Read and check the slot identity (birth, StoreID against the whole
+        // on-disk range catalogue) ONCE for this check: each slot and promise
+        // record below is still read and validated against it. Re-reading the
+        // catalogue per slot made every Strong read probe quadratic in the
+        // writes this node ever prepared.
+        let identity = db.native_abort_slot_identity()?;
+        let actual = db.native_abort_slot_inventory_for(&identity)?;
         let actual = actual
             .iter()
             .filter(|r| r.command.range_id == range_id)
@@ -713,7 +719,11 @@ impl RangeWriteStore {
             if let Some(expected) = &slot.resolved_native_receipt_sha256 {
                 read.receipt(db, range_id, record.command.index, expected)?;
             }
-            let promise = db.observe_actual_native_abort_promise(range_id, record.command.index)?;
+            let promise = db.observe_actual_native_abort_promise_for(
+                &identity,
+                range_id,
+                record.command.index,
+            )?;
             match (&slot.promise, promise) {
                 (None, None) => {}
                 (Some(saved), Some(actual))

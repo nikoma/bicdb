@@ -220,7 +220,9 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
                 Ok(Some(index)) => Err(range_write_error(format!(
                     "native writer-start of an unfinished command at index {index} requires native abort/tail recovery; ordinary leader recovery is not attempted"
                 ))),
-                Ok(None) => self.recover_one_range_leadership(&range),
+                Ok(None) => self
+                    .resolve_reopened_native_completed_raw_entry(&range)
+                    .and_then(|()| self.recover_one_range_leadership(&range)),
             };
             match outcome {
                 Ok(()) => {
@@ -244,6 +246,30 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
             )));
         }
         Ok(completed)
+    }
+
+    /// Reopened INITIAL leader only: when its earlier process ended after
+    /// the native completion of its own certified command and before the
+    /// raw Applied mark, record that raw resolution from its own durable
+    /// certificate and native history (see
+    /// `resolve_reopened_native_completed_raw_entry`). Any other state is
+    /// untouched; the native-prefix refusal of the ordinary leader recovery
+    /// is not relaxed: it is simply no longer reached for this state, since
+    /// the raw log then ends exactly at the native prefix.
+    fn resolve_reopened_native_completed_raw_entry(&self, range: &RangeDescriptor) -> Result<()> {
+        let mutation = self.range_mutations.try_enter(range.id)?;
+        let authority = &RangeMutationAuthority::Mutation(&mutation);
+        let _reservation = self.try_reserve_range(range.id)?;
+        let mut service = self
+            .local_service
+            .try_lock_for(Duration::from_millis(250))
+            .ok_or_else(|| range_write_error("reopened leader raw resolution service busy"))?;
+        let database = service.database();
+        let database = database
+            .try_read()
+            .ok_or_else(|| range_write_error("reopened leader raw resolution database busy"))?;
+        service.resolve_reopened_native_completed_raw_entry(&database, range, authority)?;
+        Ok(())
     }
 
     /// Diagnostic only; ordinary admission independently rechecks this state

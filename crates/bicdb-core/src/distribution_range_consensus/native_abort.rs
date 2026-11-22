@@ -1617,6 +1617,10 @@ pub(crate) enum TestNativeAdmissionStop {
     AfterEverCommitMark,
     AfterLocalCommit,
     AfterCommitQuorum,
+    /// In the origin's local application callback: after its native
+    /// completion (Core WAL, certified native prefix, history leaf, pending
+    /// deleted), before its raw log marks the command Applied.
+    AfterNativeCompletion,
 }
 #[cfg(test)]
 static TEST_NATIVE_ADMISSION_STOP: std::sync::Mutex<Option<(RangeId, TestNativeAdmissionStop)>> =

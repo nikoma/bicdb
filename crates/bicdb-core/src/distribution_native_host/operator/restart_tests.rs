@@ -1230,3 +1230,133 @@ fn followers_of_a_session_recovered_range_serve_again(
         );
     }
 }
+
+/// State C: the range leader ends inside its local application callback,
+/// after its native completion of the write (Core WAL, certified native
+/// prefix, history leaf, pending deleted) and before its raw log marks the
+/// command Applied. The followers already applied it. The reopened leader's
+/// raw log ends one below its native prefix at its own certified entry; it
+/// records that raw resolution from its own certificate and native history,
+/// and the range serves again. The write is present exactly once (an
+/// identical retry is not a new event), and after both followers restart
+/// every row is still readable and the range accepts writes.
+#[test]
+fn native_initial_member_restart_leader_native_completed_raw_unresolved_tail_is_resolved() {
+    use crate::distribution_range_consensus::native_abort::{
+        test_arm_native_admission_stop, test_freeze_hot_recovery_after_stop,
+        test_native_admission_stop_armed, test_thaw_hot_recovery, TestNativeAdmissionStop,
+    };
+    struct Thaw;
+    impl Drop for Thaw {
+        fn drop(&mut self) {
+            test_thaw_hot_recovery();
+        }
+    }
+    let _thaw = Thaw;
+    let mut cluster = Cluster::new();
+    let topology = cluster.topology(0);
+    let metadata_leader = cluster.metadata_leader().expect("a metadata leader");
+    let led = topology
+        .ranges
+        .values()
+        .find(|range| {
+            range.leader != node(metadata_leader)
+                && !range
+                    .replicas
+                    .iter()
+                    .any(|r| r.node_id == node(metadata_leader))
+        })
+        .or_else(|| {
+            topology
+                .ranges
+                .values()
+                .find(|range| range.leader != node(metadata_leader))
+        })
+        .expect("a range not led by the metadata leader")
+        .clone();
+    let victim = (0..4).find(|&i| node(i) == led.leader).unwrap();
+    let followers = (0..4)
+        .filter(|&i| i != victim && led.replicas.iter().any(|r| r.node_id == node(i)))
+        .collect::<Vec<_>>();
+    assert_eq!(followers.len(), 2);
+    let client = cluster.client(metadata_leader);
+    let mut counter = 0u64;
+    let mut acknowledged = Vec::new();
+    let key = key_in(&topology, led.id, &mut counter);
+    append(&mut cluster, &client, &key, Duration::from_secs(30)).unwrap();
+    acknowledged.push(key);
+    let stopped = key_in(&topology, led.id, &mut counter);
+    test_freeze_hot_recovery_after_stop(led.id);
+    test_arm_native_admission_stop(led.id, TestNativeAdmissionStop::AfterNativeCompletion);
+    let error = client
+        .append("items", &stopped, value(&stopped))
+        .expect_err("a stopped admission is never acknowledged");
+    assert!(
+        !test_native_admission_stop_armed(),
+        "the stop did not fire: {error}"
+    );
+    eprintln!("RESTART_TEST AfterNativeCompletion: stopped append {stopped}: {error}");
+    cluster.crash(victim);
+    test_thaw_hot_recovery();
+    cluster.reopen(victim);
+    let key = key_in(&topology, led.id, &mut counter);
+    append(&mut cluster, &client, &key, Duration::from_secs(60))
+        .unwrap_or_else(|error| panic!("write after the raw resolution failed: {error}"));
+    acknowledged.push(key);
+    let data = cluster
+        .host(victim)
+        .status(&budget(1000))
+        .ok()
+        .and_then(|s| s.initial_data);
+    eprintln!(
+        "RESTART_TEST AfterNativeCompletion: reopened leader recovery {:?}; hot recovery {:?}",
+        data.as_ref()
+            .and_then(|d| d.reopened_leader_recovery_last_attempt.clone()),
+        data.as_ref()
+            .and_then(|d| d.hot_recovery_last_attempt.clone())
+    );
+    assert_eq!(
+        read(&mut cluster, &client, &stopped, Duration::from_secs(30)).unwrap(),
+        Some(value(&stopped)),
+        "the natively completed write is present"
+    );
+    let begun = Instant::now();
+    let inserted = loop {
+        match client.append("items", &stopped, value(&stopped)) {
+            Ok(inserted) => break inserted,
+            Err(error) => {
+                assert!(
+                    begun.elapsed() < Duration::from_secs(30),
+                    "retry failed: {error}"
+                );
+                cluster.tick();
+                let _ = client.refresh();
+                std::thread::sleep(Duration::from_millis(100));
+            }
+        }
+    };
+    assert!(
+        !inserted,
+        "the natively completed write exists exactly once: an identical retry is no new event"
+    );
+    acknowledged.push(stopped);
+    for &follower in &followers {
+        cluster.crash(follower);
+        cluster.reopen(follower);
+        eprintln!("RESTART_TEST follower n{follower} reopened");
+    }
+    for key in &acknowledged {
+        assert_eq!(
+            read(&mut cluster, &client, key, Duration::from_secs(60)).unwrap(),
+            Some(value(key)),
+            "row {key} must be readable with both followers restarted"
+        );
+    }
+    let key = key_in(&topology, led.id, &mut counter);
+    append(&mut cluster, &client, &key, Duration::from_secs(60))
+        .unwrap_or_else(|error| panic!("write with both followers restarted failed: {error}"));
+    assert_eq!(
+        read(&mut cluster, &client, &key, Duration::from_secs(30)).unwrap(),
+        Some(value(&key))
+    );
+}

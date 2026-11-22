@@ -690,7 +690,14 @@ impl NativeInitialDataHost {
                 .try_lock()
                 .ok_or_else(|| invalid("tail diagnostic service busy"))?
                 .unfinished_native_writer_start(&database, range)?;
+            let tail_state = reopened_tail_state(
+                &progress,
+                &prefix,
+                entry.as_ref().map(|e| e.state),
+                writer_start,
+            );
             Ok(serde_json::json!({
+                "tail_state": tail_state,
                 "unfinished_native_writer_start_index": writer_start,
                 "resolved_through": progress.resolved_through,
                 "last_index": progress.last_index,
@@ -1314,6 +1321,63 @@ impl NativeInitialDataHost {
         Ok(())
     }
 }
+/// The name of a reopened led range's tail shape, from this node's own
+/// durable raw log and native prefix (`next` = the raw log's first
+/// unresolved entry). Diagnostic only: every recovery path re-proves its own
+/// state, and a name here neither grants nor refuses anything. The names
+/// say which recovery handles the shape:
+/// - ordinary reopened leader recovery: `clean`,
+///   `native_completed_raw_unresolved` (State C: the native prefix covers
+///   the own certified first unresolved entry);
+/// - hot recovery: `native_pending`, `own_commit_tail`, `prepared_tail`,
+///   `writer_start_only_tail`;
+/// - none (the range stays refused until an operator repairs it):
+///   `native_prefix_invalidated`, `native_materialized_pending`,
+///   `native_prefix_unknown`, `unhandled_reopened_tail`.
+pub(super) fn reopened_tail_state(
+    progress: &crate::RangeWriteProgress,
+    prefix: &crate::db::NativeRangePrefixObservation,
+    next_state: Option<crate::distribution_range_consensus::RangeWriteState>,
+    writer_start: Option<u64>,
+) -> &'static str {
+    use crate::distribution_range_consensus::RangeWriteState as S;
+    if prefix.invalidated {
+        return "native_prefix_invalidated";
+    }
+    if prefix.materialized_pending_index.is_some() {
+        return "native_materialized_pending";
+    }
+    if prefix.pending_command_index.is_some() {
+        return "native_pending";
+    }
+    let Some(native) = prefix.native_applied_index else {
+        return "native_prefix_unknown";
+    };
+    let (resolved, last) = (progress.resolved_through, progress.last_index);
+    let above = native.checked_add(1);
+    if resolved == native && last == native {
+        return match writer_start {
+            None => "clean",
+            Some(index) if Some(index) == above => "writer_start_only_tail",
+            Some(_) => "unhandled_reopened_tail",
+        };
+    }
+    if resolved.checked_add(1) == Some(native)
+        && last == native
+        && next_state == Some(S::QuorumCommitted)
+    {
+        return "native_completed_raw_unresolved";
+    }
+    if resolved == native && Some(last) == above {
+        return match next_state {
+            Some(S::Committed | S::QuorumCommitted | S::Applied) => "own_commit_tail",
+            Some(S::Prepared) => "prepared_tail",
+            _ => "unhandled_reopened_tail",
+        };
+    }
+    "unhandled_reopened_tail"
+}
+
 fn network_address(
     initial: &NativeInitialConsensusLaunch,
     parent: &CancellationToken,

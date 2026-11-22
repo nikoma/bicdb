@@ -4213,6 +4213,10 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         let authority = &RangeMutationAuthority::Mutation(&evidence.mutation);
         let mut problems = Vec::new();
         let mut actual_native_apply_verified = !self.native_image_mode;
+        // Test only: the process "ends" between the native completion and
+        // the raw Applied mark (the raw log is left one below the prefix).
+        #[allow(unused_mut)]
+        let mut injected_stop = false;
         if let Some(native) = &evidence.native {
             if let Some((receipt, database)) = native_context {
                 let current_range = {
@@ -4246,6 +4250,16 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                             });
                         if let Err(error) = completion {
                             problems.push(format!("native prefix completion failed: {error}"));
+                        } else {
+                            #[cfg(test)]
+                            if native_abort::test_take_native_admission_stop(
+                                evidence.range_id,
+                                native_abort::TestNativeAdmissionStop::AfterNativeCompletion,
+                            ) {
+                                injected_stop = true;
+                                problems
+                                    .push("injected admission stop AfterNativeCompletion".into());
+                            }
                         }
                     }
                 }
@@ -4255,7 +4269,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         } else if self.native_image_mode {
             problems.push("native callback has no admitted native command journal".to_string());
         }
-        if actual_native_apply_verified {
+        if actual_native_apply_verified && !injected_stop {
             if let Err(error) = self
                 .local_service
                 .lock()

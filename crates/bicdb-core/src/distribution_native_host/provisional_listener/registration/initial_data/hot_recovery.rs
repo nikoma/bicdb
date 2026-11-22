@@ -329,7 +329,31 @@ impl NativeHotRecoveryMaintenance {
                 };
                 return Ok(Some((command, tail)));
             }
-            return self.reopened_prepared_candidate(&service, &db, &prefix, range);
+            let prepared = self.reopened_prepared_candidate(&service, &db, &prefix, range)?;
+            if prepared.is_none() && self.initial.reopened() {
+                // Nothing to propose. Name the shape when neither this
+                // recovery nor the ordinary reopened leader recovery handles
+                // it, so the range is never refused silently.
+                let progress = service.range_write_progress(range.id);
+                let next = service
+                    .probe_range_write_for_peer(
+                        range,
+                        &self.initial.seed.spec.node_id,
+                        progress.resolved_through.saturating_add(1),
+                    )?
+                    .entry
+                    .map(|e| e.state);
+                let writer_start = service.unfinished_native_writer_start(&db, range)?;
+                let tail_state = super::reopened_tail_state(&progress, &prefix, next, writer_start);
+                if !matches!(tail_state, "clean" | "native_completed_raw_unresolved") {
+                    self.record(serde_json::json!({"phase":"reopened_tail_refused","range_id":range.id,
+                        "tail_state":tail_state,"resolved_through":progress.resolved_through,
+                        "last_index":progress.last_index,"native_applied_index":prefix.native_applied_index,
+                        "unfinished_native_writer_start_index":writer_start,
+                        "scope":"no hot recovery candidate for this reopened tail; the range stays refused","diagnostic_not_authority":true}));
+                }
+            }
+            return Ok(prepared);
         };
         if prefix.invalidated
             || prefix.materialized_pending_index.is_some()

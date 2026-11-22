@@ -97,9 +97,10 @@ pub(super) fn exercise(
                 parent,
             )
             .unwrap();
+        // The metadata host's own tick may hold this lock for a moment, so
+        // wait for it as every other fixture caller does.
         let owned = fixture.metadata[&local]
-            .try_lock()
-            .unwrap()
+            .lock()
             .observe_owned_native_metadata_member(&own, business, parent)
             .unwrap();
         {

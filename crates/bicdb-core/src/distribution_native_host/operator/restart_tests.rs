@@ -827,3 +827,536 @@ fn native_initial_member_restart_whole_cluster_reopens_from_its_roots() {
         );
     }
 }
+
+/// A range leader whose last write was only PREPARED when its process ended
+/// (its own raw log Prepared, its slot without a Commit vote, no native
+/// Pending), with the followers prepared, without, and with only the
+/// writer-start before the local Prepare; and one whose Commit votes reached
+/// a quorum without a certificate, which is recovered forward. After the
+/// reopen, the hot recovery aborts that slot through the abort protocol and
+/// the range accepts writes again; the unacknowledged write is absent and
+/// every acknowledged row is readable.
+#[test]
+fn native_initial_member_restart_prepared_only_leader_tail_is_aborted() {
+    use crate::distribution_range_consensus::native_abort::{
+        test_arm_native_admission_stop, test_native_admission_stop_armed, TestNativeAdmissionStop,
+    };
+    let mut cluster = Cluster::new();
+    let topology = cluster.topology(0);
+    let metadata_leader = cluster.metadata_leader().expect("a metadata leader");
+    let led = topology
+        .ranges
+        .values()
+        .find(|range| range.leader != node(metadata_leader))
+        .expect("a range not led by the metadata leader")
+        .clone();
+    let victim = (0..4).find(|&i| node(i) == led.leader).unwrap();
+    let client = cluster.client(metadata_leader);
+    let mut counter = 0u64;
+    let mut acknowledged = Vec::new();
+    let mut lost = Vec::new();
+    let mut recovered_forward = Vec::new();
+    for point in [
+        // First, while the victim is not yet a reopened owner: its own hot
+        // recovery then cannot start the forward recovery before the crash
+        // (an interrupted recovery session is a different state).
+        // Not aborted (every committer is ever-Commit): recovered forward,
+        // decided by the Commit votes of a fenced member quorum.
+        TestNativeAdmissionStop::AfterCommitQuorum,
+        TestNativeAdmissionStop::AfterPrepareQuorum,
+        TestNativeAdmissionStop::AfterLocalPrepare,
+        TestNativeAdmissionStop::AfterWriterStart,
+    ] {
+        let key = key_in(&topology, led.id, &mut counter);
+        append(&mut cluster, &client, &key, Duration::from_secs(30)).unwrap();
+        acknowledged.push(key);
+        let stopped = key_in(&topology, led.id, &mut counter);
+        test_arm_native_admission_stop(led.id, point);
+        let error = client
+            .append("items", &stopped, value(&stopped))
+            .expect_err("a stopped admission is never acknowledged");
+        assert!(
+            !test_native_admission_stop_armed(),
+            "the stop did not fire: {error}"
+        );
+        eprintln!("RESTART_TEST {point:?}: stopped append {stopped}: {error}");
+        if point == TestNativeAdmissionStop::AfterCommitQuorum {
+            recovered_forward.push(stopped);
+        } else {
+            lost.push(stopped);
+        }
+        cluster.crash(victim);
+        cluster.reopen(victim);
+        let key = key_in(&topology, led.id, &mut counter);
+        append(&mut cluster, &client, &key, Duration::from_secs(60))
+            .unwrap_or_else(|error| panic!("write after the abort ({point:?}) failed: {error}"));
+        acknowledged.push(key);
+    }
+    for key in &acknowledged {
+        assert_eq!(
+            read(&mut cluster, &client, key, Duration::from_secs(30)).unwrap(),
+            Some(value(key)),
+            "acknowledged row {key} must be readable"
+        );
+    }
+    for key in &recovered_forward {
+        assert_eq!(
+            read(&mut cluster, &client, key, Duration::from_secs(30)).unwrap(),
+            Some(value(key)),
+            "the write decided by a Commit quorum {key} must be present"
+        );
+    }
+    for key in &lost {
+        assert_eq!(
+            read(&mut cluster, &client, key, Duration::from_secs(30)).unwrap(),
+            None,
+            "the aborted write {key} must be absent"
+        );
+    }
+}
+
+/// A range leader ends inside its own Commit round, after its protected slot
+/// was marked ever-Commit (it has chosen commit; the slot is never aborted)
+/// and before any Commit reached a follower: either its own raw Commit vote
+/// is durable (`AfterLocalCommit`, State A) or it is not (`AfterEverCommitMark`,
+/// State B). No client was acknowledged. The reopened leader's hot recovery
+/// finishes that Commit round before its session's fence (own vote, then the
+/// original Commit to the followers, each re-proving it), and the forward
+/// session decides the write from the members' durable Commit votes: the
+/// write is present and the range accepts writes again.
+fn ever_commit_leader_tail_is_committed_forward(
+    point: crate::distribution_range_consensus::native_abort::TestNativeAdmissionStop,
+    after_session: bool,
+) {
+    use crate::distribution_range_consensus::native_abort::{
+        test_arm_native_admission_stop, test_freeze_hot_recovery_after_stop,
+        test_native_admission_stop_armed, test_thaw_hot_recovery, TestNativeAdmissionStop,
+    };
+    struct Thaw;
+    impl Drop for Thaw {
+        fn drop(&mut self) {
+            test_thaw_hot_recovery();
+        }
+    }
+    let _thaw = Thaw;
+    let mut cluster = Cluster::new();
+    let topology = cluster.topology(0);
+    let metadata_leader = cluster.metadata_leader().expect("a metadata leader");
+    let led = topology
+        .ranges
+        .values()
+        .find(|range| range.leader != node(metadata_leader))
+        .expect("a range not led by the metadata leader")
+        .clone();
+    let victim = (0..4).find(|&i| node(i) == led.leader).unwrap();
+    let client = cluster.client(metadata_leader);
+    let mut counter = 0u64;
+    let mut acknowledged = Vec::new();
+    let key = key_in(&topology, led.id, &mut counter);
+    append(&mut cluster, &client, &key, Duration::from_secs(30)).unwrap();
+    acknowledged.push(key);
+    let mut points = vec![point];
+    if after_session {
+        // A first kill recovered by a session: the victim's process then
+        // holds that session's activation, which its next process finds
+        // durable but never armed.
+        points.insert(0, TestNativeAdmissionStop::AfterCommitQuorum);
+    }
+    let mut stopped = String::new();
+    for (round, point) in points.iter().copied().enumerate() {
+        if round > 0 {
+            acknowledged.push(stopped.clone());
+        }
+        stopped = key_in(&topology, led.id, &mut counter);
+        // The victim's process "ends" at the stop: its hot recovery does
+        // nothing more until it is reopened.
+        test_freeze_hot_recovery_after_stop(led.id);
+        test_arm_native_admission_stop(led.id, point);
+        let error = client
+            .append("items", &stopped, value(&stopped))
+            .expect_err("a stopped admission is never acknowledged");
+        assert!(
+            !test_native_admission_stop_armed(),
+            "the stop did not fire: {error}"
+        );
+        eprintln!("RESTART_TEST {point:?}: stopped append {stopped}: {error}");
+        cluster.crash(victim);
+        test_thaw_hot_recovery();
+        cluster.reopen(victim);
+        let key = key_in(&topology, led.id, &mut counter);
+        append(&mut cluster, &client, &key, Duration::from_secs(60)).unwrap_or_else(|error| {
+            panic!("write after the re-driven Commit ({point:?}) failed: {error}")
+        });
+        acknowledged.push(key);
+    }
+    let hot = cluster
+        .host(victim)
+        .status(&budget(1000))
+        .ok()
+        .and_then(|s| s.initial_data)
+        .and_then(|d| d.hot_recovery_last_attempt);
+    eprintln!("RESTART_TEST {point:?}: hot recovery of the reopened leader: {hot:?}");
+    assert_eq!(
+        read(&mut cluster, &client, &stopped, Duration::from_secs(30)).unwrap(),
+        Some(value(&stopped)),
+        "{point:?}: the write whose leader chose commit is present"
+    );
+    for key in &acknowledged {
+        assert_eq!(
+            read(&mut cluster, &client, key, Duration::from_secs(30)).unwrap(),
+            Some(value(key)),
+            "acknowledged row {key} must be readable"
+        );
+    }
+}
+#[test]
+fn native_initial_member_restart_leader_own_commit_vote_tail_is_committed_forward() {
+    use crate::distribution_range_consensus::native_abort::TestNativeAdmissionStop;
+    ever_commit_leader_tail_is_committed_forward(TestNativeAdmissionStop::AfterLocalCommit, false);
+}
+#[test]
+fn native_initial_member_restart_ever_commit_unvoted_leader_tail_is_committed_forward() {
+    use crate::distribution_range_consensus::native_abort::TestNativeAdmissionStop;
+    ever_commit_leader_tail_is_committed_forward(
+        TestNativeAdmissionStop::AfterEverCommitMark,
+        false,
+    );
+}
+/// The same, when the victim's previous process took part in a recovery
+/// session of the range (its activation is durable and never armed in the
+/// reopened process).
+#[test]
+fn native_initial_member_restart_ever_commit_unvoted_leader_tail_after_a_session() {
+    use crate::distribution_range_consensus::native_abort::TestNativeAdmissionStop;
+    ever_commit_leader_tail_is_committed_forward(
+        TestNativeAdmissionStop::AfterEverCommitMark,
+        true,
+    );
+}
+#[test]
+fn native_initial_member_restart_leader_own_commit_vote_tail_after_a_session() {
+    use crate::distribution_range_consensus::native_abort::TestNativeAdmissionStop;
+    ever_commit_leader_tail_is_committed_forward(TestNativeAdmissionStop::AfterLocalCommit, true);
+}
+
+/// The reopened leader's hot recovery session (an abort, then a forward
+/// recovery) reaches a follower's Complete, which makes its catalogue
+/// completion durable and then fails before it refreshes the follower's
+/// retained preparation binding. The next Complete repairs the binding the
+/// way a re-sent Prepare does, and the range recovers.
+#[test]
+fn native_initial_member_restart_follower_complete_interrupted_after_catalogue() {
+    use crate::distribution_range_consensus::native_abort::{
+        test_arm_native_admission_stop, test_native_admission_stop_armed, TestNativeAdmissionStop,
+    };
+    use crate::distribution_range_consensus::{
+        test_arm_completion_refresh_failure, test_completion_refresh_failure_armed,
+    };
+    let mut cluster = Cluster::new();
+    let topology = cluster.topology(0);
+    let metadata_leader = cluster.metadata_leader().expect("a metadata leader");
+    let led = topology
+        .ranges
+        .values()
+        .find(|range| range.leader != node(metadata_leader))
+        .expect("a range not led by the metadata leader")
+        .clone();
+    let victim = (0..4).find(|&i| node(i) == led.leader).unwrap();
+    let follower = (0..4)
+        .find(|&i| i != victim && led.replicas.iter().any(|r| r.node_id == node(i)))
+        .unwrap();
+    let client = cluster.client(metadata_leader);
+    let mut counter = 0u64;
+    let mut acknowledged = Vec::new();
+    for (point, present) in [
+        (TestNativeAdmissionStop::AfterCommitQuorum, true),
+        (TestNativeAdmissionStop::AfterPrepareQuorum, false),
+    ] {
+        let key = key_in(&topology, led.id, &mut counter);
+        append(&mut cluster, &client, &key, Duration::from_secs(30)).unwrap();
+        acknowledged.push(key);
+        let stopped = key_in(&topology, led.id, &mut counter);
+        test_arm_native_admission_stop(led.id, point);
+        let error = client
+            .append("items", &stopped, value(&stopped))
+            .expect_err("a stopped admission is never acknowledged");
+        assert!(
+            !test_native_admission_stop_armed(),
+            "the stop did not fire: {error}"
+        );
+        test_arm_completion_refresh_failure(node(follower), led.id);
+        cluster.crash(victim);
+        cluster.reopen(victim);
+        let key = key_in(&topology, led.id, &mut counter);
+        append(&mut cluster, &client, &key, Duration::from_secs(60)).unwrap_or_else(|error| {
+            panic!("write after the interrupted follower Complete ({point:?}) failed: {error}")
+        });
+        assert!(
+            !test_completion_refresh_failure_armed(),
+            "the follower's Complete was not interrupted ({point:?})"
+        );
+        acknowledged.push(key);
+        assert_eq!(
+            read(&mut cluster, &client, &stopped, Duration::from_secs(30)).unwrap(),
+            present.then(|| value(&stopped)),
+            "{point:?}: a Commit-quorum write is present, an aborted one absent"
+        );
+    }
+    for key in &acknowledged {
+        assert_eq!(
+            read(&mut cluster, &client, key, Duration::from_secs(30)).unwrap(),
+            Some(value(key)),
+            "acknowledged row {key} must be readable"
+        );
+    }
+}
+
+/// A range whose leader ended with a write that a Commit quorum had voted
+/// for is recovered forward by a hot recovery session (or, with the write
+/// only Prepared, aborted by one), which leaves that session's durable
+/// activation with every member. Then each follower is
+/// dropped without a stop and reopened: its new process holds the durable
+/// activation but took no part in it, so it has no activation of its own.
+/// With both followers restarted, the range must again serve Strong reads
+/// (a read majority needs a restarted follower) and accept writes.
+#[test]
+fn native_initial_member_restart_followers_of_a_session_recovered_range_serve_again() {
+    use crate::distribution_range_consensus::native_abort::TestNativeAdmissionStop;
+    followers_of_a_session_recovered_range_serve_again(TestNativeAdmissionStop::AfterCommitQuorum);
+}
+#[test]
+fn native_initial_member_restart_followers_of_a_session_aborted_range_serve_again() {
+    use crate::distribution_range_consensus::native_abort::TestNativeAdmissionStop;
+    followers_of_a_session_recovered_range_serve_again(TestNativeAdmissionStop::AfterPrepareQuorum);
+}
+fn followers_of_a_session_recovered_range_serve_again(
+    stop: crate::distribution_range_consensus::native_abort::TestNativeAdmissionStop,
+) {
+    use crate::distribution_range_consensus::native_abort::{
+        test_arm_native_admission_stop, test_native_admission_stop_armed, TestNativeAdmissionStop,
+    };
+    let forward = stop == TestNativeAdmissionStop::AfterCommitQuorum;
+    let mut cluster = Cluster::new();
+    let topology = cluster.topology(0);
+    let metadata_leader = cluster.metadata_leader().expect("a metadata leader");
+    // Prefer a range the metadata leader is not a member of: then no
+    // restart below also moves metadata leadership.
+    let led = topology
+        .ranges
+        .values()
+        .find(|range| {
+            !range
+                .replicas
+                .iter()
+                .any(|r| r.node_id == node(metadata_leader))
+        })
+        .or_else(|| {
+            topology
+                .ranges
+                .values()
+                .find(|range| range.leader != node(metadata_leader))
+        })
+        .expect("a range not led by the metadata leader")
+        .clone();
+    let leader = (0..4).find(|&i| node(i) == led.leader).unwrap();
+    let followers = (0..4)
+        .filter(|&i| i != leader && led.replicas.iter().any(|r| r.node_id == node(i)))
+        .collect::<Vec<_>>();
+    assert_eq!(followers.len(), 2);
+    eprintln!(
+        "RESTART_TEST range={} leader=n{leader} followers={followers:?} metadata_leader=n{metadata_leader}",
+        led.id
+    );
+    let client = cluster.client(metadata_leader);
+    let mut counter = 0u64;
+    let mut acknowledged = Vec::new();
+    let key = key_in(&topology, led.id, &mut counter);
+    append(&mut cluster, &client, &key, Duration::from_secs(30)).unwrap();
+    acknowledged.push(key);
+    // The leader ends after a Commit quorum voted for this write: the
+    // reopened leader recovers it forward through a hot recovery session.
+    let decided = key_in(&topology, led.id, &mut counter);
+    test_arm_native_admission_stop(led.id, stop);
+    let error = client
+        .append("items", &decided, value(&decided))
+        .expect_err("a stopped admission is never acknowledged");
+    assert!(
+        !test_native_admission_stop_armed(),
+        "the stop did not fire: {error}"
+    );
+    cluster.crash(leader);
+    cluster.reopen(leader);
+    let key = key_in(&topology, led.id, &mut counter);
+    append(&mut cluster, &client, &key, Duration::from_secs(60))
+        .unwrap_or_else(|error| panic!("write after the forward recovery failed: {error}"));
+    acknowledged.push(key);
+    let hot = cluster
+        .host(leader)
+        .status(&budget(1000))
+        .unwrap()
+        .initial_data
+        .unwrap()
+        .hot_recovery_last_attempt;
+    eprintln!("RESTART_TEST hot recovery of the reopened leader: {hot:?}");
+    assert!(
+        hot.is_some(),
+        "the reopened leader must have recovered through a hot recovery session"
+    );
+    assert_eq!(
+        read(&mut cluster, &client, &decided, Duration::from_secs(30)).unwrap(),
+        forward.then(|| value(&decided)),
+        "the write decided by a Commit quorum is present, an aborted one absent"
+    );
+    // Both followers restart, one after the other, with no write between.
+    for &follower in &followers {
+        cluster.crash(follower);
+        cluster.reopen(follower);
+        eprintln!("RESTART_TEST follower n{follower} reopened");
+    }
+    for key in &acknowledged {
+        assert_eq!(
+            read(&mut cluster, &client, key, Duration::from_secs(60)).unwrap(),
+            Some(value(key)),
+            "acknowledged row {key} must be readable with both followers restarted"
+        );
+    }
+    for _ in 0..2 {
+        let key = key_in(&topology, led.id, &mut counter);
+        append(&mut cluster, &client, &key, Duration::from_secs(60))
+            .unwrap_or_else(|error| panic!("write with both followers restarted failed: {error}"));
+        assert_eq!(
+            read(&mut cluster, &client, &key, Duration::from_secs(30)).unwrap(),
+            Some(value(&key))
+        );
+    }
+}
+
+/// State C: the range leader ends inside its local application callback,
+/// after its native completion of the write (Core WAL, certified native
+/// prefix, history leaf, pending deleted) and before its raw log marks the
+/// command Applied. The followers already applied it. The reopened leader's
+/// raw log ends one below its native prefix at its own certified entry; it
+/// records that raw resolution from its own certificate and native history,
+/// and the range serves again. The write is present exactly once (an
+/// identical retry is not a new event), and after both followers restart
+/// every row is still readable and the range accepts writes.
+#[test]
+fn native_initial_member_restart_leader_native_completed_raw_unresolved_tail_is_resolved() {
+    use crate::distribution_range_consensus::native_abort::{
+        test_arm_native_admission_stop, test_freeze_hot_recovery_after_stop,
+        test_native_admission_stop_armed, test_thaw_hot_recovery, TestNativeAdmissionStop,
+    };
+    struct Thaw;
+    impl Drop for Thaw {
+        fn drop(&mut self) {
+            test_thaw_hot_recovery();
+        }
+    }
+    let _thaw = Thaw;
+    let mut cluster = Cluster::new();
+    let topology = cluster.topology(0);
+    let metadata_leader = cluster.metadata_leader().expect("a metadata leader");
+    let led = topology
+        .ranges
+        .values()
+        .find(|range| {
+            range.leader != node(metadata_leader)
+                && !range
+                    .replicas
+                    .iter()
+                    .any(|r| r.node_id == node(metadata_leader))
+        })
+        .or_else(|| {
+            topology
+                .ranges
+                .values()
+                .find(|range| range.leader != node(metadata_leader))
+        })
+        .expect("a range not led by the metadata leader")
+        .clone();
+    let victim = (0..4).find(|&i| node(i) == led.leader).unwrap();
+    let followers = (0..4)
+        .filter(|&i| i != victim && led.replicas.iter().any(|r| r.node_id == node(i)))
+        .collect::<Vec<_>>();
+    assert_eq!(followers.len(), 2);
+    let client = cluster.client(metadata_leader);
+    let mut counter = 0u64;
+    let mut acknowledged = Vec::new();
+    let key = key_in(&topology, led.id, &mut counter);
+    append(&mut cluster, &client, &key, Duration::from_secs(30)).unwrap();
+    acknowledged.push(key);
+    let stopped = key_in(&topology, led.id, &mut counter);
+    test_freeze_hot_recovery_after_stop(led.id);
+    test_arm_native_admission_stop(led.id, TestNativeAdmissionStop::AfterNativeCompletion);
+    let error = client
+        .append("items", &stopped, value(&stopped))
+        .expect_err("a stopped admission is never acknowledged");
+    assert!(
+        !test_native_admission_stop_armed(),
+        "the stop did not fire: {error}"
+    );
+    eprintln!("RESTART_TEST AfterNativeCompletion: stopped append {stopped}: {error}");
+    cluster.crash(victim);
+    test_thaw_hot_recovery();
+    cluster.reopen(victim);
+    let key = key_in(&topology, led.id, &mut counter);
+    append(&mut cluster, &client, &key, Duration::from_secs(60))
+        .unwrap_or_else(|error| panic!("write after the raw resolution failed: {error}"));
+    acknowledged.push(key);
+    let data = cluster
+        .host(victim)
+        .status(&budget(1000))
+        .ok()
+        .and_then(|s| s.initial_data);
+    eprintln!(
+        "RESTART_TEST AfterNativeCompletion: reopened leader recovery {:?}; hot recovery {:?}",
+        data.as_ref()
+            .and_then(|d| d.reopened_leader_recovery_last_attempt.clone()),
+        data.as_ref()
+            .and_then(|d| d.hot_recovery_last_attempt.clone())
+    );
+    assert_eq!(
+        read(&mut cluster, &client, &stopped, Duration::from_secs(30)).unwrap(),
+        Some(value(&stopped)),
+        "the natively completed write is present"
+    );
+    let begun = Instant::now();
+    let inserted = loop {
+        match client.append("items", &stopped, value(&stopped)) {
+            Ok(inserted) => break inserted,
+            Err(error) => {
+                assert!(
+                    begun.elapsed() < Duration::from_secs(30),
+                    "retry failed: {error}"
+                );
+                cluster.tick();
+                let _ = client.refresh();
+                std::thread::sleep(Duration::from_millis(100));
+            }
+        }
+    };
+    assert!(
+        !inserted,
+        "the natively completed write exists exactly once: an identical retry is no new event"
+    );
+    acknowledged.push(stopped);
+    for &follower in &followers {
+        cluster.crash(follower);
+        cluster.reopen(follower);
+        eprintln!("RESTART_TEST follower n{follower} reopened");
+    }
+    for key in &acknowledged {
+        assert_eq!(
+            read(&mut cluster, &client, key, Duration::from_secs(60)).unwrap(),
+            Some(value(key)),
+            "row {key} must be readable with both followers restarted"
+        );
+    }
+    let key = key_in(&topology, led.id, &mut counter);
+    append(&mut cluster, &client, &key, Duration::from_secs(60))
+        .unwrap_or_else(|error| panic!("write with both followers restarted failed: {error}"));
+    assert_eq!(
+        read(&mut cluster, &client, &key, Duration::from_secs(30)).unwrap(),
+        Some(value(&key))
+    );
+}

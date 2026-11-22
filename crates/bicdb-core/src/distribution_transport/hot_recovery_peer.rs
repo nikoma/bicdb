@@ -100,6 +100,7 @@ pub(crate) enum HotRecoveryPhaseRequest {
 /// the final activated/open + fresh enrolled QQ publisher remains unchanged.
 pub(crate) struct HotRecoveryPhaseReceipt {
     actual_open: HotRecoveryPeerOpen,
+    fenced_clean_native_index: Option<u64>,
 }
 /// Observed physical-open DATA, never a role/Ready/current-slot proof. Only
 /// actual sealed transport observations construct it; later changes refuse.
@@ -132,6 +133,12 @@ impl HotRecoveryPeerOpen {
 impl HotRecoveryPhaseReceipt {
     pub(crate) fn observed_open(&self) -> &HotRecoveryPeerOpen {
         &self.actual_open
+    }
+    /// Fence replies only: the fenced member's native index when its raw log
+    /// is fully resolved at exactly that native point with nothing pending.
+    /// Scheduling DATA: every later phase reproves the point itself.
+    pub(crate) fn fenced_clean_native_index(&self) -> Option<u64> {
+        self.fenced_clean_native_index
     }
 }
 impl TcpClusterRelocationTransport {
@@ -221,6 +228,7 @@ impl TcpClusterRelocationTransport {
         // actual peer timeout carries no successful vote/late observation.
         parent.check()?;
         let (response, peer, _) = result?;
+        let mut fenced_clean_native_index = None;
         let actual_open = match (request, response) {
             (HotRecoveryPhaseRequest::Fence(r), ClusterDataResponse::RecoveryEpochFence(reply)) => {
                 if reply.phase != RecoveryFenceObservationPhase::ActiveRecovery {
@@ -234,6 +242,15 @@ impl TcpClusterRelocationTransport {
                     token.deadline().unwrap(),
                 )?;
                 observation.require_live()?;
+                let native = observation.native();
+                let progress = observation.progress();
+                fenced_clean_native_index = native.native_applied_index.filter(|index| {
+                    native.pending_command_index.is_none()
+                        && native.materialized_pending_index.is_none()
+                        && !native.invalidated
+                        && progress.resolved_through == *index
+                        && progress.last_index == *index
+                });
                 HotRecoveryPeerOpen {
                     node: observation.node_id().clone(),
                     store: observation.store_open_id(),
@@ -330,6 +347,9 @@ impl TcpClusterRelocationTransport {
         // A late/canceled producer result never becomes a scheduling success.
         parent.check()?;
         token.check()?;
-        Ok(HotRecoveryPhaseReceipt { actual_open })
+        Ok(HotRecoveryPhaseReceipt {
+            actual_open,
+            fenced_clean_native_index,
+        })
     }
 }

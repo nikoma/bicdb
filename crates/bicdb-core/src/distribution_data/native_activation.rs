@@ -56,6 +56,10 @@ impl ClusterDataNodeService {
                 .arm_native_activation_open(&db, prepared, receipt, fresh, frozen)
         }
     }
+    /// See `RangeWriteStore::native_activation_dormant`. Scheduling DATA.
+    pub(crate) fn native_activation_dormant(&self, range: crate::RangeId) -> bool {
+        self.range_writes.native_activation_dormant(range)
+    }
     pub(crate) fn require_current_native_activation(
         &self,
         request: &NativeCompletionRequest,

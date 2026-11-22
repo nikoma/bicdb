@@ -197,8 +197,10 @@ pub enum BicDbError {
     /// `incarnation` and `sequence` identify the commit for
     /// `BicDb::resolve_commit_outcome` (SQL: `bicdb_commit_outcome`) once
     /// the database has been reopened. `sequence` is `None` for operations
-    /// that commit only in the page store (bulk load, index builds): those
-    /// are resolved by re-reading their result after the reopen.
+    /// that commit only in the page store (bulk load, index builds) and for
+    /// range writes without a Core commit sequence: those are resolved by
+    /// re-reading their result once recovery has finished (for a replicated
+    /// range: once its leader has recovered it and it accepts writes again).
     /// `transaction_id` is informational (absent when only the commit
     /// sequence is known, as in a quorum wait).
     #[error(
@@ -267,8 +269,12 @@ fn commit_outcome_hint(sequence: Option<u64>, incarnation: &str) -> String {
         Some(sequence) => {
             format!("resolve it with SELECT bicdb_commit_outcome('{incarnation}', {sequence})")
         }
-        None => "re-read the operation's result: it has no commit sequence, and the page \
-                 store's recovery kept it only if its commit record reached the disk"
+        None => "re-read the operation's result only after recovery has finished: it has no \
+                 commit sequence, and its outcome stays unknown until then. For a write to a \
+                 replicated range, recovery finishes when the range's leader has recovered the \
+                 range and the range accepts writes again (a new write to it succeeds); a \
+                 recovered leader can still commit the operation, so a re-read before that \
+                 may miss it and a retry may duplicate it"
             .to_string(),
     }
 }

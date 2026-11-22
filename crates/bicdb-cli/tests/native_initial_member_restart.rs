@@ -27,6 +27,7 @@ use rcgen::{
     BasicConstraints, CertificateParams, ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose,
 };
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::net::TcpListener;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
@@ -1066,14 +1067,10 @@ fn native_initial_member_restart_four_process_kill_and_reopen() {
 ///
 /// A command the killed leader's own log certifies committed (raw entry
 /// QuorumCommitted/Applied just above the native prefix) is recovered forward
-/// by the hot recovery, and the range accepts appends again.
-///
-/// What is NOT promised yet: recovery of a tail WITHOUT that certificate in
-/// the leader's own log (prepared only). It needs the native abort or a
-/// recovery sourced from a follower, which no host drives after a restart.
-/// The range then stays refusing appends and the member says so in its
-/// status. The test accepts exactly these outcomes and prints which one
-/// occurred in each round.
+/// by the hot recovery. A command its own log holds only Prepared, with no
+/// Commit vote of its own, is aborted by the hot recovery through the abort
+/// protocol. Either way the range accepts appends again: every round must
+/// recover. The test prints which state each kill left.
 /// The member's own diagnostic names a first unresolved entry that its log
 /// certifies committed.
 fn committed_tail(attempt: &Value) -> bool {
@@ -1110,6 +1107,8 @@ fn native_initial_member_restart_four_process_leader_killed_under_writes() {
     let mut unknown = Vec::new();
     let mut counter = 0u64;
     let (mut recovered_rounds, mut refused_rounds) = (0, 0);
+    // Which unfinished state each kill left, as the restarted member saw it.
+    let mut kill_states: BTreeMap<String, usize> = BTreeMap::new();
     let mut unrecovered = Vec::new();
     // One round per range leader that does not lead metadata.
     let led = topology
@@ -1175,35 +1174,67 @@ fn native_initial_member_restart_four_process_leader_killed_under_writes() {
         // The killed leader's own range: appends resume, or the member
         // reports why its leadership is not recovered.
         let begun = Instant::now();
+        let mut seen_state: Option<String> = None;
+        let mut seen_abort = false;
+        let mut seen_redrive = false;
         let (recovered, status) = loop {
             let status = cluster.status(leader).unwrap();
+            let attempt = &status["host"]["initial_data"]["reopened_leader_recovery_last_attempt"];
+            if seen_state.is_none() {
+                seen_state = attempt["unrecovered_ranges"].as_array().and_then(|ranges| {
+                    ranges
+                        .iter()
+                        .find(|r| r["range_id"] == led.id.get())
+                        .and_then(|r| {
+                            r["first_unresolved_state"].as_str().map(str::to_owned).or_else(|| {
+                                r["unfinished_native_writer_start_index"]
+                                    .as_u64()
+                                    .map(|_| "WriterStartOnly".to_owned())
+                            })
+                        })
+                });
+            }
+            if seen_state.is_none() {
+                // Recovered by the ordinary reopened leader recovery itself:
+                // its native prefix already covered its own certified entry.
+                seen_state = attempt["recovered_tails"].as_array().and_then(|ranges| {
+                    ranges
+                        .iter()
+                        .find(|r| {
+                            r["range_id"] == led.id.get()
+                                && r["tail_state"] == "native_completed_raw_unresolved"
+                        })
+                        .map(|_| "NativeCompletedRawUnresolved".to_owned())
+                });
+            }
+            let hot = &status["host"]["initial_data"]["hot_recovery_last_attempt"];
+            seen_abort |= hot["abort"] == true && hot["range_id"] == led.id.get();
+            seen_redrive |= (hot["commit_redriven"] == true || hot["phase"] == "commit_redrive")
+                && hot["range_id"] == led.id.get();
             if writer.acknowledged() > before + 3 {
                 break (true, status);
             }
-            let attempt = &status["host"]["initial_data"]["reopened_leader_recovery_last_attempt"];
             if begun.elapsed() > LEADER_RECOVERY_PATIENCE {
-                break (false, status);
-            }
-            // A tail that is certified committed in the killed leader's own
-            // log is recovered forward by the hot recovery: wait for it.
-            if attempt["result"] == "refused_or_pending"
-                && attempt["error"].as_str().is_some_and(|error| {
-                    error.contains("native unresolved leader tail")
-                        || error.contains("unfinished command")
-                })
-                && !committed_tail(attempt)
-                && begun.elapsed() > Duration::from_secs(10)
-            {
                 break (false, status);
             }
             cluster.require_alive("waiting for appends after the leader restart");
             std::thread::sleep(POLL);
         };
+        let mut state = match (&seen_state, seen_abort) {
+            (Some(state), true) => format!("{state} tail aborted"),
+            (None, true) => "tail aborted".to_owned(),
+            (Some(state), false) => format!("{state} tail"),
+            (None, false) => "no unfinished tail seen".to_owned(),
+        };
+        if seen_redrive {
+            state.push_str(", own Commit round re-driven");
+        }
+        *kill_states.entry(state.clone()).or_default() += 1;
         let attempts = writer.finish();
         let diagnostic =
             status["host"]["initial_data"]["reopened_leader_recovery_last_attempt"].clone();
         println!(
-            "{} RESTART_M round {round}: leader n{leader} of range {} killed under appends; appends resumed={recovered}; data_serving={}; leader recovery: {diagnostic}; hot recovery: {}",
+            "{} RESTART_M round {round}: leader n{leader} of range {} killed under appends; state={state}; appends resumed={recovered}; data_serving={}; leader recovery: {diagnostic}; hot recovery: {}",
             stamp(cluster.started),
             led.id,
             status["host"]["data_serving"],
@@ -1300,10 +1331,14 @@ fn native_initial_member_restart_four_process_leader_killed_under_writes() {
         }
     }
     println!(
-        "{} RESTART_M leader kills under appends: {recovered_rounds} rounds recovered, {refused_rounds} rounds left the range refusing appends; {} acknowledged rows readable; of {} unacknowledged appends {present} exist and {unreadable} are unreadable for now",
+        "{} RESTART_M leader kills under appends: {recovered_rounds} rounds recovered, {refused_rounds} rounds left the range refusing appends; states {kill_states:?}; {} acknowledged rows readable; of {} unacknowledged appends {present} exist and {unreadable} are unreadable for now",
         stamp(cluster.started),
         acknowledged.len(),
         unknown.len()
     );
     cluster.require_alive("finishing");
+    assert_eq!(
+        refused_rounds, 0,
+        "every leader killed under appends must recover its range: states {kill_states:?}"
+    );
 }

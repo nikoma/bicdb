@@ -4132,6 +4132,10 @@ pub struct BicDb {
     range_image_initializing: AtomicBool,
     range_image_native_birth_active: AtomicBool,
     native_range_image_journal: Mutex<()>,
+    /// Native abort slots whose writer-start was published by THIS open.
+    /// Memory only and never cleared: a slot absent here was started by an
+    /// earlier open of this directory, whose transactions cannot still run.
+    native_abort_slots_started_this_open: Mutex<std::collections::BTreeSet<(crate::RangeId, u64)>>,
     native_range_command_scopes: Arc<Mutex<range_image_native::NativeRangeScopeRegistry>>,
     schema_compatibility: SchemaCompatibilityAuthority,
     encryption: EncryptionRuntime,
@@ -11851,6 +11855,7 @@ impl BicDb {
             range_image_initializing: AtomicBool::new(false),
             range_image_native_birth_active: AtomicBool::new(false),
             native_range_image_journal: Mutex::new(()),
+            native_abort_slots_started_this_open: Mutex::new(Default::default()),
             native_range_command_scopes: Arc::new(Mutex::new(Default::default())),
             schema_compatibility: SchemaCompatibilityAuthority::new(),
             encryption,

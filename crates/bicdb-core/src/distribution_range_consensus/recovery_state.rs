@@ -770,6 +770,106 @@ impl RangeWriteStore {
     pub(super) fn recovery_range_catalog_sha256(&self, range_id: RangeId) -> Result<String> {
         self.recovery_range_catalog_sha256_with_phase(range_id, None)
     }
+    /// Diagnostic only: one short digest per part of the range's recovery
+    /// catalogue commitment, so a refusal can name the part that changed.
+    /// Never compared for a decision.
+    pub(super) fn recovery_range_catalog_part_digests(
+        &self,
+        range_id: RangeId,
+    ) -> Vec<(&'static str, String)> {
+        fn digest<T: serde::Serialize>(value: &T) -> String {
+            serde_json::to_vec(value)
+                .map(|bytes| hex::encode(Sha256::digest(&bytes))[..12].to_string())
+                .unwrap_or_else(|_| "unserializable".into())
+        }
+        let saved = self.catalog.recovery_fences.get(&range_id);
+        vec![
+            ("range_log", digest(&self.catalog.ranges.get(&range_id))),
+            ("fence_scope", digest(&saved.map(|s| &s.scope))),
+            ("fence_phase", digest(&saved.map(|s| &s.phase))),
+            (
+                "fence_local",
+                digest(&saved.map(|s| {
+                    (
+                        &s.local_node_id,
+                        s.local_member_incarnation,
+                        &s.native_database_incarnation,
+                    )
+                })),
+            ),
+            (
+                "historical_certifications",
+                digest(&saved.map(|s| &s.historical_certifications)),
+            ),
+            ("retired_nonces", digest(&saved.map(|s| &s.retired_nonces))),
+            (
+                "handoff_promise",
+                digest(&self.catalog.handoff_promises.get(&range_id)),
+            ),
+            (
+                "image_install_intent",
+                digest(&self.catalog.image_install_intents.get(&range_id)),
+            ),
+            (
+                "native_image_base",
+                digest(&self.catalog.native_image_bases.get(&range_id)),
+            ),
+            (
+                "backup_fence",
+                digest(&self.catalog.backup_fences.get(&range_id)),
+            ),
+            (
+                "sparse_committed",
+                digest(
+                    &self
+                        .catalog
+                        .sparse_committed_decisions
+                        .as_ref()
+                        .and_then(|m| m.get(&range_id)),
+                ),
+            ),
+            (
+                "installing_certifications",
+                digest(
+                    &self
+                        .catalog
+                        .installing_committed_certifications
+                        .as_ref()
+                        .and_then(|m| m.get(&range_id)),
+                ),
+            ),
+            (
+                "installing_handovers",
+                digest(
+                    &self
+                        .catalog
+                        .installing_recovery_handovers
+                        .as_ref()
+                        .and_then(|m| m.get(&range_id)),
+                ),
+            ),
+            (
+                "native_abort_control",
+                digest(
+                    &self
+                        .catalog
+                        .native_abort_protocol
+                        .as_ref()
+                        .and_then(|p| p.range(range_id)),
+                ),
+            ),
+            (
+                "current_joint",
+                digest(
+                    &self
+                        .catalog
+                        .current_joint_recoveries
+                        .as_ref()
+                        .and_then(|m| m.get(&range_id)),
+                ),
+            ),
+        ]
+    }
     pub(super) fn recovery_range_catalog_sha256_with_phase(
         &self,
         range_id: RangeId,

@@ -20,6 +20,10 @@ pub(super) struct ReplicaDebt {
     // observation occupies that follower's recovery context, and while it is
     // occupied the follower refuses the ordinary native apply instruction.
     tracked_at: BTreeMap<ClusterNodeId, Instant>,
+    // A settled follower refused its re-observation because its current
+    // process holds this session's durable activation without having armed
+    // it (it was restarted). Scheduling hint for a fresh re-arm session.
+    rearm: bool,
 }
 /// Cadence of re-observing a settled follower. Unsettled followers keep the
 /// one-per-attempt cadence.
@@ -71,7 +75,16 @@ impl ReplicaDebt {
             retry_after: BTreeMap::new(),
             peer_opens: job.peer_opens,
             tracked_at,
+            rearm: false,
         }
+    }
+    /// See the `rearm` field. Never a permission: the re-arm session itself
+    /// fences and reproves every member.
+    pub(super) fn rearm_requested(&self) -> bool {
+        self.rearm
+    }
+    pub(super) fn request_rearm(&mut self) {
+        self.rearm = true;
     }
     fn settled(&self, node: &ClusterNodeId) -> bool {
         !self.pending.contains(node)
@@ -321,6 +334,11 @@ impl NativeHotRecoveryMaintenance {
                         #[cfg(test)]
                         eprintln!("NATIVE_HOT_REPLICA_COMPLETED_MATERIALIZATION target={} range={} anchor={} actual_native_prepared=true no_active_fence_authority_cast=true no_leader_reservation=true",node,debt.range.id,debt.command.index);
                     }
+                    Some(Phase::AbortResolve) => {
+                        return Err(invalid(
+                            "catch-up of a follower that missed the abort resolution is not supported",
+                        ));
+                    }
                     Some(Phase::Publish | Phase::Replica) => {
                         return Err(invalid("invalid retained recipient phase"));
                     }
@@ -329,6 +347,16 @@ impl NativeHotRecoveryMaintenance {
             Ok(())
         })();
         if let Err(error) = &result {
+            // The exact refusal of a member whose open holds no activation of
+            // its own (`native_activated_open_allowed`). A wrong hint costs a
+            // session, never safety: the session reproves every member.
+            if was_settled
+                && error
+                    .to_string()
+                    .contains("native activation requires actual current-open release proof")
+            {
+                debt.rearm = true;
+            }
             // A failed re-observation of a settled follower proves no new
             // obligation; it is retried at the slow cadence. Only a follower
             // that already owed something stays on the fast cadence.
@@ -376,7 +404,7 @@ impl NativeHotRecoveryMaintenance {
             "semantic_veto":debt.semantic_veto.iter().map(|(n,p)|(n.to_string(),format!("{p:?}"))).collect::<BTreeMap<_,_>>(),
             "actual_progress":debt.progress,"completed_this_attempt":result.is_ok(),
             "error":result.as_ref().err().map(ToString::to_string),
-            "tracked_after_catchup":true,"no_leader_reservation_during_peer_io":true,
+            "tracked_after_catchup":true,"no_leader_reservation_during_peer_io":true,"rearm_requested":debt.rearm,
             "diagnostic_not_authority":true}));
         // Keep tracking after current convergence: later ordinary ACKs may
         // leave a lagging follower without another user request to repair it.

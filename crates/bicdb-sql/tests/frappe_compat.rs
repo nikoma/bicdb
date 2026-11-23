@@ -61,3 +61,39 @@ fn information_schema_catalog_is_the_connected_database() {
         vec![vec![s("bicdb")]]
     );
 }
+
+/// `substring(text, pattern)` with a text pattern is the regular-expression
+/// form (Frappe matches index definitions with `SUBSTRING(indexdef, '(.*)')`).
+#[test]
+fn substring_with_a_text_pattern_is_a_regex_match() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE TABLE defs (id int PRIMARY KEY, def text); INSERT INTO defs VALUES (1, 'CREATE INDEX i ON t USING btree (parent)')")
+        .unwrap();
+    for (query, expected) in [
+        (
+            "SELECT substring('CREATE INDEX i ON t (parent)', '\\((.*)\\)')",
+            s("parent"),
+        ),
+        ("SELECT substring('Thomas' FROM '...$')", s("mas")),
+        ("SELECT substring('Thomas', 'zz')", SqlValue::Null),
+        ("SELECT substring('Thomas', 2)", s("homas")),
+        ("SELECT substring('Thomas' FROM 2 FOR 3)", s("hom")),
+        (
+            "SELECT SUBSTRING(def, '(.*)') FROM defs",
+            s("CREATE INDEX i ON t USING btree (parent)"),
+        ),
+        (
+            "SELECT SUBSTRING(def, 'btree \\((\\w+)\\)') FROM defs WHERE id = 1",
+            s("parent"),
+        ),
+    ] {
+        assert_eq!(
+            session.execute(query).unwrap().rows,
+            vec![vec![expected]],
+            "{query}"
+        );
+    }
+}

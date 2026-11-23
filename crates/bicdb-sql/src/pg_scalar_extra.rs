@@ -396,6 +396,25 @@ fn trim_chars(text: &str, set: &str, left: bool, right: bool) -> String {
     out.to_string()
 }
 
+/// PostgreSQL `substring(string FROM pattern)`: the text matched by the first
+/// parenthesized subexpression when the pattern has one, else the whole match;
+/// NULL when nothing matches.
+pub(crate) fn regex_substring(source: &str, pattern: &str) -> Result<SqlValue> {
+    crate::schema_meta::reject_oversized_regex(pattern)?;
+    let regex = pg_regex(pattern, "")?;
+    Ok(match regex.captures(source) {
+        None => SqlValue::Null,
+        Some(captures) => {
+            let group = if captures.len() > 1 {
+                captures.get(1)
+            } else {
+                captures.get(0)
+            };
+            group.map_or(SqlValue::Null, |m| SqlValue::String(m.as_str().to_string()))
+        }
+    })
+}
+
 fn pg_regex(pattern: &str, flags: &str) -> Result<regex::Regex> {
     let mut builder = RegexBuilder::new(pattern);
     for flag in flags.chars() {

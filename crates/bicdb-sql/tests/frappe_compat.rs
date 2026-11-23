@@ -226,6 +226,50 @@ fn create_index_if_not_exists_skips_a_name_used_on_another_table() {
     );
 }
 
+/// Another connection's open transaction (one that never touched the table)
+/// must not make DROP TABLE fail, and must not leave a recycle-bin intent that
+/// stops the database from reopening. Frappe's tests drop scratch tables while
+/// a second connection is idle in a transaction.
+#[test]
+fn drop_table_with_another_transaction_pending_drops_and_reopens() {
+    let dir = tempfile::tempdir().unwrap();
+    {
+        let mut db = BicDb::open(dir.path()).unwrap();
+        SqlSession::new(&mut db)
+            .execute(
+                "CREATE TABLE other (id int PRIMARY KEY); INSERT INTO other VALUES (1); \
+                 CREATE TABLE \"tabTestNotes\" (id int PRIMARY KEY, content text); \
+                 CREATE INDEX test_index ON \"tabTestNotes\" (id, content); \
+                 CREATE TABLE scratch (id int PRIMARY KEY); CREATE INDEX scratch_idx ON scratch (id)",
+            )
+            .unwrap();
+        let mut idle = db.begin_transaction().unwrap();
+        idle.get("other", "1").unwrap();
+        idle.insert("other", bicdb_core::Record::new("2")).unwrap();
+        {
+            let mut session = SqlSession::new(&mut db);
+            session.execute("DROP TABLE \"tabTestNotes\"").unwrap();
+            session.execute("BEGIN").unwrap();
+            session.execute("DROP TABLE scratch").unwrap();
+            session.execute("COMMIT").unwrap();
+            session
+                .execute("CREATE TABLE \"tabTestNotes\" (id int PRIMARY KEY, content text); CREATE INDEX test_index ON \"tabTestNotes\" (id)")
+                .unwrap();
+        }
+        idle.rollback().unwrap();
+    }
+    let mut db = BicDb::open(dir.path()).unwrap();
+    bicdb_sql::recover_interrupted_recycle_bin_renames(&mut db).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY 1"
+        ),
+        vec![vec![s("other")], vec![s("tabTestNotes")]]
+    );
+}
+
 /// `frappe.db.get_database_size()`:
 /// `SELECT (pg_database_size(<name>) / 1024 / 1024) AS database_size`.
 #[test]

@@ -3130,12 +3130,13 @@ pub(crate) fn delete_sequence(db: &mut BicDb, sequence: &str) -> Result<bool> {
 }
 
 pub(crate) fn alter_table_add_column(
-    db: &mut BicDb,
+    mut rows: DdlRows<'_>,
     table: &str,
     schema: &mut TableSchema,
     column_def: &ColumnDef,
     if_not_exists: bool,
 ) -> Result<()> {
+    let db = &*rows.db;
     let mut column = column_schema_from_def(db, column_def)?;
     if schema.column(&column.name).is_some() {
         if if_not_exists {
@@ -3164,7 +3165,7 @@ pub(crate) fn alter_table_add_column(
     let mut updated_schema = schema.clone();
     updated_schema.add_column(column);
     if !column_nullable {
-        for record in db.scan_collection(table)? {
+        for record in rows.visible(table)? {
             if matches!(
                 default.clone().unwrap_or_else(|| record_column_value(
                     &record,
@@ -3187,7 +3188,7 @@ pub(crate) fn alter_table_add_column(
         }
     }
     if !unique_constraints.is_empty() {
-        let mut candidates = db.scan_collection(table)?;
+        let mut candidates = rows.visible(table)?;
         if let Some(default) = default.as_ref() {
             for record in &mut candidates {
                 set_record_column(record, Some(&updated_schema), &column_name, default.clone())?;
@@ -3220,25 +3221,26 @@ pub(crate) fn alter_table_add_column(
         validate_unique_constraint_index_compatibility(db, &updated_schema)?;
     }
     if let Some(default) = default {
-        for mut record in db.scan_collection(table)? {
+        rows.rewrite(table, |record| {
+            let mut record = record.clone();
             set_record_column(
                 &mut record,
                 Some(&updated_schema),
                 &column_name,
                 default.clone(),
             )?;
-            db.insert(table, record)?;
-        }
+            Ok(Some(record))
+        })?;
     }
     if added_unique {
-        ensure_unique_constraint_indexes_for_schema(db, &updated_schema)?;
+        ensure_unique_constraint_indexes_for_schema(rows.db, &updated_schema)?;
     }
     *schema = updated_schema;
-    save_schema(db, schema)
+    save_schema(rows.db, schema)
 }
 
 pub(crate) fn alter_table_drop_column(
-    db: &mut BicDb,
+    mut rows: DdlRows<'_>,
     table: &str,
     schema: &mut TableSchema,
     column: &str,
@@ -3299,11 +3301,12 @@ pub(crate) fn alter_table_drop_column(
             .map(|part| part.trim().trim_matches('"'))
             .any(|candidate| candidate.eq_ignore_ascii_case(&actual))
     });
-    for mut record in db.scan_collection(table)? {
+    rows.rewrite(table, |record| {
+        let mut record = record.clone();
         remove_record_column(&mut record, &actual);
-        db.insert(table, record)?;
-    }
-    save_schema(db, schema)
+        Ok(Some(record))
+    })?;
+    save_schema(rows.db, schema)
 }
 
 pub(crate) fn alter_table_rename_column(

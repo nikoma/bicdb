@@ -97,3 +97,100 @@ fn substring_with_a_text_pattern_is_a_regex_match() {
         );
     }
 }
+
+fn rows(session: &mut SqlSession<'_>, query: &str) -> Vec<Vec<SqlValue>> {
+    session.execute(query).unwrap().rows
+}
+
+/// Frappe syncs a DocType's table inside the transaction that saved the
+/// DocType row, so ALTER TABLE must see (and not conflict with) rows the same
+/// transaction already inserted, updated, locked or deleted.
+#[test]
+fn row_rewriting_alter_table_includes_the_transactions_own_rows() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE TABLE doc (name varchar(140) PRIMARY KEY, a varchar(140), b int); \
+             INSERT INTO doc VALUES ('1', 'one', NULL), ('2', 'two', 2), ('3', 'three', 3), ('4', 'four', 4)",
+        )
+        .unwrap();
+    session.execute("BEGIN").unwrap();
+    session
+        .execute("INSERT INTO doc VALUES ('5', 'five', NULL)")
+        .unwrap();
+    session
+        .execute("UPDATE doc SET a = 'uno' WHERE name = '1'")
+        .unwrap();
+    session.execute("DELETE FROM doc WHERE name = '4'").unwrap();
+    session
+        .execute("SELECT name FROM doc WHERE name = '3' FOR UPDATE")
+        .unwrap();
+    session
+        .execute(
+            "ALTER TABLE doc ADD COLUMN c smallint NOT NULL DEFAULT 7, \
+             ALTER COLUMN a TYPE varchar(64), ALTER COLUMN b TYPE bigint",
+        )
+        .unwrap();
+    // Frappe fills NULLs with the default, then tightens the column.
+    session
+        .execute("UPDATE doc SET b = 0 WHERE b IS NULL")
+        .unwrap();
+    session
+        .execute("ALTER TABLE doc ALTER COLUMN b SET NOT NULL, ALTER COLUMN b SET DEFAULT 0")
+        .unwrap();
+    session.execute("ALTER TABLE doc DROP COLUMN a").unwrap();
+    session.execute("COMMIT").unwrap();
+    assert_eq!(
+        rows(&mut session, "SELECT name, b, c FROM doc ORDER BY name"),
+        vec![
+            vec![s("1"), SqlValue::Int(0), SqlValue::Int(7)],
+            vec![s("2"), SqlValue::Int(2), SqlValue::Int(7)],
+            vec![s("3"), SqlValue::Int(3), SqlValue::Int(7)],
+            vec![s("5"), SqlValue::Int(0), SqlValue::Int(7)],
+        ]
+    );
+
+    // SET NOT NULL still refuses NULLs the transaction itself wrote.
+    session.execute("BEGIN").unwrap();
+    session
+        .execute("ALTER TABLE doc ALTER COLUMN c DROP NOT NULL")
+        .unwrap();
+    session
+        .execute("UPDATE doc SET c = NULL WHERE name = '2'")
+        .unwrap();
+    assert!(session
+        .execute("ALTER TABLE doc ALTER COLUMN c SET NOT NULL")
+        .is_err());
+    session.execute("ROLLBACK").unwrap();
+
+    // A rolled-back ALTER restores the shape and the transaction's rows vanish.
+    session.execute("BEGIN").unwrap();
+    session
+        .execute("INSERT INTO doc VALUES ('6', 6, 6)")
+        .unwrap();
+    session
+        .execute("UPDATE doc SET b = 20 WHERE name = '2'")
+        .unwrap();
+    session
+        .execute("ALTER TABLE doc ADD COLUMN d int NOT NULL DEFAULT 1")
+        .unwrap();
+    session.execute("ROLLBACK").unwrap();
+    assert_eq!(
+        rows(&mut session, "SELECT name, b, c FROM doc ORDER BY name"),
+        vec![
+            vec![s("1"), SqlValue::Int(0), SqlValue::Int(7)],
+            vec![s("2"), SqlValue::Int(2), SqlValue::Int(7)],
+            vec![s("3"), SqlValue::Int(3), SqlValue::Int(7)],
+            vec![s("5"), SqlValue::Int(0), SqlValue::Int(7)],
+        ]
+    );
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT count(*) FROM information_schema.columns WHERE table_name = 'doc' AND column_name = 'd'"
+        ),
+        vec![vec![SqlValue::Int(0)]]
+    );
+}

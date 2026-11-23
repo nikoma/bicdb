@@ -9,6 +9,104 @@
 // code compiles unchanged.
 use crate::*;
 
+/// Row access for ALTER TABLE forms that validate or rewrite every row.
+///
+/// DDL writes committed storage directly and keeps its own undo. Rows the
+/// session's open transaction has already written or locked belong to that
+/// transaction: writing them directly conflicts with the transaction's own
+/// row locks, and its pending rows (stored in the old shape) would miss the
+/// change and overwrite it at COMMIT. Those rows are therefore read and
+/// rewritten through the transaction, so `BEGIN; UPDATE t ...; ALTER TABLE t
+/// ADD COLUMN c int NOT NULL DEFAULT 0; COMMIT` behaves as in PostgreSQL.
+pub(crate) struct DdlRows<'a> {
+    pub(crate) db: &'a mut BicDb,
+    pub(crate) tx: Option<&'a mut Transaction>,
+}
+
+impl DdlRows<'_> {
+    fn owns(&self, table: &str, id: &str) -> bool {
+        self.tx.as_deref().is_some_and(|tx| {
+            tx.has_pending_write_for_record(table, id) || tx.holds_record_lock(table, id)
+        })
+    }
+
+    /// The table's rows as the transaction sees them: committed rows with the
+    /// transaction's pending upserts replacing, and its deletes removing, them.
+    pub(crate) fn visible(&self, table: &str) -> Result<Vec<Record>> {
+        let mut rows = self.db.scan_collection(table)?;
+        if let Some(tx) = self.tx.as_deref() {
+            if tx.has_pending_writes(table) {
+                rows.retain(|record| !tx.has_pending_write_for_record(table, &record.id));
+                rows.extend(
+                    tx.pending_records(table)
+                        .into_iter()
+                        .map(|record| (*record).clone()),
+                );
+            }
+        }
+        Ok(rows)
+    }
+
+    /// Apply `rewrite` to every visible row; it returns `None` for a row it
+    /// leaves unchanged and must preserve the row identity.
+    pub(crate) fn rewrite(
+        &mut self,
+        table: &str,
+        mut rewrite: impl FnMut(&Record) -> Result<Option<Record>>,
+    ) -> Result<()> {
+        let committed = self.db.scan_collection(table)?;
+        if let Some(tx) = self.tx.as_deref_mut() {
+            tx.transform_pending_records(table, |record| -> Result<Record> {
+                Ok(rewrite(record)?.unwrap_or_else(|| record.clone()))
+            })?;
+        }
+        for record in committed {
+            if let Some(tx) = self.tx.as_deref_mut() {
+                if tx.has_pending_write_for_record(table, &record.id) {
+                    continue;
+                }
+                if tx.holds_record_lock(table, &record.id) {
+                    if let Some(current) = tx.get(table, &record.id)? {
+                        if let Some(updated) = rewrite(&current)? {
+                            tx.insert(table, updated)?;
+                        }
+                    }
+                    continue;
+                }
+            }
+            if let Some(updated) = rewrite(&record)? {
+                self.db.insert(table, updated)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Store a rewritten row, through the transaction when it owns the row.
+    pub(crate) fn store(&mut self, table: &str, record: Record) -> Result<()> {
+        if self.owns(table, &record.id) {
+            self.tx
+                .as_deref_mut()
+                .expect("owned rows have a transaction")
+                .insert(table, record)?;
+        } else {
+            self.db.insert(table, record)?;
+        }
+        Ok(())
+    }
+
+    /// Delete a committed row that no rewritten row replaced. A row owned by
+    /// the transaction cannot change identity under it.
+    pub(crate) fn remove_replaced(&mut self, table: &str, id: &str) -> Result<()> {
+        if self.owns(table, id) {
+            return Err(SqlError::Unsupported(format!(
+                "ALTER TABLE cannot change the key of a row of \"{table}\" that the current transaction has modified"
+            )));
+        }
+        self.db.delete(table, id)?;
+        Ok(())
+    }
+}
+
 pub(crate) fn apply_rename_table_undo(db: &mut BicDb, undo: DdlUndo) -> Result<()> {
     let DdlUndo::RestoreRenamedTable {
         old_table,
@@ -60,7 +158,7 @@ pub(crate) fn restore_renamed_table(
 }
 
 pub(crate) fn alter_table_alter_column(
-    db: &mut BicDb,
+    mut rows: DdlRows<'_>,
     table: &str,
     schema: &mut TableSchema,
     column: &str,
@@ -87,39 +185,42 @@ pub(crate) fn alter_table_alter_column(
                     "ALTER COLUMN TYPE USING expressions are not supported".to_string(),
                 ));
             }
-            let blob = oracle::lob_columns::modifier(db, data_type)?;
+            let blob = oracle::lob_columns::modifier(rows.db, data_type)?;
             let (pg_type, vector_dim) = if blob.is_some() {
                 ("bytea".into(), None)
             } else {
                 pg_type_from_data_type(data_type)?
             };
             let type_modifier = blob
-                .or(oracle::character_columns::modifier(db, data_type)?)
+                .or(oracle::character_columns::modifier(rows.db, data_type)?)
                 .or(pg_type_modifier_from_data_type(data_type)?);
             let column_name = schema.columns[idx].name.clone();
             schema.columns[idx].pg_type = pg_type;
             schema.columns[idx].type_modifier = type_modifier;
             schema.columns[idx].vector_dim = vector_dim;
-            for mut record in db.scan_collection(table)? {
-                let current = record_column_value(&record, schema, &column_name);
-                if !matches!(current, SqlValue::Null) {
-                    let converted = if using.is_some()
-                        && !matches!(
-                            schema.columns[idx].type_modifier,
-                            Some(PgTypeModifier::OracleCharacterV1 { .. })
-                        ) {
-                        cast_value(current, data_type)?
-                    } else {
-                        cast_value_to_column_type(current, &schema.columns[idx])?
-                    };
-                    set_record_column(&mut record, Some(schema), &column_name, converted)?;
-                    db.insert(table, record)?;
+            let altered: &TableSchema = schema;
+            rows.rewrite(table, |record| {
+                let current = record_column_value(record, altered, &column_name);
+                if matches!(current, SqlValue::Null) {
+                    return Ok(None);
                 }
-            }
-            save_schema(db, schema)
+                let converted = if using.is_some()
+                    && !matches!(
+                        altered.columns[idx].type_modifier,
+                        Some(PgTypeModifier::OracleCharacterV1 { .. })
+                    ) {
+                    cast_value(current, data_type)?
+                } else {
+                    cast_value_to_column_type(current, &altered.columns[idx])?
+                };
+                let mut record = record.clone();
+                set_record_column(&mut record, Some(altered), &column_name, converted)?;
+                Ok(Some(record))
+            })?;
+            save_schema(rows.db, schema)
         }
         AlterColumnOperation::SetNotNull => {
-            for record in db.scan_collection(table)? {
+            for record in rows.visible(table)? {
                 if matches!(record_column_value(&record, schema, column), SqlValue::Null) {
                     return Err(constraint_violation(
                         "23502",
@@ -131,7 +232,7 @@ pub(crate) fn alter_table_alter_column(
                 }
             }
             schema.columns[idx].nullable = false;
-            save_schema(db, schema)
+            save_schema(rows.db, schema)
         }
         AlterColumnOperation::DropNotNull => {
             if schema.columns[idx].primary_key {
@@ -141,12 +242,12 @@ pub(crate) fn alter_table_alter_column(
                 ));
             }
             schema.columns[idx].nullable = true;
-            save_schema(db, schema)
+            save_schema(rows.db, schema)
         }
         AlterColumnOperation::SetDefault { .. } | AlterColumnOperation::DropDefault => {
             let actual = schema.columns[idx].name.clone();
-            alter_column_default(db, schema, &actual, op)?;
-            save_schema(db, schema)
+            alter_column_default(rows.db, schema, &actual, op)?;
+            save_schema(rows.db, schema)
         }
         AlterColumnOperation::AddGenerated { .. } => Err(SqlError::Unsupported(format!(
             "ALTER COLUMN {op} is not supported"

@@ -93,7 +93,7 @@ impl<'db> SqlSession<'db> {
             let mut schema = load_schema(self.db_ref(), &table)?
                 .ok_or_else(|| SqlError::InvalidCollection(table.clone()))?;
             self.capture_table_state_undo(&table, &schema)?;
-            alter_table_drop_column(self.db_mut()?, &table, &mut schema, &column, false)?;
+            alter_table_drop_column(self.ddl_rows()?, &table, &mut schema, &column, false)?;
             self.change_column_privileges(&table, &column, None)?;
         }
 
@@ -1116,7 +1116,7 @@ impl<'db> SqlSession<'db> {
                 continue;
             }
             self.capture_table_state_undo(&table, &schema)?;
-            alter_table_drop_column(self.db_mut()?, &table, &mut schema, &column, false)?;
+            alter_table_drop_column(self.ddl_rows()?, &table, &mut schema, &column, false)?;
         }
         for (table, column) in dependent_defaults {
             let Some(mut schema) = load_schema(self.db_ref(), &table)? else {
@@ -1217,7 +1217,7 @@ impl<'db> SqlSession<'db> {
                         *if_not_exists,
                     )? {
                         alter_table_add_column(
-                            self.db_mut()?,
+                            self.ddl_rows()?,
                             &table,
                             &mut schema,
                             column_def,
@@ -1321,7 +1321,7 @@ impl<'db> SqlSession<'db> {
                             .and_then(|column| column.default_sequence.clone());
                         self.capture_table_state_undo(&table, &schema)?;
                         alter_table_drop_column(
-                            self.db_mut()?,
+                            self.ddl_rows()?,
                             &table,
                             &mut schema,
                             &column_name,
@@ -1442,7 +1442,7 @@ impl<'db> SqlSession<'db> {
                         }
                         self.capture_table_state_undo(&table, &schema)?;
                         alter_table_alter_column(
-                            self.db_mut()?,
+                            self.ddl_rows()?,
                             &table,
                             &mut schema,
                             &column_name,
@@ -1765,7 +1765,7 @@ impl<'db> SqlSession<'db> {
         let mut planned = Vec::with_capacity(changes.len());
         let mut unchanged_source_tables = BTreeSet::new();
         for (previous, updated) in changes {
-            let mut records = self.db_ref().scan_collection(&previous.name)?;
+            let mut records = self.ddl_rows()?.visible(&previous.name)?;
             let mut unchanged_source = source_metadata_only;
             if rewrite {
                 for record in &mut records {
@@ -1891,13 +1891,36 @@ impl<'db> SqlSession<'db> {
                     .iter()
                     .map(|record| record.id.clone())
                     .collect::<BTreeSet<_>>();
+                let mut rows = self.ddl_rows()?;
                 for record in records {
-                    self.db_mut()?.insert(&previous.name, record.clone())?;
+                    rows.store(&previous.name, record.clone())?;
                 }
-                for old in self.db_ref().scan_collection(&previous.name)? {
-                    if !updated_ids.contains(&old.id) {
-                        self.db_mut()?.delete(&previous.name, &old.id)?;
+                let pending_upserts = rows
+                    .tx
+                    .as_deref()
+                    .map(|tx| {
+                        tx.pending_records(&previous.name)
+                            .iter()
+                            .map(|record| record.id.clone())
+                            .collect::<BTreeSet<_>>()
+                    })
+                    .unwrap_or_default();
+                if let Some(id) = pending_upserts.iter().find(|id| !updated_ids.contains(*id)) {
+                    rows.remove_replaced(&previous.name, id)?;
+                }
+                for old in rows.db.scan_collection(&previous.name)? {
+                    if updated_ids.contains(&old.id) {
+                        continue;
                     }
+                    // A row this transaction deleted stays deleted at COMMIT.
+                    if !pending_upserts.contains(&old.id)
+                        && rows.tx.as_deref().is_some_and(|tx| {
+                            tx.has_pending_write_for_record(&previous.name, &old.id)
+                        })
+                    {
+                        continue;
+                    }
+                    rows.remove_replaced(&previous.name, &old.id)?;
                 }
                 save_schema(self.db_mut()?, updated)?;
             }

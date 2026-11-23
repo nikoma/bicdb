@@ -246,15 +246,17 @@ fn repeat_pause(repeated: u32) -> Duration {
 /// windows around a durable write (publication, Open, release, writer
 /// policy). Such a member reads every other member twice, and a member that
 /// is busy with its own step answers "busy" and is asked again; so does the
-/// metadata leader beyond four metadata reads at a time. Measured
-/// between five processes: two members at once finish in about 1.1 s where
-/// one after the other needs 1.5 s, but three members' publications at once
-/// needed 2.2 to 2.3 s where one after the other needs 1.7 s, almost all of
-/// it repetitions of busy members. So two.
-const WINDOWED_STEPS_AT_ONCE: usize = 2;
+/// metadata leader beyond four metadata reads at a time. Measured between
+/// five processes on a fast host, two members at once finished in about
+/// 1.1 s where one after the other needs 1.5 s. On a slow host (a quarter of
+/// one CPU, or the CI runner) two members at once kept refusing each other
+/// as busy and expiring each other's windows: a two-member publication took
+/// 46 to 76 s before a member was repeated alone, where each alone needs
+/// about 3 s, and a busy refusal is repeated without bound inside the phase.
+/// So one, at the price of about 0.4 s on a fast host.
+const WINDOWED_STEPS_AT_ONCE: usize = 1;
 /// How many members are asked at once for a preparation (the member's own
-/// local work), a custody retirement (one read of every other member, no
-/// durable write under observation) or the read-only release observation.
+/// local work) or the read-only release observation.
 /// Three at once were measured at 0.33 s and 0.62 s where one after the
 /// other needs 0.65 s and 1.0 s. Not more than the measured three: every
 /// request takes metadata reads on the metadata leader, which admits four
@@ -528,14 +530,6 @@ pub(crate) struct RemoteJoinedHandoffBackend {
     /// have reached it.
     #[cfg(test)]
     decision_publish_fault: Option<Arc<Mutex<Option<ClusterNodeId>>>>,
-    /// A step that reads the other members (every bridge step but the
-    /// preparation) had to repeat a member alone because it failed beside
-    /// its neighbours: the members are too slow to read each other while
-    /// each is busy with its own step. Every later such step of this object
-    /// then asks one member at a time. Measured at a quarter of one CPU, a
-    /// two-member phase run together took 20 to 25 s and each member alone
-    /// 3 s; a three-member custody retirement together 25 s.
-    windowed_alone: std::sync::atomic::AtomicBool,
 }
 
 impl RemoteJoinedHandoffBackend {
@@ -584,7 +578,6 @@ impl RemoteJoinedHandoffBackend {
             stop_after: None,
             #[cfg(test)]
             decision_publish_fault: None,
-            windowed_alone: std::sync::atomic::AtomicBool::new(false),
         }
     }
     /// Give the backend this coordinator's OWN data service: the service of
@@ -2573,36 +2566,11 @@ impl RemoteJoinedHandoffBackend {
         what: &str,
         counted: &(dyn Fn(AuthenticatedNativeJointBridgeStepFrame) -> Result<()> + Sync),
     ) -> Result<Vec<(ClusterNodeId, NativeJointHandoffStepOutcomeV1)>> {
-        // Every step but the preparation reads the other members while they
-        // serve their own step of the same phase.
-        let windowed = !matches!(
-            operation,
-            NativeJointHandoffStepOperationV1::BridgePrepare { .. }
-        );
         let mut outcomes = Vec::with_capacity(nodes.len());
-        let mut start = 0;
-        while start < nodes.len() {
-            // Re-read per group: an earlier group of this very phase may
-            // have shown that members cannot overlap here.
-            let at_once = if windowed
-                && self
-                    .windowed_alone
-                    .load(std::sync::atomic::Ordering::Acquire)
-            {
-                1
-            } else {
-                at_once.max(1)
-            };
-            let group = &nodes[start..(start + at_once).min(nodes.len())];
-            start += group.len();
-            let (group_outcomes, repeated) = self.complete_bridge_step_group(
+        for group in nodes.chunks(at_once.max(1)) {
+            outcomes.extend(self.complete_bridge_step_group(
                 members, decision, group, operation, phase, what, counted,
-            )?;
-            if windowed && repeated > 0 {
-                self.windowed_alone
-                    .store(true, std::sync::atomic::Ordering::Release);
-            }
-            outcomes.extend(group_outcomes);
+            )?);
         }
         Ok(outcomes)
     }
@@ -2618,7 +2586,7 @@ impl RemoteJoinedHandoffBackend {
         phase: &CancellationToken,
         what: &str,
         counted: &(dyn Fn(AuthenticatedNativeJointBridgeStepFrame) -> Result<()> + Sync),
-    ) -> Result<(Vec<(ClusterNodeId, NativeJointHandoffStepOutcomeV1)>, usize)> {
+    ) -> Result<Vec<(ClusterNodeId, NativeJointHandoffStepOutcomeV1)>> {
         let started = Instant::now();
         let transport: &TcpClusterRelocationTransport = &self.transport;
         let step = |node: &ClusterNodeId| -> Result<NativeJointHandoffStepOutcomeV1> {
@@ -2657,7 +2625,7 @@ impl RemoteJoinedHandoffBackend {
                 nodes.len()
             )
         });
-        Ok((outcomes, repeated))
+        Ok(outcomes)
     }
 
     /// Preparation, publication and Open on every new member of `decision`,
@@ -2743,7 +2711,10 @@ impl RemoteJoinedHandoffBackend {
         };
         let phase = bounded(parent, BRIDGE_PHASE);
         // Every member proves every new member durably open itself and
-        // retires only its own custody: three at a time.
+        // retires only its own custody. It reads every other member while
+        // they serve their own retirement, so one at a time, as the windowed
+        // steps: three at once took 25 to 37 s at a quarter of one CPU where
+        // each alone needs about 2 s.
         let asked = new
             .iter()
             .filter(|node| !released(node))
@@ -2753,7 +2724,7 @@ impl RemoteJoinedHandoffBackend {
             members,
             &decision,
             &asked,
-            LIGHT_STEPS_AT_ONCE,
+            WINDOWED_STEPS_AT_ONCE,
             &operation,
             &phase,
             "OLD custody retirement",

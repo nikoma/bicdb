@@ -542,6 +542,64 @@ impl NativeJointPreparationCustody {
         }
         Ok(())
     }
+    /// This member's own fresh pre-quorum phase observation for a remote
+    /// publication: its own metadata observation, its attached MStore point
+    /// (both before any engine guard), then the committed decision observed
+    /// and the member proved current under its own service lock.
+    fn observe_publication_local_phase(
+        self: &Arc<Self>,
+        client: &TcpClusterRelocationTransport,
+        metadata_leader: &ClusterNodeId,
+        data: &NativeJointDecisionData,
+        phase: &crate::CancellationToken,
+    ) -> Result<(
+        CommittedNativeJointDecisionObservation,
+        crate::db::NativeJointPhaseOwner,
+    )> {
+        let part = std::cell::Cell::new(Instant::now());
+        let traced = |what: &str| {
+            crate::distribution_native_host::range_move_trace(part.replace(Instant::now()), || {
+                format!("member publication local phase: {what}")
+            })
+        };
+        let business = Uuid::now_v7();
+        let metadata = client.acquire_host_metadata_observation(
+            metadata_leader,
+            business,
+            observation_budget(phase)?,
+            phase,
+        )?;
+        traced("own metadata observation");
+        let point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &self.service,
+            &metadata,
+            business,
+            phase,
+        )?;
+        traced("metadata point captured");
+        let service = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("remote publication phase actual service busy"))?;
+        let committed = self.actual.observe_fresh_committed_with_point(
+            &service,
+            metadata,
+            business,
+            data.old_range().id,
+            point,
+        )?;
+        traced("committed decision observed");
+        let writer = self
+            .actual
+            .require_current_under_preparation_custody(&service, &committed, self)?;
+        traced("member proved current");
+        if committed.data() != data {
+            return Err(invalid(
+                "remote publication phase changed protected global decision",
+            ));
+        }
+        Ok((committed, writer))
+    }
     /// This member's own complete publication of its native serving bridge.
     ///
     /// The member takes its own fresh pre-quorum phase observation under its
@@ -580,55 +638,44 @@ impl NativeJointPreparationCustody {
                 )
             })
         };
-        // (1) Own pre-quorum phase observation. Actual TLS OWN and MStore
-        // acquisition precede all engine guards.
-        let business = Uuid::now_v7();
-        let metadata = client.acquire_host_metadata_observation(
-            metadata_leader,
-            business,
-            observation_budget(&phase)?,
-            &phase,
-        )?;
-        let point = ClusterDataNodeService::capture_actual_joint_metadata_point(
-            &self.service,
-            &metadata,
-            business,
-            &phase,
-        )?;
-        let (local_phase, local_writer) = {
-            let service = self
-                .service
-                .try_lock()
-                .ok_or_else(|| invalid("remote publication phase actual service busy"))?;
-            let committed = self.actual.observe_fresh_committed_with_point(
-                &service,
-                metadata,
-                business,
-                data.old_range().id,
-                point,
-            )?;
-            let writer = self
-                .actual
-                .require_current_under_preparation_custody(&service, &committed, self)?;
-            if committed.data() != data {
-                return Err(invalid(
-                    "remote publication phase changed protected global decision",
-                ));
-            }
-            (committed, writer)
-        };
+        // (1) Own pre-quorum phase observation and (2) one observation of
+        // every other NEW member, taken at the same time. Both are the
+        // pre-quorum observations of this publication: the post-quorum one
+        // below must follow every one of them (`anchors`), and no order is
+        // required among them, as the in-process phase observes all its
+        // members in one round. Taken one after the other, the window
+        // started only after this member's own observation, which on a slow
+        // host took up to 2 s, and its frames then ran out before the
+        // durable write. The window's exchanges are bound to `collector`,
+        // not to the local observation; the phase is bounded by the local
+        // observation once both are in.
+        let (local, window) = std::thread::scope(|scope| {
+            let observe_local =
+                || self.observe_publication_local_phase(client, metadata_leader, data, &phase);
+            let local = std::thread::Builder::new()
+                .name("joint-publication-local-phase".into())
+                .spawn_scoped(scope, observe_local);
+            let window = RemotePreparationWindow::collect(
+                NativeJointBridgePhaseKindV1::Preparation,
+                data,
+                client,
+                collector,
+                collector_business,
+                &phase,
+            );
+            let local = match local {
+                Ok(worker) => worker.join().unwrap_or_else(|_| {
+                    Err(invalid("the publication local phase worker panicked"))
+                }),
+                Err(_) => observe_local(),
+            };
+            (local, window)
+        });
+        let (local_phase, local_writer) = local?;
+        let window = window?;
         let phase = phase.child_with_deadline(local_phase.deadline());
         phase.check()?;
-        traced("own pre-quorum observation", &phase);
-        // (2) Every other NEW member, each under its own lock and metadata.
-        let window = RemotePreparationWindow::collect(
-            NativeJointBridgePhaseKindV1::Preparation,
-            data,
-            client,
-            collector,
-            collector_business,
-            &phase,
-        )?;
+        window.require_live()?;
         traced("window of every other member", &phase);
         // (3) Only THIS member's read pin. It is a slot of this database's
         // own mutation gate; no other member's pin gates this journal. It is
@@ -639,14 +686,22 @@ impl NativeJointPreparationCustody {
         // complete checks, as the in-process phase does. Repeated anyway, it
         // spent about 0.7 s of a slow host's window, after the frames had
         // arrived, only to take nothing.
-        if !self.actual.read_pin_already_released()? {
+        // The released fact is read under the service guard, the same guard
+        // the release takes; read without it, a concurrent holder of the pin
+        // slot made this publication refuse ("pin transition busy").
+        {
             let service = self
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("remote publication pin release service busy"))?;
-            self.actual
-                .release_read_pin_under_preparation_custody(&service, &local_phase, self)?;
-            traced("own read pin released", &phase);
+            if !self.actual.read_pin_already_released().unwrap_or(false) {
+                self.actual.release_read_pin_under_preparation_custody(
+                    &service,
+                    &local_phase,
+                    self,
+                )?;
+                traced("own read pin released", &phase);
+            }
         }
         window.require_live()?;
         // (4) Distinct post-quorum observation, no guard across the I/O.

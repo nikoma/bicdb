@@ -388,6 +388,32 @@ fn empty_text_primary_key_lookups_match_no_row() {
     );
 }
 
+/// `date(x)` is the function spelling of `CAST(x AS date)`; Frappe's report
+/// builder groups by `date(creation)`.
+#[test]
+fn date_function_casts_to_date() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE TABLE \"tabDocType\" (name varchar(140) PRIMARY KEY, issingle smallint, creation timestamp(6)); INSERT INTO \"tabDocType\" VALUES ('A', 0, '2026-11-23 10:11:12.5'), ('B', 1, NULL)")
+        .unwrap();
+    assert_eq!(
+        rows(
+            &mut session,
+            "select \"name\", \"issingle\", date(creation) as creation from \"tabDocType\" order by \"tabDocType\".\"creation\" DESC limit 2 offset 0"
+        ),
+        vec![
+            vec![s("B"), SqlValue::Int(1), SqlValue::Null],
+            vec![s("A"), SqlValue::Int(0), s("2026-11-23")],
+        ]
+    );
+    assert_eq!(
+        rows(&mut session, "SELECT date('2026-02-03 04:05:06'), date(timestamp '2026-02-03 23:59:59') = date '2026-02-03', pg_typeof(date(now()))"),
+        vec![vec![s("2026-02-03"), SqlValue::Bool(true), s("date")]]
+    );
+}
+
 /// `frappe.db.estimate_count()` reads `pg_class.reltuples`, which
 /// PostgreSQL's autovacuum keeps near the row count; an unanalyzed BicDB
 /// table reported 0.

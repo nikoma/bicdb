@@ -3646,7 +3646,7 @@ impl<'db> SqlEngine<'db> {
             "pow" | "cbrt" | "exp" | "ln" | "log" => Some("float8".to_string()),
             "similarity" => Some("float4".to_string()),
             "age" | "make_interval" => Some("interval".to_string()),
-            "to_date" => Some("date".to_string()),
+            "to_date" | "date" => Some("date".to_string()),
             "trunc" if args.len() == 2 => Some("numeric".to_string()),
             "bicdb_oracle_nvl_number"
             | "bicdb_oracle_nvl2_number"

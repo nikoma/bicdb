@@ -685,6 +685,7 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             | "make_interval"
             | "date_bin"
             | "to_date"
+            | "date"
             | "bicdb_oracle_to_date"
             | "bicdb_oracle_trunc_date"
             | "bicdb_oracle_plsql_trunc_date"
@@ -1148,6 +1149,12 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
                     .map_err(|error| postgres_timestamp_input_error(&text(0), error))?
                     .to_iso_text(false),
             )
+        }
+        // `date(timestamp)` / `date(timestamptz)` / `date(text)`: the
+        // pg_catalog function spelling of `CAST(x AS date)`.
+        "date" => {
+            arity(name, args, 1..=1)?;
+            crate::eval::cast_value(args[0].clone(), &DataType::Date)?
         }
         "to_date" => {
             arity(name, args, 2..=2)?;

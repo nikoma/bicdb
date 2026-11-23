@@ -7606,7 +7606,10 @@ pub(crate) fn primary_key_values_from_record_id(
                     table: schema.name.clone(),
                     column: column.clone(),
                 })?;
-            cast_value_to_pg_type(SqlValue::String(cell), &column_schema.pg_type)
+            cast_value_to_pg_type(
+                SqlValue::String(primary_key_cell_text(&cell).to_string()),
+                &column_schema.pg_type,
+            )
         })
         .collect::<Result<Vec<_>>>()?;
     Ok(Some(values))

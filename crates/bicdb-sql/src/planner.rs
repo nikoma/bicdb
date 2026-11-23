@@ -1253,7 +1253,7 @@ impl InsertValuesTemplate {
             // Absence represents SQL NULL for JSON columns; the primary key
             // lives in the record id unless its type needs the typed cell.
             if (plan.json && matches!(value, SqlValue::Null))
-                || (self.omit_primary_key_metadata && plan.primary_key)
+                || (self.omit_primary_key_metadata && plan.primary_key && !is_empty_text_key(value))
             {
                 continue;
             }
@@ -1385,7 +1385,7 @@ impl InsertValuesTemplate {
                 continue;
             };
             if (plan.json && matches!(value, SqlValue::Null))
-                || (self.omit_primary_key_metadata && plan.primary_key)
+                || (self.omit_primary_key_metadata && plan.primary_key && !is_empty_text_key(value))
             {
                 continue;
             }

@@ -4869,6 +4869,7 @@ fn record_from_fields_inner(
             continue;
         }
         if omit_primary_key_metadata
+            && !is_empty_text_key(&value)
             && primary_key_columns
                 .iter()
                 .any(|primary_key| column == *primary_key)

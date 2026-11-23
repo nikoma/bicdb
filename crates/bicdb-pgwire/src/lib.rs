@@ -4957,7 +4957,20 @@ fn execute_server_sql_with_options_normalized(
                 bicdb_sql::postgres_execution_requires_snapshot(sql)
             })?;
         }
-        if transaction_control == Some(Some(TransactionControl::Begin)) {
+        if transaction_control == Some(Some(TransactionControl::Begin)) && state.in_transaction {
+            // PostgreSQL: BEGIN inside a transaction block only warns and
+            // leaves the block (and its characteristics) unchanged.
+            if state.failed_transaction {
+                return Err(PgWireError::InFailedTransaction);
+            }
+            let mut result = SqlResult::command("BEGIN");
+            result.notices.push(bicdb_sql::SqlNotice {
+                sqlstate: "25001".to_string(),
+                message: "there is already a transaction in progress".to_string(),
+                fields: Vec::new(),
+            });
+            Ok(result)
+        } else if transaction_control == Some(Some(TransactionControl::Begin)) {
             let deferrable = if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile) {
                 None
             } else {

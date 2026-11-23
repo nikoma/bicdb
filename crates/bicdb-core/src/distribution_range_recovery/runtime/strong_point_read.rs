@@ -149,15 +149,6 @@ impl RangeRecoveryRuntime {
                 error,
             ));
         }
-        let operation = match self.try_reserve_point_context(request.range_id) {
-            Ok(operation) => operation,
-            Err(error) => {
-                return Unavailable(NativeStrongPointReadUnavailable::new(
-                    NativeStrongReadStage::Reservation,
-                    error,
-                ))
-            }
-        };
         let runtime = Arc::clone(self);
         let worker_token = token.clone();
         let (tx, rx) = mpsc::sync_channel(1);
@@ -215,6 +206,18 @@ impl RangeRecoveryRuntime {
                         .reserve_native_point_read(request.range_id, &worker_token)
                         .map_err(|e| check(NativeStrongReadStage::Reservation, e))?;
                     mark("range admission");
+                    // The range's exclusive context is taken only once the
+                    // range is admitted, in the order recovery takes them:
+                    // range admission first, then the receiver context. Taken
+                    // before the admission wait, a read held the context for
+                    // as long as a leader recovery held the admission, and
+                    // that recovery's own local receiver step was then
+                    // refused the context ("range has an exclusive context")
+                    // and retried, behind the next read; after a restart no
+                    // Strong read of the range got through for over 20 s.
+                    let operation = runtime
+                        .try_reserve_point_context(request.range_id)
+                        .map_err(|e| check(NativeStrongReadStage::Reservation, e))?;
 
                     // STRONG_TRACE_BEGIN
                     #[cfg(test)]
@@ -460,7 +463,6 @@ impl RangeRecoveryRuntime {
                     ),
                 );
                 // STRONG_TRACE_END
-                drop(operation);
                 let _ = tx.send(match result {
                     Ok(value) => Observed(value),
                     Err(error) => Unavailable(error),

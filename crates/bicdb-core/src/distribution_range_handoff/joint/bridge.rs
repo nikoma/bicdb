@@ -809,6 +809,16 @@ impl NativeJointActivationAdmission {
     }
     /// The caller already owns THIS service latch. Every other local-service
     /// check is nonwaiting; never recursively acquire the current latch.
+    /// The journal commit point of this member's own bridge; see
+    /// `RemoteActivationBacking::pass_commit_point`. In-process phases keep
+    /// every check unchanged.
+    pub(crate) fn pass_commit_point(&self) -> Result<()> {
+        #[cfg(feature = "tls-replication")]
+        if let ActivationBacking::Remote(remote) = &self.backing {
+            return remote.pass_commit_point();
+        }
+        Ok(())
+    }
     pub(crate) fn require_external_preparations_current(&self) -> Result<()> {
         self.require_live()?;
         match &self.backing {

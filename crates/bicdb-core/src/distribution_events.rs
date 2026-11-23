@@ -877,8 +877,6 @@ mod client {
             let mut hint: Option<NativeEventRoute> = None;
             let mut retry_after = std::time::Duration::from_millis(50);
             let mut last = invalid("typed event Get unavailable");
-            // The member each exchange still in flight was sent to.
-            let mut in_flight_to: Vec<(usize, ClusterNodeId)> = Vec::new();
             // A finite bound plus the SAME absolute request deadline. Typed
             // route/unavailable results never become a successful empty row.
             for attempt in 0..128 {
@@ -953,26 +951,6 @@ mod client {
                         None => (current.leader.clone(), current.id, current.epoch),
                     }
                 };
-                // A further exchange is sent beside one still in flight only to
-                // ANOTHER member, the purpose of that exchange being a member
-                // that does not answer. Sent to the same member, it was a
-                // second read of the same range on the member already busy
-                // with the first: it competed with it for the range's
-                // exclusive read context and the member's CPU, with half the
-                // budget, and on a loaded host neither finished. The caller
-                // keeps listening to the read it has.
-                in_flight_to.retain(|(id, _)| reads.attempts.iter().any(|(a, _)| a == id));
-                if in_flight_to.iter().any(|(_, to)| *to == destination) {
-                    while let ReadWaited::Replied(_, reply) =
-                        reads.wait(None, slice_end, operation_error)
-                    {
-                        if let Some(value) = late(reply.result, operation_error)? {
-                            parent.check()?;
-                            return Ok(value);
-                        }
-                    }
-                    continue;
-                }
                 // The member is never told a longer budget than this caller
                 // has left (and never more than the protocol's five seconds).
                 let exchange_end = deadline.min(now + std::time::Duration::from_secs(5));
@@ -999,7 +977,6 @@ mod client {
                     .unwrap_or(5000)
                     .clamp(1, 5000),
                 };
-                let sent_to = destination.clone();
                 let exchange = {
                     let token = token.clone();
                     let reports = reports.clone();
@@ -1019,10 +996,7 @@ mod client {
                     .name("event-get-attempt".into())
                     .spawn_scoped(scope, exchange)
                 {
-                    Ok(_) => {
-                        reads.attempts.push((attempt, token));
-                        in_flight_to.push((attempt, sent_to));
-                    }
+                    Ok(_) => reads.attempts.push((attempt, token)),
                     Err(error) => {
                         operation_error.read_failed(error.into());
                         continue;

@@ -149,7 +149,7 @@ impl RangeRecoveryRuntime {
                 error,
             ));
         }
-        let operation = match self.reserve_point_context(request.range_id, &token) {
+        let operation = match self.try_reserve_point_context(request.range_id) {
             Ok(operation) => operation,
             Err(error) => {
                 return Unavailable(NativeStrongPointReadUnavailable::new(

@@ -352,8 +352,27 @@ pub(super) struct RemoteActivationBacking {
     local_phase: CommittedNativeJointDecisionObservation,
     local_writer: crate::db::NativeJointPhaseOwner,
     window: RemotePreparationWindow,
+    /// Set once this member's journal commit point is passed (see
+    /// `pass_commit_point`); every frame was live at that point.
+    past_commit_point: std::sync::atomic::AtomicBool,
 }
 impl RemoteActivationBacking {
+    /// The commit point of this member's own durable bridge: every other
+    /// member's frame must be live here, immediately before the journal
+    /// commit (or, when an earlier attempt's exact bridge is recovered, at
+    /// the recovery decision). After it, the frames no longer gate anything:
+    /// what they attested decided only whether to write, the write is
+    /// historical, and the publication stays unconfirmed until a SECOND
+    /// window, observed after the write, reports every other member
+    /// unchanged. Checking the first window again after the post-write
+    /// proofs only refused a durable bridge on every repetition once those
+    /// proofs took longer than the frames lasted.
+    pub(super) fn pass_commit_point(&self) -> Result<()> {
+        self.window.require_live()?;
+        self.past_commit_point
+            .store(true, std::sync::atomic::Ordering::Release);
+        Ok(())
+    }
     pub(super) fn require_live(&self, local: &NativeJointPreparedServingObservation) -> Result<()> {
         self.local_phase.require_metadata_current()?;
         local
@@ -368,6 +387,12 @@ impl RemoteActivationBacking {
             return Err(invalid(
                 "remote preparation window was observed by another member/phase",
             ));
+        }
+        if self
+            .past_commit_point
+            .load(std::sync::atomic::Ordering::Acquire)
+        {
+            return Ok(());
         }
         self.window.require_live()
     }
@@ -740,6 +765,7 @@ impl NativeJointPreparationCustody {
                 local_phase,
                 local_writer,
                 window,
+                past_commit_point: std::sync::atomic::AtomicBool::new(false),
             }),
             publication_claimed: std::sync::atomic::AtomicBool::new(false),
             local: Arc::new(NativeJointPreparedServingObservation {

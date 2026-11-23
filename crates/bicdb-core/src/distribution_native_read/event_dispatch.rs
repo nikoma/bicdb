@@ -342,6 +342,18 @@ impl NativeStrongEventDispatcher {
                 )
             }
         };
+        // A Strong read of a range whose exclusive context another read
+        // holds right now is refused before its two metadata acquisitions,
+        // exactly as its admission would refuse it after them. A client
+        // sends a second exchange beside a read that is slow to answer;
+        // reaching this member while the first read still runs, that second
+        // read used to take a host and a leader metadata observation (a
+        // quorum round on the metadata leader each) only to be refused, and
+        // under load that work slowed the first read past its budget. The
+        // range is request DATA here; a refusal grants nothing.
+        if let Some(busy) = runtime.point_context_held(request.range_id) {
+            return fail(NativeEventGetUnavailableCode::Busy, None, &busy);
+        }
         let host_metadata =
             match self.fresh_host_route(&runtime, &transport, request.business_request_id, token) {
                 Ok(m) => m,

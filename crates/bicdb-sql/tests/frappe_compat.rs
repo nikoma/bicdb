@@ -270,6 +270,27 @@ fn drop_table_with_another_transaction_pending_drops_and_reopens() {
     );
 }
 
+/// `frappe.db.estimate_count()` reads `pg_class.reltuples`, which
+/// PostgreSQL's autovacuum keeps near the row count; an unanalyzed BicDB
+/// table reported 0.
+#[test]
+fn reltuples_estimates_rows_of_an_unanalyzed_table() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE TABLE \"tabDocField\" (name varchar(140) PRIMARY KEY); INSERT INTO \"tabDocField\" SELECT 'f' || g FROM generate_series(1, 150) g")
+        .unwrap();
+    assert_eq!(
+        rows(
+            &mut session,
+            "select c.reltuples from pg_class c join pg_namespace n on n.oid = c.relnamespace \
+             where c.relname = 'tabDocField' and n.nspname = 'public' and c.relkind = 'r'"
+        ),
+        vec![vec![SqlValue::Float(150.0)]]
+    );
+}
+
 /// `frappe.db.get_database_size()`:
 /// `SELECT (pg_database_size(<name>) / 1024 / 1024) AS database_size`.
 #[test]

@@ -1141,9 +1141,18 @@ pub(crate) fn catalog_relkind_matches(kinds: Option<&BTreeSet<String>>, relkind:
     })
 }
 
+/// `pg_class.reltuples`: the ANALYZE row count, or, for a table never
+/// analyzed, the storage layer's cheap row-count estimate. PostgreSQL keeps
+/// this current through autovacuum, and applications read it as a fast
+/// estimate of a table's size (`frappe.db.estimate_count`).
 pub(crate) fn reltuples_for_relation(db: &BicDb, relation: &str, _exact: bool) -> f64 {
     db.table_statistics(relation)
         .map(|stats| stats.row_count as f64)
+        .or_else(|| {
+            db.estimated_record_count(relation)
+                .ok()
+                .map(|count| count as f64)
+        })
         .unwrap_or(0.0)
 }
 

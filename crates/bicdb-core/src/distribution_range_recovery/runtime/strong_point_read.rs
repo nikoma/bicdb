@@ -149,7 +149,7 @@ impl RangeRecoveryRuntime {
                 error,
             ));
         }
-        let operation = match self.try_reserve_point_context(request.range_id) {
+        let operation = match self.reserve_point_context(request.range_id, &token) {
             Ok(operation) => operation,
             Err(error) => {
                 return Unavailable(NativeStrongPointReadUnavailable::new(
@@ -423,6 +423,28 @@ impl RangeRecoveryRuntime {
                         " [point read refused at {}ms of a {budget_ms}ms budget; {steps}]",
                         begun.elapsed().as_millis()
                     ));
+                }
+                // Diagnostic only, with BICDB_RANGE_MOVE_TRACE set: every
+                // step of a read that took more than half a second, whatever
+                // its outcome, so a slow read names where its time went even
+                // when its caller already gave up.
+                if begun.elapsed() > std::time::Duration::from_millis(500) {
+                    crate::distribution_native_host::range_move_trace(begun, || {
+                        format!(
+                            "strong point read of {} slow: budget {budget_ms}ms, {}; {}",
+                            request.range_id,
+                            marks
+                                .borrow()
+                                .iter()
+                                .map(|(step, ms)| format!("{step} at {ms}ms"))
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                            match &result {
+                                Ok(_) => "observed".to_string(),
+                                Err(refusal) => format!("refused: {refusal:?}"),
+                            }
+                        )
+                    });
                 }
                 // All actual local IO occurs on this worker. Its operation stays
                 // owned even when the caller abandons this bounded result channel.

@@ -988,20 +988,61 @@ impl RangeRecoveryRuntime {
     fn reserve_context(&self, range: RangeId, exclusive: bool) -> Result<Arc<Operation>> {
         self.reserve_context_locked(range, exclusive, self.sessions.lock())
     }
+    /// The exclusive point-read context of `range`, waited for while
+    /// `token` is live. A Strong read holds its range's exclusive context for
+    /// its whole read, which on a loaded host takes more than a second; a
+    /// second read of the same range that arrived meanwhile was refused at
+    /// once, and its client asked again only after a pause. Under steady load
+    /// every new read then met the read before it still holding the context:
+    /// a client that keeps one read in flight beside a slow one was refused
+    /// on every attempt for 22 s. The waiting read takes the context as soon
+    /// as the holder ends, whatever that holder's outcome. Nothing is held
+    /// while it waits: each attempt takes the contexts latch only to try,
+    /// exactly as the refusing admission did, and a deadline still refuses
+    /// with the same busy text.
     #[track_caller]
-    fn try_reserve_point_context(&self, range: RangeId) -> Result<Arc<Operation>> {
-        let sessions = self
-            .sessions
-            .try_lock()
-            .ok_or_else(|| invalid("receiver contexts are busy before point-read admission"))?;
-        self.reserve_context_locked(range, true, sessions)
+    fn reserve_point_context(
+        &self,
+        range: RangeId,
+        token: &CancellationToken,
+    ) -> Result<Arc<Operation>> {
+        let caller = std::panic::Location::caller();
+        loop {
+            let refused = match self.sessions.try_lock_for(LATCH_POLL) {
+                Some(sessions) => {
+                    match self.reserve_context_locked_at(range, true, sessions, caller) {
+                        Ok(operation) => return Ok(operation),
+                        Err(error) => error,
+                    }
+                }
+                None => invalid("receiver contexts are busy before point-read admission"),
+            };
+            if token.check().is_err()
+                || token
+                    .deadline()
+                    .is_some_and(|deadline| Instant::now() + LATCH_POLL >= deadline)
+            {
+                return Err(refused);
+            }
+            std::thread::sleep(LATCH_POLL);
+        }
     }
     #[track_caller]
     fn reserve_context_locked(
         &self,
         range: RangeId,
         exclusive: bool,
+        sessions: parking_lot::MutexGuard<'_, Sessions>,
+    ) -> Result<Arc<Operation>> {
+        self.reserve_context_locked_at(range, exclusive, sessions, std::panic::Location::caller())
+    }
+    /// `reserve_context_locked` for a holder recorded at `at`.
+    fn reserve_context_locked_at(
+        &self,
+        range: RangeId,
+        exclusive: bool,
         mut sessions: parking_lot::MutexGuard<'_, Sessions>,
+        at: &'static std::panic::Location<'static>,
     ) -> Result<Arc<Operation>> {
         if sessions
             .current
@@ -1021,7 +1062,7 @@ impl RangeRecoveryRuntime {
             id: holder,
             range,
             exclusive,
-            at: std::panic::Location::caller(),
+            at,
             since: Instant::now(),
         });
         Ok(Arc::new(Operation {

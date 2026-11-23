@@ -4804,6 +4804,7 @@ impl<'db> SqlEngine<'db> {
         } else {
             None
         };
+        let _catalog_scope = crate::search_path::CatalogScope::enter(&self.session_gucs);
         let mut profile = SqlProfileScope::new(sql);
         let _schema_cache = SqlSchemaCacheScope::new();
         let result = self.execute_inner(sql);

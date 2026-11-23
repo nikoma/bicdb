@@ -40,6 +40,46 @@ pub(crate) fn active_path() -> Option<Arc<[String]>> {
     ACTIVE_PATH.with(|active| active.borrow().clone())
 }
 
+thread_local! {
+    /// The connected database of the statement executing on this thread:
+    /// the catalog name information_schema reports (`table_catalog`, ...).
+    static ACTIVE_CATALOG: RefCell<Option<Arc<str>>> = const { RefCell::new(None) };
+}
+
+/// Publishes the session's database name to catalog row producers for one
+/// statement and restores the previous name when it ends.
+pub(crate) struct CatalogScope(Option<Arc<str>>);
+
+impl CatalogScope {
+    pub(crate) fn enter(gucs: &HashMap<String, String>) -> Self {
+        let name: Arc<str> = crate::eval::current_database_from_gucs(gucs).into();
+        Self(ACTIVE_CATALOG.with(|active| active.borrow_mut().replace(name)))
+    }
+}
+
+impl Drop for CatalogScope {
+    fn drop(&mut self) {
+        let previous = self.0.take();
+        ACTIVE_CATALOG.with(|active| *active.borrow_mut() = previous);
+    }
+}
+
+/// The information_schema catalog name: the connected database, as in
+/// PostgreSQL where `table_catalog` equals `current_database()`.
+pub(crate) fn current_catalog_name() -> String {
+    ACTIVE_CATALOG.with(|active| {
+        active
+            .borrow()
+            .as_deref()
+            .map(str::to_string)
+            .unwrap_or_else(|| "bicdb".to_string())
+    })
+}
+
+pub(crate) fn current_catalog_value() -> SqlValue {
+    SqlValue::String(current_catalog_name())
+}
+
 /// Schemas of a `search_path` value in order, with `$user` expanded and
 /// unquoted names folded to lower case.
 pub(crate) fn parse_search_path(path: &str, user: &str) -> Vec<String> {

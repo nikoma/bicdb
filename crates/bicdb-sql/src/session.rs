@@ -3319,6 +3319,7 @@ impl<'db> SqlSession<'db> {
             None => None,
         };
         let _path_scope = crate::search_path::PathScope::enter(path);
+        let _catalog_scope = crate::search_path::CatalogScope::enter(&self.session_gucs);
         let sql = bound.as_deref().unwrap_or(sql);
         // A per-row routine call reaches raw SQL only through dynamic EXECUTE
         // fallbacks for statements sqlparser cannot represent (DDL, grants).

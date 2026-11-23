@@ -26,7 +26,10 @@ pub(crate) fn information_schema_check_constraints(
                         return None;
                     };
                     Some(virtual_row([
-                        ("constraint_catalog", SqlValue::String("bicdb".to_string())),
+                        (
+                            "constraint_catalog",
+                            crate::search_path::current_catalog_value(),
+                        ),
                         (
                             "constraint_schema",
                             SqlValue::String(schema.schema_name.clone()),
@@ -45,14 +48,17 @@ pub(crate) fn constraint_column_usage_row(
     column: &str,
 ) -> BTreeMap<String, SqlValue> {
     virtual_row([
-        ("table_catalog", SqlValue::String("bicdb".to_string())),
+        ("table_catalog", crate::search_path::current_catalog_value()),
         ("table_schema", SqlValue::String(schema.schema_name.clone())),
         (
             "table_name",
             SqlValue::String(catalog_display_name(&schema.name)),
         ),
         ("column_name", SqlValue::String(column.to_string())),
-        ("constraint_catalog", SqlValue::String("bicdb".to_string())),
+        (
+            "constraint_catalog",
+            crate::search_path::current_catalog_value(),
+        ),
         (
             "constraint_schema",
             SqlValue::String(schema.schema_name.clone()),
@@ -357,13 +363,16 @@ pub(crate) fn table_constraint_row(
     }
     .unwrap_or((false, false));
     virtual_row([
-        ("constraint_catalog", SqlValue::String("bicdb".to_string())),
+        (
+            "constraint_catalog",
+            crate::search_path::current_catalog_value(),
+        ),
         (
             "constraint_schema",
             SqlValue::String(schema.schema_name.clone()),
         ),
         ("constraint_name", SqlValue::String(name.to_string())),
-        ("table_catalog", SqlValue::String("bicdb".into())),
+        ("table_catalog", crate::search_path::current_catalog_value()),
         ("table_schema", SqlValue::String(schema.schema_name.clone())),
         (
             "table_name",
@@ -424,13 +433,16 @@ pub(crate) fn key_column_usage_row(
     ordinal: i64,
 ) -> BTreeMap<String, SqlValue> {
     virtual_row([
-        ("constraint_catalog", SqlValue::String("bicdb".to_string())),
+        (
+            "constraint_catalog",
+            crate::search_path::current_catalog_value(),
+        ),
         (
             "constraint_schema",
             SqlValue::String(schema.schema_name.clone()),
         ),
         ("constraint_name", SqlValue::String(constraint.to_string())),
-        ("table_catalog", SqlValue::String("bicdb".to_string())),
+        ("table_catalog", crate::search_path::current_catalog_value()),
         ("table_schema", SqlValue::String(schema.schema_name.clone())),
         (
             "table_name",
@@ -456,7 +468,10 @@ pub(crate) fn information_schema_sequences(db: &BicDb) -> Result<Vec<BTreeMap<St
             continue;
         }
         rows.push(virtual_row([
-            ("sequence_catalog", SqlValue::String("bicdb".to_string())),
+            (
+                "sequence_catalog",
+                crate::search_path::current_catalog_value(),
+            ),
             (
                 "sequence_schema",
                 SqlValue::String(sequence_catalog_namespace(db, &sequence.name)?),
@@ -8236,7 +8251,7 @@ pub(crate) fn information_schema_schemata(db: &BicDb) -> Result<Vec<BTreeMap<Str
         .into_iter()
         .map(|n| {
             virtual_row([
-                ("catalog_name", SqlValue::String("bicdb".into())),
+                ("catalog_name", crate::search_path::current_catalog_value()),
                 ("schema_name", SqlValue::String(n.name)),
                 ("schema_owner", SqlValue::String(n.owner)),
                 ("default_character_set_catalog", SqlValue::Null),

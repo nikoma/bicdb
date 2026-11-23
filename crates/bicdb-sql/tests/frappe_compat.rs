@@ -240,7 +240,8 @@ fn drop_table_with_another_transaction_pending_drops_and_reopens() {
                 "CREATE TABLE other (id int PRIMARY KEY); INSERT INTO other VALUES (1); \
                  CREATE TABLE \"tabTestNotes\" (id int PRIMARY KEY, content text); \
                  CREATE INDEX test_index ON \"tabTestNotes\" (id, content); \
-                 CREATE TABLE scratch (id int PRIMARY KEY); CREATE INDEX scratch_idx ON scratch (id)",
+                 CREATE TABLE scratch (id int PRIMARY KEY); CREATE INDEX scratch_idx ON scratch (id); \
+                 CREATE TABLE written (id int PRIMARY KEY); INSERT INTO written VALUES (1)",
             )
             .unwrap();
         let mut idle = db.begin_transaction().unwrap();
@@ -252,6 +253,18 @@ fn drop_table_with_another_transaction_pending_drops_and_reopens() {
             session.execute("BEGIN").unwrap();
             session.execute("DROP TABLE scratch").unwrap();
             session.execute("COMMIT").unwrap();
+            // A table this transaction wrote cannot be dropped permanently
+            // under its buffered rows: the conflict is reported, and nothing
+            // is left behind for recovery.
+            session.execute("BEGIN").unwrap();
+            session.execute("INSERT INTO written VALUES (2)").unwrap();
+            let error = session.execute("DROP TABLE written").unwrap_err();
+            assert_eq!(error.sqlstate(), "40001");
+            session.execute("ROLLBACK").unwrap();
+            assert_eq!(
+                rows(&mut session, "SELECT id FROM written"),
+                vec![vec![SqlValue::Int(1)]]
+            );
             session
                 .execute("CREATE TABLE \"tabTestNotes\" (id int PRIMARY KEY, content text); CREATE INDEX test_index ON \"tabTestNotes\" (id)")
                 .unwrap();
@@ -266,7 +279,7 @@ fn drop_table_with_another_transaction_pending_drops_and_reopens() {
             &mut session,
             "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY 1"
         ),
-        vec![vec![s("other")], vec![s("tabTestNotes")]]
+        vec![vec![s("other")], vec![s("tabTestNotes")], vec![s("written")]]
     );
 }
 

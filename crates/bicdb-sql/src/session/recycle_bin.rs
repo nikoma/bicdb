@@ -352,13 +352,19 @@ impl<'db> SqlSession<'db> {
             {
                 super::recycle_bin_journal::clear(self.db_mut()?, &bin_name)?;
             }
+            // A pending transaction elsewhere (even one that never touched
+            // this table) blocks moving the storage; PostgreSQL's DROP TABLE
+            // does not wait for it, so drop permanently instead. Not when this
+            // transaction has written the table: its buffered rows must stay
+            // bound to the kept backing, and a permanent drop would make its
+            // COMMIT fail after the table is already gone.
+            let own_writes = self
+                .tx
+                .as_ref()
+                .is_some_and(|tx| tx.has_pending_writes(table));
             return match error {
-                // A pending transaction elsewhere (even one that never touched
-                // this table) blocks moving the storage; PostgreSQL's DROP
-                // TABLE does not wait for it, so drop permanently instead.
-                SqlError::BicDb(
-                    BicDbError::Unsupported(_) | BicDbError::TransactionConflict(_),
-                ) => Ok(false),
+                SqlError::BicDb(BicDbError::Unsupported(_)) => Ok(false),
+                SqlError::BicDb(BicDbError::TransactionConflict(_)) if !own_writes => Ok(false),
                 error => Err(error),
             };
         }

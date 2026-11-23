@@ -566,6 +566,7 @@ pub(crate) fn clear_open_transaction_state(server: &PgWireServer, state: &mut Co
     state.tx_write_tables.clear();
     state.tx_notifications.clear();
     state.savepoints.clear();
+    crate::sql_cursors::close_transaction_cursors(state);
 }
 
 pub(crate) fn rollback_transaction_ddl_to_len(

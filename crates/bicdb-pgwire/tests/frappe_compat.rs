@@ -127,3 +127,73 @@ async fn session_statement_timeout_cancels_long_statements() {
     // SET LOCAL ended with the transaction.
     client.batch_execute("SELECT pg_sleep(0.4)").await.unwrap();
 }
+
+/// psycopg2 named ("server-side") cursors, used by
+/// `frappe.db.unbuffered_cursor()`.
+#[tokio::test]
+async fn declare_fetch_and_close_cursors() {
+    let (client, _root) = connect().await;
+    client
+        .batch_execute(
+            "CREATE TABLE country (name text PRIMARY KEY); \
+             INSERT INTO country VALUES ('Chad'), ('Austria'), ('Benin')",
+        )
+        .await
+        .unwrap();
+    let error = client
+        .batch_execute("DECLARE c CURSOR FOR SELECT name FROM country")
+        .await
+        .unwrap_err();
+    assert_eq!(error.code().unwrap().code(), "25P01");
+
+    client.batch_execute("BEGIN").await.unwrap();
+    client
+        .batch_execute(
+            "DECLARE \"ss_cursor\" CURSOR WITHOUT HOLD FOR SELECT * FROM \"country\" ORDER BY name",
+        )
+        .await
+        .unwrap();
+    let first = client
+        .simple_query("FETCH FORWARD 2 FROM \"ss_cursor\"")
+        .await
+        .unwrap();
+    assert_eq!(values(&first), vec!["Austria", "Benin"]);
+    assert_eq!(tag(&first), Some(2));
+    let rest = client
+        .simple_query("FETCH FORWARD 2 FROM \"ss_cursor\"")
+        .await
+        .unwrap();
+    assert_eq!(values(&rest), vec!["Chad"]);
+    assert!(values(
+        &client
+            .simple_query("FETCH FORWARD 2 FROM \"ss_cursor\"")
+            .await
+            .unwrap()
+    )
+    .is_empty());
+    client.batch_execute("CLOSE \"ss_cursor\"").await.unwrap();
+    let error = client
+        .batch_execute("FETCH NEXT FROM \"ss_cursor\"")
+        .await
+        .unwrap_err();
+    assert_eq!(error.code().unwrap().code(), "34000");
+    client.batch_execute("ROLLBACK").await.unwrap();
+
+    // WITHOUT HOLD cursors end with the transaction; WITH HOLD ones stay.
+    client.batch_execute("BEGIN").await.unwrap();
+    client
+        .batch_execute("DECLARE gone CURSOR FOR SELECT name FROM country ORDER BY name")
+        .await
+        .unwrap();
+    client
+        .batch_execute("DECLARE kept CURSOR WITH HOLD FOR SELECT name FROM country ORDER BY name")
+        .await
+        .unwrap();
+    client.batch_execute("COMMIT").await.unwrap();
+    assert!(client.batch_execute("FETCH gone").await.is_err());
+    assert_eq!(
+        values(&client.simple_query("FETCH ALL FROM kept").await.unwrap()),
+        vec!["Austria", "Benin", "Chad"]
+    );
+    client.batch_execute("CLOSE ALL").await.unwrap();
+}

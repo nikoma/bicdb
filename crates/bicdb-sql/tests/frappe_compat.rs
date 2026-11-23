@@ -225,3 +225,30 @@ fn create_index_if_not_exists_skips_a_name_used_on_another_table() {
         vec![vec![s("tabReport")]]
     );
 }
+
+/// `frappe.db.get_database_size()`:
+/// `SELECT (pg_database_size(<name>) / 1024 / 1024) AS database_size`.
+#[test]
+fn pg_database_size_reports_the_connected_database() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db).with_session_gucs(gucs("site_db"));
+    session
+        .execute("CREATE TABLE filler (id int PRIMARY KEY, body text); INSERT INTO filler SELECT g, repeat('x', 100) FROM generate_series(1, 200) g")
+        .unwrap();
+    assert_eq!(
+        rows(&mut session, "SELECT pg_database_size('site_db') > 0"),
+        vec![vec![SqlValue::Bool(true)]]
+    );
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT pg_database_size(current_database()) > 0, (pg_database_size('site_db') / 1024 / 1024) >= 0 AS database_size"
+        ),
+        vec![vec![SqlValue::Bool(true), SqlValue::Bool(true)]]
+    );
+    let error = session
+        .execute("SELECT pg_database_size('missing_db')")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "3D000");
+}

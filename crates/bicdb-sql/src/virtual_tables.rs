@@ -1520,6 +1520,7 @@ pub(crate) fn execute_builtin_function_with_engine(
             | "pg_last_wal_receive_lsn"
             | "pg_last_wal_replay_lsn"
             | "pg_wal_lsn_diff"
+            | "pg_database_size"
     ) {
         let Some(db) = db else {
             return Err(SqlError::Unsupported(format!(

@@ -270,6 +270,23 @@ pub(crate) fn advisory_integer_expr(expr: &Expr) -> Result<Option<i64>> {
     }
 }
 
+/// The transaction modes of a normalized `BEGIN` / `START TRANSACTION`
+/// (`read only`, `isolation level ...`), or `None` when it names none.
+pub(crate) fn nested_begin_modes(normalized: &str) -> Option<&str> {
+    let statement = normalized.trim().trim_end_matches(';').trim_end();
+    let modes = if let Some(rest) = statement.strip_prefix("start transaction") {
+        rest
+    } else {
+        let rest = statement.strip_prefix("begin")?;
+        let rest = rest.trim_start();
+        rest.strip_prefix("transaction")
+            .or_else(|| rest.strip_prefix("work"))
+            .unwrap_or(rest)
+    };
+    let modes = modes.trim();
+    (!modes.is_empty()).then_some(modes)
+}
+
 /// The session's `statement_timeout` as a duration; `None` when unset or 0
 /// (disabled). A bare number is milliseconds, as in PostgreSQL; the units
 /// us, ms, s, min, h and d are accepted.

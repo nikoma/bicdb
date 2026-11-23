@@ -42,7 +42,8 @@ fn tag(messages: &[SimpleQueryMessage]) -> Option<u64> {
 }
 
 /// `frappe.db.rollback()` re-opens a transaction and `begin(read_only=True)`
-/// then sends START TRANSACTION inside it: PostgreSQL only warns.
+/// then sends START TRANSACTION READ ONLY inside it. PostgreSQL warns, keeps
+/// the block, and applies the modes as SET TRANSACTION would.
 #[tokio::test]
 async fn begin_inside_a_transaction_warns_and_keeps_the_block() {
     let (client, _root) = connect().await;
@@ -55,16 +56,33 @@ async fn begin_inside_a_transaction_warns_and_keeps_the_block() {
         .batch_execute("INSERT INTO notes VALUES (1)")
         .await
         .unwrap();
-    client
-        .batch_execute("START TRANSACTION READ ONLY")
-        .await
-        .unwrap();
+    // A bare BEGIN changes nothing: the block stays writable.
     client.batch_execute("BEGIN").await.unwrap();
-    // Still the same, writable block: the second BEGIN changed nothing.
     client
         .batch_execute("INSERT INTO notes VALUES (2)")
         .await
         .unwrap();
+    client.batch_execute("ROLLBACK").await.unwrap();
+    // Frappe's sequence: rollback, START TRANSACTION, START TRANSACTION READ ONLY.
+    client.batch_execute("START TRANSACTION").await.unwrap();
+    client
+        .batch_execute("START TRANSACTION READ ONLY")
+        .await
+        .unwrap();
+    assert_eq!(
+        values(
+            &client
+                .simple_query("SHOW transaction_read_only")
+                .await
+                .unwrap()
+        ),
+        vec!["on"]
+    );
+    let error = client
+        .batch_execute("INSERT INTO notes VALUES (3)")
+        .await
+        .unwrap_err();
+    assert_eq!(error.code().unwrap().code(), "25006");
     client.batch_execute("ROLLBACK").await.unwrap();
     assert_eq!(
         values(

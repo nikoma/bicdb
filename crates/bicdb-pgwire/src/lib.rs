@@ -4971,10 +4971,25 @@ fn execute_server_sql_with_options_normalized(
             })?;
         }
         if transaction_control == Some(Some(TransactionControl::Begin)) && state.in_transaction {
-            // PostgreSQL: BEGIN inside a transaction block only warns and
-            // leaves the block (and its characteristics) unchanged.
+            // PostgreSQL: BEGIN inside a transaction block warns and keeps the
+            // block, but still applies its modes as SET TRANSACTION would
+            // (`START TRANSACTION READ ONLY` makes the open block read-only).
             if state.failed_transaction {
                 return Err(PgWireError::InFailedTransaction);
+            }
+            if let Some(modes) = nested_begin_modes(normalized) {
+                let set_sql = format!("set transaction {modes}");
+                let set_normalized = normalize_executable_sql(&set_sql);
+                execute_server_transaction_sql(
+                    server,
+                    state,
+                    &set_sql,
+                    &set_normalized,
+                    &cancellation,
+                )?;
+                state.tx_fixed_snapshot = state.tx.as_ref().is_some_and(|tx| {
+                    tx.isolation() != bicdb_core::TransactionIsolation::ReadCommitted
+                });
             }
             let mut result = SqlResult::command("BEGIN");
             result.notices.push(bicdb_sql::SqlNotice {

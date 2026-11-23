@@ -1,0 +1,23 @@
+# Frappe tests that are expected to fail against BicDB; any other failure
+# fails the qualification. See docs/frappe-compatibility.md ("Known gaps").
+
+# Each test drops and re-creates tables it wrote in the same transaction while
+# another connection has a transaction open. Moving a dropped table aside
+# needs every other transaction to be idle, so DROP TABLE reports a
+# serialization failure and the class's later tests run in an aborted
+# transaction.
+frappe.tests.test_db.TestPostgresSchemaQueryIndependence.test_add_index
+frappe.tests.test_db.TestPostgresSchemaQueryIndependence.test_add_unique
+frappe.tests.test_db.TestPostgresSchemaQueryIndependence.test_db_table_columns
+frappe.tests.test_db.TestPostgresSchemaQueryIndependence.test_describe
+frappe.tests.test_db.TestPostgresSchemaQueryIndependence.test_get_column_type
+frappe.tests.test_db.TestPostgresSchemaQueryIndependence.test_get_table_columns_description
+frappe.tests.test_db.TestPostgresSchemaQueryIndependence.test_get_tables
+frappe.tests.test_db.TestPostgresSchemaQueryIndependence.test_has_index
+frappe.tests.test_db.TestPostgresSchemaQueryIndependence.test_search_path
+frappe.tests.test_db.TestPostgresSchemaQueryIndependence.test_table_count_cache_only_from_site_schema
+
+# Fail the same way on PostgreSQL 17 with the same bench and test command
+# ("DocType Test WebViewDocType not found"): not a database difference.
+frappe.tests.test_document.TestDocumentWebView.test_base_class_set_correctly_on_has_web_view_change
+frappe.tests.test_document.TestDocumentWebView.test_web_view_link_authentication

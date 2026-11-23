@@ -1838,6 +1838,10 @@ impl<'db> SqlEngine<'db> {
                                     break;
                                 }
                             };
+                            // No row has an empty text key (it cannot be stored).
+                            if matches!(&value, SqlValue::String(text) if text.is_empty()) {
+                                continue;
+                            }
                             let pk = record_id_from_column_values(table, schema, &key, &[value])?;
                             if let Some(rowid) = self.db_ref().rowid_for(table, &pk)? {
                                 rowids.push(rowid);
@@ -1916,7 +1920,9 @@ impl<'db> SqlEngine<'db> {
                 let Some(value) = row.into_iter().next() else {
                     continue;
                 };
-                if matches!(value, SqlValue::Null) {
+                if matches!(value, SqlValue::Null)
+                    || matches!(&value, SqlValue::String(text) if text.is_empty())
+                {
                     continue;
                 }
                 let Ok(pk) = record_id_from_column_values(table, schema, &key, &[value]) else {
@@ -7155,7 +7161,10 @@ impl<'db> SqlEngine<'db> {
                 columns: BoundExprColumns::Values(row),
                 vars: &context.var_values,
             })?;
-            if matches!(value, SqlValue::Null) {
+            // NULL and the (unstorable) empty text key match no row.
+            if matches!(value, SqlValue::Null)
+                || matches!(&value, SqlValue::String(text) if text.is_empty())
+            {
                 return Ok(None);
             }
             sql_values.push(value);
@@ -7396,7 +7405,9 @@ impl<'db> SqlEngine<'db> {
                 columns: BoundExprColumns::Values(outer_row),
                 vars: &context.var_values,
             })?;
-            if matches!(value, SqlValue::Null) {
+            if matches!(value, SqlValue::Null)
+                || matches!(&value, SqlValue::String(text) if text.is_empty())
+            {
                 return Ok(None);
             }
             key_values.push(value);
@@ -7746,8 +7757,11 @@ impl<'db> SqlEngine<'db> {
                 columns: BoundExprColumns::Values(outer_row),
                 vars: var_values,
             })?;
-            if matches!(value, SqlValue::Null) {
-                // A NULL key matches no row (the fused PK path returns 0 rows too).
+            // A NULL key matches no row (the fused PK path returns 0 rows
+            // too), and neither does the unstorable empty text key.
+            if matches!(value, SqlValue::Null)
+                || matches!(&value, SqlValue::String(text) if text.is_empty())
+            {
                 any_null = true;
                 break;
             }

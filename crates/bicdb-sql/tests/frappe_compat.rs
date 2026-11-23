@@ -337,6 +337,57 @@ fn in_list_on_an_indexed_column_uses_the_index() {
     );
 }
 
+/// Looking a row up by an empty text key is an ordinary miss in PostgreSQL;
+/// BicDB cannot store an empty single-column key, so no row can match, but
+/// the lookups failed with "INSERT into t requires name". Frappe's naming
+/// series probe `SELECT "current" FROM "tabSeries" WHERE "name"='' FOR UPDATE`.
+#[test]
+fn empty_text_primary_key_lookups_match_no_row() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE TABLE \"tabSeries\" (name varchar(100) PRIMARY KEY, current int); INSERT INTO \"tabSeries\" VALUES ('A', 1)")
+        .unwrap();
+    for query in [
+        "SELECT * FROM \"tabSeries\" WHERE name = ''",
+        "SELECT \"current\" FROM \"tabSeries\" WHERE \"name\" = ''",
+        "SELECT * FROM \"tabSeries\" WHERE name IN ('')",
+        "SELECT * FROM \"tabSeries\" WHERE name = ANY(ARRAY[''])",
+        "SELECT cast(name as varchar) FROM \"tabSeries\" WHERE cast(name as varchar) IN ('')",
+    ] {
+        assert!(
+            session
+                .execute(query)
+                .unwrap_or_else(|error| panic!("{query}: {error:?}"))
+                .rows
+                .is_empty(),
+            "{query}"
+        );
+    }
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT name FROM \"tabSeries\" WHERE name IN ('', 'A')"
+        ),
+        vec![vec![s("A")]]
+    );
+    session.execute("BEGIN").unwrap();
+    assert!(rows(
+        &mut session,
+        "SELECT \"current\" FROM \"tabSeries\" WHERE \"name\"='' FOR UPDATE"
+    )
+    .is_empty());
+    session
+        .execute("UPDATE \"tabSeries\" SET current = 2 WHERE name = ''")
+        .unwrap();
+    session.execute("ROLLBACK").unwrap();
+    assert_eq!(
+        rows(&mut session, "SELECT name, current FROM \"tabSeries\""),
+        vec![vec![s("A"), SqlValue::Int(1)]]
+    );
+}
+
 /// `frappe.db.estimate_count()` reads `pg_class.reltuples`, which
 /// PostgreSQL's autovacuum keeps near the row count; an unanalyzed BicDB
 /// table reported 0.

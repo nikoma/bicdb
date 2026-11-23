@@ -2905,6 +2905,10 @@ impl<'db> SqlEngine<'db> {
                         },
                         _ => return Ok(None),
                     };
+                    // No row has an empty text key (it cannot be stored).
+                    if matches!(&value, SqlValue::String(text) if text.is_empty()) {
+                        continue;
+                    }
                     record_ids.push(record_id_from_column_values(
                         table,
                         schema,
@@ -2944,6 +2948,7 @@ impl<'db> SqlEngine<'db> {
                     break;
                 }
                 match eval_constant_expr(element) {
+                    Ok(SqlValue::String(text)) if text.is_empty() => {}
                     Ok(value) if !matches!(value, SqlValue::Null) => {
                         record_ids.push(record_id_from_column_values(
                             table,
@@ -3034,11 +3039,11 @@ impl<'db> SqlEngine<'db> {
         // full scan that evaluated the NULL comparison against every row; a
         // literal NULL was caught earlier, but a scalar subquery that finds
         // no row is only evaluated here.
-        if bound_values
-            .iter()
-            .flatten()
-            .any(|value| matches!(value, SqlValue::Null))
-        {
+        // An empty text key cannot be stored either, so it matches no row.
+        if bound_values.iter().flatten().any(|value| {
+            matches!(value, SqlValue::Null)
+                || matches!(value, SqlValue::String(text) if text.is_empty())
+        }) {
             return Ok(Some(PrimaryKeyAccess::Never));
         }
         if bound_values.iter().all(Option::is_some) {

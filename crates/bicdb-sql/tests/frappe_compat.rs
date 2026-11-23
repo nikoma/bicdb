@@ -194,3 +194,34 @@ fn row_rewriting_alter_table_includes_the_transactions_own_rows() {
         vec![vec![SqlValue::Int(0)]]
     );
 }
+
+/// Frappe names single-column indexes after the column
+/// (`CREATE INDEX IF NOT EXISTS "standard" ON "tabPrint Format"("standard")`).
+/// Index names are unique per schema in PostgreSQL, so the second table's
+/// IF NOT EXISTS is a no-op instead of an error.
+#[test]
+fn create_index_if_not_exists_skips_a_name_used_on_another_table() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE TABLE \"tabReport\" (name varchar(140) PRIMARY KEY, standard varchar(3)); \
+             CREATE TABLE \"tabPrint Format\" (name varchar(140) PRIMARY KEY, standard varchar(3)); \
+             CREATE INDEX IF NOT EXISTS \"standard\" ON \"tabReport\"(\"standard\")",
+        )
+        .unwrap();
+    session
+        .execute("CREATE INDEX IF NOT EXISTS \"standard\" ON \"tabPrint Format\"(\"standard\")")
+        .unwrap();
+    assert!(session
+        .execute("CREATE INDEX \"standard\" ON \"tabPrint Format\"(\"standard\")")
+        .is_err());
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT tablename FROM pg_indexes WHERE indexname = 'standard'"
+        ),
+        vec![vec![s("tabReport")]]
+    );
+}

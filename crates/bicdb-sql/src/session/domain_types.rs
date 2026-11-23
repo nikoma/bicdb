@@ -3000,6 +3000,17 @@ impl<'db> SqlSession<'db> {
                 "index `{index_name}` already exists"
             )));
         }
+        // Index names share the schema's relation namespace: IF NOT EXISTS
+        // skips when the name is taken by an index on another table too.
+        if create_index.if_not_exists
+            && self
+                .db_ref()
+                .index_definitions()
+                .iter()
+                .any(|definition| definition.name == index_name)
+        {
+            return Ok(SqlResult::command("CREATE INDEX"));
+        }
         let access_method = index_access_method_name(create_index.using.as_ref()).to_string();
         if access_method_oid(&access_method) == 0 {
             return Err(SqlError::undefined_object(format!(

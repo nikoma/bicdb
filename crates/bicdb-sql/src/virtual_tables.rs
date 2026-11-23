@@ -5680,6 +5680,43 @@ pub(crate) fn equality_value(selection: &Expr, field: &IndexField) -> Result<Opt
     Ok(None)
 }
 
+/// The constant values of a non-negated `field IN (...)` conjunct, for one
+/// index point lookup per value. NULL elements never compare equal and are
+/// dropped; lists with a non-constant element, or longer than `max`, give
+/// `None`.
+pub(crate) fn in_list_values(
+    selection: &Expr,
+    field: &IndexField,
+    max: usize,
+) -> Result<Option<Vec<IndexValue>>> {
+    for term in and_terms(selection) {
+        let Expr::InList {
+            expr,
+            list,
+            negated: false,
+        } = term
+        else {
+            continue;
+        };
+        let Ok(term_field) = predicate_index_field_from_expr(expr) else {
+            continue;
+        };
+        if !index_field_matches(&term_field, field) || list.is_empty() || list.len() > max {
+            continue;
+        }
+        let mut values = Vec::with_capacity(list.len());
+        for element in list {
+            match eval_constant_expr(element) {
+                Ok(SqlValue::Null) => {}
+                Ok(value) => values.push(index_value_from_sql(value)?),
+                Err(_) => return Ok(None),
+            }
+        }
+        return Ok(Some(values));
+    }
+    Ok(None)
+}
+
 pub(crate) fn range_bounds(
     selection: &Expr,
     field: &IndexField,

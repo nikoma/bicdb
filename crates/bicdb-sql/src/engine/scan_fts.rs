@@ -3506,6 +3506,24 @@ impl<'db> SqlEngine<'db> {
                     };
                 self.records_for_ids(collection, &ids)
             }
+            PlanKind::IndexInLookup { index_name, keys } => {
+                sql_profile_index_lookup();
+                let index = self.index_definition_for_scan(collection, index_name);
+                let mut ids = BTreeSet::new();
+                for key in keys {
+                    let prefix = std::slice::from_ref(key);
+                    let found = self.lookup_index_cached(index_name, prefix)?;
+                    let found = match &index {
+                        Some(index) => self.record_ids_with_pending_index_lookup_candidates(
+                            collection, index, prefix, found,
+                        )?,
+                        None => self.record_ids_with_pending_candidates(collection, found),
+                    };
+                    ids.extend(found.iter().cloned());
+                }
+                let ids = ids.into_iter().collect::<Vec<_>>();
+                self.records_for_ids(collection, &ids)
+            }
             PlanKind::DeferredIndexLookup {
                 index_name,
                 prefix_exprs,

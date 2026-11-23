@@ -2311,6 +2311,57 @@ impl<'db> SqlEngine<'db> {
                 }
                 prefix.push(value);
             }
+            if prefix.is_empty() {
+                // `col IN (a, b, ...)` on the index's leading column: one
+                // prefix lookup per value instead of a full scan.
+                const MAX_IN_LIST_LOOKUPS: usize = 1024;
+                let Some(field @ IndexField::MetadataPath(_)) = index.fields.first() else {
+                    continue;
+                };
+                let Some(values) = in_list_values(selection, field, MAX_IN_LIST_LOOKUPS)? else {
+                    continue;
+                };
+                let mut keys = Vec::with_capacity(values.len());
+                for value in values {
+                    let value = match schema.as_ref() {
+                        Some(schema) => typed_index_predicate_value(schema, field, value)?,
+                        None => value,
+                    };
+                    if !keys.contains(&value) {
+                        keys.push(value);
+                    }
+                }
+                let estimated_rows = keys
+                    .iter()
+                    .map(|key| {
+                        let prefix = std::slice::from_ref(key);
+                        estimate_index_lookup_rows(index, prefix, stats).unwrap_or_else(|| {
+                            if total_rows <= SMALL_TABLE_EXACT_PROBE_ROWS {
+                                self.db_ref()
+                                    .lookup_index(&index.name, prefix)
+                                    .map(|ids| ids.len())
+                                    .unwrap_or(total_rows)
+                            } else {
+                                (total_rows / 10).max(1)
+                            }
+                        })
+                    })
+                    .sum::<usize>()
+                    .min(total_rows);
+                candidates.push(QueryPlan {
+                    kind: PlanKind::IndexInLookup {
+                        index_name: index.name.clone(),
+                        keys,
+                    },
+                    estimated_rows,
+                    estimated_cost: if stats.is_some() {
+                        20.0 + estimated_rows as f64 * 2.0
+                    } else {
+                        1.0 + estimated_rows as f64 * 0.10
+                    },
+                });
+                continue;
+            }
             if !prefix.is_empty() {
                 let estimated_rows = estimate_index_lookup_rows(index, &prefix, stats)
                     .unwrap_or_else(|| {

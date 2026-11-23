@@ -283,6 +283,60 @@ fn drop_table_with_another_transaction_pending_drops_and_reopens() {
     );
 }
 
+/// Frappe's link checks run `WHERE fieldtype IN ('Link', 'Table') AND
+/// options = ...` against tabDocField once per DocType; the IN list on the
+/// indexed column must use the index (one lookup per value), and give the
+/// same rows as a scan, including the transaction's own pending rows.
+#[test]
+fn in_list_on_an_indexed_column_uses_the_index() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE TABLE \"tabDocField\" (name varchar(140) PRIMARY KEY, parent varchar(140), \
+             fieldtype varchar(140), options text, creation timestamp(6)); \
+             CREATE INDEX ON \"tabDocField\" (fieldtype); \
+             INSERT INTO \"tabDocField\" SELECT 'f' || g, 'P' || (g % 7), \
+             (ARRAY['Data','Link','Table','Int','Check'])[1 + g % 5], \
+             CASE WHEN g % 3 = 0 THEN 'User' ELSE 'Role' END, \
+             timestamp '2026-01-01' + g * interval '1 minute' FROM generate_series(1, 300) g",
+        )
+        .unwrap();
+    let query = "SELECT \"parent\", \"name\" FROM \"tabDocField\" WHERE \"fieldtype\" IN ('Link','Table') AND \"options\"='User' ORDER BY \"creation\" DESC";
+    let plan = rows(&mut session, &format!("EXPLAIN {query}"));
+    assert!(
+        format!("{plan:?}").contains("InListKeys 2"),
+        "expected an IN-list index lookup, got {plan:?}"
+    );
+    let scanned = rows(
+        &mut session,
+        "SELECT \"parent\", \"name\" FROM \"tabDocField\" WHERE (\"fieldtype\" = 'Link' OR \"fieldtype\" = 'Table') AND \"options\"='User' ORDER BY \"creation\" DESC",
+    );
+    assert_eq!(scanned.len(), 40);
+    assert_eq!(rows(&mut session, query), scanned);
+
+    session.execute("BEGIN").unwrap();
+    session
+        .execute("INSERT INTO \"tabDocField\" VALUES ('new', 'P9', 'Link', 'User', '2027-01-01')")
+        .unwrap();
+    session
+        .execute("UPDATE \"tabDocField\" SET fieldtype = 'Data' WHERE name = 'f6'")
+        .unwrap();
+    let in_tx = rows(&mut session, query);
+    assert_eq!(in_tx.len(), 40);
+    assert_eq!(in_tx[0], vec![s("P9"), s("new")]);
+    assert!(!in_tx.iter().any(|row| row[1] == s("f6")));
+    session.execute("ROLLBACK").unwrap();
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT count(*) FROM \"tabDocField\" WHERE fieldtype IN ('Link', NULL, 'Link')"
+        ),
+        vec![vec![SqlValue::Int(60)]]
+    );
+}
+
 /// `frappe.db.estimate_count()` reads `pg_class.reltuples`, which
 /// PostgreSQL's autovacuum keeps near the row count; an unanalyzed BicDB
 /// table reported 0.

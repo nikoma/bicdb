@@ -528,6 +528,14 @@ pub(crate) struct RemoteJoinedHandoffBackend {
     /// have reached it.
     #[cfg(test)]
     decision_publish_fault: Option<Arc<Mutex<Option<ClusterNodeId>>>>,
+    /// A step that reads the other members (every bridge step but the
+    /// preparation) had to repeat a member alone because it failed beside
+    /// its neighbours: the members are too slow to read each other while
+    /// each is busy with its own step. Every later such step of this object
+    /// then asks one member at a time. Measured at a quarter of one CPU, a
+    /// two-member phase run together took 20 to 25 s and each member alone
+    /// 3 s; a three-member custody retirement together 25 s.
+    windowed_alone: std::sync::atomic::AtomicBool,
 }
 
 impl RemoteJoinedHandoffBackend {
@@ -576,6 +584,7 @@ impl RemoteJoinedHandoffBackend {
             stop_after: None,
             #[cfg(test)]
             decision_publish_fault: None,
+            windowed_alone: std::sync::atomic::AtomicBool::new(false),
         }
     }
     /// Give the backend this coordinator's OWN data service: the service of
@@ -2564,11 +2573,36 @@ impl RemoteJoinedHandoffBackend {
         what: &str,
         counted: &(dyn Fn(AuthenticatedNativeJointBridgeStepFrame) -> Result<()> + Sync),
     ) -> Result<Vec<(ClusterNodeId, NativeJointHandoffStepOutcomeV1)>> {
+        // Every step but the preparation reads the other members while they
+        // serve their own step of the same phase.
+        let windowed = !matches!(
+            operation,
+            NativeJointHandoffStepOperationV1::BridgePrepare { .. }
+        );
         let mut outcomes = Vec::with_capacity(nodes.len());
-        for group in nodes.chunks(at_once.max(1)) {
-            outcomes.extend(self.complete_bridge_step_group(
+        let mut start = 0;
+        while start < nodes.len() {
+            // Re-read per group: an earlier group of this very phase may
+            // have shown that members cannot overlap here.
+            let at_once = if windowed
+                && self
+                    .windowed_alone
+                    .load(std::sync::atomic::Ordering::Acquire)
+            {
+                1
+            } else {
+                at_once.max(1)
+            };
+            let group = &nodes[start..(start + at_once).min(nodes.len())];
+            start += group.len();
+            let (group_outcomes, repeated) = self.complete_bridge_step_group(
                 members, decision, group, operation, phase, what, counted,
-            )?);
+            )?;
+            if windowed && repeated > 0 {
+                self.windowed_alone
+                    .store(true, std::sync::atomic::Ordering::Release);
+            }
+            outcomes.extend(group_outcomes);
         }
         Ok(outcomes)
     }
@@ -2584,7 +2618,7 @@ impl RemoteJoinedHandoffBackend {
         phase: &CancellationToken,
         what: &str,
         counted: &(dyn Fn(AuthenticatedNativeJointBridgeStepFrame) -> Result<()> + Sync),
-    ) -> Result<Vec<(ClusterNodeId, NativeJointHandoffStepOutcomeV1)>> {
+    ) -> Result<(Vec<(ClusterNodeId, NativeJointHandoffStepOutcomeV1)>, usize)> {
         let started = Instant::now();
         let transport: &TcpClusterRelocationTransport = &self.transport;
         let step = |node: &ClusterNodeId| -> Result<NativeJointHandoffStepOutcomeV1> {
@@ -2623,7 +2657,7 @@ impl RemoteJoinedHandoffBackend {
                 nodes.len()
             )
         });
-        Ok(outcomes)
+        Ok((outcomes, repeated))
     }
 
     /// Preparation, publication and Open on every new member of `decision`,

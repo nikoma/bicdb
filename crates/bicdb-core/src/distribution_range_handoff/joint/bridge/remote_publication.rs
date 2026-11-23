@@ -610,13 +610,13 @@ impl NativeJointPreparationCustody {
             let writer = self
                 .actual
                 .require_current_under_preparation_custody(&service, &committed, self)?;
+            if committed.data() != data {
+                return Err(invalid(
+                    "remote publication phase changed protected global decision",
+                ));
+            }
             (committed, writer)
         };
-        if local_phase.data() != data {
-            return Err(invalid(
-                "remote publication phase changed protected global decision",
-            ));
-        }
         let phase = phase.child_with_deadline(local_phase.deadline());
         phase.check()?;
         traced("own pre-quorum observation", &phase);
@@ -631,17 +631,23 @@ impl NativeJointPreparationCustody {
         )?;
         traced("window of every other member", &phase);
         // (3) Only THIS member's read pin. It is a slot of this database's
-        // own mutation gate; no other member's pin gates this journal. The
-        // release validates this member completely before and after.
-        {
+        // own mutation gate; no other member's pin gates this journal. It is
+        // released only after a complete window observed every other NEW
+        // member prepared. The release validates this member completely
+        // before and after. A pin is monotone: a repeated publication whose
+        // earlier attempt already released it skips the release and its two
+        // complete checks, as the in-process phase does. Repeated anyway, it
+        // spent about 0.7 s of a slow host's window, after the frames had
+        // arrived, only to take nothing.
+        if !self.actual.read_pin_already_released()? {
             let service = self
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("remote publication pin release service busy"))?;
             self.actual
                 .release_read_pin_under_preparation_custody(&service, &local_phase, self)?;
+            traced("own read pin released", &phase);
         }
-        traced("own read pin released", &phase);
         window.require_live()?;
         // (4) Distinct post-quorum observation, no guard across the I/O.
         let business = Uuid::now_v7();

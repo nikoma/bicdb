@@ -1363,6 +1363,28 @@ fn verify_destination_certificate(
     Ok(())
 }
 
+thread_local! {
+    static REQUEST_WRITE_STARTED: std::cell::Cell<Option<Instant>> =
+        const { std::cell::Cell::new(None) };
+}
+/// Records, for this thread's current exchange, the instant its request
+/// began to be written: after the connection and its TLS handshake, and
+/// not later than the instant the receiver can have begun serving it.
+fn note_request_write_started() {
+    REQUEST_WRITE_STARTED.with(|started| started.set(Some(Instant::now())));
+}
+/// Clears the instant recorded by this thread's last exchange. Call before
+/// an exchange whose instant `take_request_write_started` then reads.
+pub(crate) fn clear_request_write_started() {
+    REQUEST_WRITE_STARTED.with(|started| started.set(None));
+}
+/// The instant this thread's last exchange began writing its request, if
+/// one did since `clear_request_write_started`. Diagnostic of an exchange
+/// on THIS thread only; it bounds nothing by itself.
+pub(crate) fn take_request_write_started() -> Option<Instant> {
+    REQUEST_WRITE_STARTED.with(|started| started.take())
+}
+
 /// The longest own budget a receiver serves a request for.
 const MAX_SERVED_BUDGET: Duration = Duration::from_millis(5000);
 /// What a caller waits beyond a served budget for the reply itself.
@@ -5923,6 +5945,7 @@ impl TcpClusterRelocationTransport {
                     pending_certificate_sha256.as_deref(),
                     Some(&peer_certificate_sha256),
                 )?;
+                note_request_write_started();
                 let response = if let Some(observed) = observed.as_deref_mut() {
                     observed.send(&mut stream)?;
                     observed.receive(&mut stream, self.config.max_frame_bytes)?
@@ -5942,6 +5965,7 @@ impl TcpClusterRelocationTransport {
                     pending_certificate_sha256.as_deref(),
                     None,
                 )?;
+                note_request_write_started();
                 let response = if let Some(observed) = observed.as_deref_mut() {
                     observed.send(&mut stream)?;
                     observed.receive(&mut stream, self.config.max_frame_bytes)?

@@ -568,6 +568,7 @@ impl TcpClusterRelocationTransport {
         }
         self.require_numeric_metadata_destination(recipient, &token)?;
         let sent = Instant::now();
+        super::clear_request_write_started();
         let (response, actual, actual_birth) = self.call_with_native_destination_cancellable(
             &token,
             recipient,
@@ -575,6 +576,14 @@ impl TcpClusterRelocationTransport {
                 request: request.clone(),
             },
         )?;
+        // The instant this exchange began writing the request, on this same
+        // thread: after the connection and TLS handshake, and not later than
+        // the instant the member began serving it, from which it counts the
+        // window it reports. Counted from `sent` instead, every frame lost
+        // the whole handshake (a large part of a second on a slow host).
+        let sent = super::take_request_write_started()
+            .filter(|written| *written >= sent)
+            .unwrap_or(sent);
         token.check()?;
         own.require_live_request(request.business)?;
         if actual.node_id() != recipient
@@ -606,8 +615,8 @@ impl TcpClusterRelocationTransport {
         }
         // The window can only shrink: the member reports the remainder of
         // its own observation counted from the instant it began serving this
-        // request, and it is counted here from the instant BEFORE this
-        // request left, which is not later, so the member's own observation
+        // request, and it is counted here from the instant this request began
+        // to be written, which is not later, so the member's own observation
         // cannot have expired while this frame still reads as live.
         let mut window_deadline = own.deadline();
         if let Some(deadline) = token.deadline() {

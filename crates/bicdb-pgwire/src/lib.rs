@@ -4932,7 +4932,13 @@ fn execute_server_sql_with_options_normalized(
     state.last_query_at = Some(unix_timestamp());
 
     let started = Instant::now();
-    let deadline = (!role_permit.timeout.is_zero()).then(|| Instant::now() + role_permit.timeout);
+    // The session's statement_timeout (SET [LOCAL] statement_timeout) bounds
+    // the statement together with the server/role limit; the shorter wins.
+    let timeout = match session_statement_timeout(state.session_state.session_gucs()) {
+        Some(session) if role_permit.timeout.is_zero() || session < role_permit.timeout => session,
+        _ => role_permit.timeout,
+    };
+    let deadline = (!timeout.is_zero()).then(|| Instant::now() + timeout);
     let cancellation = CancellationToken::new(state.cancel_token.clone(), deadline)
         .with_wait_admission(_permit.observer());
     let transaction_control = if is_transaction_control_candidate(normalized) {

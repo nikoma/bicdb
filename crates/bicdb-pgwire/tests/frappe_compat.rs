@@ -82,3 +82,48 @@ async fn begin_inside_a_transaction_warns_and_keeps_the_block() {
     assert_eq!(error.code().unwrap().code(), "25P02");
     client.batch_execute("ROLLBACK").await.unwrap();
 }
+
+/// `frappe.db.set_execution_timeout()` uses `SET LOCAL statement_timeout`.
+#[tokio::test]
+async fn session_statement_timeout_cancels_long_statements() {
+    let (client, _root) = connect().await;
+    client
+        .batch_execute("SET statement_timeout = 200")
+        .await
+        .unwrap();
+    let started = Instant::now();
+    let error = client
+        .batch_execute("SELECT pg_sleep(5)")
+        .await
+        .unwrap_err();
+    assert_eq!(error.code().unwrap().code(), "57014");
+    assert!(started.elapsed() < Duration::from_secs(4));
+    client
+        .batch_execute("SET statement_timeout = 0")
+        .await
+        .unwrap();
+    client.batch_execute("SELECT pg_sleep(0.3)").await.unwrap();
+
+    client.batch_execute("BEGIN").await.unwrap();
+    client
+        .batch_execute("SET LOCAL statement_timeout = '250ms'")
+        .await
+        .unwrap();
+    client.batch_execute("SAVEPOINT s").await.unwrap();
+    let error = client
+        .batch_execute("SELECT pg_sleep(5)")
+        .await
+        .unwrap_err();
+    assert_eq!(error.code().unwrap().code(), "57014");
+    client
+        .batch_execute("ROLLBACK TO SAVEPOINT s")
+        .await
+        .unwrap();
+    assert_eq!(
+        values(&client.simple_query("SELECT 7").await.unwrap()),
+        vec!["7"]
+    );
+    client.batch_execute("COMMIT").await.unwrap();
+    // SET LOCAL ended with the transaction.
+    client.batch_execute("SELECT pg_sleep(0.4)").await.unwrap();
+}

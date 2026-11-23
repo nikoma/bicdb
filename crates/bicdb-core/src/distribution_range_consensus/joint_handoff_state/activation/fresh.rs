@@ -31,14 +31,11 @@ impl RangeWriteStore {
         admission
             .committed()
             .require_native_publication_metadata(database, self)?;
-        let (writer, writer_root) =
-            admission.original_phase_owner_for_activation(database, self)?;
-        let writer_domain = admission.original_writer_domain_for_activation(database, self)?;
-
         let native = admission.native_receipt();
         let range = native.data().old_range().id;
         // An absence result grants nothing and performs no write. The complete
-        // new-publication path below will still perform ALL mandatory checks.
+        // new-publication path below will still perform ALL mandatory checks,
+        // the writer and domain proofs among them.
         if self
             .catalog
             .native_joint_handoffs
@@ -49,6 +46,9 @@ impl RangeWriteStore {
         {
             return Ok(None);
         }
+        let (writer, writer_root) =
+            admission.original_phase_owner_for_activation(database, self)?;
+        let writer_domain = admission.original_writer_domain_for_activation(database, self)?;
         admission.require_external_publications_current()?;
         #[cfg(test)]
         let mut scope_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
@@ -87,6 +87,8 @@ impl RangeWriteStore {
         admission
             .committed()
             .require_native_publication_metadata(database, self)?;
+        // The decision to recover the earlier attempt's exact activation.
+        admission.pass_commit_point()?;
         let _version = admission.committed().native_publication_guard()?;
         Ok(Some(receipt))
     }
@@ -102,6 +104,13 @@ impl RangeWriteStore {
         parent: &CancellationToken,
     ) -> Result<NativeJointCatalogueActivationReceipt> {
         parent.check()?;
+        let part = std::cell::Cell::new(std::time::Instant::now());
+        let traced = |what: &str| {
+            crate::distribution_native_host::range_move_trace(
+                part.replace(std::time::Instant::now()),
+                || format!("native open activation part: {what}"),
+            )
+        };
         let (writer, writer_root) =
             admission.original_phase_owner_for_activation(database, self)?;
         let writer_domain = admission.original_writer_domain_for_activation(database, self)?;
@@ -121,6 +130,7 @@ impl RangeWriteStore {
         }
         #[cfg(test)]
         test_cuts::after_external()?;
+        traced("writer and final foreign boundary");
         let native = admission.native_receipt();
         let data = admission.data();
         let range = data.old_range().id;
@@ -141,6 +151,7 @@ impl RangeWriteStore {
             .committed()
             .require_current_with_native_read_scope(&scope)?;
         scope.require_prepared_frozen(admission.local_preparation(), frozen)?;
+        traced("native scope and local proofs");
         self.require_native_catalog_durability(database.data_path())?;
         self.require_native_joint_host_base(database, data.old_range().id)?;
         if native.local_node_id() != &self.catalog.node_id || data != original.data() {
@@ -153,6 +164,7 @@ impl RangeWriteStore {
         // against the same locked immutable native spine; never export/rescan
         // the entire source lineage once per retained command.
         scope.require_prepared_catalogue_history(catalogue, admission, parent)?;
+        traced("catalogue history");
         let candidate = NativeJointCatalogueActivation::from_actual(&native)?;
         let existing = self
             .catalog
@@ -190,6 +202,10 @@ impl RangeWriteStore {
                 "fresh activation changed permanent plan/session/nonce",
             ));
         }
+        // Commit point: every other member's frame is live immediately
+        // before the activation is written, and gates nothing after it.
+        traced("writer domain and gate");
+        admission.pass_commit_point()?;
         self.recovery_persistence_uncertain = true;
         state.serving_activation = Some(candidate.clone());
         // Missing raw log is possible only at an actually verified genesis
@@ -213,6 +229,7 @@ impl RangeWriteStore {
         #[cfg(test)]
         eprintln!("ACTUAL_JOINT_OPEN_CATALOGUE_PERSIST node={} success={} uncertain={} range={} scoped=true",self.catalog.node_id,persisted.is_ok(),self.recovery_persistence_uncertain,range);
         persisted?;
+        traced("catalogue persisted");
         self.recovery_persistence_uncertain = false;
         drop(controlled);
         #[cfg(test)]
@@ -234,6 +251,7 @@ impl RangeWriteStore {
             .require_native_publication_metadata(database, self)?;
         parent.check()?;
         let _version = admission.committed().native_publication_guard()?;
+        traced("post-write proofs");
         Ok(receipt)
     }
 }

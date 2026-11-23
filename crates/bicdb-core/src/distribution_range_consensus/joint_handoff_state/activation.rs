@@ -446,12 +446,14 @@ impl RangeWriteStore {
         database: &crate::BicDb,
         admission: &NativeJointOpenAdmission,
     ) -> Result<()> {
-        let (writer, writer_root) =
-            admission.original_phase_owner_for_activation(database, self)?;
-        let writer_domain = admission.original_writer_domain_for_activation(database, self)?;
+        // Nothing to re-fsync: the activation or recovery that follows runs
+        // the writer and domain proofs itself before anything is written.
         if !self.recovery_persistence_uncertain {
             return Ok(());
         }
+        let (writer, writer_root) =
+            admission.original_phase_owner_for_activation(database, self)?;
+        let writer_domain = admission.original_writer_domain_for_activation(database, self)?;
         admission.require_live()?;
         admission.committed().require_current(database)?;
         let native = admission.native_receipt();

@@ -23,8 +23,28 @@ pub(super) struct RemoteOpenBacking {
     local_phase: CommittedNativeJointDecisionObservation,
     local_writer: crate::db::NativeJointPhaseOwner,
     window: RemotePreparationWindow,
+    /// Set once this member's activation commit point is passed (see
+    /// `pass_commit_point`); every frame was live at that point.
+    past_commit_point: std::sync::atomic::AtomicBool,
 }
 impl RemoteOpenBacking {
+    /// The commit point of this member's own catalogue activation: every
+    /// other NEW member's frame must be live here, immediately before the
+    /// activation is written (or, when an earlier attempt's exact activation
+    /// is recovered, at the recovery decision). After it the frames gate
+    /// nothing: what they attested decided only whether to write, the write
+    /// is historical, and the activation stays unconfirmed until a SECOND
+    /// window, observed after the write, reports every other member
+    /// unchanged. This member's own fresh observations still bound every
+    /// later check. Checking the first window again through the local
+    /// proofs that follow the write refused a durable activation on every
+    /// repetition once those proofs took longer than the frames lasted.
+    pub(super) fn pass_commit_point(&self) -> Result<()> {
+        self.window.require_live()?;
+        self.past_commit_point
+            .store(true, std::sync::atomic::Ordering::Release);
+        Ok(())
+    }
     fn require_window(&self, local: &ClusterNodeId) -> Result<()> {
         if &self.window.observer != local || self.window.kind != NativeJointBridgePhaseKindV1::Open
         {
@@ -54,7 +74,12 @@ impl RemoteOpenBacking {
         if self.window.frames.len() + 1 != local.data().new_members().len() {
             return Err(invalid("remote open window omits a NEW member"));
         }
-        self.window.require_live()?;
+        if !self
+            .past_commit_point
+            .load(std::sync::atomic::Ordering::Acquire)
+        {
+            self.window.require_live()?;
+        }
         let (term, index, context) = fresh.metadata_anchor();
         let mut anchors = vec![self.local_phase.metadata_anchor()];
         anchors.extend(
@@ -170,6 +195,70 @@ impl NativeJointPreparationCustody {
         }
         Ok(())
     }
+    /// This member's own fresh pre-quorum OPEN observation: its own
+    /// metadata observation and attached MStore point (both before any
+    /// engine guard), then, under its own service lock, its own store
+    /// uncertainty reconciled, the committed decision observed and the
+    /// member proved current under its open preparation custody.
+    fn observe_open_local_phase(
+        self: &Arc<Self>,
+        bridge: &Arc<crate::db::NativeJointServingBridgeReceipt>,
+        client: &TcpClusterRelocationTransport,
+        metadata_leader: &ClusterNodeId,
+        phase: &crate::CancellationToken,
+    ) -> Result<(
+        CommittedNativeJointDecisionObservation,
+        crate::db::NativeJointPhaseOwner,
+    )> {
+        let started = Instant::now();
+        let data = self.data();
+        let business = Uuid::now_v7();
+        let metadata = client.acquire_host_metadata_observation(
+            metadata_leader,
+            business,
+            observation_budget(phase)?,
+            phase,
+        )?;
+        let point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &self.service,
+            &metadata,
+            business,
+            phase,
+        )?;
+        crate::distribution_native_host::range_move_trace(started, || {
+            "remote open local phase: own metadata".into()
+        });
+        let started = Instant::now();
+        let mut service = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("remote open phase actual service busy"))?;
+        service.reconcile_native_joint_open_phase_with_point(
+            &metadata,
+            business,
+            bridge,
+            &self.actual,
+            phase,
+            point.as_deref(),
+        )?;
+        let committed = self.actual.observe_fresh_committed_with_point(
+            &service,
+            metadata,
+            business,
+            data.old_range().id,
+            point,
+        )?;
+        let writer = self.actual.require_current_under_open_preparation_custody(
+            &service,
+            &committed,
+            bridge.clone(),
+            self,
+        )?;
+        crate::distribution_native_host::range_move_trace(started, || {
+            "remote open local phase: reconcile and local observation".into()
+        });
+        Ok((committed, writer))
+    }
     /// This member's own complete catalogue activation over its own durable
     /// `bridge`.
     ///
@@ -205,48 +294,48 @@ impl NativeJointPreparationCustody {
         self.require_remote_open_actor(bridge, client)?;
         let data = self.data();
         let phase = request.child_with_deadline(Instant::now() + REMOTE_PHASE_BUDGET);
-        // (1) Own pre-quorum OPEN observation; metadata I/O before guards.
-        let business = Uuid::now_v7();
-        let metadata = client.acquire_host_metadata_observation(
-            metadata_leader,
-            business,
-            observation_budget(&phase)?,
-            &phase,
-        )?;
-        let point = ClusterDataNodeService::capture_actual_joint_metadata_point(
-            &self.service,
-            &metadata,
-            business,
-            &phase,
-        )?;
-        let (local_phase, local_writer) = {
-            let mut service = self
-                .service
-                .try_lock()
-                .ok_or_else(|| invalid("remote open phase actual service busy"))?;
-            service.reconcile_native_joint_open_phase_with_point(
-                &metadata,
-                business,
-                bridge,
-                &self.actual,
-                &phase,
-                point.as_deref(),
-            )?;
-            let committed = self.actual.observe_fresh_committed_with_point(
-                &service,
-                metadata,
-                business,
-                data.old_range().id,
-                point,
-            )?;
-            let writer = self.actual.require_current_under_open_preparation_custody(
-                &service,
-                &committed,
-                bridge.clone(),
-                self,
-            )?;
-            (committed, writer)
+        let part = std::cell::Cell::new(Instant::now());
+        let traced = |what: &str| {
+            crate::distribution_native_host::range_move_trace(part.replace(Instant::now()), || {
+                format!("remote open part: {what}")
+            })
         };
+        // (1) Own pre-quorum OPEN observation and (2) one OPEN observation
+        // of every other NEW member, taken at the same time, as the remote
+        // publication does. Both are pre-quorum observations of this open:
+        // the post-quorum one below must follow every one of them
+        // (`require_post_quorum`), and no order is required among them, as
+        // the in-process phase observes all its members in one round. Taken
+        // one after the other, the window started only after this member's
+        // own reconcile and observation, which on a slow host took about
+        // 0.7 s, and its frames then ran out before the activation was
+        // written. The window's exchanges are bound to `collector`, not to
+        // the local observation; the phase is bounded by the local
+        // observation once both are in.
+        let (local, window) = std::thread::scope(|scope| {
+            let observe_local =
+                || self.observe_open_local_phase(bridge, client, metadata_leader, &phase);
+            let local = std::thread::Builder::new()
+                .name("joint-open-local-phase".into())
+                .spawn_scoped(scope, observe_local);
+            let window = RemotePreparationWindow::collect(
+                NativeJointBridgePhaseKindV1::Open,
+                data,
+                client,
+                collector,
+                collector_business,
+                &phase,
+            );
+            let local = match local {
+                Ok(worker) => worker
+                    .join()
+                    .unwrap_or_else(|_| Err(invalid("the open local phase worker panicked"))),
+                Err(_) => observe_local(),
+            };
+            (local, window)
+        });
+        let (local_phase, local_writer) = local?;
+        let window = window?;
         if local_phase.data() != data {
             return Err(invalid(
                 "remote open phase changed protected global decision",
@@ -254,15 +343,8 @@ impl NativeJointPreparationCustody {
         }
         let phase = phase.child_with_deadline(local_phase.deadline());
         phase.check()?;
-        // (2) Every other NEW member's own durable bridge, under its lock.
-        let window = RemotePreparationWindow::collect(
-            NativeJointBridgePhaseKindV1::Open,
-            data,
-            client,
-            collector,
-            collector_business,
-            &phase,
-        )?;
+        window.require_live()?;
+        traced("window");
         // (3) Distinct post-quorum observation, no guard across the I/O.
         let business = Uuid::now_v7();
         let metadata = client.acquire_host_metadata_observation(
@@ -290,6 +372,7 @@ impl NativeJointPreparationCustody {
                 point,
             )?
         };
+        traced("post-quorum observation");
         let identities = window.identities.clone();
         let first_contexts = window.contexts();
         let post_quorum = fresh.metadata_anchor();
@@ -298,6 +381,7 @@ impl NativeJointPreparationCustody {
                 local_phase,
                 local_writer,
                 window,
+                past_commit_point: std::sync::atomic::AtomicBool::new(false),
             }),
             attempted: std::sync::atomic::AtomicBool::new(false),
             local: Arc::new(NativeJointPreparedServingObservation {
@@ -314,6 +398,7 @@ impl NativeJointPreparationCustody {
         // (4) The unchanged local activation: final foreign boundary, local
         // native scope, recover-or-persist, activated Open installation.
         let activation = Arc::new(admission.persist_local_catalogue_activation(parent)?);
+        traced("local catalogue activation");
         retain(&activation);
         if activation.native().data() != data
             || activation.native_bridge_sha256() != bridge.checksum_sha256()

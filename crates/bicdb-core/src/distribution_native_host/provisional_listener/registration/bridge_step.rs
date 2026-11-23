@@ -1013,6 +1013,7 @@ pub(super) fn open_member_bridge(
             step.activation = Some(activation.clone());
         }
     };
+    let open_started = Instant::now();
     let (opened, release_owner) = custody.open_remote_activation(
         &bridge,
         transport,
@@ -1023,6 +1024,9 @@ pub(super) fn open_member_bridge(
         token,
         &mut retain,
     )?;
+    crate::distribution_native_host::range_move_trace(open_started, || {
+        "member step OPEN first window and activation".into()
+    });
     {
         let mut held = steps.hold_for_retention();
         let step = held
@@ -1054,9 +1058,13 @@ pub(super) fn open_member_bridge(
     if bridge_remaining(token).map_or(true, |left| left < MIN_BRIDGE_SUBSTEP_BUDGET) {
         return Ok((incomplete(), anchor));
     }
-    if let Err(_error) =
-        custody.confirm_remote_open_second_window(&opened, &bridge, transport, &leader, token)
-    {
+    let second_started = Instant::now();
+    let second =
+        custody.confirm_remote_open_second_window(&opened, &bridge, transport, &leader, token);
+    crate::distribution_native_host::range_move_trace(second_started, || {
+        "member step OPEN second window".into()
+    });
+    if let Err(_error) = second {
         // Fail closed: the durable activation exists but is not reported.
         #[cfg(test)]
         eprintln!(

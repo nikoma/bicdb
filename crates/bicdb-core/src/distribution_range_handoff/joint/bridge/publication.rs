@@ -574,6 +574,16 @@ impl NativeJointOpenAdmission {
         }
         Ok(())
     }
+    /// The commit point of this member's own catalogue activation; see
+    /// `RemoteOpenBacking::pass_commit_point`. In-process phases keep every
+    /// check unchanged.
+    pub(crate) fn pass_commit_point(&self) -> Result<()> {
+        #[cfg(feature = "tls-replication")]
+        if let OpenBacking::Remote(remote) = &self.backing {
+            return remote.pass_commit_point();
+        }
+        Ok(())
+    }
     pub(crate) fn has_fresh_open_phase(&self) -> bool {
         match &self.backing {
             OpenBacking::Local { open_phase, .. } => open_phase.is_some(),

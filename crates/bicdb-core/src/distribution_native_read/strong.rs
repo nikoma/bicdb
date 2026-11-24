@@ -237,8 +237,14 @@ impl EnrolledNativeReadQuorum {
             host.require_for_coordinator(&database, &scope.range, coordinator)?;
             (snapshot, record, snapshot_sequence)
         };
-        // Reacquire only after the borrowed DB guard above has been dropped.
-        local.require_current(service)?;
+        // No second revalidation here: `finalize` revalidates the same local
+        // proof after the final metadata observation, and a revalidation
+        // that holds at that later point also held here (the proof's range
+        // index, history, visibility, writer and schema only ever advance or
+        // end; a stale proof never becomes current again). Each
+        // revalidation is a complete fresh read of the range's lineage and
+        // catalogue, twice; under load the repeated ones made a Strong read
+        // need more than its whole budget, so it was refused on every retry.
         cancellation.check()?;
         Ok(PendingNativePointRead {
             enrolled: self,
@@ -302,7 +308,10 @@ impl PendingNativePointRead {
                 .require_for_coordinator(&database, &final_scope.range, coordinator)?;
             database.check_recovery_state()?;
         }
-        local.require_current(service)?;
+        // The revalidation above is this read's final currentness, taken
+        // after the final metadata observation; repeating it right after a
+        // non-waiting host check proved nothing more (see
+        // `capture_actual_point_read`).
         self.cancellation.check()?;
         parent.check()?;
         final_metadata.require_live_request(round.business)?;

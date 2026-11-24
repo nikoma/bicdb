@@ -296,6 +296,7 @@ impl RangeRecoveryRuntime {
                     let enrolled = candidate
                         .check_enrolled_voter_births()
                         .map_err(|e| check(NativeStrongReadStage::WriterAdmission, e))?;
+                    mark("birth enrollment");
 
                     // STRONG_TRACE_BEGIN
                     #[cfg(test)]
@@ -316,6 +317,7 @@ impl RangeRecoveryRuntime {
                                 break s;
                             }
                         };
+                        mark("snapshot service lock");
                         enrolled
                             .capture_actual_point_read(
                                 &service,
@@ -397,6 +399,7 @@ impl RangeRecoveryRuntime {
                             break s;
                         }
                     };
+                    mark("final service lock");
 
                     // STRONG_TRACE_BEGIN
                     #[cfg(test)]

@@ -335,6 +335,17 @@ crate::distribution_native_read::trace::Span::detail("read-attempt", format_args
                                 started.elapsed().as_millis()
                             ))
                         });
+                        // Diagnostic only, with BICDB_RANGE_MOVE_TRACE set.
+                        if started.elapsed() > Duration::from_millis(200) {
+                            crate::distribution_native_host::range_move_trace(started, || {
+                                format!(
+                                    "strong read probe of {} for {} slow: ok={}",
+                                    job.node,
+                                    request.scope.range.id,
+                                    result.is_ok()
+                                )
+                            });
+                        }
 
 // STRONG_TRACE_BEGIN
 #[cfg(test)]

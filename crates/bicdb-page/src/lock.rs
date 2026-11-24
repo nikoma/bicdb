@@ -289,7 +289,9 @@ pub fn probe_directory_lock(dir: &Path) -> Result<DirectoryLockProbe> {
     if rc != 0 {
         return Err(PageError::io(&path, std::io::Error::last_os_error()));
     }
-    if i32::from(lock.l_type) == libc::F_UNLCK {
+    // `l_type` and `F_UNLCK` are `c_short` on macOS and the BSDs, while Linux
+    // declares `F_UNLCK` as `c_int`: widen both sides so every Unix compiles.
+    if i32::from(lock.l_type) == i32::from(libc::F_UNLCK) {
         Ok(DirectoryLockProbe::Unlocked)
     } else {
         Ok(DirectoryLockProbe::HeldByProcess {

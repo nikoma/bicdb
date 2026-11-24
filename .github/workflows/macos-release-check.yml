@@ -1,0 +1,24 @@
+name: macos-release-check
+
+# Builds the published binary on macOS for release branches. Linux CI cannot
+# catch libc type differences between platforms (1.0.525 failed to compile on
+# macOS for exactly that reason).
+
+on:
+  push:
+    branches: ['release/**']
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: cargo build -p bicdb (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust toolchain
+        run: rustup show && rustc --version && cargo --version
+      - name: Build bicdb (release profile, locked)
+        run: cargo build -p bicdb --release --locked
+      - name: Run the binary
+        run: ./target/release/bicdb --version

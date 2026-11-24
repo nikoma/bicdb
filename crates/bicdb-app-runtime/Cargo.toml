@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-app-runtime"
-version = "1.0.526"
+version = "1.0.529"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -21,12 +21,12 @@ base64.workspace = true
 axum.workspace = true
 axum-server.workspace = true
 bytes.workspace = true
-bicdb-core = { path = "../bicdb-core", version = "=1.0.526" }
-bicdb-lua = { path = "../bicdb-lua", version = "=1.0.526" }
-bicdb-script = { path = "../bicdb-script", version = "=1.0.526" }
-bicdb-workflow = { path = "../bicdb-workflow", version = "=1.0.526" }
-bicdb-extension = { path = "../bicdb-extension", version = "=1.0.526", features = ["http"] }
-bicdb-sql = { path = "../bicdb-sql", version = "=1.0.526", default-features = false }
+bicdb-core = { path = "../bicdb-core", version = "=1.0.529" }
+bicdb-lua = { path = "../bicdb-lua", version = "=1.0.529" }
+bicdb-script = { path = "../bicdb-script", version = "=1.0.529" }
+bicdb-workflow = { path = "../bicdb-workflow", version = "=1.0.529" }
+bicdb-extension = { path = "../bicdb-extension", version = "=1.0.529", features = ["http"] }
+bicdb-sql = { path = "../bicdb-sql", version = "=1.0.529", default-features = false }
 chacha20poly1305.workspace = true
 chrono.workspace = true
 chrono-tz = "0.10"

@@ -63,6 +63,11 @@ pub(super) struct NativeBridgeMemberStep {
     /// native publisher returned it and before any later check.
     bridge: Option<Arc<crate::db::NativeJointServingBridgeReceipt>>,
     bridge_confirmed: bool,
+    /// The first window of the attempt that passed this member's commit
+    /// point. A later attempt recovers the bridge it decided instead of
+    /// asking every other member again, and its second window compares
+    /// against it. DATA; cleared when no such bridge exists.
+    publication_first: Option<crate::distribution_range_handoff::NativeBridgeFirstWindow>,
     /// Same marker for this member's own catalogue activation.
     activation_pending: bool,
     /// This member's own catalogue activation receipt, retained as soon as
@@ -71,6 +76,9 @@ pub(super) struct NativeBridgeMemberStep {
         Option<Arc<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt>>,
     activation_sha256: Option<String>,
     activation_confirmed: bool,
+    /// The first window of the Open attempt that passed this member's
+    /// commit point; same use as `publication_first`.
+    activation_first: Option<crate::distribution_range_handoff::NativeOpenFirstWindow>,
     /// The original Registered receiver's release owner, retained under the
     /// same live admission that activated, until it moves into `release`.
     /// Always `None` on a surviving original member.
@@ -396,10 +404,12 @@ pub(super) fn retained_prepare_step<'a>(
                 publishing: Arc::new(AtomicBool::new(false)),
                 bridge: None,
                 bridge_confirmed: false,
+                publication_first: None,
                 activation_pending: false,
                 activation: None,
                 activation_sha256: None,
                 activation_confirmed: false,
+                activation_first: None,
                 release_owner: None,
                 release: None,
                 old_custody_retired: false,
@@ -813,7 +823,7 @@ pub(super) fn publish_member_bridge(
         Ok(outcome)
     };
     let anchor = fresh.anchor;
-    let (custody, confirmed, claim) = {
+    let (custody, confirmed, claim, first, proven) = {
         let mut held = steps.hold()?;
         let step = held
             .get_mut(&request.range_id)
@@ -826,7 +836,7 @@ pub(super) fn publish_member_bridge(
         // The decision this member itself protected, never request DATA.
         request.require_decision(custody.data())?;
         if step.bridge_confirmed && !step.publication_pending {
-            (custody, step.bridge.clone(), None)
+            (custody, step.bridge.clone(), None, None, None)
         } else {
             if step.publishing.swap(true, Ordering::AcqRel) {
                 return Err(invalid(
@@ -839,6 +849,10 @@ pub(super) fn publish_member_bridge(
                 custody,
                 None,
                 Some(PublishingClaim(step.publishing.clone())),
+                step.publication_first.clone(),
+                // Retained only after a write or recovery and its post-write
+                // proofs completed.
+                step.bridge.clone(),
             )
         }
     };
@@ -854,7 +868,56 @@ pub(super) fn publish_member_bridge(
         .current_metadata_leader_hint(token)?
         .ok_or_else(|| invalid("joint bridge step current metadata leader unavailable"))?;
     let BridgeStepOwn { own, business, .. } = fresh;
-    let published = custody.publish_remote_bridge(transport, &leader, &own, business, token)?;
+    let published = match first {
+        // An earlier attempt already recovered or wrote this member's bridge
+        // and completed its post-write proofs: only the second window is
+        // left, and it re-reads the bridge under this member's lock.
+        Some(first) if proven.is_some() => first.published(proven.expect("checked")),
+        // An earlier attempt's first window passed this member's commit
+        // point: recover the bridge it decided, with a whole phase for the
+        // recovery and its post-write proofs, instead of taking the first
+        // window, the read scope and the proofs again on every attempt and
+        // running out of phase in the proofs each time.
+        Some(first) => match custody.recover_remote_bridge(transport, &leader, &first, token) {
+            Ok(published) => published,
+            Err(error) => {
+                if error
+                    .to_string()
+                    .contains(crate::distribution_range_handoff::RECOVERY_ONLY_FOUND_NO_BRIDGE)
+                {
+                    // Nothing was written: the next attempt starts over.
+                    if let Some(step) = steps
+                        .hold_for_retention()
+                        .get_mut(&request.range_id)
+                        .filter(|step| step.decision_sha256 == decision)
+                    {
+                        step.publication_first = None;
+                    }
+                }
+                return Err(error);
+            }
+        },
+        None => {
+            let mut retain_first =
+                |first: crate::distribution_range_handoff::NativeBridgeFirstWindow| {
+                    if let Some(step) = steps
+                        .hold_for_retention()
+                        .get_mut(&request.range_id)
+                        .filter(|step| step.decision_sha256 == decision)
+                    {
+                        step.publication_first = Some(first);
+                    }
+                };
+            custody.publish_remote_bridge(
+                transport,
+                &leader,
+                &own,
+                business,
+                &mut retain_first,
+                token,
+            )?
+        }
+    };
     let receipt = published.receipt().clone();
     // Retained BEFORE the second window or any later check can fail.
     {
@@ -907,6 +970,7 @@ pub(super) fn publish_member_bridge(
             .ok_or_else(|| invalid("joint bridge publish member custody ended"))?;
         step.bridge_confirmed = true;
         step.publication_pending = false;
+        step.publication_first = None;
     }
     token.check()?;
     Ok((published_outcome(&custody, &receipt)?, anchor))
@@ -944,7 +1008,7 @@ pub(super) fn open_member_bridge(
         Ok(outcome)
     };
     let anchor = fresh.anchor;
-    let (custody, bridge, confirmed, claim) = {
+    let (custody, bridge, confirmed, claim, first, proven) = {
         let mut held = steps.hold()?;
         let step = held
             .get_mut(&request.range_id)
@@ -964,18 +1028,40 @@ pub(super) fn open_member_bridge(
                 invalid("joint bridge open member holds no confirmed bridge publication")
             })?;
         if step.activation_confirmed && !step.activation_pending {
-            (custody, bridge, step.activation_sha256.clone(), None)
+            (
+                custody,
+                bridge,
+                step.activation_sha256.clone(),
+                None,
+                None,
+                None,
+            )
         } else {
             if step.publishing.swap(true, Ordering::AcqRel) {
                 return Err(invalid("joint bridge open member attempt already running"));
             }
             // Uncertain from here until a second window confirms.
             step.activation_pending = true;
+            // A Registered member resumes only with its release owner
+            // retained; otherwise the whole attempt is taken again.
+            let first = step
+                .activation_first
+                .clone()
+                .filter(|_| !registered || step.release_owner.is_some());
+            // Retained only after a write or recovery and its post-write
+            // proofs completed (and the release owner, if Registered).
+            let proven = step
+                .activation
+                .clone()
+                .zip(step.activation_sha256.clone())
+                .filter(|_| first.is_some());
             (
                 custody,
                 bridge,
                 None,
                 Some(PublishingClaim(step.publishing.clone())),
+                first,
+                proven,
             )
         }
     };
@@ -1014,16 +1100,68 @@ pub(super) fn open_member_bridge(
         }
     };
     let open_started = Instant::now();
-    let (opened, release_owner) = custody.open_remote_activation(
-        &bridge,
-        transport,
-        &leader,
-        &own,
-        business,
-        registered,
-        token,
-        &mut retain,
-    )?;
+    let (opened, release_owner) = match first {
+        // An earlier attempt already recovered or wrote this member's
+        // activation and completed its post-write proofs: only the second
+        // window is left, and it re-reads the activation from the store.
+        Some(first) if proven.is_some() => {
+            let (activation, activation_sha256) = proven.expect("checked");
+            (first.opened(activation, activation_sha256), None)
+        }
+        // An earlier attempt's first window passed this member's commit
+        // point: recover the activation it decided, under a whole phase,
+        // without asking every other member again.
+        Some(first) => match custody.recover_remote_activation(
+            &bridge,
+            transport,
+            &leader,
+            &first,
+            registered,
+            token,
+            &mut retain,
+        ) {
+            Ok(opened) => opened,
+            Err(error) => {
+                if error
+                    .to_string()
+                    .contains(crate::distribution_range_handoff::OPEN_RECOVERY_FOUND_NO_ACTIVATION)
+                {
+                    // Nothing was written: the next attempt starts over.
+                    if let Some(step) = steps
+                        .hold_for_retention()
+                        .get_mut(&request.range_id)
+                        .filter(|step| step.decision_sha256 == decision)
+                    {
+                        step.activation_first = None;
+                    }
+                }
+                return Err(error);
+            }
+        },
+        None => {
+            let mut retain_first =
+                |first: crate::distribution_range_handoff::NativeOpenFirstWindow| {
+                    if let Some(step) = steps
+                        .hold_for_retention()
+                        .get_mut(&request.range_id)
+                        .filter(|step| step.decision_sha256 == decision)
+                    {
+                        step.activation_first = Some(first);
+                    }
+                };
+            custody.open_remote_activation(
+                &bridge,
+                transport,
+                &leader,
+                &own,
+                business,
+                registered,
+                token,
+                &mut retain,
+                &mut retain_first,
+            )?
+        }
+    };
     crate::distribution_native_host::range_move_trace(open_started, || {
         "member step OPEN first window and activation".into()
     });
@@ -1105,6 +1243,7 @@ pub(super) fn open_member_bridge(
         step.release = Some(release);
         step.activation_confirmed = true;
         step.activation_pending = false;
+        step.activation_first = None;
     }
     token.check()?;
     Ok((

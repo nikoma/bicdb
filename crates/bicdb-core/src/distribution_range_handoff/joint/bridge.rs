@@ -30,10 +30,14 @@ pub(crate) use publication::{
     NativeJointRemoteOldRetirementProof, NativeRemoteBridgeReleased,
     NativeRemoteJointActivationCertificate,
 };
+#[cfg(feature = "tls-replication")]
+pub(crate) use publication::{NativeOpenFirstWindow, OPEN_RECOVERY_FOUND_NO_ACTIVATION};
 #[cfg(all(test, feature = "tls-replication"))]
 pub(crate) use remote_publication::{
     test_arm_bridge_second_window_fault, NativeBridgeSecondWindowFault,
 };
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_publication::{NativeBridgeFirstWindow, RECOVERY_ONLY_FOUND_NO_BRIDGE};
 
 /// An uncounted bundle of genuine actual evidence and an untrusted service
 /// association. Construction performs no validation and grants nothing.
@@ -816,6 +820,32 @@ impl NativeJointActivationAdmission {
             return remote.pass_commit_point();
         }
         Ok(())
+    }
+    /// The decision to recover this member's existing exact bridge; see
+    /// `RemoteActivationBacking::pass_recovery_point`.
+    pub(crate) fn pass_recovery_point(&self) -> Result<()> {
+        #[cfg(feature = "tls-replication")]
+        if let ActivationBacking::Remote(remote) = &self.backing {
+            return remote.pass_recovery_point();
+        }
+        Ok(())
+    }
+    /// Refuses a write by a recovery-only admission; see
+    /// `RemoteActivationBacking::require_may_write`.
+    pub(crate) fn require_may_write(&self) -> Result<()> {
+        #[cfg(feature = "tls-replication")]
+        if let ActivationBacking::Remote(remote) = &self.backing {
+            return remote.require_may_write();
+        }
+        Ok(())
+    }
+    /// Whether this admission's first window passed its commit point.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn passed_commit_point(&self) -> bool {
+        match &self.backing {
+            ActivationBacking::Remote(remote) => remote.passed_commit_point(),
+            _ => false,
+        }
     }
     /// The caller already owns THIS service latch. Every other local-service
     /// check is nonwaiting; never recursively acquire the current latch.

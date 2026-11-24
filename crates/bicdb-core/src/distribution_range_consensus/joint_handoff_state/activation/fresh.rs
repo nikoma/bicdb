@@ -88,7 +88,7 @@ impl RangeWriteStore {
             .committed()
             .require_native_publication_metadata(database, self)?;
         // The decision to recover the earlier attempt's exact activation.
-        admission.pass_commit_point()?;
+        admission.pass_recovery_point()?;
         let _version = admission.committed().native_publication_guard()?;
         Ok(Some(receipt))
     }

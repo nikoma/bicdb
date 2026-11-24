@@ -22,12 +22,42 @@ pub(super) struct RemoteOpenBacking {
     /// registration it proved current under its own service lock.
     local_phase: CommittedNativeJointDecisionObservation,
     local_writer: crate::db::NativeJointPhaseOwner,
-    window: RemotePreparationWindow,
+    /// `None` only for a recovery of this member's own existing activation
+    /// (`recover_remote_activation`): such an admission can never write.
+    window: Option<RemotePreparationWindow>,
+    /// Every other NEW member's identity before the write: this admission's
+    /// own window, or the deciding attempt's for a recovery.
+    identities: BTreeMap<ClusterNodeId, NativeJointBridgeMemberIdentity>,
     /// Set once this member's activation commit point is passed (see
     /// `pass_commit_point`); every frame was live at that point.
     past_commit_point: std::sync::atomic::AtomicBool,
 }
+/// Refusal of a recovery-only Open that found no activation to recover.
+pub(crate) const OPEN_RECOVERY_FOUND_NO_ACTIVATION: &str =
+    "a recovery of this member's own catalogue activation found no activation to recover";
 impl RemoteOpenBacking {
+    fn window(&self) -> Result<&RemotePreparationWindow> {
+        self.window
+            .as_ref()
+            .ok_or_else(|| invalid(OPEN_RECOVERY_FOUND_NO_ACTIVATION))
+    }
+    /// The decision to recover an existing exact activation: the commit
+    /// point with a first window; a recovery-only admission has no frame to
+    /// check, as an earlier attempt passed its own commit point.
+    pub(super) fn pass_recovery_point(&self) -> Result<()> {
+        if self.window.is_some() {
+            return self.pass_commit_point();
+        }
+        self.past_commit_point
+            .store(true, std::sync::atomic::Ordering::Release);
+        Ok(())
+    }
+    pub(super) fn passed_commit_point(&self) -> bool {
+        self.window.is_some()
+            && self
+                .past_commit_point
+                .load(std::sync::atomic::Ordering::Acquire)
+    }
     /// The commit point of this member's own catalogue activation: every
     /// other NEW member's frame must be live here, immediately before the
     /// activation is written (or, when an earlier attempt's exact activation
@@ -40,14 +70,16 @@ impl RemoteOpenBacking {
     /// proofs that follow the write refused a durable activation on every
     /// repetition once those proofs took longer than the frames lasted.
     pub(super) fn pass_commit_point(&self) -> Result<()> {
-        self.window.require_live()?;
+        self.window()?.require_live()?;
         self.past_commit_point
             .store(true, std::sync::atomic::Ordering::Release);
         Ok(())
     }
     fn require_window(&self, local: &ClusterNodeId) -> Result<()> {
-        if &self.window.observer != local || self.window.kind != NativeJointBridgePhaseKindV1::Open
-        {
+        let Some(window) = &self.window else {
+            return Ok(());
+        };
+        if &window.observer != local || window.kind != NativeJointBridgePhaseKindV1::Open {
             return Err(invalid(
                 "remote open window was observed by another member/phase",
             ));
@@ -71,23 +103,20 @@ impl RemoteOpenBacking {
             custody.require_original_caller()?;
         }
         self.require_window(bridge.local_node_id())?;
-        if self.window.frames.len() + 1 != local.data().new_members().len() {
-            return Err(invalid("remote open window omits a NEW member"));
-        }
-        if !self
-            .past_commit_point
-            .load(std::sync::atomic::Ordering::Acquire)
-        {
-            self.window.require_live()?;
-        }
         let (term, index, context) = fresh.metadata_anchor();
         let mut anchors = vec![self.local_phase.metadata_anchor()];
-        anchors.extend(
-            self.window
-                .frames
-                .values()
-                .map(|frame| frame.metadata_anchor()),
-        );
+        if let Some(window) = &self.window {
+            if window.frames.len() + 1 != local.data().new_members().len() {
+                return Err(invalid("remote open window omits a NEW member"));
+            }
+            if !self
+                .past_commit_point
+                .load(std::sync::atomic::Ordering::Acquire)
+            {
+                window.require_live()?;
+            }
+            anchors.extend(window.frames.values().map(|frame| frame.metadata_anchor()));
+        }
         for old in anchors {
             if term < old.0 || index < old.1 || context == old.2 {
                 return Err(invalid(
@@ -99,8 +128,7 @@ impl RemoteOpenBacking {
     }
     /// The post-quorum anchor recorded in every OTHER member's own bridge.
     pub(super) fn bridge_anchors(&self) -> Result<Vec<(u64, u64, Uuid)>> {
-        self.window
-            .identities
+        self.identities
             .values()
             .map(|identity| {
                 identity
@@ -118,7 +146,12 @@ impl RemoteOpenBacking {
         local: &ClusterNodeId,
     ) -> Result<()> {
         self.require_window(local)?;
-        self.window.require_complete(data)
+        // A recovery-only admission trusts no other member and may only
+        // recover an activation that already exists.
+        match &self.window {
+            Some(window) => window.require_complete(data),
+            None => Ok(()),
+        }
     }
     pub(super) fn require_local_native_scope(
         &self,
@@ -153,6 +186,32 @@ impl RemoteOpenBacking {
     }
 }
 
+/// What one Open attempt's first window attested, retained once that attempt
+/// passed its commit point. DATA for the second window; it grants nothing.
+#[derive(Clone)]
+pub(crate) struct NativeOpenFirstWindow {
+    identities: BTreeMap<ClusterNodeId, NativeJointBridgeMemberIdentity>,
+    first_contexts: std::collections::BTreeSet<Uuid>,
+    post_quorum: (u64, u64, Uuid),
+}
+impl NativeOpenFirstWindow {
+    /// The activation a second window confirms, for this member's activation
+    /// retained after an earlier attempt's recovery or write and its
+    /// post-write proofs completed.
+    pub(crate) fn opened(
+        &self,
+        activation: Arc<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt>,
+        activation_sha256: String,
+    ) -> NativeRemoteBridgeOpened {
+        NativeRemoteBridgeOpened {
+            activation,
+            activation_sha256,
+            identities: self.identities.clone(),
+            first_contexts: self.first_contexts.clone(),
+            post_quorum: self.post_quorum,
+        }
+    }
+}
 /// This member's durable catalogue activation together with the identity
 /// every other NEW member reported BEFORE the write. Not yet confirmed.
 pub(crate) struct NativeRemoteBridgeOpened {
@@ -241,6 +300,10 @@ impl NativeJointPreparationCustody {
             phase,
             point.as_deref(),
         )?;
+        crate::distribution_native_host::range_move_trace(started, || {
+            "remote open local phase: own store reconciled".into()
+        });
+        let started = Instant::now();
         let committed = self.actual.observe_fresh_committed_with_point(
             &service,
             metadata,
@@ -248,6 +311,10 @@ impl NativeJointPreparationCustody {
             data.old_range().id,
             point,
         )?;
+        crate::distribution_native_host::range_move_trace(started, || {
+            "remote open local phase: committed decision observed".into()
+        });
+        let started = Instant::now();
         let writer = self.actual.require_current_under_open_preparation_custody(
             &service,
             &committed,
@@ -255,7 +322,7 @@ impl NativeJointPreparationCustody {
             self,
         )?;
         crate::distribution_native_host::range_move_trace(started, || {
-            "remote open local phase: reconcile and local observation".into()
+            "remote open local phase: member and bridge proved current".into()
         });
         Ok((committed, writer))
     }
@@ -283,6 +350,7 @@ impl NativeJointPreparationCustody {
         retain: &mut dyn FnMut(
             &Arc<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt>,
         ),
+        retain_first: &mut dyn FnMut(NativeOpenFirstWindow),
     ) -> Result<(
         NativeRemoteBridgeOpened,
         Option<crate::distribution_native_host::NativeRegisteredRemoteJointReleaseOwner>,
@@ -375,12 +443,55 @@ impl NativeJointPreparationCustody {
         traced("post-quorum observation");
         let identities = window.identities.clone();
         let first_contexts = window.contexts();
+        self.activate_remote(
+            bridge,
+            local_phase,
+            local_writer,
+            Some(window),
+            identities,
+            first_contexts,
+            fresh,
+            &phase,
+            registered,
+            parent,
+            retain,
+            retain_first,
+        )
+    }
+    /// The admission and the unchanged local activation of a remote Open:
+    /// final foreign boundary, local native scope, recover-or-persist,
+    /// activated Open installation, then the receipt retained, and with
+    /// `registered` the original release owner retained under the same
+    /// admission. With no `window` the admission may only recover.
+    #[allow(clippy::too_many_arguments)]
+    fn activate_remote(
+        self: &Arc<Self>,
+        bridge: &Arc<crate::db::NativeJointServingBridgeReceipt>,
+        local_phase: CommittedNativeJointDecisionObservation,
+        local_writer: crate::db::NativeJointPhaseOwner,
+        window: Option<RemotePreparationWindow>,
+        identities: BTreeMap<ClusterNodeId, NativeJointBridgeMemberIdentity>,
+        first_contexts: std::collections::BTreeSet<Uuid>,
+        fresh: CommittedNativeJointDecisionObservation,
+        phase: &crate::CancellationToken,
+        registered: bool,
+        parent: &crate::CancellationToken,
+        retain: &mut dyn FnMut(
+            &Arc<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt>,
+        ),
+        retain_first: &mut dyn FnMut(NativeOpenFirstWindow),
+    ) -> Result<(
+        NativeRemoteBridgeOpened,
+        Option<crate::distribution_native_host::NativeRegisteredRemoteJointReleaseOwner>,
+    )> {
+        let data = self.data();
         let post_quorum = fresh.metadata_anchor();
         let admission = NativeJointOpenAdmission {
             backing: OpenBacking::Remote(RemoteOpenBacking {
                 local_phase,
                 local_writer,
                 window,
+                identities: identities.clone(),
                 past_commit_point: std::sync::atomic::AtomicBool::new(false),
             }),
             attempted: std::sync::atomic::AtomicBool::new(false),
@@ -395,10 +506,25 @@ impl NativeJointPreparationCustody {
             fresh,
         };
         admission.require_live()?;
-        // (4) The unchanged local activation: final foreign boundary, local
-        // native scope, recover-or-persist, activated Open installation.
-        let activation = Arc::new(admission.persist_local_catalogue_activation(parent)?);
-        traced("local catalogue activation");
+        let started = Instant::now();
+        let activation = admission.persist_local_catalogue_activation(parent);
+        crate::distribution_native_host::range_move_trace(started, || {
+            format!(
+                "remote open part: local catalogue activation ok={}",
+                activation.is_ok()
+            )
+        });
+        // Whatever follows, a first window that passed its commit point
+        // decided this member's activation; a later attempt that finds it
+        // recovers it without asking anyone again.
+        if admission.passed_commit_point() {
+            retain_first(NativeOpenFirstWindow {
+                identities: identities.clone(),
+                first_contexts: first_contexts.clone(),
+                post_quorum,
+            });
+        }
+        let activation = Arc::new(activation?);
         retain(&activation);
         if activation.native().data() != data
             || activation.native_bridge_sha256() != bridge.checksum_sha256()
@@ -423,6 +549,99 @@ impl NativeJointPreparationCustody {
             },
             release_owner,
         ))
+    }
+    /// A later attempt of an Open whose first window already passed its
+    /// commit point (`first`): nothing here asks another member again. Under
+    /// a full fresh phase the member takes its own pre-quorum and
+    /// post-quorum observations and runs the unchanged local activation with
+    /// an admission that may only RECOVER the exact existing activation;
+    /// with none it refuses (`OPEN_RECOVERY_FOUND_NO_ACTIVATION`) and the
+    /// caller starts over. The activation stays unconfirmed until a second
+    /// window reports every other member unchanged against `first`.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn recover_remote_activation(
+        self: &Arc<Self>,
+        bridge: &Arc<crate::db::NativeJointServingBridgeReceipt>,
+        client: &TcpClusterRelocationTransport,
+        metadata_leader: &ClusterNodeId,
+        first: &NativeOpenFirstWindow,
+        registered: bool,
+        parent: &crate::CancellationToken,
+        retain: &mut dyn FnMut(
+            &Arc<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt>,
+        ),
+    ) -> Result<(
+        NativeRemoteBridgeOpened,
+        Option<crate::distribution_native_host::NativeRegisteredRemoteJointReleaseOwner>,
+    )> {
+        let request = self.actual.bound_preparation_request(parent);
+        request.check()?;
+        self.require_original_caller()?;
+        self.require_remote_open_actor(bridge, client)?;
+        let data = self.data();
+        let phase = request.child_with_deadline(Instant::now() + REMOTE_PHASE_BUDGET);
+        let started = Instant::now();
+        let (local_phase, local_writer) =
+            self.observe_open_local_phase(bridge, client, metadata_leader, &phase)?;
+        if local_phase.data() != data {
+            return Err(invalid(
+                "remote open recovery changed protected global decision",
+            ));
+        }
+        let phase = phase.child_with_deadline(local_phase.deadline());
+        phase.check()?;
+        let business = Uuid::now_v7();
+        let metadata = client.acquire_host_metadata_observation(
+            metadata_leader,
+            business,
+            observation_budget(&phase)?,
+            &phase,
+        )?;
+        let point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &self.service,
+            &metadata,
+            business,
+            &phase,
+        )?;
+        let fresh = {
+            let service = self
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("remote open recovery service busy"))?;
+            self.actual.observe_fresh_committed_with_point(
+                &service,
+                metadata,
+                business,
+                data.old_range().id,
+                point,
+            )?
+        };
+        let anchor = fresh.metadata_anchor();
+        if anchor.0 < first.post_quorum.0
+            || anchor.1 < first.post_quorum.1
+            || anchor.2 == first.post_quorum.2
+        {
+            return Err(invalid(
+                "remote open recovery is not after the deciding post-quorum observation",
+            ));
+        }
+        crate::distribution_native_host::range_move_trace(started, || {
+            "remote open recovery: own observations".into()
+        });
+        self.activate_remote(
+            bridge,
+            local_phase,
+            local_writer,
+            None,
+            first.identities.clone(),
+            first.first_contexts.clone(),
+            fresh,
+            &phase,
+            registered,
+            parent,
+            retain,
+            &mut |_| {},
+        )
     }
     /// The AFTER half of the remote activation: a second bounded OPEN window
     /// bound to a metadata observation taken after the durable write. Every

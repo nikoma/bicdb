@@ -990,6 +990,10 @@ impl BicDb {
         let (term, index, context) = admission.committed().metadata_anchor();
         let existing = scope.actual_existing_bridge()?;
         let recovered = existing.is_some();
+        if !recovered {
+            // A recovery-only admission never writes.
+            admission.require_may_write()?;
+        }
         // Protected success is historical fact; preserve EXACT original QQ and
         // post-QQ audit even when the new phase has a different MQ context.
         let mut record = existing.unwrap_or_else(|| NativeJointServingBridgeRecord {
@@ -1063,7 +1067,7 @@ impl BicDb {
         if recovered {
             // An earlier attempt's exact bridge: the recovery decision is this
             // attempt's commit point.
-            admission.pass_commit_point()?;
+            admission.pass_recovery_point()?;
         }
         let receipt = scope.receipt_from_actual(record)?;
         scope.require_bridge_postcondition(&receipt, controlled.as_ref())?;

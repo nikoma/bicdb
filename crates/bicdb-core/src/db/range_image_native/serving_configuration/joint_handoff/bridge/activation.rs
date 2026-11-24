@@ -1071,10 +1071,17 @@ impl BicDb {
         }
         let receipt = scope.receipt_from_actual(record)?;
         scope.require_bridge_postcondition(&receipt, controlled.as_ref())?;
-        admission.require_local_publication_scope(&scope, store)?;
-        admission
-            .committed()
-            .require_native_publication_metadata(self, store)?;
+        if !recovered {
+            // A write happened since the checks above: prove the scope and
+            // the metadata again. A recovery wrote nothing, under the same
+            // continuously held scope, so repeating those two complete checks
+            // right after them proved nothing more; on a slow host they were
+            // what a recovery attempt ran out of time in.
+            admission.require_local_publication_scope(&scope, store)?;
+            admission
+                .committed()
+                .require_native_publication_metadata(self, store)?;
+        }
         drop(controlled);
         traced("post-write proofs");
         self.range_mutations

@@ -352,6 +352,12 @@ impl NativeStrongEventDispatcher {
         // under load that work slowed the first read past its budget. The
         // range is request DATA here; a refusal grants nothing.
         if let Some(busy) = runtime.point_context_held(request.range_id) {
+            crate::distribution_native_host::range_move_trace(std::time::Instant::now(), || {
+                format!(
+                    "strong read request {} refused before admission: {busy}",
+                    request.business_request_id
+                )
+            });
             return fail(NativeEventGetUnavailableCode::Busy, None, &busy);
         }
         let host_metadata =

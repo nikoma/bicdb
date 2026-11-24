@@ -877,6 +877,11 @@ mod client {
             let mut hint: Option<NativeEventRoute> = None;
             let mut retry_after = std::time::Duration::from_millis(50);
             let mut last = invalid("typed event Get unavailable");
+            // The member each exchange was sent to, and the member that
+            // refused an added exchange as busy while this request's own
+            // earlier exchange was still executing there.
+            let mut destinations = std::collections::BTreeMap::<usize, ClusterNodeId>::new();
+            let mut busy_with_own_read: Option<ClusterNodeId> = None;
             // A finite bound plus the SAME absolute request deadline. Typed
             // route/unavailable results never become a successful empty row.
             for attempt in 0..128 {
@@ -886,6 +891,39 @@ mod client {
                 parent
                     .check()
                     .map_err(|error| operation_error.take_or(error))?;
+                // A member that refused an added exchange as busy is alive and
+                // still executing this request's own earlier read: that read
+                // is listened to until it answers or the request ends, and
+                // the member is not sent another read, nor every member a
+                // discovery exchange, every few milliseconds meanwhile. That
+                // traffic only slowed the read it waited for; on a slow host
+                // the read then never finished inside its budget and the
+                // same read was refused as busy for 20 s.
+                if let Some(member) = busy_with_own_read.clone() {
+                    if reads
+                        .attempts
+                        .iter()
+                        .any(|(id, _)| destinations.get(id) == Some(&member))
+                    {
+                        while let ReadWaited::Replied(_, reply) =
+                            reads.wait(None, deadline, operation_error)
+                        {
+                            if let Some(value) = late(reply.result, operation_error)? {
+                                parent.check()?;
+                                return Ok(value);
+                            }
+                            if !reads
+                                .attempts
+                                .iter()
+                                .any(|(id, _)| destinations.get(id) == Some(&member))
+                            {
+                                break;
+                            }
+                        }
+                    }
+                    busy_with_own_read = None;
+                    continue;
+                }
                 if attempt > 0 {
                     let until = (std::time::Instant::now() + retry_after).min(deadline);
                     // An exchange that is still in flight may answer during
@@ -977,6 +1015,7 @@ mod client {
                     .unwrap_or(5000)
                     .clamp(1, 5000),
                 };
+                let sent_to = destination.clone();
                 let exchange = {
                     let token = token.clone();
                     let reports = reports.clone();
@@ -996,7 +1035,10 @@ mod client {
                     .name("event-get-attempt".into())
                     .spawn_scoped(scope, exchange)
                 {
-                    Ok(_) => reads.attempts.push((attempt, token)),
+                    Ok(_) => {
+                        destinations.insert(attempt, sent_to);
+                        reads.attempts.push((attempt, token));
+                    }
                     Err(error) => {
                         operation_error.read_failed(error.into());
                         continue;
@@ -1040,6 +1082,16 @@ mod client {
                                 return Err(invalid(
                                     "explicit Strong Get is unsupported by this unenforced deployment",
                                 ));
+                            }
+                            if matches!(code, NativeEventGetUnavailableCode::Busy)
+                                && destinations.get(&attempt).is_some_and(|member| {
+                                    reads
+                                        .attempts
+                                        .iter()
+                                        .any(|(id, _)| destinations.get(id) == Some(member))
+                                })
+                            {
+                                busy_with_own_read = destinations.get(&attempt).cloned();
                             }
                             if route.is_some() {
                                 hint = route;

@@ -95,6 +95,23 @@ impl Drop for Cluster {
                     let log = self.root.join(format!("node{i}.g{generation}.stderr"));
                     if let Ok(text) = std::fs::read_to_string(&log) {
                         let lines = text.lines().collect::<Vec<_>>();
+                        let traced = lines
+                            .iter()
+                            .filter(|line| line.contains("RANGE_MOVE_TRACE"))
+                            .collect::<Vec<_>>();
+                        eprintln!(
+                            "RESTART_M FAILURE node{i} generation {generation} last traces ({} in all):\n{}",
+                            traced.len(),
+                            traced[traced.len().saturating_sub(80)..]
+                                .iter()
+                                .map(|line| line.chars().take(1500).collect::<String>())
+                                .collect::<Vec<_>>()
+                                .join("\n")
+                        );
+                        let lines = lines
+                            .into_iter()
+                            .filter(|line| !line.contains("RANGE_MOVE_TRACE"))
+                            .collect::<Vec<_>>();
                         let tail = &lines[lines.len().saturating_sub(40)..];
                         eprintln!(
                             "RESTART_M FAILURE node{i} generation {generation} stderr tail ({} lines):\n{}",
@@ -157,6 +174,10 @@ impl Cluster {
             .arg("--cluster-tls-ca")
             .arg(self.root.join("ca.pem"));
         let generation = self.generations[i];
+        // Every member reports its slow Strong reads (each step's time and
+        // the outcome) and who holds a busy read context; a failure prints
+        // them below.
+        process.env("BICDB_RANGE_MOVE_TRACE", "1");
         process
             .stdin(Stdio::null())
             .stdout(

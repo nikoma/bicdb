@@ -156,6 +156,9 @@ impl RangeRecoveryRuntime {
         // a refusal. Never consulted for admission or currentness.
         let begun = Instant::now();
         let budget_ms = request.budget_ms;
+        let marks = Arc::new(Mutex::new(Vec::<(&'static str, u128)>::new()));
+        let worker_marks = Arc::clone(&marks);
+        let (traced_range, traced_request) = (request.range_id, request.business_request_id);
 
         // STRONG_TRACE_BEGIN
         #[cfg(test)]
@@ -184,10 +187,9 @@ impl RangeRecoveryRuntime {
                 );
                 // STRONG_TRACE_END
 
-                let marks = std::cell::RefCell::new(Vec::<(&'static str, u128)>::new());
-                let mark = |step: &'static str| {
-                    marks.borrow_mut().push((step, begun.elapsed().as_millis()))
-                };
+                let marks = worker_marks;
+                let mark =
+                    |step: &'static str| marks.lock().push((step, begun.elapsed().as_millis()));
                 mark("worker started");
                 let mut result = (|| {
                     let check = |stage, error| NativeStrongPointReadUnavailable::new(stage, error);
@@ -417,7 +419,7 @@ impl RangeRecoveryRuntime {
                 })();
                 if let Err(refusal) = &mut result {
                     let steps = marks
-                        .borrow()
+                        .lock()
                         .iter()
                         .map(|(step, ms)| format!("{step} at {ms}ms"))
                         .collect::<Vec<_>>()
@@ -434,10 +436,11 @@ impl RangeRecoveryRuntime {
                 if begun.elapsed() > std::time::Duration::from_millis(500) {
                     crate::distribution_native_host::range_move_trace(begun, || {
                         format!(
-                            "strong point read of {} slow: budget {budget_ms}ms, {}; {}",
+                            "strong point read of {} slow: request {}, budget {budget_ms}ms, {}; {}",
                             request.range_id,
+                            request.business_request_id,
                             marks
-                                .borrow()
+                                .lock()
                                 .iter()
                                 .map(|(step, ms)| format!("{step} at {ms}ms"))
                                 .collect::<Vec<_>>()
@@ -476,6 +479,20 @@ impl RangeRecoveryRuntime {
         }
         loop {
             if let Err(error) = token.check() {
+                // Diagnostic only, with BICDB_RANGE_MOVE_TRACE set: the
+                // caller's budget ended while its worker still runs; the
+                // worker's last finished step names what it is waiting for.
+                crate::distribution_native_host::range_move_trace(begun, || {
+                    format!(
+                        "strong point read of {traced_range} still running at its caller's deadline: request {traced_request}, budget {budget_ms}ms, {}",
+                        marks
+                            .lock()
+                            .iter()
+                            .map(|(step, ms)| format!("{step} at {ms}ms"))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                });
                 // STRONG_TRACE_BEGIN
                 #[cfg(test)]
                 crate::distribution_native_read::trace::Span::detail(

@@ -373,7 +373,7 @@ pub(crate) fn error_response_for_error(
                 stream,
                 "ERROR",
                 error.sqlstate(),
-                &error.to_string(),
+                &error.postgres_message(),
                 &error.fields(),
             )
         }
@@ -410,7 +410,7 @@ pub(crate) fn error_response_for_error(
                 stream,
                 "ERROR",
                 bicdb_error_sqlstate(error),
-                &error.to_string(),
+                &bicdb_sql::postgres_bicdb_error_message(error),
                 &fields,
             )
         }

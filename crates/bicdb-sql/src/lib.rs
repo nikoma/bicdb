@@ -1979,6 +1979,37 @@ pub enum UniqueViolationOrigin {
     IndexBuild,
 }
 
+/// A core error's primary message as PostgreSQL clients see it.
+pub fn postgres_bicdb_error_message(error: &BicDbError) -> String {
+    match error {
+        BicDbError::Authorization(message) => message.clone(),
+        BicDbError::CollectionNotFound(name) => {
+            format!("relation \"{}\" does not exist", catalog_display_name(name))
+        }
+        error => display_bicdb_error(error),
+    }
+}
+
+/// A parser diagnostic in PostgreSQL's words: `syntax error at or near "X"`
+/// or `syntax error at end of input`. Other messages pass through.
+fn postgres_syntax_message(message: &str) -> String {
+    let Some(detail) = message.strip_prefix("sql parser error: ") else {
+        return message.to_string();
+    };
+    let Some(found) = detail.split(", found: ").nth(1) else {
+        return message.to_string();
+    };
+    let token = found
+        .rsplit_once(" at Line: ")
+        .map(|(token, _)| token)
+        .unwrap_or(found)
+        .trim();
+    if token.is_empty() || token == "EOF" {
+        return "syntax error at end of input".to_string();
+    }
+    format!("syntax error at or near \"{token}\"")
+}
+
 /// Core errors as SQL clients see them: a missing schema-qualified relation is
 /// named by its logical name rather than its physical storage name.
 fn display_bicdb_error(error: &BicDbError) -> String {
@@ -2373,6 +2404,25 @@ impl SqlError {
         }
     }
 
+    /// The primary message PostgreSQL sends for this error. `Display` keeps
+    /// BicDB's diagnostic prefixes for embedded callers and logs; clients on
+    /// the PostgreSQL protocol see PostgreSQL's wording.
+    pub fn postgres_message(&self) -> String {
+        match self {
+            Self::WithNotices { error, .. } => error.postgres_message(),
+            Self::Rethrown(error) => error.postgres_message(),
+            Self::BicDb(error) => postgres_bicdb_error_message(error),
+            Self::InvalidCollection(name) => {
+                format!("relation \"{}\" does not exist", catalog_display_name(name))
+            }
+            Self::InvalidSql(message) => postgres_syntax_message(message),
+            Self::Unsupported(message) | Self::UnsupportedPlpgsqlFeature(message) => {
+                message.clone()
+            }
+            other => other.to_string(),
+        }
+    }
+
     pub fn sqlstate(&self) -> &str {
         match self {
             Self::WithNotices { error, .. } => error.sqlstate(),
@@ -2385,6 +2435,13 @@ impl SqlError {
             Self::UndefinedRole { .. } => "42704",
             Self::InvalidTransactionState { .. } => "25P01",
             Self::RaisedException { sqlstate, .. } => sqlstate,
+            // A duplicate relation reaches here as plain SQL text from several
+            // DDL paths; PostgreSQL reports it as duplicate_table.
+            Self::InvalidSql(message)
+                if message.starts_with("relation \"") && message.ends_with("\" already exists") =>
+            {
+                "42P07"
+            }
             Self::InvalidSql(_) => "42601",
             Self::ExactUnitsCapabilityDenied => "42501",
             Self::ApplicationTransactionControlDenied => "2D000",

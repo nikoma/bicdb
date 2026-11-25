@@ -918,14 +918,8 @@ impl SqlEngine<'_> {
                         }
                     }
                 }
-                // One relation in scope: name it, like the existing column errors.
-                match scope.relations.as_slice() {
-                    [relation] if !relation.alias.is_empty() => Err(SqlError::UndefinedColumn {
-                        table: relation.alias.clone(),
-                        column: name.to_string(),
-                    }),
-                    _ => Err(undefined_column(name)),
-                }
+                // PostgreSQL names only the column of an unqualified reference.
+                Err(undefined_column(name))
             }
             [.., qualifier, column] if parts.len() <= 3 => {
                 let (qualifier, column) = (qualifier.value.as_str(), column.value.as_str());
@@ -949,10 +943,11 @@ impl SqlEngine<'_> {
                             Some(columns) if columns.iter().any(|name| same_name(name, column)) => {
                                 Ok(())
                             }
-                            Some(_) => Err(SqlError::UndefinedColumn {
-                                table: relation.alias.clone(),
-                                column: column.to_string(),
-                            }),
+                            Some(_) => Err(SqlError::data_exception_public(
+                                "42703",
+                                format!("column {}.{} does not exist", relation.alias, column),
+                                None,
+                            )),
                         };
                     }
                 }

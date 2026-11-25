@@ -1623,8 +1623,87 @@ pub(crate) fn select_expr_column_name(expr: &Expr) -> String {
                 inner
             }
         }
-        _ => "?column?".to_string(),
+        other => postgres_other_column_name(other),
     }
+}
+
+/// PostgreSQL's output name (FigureColname) for expressions the specific
+/// rules above do not name: `case`, `exists`, `row`, a scalar subquery's
+/// column, the SQL-syntax functions, and `?column?` for operators and
+/// literals.
+pub(crate) fn postgres_other_column_name(expr: &Expr) -> String {
+    postgres_figure_column_name(expr)
+        .map(|(name, _)| name)
+        .unwrap_or_else(|| "?column?".to_string())
+}
+
+/// (name, strength): 2 for a real name, 1 for a fallback word such as a
+/// cast's type name or `case`.
+pub(crate) fn postgres_figure_column_name(expr: &Expr) -> Option<(String, u8)> {
+    match expr {
+        Expr::Identifier(ident) => Some((ident.value.clone(), 2)),
+        Expr::CompoundIdentifier(parts) => parts.last().map(|part| (part.value.clone(), 2)),
+        Expr::Nested(inner) | Expr::Collate { expr: inner, .. } => {
+            postgres_figure_column_name(inner)
+        }
+        Expr::Cast {
+            expr, data_type, ..
+        } => match postgres_figure_column_name(expr) {
+            Some((name, 2)) if !cast_originates_from_literal(expr) => Some((name, 2)),
+            _ => Some((typed_literal_column_name(data_type), 1)),
+        },
+        Expr::TypedString(value) => Some((typed_literal_column_name(&value.data_type), 1)),
+        Expr::Function(_) | Expr::Array(_) | Expr::CompoundFieldAccess { .. } => {
+            let name = select_expr_column_name(expr);
+            (name != "?column?").then_some((name, 2))
+        }
+        Expr::Case { else_result, .. } => {
+            match else_result.as_deref().and_then(postgres_figure_column_name) {
+                Some((name, 2)) => Some((name, 2)),
+                _ => Some(("case".to_string(), 1)),
+            }
+        }
+        Expr::Exists { .. } => Some(("exists".to_string(), 2)),
+        Expr::Subquery(query) => postgres_output_names(query)
+            .and_then(|names| names.into_iter().next())
+            .filter(|name| name != "?column?")
+            .map(|name| (name, 2)),
+        Expr::Tuple(_) => Some(("row".to_string(), 2)),
+        Expr::Interval(_) => Some(("interval".to_string(), 1)),
+        Expr::Extract { .. } => Some(("extract".to_string(), 2)),
+        Expr::Substring { .. } => Some(("substring".to_string(), 2)),
+        Expr::Position { .. } => Some(("position".to_string(), 2)),
+        Expr::Trim { .. } => Some(("btrim".to_string(), 2)),
+        Expr::Ceil { .. } => Some(("ceil".to_string(), 2)),
+        Expr::Floor { .. } => Some(("floor".to_string(), 2)),
+        Expr::AtTimeZone { .. } => Some(("timezone".to_string(), 2)),
+        _ => None,
+    }
+}
+
+/// PostgreSQL's names for a select list's output columns, when the list has
+/// no wildcards.
+pub(crate) fn postgres_output_names(query: &Query) -> Option<Vec<String>> {
+    let mut body = query.body.as_ref();
+    loop {
+        match body {
+            SetExpr::Query(inner) => body = inner.body.as_ref(),
+            SetExpr::SetOperation { left, .. } => body = left.as_ref(),
+            _ => break,
+        }
+    }
+    let SetExpr::Select(select) = body else {
+        return None;
+    };
+    select
+        .projection
+        .iter()
+        .map(|item| match item {
+            SelectItem::ExprWithAlias { alias, .. } => Some(alias.value.clone()),
+            SelectItem::UnnamedExpr(expr) => Some(postgres_other_column_name(expr)),
+            _ => None,
+        })
+        .collect()
 }
 
 pub(crate) fn row_expr_column_name(expr: &Expr) -> String {
@@ -1677,7 +1756,9 @@ pub(crate) fn row_expr_column_name(expr: &Expr) -> String {
             }
         }
         Expr::Nested(expr) => row_expr_column_name(expr),
-        other => other.to_string(),
+        // Oracle names an unaliased expression by its text.
+        other if crate::oracle::simple_case::enabled() => other.to_string(),
+        other => postgres_other_column_name(other),
     }
 }
 

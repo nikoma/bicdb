@@ -1886,7 +1886,11 @@ pub(crate) fn execute_builtin_function_with_engine(
                     SqlResult::new(vec![name.replace("pg_catalog.", "")], vec![vec![value]])
                 })
                 .ok_or_else(|| {
-                    SqlError::Unsupported(format!("function {other} is not supported without FROM"))
+                    undefined_function_error(db, function, &arg_types).unwrap_or_else(|| {
+                        SqlError::Unsupported(format!(
+                            "function {other} is not supported without FROM"
+                        ))
+                    })
                 })
         }
     }
@@ -6770,4 +6774,60 @@ fn first_non_null_index_field(schema: &TableSchema, function: &Function) -> Opti
         fields.push(field);
     }
     Some(IndexField::FirstNonNull(fields))
+}
+
+/// PostgreSQL's 42883 for a call that names no built-in and no user
+/// function: `function f(integer, unknown) does not exist`. `None` when the
+/// name exists (the failure is something else).
+pub(crate) fn undefined_function_error<'a>(
+    db: impl Into<Option<&'a BicDb>>,
+    function: &Function,
+    arg_types: &[Option<String>],
+) -> Option<SqlError> {
+    let db = db.into();
+    let full = object_name(&function.name).ok()?.to_ascii_lowercase();
+    let name = full.rsplit('.').next().unwrap_or(&full).to_string();
+    if crate::builtin_signatures::PG_CATALOG_FUNCTION_SIGNATURES
+        .iter()
+        .any(|(builtin, _)| builtin.eq_ignore_ascii_case(&name))
+    {
+        return None;
+    }
+    if let Some(db) = db {
+        let defined =
+            |kind| routines_named(db, kind, &name).is_ok_and(|routines| !routines.is_empty());
+        if defined(RoutineKind::Function) || defined(RoutineKind::Procedure) {
+            return None;
+        }
+    }
+    let args = function_arg_list(function);
+    let types = args
+        .iter()
+        .enumerate()
+        .map(|(index, arg)| {
+            if matches!(
+                arg,
+                Expr::Value(ValueWithSpan {
+                    value: Value::SingleQuotedString(_),
+                    ..
+                })
+            ) {
+                return "unknown".to_string();
+            }
+            arg_types
+                .get(index)
+                .cloned()
+                .flatten()
+                .and_then(|pg_type| {
+                    pg_type_oid_by_name(&pg_type).and_then(|oid| pg_format_type(oid, -1))
+                })
+                .unwrap_or_else(|| "unknown".to_string())
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    Some(SqlError::RaisedException {
+        sqlstate: "42883".to_string(),
+        message: format!("function {name}({types}) does not exist"),
+        detail: None,
+    })
 }

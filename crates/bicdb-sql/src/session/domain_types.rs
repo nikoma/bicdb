@@ -566,7 +566,14 @@ impl<'db> SqlSession<'db> {
                     self.require_table_ownership(&table, "drop it")?;
                     if !self.drop_table_and_partitions(&table, &dropping, cascade, purge)? {
                         if !if_exists {
-                            return Err(SqlError::InvalidCollection(table));
+                            return Err(SqlError::RaisedException {
+                                sqlstate: "42P01".to_string(),
+                                message: format!(
+                                    "table \"{}\" does not exist",
+                                    relation_name_for_message(&table)
+                                ),
+                                detail: None,
+                            });
                         }
                         crate::statement_context::notice_skipping_missing(
                             "table",

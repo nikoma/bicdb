@@ -2017,10 +2017,12 @@ impl<'db> SqlEngine<'db> {
         .ok()
         .and_then(first_result_value)
         .ok_or_else(|| {
-            SqlError::Unsupported(format!(
-                "function {} is not supported without FROM",
-                function.name
-            ))
+            undefined_function_error(self.db_ref(), function, &arg_types).unwrap_or_else(|| {
+                SqlError::Unsupported(format!(
+                    "function {} is not supported without FROM",
+                    function.name
+                ))
+            })
         })
     }
 
@@ -3634,10 +3636,12 @@ impl<'db> SqlEngine<'db> {
         .ok()
         .and_then(first_result_value)
         .ok_or_else(|| {
-            SqlError::Unsupported(format!(
-                "function {} is not supported without FROM",
-                function.name
-            ))
+            undefined_function_error(self.db_ref(), function, &arg_types).unwrap_or_else(|| {
+                SqlError::Unsupported(format!(
+                    "function {} is not supported without FROM",
+                    function.name
+                ))
+            })
         })
     }
 

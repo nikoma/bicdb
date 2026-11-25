@@ -4962,6 +4962,22 @@ pub(crate) fn sql_value_text(value: &SqlValue) -> Option<String> {
 
 /// [`unqualified_relation`] for error messages: they name the SQL relation,
 /// never its schema-isolated storage name (`__bicdb_s_<digest>_<hex>`).
+/// PostgreSQL's `permission denied for <kind> <name>` message.
+pub(crate) fn relation_permission_denied_message(db: &BicDb, name: &str) -> String {
+    let kind = match load_view(db, name) {
+        Ok(Some(view)) if view.materialized => "materialized view",
+        Ok(Some(_)) => "view",
+        _ => match load_sequence(db, name) {
+            Ok(Some(_)) => "sequence",
+            _ => "table",
+        },
+    };
+    format!(
+        "permission denied for {kind} {}",
+        relation_name_for_message(name)
+    )
+}
+
 pub(crate) fn relation_name_for_message(name: &str) -> String {
     match crate::eval::rewrite_helpers::logical_relation_name(name) {
         Some(logical) => unqualified_relation(&logical),

@@ -1,0 +1,56 @@
+insert.fewer_values|CREATE TABLE fv(a int, b text DEFAULT 'dflt', c int); INSERT INTO fv VALUES (1); INSERT INTO fv VALUES (2, 'x'); SELECT * FROM fv ORDER BY a
+insert.fewer_values_multi_row|CREATE TABLE fm(a int, b int DEFAULT 7); INSERT INTO fm VALUES (1), (2); SELECT * FROM fm ORDER BY a
+insert.fewer_values_select|CREATE TABLE fs(a int, b int DEFAULT 9, c text); INSERT INTO fs SELECT 1; INSERT INTO fs SELECT g, g FROM generate_series(2, 3) g; SELECT * FROM fs ORDER BY a
+insert.fewer_values_serial|CREATE TABLE fse(v text, id serial); INSERT INTO fse VALUES ('a'); INSERT INTO fse VALUES ('b'); SELECT * FROM fse ORDER BY id
+insert.too_many_values|CREATE TABLE tm(a int); SELECT 'start'; INSERT INTO tm VALUES (1, 2)
+insert.list_more_columns|CREATE TABLE lm(a int, b int); SELECT 'start'; INSERT INTO lm (a, b) VALUES (1)
+insert.list_more_values|CREATE TABLE lv(a int, b int); SELECT 'start'; INSERT INTO lv (a) VALUES (1, 2)
+insert.values_lengths_differ|CREATE TABLE vd(a int, b int); SELECT 'start'; INSERT INTO vd VALUES (1), (2, 3)
+insert.select_list_more_columns|CREATE TABLE sm(a int, b int); SELECT 'start'; INSERT INTO sm (a, b) SELECT 1
+names.operators|CREATE TABLE nm(i int, t text); SELECT i + 1, -i, i * 2 > 3, t || 'x', i IS NULL FROM nm \gdesc
+names.functions_casts|CREATE TABLE nf(i int); SELECT upper('a'), coalesce(i, 0), '1'::int, i::text, CAST(i AS bigint), 'x'::varchar, now()::date, 1.5::numeric FROM nf \gdesc
+names.case_exists_array_row|CREATE TABLE nc(i int); SELECT CASE WHEN i > 0 THEN 1 END, CASE WHEN i > 0 THEN 1 ELSE i END, EXISTS (SELECT 1), ARRAY[1, 2], ROW(1, 2), (SELECT max(i) FROM nc) FROM nc \gdesc
+names.aggregates|CREATE TABLE na(i int, g int); SELECT count(*), sum(i), max(i), avg(i), count(DISTINCT i), string_agg(i::text, ','), g FROM na GROUP BY g \gdesc
+names.qualified_and_literals|CREATE TABLE nq(i int); SELECT nq.i, 1, 'x', NULL, true FROM nq \gdesc
+names.no_from|SELECT 1 + 1, 'a' || 'b', CASE WHEN true THEN 1 END, upper('x'), 2::int8 \gdesc
+names.values|SELECT * FROM (VALUES (1, 'a'), (2, 'b')) v \gdesc
+names.derived_table|CREATE TABLE nd(i int); SELECT * FROM (SELECT i + 1, upper('a') FROM nd) s \gdesc
+names.cte|CREATE TABLE nt(i int); WITH c AS (SELECT i * 2, CASE WHEN i > 0 THEN 'p' END FROM nt) SELECT * FROM c \gdesc
+names.view_columns|CREATE TABLE nv(i int); CREATE VIEW nvv AS SELECT i + 1, upper('x'), i::text, 'a'::text, CASE WHEN true THEN 1 END FROM nv; SELECT attname FROM pg_attribute WHERE attrelid = 'nvv'::regclass AND attnum > 0 ORDER BY attnum
+names.extract_substring|CREATE TABLE ne(d date, s text); SELECT extract(year FROM d), substring(s FROM 1 FOR 2), position('a' IN s), trim(s), date_trunc('day', now()) FROM ne \gdesc
+names.union|CREATE TABLE nu(i int); SELECT i + 1 FROM nu UNION ALL SELECT 2 \gdesc
+names.order_by_expression|CREATE TABLE no(i int); INSERT INTO no VALUES (2), (1); SELECT i + 1 FROM no ORDER BY i + 1
+names.group_by_expression|CREATE TABLE ng(i int); INSERT INTO ng VALUES (1), (1), (2); SELECT i * 10, count(*) FROM ng GROUP BY i * 10 ORDER BY 1
+rules.also_insert|CREATE TABLE ra(a int); CREATE TABLE ra_log(a int, note text); CREATE RULE ra_r AS ON INSERT TO ra DO ALSO INSERT INTO ra_log VALUES (NEW.a, 'ins'); INSERT INTO ra VALUES (1), (2); SELECT * FROM ra ORDER BY a; SELECT * FROM ra_log ORDER BY a
+rules.also_update|CREATE TABLE ru(a int, b int); INSERT INTO ru VALUES (1, 10), (2, 20); CREATE TABLE ru_log(old_b int, new_b int); CREATE RULE ru_r AS ON UPDATE TO ru DO ALSO INSERT INTO ru_log VALUES (OLD.b, NEW.b); UPDATE ru SET b = b + 1 WHERE a = 2; SELECT * FROM ru ORDER BY a; SELECT * FROM ru_log
+rules.also_delete|CREATE TABLE rd(a int); INSERT INTO rd VALUES (1), (2), (3); CREATE TABLE rd_log(a int); CREATE RULE rd_r AS ON DELETE TO rd DO ALSO INSERT INTO rd_log VALUES (OLD.a); DELETE FROM rd WHERE a > 1; SELECT * FROM rd; SELECT * FROM rd_log ORDER BY a
+rules.instead_nothing|CREATE TABLE rn(a int); CREATE RULE rn_r AS ON INSERT TO rn DO INSTEAD NOTHING; INSERT INTO rn VALUES (1); SELECT count(*) FROM rn
+rules.instead_delete_nothing|CREATE TABLE rdn(a int); INSERT INTO rdn VALUES (1); CREATE RULE rdn_r AS ON DELETE TO rdn DO INSTEAD NOTHING; DELETE FROM rdn; SELECT count(*) FROM rdn
+rules.instead_update_action|CREATE TABLE riu(a int); INSERT INTO riu VALUES (1); CREATE TABLE riu_log(o int, n int); CREATE RULE riu_r AS ON UPDATE TO riu DO INSTEAD INSERT INTO riu_log VALUES (OLD.a, NEW.a); UPDATE riu SET a = 5; SELECT * FROM riu; SELECT * FROM riu_log
+rules.also_notify|CREATE TABLE rno(a int); CREATE RULE rno_r AS ON INSERT TO rno DO ALSO NOTIFY rno; INSERT INTO rno VALUES (1); SELECT count(*) FROM rno
+rules.also_multiple_actions|CREATE TABLE rm(a int); CREATE TABLE rm_l1(a int); CREATE TABLE rm_l2(a int); CREATE RULE rm_r AS ON INSERT TO rm DO ALSO (INSERT INTO rm_l1 VALUES (NEW.a); INSERT INTO rm_l2 VALUES (NEW.a * 2)); INSERT INTO rm VALUES (3); SELECT * FROM rm_l1; SELECT * FROM rm_l2
+rules.default_is_also|CREATE TABLE rdf(a int); CREATE TABLE rdf_log(a int); CREATE RULE rdf_r AS ON INSERT TO rdf DO INSERT INTO rdf_log VALUES (NEW.a); INSERT INTO rdf VALUES (4); SELECT * FROM rdf; SELECT * FROM rdf_log
+rules.instead_on_view|CREATE TABLE rvb(a int); CREATE VIEW rvv AS SELECT a, a * 2 AS b FROM rvb; CREATE RULE rvv_r AS ON INSERT TO rvv DO INSTEAD INSERT INTO rvb VALUES (NEW.a); INSERT INTO rvv VALUES (6, 0); SELECT * FROM rvv
+errors.missing_relation_select|SELECT 'start'; SELECT * FROM no_such_table
+errors.missing_relation_insert|SELECT 'start'; INSERT INTO no_such_table VALUES (1)
+errors.missing_relation_update|SELECT 'start'; UPDATE no_such_table SET a = 1
+errors.missing_relation_delete|SELECT 'start'; DELETE FROM no_such_table
+errors.missing_relation_drop|SELECT 'start'; DROP TABLE no_such_table
+errors.missing_column_select|CREATE TABLE ec(a int); SELECT 'start'; SELECT b FROM ec
+errors.missing_column_insert|CREATE TABLE eci(a int); SELECT 'start'; INSERT INTO eci (b) VALUES (1)
+errors.missing_column_update|CREATE TABLE ecu(a int); SELECT 'start'; UPDATE ecu SET b = 1
+errors.missing_function|SELECT 'start'; SELECT no_such_function(1)
+errors.permission_table|DROP ROLE IF EXISTS err_r1; CREATE ROLE err_r1; CREATE TABLE ept(a int); SET ROLE err_r1; SELECT 'start'; SELECT * FROM ept
+errors.permission_insert|DROP ROLE IF EXISTS err_r2; CREATE ROLE err_r2; CREATE TABLE epi(a int); SET ROLE err_r2; SELECT 'start'; INSERT INTO epi VALUES (1)
+errors.permission_view|DROP ROLE IF EXISTS err_r3; CREATE ROLE err_r3; CREATE TABLE epv(a int); CREATE VIEW epvv AS SELECT a FROM epv; SET ROLE err_r3; SELECT 'start'; SELECT * FROM epvv
+errors.duplicate_key|CREATE TABLE edk(a int PRIMARY KEY); INSERT INTO edk VALUES (1); SELECT 'start'; INSERT INTO edk VALUES (1)
+errors.duplicate_unique|CREATE TABLE edu(a int, b int UNIQUE); INSERT INTO edu VALUES (1, 1); SELECT 'start'; INSERT INTO edu VALUES (2, 1)
+errors.not_null|CREATE TABLE enn(a int NOT NULL); SELECT 'start'; INSERT INTO enn VALUES (NULL)
+errors.check|CREATE TABLE eck(a int CHECK (a > 0)); SELECT 'start'; INSERT INTO eck VALUES (-1)
+errors.foreign_key_insert|CREATE TABLE efp(id int PRIMARY KEY); CREATE TABLE efc(p int REFERENCES efp); SELECT 'start'; INSERT INTO efc VALUES (1)
+errors.foreign_key_delete|CREATE TABLE efp2(id int PRIMARY KEY); CREATE TABLE efc2(p int REFERENCES efp2); INSERT INTO efp2 VALUES (1); INSERT INTO efc2 VALUES (1); SELECT 'start'; DELETE FROM efp2
+errors.syntax|SELECT 'start'; SELEC 1
+errors.syntax_midway|SELECT 'start'; SELECT 1 FROM
+errors.division_by_zero|SELECT 'start'; SELECT 1 / 0
+errors.invalid_integer|SELECT 'start'; SELECT 'abc'::int
+errors.table_exists|CREATE TABLE ete(a int); SELECT 'start'; CREATE TABLE ete(a int)

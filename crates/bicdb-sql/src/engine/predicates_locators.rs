@@ -1505,10 +1505,9 @@ impl<'db> SqlEngine<'db> {
                 relation_name_for_message(table),
             )));
         }
-        Err(SqlError::BicDb(BicDbError::Authorization(format!(
-            "permission denied for table {}",
-            relation_name_for_message(table)
-        ))))
+        Err(SqlError::BicDb(BicDbError::Authorization(
+            relation_permission_denied_message(self.db_ref(), table),
+        )))
     }
 
     pub(crate) fn indexed_records_for_table_selection(

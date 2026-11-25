@@ -155,3 +155,46 @@ severity and SQLSTATE:
   not sent at the default `client_min_messages`.
 - Notices raised by triggers during `COPY FROM STDIN` and by deferred triggers at
   `COMMIT` are sent before the command completes.
+
+## INSERT defaults, output column names, rules and error messages (2026-11)
+
+- `INSERT INTO t VALUES (...)` and `INSERT INTO t SELECT ...` without a column
+  list fill the leading columns and give the remaining ones their defaults (or
+  NULL), as in PostgreSQL. Too many values fail with 42601 `INSERT has more
+  expressions than target columns`; an explicit column list that does not match
+  the values fails with 42601 `INSERT has more target columns than expressions`
+  (or the reverse), and VALUES rows of different lengths with `VALUES lists
+  must all be the same length`.
+- Result columns are named as PostgreSQL names them in RowDescription:
+  `?column?` for operators and literals, the function name for calls, the type
+  name for casts of literals (`'1'::int` is `int4`), `case`, `exists`, `array`,
+  `row`, a scalar subquery's own column name, the column name for qualified
+  references, and `column1..N` for VALUES. Derived tables, CTEs and view
+  columns use the same names. Databases with the Oracle profile keep naming an
+  unaliased expression by its text.
+- Rules: `CREATE RULE ... DO ALSO` (the default) and `DO INSTEAD` with one or
+  more actions or `NOTHING`, on INSERT, UPDATE and DELETE, for tables and
+  views. Actions run once per affected row with `NEW` (INSERT, UPDATE) and
+  `OLD` (UPDATE, DELETE) bound to its values; an INSERT runs before its rules'
+  actions and an UPDATE or DELETE after them, and an INSTEAD rule suppresses
+  the statement. A `NOTIFY` action is delivered at commit. Conditional
+  (`WHERE`) rules, and `UPDATE ... FROM` / `DELETE ... USING` on a relation
+  with rules, are not supported (0A000). Actions run with the caller's
+  privileges.
+- Error messages on the PostgreSQL protocol use PostgreSQL's wording (embedded
+  callers keep BicDB's `Display` text):
+  - missing relation: 42P01 `relation "t" does not exist`, also for INSERT,
+    UPDATE and DELETE targets (checked before privileges, as in PostgreSQL);
+    `DROP TABLE` of a missing table: 42P01 `table "t" does not exist`;
+  - missing column: 42703 `column "c" does not exist` / `column t.c does not
+    exist` in queries, `column "c" of relation "t" does not exist` for
+    INSERT and UPDATE targets (an UPDATE now checks its SET targets even when
+    no row matches);
+  - missing function: 42883 `function f(integer) does not exist`;
+  - permission: 42501 `permission denied for table|view|materialized view|sequence x`
+    without BicDB's `authorization denied:` prefix;
+  - syntax: 42601 `syntax error at or near "X"` / `syntax error at end of input`;
+  - duplicate relation: 42P07 `relation "t" already exists`;
+  - a referenced parent row: 23503 `update or delete on table "p" violates
+    foreign key constraint "c_p_fkey" on table "c"`;
+  - unsupported features lose the `unsupported SQL:` prefix (still 0A000).

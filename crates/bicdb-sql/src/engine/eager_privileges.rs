@@ -150,9 +150,8 @@ impl SqlEngine<'_> {
         if role_has_table_privilege(self.db_ref(), role, table, "SELECT")? {
             return Ok(());
         }
-        Err(SqlError::BicDb(BicDbError::Authorization(format!(
-            "permission denied for table {}",
-            relation_name_for_message(table)
-        ))))
+        Err(SqlError::BicDb(BicDbError::Authorization(
+            relation_permission_denied_message(self.db_ref(), table),
+        )))
     }
 }

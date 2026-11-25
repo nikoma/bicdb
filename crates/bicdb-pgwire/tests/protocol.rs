@@ -11114,7 +11114,7 @@ fn failed_transaction_reports_error_status_and_recovers_on_rollback() {
     assert_eq!(status, b'E');
     assert!(error.contains("ERROR"));
     assert!(error.contains("42P01"));
-    assert!(error.contains("collection not found"));
+    assert!(error.contains("relation \"missing_table\" does not exist"));
 
     send_query(&mut client, "SELECT 1;");
     let (error, status) = read_error_response_with_status(&mut client);
@@ -11206,7 +11206,7 @@ fn pgwire_savepoints_recover_failed_transaction_status() {
     send_query(&mut client, "SELECT * FROM missing_table;");
     let (error, status) = read_error_response_with_status(&mut client);
     assert_eq!(status, b'E');
-    assert!(error.contains("collection not found"));
+    assert!(error.contains("relation \"missing_table\" does not exist"));
 
     send_query(&mut client, "ROLLBACK TO SAVEPOINT s1;");
     assert_eq!(read_query_rows_with_status(&mut client).1, b'T');
@@ -12015,7 +12015,7 @@ fn server_query_timeout_and_unsupported_sql_return_errors() {
     assert_eq!(read_query_rows(&mut client), vec![vec![String::new()]]);
     send_query(&mut client, "SELECT * FROM missing_table;");
     let error = read_error_response(&mut client);
-    assert!(error.contains("collection not found"));
+    assert!(error.contains("relation \"missing_table\" does not exist"));
     assert!(error.contains("C42P01"));
     send_query(
         &mut client,
@@ -12226,8 +12226,8 @@ fn error_response_fields_cover_common_sql_failures() {
     send_query(&mut client, "SELECT missing_column FROM error_fields;");
     let error = read_error_response(&mut client);
     assert!(error.contains("C42703"));
-    assert!(error.contains("terror_fields"));
-    assert!(error.contains("cmissing_column"));
+    // PostgreSQL names only the column, without table/column fields.
+    assert!(error.contains("column \"missing_column\" does not exist"));
 
     send_query(
         &mut client,

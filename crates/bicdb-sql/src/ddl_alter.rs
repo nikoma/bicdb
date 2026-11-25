@@ -2172,9 +2172,8 @@ pub(crate) fn view_column_from_select_item(item: &SelectItem, idx: usize) -> Res
             .map(|alias| alias.value.clone())
             .or_else(|| view_column_name_from_expr(expr))
             .unwrap_or_else(|| format!("column{}", idx + 1)),
-        SelectItem::UnnamedExpr(expr) => {
-            view_column_name_from_expr(expr).unwrap_or_else(|| format!("column{}", idx + 1))
-        }
+        SelectItem::UnnamedExpr(expr) => view_column_name_from_expr(expr)
+            .unwrap_or_else(|| crate::eval::postgres_other_column_name(expr)),
         SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(_, _) => {
             return Err(SqlError::Unsupported(
                 "metadata-only CREATE VIEW cannot infer wildcard columns".to_string(),
@@ -2188,8 +2187,10 @@ pub(crate) fn view_column_name_from_expr(expr: &Expr) -> Option<String> {
     match expr {
         Expr::Identifier(ident) => Some(ident.value.clone()),
         Expr::CompoundIdentifier(idents) => idents.last().map(|ident| ident.value.clone()),
-        Expr::Nested(expr) | Expr::Cast { expr, .. } => view_column_name_from_expr(expr),
-        Expr::Function(function) => function.name.0.last().map(|part| part.to_string()),
+        Expr::Nested(expr) => view_column_name_from_expr(expr),
+        Expr::Cast { .. } | Expr::Function(_) => {
+            Some(crate::eval::postgres_other_column_name(expr))
+        }
         _ => None,
     }
 }

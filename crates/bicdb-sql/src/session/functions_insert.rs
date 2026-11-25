@@ -846,6 +846,7 @@ impl<'db> SqlSession<'db> {
         let table =
             resolve_session_relation_name_if_exists(self.db_ref(), &relation_name(table_name)?);
         let preauthorized = self.take_view_target_preauthorization(&table);
+        require_dml_target_exists(self.db_ref(), &table)?;
         if !preauthorized {
             self.require_table_privilege(&table, "INSERT")?;
         }
@@ -898,6 +899,23 @@ impl<'db> SqlSession<'db> {
                     .collect();
             }
             let source = insert.source.as_ref().expect("checked source above");
+            // PostgreSQL: without a column list the values fill the leading
+            // columns and the rest take their defaults; a list must match.
+            if let Some(width) = self.insert_source_width(source, &ctes)? {
+                if width > columns.len() {
+                    return Err(insert_width_error(
+                        "INSERT has more expressions than target columns",
+                    ));
+                }
+                if width < columns.len() {
+                    if !insert.columns.is_empty() {
+                        return Err(insert_width_error(
+                            "INSERT has more target columns than expressions",
+                        ));
+                    }
+                    columns.truncate(width);
+                }
+            }
             if let Some(schema) = schema.as_deref() {
                 for column in &columns {
                     ensure_schema_column(&table, schema, column)?;
@@ -1292,6 +1310,44 @@ impl<'db> SqlSession<'db> {
     /// declines it and the generic path runs. The cast column values of every
     /// row come back with the records for the caller's local-constraint check.
     #[allow(clippy::type_complexity)]
+    /// The number of values each source row supplies, when evident before
+    /// the source runs.
+    fn insert_source_width(
+        &self,
+        source: &Query,
+        ctes: &BTreeMap<String, CteResult>,
+    ) -> Result<Option<usize>> {
+        match source.body.as_ref() {
+            SetExpr::Values(values) => {
+                let Some(first) = values.rows.first() else {
+                    return Ok(None);
+                };
+                if values.rows.iter().any(|row| row.len() != first.len()) {
+                    return Err(insert_width_error(
+                        "VALUES lists must all be the same length",
+                    ));
+                }
+                Ok(Some(first.len()))
+            }
+            _ => {
+                if let SetExpr::Select(select) = source.body.as_ref() {
+                    if select.projection.iter().all(|item| {
+                        matches!(
+                            item,
+                            SelectItem::UnnamedExpr(_) | SelectItem::ExprWithAlias { .. }
+                        )
+                    }) {
+                        return Ok(Some(select.projection.len()));
+                    }
+                }
+                Ok(self
+                    .sql_engine_with_ctes(ctes.clone())
+                    .query_describe_output_columns(source)
+                    .map(|columns| columns.len()))
+            }
+        }
+    }
+
     pub(crate) fn records_from_insert_values_template(
         &mut self,
         table: &str,
@@ -3633,6 +3689,27 @@ impl<'db> SqlSession<'db> {
 /// `RETURNING` that reads the row, or an `ON CONFLICT` arbiter (a conflict
 /// target or constraint; `DO UPDATE` always has one). `RETURNING 1` and an
 /// arbiter-less `ON CONFLICT DO NOTHING` read nothing.
+/// PostgreSQL resolves a DML target before checking privileges on it: a
+/// missing relation is 42P01, not a permission failure.
+pub(crate) fn require_dml_target_exists(db: &BicDb, table: &str) -> Result<()> {
+    if relation_exists(db, table)
+        || load_view(db, table)?.is_some()
+        || load_schema(db, table)?.is_some()
+        || is_virtual_table(table)
+    {
+        return Ok(());
+    }
+    Err(SqlError::InvalidCollection(table.to_string()))
+}
+
+fn insert_width_error(message: &str) -> SqlError {
+    SqlError::RaisedException {
+        sqlstate: "42601".to_string(),
+        message: message.to_string(),
+        detail: None,
+    }
+}
+
 pub(crate) fn insert_reads_target(insert: &Insert) -> bool {
     insert
         .returning

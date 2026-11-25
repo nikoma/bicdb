@@ -805,6 +805,7 @@ impl<'db> SqlSession<'db> {
         let (table, target_alias) = table_with_joins_name_and_alias(&update.table)?;
         let table = resolve_session_relation_name_if_exists(self.db_ref(), &table);
         let preauthorized = self.take_view_target_preauthorization(&table);
+        super::functions_insert::require_dml_target_exists(self.db_ref(), &table)?;
         if !preauthorized {
             self.require_update_privileges(&table, &update.assignments)?;
         }
@@ -825,6 +826,30 @@ impl<'db> SqlSession<'db> {
             return self.execute_update_of_view(update, view, ctes, match_policy);
         }
         let schema = load_schema_shared(self.db_ref(), &table)?;
+        if let Some(schema) = schema.as_deref() {
+            // PostgreSQL resolves every SET target, even when no row matches.
+            for assignment in &update.assignments {
+                let names: Vec<&ObjectName> = match &assignment.target {
+                    AssignmentTarget::ColumnName(name) => vec![name],
+                    AssignmentTarget::Tuple(names) => names.iter().collect(),
+                };
+                for name in names {
+                    let parts = object_name_parts(name);
+                    let Some(column) = parts.first() else {
+                        continue;
+                    };
+                    let known = schema.columns.iter().any(|candidate| {
+                        !candidate.hidden && candidate.name.eq_ignore_ascii_case(column)
+                    });
+                    if !known {
+                        return Err(SqlError::UndefinedColumn {
+                            table: relation_name_for_message(&table),
+                            column: column.clone(),
+                        });
+                    }
+                }
+            }
+        }
         self.validate_row_assignments(update, &table, schema.as_deref())?;
         if let Some(schema) = schema
             .as_deref()
@@ -2183,6 +2208,7 @@ impl<'db> SqlSession<'db> {
         let (table, target_alias) = delete_from_table_and_alias(delete)?;
         let table = resolve_session_relation_name_if_exists(self.db_ref(), &table);
         let preauthorized = self.take_view_target_preauthorization(&table);
+        super::functions_insert::require_dml_target_exists(self.db_ref(), &table)?;
         if !preauthorized {
             self.require_table_privilege(&table, "DELETE")?;
         }
@@ -6423,10 +6449,9 @@ impl<'db> SqlSession<'db> {
         if role_has_table_privilege(self.db_ref(), &role, table, privilege)? {
             return Ok(());
         }
-        Err(SqlError::BicDb(BicDbError::Authorization(format!(
-            "permission denied for table {}",
-            relation_name_for_message(table)
-        ))))
+        Err(SqlError::BicDb(BicDbError::Authorization(
+            relation_permission_denied_message(self.db_ref(), table),
+        )))
     }
 
     pub(crate) fn apply_foreign_key_parent_delete_batch(

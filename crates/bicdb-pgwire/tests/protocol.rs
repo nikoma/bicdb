@@ -2173,6 +2173,67 @@ fn copy_from_stdin_csv_imports_rows_over_wire() {
     server.join().unwrap();
 }
 
+/// Regression: COPY FROM STDIN into a missing relation entered COPY mode on the server while
+/// the client had already received the error, so every later query on the session was answered
+/// with "expected CopyData ..." and then the session hung waiting for a Sync. PostgreSQL reports
+/// the error instead of CopyInResponse and the session stays usable.
+#[test]
+fn copy_from_stdin_into_a_missing_relation_fails_before_copy_mode_and_keeps_the_session() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        bicdb_pgwire::handle_client(stream, path).unwrap();
+    });
+
+    let mut client = TcpStream::connect(address).unwrap();
+    client
+        .set_read_timeout(Some(std::time::Duration::from_secs(30)))
+        .unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+
+    send_query(&mut client, "COPY no_such_table FROM STDIN;");
+    let (tags, status) = read_tags_until_ready(&mut client);
+    assert_eq!(status, b'I');
+    assert!(tags.contains(&b'E'), "expected an error: {tags:?}");
+    assert!(!tags.contains(&b'G'), "must not enter COPY mode: {tags:?}");
+
+    // The session is still in ordinary query mode.
+    send_query(&mut client, "CREATE TABLE copy_after_error (a INT);");
+    assert!(read_query_rows(&mut client).is_empty());
+    send_query(&mut client, "COPY copy_after_error FROM STDIN;");
+    let (tag, _) = read_message(&mut client);
+    assert_eq!(tag, b'G');
+    send_message(&mut client, b'd', b"5\n");
+    send_message(&mut client, b'c', &[]);
+    let (tags, status) = read_tags_until_ready(&mut client);
+    assert_eq!(status, b'I');
+    assert!(
+        tags.contains(&b'C'),
+        "unexpected COPY response tags: {tags:?}"
+    );
+    send_query(&mut client, "SELECT a FROM copy_after_error;");
+    assert_eq!(read_query_rows(&mut client), vec![vec!["5".to_string()]]);
+
+    // A query sent in the middle of COPY data is a protocol violation; a simple-query client
+    // gets an error and ReadyForQuery instead of a session waiting for a Sync forever.
+    send_query(&mut client, "COPY copy_after_error FROM STDIN;");
+    let (tag, _) = read_message(&mut client);
+    assert_eq!(tag, b'G');
+    send_query(&mut client, "SELECT 1;");
+    let (tags, status) = read_tags_until_ready(&mut client);
+    assert_eq!(status, b'I');
+    assert!(tags.contains(&b'E'), "expected a protocol error: {tags:?}");
+    send_query(&mut client, "SELECT count(*) FROM copy_after_error;");
+    assert_eq!(read_query_rows(&mut client), vec![vec!["1".to_string()]]);
+
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
+}
+
 #[test]
 fn copy_arrays_roundtrip_quoted_elements_bounds_and_restart() {
     let dir = tempfile::tempdir().unwrap();

@@ -24,7 +24,7 @@ qualification on every pull request that touches the engine.
 ## Running it
 
 ```sh
-cargo build -p bicdb-cli --bin bicdb
+cargo build -p bicdb --bin bicdb
 pip install frappe-bench==5.31.1          # Python 3.14; node 24 + yarn on PATH
 BICDB_BIN=target/debug/bicdb REDIS_URL=redis://127.0.0.1:6379 \
   WORK_DIR=/tmp/frappe examples/frappe/verify.sh

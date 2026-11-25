@@ -174,16 +174,21 @@ class Target:
         self.admin_db = args.admin_db
         self.unit = None
         self.datadir = None
+        self.label = args.label
+        self.ref_name = f"pgregress-ref-{args.label}"
 
     # -- lifecycle ---------------------------------------------------------
     def start(self):
         if self.kind == "ref":
-            self.port = self.port or 57434
             self.user = self.user or "postgres"
             self.admin_db = self.admin_db or "postgres"
-            sh(["docker", "rm", "-f", "pgregress-ref"], check=False)
+            running = sh(["docker", "inspect", "-f", "{{.State.Running}}", self.ref_name], check=False)
+            if running.stdout.strip() == "true":
+                raise SystemExit(f"container {self.ref_name} is running: another run uses label "
+                                 f"{self.label!r}; choose another --label")
+            sh(["docker", "rm", "-f", self.ref_name], check=False)
             # Same absolute paths inside the container so server-side COPY and LOAD see the files.
-            sh(["docker", "run", "-d", "--name", "pgregress-ref", "--memory", "1g", "--cpus", "2",
+            sh(["docker", "run", "-d", "--name", self.ref_name, "--memory", "1g", "--cpus", "2",
                 "-e", "POSTGRES_PASSWORD=regress", "-e", "POSTGRES_HOST_AUTH_METHOD=trust",
                 "-e", "POSTGRES_INITDB_ARGS=--locale=C --encoding=UTF8",
                 "-v", f"{self.regress}:{self.regress}:ro", "-v", f"{self.builddir}:{self.builddir}",
@@ -191,14 +196,16 @@ class Target:
                 "-p", f"127.0.0.1:{self.port}:5432", IMAGE,
                 "-c", "max_prepared_transactions=2", "-c", "fsync=off"])
             # The bind mounts live under /root; let the server's `postgres` user traverse it.
-            sh(["docker", "exec", "-u", "0", "pgregress-ref", "chmod", "o+x", "/root"])
+            sh(["docker", "exec", "-u", "0", self.ref_name, "chmod", "o+x", "/root"])
         elif self.kind == "bicdb":
-            self.port = self.port or 57455
             self.user = self.user or "bicdb"
             self.admin_db = self.admin_db or "bicdb"
             self.datadir = os.path.join(self.builddir, "bicdb-data")
-            self.unit = f"pgregress-bicdb-{self.port}"
-            sh(["systemctl", "stop", self.unit], check=False)
+            # The unit is named by the run label, never by port, so runs cannot stop each other.
+            self.unit = f"pgregress-bicdb-{self.label}"
+            if unit_state(self.unit) not in ("not-found", "inactive", "failed"):
+                raise SystemExit(f"unit {self.unit} is already running: another run uses label "
+                                 f"{self.label!r}; choose another --label")
             shutil.rmtree(self.datadir, ignore_errors=True)
             self._start_bicdb()
         else:
@@ -207,7 +214,15 @@ class Target:
         self.wait_ready(120)
 
     def _start_bicdb(self):
-        sh(["systemctl", "reset-failed", self.unit], check=False)
+        # A restart must wait until the previous unit is fully gone, or systemd-run refuses the
+        # name ("already loaded").
+        deadline = time.time() + 60
+        while time.time() < deadline:
+            sh(["systemctl", "reset-failed", self.unit], check=False)
+            if unit_state(self.unit) == "not-found":
+                break
+            sh(["systemctl", "stop", self.unit], check=False)
+            time.sleep(1)
         sh(["systemd-run", "--quiet", f"--unit={self.unit}", "--collect", "-p",
             f"MemoryMax={self.args.memory_max}", "-p", "Nice=15", "-p", "CPUWeight=20",
             self.args.bicdb_bin, "serve", "--port", str(self.port), self.datadir])
@@ -218,13 +233,13 @@ class Target:
             self._start_bicdb()
             return self.wait_ready(120)
         if self.kind == "ref":
-            sh(["docker", "start", "pgregress-ref"], check=False)
+            sh(["docker", "start", self.ref_name], check=False)
             return self.wait_ready(120)
         return self.wait_ready(30)
 
     def stop(self):
         if self.kind == "ref" and not self.args.keep:
-            sh(["docker", "rm", "-f", "pgregress-ref"], check=False)
+            sh(["docker", "rm", "-f", self.ref_name], check=False)
         if self.kind == "bicdb":
             if self.unit:
                 sh(["systemctl", "stop", self.unit], check=False)
@@ -275,6 +290,33 @@ class Target:
         except subprocess.TimeoutExpired:
             return subprocess.CompletedProcess([], 124, b"timeout", b"")
         return r
+
+
+def unit_state(unit):
+    """LoadState/ActiveState of a systemd unit: 'not-found' when it does not exist."""
+    load = sh(["systemctl", "show", "-p", "LoadState", "--value", unit], check=False).stdout.strip()
+    if load in ("", "not-found"):
+        return "not-found"
+    return sh(["systemctl", "show", "-p", "ActiveState", "--value", unit],
+              check=False).stdout.strip() or "unknown"
+
+
+def free_port():
+    """A TCP port nobody listens on now (bind-tested on 127.0.0.1)."""
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
+
+
+def port_in_use(port):
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        try:
+            probe.bind(("127.0.0.1", port))
+        except OSError:
+            return True
+    return False
 
 
 def start_client(regress, builddir, libdir):
@@ -388,12 +430,30 @@ def main():
     ap.add_argument("--timeout", type=int, default=300, help="per-test timeout (seconds)")
     ap.add_argument("--only", help="comma-separated tests to run (still in schedule order; test_setup always first)")
     ap.add_argument("--keep", action="store_true", help="keep the server and its data after the run")
-    ap.add_argument("--label", default="")
+    ap.add_argument("--label", default="",
+                    help="run name: names the server unit, psql/ref containers and must be unique "
+                         "among running runs (default: the --out directory name)")
+    ap.add_argument("--overwrite", action="store_true",
+                    help="reuse an existing --out directory (it is deleted first)")
     ap.add_argument("--no-adapt", action="store_true", help="BicDB target: run the SQL files unchanged")
     args = ap.parse_args()
+    args.label = re.sub(r"[^a-zA-Z0-9_.-]", "-", args.label or os.path.basename(
+        os.path.abspath(args.out).rstrip("/")))
+    if args.target in ("ref", "bicdb"):
+        if args.port is None:
+            args.port = free_port()
+        elif port_in_use(args.port):
+            raise SystemExit(f"port {args.port} is in use; omit --port to get a free one")
+    if os.path.exists(os.path.abspath(args.out)) and not args.overwrite:
+        raise SystemExit(f"run directory {args.out} exists; choose another --out/--label or pass "
+                         "--overwrite")
+    print(f"run label={args.label} port={args.port} out={os.path.abspath(args.out)}", flush=True)
     global CLIENT
     # One psql container per run, so runs against different targets can proceed side by side.
-    CLIENT = "pgregress-client-" + re.sub(r"[^a-zA-Z0-9_.-]", "-", args.label or args.target)
+    CLIENT = "pgregress-client-" + args.label
+    if sh(["docker", "inspect", "-f", "{{.State.Running}}", CLIENT],
+          check=False).stdout.strip() == "true":
+        raise SystemExit(f"container {CLIENT} is running: another run uses label {args.label!r}")
 
     regress = ensure_source()
     libdir = ensure_regress_so(regress)

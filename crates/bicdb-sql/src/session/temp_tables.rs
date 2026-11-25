@@ -2,6 +2,169 @@
 //! connection's temporary tables are dropped when it ends, and none survives
 //! a restart of the server.
 use super::*;
+use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::Mutex;
+
+/// Backend numbers for sessions without a connection: far above connection
+/// ids, unique in the process.
+static NEXT_EMBEDDED_BACKEND: AtomicI32 = AtomicI32::new(1_000_000_000);
+
+pub(crate) fn next_embedded_temp_backend() -> i32 {
+    NEXT_EMBEDDED_BACKEND.fetch_add(1, Ordering::Relaxed)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum OnCommitAction {
+    DeleteRows,
+    Drop,
+}
+
+/// `ON COMMIT DELETE ROWS` / `ON COMMIT DROP` of temporary tables, by
+/// temporary schema then physical table. Temporary tables do not outlive the
+/// process, so neither does this registry.
+static ON_COMMIT: Mutex<BTreeMap<String, BTreeMap<String, OnCommitAction>>> =
+    Mutex::new(BTreeMap::new());
+
+pub(crate) fn register_on_commit(temp_schema: &str, table: &str, action: OnCommitAction) {
+    ON_COMMIT
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .entry(temp_schema.to_string())
+        .or_default()
+        .insert(table.to_string(), action);
+}
+
+fn on_commit_actions(temp_schema: &str) -> Vec<(String, OnCommitAction)> {
+    ON_COMMIT
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .get(temp_schema)
+        .map(|tables| {
+            tables
+                .iter()
+                .map(|(table, action)| (table.clone(), *action))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+pub(crate) fn forget_on_commit(temp_schema: &str, table: Option<&str>) {
+    let mut registry = ON_COMMIT
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    match table {
+        Some(table) => {
+            if let Some(tables) = registry.get_mut(temp_schema) {
+                tables.remove(table);
+            }
+        }
+        None => {
+            registry.remove(temp_schema);
+        }
+    }
+}
+
+/// Drops the ON COMMIT DROP tables of backend `backend_pid` once its
+/// transaction has committed.
+pub fn drop_temp_on_commit_tables(db: &mut BicDb, backend_pid: i32) -> Result<()> {
+    let temp = temp_schema_for_backend(backend_pid);
+    let drops = on_commit_actions(&temp)
+        .into_iter()
+        .filter(|(_, action)| *action == OnCommitAction::Drop)
+        .map(|(table, _)| table)
+        .collect::<Vec<_>>();
+    if drops.is_empty() {
+        return Ok(());
+    }
+    let _effects = crate::statement_context::StatementScope::enter();
+    let mut session = SqlSession::new(db);
+    for table in drops {
+        forget_on_commit(&temp, Some(&table));
+        if load_schema(session.db_ref(), &table)?.is_none() {
+            continue;
+        }
+        let name = format!(
+            "\"{}\".\"{}\"",
+            temp.replace('"', "\"\""),
+            catalog_display_name(&table).replace('"', "\"\"")
+        );
+        session.execute(&format!("DROP TABLE {name}"))?;
+    }
+    Ok(())
+}
+
+/// Whether temporary schema `temp_schema` has ON COMMIT actions to run.
+pub fn temp_on_commit_pending(temp_schema: &str) -> bool {
+    !on_commit_actions(temp_schema).is_empty()
+}
+
+/// Whether temporary schema `temp_schema` has ON COMMIT DELETE ROWS tables.
+pub fn temp_on_commit_delete_pending(temp_schema: &str) -> bool {
+    on_commit_actions(temp_schema)
+        .iter()
+        .any(|(_, action)| *action == OnCommitAction::DeleteRows)
+}
+
+/// Whether temporary schema `temp_schema` has ON COMMIT DROP tables.
+pub fn temp_on_commit_drop_pending(temp_schema: &str) -> bool {
+    on_commit_actions(temp_schema)
+        .iter()
+        .any(|(_, action)| *action == OnCommitAction::Drop)
+}
+
+impl<'db> SqlSession<'db> {
+    /// Runs this session's ON COMMIT actions in its pending transaction, for
+    /// a server that commits the transaction itself.
+    /// ON COMMIT DROP tables are left to [`drop_temp_on_commit_tables`]
+    /// after the commit.
+    pub fn run_temp_on_commit_actions(&mut self) -> Result<()> {
+        self.apply_temp_on_commit_actions_with(false)
+    }
+
+    /// Runs the ON COMMIT actions of this session's temporary tables inside
+    /// the committing transaction: DELETE ROWS empties the table, DROP drops
+    /// it. A table that no longer exists is forgotten.
+    pub(crate) fn apply_temp_on_commit_actions(&mut self) -> Result<()> {
+        self.apply_temp_on_commit_actions_with(true)
+    }
+
+    fn apply_temp_on_commit_actions_with(&mut self, drop_tables: bool) -> Result<()> {
+        let Some(temp) = self.temp_schema_name() else {
+            return Ok(());
+        };
+        let actions = on_commit_actions(&temp);
+        if actions.is_empty() {
+            return Ok(());
+        }
+        for (table, action) in actions {
+            if load_schema(self.db_ref(), &table)?.is_none() {
+                forget_on_commit(&temp, Some(&table));
+                continue;
+            }
+            let name = format!(
+                "\"{}\".\"{}\"",
+                temp.replace('"', "\"\""),
+                catalog_display_name(&table).replace('"', "\"\"")
+            );
+            match action {
+                OnCommitAction::DeleteRows => {
+                    // A read-only commit of an empty table writes nothing.
+                    let probe =
+                        self.execute_text_statements(&format!("SELECT 1 FROM {name} LIMIT 1"))?;
+                    if !probe.rows.is_empty() {
+                        self.execute_text_statements(&format!("TRUNCATE {name}"))?;
+                    }
+                }
+                OnCommitAction::Drop if drop_tables => {
+                    self.execute_text_statements(&format!("DROP TABLE {name}"))?;
+                    forget_on_commit(&temp, Some(&table));
+                }
+                OnCommitAction::Drop => {}
+            }
+        }
+        Ok(())
+    }
+}
 
 /// Whether backend `backend_pid` has a temporary schema.
 pub fn temp_schema_exists(db: &BicDb, backend_pid: i32) -> bool {
@@ -21,6 +184,7 @@ pub fn drop_connection_temp_schema(db: &mut BicDb, backend_pid: i32) -> Result<b
     let _effects = crate::statement_context::StatementScope::enter();
     let mut session = SqlSession::new(db);
     session.drop_temp_schema_named(&schema)?;
+    forget_on_commit(&schema, None);
     Ok(true)
 }
 
@@ -39,6 +203,34 @@ pub fn drop_orphan_temp_schemas(db: &mut BicDb) -> Result<usize> {
     let mut session = SqlSession::new(db);
     for schema in &schemas {
         session.drop_temp_schema_named(schema)?;
+        forget_on_commit(schema, None);
     }
     Ok(schemas.len())
+}
+
+/// Drops the temporary schema of a session without a connection when the
+/// session ends. Held as the session's last field, so it runs after the
+/// session's transaction state is gone.
+#[derive(Debug)]
+pub(crate) struct EmbeddedTempGuard {
+    db: std::ptr::NonNull<BicDb>,
+    backend: i32,
+}
+
+impl EmbeddedTempGuard {
+    pub(crate) fn new(db: std::ptr::NonNull<BicDb>, backend: i32) -> Self {
+        Self { db, backend }
+    }
+}
+
+impl Drop for EmbeddedTempGuard {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            return;
+        }
+        // Safety: the guard is created only for an exclusive session, whose
+        // `&'db mut BicDb` outlives the session and so this guard.
+        let db = unsafe { self.db.as_mut() };
+        let _ = drop_connection_temp_schema(db, self.backend);
+    }
 }

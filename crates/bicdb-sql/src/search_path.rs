@@ -63,6 +63,12 @@ impl Drop for TempSchemaScope {
     }
 }
 
+thread_local! {
+    /// Whether the last binding path placed the temporary schema where
+    /// `search_path` names `pg_temp` (rather than implicitly first).
+    static EXPLICIT_TEMP_IN_PATH: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 /// The current session's temporary schema name, for `pg_temp` qualifiers.
 pub(crate) fn active_temp_schema() -> Option<String> {
     ACTIVE_TEMP_SCHEMA.with(|active| active.borrow().as_deref().map(str::to_string))
@@ -200,6 +206,9 @@ pub(crate) fn binding_path_with_temp(
             other = true;
         }
     }
+    EXPLICIT_TEMP_IN_PATH.with(|explicit| {
+        explicit.set(temp.is_some() && searched.iter().any(|schema| schema == "pg_temp"))
+    });
     for schema in searched {
         if schema == "pg_temp" {
             if let Some(temp) = temp {
@@ -881,6 +890,14 @@ pub fn bind_session_sql_with_temp(
 
 /// `current_schema`: the first existing schema, or NULL for an empty path.
 pub(crate) fn current_schema_value() -> SqlValue {
+    // `SET search_path = pg_temp, ...` reports the temporary schema.
+    if let Some(path) = active_path() {
+        if path.first().is_some_and(|first| is_temp_schema(first))
+            && EXPLICIT_TEMP_IN_PATH.with(std::cell::Cell::get)
+        {
+            return SqlValue::String(path[0].clone());
+        }
+    }
     match active_path() {
         Some(path) => first_creation_schema(&path)
             .cloned()

@@ -312,25 +312,12 @@ impl<'db> SqlSession<'db> {
                     None,
                 ));
             }
-            Some(sqlparser::ast::OnCommit::DeleteRows) => {
-                return Err(SqlError::Unsupported(
-                    "ON COMMIT DELETE ROWS is not supported".to_string(),
-                ));
-            }
-            Some(sqlparser::ast::OnCommit::Drop) => {
-                return Err(SqlError::Unsupported(
-                    "ON COMMIT DROP is not supported".to_string(),
-                ));
-            }
+            Some(_) => {}
         }
         if !temporary {
             return Ok(None);
         }
-        let Some(temp_schema) = self.temp_schema_name() else {
-            // An embedded session has no connection lifetime to bound the
-            // table by; it keeps the table in its schema as before.
-            return Ok(None);
-        };
+        let temp_schema = self.temp_schema_for_creation();
         let table = match parts.as_slice() {
             [table] => table.clone(),
             [schema, table] if schema == "pg_temp" || *schema == temp_schema => table.clone(),
@@ -362,6 +349,27 @@ impl<'db> SqlSession<'db> {
 
     pub(crate) fn execute_create_table(&mut self, create_table: &CreateTable) -> Result<SqlResult> {
         self.execute_create_table_with_compression(create_table, &[])
+    }
+
+    /// Registers a temporary table's ON COMMIT action once it exists.
+    fn register_temp_on_commit(&mut self, create_table: &CreateTable, table: &str) {
+        let action = match create_table.on_commit {
+            Some(sqlparser::ast::OnCommit::DeleteRows) => temp_tables::OnCommitAction::DeleteRows,
+            Some(sqlparser::ast::OnCommit::Drop) => temp_tables::OnCommitAction::Drop,
+            _ => return,
+        };
+        if let Some(temp) = self.temp_schema_name() {
+            temp_tables::register_on_commit(&temp, table, action);
+        }
+    }
+
+    /// The ON COMMIT actions run at the end of a statement that is its own
+    /// transaction (no open transaction block).
+    pub(crate) fn apply_autocommit_temp_on_commit(&mut self) -> Result<()> {
+        if self.tx.is_none() && !self.in_transaction() {
+            self.apply_temp_on_commit_actions()?;
+        }
+        Ok(())
     }
 
     pub(crate) fn execute_create_table_with_compression(
@@ -634,11 +642,42 @@ impl<'db> SqlSession<'db> {
                     }
                 }
                 other => {
-                    constraints.extend(table_constraint_schema(
+                    let generated_check_name =
+                        matches!(other, TableConstraint::Check(check) if check.name.is_none());
+                    let mut built = table_constraint_schema(
                         &table,
                         other,
                         oracle::default_unique_null_policy(self.db_ref())?,
-                    )?);
+                    )?;
+                    if generated_check_name {
+                        // PostgreSQL: `<table>_<column>_check` when the check
+                        // reads one column, `<table>_check` otherwise, with
+                        // a number appended until the name is unused.
+                        for constraint in &mut built {
+                            if let ConstraintSchema::Check {
+                                name, expression, ..
+                            } = constraint
+                            {
+                                let base = match check_expression_single_column(expression) {
+                                    Some(column) => format!("{table}_{column}_check"),
+                                    None => format!("{table}_check"),
+                                };
+                                let taken = |candidate: &str| {
+                                    constraints
+                                        .iter()
+                                        .any(|existing| constraint_name(existing) == candidate)
+                                };
+                                let mut candidate = base.clone();
+                                let mut suffix = 0;
+                                while taken(&candidate) {
+                                    suffix += 1;
+                                    candidate = format!("{base}{suffix}");
+                                }
+                                *name = candidate;
+                            }
+                        }
+                    }
+                    constraints.extend(built);
                 }
             }
         }
@@ -774,6 +813,10 @@ impl<'db> SqlSession<'db> {
         for mut parent in parents {
             parent.inheritance_children.push(table.clone());
             self.save_session_schema(&parent)?;
+        }
+        if temporary_schema {
+            self.register_temp_on_commit(create_table, &table);
+            self.apply_autocommit_temp_on_commit()?;
         }
         Ok(SqlResult::command("CREATE TABLE"))
     }
@@ -2615,4 +2658,25 @@ pub(super) fn composite_type_replacements(
     }
 
     Ok(replacements)
+}
+
+/// The one column a CHECK expression reads, if it reads exactly one.
+fn check_expression_single_column(expression: &str) -> Option<String> {
+    let expr = parse_check_expression(expression).ok()?;
+    let mut columns = BTreeSet::new();
+    let _ = sqlparser::ast::visit_expressions(&expr, |expr| {
+        match expr {
+            Expr::Identifier(ident) => {
+                columns.insert(ident_value(ident));
+            }
+            Expr::CompoundIdentifier(parts) => {
+                if let Some(last) = parts.last() {
+                    columns.insert(ident_value(last));
+                }
+            }
+            _ => {}
+        }
+        std::ops::ControlFlow::<()>::Continue(())
+    });
+    (columns.len() == 1).then(|| columns.into_iter().next().expect("one column"))
 }

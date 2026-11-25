@@ -871,6 +871,9 @@ impl<'db> SqlSession<'db> {
             }
         }
         self.validate_row_assignments(update, &table, schema.as_deref())?;
+        if let Some(schema) = schema.as_deref() {
+            validate_integer_text_assignments(schema, &update.assignments)?;
+        }
         if let Some(schema) = schema
             .as_deref()
             .filter(|schema| !schema.requires_row_move_plan())
@@ -8216,6 +8219,35 @@ fn check_return_next_target(has_out_parameters: bool, query: &Query) -> Result<(
             "RETURN NEXT cannot have a parameter in function with OUT parameters",
             None,
         ));
+    }
+    Ok(())
+}
+
+/// `SET int_column = '34.5'` reads the literal with the column type's input
+/// function, as an INSERT does.
+fn validate_integer_text_assignments(
+    schema: &TableSchema,
+    assignments: &[sqlparser::ast::Assignment],
+) -> Result<()> {
+    for assignment in assignments {
+        let sqlparser::ast::AssignmentTarget::ColumnName(name) = &assignment.target else {
+            continue;
+        };
+        if !is_string_literal_expr(&assignment.value) {
+            continue;
+        }
+        let column = object_name_parts(name).pop().unwrap_or_default();
+        let Some(column) = schema
+            .column(&column)
+            .filter(|column| column.user_type.is_none())
+        else {
+            continue;
+        };
+        if matches!(column.pg_type.as_str(), "int2" | "int4" | "int8") {
+            if let SqlValue::String(text) = eval_constant_expr(&assignment.value)? {
+                pg_integer_input(&text, &column.pg_type)?;
+            }
+        }
     }
     Ok(())
 }

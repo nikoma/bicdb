@@ -427,11 +427,6 @@ fn temporary_table_placement_errors_match_postgres() {
             "42P16",
             "ON COMMIT can only be used on temporary tables",
         ),
-        (
-            "CREATE TEMP TABLE tt_oc (a int) ON COMMIT DROP",
-            "0A000",
-            "unsupported SQL: ON COMMIT DROP is not supported",
-        ),
     ] {
         let error = sql.execute(statement).unwrap_err();
         assert_eq!(error.sqlstate(), sqlstate, "{statement}");
@@ -459,4 +454,287 @@ fn orphan_temporary_schemas_are_dropped() {
     }
     assert_eq!(bicdb_sql::drop_orphan_temp_schemas(&mut db).unwrap(), 1);
     assert!(!bicdb_sql::temp_schema_exists(&db, 11));
+}
+
+#[test]
+fn temporary_table_on_commit_actions() {
+    let (_dir, mut db) = open();
+    let mut sql = SqlSession::new(&mut db).with_runtime(std::sync::Arc::new(TestBackend(21)));
+    sql.execute("CREATE TEMP TABLE tt_delete (a int) ON COMMIT DELETE ROWS")
+        .unwrap();
+    sql.execute("BEGIN").unwrap();
+    sql.execute("INSERT INTO tt_delete VALUES (1), (2)")
+        .unwrap();
+    assert_eq!(
+        rows(&mut sql, "SELECT count(*) FROM tt_delete"),
+        [[SqlValue::Int(2)]]
+    );
+    sql.execute("COMMIT").unwrap();
+    assert_eq!(
+        rows(&mut sql, "SELECT count(*) FROM tt_delete"),
+        [[SqlValue::Int(0)]]
+    );
+    // Outside a transaction block every statement commits.
+    sql.execute("INSERT INTO tt_delete VALUES (3)").unwrap();
+    assert_eq!(
+        rows(&mut sql, "SELECT count(*) FROM tt_delete"),
+        [[SqlValue::Int(0)]]
+    );
+    sql.execute("BEGIN").unwrap();
+    sql.execute("CREATE TEMP TABLE tt_drop (a int) ON COMMIT DROP")
+        .unwrap();
+    sql.execute("INSERT INTO tt_drop VALUES (1)").unwrap();
+    assert_eq!(
+        rows(&mut sql, "SELECT count(*) FROM tt_drop"),
+        [[SqlValue::Int(1)]]
+    );
+    sql.execute("COMMIT").unwrap();
+    assert_eq!(
+        sql.execute("SELECT * FROM tt_drop").unwrap_err().sqlstate(),
+        "42P01"
+    );
+}
+
+#[test]
+fn embedded_session_temporary_tables_end_with_the_session() {
+    let (_dir, mut db) = open();
+    {
+        let mut sql = SqlSession::new(&mut db);
+        sql.execute("CREATE TABLE tt_emb (a int)").unwrap();
+        sql.execute("CREATE TEMP TABLE tt_emb (b int)").unwrap();
+        sql.execute("INSERT INTO tt_emb VALUES (5)").unwrap();
+        assert_eq!(rows(&mut sql, "SELECT b FROM tt_emb"), [[SqlValue::Int(5)]]);
+        assert_eq!(
+            rows(&mut sql, "SELECT count(*) FROM public.tt_emb"),
+            [[SqlValue::Int(0)]]
+        );
+    }
+    let mut sql = SqlSession::new(&mut db);
+    // The permanent table remains; the temporary one is gone.
+    assert_eq!(
+        sql.execute("SELECT * FROM tt_emb").unwrap().columns,
+        ["a".to_string()]
+    );
+    assert_eq!(
+        rows(
+            &mut sql,
+            "SELECT count(*) FROM pg_class WHERE relname = 'tt_emb' AND relpersistence = 't'"
+        ),
+        [[SqlValue::Int(0)]]
+    );
+}
+
+#[test]
+fn integer_text_input_is_not_rounded() {
+    let (_dir, mut db) = open();
+    let mut sql = SqlSession::new(&mut db);
+    for (statement, message) in [
+        (
+            "SELECT '34.5'::int2",
+            "invalid input syntax for type smallint: \"34.5\"",
+        ),
+        (
+            "SELECT int4 '1e3'",
+            "invalid input syntax for type integer: \"1e3\"",
+        ),
+        (
+            "SELECT '1.5'::text::int8",
+            "invalid input syntax for type bigint: \"1.5\"",
+        ),
+    ] {
+        let error = sql.execute(statement).unwrap_err();
+        assert_eq!(error.sqlstate(), "22P02", "{statement}");
+        assert_eq!(error.to_string(), message, "{statement}");
+    }
+    sql.execute("CREATE TABLE it_t (a int2, b int8)").unwrap();
+    let error = sql
+        .execute("INSERT INTO it_t VALUES ('34.5', 1)")
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "invalid input syntax for type smallint: \"34.5\""
+    );
+    sql.execute("INSERT INTO it_t VALUES (' 12 ', '0x10'), (34.5, 2.5)")
+        .unwrap();
+    let error = sql.execute("UPDATE it_t SET a = '2.5'").unwrap_err();
+    assert_eq!(error.sqlstate(), "22P02");
+    assert_eq!(
+        rows(&mut sql, "SELECT a, b FROM it_t ORDER BY a"),
+        [
+            [SqlValue::Int(12), SqlValue::Int(16)],
+            [SqlValue::Int(35), SqlValue::Int(3)],
+        ]
+    );
+    // Numeric values keep PostgreSQL's rounding.
+    assert_eq!(
+        rows(&mut sql, "SELECT 34.5::numeric::int2, (-2.5)::int8"),
+        [[SqlValue::Int(35), SqlValue::Int(-3)]]
+    );
+}
+
+fn cell(sql: &mut SqlSession<'_>, statement: &str) -> String {
+    rows(sql, statement)[0][0].to_cell()
+}
+
+#[test]
+fn describe_catalog_text_matches_postgres() {
+    let (_dir, mut db) = open();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute(
+        "CREATE TABLE dc_t (a int, c numeric, d float8, e text, CHECK (c > 0), \
+         CHECK (d < 10 AND a >= 0), CHECK (e <> ''))",
+    )
+    .unwrap();
+    assert_eq!(
+        rows(
+            &mut sql,
+            "SELECT conname::text, pg_get_constraintdef(oid, true) FROM pg_constraint \
+             WHERE conrelid = 'dc_t'::regclass AND contype = 'c' ORDER BY 1"
+        ),
+        [
+            [
+                SqlValue::String("dc_t_c_check".into()),
+                SqlValue::String("CHECK (c > 0::numeric)".into())
+            ],
+            [
+                SqlValue::String("dc_t_check".into()),
+                SqlValue::String("CHECK (d < 10::double precision AND a >= 0)".into())
+            ],
+            [
+                SqlValue::String("dc_t_e_check".into()),
+                SqlValue::String("CHECK (e <> ''::text)".into())
+            ],
+        ]
+    );
+    sql.execute("CREATE VIEW dc_v AS SELECT a, e FROM dc_t WHERE a > 1 ORDER BY e")
+        .unwrap();
+    assert_eq!(
+        cell(&mut sql, "SELECT pg_get_viewdef('dc_v'::regclass, true)"),
+        " SELECT a,\n    e\n   FROM dc_t\n  WHERE a > 1\n  ORDER BY e;"
+    );
+    assert_eq!(
+        cell(
+            &mut sql,
+            "SELECT pg_get_userbyid(nspowner) FROM pg_namespace WHERE nspname = 'public'"
+        ),
+        "pg_database_owner"
+    );
+    assert_eq!(
+        cell(
+            &mut sql,
+            "SELECT n.nspname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace \
+             WHERE c.relname = 'bicdb_graph_nodes'"
+        ),
+        "pg_catalog"
+    );
+    sql.execute("CREATE INDEX dc_i ON dc_t (e, a)").unwrap();
+    assert_eq!(
+        rows(
+            &mut sql,
+            "SELECT a.attname::text, pg_catalog.format_type(a.atttypid, a.atttypmod) \
+             FROM pg_attribute a WHERE a.attrelid = 'dc_i'::regclass AND a.attnum > 0 \
+             ORDER BY a.attnum"
+        ),
+        [
+            [
+                SqlValue::String("e".into()),
+                SqlValue::String("text".into())
+            ],
+            [
+                SqlValue::String("a".into()),
+                SqlValue::String("integer".into())
+            ],
+        ]
+    );
+    sql.execute("CREATE TABLE dc_p (k int) PARTITION BY RANGE (k)")
+        .unwrap();
+    sql.execute("CREATE TABLE dc_c PARTITION OF dc_p FOR VALUES FROM (0) TO (10)")
+        .unwrap();
+    assert_eq!(
+        rows(
+            &mut sql,
+            "SELECT count(*) FROM (SELECT pg_partition_ancestors('dc_c'::regclass)) s"
+        ),
+        [[SqlValue::Int(2)]]
+    );
+}
+
+#[test]
+fn added_scalar_functions_and_input_details() {
+    let (_dir, mut db) = open();
+    let mut sql = SqlSession::new(&mut db);
+    assert_eq!(cell(&mut sql, "SELECT div(9, 4)"), "2");
+    assert_eq!(
+        cell(&mut sql, "SELECT factorial(20)"),
+        "2432902008176640000"
+    );
+    assert_eq!(
+        rows(
+            &mut sql,
+            "SELECT width_bucket(5.35, 0.024, 10.06, 5), width_bucket(11::float8, 0, 10, 5)"
+        ),
+        [[SqlValue::Int(3), SqlValue::Int(6)]]
+    );
+    assert_eq!(
+        rows(&mut sql, "SELECT sind(30), cosd(60), tand(45)"),
+        [[
+            SqlValue::Float(0.5),
+            SqlValue::Float(0.5),
+            SqlValue::Float(1.0)
+        ]]
+    );
+    assert_eq!(
+        cell(&mut sql, "SELECT array_reverse(ARRAY[1,2,3])::text"),
+        "{3,2,1}"
+    );
+    assert_eq!(
+        cell(&mut sql, "SELECT array_sort(ARRAY[3,1,2])::text"),
+        "{1,2,3}"
+    );
+    for (input, type_name, message, detail, code) in [
+        (
+            "(1,4",
+            "int4range",
+            "malformed range literal: \"(1,4\"",
+            Some("Unexpected end of input."),
+            "22P02",
+        ),
+        (
+            "(4,zed)",
+            "int4range",
+            "invalid input syntax for type integer: \"zed\"",
+            None,
+            "22P02",
+        ),
+        (
+            "192.168.198.200/24",
+            "cidr",
+            "invalid cidr value: \"192.168.198.200/24\"",
+            Some("Value has bits set to right of mask."),
+            "22P02",
+        ),
+        (
+            "0xffffffffff",
+            "xid",
+            "value \"0xffffffffff\" is out of range for type xid",
+            None,
+            "22003",
+        ),
+    ] {
+        assert_eq!(
+            error_info(&mut sql, input, type_name),
+            [
+                Some(message.to_string()),
+                detail.map(str::to_string),
+                None,
+                Some(code.to_string())
+            ],
+            "{input}::{type_name}"
+        );
+    }
+    let error = sql.execute("SELECT '\\xDeAdBeE'::bytea").unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "invalid hexadecimal data: odd number of digits"
+    );
 }

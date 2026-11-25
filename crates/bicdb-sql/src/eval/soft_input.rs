@@ -43,6 +43,24 @@ pub(crate) fn soft_input_error(
 ) -> Result<Option<SoftInputError>> {
     let data_type = parse_input_type_name(type_name)?;
     let input = SqlValue::String(text.to_string());
+    // The relative date/time inputs are always valid for their types.
+    if let Ok((pg_type, _)) = pg_type_from_data_type(&data_type) {
+        let special = text.trim().to_ascii_lowercase();
+        if matches!(pg_type.as_str(), "date" | "timestamp" | "timestamptz")
+            && matches!(special.as_str(), "now" | "today" | "tomorrow" | "yesterday")
+        {
+            return Ok(None);
+        }
+    }
+    if let Some(converted) = pg_type_from_data_type(&data_type)
+        .ok()
+        .and_then(|(pg_type, _)| text_input_integer_value(&input, &pg_type))
+    {
+        return match converted {
+            Ok(_) => Ok(None),
+            Err(error) => Ok(Some(saved_input_error(&error))),
+        };
+    }
     let builtin = pg_type_from_data_type(&data_type)
         .ok()
         .map(|(pg_type, _)| pg_type);

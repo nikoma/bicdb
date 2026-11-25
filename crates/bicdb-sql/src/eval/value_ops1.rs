@@ -128,6 +128,9 @@ pub(crate) fn eval_privilege_function_value(
             }
             let oid = sql_value_i64(value)
                 .ok_or_else(|| SqlError::InvalidSql("pg_get_userbyid requires an OID".into()))?;
+            if oid == crate::planner::PG_DATABASE_OWNER_OID {
+                return Ok(Some(SqlValue::String("pg_database_owner".into())));
+            }
             let name = list_roles(db)?
                 .into_iter()
                 .find(|role| role_oid(&role.name) == oid)
@@ -213,16 +216,40 @@ pub(crate) fn eval_db_catalog_function_value_with_engine(
                 .find(|schema| table_relation_oid(schema) == oid)
             {
                 // A table outside a partition tree is its only ancestor; a
-                // partition's chain is a set, which this scalar form cannot
-                // return.
+                // partition's chain is a set (the SELECT-list form is
+                // rewritten through `bicdb_partition_ancestor_oids`).
                 if schema.partition_of.is_some() {
                     return Err(SqlError::Unsupported(
-                        "pg_partition_ancestors of a partition is not supported".to_string(),
+                        "pg_partition_ancestors of a partition is not supported here".to_string(),
                     ));
                 }
                 return Ok(Some(SqlValue::Int(oid)));
             }
         }
+    }
+    if bare_name == "bicdb_partition_ancestor_oids" && args.len() == 1 {
+        let Some(oid) =
+            sql_value_i64(&args[0]).or_else(|| args[0].to_cell().trim().parse::<i64>().ok())
+        else {
+            return Ok(Some(SqlValue::Null));
+        };
+        let schemas = list_schemas(db)?;
+        let mut chain = Vec::new();
+        let mut current = schemas
+            .iter()
+            .find(|schema| table_relation_oid(schema) == oid);
+        while let Some(schema) = current {
+            chain.push(SqlValue::Int(table_relation_oid(schema)));
+            current = schema.partition_of.as_ref().and_then(|link| {
+                schemas
+                    .iter()
+                    .find(|candidate| candidate.name == link.parent_table)
+            });
+            if chain.len() > schemas.len() {
+                break;
+            }
+        }
+        return Ok(Some(array_value(chain)));
     }
     if bare_name == "pg_table_is_visible" && args.len() == 1 {
         if let Some(visible) = table_is_visible(db, &args[0])? {
@@ -1617,12 +1644,105 @@ pub(crate) fn pg_get_viewdef(db: &BicDb, args: &[SqlValue]) -> Result<SqlValue> 
 }
 
 pub(crate) fn postgres_view_definition(definition: &str) -> String {
+    if let Some(pretty) = pretty_simple_view_definition(definition) {
+        return pretty;
+    }
     let definition = definition.trim_end();
     if definition.ends_with(';') {
         definition.to_string()
     } else {
         format!("{definition};")
     }
+}
+
+/// PostgreSQL's layout of a view definition (`pg_get_viewdef`) for a plain
+/// single-table SELECT: ` SELECT a,\n    b\n   FROM t\n  WHERE ...;`. Other
+/// shapes keep their stored text.
+fn pretty_simple_view_definition(definition: &str) -> Option<String> {
+    let statements = Parser::parse_sql(&PostgreSqlDialect {}, definition).ok()?;
+    let [Statement::Query(query)] = statements.as_slice() else {
+        return None;
+    };
+    if query.with.is_some() || query.fetch.is_some() || !query.locks.is_empty() {
+        return None;
+    }
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        return None;
+    };
+    if select.distinct.is_some()
+        || select.having.is_some()
+        || select.top.is_some()
+        || select.into.is_some()
+        || !select.named_window.is_empty()
+        || select.qualify.is_some()
+        || select.from.len() > 1
+        || select.from.iter().any(|from| !from.joins.is_empty())
+    {
+        return None;
+    }
+    let mut text = String::from(" SELECT ");
+    text.push_str(
+        &select
+            .projection
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(",\n    "),
+    );
+    if let Some(from) = select.from.first() {
+        text.push_str("\n   FROM ");
+        text.push_str(&from.relation.to_string());
+    }
+    if let Some(selection) = &select.selection {
+        text.push_str("\n  WHERE ");
+        text.push_str(&selection.to_string());
+    }
+    match &select.group_by {
+        GroupByExpr::Expressions(exprs, modifiers) if !exprs.is_empty() && modifiers.is_empty() => {
+            text.push_str("\n  GROUP BY ");
+            text.push_str(
+                &exprs
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            );
+        }
+        GroupByExpr::Expressions(exprs, _) if exprs.is_empty() => {}
+        _ => return None,
+    }
+    if let Some(order_by) = &query.order_by {
+        let OrderByKind::Expressions(exprs) = &order_by.kind else {
+            return None;
+        };
+        text.push_str("\n  ORDER BY ");
+        text.push_str(
+            &exprs
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", "),
+        );
+    }
+    if let Some(limit) = &query.limit_clause {
+        match limit {
+            LimitClause::LimitOffset {
+                limit,
+                offset,
+                limit_by,
+            } if limit_by.is_empty() => {
+                if let Some(offset) = offset {
+                    text.push_str(&format!("\n OFFSET {}", offset.value));
+                }
+                if let Some(limit) = limit {
+                    text.push_str(&format!("\n LIMIT {limit}"));
+                }
+            }
+            _ => return None,
+        }
+    }
+    text.push(';');
+    Some(text)
 }
 
 pub(crate) fn catalog_relation_name_for_table_oid(db: &BicDb, oid: i64) -> Result<Option<String>> {
@@ -2184,6 +2304,7 @@ pub(crate) fn eval_acldefault(args: &[SqlValue]) -> Option<SqlValue> {
 pub(crate) fn acl_owner_name(value: &SqlValue) -> String {
     match sql_value_i64(value) {
         Some(10) => "bicdb".to_string(),
+        Some(crate::planner::PG_DATABASE_OWNER_OID) => "pg_database_owner".to_string(),
         Some(oid) => oid.to_string(),
         None => value.to_cell(),
     }

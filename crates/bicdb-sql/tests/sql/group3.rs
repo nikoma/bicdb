@@ -866,7 +866,7 @@ fn postgres_acldefault_is_supported_for_pg_dump_namespace_query() {
         vec![vec![
             SqlValue::String("public".to_string()),
             SqlValue::Null,
-            SqlValue::String("{bicdb=UC/bicdb}".to_string()),
+            SqlValue::String("{pg_database_owner=UC/pg_database_owner}".to_string()),
         ]]
     );
 }

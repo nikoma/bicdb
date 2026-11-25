@@ -1516,13 +1516,21 @@ impl<'db> SqlEngine<'db> {
                     }
                 }
                 let (scope, _) = self.bound_row_context(context.column_keys());
+                let source_type = scope.known_expr_type(expr).or_else(|| {
+                    pg_type_from_data_type(data_type)
+                        .is_ok_and(|(pg_type, _)| {
+                            matches!(pg_type.as_str(), "int2" | "int4" | "int8")
+                        })
+                        .then(|| self.infer_slot_row_expr_type(context.row_lookup.columns(), expr))
+                        .flatten()
+                });
                 cast_expr_value_with_db_and_source_type(
                     self.db_ref(),
                     value,
                     expr,
                     data_type,
                     None,
-                    scope.known_expr_type(expr),
+                    source_type,
                 )
             }
             Expr::Position { expr, r#in } => eval_position_typed_value(
@@ -3268,13 +3276,21 @@ impl<'db> SqlEngine<'db> {
                 }
                 let columns = row.keys().cloned().collect::<Vec<_>>();
                 let (scope, _) = self.bound_row_context(&columns);
+                let source_type = scope.known_expr_type(expr).or_else(|| {
+                    pg_type_from_data_type(data_type)
+                        .is_ok_and(|(pg_type, _)| {
+                            matches!(pg_type.as_str(), "int2" | "int4" | "int8")
+                        })
+                        .then(|| self.infer_sql_row_expr_type(row, expr))
+                        .flatten()
+                });
                 cast_expr_value_with_db_and_source_type(
                     self.db_ref(),
                     value,
                     expr,
                     data_type,
                     None,
-                    scope.known_expr_type(expr),
+                    source_type,
                 )
             }
             Expr::Position { expr, r#in } => eval_position_typed_value(

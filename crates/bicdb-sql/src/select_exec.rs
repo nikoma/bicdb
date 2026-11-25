@@ -3943,7 +3943,10 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
                 rows.push(virtual_row([
                     ("oid", SqlValue::Int(namespace_oid(&namespace))),
                     ("nspname", SqlValue::String(namespace.clone())),
-                    ("nspowner", SqlValue::Int(role_oid(&owner))),
+                    (
+                        "nspowner",
+                        SqlValue::Int(namespace_owner_oid(&namespace, &owner)),
+                    ),
                     (
                         "nspacl",
                         schema_acl_value_from_privileges(&privileges, &namespace)?,

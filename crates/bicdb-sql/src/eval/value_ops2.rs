@@ -1559,6 +1559,19 @@ pub(crate) fn cast_expr_value(
     }
     let (target_type, _) = pg_type_from_data_type(data_type)?;
     let source_type = projected_arithmetic_operand_pg_type(expr, schema);
+    // Text (or an unknown-typed literal) becomes an integer through the
+    // type's input function; only numeric sources round.
+    if matches!(target_type.as_str(), "int2" | "int4" | "int8")
+        && (is_string_literal_expr(expr)
+            || matches!(
+                projected_expr_pg_type(expr, schema).as_deref(),
+                Some("text" | "varchar" | "bpchar" | "name" | "unknown")
+            ))
+    {
+        if let Some(input) = text_input_integer_value(&value, &target_type) {
+            return input;
+        }
+    }
     if matches!(target_type.as_str(), "text" | "varchar" | "bpchar" | "name") {
         let projected_source_type = projected_expr_pg_type(expr, schema);
         if source_type.as_deref().or(projected_source_type.as_deref()) == Some("bpchar")
@@ -2975,6 +2988,21 @@ pub(crate) fn cast_expr_value_with_db_and_source_type(
         .or_else(|| projected_expr_pg_type(expr, schema))
         .or_else(|| projected_expr_pg_type_with_db(db, expr))
         .or_else(|| catalog_oid_alias_expr_type(expr).map(str::to_string));
+    if let Some(target) = target_pg_type
+        .as_deref()
+        .filter(|target| matches!(*target, "int2" | "int4" | "int8"))
+    {
+        if is_string_literal_expr(expr)
+            || matches!(
+                source_pg_type.as_deref(),
+                Some("text" | "varchar" | "bpchar" | "name" | "unknown")
+            )
+        {
+            if let Some(input) = text_input_integer_value(&value, target) {
+                return input;
+            }
+        }
+    }
     let internal_array_input = target_pg_type
         .as_deref()
         .is_some_and(|target| target.ends_with("[]"))

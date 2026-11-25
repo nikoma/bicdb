@@ -4492,7 +4492,9 @@ fn execute_server_db_sql_for_state_inner(
         // commit, which is here.
         let mut tx =
             match crate::sql_parsing::drain_deferred_trigger_hooks(server, state, cancellation, tx)
-            {
+                .and_then(|tx| {
+                    crate::sql_parsing::apply_temp_on_commit_hooks(server, state, cancellation, tx)
+                }) {
                 Ok(tx) => tx,
                 Err(error) => {
                     state.session_state = session_state;

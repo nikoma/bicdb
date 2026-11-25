@@ -1036,6 +1036,7 @@ impl<'db> SqlSession<'db> {
                 for column in &columns {
                     ensure_schema_column(&table, schema, column)?;
                 }
+                validate_integer_text_literals(schema, &columns, source)?;
                 validate_generated_always_insert(schema, &columns, source)?;
             }
             // Stored-form INSERT (typed resident rows phase 3): the template
@@ -3969,4 +3970,43 @@ fn returning_mentions_tableoid(returning: &[SelectItem]) -> bool {
         })
         .is_break()
     })
+}
+
+/// A string literal assigned to an integer column is read by the column
+/// type's input function: `'34.5'` is invalid input, not 35.
+pub(crate) fn validate_integer_text_literals(
+    schema: &TableSchema,
+    columns: &[String],
+    source: &Query,
+) -> Result<()> {
+    let SetExpr::Values(values) = source.body.as_ref() else {
+        return Ok(());
+    };
+    let targets = columns
+        .iter()
+        .map(|column| {
+            schema
+                .column(column)
+                .filter(|column| column.user_type.is_none())
+                .map(|column| column.pg_type.as_str())
+                .filter(|pg_type| matches!(*pg_type, "int2" | "int4" | "int8"))
+        })
+        .collect::<Vec<_>>();
+    if targets.iter().all(Option::is_none) {
+        return Ok(());
+    }
+    for row in &values.rows {
+        for (expr, target) in row.iter().zip(&targets) {
+            let Some(pg_type) = target else {
+                continue;
+            };
+            if !is_string_literal_expr(expr) {
+                continue;
+            }
+            if let SqlValue::String(text) = eval_constant_expr(expr)? {
+                pg_integer_input(&text, pg_type)?;
+            }
+        }
+    }
+    Ok(())
 }

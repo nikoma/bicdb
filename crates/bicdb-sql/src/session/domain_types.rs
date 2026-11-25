@@ -948,7 +948,9 @@ impl<'db> SqlSession<'db> {
             return Ok(());
         }
         let name = ObjectName::from(vec![Ident::with_quote('"', temp.to_string())]);
-        self.drop_schemas(true, &[name], true, true).map(|_| ())
+        self.drop_schemas(true, &[name], true, true)?;
+        super::temp_tables::forget_on_commit(temp, None);
+        Ok(())
     }
 
     fn drop_schemas(
@@ -4133,6 +4135,26 @@ impl<'db> SqlSession<'db> {
         );
         let (function_schema, name) =
             routine_creation_schema_and_name(&object_name(&create_function.name)?);
+        // `CREATE FUNCTION pg_temp.f()` lives in the session's temporary
+        // schema and ends with it.
+        let function_schema = if function_schema == "pg_temp"
+            || crate::search_path::is_temp_schema(&function_schema)
+        {
+            let temp = self.temp_schema_for_creation();
+            if load_namespace(self.db_ref(), &temp)?.is_none() {
+                self.create_session_namespace_if_missing(
+                    NamespaceSchema {
+                        dropped: false,
+                        name: temp.clone(),
+                        owner: current_user_from_gucs(&self.session_gucs),
+                    },
+                    true,
+                )?;
+            }
+            temp
+        } else {
+            function_schema
+        };
         let (return_type, returns_set) = create_function
             .return_type
             .as_ref()

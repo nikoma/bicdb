@@ -571,6 +571,15 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
                 SqlValue::String(text) if is_integer_literal_text(text) => Some(text.clone()),
                 _ => None,
             };
+            // Integer input syntax (surrounding whitespace, 0x/0o/0b, digit
+            // separators) is never a numeric value's text.
+            if let SqlValue::String(text) = &value {
+                if !is_valid_numeric_text(text) {
+                    if let Ok(parsed) = pg_integer_input(text, pg_type) {
+                        return Ok(SqlValue::Int(parsed));
+                    }
+                }
+            }
             let value = match value {
                 SqlValue::Int(value) => Ok(value),
                 SqlValue::Float(value) => float_to_i64_rounded(value),
@@ -730,14 +739,23 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
                 parse_bytea_text(&text)
                     .map(|bytes| SqlValue::String(format_bytea_hex(&bytes)))
                     .map_err(|error| match error {
+                        // byteain's hex decoder messages.
                         PgCanonicalValueError::InvalidByteaHex => {
-                            SqlError::invalid_parameter_value(format!(
-                                "invalid hexadecimal digit in bytea value: {text}"
-                            ))
+                            let digits = text.get(2..).unwrap_or_default();
+                            match digits
+                                .chars()
+                                .find(|c| !c.is_ascii_hexdigit() && !c.is_ascii_whitespace())
+                            {
+                                Some(c) => SqlError::invalid_parameter_value(format!(
+                                    "invalid hexadecimal digit: \"{c}\""
+                                )),
+                                None => SqlError::invalid_parameter_value(
+                                    "invalid hexadecimal data: odd number of digits",
+                                ),
+                            }
                         }
-                        _ => SqlError::invalid_text_representation(
-                            "bytea",
-                            format!("invalid input syntax for type bytea: \"{text}\""),
+                        _ => SqlError::InvalidTextRepresentation(
+                            "invalid input syntax for type bytea".to_string(),
                         ),
                     })
             }
@@ -763,6 +781,15 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
         | "tstzmultirange" | "datemultirange" | "int8multirange" | "pg_lsn" | "pg_snapshot"
         | "txid_snapshot" | "xid" | "xid8" | "cid" | "tid" => {
             let text = value.to_cell();
+            if let Some(element) = builtin_range_element_type(pg_type) {
+                if let Some((lower, upper)) = pg_range_literal_bounds(pg_type, &text)? {
+                    if matches!(element, "int4" | "int8") {
+                        for bound in [lower, upper].into_iter().flatten() {
+                            pg_integer_input(&bound, element)?;
+                        }
+                    }
+                }
+            }
             parse_pg_canonical_special(pg_type, &text)
                 .and_then(|value| {
                     value.ok_or_else(|| PgCanonicalValueError::InvalidSpecialValue {
@@ -795,7 +822,28 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
                     }
                     _ => SqlValue::String(text.trim().to_string()),
                 })
-                .map_err(|error| postgres_range_input_error(pg_type, &text, error))
+                .map_err(|error| {
+                    // A well-formed address with bits beyond the netmask.
+                    if pg_type == "cidr"
+                        && parse_pg_canonical_special("inet", &text)
+                            .is_ok_and(|value| value.is_some())
+                    {
+                        return SqlError::with_detail(
+                            SqlError::InvalidTextRepresentation(format!(
+                                "invalid cidr value: \"{text}\""
+                            )),
+                            "Value has bits set to right of mask.",
+                        );
+                    }
+                    if matches!(pg_type, "xid" | "xid8" | "cid")
+                        && transaction_id_overflows(pg_type, &text)
+                    {
+                        return SqlError::numeric_value_out_of_range(format!(
+                            "value \"{text}\" is out of range for type {pg_type}"
+                        ));
+                    }
+                    postgres_range_input_error(pg_type, &text, error)
+                })
         }
         "int2vector" | "oidvector" => {
             let text = value.to_cell();
@@ -4382,5 +4430,227 @@ fn bit_input_error(pg_type: &str, text: &str) -> SqlError {
         None => SqlError::InvalidTextRepresentation(format!(
             "invalid input syntax for type {pg_type}: \"{text}\""
         )),
+    }
+}
+
+/// The integer types' input function (`int2in`, `int4in`, `int8in`):
+/// surrounding whitespace, an optional sign, then decimal digits or a
+/// `0x`/`0o`/`0b` prefix, with single underscores between digits. Text in any
+/// other form (`34.5`, `1e3`) is invalid input, never rounded.
+pub(crate) fn pg_integer_input(text: &str, pg_type: &str) -> Result<i64> {
+    let invalid = || {
+        SqlError::InvalidTextRepresentation(format!(
+            "invalid input syntax for type {}: \"{text}\"",
+            pg_integer_type_name(pg_type)
+        ))
+    };
+    let out_of_range = || {
+        SqlError::numeric_value_out_of_range(format!(
+            "value \"{text}\" is out of range for type {}",
+            pg_integer_type_name(pg_type)
+        ))
+    };
+    let is_space = |c: char| matches!(c, ' ' | '\t' | '\n' | '\r' | '\x0b' | '\x0c');
+    let body = text.trim_matches(is_space);
+    let (negative, body) = match body.as_bytes().first() {
+        Some(b'-') => (true, &body[1..]),
+        Some(b'+') => (false, &body[1..]),
+        _ => (false, body),
+    };
+    let (radix, digits) = match body.get(..2).map(str::to_ascii_lowercase).as_deref() {
+        Some("0x") => (16, &body[2..]),
+        Some("0o") => (8, &body[2..]),
+        Some("0b") => (2, &body[2..]),
+        _ => (10, body),
+    };
+    if digits.is_empty()
+        || digits.starts_with('_')
+        || digits.ends_with('_')
+        || digits.contains("__")
+    {
+        return Err(invalid());
+    }
+    let mut magnitude: u128 = 0;
+    for c in digits.chars() {
+        if c == '_' {
+            continue;
+        }
+        let digit = c.to_digit(radix).ok_or_else(invalid)?;
+        magnitude = magnitude
+            .checked_mul(u128::from(radix))
+            .and_then(|value| value.checked_add(u128::from(digit)))
+            .ok_or_else(out_of_range)?;
+    }
+    let value = if negative {
+        0i128.checked_sub(i128::try_from(magnitude).map_err(|_| out_of_range())?)
+    } else {
+        i128::try_from(magnitude).ok()
+    }
+    .ok_or_else(out_of_range)?;
+    let (min, max) = match pg_type {
+        "int2" => (i128::from(i16::MIN), i128::from(i16::MAX)),
+        "int4" => (i128::from(i32::MIN), i128::from(i32::MAX)),
+        _ => (i128::from(i64::MIN), i128::from(i64::MAX)),
+    };
+    if value < min || value > max {
+        return Err(out_of_range());
+    }
+    Ok(value as i64)
+}
+
+/// Text read by a type's input function: integer targets go through
+/// [`pg_integer_input`]; `None` for other targets (their conversion already
+/// is the input function).
+pub(crate) fn text_input_integer_value(
+    value: &SqlValue,
+    pg_type: &str,
+) -> Option<Result<SqlValue>> {
+    match (value, pg_type) {
+        (SqlValue::String(text), "int2" | "int4" | "int8") => {
+            Some(pg_integer_input(text, pg_type).map(SqlValue::Int))
+        }
+        _ => None,
+    }
+}
+
+fn builtin_range_element_type(pg_type: &str) -> Option<&'static str> {
+    Some(match pg_type {
+        "int4range" => "int4",
+        "int8range" => "int8",
+        "numrange" => "numeric",
+        "tsrange" => "timestamp",
+        "tstzrange" => "timestamptz",
+        "daterange" => "date",
+        _ => return None,
+    })
+}
+
+/// `range_parse`'s syntax check: `empty`, or `[`/`(`, lower, `,`, upper,
+/// `]`/`)`, with PostgreSQL's DETAIL for each malformation. Returns the
+/// unquoted bounds (`None` for an omitted, infinite bound), `None` for
+/// `empty`.
+pub(crate) fn pg_range_literal_bounds(
+    pg_type: &str,
+    text: &str,
+) -> Result<Option<(Option<String>, Option<String>)>> {
+    let malformed = |detail: &str| {
+        SqlError::with_detail(
+            SqlError::InvalidTextRepresentation(format!("malformed range literal: \"{text}\"")),
+            detail,
+        )
+    };
+    let _ = pg_type;
+    let chars = text.chars().collect::<Vec<_>>();
+    let mut at = 0;
+    let skip_space = |at: &mut usize| {
+        while *at < chars.len() && chars[*at].is_whitespace() {
+            *at += 1;
+        }
+    };
+    skip_space(&mut at);
+    let rest = chars[at..].iter().collect::<String>();
+    if rest.len() >= 5 && rest[..5].eq_ignore_ascii_case("empty") {
+        let mut after = at + 5;
+        skip_space(&mut after);
+        if after != chars.len() {
+            return Err(malformed("Junk after \"empty\" key word."));
+        }
+        return Ok(None);
+    }
+    if !matches!(chars.get(at), Some('[' | '(')) {
+        return Err(malformed("Missing left parenthesis or bracket."));
+    }
+    at += 1;
+    // One bound: quoted segments and backslash escapes are literal text.
+    let read_bound = |at: &mut usize, closers: &[char]| -> Result<(Option<String>, char)> {
+        let mut value = String::new();
+        let mut any = false;
+        let mut quoted = false;
+        loop {
+            let Some(&c) = chars.get(*at) else {
+                return Err(malformed("Unexpected end of input."));
+            };
+            *at += 1;
+            if quoted {
+                match c {
+                    '"' if chars.get(*at) == Some(&'"') => {
+                        value.push('"');
+                        *at += 1;
+                    }
+                    '"' => quoted = false,
+                    '\\' => {
+                        let Some(&next) = chars.get(*at) else {
+                            return Err(malformed("Unexpected end of input."));
+                        };
+                        value.push(next);
+                        *at += 1;
+                    }
+                    other => value.push(other),
+                }
+                continue;
+            }
+            match c {
+                '"' => {
+                    quoted = true;
+                    any = true;
+                }
+                '\\' => {
+                    let Some(&next) = chars.get(*at) else {
+                        return Err(malformed("Unexpected end of input."));
+                    };
+                    value.push(next);
+                    *at += 1;
+                    any = true;
+                }
+                c if closers.contains(&c) => {
+                    return Ok(((any || !value.is_empty()).then_some(value), c));
+                }
+                c => {
+                    value.push(c);
+                    any = true;
+                }
+            }
+        }
+    };
+    let (lower, separator) = read_bound(&mut at, &[',', ']', ')'])?;
+    if separator != ',' {
+        return Err(malformed("Missing comma after lower bound."));
+    }
+    let (upper, closer) = read_bound(&mut at, &[',', ']', ')'])?;
+    if closer == ',' {
+        return Err(malformed("Too many commas."));
+    }
+    skip_space(&mut at);
+    if at != chars.len() {
+        return Err(malformed("Junk after right parenthesis or bracket."));
+    }
+    Ok(Some((lower, upper)))
+}
+
+/// Unsigned integer text (decimal, `0x` hex or leading-zero octal, as
+/// `strtoul` with base 0 reads it) too large for a transaction id type.
+fn transaction_id_overflows(pg_type: &str, text: &str) -> bool {
+    let digits = text.trim();
+    let (radix, digits) = if let Some(hex) = digits
+        .strip_prefix("0x")
+        .or_else(|| digits.strip_prefix("0X"))
+    {
+        (16, hex)
+    } else if digits.len() > 1 && digits.starts_with('0') {
+        (8, &digits[1..])
+    } else {
+        (10, digits)
+    };
+    if digits.is_empty() || !digits.chars().all(|c| c.is_digit(radix)) {
+        return false;
+    }
+    let limit = if pg_type == "xid8" {
+        u128::from(u64::MAX)
+    } else {
+        u128::from(u32::MAX)
+    };
+    match u128::from_str_radix(digits, radix) {
+        Ok(value) => value > limit,
+        Err(_) => true,
     }
 }

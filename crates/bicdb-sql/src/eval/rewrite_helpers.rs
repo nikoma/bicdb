@@ -62,11 +62,45 @@ pub(crate) fn literal_to_value(value: &ValueWithSpan) -> Result<SqlValue> {
 }
 
 pub(crate) fn typed_string_to_value(value: &TypedString) -> Result<SqlValue> {
-    cast_value(literal_to_value(&value.value)?, &value.data_type)
+    let literal = literal_to_value(&value.value)?;
+    if let Some(input) = typed_string_integer_input(&literal, &value.data_type) {
+        return input;
+    }
+    cast_value(literal, &value.data_type)
 }
 
 pub(crate) fn typed_string_to_value_with_db(db: &BicDb, value: &TypedString) -> Result<SqlValue> {
-    cast_value_with_db(db, literal_to_value(&value.value)?, &value.data_type)
+    let literal = literal_to_value(&value.value)?;
+    if let Some(input) = typed_string_integer_input(&literal, &value.data_type) {
+        return input;
+    }
+    cast_value_with_db(db, literal, &value.data_type)
+}
+
+/// `int2 '34.5'` is the type's input function applied to the literal.
+fn typed_string_integer_input(
+    literal: &SqlValue,
+    data_type: &DataType,
+) -> Option<Result<SqlValue>> {
+    let (pg_type, _) = pg_type_from_data_type(data_type).ok()?;
+    text_input_integer_value(literal, &pg_type)
+}
+
+/// A string literal (an unknown-typed constant), looking through parentheses.
+pub(crate) fn is_string_literal_expr(expr: &Expr) -> bool {
+    match expr {
+        Expr::Nested(inner) => is_string_literal_expr(inner),
+        Expr::Value(value) => matches!(
+            value.value,
+            Value::SingleQuotedString(_)
+                | Value::DoubleQuotedString(_)
+                | Value::EscapedStringLiteral(_)
+                | Value::DollarQuotedString(_)
+                | Value::TripleSingleQuotedString(_)
+                | Value::TripleDoubleQuotedString(_)
+        ),
+        _ => false,
+    }
 }
 
 pub(crate) fn json_path<'a>(value: &'a JsonValue, path: &[String]) -> Option<&'a JsonValue> {
@@ -537,6 +571,97 @@ pub(crate) fn rewrite_select_top_identifiers(sql: &str) -> Option<String> {
     Some(rewritten)
 }
 
+/// `SELECT pg_partition_ancestors(x)` returns a set of OIDs; it runs as
+/// `SELECT unnest(bicdb_partition_ancestor_oids(x))`, the partition itself
+/// first and then each ancestor, as PostgreSQL returns them.
+pub(crate) fn rewrite_partition_ancestor_projection(sql: &str) -> Option<String> {
+    if !sql.to_ascii_lowercase().contains("pg_partition_ancestors") {
+        return None;
+    }
+    let tokens = tokens_with_source(&sqlparser::dialect::PostgreSqlDialect {}, sql)?;
+    let code = tokens
+        .iter()
+        .enumerate()
+        .filter(|(_, (token, _))| !matches!(token, Token::Whitespace(_)))
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+    let word = |index: usize, value: &str| matches!(&tokens[index].0, Token::Word(word) if word.quote_style.is_none() && word.value.eq_ignore_ascii_case(value));
+    // Replacement text for token ranges: (start, end exclusive, text).
+    let mut edits: Vec<(usize, usize, String)> = Vec::new();
+    let mut close_after: Vec<usize> = Vec::new();
+    for position in 0..code.len() {
+        let index = code[position];
+        if !word(index, "select") {
+            continue;
+        }
+        let mut name_start = position + 1;
+        let mut name_end = name_start;
+        if code
+            .get(name_start)
+            .is_some_and(|&next| word(next, "pg_catalog"))
+            && code
+                .get(name_start + 1)
+                .is_some_and(|&next| matches!(tokens[next].0, Token::Period))
+        {
+            name_end = name_start + 2;
+        }
+        let Some(&function) = code.get(name_end) else {
+            continue;
+        };
+        if !word(function, "pg_partition_ancestors")
+            || !code
+                .get(name_end + 1)
+                .is_some_and(|&next| matches!(tokens[next].0, Token::LParen))
+        {
+            continue;
+        }
+        let open = code[name_end + 1];
+        let mut depth = 0usize;
+        let mut close = None;
+        for &candidate in &code[name_end + 1..] {
+            match tokens[candidate].0 {
+                Token::LParen => depth += 1,
+                Token::RParen => {
+                    depth -= 1;
+                    if depth == 0 {
+                        close = Some(candidate);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        let Some(close) = close else {
+            continue;
+        };
+        name_start = code[name_start];
+        edits.push((
+            name_start,
+            open,
+            "unnest(pg_catalog.bicdb_partition_ancestor_oids".to_string(),
+        ));
+        close_after.push(close);
+    }
+    if edits.is_empty() {
+        return None;
+    }
+    let mut out = String::with_capacity(sql.len() + 64);
+    let mut index = 0;
+    while index < tokens.len() {
+        if let Some((_, end, text)) = edits.iter().find(|(start, _, _)| *start == index) {
+            out.push_str(text);
+            index = *end;
+            continue;
+        }
+        out.push_str(tokens[index].1);
+        if close_after.contains(&index) {
+            out.push(')');
+        }
+        index += 1;
+    }
+    Some(out)
+}
+
 /// `pg_catalog.unnest(...)` is the built-in `unnest`, which the parser only
 /// recognizes as a table function (`FROM unnest(...)`) unqualified; psql's
 /// describe queries qualify it.
@@ -590,6 +715,11 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
     }
 
     if let Some(next) = crate::engine::flashback::rewrite_flashback_clauses(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
+    if let Some(next) = rewrite_partition_ancestor_projection(&rewritten) {
         rewritten = next;
         changed = true;
     }

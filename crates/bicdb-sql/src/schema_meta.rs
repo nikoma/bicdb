@@ -5052,6 +5052,11 @@ pub(crate) fn routine_schema_and_name(name: &str) -> (String, String) {
         Some((schema, _)) if !schema.is_empty() => normalize_object_name(schema),
         _ => "public".to_string(),
     };
+    // `pg_temp.f` names a routine in the session's own temporary schema.
+    let schema = match schema.as_str() {
+        "pg_temp" => crate::search_path::active_temp_schema().unwrap_or(schema),
+        _ => schema,
+    };
     (schema, bare)
 }
 

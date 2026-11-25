@@ -74,7 +74,10 @@ mod temp_tables;
 mod transaction_defaults;
 mod vacuum_analyze;
 pub use read_only::parse_transaction_read_only;
-pub use temp_tables::{drop_connection_temp_schema, drop_orphan_temp_schemas, temp_schema_exists};
+pub use temp_tables::{
+    drop_connection_temp_schema, drop_orphan_temp_schemas, temp_on_commit_pending,
+    temp_schema_exists,
+};
 pub(crate) mod txn_update;
 pub(crate) mod updatable_views;
 // Glue import: bring every crate-root item (including the root's private
@@ -1186,6 +1189,10 @@ pub struct SqlSession<'db> {
     /// decision supplied by the host, never a user-settable SQL setting.
     pub(crate) app_exact_decimal_units: Option<bool>,
     pub(crate) runtime: Option<Arc<dyn SqlSessionRuntime>>,
+    /// Temporary-schema backend number of a session without a connection
+    /// runtime, assigned when it first creates a temporary table; its
+    /// temporary objects are dropped when the session ends.
+    pub(crate) embedded_temp_backend: Option<i32>,
     pub(crate) cancellation: CancellationToken,
     pub(crate) fts_limits: bicdb_core::FtsQueryLimits,
     pub(crate) tx: Option<Transaction>,
@@ -1265,6 +1272,9 @@ pub struct SqlSession<'db> {
     /// Current trigger nesting depth, bounding trigger-writes-table-with-
     /// triggers recursion (see session/row_triggers.rs).
     pub(crate) trigger_depth: usize,
+    /// Last field: drops an embedded session's temporary schema after every
+    /// other field (the transaction included) is gone.
+    pub(crate) embedded_temp_guard: Option<temp_tables::EmbeddedTempGuard>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -2612,6 +2622,8 @@ impl<'db> SqlSession<'db> {
             security_context,
             app_exact_decimal_units: None,
             runtime: None,
+            embedded_temp_backend: None,
+            embedded_temp_guard: None,
             cancellation: CancellationToken::uncancelable(),
             fts_limits: bicdb_core::FtsQueryLimits::UNLIMITED,
             tx: None,
@@ -2739,9 +2751,25 @@ impl<'db> SqlSession<'db> {
     /// The session's temporary-object schema, `pg_temp_<backend pid>`, for a
     /// session served by a connection. Embedded sessions have none.
     pub(crate) fn temp_schema_name(&self) -> Option<String> {
-        self.runtime
-            .as_ref()
-            .map(|runtime| temp_schema_for_backend(runtime.backend_pid()))
+        match &self.runtime {
+            Some(runtime) => Some(temp_schema_for_backend(runtime.backend_pid())),
+            None => self.embedded_temp_backend.map(temp_schema_for_backend),
+        }
+    }
+
+    /// The temporary schema for a new temporary object: a session without a
+    /// connection takes a process-unique backend number on first use.
+    pub(crate) fn temp_schema_for_creation(&mut self) -> String {
+        if self.runtime.is_none() && self.embedded_temp_backend.is_none() {
+            let backend = temp_tables::next_embedded_temp_backend();
+            self.embedded_temp_backend = Some(backend);
+            if self.exclusive {
+                self.embedded_temp_guard =
+                    Some(temp_tables::EmbeddedTempGuard::new(self.db, backend));
+            }
+        }
+        self.temp_schema_name()
+            .expect("a temporary schema exists for a connection or an embedded session")
     }
 
     pub fn with_runtime(mut self, runtime: Arc<dyn SqlSessionRuntime>) -> Self {
@@ -3346,10 +3374,20 @@ impl<'db> SqlSession<'db> {
             }
             let mut fields = BTreeMap::new();
             for (column, value) in columns.iter().zip(row) {
-                fields.insert(
-                    column.clone(),
-                    value.map(SqlValue::String).unwrap_or(SqlValue::Null),
-                );
+                // COPY text goes through each column type's input function.
+                let value = match (
+                    value,
+                    schema.as_ref().and_then(|schema| schema.column(column)),
+                ) {
+                    (Some(text), Some(target))
+                        if target.user_type.is_none()
+                            && matches!(target.pg_type.as_str(), "int2" | "int4" | "int8") =>
+                    {
+                        SqlValue::Int(pg_integer_input(&text, &target.pg_type)?)
+                    }
+                    (value, _) => value.map(SqlValue::String).unwrap_or(SqlValue::Null),
+                };
+                fields.insert(column.clone(), value);
             }
             self.apply_bulk_insert_defaults(schema.as_ref(), &defaults, idx, &mut fields)?;
             records.push(record_from_insert_fields_with_db(
@@ -4760,6 +4798,9 @@ impl<'db> SqlSession<'db> {
                 self.rollback_guc_transaction();
                 return Err(error);
             }
+        }
+        if self.tx.is_some() {
+            self.apply_temp_on_commit_actions()?;
         }
         self.pg_large_objects.clear();
         let mut committed_sequence = 0;

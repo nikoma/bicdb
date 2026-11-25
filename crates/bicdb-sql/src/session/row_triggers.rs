@@ -182,7 +182,7 @@ impl<'db> SqlSession<'db> {
 
     /// Run one trigger function with the given variables bound. Returns the
     /// function's RETURN value (None for a bare `RETURN;` or fall-through).
-    fn call_trigger_function(
+    pub(crate) fn call_trigger_function(
         &mut self,
         trigger_name: &str,
         function_name: &str,

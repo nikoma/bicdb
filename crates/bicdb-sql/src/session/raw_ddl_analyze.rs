@@ -1150,7 +1150,10 @@ impl<'db> SqlSession<'db> {
 
     fn execute_statement_inner(&mut self, statement: &Statement) -> Result<SqlResult> {
         match statement {
-            Statement::Query(query) => self.execute_query(query),
+            Statement::Query(query) => match self.execute_select_into(query)? {
+                Some(result) => Ok(result),
+                None => self.execute_query(query),
+            },
             Statement::ShowVariable { variable } => self.sql_engine().execute_show(variable),
             Statement::CreateTable(create_table) => self.execute_create_table(create_table),
             Statement::CreateView(create_view) => self.execute_create_view(create_view),

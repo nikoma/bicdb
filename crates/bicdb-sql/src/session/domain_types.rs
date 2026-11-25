@@ -204,6 +204,16 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_create_view(&mut self, create_view: &CreateView) -> Result<SqlResult> {
+        self.execute_create_view_with_options(create_view, None, true)
+    }
+
+    /// `with_data` is false for `CREATE MATERIALIZED VIEW ... WITH NO DATA`.
+    pub(crate) fn execute_create_view_with_options(
+        &mut self,
+        create_view: &CreateView,
+        mut check_option: Option<super::updatable_views::CheckOption>,
+        with_data: bool,
+    ) -> Result<SqlResult> {
         if create_view.temporary {
             return Err(SqlError::Unsupported(
                 "temporary views are not supported".to_string(),
@@ -319,6 +329,25 @@ impl<'db> SqlSession<'db> {
                         "CREATE VIEW option {option} is not supported"
                     )));
                 };
+                if key.value.eq_ignore_ascii_case("check_option") {
+                    let text = match value {
+                        Expr::Value(ValueWithSpan {
+                            value: Value::SingleQuotedString(text),
+                            ..
+                        }) => text.clone(),
+                        Expr::Identifier(ident) => ident.value.clone(),
+                        other => other.to_string(),
+                    };
+                    check_option = Some(
+                        super::updatable_views::CheckOption::parse(&text).ok_or_else(|| {
+                            SqlError::invalid_parameter_value(
+                                "invalid value for enum option \"check_option\": ".to_string()
+                                    + text.as_str(),
+                            )
+                        })?,
+                    );
+                    continue;
+                }
                 let enabled = match eval_constant_expr(value)? {
                     SqlValue::Bool(enabled) => enabled,
                     SqlValue::String(text) => {
@@ -359,7 +388,7 @@ impl<'db> SqlSession<'db> {
             } else {
                 reserve_relation_type_oids(self.db_mut()?, &namespace, &view)?
             };
-        self.save_session_view(&ViewSchema {
+        let mut schema = ViewSchema {
             name: view,
             row_type_oid: Some(row_type_oid),
             row_array_type_oid: Some(row_array_type_oid),
@@ -370,7 +399,19 @@ impl<'db> SqlSession<'db> {
             owner: Some(current_user_from_gucs(&self.session_gucs)),
             security_invoker,
             security_barrier,
-        })?;
+            check_option: check_option.map(|option| option.as_str().to_string()),
+            snapshot: None,
+        };
+        self.validate_view_check_option(&schema)?;
+        if schema.materialized {
+            let rows = if with_data && super::materialized_views::snapshot_supported(&schema) {
+                self.compute_materialized_rows(&schema)?
+            } else {
+                Vec::new()
+            };
+            schema.snapshot = super::materialized_views::snapshot_for(&schema, with_data, rows);
+        }
+        self.save_session_view(&schema)?;
         Ok(SqlResult::command(if create_view.materialized {
             "CREATE MATERIALIZED VIEW"
         } else {

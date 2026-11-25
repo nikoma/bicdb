@@ -464,12 +464,14 @@ impl<'db> SqlSession<'db> {
             return Ok(None);
         };
         if load_schema(self.db_ref(), &trigger.table_name)?.is_none()
+            && load_view(self.db_ref(), &trigger.table_name)?.is_none()
             && user_collection_names(self.db_ref())
                 .iter()
                 .all(|name| !name.eq_ignore_ascii_case(&trigger.table_name))
         {
             return Err(SqlError::InvalidCollection(trigger.table_name));
         }
+        self.validate_view_trigger(&trigger)?;
         // A trigger runs its function with the TABLE OWNER's data flowing
         // through NEW/OLD, so attaching one to a table is a privilege on that
         // table, not on the trigger. Without this, any authenticated role
@@ -510,6 +512,7 @@ impl<'db> SqlSession<'db> {
         }
         let table_name = relation_name(&create_trigger.table_name)?;
         if load_schema(self.db_ref(), &table_name)?.is_none()
+            && load_view(self.db_ref(), &table_name)?.is_none()
             && user_collection_names(self.db_ref())
                 .iter()
                 .all(|name| !name.eq_ignore_ascii_case(&table_name))
@@ -568,6 +571,7 @@ impl<'db> SqlSession<'db> {
             is_constraint: create_trigger.is_constraint,
             initially_deferred,
         };
+        self.validate_view_trigger(&trigger)?;
         self.create_session_trigger_if_missing(trigger, create_trigger.or_replace)?;
         Ok(SqlResult::command("CREATE TRIGGER"))
     }
@@ -813,18 +817,23 @@ impl<'db> SqlSession<'db> {
         };
         let table =
             resolve_session_relation_name_if_exists(self.db_ref(), &relation_name(table_name)?);
-        self.require_table_privilege(&table, "INSERT")?;
+        let preauthorized = self.take_view_target_preauthorization(&table);
+        if !preauthorized {
+            self.require_table_privilege(&table, "INSERT")?;
+        }
         validate_comparison_signatures(
             &self.sql_engine_with_ctes(ctes.clone()),
             ComparisonStatement::Insert(insert),
         )?;
-        if insert.returning.is_some() {
+        if insert.returning.is_some() && !preauthorized {
             self.require_table_privilege(&table, "SELECT")?;
         }
-        if load_view(self.db_ref(), &table)?.is_some() {
-            return Err(SqlError::Unsupported(
-                "INSERT into views is not supported".to_string(),
-            ));
+        if let Some(view) = load_view(self.db_ref(), &table)? {
+            let triggers = self.instead_of_triggers(&view.name, "insert")?;
+            if !triggers.is_empty() {
+                return self.execute_instead_of_insert(insert, view, triggers, ctes);
+            }
+            return self.execute_insert_into_view(insert, view, ctes);
         }
         let schema = load_schema_shared(self.db_ref(), &table)?;
         let mut columns = insert

@@ -300,6 +300,18 @@ impl<'db> SqlSession<'db> {
         create_table: &CreateTable,
         compression: &[RawColumnCompression],
     ) -> Result<SqlResult> {
+        self.execute_create_table_definition(create_table, compression, true)
+    }
+
+    /// `implicit_id_key` keeps the legacy rule that makes a column named
+    /// `id` the key of a table declared without one; a table created from a
+    /// query (CREATE TABLE AS) takes no key, as in PostgreSQL.
+    pub(crate) fn execute_create_table_definition(
+        &mut self,
+        create_table: &CreateTable,
+        compression: &[RawColumnCompression],
+        implicit_id_key: bool,
+    ) -> Result<SqlResult> {
         if create_table.partition_of.is_some() {
             // A mixed statement list reaches this parsed path even though a
             // single PARTITION OF statement uses the raw compatibility path.
@@ -313,9 +325,9 @@ impl<'db> SqlSession<'db> {
             return Ok(SqlResult::command("CREATE TABLE"));
         }
         if create_table.query.is_some() {
-            return Err(SqlError::Unsupported(
-                "CREATE TABLE AS SELECT is not supported".to_string(),
-            ));
+            return self.execute_create_table_as(
+                super::create_table_as::CreateTableAs::from_parsed(create_table)?,
+            );
         }
 
         let table = relation_name(&create_table.name)?;
@@ -543,7 +555,8 @@ impl<'db> SqlSession<'db> {
             }
         }
 
-        if !has_like_clause
+        if implicit_id_key
+            && !has_like_clause
             && create_table.partition_by.is_none()
             && !columns.iter().any(|column| column.primary_key)
         {

@@ -5761,6 +5761,9 @@ impl<'db> SqlEngine<'db> {
                 view.name
             )));
         }
+        if let Some(stored) = crate::session::materialized_views::snapshot_rows(view)? {
+            return Ok(stored);
+        }
         // View definitions are reparsed and predicates are cloned for this
         // evaluation. Their node addresses do not belong to the caller's
         // persistent routine IR and must not enter its address-keyed memos.

@@ -108,3 +108,33 @@ fn a_partitioned_parent_without_storage_no_longer_keeps_the_database_closed() {
     );
     assert_eq!(cells(&mut db, "SELECT k FROM keep"), [["7"]]);
 }
+
+#[test]
+fn a_partitioned_table_with_a_unique_constraint_survives_a_reopen() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    run(
+        &mut db,
+        "CREATE TABLE pu (i int UNIQUE) PARTITION BY LIST (i)",
+    );
+    run(
+        &mut db,
+        "CREATE TABLE pu1 PARTITION OF pu FOR VALUES IN (1)",
+    );
+    run(
+        &mut db,
+        "CREATE TABLE pu2 PARTITION OF pu FOR VALUES IN (2)",
+    );
+    run(&mut db, "INSERT INTO pu VALUES (1), (2)");
+    // The partitions carry the parent's constraint name; opening used to refuse that as an
+    // index definition conflict, so the database never opened again.
+    let mut db = reopen(db, dir.path());
+    assert_eq!(
+        cells(&mut db, "SELECT i FROM pu ORDER BY i"),
+        [["1"], ["2"]]
+    );
+    let error = SqlSession::new(&mut db)
+        .execute("INSERT INTO pu VALUES (1)")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "23505", "{error}");
+}

@@ -1392,6 +1392,16 @@ pub(crate) fn ensure_unique_constraint_indexes_for_schema(
             if unique_constraint_index_definition_matches(&existing, &definition) {
                 continue;
             }
+            // A partition carries its parent's UNIQUE constraint under the parent's name, and
+            // the parent's index of that name enforces it across the partitions. Treating the
+            // partition's copy as a conflicting definition made every database holding a
+            // partitioned table with a UNIQUE constraint fail to open again.
+            if partition_ancestor_owns_index(schema, &existing.collection)
+                && existing.unique
+                && index_field_lists_match(&existing.fields, &definition.fields)
+            {
+                continue;
+            }
             return Err(SqlError::InvalidSql(format!(
                 "index \"{}\" already exists with a definition that does not match UNIQUE constraint \"{}\"",
                 definition.name, definition.name
@@ -1400,6 +1410,14 @@ pub(crate) fn ensure_unique_constraint_indexes_for_schema(
         db.create_index(definition)?;
     }
     Ok(())
+}
+
+/// Whether `collection` is the partitioned table `schema` is a partition of.
+fn partition_ancestor_owns_index(schema: &TableSchema, collection: &str) -> bool {
+    schema
+        .partition_of
+        .as_ref()
+        .is_some_and(|link| link.parent_table.eq_ignore_ascii_case(collection))
 }
 
 /// Compare every property that changes UNIQUE write enforcement.

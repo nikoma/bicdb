@@ -787,14 +787,20 @@ impl<'db> SqlSession<'db> {
         update: &sqlparser::ast::Update,
         ctes: BTreeMap<String, CteResult>,
     ) -> Result<SqlResult> {
-        self.execute_update_with_match_policy(update, ctes, UpdateMatchPolicy::First)
+        self.execute_update_with_match_policy(update, ctes, UpdateMatchPolicy::First, None)
     }
 
+    /// `merge` carries the target rows a MERGE action already chose from its
+    /// one join snapshot: they replace this UPDATE's own FROM evaluation and
+    /// candidate search, and the updated slot rows are handed back for the
+    /// MERGE RETURNING projection. Every write, trigger and constraint step
+    /// below is the ordinary UPDATE path.
     pub(super) fn execute_update_with_match_policy(
         &mut self,
         update: &sqlparser::ast::Update,
         ctes: BTreeMap<String, CteResult>,
         match_policy: UpdateMatchPolicy,
+        mut merge: Option<&mut super::merge::MergeActionRows>,
     ) -> Result<SqlResult> {
         let (table, target_alias) = table_with_joins_name_and_alias(&update.table)?;
         let table = resolve_session_relation_name_if_exists(self.db_ref(), &table);
@@ -823,7 +829,13 @@ impl<'db> SqlSession<'db> {
                 return Ok(result);
             }
         }
-        let from_rows = self.update_from_row_set(update.from.as_ref(), &ctes)?;
+        let from_rows = match merge.as_ref() {
+            Some(merge) => Some(RowSet {
+                rows: Vec::new(),
+                columns: merge.source_columns.clone(),
+            }),
+            None => self.update_from_row_set(update.from.as_ref(), &ctes)?,
+        };
         let mut updated = 0usize;
         let mut updated_records = Vec::new();
         let mut updated_record_snapshots = Vec::new();
@@ -849,7 +861,9 @@ impl<'db> SqlSession<'db> {
                 return Ok(result);
             }
         }
-        let assignment_candidates = if let Some(parent) = schema
+        let assignment_candidates = if let Some(merge) = merge.as_mut() {
+            std::mem::take(&mut merge.update_candidates)
+        } else if let Some(parent) = schema
             .as_deref()
             .filter(|schema| schema.requires_row_move_plan())
         {
@@ -1568,6 +1582,11 @@ impl<'db> SqlSession<'db> {
                     .map(|(before, after)| (Some(before), Some(after))),
             )?;
         }
+        if let Some(merge) = merge {
+            merge.returned_rows = returning_rows.unwrap_or_default();
+            merge.returned_columns = returning_columns.map(|columns| columns.as_ref().clone());
+            return Ok(SqlResult::command(format!("UPDATE {updated}")));
+        }
         if let Some(returning) = &update.returning {
             if from_rows.is_some() {
                 return self.project_update_from_returning_slot_rows(
@@ -2144,6 +2163,18 @@ impl<'db> SqlSession<'db> {
         delete: &Delete,
         ctes: BTreeMap<String, CteResult>,
     ) -> Result<SqlResult> {
+        self.execute_delete_with_merge_rows(delete, ctes, None)
+    }
+
+    /// `merge` carries the target rows a MERGE DELETE action chose from its
+    /// join snapshot (see `execute_update_with_match_policy`); the deleted
+    /// candidates' slot rows are handed back for MERGE RETURNING.
+    pub(super) fn execute_delete_with_merge_rows(
+        &mut self,
+        delete: &Delete,
+        ctes: BTreeMap<String, CteResult>,
+        mut merge: Option<&mut super::merge::MergeActionRows>,
+    ) -> Result<SqlResult> {
         let (table, target_alias) = delete_from_table_and_alias(delete)?;
         let table = resolve_session_relation_name_if_exists(self.db_ref(), &table);
         self.require_table_privilege(&table, "DELETE")?;
@@ -2160,16 +2191,32 @@ impl<'db> SqlSession<'db> {
             ));
         }
         let schema = load_schema(self.db_ref(), &table)?;
-        if let Some(schema_ref) = schema.as_ref() {
+        if let Some(schema_ref) = schema.as_ref().filter(|_| merge.is_none()) {
             if let Some(result) =
                 self.try_execute_delete_stored(delete, &ctes, &table, &target_alias, schema_ref)?
             {
                 return Ok(result);
             }
         }
-        let using_rows = self.delete_using_row_set(delete.using.as_deref(), &ctes)?;
+        let using_rows = match merge.as_ref() {
+            Some(merge) => Some(RowSet {
+                rows: Vec::new(),
+                columns: merge.source_columns.clone(),
+            }),
+            None => self.delete_using_row_set(delete.using.as_deref(), &ctes)?,
+        };
         let target_columns = Arc::new(row_output_columns(&table, &target_alias, schema.as_ref()));
-        let records_to_delete = if let Some(parent) = schema
+        let records_to_delete = if let Some(merge) = merge.as_mut() {
+            std::mem::take(&mut merge.update_candidates)
+                .into_iter()
+                .map(|candidate| DeleteCandidate {
+                    physical_table: candidate.physical_table,
+                    record: candidate.record,
+                    columns: candidate.columns,
+                    row: candidate.row,
+                })
+                .collect()
+        } else if let Some(parent) = schema
             .as_ref()
             .filter(|schema| schema.partitioning.is_some())
         {
@@ -2499,6 +2546,9 @@ impl<'db> SqlSession<'db> {
             deleted_record_ids.push(record.id.clone());
             deleted_record_snapshots.push(statement_snapshot);
             deleted_records.push(record);
+            if let Some(merge) = merge.as_mut() {
+                merge.returned_rows.push(candidate.row);
+            }
         }
         let deleted = if schema
             .as_ref()
@@ -2550,6 +2600,9 @@ impl<'db> SqlSession<'db> {
                 "delete",
                 deleted_records.iter().map(|record| (Some(record), None)),
             )?;
+        }
+        if merge.is_some() {
+            return Ok(SqlResult::command(format!("DELETE {deleted}")));
         }
         if let Some(returning) = &delete.returning {
             return self.project_returning_records_with_alias(

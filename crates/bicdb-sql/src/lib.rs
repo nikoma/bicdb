@@ -215,6 +215,8 @@ pub use type_codec::{
 
 // Phase-1 mechanical module split: each module below was extracted verbatim
 // from this file. `pub use` glob re-exports keep every existing path resolving.
+mod fetch_ties;
+mod grouping_sets;
 mod join_budget;
 mod statement_context;
 pub use statement_context::SqlDescriptionScope;

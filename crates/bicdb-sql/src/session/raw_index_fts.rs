@@ -958,7 +958,22 @@ impl<'db> SqlSession<'db> {
         Ok(Some(output.unwrap_or_else(|| SqlResult::empty(Vec::new()))))
     }
 
+    /// Out of line so the rewritten query does not enlarge the frame of the
+    /// recursive statement path.
+    #[inline(never)]
+    fn execute_with_ties_query_in_sql(&mut self, query: &Query) -> Result<SqlResult> {
+        let (rewritten, hidden) = crate::fetch_ties::rewrite_with_ties(query)?
+            .map(|(query, hidden)| (Box::new(query), hidden))
+            .expect("WITH TIES query");
+        let mut result = self.execute_temporary_query(&rewritten)?;
+        crate::fetch_ties::drop_trailing_columns(&mut result, hidden);
+        Ok(result)
+    }
+
     fn execute_query_in_sql(&mut self, query: &Query) -> Result<SqlResult> {
+        if query.fetch.as_ref().is_some_and(|fetch| fetch.with_ties) {
+            return self.execute_with_ties_query_in_sql(query);
+        }
         if let Some(rewritten) = normalize_fetch_clause(query)? {
             return self.execute_temporary_query(&rewritten);
         }

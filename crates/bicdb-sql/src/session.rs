@@ -8,7 +8,7 @@ pub(crate) mod deferred_constraints;
 mod domain_types;
 mod flashback;
 mod index_drop;
-mod merge;
+pub(crate) mod merge;
 #[cfg(test)]
 mod timestamp_day_indexes;
 pub(crate) use merge::UpdateMatchPolicy;

@@ -1232,6 +1232,7 @@ impl InsertValuesTemplate {
                 error @ (SqlError::ConstraintViolation { .. }
                 | SqlError::DataException { .. }
                 | SqlError::Detailed { .. }
+                | SqlError::InvalidTextRepresentation(_)
                 | SqlError::OracleError { .. }) => error,
                 error => SqlError::TypeMismatch {
                     table: table.to_string(),
@@ -1377,6 +1378,7 @@ impl InsertValuesTemplate {
                 error @ (SqlError::ConstraintViolation { .. }
                 | SqlError::DataException { .. }
                 | SqlError::Detailed { .. }
+                | SqlError::InvalidTextRepresentation(_)
                 | SqlError::OracleError { .. }) => error,
                 error => SqlError::TypeMismatch {
                     table: table.to_string(),

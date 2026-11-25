@@ -7851,7 +7851,8 @@ impl<'db> SqlSession<'db> {
                         |error| match error {
                             error @ (SqlError::ConstraintViolation { .. }
                             | SqlError::DataException { .. }
-                            | SqlError::Detailed { .. }) => error,
+                            | SqlError::Detailed { .. }
+                            | SqlError::InvalidTextRepresentation(_)) => error,
                             error => SqlError::TypeMismatch {
                                 table: schema.name.clone(),
                                 column: column_schema.name.clone(),

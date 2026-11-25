@@ -3092,9 +3092,31 @@ impl<'db> SqlSession<'db> {
         {
             return Ok(result);
         }
+        let wants_tableoid = returning_mentions_tableoid(returning);
         let rows = records
             .iter()
-            .map(|record| row_from_record(table, alias, schema, record))
+            .map(|record| {
+                let mut row = row_from_record(table, alias, schema, record)?;
+                if wants_tableoid {
+                    if let Some(schema) = schema {
+                        // The relation holding the row: for a partitioned
+                        // target, the leaf it was routed to.
+                        let holder = if schema.partitioning.is_some() {
+                            partition::route_record(self.db_ref(), schema, record)?
+                        } else {
+                            schema.clone()
+                        };
+                        insert_row_value(
+                            &mut row,
+                            table,
+                            alias,
+                            "tableoid",
+                            SqlValue::Int(table_relation_oid(&holder)),
+                        );
+                    }
+                }
+                Ok(row)
+            })
             .collect::<Result<Vec<_>>>()?;
         let wildcard_columns = FieldRef::wildcard(schema)
             .into_iter()
@@ -3203,6 +3225,18 @@ impl<'db> SqlSession<'db> {
             Expr::Identifier(ident) => {
                 if table_has_field(Some(schema), &ident.value) {
                     return Ok(Some(column_value(&ident.value)?));
+                }
+                // RETURNING tableoid names the relation that holds the row:
+                // for a partitioned target, the leaf it was routed to.
+                if ident.value.eq_ignore_ascii_case("tableoid")
+                    && routine_var_from_ident(&self.routine_vars, ident).is_none()
+                {
+                    let holder = if schema.partitioning.is_some() {
+                        partition::route_record(self.db_ref(), schema, record)?
+                    } else {
+                        schema.clone()
+                    };
+                    return Ok(Some(SqlValue::Int(table_relation_oid(&holder))));
                 }
                 Ok(Some(
                     routine_var_from_ident(&self.routine_vars, ident).unwrap_or(SqlValue::Null),
@@ -3817,4 +3851,28 @@ pub(crate) fn routine_signature_for_notice(desc: &FunctionDesc) -> String {
         normalize_object_name(&desc.name.to_string()),
         args.join(", ")
     )
+}
+
+fn returning_mentions_tableoid(returning: &[SelectItem]) -> bool {
+    use std::ops::ControlFlow;
+    returning.iter().any(|item| {
+        let expr = match item {
+            SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => expr,
+            _ => return false,
+        };
+        sqlparser::ast::visit_expressions(expr, |expr| match expr {
+            Expr::Identifier(ident) if ident.value.eq_ignore_ascii_case("tableoid") => {
+                ControlFlow::Break(())
+            }
+            Expr::CompoundIdentifier(idents)
+                if idents
+                    .last()
+                    .is_some_and(|ident| ident.value.eq_ignore_ascii_case("tableoid")) =>
+            {
+                ControlFlow::Break(())
+            }
+            _ => ControlFlow::Continue(()),
+        })
+        .is_break()
+    })
 }

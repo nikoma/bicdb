@@ -43,8 +43,10 @@ Semantics:
   (with `TG_OP` set to the action) behave as for those statements. Rows are
   processed in source order; consecutive rows of one clause run as a batch.
 - The statement is atomic: any error rolls back every action.
-- Concurrency follows UPDATE ... FROM: a concurrently changed target row is
-  detected at commit and the transaction fails with a serialization error.
+- Concurrency follows UPDATE ... FROM and DELETE ... USING: the chosen
+  target rows are written through the same conflict checks as those
+  statements (concurrent-update behaviour under each isolation level is
+  theirs; it has not been separately tested for MERGE).
 
 Not supported (fails with 0A000 instead of running with different
 semantics): MERGE into a view, a partitioned table or a table with row-level

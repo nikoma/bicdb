@@ -68,6 +68,7 @@ mod row_triggers;
 mod sql_cursors;
 pub use sql_cursors::SqlCursors;
 pub(crate) use sql_cursors::{pg_cursors_rows, PG_CURSORS_COLUMNS};
+pub(crate) use row_triggers::current_trigger_depth;
 mod set_functions;
 #[cfg(test)]
 mod subquery_scope_tests;

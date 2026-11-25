@@ -1442,6 +1442,7 @@ dependencies = [
  "icu_collator",
  "icu_locale_core",
  "itoa",
+ "libm",
  "md-5 0.10.6",
  "num-bigint 0.4.6",
  "num-traits",

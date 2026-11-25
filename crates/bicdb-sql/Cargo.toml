@@ -35,6 +35,8 @@ hmac.workspace = true
 icu_collator.workspace = true
 icu_locale_core.workspace = true
 itoa.workspace = true
+# erf, erfc, tgamma and lgamma for the PostgreSQL float functions.
+libm = "0.2"
 md-5 = "0.10"
 # pgcrypto crypt(): bcrypt, md5-crypt, DES and extended-DES (BSDi) hashes.
 pwhash = "1.0"

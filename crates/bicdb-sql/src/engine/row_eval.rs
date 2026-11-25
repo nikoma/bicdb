@@ -3869,22 +3869,42 @@ impl<'db> SqlEngine<'db> {
         cast_routine_return_value(self.db_ref(), value, &routine.schema).map(Some)
     }
 
+    /// `txid_current()`, `pg_current_xact_id()` and
+    /// `pg_current_xact_id_if_assigned()` of the engine's transaction.
+    #[inline(never)]
+    fn eval_runtime_transaction_id(
+        &self,
+        bare_name: &str,
+        args: &[SqlValue],
+    ) -> Result<Option<SqlValue>> {
+        if !args.is_empty() {
+            return Err(SqlError::InvalidSql(format!(
+                "{bare_name} expects no arguments, got {}",
+                args.len()
+            )));
+        }
+        if bare_name == "pg_current_xact_id_if_assigned" {
+            return Ok(Some(self.tx.map_or(SqlValue::Null, |transaction| {
+                crate::pg_float_text_functions::xact_id_if_assigned(transaction.id().0)
+            })));
+        }
+        Ok(self.tx.map(|transaction| {
+            crate::pg_float_text_functions::note_assigned_xact(transaction.id().0);
+            SqlValue::Int(transaction.id().0 as i64)
+        }))
+    }
+
     pub(crate) fn eval_runtime_function_value(
         &self,
         name: &str,
         args: &[SqlValue],
     ) -> Result<Option<SqlValue>> {
         let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(name);
-        if bare_name == "txid_current" {
-            if !args.is_empty() {
-                return Err(SqlError::InvalidSql(format!(
-                    "txid_current expects no arguments, got {}",
-                    args.len()
-                )));
-            }
-            return Ok(self
-                .tx
-                .map(|transaction| SqlValue::Int(transaction.id().0 as i64)));
+        if matches!(
+            bare_name,
+            "txid_current" | "pg_current_xact_id" | "pg_current_xact_id_if_assigned"
+        ) {
+            return self.eval_runtime_transaction_id(bare_name, args);
         }
         let Some(runtime) = &self.runtime else {
             return Ok(None);

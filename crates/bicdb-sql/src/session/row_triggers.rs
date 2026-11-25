@@ -201,6 +201,7 @@ impl<'db> SqlSession<'db> {
             )));
         };
         self.trigger_depth += 1;
+        let _depth = TriggerDepthScope::enter(self.trigger_depth);
         let result = self.execute_with_routine_security(&routine.schema, |session| {
             let mut frame =
                 RoutineFrame::new_with_symbols(&routine.ir.params, &[], &routine.ir.symbol_names)?;
@@ -621,4 +622,29 @@ fn trigger_function_is_pg_notify(db: &BicDb, function_name: &str) -> Result<bool
         return Ok(false);
     };
     Ok(pg_notify_trigger_call(&function.definition).is_some())
+}
+
+thread_local! {
+    /// `pg_trigger_depth()`: how many trigger functions are executing.
+    static TRIGGER_DEPTH: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Publishes the trigger nesting depth while a trigger function runs.
+struct TriggerDepthScope(usize);
+
+impl TriggerDepthScope {
+    fn enter(depth: usize) -> Self {
+        Self(TRIGGER_DEPTH.with(|current| current.replace(depth)))
+    }
+}
+
+impl Drop for TriggerDepthScope {
+    fn drop(&mut self) {
+        TRIGGER_DEPTH.with(|current| current.set(self.0));
+    }
+}
+
+/// `pg_trigger_depth()`.
+pub(crate) fn current_trigger_depth() -> usize {
+    TRIGGER_DEPTH.with(std::cell::Cell::get)
 }

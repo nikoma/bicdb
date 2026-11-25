@@ -3218,22 +3218,16 @@ impl<'db> SqlSession<'db> {
         if let Some(value) = self.eval_pg_large_object_function(&name, &args)? {
             return Ok(value);
         }
-        if matches!(name.as_ref(), "txid_current" | "pg_catalog.txid_current") {
-            require_arg_count("txid_current", &args, 0)?;
-            // Per-row routine hosts borrow the caller's transaction. Reading
-            // its identity does not start a new transaction or authorize writes.
-            let transaction_id = if let Some(tx) = self.read_tx() {
-                tx.id().0
-            } else {
-                // A standalone SELECT still has an implicit PostgreSQL
-                // transaction. Allocate its ID for this statement and
-                // release the read-only transaction immediately.
-                let tx = self.begin_session_transaction()?;
-                let transaction_id = tx.id().0;
-                tx.rollback()?;
-                transaction_id
-            };
-            return Ok(SqlValue::Int(transaction_id as i64));
+        if matches!(
+            name.as_ref(),
+            "txid_current"
+                | "pg_catalog.txid_current"
+                | "pg_current_xact_id"
+                | "pg_catalog.pg_current_xact_id"
+                | "pg_current_xact_id_if_assigned"
+                | "pg_catalog.pg_current_xact_id_if_assigned"
+        ) {
+            return self.eval_session_transaction_id(&name, &args);
         }
         if let Some(value) = eval_network_function_value(&name, &args, &arg_types)?
             .or(eval_user_range_function_value_for(
@@ -4633,6 +4627,36 @@ impl<'db> SqlSession<'db> {
         let executed = self.execute_plpgsql_function_value_inner(routine, ir, args);
         self.current_routine_ir = previous_ir;
         executed
+    }
+
+    /// `txid_current()`, `pg_current_xact_id()` and
+    /// `pg_current_xact_id_if_assigned()`. Outlined: the function dispatcher
+    /// is on the recursive expression stack.
+    #[inline(never)]
+    fn eval_session_transaction_id(&mut self, name: &str, args: &[SqlValue]) -> Result<SqlValue> {
+        let bare = name.strip_prefix("pg_catalog.").unwrap_or(name);
+        if bare == "pg_current_xact_id_if_assigned" {
+            require_arg_count("pg_current_xact_id_if_assigned", args, 0)?;
+            return Ok(self.read_tx().map_or(SqlValue::Null, |tx| {
+                crate::pg_float_text_functions::xact_id_if_assigned(tx.id().0)
+            }));
+        }
+        require_arg_count("txid_current", args, 0)?;
+        // Per-row routine hosts borrow the caller's transaction. Reading
+        // its identity does not start a new transaction or authorize writes.
+        let transaction_id = if let Some(tx) = self.read_tx() {
+            tx.id().0
+        } else {
+            // A standalone SELECT still has an implicit PostgreSQL
+            // transaction. Allocate its ID for this statement and
+            // release the read-only transaction immediately.
+            let tx = self.begin_session_transaction()?;
+            let transaction_id = tx.id().0;
+            tx.rollback()?;
+            transaction_id
+        };
+        crate::pg_float_text_functions::note_assigned_xact(transaction_id);
+        Ok(SqlValue::Int(transaction_id as i64))
     }
 
     /// A call frame from the routine's cached template (built once per

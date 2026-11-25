@@ -18,3 +18,14 @@ sd_bad|SET max_stack_depth = '50'
 sd_big|SET max_stack_depth = '100MB'
 sd_unit|SET max_stack_depth = '1 xyz'
 sd_json|SET max_stack_depth = '100kB';SELECT repeat('[', 10000)::json
+fn_xact|BEGIN;SELECT pg_current_xact_id() = pg_current_xact_id_if_assigned();COMMIT;SELECT pg_current_xact_id_if_assigned() IS NULL
+fn_toreg3|SELECT to_regtypemod('bogus type')
+fn_toreg2|SELECT to_regcollation('"POSIX"'), to_regcollation('nosuch'), to_regoper('nosuch')
+fn_depth|CREATE TABLE fd_t(a int);CREATE FUNCTION fd_f() RETURNS trigger LANGUAGE plpgsql AS $$begin raise notice 'depth %', pg_trigger_depth(); return new; end$$;CREATE TRIGGER fd_g BEFORE INSERT ON fd_t FOR EACH ROW EXECUTE FUNCTION fd_f();SELECT pg_trigger_depth();INSERT INTO fd_t VALUES (1)
+fn_gcd|SELECT gcd(4.0, 6.0), lcm(4.0, 6.0), gcd(12.5, 5), lcm(0.5, 0.75), gcd('NaN'::numeric, 1)
+fn_adj|SELECT range_adjacent(int4range(1,2), int4range(2,3)), range_adjacent(int4range(1,2), int4range(3,4))
+fn_casefold|SELECT casefold('ABC'), casefold('aBc')
+fn_gamma_err|SELECT gamma(0)
+fn_gamma_err2|SELECT gamma(-1)
+fn_lgamma_err|SELECT lgamma(0)
+fn_gamma_big|SELECT gamma(200)

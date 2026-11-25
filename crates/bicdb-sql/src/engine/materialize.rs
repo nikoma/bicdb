@@ -3583,6 +3583,9 @@ impl<'db> SqlEngine<'db> {
             "pg_current_snapshot" => return Some("pg_snapshot".to_string()),
             "txid_current_snapshot" => return Some("txid_snapshot".to_string()),
             "txid_current" => return Some("int8".to_string()),
+            "pg_current_xact_id" | "pg_current_xact_id_if_assigned" => {
+                return Some("xid8".to_string())
+            }
             "current_scn" | "timestamp_to_scn" => return Some("int8".to_string()),
             "scn_to_timestamp" => return Some("timestamptz".to_string()),
             "pg_snapshot_xmin" | "pg_snapshot_xmax" | "pg_snapshot_xip" => {

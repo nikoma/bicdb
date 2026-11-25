@@ -111,3 +111,35 @@ fn max_stack_depth_is_a_setting() {
     assert_eq!(cells(&mut sql, "SHOW max_stack_depth"), [["2MB"]]);
     assert!(sql.execute("SET max_stack_depth = '50'").is_err());
 }
+
+#[test]
+fn scalar_functions_match_postgres() {
+    let (_dir, mut db) = open();
+    let mut sql = SqlSession::new(&mut db);
+    assert_eq!(
+        cells(
+            &mut sql,
+            "SELECT gcd(4.0, 6.0), lcm(4.0, 6.0), casefold('ABC')"
+        ),
+        [["2.0", "12.0", "abc"]]
+    );
+    let row = sql
+        .execute("SELECT to_regtypemod('varchar(10)'), to_regtypemod('int4'), gamma(5), range_adjacent(int4range(1,2), int4range(2,3)), to_regrole('no_such_role')")
+        .unwrap()
+        .rows
+        .remove(0);
+    assert_eq!(
+        row,
+        [
+            SqlValue::Int(14),
+            SqlValue::Int(-1),
+            SqlValue::Float(24.0),
+            SqlValue::Bool(true),
+            SqlValue::Null
+        ]
+    );
+    assert_eq!(
+        sql.execute("SELECT gamma(0)").unwrap_err().to_string(),
+        "value out of range: overflow"
+    );
+}

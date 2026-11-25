@@ -1231,6 +1231,7 @@ impl InsertValuesTemplate {
             let value = cast_value_to_column_type(value, column).map_err(|error| match error {
                 error @ (SqlError::ConstraintViolation { .. }
                 | SqlError::DataException { .. }
+                | SqlError::Detailed { .. }
                 | SqlError::OracleError { .. }) => error,
                 error => SqlError::TypeMismatch {
                     table: table.to_string(),
@@ -1375,6 +1376,7 @@ impl InsertValuesTemplate {
             let value = cast_value_to_column_type(value, column).map_err(|error| match error {
                 error @ (SqlError::ConstraintViolation { .. }
                 | SqlError::DataException { .. }
+                | SqlError::Detailed { .. }
                 | SqlError::OracleError { .. }) => error,
                 error => SqlError::TypeMismatch {
                     table: table.to_string(),

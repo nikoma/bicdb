@@ -565,6 +565,12 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
             }
         }
         "int2" | "int4" | "int8" => {
+            // Text in integer-literal form goes through the type's input
+            // function, which names the value when it is out of range.
+            let integer_literal_text = match &value {
+                SqlValue::String(text) if is_integer_literal_text(text) => Some(text.clone()),
+                _ => None,
+            };
             let value = match value {
                 SqlValue::Int(value) => Ok(value),
                 SqlValue::Float(value) => float_to_i64_rounded(value),
@@ -572,24 +578,40 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
                     parse_decimal(&value).and_then(decimal_to_i64_rounded)
                 }
                 SqlValue::String(value) => Err(SqlError::InvalidTextRepresentation(format!(
-                    "invalid input syntax for type integer: \"{value}\""
+                    "invalid input syntax for type {}: \"{value}\"",
+                    pg_integer_type_name(pg_type)
                 ))),
                 other => Err(SqlError::InvalidSql(format!(
                     "cannot cast {} to integer",
                     other.to_cell()
                 ))),
             }
-            .map_err(|error| match error {
-                SqlError::InvalidSql(message) if message.contains("out of range") => {
+            .map_err(|error| match (error, integer_literal_text.as_deref()) {
+                (SqlError::InvalidSql(message), Some(text)) if message.contains("out of range") => {
+                    SqlError::numeric_value_out_of_range(format!(
+                        "value \"{text}\" is out of range for type {}",
+                        pg_integer_type_name(pg_type)
+                    ))
+                }
+                (SqlError::InvalidSql(message), None) if message.contains("out of range") => {
                     integer_out_of_range(pg_type)
                 }
-                error => error,
+                (error, _) => error,
             })?;
-            enforce_integer_range(value, pg_type).map(SqlValue::Int)
+            enforce_integer_range(value, pg_type)
+                .map(SqlValue::Int)
+                .map_err(|error| match integer_literal_text.as_deref() {
+                    Some(text) => SqlError::numeric_value_out_of_range(format!(
+                        "value \"{text}\" is out of range for type {}",
+                        pg_integer_type_name(pg_type)
+                    )),
+                    None => error,
+                })
         }
         "float4" | "float8" => cast_value_to_float(value, pg_type),
         "numeric" => cast_value_to_numeric(value),
         "money" => {
+            let money_text_input = matches!(value, SqlValue::String(_));
             let text = match value {
                 SqlValue::Int(value) => value.to_string(),
                 SqlValue::Float(value) => canonical_float_decimal(value)?,
@@ -605,6 +627,11 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
                 .map(crate::pg_money_text_from_cents)
                 .map(SqlValue::String)
                 .map_err(|error| match error {
+                    PgCanonicalValueError::NumericOverflow if money_text_input => {
+                        SqlError::numeric_value_out_of_range(format!(
+                            "value \"{text}\" is out of range for type money"
+                        ))
+                    }
                     PgCanonicalValueError::NumericOverflow => SqlError::money_out_of_range(),
                     _ => SqlError::InvalidTextRepresentation(format!(
                         "invalid input syntax for type money: \"{text}\""
@@ -719,11 +746,7 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
             let text = value.to_cell();
             PgBitString::from_postgres_text(&text)
                 .map(|bits| SqlValue::String(bits.to_bit_text()))
-                .map_err(|_| {
-                    SqlError::InvalidTextRepresentation(format!(
-                        "invalid input syntax for type {pg_type}: \"{text}\""
-                    ))
-                })
+                .map_err(|_| bit_input_error(pg_type, &text))
         }
         "interval" => match value {
             SqlValue::String(value) => PgInterval::from_postgres_text(&value)
@@ -960,6 +983,12 @@ pub(crate) fn postgres_timestamp_input_error(
     if let Some(error) = shared_datetime_input_error(value, &error) {
         return error;
     }
+    if let Some(timezone) = unknown_timestamp_timezone(value) {
+        return SqlError::invalid_parameter_value(format!(
+            "time zone \"{}\" not recognized",
+            timezone.to_ascii_lowercase()
+        ));
+    }
     let message = match &error {
         PgCanonicalValueError::TemporalOverflow(_)
         | PgCanonicalValueError::TemporalFieldOverflow(_)
@@ -987,7 +1016,8 @@ pub(crate) fn postgres_timestamptz_input_error(
     }
     if let Some(timezone) = unknown_timestamp_timezone(value) {
         return SqlError::invalid_parameter_value(format!(
-            "time zone \"{timezone}\" not recognized"
+            "time zone \"{}\" not recognized",
+            timezone.to_ascii_lowercase()
         ));
     }
     let message = match &error {
@@ -4308,4 +4338,49 @@ fn parse_numeric_value(value: &str) -> Result<SqlValue> {
                 "invalid input syntax for type numeric: \"{value}\""
             )),
         })
+}
+
+/// Text an integer type's input function reads: optional sign and digits.
+fn is_integer_literal_text(text: &str) -> bool {
+    let digits = text.trim();
+    let digits = digits.strip_prefix(['+', '-']).unwrap_or(digits);
+    !digits.is_empty() && digits.bytes().all(|byte| byte.is_ascii_digit())
+}
+
+fn pg_integer_type_name(pg_type: &str) -> &'static str {
+    match pg_type {
+        "int2" => "smallint",
+        "int8" => "bigint",
+        _ => "integer",
+    }
+}
+
+/// `bit_in`'s message for an invalid digit: the first character that is not
+/// a binary (or, after an `x` prefix, hexadecimal) digit.
+fn bit_input_error(pg_type: &str, text: &str) -> SqlError {
+    let (hex, digits) = match text.chars().next() {
+        Some('x' | 'X') => (true, &text[1..]),
+        Some('b' | 'B') => (false, &text[1..]),
+        _ => (false, text),
+    };
+    let invalid = digits.chars().find(|c| {
+        if hex {
+            !c.is_ascii_hexdigit()
+        } else {
+            !matches!(c, '0' | '1')
+        }
+    });
+    match invalid {
+        Some(c) => SqlError::data_exception_public(
+            "22P02",
+            format!(
+                "\"{c}\" is not a valid {} digit",
+                if hex { "hexadecimal" } else { "binary" }
+            ),
+            Some(pg_type.to_string()),
+        ),
+        None => SqlError::InvalidTextRepresentation(format!(
+            "invalid input syntax for type {pg_type}: \"{text}\""
+        )),
+    }
 }

@@ -2763,7 +2763,16 @@ pub(crate) fn parse_message(
     let db = server.read_db_for_transaction_progress()?;
     let _catalog_owner = db.enter_catalog_read_access(state.tx.as_ref())?;
     state.catalog_cache.with_schema_cache(&db, || {
-        parse_message_inner(payload, server, &db, &state.session_state, &state.user)
+        parse_message_inner(
+            payload,
+            server,
+            &db,
+            &state.session_state,
+            &state.user,
+            &bicdb_sql::temp_schema_for_backend(
+                i32::try_from(state.connection_id).unwrap_or(i32::MAX),
+            ),
+        )
     })
 }
 
@@ -2773,6 +2782,7 @@ fn parse_message_inner(
     db: &BicDb,
     session_state: &SqlSessionGucState,
     user: &str,
+    temp_schema: &str,
 ) -> Result<ParsedStatementMessage> {
     let mut idx = 0;
     let name = read_cstr(payload, &mut idx)?;
@@ -2804,8 +2814,13 @@ fn parse_message_inner(
             };
         // Bind unqualified relations through the session's search_path before
         // the statement is described, as execution will.
-        bicdb_sql::search_path::bind_session_sql(db, &sql, session_state.session_gucs())?
-            .unwrap_or(sql)
+        bicdb_sql::search_path::bind_session_sql_with_temp(
+            db,
+            &sql,
+            session_state.session_gucs(),
+            Some(temp_schema),
+        )?
+        .unwrap_or(sql)
     };
     // Parse describes one prepared statement. Apply this after profile lowering
     // so Oracle routine/block bodies have their protected dollar-quoted form;

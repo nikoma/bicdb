@@ -337,6 +337,7 @@ fn set_record_column_inner(
         value = cast_value_to_column_type(value, column_schema).map_err(|error| match error {
             error @ (SqlError::ConstraintViolation { .. }
             | SqlError::DataException { .. }
+            | SqlError::Detailed { .. }
             | SqlError::OracleError { .. }) => error,
             error => SqlError::TypeMismatch {
                 table: schema.map(|schema| schema.name.clone()).unwrap_or_default(),

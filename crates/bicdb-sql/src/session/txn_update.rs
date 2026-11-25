@@ -7850,7 +7850,8 @@ impl<'db> SqlSession<'db> {
                     cast_value_to_column_type(value, column_schema).map_err(
                         |error| match error {
                             error @ (SqlError::ConstraintViolation { .. }
-                            | SqlError::DataException { .. }) => error,
+                            | SqlError::DataException { .. }
+                            | SqlError::Detailed { .. }) => error,
                             error => SqlError::TypeMismatch {
                                 table: schema.name.clone(),
                                 column: column_schema.name.clone(),

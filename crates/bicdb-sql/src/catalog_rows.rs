@@ -727,6 +727,14 @@ pub(crate) fn pg_class_rows_filtered(
         if table_schema.is_some_and(|schema| schema.unlogged) {
             row.insert("relpersistence".to_string(), SqlValue::String("u".into()));
         }
+        if table_schema
+            .is_some_and(|schema| crate::search_path::is_temp_schema(&schema.schema_name))
+        {
+            row.insert(
+                "relpersistence".to_string(),
+                SqlValue::String("t".to_string()),
+            );
+        }
         rows.push(row);
     }
 

@@ -1,0 +1,232 @@
+iev1|SELECT * FROM pg_input_error_info('junk', 'int4');SELECT pg_input_is_valid('34', 'int2'), pg_input_is_valid('asdf', 'int2'), pg_input_is_valid('50000', 'int2')
+iev2|SELECT * FROM pg_input_error_info('50000', 'int2');SELECT * FROM pg_input_error_info('1.5', 'numeric(2,1)');SELECT * FROM pg_input_error_info('12.34', 'numeric(2,1)')
+vac1|CREATE TABLE vac1(a int);VACUUM vac1;VACUUM (ANALYZE) vac1;VACUUM ANALYZE vac1;ANALYZE vac1;ANALYZE;BEGIN;VACUUM vac1
+iei_arrays_1|SELECT pg_input_is_valid('{1,2,3}', 'integer[]');
+iei_arrays_2|SELECT pg_input_is_valid('{1,2', 'integer[]');
+iei_arrays_3|SELECT pg_input_is_valid('{1,zed}', 'integer[]');
+iei_arrays_4|SELECT * FROM pg_input_error_info('{1,zed}', 'integer[]');
+iei_bit_1|SELECT pg_input_is_valid('01010001', 'bit(10)');
+iei_bit_2|SELECT * FROM pg_input_error_info('01010001', 'bit(10)');
+iei_bit_3|SELECT pg_input_is_valid('01010Z01', 'bit(8)');
+iei_bit_4|SELECT * FROM pg_input_error_info('01010Z01', 'bit(8)');
+iei_bit_5|SELECT pg_input_is_valid('x01010Z01', 'bit(32)');
+iei_bit_6|SELECT * FROM pg_input_error_info('x01010Z01', 'bit(32)');
+iei_bit_7|SELECT pg_input_is_valid('01010Z01', 'varbit');
+iei_bit_8|SELECT * FROM pg_input_error_info('01010Z01', 'varbit');
+iei_bit_9|SELECT pg_input_is_valid('x01010Z01', 'varbit');
+iei_bit_10|SELECT * FROM pg_input_error_info('x01010Z01', 'varbit');
+iei_boolean_1|SELECT pg_input_is_valid('true', 'bool');
+iei_boolean_2|SELECT pg_input_is_valid('asdf', 'bool');
+iei_boolean_3|SELECT * FROM pg_input_error_info('junk', 'bool');
+iei_box_1|SELECT pg_input_is_valid('200', 'box');
+iei_box_2|SELECT * FROM pg_input_error_info('200', 'box');
+iei_box_3|SELECT pg_input_is_valid('((200,300),(500, xyz))', 'box');
+iei_box_4|SELECT * FROM pg_input_error_info('((200,300),(500, xyz))', 'box');
+iei_char_1|SELECT pg_input_is_valid('abcd  ', 'char(4)');
+iei_char_2|SELECT pg_input_is_valid('abcde', 'char(4)');
+iei_char_3|SELECT * FROM pg_input_error_info('abcde', 'char(4)');
+iei_date_2|SELECT pg_input_is_valid('garbage', 'date');
+iei_date_4|SELECT * FROM pg_input_error_info('garbage', 'date');
+iei_float4_1|SELECT pg_input_is_valid('34.5', 'float4');
+iei_float4_2|SELECT pg_input_is_valid('xyz', 'float4');
+iei_float4_3|SELECT pg_input_is_valid('1e400', 'float4');
+iei_float4_4|SELECT * FROM pg_input_error_info('1e400', 'float4');
+iei_float8_1|SELECT pg_input_is_valid('34.5', 'float8');
+iei_float8_2|SELECT pg_input_is_valid('xyz', 'float8');
+iei_float8_3|SELECT pg_input_is_valid('1e4000', 'float8');
+iei_float8_4|SELECT * FROM pg_input_error_info('1e4000', 'float8');
+iei_geometry_1|SELECT pg_input_is_valid('(1', 'circle');
+iei_geometry_2|SELECT * FROM pg_input_error_info('1,', 'circle');
+iei_geometry_3|SELECT pg_input_is_valid('(1,2),-1', 'circle');
+iei_geometry_4|SELECT * FROM pg_input_error_info('(1,2),-1', 'circle');
+iei_inet_1|SELECT pg_input_is_valid('1234', 'cidr');
+iei_inet_2|SELECT * FROM pg_input_error_info('1234', 'cidr');
+iei_inet_3|SELECT pg_input_is_valid('192.168.198.200/24', 'cidr');
+iei_inet_5|SELECT pg_input_is_valid('1234', 'inet');
+iei_inet_6|SELECT * FROM pg_input_error_info('1234', 'inet');
+iei_int2_1|SELECT pg_input_is_valid('34', 'int2');
+iei_int2_2|SELECT pg_input_is_valid('asdf', 'int2');
+iei_int2_3|SELECT pg_input_is_valid('50000', 'int2');
+iei_int2_4|SELECT * FROM pg_input_error_info('50000', 'int2');
+iei_int2_5|SELECT pg_input_is_valid(' 1 3  5 ', 'int2vector');
+iei_int2_6|SELECT * FROM pg_input_error_info('1 asdf', 'int2vector');
+iei_int2_7|SELECT * FROM pg_input_error_info('50000', 'int2vector');
+iei_int4_1|SELECT pg_input_is_valid('34', 'int4');
+iei_int4_2|SELECT pg_input_is_valid('asdf', 'int4');
+iei_int4_3|SELECT pg_input_is_valid('1000000000000', 'int4');
+iei_int4_4|SELECT * FROM pg_input_error_info('1000000000000', 'int4');
+iei_int8_1|SELECT pg_input_is_valid('34', 'int8');
+iei_int8_2|SELECT pg_input_is_valid('asdf', 'int8');
+iei_int8_3|SELECT pg_input_is_valid('10000000000000000000', 'int8');
+iei_interval_1|SELECT pg_input_is_valid('1.5 weeks', 'interval');
+iei_interval_2|SELECT pg_input_is_valid('garbage', 'interval');
+iei_interval_3|SELECT pg_input_is_valid('@ 30 eons ago', 'interval');
+iei_interval_4|SELECT * FROM pg_input_error_info('garbage', 'interval');
+iei_interval_5|SELECT * FROM pg_input_error_info('@ 30 eons ago', 'interval');
+iei_json_1|select pg_input_is_valid('{"a":true}', 'json');
+iei_json_2|select pg_input_is_valid('{"a":true', 'json');
+iei_json_encoding_1|select * from pg_input_error_info('{ "a":  "\ud83d\ude04\ud83d\udc36" }', 'jsonb');
+iei_jsonb_1|select pg_input_is_valid('{"a":true}', 'jsonb');
+iei_jsonb_2|select pg_input_is_valid('{"a":true', 'jsonb');
+iei_jsonb_4|select * from pg_input_error_info('{"a":1e1000000}', 'jsonb');
+iei_line_1|SELECT pg_input_is_valid('{1, 1}', 'line');
+iei_line_2|SELECT * FROM pg_input_error_info('{1, 1}', 'line');
+iei_line_3|SELECT pg_input_is_valid('{0, 0, 0}', 'line');
+iei_line_5|SELECT pg_input_is_valid('{1, 1, a}', 'line');
+iei_line_6|SELECT * FROM pg_input_error_info('{1, 1, a}', 'line');
+iei_line_7|SELECT pg_input_is_valid('{1, 1, 1e400}', 'line');
+iei_line_8|SELECT * FROM pg_input_error_info('{1, 1, 1e400}', 'line');
+iei_line_9|SELECT pg_input_is_valid('(1, 1), (1, 1e400)', 'line');
+iei_line_10|SELECT * FROM pg_input_error_info('(1, 1), (1, 1e400)', 'line');
+iei_lseg_1|SELECT pg_input_is_valid('[(1,2),(3)]', 'lseg');
+iei_lseg_2|SELECT * FROM pg_input_error_info('[(1,2),(3)]', 'lseg');
+iei_macaddr_1|SELECT pg_input_is_valid('08:00:2b:01:02:ZZ', 'macaddr');
+iei_macaddr_2|SELECT * FROM pg_input_error_info('08:00:2b:01:02:ZZ', 'macaddr');
+iei_macaddr_3|SELECT pg_input_is_valid('08:00:2b:01:02:', 'macaddr');
+iei_macaddr_4|SELECT * FROM pg_input_error_info('08:00:2b:01:02:', 'macaddr');
+iei_macaddr8_1|SELECT pg_input_is_valid('08:00:2b:01:02:03:04:ZZ', 'macaddr8');
+iei_macaddr8_2|SELECT * FROM pg_input_error_info('08:00:2b:01:02:03:04:ZZ', 'macaddr8');
+iei_macaddr8_3|SELECT pg_input_is_valid('08:00:2b:01:02:03:04:', 'macaddr8');
+iei_macaddr8_4|SELECT * FROM pg_input_error_info('08:00:2b:01:02:03:04:', 'macaddr8');
+iei_money_1|SELECT pg_input_is_valid('\x0001', 'money');
+iei_money_2|SELECT * FROM pg_input_error_info('\x0001', 'money');
+iei_money_3|SELECT pg_input_is_valid('192233720368547758.07', 'money');
+iei_money_4|SELECT * FROM pg_input_error_info('192233720368547758.07', 'money');
+iei_multirangetypes_1|select pg_input_is_valid('{[1,2], [4,5]}', 'int4multirange');
+iei_multirangetypes_2|select pg_input_is_valid('{[1,2], [4,5]', 'int4multirange');
+iei_multirangetypes_4|select pg_input_is_valid('{[1,2], [4,zed]}', 'int4multirange');
+iei_numeric_1|SELECT pg_input_is_valid('34.5', 'numeric');
+iei_numeric_2|SELECT pg_input_is_valid('34xyz', 'numeric');
+iei_numeric_3|SELECT pg_input_is_valid('1e400000', 'numeric');
+iei_numeric_4|SELECT * FROM pg_input_error_info('1e400000', 'numeric');
+iei_numeric_5|SELECT pg_input_is_valid('1234.567', 'numeric(8,4)');
+iei_numeric_6|SELECT pg_input_is_valid('1234.567', 'numeric(7,4)');
+iei_numeric_7|SELECT * FROM pg_input_error_info('1234.567', 'numeric(7,4)');
+iei_numeric_8|SELECT * FROM pg_input_error_info('0x1234.567', 'numeric');
+iei_oid_1|SELECT pg_input_is_valid('1234', 'oid');
+iei_oid_2|SELECT pg_input_is_valid('01XYZ', 'oid');
+iei_oid_3|SELECT * FROM pg_input_error_info('01XYZ', 'oid');
+iei_oid_4|SELECT pg_input_is_valid('9999999999', 'oid');
+iei_oid_5|SELECT * FROM pg_input_error_info('9999999999', 'oid');
+iei_oid_6|SELECT pg_input_is_valid(' 1 2  4 ', 'oidvector');
+iei_oid_7|SELECT pg_input_is_valid('01 01XYZ', 'oidvector');
+iei_oid_9|SELECT pg_input_is_valid('01 9999999999', 'oidvector');
+iei_path_1|SELECT pg_input_is_valid('[(1,2),(3)]', 'path');
+iei_path_2|SELECT * FROM pg_input_error_info('[(1,2),(3)]', 'path');
+iei_pg_lsn_1|SELECT pg_input_is_valid('16AE7F7', 'pg_lsn');
+iei_pg_lsn_2|SELECT * FROM pg_input_error_info('16AE7F7', 'pg_lsn');
+iei_point_1|SELECT pg_input_is_valid('1,y', 'point');
+iei_point_2|SELECT * FROM pg_input_error_info('1,y', 'point');
+iei_polygon_1|SELECT pg_input_is_valid('(2.0,0.8,0.1)', 'polygon');
+iei_polygon_2|SELECT * FROM pg_input_error_info('(2.0,0.8,0.1)', 'polygon');
+iei_polygon_3|SELECT pg_input_is_valid('(2.0,xyz)', 'polygon');
+iei_polygon_4|SELECT * FROM pg_input_error_info('(2.0,xyz)', 'polygon');
+iei_rangetypes_1|select pg_input_is_valid('(1,4)', 'int4range');
+iei_rangetypes_2|select pg_input_is_valid('(1,4', 'int4range');
+iei_rangetypes_4|select pg_input_is_valid('(4,1)', 'int4range');
+iei_rangetypes_5|select * from pg_input_error_info('(4,1)', 'int4range');
+iei_rangetypes_6|select pg_input_is_valid('(4,zed)', 'int4range');
+iei_rangetypes_8|select pg_input_is_valid('[1,2147483647]', 'int4range');
+iei_rangetypes_9|select * from pg_input_error_info('[1,2147483647]', 'int4range');
+iei_rangetypes_10|select pg_input_is_valid('[2000-01-01,5874897-12-31]', 'daterange');
+iei_tid_1|SELECT pg_input_is_valid('(0)', 'tid');
+iei_tid_2|SELECT * FROM pg_input_error_info('(0)', 'tid');
+iei_tid_3|SELECT pg_input_is_valid('(0,-1)', 'tid');
+iei_tid_4|SELECT * FROM pg_input_error_info('(0,-1)', 'tid');
+iei_time_1|SELECT pg_input_is_valid('12:00:00', 'time');
+iei_time_2|SELECT pg_input_is_valid('25:00:00', 'time');
+iei_time_3|SELECT pg_input_is_valid('15:36:39 America/New_York', 'time');
+iei_time_4|SELECT * FROM pg_input_error_info('25:00:00', 'time');
+iei_time_5|SELECT * FROM pg_input_error_info('15:36:39 America/New_York', 'time');
+iei_timestamp_2|SELECT pg_input_is_valid('garbage', 'timestamp');
+iei_timestamp_3|SELECT pg_input_is_valid('2001-01-01 00:00 Nehwon/Lankhmar', 'timestamp');
+iei_timestamp_4|SELECT * FROM pg_input_error_info('garbage', 'timestamp');
+iei_timestamp_5|SELECT * FROM pg_input_error_info('2001-01-01 00:00 Nehwon/Lankhmar', 'timestamp');
+iei_timestamptz_2|SELECT pg_input_is_valid('garbage', 'timestamptz');
+iei_timestamptz_3|SELECT pg_input_is_valid('2001-01-01 00:00 Nehwon/Lankhmar', 'timestamptz');
+iei_timestamptz_4|SELECT * FROM pg_input_error_info('garbage', 'timestamptz');
+iei_timestamptz_5|SELECT * FROM pg_input_error_info('2001-01-01 00:00 Nehwon/Lankhmar', 'timestamptz');
+iei_timetz_1|SELECT pg_input_is_valid('12:00:00 PDT', 'timetz');
+iei_timetz_2|SELECT pg_input_is_valid('25:00:00 PDT', 'timetz');
+iei_timetz_3|SELECT pg_input_is_valid('15:36:39 America/New_York', 'timetz');
+iei_timetz_4|SELECT * FROM pg_input_error_info('25:00:00 PDT', 'timetz');
+iei_timetz_5|SELECT * FROM pg_input_error_info('15:36:39 America/New_York', 'timetz');
+iei_tstypes_1|SELECT pg_input_is_valid('foo', 'tsvector');
+iei_tstypes_2|SELECT pg_input_is_valid($$''$$, 'tsvector');
+iei_tstypes_3|SELECT * FROM pg_input_error_info($$''$$, 'tsvector');
+iei_tstypes_4|SELECT pg_input_is_valid('foo', 'tsquery');
+iei_tstypes_5|SELECT pg_input_is_valid('foo!', 'tsquery');
+iei_tstypes_6|SELECT * FROM pg_input_error_info('foo!', 'tsquery');
+iei_tstypes_7|SELECT * FROM pg_input_error_info('a <100000> b', 'tsquery');
+iei_uuid_1|SELECT pg_input_is_valid('11', 'uuid');
+iei_uuid_2|SELECT * FROM pg_input_error_info('11', 'uuid');
+iei_varchar_1|SELECT pg_input_is_valid('abcd  ', 'varchar(4)');
+iei_varchar_2|SELECT pg_input_is_valid('abcde', 'varchar(4)');
+iei_varchar_3|SELECT * FROM pg_input_error_info('abcde', 'varchar(4)');
+iei_xid_1|SELECT pg_input_is_valid('42', 'xid');
+iei_xid_2|SELECT pg_input_is_valid('asdf', 'xid');
+iei_xid_4|SELECT pg_input_is_valid('42', 'xid8');
+iei_xid_5|SELECT pg_input_is_valid('asdf', 'xid8');
+iei_xid_7|select pg_input_is_valid('12:13:', 'pg_snapshot');
+iei_xid_8|select pg_input_is_valid('31:12:', 'pg_snapshot');
+iei_xid_9|select * from pg_input_error_info('31:12:', 'pg_snapshot');
+iei_xid_10|select pg_input_is_valid('12:16:14,13', 'pg_snapshot');
+iei_xid_11|select * from pg_input_error_info('12:16:14,13', 'pg_snapshot');
+iei_xml_1|SELECT pg_input_is_valid('<value>one</value>', 'xml');
+iei_xml_2|SELECT pg_input_is_valid('<value>one</', 'xml');
+vac_plain_table|CREATE TABLE vac_a(a int, b text);INSERT INTO vac_a VALUES (1,'x'),(2,'y');VACUUM vac_a;VACUUM (ANALYZE) vac_a;VACUUM ANALYZE vac_a;VACUUM FULL vac_a;VACUUM (FREEZE, VERBOSE) vac_a;VACUUM FREEZE vac_a;ANALYZE vac_a;ANALYZE VERBOSE vac_a;ANALYZE (VERBOSE) vac_a;SELECT count(*) FROM vac_a
+vac_txn|CREATE TABLE vac_b(a int);BEGIN;VACUUM vac_b;ROLLBACK;BEGIN;ANALYZE vac_b;COMMIT
+vac_txn_analyze_opt|CREATE TABLE vac_c(a int);BEGIN;VACUUM (ANALYZE) vac_c;ROLLBACK
+vac_missing|VACUUM vac_nosuch
+vac_missing2|CREATE TABLE vac_d(a int);VACUUM vac_d, vac_nosuch2
+vac_analyze_missing|ANALYZE vac_nosuch3
+vac_badopt|VACUUM (nonexistentarg) vac_a
+vac_badopt_an|ANALYZE (nonexistentarg) vac_a
+vac_cols|CREATE TABLE vac_e(a int, b int);VACUUM ANALYZE vac_e(a);ANALYZE vac_e(a, b);VACUUM (ANALYZE) vac_e (b)
+vac_cols_err|CREATE TABLE vac_f(a int, b int);VACUUM vac_f(a)
+vac_cols_missing|CREATE TABLE vac_g(a int);ANALYZE vac_g(nope)
+vac_cols_dup|CREATE TABLE vac_h(a int, b int);ANALYZE vac_h(a, b, b)
+vac_parallel_full|CREATE TABLE vac_i(a int);VACUUM (PARALLEL 2, FULL TRUE) vac_i
+vac_parallel_noval|CREATE TABLE vac_j(a int);VACUUM (PARALLEL) vac_j
+vac_parallel_neg|CREATE TABLE vac_k(a int);VACUUM (PARALLEL -1) vac_k
+vac_only_db_stats|CREATE TABLE vac_l(a int);VACUUM (ONLY_DATABASE_STATS);VACUUM (ONLY_DATABASE_STATS) vac_l
+vac_view|CREATE TABLE vac_m(a int);CREATE VIEW vac_mv AS SELECT * FROM vac_m;VACUUM vac_mv;ANALYZE vac_mv
+vac_nonowner|CREATE TABLE vac_n(a int);CREATE ROLE vac_role_n;SET ROLE vac_role_n;VACUUM vac_n;ANALYZE vac_n;VACUUM (ANALYZE) vac_n;RESET ROLE;DROP TABLE vac_n;DROP ROLE vac_role_n
+vac_whole_analyze|VACUUM ANALYZE;ANALYZE
+vac_multi|CREATE TABLE vac_o(a int);CREATE TABLE vac_p(b int);VACUUM vac_o, vac_p;ANALYZE vac_o, vac_p;VACUUM (FREEZE) vac_o, vac_p
+vac_schema|CREATE SCHEMA vac_s;CREATE TABLE vac_s.t(a int);VACUUM vac_s.t;ANALYZE vac_s.t;VACUUM ANALYZE vac_s.t(a)
+vac_bool|CREATE TABLE vac_q(a int);VACUUM (FULL false, ANALYZE true, INDEX_CLEANUP auto, TRUNCATE off) vac_q;VACUUM (FULL maybe) vac_q
+nfm_count____|SELECT count(*);
+nfm_sum_____avg____|SELECT sum(2), avg(3);
+nfm_string_agg__a_______|SELECT string_agg('a', ',');
+nfm_array_agg____|SELECT array_agg(5);
+nfm_max____|SELECT max(3);
+nfm_bool_and_true__|SELECT bool_and(true);
+tmp_shadow|CREATE TABLE tmp_t1(col int);INSERT INTO tmp_t1 VALUES (1);CREATE INDEX i_tmp_t1 ON tmp_t1(col);CREATE TEMP TABLE tmp_t1(tcol float8);CREATE INDEX i_tmp_t1 ON tmp_t1(tcol);INSERT INTO tmp_t1 VALUES (2.5);SELECT * FROM tmp_t1;SELECT * FROM public.tmp_t1;SELECT * FROM pg_temp.tmp_t1;SELECT current_schema();DROP INDEX i_tmp_t1;DROP TABLE tmp_t1;SELECT * FROM tmp_t1;DROP INDEX i_tmp_t1;DROP TABLE tmp_t1
+tmp_session1|CREATE TEMP TABLE tmp_sess(a int);INSERT INTO tmp_sess VALUES (1);SELECT relpersistence FROM pg_class WHERE relname = 'tmp_sess'
+tmp_session2|SELECT count(*) FROM pg_class WHERE relname = 'tmp_sess';SELECT * FROM tmp_sess
+tmp_discard|CREATE TEMP TABLE tmp_disc(a int);DISCARD TEMP;SELECT * FROM tmp_disc
+tmp_badschema|CREATE SCHEMA tmp_s;CREATE TEMP TABLE tmp_s.t(a int)
+tmp_oncommit_perm|CREATE TABLE tmp_oc(a int) ON COMMIT DELETE ROWS
+tmp_preserve|CREATE TEMP TABLE tmp_pr(a int) ON COMMIT PRESERVE ROWS;INSERT INTO tmp_pr VALUES (1);SELECT * FROM tmp_pr
+tmp_explicit|CREATE TABLE pg_temp.tmp_ex(a int);INSERT INTO tmp_ex VALUES (5);SELECT * FROM pg_temp.tmp_ex;SELECT relpersistence FROM pg_class WHERE relname = 'tmp_ex'
+tmp_perm_after|CREATE TEMP TABLE tmp_pa1(a int);CREATE TABLE tmp_pa2(a int);SELECT n.nspname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relname = 'tmp_pa2';DROP TABLE tmp_pa2
+pos_lit|SELECT int2 '100000'
+pos_bool|SELECT bool 'test' AS error
+fn_num_nulls_____________|SELECT num_nulls(1, NULL, 2);
+fn_num_nonnulls____________|SELECT num_nonnulls(1, NULL, 2);
+fn_to_hex_________to_oct___|SELECT to_hex(-1234), to_oct(-1234), to_bin(-1234);
+fn_to_hex______int___|SELECT to_hex(256::int8);
+fn_gcd___________lcm_______|SELECT gcd(-12, 18), lcm(4, -6);
+fn_gcd_____int_______int___|SELECT gcd(12::int8, 18::int8);
+fn_sinh______float____cosh_|SELECT sinh(1.0::float8), cosh(1.0::float8), tanh(1.0::float8);
+fn_asinh______float____acos|SELECT asinh(1.0::float8), acosh(2.0::float8), atanh(0.5::float8);
+fn_getdatabaseencoding___|SELECT getdatabaseencoding();
+fn_isfinite__infinity___dat|SELECT isfinite('infinity'::date), isfinite('2001-01-01'::date);
+fn_scale_________min_scale_|SELECT scale(1.500), min_scale(1.500), trim_scale(1.500);
+fn_regexp_count____________|SELECT regexp_count('123123123123123', '(12)3');
+fn_regexp_instr__abcdefghi_|SELECT regexp_instr('abcdefghi', 'd.f'), regexp_instr('abcdefghi', 'd.f', 1, 1, 1);
+fn_regexp_substr__abcdefghi|SELECT regexp_substr('abcdefghi', 'd.f');
+fn_regexp_like___teven_____|SELECT regexp_like('Steven', '^Ste(v|ph)en$');
+fn_count__________false_|SELECT count(*) WHERE false;
+fn_count___________count___|SELECT count(*) HAVING count(*) > 0;

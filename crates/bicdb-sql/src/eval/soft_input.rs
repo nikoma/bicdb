@@ -42,21 +42,28 @@ pub(crate) fn soft_input_error(
     type_name: &str,
 ) -> Result<Option<SoftInputError>> {
     let data_type = parse_input_type_name(type_name)?;
-    let result = match db {
-        Some(db) => {
-            if user_type_column_from_data_type(db, &data_type)?.is_none()
-                && pg_type_from_data_type(&data_type).is_err()
-            {
+    let input = SqlValue::String(text.to_string());
+    let builtin = pg_type_from_data_type(&data_type)
+        .ok()
+        .map(|(pg_type, _)| pg_type);
+    let result = match (db, builtin.clone()) {
+        // A built-in type's input function applies its type modifier the
+        // way assignment does (`char(4)` rejects five characters, `bit(10)`
+        // rejects eight digits) rather than truncating like an explicit cast.
+        (_, Some(pg_type))
+            if !is_oid_alias_type(&pg_type)
+                && !pg_type.strip_suffix("[]").is_some_and(is_oid_alias_type) =>
+        {
+            cast_value_with_assignment_semantics(input, &data_type)
+        }
+        (Some(db), _) => {
+            if builtin.is_none() && user_type_column_from_data_type(db, &data_type)?.is_none() {
                 return Err(undefined_input_type(type_name, &data_type));
             }
-            cast_value_with_db(db, SqlValue::String(text.to_string()), &data_type)
+            cast_value_with_db(db, input, &data_type)
         }
-        None => {
-            if pg_type_from_data_type(&data_type).is_err() {
-                return Err(undefined_input_type(type_name, &data_type));
-            }
-            cast_value(SqlValue::String(text.to_string()), &data_type)
-        }
+        (None, Some(_)) => cast_value(input, &data_type),
+        (None, None) => return Err(undefined_input_type(type_name, &data_type)),
     };
     match result {
         Ok(_) => Ok(None),
@@ -90,17 +97,26 @@ fn undefined_input_type(type_name: &str, data_type: &DataType) -> SqlError {
     SqlError::undefined_object(format!("type \"{name}\" does not exist"))
 }
 
-/// Data exceptions (class 22) and domain constraint failures (class 23)
-/// raised by the input conversion itself are soft.
+/// Errors the input conversion reports about the text are soft: data
+/// exceptions, domain constraint failures, and the syntax errors of input
+/// functions such as `tsvector`'s. An unsupported or undefined type, an
+/// error from a domain CHECK expression and internal failures are not.
 fn is_soft_input_error(error: &SqlError) -> bool {
     match error {
-        SqlError::WithNotices { error, .. } => is_soft_input_error(error),
-        SqlError::Rethrown(_) | SqlError::OracleError { .. } | SqlError::OracleContext { .. } => {
-            false
+        SqlError::WithNotices { error, .. } | SqlError::Detailed { error, .. } => {
+            is_soft_input_error(error)
         }
+        SqlError::Rethrown(_)
+        | SqlError::OracleError { .. }
+        | SqlError::OracleContext { .. }
+        | SqlError::Unsupported(_)
+        | SqlError::UnsupportedPlpgsqlFeature(_)
+        | SqlError::BicDb(_)
+        | SqlError::InvalidSql(_)
+        | SqlError::Json(_) => false,
         error => {
             let sqlstate = error.sqlstate();
-            sqlstate.starts_with("22") || sqlstate.starts_with("23")
+            sqlstate.starts_with("22") || sqlstate.starts_with("23") || sqlstate == "42601"
         }
     }
 }

@@ -168,6 +168,33 @@ pub(crate) fn eval_db_catalog_function_value(
     )
 }
 
+/// `pg_table_is_visible(oid)` for a table: whether its unqualified name
+/// resolves to it through the search path (the temporary schema first). A
+/// table hidden by an earlier schema's relation of the same name, or in a
+/// schema off the path, is not visible. `None` when the OID is not a table.
+fn table_is_visible(db: &BicDb, oid: &SqlValue) -> Result<Option<SqlValue>> {
+    let Some(oid) = sql_value_i64(oid) else {
+        return Ok(Some(SqlValue::Null));
+    };
+    let Some(schema) = list_schemas(db)?
+        .into_iter()
+        .find(|schema| table_relation_oid(schema) == oid)
+    else {
+        return Ok(None);
+    };
+    let logical = catalog_display_name(&schema.name);
+    let path = crate::search_path::active_path()
+        .map(|path| path.to_vec())
+        .unwrap_or_else(|| vec!["public".to_string()]);
+    for namespace in path {
+        let encoded = relation_name_from_parts(&[namespace.clone(), logical.clone()])?;
+        if resolve_relation_name_memoized(db, &encoded).is_some() {
+            return Ok(Some(SqlValue::Bool(namespace == schema.schema_name)));
+        }
+    }
+    Ok(Some(SqlValue::Bool(false)))
+}
+
 pub(crate) fn eval_db_catalog_function_value_with_engine(
     db: &BicDb,
     name: &str,
@@ -177,6 +204,11 @@ pub(crate) fn eval_db_catalog_function_value_with_engine(
     query_engine: Option<&SqlEngine<'_>>,
 ) -> Result<Option<SqlValue>> {
     let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(name);
+    if bare_name == "pg_table_is_visible" && args.len() == 1 {
+        if let Some(visible) = table_is_visible(db, &args[0])? {
+            return Ok(Some(visible));
+        }
+    }
     if oracle::current_time::pg_type(bare_name).is_some() {
         return oracle::current_time::evaluate(db, bare_name, args).map(Some);
     }
@@ -3529,9 +3561,7 @@ pub(crate) fn eval_compatibility_function_value(
     if matches!(name, "pg_input_is_valid" | "pg_catalog.pg_input_is_valid") {
         return eval_pg_input_is_valid(None, args).map(Some);
     }
-    if let Some(value) =
-        crate::pg_functions_more::eval_pg_function_more(name, args, arg_types)?
-    {
+    if let Some(value) = crate::pg_functions_more::eval_pg_function_more(name, args, arg_types)? {
         return Ok(Some(value));
     }
     if name == "bicdb_variadic_call" {

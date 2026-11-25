@@ -41,6 +41,49 @@ pub(crate) fn active_path() -> Option<Arc<[String]>> {
 }
 
 thread_local! {
+    /// The temporary-object schema (`pg_temp_<backend>`) of the session whose
+    /// statement runs on this thread, whether or not it exists yet.
+    static ACTIVE_TEMP_SCHEMA: RefCell<Option<Arc<str>>> = const { RefCell::new(None) };
+}
+
+/// Publishes the session's temporary schema for one statement.
+pub(crate) struct TempSchemaScope(Option<Arc<str>>);
+
+impl TempSchemaScope {
+    pub(crate) fn enter(schema: Option<&str>) -> Self {
+        let schema = schema.map(Arc::<str>::from);
+        Self(ACTIVE_TEMP_SCHEMA.with(|active| std::mem::replace(&mut *active.borrow_mut(), schema)))
+    }
+}
+
+impl Drop for TempSchemaScope {
+    fn drop(&mut self) {
+        let previous = self.0.take();
+        ACTIVE_TEMP_SCHEMA.with(|active| *active.borrow_mut() = previous);
+    }
+}
+
+/// The current session's temporary schema name, for `pg_temp` qualifiers.
+pub(crate) fn active_temp_schema() -> Option<String> {
+    ACTIVE_TEMP_SCHEMA.with(|active| active.borrow().as_deref().map(str::to_string))
+}
+
+/// A session temporary-object schema (`pg_temp_<n>`). Such a schema is
+/// searched for relations, never chosen for a new permanent object, and not
+/// reported by `current_schema()`.
+pub(crate) fn is_temp_schema(schema: &str) -> bool {
+    schema
+        .strip_prefix("pg_temp_")
+        .is_some_and(|rest| !rest.is_empty() && rest.bytes().all(|byte| byte.is_ascii_digit()))
+}
+
+/// The schema a new permanent object goes to: the first schema of the path
+/// that is not the temporary schema.
+pub(crate) fn first_creation_schema(path: &[String]) -> Option<&String> {
+    path.iter().find(|schema| !is_temp_schema(schema))
+}
+
+thread_local! {
     /// The connected database of the statement executing on this thread:
     /// the catalog name information_schema reports (`table_catalog`, ...).
     static ACTIVE_CATALOG: RefCell<Option<Arc<str>>> = const { RefCell::new(None) };
@@ -121,6 +164,21 @@ pub(crate) fn binding_path(
     db: &BicDb,
     gucs: &HashMap<String, String>,
 ) -> Result<Option<Arc<[String]>>> {
+    binding_path_with_temp(db, gucs, None)
+}
+
+/// [`binding_path`] for a session with temporary schema `temp`. An existing
+/// temporary schema is searched first for relations, or where `pg_temp`
+/// appears in the path, as in PostgreSQL.
+pub(crate) fn binding_path_with_temp(
+    db: &BicDb,
+    gucs: &HashMap<String, String>,
+    temp: Option<&str>,
+) -> Result<Option<Arc<[String]>>> {
+    let temp = match temp {
+        Some(temp) if load_namespace(db, temp)?.is_some() => Some(temp),
+        _ => None,
+    };
     if gucs
         .get("bicdb.sql_profile")
         .is_some_and(|profile| profile != oracle::POSTGRES_PROFILE)
@@ -135,7 +193,21 @@ pub(crate) fn binding_path(
     let mut schemas = Vec::new();
     let mut other = false;
     let public_exists = load_namespace(db, "public")?.is_some();
-    for schema in parse_search_path(path, &user) {
+    let searched = parse_search_path(path, &user);
+    if let Some(temp) = temp {
+        if !searched.iter().any(|schema| schema == "pg_temp") {
+            schemas.push(temp.to_string());
+            other = true;
+        }
+    }
+    for schema in searched {
+        if schema == "pg_temp" {
+            if let Some(temp) = temp {
+                schemas.push(temp.to_string());
+                other = true;
+            }
+            continue;
+        }
         if matches!(schema.as_str(), "pg_catalog" | "information_schema")
             || schema.starts_with("pg_temp")
         {
@@ -249,7 +321,8 @@ impl Binder<'_> {
         if Self::single_part(name).is_none() {
             return;
         }
-        if let Some(schema) = self.path.first().filter(|schema| *schema != "public") {
+        if let Some(schema) = first_creation_schema(self.path).filter(|schema| *schema != "public")
+        {
             let schema = schema.clone();
             self.qualify(name, &schema);
         }
@@ -312,7 +385,11 @@ impl sqlparser::ast::VisitorMut for Binder<'_> {
             Statement::CreateTable(table) => {
                 // A self-reference names the table being created.
                 let own = Self::single_part(&table.name);
-                self.bind_creation(&mut table.name);
+                // A temporary table goes to the session's temporary schema,
+                // which CREATE TABLE itself places it in.
+                if !table.temporary {
+                    self.bind_creation(&mut table.name);
+                }
                 // Set only when creation placed the table in a schema.
                 let created_schema = match (own.is_some(), table.name.0.as_slice()) {
                     (true, [sqlparser::ast::ObjectNamePart::Identifier(schema), _]) => {
@@ -788,11 +865,24 @@ pub fn bind_session_sql(
     }
 }
 
+/// [`bind_session_sql`] for a connection with temporary schema `temp`.
+pub fn bind_session_sql_with_temp(
+    db: &BicDb,
+    sql: &str,
+    gucs: &HashMap<String, String>,
+    temp: Option<&str>,
+) -> Result<Option<String>> {
+    let _temp_scope = TempSchemaScope::enter(temp);
+    match binding_path_with_temp(db, gucs, temp)? {
+        Some(path) => bind_sql_text(db, sql, &path),
+        None => Ok(None),
+    }
+}
+
 /// `current_schema`: the first existing schema, or NULL for an empty path.
 pub(crate) fn current_schema_value() -> SqlValue {
     match active_path() {
-        Some(path) => path
-            .first()
+        Some(path) => first_creation_schema(&path)
             .cloned()
             .map(SqlValue::String)
             .unwrap_or(SqlValue::Null),

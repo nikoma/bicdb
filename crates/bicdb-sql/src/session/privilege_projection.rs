@@ -292,6 +292,74 @@ impl<'db> SqlSession<'db> {
         Ok(existed)
     }
 
+    /// A temporary table (`CREATE TEMP TABLE t`, or `CREATE TABLE pg_temp.t`)
+    /// lives in the session's temporary schema, which is created on first
+    /// use and dropped with the session. Returns the statement with its name
+    /// placed there, or `None` for a permanent table.
+    fn temporary_table_target(
+        &mut self,
+        create_table: &CreateTable,
+    ) -> Result<Option<CreateTable>> {
+        let parts = object_name_parts(&create_table.name);
+        let explicit_temp_schema = matches!(parts.as_slice(), [schema, _] if schema == "pg_temp");
+        let temporary = create_table.temporary || explicit_temp_schema;
+        match &create_table.on_commit {
+            Some(sqlparser::ast::OnCommit::PreserveRows) | None => {}
+            Some(_) if !temporary => {
+                return Err(SqlError::data_exception_public(
+                    "42P16",
+                    "ON COMMIT can only be used on temporary tables",
+                    None,
+                ));
+            }
+            Some(sqlparser::ast::OnCommit::DeleteRows) => {
+                return Err(SqlError::Unsupported(
+                    "ON COMMIT DELETE ROWS is not supported".to_string(),
+                ));
+            }
+            Some(sqlparser::ast::OnCommit::Drop) => {
+                return Err(SqlError::Unsupported(
+                    "ON COMMIT DROP is not supported".to_string(),
+                ));
+            }
+        }
+        if !temporary {
+            return Ok(None);
+        }
+        let Some(temp_schema) = self.temp_schema_name() else {
+            // An embedded session has no connection lifetime to bound the
+            // table by; it keeps the table in its schema as before.
+            return Ok(None);
+        };
+        let table = match parts.as_slice() {
+            [table] => table.clone(),
+            [schema, table] if schema == "pg_temp" || *schema == temp_schema => table.clone(),
+            _ => {
+                return Err(SqlError::data_exception_public(
+                    "42P16",
+                    "cannot create temporary relation in non-temporary schema",
+                    None,
+                ))
+            }
+        };
+        if load_namespace(self.db_ref(), &temp_schema)?.is_none() {
+            self.create_session_namespace_if_missing(
+                NamespaceSchema {
+                    dropped: false,
+                    name: temp_schema.clone(),
+                    owner: current_user_from_gucs(&self.session_gucs),
+                },
+                true,
+            )?;
+        }
+        let mut placed = create_table.clone();
+        placed.name = ObjectName::from(vec![
+            Ident::with_quote('"', temp_schema),
+            Ident::with_quote('"', table),
+        ]);
+        Ok(Some(placed))
+    }
+
     pub(crate) fn execute_create_table(&mut self, create_table: &CreateTable) -> Result<SqlResult> {
         self.execute_create_table_with_compression(create_table, &[])
     }
@@ -329,15 +397,22 @@ impl<'db> SqlSession<'db> {
                 super::create_table_as::CreateTableAs::from_parsed(create_table)?,
             );
         }
+        let temporary_target = self.temporary_table_target(create_table)?;
+        let create_table = temporary_target.as_ref().unwrap_or(create_table);
 
         let table = relation_name(&create_table.name)?;
         require_user_relation_name(&table)?;
         let schema_name = relation_schema_name(&create_table.name);
-        self.require_schema_create_privilege(&schema_name)?;
-        if !matches!(
-            schema_name.as_str(),
-            "public" | "pg_catalog" | "information_schema"
-        ) {
+        let temporary_schema = crate::search_path::is_temp_schema(&schema_name);
+        if !temporary_schema {
+            self.require_schema_create_privilege(&schema_name)?;
+        }
+        if !temporary_schema
+            && !matches!(
+                schema_name.as_str(),
+                "public" | "pg_catalog" | "information_schema"
+            )
+        {
             self.create_session_namespace_if_missing(
                 NamespaceSchema {
                     dropped: false,

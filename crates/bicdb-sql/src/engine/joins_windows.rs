@@ -2639,7 +2639,10 @@ impl<'db> SqlEngine<'db> {
                             };
                         let value = match evaluated {
                             Ok(value) => value,
-                            Err(error @ SqlError::DataException { .. }) => return Err(error),
+                            Err(
+                                error
+                                @ (SqlError::DataException { .. } | SqlError::Detailed { .. }),
+                            ) => return Err(error),
                             Err(_) => SqlValue::Null,
                         };
                         let pg_type = order_types.get(index).and_then(Option::as_deref);

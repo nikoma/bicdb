@@ -70,9 +70,11 @@ pub(crate) use sql_cursors::{pg_cursors_rows, PG_CURSORS_COLUMNS};
 mod set_functions;
 #[cfg(test)]
 mod subquery_scope_tests;
+mod temp_tables;
 mod transaction_defaults;
 mod vacuum_analyze;
 pub use read_only::parse_transaction_read_only;
+pub use temp_tables::{drop_connection_temp_schema, drop_orphan_temp_schemas, temp_schema_exists};
 pub(crate) mod txn_update;
 pub(crate) mod updatable_views;
 // Glue import: bring every crate-root item (including the root's private
@@ -138,6 +140,11 @@ pub(crate) fn is_trusted_postgres_extension(name: &str) -> bool {
             | "unaccent"
             | "uuid-ossp"
     )
+}
+
+/// The temporary-object schema of backend `pid`.
+pub fn temp_schema_for_backend(pid: i32) -> String {
+    format!("pg_temp_{pid}")
 }
 
 pub fn is_protected_security_setting(name: &str) -> bool {
@@ -2729,6 +2736,14 @@ impl<'db> SqlSession<'db> {
         self
     }
 
+    /// The session's temporary-object schema, `pg_temp_<backend pid>`, for a
+    /// session served by a connection. Embedded sessions have none.
+    pub(crate) fn temp_schema_name(&self) -> Option<String> {
+        self.runtime
+            .as_ref()
+            .map(|runtime| temp_schema_for_backend(runtime.backend_pid()))
+    }
+
     pub fn with_runtime(mut self, runtime: Arc<dyn SqlSessionRuntime>) -> Self {
         self.runtime = Some(runtime);
         self
@@ -3481,7 +3496,13 @@ impl<'db> SqlSession<'db> {
         self.db_ref().check_recovery_state()?;
         // Unqualified relations resolve through the session's search_path;
         // routine bodies compiled during this statement bind the same way.
-        let path = crate::search_path::binding_path(self.db_ref(), &self.session_gucs)?;
+        let temp_schema = self.temp_schema_name();
+        let _temp_scope = crate::search_path::TempSchemaScope::enter(temp_schema.as_deref());
+        let path = crate::search_path::binding_path_with_temp(
+            self.db_ref(),
+            &self.session_gucs,
+            temp_schema.as_deref(),
+        )?;
         // A statement list binds each statement just before it runs, so a
         // statement sees the path and schemas earlier statements set up.
         let per_statement = crate::search_path::statements_bound_separately(sql, path.is_some());
@@ -3519,9 +3540,10 @@ impl<'db> SqlSession<'db> {
                         for statement in statements {
                             let preprocessing_reads =
                                 session.enter_statement_catalog_reads(statement)?;
-                            let path = crate::search_path::binding_path(
+                            let path = crate::search_path::binding_path_with_temp(
                                 session.db_ref(),
                                 &session.session_gucs,
+                                temp_schema.as_deref(),
                             )?;
                             let bound = match path.as_deref() {
                                 Some(path) => crate::search_path::bind_sql_text(

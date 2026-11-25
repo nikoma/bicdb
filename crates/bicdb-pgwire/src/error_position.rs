@@ -25,8 +25,7 @@ pub(crate) fn error_position(query: &str, sqlstate: &str, message: &str) -> Opti
     }
     let message = strip_category_prefix(message);
     if let Some(column) = quoted_between(message, "column \"", "\" of relation \"") {
-        if message.ends_with("\" does not exist") && text.starts_with_keyword(&["insert", "update"])
-        {
+        if message.ends_with("\" does not exist") {
             return text.column_reference(column);
         }
         return None;
@@ -43,6 +42,9 @@ pub(crate) fn error_position(query: &str, sqlstate: &str, message: &str) -> Opti
     }
     if let Some(name) = quoted_between(message, "relation \"", "\" does not exist") {
         return text.relation_reference(name);
+    }
+    if let Some(name) = message.strip_prefix("collection not found: ") {
+        return text.relation_reference(name.trim());
     }
     if let Some(name) = quoted_between(message, "missing FROM-clause entry for table \"", "\"") {
         return text.qualifier_reference(name);
@@ -72,7 +74,7 @@ pub(crate) fn error_position(query: &str, sqlstate: &str, message: &str) -> Opti
             message
                 .split_once(": \"")
                 .and_then(|(_, rest)| rest.strip_suffix('"'))
-        } else if suffix.starts_with('"') {
+        } else if suffix == "\"" {
             message
                 .strip_prefix(prefix)
                 .and_then(|rest| rest.strip_suffix(suffix))
@@ -618,6 +620,22 @@ mod tests {
                 "relation \"missing_t\" does not exist"
             ),
             None
+        );
+        assert_eq!(
+            error_position(
+                "SELECT * FROM pos_nosuch_rel",
+                "42P01",
+                "collection not found: pos_nosuch_rel"
+            ),
+            Some(15)
+        );
+        assert_eq!(
+            error_position(
+                "SELECT a, nosuch FROM pos_t",
+                "42703",
+                "column \"nosuch\" of relation \"pos_t\" does not exist"
+            ),
+            Some(11)
         );
         // Errors PostgreSQL raises without a location get none.
         assert_eq!(

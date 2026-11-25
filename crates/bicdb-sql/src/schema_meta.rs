@@ -5038,7 +5038,9 @@ pub(crate) fn routine_creation_schema_and_name(name: &str) -> (String, String) {
     if name.contains('.') {
         return (schema, bare);
     }
-    match crate::search_path::active_path().and_then(|path| path.first().cloned()) {
+    match crate::search_path::active_path()
+        .and_then(|path| crate::search_path::first_creation_schema(&path).cloned())
+    {
         Some(first) => (first, bare),
         None => (schema, bare),
     }

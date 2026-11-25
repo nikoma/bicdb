@@ -929,6 +929,35 @@ impl<'db> SqlSession<'db> {
         names: &[ObjectName],
         cascade: bool,
     ) -> Result<SqlResult> {
+        self.drop_schemas(if_exists, names, cascade, false)
+    }
+
+    /// Drops this session's temporary schema and everything in it, as
+    /// PostgreSQL does when the session ends or runs `DISCARD TEMP`.
+    pub(crate) fn drop_session_temp_schema(&mut self) -> Result<()> {
+        let Some(temp) = self.temp_schema_name() else {
+            return Ok(());
+        };
+        self.drop_temp_schema_named(&temp)
+    }
+
+    pub(crate) fn drop_temp_schema_named(&mut self, temp: &str) -> Result<()> {
+        if !crate::search_path::is_temp_schema(temp)
+            || load_namespace(self.db_ref(), temp)?.is_none()
+        {
+            return Ok(());
+        }
+        let name = ObjectName::from(vec![Ident::with_quote('"', temp.to_string())]);
+        self.drop_schemas(true, &[name], true, true).map(|_| ())
+    }
+
+    fn drop_schemas(
+        &mut self,
+        if_exists: bool,
+        names: &[ObjectName],
+        cascade: bool,
+        temporary: bool,
+    ) -> Result<SqlResult> {
         struct Contents {
             namespace: NamespaceSchema,
             tables: Vec<String>,
@@ -941,9 +970,15 @@ impl<'db> SqlSession<'db> {
         let mut targets: Vec<Contents> = Vec::new();
         for name in names {
             let schema = object_name(name)?;
-            if matches!(schema.as_str(), "pg_catalog" | "information_schema")
+            if temporary && !crate::search_path::is_temp_schema(&schema) {
+                return Err(SqlError::InvalidSql(format!(
+                    "{schema} is not a temporary schema"
+                )));
+            }
+            if (matches!(schema.as_str(), "pg_catalog" | "information_schema")
                 || schema.starts_with("pg_toast")
-                || schema.starts_with("pg_temp")
+                || schema.starts_with("pg_temp"))
+                && !temporary
             {
                 return Err(SqlError::dependent_objects_still_exist(format!(
                     "cannot drop schema {schema} because it is required by the database system"
@@ -3436,7 +3471,16 @@ impl<'db> SqlSession<'db> {
         let index_name = create_index
             .name
             .as_ref()
-            .map(index_relation_name)
+            .map(|name| {
+                // An index on a temporary table lives in the temporary
+                // schema, so it can repeat a permanent index's name.
+                match object_name_parts(name).as_slice() {
+                    [index] if crate::search_path::is_temp_schema(&schema.schema_name) => {
+                        relation_name_from_parts(&[schema.schema_name.clone(), index.clone()])
+                    }
+                    _ => index_relation_name(name),
+                }
+            })
             .transpose()?
             .map_or_else(
                 || {

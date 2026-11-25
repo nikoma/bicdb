@@ -219,7 +219,10 @@ impl<'db> SqlEngine<'db> {
                             Some(column) => values.get(column).cloned().unwrap_or(SqlValue::Null),
                             None => match self.eval_row_value(&row, &order.expr) {
                                 Ok(value) => enforce_integer_value_type(value, pg_type)?,
-                                Err(error @ SqlError::DataException { .. }) => return Err(error),
+                                Err(
+                                    error @ (SqlError::DataException { .. }
+                                    | SqlError::Detailed { .. }),
+                                ) => return Err(error),
                                 Err(_) => SqlValue::Null,
                             },
                         };

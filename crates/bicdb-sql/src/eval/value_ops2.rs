@@ -2889,7 +2889,28 @@ pub(crate) fn apply_pg_type_modifier_with_context(
     numeric
         .with_typmod(*precision, *scale)
         .map(|value| SqlValue::String(value.to_decimal_text()))
-        .map_err(|_| SqlError::numeric_value_out_of_range("numeric field overflow"))
+        .map_err(|_| numeric_field_overflow(i32::from(*precision), i32::from(*scale)))
+}
+
+/// `numeric field overflow` with PostgreSQL's DETAIL for a NUMERIC(p,s).
+pub(crate) fn numeric_field_overflow(precision: i32, scale: i32) -> SqlError {
+    let error = SqlError::numeric_value_out_of_range("numeric field overflow");
+    let detail = if precision > scale {
+        format!(
+            "A field with precision {precision}, scale {scale} must round to an absolute value less than 10^{}.",
+            precision - scale
+        )
+    } else if precision == scale {
+        format!(
+            "A field with precision {precision}, scale {scale} must round to an absolute value less than 1."
+        )
+    } else {
+        format!(
+            "A field with precision {precision}, scale {scale} must round to an absolute value less than 10^-{}.",
+            scale - precision
+        )
+    };
+    SqlError::with_detail(error, detail)
 }
 
 /// Apply the element modifier without changing dimensions or lower bounds.

@@ -181,7 +181,10 @@ impl<'db> SqlEngine<'db> {
     /// The built-in function table with this engine's database, session and
     /// transaction: the same table row evaluation ends in, so a FROM-less
     /// SELECT resolves every function a SELECT with FROM does.
-    pub(crate) fn eval_engine_builtin_function_value(&self, function: &Function) -> Result<SqlValue> {
+    pub(crate) fn eval_engine_builtin_function_value(
+        &self,
+        function: &Function,
+    ) -> Result<SqlValue> {
         let name = object_name(&function.name)?.to_ascii_lowercase();
         let arg_exprs = function_arg_list(function);
         let arg_types = arg_exprs
@@ -3660,10 +3663,9 @@ impl<'db> SqlEngine<'db> {
                 .iter()
                 .map(|arg| self.infer_env_expr_type(arg, env))
                 .collect::<Vec<_>>();
-            if let Some(pg_type) = crate::pg_functions_more::pg_function_more_result_type(
-                bare_name,
-                &arg_types,
-            ) {
+            if let Some(pg_type) =
+                crate::pg_functions_more::pg_function_more_result_type(bare_name, &arg_types)
+            {
                 return Some(pg_type);
             }
         }

@@ -132,7 +132,11 @@ fn numeric_fraction(text: &str) -> Option<&str> {
     ) {
         return None;
     }
-    Some(text.split_once('.').map(|(_, fraction)| fraction).unwrap_or(""))
+    Some(
+        text.split_once('.')
+            .map(|(_, fraction)| fraction)
+            .unwrap_or(""),
+    )
 }
 
 fn numeric_text(value: &SqlValue) -> String {
@@ -206,11 +210,7 @@ fn char_position(text: &str, byte_offset: usize) -> i64 {
 }
 
 /// Successive non-overlapping matches from byte offset `from`.
-fn matches_from<'t>(
-    regex: &regex::Regex,
-    text: &'t str,
-    from: usize,
-) -> Vec<regex::Captures<'t>> {
+fn matches_from<'t>(regex: &regex::Regex, text: &'t str, from: usize) -> Vec<regex::Captures<'t>> {
     let mut found = Vec::new();
     let mut at = from;
     while at <= text.len() {
@@ -265,11 +265,7 @@ pub(crate) fn eval_pg_function_more(
                 "to_oct" => 8,
                 _ => 2,
             };
-            SqlValue::String(radix_text(
-                value,
-                integer_width(value, arg_type(0)),
-                radix,
-            ))
+            SqlValue::String(radix_text(value, integer_width(value, arg_type(0)), radix))
         }
         ("gcd" | "lcm", 2) => {
             if arg_types.is_some_and(|types| {
@@ -529,9 +525,13 @@ mod tests {
             SqlValue::String("11111111111111111111101100101110".into())
         );
         assert_eq!(
-            eval_pg_function_more("to_hex", &[SqlValue::Int(-1234)], Some(&[Some("int8".into())]))
-                .unwrap()
-                .unwrap(),
+            eval_pg_function_more(
+                "to_hex",
+                &[SqlValue::Int(-1234)],
+                Some(&[Some("int8".into())])
+            )
+            .unwrap()
+            .unwrap(),
             SqlValue::String("fffffffffffffb2e".into())
         );
         assert_eq!(
@@ -542,10 +542,12 @@ mod tests {
             call("lcm", &[SqlValue::Int(4), SqlValue::Int(-6)]),
             SqlValue::Int(12)
         );
-        assert!(
-            eval_pg_function_more("gcd", &[SqlValue::Int(-2147483648), SqlValue::Int(0)], None)
-                .is_err()
-        );
+        assert!(eval_pg_function_more(
+            "gcd",
+            &[SqlValue::Int(-2147483648), SqlValue::Int(0)],
+            None
+        )
+        .is_err());
     }
 
     #[test]

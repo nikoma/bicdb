@@ -283,10 +283,10 @@ mod hstore;
 mod inheritance;
 mod only_rewrite;
 mod persistence_ddl;
-mod pg_scalar_extra;
 mod pgcrypto;
 mod quantified_operators;
 mod pg_functions_more;
+mod pg_scalar_extra;
 mod records;
 mod routine_srf_projection;
 mod row_types;
@@ -2179,6 +2179,14 @@ pub enum SqlError {
     #[error(transparent)]
     Rethrown(Arc<SqlError>),
 
+    /// An error with PostgreSQL's DETAIL and HINT lines.
+    #[error("{error}")]
+    Detailed {
+        error: Box<SqlError>,
+        detail: Option<String>,
+        hint: Option<String>,
+    },
+
     /// Diagnostics emitted before a failing statement still belong to its caller.
     #[error("{error}")]
     WithNotices {
@@ -2284,6 +2292,15 @@ impl SqlError {
             sqlstate: "22P02",
             message: format!("invalid input syntax for type {data_type}: {detail}"),
             data_type: Some(data_type),
+        }
+    }
+
+    /// `error` with PostgreSQL's DETAIL line.
+    pub fn with_detail(error: SqlError, detail: impl Into<String>) -> Self {
+        Self::Detailed {
+            error: Box::new(error),
+            detail: Some(detail.into()),
+            hint: None,
         }
     }
 
@@ -2465,6 +2482,7 @@ impl SqlError {
     pub fn sqlstate(&self) -> &str {
         match self {
             Self::WithNotices { error, .. } => error.sqlstate(),
+            Self::Detailed { error, .. } => error.sqlstate(),
             Self::OracleError { sqlstate, .. } => sqlstate,
             Self::OracleContext { inner, .. } => inner.sqlstate(),
             Self::Rethrown(error) => error.sqlstate(),
@@ -2503,6 +2521,16 @@ impl SqlError {
     pub fn fields(&self) -> Vec<SqlErrorField> {
         match self {
             Self::WithNotices { error, .. } => error.fields(),
+            Self::Detailed {
+                error,
+                detail,
+                hint,
+            } => {
+                let mut fields = error.fields();
+                fields.extend(detail.clone().map(SqlErrorField::Detail));
+                fields.extend(hint.clone().map(SqlErrorField::Hint));
+                fields
+            }
             Self::OracleError { .. } => vec![SqlErrorField::Detail(
                 oracle::errors::transport_detail(self),
             )],

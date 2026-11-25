@@ -229,6 +229,11 @@ pub(crate) fn relation_name_from_parts(parts: &[String]) -> Result<String> {
         // encoded into a physical collection name.
         [schema, table] if schema == "bicdb_projection" => Ok(format!("bicdb_projection.{table}")),
         [schema, table] if schema == "public" && direct_name(table) => Ok(table.clone()),
+        // `pg_temp` names the session's own temporary schema.
+        [schema, table] if schema == "pg_temp" => match crate::search_path::active_temp_schema() {
+            Some(temp) => relation_name_from_parts(&[temp, table.clone()]),
+            None => relation_name_from_parts(&["pg_temp_".to_string(), table.clone()]),
+        },
         [schema, table] => {
             // Core collections have no schema dimension. Encode a
             // non-public SQL schema, or a quoted public name that cannot be

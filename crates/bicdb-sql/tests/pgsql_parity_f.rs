@@ -295,3 +295,168 @@ fn vacuum_skips_views_and_foreign_tables_with_postgres_warnings() {
         );
     }
 }
+
+#[derive(Debug)]
+struct TestBackend(i32);
+
+impl bicdb_sql::SqlSessionRuntime for TestBackend {
+    fn backend_pid(&self) -> i32 {
+        self.0
+    }
+
+    fn execute_advisory_lock(
+        &self,
+        _name: &str,
+        _args: &[SqlValue],
+        _cancellation: &bicdb_core::CancellationToken,
+    ) -> bicdb_sql::Result<Option<SqlValue>> {
+        Ok(None)
+    }
+
+    fn advisory_lock_rows(
+        &self,
+        _database_oid: i64,
+    ) -> Vec<std::collections::BTreeMap<String, SqlValue>> {
+        Vec::new()
+    }
+}
+
+fn rows(sql: &mut SqlSession<'_>, statement: &str) -> Vec<Vec<SqlValue>> {
+    sql.execute(statement)
+        .unwrap_or_else(|error| panic!("{statement}: {error}"))
+        .rows
+}
+
+#[test]
+fn temporary_tables_shadow_permanent_ones_and_end_with_the_session() {
+    let (_dir, mut db) = open();
+    {
+        let mut sql = SqlSession::new(&mut db).with_runtime(std::sync::Arc::new(TestBackend(7)));
+        sql.execute("CREATE TABLE tt_shadow (col int)").unwrap();
+        sql.execute("INSERT INTO tt_shadow VALUES (1)").unwrap();
+        sql.execute("CREATE INDEX i_tt_shadow ON tt_shadow (col)")
+            .unwrap();
+        sql.execute("CREATE TEMP TABLE tt_shadow (tcol float8)")
+            .unwrap();
+        sql.execute("CREATE INDEX i_tt_shadow ON tt_shadow (tcol)")
+            .unwrap();
+        sql.execute("INSERT INTO tt_shadow VALUES (2.5)").unwrap();
+        assert_eq!(
+            rows(&mut sql, "SELECT * FROM tt_shadow"),
+            [[SqlValue::Float(2.5)]]
+        );
+        assert_eq!(
+            rows(&mut sql, "SELECT * FROM public.tt_shadow"),
+            [[SqlValue::Int(1)]]
+        );
+        assert_eq!(
+            rows(&mut sql, "SELECT * FROM pg_temp.tt_shadow"),
+            [[SqlValue::Float(2.5)]]
+        );
+        assert_eq!(
+            rows(&mut sql, "SELECT current_schema()"),
+            [[SqlValue::String("public".into())]]
+        );
+        assert_eq!(
+            rows(
+                &mut sql,
+                "SELECT c.relpersistence::text, n.nspname::text FROM pg_class c \
+                 JOIN pg_namespace n ON n.oid = c.relnamespace \
+                 WHERE c.relname = 'tt_shadow' ORDER BY 1"
+            ),
+            [
+                [
+                    SqlValue::String("p".into()),
+                    SqlValue::String("public".into())
+                ],
+                [
+                    SqlValue::String("t".into()),
+                    SqlValue::String("pg_temp_7".into())
+                ],
+            ]
+        );
+        // DROP finds the temporary relations first, then the permanent ones.
+        sql.execute("DROP INDEX i_tt_shadow").unwrap();
+        sql.execute("DROP TABLE tt_shadow").unwrap();
+        assert_eq!(
+            rows(&mut sql, "SELECT * FROM tt_shadow"),
+            [[SqlValue::Int(1)]]
+        );
+        sql.execute("CREATE TEMP TABLE tt_session (a int)").unwrap();
+        sql.execute("INSERT INTO tt_session VALUES (3)").unwrap();
+        // A new permanent table never lands in the temporary schema.
+        sql.execute("CREATE TABLE tt_permanent (a int)").unwrap();
+        assert_eq!(
+            rows(
+                &mut sql,
+                "SELECT n.nspname::text FROM pg_class c JOIN pg_namespace n \
+                 ON n.oid = c.relnamespace WHERE c.relname = 'tt_permanent'"
+            ),
+            [[SqlValue::String("public".into())]]
+        );
+    }
+    assert!(bicdb_sql::temp_schema_exists(&db, 7));
+    assert!(bicdb_sql::drop_connection_temp_schema(&mut db, 7).unwrap());
+    assert!(!bicdb_sql::temp_schema_exists(&db, 7));
+    let mut sql = SqlSession::new(&mut db).with_runtime(std::sync::Arc::new(TestBackend(8)));
+    let error = sql.execute("SELECT * FROM tt_session").unwrap_err();
+    assert_eq!(error.sqlstate(), "42P01", "{error}");
+    sql.execute("CREATE TEMP TABLE tt_session (a int)").unwrap();
+    sql.execute("DISCARD TEMP").unwrap();
+    assert_eq!(
+        sql.execute("SELECT * FROM tt_session")
+            .unwrap_err()
+            .sqlstate(),
+        "42P01"
+    );
+}
+
+#[test]
+fn temporary_table_placement_errors_match_postgres() {
+    let (_dir, mut db) = open();
+    let mut sql = SqlSession::new(&mut db).with_runtime(std::sync::Arc::new(TestBackend(9)));
+    sql.execute("CREATE SCHEMA tt_s").unwrap();
+    for (statement, sqlstate, message) in [
+        (
+            "CREATE TEMP TABLE tt_s.t (a int)",
+            "42P16",
+            "cannot create temporary relation in non-temporary schema",
+        ),
+        (
+            "CREATE TABLE tt_oc (a int) ON COMMIT DELETE ROWS",
+            "42P16",
+            "ON COMMIT can only be used on temporary tables",
+        ),
+        (
+            "CREATE TEMP TABLE tt_oc (a int) ON COMMIT DROP",
+            "0A000",
+            "unsupported SQL: ON COMMIT DROP is not supported",
+        ),
+    ] {
+        let error = sql.execute(statement).unwrap_err();
+        assert_eq!(error.sqlstate(), sqlstate, "{statement}");
+        assert_eq!(error.to_string(), message, "{statement}");
+    }
+    sql.execute("CREATE TEMP TABLE tt_ok (a int) ON COMMIT PRESERVE ROWS")
+        .unwrap();
+    sql.execute("CREATE TABLE pg_temp.tt_explicit (a int)")
+        .unwrap();
+    assert_eq!(
+        rows(
+            &mut sql,
+            "SELECT relpersistence::text FROM pg_class WHERE relname = 'tt_explicit'"
+        ),
+        [[SqlValue::String("t".into())]]
+    );
+}
+
+#[test]
+fn orphan_temporary_schemas_are_dropped() {
+    let (_dir, mut db) = open();
+    {
+        let mut sql = SqlSession::new(&mut db).with_runtime(std::sync::Arc::new(TestBackend(11)));
+        sql.execute("CREATE TEMP TABLE tt_orphan (a int)").unwrap();
+    }
+    assert_eq!(bicdb_sql::drop_orphan_temp_schemas(&mut db).unwrap(), 1);
+    assert!(!bicdb_sql::temp_schema_exists(&db, 11));
+}

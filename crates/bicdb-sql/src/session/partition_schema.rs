@@ -107,11 +107,22 @@ impl SqlSession<'_> {
         } else {
             None
         };
-        let constraints = column_constraints_from_def(
+        let mut constraints = column_constraints_from_def(
             &schema.name,
             definition,
             &column,
             oracle::default_unique_null_policy(self.db_ref())?,
+        )?;
+        let own_keys = if schema.has_hidden_primary_key() {
+            Vec::new()
+        } else {
+            primary_key_columns_for_schema(schema)
+        };
+        resolve_implicit_foreign_key_references(
+            self.db_ref(),
+            &schema.name,
+            &own_keys,
+            &mut constraints,
         )?;
         self.require_reference_privilege(&schema.name, &constraints)?;
         let mut parent = schema.clone();

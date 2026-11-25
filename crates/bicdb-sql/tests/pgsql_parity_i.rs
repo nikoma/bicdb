@@ -165,4 +165,16 @@ fn alter_table_inherit_lists_and_not_null_no_inherit() {
         .execute("ALTER TABLE q ALTER CONSTRAINT q_c NO INHERIT")
         .unwrap_err();
     assert_eq!(error.sqlstate(), "42809");
+    // Several actions apply in order; a child cannot alter its copy.
+    session
+        .execute(
+            "ALTER TABLE q ALTER CONSTRAINT q_a_not_null INHERIT,
+               ALTER CONSTRAINT q_a_not_null NO INHERIT;
+             CREATE TABLE q2 () INHERITS (q)",
+        )
+        .unwrap();
+    let error = session
+        .execute("ALTER TABLE q2 ALTER CONSTRAINT q_a_not_null INHERIT")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42P16");
 }

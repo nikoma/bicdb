@@ -15,12 +15,12 @@ pub(crate) enum ConstraintCommand {
         names: Option<Vec<Vec<String>>>,
         deferred: bool,
     },
-    /// `ALTER TABLE t ALTER CONSTRAINT c [NO] INHERIT` (not-null only).
+    /// `ALTER TABLE t ALTER CONSTRAINT c [NO] INHERIT[, ...]` (not-null
+    /// constraints only), applied in order.
     Inherit {
         table: String,
-        name: String,
+        actions: Vec<(String, bool)>,
         if_exists: bool,
-        inherit: bool,
     },
 }
 
@@ -116,25 +116,46 @@ pub(crate) fn parse_constraint_command(sql: &str) -> Result<Option<ConstraintCom
                 "ALTER CONSTRAINT requires an unqualified constraint name".into(),
             ));
         }
-        let inherit = if tokens.keyword("INHERIT") {
-            Some(true)
-        } else if tokens.values.get(tokens.at).is_some_and(|token| {
-            matches!(token, Token::Word(word) if word.quote_style.is_none() && word.value.eq_ignore_ascii_case("NO"))
-        }) && tokens.values.get(tokens.at + 1).is_some_and(|token| {
-            matches!(token, Token::Word(word) if word.quote_style.is_none() && word.value.eq_ignore_ascii_case("INHERIT"))
-        }) {
-            tokens.at += 2;
-            Some(false)
-        } else {
-            None
-        };
-        if let Some(inherit) = inherit {
+        // `[NO] INHERIT`, possibly several `ALTER CONSTRAINT c [NO] INHERIT`
+        // actions separated by commas.
+        fn inherit_action(tokens: &mut Tokens) -> Option<bool> {
+            let word = |token: Option<&Token>, expected: &str| {
+                matches!(token, Some(Token::Word(word))
+                    if word.quote_style.is_none() && word.value.eq_ignore_ascii_case(expected))
+            };
+            if word(tokens.values.get(tokens.at), "INHERIT") {
+                tokens.at += 1;
+                Some(true)
+            } else if word(tokens.values.get(tokens.at), "NO")
+                && word(tokens.values.get(tokens.at + 1), "INHERIT")
+            {
+                tokens.at += 2;
+                Some(false)
+            } else {
+                None
+            }
+        }
+        if let Some(inherit) = inherit_action(&mut tokens) {
+            let mut actions = vec![(name[0].clone(), inherit)];
+            while tokens.values.get(tokens.at) == Some(&Token::Comma) {
+                tokens.at += 1;
+                if !tokens.keyword("ALTER") || !tokens.keyword("CONSTRAINT") {
+                    return Ok(None);
+                }
+                let name = tokens.identifier()?;
+                let [name] = name.as_slice() else {
+                    return Ok(None);
+                };
+                let Some(inherit) = inherit_action(&mut tokens) else {
+                    return Ok(None);
+                };
+                actions.push((name.clone(), inherit));
+            }
             tokens.finish()?;
             return Ok(Some(ConstraintCommand::Inherit {
                 table: relation_name_from_parts(&table)?,
-                name: name[0].clone(),
+                actions,
                 if_exists,
-                inherit,
             }));
         }
         let deferrable = if tokens.keyword("NOT") {
@@ -469,10 +490,28 @@ impl<'db> SqlSession<'db> {
             })
             .map(|column| column.name.clone());
         let Some(column) = column else {
-            let exists = schema
-                .constraints
-                .iter()
-                .any(|constraint| constraint_name(constraint) == name);
+            // A child's copy of a parent's not-null constraint carries the
+            // parent's name and cannot change on its own.
+            for parent in &schema.inherits {
+                let Some(parent_schema) = load_schema(self.db_ref(), parent)? else {
+                    continue;
+                };
+                let inherited = parent_schema.columns.iter().any(|column| {
+                    !column.hidden
+                        && (!column.nullable || column.primary_key)
+                        && not_null_constraint_name(&parent_schema.name, &column.name) == name
+                });
+                if inherited {
+                    return Err(SqlError::data_exception_public(
+                        "42P16",
+                        format!(
+                            "cannot alter inherited constraint \"{name}\" on relation \"{display}\""
+                        ),
+                        None,
+                    ));
+                }
+            }
+            let exists = crate::ddl_alter::table_constraint_name_exists(&schema, name);
             return Err(if exists {
                 SqlError::data_exception_public(
                     "42809",
@@ -577,10 +616,15 @@ impl<'db> SqlSession<'db> {
             }
             ConstraintCommand::Inherit {
                 table,
-                name,
+                actions,
                 if_exists,
-                inherit,
-            } => self.alter_not_null_inheritance(&table, &name, if_exists, inherit),
+            } => {
+                let mut result = SqlResult::command("ALTER TABLE");
+                for (name, inherit) in actions {
+                    result = self.alter_not_null_inheritance(&table, &name, if_exists, inherit)?;
+                }
+                Ok(result)
+            }
             ConstraintCommand::Set { names, deferred } => {
                 let schemas = list_schemas(self.db_ref())?;
                 let mut selected = Vec::new();

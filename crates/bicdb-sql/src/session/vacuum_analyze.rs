@@ -164,6 +164,10 @@ pub(crate) fn parse_vacuum_statement(sql: &str) -> Result<Option<VacuumStatement
     } else if keyword(tokens.get(at), "verbose") {
         at += 1;
     }
+    // BicDB has long accepted `ANALYZE TABLE t`; keep it.
+    if !vacuum && keyword(tokens.get(at), "table") && tokens.len() > at + 1 {
+        at += 1;
+    }
     while at < tokens.len() {
         if keyword(tokens.get(at), "only") {
             at += 1;

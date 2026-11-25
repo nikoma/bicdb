@@ -173,7 +173,7 @@ pub(crate) fn eval_db_catalog_function_value(
 /// table hidden by an earlier schema's relation of the same name, or in a
 /// schema off the path, is not visible. `None` when the OID is not a table.
 fn table_is_visible(db: &BicDb, oid: &SqlValue) -> Result<Option<SqlValue>> {
-    let Some(oid) = sql_value_i64(oid) else {
+    let Some(oid) = sql_value_i64(oid).or_else(|| oid.to_cell().trim().parse::<i64>().ok()) else {
         return Ok(Some(SqlValue::Null));
     };
     let Some(schema) = list_schemas(db)?
@@ -204,6 +204,26 @@ pub(crate) fn eval_db_catalog_function_value_with_engine(
     query_engine: Option<&SqlEngine<'_>>,
 ) -> Result<Option<SqlValue>> {
     let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(name);
+    if bare_name == "pg_partition_ancestors" && args.len() == 1 {
+        if let Some(oid) =
+            sql_value_i64(&args[0]).or_else(|| args[0].to_cell().trim().parse::<i64>().ok())
+        {
+            if let Some(schema) = list_schemas(db)?
+                .into_iter()
+                .find(|schema| table_relation_oid(schema) == oid)
+            {
+                // A table outside a partition tree is its only ancestor; a
+                // partition's chain is a set, which this scalar form cannot
+                // return.
+                if schema.partition_of.is_some() {
+                    return Err(SqlError::Unsupported(
+                        "pg_partition_ancestors of a partition is not supported".to_string(),
+                    ));
+                }
+                return Ok(Some(SqlValue::Int(oid)));
+            }
+        }
+    }
     if bare_name == "pg_table_is_visible" && args.len() == 1 {
         if let Some(visible) = table_is_visible(db, &args[0])? {
             return Ok(Some(visible));

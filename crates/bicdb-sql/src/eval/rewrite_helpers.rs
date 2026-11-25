@@ -537,6 +537,49 @@ pub(crate) fn rewrite_select_top_identifiers(sql: &str) -> Option<String> {
     Some(rewritten)
 }
 
+/// `pg_catalog.unnest(...)` is the built-in `unnest`, which the parser only
+/// recognizes as a table function (`FROM unnest(...)`) unqualified; psql's
+/// describe queries qualify it.
+pub(crate) fn rewrite_qualified_unnest_calls(sql: &str) -> Option<String> {
+    if !sql.to_ascii_lowercase().contains("pg_catalog.unnest") {
+        return None;
+    }
+    let tokens = tokens_with_source(&sqlparser::dialect::PostgreSqlDialect {}, sql)?;
+    let significant = |index: usize| {
+        tokens[index..]
+            .iter()
+            .position(|(token, _)| !matches!(token, Token::Whitespace(_)))
+            .map(|offset| index + offset)
+    };
+    let mut out = String::with_capacity(sql.len());
+    let mut changed = false;
+    let mut index = 0;
+    while index < tokens.len() {
+        let (token, source) = &tokens[index];
+        if let Token::Word(word) = token {
+            if word.quote_style.is_none() && word.value.eq_ignore_ascii_case("pg_catalog") {
+                let dot = index + 1;
+                if matches!(tokens.get(dot), Some((Token::Period, _))) {
+                    if let Some((Token::Word(name), _)) = tokens.get(dot + 1) {
+                        let call = significant(dot + 2);
+                        if name.quote_style.is_none()
+                            && name.value.eq_ignore_ascii_case("unnest")
+                            && call.is_some_and(|call| matches!(tokens[call].0, Token::LParen))
+                        {
+                            index = dot + 1;
+                            changed = true;
+                            continue;
+                        }
+                    }
+                }
+            }
+        }
+        out.push_str(source);
+        index += 1;
+    }
+    changed.then_some(out)
+}
+
 pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
     let mut rewritten = sql.to_string();
     let mut changed = false;
@@ -547,6 +590,11 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
     }
 
     if let Some(next) = crate::engine::flashback::rewrite_flashback_clauses(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
+    if let Some(next) = rewrite_qualified_unnest_calls(&rewritten) {
         rewritten = next;
         changed = true;
     }

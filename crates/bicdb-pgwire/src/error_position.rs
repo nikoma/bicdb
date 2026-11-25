@@ -504,10 +504,44 @@ impl QueryText {
     }
 
     fn literal_reference(&self, value: &str) -> Option<usize> {
-        self.literals
+        let (offset, _) = self.literals.iter().find(|(_, content)| content == value)?;
+        // `'x'::text::bool`: the literal itself is valid text; the failing
+        // conversion runs on a value at execution time, with no location.
+        (!self.cast_to_text_after_literal(*offset)).then_some(offset + 1)
+    }
+
+    fn cast_to_text_after_literal(&self, literal: usize) -> bool {
+        let mut index = literal;
+        while index < self.chars.len() && self.masked[index] {
+            index += 1;
+        }
+        let rest = self.chars[index..]
             .iter()
-            .find(|(_, content)| content == value)
-            .map(|(offset, _)| offset + 1)
+            .collect::<String>()
+            .trim_start()
+            .to_ascii_lowercase();
+        let Some(cast) = rest.strip_prefix("::") else {
+            return false;
+        };
+        let cast = cast.trim_start();
+        [
+            "text",
+            "varchar",
+            "name",
+            "bpchar",
+            "character",
+            "char",
+            "\"char\"",
+        ]
+        .iter()
+        .any(|target| {
+            cast.strip_prefix(target).is_some_and(|after| {
+                after
+                    .chars()
+                    .next()
+                    .is_none_or(|c| !(c.is_alphanumeric() || c == '_'))
+            })
+        })
     }
 
     fn unique_token(&self, token: &str) -> Option<usize> {
@@ -663,6 +697,14 @@ mod tests {
                 "value \"100000\" is out of range for type smallint"
             ),
             Some(23)
+        );
+        assert_eq!(
+            error_position(
+                "SELECT '  tru e '::text::boolean AS invalid",
+                "22P02",
+                "invalid input syntax for type boolean: \"  tru e \""
+            ),
+            None
         );
         // No literal with that text: the value came from data.
         assert_eq!(

@@ -648,6 +648,14 @@ impl<'db> SqlSession<'db> {
             )?
             else {
                 if drop_function.if_exists {
+                    crate::statement_context::report_notice(
+                        None,
+                        "00000",
+                        format!(
+                            "function {} does not exist, skipping",
+                            routine_signature_for_notice(desc)
+                        ),
+                    );
                     continue;
                 }
                 return Err(SqlError::undefined_function(format!(
@@ -748,6 +756,16 @@ impl<'db> SqlSession<'db> {
                     "procedure \"{name}\" does not exist"
                 )));
             }
+            if !existed {
+                crate::statement_context::report_notice(
+                    None,
+                    "00000",
+                    format!(
+                        "procedure {} does not exist, skipping",
+                        routine_signature_for_notice(desc)
+                    ),
+                );
+            }
         }
         Ok(SqlResult::command("DROP PROCEDURE"))
     }
@@ -770,6 +788,16 @@ impl<'db> SqlSession<'db> {
             return Err(SqlError::InvalidSql(format!(
                 "trigger \"{name}\" does not exist"
             )));
+        }
+        if !existed {
+            let message = match &table_name {
+                Some(table) => format!(
+                    "trigger \"{name}\" for relation \"{}\" does not exist, skipping",
+                    relation_name_for_message(table)
+                ),
+                None => format!("trigger \"{name}\" does not exist, skipping"),
+            };
+            crate::statement_context::report_notice(None, "00000", message);
         }
         Ok(SqlResult::command("DROP TRIGGER"))
     }
@@ -1153,9 +1181,9 @@ impl<'db> SqlSession<'db> {
         }
         if let [arbiter] = arbiters.as_slice() {
             let mut seen = BTreeSet::new();
-            for (id, _, _) in &rows {
+            for (id, _, cells) in &rows {
                 if !seen.insert(id.as_str()) {
-                    return Err(unique_violation(schema, &arbiter.name));
+                    return Err(unique_cells_violation(schema, arbiter, cells));
                 }
                 sql_profile_index_lookup();
             }
@@ -1164,13 +1192,15 @@ impl<'db> SqlSession<'db> {
                     table,
                     rows.iter().map(|(id, _, _)| id.as_str()),
                 )?;
-                if existing.into_iter().any(|exists| exists) {
-                    return Err(unique_violation(schema, &arbiter.name));
+                if let Some(((_, _, cells), _)) =
+                    rows.iter().zip(existing).find(|(_, exists)| *exists)
+                {
+                    return Err(unique_cells_violation(schema, arbiter, cells));
                 }
             } else {
-                for (id, _, _) in &rows {
+                for (id, _, cells) in &rows {
                     if self.db_ref().get_unchecked(table, id)?.is_some() {
-                        return Err(unique_violation(schema, &arbiter.name));
+                        return Err(unique_cells_violation(schema, arbiter, cells));
                     }
                 }
             }
@@ -3614,4 +3644,41 @@ pub(crate) fn insert_reads_target(insert: &Insert) -> bool {
                 if on_conflict.conflict_target.is_some()
                     || matches!(on_conflict.action, OnConflictAction::DoUpdate(_))
         )
+}
+
+/// `name(pg_catalog.int4, text)` of a routine named in DROP, as PostgreSQL
+/// prints a routine it skips: SQL keyword types are qualified by their
+/// catalog names; other types are printed as written.
+pub(crate) fn routine_signature_for_notice(desc: &FunctionDesc) -> String {
+    use sqlparser::ast::{DataType, TimezoneInfo};
+    let args = desc
+        .args
+        .iter()
+        .flatten()
+        .filter(|arg| !matches!(arg.mode, Some(sqlparser::ast::ArgMode::Out)))
+        .map(|arg| match &arg.data_type {
+            DataType::Int(_) | DataType::Integer(_) => "pg_catalog.int4".to_string(),
+            DataType::BigInt(_) => "pg_catalog.int8".to_string(),
+            DataType::SmallInt(_) => "pg_catalog.int2".to_string(),
+            DataType::Real => "pg_catalog.float4".to_string(),
+            DataType::DoublePrecision => "pg_catalog.float8".to_string(),
+            DataType::Boolean => "pg_catalog.bool".to_string(),
+            DataType::Numeric(_) | DataType::Decimal(_) => "pg_catalog.numeric".to_string(),
+            DataType::Varchar(_) | DataType::CharacterVarying(_) => {
+                "pg_catalog.varchar".to_string()
+            }
+            DataType::Char(_) | DataType::Character(_) => "pg_catalog.bpchar".to_string(),
+            DataType::Timestamp(_, TimezoneInfo::WithTimeZone) => {
+                "pg_catalog.timestamptz".to_string()
+            }
+            DataType::Timestamp(_, _) => "pg_catalog.timestamp".to_string(),
+            DataType::Interval { .. } => "pg_catalog.interval".to_string(),
+            other => other.to_string().to_ascii_lowercase(),
+        })
+        .collect::<Vec<_>>();
+    format!(
+        "{}({})",
+        normalize_object_name(&desc.name.to_string()),
+        args.join(", ")
+    )
 }

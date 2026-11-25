@@ -203,10 +203,7 @@ impl SqlSession<'_> {
                 .get_raw_record_cached(&target.name, &record.id)?
                 .is_some()
             {
-                return Err(unique_violation(
-                    &target,
-                    &target.primary_key_constraint_name(),
-                ));
+                return Err(partition_primary_key_violation(&target, &record));
             }
             validate_records_for_write(
                 self.db_ref(),
@@ -387,11 +384,19 @@ impl SqlSession<'_> {
             if matches!(value, SqlValue::Null) {
                 return Err(constraint_violation(
                     "23502",
-                    format!("null value in column \"{key}\" violates not-null constraint"),
+                    format!(
+                        "null value in column \"{key}\" of relation \"{}\" violates not-null constraint",
+                        catalog_display_name(&schema.name)
+                    ),
                     Some(schema.name.clone()),
                     Some(key.clone()),
                     Some(not_null_constraint_name(&schema.name, &key)),
-                ));
+                )
+                .with_error_detail(crate::error_detail::failing_row_detail(
+                    &schema.name,
+                    schema,
+                    record,
+                )));
             }
             fields.insert(key, value);
         }
@@ -484,10 +489,7 @@ impl SqlSession<'_> {
                     .get_raw_record_cached(&target.name, &after.id)?
                     .is_some()
                 {
-                    return Err(unique_violation(
-                        &target,
-                        &target.primary_key_constraint_name(),
-                    ));
+                    return Err(partition_primary_key_violation(&target, &after));
                 }
                 validate_records_for_write(
                     self.db_ref(),
@@ -622,4 +624,17 @@ impl SqlSession<'_> {
         }
         Ok(())
     }
+}
+
+/// The unique violation of a routed row whose primary key already exists in
+/// its destination partition, with PostgreSQL's `Key (...)=(...)` DETAIL.
+fn partition_primary_key_violation(target: &TableSchema, record: &Record) -> SqlError {
+    let columns = primary_key_columns_for_schema(target);
+    let values = record_column_values(record, target, &columns);
+    unique_key_violation(
+        target,
+        &target.primary_key_constraint_name(),
+        &UniqueKey::Columns(columns),
+        &values,
+    )
 }

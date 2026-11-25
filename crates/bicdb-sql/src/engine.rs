@@ -2069,6 +2069,7 @@ pub(crate) fn json_set_function_type_error(
         table: None,
         column: None,
         constraint: None,
+        detail: None,
     }
 }
 
@@ -5305,7 +5306,10 @@ impl<'db> SqlEngine<'db> {
     #[inline(never)]
     fn execute_grouping_sets_query(&self, query: &Query) -> Result<SqlResult> {
         let rewritten = Box::new(
-            crate::grouping_sets::rewrite_grouping_sets(query)?.expect("grouping sets query"),
+            crate::grouping_sets::rewrite_grouping_sets(query, &|relation| {
+                table_factor_column_names(self.db, relation)
+            })?
+            .expect("grouping sets query"),
         );
         self.execute_query(&rewritten)
     }
@@ -5317,6 +5321,11 @@ impl<'db> SqlEngine<'db> {
         }
         if let Some(rewritten) = normalize_fetch_clause(query)? {
             return self.execute_query(&rewritten);
+        }
+        // Before ORDER BY / GROUP BY positions are resolved: the grouping-sets
+        // rewrite maps positions to its own output columns.
+        if crate::grouping_sets::has_grouping_sets(query) {
+            return self.execute_grouping_sets_query(query);
         }
         self.check_cancellation()?;
         if let Some(rewritten) = rewrite_ordinal_order_by(query, &|relation| {
@@ -5351,10 +5360,6 @@ impl<'db> SqlEngine<'db> {
                     if limit == 0 { usize::MAX } else { limit },
                 );
             }
-        }
-
-        if crate::grouping_sets::has_grouping_sets(query) {
-            return self.execute_grouping_sets_query(query);
         }
 
         if !query.locks.is_empty() {

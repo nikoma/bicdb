@@ -2370,6 +2370,7 @@ where
             table: None,
             column: None,
             constraint: None,
+            detail: None,
         });
     }
     if jsonb_subscript {

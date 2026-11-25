@@ -474,6 +474,9 @@ impl<'db> SqlSession<'db> {
                 sequence.owned_by_column = parts.last().cloned();
             }
         }
+        if if_not_exists && load_sequence(self.db_ref(), &sequence.name)?.is_some() {
+            crate::statement_context::relation_exists_skipping(&sequence.name);
+        }
         self.create_session_sequence_if_missing(sequence, if_not_exists)?;
         Ok(SqlResult::command("CREATE SEQUENCE"))
     }
@@ -506,7 +509,14 @@ impl<'db> SqlSession<'db> {
         }
         let schema = load_schema(self.db_ref(), table)?;
         if let Some(schema) = &schema {
-            self.drop_table_inbound_foreign_keys(schema, dropping, cascade)?;
+            let views = self.views_depending_on_table(&schema.name, "table", dropping)?;
+            self.drop_table_inbound_foreign_keys(schema, dropping, cascade, &views)?;
+            if cascade {
+                // Dependents first: a view is dropped after the views on it.
+                for (view, _) in views.iter().rev() {
+                    self.delete_session_view(view)?;
+                }
+            }
             self.drop_table_row_type_dependents(schema, cascade)?;
             // Keep the exact backing until an explicit transaction
             // decides. Copying rows back on rollback assigns newer
@@ -554,10 +564,14 @@ impl<'db> SqlSession<'db> {
                     // ownership check: any authenticated role could delete
                     // any tenant's table.
                     self.require_table_ownership(&table, "drop it")?;
-                    if !self.drop_table_and_partitions(&table, &dropping, cascade, purge)?
-                        && !if_exists
-                    {
-                        return Err(SqlError::InvalidCollection(table));
+                    if !self.drop_table_and_partitions(&table, &dropping, cascade, purge)? {
+                        if !if_exists {
+                            return Err(SqlError::InvalidCollection(table));
+                        }
+                        crate::statement_context::notice_skipping_missing(
+                            "table",
+                            &relation_name_for_message(&table),
+                        );
                     }
                 }
                 Ok(SqlResult::command("DROP TABLE"))
@@ -643,6 +657,12 @@ impl<'db> SqlSession<'db> {
                             "sequence `{sequence}` does not exist"
                         )));
                     }
+                    if !existed {
+                        crate::statement_context::notice_skipping_missing(
+                            "sequence",
+                            &relation_name_for_message(&sequence),
+                        );
+                    }
                 }
                 Ok(SqlResult::command("DROP SEQUENCE"))
             }
@@ -656,6 +676,7 @@ impl<'db> SqlSession<'db> {
                     let Some(user_type) = load_user_type(self.db_ref(), &schema_name, &name)?
                     else {
                         if if_exists {
+                            crate::statement_context::notice_skipping_missing("type", &name);
                             continue;
                         }
                         return Err(SqlError::undefined_type(format!("{schema_name}.{name}")));
@@ -670,6 +691,10 @@ impl<'db> SqlSession<'db> {
                 Ok(SqlResult::command("DROP TYPE"))
             }
             ObjectType::View => {
+                let dropping = names
+                    .iter()
+                    .map(relation_name)
+                    .collect::<Result<Vec<_>>>()?;
                 for name in names {
                     let view = relation_name(name)?;
                     // Same hole the DROP TABLE gate above closed, left open on
@@ -679,9 +704,56 @@ impl<'db> SqlSession<'db> {
                         let owner = loaded.owner.unwrap_or_else(current_role_name);
                         self.require_object_ownership(&owner, &format!("view {view}"), "drop it")?;
                     }
+                    if load_view(self.db_ref(), &view)?.is_some() {
+                        let dependents = self.views_depending_on_table(&view, "view", &dropping)?;
+                        if !dependents.is_empty() {
+                            let shown = catalog_display_name(&view);
+                            if !cascade {
+                                return Err(SqlError::coded(
+                                    "2BP01",
+                                    format!(
+                                        "cannot drop view {shown} because other objects depend on it"
+                                    ),
+                                    Some(
+                                        dependents
+                                            .iter()
+                                            .map(|(dependent, on)| {
+                                                format!(
+                                                    "view {} depends on {on}",
+                                                    catalog_display_name(dependent)
+                                                )
+                                            })
+                                            .collect::<Vec<_>>()
+                                            .join("\n"),
+                                    ),
+                                    Some(
+                                        "Use DROP ... CASCADE to drop the dependent objects too."
+                                            .to_string(),
+                                    ),
+                                ));
+                            }
+                            crate::statement_context::notice_drop_cascades(
+                                &dependents
+                                    .iter()
+                                    .map(|(dependent, _)| {
+                                        format!("view {}", catalog_display_name(dependent))
+                                    })
+                                    .collect::<Vec<_>>(),
+                            );
+                            for (dependent, _) in dependents.iter().rev() {
+                                self.delete_session_view(dependent)?;
+                            }
+                        }
+                    }
                     let existed = self.delete_session_view(&view)?;
                     if !existed && !if_exists {
                         return Err(SqlError::InvalidCollection(view));
+                    }
+                    if !existed {
+                        crate::statement_context::notice_skipping_missing(
+                            "view",
+                            &relation_name_for_message(&view),
+                        );
                     }
                 }
                 Ok(SqlResult::command("DROP VIEW"))
@@ -701,6 +773,7 @@ impl<'db> SqlSession<'db> {
                     }
                     if !role_exists(self.db_ref(), &role)? {
                         if if_exists {
+                            crate::statement_context::notice_skipping_missing("role", &role);
                             continue;
                         }
                         return Err(SqlError::UndefinedRole { name: role });
@@ -841,6 +914,7 @@ impl<'db> SqlSession<'db> {
             }
             let Some(namespace) = load_namespace(self.db_ref(), &schema)? else {
                 if if_exists {
+                    crate::statement_context::notice_skipping_missing("schema", &schema);
                     continue;
                 }
                 return Err(SqlError::data_exception_public(
@@ -891,9 +965,10 @@ impl<'db> SqlSession<'db> {
                 operators,
             });
         }
+        let mut cascaded = Vec::new();
         for target in &targets {
             let schema = &target.namespace.name;
-            let mut objects = target
+            let objects = target
                 .tables
                 .iter()
                 .map(|table| format!("table {schema}.{}", catalog_display_name(table)))
@@ -923,9 +998,10 @@ impl<'db> SqlSession<'db> {
                         .operators
                         .iter()
                         .map(|operator| format!("operator {}", operator.id.display())),
-                );
+                )
+                .collect::<Vec<_>>();
             if !cascade {
-                if let Some(first) = objects.next() {
+                if let Some(first) = objects.first() {
                     return Err(SqlError::dependent_objects_still_exist(format!(
                         "cannot drop schema {schema} because other objects depend on it \
                          ({first} depends on schema {schema})"
@@ -973,6 +1049,23 @@ impl<'db> SqlSession<'db> {
                     "drop it",
                 )?;
             }
+            cascaded.push((target, objects));
+        }
+        // PostgreSQL lists the objects CASCADE drops; routines, types,
+        // operators and sequences (which may belong to a column) are printed
+        // differently there, so the list is reported only without them.
+        let reportable = cascaded.iter().all(|(target, _)| {
+            target.routines.is_empty()
+                && target.types.is_empty()
+                && target.operators.is_empty()
+                && target.sequences.is_empty()
+        });
+        if cascade && reportable {
+            let objects = cascaded
+                .into_iter()
+                .flat_map(|(_, objects)| objects)
+                .collect::<Vec<_>>();
+            crate::statement_context::notice_drop_cascades(&objects);
         }
         for target in targets {
             let schema = target.namespace.name.clone();
@@ -1068,16 +1161,118 @@ impl<'db> SqlSession<'db> {
     /// being dropped; with CASCADE only those constraints are dropped, never
     /// the referencing tables or their rows. Tables dropped by the same
     /// statement do not count.
+    /// The views that depend on `table` (directly or through other views),
+    /// each with the object it depends on (`table t`, `view v`), in the order
+    /// PostgreSQL reports them: each view followed by the views on it. Views
+    /// over tables that the same statement drops are not dependents, and an
+    /// Oracle-profile database keeps its views (they become invalid).
+    pub(crate) fn views_depending_on_table(
+        &self,
+        table: &str,
+        kind: &str,
+        dropping: &[String],
+    ) -> Result<Vec<(String, String)>> {
+        if oracle::is_oracle_database(self.db_ref())? {
+            return Ok(Vec::new());
+        }
+        let views = list_views(self.db_ref())?
+            .into_iter()
+            .filter(|view| !view.materialized)
+            .map(|view| {
+                let relations =
+                    super::view_dependencies::relations(&view.query_sql).unwrap_or_default();
+                (view.name, relations)
+            })
+            .collect::<Vec<_>>();
+        let mut found: Vec<(String, String)> = Vec::new();
+        fn visit(
+            views: &[(String, BTreeSet<String>)],
+            object: &str,
+            description: String,
+            dropping: &[String],
+            found: &mut Vec<(String, String)>,
+        ) {
+            for (view, relations) in views {
+                let depends = relations
+                    .iter()
+                    .any(|relation| relation.eq_ignore_ascii_case(object));
+                if depends
+                    && !found.iter().any(|(seen, _)| seen == view)
+                    && !dropping.iter().any(|name| name.eq_ignore_ascii_case(view))
+                {
+                    found.push((view.clone(), description.clone()));
+                    visit(
+                        views,
+                        view,
+                        format!("view {}", catalog_display_name(view)),
+                        dropping,
+                        found,
+                    );
+                }
+            }
+        }
+        visit(
+            &views,
+            table,
+            format!("{kind} {}", catalog_display_name(table)),
+            dropping,
+            &mut found,
+        );
+        Ok(found)
+    }
+
     pub(crate) fn drop_table_inbound_foreign_keys(
         &mut self,
         target: &TableSchema,
         dropping: &[String],
         cascade: bool,
+        views: &[(String, String)],
     ) -> Result<()> {
         let references_target = |constraint: &ConstraintSchema| {
             matches!(constraint, ConstraintSchema::ForeignKey { foreign_table, .. }
                 if foreign_table.eq_ignore_ascii_case(&target.name))
         };
+        let mut dependents = Vec::new();
+        for child in list_schemas(self.db_ref())? {
+            if child.name.eq_ignore_ascii_case(&target.name)
+                || dropping
+                    .iter()
+                    .any(|name| name.eq_ignore_ascii_case(&child.name))
+                || !child.constraints.iter().any(references_target)
+            {
+                continue;
+            }
+            for constraint in child.constraints.iter().filter(|c| references_target(c)) {
+                dependents.push(format!(
+                    "constraint {} on table {}",
+                    constraint_name(constraint),
+                    catalog_display_name(&child.name)
+                ));
+            }
+        }
+        let table = catalog_display_name(&target.name);
+        let mut depends = dependents
+            .iter()
+            .map(|dependent| format!("{dependent} depends on table {table}"))
+            .collect::<Vec<_>>();
+        for (view, on) in views {
+            dependents.push(format!("view {}", catalog_display_name(view)));
+            depends.push(format!(
+                "view {} depends on {on}",
+                catalog_display_name(view)
+            ));
+        }
+        if !dependents.is_empty() && cascade {
+            crate::statement_context::notice_drop_cascades(&dependents);
+        }
+        if !views.is_empty() && !cascade {
+            return Err(SqlError::coded(
+                "2BP01",
+                format!("cannot drop table {table} because other objects depend on it"),
+                Some(depends.join("\n")),
+                Some("Use DROP ... CASCADE to drop the dependent objects too.".to_string()),
+            ));
+        }
         for mut child in list_schemas(self.db_ref())? {
             if child.name.eq_ignore_ascii_case(&target.name)
                 || dropping
@@ -1095,10 +1290,12 @@ impl<'db> SqlSession<'db> {
                         "unique/primary keys in table referenced by foreign keys",
                     ));
                 }
-                return Err(SqlError::dependent_objects_still_exist(format!(
-                    "cannot drop table {} because other objects depend on it",
-                    catalog_display_name(&target.name)
-                )));
+                return Err(SqlError::coded(
+                    "2BP01",
+                    format!("cannot drop table {table} because other objects depend on it"),
+                    Some(depends.join("\n")),
+                    Some("Use DROP ... CASCADE to drop the dependent objects too.".to_string()),
+                ));
             }
             child
                 .constraints
@@ -1210,6 +1407,19 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_alter_table(&mut self, alter_table: &AlterTable) -> Result<SqlResult> {
+        if alter_table.if_exists {
+            let target = relation_name(&alter_table.name)?;
+            if load_schema(self.db_ref(), &target)?.is_none()
+                && load_view(self.db_ref(), &target)?.is_none()
+                && load_sequence(self.db_ref(), &target)?.is_none()
+            {
+                crate::statement_context::notice_skipping_missing(
+                    "relation",
+                    &relation_name_for_message(&target),
+                );
+                return Ok(SqlResult::command("ALTER TABLE"));
+            }
+        }
         // PostgreSQL accepts ALTER TABLE ... OWNER TO for a view (pg_dump
         // emits it for every view).
         if let [AlterTableOperation::OwnerTo { new_owner }] = alter_table.operations.as_slice() {
@@ -1267,9 +1477,19 @@ impl<'db> SqlSession<'db> {
                     ..
                 } => {
                     reject_postgres_system_column_name(&ident_value(&column_def.name))?;
-                    if !*if_not_exists || schema.column(&ident_value(&column_def.name)).is_none() {
-                        self.ensure_table_row_type_change_allowed(&schema)?;
+                    if *if_not_exists && schema.column(&ident_value(&column_def.name)).is_some() {
+                        crate::statement_context::report_notice(
+                            None,
+                            "42701",
+                            format!(
+                                "column \"{}\" of relation \"{}\" already exists, skipping",
+                                ident_value(&column_def.name),
+                                relation_name_for_message(&table)
+                            ),
+                        );
+                        continue;
                     }
+                    self.ensure_table_row_type_change_allowed(&schema)?;
                     if schema.partitioning.is_some()
                         && self.alter_partition_add_column(
                             &mut schema,
@@ -2039,7 +2259,12 @@ impl<'db> SqlSession<'db> {
                 }
                 let key = typed_unique_key_label(schema, &arbiter.key, &values)?;
                 if !seen.insert(key) {
-                    return Err(unique_violation(schema, &arbiter.name));
+                    return Err(unique_key_violation(
+                        schema,
+                        &arbiter.name,
+                        &arbiter.key,
+                        &values,
+                    ));
                 }
             }
         }
@@ -2273,7 +2498,14 @@ impl<'db> SqlSession<'db> {
                         }
                     }
                     if !found {
-                        return Err(foreign_key_violation(&local_schema.name, name));
+                        return Err(foreign_key_missing_violation(
+                            &local_schema.name,
+                            local_schema,
+                            name,
+                            columns,
+                            &key,
+                            foreign_table,
+                        ));
                     }
                 }
             }
@@ -2542,6 +2774,16 @@ impl<'db> SqlSession<'db> {
             return Err(SqlError::InvalidSql(format!(
                 "policy \"{name}\" for table \"{table}\" does not exist"
             )));
+        }
+        if schema.policies.len() == original_len {
+            crate::statement_context::report_notice(
+                None,
+                "00000",
+                format!(
+                    "policy \"{name}\" for relation \"{}\" does not exist, skipping",
+                    relation_name_for_message(&table)
+                ),
+            );
         }
         self.save_session_schema(&schema)?;
         Ok(SqlResult::command("DROP POLICY"))
@@ -3072,6 +3314,7 @@ impl<'db> SqlSession<'db> {
             .collect::<Result<Vec<_>>>()?;
         if schema.indexes.iter().any(|index| index.name == index_name) {
             if create_index.if_not_exists {
+                crate::statement_context::relation_exists_skipping(&index_name);
                 return Ok(SqlResult::command("CREATE INDEX"));
             }
             return Err(SqlError::InvalidSql(format!(
@@ -3087,6 +3330,7 @@ impl<'db> SqlSession<'db> {
                 .iter()
                 .any(|definition| definition.name == index_name)
         {
+            crate::statement_context::relation_exists_skipping(&index_name);
             return Ok(SqlResult::command("CREATE INDEX"));
         }
         let access_method = index_access_method_name(create_index.using.as_ref()).to_string();

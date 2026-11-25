@@ -565,7 +565,10 @@ fn validate_record_columns(table: &str, schema: &TableSchema, record: &Record) -
                 Some(table.to_string()),
                 Some(column.name.clone()),
                 Some(not_null_constraint_name(table, &column.name)),
-            ));
+            )
+            .with_error_detail(crate::error_detail::failing_row_detail(
+                table, schema, record,
+            )));
         }
     }
     for (column, value) in schema.columns.iter().zip(values.iter()) {
@@ -613,7 +616,10 @@ pub(crate) fn validate_not_null(table: &str, schema: &TableSchema, record: &Reco
                 Some(table.to_string()),
                 Some(column.name.clone()),
                 Some(not_null_constraint_name(table, &column.name)),
-            ));
+            )
+            .with_error_detail(crate::error_detail::failing_row_detail(
+                table, schema, record,
+            )));
         }
     }
     Ok(())
@@ -839,7 +845,10 @@ fn validate_prepared_checks(
                 Some(table.to_string()),
                 None,
                 Some((*name).to_string()),
-            ));
+            )
+            .with_error_detail(crate::error_detail::failing_row_detail(
+                table, schema, record,
+            )));
         }
     }
     Ok(())
@@ -1383,7 +1392,12 @@ fn validate_unique_arbiter_records_vacating(
         let key = typed_unique_key_label(schema, &arbiter.key, &key_values)?;
         if let Some(existing_id) = seen.get(&key) {
             if !allow_existing_same_id || existing_id != &record.id {
-                return Err(unique_violation(schema, &arbiter.name));
+                return Err(unique_key_violation(
+                    schema,
+                    &arbiter.name,
+                    &arbiter.key,
+                    &key_values,
+                ));
             }
         } else {
             seen.insert(key, record.id.clone());
@@ -1453,7 +1467,12 @@ fn validate_unique_arbiter_records_vacating(
                 .get(&key)
                 .is_some_and(|ids| ids.iter().any(|id| conflicts(id, record, &preceding)))
             {
-                return Err(unique_violation(schema, &arbiter.name));
+                return Err(unique_key_violation(
+                    schema,
+                    &arbiter.name,
+                    &arbiter.key,
+                    &key_values,
+                ));
             }
         }
         return Ok(());
@@ -1491,7 +1510,12 @@ fn validate_unique_arbiter_records_vacating(
             db.lookup_index_exact(index_name, &index_values)?,
         );
         if ids.iter().any(|id| conflicts(id, record, &preceding)) {
-            return Err(unique_violation(schema, &arbiter.name));
+            return Err(unique_key_violation(
+                schema,
+                &arbiter.name,
+                &arbiter.key,
+                &key_values,
+            ));
         }
         // Committed index entries cannot see this transaction's earlier writes.
         let key = typed_unique_key_label(schema, &arbiter.key, &key_values)?;
@@ -1499,7 +1523,12 @@ fn validate_unique_arbiter_records_vacating(
             .get(&key)
             .is_some_and(|ids| ids.iter().any(|id| conflicts(id, record, &preceding)))
         {
-            return Err(unique_violation(schema, &arbiter.name));
+            return Err(unique_key_violation(
+                schema,
+                &arbiter.name,
+                &arbiter.key,
+                &key_values,
+            ));
         }
     }
     Ok(())
@@ -1659,7 +1688,12 @@ pub(crate) fn validate_unique_primary_key_arbiter_records(
             (_, None) => db.get_unchecked(table, &record_id)?,
         };
         if existing.is_some_and(|existing| !allow_existing_same_id || existing.id != record.id) {
-            return Err(unique_violation(schema, &arbiter.name));
+            return Err(unique_key_violation(
+                schema,
+                &arbiter.name,
+                &UniqueKey::Columns(columns.clone()),
+                &key_values,
+            ));
         }
     }
     Ok(true)
@@ -2585,7 +2619,15 @@ pub(crate) fn validate_exclusion_constraints(
                     record,
                     existing,
                 )? {
-                    return Err(exclusion_violation(table, name));
+                    return Err(exclusion_conflict_violation(
+                        table,
+                        schema,
+                        name,
+                        equal_columns,
+                        range,
+                        record,
+                        existing,
+                    ));
                 }
             }
         }
@@ -2617,7 +2659,15 @@ pub(crate) fn validate_exclusion_record_pairs(
                 record,
                 other,
             )? {
-                return Err(exclusion_violation(table, name));
+                return Err(exclusion_conflict_violation(
+                    table,
+                    schema,
+                    name,
+                    equal_columns,
+                    range,
+                    other,
+                    record,
+                ));
             }
         }
     }
@@ -2830,7 +2880,7 @@ pub(crate) fn validate_foreign_key_constraint_immediate(
     };
     let domain_error = |error: SqlError| {
         if error.sqlstate() == "22003" {
-            foreign_key_violation(table, name)
+            foreign_key_missing_violation(table, schema, name, columns, &key, foreign_table)
         } else {
             error
         }
@@ -2880,7 +2930,14 @@ pub(crate) fn validate_foreign_key_constraint_immediate(
         }
     }
     if !found {
-        return Err(foreign_key_violation(table, name));
+        return Err(foreign_key_missing_violation(
+            table,
+            schema,
+            name,
+            columns,
+            &key,
+            foreign_table,
+        ));
     }
     Ok(())
 }
@@ -3986,6 +4043,7 @@ pub(crate) fn constraint_violation(
         constraint,
         oracle_code: None,
         unique_origin: None,
+        detail: None,
     }
 }
 
@@ -4007,12 +4065,74 @@ pub(crate) fn unique_violation(schema: &TableSchema, name: &str) -> SqlError {
     SqlError::ConstraintViolation {
         sqlstate: "23505",
         message: format!("duplicate key value violates unique constraint \"{name}\""),
-        schema: Some(schema.schema_name.clone()),
+        schema: Some(Box::new(schema.schema_name.clone())),
         table: Some(catalog_display_name(&schema.name)),
         column: None,
         constraint: Some(name.to_string()),
         oracle_code: None,
         unique_origin: Some(UniqueViolationOrigin::Write),
+        detail: None,
+    }
+}
+
+/// [`unique_violation`] with PostgreSQL's `Key (a)=(1) already exists.` DETAIL.
+pub(crate) fn unique_key_violation(
+    schema: &TableSchema,
+    name: &str,
+    key: &UniqueKey,
+    values: &[SqlValue],
+) -> SqlError {
+    let error = unique_violation(schema, name);
+    match crate::error_detail::unique_key_detail(schema, key, values, "already exists.") {
+        Some(detail) => error.with_error_detail(detail),
+        None => error,
+    }
+}
+
+/// [`unique_key_violation`] of the key `record` has under `arbiter`.
+pub(crate) fn unique_record_violation(
+    schema: &TableSchema,
+    arbiter: &UniqueConflictArbiter,
+    record: &Record,
+) -> SqlError {
+    let values = unique_key_values(record, schema, &arbiter.key);
+    unique_key_violation(schema, &arbiter.name, &arbiter.key, &values)
+}
+
+/// [`unique_key_violation`] of a row given as one cell per schema column.
+pub(crate) fn unique_cells_violation(
+    schema: &TableSchema,
+    arbiter: &UniqueConflictArbiter,
+    cells: &[Option<SqlValue>],
+) -> SqlError {
+    let columns = match &arbiter.key {
+        UniqueKey::Columns(columns) => Some(columns.clone()),
+        UniqueKey::IndexFields(fields) => fields
+            .iter()
+            .map(|field| index_field_column_name(schema, field))
+            .collect(),
+    };
+    let values = columns.and_then(|columns| {
+        columns
+            .iter()
+            .map(|column| {
+                let index = schema
+                    .columns
+                    .iter()
+                    .position(|candidate| candidate.name.eq_ignore_ascii_case(column))?;
+                Some(
+                    cells
+                        .get(index)
+                        .cloned()
+                        .flatten()
+                        .unwrap_or(SqlValue::Null),
+                )
+            })
+            .collect::<Option<Vec<_>>>()
+    });
+    match values {
+        Some(values) => unique_key_violation(schema, &arbiter.name, &arbiter.key, &values),
+        None => unique_violation(schema, &arbiter.name),
     }
 }
 
@@ -4026,6 +4146,59 @@ pub(crate) fn unique_validation_violation(
         *unique_origin = Some(UniqueViolationOrigin::ConstraintValidation { primary_key });
     }
     error
+}
+
+/// [`exclusion_violation`] of `record` conflicting with `existing`, with
+/// PostgreSQL's `Key (...)=(...) conflicts with existing key (...)=(...).`
+/// DETAIL when the constraint's columns are plain columns in a known order.
+#[allow(clippy::too_many_arguments)]
+fn exclusion_conflict_violation(
+    table: &str,
+    schema: &TableSchema,
+    name: &str,
+    equal_columns: &[String],
+    range: &Option<ExclusionRangeSchema>,
+    record: &Record,
+    existing: &Record,
+) -> SqlError {
+    let error = exclusion_violation(table, name);
+    let columns = match range {
+        None => equal_columns.to_vec(),
+        Some(ExclusionRangeSchema {
+            range_column: Some(column),
+            ..
+        }) if equal_columns.is_empty() => vec![column.clone()],
+        Some(_) => return error,
+    };
+    let key = UniqueKey::Columns(columns);
+    let new = crate::error_detail::unique_key_detail(
+        schema,
+        &key,
+        &unique_key_values(record, schema, &key),
+        "",
+    );
+    let old = crate::error_detail::unique_key_detail(
+        schema,
+        &key,
+        &unique_key_values(existing, schema, &key),
+        "",
+    );
+    match (new, old) {
+        (Some(mut new), Some(old)) => {
+            let text = format!(
+                "{} conflicts with existing {}.",
+                new.text.as_deref().unwrap_or_default().trim_end(),
+                old.text
+                    .as_deref()
+                    .unwrap_or_default()
+                    .trim_end()
+                    .replacen("Key", "key", 1)
+            );
+            new.text = Some(text);
+            error.with_error_detail(new)
+        }
+        _ => error,
+    }
 }
 
 pub(crate) fn exclusion_violation(table: &str, name: &str) -> SqlError {
@@ -4048,6 +4221,66 @@ pub(crate) fn foreign_key_violation(table: &str, name: &str) -> SqlError {
         Some(table.to_string()),
         None,
         Some(name.to_string()),
+    )
+}
+
+/// The violation of deleting or updating a row of `table` whose key `values`
+/// (of `columns`) a row of `referencing` still references.
+pub(crate) fn foreign_key_referenced_violation(
+    table: &str,
+    schema: &TableSchema,
+    name: &str,
+    referencing: &str,
+    columns: &[String],
+    values: &[SqlValue],
+) -> SqlError {
+    let types = columns
+        .iter()
+        .map(|column| schema.column(column).map(|column| column.pg_type.clone()))
+        .collect::<Vec<_>>();
+    constraint_violation(
+        "23503",
+        format!(
+            "update or delete on table \"{}\" violates foreign key constraint \"{}\" on table \"{}\"",
+            catalog_display_name(table),
+            name,
+            catalog_display_name(referencing)
+        ),
+        Some(referencing.to_string()),
+        None,
+        Some(name.to_string()),
+    )
+    .with_error_detail(crate::error_detail::foreign_key_referenced_detail(
+        &schema.name,
+        columns,
+        values,
+        &types,
+        referencing,
+    ))
+}
+
+/// [`foreign_key_violation`] of a referencing row of `table` whose key
+/// `values` (of `columns`) is not in `referenced`, with PostgreSQL's DETAIL.
+pub(crate) fn foreign_key_missing_violation(
+    table: &str,
+    schema: &TableSchema,
+    name: &str,
+    columns: &[String],
+    values: &[SqlValue],
+    referenced: &str,
+) -> SqlError {
+    let types = columns
+        .iter()
+        .map(|column| schema.column(column).map(|column| column.pg_type.clone()))
+        .collect::<Vec<_>>();
+    foreign_key_violation(table, name).with_error_detail(
+        crate::error_detail::foreign_key_missing_detail(
+            &schema.name,
+            columns,
+            values,
+            &types,
+            referenced,
+        ),
     )
 }
 

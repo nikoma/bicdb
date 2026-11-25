@@ -3357,6 +3357,7 @@ pub(crate) fn json_agg_function_parts(
             table: None,
             column: None,
             constraint: None,
+            detail: None,
         });
     }
     Ok((expr.clone(), distinct, order_by))
@@ -3390,6 +3391,7 @@ pub(crate) fn json_object_agg_function_parts(
             table: None,
             column: None,
             constraint: None,
+            detail: None,
         });
     }
     Ok((key.clone(), value.clone(), distinct, order_by))
@@ -3423,6 +3425,7 @@ pub(crate) fn string_agg_function_parts(
             table: None,
             column: None,
             constraint: None,
+            detail: None,
         });
     }
     Ok((expr.clone(), delimiter.clone(), distinct, order_by))

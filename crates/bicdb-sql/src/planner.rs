@@ -1275,12 +1275,24 @@ impl InsertValuesTemplate {
         slot: usize,
     ) -> Result<String> {
         let column = &self.schema.columns[slot];
-        let value = cells[slot]
-            .take()
-            .filter(|value| !matches!(value, SqlValue::Null))
-            .ok_or_else(|| {
-                SqlError::InvalidSql(format!("INSERT into {table} requires {}", column.name))
-            })?;
+        if cells[slot]
+            .as_ref()
+            .is_none_or(|value| matches!(value, SqlValue::Null))
+        {
+            let shown = self
+                .columns
+                .iter()
+                .zip(cells.iter())
+                .map(|(plan, cell)| cell.clone().or_else(|| plan.default.clone()))
+                .collect::<Vec<_>>();
+            return Err(crate::error_detail::not_null_cells_violation(
+                table,
+                &self.schema,
+                &column.name,
+                &shown,
+            ));
+        }
+        let value = cells[slot].take().expect("checked above");
         let value = cast_value_to_column_type(value, column)?;
         let cell = primary_key_identity_cell(&self.schema, &column.name, &value)?;
         if cell.is_empty() {
@@ -1429,10 +1441,23 @@ impl InsertValuesTemplate {
                     Some(table.to_string()),
                     Some(column.name.clone()),
                     Some(not_null_constraint_name(table, &column.name)),
-                ));
+                )
+                .with_error_detail(self.failing_row_detail(table, cells)));
             }
         }
         Ok(())
+    }
+
+    /// `Failing row contains (...)` of a built row; absent cells take their
+    /// static defaults.
+    fn failing_row_detail(&self, table: &str, cells: &[Option<SqlValue>]) -> ErrorDetail {
+        let cells = self
+            .columns
+            .iter()
+            .zip(cells)
+            .map(|(plan, cell)| cell.clone().or_else(|| plan.default.clone()))
+            .collect::<Vec<_>>();
+        crate::error_detail::failing_cells_detail(table, &self.schema, &cells)
     }
 
     /// The local constraints on one built row: NOT NULL over the cast values
@@ -1462,7 +1487,8 @@ impl InsertValuesTemplate {
                     Some(table.to_string()),
                     Some(column.name.clone()),
                     Some(not_null_constraint_name(table, &column.name)),
-                ));
+                )
+                .with_error_detail(self.failing_row_detail(table, cells)));
             }
         }
         validate_checks(table, &self.schema, record, check_engine)

@@ -252,6 +252,7 @@ impl SqlSession<'_> {
             let (schema_name, bare) = collation_identity(name)?;
             let Some(collation) = load_collation(self.db_ref(), &schema_name, &bare)? else {
                 if if_exists {
+                    crate::statement_context::notice_skipping_missing("collation", &bare);
                     continue;
                 }
                 return Err(undefined_collation(&bare));

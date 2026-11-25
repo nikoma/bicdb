@@ -1,0 +1,63 @@
+detail_unique_pk|CREATE TABLE g1(a int primary key, b text);INSERT INTO g1 VALUES (1,'x');INSERT INTO g1 VALUES (1,'y')
+detail_unique_multi|CREATE TABLE g2(a int, b text, c bool, UNIQUE(a,b,c));INSERT INTO g2 VALUES (1,'x y',true);INSERT INTO g2 VALUES (1,'x y',true)
+detail_unique_update|CREATE TABLE g3(a int unique, b text);INSERT INTO g3 VALUES (1,'x'),(2,'y');UPDATE g3 SET a=1 WHERE a=2
+detail_unique_index_expr|CREATE TABLE g4(a text);CREATE UNIQUE INDEX g4_lower ON g4 (lower(a));INSERT INTO g4 VALUES ('Ab');INSERT INTO g4 VALUES ('aB')
+detail_unique_numeric_ts|CREATE TABLE g5(a numeric(6,2), t timestamp, f float8, UNIQUE(a,t,f));INSERT INTO g5 VALUES (1.5,'2024-01-02 03:04:05',0.1);INSERT INTO g5 VALUES (1.50,'2024-01-02 03:04:05',0.1)
+detail_unique_same_stmt|CREATE TABLE g6(a int primary key);INSERT INTO g6 VALUES (1),(1)
+detail_unique_build|CREATE TABLE g7(a int);INSERT INTO g7 VALUES (1),(1);CREATE UNIQUE INDEX g7_a ON g7(a)
+detail_unique_add_constraint|CREATE TABLE g8(a int, b int);INSERT INTO g8 VALUES (1,2),(1,2);ALTER TABLE g8 ADD CONSTRAINT g8_ab UNIQUE (a,b)
+detail_unique_on_conflict_other|CREATE TABLE g9(a int primary key, b int unique);INSERT INTO g9 VALUES (1,1);INSERT INTO g9 VALUES (2,1) ON CONFLICT (a) DO NOTHING
+detail_fk_insert|CREATE TABLE g10p(a int primary key);CREATE TABLE g10c(x int references g10p(a));INSERT INTO g10p VALUES (1);INSERT INTO g10c VALUES (5)
+detail_fk_update_child|CREATE TABLE g11p(a int primary key);CREATE TABLE g11c(x int references g11p);INSERT INTO g11p VALUES (1);INSERT INTO g11c VALUES (1);UPDATE g11c SET x=7
+detail_fk_delete_parent|CREATE TABLE g12p(a int primary key);CREATE TABLE g12c(x int references g12p);INSERT INTO g12p VALUES (1);INSERT INTO g12c VALUES (1);DELETE FROM g12p
+detail_fk_update_parent|CREATE TABLE g13p(a int primary key);CREATE TABLE g13c(x int references g13p);INSERT INTO g13p VALUES (1);INSERT INTO g13c VALUES (1);UPDATE g13p SET a=2
+detail_fk_multi|CREATE TABLE g14p(a int, b text, primary key(a,b));CREATE TABLE g14c(x int, y text, foreign key (x,y) references g14p);INSERT INTO g14c VALUES (1,'q')
+detail_fk_add_constraint|CREATE TABLE g15p(a int primary key);CREATE TABLE g15c(x int);INSERT INTO g15c VALUES (3);ALTER TABLE g15c ADD CONSTRAINT g15_fk FOREIGN KEY (x) REFERENCES g15p
+detail_check|CREATE TABLE g16(a int check (a > 0), b text, c bool);INSERT INTO g16 VALUES (-1,'hello world',NULL)
+detail_check_named_update|CREATE TABLE g17(a int, b numeric, CONSTRAINT pos CHECK (b > 0));INSERT INTO g17 VALUES (1,2.50);UPDATE g17 SET b=-3.25
+detail_check_long|CREATE TABLE g18(a text check (length(a) < 5));INSERT INTO g18 VALUES (repeat('abcdefghij',10))
+detail_notnull|CREATE TABLE g19(a int not null, b text);INSERT INTO g19 VALUES (NULL,'x')
+detail_notnull_update|CREATE TABLE g20(a int, b text not null, t timestamptz);INSERT INTO g20 VALUES (1,'x','2024-01-01 00:00:00+00');UPDATE g20 SET b=NULL
+detail_notnull_pk|CREATE TABLE g21(a int primary key, b int);INSERT INTO g21 (b) VALUES (5)
+detail_check_add|CREATE TABLE g22(a int);INSERT INTO g22 VALUES (-5);ALTER TABLE g22 ADD CONSTRAINT g22_pos CHECK (a > 0)
+detail_check_domain|CREATE DOMAIN g23d AS int CHECK (VALUE > 0);SELECT (-1)::g23d
+detail_exclusion|CREATE TABLE g24(r int4range, EXCLUDE USING gist (r WITH &&));INSERT INTO g24 VALUES ('[1,5)');INSERT INTO g24 VALUES ('[3,8)')
+detail_check_array_json|CREATE TABLE g25(a int[], j jsonb, CHECK (j->>'k' = 'v'));INSERT INTO g25 VALUES ('{1,2}','{"k": "w"}')
+notice_drop_table_if_exists|DROP TABLE IF EXISTS g_nosuch;SELECT 1
+notice_drop_multi_if_exists|CREATE TABLE g26(a int);DROP TABLE IF EXISTS g_nosuch1, g26, g_nosuch2;SELECT 1
+notice_drop_view_if_exists|DROP VIEW IF EXISTS g_nosuchv;DROP INDEX IF EXISTS g_nosuchi;DROP SEQUENCE IF EXISTS g_nosuchs;DROP MATERIALIZED VIEW IF EXISTS g_nosuchm;SELECT 1
+notice_drop_schema_type_if_exists|DROP SCHEMA IF EXISTS g_nosuch_schema;DROP TYPE IF EXISTS g_nosuch_type;DROP DOMAIN IF EXISTS g_nosuch_dom;SELECT 1
+notice_drop_function_if_exists|DROP FUNCTION IF EXISTS g_nosuch_fn(int);DROP FUNCTION IF EXISTS g_nosuch_fn2;DROP PROCEDURE IF EXISTS g_nosuch_proc();SELECT 1
+notice_drop_trigger_rule_if_exists|CREATE TABLE g27(a int);DROP TRIGGER IF EXISTS g_nosuch_trg ON g27;DROP POLICY IF EXISTS g_nosuch_pol ON g27;SELECT 1
+notice_drop_role_ext_if_exists|DROP ROLE IF EXISTS g_nosuch_role;DROP EXTENSION IF EXISTS g_nosuch_ext;DROP COLLATION IF EXISTS g_nosuch_coll;SELECT 1
+notice_create_table_if_not_exists|CREATE TABLE g28(a int);CREATE TABLE IF NOT EXISTS g28(a int);CREATE INDEX g28_i ON g28(a);CREATE INDEX IF NOT EXISTS g28_i ON g28(a);CREATE SEQUENCE g28_s;CREATE SEQUENCE IF NOT EXISTS g28_s;CREATE SCHEMA g28sch;CREATE SCHEMA IF NOT EXISTS g28sch;SELECT 1
+notice_create_view_if_not_exists|CREATE MATERIALIZED VIEW g29 AS SELECT 1 AS a;CREATE MATERIALIZED VIEW IF NOT EXISTS g29 AS SELECT 1 AS a;SELECT 1
+notice_alter_table_if_exists|ALTER TABLE IF EXISTS g_nosuch ADD COLUMN a int;ALTER TABLE IF EXISTS g_nosuch RENAME TO g_x;SELECT 1
+notice_alter_column_if|CREATE TABLE g30(a int);ALTER TABLE g30 ADD COLUMN IF NOT EXISTS a int;ALTER TABLE g30 DROP COLUMN IF EXISTS zz;ALTER TABLE g30 DROP CONSTRAINT IF EXISTS zz_c;SELECT 1
+notice_drop_cascade_one|CREATE TABLE g31(a int);CREATE VIEW g31v AS SELECT * FROM g31;DROP TABLE g31 CASCADE;SELECT 1
+notice_drop_cascade_many|CREATE TABLE g32(a int);CREATE VIEW g32v1 AS SELECT * FROM g32;CREATE VIEW g32v2 AS SELECT * FROM g32;DROP TABLE g32 CASCADE;SELECT 1
+notice_drop_cascade_fk|CREATE TABLE g33p(a int primary key);CREATE TABLE g33c(x int references g33p);DROP TABLE g33p CASCADE;SELECT 1
+notice_drop_cascade_type|CREATE TYPE g34t AS (a int, b text);CREATE TABLE g34(c g34t);DROP TYPE g34t CASCADE;SELECT 1
+notice_drop_schema_cascade|CREATE SCHEMA g35s;CREATE TABLE g35s.t1(a int);CREATE TABLE g35s.t2(a int);DROP SCHEMA g35s CASCADE;SELECT 1
+notice_drop_restrict_err|CREATE TABLE g36(a int);CREATE VIEW g36v AS SELECT * FROM g36;DROP TABLE g36
+notice_no_transaction|COMMIT;ROLLBACK;SELECT 1
+notice_already_in_transaction|BEGIN;BEGIN;COMMIT;SELECT 1
+notice_truncate_cascade|CREATE TABLE g37p(a int primary key);CREATE TABLE g37c(x int references g37p);TRUNCATE g37p CASCADE;SELECT 1
+notice_truncate_fk_err|CREATE TABLE g38p(a int primary key);CREATE TABLE g38c(x int references g38p);TRUNCATE g38p
+notice_identifier_truncated|CREATE TABLE g39_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(a int);SELECT 1
+notice_implicit_seq|CREATE TABLE g40(a serial, b int GENERATED ALWAYS AS IDENTITY);SELECT 1
+notice_raise|DO $$BEGIN RAISE NOTICE 'hello %', 5; RAISE WARNING 'warn'; RAISE INFO 'info'; END$$;SELECT 1
+notice_drop_owned_view_dep|CREATE TABLE g41(a int);CREATE VIEW g41v AS SELECT * FROM g41;CREATE VIEW g41vv AS SELECT * FROM g41v;DROP VIEW g41v CASCADE;SELECT 1
+notice_drop_cascade_mixed|CREATE TABLE g42p(a int primary key);CREATE TABLE g42c(x int references g42p);CREATE VIEW g42v AS SELECT * FROM g42p;CREATE VIEW g42vv AS SELECT * FROM g42v;DROP TABLE g42p CASCADE;SELECT count(*) FROM pg_views WHERE viewname LIKE 'g42%'
+notice_drop_restrict_mixed|CREATE TABLE g43p(a int primary key);CREATE TABLE g43c(x int references g43p);CREATE VIEW g43v AS SELECT * FROM g43p;CREATE VIEW g43vv AS SELECT * FROM g43v;DROP TABLE g43p
+notice_drop_view_restrict|CREATE TABLE g44(a int);CREATE VIEW g44v AS SELECT * FROM g44;CREATE VIEW g44vv AS SELECT * FROM g44v;DROP VIEW g44v
+notice_deferred_trigger_commit|CREATE TABLE g45(a int);CREATE FUNCTION g45f() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN RAISE NOTICE 'deferred %', NEW.a; RETURN NULL; END$$;CREATE CONSTRAINT TRIGGER g45t AFTER INSERT ON g45 DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION g45f();BEGIN;INSERT INTO g45 VALUES (1),(2);COMMIT;SELECT count(*) FROM g45
+notice_deferred_trigger_autocommit|CREATE TABLE g46(a int);CREATE FUNCTION g46f() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN RAISE NOTICE 'deferred %', NEW.a; RETURN NULL; END$$;CREATE CONSTRAINT TRIGGER g46t AFTER INSERT ON g46 DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION g46f();INSERT INTO g46 VALUES (7);SELECT count(*) FROM g46
+geo_point_column|CREATE TABLE g50(id int, p point);INSERT INTO g50 VALUES (1,'(1,2)'),(2,'(-3.5, 4e1)'),(3,NULL);SELECT id, p FROM g50 ORDER BY id;SELECT id FROM g50 WHERE p <-> point '(0,0)' < 5 ORDER BY id;SELECT p[0], p[1] FROM g50 WHERE id=2
+geo_box_column|CREATE TABLE g51(id int, b box);INSERT INTO g51 VALUES (1,'(2,2),(0,0)'),(2,'((1,5),(3,1))'),(3,'1,2,3,4');SELECT id, b, area(b), center(b) FROM g51 ORDER BY id;SELECT id FROM g51 WHERE b && box '(1,1),(1.5,1.5)' ORDER BY id;SELECT id FROM g51 WHERE b @> point '(2.5,2)' ORDER BY id
+geo_all_types|CREATE TABLE g52(l line, s lseg, pa path, po polygon, c circle);INSERT INTO g52 VALUES ('{1,-1,0}','[(0,0),(1,1)]','[(0,0),(1,1),(2,0)]','((0,0),(1,1),(2,0))','<(1,1),2>');SELECT * FROM g52;SELECT length(s), npoints(pa), area(pa), radius(c), isopen(pa), npoints(po) FROM g52
+geo_gist_index|CREATE TABLE g53(id int, b box, po polygon, c circle, p point);INSERT INTO g53 SELECT i, box(point(i,i),point(i+1,i+1)), polygon(box(point(i,i),point(i+1,i+1))), circle(point(i,i),1), point(i,i) FROM generate_series(1,50) i;CREATE INDEX g53_b ON g53 USING gist (b);CREATE INDEX g53_po ON g53 USING gist (po);CREATE INDEX g53_c ON g53 USING gist (c);CREATE INDEX g53_p ON g53 USING gist (p);SELECT id FROM g53 WHERE b && box '(10,10),(12,12)' ORDER BY id;SELECT id FROM g53 WHERE c @> point '(20,20.5)' ORDER BY id;SELECT id FROM g53 WHERE p <@ box '(5,5),(7,7)' ORDER BY id;SELECT id FROM g53 ORDER BY p <-> point '(30.2,30.2)' LIMIT 3
+geo_casts_update|CREATE TABLE g55(id int primary key, p point, c circle);INSERT INTO g55 VALUES (1,'(1,1)','<(0,0),1>');UPDATE g55 SET p = p + point '(1,1)', c = circle(p, 3);SELECT * FROM g55;SELECT pg_typeof(p), pg_typeof(c) FROM g55;SELECT p::text, box(c) FROM g55
+geo_input_grammar|SELECT box '(0,0)(1,1)', box ' ( 1 , 2 ) , ( 3 , 4 ) ', point ' ( 1 , 2 ) ', lseg '1,2,3,4', path '(1,2),(3,4)', path '((1,2),(3,4))', polygon '1,2,3,4,5,6', circle '1,2,3', circle '<1,2,3>', line '[(0,0),(1,1)]'
+geo_unknown_literal|CREATE TABLE g57(b box);INSERT INTO g57 VALUES ('(2,2),(1,1)'),('(10,10),(8,8)');SELECT b FROM g57 WHERE b << '(5,5),(6,6)';SELECT b FROM g57 WHERE b && '(1.5,1.5),(9,9)' ORDER BY b <-> point '(0,0)'
+geo_index_infinite|CREATE TABLE g58(id int, b box);INSERT INTO g58 VALUES (1,'(0,0),(1,1)'),(2,'(0,infinity),(-infinity,0)'),(3,'(5,5),(6,6)');CREATE INDEX g58_b ON g58 USING gist (b);SELECT id FROM g58 WHERE b && box '(0.5,0.5),(0.6,0.6)' ORDER BY id;SELECT id FROM g58 WHERE b && box '(100,-100),(200,-200)' ORDER BY id

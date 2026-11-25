@@ -356,6 +356,7 @@ impl<'db> SqlSession<'db> {
                 .any(|name| name == &table);
         if relation_exists {
             if create_table.if_not_exists {
+                crate::statement_context::relation_exists_skipping(&table);
                 return Ok(SqlResult::command("CREATE TABLE"));
             }
             return Err(SqlError::InvalidSql(format!(

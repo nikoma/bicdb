@@ -100,6 +100,10 @@ impl<'db> SqlSession<'db> {
         for name in names {
             let Some((index, table)) = self.resolve_index_for_drop(name)? else {
                 if if_exists {
+                    crate::statement_context::notice_skipping_missing(
+                        "index",
+                        &relation_name_for_message(&relation_name(name)?),
+                    );
                     continue;
                 }
                 return Err(SqlError::InvalidSql(format!("index `{name}` not found")));

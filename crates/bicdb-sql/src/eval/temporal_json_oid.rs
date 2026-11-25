@@ -1037,10 +1037,7 @@ pub(crate) fn postgres_range_input_error(
             format!("date out of range: \"{value}\""),
             Some(pg_type.to_string()),
         ),
-        _ => SqlError::invalid_text_representation(
-            pg_type,
-            format!("invalid input syntax for type {pg_type}: \"{value}\""),
-        ),
+        _ => SqlError::invalid_text_representation(pg_type, format!("\"{value}\"")),
     }
 }
 
@@ -2137,6 +2134,7 @@ pub(crate) fn jsonb_numeric_range_error() -> SqlError {
         table: None,
         column: None,
         constraint: None,
+        detail: None,
     }
 }
 
@@ -2510,6 +2508,7 @@ pub(crate) fn reject_invalid_json_unicode(value: &SqlValue) -> Result<()> {
             table: None,
             column: None,
             constraint: None,
+            detail: None,
         });
     }
     Ok(())
@@ -2673,6 +2672,7 @@ pub(crate) fn delete_json_path(
             table: None,
             column: None,
             constraint: None,
+            detail: None,
         });
     };
     let last = level + 1 == path.len();

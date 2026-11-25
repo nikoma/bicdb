@@ -718,6 +718,7 @@ fn is_json_predicate(name: &str, args: &[SqlValue]) -> Result<SqlValue> {
                 table: None,
                 column: None,
                 constraint: None,
+                detail: None,
             });
         }
     };
@@ -2054,6 +2055,7 @@ fn data_error(sqlstate: &'static str, message: impl Into<String>) -> SqlError {
         table: None,
         column: None,
         constraint: None,
+        detail: None,
     }
 }
 

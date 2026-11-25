@@ -136,3 +136,22 @@ focused Carrier/type/assignment/ownership checks. This does not add general
 routine overloading or change procedure resolution. A database already migrated
 with the old deletion bug must be recreated or repaired deliberately; replaying
 existing successful migration receipts does not restore the missing function.
+
+## NOTICE and WARNING messages
+
+BicDB sends the notices PostgreSQL sends for these statements, with PostgreSQL's
+severity and SQLSTATE:
+
+- `DROP TABLE/VIEW/INDEX/SEQUENCE/TYPE/DOMAIN/SCHEMA/ROLE/COLLATION/FUNCTION/PROCEDURE
+  IF EXISTS`, `DROP TRIGGER/POLICY IF EXISTS ... ON t`, `ALTER TABLE IF EXISTS`,
+  `ALTER TABLE ... DROP COLUMN/CONSTRAINT IF EXISTS`: `... does not exist, skipping`.
+- `CREATE TABLE/INDEX/SEQUENCE/SCHEMA IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`:
+  `... already exists, skipping`.
+- `DROP ... CASCADE`: `drop cascades to view v` (or `drop cascades to N other objects`
+  with one DETAIL line per object); `TRUNCATE ... CASCADE`: `truncate cascades to table "c"`.
+- `COMMIT`/`ROLLBACK` outside a transaction block: `WARNING: there is no transaction in
+  progress`; `BEGIN` inside one: `WARNING: there is already a transaction in progress`.
+- PL/pgSQL `RAISE WARNING` and `RAISE INFO` keep their severity; `RAISE LOG`/`DEBUG` are
+  not sent at the default `client_min_messages`.
+- Notices raised by triggers during `COPY FROM STDIN` and by deferred triggers at
+  `COMMIT` are sent before the command completes.

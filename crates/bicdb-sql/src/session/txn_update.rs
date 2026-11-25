@@ -2704,22 +2704,39 @@ impl<'db> SqlSession<'db> {
                 if target_names.contains(&child.name.to_ascii_lowercase()) {
                     continue;
                 }
-                let references_target = child.constraints.iter().any(|constraint| {
-                    matches!(
-                        constraint,
+                let referenced = child
+                    .constraints
+                    .iter()
+                    .find_map(|constraint| match constraint {
                         ConstraintSchema::ForeignKey { foreign_table, .. }
-                            if target_names.contains(&foreign_table.to_ascii_lowercase())
-                    )
-                });
-                if !references_target {
+                            if target_names.contains(&foreign_table.to_ascii_lowercase()) =>
+                        {
+                            Some(foreign_table.clone())
+                        }
+                        _ => None,
+                    });
+                let Some(referenced) = referenced else {
                     continue;
-                }
+                };
+                let child_name = catalog_display_name(&child.name);
                 if !cascade {
-                    return Err(SqlError::dependent_objects_still_exist(format!(
-                        "cannot truncate a table referenced in a foreign key constraint; table \"{}\" references a target table",
-                        child.name
-                    )));
+                    return Err(SqlError::coded(
+                        "0A000",
+                        "cannot truncate a table referenced in a foreign key constraint",
+                        Some(format!(
+                            "Table \"{child_name}\" references \"{}\".",
+                            catalog_display_name(&referenced)
+                        )),
+                        Some(format!(
+                            "Truncate table \"{child_name}\" at the same time, or use TRUNCATE ... CASCADE."
+                        )),
+                    ));
                 }
+                crate::statement_context::report_notice(
+                    None,
+                    "00000",
+                    format!("truncate cascades to table \"{child_name}\""),
+                );
                 tables.push(TruncateTarget {
                     name: child.name.clone(),
                     schema: child.clone(),
@@ -5286,15 +5303,10 @@ impl<'db> SqlSession<'db> {
                     if let Some(constraint) = &error_fields.constraint {
                         fields.push(SqlErrorField::Constraint(constraint.clone()));
                     }
-                    let suppressed =
-                        self.session_gucs
-                            .get("client_min_messages")
-                            .is_some_and(|level| {
-                                matches!(
-                                    level.to_ascii_lowercase().as_str(),
-                                    "warning" | "error" | "fatal" | "panic"
-                                )
-                            });
+                    let suppressed = self.raise_level_suppressed(error_fields.severity);
+                    if let Some(severity) = error_fields.severity {
+                        fields.push(SqlErrorField::Severity(severity.to_string()));
+                    }
                     if !suppressed {
                         crate::statement_context::note_notice(SqlNotice {
                             sqlstate: sqlstate.clone(),
@@ -6382,6 +6394,30 @@ impl<'db> SqlSession<'db> {
         Ok(())
     }
 
+    /// Whether a RAISE at `severity` (NOTICE when `None`) stays unsent:
+    /// PostgreSQL sends a level at or above client_min_messages (default
+    /// NOTICE), and INFO always. Kept out of the statement interpreter's
+    /// frame, which recursion multiplies.
+    #[inline(never)]
+    fn raise_level_suppressed(&self, severity: Option<&str>) -> bool {
+        let rank = |level: &str| match level {
+            "debug" | "debug5" | "debug4" | "debug3" | "debug2" | "debug1" => 0,
+            "log" => 1,
+            "notice" => 2,
+            "warning" => 3,
+            _ => 4,
+        };
+        let minimum = self
+            .session_gucs
+            .get("client_min_messages")
+            .map_or(2, |level| rank(&level.to_ascii_lowercase()));
+        match severity {
+            Some("INFO") => false,
+            Some(level) => rank(&level.to_ascii_lowercase()) < minimum,
+            None => rank("notice") < minimum,
+        }
+    }
+
     pub(crate) fn require_table_privilege(&self, table: &str, privilege: &str) -> Result<()> {
         let role = current_user_from_gucs(&self.session_gucs);
         if role_has_table_privilege(self.db_ref(), &role, table, privilege)? {
@@ -6497,7 +6533,14 @@ impl<'db> SqlSession<'db> {
                     {
                         continue;
                     }
-                    return Err(foreign_key_violation(&child_schema.name, name));
+                    return Err(foreign_key_referenced_violation(
+                        table,
+                        schema,
+                        name,
+                        &child_schema.name,
+                        referred_columns,
+                        &values,
+                    ));
                 }
             }
         }
@@ -6796,12 +6839,30 @@ impl<'db> SqlSession<'db> {
                             &constraint.child_schema,
                             &child,
                             foreign_key,
-                        )?;
+                        )
+                        .map_err(|error| {
+                            if error.sqlstate() == "23503" {
+                                foreign_key_referenced_violation(
+                                    table,
+                                    schema,
+                                    &constraint.name,
+                                    &constraint.child_schema.name,
+                                    &constraint.referred_columns,
+                                    &values,
+                                )
+                            } else {
+                                error
+                            }
+                        })?;
                         continue;
                     }
-                    return Err(foreign_key_violation(
-                        &constraint.child_schema.name,
+                    return Err(foreign_key_referenced_violation(
+                        table,
+                        schema,
                         &constraint.name,
+                        &constraint.child_schema.name,
+                        &constraint.referred_columns,
+                        &values,
                     ));
                 }
             }
@@ -7613,16 +7674,9 @@ impl<'db> SqlSession<'db> {
                     && !column_schema.hidden
                     && (!column_schema.nullable || column_schema.primary_key)
                 {
-                    return Err(constraint_violation(
-                        "23502",
-                        format!(
-                            "null value in column \"{}\" of relation \"{}\" violates not-null constraint",
-                            column_schema.name, catalog_display_name(table)
-                        ),
-                        Some(table.to_string()),
-                        Some(column_schema.name.clone()),
-                        Some(not_null_constraint_name(table, &column_schema.name)),
-                    ));
+                    // The violation's DETAIL shows the whole new row, which
+                    // the generic path builds before it checks NOT NULL.
+                    return Ok(None);
                 }
                 let storage =
                     if is_json_pg_type(&column_schema.pg_type) && matches!(value, SqlValue::Null) {

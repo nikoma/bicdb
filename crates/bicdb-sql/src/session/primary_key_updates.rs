@@ -170,12 +170,19 @@ impl SqlSession<'_> {
             }
             for column in &keys {
                 if matches!(fields.get(column), Some(SqlValue::Null)) {
+                    let mut failing = candidate.record.clone();
+                    for (name, value) in &fields {
+                        let _ = set_record_column(&mut failing, Some(schema), name, value.clone());
+                    }
                     return Err(constraint_violation(
                         "23502",
                         format!("null value in column \"{column}\" of relation \"{}\" violates not-null constraint", catalog_display_name(table)),
                         Some(table.into()), Some(column.clone()),
                         Some(not_null_constraint_name(table, column)),
-                    ));
+                    )
+                    .with_error_detail(crate::error_detail::failing_row_detail(
+                        table, schema, &failing,
+                    )));
                 }
             }
             let built = record_from_fields_with_db(self.db_ref(), table, Some(schema), fields)?;
@@ -207,7 +214,12 @@ impl SqlSession<'_> {
             validate_record_local_constraints(table, schema, &after, Some(&self.sql_engine()))?;
             let new_key = record_column_values(&after, schema, &keys);
             if !seen.insert(typed_column_key_label(schema, &keys, &new_key)?) {
-                return Err(unique_violation(schema, &primary.name));
+                return Err(unique_key_violation(
+                    schema,
+                    &primary.name,
+                    &UniqueKey::Columns(keys.clone()),
+                    &new_key,
+                ));
             }
             if !statement_uniqueness {
                 // PostgreSQL immediate checks observe earlier rows already

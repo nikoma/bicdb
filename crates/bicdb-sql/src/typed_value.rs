@@ -4047,48 +4047,61 @@ fn parse_pg_snapshot(value: &str) -> Result<PgSnapshot, PgCanonicalValueError> {
     PgSnapshot::new(xmin, xmax, in_progress)
 }
 
+/// PostgreSQL's geometric input functions (`point_in` ... `circle_in` in
+/// geo_ops.c), ported with their exact grammar: the delimiters each type
+/// accepts, a single optional enclosing parenthesis, whitespace anywhere
+/// between tokens and `float8in` numbers.
 fn parse_geometric(pg_type: &str, value: &str) -> Result<PgGeometric, PgCanonicalValueError> {
-    let value = value.trim();
-    match pg_type {
-        "point" => parse_point(value).map(PgGeometric::Point),
+    let invalid = || invalid_special(pg_type, value);
+    let mut cursor = GeoCursor {
+        text: value.as_bytes(),
+        at: 0,
+        pg_type,
+        original: value,
+    };
+    let geometric = match pg_type {
+        "point" => {
+            let point = cursor.pair()?;
+            PgGeometric::Point(point)
+        }
         "line" => {
-            if value.starts_with('{') {
-                if !value.ends_with('}') {
-                    return Err(invalid_special(pg_type, value));
+            cursor.skip_spaces();
+            if cursor.peek() == Some(b'{') {
+                cursor.at += 1;
+                let a = cursor.number()?;
+                cursor.expect(b',')?;
+                let b = cursor.number()?;
+                cursor.expect(b',')?;
+                let c = cursor.number()?;
+                cursor.expect(b'}')?;
+                cursor.skip_spaces();
+                if pg_float_eq(a, 0.0) && pg_float_eq(b, 0.0) {
+                    return Err(invalid());
                 }
-                let values = parse_geometric_components(pg_type, value, "{}")?;
-                if values.len() != 3 || pg_float_eq(values[0], 0.0) && pg_float_eq(values[1], 0.0) {
-                    return Err(invalid_special(pg_type, value));
+                PgGeometric::Line {
+                    a: PgFloat8::from_value(a),
+                    b: PgFloat8::from_value(b),
+                    c: PgFloat8::from_value(c),
                 }
-                return Ok(PgGeometric::Line {
-                    a: PgFloat8::from_value(values[0]),
-                    b: PgFloat8::from_value(values[1]),
-                    c: PgFloat8::from_value(values[2]),
-                });
+            } else {
+                let (points, _) = cursor.path(true, 2)?;
+                if pg_point_eq(points[0], points[1]) {
+                    return Err(invalid());
+                }
+                line_from_points(points[0], points[1])
             }
-            let points = points_from_components(pg_type, value, "()[]")?;
-            if points.len() != 2 || pg_point_eq(points[0], points[1]) {
-                return Err(invalid_special(pg_type, value));
-            }
-            Ok(line_from_points(points[0], points[1]))
         }
         "lseg" => {
-            let points = points_from_components(pg_type, value, "()[]")?;
-            if points.len() != 2 {
-                return Err(invalid_special(pg_type, value));
-            }
-            Ok(PgGeometric::LineSegment {
+            let (points, _) = cursor.path(true, 2)?;
+            PgGeometric::LineSegment {
                 start: points[0],
                 end: points[1],
-            })
+            }
         }
         "box" => {
-            let points = points_from_components(pg_type, value, "()")?;
-            if points.len() != 2 {
-                return Err(invalid_special(pg_type, value));
-            }
+            let (points, _) = cursor.path(false, 2)?;
             let (first, second) = (points[0], points[1]);
-            Ok(PgGeometric::Box {
+            PgGeometric::Box {
                 high: PgPoint {
                     x: PgFloat8::from_value(pg_float_max(first.x.to_value(), second.x.to_value())),
                     y: PgFloat8::from_value(pg_float_max(first.y.to_value(), second.y.to_value())),
@@ -4097,69 +4110,275 @@ fn parse_geometric(pg_type: &str, value: &str) -> Result<PgGeometric, PgCanonica
                     x: PgFloat8::from_value(pg_float_min(first.x.to_value(), second.x.to_value())),
                     y: PgFloat8::from_value(pg_float_min(first.y.to_value(), second.y.to_value())),
                 },
-            })
+            }
         }
         "path" => {
-            let closed = !value.starts_with('[');
-            if value.contains(['[', ']']) && !(value.starts_with('[') && value.ends_with(']')) {
-                return Err(invalid_special(pg_type, value));
+            let count = geo_pair_count(value).ok_or_else(invalid)?;
+            cursor.skip_spaces();
+            // A single leading parenthesis encloses the whole path.
+            let mut depth = 0;
+            if cursor.peek() == Some(b'(') && value.rfind('(') == Some(cursor.at) {
+                cursor.at += 1;
+                depth += 1;
             }
-            let points = points_from_components(pg_type, value, "()[]")?;
-            if points.is_empty() {
-                return Err(invalid_special(pg_type, value));
+            let (points, open) = cursor.path(true, count)?;
+            if depth >= 1 {
+                cursor.expect(b')')?;
+                cursor.skip_spaces();
             }
-            Ok(PgGeometric::Path { closed, points })
+            PgGeometric::Path {
+                closed: !open,
+                points,
+            }
         }
         "polygon" => {
-            let points = points_from_components(pg_type, value, "()")?;
-            if points.is_empty() {
-                return Err(invalid_special(pg_type, value));
-            }
-            Ok(PgGeometric::Polygon { points })
+            let count = geo_pair_count(value).ok_or_else(invalid)?;
+            let (points, _) = cursor.path(false, count)?;
+            PgGeometric::Polygon { points }
         }
         "circle" => {
-            let values = parse_geometric_components(pg_type, value, "()<>")?;
-            if values.len() != 3 || values[2] < 0.0 {
-                return Err(invalid_special(pg_type, value));
+            cursor.skip_spaces();
+            let mut depth = 0;
+            if cursor.peek() == Some(b'<') {
+                depth += 1;
+                cursor.at += 1;
+            } else if cursor.peek() == Some(b'(') {
+                // Two left parentheses: the first one encloses the circle.
+                let mut next = cursor.at + 1;
+                while cursor.text.get(next).is_some_and(u8::is_ascii_whitespace) {
+                    next += 1;
+                }
+                if cursor.text.get(next) == Some(&b'(') {
+                    depth += 1;
+                    cursor.at = next;
+                }
             }
-            Ok(PgGeometric::Circle {
-                center: PgPoint {
-                    x: PgFloat8::from_value(values[0]),
-                    y: PgFloat8::from_value(values[1]),
-                },
-                radius: PgFloat8::from_value(values[2]),
-            })
+            let center = cursor.pair_inner()?;
+            if cursor.peek() == Some(b',') {
+                cursor.at += 1;
+            }
+            let radius = cursor.number()?;
+            if radius < 0.0 {
+                return Err(invalid());
+            }
+            while depth > 0 {
+                match cursor.peek() {
+                    Some(b')') => {}
+                    Some(b'>') if depth == 1 => {}
+                    _ => return Err(invalid()),
+                }
+                depth -= 1;
+                cursor.at += 1;
+                cursor.skip_spaces();
+            }
+            PgGeometric::Circle {
+                center,
+                radius: PgFloat8::from_value(radius),
+            }
         }
-        _ => Err(invalid_special(pg_type, value)),
-    }
-}
-
-fn parse_point(value: &str) -> Result<PgPoint, PgCanonicalValueError> {
-    let value = value.trim();
-    let inner = if let Some(inner) = value.strip_prefix('(') {
-        inner
-            .strip_suffix(')')
-            .ok_or_else(|| invalid_special("point", value))?
-    } else if value.contains(['(', ')']) {
-        return Err(invalid_special("point", value));
-    } else {
-        value
+        _ => return Err(invalid()),
     };
-    let values = parse_geometric_float_list(inner)?;
-    if values.len() != 2 {
-        return Err(invalid_special("point", value));
+    if cursor.at != cursor.text.len() {
+        return Err(invalid());
     }
-    Ok(PgPoint {
-        x: PgFloat8::from_value(values[0]),
-        y: PgFloat8::from_value(values[1]),
-    })
+    Ok(geometric)
 }
 
-fn parse_geometric_float_list(value: &str) -> Result<Vec<f64>, PgCanonicalValueError> {
-    split_quoted_top_level(value, ',')
-        .into_iter()
-        .map(parse_geometric_float)
-        .collect()
+/// geo_ops.c's `pair_count`: the number of points a path or polygon text
+/// lists (an odd number of commas), or `None`.
+fn geo_pair_count(value: &str) -> Option<usize> {
+    let commas = value.bytes().filter(|byte| *byte == b',').count();
+    (commas % 2 == 1).then_some(commas.div_ceil(2))
+}
+
+struct GeoCursor<'a> {
+    text: &'a [u8],
+    at: usize,
+    pg_type: &'a str,
+    original: &'a str,
+}
+
+impl GeoCursor<'_> {
+    fn invalid(&self) -> PgCanonicalValueError {
+        invalid_special(self.pg_type, self.original)
+    }
+
+    fn peek(&self) -> Option<u8> {
+        self.text.get(self.at).copied()
+    }
+
+    fn skip_spaces(&mut self) {
+        while self.peek().is_some_and(|byte| byte.is_ascii_whitespace()) {
+            self.at += 1;
+        }
+    }
+
+    fn expect(&mut self, byte: u8) -> Result<(), PgCanonicalValueError> {
+        if self.peek() == Some(byte) {
+            self.at += 1;
+            Ok(())
+        } else {
+            Err(self.invalid())
+        }
+    }
+
+    /// `float8in_internal` with an end pointer: whitespace, a number,
+    /// whitespace.
+    fn number(&mut self) -> Result<f64, PgCanonicalValueError> {
+        self.skip_spaces();
+        let start = self.at;
+        let length = float_token_length(&self.text[start..]).ok_or_else(|| self.invalid())?;
+        let token =
+            std::str::from_utf8(&self.text[start..start + length]).map_err(|_| self.invalid())?;
+        let parsed = parse_geometric_float(token).map_err(|error| match error {
+            PgCanonicalValueError::FloatOverflow(value) => {
+                PgCanonicalValueError::FloatOverflow(value)
+            }
+            _ => self.invalid(),
+        })?;
+        self.at = start + length;
+        self.skip_spaces();
+        Ok(parsed)
+    }
+
+    /// `pair_decode` with an end pointer: `x,y` or `(x,y)`.
+    fn pair_inner(&mut self) -> Result<PgPoint, PgCanonicalValueError> {
+        self.skip_spaces();
+        let delimited = self.peek() == Some(b'(');
+        if delimited {
+            self.at += 1;
+        }
+        let x = self.number()?;
+        self.expect(b',')?;
+        let y = self.number()?;
+        if delimited {
+            self.expect(b')')?;
+            self.skip_spaces();
+        }
+        Ok(PgPoint {
+            x: PgFloat8::from_value(x),
+            y: PgFloat8::from_value(y),
+        })
+    }
+
+    /// `pair_decode` without an end pointer: the pair is the whole text.
+    fn pair(&mut self) -> Result<PgPoint, PgCanonicalValueError> {
+        let point = self.pair_inner()?;
+        if self.at != self.text.len() {
+            return Err(self.invalid());
+        }
+        Ok(point)
+    }
+
+    /// `path_decode`: `count` points, enclosed in `[...]` (open, when
+    /// `open_allowed`) or one optional `(...)`.
+    fn path(
+        &mut self,
+        open_allowed: bool,
+        count: usize,
+    ) -> Result<(Vec<PgPoint>, bool), PgCanonicalValueError> {
+        let mut depth = 0;
+        self.skip_spaces();
+        let open = self.peek() == Some(b'[');
+        if open {
+            if !open_allowed {
+                return Err(self.invalid());
+            }
+            depth += 1;
+            self.at += 1;
+        } else if self.peek() == Some(b'(') {
+            let mut next = self.at + 1;
+            while self.text.get(next).is_some_and(u8::is_ascii_whitespace) {
+                next += 1;
+            }
+            let last_open = self.text.iter().rposition(|byte| *byte == b'(');
+            if self.text.get(next) == Some(&b'(') {
+                depth += 1;
+                self.at = next;
+            } else if last_open == Some(self.at) {
+                depth += 1;
+                self.at = next;
+            }
+        }
+        let mut points = Vec::with_capacity(count);
+        for _ in 0..count {
+            points.push(self.pair_inner()?);
+            if self.peek() == Some(b',') {
+                self.at += 1;
+            }
+        }
+        while depth > 0 {
+            match self.peek() {
+                Some(b')') => {}
+                Some(b']') if open && depth == 1 => {}
+                _ => return Err(self.invalid()),
+            }
+            depth -= 1;
+            self.at += 1;
+            self.skip_spaces();
+        }
+        Ok((points, open))
+    }
+}
+
+/// The length of the `strtod` number at the start of `text`: decimal or
+/// hexadecimal, or Infinity/inf/NaN in any case, with an optional sign.
+fn float_token_length(text: &[u8]) -> Option<usize> {
+    let mut at = 0;
+    if matches!(text.first(), Some(b'+' | b'-')) {
+        at += 1;
+    }
+    let rest = &text[at..];
+    let starts_with = |word: &str| {
+        rest.len() >= word.len() && rest[..word.len()].eq_ignore_ascii_case(word.as_bytes())
+    };
+    if starts_with("infinity") {
+        return Some(at + 8);
+    }
+    if starts_with("inf") || starts_with("nan") {
+        return Some(at + 3);
+    }
+    let digits = |text: &[u8], from: usize, hex: bool| {
+        text[from..]
+            .iter()
+            .take_while(|byte| {
+                if hex {
+                    byte.is_ascii_hexdigit()
+                } else {
+                    byte.is_ascii_digit()
+                }
+            })
+            .count()
+    };
+    let hex = rest.len() > 2 && rest[0] == b'0' && matches!(rest[1], b'x' | b'X');
+    let mut position = if hex { at + 2 } else { at };
+    let integral = digits(text, position, hex);
+    position += integral;
+    let mut fraction = 0;
+    if text.get(position) == Some(&b'.') {
+        fraction = digits(text, position + 1, hex);
+        if integral > 0 || fraction > 0 {
+            position += 1 + fraction;
+        }
+    }
+    if integral == 0 && fraction == 0 {
+        return None;
+    }
+    let exponent = if hex { [b'p', b'P'] } else { [b'e', b'E'] };
+    if text
+        .get(position)
+        .is_some_and(|byte| exponent.contains(byte))
+    {
+        let mut next = position + 1;
+        if matches!(text.get(next), Some(b'+' | b'-')) {
+            next += 1;
+        }
+        let exponent_digits = digits(text, next, false);
+        if exponent_digits > 0 {
+            position = next + exponent_digits;
+        }
+    }
+    Some(position)
 }
 
 fn parse_geometric_float(value: &str) -> Result<f64, PgCanonicalValueError> {
@@ -4259,63 +4478,6 @@ fn geometric_float_has_nonzero_digit(value: &str) -> bool {
         .map_or(value, |(mantissa, _)| mantissa)
         .bytes()
         .any(|byte| matches!(byte, b'1'..=b'9'))
-}
-
-fn parse_geometric_components(
-    pg_type: &str,
-    value: &str,
-    allowed_delimiters: &str,
-) -> Result<Vec<f64>, PgCanonicalValueError> {
-    let mut stack = Vec::new();
-    let mut flattened = String::with_capacity(value.len());
-    for character in value.chars() {
-        let expected_close = match character {
-            '(' => Some(')'),
-            '[' => Some(']'),
-            '{' => Some('}'),
-            '<' => Some('>'),
-            _ => None,
-        };
-        if let Some(expected_close) = expected_close {
-            if !allowed_delimiters.contains(character) {
-                return Err(invalid_special(pg_type, value));
-            }
-            stack.push(expected_close);
-            continue;
-        }
-        if matches!(character, ')' | ']' | '}' | '>') {
-            if !allowed_delimiters.contains(character) || stack.pop() != Some(character) {
-                return Err(invalid_special(pg_type, value));
-            }
-            continue;
-        }
-        flattened.push(character);
-    }
-    if !stack.is_empty() {
-        return Err(invalid_special(pg_type, value));
-    }
-    parse_geometric_float_list(&flattened).map_err(|error| match error {
-        PgCanonicalValueError::FloatOverflow(_) => error,
-        _ => invalid_special(pg_type, value),
-    })
-}
-
-fn points_from_components(
-    pg_type: &str,
-    value: &str,
-    allowed_delimiters: &str,
-) -> Result<Vec<PgPoint>, PgCanonicalValueError> {
-    let values = parse_geometric_components(pg_type, value, allowed_delimiters)?;
-    if values.len() % 2 != 0 {
-        return Err(invalid_special(pg_type, value));
-    }
-    Ok(values
-        .chunks_exact(2)
-        .map(|coordinates| PgPoint {
-            x: PgFloat8::from_value(coordinates[0]),
-            y: PgFloat8::from_value(coordinates[1]),
-        })
-        .collect())
 }
 
 fn line_from_points(first: PgPoint, second: PgPoint) -> PgGeometric {

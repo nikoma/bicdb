@@ -94,6 +94,7 @@ fn profiled_unique_error(error: &SqlError) -> Option<SqlError> {
             column,
             constraint,
             unique_origin,
+            detail,
             ..
         } => {
             let (code, message) = unique_constraint_diagnostic(error)?;
@@ -106,6 +107,7 @@ fn profiled_unique_error(error: &SqlError) -> Option<SqlError> {
                 constraint: constraint.clone(),
                 oracle_code: Some(code),
                 unique_origin: *unique_origin,
+                detail: detail.clone(),
             })
         }
         SqlError::Rethrown(inner) => {

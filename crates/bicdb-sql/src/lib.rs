@@ -256,6 +256,7 @@ mod order_by_ordinal;
 mod partial_index;
 mod partition;
 pub(crate) use const_fold::fold_statement_constants;
+mod error_detail;
 mod pg_scalar_extra;
 mod records;
 mod row_types;
@@ -1923,6 +1924,54 @@ fn sql_rows_memory_estimate<R: SqlRowMemoryEstimate>(rows: &[R]) -> usize {
     rows.iter().map(SqlRowMemoryEstimate::memory_estimate).sum()
 }
 
+/// The DETAIL and HINT lines of an error. A DETAIL that shows row values
+/// (`Key (a)=(1) already exists.`, `Failing row contains (...)`) names the
+/// relation the values were read from and is sent only after the session
+/// confirmed that the current role may read them there
+/// ([`ErrorDetail::authorize`]); until then `fallback`, which shows no values,
+/// is sent instead (none when PostgreSQL then sends no DETAIL).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ErrorDetail {
+    pub(crate) text: Option<String>,
+    pub(crate) fallback: Option<String>,
+    /// Relation whose row values `text` shows; `None` when it shows none.
+    pub(crate) values_of: Option<String>,
+    pub(crate) authorized: bool,
+    pub(crate) hint: Option<String>,
+}
+
+impl ErrorDetail {
+    /// A DETAIL (and HINT) that shows no row values.
+    pub(crate) fn plain(text: Option<String>, hint: Option<String>) -> Self {
+        Self {
+            text,
+            fallback: None,
+            values_of: None,
+            authorized: true,
+            hint,
+        }
+    }
+
+    /// A DETAIL that shows values of a row of `relation`.
+    pub(crate) fn values(relation: &str, text: String, fallback: Option<String>) -> Self {
+        Self {
+            text: Some(text),
+            fallback,
+            values_of: Some(relation.to_string()),
+            authorized: false,
+            hint: None,
+        }
+    }
+
+    pub(crate) fn line(&self) -> Option<&str> {
+        if self.authorized {
+            self.text.as_deref()
+        } else {
+            self.fallback.as_deref()
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UniqueViolationOrigin {
     Write,
@@ -2011,12 +2060,15 @@ pub enum SqlError {
     ConstraintViolation {
         sqlstate: &'static str,
         message: String,
-        schema: Option<String>,
+        /// Boxed so the error, carried by every `Result`, stays small.
+        schema: Option<Box<String>>,
         table: Option<String>,
         column: Option<String>,
         constraint: Option<String>,
         oracle_code: Option<i32>,
         unique_origin: Option<UniqueViolationOrigin>,
+        /// PostgreSQL's DETAIL and HINT lines.
+        detail: Option<Box<ErrorDetail>>,
     },
 
     #[error("savepoint \"{name}\" does not exist")]
@@ -2241,6 +2293,72 @@ impl SqlError {
         Self::data_exception(sqlstate, message, data_type)
     }
 
+    /// An error with a SQLSTATE and PostgreSQL's DETAIL and HINT lines,
+    /// neither of which shows row values.
+    pub(crate) fn coded(
+        sqlstate: &'static str,
+        message: impl Into<String>,
+        detail: Option<String>,
+        hint: Option<String>,
+    ) -> Self {
+        Self::ConstraintViolation {
+            sqlstate,
+            message: message.into(),
+            schema: None,
+            table: None,
+            column: None,
+            constraint: None,
+            oracle_code: None,
+            unique_origin: None,
+            detail: (detail.is_some() || hint.is_some())
+                .then(|| Box::new(ErrorDetail::plain(detail, hint))),
+        }
+    }
+
+    /// Attaches `detail` to a constraint violation; other errors are returned unchanged.
+    pub(crate) fn with_error_detail(self, new: ErrorDetail) -> Self {
+        match self {
+            Self::ConstraintViolation {
+                sqlstate,
+                message,
+                schema,
+                table,
+                column,
+                constraint,
+                oracle_code,
+                unique_origin,
+                ..
+            } => Self::ConstraintViolation {
+                sqlstate,
+                message,
+                schema,
+                table,
+                column,
+                constraint,
+                oracle_code,
+                unique_origin,
+                detail: Some(Box::new(new)),
+            },
+            Self::WithNotices { error, notices } => Self::WithNotices {
+                error: Box::new(error.with_error_detail(new)),
+                notices,
+            },
+            other => other,
+        }
+    }
+
+    /// Every DETAIL of this error that shows row values not yet authorized.
+    pub(crate) fn unauthorized_value_details(&mut self) -> Vec<&mut ErrorDetail> {
+        match self {
+            Self::ConstraintViolation {
+                detail: Some(detail),
+                ..
+            } if !detail.authorized && detail.values_of.is_some() => vec![detail.as_mut()],
+            Self::WithNotices { error, .. } => error.unauthorized_value_details(),
+            _ => Vec::new(),
+        }
+    }
+
     pub(crate) fn duplicate_constraint(table: &str, constraint: &str) -> Self {
         Self::ConstraintViolation {
             sqlstate: "42710",
@@ -2251,6 +2369,7 @@ impl SqlError {
             table: Some(table.to_string()),
             column: None,
             constraint: Some(constraint.to_string()),
+            detail: None,
         }
     }
 
@@ -2321,6 +2440,7 @@ impl SqlError {
                 column,
                 constraint,
                 oracle_code,
+                detail,
                 ..
             } => {
                 let mut fields = Vec::new();
@@ -2328,9 +2448,14 @@ impl SqlError {
                     fields.push(SqlErrorField::Detail(oracle::errors::transport_detail(
                         self,
                     )));
+                } else if let Some(line) = detail.as_deref().and_then(ErrorDetail::line) {
+                    fields.push(SqlErrorField::Detail(line.to_string()));
+                }
+                if let Some(hint) = detail.as_deref().and_then(|detail| detail.hint.as_ref()) {
+                    fields.push(SqlErrorField::Hint(hint.clone()));
                 }
                 if let Some(schema) = schema {
-                    fields.push(SqlErrorField::Schema(schema.clone()));
+                    fields.push(SqlErrorField::Schema(schema.to_string()));
                 }
                 if let Some(table) = table {
                     fields.push(SqlErrorField::Table(table.clone()));
@@ -2375,6 +2500,8 @@ pub enum SqlErrorField {
     DataType(String),
     Constraint(String),
     Hint(String),
+    /// Severity of a notice (`WARNING`); notices without it are `NOTICE`.
+    Severity(String),
 }
 
 fn bicdb_error_sqlstate(error: &BicDbError) -> &'static str {
@@ -2465,7 +2592,8 @@ impl SqlNotice {
                     | SqlErrorField::Column(value)
                     | SqlErrorField::DataType(value)
                     | SqlErrorField::Constraint(value)
-                    | SqlErrorField::Hint(value) => value.len(),
+                    | SqlErrorField::Hint(value)
+                    | SqlErrorField::Severity(value) => value.len(),
                 })
                 .sum::<usize>()
     }
@@ -4894,6 +5022,9 @@ pub(crate) struct RaiseErrorFields {
     pub(crate) constraint: Option<String>,
     pub(crate) table: Option<String>,
     pub(crate) column: Option<String>,
+    /// The level of a non-error RAISE other than NOTICE (`WARNING`, `INFO`,
+    /// `LOG`, `DEBUG`).
+    pub(crate) severity: Option<&'static str>,
 }
 
 #[derive(Clone, Debug)]

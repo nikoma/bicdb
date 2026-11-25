@@ -160,9 +160,12 @@ fn parse_refresh(sql: &str) -> Result<Option<RawRefresh>> {
     if words.first().cloned().flatten().as_deref() != Some("REFRESH") {
         return Ok(None);
     }
-    if words.get(1).cloned().flatten().as_deref() != Some("MATERIALIZED")
-        || words.get(2).cloned().flatten().as_deref() != Some("VIEW")
-    {
+    // Other REFRESH statements (for example `REFRESH CUBE`) belong to their
+    // own handlers.
+    if words.get(1).cloned().flatten().as_deref() != Some("MATERIALIZED") {
+        return Ok(None);
+    }
+    if words.get(2).cloned().flatten().as_deref() != Some("VIEW") {
         return Err(syntax());
     }
     let mut index = 3;
@@ -349,4 +352,21 @@ pub(crate) fn strip_materialized_data_clause(sql: &str) -> Option<(String, bool)
         return None;
     }
     Some((trimmed[..before.len()].trim_end().to_string(), with_data))
+}
+
+#[cfg(test)]
+mod refresh_parse_tests {
+    use super::parse_refresh;
+
+    #[test]
+    fn other_refresh_statements_are_left_to_their_own_handlers() {
+        assert!(parse_refresh("REFRESH CUBE refreshed").unwrap().is_none());
+        assert!(parse_refresh("REFRESH CUBE \"../victim\"")
+            .unwrap()
+            .is_none());
+        assert!(parse_refresh("REFRESH MATERIALIZED TABLE x").is_err());
+        assert!(parse_refresh("REFRESH MATERIALIZED VIEW mv")
+            .unwrap()
+            .is_some());
+    }
 }

@@ -570,10 +570,17 @@ impl NativeRemoteImageSourceSession {
             capture.validate(&db)?;
         }
         {
-            let metadata = self
-                .metadata
-                .try_lock()
-                .ok_or_else(|| invalid("source metadata changed before frame"))?;
+            // The same bounded wait as the observation above: a metadata
+            // store held for an instant (a supervisor tick, another request)
+            // is not a changed one, and refusing on it failed the frame.
+            // `require_current` then decides whether anything changed.
+            let metadata = loop {
+                parent.check()?;
+                own.require_live_request(business)?;
+                if let Some(metadata) = self.metadata.try_lock_for(Duration::from_millis(5)) {
+                    break metadata;
+                }
+            };
             proof.require_current(&metadata)?;
         }
         self.admission

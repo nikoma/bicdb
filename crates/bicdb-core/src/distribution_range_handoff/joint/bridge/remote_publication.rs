@@ -349,7 +349,10 @@ pub(super) fn remaining(token: &crate::CancellationToken) -> Result<Duration> {
 pub(super) struct RemoteActivationBacking {
     /// This member's own fresh pre-quorum phase observation and the writer
     /// registration it proved current under its own service lock.
-    local_phase: CommittedNativeJointDecisionObservation,
+    /// `None` only for a recovery-only admission, whose one own observation
+    /// is the admission's fresh one: with no frame there is no pre-quorum
+    /// round to vote in.
+    local_phase: Option<CommittedNativeJointDecisionObservation>,
     local_writer: crate::db::NativeJointPhaseOwner,
     /// `None` only for a recovery of this member's own existing bridge (see
     /// `recover_remote_bridge`): such an admission can never write.
@@ -406,7 +409,9 @@ impl RemoteActivationBacking {
         Ok(())
     }
     pub(super) fn require_live(&self, local: &NativeJointPreparedServingObservation) -> Result<()> {
-        self.local_phase.require_metadata_current()?;
+        if let Some(local_phase) = &self.local_phase {
+            local_phase.require_metadata_current()?;
+        }
         local
             .actual
             .require_phase_writer_lifetime(&self.local_writer)?;
@@ -438,7 +443,11 @@ impl RemoteActivationBacking {
         local: &NativeJointPreparedServingObservation,
         service: &ClusterDataNodeService,
     ) -> Result<()> {
-        let writer = local.require_fresh_phase_current(service, &self.local_phase)?;
+        let local_phase = self
+            .local_phase
+            .as_ref()
+            .ok_or_else(|| invalid(RECOVERY_ONLY_FOUND_NO_BRIDGE))?;
+        let writer = local.require_fresh_phase_current(service, local_phase)?;
         if !writer.same_actual(&self.local_writer) {
             return Err(invalid(
                 "remote publication local writer registration/generation changed",
@@ -464,10 +473,12 @@ impl RemoteActivationBacking {
         data: &NativeJointDecisionData,
         local: &ClusterNodeId,
     ) -> Result<Vec<(u64, u64, Uuid)>> {
-        let mut anchors = vec![self.local_phase.metadata_anchor()];
-        let Some(window) = &self.window else {
-            return Ok(anchors);
+        // A recovery-only admission has no pre-quorum round: its one own
+        // observation is the fresh one, and nothing precedes it.
+        let (Some(window), Some(local_phase)) = (&self.window, &self.local_phase) else {
+            return Ok(Vec::new());
         };
+        let mut anchors = vec![local_phase.metadata_anchor()];
         if &window.observer != local || window.frames.len() + 1 != data.new_members().len() {
             return Err(invalid(
                 "remote preparation window omits or replaces a NEW member",
@@ -507,8 +518,12 @@ impl RemoteActivationBacking {
         local: &NativeJointPreparedServingObservation,
     ) -> BTreeMap<ClusterNodeId, NativeJointPreparedServingVoteData> {
         let actual = local.actual.prepared();
-        let (term, index, context) = self.local_phase.metadata_anchor();
         let mut votes = BTreeMap::new();
+        // A recovery-only admission never writes, so it has no votes.
+        let Some(local_phase) = &self.local_phase else {
+            return votes;
+        };
+        let (term, index, context) = local_phase.metadata_anchor();
         votes.insert(
             local.local_node_id().clone(),
             NativeJointPreparedServingVoteData {
@@ -834,7 +849,7 @@ impl NativeJointPreparationCustody {
         let post_quorum = fresh.metadata_anchor();
         let admission = NativeJointActivationAdmission {
             backing: ActivationBacking::Remote(RemoteActivationBacking {
-                local_phase,
+                local_phase: Some(local_phase),
                 local_writer,
                 window: Some(window),
                 past_commit_point: std::sync::atomic::AtomicBool::new(false),
@@ -906,10 +921,14 @@ impl NativeJointPreparationCustody {
         let data = self.data();
         let phase = request.child_with_deadline(Instant::now() + REMOTE_PHASE_BUDGET);
         let started = Instant::now();
-        let (local_phase, local_writer) =
-            self.observe_publication_local_phase(client, metadata_leader, data, &phase)?;
-        let phase = phase.child_with_deadline(local_phase.deadline());
-        phase.check()?;
+        // ONE own observation: with no other member asked there is no
+        // pre-quorum round for a separate local observation to vote in, and
+        // the publisher's own local scope proves this member and its writer
+        // current under that observation. The writer is the preparation's
+        // original phase owner, which the scope must still show. Taking a
+        // full local phase observation as well cost about 1.6 s of a slow
+        // host's attempt, which then never finished.
+        let (local_writer, _) = self.actual.original_phase_owner_for_continuation()?;
         let business = Uuid::now_v7();
         let metadata = client.acquire_host_metadata_observation(
             metadata_leader,
@@ -948,7 +967,7 @@ impl NativeJointPreparationCustody {
         let cancellation = phase.child_with_deadline(fresh.deadline());
         let admission = NativeJointActivationAdmission {
             backing: ActivationBacking::Remote(RemoteActivationBacking {
-                local_phase,
+                local_phase: None,
                 local_writer,
                 window: None,
                 past_commit_point: std::sync::atomic::AtomicBool::new(false),

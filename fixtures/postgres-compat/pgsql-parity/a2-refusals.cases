@@ -1,1 +1,2 @@
 excl.deferrable_refused|CREATE TABLE ex8(r int4range, EXCLUDE USING gist (r WITH &&) DEFERRABLE INITIALLY DEFERRED); BEGIN; INSERT INTO ex8 VALUES ('[1,5)'),('[2,3)'); DELETE FROM ex8 WHERE r='[2,3)'; COMMIT; SELECT count(*) FROM ex8
+hstore.gin_index|CREATE EXTENSION IF NOT EXISTS hstore; CREATE TABLE hs2(h hstore); CREATE INDEX hs2_gin ON hs2 USING gin (h); INSERT INTO hs2 VALUES ('a=>1'); SELECT count(*) FROM hs2 WHERE h ? 'a'

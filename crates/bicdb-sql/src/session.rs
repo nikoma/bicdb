@@ -8,6 +8,7 @@ mod collation_ddl;
 mod create_table_as;
 pub(crate) mod deferred_constraints;
 mod domain_types;
+pub(crate) mod extension_objects;
 mod flashback;
 mod index_drop;
 mod inheritance_dml;

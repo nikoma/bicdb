@@ -3560,6 +3560,9 @@ pub(crate) fn eval_compatibility_function_value(
     if let Some(value) = crate::pgcrypto::eval_pgcrypto_function(name, args)? {
         return Ok(Some(value));
     }
+    if let Some(value) = crate::hstore::eval_hstore_function(name, args)? {
+        return Ok(Some(value));
+    }
     match name {
         "uuidv4"
         | "pg_catalog.uuidv4"

@@ -1997,7 +1997,9 @@ impl<'db> SqlSession<'db> {
             version: create_extension.version.as_ref().map(ident_value),
         };
         reject_postgis_extension(&extension.name)?;
+        let (name, schema) = (extension.name.clone(), extension.schema.clone());
         save_extension_if_missing(self.db_mut()?, extension, create_extension.if_not_exists)?;
+        self.install_extension_objects(&name, &schema)?;
         Ok(SqlResult::command("CREATE EXTENSION"))
     }
 
@@ -2007,7 +2009,9 @@ impl<'db> SqlSession<'db> {
         };
         self.require_extension_creation_authority(&extension.name)?;
         reject_postgis_extension(&extension.name)?;
+        let (name, schema) = (extension.name.clone(), extension.schema.clone());
         save_extension_if_missing(self.db_mut()?, extension, if_not_exists)?;
+        self.install_extension_objects(&name, &schema)?;
         Ok(Some(SqlResult::command("CREATE EXTENSION")))
     }
 
@@ -2149,6 +2153,7 @@ impl<'db> SqlSession<'db> {
                     }
                     return Ok(Some(SqlResult::command("DROP EXTENSION")));
                 }
+                self.remove_extension_objects(&name, cascade)?;
                 let resources = if installation.is_some() {
                     list_rest_resources(self.db_ref())?
                         .into_iter()

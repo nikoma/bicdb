@@ -272,6 +272,7 @@ mod partial_index;
 mod partition;
 pub(crate) use const_fold::fold_statement_constants;
 mod error_detail;
+mod hstore;
 mod inheritance;
 mod persistence_ddl;
 mod pg_scalar_extra;

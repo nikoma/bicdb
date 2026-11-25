@@ -2035,6 +2035,11 @@ pub(crate) fn cast_value_to_user_type(
             delimiter,
             ..
         } if user_type.array => cast_value_to_array_with_delimiter(value, codec_type, *delimiter),
+        UserTypeKind::Base { input, .. }
+            if input == crate::session::extension_objects::HSTORE_INPUT =>
+        {
+            crate::hstore::canonical_value(value)
+        }
         UserTypeKind::Base { codec_type, .. } => cast_value_to_pg_type(value, codec_type),
         UserTypeKind::Enum { labels } => {
             if matches!(value, SqlValue::Null) {

@@ -1633,8 +1633,9 @@ fn postgres_pg_get_viewdef_renders_stored_and_virtual_view_definitions() {
             ))
             .unwrap()
             .rows,
+        // PostgreSQL's pg_get_viewdef layout.
         vec![vec![SqlValue::String(
-            "SELECT id, name FROM patients;".to_string()
+            " SELECT id,\n    name\n   FROM patients;".to_string()
         )]]
     );
     assert_eq!(
@@ -1645,7 +1646,7 @@ fn postgres_pg_get_viewdef_renders_stored_and_virtual_view_definitions() {
             .unwrap()
             .rows,
         vec![vec![SqlValue::String(
-            "SELECT NULL::text AS projection, NULL::text AS id, NULL::text AS \"from\", NULL::text AS \"to\", NULL::text AS label, NULL::jsonb AS properties, NULL::bigint AS timestamp WHERE false;".to_string()
+            " SELECT NULL::text AS projection,\n    NULL::text AS id,\n    NULL::text AS \"from\",\n    NULL::text AS \"to\",\n    NULL::text AS label,\n    NULL::jsonb AS properties,\n    NULL::bigint AS timestamp\n  WHERE false;".to_string()
         )]]
     );
 }

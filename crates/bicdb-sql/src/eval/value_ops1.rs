@@ -1659,7 +1659,29 @@ pub(crate) fn postgres_view_definition(definition: &str) -> String {
 /// single-table SELECT: ` SELECT a,\n    b\n   FROM t\n  WHERE ...;`. Other
 /// shapes keep their stored text.
 fn pretty_simple_view_definition(definition: &str) -> Option<String> {
+    use sqlparser::ast::Spanned;
     let statements = Parser::parse_sql(&PostgreSqlDialect {}, definition).ok()?;
+    // Each part keeps the text it was written with (`x::text`, not the
+    // parser's rendering), sliced from the stored definition by its span.
+    let line_starts = std::iter::once(0)
+        .chain(definition.match_indices('\n').map(|(index, _)| index + 1))
+        .collect::<Vec<_>>();
+    let offset = |location: sqlparser::tokenizer::Location| -> Option<usize> {
+        let start = *line_starts.get(usize::try_from(location.line).ok()?.checked_sub(1)?)?;
+        let column = usize::try_from(location.column).ok()?.checked_sub(1)?;
+        definition[start..]
+            .char_indices()
+            .map(|(index, _)| start + index)
+            .chain(std::iter::once(definition.len()))
+            .nth(column)
+    };
+    let source = |span: sqlparser::tokenizer::Span| -> Option<String> {
+        if span.start.line == 0 {
+            return None;
+        }
+        let (start, end) = (offset(span.start)?, offset(span.end)?);
+        (start < end).then(|| definition[start..end].trim().to_string())
+    };
     let [Statement::Query(query)] = statements.as_slice() else {
         return None;
     };
@@ -1685,17 +1707,17 @@ fn pretty_simple_view_definition(definition: &str) -> Option<String> {
         &select
             .projection
             .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
+            .map(|item| source(item.span()))
+            .collect::<Option<Vec<_>>>()?
             .join(",\n    "),
     );
     if let Some(from) = select.from.first() {
         text.push_str("\n   FROM ");
-        text.push_str(&from.relation.to_string());
+        text.push_str(&source(from.relation.span())?);
     }
     if let Some(selection) = &select.selection {
         text.push_str("\n  WHERE ");
-        text.push_str(&selection.to_string());
+        text.push_str(&source(selection.span())?);
     }
     match &select.group_by {
         GroupByExpr::Expressions(exprs, modifiers) if !exprs.is_empty() && modifiers.is_empty() => {
@@ -1703,8 +1725,8 @@ fn pretty_simple_view_definition(definition: &str) -> Option<String> {
             text.push_str(
                 &exprs
                     .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
+                    .map(|expr| source(expr.span()))
+                    .collect::<Option<Vec<_>>>()?
                     .join(", "),
             );
         }
@@ -1719,10 +1741,19 @@ fn pretty_simple_view_definition(definition: &str) -> Option<String> {
         text.push_str(
             &exprs
                 .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
+                .map(|expr| {
+                    let rendered = source(expr.expr.span())?;
+                    Some(match expr.options.asc {
+                        Some(false) => format!("{rendered} DESC"),
+                        _ => rendered,
+                    })
+                })
+                .collect::<Option<Vec<_>>>()?
                 .join(", "),
         );
+        if exprs.iter().any(|expr| expr.options.nulls_first.is_some()) {
+            return None;
+        }
     }
     if let Some(limit) = &query.limit_clause {
         match limit {

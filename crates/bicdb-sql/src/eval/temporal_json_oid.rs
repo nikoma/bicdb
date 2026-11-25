@@ -571,6 +571,22 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
                 SqlValue::String(text) if is_integer_literal_text(text) => Some(text.clone()),
                 _ => None,
             };
+            // A numeric NaN or infinity has no integer value.
+            if let SqlValue::String(text) = &value {
+                let special = text.trim().to_ascii_lowercase();
+                let special = special.trim_start_matches(['+', '-']);
+                if matches!(special, "nan" | "infinity" | "inf") {
+                    return Err(SqlError::data_exception_public(
+                        "0A000",
+                        format!(
+                            "cannot convert {} to {}",
+                            if special == "nan" { "NaN" } else { "infinity" },
+                            pg_integer_type_name(pg_type)
+                        ),
+                        None,
+                    ));
+                }
+            }
             // Integer input syntax (surrounding whitespace, 0x/0o/0b, digit
             // separators) is never a numeric value's text.
             if let SqlValue::String(text) = &value {

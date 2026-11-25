@@ -3615,9 +3615,13 @@ impl<'db> SqlSession<'db> {
         };
         // A statement outside a transaction block committed on its own: its
         // temporary tables' ON COMMIT DELETE ROWS applies now.
+        // ON COMMIT DROP tables go after their transaction committed (a
+        // table with buffered writes cannot be dropped inside it).
         if result.is_ok() && self.tx.is_none() && !self.in_transaction() {
             if let Some(temp) = self.temp_schema_name() {
-                if temp_tables::temp_on_commit_delete_pending(&temp) {
+                if temp_tables::temp_on_commit_delete_pending(&temp)
+                    || temp_tables::temp_on_commit_drop_pending(&temp)
+                {
                     if let Err(error) = self.apply_temp_on_commit_actions() {
                         result = Err(error);
                     }
@@ -4852,13 +4856,6 @@ impl<'db> SqlSession<'db> {
                 finish_committed_recycle_bin_purges(self.db_mut()?)?;
             } else {
                 recycle_bin_journal::recover_purges(self.db_mut()?)?;
-            }
-            // ON COMMIT DROP tables go once their transaction has committed
-            // (dropping a table with buffered writes inside it conflicts).
-            if let Some(temp) = self.temp_schema_name() {
-                if temp_tables::temp_on_commit_drop_pending(&temp) {
-                    self.apply_temp_on_commit_actions()?;
-                }
             }
         }
         Ok(SqlResult::command("COMMIT"))

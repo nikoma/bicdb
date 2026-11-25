@@ -5423,6 +5423,7 @@ impl<'db> SqlSession<'db> {
                             sqlstate: sqlstate.clone(),
                             message: format_routine_raise_message(message, &arguments),
                             fields,
+                            warning: false,
                         })?;
                     }
                     return Ok(RoutineControl::Continue);

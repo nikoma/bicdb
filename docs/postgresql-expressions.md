@@ -44,6 +44,18 @@ Supported expression forms:
   jsonpath input`), array subscripts take any expression with `last`, item
   method errors use PostgreSQL's texts, and `jsonb_path_*` accept
   `vars =>` / `silent =>` named arguments.
+- jsonpath datetime items: `.datetime()` tries PostgreSQL's ISO formats in
+  order and `.datetime(template)` parses with the standard-mode template
+  rules (separators and quoted characters must match, no trailing input);
+  `.date()`, `.time([p])`, `.time_tz([p])`, `.timestamp([p])` and
+  `.timestamp_tz([p])` convert between the five datetime types (precision
+  above 6 is reduced with PostgreSQL's WARNING). Items compare by
+  PostgreSQL's cross-type rules (date/time pairs are not comparable), print
+  as ISO 8601 text (also through `.string()`, independent of DateStyle and
+  TimeZone) and report their type through `.type()`. A conversion or
+  comparison that needs the session time zone outside the `_tz` functions
+  fails with `0A000` even in silent mode, as in PostgreSQL. In lax mode the
+  item methods apply to the elements of an array.
 - SQL/JSON query functions `JSON_VALUE`, `JSON_QUERY` and `JSON_EXISTS` with
   `PASSING`, `RETURNING`, `WITH [CONDITIONAL|UNCONDITIONAL] [ARRAY] WRAPPER`,
   `KEEP|OMIT QUOTES`, and `NULL|ERROR|DEFAULT expr|EMPTY ARRAY|EMPTY OBJECT`

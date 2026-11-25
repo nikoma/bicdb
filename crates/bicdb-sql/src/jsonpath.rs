@@ -1,11 +1,13 @@
 use std::cell::Cell;
 use std::cmp::Ordering;
 
-use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime};
 use regex::RegexBuilder;
 use serde_json::{json, Map, Number, Value as JsonValue};
 
 use crate::{Result, SqlError, SqlValue};
+
+#[path = "jsonpath_datetime.rs"]
+mod datetime;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Mode {
@@ -989,6 +991,9 @@ impl Parser {
     #[inline(never)]
     fn method_call(&mut self, left: Expr, name: String) -> Result<Expr> {
         self.next();
+        if let Some(method) = Method::parse(&name).filter(|method| is_datetime_method(*method)) {
+            return self.datetime_method_call(left, method);
+        }
         let mut arguments = Vec::new();
         if !matches!(self.peek(), Token::RParen) {
             loop {
@@ -1004,6 +1009,35 @@ impl Parser {
             .ok_or_else(|| syntax_error(format!("unknown jsonpath method {name}()")))?;
         validate_method_argument_count(method, arguments.len())?;
         Ok(Expr::Method(Box::new(left), method, arguments))
+    }
+
+    /// The grammar's datetime methods: `.datetime([template string])`,
+    /// `.date()` and `.time*/.timestamp*([integer precision])`.
+    #[inline(never)]
+    fn datetime_method_call(&mut self, left: Expr, method: Method) -> Result<Expr> {
+        let mut arguments = Vec::new();
+        match (method, self.peek().clone()) {
+            (_, Token::RParen) => {}
+            (Method::DateTime, Token::String(template)) => {
+                self.next();
+                arguments.push(Expr::Literal(JsonValue::String(template)));
+            }
+            (
+                Method::Time | Method::TimeTz | Method::Timestamp | Method::TimestampTz,
+                Token::Number(text),
+            ) if text.bytes().all(|byte| byte.is_ascii_digit()) => {
+                self.next();
+                let number = text
+                    .parse::<Number>()
+                    .map_err(|_| syntax_error("invalid jsonpath method argument"))?;
+                arguments.push(Expr::Literal(JsonValue::Number(number)));
+            }
+            (_, token) => return Err(unexpected_token("method argument", token)),
+        }
+        match self.next() {
+            Token::RParen => Ok(Expr::Method(Box::new(left), method, arguments)),
+            token => Err(unexpected_token("method argument", token)),
+        }
     }
 
     #[inline(never)]
@@ -1131,15 +1165,17 @@ impl JsonPath {
         timezone_aware: bool,
     ) -> Result<Vec<JsonValue>> {
         let keyvalue_counter = Cell::new(1);
-        self.expression.evaluate(&EvalContext {
-            root: target,
-            current: target,
-            variables,
-            mode: self.mode,
-            timezone_aware,
-            keyvalue_counter: &keyvalue_counter,
-            last: None,
-        })
+        self.expression
+            .evaluate(&EvalContext {
+                root: target,
+                current: target,
+                variables,
+                mode: self.mode,
+                timezone_aware,
+                keyvalue_counter: &keyvalue_counter,
+                last: None,
+            })
+            .map(datetime::finalize)
     }
 
     fn required_member_keys(&self) -> Vec<String> {
@@ -1400,11 +1436,18 @@ impl Expr {
                 let mut output = Vec::new();
                 for value in base.evaluate(context)? {
                     match value {
+                        JsonValue::Object(_) if datetime::is_item(&value) => {
+                            if context.mode == Mode::Strict {
+                                return Err(execution_error(
+                                    "jsonpath wildcard member accessor can only be applied to an object",
+                                ));
+                            }
+                        }
                         JsonValue::Object(object) => output.extend(object.into_values()),
                         JsonValue::Array(values) if context.mode == Mode::Lax => {
                             for value in values {
                                 match value {
-                                    JsonValue::Object(object) => {
+                                    JsonValue::Object(object) if !datetime::is_item(&value) => {
                                         output.extend(object.into_values())
                                     }
                                     _ => output.push(value),
@@ -1472,7 +1515,19 @@ impl Expr {
             Self::Method(base, method, arguments) => {
                 let mut output = Vec::new();
                 for value in base.evaluate(context)? {
-                    apply_method(*method, arguments, value, context, &mut output)?;
+                    match value {
+                        // Lax mode applies an item method to an array's
+                        // elements (all but .type() and .size()).
+                        JsonValue::Array(values)
+                            if context.mode == Mode::Lax
+                                && !matches!(method, Method::Type | Method::Size) =>
+                        {
+                            for value in values {
+                                apply_method(*method, arguments, value, context, &mut output)?;
+                            }
+                        }
+                        value => apply_method(*method, arguments, value, context, &mut output)?,
+                    }
                 }
                 Ok(output)
             }
@@ -1499,13 +1554,12 @@ impl Expr {
                 | BinaryOp::LtEq
                 | BinaryOp::Gt
                 | BinaryOp::GtEq => {
-                    let truth = compare_datetime_expressions(left, *operator, right, context)?
-                        .unwrap_or(compare_sequences(
-                            &left.evaluate(context)?,
-                            *operator,
-                            &right.evaluate(context)?,
-                            context.mode,
-                        )?);
+                    let truth = compare_sequences(
+                        &left.evaluate(context)?,
+                        *operator,
+                        &right.evaluate(context)?,
+                        context,
+                    )?;
                     Ok(vec![truth_json(truth)])
                 }
                 BinaryOp::Add
@@ -1818,7 +1872,7 @@ fn member_values(
     output: &mut Vec<JsonValue>,
 ) -> Result<()> {
     match value {
-        JsonValue::Object(object) => match object.get(name) {
+        JsonValue::Object(object) if !datetime::is_item(value) => match object.get(name) {
             Some(value) => output.push(value.clone()),
             None if mode == Mode::Strict => {
                 return Err(execution_error(format!(
@@ -1862,7 +1916,7 @@ fn descendants(
                 descendants(value, depth + 1, minimum, maximum, output);
             }
         }
-        JsonValue::Object(object) => {
+        JsonValue::Object(object) if !datetime::is_item(value) => {
             for value in object.values() {
                 descendants(value, depth + 1, minimum, maximum, output);
             }
@@ -1883,15 +1937,15 @@ fn compare_sequences(
     left: &[JsonValue],
     operator: BinaryOp,
     right: &[JsonValue],
-    mode: Mode,
+    context: &EvalContext<'_>,
 ) -> Result<Truth> {
-    let left = comparison_items(left, mode);
-    let right = comparison_items(right, mode);
+    let left = comparison_items(left, context.mode);
+    let right = comparison_items(right, context.mode);
     let mut unknown = false;
     for left in &left {
         for right in &right {
-            match compare_json_values(left, right) {
-                Some(ordering) => {
+            match compare_json_values(left, right, context.timezone_aware)? {
+                Comparison::Ordered(ordering) => {
                     let matched = match operator {
                         BinaryOp::Eq => ordering == Ordering::Equal,
                         BinaryOp::NotEq => ordering != Ordering::Equal,
@@ -1905,7 +1959,13 @@ fn compare_sequences(
                         return Ok(Truth::True);
                     }
                 }
-                None => unknown = true,
+                // Null against a non-null item: only `!=` holds.
+                Comparison::NullMismatch => {
+                    if matches!(operator, BinaryOp::NotEq) {
+                        return Ok(Truth::True);
+                    }
+                }
+                Comparison::Unknown => unknown = true,
             }
         }
     }
@@ -1914,54 +1974,6 @@ fn compare_sequences(
     } else {
         Truth::False
     })
-}
-
-fn compare_datetime_expressions(
-    left: &Expr,
-    operator: BinaryOp,
-    right: &Expr,
-    context: &EvalContext<'_>,
-) -> Result<Option<Truth>> {
-    let (Expr::Method(left, left_method, _), Expr::Method(right, right_method, _)) = (left, right)
-    else {
-        return Ok(None);
-    };
-    if !is_datetime_method(*left_method) || !is_datetime_method(*right_method) {
-        return Ok(None);
-    }
-    let left = left.evaluate(context)?;
-    let right = right.evaluate(context)?;
-    let mut comparable = false;
-    for left in &left {
-        for right in &right {
-            let (Some(left), Some(right)) = (left.as_str(), right.as_str()) else {
-                continue;
-            };
-            let Some(ordering) = datetime_key(*left_method, left, context.timezone_aware)?
-                .partial_cmp(&datetime_key(*right_method, right, context.timezone_aware)?)
-            else {
-                continue;
-            };
-            comparable = true;
-            let matched = match operator {
-                BinaryOp::Eq => ordering == Ordering::Equal,
-                BinaryOp::NotEq => ordering != Ordering::Equal,
-                BinaryOp::Lt => ordering == Ordering::Less,
-                BinaryOp::LtEq => ordering != Ordering::Greater,
-                BinaryOp::Gt => ordering == Ordering::Greater,
-                BinaryOp::GtEq => ordering != Ordering::Less,
-                _ => unreachable!(),
-            };
-            if matched {
-                return Ok(Some(Truth::True));
-            }
-        }
-    }
-    Ok(Some(if comparable {
-        Truth::False
-    } else {
-        Truth::Unknown
-    }))
 }
 
 fn is_datetime_method(method: Method) -> bool {
@@ -1974,78 +1986,6 @@ fn is_datetime_method(method: Method) -> bool {
             | Method::TimestampTz
             | Method::DateTime
     )
-}
-
-fn datetime_key(method: Method, value: &str, timezone_aware: bool) -> Result<i128> {
-    const DAY_MICROS: i128 = 86_400_000_000;
-    if matches!(method, Method::Date) || (matches!(method, Method::DateTime) && value.len() == 10) {
-        let date = NaiveDate::parse_from_str(value, "%Y-%m-%d")
-            .map_err(|_| execution_error("invalid jsonpath date value"))?;
-        return Ok(i128::from(date.to_epoch_days()) * DAY_MICROS);
-    }
-    if matches!(method, Method::Time | Method::TimeTz)
-        || (matches!(method, Method::DateTime) && !value.contains(['-', 'T', ' ']))
-    {
-        let time = value
-            .split(['+', '-', 'Z'])
-            .next()
-            .and_then(|value| NaiveTime::parse_from_str(value, "%H:%M:%S%.f").ok())
-            .ok_or_else(|| execution_error("invalid jsonpath time value"))?;
-        let mut micros = i128::from(
-            time.signed_duration_since(NaiveTime::MIN)
-                .num_microseconds()
-                .unwrap_or_default(),
-        );
-        if matches!(method, Method::TimeTz) {
-            micros -= i128::from(timezone_offset_seconds(value)?) * 1_000_000;
-        }
-        return Ok(micros);
-    }
-    let normalized = normalize_datetime_offset(value);
-    if let Ok(value) = DateTime::parse_from_rfc3339(&normalized) {
-        return Ok(i128::from(value.timestamp_micros()));
-    }
-    let value = NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S%.f")
-        .or_else(|_| NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M:%S%.f"))
-        .map_err(|_| execution_error("invalid jsonpath timestamp value"))?;
-    if !timezone_aware && matches!(method, Method::TimeTz | Method::TimestampTz) {
-        return Err(execution_error(
-            "timezone-dependent jsonpath comparison requires a _tz function",
-        ));
-    }
-    Ok(i128::from(value.and_utc().timestamp_micros()))
-}
-
-fn timezone_offset_seconds(value: &str) -> Result<i32> {
-    if value.ends_with('Z') {
-        return Ok(0);
-    }
-    let offset = value
-        .rfind(['+', '-'])
-        .filter(|offset| *offset > value.find(':').unwrap_or(0))
-        .ok_or_else(|| execution_error("jsonpath time zone offset is missing"))?;
-    let negative = value.as_bytes()[offset] == b'-';
-    let raw = &value[offset + 1..];
-    let (hours, minutes) = raw.split_once(':').unwrap_or((raw, "0"));
-    let seconds = hours
-        .parse::<i32>()
-        .ok()
-        .zip(minutes.parse::<i32>().ok())
-        .filter(|(hours, minutes)| *hours <= 15 && *minutes < 60)
-        .map(|(hours, minutes)| hours * 3600 + minutes * 60)
-        .ok_or_else(|| execution_error("invalid jsonpath time zone offset"))?;
-    Ok(if negative { -seconds } else { seconds })
-}
-
-fn normalize_datetime_offset(value: &str) -> String {
-    let mut value = value.replace(' ', "T");
-    let offset = value.rfind(['+', '-']).filter(|offset| *offset > 9);
-    if let Some(offset) = offset {
-        if value.len() == offset + 3 {
-            value.push_str(":00");
-        }
-    }
-    value
 }
 
 fn string_predicate_sequences(
@@ -2084,20 +2024,41 @@ fn comparison_items(values: &[JsonValue], mode: Mode) -> Vec<&JsonValue> {
         .collect()
 }
 
-fn compare_json_values(left: &JsonValue, right: &JsonValue) -> Option<Ordering> {
+enum Comparison {
+    Ordered(Ordering),
+    NullMismatch,
+    Unknown,
+}
+
+/// PostgreSQL's `compareItems`.
+fn compare_json_values(
+    left: &JsonValue,
+    right: &JsonValue,
+    timezone_aware: bool,
+) -> Result<Comparison> {
+    let ordered =
+        |ordering: Option<Ordering>| Ok(ordering.map_or(Comparison::Unknown, Comparison::Ordered));
     match (left, right) {
-        (JsonValue::Null, JsonValue::Null) => Some(Ordering::Equal),
-        (JsonValue::Bool(left), JsonValue::Bool(right)) => Some(left.cmp(right)),
-        (JsonValue::String(left), JsonValue::String(right)) => Some(left.cmp(right)),
-        (JsonValue::Number(left), JsonValue::Number(right)) => crate::pg_typed_compare(
-            "numeric",
-            &SqlValue::String(left.to_string()),
-            &SqlValue::String(right.to_string()),
-        )
-        .ok(),
-        (JsonValue::Array(left), JsonValue::Array(right)) => Some(left.len().cmp(&right.len())),
-        (JsonValue::Object(left), JsonValue::Object(right)) => Some(left.len().cmp(&right.len())),
-        _ => None,
+        (JsonValue::Null, JsonValue::Null) => ordered(Some(Ordering::Equal)),
+        (JsonValue::Null, _) | (_, JsonValue::Null) => Ok(Comparison::NullMismatch),
+        (JsonValue::Bool(left), JsonValue::Bool(right)) => ordered(Some(left.cmp(right))),
+        (JsonValue::String(left), JsonValue::String(right)) => ordered(Some(left.cmp(right))),
+        (JsonValue::Number(left), JsonValue::Number(right)) => ordered(
+            crate::pg_typed_compare(
+                "numeric",
+                &SqlValue::String(left.to_string()),
+                &SqlValue::String(right.to_string()),
+            )
+            .ok(),
+        ),
+        _ => match (
+            datetime::Item::from_json(left),
+            datetime::Item::from_json(right),
+        ) {
+            (Some(left), Some(right)) => ordered(datetime::compare(left, right, timezone_aware)?),
+            // Arrays and objects are not comparable.
+            _ => Ok(Comparison::Unknown),
+        },
     }
 }
 
@@ -2254,7 +2215,20 @@ fn apply_method(
     context: &EvalContext<'_>,
     output: &mut Vec<JsonValue>,
 ) -> Result<()> {
+    let datetime_item = datetime::Item::from_json(&value);
     let result = match method {
+        Method::Type if datetime_item.is_some() => JsonValue::String(
+            datetime_item
+                .expect("checked datetime item")
+                .type_name()
+                .to_string(),
+        ),
+        Method::String if datetime_item.is_some() => {
+            JsonValue::String(datetime_item.expect("checked datetime item").encode())
+        }
+        Method::KeyValue if datetime_item.is_some() => {
+            return Err(method_type_error(method, "an object"));
+        }
         Method::Type => JsonValue::String(
             match value {
                 JsonValue::Null => "null",
@@ -2443,46 +2417,28 @@ fn apply_method(
         | Method::Timestamp
         | Method::TimestampTz
         | Method::DateTime => {
-            let JsonValue::String(value) = value else {
+            let JsonValue::String(text) = value else {
                 return Err(method_type_error(method, "a string"));
             };
-            validate_datetime_method(method, &value, context.timezone_aware)?;
-            JsonValue::String(value)
+            let target = match method {
+                Method::Date => datetime::Target::Date,
+                Method::Time => datetime::Target::Time,
+                Method::TimeTz => datetime::Target::TimeTz,
+                Method::Timestamp => datetime::Target::Timestamp,
+                Method::TimestampTz => datetime::Target::TimestampTz,
+                _ => datetime::Target::DateTime,
+            };
+            let (template, precision) = match arguments.first() {
+                Some(Expr::Literal(JsonValue::String(template))) => (Some(template.as_str()), None),
+                Some(Expr::Literal(JsonValue::Number(number))) => {
+                    (None, Some(number.as_i64().ok_or(())))
+                }
+                _ => (None, None),
+            };
+            datetime::execute(target, &text, template, precision, context.timezone_aware)?.to_json()
         }
     };
     output.push(result);
-    Ok(())
-}
-
-fn validate_datetime_method(method: Method, value: &str, timezone_aware: bool) -> Result<()> {
-    let _ = timezone_aware;
-    let valid_date = || {
-        value.len() >= 10
-            && value.as_bytes().get(4) == Some(&b'-')
-            && value.as_bytes().get(7) == Some(&b'-')
-            && value[..4].parse::<u16>().is_ok()
-            && value[5..7].parse::<u8>().is_ok()
-            && value[8..10].parse::<u8>().is_ok()
-    };
-    let valid_time = || value.contains(':');
-    let valid = match method {
-        Method::Date => valid_date() && value.len() == 10,
-        Method::Time => valid_time() && !value.ends_with('Z') && !has_timezone_offset(value),
-        Method::TimeTz => valid_time() && (value.ends_with('Z') || has_timezone_offset(value)),
-        Method::Timestamp => valid_date() && value.contains('T') && !has_timezone_offset(value),
-        Method::TimestampTz => {
-            valid_date()
-                && value.contains('T')
-                && (value.ends_with('Z') || has_timezone_offset(value))
-        }
-        Method::DateTime => valid_date() || valid_time(),
-        _ => true,
-    };
-    if !valid {
-        return Err(execution_error(format!(
-            "invalid datetime value for jsonpath method: {value}"
-        )));
-    }
     Ok(())
 }
 
@@ -2508,8 +2464,16 @@ fn method_type_error(method: Method, what: &str) -> SqlError {
         | Method::Integer
         | Method::Ceiling
         | Method::Floor
-        | Method::Abs => "22036",
+        | Method::Abs
+        | Method::Boolean
+        | Method::String => "22036",
         Method::KeyValue => "2203C",
+        Method::Date
+        | Method::Time
+        | Method::TimeTz
+        | Method::Timestamp
+        | Method::TimestampTz
+        | Method::DateTime => "22031",
         _ => "22038",
     };
     SqlError::data_exception(
@@ -2568,12 +2532,6 @@ fn method_integer_argument(expression: &Expr, context: &EvalContext<'_>) -> Resu
     value
         .as_i64()
         .ok_or_else(|| execution_error("jsonpath method argument must be an integer"))
-}
-
-fn has_timezone_offset(value: &str) -> bool {
-    value
-        .rfind(['+', '-'])
-        .is_some_and(|offset| offset > value.find('T').unwrap_or(0))
 }
 
 fn jsonpath_args(
@@ -2674,18 +2632,22 @@ pub(crate) fn eval_jsonpath_function_value(
     let result = path.query(&target, &variables, timezone_aware);
     let values = match result {
         Ok(values) => values,
-        Err(_) if silent => Vec::new(),
+        Err(error) if silent && !datetime::is_unsuppressible(&error) => Vec::new(),
         Err(error) => return Err(error),
     };
     let value = match base_name {
         "jsonb_path_exists" => SqlValue::Bool(!values.is_empty()),
+        // `jsonb_path_match_internal`: anything but one boolean or null item
+        // is an error unless silent (an empty result included).
         "jsonb_path_match" => match values.as_slice() {
             [JsonValue::Bool(value)] => SqlValue::Bool(*value),
-            [JsonValue::Null] | [] => SqlValue::Null,
+            [JsonValue::Null] => SqlValue::Null,
             _ if silent => SqlValue::Null,
             _ => {
-                return Err(execution_error(
-                    "single boolean result is expected from jsonpath predicate",
+                return Err(SqlError::data_exception(
+                    "22038",
+                    "single boolean result is expected",
+                    Some("jsonpath".to_string()),
                 ))
             }
         },
@@ -2734,7 +2696,7 @@ pub(crate) fn eval_jsonpath_query_values(name: &str, args: &[SqlValue]) -> Resul
     };
     match path.query(&target, &variables, timezone_aware) {
         Ok(values) => Ok(values.into_iter().map(SqlValue::json).collect()),
-        Err(_) if silent => Ok(Vec::new()),
+        Err(error) if silent && !datetime::is_unsuppressible(&error) => Ok(Vec::new()),
         Err(error) => Err(error),
     }
 }

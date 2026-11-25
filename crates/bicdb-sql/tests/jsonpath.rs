@@ -285,3 +285,82 @@ fn jsonpath_storage_copy_arrays_and_restart_preserve_canonical_values() {
     assert_eq!(result.column_types[1], Some("jsonpath".to_string()));
     assert_eq!(result.column_types[2], Some("jsonpath[]".to_string()));
 }
+
+#[test]
+fn jsonpath_datetime_methods_convert_compare_and_print_as_postgres() {
+    let (_dir, mut db) = session_db();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("SET timezone = 'PST8PDT'").unwrap();
+    let result = session
+        .execute(
+            r#"SELECT
+                jsonb_path_query_first('"10-03-2017 12:34 +05:20"', '$.datetime("dd-mm-yyyy HH24:MI TZH:TZM")'),
+                jsonb_path_query_first('"10-03-2017 12:34"', '$.datetime("dd-mm-yyyy HH24:MI").type()'),
+                jsonb_path_query_first('"12:34:56.789"', '$.time(2)'),
+                jsonb_path_query_first_tz('"2023-08-15"', '$.timestamp_tz()'),
+                jsonb_path_query_first('"2023-08-15 12:34:56 +5:30"', '$.timestamp_tz().string()'),
+                jsonb_path_query_array(
+                    '["2017-03-10", "2017-03-11", "12:34:56", "2017-03-10 00:00:00"]',
+                    '$[*].datetime() ? (@ == "10.03.2017".datetime("dd.mm.yyyy"))'
+                ),
+                jsonb_path_query_array('[]', '$.datetime()')"#,
+        )
+        .unwrap();
+    assert_eq!(
+        result.rows,
+        vec![vec![
+            SqlValue::json(json!("2017-03-10T12:34:00+05:20")),
+            SqlValue::json(json!("timestamp without time zone")),
+            SqlValue::json(json!("12:34:56.79")),
+            SqlValue::json(json!("2023-08-15T00:00:00-07:00")),
+            SqlValue::json(json!("2023-08-15T12:34:56+05:30")),
+            SqlValue::json(json!(["2017-03-10", "2017-03-10T00:00:00"])),
+            SqlValue::json(json!([])),
+        ]]
+    );
+
+    // A cast that needs the session time zone is refused outside the _tz
+    // functions, even in silent mode.
+    for sql in [
+        r#"SELECT jsonb_path_query('"12:34:56 +05:30"', '$.time()')"#,
+        r#"SELECT jsonb_path_query('"2023-08-15"', '$.timestamp_tz()', silent => true)"#,
+    ] {
+        let error = session.execute(sql).unwrap_err();
+        assert_eq!(error.sqlstate(), "0A000", "{sql}");
+        assert!(
+            error.to_string().contains("without time zone usage"),
+            "{sql}: {error}"
+        );
+    }
+    for (sql, sqlstate, message) in [
+        (
+            r#"SELECT jsonb_path_query('"bogus"', '$.datetime()')"#,
+            "22031",
+            "datetime format is not recognized",
+        ),
+        (
+            r#"SELECT jsonb_path_query('"10-03-2017 12:34"', '$.datetime("dd-mm-yyyy")')"#,
+            "22007",
+            "trailing characters remain in input string after datetime format",
+        ),
+        (
+            r#"SELECT jsonb_path_query('1', '$.date()')"#,
+            "22031",
+            "jsonpath item method .date() can only be applied to a string",
+        ),
+        (
+            r#"SELECT jsonb_path_query('"12:34:56"', '$.time(-1)')"#,
+            "42601",
+            "syntax error at or near \"-\" of jsonpath input",
+        ),
+    ] {
+        let error = session.execute(sql).unwrap_err();
+        assert_eq!(error.sqlstate(), sqlstate, "{sql}");
+        assert!(error.to_string().contains(message), "{sql}: {error}");
+    }
+    // Silent mode suppresses the jsonpath errors.
+    let result = session
+        .execute(r#"SELECT count(*) FROM jsonb_path_query('"bogus"', '$.date()', silent => true)"#)
+        .unwrap();
+    assert_eq!(result.rows, vec![vec![SqlValue::Int(0)]]);
+}

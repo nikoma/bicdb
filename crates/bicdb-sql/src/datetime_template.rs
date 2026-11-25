@@ -141,12 +141,16 @@ enum Node {
         fill: bool,
         th: bool,
     },
-    Separator,
-    Space,
+    Separator(char),
+    Space(char),
     Char(char),
 }
 
-fn parse_template(format: &str) -> Vec<Node> {
+/// Characters a standard-mode (SQL/JSON) template may use outside keywords
+/// and double quotes.
+const STD_SEPARATORS: &str = "-./,':; ";
+
+fn parse_template(format: &str, std: bool) -> Result<Vec<Node>> {
     let mut nodes = Vec::new();
     let chars = format.char_indices().collect::<Vec<_>>();
     let mut index = 0;
@@ -182,6 +186,22 @@ fn parse_template(format: &str) -> Vec<Node> {
             }
             continue;
         }
+        if std && ch != '"' {
+            if !STD_SEPARATORS.contains(ch) {
+                return Err(format_error(
+                    format!("invalid datetime format separator: \"{ch}\""),
+                    None,
+                    None,
+                ));
+            }
+            nodes.push(if ch == ' ' {
+                Node::Space(ch)
+            } else {
+                Node::Separator(ch)
+            });
+            index += 1;
+            continue;
+        }
         if ch == '"' {
             index += 1;
             while index < chars.len() && chars[index].1 != '"' {
@@ -202,15 +222,15 @@ fn parse_template(format: &str) -> Vec<Node> {
             continue;
         }
         if is_separator_char(ch) {
-            nodes.push(Node::Separator);
+            nodes.push(Node::Separator(ch));
         } else if ch.is_whitespace() {
-            nodes.push(Node::Space);
+            nodes.push(Node::Space(ch));
         } else {
             nodes.push(Node::Char(ch));
         }
         index += 1;
     }
-    nodes
+    Ok(nodes)
 }
 
 fn is_separator_char(ch: char) -> bool {
@@ -474,20 +494,24 @@ const ROMAN_MONTHS: [&str; 12] = [
     "xii", "xi", "x", "ix", "viii", "vii", "vi", "v", "iv", "iii", "ii", "i",
 ];
 
-fn parse_fields(input: &str, format: &str) -> Result<Fields> {
-    let nodes = parse_template(format);
+/// `DCH_from_char`. `std` is PostgreSQL's standard (SQL/JSON) mode: fixed
+/// format, separators and literal characters must match exactly, and the
+/// input and the template must both be used up.
+fn parse_fields(input: &str, nodes: &[Node], std: bool) -> Result<Fields> {
     let mut parser = Parser {
         input,
         pos: 0,
-        nodes: &nodes,
+        nodes,
     };
     let mut out = Fields::default();
-    let mut fx = false;
+    let mut fx = std;
+    let mut stopped_at = nodes.len();
     let mut extra_skip: i32 = 0;
     let months_abbrev = MONTHS_FULL.map(|name| &name[..3]);
     let days_abbrev = DAYS_FULL.map(|name| &name[..3]);
     for index in 0..nodes.len() {
         if parser.pos >= input.len() {
+            stopped_at = index;
             break;
         }
         let is_action = matches!(nodes[index], Node::Action { .. });
@@ -496,8 +520,17 @@ fn parse_fields(input: &str, format: &str) -> Result<Fields> {
             extra_skip += parser.skip_spaces() as i32;
         }
         match &nodes[index] {
-            Node::Space | Node::Separator => {
-                if !fx {
+            Node::Space(separator) | Node::Separator(separator) => {
+                if std {
+                    if !parser.rest().starts_with(*separator) {
+                        return Err(format_error(
+                            format!("unmatched format separator \"{separator}\""),
+                            None,
+                            None,
+                        ));
+                    }
+                    parser.pos += separator.len_utf8();
+                } else if !fx {
                     extra_skip -= 1;
                     if parser
                         .rest()
@@ -513,7 +546,7 @@ fn parse_fields(input: &str, format: &str) -> Result<Fields> {
                 }
                 continue;
             }
-            Node::Char(_) => {
+            Node::Char(expected) => {
                 if !fx {
                     if extra_skip > 0 {
                         extra_skip -= 1;
@@ -521,6 +554,13 @@ fn parse_fields(input: &str, format: &str) -> Result<Fields> {
                         parser.pos += ch.len_utf8();
                     }
                 } else if let Some(ch) = parser.rest().chars().next() {
+                    if std && ch != *expected {
+                        return Err(format_error(
+                            format!("unmatched format character \"{expected}\""),
+                            None,
+                            None,
+                        ));
+                    }
                     parser.pos += ch.len_utf8();
                 }
                 continue;
@@ -816,6 +856,23 @@ fn parse_fields(input: &str, format: &str) -> Result<Fields> {
         }
         skip_after_field(&mut parser, fx, &mut extra_skip);
     }
+    if std {
+        if stopped_at < nodes.len() {
+            return Err(format_error(
+                "input string is too short for datetime format".into(),
+                None,
+                None,
+            ));
+        }
+        parser.skip_spaces();
+        if !parser.rest().is_empty() {
+            return Err(format_error(
+                "trailing characters remain in input string after datetime format".into(),
+                None,
+                None,
+            ));
+        }
+    }
     Ok(out)
 }
 
@@ -826,7 +883,7 @@ fn skip_after_field(parser: &mut Parser<'_>, fx: bool, extra_skip: &mut i32) {
 }
 
 /// Days from 1970-01-01 of a proleptic Gregorian date (year 0 = 1 BC).
-fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
+pub(crate) fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
     let year = year - i64::from(month <= 2);
     let era = if year >= 0 { year } else { year - 399 } / 400;
     let yoe = year - era * 400;
@@ -836,7 +893,7 @@ fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
     era * 146_097 + doe - 719_468
 }
 
-fn civil_from_days(days: i64) -> (i64, i64, i64) {
+pub(crate) fn civil_from_days(days: i64) -> (i64, i64, i64) {
     let z = days + 719_468;
     let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
     let doe = z - era * 146_097;
@@ -890,7 +947,12 @@ fn out_of_range(input: &str) -> SqlError {
 }
 
 fn do_to_timestamp(input: &str, format: &str) -> Result<Broken> {
-    let fields = parse_fields(input, format)?;
+    let nodes = parse_template(format, false)?;
+    let fields = parse_fields(input, &nodes, false)?;
+    broken_from_fields(input, &fields)
+}
+
+fn broken_from_fields(input: &str, fields: &Fields) -> Result<Broken> {
     let mut hour = 0i64;
     let mut minute = 0i64;
     let mut second = 0i64;
@@ -1067,6 +1129,168 @@ fn do_to_timestamp(input: &str, format: &str) -> Result<Broken> {
         day,
         micros_of_day: ((hour * 60 + minute) * 60 + second) * 1_000_000 + fraction,
         offset,
+    })
+}
+
+/// The type `parse_datetime` gives a standard-mode template result.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ParsedKind {
+    Date,
+    Time,
+    TimeTz,
+    Timestamp,
+    TimestampTz,
+}
+
+/// A standard-mode template result: `value` is days since 2000-01-01 for a
+/// date, microseconds of the day for a time (local for timetz), local
+/// microseconds since 2000-01-01 for a timestamp and UTC microseconds for a
+/// timestamptz. `offset` is seconds east of UTC for the zoned kinds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ParsedDatetime {
+    pub(crate) kind: ParsedKind,
+    pub(crate) value: i64,
+    pub(crate) offset: i32,
+    /// The fractional precision an `FFn` field gave, or -1.
+    pub(crate) typmod: i32,
+}
+
+const DATED: u8 = 1;
+const TIMED: u8 = 2;
+const ZONED: u8 = 4;
+
+/// `DCH_datetime_type`.
+fn datetime_flags(nodes: &[Node]) -> u8 {
+    let mut flags = 0;
+    for node in nodes {
+        let Node::Action { info, .. } = node else {
+            continue;
+        };
+        flags |= match info.key {
+            Key::Fx | Key::Iw => 0,
+            Key::AmDots
+            | Key::Am
+            | Key::Hh12
+            | Key::Hh24
+            | Key::Mi
+            | Key::Ss
+            | Key::Ms
+            | Key::Us
+            | Key::Ff(_)
+            | Key::Ssss => TIMED,
+            Key::Tz | Key::Of | Key::Tzh | Key::Tzm => ZONED,
+            _ => DATED,
+        };
+    }
+    flags
+}
+
+/// `AdjustTimestampForTypmod` / `AdjustTimeForTypmod`: round half away from
+/// zero to `precision` fractional digits.
+pub(crate) fn round_micros_to_precision(value: i64, precision: i32) -> i64 {
+    if !(0..6).contains(&precision) {
+        return value;
+    }
+    let scale = 10_i64.pow(6 - precision as u32);
+    let offset = scale / 2;
+    if value >= 0 {
+        value.saturating_add(offset) / scale * scale
+    } else {
+        -((value.saturating_neg().saturating_add(offset)) / scale * scale)
+    }
+}
+
+/// PostgreSQL's `parse_datetime` in standard mode (the jsonpath
+/// `.datetime()` family): the template decides the result type.
+pub(crate) fn parse_datetime_std(input: &str, format: &str) -> Result<ParsedDatetime> {
+    let nodes = parse_template(format, true)?;
+    let fields = parse_fields(input, &nodes, true)?;
+    let flags = datetime_flags(&nodes);
+    let broken = broken_from_fields(input, &fields)?;
+    let typmod = if fields.ff != 0 { fields.ff } else { -1 };
+    let days = days_from_civil(broken.year, broken.month, broken.day) - UNIX_TO_PG_DAYS;
+    let local = || {
+        days.checked_mul(86_400_000_000)
+            .and_then(|micros| micros.checked_add(broken.micros_of_day))
+            .filter(|micros| (-211_813_488_000_000_000..9_223_371_331_200_000_000).contains(micros))
+    };
+    let zone = || {
+        broken.offset.ok_or_else(|| {
+            format_error(
+                "missing time zone in input string for type timestamptz".into(),
+                None,
+                None,
+            )
+        })
+    };
+    let (kind, value, offset) = if flags & DATED != 0 {
+        if flags & TIMED != 0 {
+            if flags & ZONED != 0 {
+                let offset = zone()?;
+                let utc = local()
+                    .and_then(|local| local.checked_sub(i64::from(offset) * 1_000_000))
+                    .ok_or_else(|| {
+                        SqlError::data_exception_public(
+                            "22008",
+                            "timestamptz out of range".to_string(),
+                            None,
+                        )
+                    })?;
+                (
+                    ParsedKind::TimestampTz,
+                    round_micros_to_precision(utc, typmod),
+                    offset,
+                )
+            } else {
+                let local = local().ok_or_else(timestamp_out_of_range)?;
+                (
+                    ParsedKind::Timestamp,
+                    round_micros_to_precision(local, typmod),
+                    0,
+                )
+            }
+        } else if flags & ZONED != 0 {
+            return Err(format_error(
+                "datetime format is zoned but not timed".into(),
+                None,
+                None,
+            ));
+        } else {
+            if !(-2_451_545..=2_145_031_948).contains(&days) {
+                return Err(SqlError::data_exception_public(
+                    "22008",
+                    format!("date out of range: \"{input}\""),
+                    None,
+                ));
+            }
+            (ParsedKind::Date, days, 0)
+        }
+    } else if flags & TIMED != 0 {
+        let time = round_micros_to_precision(broken.micros_of_day, typmod);
+        if flags & ZONED != 0 {
+            let offset = broken.offset.ok_or_else(|| {
+                format_error(
+                    "missing time zone in input string for type timetz".into(),
+                    None,
+                    None,
+                )
+            })?;
+            (ParsedKind::TimeTz, time, offset)
+        } else {
+            (ParsedKind::Time, time, 0)
+        }
+    } else {
+        return Err(format_error(
+            "datetime format is not dated and not timed".into(),
+            None,
+            None,
+        ));
+    };
+    Ok(ParsedDatetime {
+        kind,
+        value,
+        offset,
+        typmod,
     })
 }
 

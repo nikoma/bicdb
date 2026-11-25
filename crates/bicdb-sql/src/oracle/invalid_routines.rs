@@ -103,6 +103,7 @@ pub(crate) fn classify(db: &BicDb, routine: &mut RoutineSchema) -> Result<Option
         sqlstate: "01000".into(),
         message: "creation succeeded with compilation errors".into(),
         fields: Vec::new(),
+        warning: false,
     }))
 }
 

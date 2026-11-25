@@ -7536,8 +7536,10 @@ pub(crate) fn information_schema_columns_filtered(
                     "generation_expression",
                     column
                         .generated_expr
-                        .clone()
-                        .map(SqlValue::String)
+                        .as_deref()
+                        .map(|expression| {
+                            SqlValue::String(pg_generation_expression_text(expression))
+                        })
                         .unwrap_or(SqlValue::Null),
                 ),
                 ("is_updatable", SqlValue::String("YES".to_string())),

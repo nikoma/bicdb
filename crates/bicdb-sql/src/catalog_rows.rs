@@ -4245,7 +4245,9 @@ pub(crate) fn pg_attrdef_rows_for_adrelids(
 
 pub(crate) fn column_attrdef_expression(column: &ColumnSchema) -> Result<Option<SqlValue>> {
     if let Some(expression) = column.generated_expr.as_ref() {
-        return Ok(Some(SqlValue::String(expression.clone())));
+        return Ok(Some(SqlValue::String(pg_generation_expression_text(
+            expression,
+        ))));
     }
     if let Some(sequence) = column
         .default_sequence
@@ -6770,6 +6772,51 @@ pub(crate) fn exclusion_constraint_definition(
         ));
     }
     definition
+}
+
+/// A generation expression as PostgreSQL deparses it (`pg_get_expr`,
+/// `information_schema.columns.generation_expression`): every operator
+/// expression in parentheses. Forms whose deparse would need type
+/// information keep their own text.
+pub(crate) fn pg_generation_expression_text(expression: &str) -> String {
+    fn render(expr: &Expr) -> Option<String> {
+        match expr {
+            Expr::Nested(inner) => render(inner),
+            Expr::Identifier(ident) => Some(ident.to_string()),
+            Expr::CompoundIdentifier(parts) => Some(
+                parts
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join("."),
+            ),
+            Expr::Value(value) => match &value.value {
+                sqlparser::ast::Value::Number(number, _)
+                    if number.parse::<i32>().is_ok_and(|number| number >= 0) =>
+                {
+                    Some(number.clone())
+                }
+                _ => None,
+            },
+            Expr::BinaryOp { left, op, right }
+                if matches!(
+                    op,
+                    BinaryOperator::Plus
+                        | BinaryOperator::Minus
+                        | BinaryOperator::Multiply
+                        | BinaryOperator::Divide
+                        | BinaryOperator::Modulo
+                ) =>
+            {
+                Some(format!("({} {op} {})", render(left)?, render(right)?))
+            }
+            _ => None,
+        }
+    }
+    parse_check_expression(expression)
+        .ok()
+        .and_then(|expr| render(&expr))
+        .unwrap_or_else(|| expression.to_string())
 }
 
 pub(crate) fn pg_check_constraint_definition(expression: &str) -> String {

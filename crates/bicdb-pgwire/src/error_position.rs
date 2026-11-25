@@ -65,6 +65,7 @@ pub(crate) fn error_position(query: &str, sqlstate: &str, message: &str) -> Opti
         ("interval field value out of range: \"", "\""),
         ("malformed array literal: \"", "\""),
         ("malformed range literal: \"", "\""),
+        ("malformed multirange literal: \"", "\""),
         ("malformed record literal: \"", "\""),
     ] {
         if !message.starts_with(prefix) {
@@ -87,6 +88,13 @@ pub(crate) fn error_position(query: &str, sqlstate: &str, message: &str) -> Opti
         if let Some(literal) = literal {
             return text.literal_reference(literal);
         }
+    }
+    // JSON input errors do not quote the text: the literal read as json.
+    if matches!(
+        message,
+        "invalid input syntax for type json" | "unsupported Unicode escape sequence"
+    ) {
+        return text.json_literal_reference();
     }
     if let Some(value) = message
         .strip_prefix('"')
@@ -507,7 +515,136 @@ impl QueryText {
         let (offset, _) = self.literals.iter().find(|(_, content)| content == value)?;
         // `'x'::text::bool`: the literal itself is valid text; the failing
         // conversion runs on a value at execution time, with no location.
-        (!self.cast_to_text_after_literal(*offset)).then_some(offset + 1)
+        (!self.cast_to_text_after_literal(*offset) && !self.literal_read_as_text(*offset))
+            .then_some(offset + 1)
+    }
+
+    /// Position of the one literal cast to `json`/`jsonb` (`'...'::json`,
+    /// `json '...'`), or of an INSERT's only literal.
+    fn json_literal_reference(&self) -> Option<usize> {
+        let followed_by_json = |offset: usize| {
+            let mut index = offset;
+            while index < self.chars.len() && self.masked[index] {
+                index += 1;
+            }
+            let rest = self.chars[index..]
+                .iter()
+                .take(16)
+                .collect::<String>()
+                .to_ascii_lowercase();
+            let rest = rest.trim_start();
+            rest.strip_prefix("::").is_some_and(|cast| {
+                let cast = cast.trim_start();
+                cast.starts_with("json") && !cast.starts_with("jsonpath")
+            })
+        };
+        let preceded_by_json = |offset: usize| {
+            let before = self.chars[..offset]
+                .iter()
+                .collect::<String>()
+                .to_ascii_lowercase();
+            let before = before.trim_end();
+            before.ends_with("json") || before.ends_with("jsonb")
+        };
+        let candidates = self
+            .literals
+            .iter()
+            .filter(|(offset, _)| followed_by_json(*offset) || preceded_by_json(*offset))
+            .collect::<Vec<_>>();
+        match candidates.as_slice() {
+            [(offset, _)] => Some(offset + 1),
+            [] if self.literals.len() == 1
+                && self
+                    .chars
+                    .iter()
+                    .collect::<String>()
+                    .trim_start()
+                    .to_ascii_lowercase()
+                    .starts_with("insert") =>
+            {
+                Some(self.literals[0].0 + 1)
+            }
+            _ => None,
+        }
+    }
+
+    /// Whether the literal at `literal` becomes a text value before any
+    /// conversion that can fail: an argument of a built-in string function
+    /// (`upper('x')::int`), or a column of a derived `(VALUES ...)` table.
+    /// A later conversion of that value runs without a location.
+    fn literal_read_as_text(&self, literal: usize) -> bool {
+        // The unmasked `(` enclosing the literal.
+        let mut depth = 0usize;
+        let mut index = literal;
+        let open = loop {
+            if index == 0 {
+                return false;
+            }
+            index -= 1;
+            if self.masked[index] {
+                continue;
+            }
+            match self.chars[index] {
+                ')' => depth += 1,
+                '(' if depth == 0 => break index,
+                '(' => depth -= 1,
+                _ => {}
+            }
+        };
+        let word_before = |end: usize| -> (String, usize) {
+            let mut end = end;
+            while end > 0 && self.chars[end - 1].is_whitespace() {
+                end -= 1;
+            }
+            let mut start = end;
+            while start > 0 && is_ident_char(self.chars[start - 1]) && !self.masked[start - 1] {
+                start -= 1;
+            }
+            (
+                self.chars[start..end]
+                    .iter()
+                    .collect::<String>()
+                    .to_ascii_lowercase(),
+                start,
+            )
+        };
+        let (function, start) = word_before(open);
+        if matches!(
+            function.as_str(),
+            "upper"
+                | "lower"
+                | "initcap"
+                | "btrim"
+                | "ltrim"
+                | "rtrim"
+                | "trim"
+                | "concat"
+                | "concat_ws"
+                | "replace"
+                | "substr"
+                | "substring"
+                | "left"
+                | "right"
+                | "lpad"
+                | "rpad"
+                | "repeat"
+                | "reverse"
+                | "translate"
+                | "split_part"
+                | "format"
+                | "md5"
+        ) {
+            return true;
+        }
+        // `(VALUES ('x'))`: the row's `(` follows VALUES, which follows `(`.
+        if function == "values" {
+            let mut before = start;
+            while before > 0 && self.chars[before - 1].is_whitespace() {
+                before -= 1;
+            }
+            return before > 0 && self.chars[before - 1] == '(' && !self.masked[before - 1];
+        }
+        false
     }
 
     fn cast_to_text_after_literal(&self, literal: usize) -> bool {

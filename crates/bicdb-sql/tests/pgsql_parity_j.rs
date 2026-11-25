@@ -4,7 +4,7 @@
 //! `parse_ident`. Expected values are PostgreSQL 18's.
 
 use bicdb_core::{BicDb, DbConfig};
-use bicdb_sql::{SqlSession, SqlValue};
+use bicdb_sql::{SqlErrorField, SqlSession, SqlValue};
 use tempfile::TempDir;
 
 fn open() -> (TempDir, BicDb) {
@@ -116,4 +116,80 @@ fn temporary_tables_take_triggers_and_self_references() {
         error(&mut sql, "INSERT INTO tfc VALUES (2)"),
         "insert or update on table \"tfc\" violates foreign key constraint \"tfc_id_fkey\""
     );
+}
+
+fn error_fields(sql: &mut SqlSession<'_>, statement: &str) -> (String, Vec<SqlErrorField>) {
+    match sql.execute(statement) {
+        Ok(result) => panic!("{statement} succeeded: {:?}", result.rows),
+        Err(error) => (error.to_string(), error.fields()),
+    }
+}
+
+#[test]
+fn json_input_errors_carry_postgres_detail_and_context() {
+    let (_dir, mut db) = open();
+    let mut sql = SqlSession::new(&mut db);
+    for (statement, detail, context) in [
+        (
+            "SELECT '[1,2,]'::json",
+            "Expected JSON value, but found \"]\".",
+            "JSON data, line 1: [1,2,]",
+        ),
+        (
+            "SELECT '{\"abc\":1,3}'::jsonb",
+            "Expected string, but found \"3\".",
+            "JSON data, line 1: {\"abc\":1,3...",
+        ),
+    ] {
+        let (message, fields) = error_fields(&mut sql, statement);
+        assert_eq!(message, "invalid input syntax for type json", "{statement}");
+        assert!(
+            fields.contains(&SqlErrorField::Detail(detail.into())),
+            "{fields:?}"
+        );
+        assert!(
+            fields.contains(&SqlErrorField::Context(context.into())),
+            "{fields:?}"
+        );
+    }
+}
+
+#[test]
+fn multirange_input_errors_carry_postgres_detail() {
+    let (_dir, mut db) = open();
+    let mut sql = SqlSession::new(&mut db);
+    for (literal, message, detail) in [
+        (
+            "",
+            "malformed multirange literal: \"\"",
+            "Missing left brace.",
+        ),
+        (
+            "{,}",
+            "malformed multirange literal: \"{,}\"",
+            "Expected range start.",
+        ),
+        (
+            "{(,)}.",
+            "malformed multirange literal: \"{(,)}.\"",
+            "Junk after closing right brace.",
+        ),
+        (
+            "{[1,3) - }",
+            "malformed multirange literal: \"{[1,3) - }\"",
+            "Expected comma or end of multirange.",
+        ),
+        (
+            "{(,,3)}",
+            "malformed range literal: \"(,,3)\"",
+            "Too many commas.",
+        ),
+    ] {
+        let (got, fields) = error_fields(&mut sql, &format!("SELECT '{literal}'::int4multirange"));
+        assert_eq!(got, message, "{literal}");
+        assert!(
+            fields.contains(&SqlErrorField::Detail(detail.into())),
+            "{literal}: {fields:?}"
+        );
+    }
 }

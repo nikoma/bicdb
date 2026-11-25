@@ -593,6 +593,10 @@ fn diagnostic_response(
                 payload.push(b'P');
                 diagnostic_cstr(&mut payload, value);
             }
+            SqlErrorField::Context(value) => {
+                payload.push(b'W');
+                diagnostic_cstr(&mut payload, value);
+            }
             SqlErrorField::Severity(_) => {}
         }
     }

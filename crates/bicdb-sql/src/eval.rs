@@ -8,6 +8,7 @@ mod value_ops1;
 pub(crate) use value_ops1::*;
 mod value_ops2;
 pub(crate) use value_ops2::*;
+pub(crate) mod json_input_errors;
 mod temporal_json_oid;
 // Keep the central cast implementation's CFG stable for existing PGO data.
 pub(crate) use temporal_json_oid::cast_value_to_pg_type_fast as cast_value_to_pg_type;

@@ -2178,6 +2178,7 @@ pub(crate) fn cast_value_to_user_range(
         }
     };
     if multirange {
+        pg_multirange_literal_check(&user_type.formatted_name(), &text)?;
         let ranges = parse_pg_multirange_with_policy(
             &text,
             &user_type.formatted_name(),

@@ -5568,9 +5568,13 @@ pub(crate) fn storage_envelope(value: SqlValue, pg_type: Option<&str>) -> Result
     if pg_type == Some("json") {
         let text = value.to_cell();
         PgJsonText::parse(text.clone()).map_err(|_| {
-            SqlError::invalid_text_representation(
-                "json",
-                format!("invalid input syntax for type json: \"{text}\""),
+            crate::eval::json_input_errors::json_input_error_or(
+                &text,
+                false,
+                SqlError::invalid_text_representation(
+                    "json",
+                    format!("invalid input syntax for type json: \"{text}\""),
+                ),
             )
         })?;
         let stored = StoredJsonTextValue {

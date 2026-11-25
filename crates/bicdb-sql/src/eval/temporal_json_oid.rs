@@ -692,9 +692,13 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
             SqlValue::String(value) => PgJsonText::parse(value.clone())
                 .map(SqlValue::JsonText)
                 .map_err(|_| {
-                    SqlError::invalid_text_representation(
-                        "json",
-                        format!("invalid input syntax for type json: \"{value}\""),
+                    super::json_input_errors::json_input_error_or(
+                        &value,
+                        false,
+                        SqlError::invalid_text_representation(
+                            "json",
+                            format!("invalid input syntax for type json: \"{value}\""),
+                        ),
                     )
                 }),
             other => Ok(SqlValue::JsonText(PgJsonText::from_value(
@@ -715,9 +719,13 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
                 SqlValue::Json(value) => SqlValue::into_json_value(value),
                 SqlValue::Geometry(value) => value.to_geojson_value(),
                 SqlValue::String(value) => serde_json::from_str(&value).map_err(|_| {
-                    SqlError::invalid_text_representation(
-                        "jsonb",
-                        format!("invalid input syntax for type jsonb: \"{value}\""),
+                    super::json_input_errors::json_input_error_or(
+                        &value,
+                        true,
+                        SqlError::invalid_text_representation(
+                            "jsonb",
+                            format!("invalid input syntax for type jsonb: \"{value}\""),
+                        ),
                     )
                 })?,
                 other => sql_value_to_json(other),
@@ -815,6 +823,9 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
         | "tstzmultirange" | "datemultirange" | "int8multirange" | "pg_lsn" | "pg_snapshot"
         | "txid_snapshot" | "xid" | "xid8" | "cid" | "tid" => {
             let text = value.to_cell();
+            if is_builtin_multirange_type(pg_type) {
+                pg_multirange_literal_check(pg_type, &text)?;
+            }
             if let Some(element) = builtin_range_element_type(pg_type) {
                 if let Some((lower, upper)) = pg_range_literal_bounds(pg_type, &text)? {
                     if matches!(element, "int4" | "int8") {
@@ -4583,6 +4594,108 @@ fn builtin_range_element_type(pg_type: &str) -> Option<&'static str> {
         "daterange" => "date",
         _ => return None,
     })
+}
+
+/// `multirange_in`'s syntax check, with PostgreSQL's DETAIL for each
+/// malformation; each range it contains gets [`pg_range_literal_bounds`]'s
+/// check as it closes, in input order.
+pub(crate) fn pg_multirange_literal_check(pg_type: &str, text: &str) -> Result<()> {
+    let malformed = |detail: &str| {
+        SqlError::with_detail(
+            SqlError::InvalidTextRepresentation(format!(
+                "malformed multirange literal: \"{text}\""
+            )),
+            detail,
+        )
+    };
+    #[derive(Clone, Copy, PartialEq)]
+    enum State {
+        BeforeRange,
+        InRange,
+        InRangeEscaped,
+        InRangeQuoted,
+        InRangeQuotedEscaped,
+        AfterRange,
+        Finished,
+    }
+    let bytes = text.as_bytes();
+    let mut at = 0;
+    while at < bytes.len() && bytes[at].is_ascii_whitespace() {
+        at += 1;
+    }
+    if bytes.get(at) != Some(&b'{') {
+        return Err(malformed("Missing left brace."));
+    }
+    at += 1;
+    let mut state = State::BeforeRange;
+    let mut ranges_seen = 0;
+    let mut range_start = 0;
+    let range_type = range_type_from_multirange(pg_type).unwrap_or(pg_type);
+    while state != State::Finished {
+        let Some(&ch) = bytes.get(at) else {
+            return Err(malformed("Unexpected end of input."));
+        };
+        if ch.is_ascii_whitespace() {
+            at += 1;
+            continue;
+        }
+        match state {
+            State::BeforeRange => {
+                if ch == b'[' || ch == b'(' {
+                    range_start = at;
+                    state = State::InRange;
+                } else if ch == b'}' && ranges_seen == 0 {
+                    state = State::Finished;
+                } else if bytes[at..].len() >= 5 && bytes[at..at + 5].eq_ignore_ascii_case(b"empty")
+                {
+                    ranges_seen += 1;
+                    at += 4;
+                    state = State::AfterRange;
+                } else {
+                    return Err(malformed("Expected range start."));
+                }
+            }
+            State::InRange => {
+                if ch == b']' || ch == b')' {
+                    pg_range_literal_bounds(range_type, &text[range_start..=at])?;
+                    ranges_seen += 1;
+                    state = State::AfterRange;
+                } else if ch == b'"' {
+                    state = State::InRangeQuoted;
+                } else if ch == b'\\' {
+                    state = State::InRangeEscaped;
+                }
+            }
+            State::InRangeEscaped => state = State::InRange,
+            State::InRangeQuoted => {
+                if ch == b'"' {
+                    if bytes.get(at + 1) == Some(&b'"') {
+                        at += 1;
+                    } else {
+                        state = State::InRange;
+                    }
+                } else if ch == b'\\' {
+                    state = State::InRangeQuotedEscaped;
+                }
+            }
+            State::InRangeQuotedEscaped => state = State::InRangeQuoted,
+            State::AfterRange => {
+                if ch == b',' {
+                    state = State::BeforeRange;
+                } else if ch == b'}' {
+                    state = State::Finished;
+                } else {
+                    return Err(malformed("Expected comma or end of multirange."));
+                }
+            }
+            State::Finished => {}
+        }
+        at += 1;
+    }
+    if bytes[at..].iter().any(|byte| !byte.is_ascii_whitespace()) {
+        return Err(malformed("Junk after closing right brace."));
+    }
+    Ok(())
 }
 
 /// `range_parse`'s syntax check: `empty`, or `[`/`(`, lower, `,`, upper,

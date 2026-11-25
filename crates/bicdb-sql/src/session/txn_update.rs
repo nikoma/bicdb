@@ -3879,6 +3879,16 @@ impl<'db> SqlSession<'db> {
             return regclass_text_value(self.db_ref(), value);
         }
         let value = self.eval_session_expr(expr)?;
+        // A routine variable or parameter casts from its declared type.
+        if let Ok((target, _)) = pg_type_from_data_type(data_type) {
+            if let Some(result) = string_source_cast_value(
+                &value,
+                self.routine_unary_operand_type(expr).as_deref(),
+                &target,
+            ) {
+                return result;
+            }
+        }
         cast_expr_value_with_db(self.db_ref(), value, expr, data_type, None)
     }
 
@@ -5183,6 +5193,7 @@ impl<'db> SqlSession<'db> {
             RoutineStmt::Null => Ok(RoutineControl::Continue),
             RoutineStmt::Assignment { target, expr } => {
                 let value = self.eval_routine_expr(frame, expr)?;
+                let value = routine_string_source_assignment(frame, target, &expr.expr, value)?;
                 self.assign_routine_value(frame, target, value)?;
                 Ok(RoutineControl::Continue)
             }

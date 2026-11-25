@@ -596,7 +596,25 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
                     }
                 }
             }
+            // jsonb to an integer type goes through numeric.
             let value = match value {
+                SqlValue::Json(json) => {
+                    if !matches!(json.as_ref(), JsonValue::Number(_)) {
+                        return Err(SqlError::data_exception(
+                            "22023",
+                            format!(
+                                "cannot cast jsonb {} to type {}",
+                                jsonb_kind_name(&json),
+                                pg_integer_type_name(pg_type)
+                            ),
+                            None,
+                        ));
+                    }
+                    return cast_value_to_pg_type(
+                        cast_value_to_numeric(SqlValue::Json(json))?,
+                        pg_type,
+                    );
+                }
                 SqlValue::Int(value) => Ok(value),
                 SqlValue::Float(value) => float_to_i64_rounded(value),
                 SqlValue::String(value) if is_valid_numeric_text(&value) => {
@@ -4349,6 +4367,18 @@ fn time_after_date_prefix(text: &str) -> Option<PgTime> {
     })
 }
 
+/// The jsonb type name PostgreSQL's jsonb casts report.
+fn jsonb_kind_name(value: &JsonValue) -> &'static str {
+    match value {
+        JsonValue::Null => "null",
+        JsonValue::Bool(_) => "boolean",
+        JsonValue::String(_) => "string",
+        JsonValue::Array(_) => "array",
+        JsonValue::Object(_) => "object",
+        JsonValue::Number(_) => "numeric",
+    }
+}
+
 #[inline(never)]
 fn cast_value_to_numeric(value: SqlValue) -> Result<SqlValue> {
     match value {
@@ -4358,14 +4388,7 @@ fn cast_value_to_numeric(value: SqlValue) -> Result<SqlValue> {
                 // rounding clinical thresholds through f64.
                 parse_numeric_value(&number.to_string())
             } else {
-                let kind = match value.as_ref() {
-                    JsonValue::Null => "null",
-                    JsonValue::Bool(_) => "boolean",
-                    JsonValue::String(_) => "string",
-                    JsonValue::Array(_) => "array",
-                    JsonValue::Object(_) => "object",
-                    JsonValue::Number(_) => unreachable!(),
-                };
+                let kind = jsonb_kind_name(&value);
                 Err(SqlError::data_exception(
                     "22023",
                     format!("cannot cast jsonb {kind} to type numeric"),
@@ -4517,6 +4540,27 @@ pub(crate) fn pg_integer_input(text: &str, pg_type: &str) -> Result<i64> {
 /// Text read by a type's input function: integer targets go through
 /// [`pg_integer_input`]; `None` for other targets (their conversion already
 /// is the input function).
+/// Whether values of `pg_type` reach another type through PostgreSQL's I/O
+/// conversion (the string category): a cast reads their text with the
+/// target type's input function instead of converting a number.
+pub(crate) fn is_string_category_source(pg_type: &str) -> bool {
+    matches!(pg_type, "text" | "varchar" | "bpchar" | "name" | "unknown")
+}
+
+/// The cast of `value`, of type `source`, to `target` when `source` is a
+/// string-category type and `target` an integer type: the input function.
+/// `None` when the general cast applies.
+pub(crate) fn string_source_cast_value(
+    value: &SqlValue,
+    source: Option<&str>,
+    target: &str,
+) -> Option<Result<SqlValue>> {
+    if !source.is_some_and(is_string_category_source) {
+        return None;
+    }
+    text_input_integer_value(value, target)
+}
+
 pub(crate) fn text_input_integer_value(
     value: &SqlValue,
     pg_type: &str,

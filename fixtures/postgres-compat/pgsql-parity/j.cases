@@ -1,0 +1,59 @@
+tc_sel|CREATE TABLE tc_sel(t text);INSERT INTO tc_sel VALUES ('34.5');SELECT t::int4 FROM tc_sel
+tc_sel2|CREATE TABLE tc_sel2(t text);INSERT INTO tc_sel2 VALUES ('34.5');SELECT t::int2 FROM tc_sel2
+tc_sel8|CREATE TABLE tc_sel8(t varchar);INSERT INTO tc_sel8 VALUES ('34.5');SELECT t::int8 FROM tc_sel8
+tc_cast|CREATE TABLE tc_cast(t text);INSERT INTO tc_cast VALUES ('34.5');SELECT CAST(t AS integer) FROM tc_cast
+tc_expr|CREATE TABLE tc_expr(t text);INSERT INTO tc_expr VALUES ('34');SELECT (t || '.5')::int4 FROM tc_expr
+tc_where|CREATE TABLE tc_where(t text);INSERT INTO tc_where VALUES ('34.5');SELECT 1 FROM tc_where WHERE t::int4 = 35
+tc_order|CREATE TABLE tc_order(t text);INSERT INTO tc_order VALUES ('34.5'),('1');SELECT t FROM tc_order ORDER BY t::int4
+tc_join|CREATE TABLE tc_ja(t text);CREATE TABLE tc_jb(i int);INSERT INTO tc_ja VALUES ('34.5');INSERT INTO tc_jb VALUES (35);SELECT * FROM tc_ja JOIN tc_jb ON tc_ja.t::int4 = tc_jb.i
+tc_view|CREATE TABLE tc_view(t text);INSERT INTO tc_view VALUES ('34.5');CREATE VIEW tc_view_v AS SELECT t::int4 AS i FROM tc_view;SELECT * FROM tc_view_v
+tc_param|PREPARE tc_param(text) AS SELECT $1::int4;EXECUTE tc_param('34.5')
+tc_sub|SELECT x::int4 FROM (SELECT '34.5'::text AS x) s
+tc_cte|WITH c AS (SELECT '34.5'::text AS x) SELECT x::int4 FROM c
+tc_values|SELECT x::int4 FROM (VALUES ('34.5')) v(x)
+tc_numint|CREATE TABLE tc_numint(n numeric);INSERT INTO tc_numint VALUES (34.5),(35.5),(-0.5);SELECT n::int4, n::int2, n::int8 FROM tc_numint
+tc_fltint|CREATE TABLE tc_fltint(f float8);INSERT INTO tc_fltint VALUES (34.5),(35.5),(-0.5);SELECT f::int4, f::int8 FROM tc_fltint
+tc_bool|CREATE TABLE tc_bool(t text);INSERT INTO tc_bool VALUES ('yes');SELECT t::bool FROM tc_bool
+tc_bool2|CREATE TABLE tc_bool2(t text);INSERT INTO tc_bool2 VALUES ('maybe');SELECT t::bool FROM tc_bool2
+tc_bool3|CREATE TABLE tc_bool3(t text);INSERT INTO tc_bool3 VALUES (' of ');SELECT t::bool FROM tc_bool3
+tc_date|CREATE TABLE tc_date(t text);INSERT INTO tc_date VALUES ('2020-02-30');SELECT t::date FROM tc_date
+tc_date2|CREATE TABLE tc_date2(t text);INSERT INTO tc_date2 VALUES ('Jan 5 2020');SELECT t::date FROM tc_date2
+tc_ts|CREATE TABLE tc_ts(t text);INSERT INTO tc_ts VALUES ('2020-01-01 25:00');SELECT t::timestamp FROM tc_ts
+tc_ts2|CREATE TABLE tc_ts2(t text);INSERT INTO tc_ts2 VALUES ('2020-01-01 10:00:00.1234567');SELECT t::timestamp FROM tc_ts2
+tc_num|CREATE TABLE tc_num(t text);INSERT INTO tc_num VALUES ('123.456');SELECT t::numeric(5,2) FROM tc_num
+tc_num2|CREATE TABLE tc_num2(t text);INSERT INTO tc_num2 VALUES ('12345.6');SELECT t::numeric(5,2) FROM tc_num2
+tc_num3|CREATE TABLE tc_num3(t text);INSERT INTO tc_num3 VALUES ('abc');SELECT t::numeric FROM tc_num3
+tc_num4|CREATE TABLE tc_num4(t text);INSERT INTO tc_num4 VALUES (' 1e3 ');SELECT t::numeric FROM tc_num4
+tc_flt|CREATE TABLE tc_flt(t text);INSERT INTO tc_flt VALUES ('1.5x');SELECT t::float8 FROM tc_flt
+tc_flt2|CREATE TABLE tc_flt2(t text);INSERT INTO tc_flt2 VALUES ('NaN'),(' -Infinity'),('1e300');SELECT t::float8 FROM tc_flt2
+tc_flt3|CREATE TABLE tc_flt3(t text);INSERT INTO tc_flt3 VALUES ('1e40');SELECT t::float4 FROM tc_flt3
+tc_flt4|CREATE TABLE tc_flt4(t text);INSERT INTO tc_flt4 VALUES ('1e400');SELECT t::float8 FROM tc_flt4
+tc_iv|CREATE TABLE tc_iv(t text);INSERT INTO tc_iv VALUES ('1 day 2 hours');SELECT t::interval FROM tc_iv
+tc_iv2|CREATE TABLE tc_iv2(t text);INSERT INTO tc_iv2 VALUES ('1 fortnight');SELECT t::interval FROM tc_iv2
+tc_int_ws|CREATE TABLE tc_int_ws(t text);INSERT INTO tc_int_ws VALUES (' 42 '),('+7'),('0x1F'),('1_000');SELECT t::int4 FROM tc_int_ws
+tc_int_ovf|CREATE TABLE tc_int_ovf(t text);INSERT INTO tc_int_ovf VALUES ('40000');SELECT t::int2 FROM tc_int_ovf
+tc_int_empty|CREATE TABLE tc_int_empty(t text);INSERT INTO tc_int_empty VALUES ('');SELECT t::int4 FROM tc_int_empty
+tc_numcol_txt|CREATE TABLE tc_nct(n numeric);INSERT INTO tc_nct VALUES (34.5);SELECT n::text::int4 FROM tc_nct
+tc_insel|CREATE TABLE tc_insel(t text);CREATE TABLE tc_insel2(i int);INSERT INTO tc_insel VALUES ('34.5');INSERT INTO tc_insel2 SELECT t::int FROM tc_insel
+tc_upd|CREATE TABLE tc_upd(t text, i int);INSERT INTO tc_upd VALUES ('34.5',0);UPDATE tc_upd SET i = t::int
+tc_agg|CREATE TABLE tc_agg(t text);INSERT INTO tc_agg VALUES ('34.5');SELECT sum(t::int) FROM tc_agg
+tc_grp|CREATE TABLE tc_grp(t text);INSERT INTO tc_grp VALUES ('34.5');SELECT t::int FROM tc_grp GROUP BY t::int
+tc_case|CREATE TABLE tc_case(t text);INSERT INTO tc_case VALUES ('34.5');SELECT CASE WHEN true THEN t::int END FROM tc_case
+tc_func|CREATE TABLE tc_func(t text);INSERT INTO tc_func VALUES ('34.5 ');SELECT trim(t)::int FROM tc_func
+tc_char|CREATE TABLE tc_char(t char(5));INSERT INTO tc_char VALUES ('34.5');SELECT t::int FROM tc_char
+tc_dom|CREATE DOMAIN tc_d AS text;CREATE TABLE tc_dom(t tc_d);INSERT INTO tc_dom VALUES ('34.5');SELECT t::int FROM tc_dom
+tc_json|SELECT ('{"a":"34.5"}'::json->>'a')::int
+tc_jsonnum|SELECT ('{"a":34.5}'::jsonb->'a')::int
+tc_upper|SELECT upper('34.5')::int
+tc_numcol|CREATE TABLE tc_nc(n numeric(6,2));INSERT INTO tc_nc VALUES (34.50);SELECT n::int, n::numeric(4,1), n::float8 FROM tc_nc
+tc_txtnum_w|CREATE TABLE tc_tnw(t text);INSERT INTO tc_tnw VALUES ('1.5');SELECT count(*) FROM tc_tnw WHERE t::int > 0
+tc_order2|CREATE TABLE tc_order2(t text);INSERT INTO tc_order2 VALUES ('34.5'),('1'),('7');SELECT t FROM tc_order2 ORDER BY t::int4
+tc_plpg3|CREATE FUNCTION tc_plpg3(n numeric) RETURNS int LANGUAGE plpgsql AS $$DECLARE i int; BEGIN i := n; RETURN i; END$$;SELECT tc_plpg3(34.5)
+tc_plpg5|CREATE FUNCTION tc_plpg5() RETURNS int LANGUAGE plpgsql AS $$DECLARE i int; BEGIN i := 34.5; RETURN i; END$$;SELECT tc_plpg5()
+tc_avg|CREATE TABLE tc_avg(n int);INSERT INTO tc_avg VALUES (1),(2);SELECT avg(n)::int, sum(n)::numeric(5,1)::int FROM tc_avg
+tc_round|SELECT round(34.5)::int, (34.5)::int, 34.5::int, '34'::text::int, (1.5::numeric)::int8
+tc_case2|CREATE TABLE tc_case2(t text, n numeric);INSERT INTO tc_case2 VALUES ('2.5', 2.5);SELECT n::int, (n * 1)::int FROM tc_case2
+tc_jsonb2|SELECT ('{"a":"x"}'::jsonb->'a')::int
+tc_jsonb3|SELECT ('{"a":true}'::jsonb->'a')::int8
+tc_lit|SELECT '34.5'::int
+tc_concat|CREATE TABLE tc_concat(t text);INSERT INTO tc_concat VALUES ('34');SELECT concat(t, '.5')::int FROM tc_concat

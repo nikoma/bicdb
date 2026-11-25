@@ -2248,6 +2248,47 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
                 }
             }
         }
+        // String functions whose result is text whatever their arguments.
+        if matches!(
+            unqualified_name,
+            "concat"
+                | "concat_ws"
+                | "format"
+                | "md5"
+                | "to_char"
+                | "quote_ident"
+                | "quote_literal"
+                | "quote_nullable"
+                | "initcap"
+                | "lpad"
+                | "rpad"
+                | "repeat"
+                | "split_part"
+                | "translate"
+                | "chr"
+                | "replace"
+                | "left"
+                | "right"
+                | "textcat"
+        ) {
+            return Some("text".to_string());
+        }
+        // Text for text input; bytea (or a range bound) otherwise.
+        if matches!(
+            unqualified_name,
+            "lower" | "upper" | "btrim" | "ltrim" | "rtrim" | "reverse"
+        ) {
+            if let Some(first) = argument_nodes.first() {
+                let first_type = projected_expr_pg_type(first, schema);
+                if matches!(
+                    first_type.as_deref(),
+                    Some("text" | "varchar" | "bpchar" | "name" | "char" | "unknown")
+                ) || (first_type.is_none() && is_string_literal_expr(first))
+                {
+                    return Some("text".to_string());
+                }
+            }
+        }
         if unqualified_name == "range_merge" {
             if let Some(arg_type) = argument_nodes
                 .first()
@@ -2471,6 +2512,14 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
     }
     if matches!(expr, Expr::Position { .. }) {
         return Some("int4".to_string());
+    }
+    if let Expr::Trim { expr: inner, .. } = expr {
+        return match projected_expr_pg_type(inner, schema).as_deref() {
+            Some("bytea") => Some("bytea".to_string()),
+            Some(_) => Some("text".to_string()),
+            None if is_string_literal_expr(inner) => Some("text".to_string()),
+            None => None,
+        };
     }
     if let Expr::Substring { expr, .. } | Expr::Overlay { expr, .. } = expr {
         return match projected_expr_pg_type(expr, schema).as_deref() {
@@ -4211,7 +4260,8 @@ pub(crate) fn apply_order_by_cancellable(
                             .map(|value| SqlValue::Float(value as f64))
                             .unwrap_or(SqlValue::Null),
                         (_, Some(geometric), _) => geometric.score(record)?,
-                        (_, _, Some(field)) => field.value(record).unwrap_or(SqlValue::Null),
+                        // A failing key (a cast of its text) fails the query.
+                        (_, _, Some(field)) => field.value(record)?,
                         _ => unreachable!("ORDER BY driver"),
                     };
                     let typed_key = if matches!(value, SqlValue::Null) {

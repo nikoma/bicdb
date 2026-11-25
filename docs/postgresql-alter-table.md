@@ -34,7 +34,12 @@ or composite type (`ADD COLUMN s status DEFAULT 'new'::status`) also fills the
 existing rows, while new rows evaluate the default expression.
 
 `DROP COLUMN` removes the column from schema/catalog metadata and from stored
-record metadata. Dropping primary key columns is not supported.
+record metadata. Dropping a primary-key column drops the primary key with it,
+as in PostgreSQL: the constraint and its index are removed, the remaining key
+columns keep NOT NULL, and the rows are re-keyed under the hidden row identity
+of a table without a primary key (a full rewrite of the table). When another
+table's foreign key references the primary key the command fails with 2BP01;
+the CASCADE form that would drop those foreign keys is not supported.
 
 `RENAME COLUMN` updates schema/catalog metadata, stored record metadata, and
 simple constraint/index column references. Renaming primary key columns is not

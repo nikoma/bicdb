@@ -3262,13 +3262,30 @@ pub(crate) fn alter_table_drop_column(
             "column \"{column}\" of relation \"{table}\" does not exist"
         )));
     };
-    if schema.columns[idx].primary_key {
-        return Err(SqlError::Unsupported(
-            "ALTER TABLE DROP COLUMN for primary key columns is not supported".to_string(),
-        ));
-    }
     let actual = schema.columns[idx].name.clone();
+    let drops_primary_key = schema.columns[idx].primary_key;
+    if drops_primary_key {
+        ensure_primary_key_unreferenced(rows.db, table, schema, &actual)?;
+    }
+    let previous_primary_key_index = drops_primary_key
+        .then(|| primary_key_index_definition_for_schema(schema))
+        .flatten();
     schema.columns.remove(idx);
+    if drops_primary_key {
+        // PostgreSQL drops the primary key with any of its columns. The
+        // rows are re-keyed under the hidden row identity a table without a
+        // primary key uses.
+        let primary_key_name = schema.primary_key_constraint_name();
+        schema
+            .constraints
+            .retain(|constraint| constraint_name(constraint) != primary_key_name);
+        for column in &mut schema.columns {
+            column.primary_key = false;
+        }
+        schema.primary_key_name = None;
+        schema.implicit_primary_key_name = None;
+        schema.columns.push(synthetic_primary_key_column());
+    }
     schema.constraints.retain(|constraint| match constraint {
         ConstraintSchema::Unique { columns, .. }
         | ConstraintSchema::UniqueWithNullPolicy { columns, .. }
@@ -3305,12 +3322,103 @@ pub(crate) fn alter_table_drop_column(
             .map(|part| part.trim().trim_matches('"'))
             .any(|candidate| candidate.eq_ignore_ascii_case(&actual))
     });
+    if drops_primary_key {
+        if let Some(index) = previous_primary_key_index {
+            if rows
+                .db
+                .index_definitions()
+                .iter()
+                .any(|existing| existing.name.eq_ignore_ascii_case(&index.name))
+            {
+                rows.db.drop_index(&index.name)?;
+            }
+        }
+        // Rows as the open transaction sees them; a row it has modified
+        // cannot change identity under it (`remove_replaced` refuses).
+        let records = rows.visible(table)?;
+        let mut rekeyed = Vec::with_capacity(records.len());
+        for mut record in records {
+            let old_id = record.id.clone();
+            remove_record_column(&mut record, &actual);
+            let fields = record_fields_for_schema(&record, schema);
+            rekeyed.push((old_id, record_from_fields(table, Some(schema), fields)?));
+        }
+        for (old_id, _) in &rekeyed {
+            rows.remove_replaced(table, old_id)?;
+        }
+        for (_, record) in rekeyed {
+            rows.store(table, record)?;
+        }
+        return save_schema(rows.db, schema);
+    }
     rows.rewrite(table, |record| {
         let mut record = record.clone();
         remove_record_column(&mut record, &actual);
         Ok(Some(record))
     })?;
     save_schema(rows.db, schema)
+}
+
+/// A primary key that another table's foreign key references cannot be
+/// dropped with its column (PostgreSQL requires CASCADE, which would drop the
+/// referencing constraints; that form is not supported here).
+fn ensure_primary_key_unreferenced(
+    db: &BicDb,
+    table: &str,
+    schema: &TableSchema,
+    column: &str,
+) -> Result<()> {
+    let primary_key_columns = primary_key_columns_for_schema(schema);
+    for other in list_schemas(db)? {
+        for constraint in &other.constraints {
+            let ConstraintSchema::ForeignKey {
+                foreign_table,
+                referred_columns,
+                ..
+            } = constraint
+            else {
+                continue;
+            };
+            if foreign_table.eq_ignore_ascii_case(table)
+                && referred_columns.len() == primary_key_columns.len()
+                && referred_columns.iter().all(|referred| {
+                    primary_key_columns
+                        .iter()
+                        .any(|key| key.eq_ignore_ascii_case(referred))
+                })
+            {
+                return Err(SqlError::RaisedException {
+                    sqlstate: "2BP01".into(),
+                    message: format!(
+                        "cannot drop column {column} of table {table} because other objects depend on it"
+                    ),
+                    detail: None,
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn synthetic_primary_key_column() -> ColumnSchema {
+    ColumnSchema {
+        name: SYNTHETIC_PRIMARY_KEY.to_string(),
+        pg_type: "text".to_string(),
+        user_type: None,
+        collation: None,
+        type_modifier: None,
+        array_ndims: 0,
+        compression: None,
+        primary_key: true,
+        hidden: true,
+        nullable: false,
+        vector_dim: None,
+        default_sequence: None,
+        default_value: None,
+        default_expr: None,
+        generated_expr: None,
+        identity: None,
+    }
 }
 
 pub(crate) fn alter_table_rename_column(

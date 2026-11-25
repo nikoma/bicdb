@@ -280,6 +280,16 @@ fn quoted(name: &str) -> String {
     Ident::with_quote('"', name).to_string()
 }
 
+/// Whether `query`'s GROUP BY has a grouping-sets element (the cheap test
+/// that guards `rewrite_grouping_sets`).
+pub(crate) fn has_grouping_sets(query: &Query) -> bool {
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        return false;
+    };
+    matches!(&select.group_by, GroupByExpr::Expressions(elements, modifiers)
+        if modifiers.is_empty() && elements.iter().any(is_grouping_construct))
+}
+
 /// `query` with its grouping sets expanded, or `None` when its GROUP BY has
 /// none. Forms whose combined result PostgreSQL computes differently from
 /// a union of grouped branches (window functions, `*`) fail with 0A000.

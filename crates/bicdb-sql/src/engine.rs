@@ -5279,12 +5279,32 @@ impl<'db> SqlEngine<'db> {
         join_budget.finish(self.execute_query_unscoped(query))
     }
 
+    /// Kept out of line: `execute_query_unscoped` recurses through nested
+    /// queries, and a rewritten `Query` held in its frame would grow every
+    /// level of that recursion.
+    #[inline(never)]
+    fn execute_with_ties_query(&self, query: &Query) -> Result<SqlResult> {
+        let (rewritten, hidden) = crate::fetch_ties::rewrite_with_ties(query)?
+            .map(|(query, hidden)| (Box::new(query), hidden))
+            .expect("WITH TIES query");
+        let mut result = self.execute_query(&rewritten)?;
+        crate::fetch_ties::drop_trailing_columns(&mut result, hidden);
+        Ok(result)
+    }
+
+    /// Out of line for the same reason as `execute_with_ties_query`.
+    #[inline(never)]
+    fn execute_grouping_sets_query(&self, query: &Query) -> Result<SqlResult> {
+        let rewritten = Box::new(
+            crate::grouping_sets::rewrite_grouping_sets(query)?.expect("grouping sets query"),
+        );
+        self.execute_query(&rewritten)
+    }
+
     fn execute_query_unscoped(&self, query: &Query) -> Result<SqlResult> {
         oracle::lock_waits::duration(self.db_ref(), query)?;
-        if let Some((rewritten, hidden)) = crate::fetch_ties::rewrite_with_ties(query)? {
-            let mut result = self.execute_query(&rewritten)?;
-            crate::fetch_ties::drop_trailing_columns(&mut result, hidden);
-            return Ok(result);
+        if query.fetch.as_ref().is_some_and(|fetch| fetch.with_ties) {
+            return self.execute_with_ties_query(query);
         }
         if let Some(rewritten) = normalize_fetch_clause(query)? {
             return self.execute_query(&rewritten);
@@ -5324,8 +5344,8 @@ impl<'db> SqlEngine<'db> {
             }
         }
 
-        if let Some(rewritten) = crate::grouping_sets::rewrite_grouping_sets(query)? {
-            return self.execute_query(&rewritten);
+        if crate::grouping_sets::has_grouping_sets(query) {
+            return self.execute_grouping_sets_query(query);
         }
 
         if !query.locks.is_empty() {

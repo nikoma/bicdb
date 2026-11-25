@@ -525,6 +525,165 @@ fn numeric_correlation(
     key.map(|(expr, slot)| (expr, slot, residuals, correlations))
 }
 
+/// Whether `expr` (including any subquery inside it) may refer to a column of the inner relation
+/// `qualifier`/`schema`, or calls a function (which may be volatile). Conservative: unqualified
+/// names matching an inner column and any relation reusing the qualifier count as references.
+fn may_reference_inner(expr: &Expr, qualifier: &[String], schema: &TableSchema) -> bool {
+    struct Finder<'a> {
+        qualifier: &'a [String],
+        schema: &'a TableSchema,
+        found: bool,
+    }
+    impl Visitor for Finder<'_> {
+        type Break = ();
+        fn pre_visit_expr(&mut self, expr: &Expr) -> ControlFlow<()> {
+            let hit = match expr {
+                Expr::Identifier(ident) => self.schema.column(&ident_value(ident)).is_some(),
+                Expr::CompoundIdentifier(parts) => {
+                    let names = parts.iter().map(ident_value).collect::<Vec<_>>();
+                    let owner = &names[..names.len().saturating_sub(1)];
+                    owner.is_empty()
+                        || owner == self.qualifier
+                        || owner == &self.qualifier[self.qualifier.len() - 1..]
+                        || owner.last() == self.qualifier.last()
+                }
+                Expr::Function(_) => true,
+                _ => false,
+            };
+            if hit {
+                self.found = true;
+                return ControlFlow::Break(());
+            }
+            ControlFlow::Continue(())
+        }
+        fn pre_visit_table_factor(&mut self, factor: &TableFactor) -> ControlFlow<()> {
+            let shadows = match factor {
+                TableFactor::Table { name, alias, .. } => alias
+                    .as_ref()
+                    .map(|alias| ident_value(&alias.name))
+                    .or_else(|| object_name_parts(name).last().cloned()),
+                TableFactor::Derived { alias, .. } => {
+                    alias.as_ref().map(|alias| ident_value(&alias.name))
+                }
+                _ => None,
+            };
+            if shadows.as_ref() == self.qualifier.last() {
+                self.found = true;
+                return ControlFlow::Break(());
+            }
+            ControlFlow::Continue(())
+        }
+    }
+    let mut finder = Finder {
+        qualifier,
+        schema,
+        found: false,
+    };
+    let _ = Visit::visit(expr, &mut finder);
+    finder.found
+}
+
+fn conjuncts(expr: &Expr, out: &mut Vec<Expr>) {
+    match unwrap_nested_expr(expr) {
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::And,
+            right,
+        } => {
+            conjuncts(left, out);
+            conjuncts(right, out);
+        }
+        other => out.push(other.clone()),
+    }
+}
+
+impl SqlEngine<'_> {
+    /// `EXISTS (SELECT .. FROM t WHERE p(t) AND q)` where `q` refers to no column of `t`: `q` is
+    /// a one-time filter of the outer row (PostgreSQL evaluates such quals as a gating filter
+    /// before scanning). Returns `(q, subquery without q)`. Evaluating `q` once per outer row
+    /// instead of once per inner row turns a nested EXISTS that refers two levels out from
+    /// quadratic-or-worse into probes the candidate indexes can answer.
+    pub(super) fn split_exists_outer_filter(&self, query: &Query) -> Result<Option<(Expr, Query)>> {
+        if query.with.is_some()
+            || query.limit_clause.is_some()
+            || query.fetch.is_some()
+            || !query.locks.is_empty()
+            || query.order_by.is_some()
+        {
+            return Ok(None);
+        }
+        let SetExpr::Select(select) = query.body.as_ref() else {
+            return Ok(None);
+        };
+        // An aggregate projection yields a row even when no input row passes the filter.
+        let plain_projection = select.projection.iter().all(|item| match item {
+            SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => {
+                matches!(
+                    expr,
+                    Expr::Value(_) | Expr::Identifier(_) | Expr::CompoundIdentifier(_)
+                )
+            }
+            SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(..) => true,
+            _ => false,
+        });
+        if !plain_projection
+            || select.from.len() != 1
+            || !select.from[0].joins.is_empty()
+            || select.distinct.is_some()
+            || select.having.is_some()
+            || select.qualify.is_some()
+            || !select.named_window.is_empty()
+            || !matches!(&select.group_by, GroupByExpr::Expressions(keys, modifiers) if keys.is_empty() && modifiers.is_empty())
+        {
+            return Ok(None);
+        }
+        let Some(selection) = select.selection.as_ref() else {
+            return Ok(None);
+        };
+        let TableFactor::Table {
+            name,
+            alias,
+            args: None,
+            ..
+        } = &select.from[0].relation
+        else {
+            return Ok(None);
+        };
+        let resolved =
+            resolve_session_relation_name_if_exists(self.db_ref(), &relation_name(name)?);
+        let Some(schema) = load_schema(self.db_ref(), &resolved)? else {
+            return Ok(None);
+        };
+        let qualifier = alias
+            .as_ref()
+            .map(|alias| vec![ident_value(&alias.name)])
+            .unwrap_or_else(|| object_name_parts(name));
+        if qualifier.is_empty() {
+            return Ok(None);
+        }
+        let mut parts = Vec::new();
+        conjuncts(selection, &mut parts);
+        let (outer, inner): (Vec<Expr>, Vec<Expr>) = parts
+            .into_iter()
+            .partition(|part| !may_reference_inner(part, &qualifier, &schema));
+        if outer.is_empty() {
+            return Ok(None);
+        }
+        let and = |items: Vec<Expr>| {
+            items.into_iter().reduce(|left, right| Expr::BinaryOp {
+                left: Box::new(Expr::Nested(Box::new(left))),
+                op: BinaryOperator::And,
+                right: Box::new(Expr::Nested(Box::new(right))),
+            })
+        };
+        let mut rest = query.clone();
+        if let SetExpr::Select(select) = rest.body.as_mut() {
+            select.selection = and(inner);
+        }
+        Ok(and(outer).map(|gate| (gate, rest)))
+    }
+}
+
 impl SqlEngine<'_> {
     /// Returns an equivalent subquery restricted to candidate primary keys, or
     /// declines. Numeric canonicalization may include extra candidates; the

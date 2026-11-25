@@ -477,6 +477,20 @@ impl<'db> SqlEngine<'db> {
                 .eval_slot_row_truth_typed(row, context, expr, env)?
                 .map(|v| !v)),
             Expr::Exists { subquery, negated } => {
+                let mut split = self.split_exists_outer_filter(subquery)?;
+                if let Some((gate, _)) = &split {
+                    // A gate this level cannot evaluate (e.g. it refers further out) leaves the
+                    // subquery as written; the ordinary path then reports any real error.
+                    match self.eval_slot_row_truth_typed(row, context, gate, env) {
+                        Ok(Some(true)) => {}
+                        Ok(_) => return Ok(Some(*negated)),
+                        Err(_) => {
+                            self.check_cancellation()?;
+                            split = None;
+                        }
+                    }
+                }
+                let subquery = split.as_ref().map_or(subquery.as_ref(), |(_, rest)| rest);
                 let candidate = self.exists_candidate_query(row, context, subquery, env)?;
                 let exists = if let Some(candidate) = candidate {
                     match candidate {
@@ -1158,6 +1172,20 @@ impl<'db> SqlEngine<'db> {
                 self.eval_slot_row_truth(row, context, expr)?.is_some(),
             )),
             Expr::Exists { subquery, negated } => {
+                let mut split = self.split_exists_outer_filter(subquery)?;
+                if let Some((gate, _)) = &split {
+                    // A gate this level cannot evaluate (e.g. it refers further out) leaves the
+                    // subquery as written; the ordinary path then reports any real error.
+                    match self.eval_slot_row_truth(row, context, gate) {
+                        Ok(Some(true)) => {}
+                        Ok(_) => return Ok(Some(*negated)),
+                        Err(_) => {
+                            self.check_cancellation()?;
+                            split = None;
+                        }
+                    }
+                }
+                let subquery = split.as_ref().map_or(subquery.as_ref(), |(_, rest)| rest);
                 let exists = if let Some(candidate) =
                     self.exists_candidate_query(row, context, subquery, &[])?
                 {

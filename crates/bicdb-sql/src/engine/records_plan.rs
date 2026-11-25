@@ -459,6 +459,9 @@ impl<'db> SqlEngine<'db> {
         let mut rows = anchor.rows;
         let mut working_rows = rows.clone();
         let distinct = !matches!(set_quantifier, SetQuantifier::All);
+        if distinct {
+            reject_unhashable_recursive_union(&column_types)?;
+        }
 
         for iteration in 0..MAX_RECURSIVE_CTE_ITERATIONS {
             self.check_cancellation()?;
@@ -3739,6 +3742,35 @@ fn validate_set_order_by(result: &SqlResult, order_by: Option<&OrderBy>) -> Resu
                 ));
             }
         }
+    }
+    Ok(())
+}
+
+/// PostgreSQL implements a recursive `UNION` (without ALL) by hashing, and refuses it when a
+/// column type has no hash support (`bit`, `varbit`, geometric types, `json`, `xml`, ...). BicDB
+/// iterated such a query; when its rows never repeat (`n || '10'::varbit`) it never terminated.
+fn reject_unhashable_recursive_union(column_types: &[Option<String>]) -> Result<()> {
+    // Input types of PostgreSQL 18.4's default hash operator classes (pg_opclasses.tsv, am 405).
+    // Plus the types that hash through a binary-compatible class (varchar, cidr, reg*) and
+    // `unknown`, which a recursive CTE resolves to text.
+    const HASHABLE: &[i32] = &[
+        2277, 1042, 18, 1082, 700, 701, 869, 21, 23, 20, 1186, 829, 774, 19, 1700, 26, 30, 2249,
+        25, 1083, 1184, 1266, 1114, 16, 17, 28, 5069, 29, 27, 1033, 2950, 3220, 3500, 3831, 4537,
+        3802, 1043, 650, 705, 24, 2202, 2203, 2204, 2205, 2206, 3734, 3769, 4089, 4096, 4191,
+    ];
+    let unhashable = |name: &str| {
+        let name = name.trim();
+        if name.ends_with("[]") || name.starts_with('_') {
+            return false; // arrays hash when their elements do; checked by PostgreSQL at run time
+        }
+        pg_type_oid_by_name(name).is_some_and(|oid| !HASHABLE.contains(&oid))
+    };
+    if column_types.iter().flatten().any(|name| unhashable(name)) {
+        return Err(SqlError::RaisedException {
+            sqlstate: "0A000".to_string(),
+            message: "could not implement recursive UNION".to_string(),
+            detail: Some("All column datatypes must be hashable.".to_string()),
+        });
     }
     Ok(())
 }

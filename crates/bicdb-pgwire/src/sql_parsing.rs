@@ -2382,22 +2382,28 @@ pub(crate) fn render_copy_csv_value(value: Option<&str>) -> String {
     }
 }
 
-pub(crate) fn copy_in_response(
-    stream: &mut ClientStream,
+/// Columns a COPY FROM STDIN will receive; fails when the target relation does not resolve.
+pub(crate) fn copy_in_column_count(
     server: &Arc<PgWireServer>,
     copy: &CopyStatement,
-) -> Result<()> {
-    let column_count = if copy.columns.is_empty() {
-        let relation = copy
-            .relation_sql
-            .as_ref()
-            .ok_or_else(|| PgWireError::Server("COPY FROM STDIN missing relation".to_string()))?;
-        execute_server_sql_for_describe(server, &format!("SELECT * FROM {relation}"))?
-            .columns
-            .len()
+) -> Result<usize> {
+    let relation = copy
+        .relation_sql
+        .as_ref()
+        .ok_or_else(|| PgWireError::Server("COPY FROM STDIN missing relation".to_string()))?;
+    let described = execute_server_sql_for_describe(server, &format!("SELECT * FROM {relation}"))?;
+    Ok(if copy.columns.is_empty() {
+        described.columns.len()
     } else {
         copy.columns.len()
-    };
+    })
+}
+
+pub(crate) fn copy_in_response(
+    stream: &mut ClientStream,
+    _copy: &CopyStatement,
+    column_count: usize,
+) -> Result<()> {
     let mut payload = Vec::new();
     payload.push(0);
     put_i16(&mut payload, column_count as i16);

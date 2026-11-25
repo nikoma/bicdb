@@ -45,6 +45,16 @@ enum CandidateSource {
     /// Record ids by index key from an index-only read of an index that
     /// holds the correlation column at any position (no record decoded).
     Indexed(IndexedCandidates),
+    /// For an inner table without a single numeric primary key: the
+    /// canonical correlation keys of the inner rows that pass the residual
+    /// filters, from one scan. When the correlation is the subquery's only
+    /// outer reference (`exact`), a key's presence decides EXISTS; otherwise
+    /// only its absence does and the ordinary path decides the rest.
+    Keys {
+        keys: BTreeSet<String>,
+        exact: bool,
+        present_verified: Cell<bool>,
+    },
 }
 
 /// A bucket is resolved to primary-key values and narrowed by the residual
@@ -87,6 +97,8 @@ pub(super) enum ExistsCandidate {
     Query(Query),
     /// No inner row can satisfy the correlation and filters: EXISTS is false.
     Absent,
+    /// An inner row satisfies the whole (single-equality) predicate: EXISTS is true.
+    Present,
 }
 
 pub(crate) struct ProbeScope<'a> {
@@ -335,7 +347,7 @@ fn numeric_correlation(
     context: &BoundRowContext,
     engine: &SqlEngine<'_>,
     env: &[RelationColumns],
-) -> Option<(Expr, usize, Vec<Expr>)> {
+) -> Option<(Expr, usize, Vec<Expr>, usize)> {
     fn inner<'a>(
         expression: &'a Expr,
         qualifier: &[String],
@@ -424,6 +436,7 @@ fn numeric_correlation(
         env: &[RelationColumns],
         key: &mut Option<(Expr, usize)>,
         residuals: &mut Vec<Expr>,
+        correlations: &mut usize,
     ) -> Option<()> {
         match unwrap_nested_expr(expression) {
             Expr::BinaryOp {
@@ -432,10 +445,26 @@ fn numeric_correlation(
                 right,
             } => {
                 collect(
-                    left, qualifier, schema, context, engine, env, key, residuals,
+                    left,
+                    qualifier,
+                    schema,
+                    context,
+                    engine,
+                    env,
+                    key,
+                    residuals,
+                    correlations,
                 )?;
                 collect(
-                    right, qualifier, schema, context, engine, env, key, residuals,
+                    right,
+                    qualifier,
+                    schema,
+                    context,
+                    engine,
+                    env,
+                    key,
+                    residuals,
+                    correlations,
                 )
             }
             Expr::BinaryOp {
@@ -468,6 +497,7 @@ fn numeric_correlation(
                         if key.is_none() && bounded_numeric(column) {
                             *key = Some((candidate.clone(), slot));
                         }
+                        *correlations += 1;
                         return Some(());
                     }
                 }
@@ -480,6 +510,7 @@ fn numeric_correlation(
     }
     let mut key = None;
     let mut residuals = Vec::new();
+    let mut correlations = 0;
     collect(
         expression,
         qualifier,
@@ -489,8 +520,9 @@ fn numeric_correlation(
         env,
         &mut key,
         &mut residuals,
+        &mut correlations,
     )?;
-    key.map(|(expr, slot)| (expr, slot, residuals))
+    key.map(|(expr, slot)| (expr, slot, residuals, correlations))
 }
 
 impl SqlEngine<'_> {
@@ -551,10 +583,53 @@ impl SqlEngine<'_> {
         let Some(value) = row.get(plan.outer_slot) else {
             return Ok(None);
         };
+        if let CandidateSource::Keys {
+            keys,
+            exact,
+            present_verified,
+        } = &plan.source
+        {
+            let present = if matches!(value, SqlValue::Null) {
+                false
+            } else {
+                let Some(key) = numeric_key(self.db_ref(), value) else {
+                    return Ok(None);
+                };
+                keys.contains(&key)
+            };
+            if !present {
+                if plan.empty_verified.get() {
+                    return Ok(Some(ExistsCandidate::Absent));
+                }
+                // As for the other sources, the first absent answer still runs the original
+                // subquery (with a false filter) so its authorization is checked.
+                plan.empty_verified.set(true);
+                let mut limited = query.clone();
+                let SetExpr::Select(select) = limited.body.as_mut() else {
+                    return Ok(None);
+                };
+                let Some(original) = select.selection.take() else {
+                    return Ok(None);
+                };
+                select.selection = Some(Expr::BinaryOp {
+                    left: Box::new(Expr::Nested(Box::new(original))),
+                    op: BinaryOperator::And,
+                    right: Box::new(Expr::Value(Value::Boolean(false).into())),
+                });
+                return Ok(Some(ExistsCandidate::Query(limited)));
+            }
+            if *exact && present_verified.get() {
+                return Ok(Some(ExistsCandidate::Present));
+            }
+            // The first present answer (and every one that is not exact) runs the original.
+            present_verified.set(true);
+            return Ok(None);
+        }
         let keys: Cow<'_, [SqlValue]> = if matches!(value, SqlValue::Null) {
             Cow::Borrowed(&[][..])
         } else {
             match &plan.source {
+                CandidateSource::Keys { .. } => return Ok(None),
                 CandidateSource::Scanned(keys) => {
                     let Some(key) = numeric_key(self.db_ref(), value) else {
                         return Ok(None);
@@ -678,14 +753,11 @@ impl SqlEngine<'_> {
             return Ok(None);
         }
         let primary_names = primary_key_columns_for_schema(&schema);
-        let [primary_name] = primary_names.as_slice() else {
-            return Ok(None);
-        };
-        let Some(primary) = schema
-            .column(primary_name)
-            .filter(|column| !column.hidden && bounded_numeric(column))
-        else {
-            return Ok(None);
+        let primary = match primary_names.as_slice() {
+            [primary_name] => schema
+                .column(primary_name)
+                .filter(|column| !column.hidden && bounded_numeric(column)),
+            _ => None,
         };
         let qualifier = alias
             .as_ref()
@@ -697,10 +769,19 @@ impl SqlEngine<'_> {
         let Some(selection) = select.selection.as_ref() else {
             return Ok(None);
         };
-        let Some((key_expr, outer_slot, residuals)) =
+        let Some((key_expr, outer_slot, residuals, correlations)) =
             numeric_correlation(selection, &qualifier, &schema, context, self, env)
         else {
             return Ok(None);
+        };
+        let Some(primary) = primary else {
+            return self.keys_exists_candidates(
+                query,
+                key_expr,
+                outer_slot,
+                residuals,
+                correlations,
+            );
         };
         let mut primary_parts = qualifier
             .iter()
@@ -786,6 +867,78 @@ impl SqlEngine<'_> {
             outer_slot,
             primary_key,
             source: CandidateSource::Scanned(keys),
+            empty_verified: Cell::new(false),
+        }))
+    }
+
+    /// One scan of the correlation keys of the inner rows that pass the residual filters, for an
+    /// inner table without a single numeric primary key (a correlated EXISTS over such a table
+    /// otherwise rescans it for every outer row: quadratic).
+    fn keys_exists_candidates(
+        &self,
+        query: &Query,
+        key_expr: Expr,
+        outer_slot: usize,
+        residuals: Vec<Expr>,
+        correlations: usize,
+    ) -> Result<Option<CandidateProbe>> {
+        let mut scan = query.clone();
+        let SetExpr::Select(projection) = scan.body.as_mut() else {
+            return Ok(None);
+        };
+        projection.projection = vec![SelectItem::UnnamedExpr(key_expr)];
+        projection.selection = residuals.into_iter().reduce(|left, right| Expr::BinaryOp {
+            left: Box::new(Expr::Nested(Box::new(left))),
+            op: BinaryOperator::And,
+            right: Box::new(Expr::Nested(Box::new(right))),
+        });
+        scan.order_by = None;
+        scan.limit_clause = Some(LimitClause::LimitOffset {
+            limit: Some(Expr::Value(
+                Value::Number((MAX_PROBE_ROWS + 1).to_string(), false).into(),
+            )),
+            offset: None,
+            limit_by: Vec::new(),
+        });
+        let result = match self.execute_query(&scan) {
+            Ok(result) => result,
+            Err(_) => {
+                self.check_cancellation()?;
+                return Ok(None);
+            }
+        };
+        if result.rows.len() > MAX_PROBE_ROWS {
+            return Ok(None);
+        }
+        let mut keys = BTreeSet::new();
+        let mut bytes = 0usize;
+        for (index, values) in result.rows.into_iter().enumerate() {
+            if index % 1024 == 0 {
+                self.check_cancellation()?;
+            }
+            let [value] = values.as_slice() else {
+                return Ok(None);
+            };
+            if matches!(value, SqlValue::Null) {
+                continue;
+            }
+            let Some(key) = numeric_key(self.db_ref(), value) else {
+                return Ok(None);
+            };
+            bytes = bytes.saturating_add(key.len() + 64);
+            if bytes > MAX_PROBE_BYTES {
+                return Ok(None);
+            }
+            keys.insert(key);
+        }
+        Ok(Some(CandidateProbe {
+            outer_slot,
+            primary_key: Expr::Value(Value::Null.into()),
+            source: CandidateSource::Keys {
+                keys,
+                exact: correlations == 1,
+                present_verified: Cell::new(false),
+            },
             empty_verified: Cell::new(false),
         }))
     }

@@ -1271,8 +1271,10 @@ pub(crate) fn list_schemas(db: &BicDb) -> Result<Vec<TableSchema>> {
 
 pub fn ensure_primary_key_indexes(db: &mut BicDb) -> Result<()> {
     oracle::initialize_existing_database_profile(db)?;
+    restore_missing_table_storage(db)?;
     for schema in list_schemas(db)? {
-        ensure_primary_key_index_for_schema(db, &schema)?;
+        let result = ensure_primary_key_index_for_schema(db, &schema);
+        tolerate_on_empty_partitioned_parent(db, &schema, result)?;
     }
     Ok(())
 }
@@ -1317,10 +1319,63 @@ pub fn missing_embedded_table_constraint_indexes(
 /// older BicDB builds. PostgreSQL UNIQUE constraints are index-backed; keeping
 /// them as catalog-only metadata forces every validation and ON CONFLICT probe
 /// to materialize the complete relation.
-pub fn ensure_unique_constraint_indexes(db: &mut BicDb) -> Result<()> {
+/// Repairs a table whose catalog entry survived while its storage did not.
+///
+/// `DROP TABLE` of a partitioned table used to drop the parent's storage and then fail to remove
+/// its catalog entry (its partitions still referenced it), committing that half. Every later
+/// start then failed building the table's constraint indexes (`collection not found`), so the
+/// whole database stayed closed. Such a table has no rows left to lose; recreate its empty storage
+/// so the database opens, every other table (including its partitions) keeps its data, and the
+/// table can be dropped again. Nothing is deleted here.
+pub fn restore_missing_table_storage(db: &mut BicDb) -> Result<Vec<String>> {
+    let mut restored = Vec::new();
     for schema in list_schemas(db)? {
-        ensure_unique_constraint_indexes_for_schema(db, &schema)?;
+        if schema.partitioning.is_none() || db.has_collection(&schema.name) {
+            continue;
+        }
+        eprintln!(
+            "BicDB: partitioned table {} had a catalog entry but no storage (an interrupted DROP \
+             TABLE); recreated its empty storage so the database can open",
+            schema.name
+        );
+        db.create_collection(&schema.name)?;
+        restored.push(schema.name);
     }
+    Ok(restored)
+}
+
+pub fn ensure_unique_constraint_indexes(db: &mut BicDb) -> Result<()> {
+    restore_missing_table_storage(db)?;
+    for schema in list_schemas(db)? {
+        let result = ensure_unique_constraint_indexes_for_schema(db, &schema);
+        tolerate_on_empty_partitioned_parent(db, &schema, result)?;
+    }
+    Ok(())
+}
+
+/// At open, a constraint index that cannot be built for an empty partitioned parent (its storage
+/// was restored above after the interrupted DROP TABLE, while another relation now holds an index
+/// of that name) must not keep the whole database closed: the parent holds no rows to protect,
+/// and its partitions keep their own indexes. Any other failure, or one on a table with rows,
+/// still stops the open.
+fn tolerate_on_empty_partitioned_parent(
+    db: &BicDb,
+    schema: &TableSchema,
+    result: Result<()>,
+) -> Result<()> {
+    let Err(error) = result else {
+        return Ok(());
+    };
+    if schema.partitioning.is_none()
+        || !db.has_collection(&schema.name)
+        || !db.scan_collection(&schema.name)?.is_empty()
+    {
+        return Err(error);
+    }
+    eprintln!(
+        "BicDB: partitioned table {} (no rows): constraint index not rebuilt at open: {error}",
+        schema.name
+    );
     Ok(())
 }
 
@@ -1337,6 +1392,16 @@ pub(crate) fn ensure_unique_constraint_indexes_for_schema(
             if unique_constraint_index_definition_matches(&existing, &definition) {
                 continue;
             }
+            // A partition carries its parent's UNIQUE constraint under the parent's name, and
+            // the parent's index of that name enforces it across the partitions. Treating the
+            // partition's copy as a conflicting definition made every database holding a
+            // partitioned table with a UNIQUE constraint fail to open again.
+            if partition_ancestor_owns_index(schema, &existing.collection)
+                && existing.unique
+                && index_field_lists_match(&existing.fields, &definition.fields)
+            {
+                continue;
+            }
             return Err(SqlError::InvalidSql(format!(
                 "index \"{}\" already exists with a definition that does not match UNIQUE constraint \"{}\"",
                 definition.name, definition.name
@@ -1345,6 +1410,14 @@ pub(crate) fn ensure_unique_constraint_indexes_for_schema(
         db.create_index(definition)?;
     }
     Ok(())
+}
+
+/// Whether `collection` is the partitioned table `schema` is a partition of.
+fn partition_ancestor_owns_index(schema: &TableSchema, collection: &str) -> bool {
+    schema
+        .partition_of
+        .as_ref()
+        .is_some_and(|link| link.parent_table.eq_ignore_ascii_case(collection))
 }
 
 /// Compare every property that changes UNIQUE write enforcement.

@@ -2591,6 +2591,28 @@ pub(crate) struct TimestampTemplateParts {
     pub(crate) second: Option<u32>,
 }
 
+/// float8 text as PostgreSQL prints it in messages: shortest digits, exponent form (`1e+20`)
+/// from an exponent of 15 up or below -4.
+fn pg_float8_text(value: f64) -> String {
+    let exponent = if value == 0.0 {
+        0
+    } else {
+        value.abs().log10().floor() as i32
+    };
+    if !(-4..15).contains(&exponent) {
+        let text = format!("{value:e}");
+        if let Some((mantissa, exponent)) = text.split_once('e') {
+            let (sign, digits) = match exponent.strip_prefix('-') {
+                Some(digits) => ('-', digits),
+                None => ('+', exponent),
+            };
+            return format!("{mantissa}e{sign}{digits:0>2}");
+        }
+        return text;
+    }
+    value.to_string()
+}
+
 pub(crate) fn eval_to_timestamp(args: &[SqlValue]) -> Result<SqlValue> {
     if args.len() != 1 && args.len() != 2 {
         return Err(SqlError::InvalidSql(format!(
@@ -2605,6 +2627,36 @@ pub(crate) fn eval_to_timestamp(args: &[SqlValue]) -> Result<SqlValue> {
         let epoch_seconds = sql_value_f64(&args[0]).ok_or_else(|| {
             SqlError::InvalidSql("to_timestamp first argument must be numeric".to_string())
         })?;
+        // PostgreSQL: +/-Infinity map to the infinite timestamps, NaN and values outside the
+        // timestamp range are errors. They used to saturate into a nonsense year (or overflow).
+        if epoch_seconds.is_nan() {
+            return Err(SqlError::data_exception(
+                "22008",
+                "timestamp cannot be NaN",
+                None,
+            ));
+        }
+        if epoch_seconds.is_infinite() {
+            return Ok(SqlValue::String(
+                if epoch_seconds > 0.0 {
+                    "infinity"
+                } else {
+                    "-infinity"
+                }
+                .to_string(),
+            ));
+        }
+        // 4714-11-24 00:00:00 BC .. 294277-01-01 00:00:00 (exclusive), in Unix seconds.
+        if !(-210_866_803_200.0..9_224_318_016_000.0).contains(&epoch_seconds) {
+            return Err(SqlError::data_exception(
+                "22008",
+                format!(
+                    "timestamp out of range: \"{}\"",
+                    pg_float8_text(epoch_seconds)
+                ),
+                None,
+            ));
+        }
         return Ok(SqlValue::String(unix_seconds_to_utc_timestamp(
             epoch_seconds.floor() as i64,
         )));

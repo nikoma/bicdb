@@ -2642,13 +2642,24 @@ fn handle_frontend_message(
                 abort_copy_in(server, state)?;
                 return Ok(false);
             }
-            _ => {
+            other => {
                 abort_copy_in(server, state)?;
-                state.discard_until_sync = true;
-                error_response(
+                state.failed_queries += 1;
+                server.failed_queries.fetch_add(1, Ordering::SeqCst);
+                state.record_query_error(&server.config.sql_profile);
+                error_response_with_fields(
                     stream,
-                    "expected CopyData, CopyDone, or CopyFail during COPY FROM STDIN",
+                    "ERROR",
+                    "08P01",
+                    &format!("unexpected message type 0x{other:02X} during COPY from stdin"),
+                    &[],
                 )?;
+                // A simple-query client sends no Sync: waiting for one hung the session.
+                if extended {
+                    state.discard_until_sync = true;
+                } else {
+                    ready_for_query_status(stream, state.transaction_status())?;
+                }
             }
         }
         return Ok(true);
@@ -3510,6 +3521,11 @@ fn execute_server_query(
                 if state.failed_transaction {
                     return Err(PgWireError::InFailedTransaction);
                 }
+                // Resolve the target before entering COPY mode, as PostgreSQL does: a missing
+                // relation is reported instead of CopyInResponse. Resolving it after the session
+                // had entered COPY mode left the server waiting for CopyData while the client had
+                // already seen the error and went on sending queries, so the session hung.
+                let column_count = copy_in_column_count(server, &copy)?;
                 let owns_serializable_transaction = !state.in_transaction
                     && !bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile)
                     && state
@@ -3553,7 +3569,7 @@ fn execute_server_query(
                         PgWireError::Server("COPY FROM STDIN state is missing".to_string())
                     })?
                     .spec;
-                copy_in_response(stream, server, copy)?;
+                copy_in_response(stream, copy, column_count)?;
                 state.last_query_at = Some(unix_timestamp());
                 Ok(QueryFlow::CopyInStarted)
             }

@@ -478,6 +478,62 @@ impl<'db> SqlSession<'db> {
         Ok(SqlResult::command("CREATE SEQUENCE"))
     }
 
+    /// Drops one table, after its partitions: PostgreSQL drops a partitioned table's partitions
+    /// with it. Dropping the parent first used to remove its storage and then fail to unpublish
+    /// its catalog entry (its partitions still named it as their parent), which left a catalog
+    /// entry without storage and a database that no longer opened. Returns whether anything
+    /// existed.
+    fn drop_table_and_partitions(
+        &mut self,
+        table: &str,
+        dropping: &[String],
+        cascade: bool,
+        purge: bool,
+    ) -> Result<bool> {
+        let partitions = list_schemas(self.db_ref())?
+            .into_iter()
+            .filter(|schema| {
+                schema
+                    .partition_of
+                    .as_ref()
+                    .is_some_and(|link| link.parent_table.eq_ignore_ascii_case(table))
+                    && !schema.name.eq_ignore_ascii_case(table)
+            })
+            .map(|schema| schema.name)
+            .collect::<Vec<_>>();
+        for partition in &partitions {
+            self.drop_table_and_partitions(partition, dropping, cascade, purge)?;
+        }
+        let schema = load_schema(self.db_ref(), table)?;
+        if let Some(schema) = &schema {
+            self.drop_table_inbound_foreign_keys(schema, dropping, cascade)?;
+            self.drop_table_row_type_dependents(schema, cascade)?;
+            // Keep the exact backing until an explicit transaction
+            // decides. Copying rows back on rollback assigns newer
+            // versions that its retained snapshot cannot see.
+            let deferred_purge = self.tx.is_some() && (purge || !self.recycle_bin_enabled());
+            if (!purge || deferred_purge)
+                && self.move_table_to_recycle_bin(table, schema, deferred_purge)?
+            {
+                return Ok(true);
+            }
+        }
+        let schema_existed = schema.is_some();
+        // A table's triggers belong to it and are dropped with it.
+        for trigger in list_triggers(self.db_ref())?
+            .into_iter()
+            .filter(|trigger| trigger.table_name.eq_ignore_ascii_case(table))
+        {
+            self.delete_session_trigger(&trigger.name, Some(&trigger.table_name))?;
+        }
+        let existed = self.drop_session_collection(table)?;
+        self.delete_session_schema(table)?;
+        if existed || schema_existed {
+            self.drop_owned_sequences_for_table(table)?;
+        }
+        Ok(existed || schema_existed)
+    }
+
     pub(crate) fn execute_drop(
         &mut self,
         object_type: ObjectType,
@@ -498,35 +554,9 @@ impl<'db> SqlSession<'db> {
                     // ownership check: any authenticated role could delete
                     // any tenant's table.
                     self.require_table_ownership(&table, "drop it")?;
-                    let schema = load_schema(self.db_ref(), &table)?;
-                    if let Some(schema) = &schema {
-                        self.drop_table_inbound_foreign_keys(schema, &dropping, cascade)?;
-                        self.drop_table_row_type_dependents(schema, cascade)?;
-                        // Keep the exact backing until an explicit transaction
-                        // decides. Copying rows back on rollback assigns newer
-                        // versions that its retained snapshot cannot see.
-                        let deferred_purge =
-                            self.tx.is_some() && (purge || !self.recycle_bin_enabled());
-                        if (!purge || deferred_purge)
-                            && self.move_table_to_recycle_bin(&table, schema, deferred_purge)?
-                        {
-                            continue;
-                        }
-                    }
-                    let schema_existed = schema.is_some();
-                    // A table's triggers belong to it and are dropped with it.
-                    for trigger in list_triggers(self.db_ref())?
-                        .into_iter()
-                        .filter(|trigger| trigger.table_name.eq_ignore_ascii_case(&table))
+                    if !self.drop_table_and_partitions(&table, &dropping, cascade, purge)?
+                        && !if_exists
                     {
-                        self.delete_session_trigger(&trigger.name, Some(&trigger.table_name))?;
-                    }
-                    let existed = self.drop_session_collection(&table)?;
-                    self.delete_session_schema(&table)?;
-                    if existed || schema_existed {
-                        self.drop_owned_sequences_for_table(&table)?;
-                    }
-                    if !existed && !schema_existed && !if_exists {
                         return Err(SqlError::InvalidCollection(table));
                     }
                 }

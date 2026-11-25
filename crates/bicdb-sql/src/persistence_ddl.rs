@@ -23,12 +23,12 @@ pub(crate) enum PersistenceDdl {
         /// Columns whose NOT NULL is declared NO INHERIT.
         no_inherit_not_null: Vec<String>,
     },
-    /// `ALTER TABLE name INHERIT parent` (`true`) or `NO INHERIT parent`.
+    /// `ALTER TABLE name INHERIT parent` (`true`) or `NO INHERIT parent`,
+    /// one or more comma-separated actions applied in order.
     Inherit {
         table: String,
         if_exists: bool,
-        parent: String,
-        inherit: bool,
+        parents: Vec<(String, bool)>,
     },
     /// `ALTER TABLE name SET LOGGED` (`false`) or `SET UNLOGGED` (`true`).
     SetPersistence {
@@ -128,25 +128,37 @@ pub(crate) fn parse_persistence_ddl(sql: &str) -> Result<Option<PersistenceDdl>>
                 }
             }
         }
-        let inherit_at = if at(next).is_some_and(|token| is_keyword(token, "NO"))
-            && at(next + 1).is_some_and(|token| is_keyword(token, "INHERIT"))
-        {
-            Some((next + 2, false))
-        } else if at(next).is_some_and(|token| is_keyword(token, "INHERIT")) {
-            Some((next + 1, true))
-        } else {
-            None
+        // One or more comma-separated `[NO] INHERIT parent` actions.
+        let inherit_action = |position: usize| {
+            if at(position).is_some_and(|token| is_keyword(token, "NO"))
+                && at(position + 1).is_some_and(|token| is_keyword(token, "INHERIT"))
+            {
+                Some((position + 2, false))
+            } else if at(position).is_some_and(|token| is_keyword(token, "INHERIT")) {
+                Some((position + 1, true))
+            } else {
+                None
+            }
         };
-        if let Some((parent_at, inherit)) = inherit_at {
-            if let Some((parent, end)) = relation_at(&tokens, &sig, parent_at) {
+        if inherit_action(next).is_some() {
+            let mut parents = Vec::new();
+            let mut position = next;
+            while let Some((parent_at, inherit)) = inherit_action(position) {
+                let Some((parent, end)) = relation_at(&tokens, &sig, parent_at) else {
+                    return Ok(None);
+                };
+                parents.push((parent, inherit));
                 if end == sig.len() {
                     return Ok(Some(PersistenceDdl::Inherit {
                         table,
                         if_exists,
-                        parent,
-                        inherit,
+                        parents,
                     }));
                 }
+                if at(end) != Some(&Token::Comma) {
+                    return Ok(None);
+                }
+                position = end + 1;
             }
             return Ok(None);
         }

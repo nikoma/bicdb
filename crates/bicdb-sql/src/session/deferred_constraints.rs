@@ -15,6 +15,13 @@ pub(crate) enum ConstraintCommand {
         names: Option<Vec<Vec<String>>>,
         deferred: bool,
     },
+    /// `ALTER TABLE t ALTER CONSTRAINT c [NO] INHERIT` (not-null only).
+    Inherit {
+        table: String,
+        name: String,
+        if_exists: bool,
+        inherit: bool,
+    },
 }
 
 struct Tokens {
@@ -108,6 +115,27 @@ pub(crate) fn parse_constraint_command(sql: &str) -> Result<Option<ConstraintCom
             return Err(SqlError::InvalidSql(
                 "ALTER CONSTRAINT requires an unqualified constraint name".into(),
             ));
+        }
+        let inherit = if tokens.keyword("INHERIT") {
+            Some(true)
+        } else if tokens.values.get(tokens.at).is_some_and(|token| {
+            matches!(token, Token::Word(word) if word.quote_style.is_none() && word.value.eq_ignore_ascii_case("NO"))
+        }) && tokens.values.get(tokens.at + 1).is_some_and(|token| {
+            matches!(token, Token::Word(word) if word.quote_style.is_none() && word.value.eq_ignore_ascii_case("INHERIT"))
+        }) {
+            tokens.at += 2;
+            Some(false)
+        } else {
+            None
+        };
+        if let Some(inherit) = inherit {
+            tokens.finish()?;
+            return Ok(Some(ConstraintCommand::Inherit {
+                table: relation_name_from_parts(&table)?,
+                name: name[0].clone(),
+                if_exists,
+                inherit,
+            }));
         }
         let deferrable = if tokens.keyword("NOT") {
             tokens.require("DEFERRABLE")?;
@@ -405,6 +433,90 @@ impl<'db> SqlSession<'db> {
         self.execute_constraint_command(command).map(Some)
     }
 
+    /// PostgreSQL 18's `ALTER CONSTRAINT ... [NO] INHERIT`, which applies to
+    /// not-null constraints only. NO INHERIT leaves the children's copies as
+    /// their own constraints; INHERIT adds the constraint to every
+    /// descendant, checking its rows.
+    fn alter_not_null_inheritance(
+        &mut self,
+        table: &str,
+        name: &str,
+        if_exists: bool,
+        inherit: bool,
+    ) -> Result<SqlResult> {
+        let table = resolve_session_relation_name_if_exists(self.db_ref(), table);
+        let Some(mut schema) = load_schema(self.db_ref(), &table)? else {
+            return if if_exists {
+                Ok(SqlResult::command("ALTER TABLE"))
+            } else {
+                Err(SqlError::InvalidCollection(table))
+            };
+        };
+        self.require_table_ownership(&schema.name, "ALTER TABLE")?;
+        let display = schema
+            .name
+            .rsplit('.')
+            .next()
+            .unwrap_or(&schema.name)
+            .to_string();
+        let column = schema
+            .columns
+            .iter()
+            .filter(|column| !column.hidden && (!column.nullable || column.primary_key))
+            .find(|column| {
+                not_null_constraint_name(&schema.name, &column.name) == name
+                    || not_null_constraint_name(&display, &column.name) == name
+            })
+            .map(|column| column.name.clone());
+        let Some(column) = column else {
+            let exists = schema
+                .constraints
+                .iter()
+                .any(|constraint| constraint_name(constraint) == name);
+            return Err(if exists {
+                SqlError::data_exception_public(
+                    "42809",
+                    format!("constraint \"{name}\" of relation \"{display}\" is not a not-null constraint"),
+                    None,
+                )
+            } else {
+                SqlError::undefined_object(format!(
+                    "constraint \"{name}\" of relation \"{display}\" does not exist"
+                ))
+            });
+        };
+        let key = not_null_constraint_name(&schema.name, &column);
+        let listed = schema.no_inherit_constraints.contains(&key);
+        if inherit {
+            if listed {
+                schema.no_inherit_constraints.retain(|entry| *entry != key);
+                self.save_session_schema(&schema)?;
+            }
+            for child in crate::inheritance::inheritance_descendants(self.db_ref(), &schema)? {
+                let nullable = child
+                    .columns
+                    .iter()
+                    .any(|candidate| candidate.name == column && candidate.nullable);
+                if nullable {
+                    self.execute(&format!(
+                        "ALTER TABLE ONLY {} ALTER COLUMN {} SET NOT NULL",
+                        child
+                            .name
+                            .split('.')
+                            .map(pg_quote_ident)
+                            .collect::<Vec<_>>()
+                            .join("."),
+                        pg_quote_ident(&column)
+                    ))?;
+                }
+            }
+        } else if !listed {
+            schema.no_inherit_constraints.push(key);
+            self.save_session_schema(&schema)?;
+        }
+        Ok(SqlResult::command("ALTER TABLE"))
+    }
+
     fn execute_constraint_command(&mut self, command: ConstraintCommand) -> Result<SqlResult> {
         match command {
             ConstraintCommand::Alter {
@@ -463,6 +575,12 @@ impl<'db> SqlSession<'db> {
                 self.save_session_schema(&schema)?;
                 Ok(SqlResult::command("ALTER TABLE"))
             }
+            ConstraintCommand::Inherit {
+                table,
+                name,
+                if_exists,
+                inherit,
+            } => self.alter_not_null_inheritance(&table, &name, if_exists, inherit),
             ConstraintCommand::Set { names, deferred } => {
                 let schemas = list_schemas(self.db_ref())?;
                 let mut selected = Vec::new();

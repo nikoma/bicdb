@@ -5474,6 +5474,12 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                         conbin: None,
                         convalidated: true,
                     }));
+                    let no_inherit = schema
+                        .no_inherit_constraints
+                        .contains(&not_null_constraint_name(&schema.name, &column.name));
+                    if let (true, Some(row)) = (no_inherit, rows.last_mut()) {
+                        row.insert("connoinherit".into(), SqlValue::Bool(true));
+                    }
                 }
                 constraint_slot += 1;
             }

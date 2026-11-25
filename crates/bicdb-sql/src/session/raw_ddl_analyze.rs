@@ -826,9 +826,14 @@ impl<'db> SqlSession<'db> {
             PersistenceDdl::Inherit {
                 table,
                 if_exists,
-                parent,
-                inherit,
-            } => self.alter_table_inheritance(&table, if_exists, &parent, inherit),
+                parents,
+            } => {
+                let mut result = SqlResult::command("ALTER TABLE");
+                for (parent, inherit) in parents {
+                    result = self.alter_table_inheritance(&table, if_exists, &parent, inherit)?;
+                }
+                Ok(result)
+            }
             PersistenceDdl::SetPersistence {
                 table,
                 if_exists,

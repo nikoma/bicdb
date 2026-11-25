@@ -131,3 +131,38 @@ fn text_search_catalog_functions_and_default_configuration() {
         .unwrap_err();
     assert_eq!(error.sqlstate(), "22023");
 }
+
+#[test]
+fn alter_table_inherit_lists_and_not_null_no_inherit() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = open(root.path());
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE TABLE p1(a int); CREATE TABLE p2(b int); CREATE TABLE c(a int, b int);
+             ALTER TABLE c INHERIT p1, INHERIT p2; INSERT INTO c VALUES (1, 2)",
+        )
+        .unwrap();
+    assert_eq!(rows(&mut session, "SELECT count(*) FROM p2"), vec!["1"]);
+    session
+        .execute("ALTER TABLE c NO INHERIT p1, NO INHERIT p2")
+        .unwrap();
+    assert_eq!(rows(&mut session, "SELECT count(*) FROM p1"), vec!["0"]);
+    session
+        .execute(
+            "CREATE TABLE q(a int NOT NULL, CONSTRAINT q_c CHECK (a > 0));
+             ALTER TABLE q ALTER CONSTRAINT q_a_not_null NO INHERIT",
+        )
+        .unwrap();
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT connoinherit FROM pg_constraint WHERE conname = 'q_a_not_null'"
+        ),
+        vec!["t"]
+    );
+    let error = session
+        .execute("ALTER TABLE q ALTER CONSTRAINT q_c NO INHERIT")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42809");
+}

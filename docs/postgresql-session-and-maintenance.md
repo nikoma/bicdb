@@ -96,3 +96,13 @@ caret. Positions are reported where PostgreSQL reports them:
 Errors PostgreSQL raises without a location (DDL name lookups, run-time errors such as division by
 zero, and invalid data that does not come from a literal) carry none. A position is only sent
 after it has been checked against the client's statement text.
+
+## psql describe queries
+
+psql 18's `\d`, `\d+`, `\dt`, `\dv`, `\di`, `\dn` queries run: `pg_catalog.unnest(...)` in FROM is
+the built-in `unnest`, `pg_partition_ancestors(oid)` returns the table itself for a table outside
+a partition tree (a partition is refused with `0A000` rather than answered incompletely),
+`pg_table_is_visible(oid)` follows the search path for tables (so `\d t` shows the temporary
+`t` when it hides a permanent one), and `pg_constraint.connoinherit` is false. Known remaining
+differences: expression deparse in CHECK constraints and view definitions, index column rows for
+`\d index`, BicDB's internal `bicdb_graph_*` views in `\d`/`\dv`, and the `public` schema owner.

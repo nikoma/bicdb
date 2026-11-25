@@ -535,6 +535,7 @@ impl<'db> SqlSession<'db> {
             virtual_generated_columns: Vec::new(),
             inherits: Vec::new(),
             inheritance_children: Vec::new(),
+            no_inherit_constraints: Vec::new(),
         };
         partition::validate_new_key(self.db_ref(), &schema)?;
         if schema.partitioning.is_some() {
@@ -634,6 +635,7 @@ impl<'db> SqlSession<'db> {
             virtual_generated_columns: Vec::new(),
             inherits: Vec::new(),
             inheritance_children: Vec::new(),
+            no_inherit_constraints: Vec::new(),
         };
         partition::validate_new_key(self.db_ref(), &child)?;
         partition::validate_definition(&child)?;
@@ -821,6 +823,12 @@ impl<'db> SqlSession<'db> {
     ) -> Result<SqlResult> {
         use crate::persistence_ddl::PersistenceDdl;
         match ddl {
+            PersistenceDdl::Inherit {
+                table,
+                if_exists,
+                parent,
+                inherit,
+            } => self.alter_table_inheritance(&table, if_exists, &parent, inherit),
             PersistenceDdl::SetPersistence {
                 table,
                 if_exists,
@@ -847,6 +855,8 @@ impl<'db> SqlSession<'db> {
                 if_not_exists,
                 unlogged,
                 virtual_columns,
+                no_inherit_checks,
+                no_inherit_not_null,
             } => {
                 let before = load_schema(
                     self.db_ref(),
@@ -875,6 +885,28 @@ impl<'db> SqlSession<'db> {
                 for column in virtual_columns {
                     if !schema.virtual_generated_columns.contains(&column) {
                         schema.virtual_generated_columns.push(column);
+                    }
+                }
+                for column in no_inherit_not_null {
+                    let name = not_null_constraint_name(&schema.name, &column);
+                    if !schema.no_inherit_constraints.contains(&name) {
+                        schema.no_inherit_constraints.push(name);
+                    }
+                }
+                for expression in no_inherit_checks {
+                    let expected = crate::sql_text::sql_text(&parse_check_expression(&expression)?);
+                    for constraint in &schema.constraints {
+                        if let ConstraintSchema::Check {
+                            name,
+                            expression: stored,
+                            ..
+                        } = constraint
+                        {
+                            if *stored == expected && !schema.no_inherit_constraints.contains(name)
+                            {
+                                schema.no_inherit_constraints.push(name.clone());
+                            }
+                        }
                     }
                 }
                 self.save_session_schema(&schema)?;

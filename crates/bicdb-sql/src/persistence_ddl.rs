@@ -18,6 +18,17 @@ pub(crate) enum PersistenceDdl {
         if_not_exists: bool,
         unlogged: bool,
         virtual_columns: Vec<String>,
+        /// Expressions (as written) of CHECK constraints declared NO INHERIT.
+        no_inherit_checks: Vec<String>,
+        /// Columns whose NOT NULL is declared NO INHERIT.
+        no_inherit_not_null: Vec<String>,
+    },
+    /// `ALTER TABLE name INHERIT parent` (`true`) or `NO INHERIT parent`.
+    Inherit {
+        table: String,
+        if_exists: bool,
+        parent: String,
+        inherit: bool,
     },
     /// `ALTER TABLE name SET LOGGED` (`false`) or `SET UNLOGGED` (`true`).
     SetPersistence {
@@ -62,7 +73,7 @@ pub(crate) fn parse_persistence_ddl(sql: &str) -> Result<Option<PersistenceDdl>>
         return Ok(None);
     }
     let lower = sql.to_ascii_lowercase();
-    if !(lower.contains("unlogged") || lower.contains("logged") || lower.contains("generated")) {
+    if !(lower.contains("logged") || lower.contains("generated") || lower.contains("inherit")) {
         return Ok(None);
     }
     let Ok(mut tokens) = Tokenizer::new(&sqlparser::dialect::PostgreSqlDialect {}, sql).tokenize()
@@ -117,6 +128,28 @@ pub(crate) fn parse_persistence_ddl(sql: &str) -> Result<Option<PersistenceDdl>>
                 }
             }
         }
+        let inherit_at = if at(next).is_some_and(|token| is_keyword(token, "NO"))
+            && at(next + 1).is_some_and(|token| is_keyword(token, "INHERIT"))
+        {
+            Some((next + 2, false))
+        } else if at(next).is_some_and(|token| is_keyword(token, "INHERIT")) {
+            Some((next + 1, true))
+        } else {
+            None
+        };
+        if let Some((parent_at, inherit)) = inherit_at {
+            if let Some((parent, end)) = relation_at(&tokens, &sig, parent_at) {
+                if end == sig.len() {
+                    return Ok(Some(PersistenceDdl::Inherit {
+                        table,
+                        if_exists,
+                        parent,
+                        inherit,
+                    }));
+                }
+            }
+            return Ok(None);
+        }
         // ALTER TABLE name ADD [COLUMN] [IF NOT EXISTS] column ... GENERATED.
         if !at(next).is_some_and(|token| is_keyword(token, "ADD")) {
             return Ok(None);
@@ -130,15 +163,27 @@ pub(crate) fn parse_persistence_ddl(sql: &str) -> Result<Option<PersistenceDdl>>
             if_not_exists = true;
             column_at += 3;
         }
-        let Some(column) = at(column_at).and_then(identifier) else {
-            return Ok(None);
-        };
-        let Some(edit) = virtual_generated_edit(&tokens, &sig, column_at) else {
-            return Ok(None);
-        };
-        apply_edits(&mut tokens, vec![edit]);
-        let virtual_columns = vec![column];
+        let (no_inherit_checks, mut edits) = no_inherit_check_edits(&tokens, &sig, next + 1);
+        let mut virtual_columns = Vec::new();
+        if no_inherit_checks.is_empty() {
+            let Some(column) = at(column_at).and_then(identifier) else {
+                return Ok(None);
+            };
+            let Some(edit) = virtual_generated_edit(&tokens, &sig, column_at) else {
+                return Ok(None);
+            };
+            edits.push(edit);
+            virtual_columns.push(column);
+        } else if !at(2).is_some_and(|token| is_keyword(token, "ONLY"))
+            && !at(2).is_some_and(|token| is_keyword(token, "IF"))
+        {
+            // A NO INHERIT constraint is not added to the children.
+            edits.push(Edit::InsertKeyword(sig[1], "ONLY"));
+        }
+        apply_edits(&mut tokens, edits);
         return Ok(Some(PersistenceDdl::Rewritten {
+            no_inherit_checks,
+            no_inherit_not_null: Vec::new(),
             sql: tokens
                 .iter()
                 .map(crate::eval::rewrite_helpers::token_sql)
@@ -177,6 +222,7 @@ pub(crate) fn parse_persistence_ddl(sql: &str) -> Result<Option<PersistenceDdl>>
     // Column definitions start after the first parenthesis; each element
     // starts after it or a comma at depth one.
     let mut virtual_columns = Vec::new();
+    let mut no_inherit_not_null = Vec::new();
     let mut edits = Vec::new();
     if at(after_name) == Some(&Token::LParen) {
         let mut depth = 0usize;
@@ -197,6 +243,22 @@ pub(crate) fn parse_persistence_ddl(sql: &str) -> Result<Option<PersistenceDdl>>
                     depth = depth.saturating_sub(1);
                 }
                 Token::Comma if depth == 1 => element_start = Some(position + 1),
+                token
+                    if depth == 1
+                        && is_keyword(token, "NOT")
+                        && at(position + 1).is_some_and(|token| is_keyword(token, "NULL"))
+                        && at(position + 2).is_some_and(|token| is_keyword(token, "NO"))
+                        && at(position + 3).is_some_and(|token| is_keyword(token, "INHERIT")) =>
+                {
+                    if let Some(column) = element_start
+                        .and_then(|start| at(start))
+                        .and_then(identifier)
+                    {
+                        no_inherit_not_null.push(column);
+                        edits.push(Edit::Remove(sig[position + 2]));
+                        edits.push(Edit::Remove(sig[position + 3]));
+                    }
+                }
                 token if depth == 1 && is_keyword(token, "GENERATED") => {
                     if let Some(column) = element_start
                         .and_then(|start| at(start))
@@ -213,6 +275,8 @@ pub(crate) fn parse_persistence_ddl(sql: &str) -> Result<Option<PersistenceDdl>>
             position += 1;
         }
     }
+    let (no_inherit_checks, check_edits) = no_inherit_check_edits(&tokens, &sig, after_name);
+    edits.extend(check_edits);
     if !unlogged && edits.is_empty() {
         return Ok(None);
     }
@@ -231,6 +295,8 @@ pub(crate) fn parse_persistence_ddl(sql: &str) -> Result<Option<PersistenceDdl>>
         if_not_exists,
         unlogged,
         virtual_columns,
+        no_inherit_checks,
+        no_inherit_not_null,
     }))
 }
 
@@ -241,11 +307,16 @@ enum Edit {
     InsertAfter(usize),
     /// Remove the token and a whitespace token after it.
     Remove(usize),
+    /// Insert ` KEYWORD` after the token.
+    InsertKeyword(usize, &'static str),
 }
 
 fn apply_edits(tokens: &mut Vec<Token>, mut edits: Vec<Edit>) {
     let index_of = |edit: &Edit| match edit {
-        Edit::Replace(index) | Edit::InsertAfter(index) | Edit::Remove(index) => *index,
+        Edit::Replace(index)
+        | Edit::InsertAfter(index)
+        | Edit::Remove(index)
+        | Edit::InsertKeyword(index, _) => *index,
     };
     edits.sort_by_key(|edit| std::cmp::Reverse(index_of(edit)));
     for edit in edits {
@@ -253,6 +324,10 @@ fn apply_edits(tokens: &mut Vec<Token>, mut edits: Vec<Edit>) {
             Edit::Replace(index) => tokens[index] = Token::make_keyword("STORED"),
             Edit::InsertAfter(index) => {
                 tokens.insert(index + 1, Token::make_keyword("STORED"));
+                tokens.insert(index + 1, Token::Whitespace(Whitespace::Space));
+            }
+            Edit::InsertKeyword(index, keyword) => {
+                tokens.insert(index + 1, Token::make_keyword(keyword));
                 tokens.insert(index + 1, Token::Whitespace(Whitespace::Space));
             }
             Edit::Remove(index) => {
@@ -263,6 +338,56 @@ fn apply_edits(tokens: &mut Vec<Token>, mut edits: Vec<Edit>) {
             }
         }
     }
+}
+
+/// Every `CHECK (expr) NO INHERIT` from significant position `from` on: the
+/// expressions as written, and the edits dropping the `NO INHERIT` words.
+fn no_inherit_check_edits(
+    tokens: &[Token],
+    sig: &[usize],
+    from: usize,
+) -> (Vec<String>, Vec<Edit>) {
+    let mut expressions = Vec::new();
+    let mut edits = Vec::new();
+    let keyword = |position: usize, value: &str| {
+        sig.get(position)
+            .is_some_and(|&index| is_keyword(&tokens[index], value))
+    };
+    let mut position = from;
+    while position < sig.len() {
+        if keyword(position, "CHECK")
+            && sig.get(position + 1).map(|&index| &tokens[index]) == Some(&Token::LParen)
+        {
+            let mut depth = 0usize;
+            let mut close = position + 1;
+            while close < sig.len() {
+                match tokens[sig[close]] {
+                    Token::LParen => depth += 1,
+                    Token::RParen => {
+                        depth -= 1;
+                        if depth == 0 {
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+                close += 1;
+            }
+            if close < sig.len() && keyword(close + 1, "NO") && keyword(close + 2, "INHERIT") {
+                expressions.push(
+                    tokens[sig[position + 1] + 1..sig[close]]
+                        .iter()
+                        .map(crate::eval::rewrite_helpers::token_sql)
+                        .collect::<String>(),
+                );
+                edits.push(Edit::Remove(sig[close + 1]));
+                edits.push(Edit::Remove(sig[close + 2]));
+            }
+            position = close;
+        }
+        position += 1;
+    }
+    (expressions, edits)
 }
 
 /// From significant position `from`, finds the first `GENERATED ALWAYS AS

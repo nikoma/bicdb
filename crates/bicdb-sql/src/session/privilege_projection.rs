@@ -680,6 +680,7 @@ impl<'db> SqlSession<'db> {
             virtual_generated_columns: inherited_virtual,
             inherits: parents.iter().map(|parent| parent.name.clone()).collect(),
             inheritance_children: Vec::new(),
+            no_inherit_constraints: Vec::new(),
         };
         partition::validate_new_key(self.db_ref(), &schema)?;
         partition::validate_definition(&schema)?;

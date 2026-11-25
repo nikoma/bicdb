@@ -146,7 +146,13 @@ impl RenameDependencies {
                 .partition_of
                 .as_ref()
                 .is_some_and(|part| part.parent_table == *old);
-            if incoming || values || partition {
+            // Inheritance links name the renamed table on both sides.
+            let inheritance = schema
+                .inherits
+                .iter()
+                .chain(schema.inheritance_children.iter())
+                .any(|link| link == old);
+            if incoming || values || partition || inheritance {
                 plan.relations.insert(schema.name.clone());
                 plan.metadata
                     .insert((SCHEMA_COLLECTION.into(), schema.name.clone()));

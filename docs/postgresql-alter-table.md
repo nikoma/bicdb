@@ -107,11 +107,22 @@ are not inherited, as in PostgreSQL. `pg_inherits` and
 - `DROP TABLE` of a parent with children fails with 2BP01; drop the
   children first.
 
-Limits: `ONLY` in `SELECT`, `UPDATE` and `DELETE` is not supported (the SQL
-parser does not accept it there); `ALTER TABLE ONLY parent` is.
-`NO INHERIT` constraints, `ALTER TABLE ... [NO] INHERIT`, `DROP TABLE ...
-CASCADE` of a parent, renaming a table in a hierarchy, and UPDATE/DELETE
-through a parent with row-level security fail with 0A000 or a parse error.
+- `ONLY parent` in `SELECT`/`JOIN`, `UPDATE` and `DELETE` reads or writes
+  the parent's own rows only (`ALTER TABLE ONLY` and `TRUNCATE ONLY` too).
+- `CHECK (...) NO INHERIT` and `NOT NULL NO INHERIT` constraints stay on the
+  table that declares them (`pg_constraint.connoinherit`); `ALTER TABLE ...
+  ADD CONSTRAINT ... CHECK (...) NO INHERIT` does not reach the children.
+- `ALTER TABLE child INHERIT parent` attaches an existing table whose
+  columns (with the same types and NOT NULL markings) and CHECK constraints
+  cover the parent's; `NO INHERIT parent` detaches it. Circular inheritance
+  fails with 42P07.
+- `DROP TABLE parent CASCADE` drops the descendants; renaming a parent or a
+  child keeps the hierarchy.
+
+Limits: several `[NO] INHERIT` actions in one `ALTER TABLE`, `ALTER
+CONSTRAINT ... [NO] INHERIT`, and UPDATE/DELETE through a parent with
+row-level security fail (0A000 or a parse error). Inheritance tracks
+whether an inherited CHECK was also declared locally only by name.
 
 ## UNLOGGED tables
 

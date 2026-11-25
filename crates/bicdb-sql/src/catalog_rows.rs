@@ -5544,6 +5544,7 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                         types,
                         relation_oids,
                     ) {
+                        let no_inherit = schema.no_inherit_constraints.contains(name);
                         rows.push(pg_constraint_row(PgConstraintRow {
                             condeferrable: false,
                             condeferred: false,
@@ -5565,6 +5566,33 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                             conbin: Some(expression.clone()),
                             convalidated: *validated,
                         }));
+                        // A CHECK the table took from its parents.
+                        let inherited_from = schema
+                            .inherits
+                            .iter()
+                            .filter(|parent| {
+                                schemas.iter().any(|candidate| {
+                                    candidate.name == **parent
+                                        && !candidate.no_inherit_constraints.contains(name)
+                                        && candidate.constraints.iter().any(|constraint| {
+                                            matches!(constraint, ConstraintSchema::Check { .. })
+                                                && constraint_name(constraint) == name
+                                        })
+                                })
+                            })
+                            .count();
+                        if let Some(row) = rows.last_mut() {
+                            if no_inherit {
+                                row.insert("connoinherit".into(), SqlValue::Bool(true));
+                            }
+                            if inherited_from > 0 {
+                                row.insert("conislocal".into(), SqlValue::Bool(false));
+                                row.insert(
+                                    "coninhcount".into(),
+                                    SqlValue::Int(inherited_from as i64),
+                                );
+                            }
+                        }
                     }
                     constraint_slot += 1;
                 }
@@ -5894,32 +5922,38 @@ fn table_constraint_oids<'a>(
     schemas: &'a [TableSchema],
     relation_oids: &'a BTreeMap<String, i64>,
 ) -> impl Iterator<Item = i64> + 'a {
+    // A schema without a relation OID has no catalog rows to collide with;
+    // treating them all as OID 0 made their slots collide with each other.
     let primary = schemas
         .iter()
+        .filter(|schema| relation_oids.contains_key(&schema.name))
         .filter(|schema| !primary_key_columns_for_schema(schema).is_empty())
         .map(|schema| pg_constraint_oid(*relation_oids.get(&schema.name).unwrap_or(&0), 0));
-    let ordinary = schemas.iter().flat_map(move |schema| {
-        let not_null = schema
-            .columns
-            .iter()
-            .filter(|column| !column.hidden && (!column.nullable || column.primary_key))
-            .count();
-        let stored = schema
-            .constraints
-            .iter()
-            .filter(|constraint| match constraint {
-                ConstraintSchema::Unique { name, columns, .. }
-                | ConstraintSchema::UniqueWithNullPolicy { name, columns, .. } => {
-                    !unique_constraint_is_primary_key(schema, name, columns)
-                }
-                ConstraintSchema::Check { .. }
-                | ConstraintSchema::ForeignKey { .. }
-                | ConstraintSchema::Exclusion { .. } => true,
-            })
-            .count();
-        let oid = *relation_oids.get(&schema.name).unwrap_or(&0);
-        (1..=not_null + stored).map(move |slot| pg_constraint_oid(oid, slot as i64))
-    });
+    let ordinary = schemas
+        .iter()
+        .filter(|schema| relation_oids.contains_key(&schema.name))
+        .flat_map(move |schema| {
+            let not_null = schema
+                .columns
+                .iter()
+                .filter(|column| !column.hidden && (!column.nullable || column.primary_key))
+                .count();
+            let stored = schema
+                .constraints
+                .iter()
+                .filter(|constraint| match constraint {
+                    ConstraintSchema::Unique { name, columns, .. }
+                    | ConstraintSchema::UniqueWithNullPolicy { name, columns, .. } => {
+                        !unique_constraint_is_primary_key(schema, name, columns)
+                    }
+                    ConstraintSchema::Check { .. }
+                    | ConstraintSchema::ForeignKey { .. }
+                    | ConstraintSchema::Exclusion { .. } => true,
+                })
+                .count();
+            let oid = *relation_oids.get(&schema.name).unwrap_or(&0);
+            (1..=not_null + stored).map(move |slot| pg_constraint_oid(oid, slot as i64))
+        });
     primary.chain(ordinary)
 }
 
@@ -5992,7 +6026,12 @@ pub(crate) fn pg_constraint_row(row: PgConstraintRow) -> BTreeMap<String, SqlVal
         ("confmatchtype", SqlValue::String("s".to_string())),
         ("conislocal", SqlValue::Bool(true)),
         ("coninhcount", SqlValue::Int(0)),
-        ("connoinherit", SqlValue::Bool(true)),
+        // CHECK and NOT NULL constraints are inherited unless declared NO
+        // INHERIT; index-backed and foreign-key constraints never are.
+        (
+            "connoinherit",
+            SqlValue::Bool(!matches!(row.contype, "c" | "n")),
+        ),
         ("conperiod", SqlValue::Bool(false)),
         ("conkey", constraint_array_value(&row.conkey)),
         ("confkey", constraint_array_value(&row.confkey)),
@@ -7832,6 +7871,7 @@ pub(crate) fn catalog_view_schema(db: &BicDb, view: ViewSchema) -> Result<TableS
         virtual_generated_columns: Vec::new(),
         inherits: Vec::new(),
         inheritance_children: Vec::new(),
+        no_inherit_constraints: Vec::new(),
     })
 }
 pub(crate) fn relation_schemas(db: &BicDb) -> Result<Vec<TableSchema>> {

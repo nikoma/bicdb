@@ -2361,11 +2361,14 @@ pub(crate) fn table_constraint_schema(
             )]
         }
         TableConstraint::Check(check) => vec![ConstraintSchema::Check {
-            name: check
-                .name
-                .as_ref()
-                .map(ident_value)
-                .unwrap_or_else(|| format!("{}_check", table)),
+            // PostgreSQL names an unnamed table CHECK after the first column
+            // its expression references (`t_a_check`), else `t_check`.
+            name: check.name.as_ref().map(ident_value).unwrap_or_else(|| {
+                match first_referenced_column(&check.expr) {
+                    Some(column) => format!("{table}_{column}_check"),
+                    None => format!("{table}_check"),
+                }
+            }),
             expression: crate::sql_text::sql_text(&*check.expr),
             validated: true,
         }],
@@ -2435,6 +2438,27 @@ pub(crate) fn table_constraint_schema(
             )))
         }
     })
+}
+
+/// The first column an expression references, as PostgreSQL's constraint
+/// naming finds it.
+fn first_referenced_column(expr: &Expr) -> Option<String> {
+    let mut found = None;
+    let _ = sqlparser::ast::visit_expressions(expr, |expr| {
+        let name = match expr {
+            Expr::Identifier(ident) => Some(ident_value(ident)),
+            Expr::CompoundIdentifier(parts) => parts.last().map(ident_value),
+            _ => None,
+        };
+        match name {
+            Some(name) => {
+                found = Some(name);
+                std::ops::ControlFlow::Break(())
+            }
+            None => std::ops::ControlFlow::Continue(()),
+        }
+    });
+    found
 }
 
 pub(crate) fn reject_unsupported_constraint_characteristics(
@@ -3090,6 +3114,10 @@ pub(crate) fn raw_create_table_compression(sql: &str) -> Result<Option<RawCreate
         return Ok(None);
     };
     let body = &statement[open + 1..close];
+    if body.trim().is_empty() {
+        // `CREATE TABLE child () INHERITS (parent)`: nothing to compress.
+        return Ok(None);
+    }
     let mut rewritten_columns = Vec::new();
     let mut columns = Vec::new();
     for item in split_top_level_commas_nested(body) {

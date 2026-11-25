@@ -34,12 +34,6 @@ pub(super) fn apply(
     schema: &mut TableSchema,
 ) -> Result<()> {
     require_user_relation_name(new)?;
-    if !schema.inherits.is_empty() || !schema.inheritance_children.is_empty() {
-        // The hierarchy links are stored by name on both sides.
-        return Err(SqlError::Unsupported(
-            "renaming a table in an inheritance hierarchy is not supported".to_string(),
-        ));
-    }
     if user_collection_names(session.db_ref())
         .iter()
         .any(|name| name == new)
@@ -204,6 +198,17 @@ pub(super) fn apply(
             if let Some(partition) = &mut dependent.partition_of {
                 if partition.parent_table == old {
                     partition.parent_table = new.into();
+                    changed = true;
+                }
+            }
+            // Inheritance links are stored by name on both sides.
+            for link in dependent
+                .inherits
+                .iter_mut()
+                .chain(dependent.inheritance_children.iter_mut())
+            {
+                if link == old {
+                    *link = new.into();
                     changed = true;
                 }
             }

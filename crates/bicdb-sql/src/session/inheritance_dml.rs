@@ -62,6 +62,52 @@ pub(crate) fn reject_merge_into_inheritance_parent(db: &BicDb, table: &str) -> R
     Ok(())
 }
 
+/// Whether `expr` is the `<q>.tableoid = '<t>'::regclass` restriction that
+/// `UPDATE ONLY` / `DELETE FROM ONLY` are rewritten into.
+fn is_only_restriction(expr: &Expr) -> bool {
+    let Expr::BinaryOp {
+        left,
+        op: BinaryOperator::Eq,
+        right,
+    } = expr
+    else {
+        return false;
+    };
+    let column = match left.as_ref() {
+        Expr::Identifier(ident) => Some(ident),
+        Expr::CompoundIdentifier(parts) => parts.last(),
+        _ => None,
+    };
+    column.is_some_and(|ident| ident.value.eq_ignore_ascii_case("tableoid"))
+        && matches!(right.as_ref(), Expr::Cast { expr, data_type, .. }
+            if matches!(expr.as_ref(), Expr::Value(_))
+                && data_type.to_string().eq_ignore_ascii_case("regclass"))
+}
+
+/// Removes the ONLY restriction from a WHERE clause. The statement then runs
+/// against the target table's own rows, which is what ONLY asks for.
+fn strip_only_restriction(selection: &mut Option<Expr>) -> bool {
+    let Some(expr) = selection.as_mut() else {
+        return false;
+    };
+    if is_only_restriction(expr) {
+        *selection = None;
+        return true;
+    }
+    if let Expr::BinaryOp {
+        left,
+        op: BinaryOperator::And,
+        right,
+    } = expr
+    {
+        if is_only_restriction(right) {
+            *expr = (**left).clone();
+            return true;
+        }
+    }
+    false
+}
+
 /// Points `relation` at `target`, keeping the name the statement used as its
 /// alias so qualified column references keep resolving.
 fn retarget(relation: &mut TableFactor, target: &TableSchema) {
@@ -130,6 +176,15 @@ impl<'db> SqlSession<'db> {
         ctes: &BTreeMap<String, CteResult>,
         match_policy: UpdateMatchPolicy,
     ) -> Result<Option<SqlResult>> {
+        if !EXPANDING.with(Cell::get) {
+            let mut only = update.clone();
+            if strip_only_restriction(&mut only.selection) {
+                let _guard = ExpansionGuard::enter();
+                return self
+                    .execute_update_with_match_policy(&only, ctes.clone(), match_policy)
+                    .map(Some);
+            }
+        }
         let (table, _) = table_with_joins_name_and_alias(&update.table)?;
         let table = resolve_session_relation_name_if_exists(self.db_ref(), &table);
         let Some(targets) = expansion_targets(self.db_ref(), &table)? else {
@@ -155,6 +210,13 @@ impl<'db> SqlSession<'db> {
         delete: &Delete,
         ctes: &BTreeMap<String, CteResult>,
     ) -> Result<Option<SqlResult>> {
+        if !EXPANDING.with(Cell::get) {
+            let mut only = delete.clone();
+            if strip_only_restriction(&mut only.selection) {
+                let _guard = ExpansionGuard::enter();
+                return self.execute_delete_with_ctes(&only, ctes.clone()).map(Some);
+            }
+        }
         let (table, _) = delete_from_table_and_alias(delete)?;
         let table = resolve_session_relation_name_if_exists(self.db_ref(), &table);
         let Some(targets) = expansion_targets(self.db_ref(), &table)? else {
@@ -191,16 +253,29 @@ impl<'db> SqlSession<'db> {
             .count();
         if surviving > 0 {
             if cascade {
-                return Err(SqlError::Unsupported(
-                    "DROP TABLE ... CASCADE of an inheritance parent is not supported; drop its children first"
-                        .to_string(),
-                ));
+                // CASCADE drops the descendants first, as PostgreSQL does.
+                for child in schema
+                    .inheritance_children
+                    .iter()
+                    .filter(|child| !dropping.iter().any(|name| name == *child))
+                {
+                    if let Some(child) = load_schema(self.db_ref(), child)? {
+                        let statement =
+                            format!("DROP TABLE {} CASCADE", target_object_name(&child));
+                        self.execute_inner(&statement)?;
+                    }
+                }
+                return self.detach_from_parents(schema);
             }
             return Err(SqlError::dependent_objects_still_exist(format!(
                 "cannot drop table {} because other objects depend on it",
                 schema.name
             )));
         }
+        self.detach_from_parents(schema)
+    }
+
+    fn detach_from_parents(&mut self, schema: &TableSchema) -> Result<()> {
         for parent in &schema.inherits {
             if let Some(mut parent) = load_schema(self.db_ref(), parent)? {
                 parent
@@ -300,7 +375,8 @@ impl<'db> SqlSession<'db> {
                     parent
                         .constraints
                         .iter()
-                        .map(|c| constraint_name(c).to_string()),
+                        .map(|c| constraint_name(c).to_string())
+                        .filter(|name| !parent.no_inherit_constraints.contains(name)),
                 );
             }
         }
@@ -340,5 +416,118 @@ impl<'db> SqlSession<'db> {
             }
         }
         Ok(())
+    }
+
+    /// `ALTER TABLE child INHERIT parent` and `NO INHERIT parent`.
+    pub(crate) fn alter_table_inheritance(
+        &mut self,
+        table: &str,
+        if_exists: bool,
+        parent: &str,
+        inherit: bool,
+    ) -> Result<SqlResult> {
+        let table = resolve_session_relation_name_if_exists(self.db_ref(), table);
+        let Some(mut child) = load_schema(self.db_ref(), &table)? else {
+            if if_exists {
+                return Ok(SqlResult::command("ALTER TABLE"));
+            }
+            return Err(SqlError::InvalidCollection(table));
+        };
+        self.require_table_ownership(&child.name, "ALTER TABLE")?;
+        let parent_name = resolve_session_relation_name_if_exists(self.db_ref(), parent);
+        let Some(mut parent) = load_schema(self.db_ref(), &parent_name)? else {
+            return Err(SqlError::data_exception(
+                "42P01",
+                format!("relation \"{parent}\" does not exist"),
+                None,
+            ));
+        };
+        if !inherit {
+            if !child.inherits.contains(&parent.name) {
+                return Err(SqlError::data_exception(
+                    "42P01",
+                    format!(
+                        "relation \"{}\" is not a parent of relation \"{}\"",
+                        parent.name, child.name
+                    ),
+                    None,
+                ));
+            }
+            child.inherits.retain(|name| name != &parent.name);
+            parent
+                .inheritance_children
+                .retain(|name| name != &child.name);
+            self.save_session_schema(&child)?;
+            self.save_session_schema(&parent)?;
+            return Ok(SqlResult::command("ALTER TABLE"));
+        }
+        self.require_table_ownership(&parent.name, "ALTER TABLE")?;
+        let wrong = |message: String| SqlError::data_exception("42804", message, None);
+        if parent.partitioning.is_some() || child.partitioning.is_some() {
+            return Err(SqlError::Unsupported(
+                "ALTER TABLE ... INHERIT with a partitioned table is not supported".to_string(),
+            ));
+        }
+        if child.inherits.contains(&parent.name) {
+            return Err(SqlError::data_exception(
+                "42P07",
+                format!(
+                    "relation \"{}\" would be inherited from more than once",
+                    parent.name
+                ),
+                None,
+            ));
+        }
+        if parent.name == child.name
+            || crate::inheritance::inheritance_descendants(self.db_ref(), &child)?
+                .iter()
+                .any(|descendant| descendant.name == parent.name)
+        {
+            return Err(SqlError::data_exception(
+                "42P07",
+                "circular inheritance not allowed".to_string(),
+                None,
+            ));
+        }
+        for column in parent.columns.iter().filter(|column| !column.hidden) {
+            let Some(own) = child.column(&column.name) else {
+                return Err(wrong(format!(
+                    "child table is missing column \"{}\"",
+                    column.name
+                )));
+            };
+            if own.pg_type != column.pg_type || own.type_modifier != column.type_modifier {
+                return Err(wrong(format!(
+                    "child table \"{}\" has different type for column \"{}\"",
+                    child.name, column.name
+                )));
+            }
+            if !column.nullable && own.nullable {
+                return Err(wrong(format!(
+                    "column \"{}\" in child table must be marked NOT NULL",
+                    column.name
+                )));
+            }
+        }
+        for constraint in &parent.constraints {
+            if let ConstraintSchema::Check { name, .. } = constraint {
+                if parent.no_inherit_constraints.contains(name) {
+                    continue;
+                }
+                if !child.constraints.iter().any(|candidate| {
+                    matches!(candidate, ConstraintSchema::Check { .. })
+                        && constraint_name(candidate) == name
+                }) {
+                    return Err(wrong(format!(
+                        "child table is missing constraint \"{name}\""
+                    )));
+                }
+            }
+        }
+        child.inherits.push(parent.name.clone());
+        parent.inheritance_children.push(child.name.clone());
+        self.save_session_schema(&child)?;
+        self.save_session_schema(&parent)?;
+        Ok(SqlResult::command("ALTER TABLE"))
     }
 }

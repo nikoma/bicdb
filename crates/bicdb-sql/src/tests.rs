@@ -4530,6 +4530,7 @@ fn schema_bound_row_materialization_preserves_record_fields() {
         virtual_generated_columns: Vec::new(),
         inherits: Vec::new(),
         inheritance_children: Vec::new(),
+        no_inherit_constraints: Vec::new(),
     };
     let record = Record::new("42")
         .with_metadata(json!({
@@ -4613,6 +4614,7 @@ fn select_projection_binds_schema_columns_to_direct_record_slots() {
         virtual_generated_columns: Vec::new(),
         inherits: Vec::new(),
         inheritance_children: Vec::new(),
+        no_inherit_constraints: Vec::new(),
     };
     let query = parse_single_query(
         "SELECT row_key AS projected_key, payload_value

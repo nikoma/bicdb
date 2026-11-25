@@ -35,6 +35,12 @@ pub(crate) fn inherited_table_definition(
             // Keys and identity are not inherited; NOT NULL, defaults and
             // generation expressions are.
             inherited.primary_key = false;
+            if parent
+                .no_inherit_constraints
+                .contains(&not_null_constraint_name(&parent.name, &column.name))
+            {
+                inherited.nullable = true;
+            }
             if inherited.identity.take().is_some() {
                 inherited.default_sequence = None;
             }
@@ -58,6 +64,9 @@ pub(crate) fn inherited_table_definition(
         }
         for constraint in &parent.constraints {
             if let ConstraintSchema::Check { name, .. } = constraint {
+                if parent.no_inherit_constraints.contains(name) {
+                    continue;
+                }
                 if !constraints
                     .iter()
                     .any(|existing| constraint_name(existing) == name)

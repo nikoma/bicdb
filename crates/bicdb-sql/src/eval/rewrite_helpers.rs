@@ -724,6 +724,11 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
         changed = true;
     }
 
+    if let Some(next) = crate::only_rewrite::rewrite_only_relations(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
     changed.then_some(rewritten)
 }
 

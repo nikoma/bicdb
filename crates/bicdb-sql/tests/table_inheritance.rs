@@ -102,3 +102,49 @@ fn ddl_keeps_the_hierarchy_consistent() {
     );
     sql.execute("DROP TABLE p").unwrap();
 }
+
+#[test]
+fn only_no_inherit_and_hierarchy_ddl() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = open(root.path(), StorageMode::EmbeddedMemory);
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE TABLE p(a INT, CONSTRAINT p_pos CHECK (a > 0) NO INHERIT); CREATE TABLE c(b INT) INHERITS (p)")
+        .unwrap();
+    // The NO INHERIT constraint is not the child's.
+    sql.execute("INSERT INTO c VALUES (-1, 0)").unwrap();
+    sql.execute("INSERT INTO p VALUES (5)").unwrap();
+    assert_eq!(
+        sql.execute("SELECT a FROM ONLY p").unwrap().rows,
+        ints(&[5])
+    );
+    sql.execute("UPDATE ONLY p SET a = a + 1").unwrap();
+    assert_eq!(
+        sql.execute("SELECT a FROM p ORDER BY a").unwrap().rows,
+        ints(&[-1, 6])
+    );
+    sql.execute("DELETE FROM ONLY p").unwrap();
+    assert_eq!(
+        sql.execute("SELECT a FROM p ORDER BY a").unwrap().rows,
+        ints(&[-1])
+    );
+    // Detach and re-attach the child.
+    sql.execute("ALTER TABLE c NO INHERIT p").unwrap();
+    assert_eq!(
+        sql.execute("SELECT count(*) FROM p").unwrap().rows,
+        ints(&[0])
+    );
+    sql.execute("ALTER TABLE c INHERIT p").unwrap();
+    assert_eq!(
+        sql.execute("SELECT count(*) FROM p").unwrap().rows,
+        ints(&[1])
+    );
+    // Renames keep the links; CASCADE drops the descendants.
+    sql.execute("ALTER TABLE p RENAME TO pp").unwrap();
+    sql.execute("ALTER TABLE c RENAME TO cc").unwrap();
+    assert_eq!(
+        sql.execute("SELECT count(*) FROM pp").unwrap().rows,
+        ints(&[1])
+    );
+    sql.execute("DROP TABLE pp CASCADE").unwrap();
+    assert!(sql.execute("SELECT * FROM cc").is_err());
+}

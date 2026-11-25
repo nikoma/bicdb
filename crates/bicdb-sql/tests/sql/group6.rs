@@ -315,7 +315,8 @@ fn postgres_truncate_cascade_expands_foreign_key_dependents() {
         .unwrap();
 
     let restricted = session.execute("TRUNCATE truncate_parents").unwrap_err();
-    assert_eq!(restricted.sqlstate(), "2BP01");
+    // PostgreSQL refuses with feature_not_supported (0A000), not 2BP01.
+    assert_eq!(restricted.sqlstate(), "0A000");
 
     session
         .execute("TRUNCATE truncate_parents CASCADE")

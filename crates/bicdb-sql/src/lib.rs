@@ -3021,6 +3021,8 @@ fn composite_field_text(field: &SqlCompositeField) -> String {
         match (&field.value, float_type(&field.pg_type)) {
             // A float4 field prints as float4out, not as the widened double.
             (SqlValue::Float(value), Some(float_type)) => postgres_float_text(*value, float_type),
+            // boolout: a record shows t/f.
+            (SqlValue::Bool(value), _) => if *value { "t" } else { "f" }.to_string(),
             _ => field.value.to_cell(),
         }
     };

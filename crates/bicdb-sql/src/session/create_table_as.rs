@@ -222,10 +222,42 @@ impl SqlSession<'_> {
     }
 
     /// Relation statements sqlparser does not read: CREATE TABLE AS with a
-    /// column-name list or a data clause.
+    /// column-name list or a data clause, CREATE VIEW with a CHECK OPTION.
     pub(crate) fn execute_raw_relation_forms(&mut self, sql: &str) -> Result<Option<SqlResult>> {
         if let Some(result) = self.execute_raw_create_table_as(sql)? {
             return Ok(Some(result));
+        }
+        if let Some((stripped, option)) = super::updatable_views::strip_view_check_option(sql) {
+            let Ok(statements) = parse_statements(&stripped) else {
+                return Ok(None);
+            };
+            if let [Statement::CreateView(create_view)] = statements.as_slice() {
+                if create_view.materialized {
+                    return Err(SqlError::InvalidSql(
+                        "syntax error at or near \"CHECK\"".to_string(),
+                    ));
+                }
+                return self
+                    .execute_create_view_with_options(create_view, Some(option), true)
+                    .map(Some);
+            }
+        }
+        if let Some(result) = self.execute_raw_refresh_materialized_view(sql)? {
+            return Ok(Some(result));
+        }
+        if let Some((stripped, with_data)) =
+            super::materialized_views::strip_materialized_data_clause(sql)
+        {
+            let Ok(statements) = parse_statements(&stripped) else {
+                return Ok(None);
+            };
+            if let [Statement::CreateView(create_view)] = statements.as_slice() {
+                if create_view.materialized {
+                    return self
+                        .execute_create_view_with_options(create_view, None, with_data)
+                        .map(Some);
+                }
+            }
         }
         Ok(None)
     }
@@ -236,7 +268,9 @@ impl SqlSession<'_> {
         let Some(raw) = raw_create_table_as(sql) else {
             return Ok(None);
         };
-        let statements = parse_statements(&raw.sql)?;
+        let Ok(statements) = parse_statements(&raw.sql) else {
+            return Ok(None);
+        };
         let [Statement::CreateTable(create_table)] = statements.as_slice() else {
             return Ok(None);
         };

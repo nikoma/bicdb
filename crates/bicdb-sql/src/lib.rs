@@ -4529,6 +4529,13 @@ struct ViewSchema {
     // view body, in addition to exposing it in the catalogs.
     #[serde(default)]
     security_barrier: bool,
+    // `WITH [LOCAL | CASCADED] CHECK OPTION`: "local" or "cascaded".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    check_option: Option<String>,
+    // A materialized view's stored rows; `None` on descriptors written
+    // before snapshots existed, which keep expanding their query.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    snapshot: Option<session::materialized_views::MaterializedSnapshot>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

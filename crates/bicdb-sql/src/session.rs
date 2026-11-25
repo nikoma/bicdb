@@ -9,6 +9,8 @@ pub(crate) mod deferred_constraints;
 mod domain_types;
 mod flashback;
 mod index_drop;
+mod instead_of_triggers;
+pub(crate) mod materialized_views;
 pub(crate) mod merge;
 #[cfg(test)]
 mod timestamp_day_indexes;
@@ -62,6 +64,7 @@ mod subquery_scope_tests;
 mod transaction_defaults;
 pub use read_only::parse_transaction_read_only;
 pub(crate) mod txn_update;
+pub(crate) mod updatable_views;
 // Glue import: bring every crate-root item (including the root's private
 // imports and the other split modules' re-exports) into scope so the moved
 // code compiles unchanged.
@@ -1194,6 +1197,9 @@ pub struct SqlSession<'db> {
     pub(crate) oracle_suspension: Option<Arc<bicdb_core::TransactionSuspension>>,
     independent_commits_observed: bool,
     statement_error_recovered: bool,
+    /// The base relation a view rewrite already authorized; consumed by the
+    /// rewritten statement's first privilege check (see updatable_views).
+    pub(crate) view_target_preauthorized: Option<String>,
     independent_execution_observed: bool,
     latest_independent_sequence: u64,
     /// For that child session, the caller's transaction (if any), read through
@@ -2584,6 +2590,7 @@ impl<'db> SqlSession<'db> {
             oracle_suspension: None,
             independent_commits_observed: false,
             statement_error_recovered: false,
+            view_target_preauthorized: None,
             independent_execution_observed: false,
             latest_independent_sequence: 0,
             parent_tx: None,

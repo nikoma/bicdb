@@ -6708,9 +6708,8 @@ pub(crate) fn information_schema_tables(db: &BicDb) -> Result<Vec<BTreeMap<Strin
     Ok(rows)
 }
 
-/// `information_schema.views`: one row per (non-materialized) view. BicDB
-/// views are read-only unless an INSTEAD OF trigger handles the write, and
-/// no view carries a check option.
+/// `information_schema.views`: one row per (non-materialized) view, with
+/// PostgreSQL's automatic updatability and check option.
 pub(crate) fn information_schema_views(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
     let triggers = list_triggers(db)?;
     let mut rows = Vec::new();
@@ -6726,6 +6725,9 @@ pub(crate) fn information_schema_views(db: &BicDb) -> Result<Vec<BTreeMap<String
             });
             SqlValue::String(if handled { "YES" } else { "NO" }.to_string())
         };
+        let (updatable, insertable, check_option) =
+            crate::session::updatable_views::view_updatability(db, &view);
+        let yes_no = |flag: bool| SqlValue::String(if flag { "YES" } else { "NO" }.to_string());
         rows.push(virtual_row([
             ("table_catalog", crate::search_path::current_catalog_value()),
             (
@@ -6740,9 +6742,9 @@ pub(crate) fn information_schema_views(db: &BicDb) -> Result<Vec<BTreeMap<String
                 "view_definition",
                 SqlValue::String(postgres_view_definition(&view.query_sql)),
             ),
-            ("check_option", SqlValue::String("NONE".to_string())),
-            ("is_updatable", SqlValue::String("NO".to_string())),
-            ("is_insertable_into", SqlValue::String("NO".to_string())),
+            ("check_option", SqlValue::String(check_option.to_string())),
+            ("is_updatable", yes_no(updatable)),
+            ("is_insertable_into", yes_no(insertable)),
             ("is_trigger_updatable", instead_of("update")),
             ("is_trigger_deletable", instead_of("delete")),
             ("is_trigger_insertable_into", instead_of("insert")),

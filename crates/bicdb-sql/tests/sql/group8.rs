@@ -1648,7 +1648,7 @@ fn postgres_pg_get_viewdef_renders_stored_and_virtual_view_definitions() {
 }
 
 #[test]
-fn unsupported_view_behaviors_return_clear_errors() {
+fn view_writes_and_materialized_view_catalog_rows() {
     let dir = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(dir.path()).unwrap();
     let mut session = SqlSession::new(&mut db);
@@ -1715,17 +1715,26 @@ fn unsupported_view_behaviors_return_clear_errors() {
         ]]
     );
 
-    let err = session
+    // A single-table view is automatically updatable, as in PostgreSQL.
+    session
         .execute("INSERT INTO patient_names (id, name) VALUES ('p1', 'Ada')")
-        .unwrap_err();
-    assert_eq!(err.sqlstate(), "0A000");
-    assert!(err.to_string().contains("views"));
-
+        .unwrap();
+    let updated = session
+        .execute("UPDATE patient_names SET name = 'Ada L.'")
+        .unwrap();
+    assert_eq!(updated.command_complete_tag(), "UPDATE 1");
+    assert_eq!(
+        session
+            .execute("SELECT name FROM patients WHERE id = 'p1'")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::String("Ada L.".to_string())]]
+    );
+    // A materialized view is not.
     let err = session
-        .execute("UPDATE patient_names SET name = 'Ada'")
+        .execute("INSERT INTO patient_names_mat (id) VALUES ('p2')")
         .unwrap_err();
-    assert_eq!(err.sqlstate(), "0A000");
-    assert!(err.to_string().contains("views"));
+    assert_eq!(err.sqlstate(), "42809");
 }
 
 #[test]

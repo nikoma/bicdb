@@ -277,8 +277,9 @@ fn information_schema_views_and_triggers_list_catalog_objects() {
             text("s1"),
             text("v1"),
             text("NONE"),
-            text("NO"),
-            text("NO"),
+            // An automatically updatable view, as PostgreSQL reports it.
+            text("YES"),
+            text("YES"),
             SqlValue::Bool(true),
         ]]
     );

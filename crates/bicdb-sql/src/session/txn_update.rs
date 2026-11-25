@@ -804,20 +804,25 @@ impl<'db> SqlSession<'db> {
     ) -> Result<SqlResult> {
         let (table, target_alias) = table_with_joins_name_and_alias(&update.table)?;
         let table = resolve_session_relation_name_if_exists(self.db_ref(), &table);
-        self.require_update_privileges(&table, &update.assignments)?;
+        let preauthorized = self.take_view_target_preauthorization(&table);
+        if !preauthorized {
+            self.require_update_privileges(&table, &update.assignments)?;
+        }
         validate_comparison_signatures(
             &self.sql_engine_with_ctes(ctes.clone()),
             ComparisonStatement::Update(update),
         )?;
         // RETURNING projects the affected rows back to the caller, so it is a
         // read. Without this, an UPDATE-only grant was a full table read.
-        if update.returning.is_some() {
+        if update.returning.is_some() && !preauthorized {
             self.require_table_privilege(&table, "SELECT")?;
         }
-        if load_view(self.db_ref(), &table)?.is_some() {
-            return Err(SqlError::Unsupported(
-                "UPDATE through views is not supported".to_string(),
-            ));
+        if let Some(view) = load_view(self.db_ref(), &table)? {
+            let triggers = self.instead_of_triggers(&view.name, "update")?;
+            if !triggers.is_empty() {
+                return self.execute_instead_of_update(update, view, triggers, ctes);
+            }
+            return self.execute_update_of_view(update, view, ctes, match_policy);
         }
         let schema = load_schema_shared(self.db_ref(), &table)?;
         self.validate_row_assignments(update, &table, schema.as_deref())?;
@@ -2177,18 +2182,23 @@ impl<'db> SqlSession<'db> {
     ) -> Result<SqlResult> {
         let (table, target_alias) = delete_from_table_and_alias(delete)?;
         let table = resolve_session_relation_name_if_exists(self.db_ref(), &table);
-        self.require_table_privilege(&table, "DELETE")?;
+        let preauthorized = self.take_view_target_preauthorization(&table);
+        if !preauthorized {
+            self.require_table_privilege(&table, "DELETE")?;
+        }
         validate_comparison_signatures(
             &self.sql_engine_with_ctes(ctes.clone()),
             ComparisonStatement::Delete(delete),
         )?;
-        if delete.returning.is_some() {
+        if delete.returning.is_some() && !preauthorized {
             self.require_table_privilege(&table, "SELECT")?;
         }
-        if load_view(self.db_ref(), &table)?.is_some() {
-            return Err(SqlError::Unsupported(
-                "DELETE from views is not supported".to_string(),
-            ));
+        if let Some(view) = load_view(self.db_ref(), &table)? {
+            let triggers = self.instead_of_triggers(&view.name, "delete")?;
+            if !triggers.is_empty() {
+                return self.execute_instead_of_delete(delete, view, triggers, ctes);
+            }
+            return self.execute_delete_from_view(delete, view, ctes);
         }
         let schema = load_schema(self.db_ref(), &table)?;
         if let Some(schema_ref) = schema.as_ref().filter(|_| merge.is_none()) {

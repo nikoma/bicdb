@@ -5766,6 +5766,27 @@ pub(crate) fn one_row_aggregate_query(query: &Query, select: &Select) -> Option<
     if !grouped && !aggregated {
         return None;
     }
+    // Only self-contained aggregates. An aggregate over an outer reference
+    // (`SELECT max(o.x)` inside a correlated subquery) belongs to the outer
+    // query in PostgreSQL and keeps its existing evaluation path.
+    let mut references = false;
+    let _ = sqlparser::ast::visit_expressions(query, |expr| {
+        if matches!(
+            expr,
+            Expr::Identifier(_)
+                | Expr::CompoundIdentifier(_)
+                | Expr::Subquery(_)
+                | Expr::Exists { .. }
+                | Expr::InSubquery { .. }
+        ) {
+            references = true;
+            return std::ops::ControlFlow::Break(());
+        }
+        std::ops::ControlFlow::Continue(())
+    });
+    if references || query.with.is_some() {
+        return None;
+    }
     let mut rewritten = query.clone();
     let SetExpr::Select(target) = rewritten.body.as_mut() else {
         return None;

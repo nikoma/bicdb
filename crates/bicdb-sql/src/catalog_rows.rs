@@ -5703,8 +5703,15 @@ pub(crate) fn validate_constraint_catalog_oids(db: &BicDb) -> Result<()> {
     if CONSTRAINT_OID_VALIDATION.with(|memo| memo.borrow().get(&db.instance_id()) == Some(&stamp)) {
         return Ok(());
     }
-    let schemas = list_schemas(db)?;
     let relation_oids = table_oids(db);
+    // pg_constraint lists the constraints of relations. A table descriptor
+    // without a relation (left behind by an interrupted DDL) has no OID; its
+    // constraints all hashed to relation OID 0 and "collided", which failed
+    // every later pg_constraint query in the database.
+    let schemas = list_schemas(db)?
+        .into_iter()
+        .filter(|schema| relation_oids.contains_key(&schema.name))
+        .collect::<Vec<_>>();
     // Only identifiers are needed here. Constructing table rows also resolves
     // attributes and parses CHECK expressions for every catalog generation.
     let domain_oids = pg_domain_constraint_rows(db, None, None)?

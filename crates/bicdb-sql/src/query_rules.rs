@@ -398,6 +398,9 @@ impl SqlSession<'_> {
             original = Some(self.execute_statement_without_rules(statement)?);
         }
         let mut last_same_kind = None;
+        // Rows an INSTEAD rule's SELECT actions return are the statement's
+        // result rows, under the original command's tag.
+        let mut returned: Option<SqlResult> = None;
         for index in 0..new_rows.len().max(old_rows.len()) {
             let new = new_rows.get(index).map(Vec::as_slice);
             let old = old_rows.get(index).map(Vec::as_slice);
@@ -417,6 +420,18 @@ impl SqlSession<'_> {
                                     let count = crate::postgres_control::row_count(&produced).max(0)
                                         as usize;
                                     *last_same_kind.get_or_insert(0) += count;
+                                }
+                                if instead
+                                    && matches!(statement, Statement::Query(_))
+                                    && !produced.columns.is_empty()
+                                {
+                                    let result = returned.get_or_insert_with(|| {
+                                        let mut result = SqlResult::empty(produced.columns.clone());
+                                        result.column_types = produced.column_types.clone();
+                                        result.column_metadata = produced.column_metadata.clone();
+                                        result
+                                    });
+                                    result.rows.extend(produced.rows);
                                 }
                             }
                         }
@@ -439,11 +454,16 @@ impl SqlSession<'_> {
             return Ok(original);
         }
         let count = last_same_kind.unwrap_or(0);
-        Ok(SqlResult::command(match event {
+        let tag = match event {
             "insert" => format!("INSERT 0 {count}"),
             "update" => format!("UPDATE {count}"),
             _ => format!("DELETE {count}"),
-        }))
+        };
+        if let Some(mut result) = returned {
+            result.command_tag = Some(tag);
+            return Ok(result);
+        }
+        Ok(SqlResult::command(tag))
     }
 
     /// Runs the statement itself, past its target's rules.

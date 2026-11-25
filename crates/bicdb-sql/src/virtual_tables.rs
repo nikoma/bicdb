@@ -1886,7 +1886,14 @@ pub(crate) fn execute_builtin_function_with_engine(
                     SqlResult::new(vec![name.replace("pg_catalog.", "")], vec![vec![value]])
                 })
                 .ok_or_else(|| {
-                    undefined_function_error(db, function, &arg_types).unwrap_or_else(|| {
+                    // The engine's catalog sees user routines when `db` is
+                    // not passed (constant folding, EXPLAIN).
+                    undefined_function_error(
+                        db.or_else(|| query_engine.map(|engine| engine.db_ref())),
+                        function,
+                        &arg_types,
+                    )
+                    .unwrap_or_else(|| {
                         SqlError::Unsupported(format!(
                             "function {other} is not supported without FROM"
                         ))
@@ -6811,12 +6818,12 @@ pub(crate) fn undefined_function_error<'a>(
     {
         return None;
     }
-    if let Some(db) = db {
-        let defined =
-            |kind| routines_named(db, kind, &name).is_ok_and(|routines| !routines.is_empty());
-        if defined(RoutineKind::Function) || defined(RoutineKind::Procedure) {
-            return None;
-        }
+    // Without the catalog a user-defined routine cannot be ruled out, so
+    // this is not known to be a missing function (constant folding).
+    let db = db?;
+    let defined = |kind| routines_named(db, kind, &name).is_ok_and(|routines| !routines.is_empty());
+    if defined(RoutineKind::Function) || defined(RoutineKind::Procedure) {
+        return None;
     }
     let args = function_arg_list(function);
     let types = args

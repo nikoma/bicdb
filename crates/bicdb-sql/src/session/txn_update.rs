@@ -3296,7 +3296,17 @@ impl<'db> SqlSession<'db> {
         if let Some(value) = stored {
             return Ok(value);
         }
-        eval_builtin_function_value(function)
+        match eval_builtin_function_value(function) {
+            // The context-free evaluator cannot see the catalog; the session
+            // can tell a missing function (42883) from an unsupported one.
+            Err(SqlError::Unsupported(message)) => {
+                Err(
+                    undefined_function_error(self.db_ref(), function, &arg_types)
+                        .unwrap_or(SqlError::Unsupported(message)),
+                )
+            }
+            other => other,
+        }
     }
 
     pub(crate) fn eval_session_expr(&mut self, expr: &Expr) -> Result<SqlValue> {

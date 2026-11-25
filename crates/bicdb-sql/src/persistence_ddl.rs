@@ -139,7 +139,10 @@ pub(crate) fn parse_persistence_ddl(sql: &str) -> Result<Option<PersistenceDdl>>
         apply_edits(&mut tokens, vec![edit]);
         let virtual_columns = vec![column];
         return Ok(Some(PersistenceDdl::Rewritten {
-            sql: tokens.iter().map(Token::to_string).collect(),
+            sql: tokens
+                .iter()
+                .map(crate::eval::rewrite_helpers::token_sql)
+                .collect(),
             table,
             create: false,
             if_not_exists,
@@ -219,7 +222,10 @@ pub(crate) fn parse_persistence_ddl(sql: &str) -> Result<Option<PersistenceDdl>>
     }
     apply_edits(&mut tokens, edits);
     Ok(Some(PersistenceDdl::Rewritten {
-        sql: tokens.iter().map(Token::to_string).collect(),
+        sql: tokens
+            .iter()
+            .map(crate::eval::rewrite_helpers::token_sql)
+            .collect(),
         table,
         create: true,
         if_not_exists,
@@ -353,6 +359,13 @@ mod tests {
         assert_eq!(
             parse_persistence_ddl("CREATE TABLE t(a text DEFAULT 'unlogged generated')").unwrap(),
             None
+        );
+        // Quotes inside literals and identifiers survive the rewrite.
+        let (sql, _, _) =
+            rewritten("CREATE UNLOGGED TABLE \"q\"\"t\"(a text DEFAULT 'it''s', b int GENERATED ALWAYS AS (1))");
+        assert_eq!(
+            sql,
+            "CREATE TABLE \"q\"\"t\"(a text DEFAULT 'it''s', b int GENERATED ALWAYS AS (1) STORED)"
         );
         assert_eq!(
             parse_persistence_ddl("CREATE TABLE t(a int GENERATED ALWAYS AS (1) STORED)").unwrap(),

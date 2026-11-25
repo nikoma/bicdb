@@ -121,6 +121,20 @@ fn query_has_row_type_constructs(query: &Query, markers_only: bool) -> bool {
 /// The query with `(expr).*` items expanded and untyped FROM-clause
 /// populate_record calls typed; None when it has neither.
 pub(crate) fn rewrite_row_type_constructs(db: &BicDb, query: &Query) -> Result<Option<Query>> {
+    // A select-list call of a set-returning SQL function becomes a lateral
+    // source first (see `routine_srf_projection`).
+    if let Some(rewritten) = crate::routine_srf_projection::rewrite_hstore_populate_record(query) {
+        return Ok(Some(
+            rewrite_row_type_constructs(db, &rewritten)?.unwrap_or(rewritten),
+        ));
+    }
+    if let Some(rewritten) =
+        crate::routine_srf_projection::rewrite_routine_set_returning_projection(db, query)?
+    {
+        return Ok(Some(
+            rewrite_row_type_constructs(db, &rewritten)?.unwrap_or(rewritten),
+        ));
+    }
     if !query_has_row_type_constructs(query, false) {
         return Ok(None);
     }

@@ -5503,11 +5503,6 @@ impl<'db> SqlEngine<'db> {
         args: &TableFunctionArgs,
         with_ordinality: bool,
     ) -> Result<Option<RowSet>> {
-        if with_ordinality {
-            return Err(SqlError::Unsupported(format!(
-                "{table} WITH ORDINALITY is not supported"
-            )));
-        }
         let Some(routine) = resolve_routine_cached(self.db_ref(), RoutineKind::Function, table)?
         else {
             return Ok(None);
@@ -5651,6 +5646,14 @@ impl<'db> SqlEngine<'db> {
             if result.rows.is_empty() {
                 result.rows.push(vec![SqlValue::Null; result.columns.len()]);
             }
+        }
+        if with_ordinality {
+            // WITH ORDINALITY numbers the function's rows from 1 in a last
+            // bigint column named `ordinality`.
+            for (index, row) in result.rows.iter_mut().enumerate() {
+                row.push(SqlValue::Int(index as i64 + 1));
+            }
+            result.columns.push("ordinality".to_string());
         }
         let alias_name = table_alias
             .map(|alias| alias.name.value.clone())

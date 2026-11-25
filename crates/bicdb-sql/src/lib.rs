@@ -281,6 +281,7 @@ mod persistence_ddl;
 mod pg_scalar_extra;
 mod pgcrypto;
 mod records;
+mod routine_srf_projection;
 mod row_types;
 pub(crate) use order_by_ordinal::{rewrite_dml_call_forms, rewrite_ordinal_order_by};
 pub(crate) use partial_index::partial_index_predicate;

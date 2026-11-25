@@ -103,3 +103,27 @@ flt.f84_underflow|SELECT '10e-70'::float8::float4
 flt.range_msg|SELECT '10e70'::float4
 flt.array_text|SELECT ARRAY[1.1::float4]::text, ARRAY['-0'::float8, 1e20]::text, (ARRAY[1.1::float4])[1]
 flt.numeric_cast|SELECT 1.1::float4::numeric, (0.1::float8 + 0.2::float8)::numeric, 1e20::float8::numeric, 1.1::float4::numeric(5,2)
+srf.setof_int|CREATE FUNCTION srf1() RETURNS SETOF int LANGUAGE sql AS 'SELECT 1 UNION ALL SELECT 2'; SELECT * FROM srf1(); SELECT srf1(); SELECT x FROM srf1() AS x
+srf.setof_args|CREATE FUNCTION srf2(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT * FROM srf2(3); SELECT srf2(2), 'x'
+srf.setof_table_type|CREATE TABLE srft(a int, b text); INSERT INTO srft VALUES (1, 'x'), (2, 'y'); CREATE FUNCTION srf4() RETURNS SETOF srft LANGUAGE sql AS 'SELECT * FROM srft ORDER BY a'; SELECT * FROM srf4(); SELECT (srf4()).b; SELECT a FROM srf4() WHERE b = 'y'
+srf.lateral|CREATE FUNCTION srf5(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT t.x, s FROM (VALUES (1), (2)) t(x), LATERAL srf5(t.x) s ORDER BY 1, 2
+srf.out_params|CREATE FUNCTION srf6(n int, OUT a int, OUT b int) RETURNS SETOF record LANGUAGE sql AS 'SELECT g, g * 10 FROM generate_series(1, n) g'; SELECT * FROM srf6(2)
+srf.empty|CREATE FUNCTION srf7() RETURNS SETOF text LANGUAGE sql AS 'SELECT ''a'' WHERE false'; SELECT count(*) FROM srf7(); SELECT srf7()
+srf.ordinality|CREATE FUNCTION srf8() RETURNS SETOF text LANGUAGE sql AS $$ VALUES ('a'), ('b') $$; SELECT * FROM srf8() WITH ORDINALITY
+hs.each|CREATE EXTENSION IF NOT EXISTS hstore; SELECT * FROM each('a=>1,b=>2'::hstore) ORDER BY 1
+hs.skeys_svals|CREATE EXTENSION IF NOT EXISTS hstore; SELECT skeys('a=>1,b=>2'::hstore) ORDER BY 1; SELECT svals('a=>1,b=>2'::hstore) ORDER BY 1; SELECT * FROM skeys('x=>1') k
+hs.each_select|CREATE EXTENSION IF NOT EXISTS hstore; SELECT (each(h)).key FROM (SELECT 'a=>1,b=>2'::hstore AS h) s ORDER BY 1
+hs.populate|CREATE EXTENSION IF NOT EXISTS hstore; CREATE TABLE hsp(a int, b text, c date); SELECT * FROM populate_record(NULL::hsp, 'a=>1,b=>x'::hstore); SELECT (populate_record(ROW(1, 'q', '2020-01-01')::hsp, 'b=>z'::hstore)).*
+poly.sql|CREATE FUNCTION polyf(anyelement) RETURNS anyelement LANGUAGE sql AS 'SELECT $1'; SELECT polyf(1), polyf('x'::text)
+srf.select_from_table|CREATE TABLE srfs(n int); INSERT INTO srfs VALUES (1), (2); CREATE FUNCTION srf10(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT n, srf10(n) FROM srfs ORDER BY 1, 2; SELECT srf10(2) AS v ORDER BY v DESC
+srf.alias_scalar|CREATE FUNCTION srf11() RETURNS SETOF int LANGUAGE sql AS 'SELECT 7'; SELECT x FROM srf11() AS x; SELECT s.x FROM srf11() AS s(x)
+srf.field_select|CREATE FUNCTION srf12(n int) RETURNS TABLE(a int, b text) LANGUAGE sql AS $$ SELECT g, 'v' || g FROM generate_series(1, n) g $$; SELECT (srf12(2)).b; SELECT (srf12(2)).a + 0
+srf.order_from|CREATE FUNCTION srf13(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT s.v AS w FROM srf13(3) AS s(v) ORDER BY w DESC; SELECT v FROM srf13(3) AS s(v) ORDER BY 1 DESC; SELECT x FROM srf13(3) x ORDER BY x DESC
+srf.nested_expr|CREATE FUNCTION srf14(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT srf14(2) * 10, 'k'; SELECT upper('a') || srf14(2)
+srf.subquery|CREATE FUNCTION srf15() RETURNS SETOF text LANGUAGE sql AS $$ VALUES ('a'), ('b') $$; SELECT (SELECT count(*) FROM srf15()), 1
+ord.a|CREATE FUNCTION ord1(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT ord1(3) AS v ORDER BY 1 DESC
+ord.b|CREATE FUNCTION ord2(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT ord2(3) ORDER BY 1 DESC
+ord.c|CREATE FUNCTION ord3(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT * FROM (SELECT ord3(3) AS v) q ORDER BY v DESC
+ord.d|CREATE FUNCTION ord4(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT __bicdb_srf.__bicdb_srf_value AS v FROM ord4(3) AS __bicdb_srf(__bicdb_srf_value) ORDER BY v DESC
+ord.e|CREATE FUNCTION ord5(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT ord5(3) AS v ORDER BY v DESC LIMIT 2
+ord.f|CREATE TABLE ordt(k int); INSERT INTO ordt VALUES (1); CREATE FUNCTION ord6(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT ord6(3) AS v FROM ordt ORDER BY v DESC

@@ -1137,7 +1137,8 @@ impl SqlSession<'_> {
         let base = bottom.base.clone();
         self.with_statement_transaction(|session| {
             session.view_target_preauthorized = Some(base);
-            let result = session.execute_update_with_match_policy(&statement, ctes, match_policy);
+            let result =
+                session.execute_update_with_match_policy(&statement, ctes, match_policy, None);
             session.view_target_preauthorized = None;
             let result = result?;
             session.finish_view_statement(result, user_columns, &check_names, "UPDATE")

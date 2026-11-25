@@ -2794,6 +2794,14 @@ fn parse_message_inner(
     } else if is_server_status_query(&sql) {
         sql
     } else {
+        // String constants take PostgreSQL's decoding first, as for a
+        // simple query.
+        let sql =
+            match bicdb_sql::normalize_client_string_constants(&sql, session_state.session_gucs())?
+            {
+                std::borrow::Cow::Borrowed(_) => sql,
+                std::borrow::Cow::Owned(normalized) => normalized,
+            };
         // Bind unqualified relations through the session's search_path before
         // the statement is described, as execution will.
         bicdb_sql::search_path::bind_session_sql(db, &sql, session_state.session_gucs())?

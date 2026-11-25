@@ -3433,6 +3433,19 @@ impl<'db> SqlSession<'db> {
     }
 
     pub fn execute(&mut self, sql: &str) -> Result<SqlResult> {
+        // String constants first take the one spelling every later stage
+        // reads (PostgreSQL's decoding); see `string_constants`. A client
+        // statement reads plain constants per standard_conforming_strings;
+        // SQL that BicDB runs inside a statement is always standard.
+        let constants = if crate::statement_context::in_statement() {
+            crate::string_constants::normalize_string_constants(
+                sql,
+                crate::string_constants::PlainStrings::Standard,
+            )
+        } else {
+            crate::string_constants::normalize_client_string_constants(sql, &self.session_gucs)
+        }?;
+        let sql: &str = &constants;
         let _cursor_scope = sql_cursors::CursorScope::enter(&self.sql_cursors);
         let current_of = self.rewrite_where_current_of(sql)?;
         let sql = current_of.as_deref().unwrap_or(sql);

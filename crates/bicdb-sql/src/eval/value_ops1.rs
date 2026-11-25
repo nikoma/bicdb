@@ -2069,8 +2069,16 @@ pub(crate) fn pg_quote_ident(value: &str) -> String {
     }
 }
 
+/// PostgreSQL's quote_literal: quotes doubled, and a value holding a
+/// backslash written as an escape string with the backslashes doubled, so
+/// the text reads back the same whatever standard_conforming_strings is.
 pub(crate) fn pg_quote_literal(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "''"))
+    let quoted = value.replace('\'', "''");
+    if value.contains('\\') {
+        format!("E'{}'", quoted.replace('\\', "\\\\"))
+    } else {
+        format!("'{quoted}'")
+    }
 }
 
 pub(crate) fn eval_array_to_string(args: &[SqlValue]) -> Option<SqlValue> {
@@ -2941,6 +2949,7 @@ pub(crate) fn default_session_guc(name: &str) -> Option<&'static str> {
         "search_path" => Some("public"),
         "default_transaction_isolation" => Some("read committed"),
         "transaction_deferrable" => Some("off"),
+        "standard_conforming_strings" => Some("on"),
         _ => crate::session::planner_gucs::planner_guc_default(name),
     }
 }

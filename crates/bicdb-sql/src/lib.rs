@@ -95,6 +95,8 @@ mod partition_info;
 mod pg_condition_names;
 pub mod sql_text;
 mod stack_depth;
+mod string_constants;
+pub use string_constants::normalize_client_string_constants;
 mod table_queries;
 pub use identity::{
     bicdb_version_banner, postgres_version_banner, BICDB_VERSION, POSTGRES_COMPATIBILITY_VERSION,

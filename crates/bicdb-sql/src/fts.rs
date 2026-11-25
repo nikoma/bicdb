@@ -3847,7 +3847,9 @@ impl<'a> TsVectorParser<'a> {
             self.offset += 1;
             self.parse_positions()?
         } else {
-            Vec::new()
+            // As in PostgreSQL, the next lexeme may follow a quoted one
+            // directly (`'a''b'c` is two lexemes).
+            return Ok(Some((lexeme, Vec::new())));
         };
         if self.offset < self.input.len()
             && !self.input[self.offset..]
@@ -4054,6 +4056,17 @@ mod tests {
             vector.to_postgres_text(),
             "'O''Reilly':4 'a b':1A,2B,3 'z':1A,2B,3C,4"
         );
+        // A lexeme may follow a quoted one directly; escapes are literal.
+        for (input, expected) in [
+            (r"'1 \''2'", "'1 ''' '2'''"),
+            (r"'1 \'2'", "'1 ''2'"),
+            ("'a'b", "'a' 'b'"),
+            ("a'b", "'a''b'"),
+        ] {
+            let vector = PgTsVector::from_postgres_text(input).unwrap();
+            assert_eq!(vector.to_postgres_text(), expected, "{input}");
+        }
+        assert!(PgTsVector::from_postgres_text("'a':1x").is_err());
     }
 
     #[test]

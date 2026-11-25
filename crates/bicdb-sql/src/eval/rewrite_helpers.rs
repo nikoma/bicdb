@@ -32,9 +32,10 @@ pub(crate) fn literal_to_value(value: &ValueWithSpan) -> Result<SqlValue> {
                     format!("invalid hexadecimal digit in bit string: \"{value}\""),
                 )
             }),
-        // PostgreSQL escape strings (psql's \l projects array_to_string(.., E'\n')).
-        Value::EscapedStringLiteral(value) => {
-            text_value_without_nul(unescape_pg_string(value), "text")
+        // Escape (E'...') and Unicode-escape (U&'...') strings: the tokenizer
+        // already decoded the value; decoding it again lost backslashes.
+        Value::EscapedStringLiteral(value) | Value::UnicodeStringLiteral(value) => {
+            text_value_without_nul(value.clone(), "text")
         }
         Value::Number(value, _) => {
             if value.contains(['.', 'e', 'E']) {

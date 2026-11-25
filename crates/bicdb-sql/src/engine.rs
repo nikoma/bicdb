@@ -4806,6 +4806,16 @@ impl<'db> SqlEngine<'db> {
 
     pub fn execute(&self, sql: &str) -> Result<SqlResult> {
         crate::session::partition_admission::check_sql_partition_admission(self.db_ref())?;
+        // See `Session::execute`: one spelling for every string constant.
+        let constants = if crate::statement_context::in_statement() {
+            crate::string_constants::normalize_string_constants(
+                sql,
+                crate::string_constants::PlainStrings::Standard,
+            )
+        } else {
+            crate::string_constants::normalize_client_string_constants(sql, &self.session_gucs)
+        }?;
+        let sql: &str = &constants;
         let _join_budget = crate::join_budget::Scope::enter();
         let _case = oracle::simple_case::Scope::for_db(self.db_ref())?;
         self.db_ref().check_recovery_state()?;
@@ -5061,7 +5071,12 @@ impl<'db> SqlEngine<'db> {
             }
             "show standard_conforming_strings" => Ok(Some(SqlResult::new(
                 vec!["standard_conforming_strings".to_string()],
-                vec![vec![SqlValue::String("on".to_string())]],
+                vec![vec![SqlValue::String(
+                    self.session_gucs
+                        .get("standard_conforming_strings")
+                        .cloned()
+                        .unwrap_or_else(|| "on".to_string()),
+                )]],
             ))),
             "show intervalstyle" => {
                 let value = self

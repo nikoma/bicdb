@@ -4498,29 +4498,6 @@ pub(crate) fn parse_count_string(value: &str) -> Result<i64> {
     Err(non_negative_integer_error())
 }
 
-/// Decodes the backslash escapes PostgreSQL allows inside `E'...'`.
-pub(crate) fn unescape_pg_string(value: &str) -> String {
-    let mut out = String::with_capacity(value.len());
-    let mut chars = value.chars();
-    while let Some(c) = chars.next() {
-        if c != '\\' {
-            out.push(c);
-            continue;
-        }
-        match chars.next() {
-            Some('n') => out.push('\n'),
-            Some('t') => out.push('\t'),
-            Some('r') => out.push('\r'),
-            Some('b') => out.push('\u{8}'),
-            Some('f') => out.push('\u{c}'),
-            Some('0') => out.push('\0'),
-            Some(other) => out.push(other),
-            None => out.push('\\'),
-        }
-    }
-    out
-}
-
 pub(crate) fn non_negative_integer_error() -> SqlError {
     SqlError::Unsupported("LIMIT/OFFSET must be non-negative integer literals".to_string())
 }

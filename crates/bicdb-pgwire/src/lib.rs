@@ -2716,7 +2716,26 @@ fn handle_frontend_message(
                     }
                 }
             } else {
-                query
+                // String constants take PostgreSQL's decoding before any
+                // statement splitting or classification reads the text.
+                match bicdb_sql::normalize_client_string_constants(
+                    query,
+                    state.session_state.session_gucs(),
+                ) {
+                    Ok(std::borrow::Cow::Borrowed(_)) => query,
+                    Ok(std::borrow::Cow::Owned(sql)) => {
+                        lowered = sql;
+                        lowered.as_str()
+                    }
+                    Err(error) => {
+                        state.failed_queries += 1;
+                        server.failed_queries.fetch_add(1, Ordering::SeqCst);
+                        state.record_query_error(&server.config.sql_profile);
+                        error_response_for_error(stream, &PgWireError::from(error))?;
+                        ready_for_query_status(stream, state.transaction_status())?;
+                        return Ok(true);
+                    }
+                }
             };
             if sql_is_blank(query) {
                 flush_notifications(stream, server, state.connection_id)?;
@@ -3151,6 +3170,7 @@ struct ConnectionState {
     session_state: SqlSessionGucState,
     reported_interval_style: String,
     reported_time_zone: String,
+    reported_standard_conforming_strings: String,
     catalog_cache: SqlSessionCatalogCache,
     copy_in: Option<CopyInState>,
     /// Notices of work done outside a statement's own result (COPY rows,
@@ -3280,6 +3300,7 @@ impl ConnectionState {
             session_state: SqlSessionGucState::from_session_gucs(session_gucs),
             reported_interval_style: "postgres".into(),
             reported_time_zone: "UTC".into(),
+            reported_standard_conforming_strings: "on".into(),
             catalog_cache: SqlSessionCatalogCache::default(),
             copy_in: None,
             pending_notices: Vec::new(),
@@ -3754,6 +3775,17 @@ fn write_session_parameter_status(
     if timezone != state.reported_time_zone {
         parameter_status(stream, "TimeZone", timezone)?;
         state.reported_time_zone = timezone.to_string();
+    }
+    // Clients lex statements by this setting, so they must hear its changes.
+    let conforming = state
+        .session_state
+        .session_gucs()
+        .get("standard_conforming_strings")
+        .map(String::as_str)
+        .unwrap_or("on");
+    if conforming != state.reported_standard_conforming_strings {
+        parameter_status(stream, "standard_conforming_strings", conforming)?;
+        state.reported_standard_conforming_strings = conforming.to_string();
     }
     Ok(())
 }

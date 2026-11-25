@@ -1,0 +1,79 @@
+str.esc.backslash|SELECT E'a\\b', length(E'a\\b')
+str.esc.quote|SELECT E'a\'b', E'a''b', length(E'\'')
+str.esc.tsvector|SELECT E'''1 \\''2'''::tsvector
+str.esc.tsvector2|SELECT $$'1 \''2'$$::tsvector
+str.esc.ctrl|SELECT E'a\nb\tc\rd\be\ff' = 'a' || chr(10) || 'b' || chr(9) || 'c' || chr(13) || 'd' || chr(8) || 'e' || chr(12) || 'f'
+str.esc.octal|SELECT E'\101\102\7', length(E'\101\102\7'), E'\0618'
+str.esc.hex|SELECT E'\x41\x4a\x4G', E'\x7', length(E'\xe')
+str.esc.unicode4|SELECT E'Aé', E'\U0001F600', length(E'\U0001F600')
+str.esc.unicode_surrogate|SELECT E'😀'
+str.esc.unicode_bad_surrogate|SELECT E'\uD83D'
+str.esc.unicode_short|SELECT E'\u12'
+str.esc.unknown|SELECT E'\q\z\%', E'\\%'
+str.esc.nul|SELECT E'\0'
+str.esc.nul_u|SELECT E'\u0000'
+str.esc.nul_x|SELECT E'\x00'
+str.esc.trailing|SELECT E'abc\\'
+str.esc.lower_e|SELECT e'x\ty' = 'x' || chr(9) || 'y'
+str.scs.on|SHOW standard_conforming_strings; SELECT 'a\b', length('a\\b'), 'a\''
+str.scs.off|SET standard_conforming_strings = off; SELECT 'a\\b', length('a\\b'), 'x\ny' = E'x\ny'
+str.scs.off_quote|SET standard_conforming_strings = off; SELECT 'a\'b'
+str.uesc.basic|SELECT U&'d\0061t\+000061', U&'\0441\043B\043E\043D'
+str.uesc.uescape|SELECT U&'d!0061t!+000061' UESCAPE '!', U&'a\\b'
+str.uesc.bad|SELECT U&'\zz'
+str.uesc.surr|SELECT U&'\D83D\DE00'
+str.uesc.ident|SELECT 1 AS U&"d\0061t"
+str.uesc.bad_uescape|SELECT U&'x' UESCAPE '+'
+str.dollar.basic|SELECT $$a\nb$$, $tag$x$$y$tag$, length($$a\b$$)
+str.dollar.nested|SELECT $a$ $b$ inner $b$ $a$
+str.esc.in_where|CREATE TABLE ei1(t text); INSERT INTO ei1 VALUES (E'x\\y'), ('x\y'), (E'q\'r'); SELECT t, length(t) FROM ei1 ORDER BY t; SELECT count(*) FROM ei1 WHERE t = E'x\\y'
+str.esc.in_like|SELECT E'a\\b' LIKE E'a\\\\b', 'a\b' LIKE 'a\\b', 'a_b' LIKE E'a\\_b'
+str.esc.cast_types|SELECT E'\\x41'::bytea, E'{"a\\\\b"}'::text[], E'{"k": "v\\\\n"}'::json
+str.esc.array_lit|SELECT ARRAY[E'a\\b', E'c\'d']
+str.esc.func_arg|SELECT upper(E'a\\b'), replace(E'a\\b', E'\\', '/')
+str.esc.jsonb|SELECT E'{"a": "x\\"y"}'::jsonb
+str.adjacent_no_newline|SELECT 'a' 'b'
+str.esc_v|SELECT E'\v' = chr(11), E'\a', E'\x' 
+str.esc_highbit_bytes|SELECT E'\303\251', E'\xc3\xa9', length(E'\xe2\x82\xac')
+str.esc_invalid_utf8|SELECT E'\xc3'
+str.esc_octal_overflow|SELECT E'\777'
+str.esc_U_big|SELECT E'\U00110000'
+str.esc_surrogate_U|SELECT E'\uD83D\U0000DE00'
+str.esc_surrogate_then_char|SELECT E'\uD83Dx'
+str.esc_semicolon|SELECT E'a\';b', length(E'a\';b')
+str.esc_comment_like|SELECT E'--x\'', E'/*', E'*/\''
+str.esc_dollar|SELECT E'$$x\'$$', $q$E'\n'$q$
+str.ident_e|CREATE TABLE stre1(e text); INSERT INTO stre1 VALUES ('x'); SELECT e FROM stre1; SELECT e||'y' FROM stre1
+str.tsv_quoted_follow|SELECT $$'a'b$$::tsvector, $$a'b$$::tsvector, $$'a':1b$$::tsvector
+str.tsv_bad_pos|SELECT $$'a':1x$$::tsvector
+rt.insert_values|CREATE TABLE rti1(t text); INSERT INTO rti1 VALUES ('a''''b'), (E'x\\''y'), ('c\'), (E'\\\\'), (E'q\'\''); SELECT t, length(t) FROM rti1 ORDER BY t
+rt.update_where|CREATE TABLE rtu1(id int, t text); INSERT INTO rtu1 VALUES (1, 'x'); UPDATE rtu1 SET t = E'u\\''v' WHERE t = 'x'; SELECT t FROM rtu1 WHERE t = E'u\\''v'
+rt.default|CREATE TABLE rtd1(id int, t text DEFAULT E'd\\''x'); INSERT INTO rtd1(id) VALUES (1); SELECT t FROM rtd1
+rt.check|CREATE TABLE rtc1(t text CHECK (t <> E'bad\\''')); INSERT INTO rtc1 VALUES ('ok'); SELECT t FROM rtc1; INSERT INTO rtc1 VALUES (E'bad\\''')
+rt.view|CREATE VIEW rtv1 AS SELECT E'v\\''w' AS c, 'p''''q' AS d; SELECT c, d FROM rtv1
+rt.sql_function|CREATE FUNCTION rtf1() RETURNS text LANGUAGE sql AS $$ SELECT E'f\\''g' || 'h''''i' $$; SELECT rtf1()
+rt.sql_function_quoted|CREATE FUNCTION rtf2() RETURNS text LANGUAGE sql AS E'SELECT E''a\\\\b'''; SELECT rtf2()
+rt.plpgsql|CREATE FUNCTION rtp1() RETURNS text LANGUAGE plpgsql AS $$ DECLARE v text := E'p\\''q'; BEGIN RETURN v || E'\t|'; END $$; SELECT rtp1()
+rt.prepare|PREPARE rtpr1(text) AS SELECT E'p\\''q' || $1; EXECUTE rtpr1(E'\\x')
+rt.on_conflict|CREATE TABLE rto1(id int PRIMARY KEY, t text); INSERT INTO rto1 VALUES (1, 'a'); INSERT INTO rto1 VALUES (1, 'b') ON CONFLICT (id) DO UPDATE SET t = E'c\\''d'; SELECT t FROM rto1
+rt.like_escape|SELECT 'a%b' LIKE E'a\\%b', 'a%b' LIKE 'a#%b' ESCAPE '#', 'a_b' LIKE E'a\\_b' ESCAPE E'\\'
+rt.regex|SELECT 'a1' ~ E'a\\d', 'a1' ~ 'a\d', regexp_replace('a.b', E'\\.', '-')
+rt.json|SELECT E'{"a": "x\\"y"}'::jsonb ->> 'a', E'{"a": "\\u00e9"}'::json ->> 'a'
+rt.array|SELECT '{"a\\\\b"}'::text[], E'{"a\\\\b"}'::text[], ARRAY[E'a\\b', E'c\'d']
+rt.bytea|SELECT E'\\x41'::bytea, '\x41'::bytea, E'\\\\'::bytea
+rt.format|SELECT format('%L|%I', E'a\'b\\c', E'x"y'), quote_literal(E'a\\b'), quote_ident(E'q\'')
+rt.search_path|CREATE SCHEMA rts; SET search_path = rts, public; CREATE TABLE rts1(t text); INSERT INTO rts1 VALUES (E'x\\''y'); SELECT t FROM rts1 WHERE t = E'x\\''y'
+rt.cte|WITH c AS (SELECT E'c\\''d' AS v) SELECT v, 'it''s' FROM c
+rt.case|SELECT CASE WHEN E'a\'' = 'a''' THEN E'yes\\' ELSE 'no' END
+rt.in_list|SELECT E'b\\' IN ('a', E'b\\', 'c\')
+scs.show_default|SHOW standard_conforming_strings; SELECT current_setting('standard_conforming_strings')
+scs.off_show|SET standard_conforming_strings = off; SHOW standard_conforming_strings; SELECT 'a\\b'
+scs.off_table|SET standard_conforming_strings = off; CREATE TABLE scso1(t text); INSERT INTO scso1 VALUES ('x\\y'), ('q\'r'), (E'e\\f'), ('t\tu'); SELECT t, length(t) FROM scso1 ORDER BY 1
+scs.off_uescape|SET standard_conforming_strings = off; SELECT U&'x'
+scs.off_then_on|SET standard_conforming_strings = off; SELECT 'a\\b'; SET standard_conforming_strings = on; SELECT 'a\\b'
+scs.bad_value|SET standard_conforming_strings = maybe
+uesc.plus|SELECT U&'\+01F600', U&'a''b', length(U&'\00e9')
+uesc.empty_ident|SELECT 1 AS U&""
+uesc.uescape_bad_follow|SELECT U&'x' UESCAPE 1
+uesc.zero|SELECT U&'\0000'
+uesc.ident_uescape|SELECT 1 AS U&"!0041" UESCAPE '!'

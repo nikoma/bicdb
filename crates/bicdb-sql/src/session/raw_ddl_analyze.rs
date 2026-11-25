@@ -1188,15 +1188,19 @@ impl<'db> SqlSession<'db> {
             }
             "standard_conforming_strings" => {
                 let enabled = value.to_cell().to_ascii_lowercase();
-                if enabled == "on" || enabled == "true" {
-                    Arc::make_mut(&mut self.session_gucs)
-                        .insert("standard_conforming_strings".to_string(), "on".to_string());
-                    Ok(())
-                } else {
-                    Err(SqlError::Unsupported(format!(
-                        "SET standard_conforming_strings supports only on, got {enabled}"
-                    )))
-                }
+                let setting =
+                    match enabled.as_str() {
+                        "on" | "true" | "yes" | "1" => "on",
+                        "off" | "false" | "no" | "0" => "off",
+                        _ => return Err(SqlError::invalid_parameter_value(
+                            "parameter \"standard_conforming_strings\" requires a Boolean value",
+                        )),
+                    };
+                Arc::make_mut(&mut self.session_gucs).insert(
+                    "standard_conforming_strings".to_string(),
+                    setting.to_string(),
+                );
+                Ok(())
             }
             "intervalstyle" => {
                 let style = value.to_cell().to_ascii_lowercase();

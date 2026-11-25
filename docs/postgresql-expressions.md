@@ -130,6 +130,31 @@ Differential coverage lives in:
 - `fixtures/postgres-compat/028-expected-difference-domain-types.json`
 
 
+## String constants
+
+String constants are decoded exactly as PostgreSQL's lexer decodes them, before
+any other processing, so every statement form sees the same value:
+
+- `'...'` with `''` for a quote; with `SET standard_conforming_strings = off`
+  plain constants take backslash escapes as in `E'...'` (the setting is
+  reported to clients with ParameterStatus, and `SHOW`/`current_setting`
+  return it).
+- Escape strings `E'...'`: `\b \f \n \r \t \v`, octal `\ooo`, hex `\xhh`
+  (byte escapes may form multi-byte UTF-8 characters), `\uXXXX` and
+  `\UXXXXXXXX` with UTF-16 surrogate pairs, `\'`, `\\`, any other escaped
+  character standing for itself. Invalid escapes report PostgreSQL's errors
+  and SQLSTATEs (`invalid Unicode escape` 22025, `invalid Unicode surrogate
+  pair` / `invalid Unicode escape value` 42601, `invalid byte sequence for
+  encoding "UTF8"` 22021).
+- Unicode-escape strings and identifiers `U&'...'`, `U&"..."` with
+  `\XXXX`, `\+XXXXXX` and `UESCAPE 'c'`; rejected (0A000) while
+  standard_conforming_strings is off, as in PostgreSQL.
+- Constants continued across lines (`'a'` newline `'b'` is `'ab'`); two
+  constants without a newline between them are a syntax error.
+- Dollar quoting `$$...$$`, `$tag$...$tag$` is taken verbatim.
+- `quote_literal` and `format('%L')` write a value holding a backslash as
+  `E'...'` with doubled backslashes, as PostgreSQL does.
+
 ## Predicate values in projections and ordering
 
 NULL and truth predicates can produce boolean values in a SELECT list and in

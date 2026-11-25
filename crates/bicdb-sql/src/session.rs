@@ -75,7 +75,8 @@ mod transaction_defaults;
 mod vacuum_analyze;
 pub use read_only::parse_transaction_read_only;
 pub use temp_tables::{
-    drop_connection_temp_schema, drop_orphan_temp_schemas, temp_on_commit_pending,
+    drop_connection_temp_schema, drop_orphan_temp_schemas, drop_temp_on_commit_tables,
+    temp_on_commit_delete_pending, temp_on_commit_drop_pending, temp_on_commit_pending,
     temp_schema_exists,
 };
 pub(crate) mod txn_update;
@@ -3607,11 +3608,22 @@ impl<'db> SqlSession<'db> {
                 Ok(result)
             })
         };
-        let (result, recovered) = if atomic {
+        let (mut result, recovered) = if atomic {
             self.with_oracle_statement_boundary(execute)
         } else {
             (execute(self), false)
         };
+        // A statement outside a transaction block committed on its own: its
+        // temporary tables' ON COMMIT DELETE ROWS applies now.
+        if result.is_ok() && self.tx.is_none() && !self.in_transaction() {
+            if let Some(temp) = self.temp_schema_name() {
+                if temp_tables::temp_on_commit_delete_pending(&temp) {
+                    if let Err(error) = self.apply_temp_on_commit_actions() {
+                        result = Err(error);
+                    }
+                }
+            }
+        }
         self.independent_commits_observed = effects.independently_committed();
         self.independent_execution_observed = effects.independent_execution();
         self.latest_independent_sequence = effects.latest_sequence();

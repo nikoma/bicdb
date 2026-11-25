@@ -1483,6 +1483,8 @@ pub(crate) fn pg_attribute_rows_for_attrelids(
             rows.extend(pg_attribute_rows_for_sequence(*attrelid));
         } else if let Some(columns) = composite_columns.get(attrelid) {
             rows.extend(pg_attribute_rows_for_columns(*attrelid, columns.clone()));
+        } else if let Some(columns) = index_attribute_columns(db, *attrelid)? {
+            rows.extend(pg_attribute_rows_for_columns(*attrelid, columns));
         }
     }
     Ok(rows)

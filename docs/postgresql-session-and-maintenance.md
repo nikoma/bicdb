@@ -54,10 +54,23 @@ A SELECT without FROM evaluates functions through the same function table as a S
 the other. Aggregates, GROUP BY and HAVING without FROM read one implicit row:
 `SELECT count(*)` is 1, `SELECT count(*) WHERE false` is 0, `SELECT sum(2), avg(3)` works.
 
+Integer input: text (a string literal, a text value, COPY data, `pg_input_is_valid`) becomes
+`int2`/`int4`/`int8` through the type's input function: surrounding whitespace, `0x`/`0o`/`0b` and
+digit separators are accepted, and `'34.5'` or `'1e3'` is `22P02 invalid input syntax`, never
+rounded. Numeric values still round half away from zero (`34.5::numeric::int2` is 35) and float
+values round half to even (`2.5::float8::int4` is 2), as in PostgreSQL.
+
 Functions added in the shared table: `to_hex`, `to_oct`, `to_bin`, integer `gcd`/`lcm`,
 `num_nulls`, `num_nonnulls`, `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`,
 `getdatabaseencoding`, `isfinite`, `scale`, `min_scale`, `trim_scale`, `regexp_count`,
-`regexp_instr`, `regexp_like`, `regexp_substr`.
+`regexp_instr`, `regexp_like`, `regexp_substr`, `div`, `factorial`, `width_bucket` (float8 and
+exact numeric), `array_reverse`, `array_sort`, `pi`, `sin`/`cos`/`tan`/`cot`/`asin`/`acos`/`atan`/
+`atan2`, the degree variants `sind`/`cosd`/`tand`/`cotd`/`asind`/`acosd`/`atand`/`atan2d` (exact at
+the standard angles), `degrees`, `radians`.
+
+Input errors with PostgreSQL's detail: malformed range literals (`Unexpected end of input.`,
+`Missing left parenthesis or bracket.`, `Too many commas.`, ...), an invalid range element (the
+element type's error), `cidr` with host bits set, out-of-range `xid`/`xid8`, bytea hex errors.
 
 ## Temporary tables
 
@@ -76,10 +89,13 @@ pg_temp.t`) creates `t` in the session's temporary schema `pg_temp_<backend pid>
   non-temporary schema` (`42P16`), and `ON COMMIT` on a permanent table with `ON COMMIT can only
   be used on temporary tables` (`42P16`).
 
-Not yet supported (fails with `0A000` instead of being accepted with different semantics):
-`ON COMMIT DELETE ROWS` and `ON COMMIT DROP`. `ON COMMIT PRESERVE ROWS` is the default and works.
-An embedded `SqlSession` (no connection) has no session lifetime, so `TEMP` tables it creates stay
-permanent tables in their schema, as before.
+`ON COMMIT DELETE ROWS` empties the table at every commit of the session (each statement outside a
+transaction block commits); `ON COMMIT DROP` drops it when its transaction commits (at once outside a
+transaction block). `ON COMMIT PRESERVE ROWS` is the default. An embedded `SqlSession` without a
+connection gets its own temporary schema on first use, dropped when the session ends.
+`CREATE FUNCTION pg_temp.f()` creates the function in the temporary schema (called as
+`pg_temp.f()`); `current_schema()` reports the temporary schema when `search_path` names `pg_temp`
+first.
 
 ## Error positions
 
@@ -103,6 +119,10 @@ psql 18's `\d`, `\d+`, `\dt`, `\dv`, `\di`, `\dn` queries run: `pg_catalog.unnes
 the built-in `unnest`, `pg_partition_ancestors(oid)` returns the table itself for a table outside
 a partition tree (a partition is refused with `0A000` rather than answered incompletely),
 `pg_table_is_visible(oid)` follows the search path for tables (so `\d t` shows the temporary
-`t` when it hides a permanent one), and `pg_constraint.connoinherit` is false. Known remaining
-differences: expression deparse in CHECK constraints and view definitions, index column rows for
-`\d index`, BicDB's internal `bicdb_graph_*` views in `\d`/`\dv`, and the `public` schema owner.
+`t` when it hides a permanent one), and `pg_constraint.connoinherit` is false. CHECK
+constraints of `column op constant` comparisons deparse with PostgreSQL's casts
+(`CHECK (c > 0::numeric)`) and unnamed CHECKs are named `<table>_<column>_check` or
+`<table>_check[N]`; simple single-table view definitions use PostgreSQL's layout; index relations
+have their `pg_attribute` rows (`\d index`); BicDB's graph views are listed under `pg_catalog`;
+`public` is owned by `pg_database_owner`; `\d` of a partition lists foreign keys referencing its
+ancestors. Other expressions keep BicDB's text.

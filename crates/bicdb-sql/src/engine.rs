@@ -2069,6 +2069,7 @@ pub(crate) fn json_set_function_type_error(
         table: None,
         column: None,
         constraint: None,
+        detail: None,
     }
 }
 

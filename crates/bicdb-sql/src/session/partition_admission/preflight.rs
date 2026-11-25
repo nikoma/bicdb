@@ -143,7 +143,7 @@ pub(super) fn validate(
                 return Err(required("complete ACK uniqueness plan exceeds configured work memory"));
             }
             if !seen.insert((schema.name.clone(),index,key)) {
-                return Err(unique_violation(schema,&arbiter.name));
+                return Err(unique_key_violation(schema,&arbiter.name,&arbiter.key,&values));
             }
         }
         for constraint in &schema.constraints {

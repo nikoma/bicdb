@@ -208,6 +208,7 @@ impl AdvisoryLockManager {
                     table: None,
                     column: None,
                     constraint: None,
+                    detail: None,
                 });
             }
             if let Err(error) = cancellation.check() {

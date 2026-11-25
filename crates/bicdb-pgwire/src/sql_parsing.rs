@@ -358,15 +358,18 @@ pub(crate) fn drain_deferred_trigger_hooks(
                 .with_catalog_cache(catalog_cache)
                 .with_cancellation(cancellation.clone())
                 .with_pending_transaction(tx);
-        let result = session.fire_deferred_row_triggers();
+        let result = session.fire_deferred_row_triggers_reporting();
         let pending = session.take_pending_transaction();
         let catalog_cache = session.into_catalog_cache();
         (result, pending, catalog_cache)
     };
     state.catalog_cache = catalog_cache;
     match (result, pending) {
-        (Ok(()), Some(tx)) => Ok(tx),
-        (Ok(()), None) => Err(PgWireError::Server(
+        (Ok(mut notices), Some(tx)) => {
+            state.pending_notices.append(&mut notices);
+            Ok(tx)
+        }
+        (Ok(_), None) => Err(PgWireError::Server(
             "deferred trigger drain lost the open transaction".to_string(),
         )),
         (Err(error), pending) => {
@@ -515,8 +518,11 @@ pub(crate) fn commit_buffered_transaction(
                 columns,
                 rows,
             } => session
-                .copy_insert_rows(relation, columns, rows.clone())
-                .map(|count| SqlResult::command(format!("COPY {count}"))),
+                .copy_insert_rows_reporting(relation, columns, rows.clone())
+                .map(|(count, mut notices)| {
+                    state.pending_notices.append(&mut notices);
+                    SqlResult::command(format!("COPY {count}"))
+                }),
         };
         if let Err(error) = result {
             let _ = session.execute("ROLLBACK");
@@ -2221,13 +2227,17 @@ pub(crate) fn append_copy_insert_statements(
             .with_cancellation(cancellation.clone())
             .with_pending_transaction(tx);
     let started = Instant::now();
-    let result = session.copy_insert_rows(relation, columns, rows);
+    let result = session
+        .copy_insert_rows_reporting(relation, columns, rows)
+        .map(|(_, notices)| notices);
     capture_connection_guc_state(state, &session);
     state.tx = session.take_pending_transaction();
     state.tx_ddl_undo = session.take_ddl_undo_log();
     state.catalog_cache = session.into_catalog_cache();
     server.record_write_execution(duration_nanos_u64(started.elapsed()));
-    result.map_err(PgWireError::from)?;
+    state
+        .pending_notices
+        .append(&mut result.map_err(PgWireError::from)?);
     Ok(count)
 }
 

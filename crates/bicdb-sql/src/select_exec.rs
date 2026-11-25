@@ -3212,6 +3212,7 @@ pub(crate) fn finish_json_object_agg(
                 table: None,
                 column: None,
                 constraint: None,
+                detail: None,
             });
         }
         if strict && matches!(value, SqlValue::Null) {

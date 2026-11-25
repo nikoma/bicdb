@@ -80,9 +80,12 @@ fn unique_diagnostics(profile: &str) {
                 error.to_string(),
                 format!("duplicate key value violates unique constraint \"{constraint}\"")
             );
-            assert!(!fields
-                .iter()
-                .any(|field| matches!(field, SqlErrorField::Detail(_))));
+            // PostgreSQL's key DETAIL, never the other profile's transport stack.
+            assert!(fields.iter().all(|field| match field {
+                SqlErrorField::Detail(detail) =>
+                    detail.starts_with("Key (") && detail.ends_with(") already exists."),
+                _ => true,
+            }));
         }
         session.execute("ROLLBACK TO SAVEPOINT attempt").unwrap();
         assert_eq!(

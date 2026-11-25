@@ -32,6 +32,7 @@ pub(crate) fn violation(table: &str, message: impl Into<String>) -> SqlError {
         constraint: None,
         oracle_code: None,
         unique_origin: None,
+        detail: None,
     }
 }
 

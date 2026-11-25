@@ -494,10 +494,18 @@ pub(crate) fn notice_response(
     stream: &mut ClientStream,
     notice: &bicdb_sql::SqlNotice,
 ) -> Result<()> {
+    let severity = notice
+        .fields
+        .iter()
+        .find_map(|field| match field {
+            SqlErrorField::Severity(severity) => Some(severity.as_str()),
+            _ => None,
+        })
+        .unwrap_or("NOTICE");
     diagnostic_response(
         stream,
         b'N',
-        "NOTICE",
+        severity,
         &notice.sqlstate,
         &notice.message,
         &notice.fields,
@@ -551,6 +559,7 @@ fn diagnostic_response(
                 payload.push(b'H');
                 diagnostic_cstr(&mut payload, value);
             }
+            SqlErrorField::Severity(_) => {}
         }
     }
     payload.push(0);

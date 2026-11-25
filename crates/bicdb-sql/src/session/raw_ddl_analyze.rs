@@ -41,6 +41,9 @@ impl<'db> SqlSession<'db> {
         }
         for (schema, sequence, if_not_exists) in sequences {
             self.require_schema_create_privilege(&schema)?;
+            if if_not_exists && load_sequence(self.db_ref(), &sequence.name)?.is_some() {
+                crate::statement_context::relation_exists_skipping(&sequence.name);
+            }
             self.create_session_sequence_if_missing(sequence, if_not_exists)?;
         }
         Ok(Some(SqlResult::command("CREATE SEQUENCE")))
@@ -1670,6 +1673,13 @@ impl<'db> SqlSession<'db> {
                 owner
             }
         };
+        if if_not_exists && load_namespace(self.db_ref(), &name)?.is_some() {
+            crate::statement_context::report_notice(
+                None,
+                "42P06",
+                format!("schema \"{name}\" already exists, skipping"),
+            );
+        }
         self.create_session_namespace_if_missing(
             NamespaceSchema {
                 name,

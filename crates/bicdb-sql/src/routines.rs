@@ -2033,10 +2033,12 @@ pub(crate) fn parse_routine_raise(statement: &str) -> Result<RoutineStmt> {
             });
         }
     }
-    let (notice, rest) = if let Some(rest) = message_levels
-        .iter()
-        .find_map(|level| strip_routine_keyword(statement, level))
-    {
+    let mut raised_level = None;
+    let (notice, rest) = if let Some(rest) = message_levels.iter().find_map(|level| {
+        let rest = strip_routine_keyword(statement, level)?;
+        raised_level = Some(*level);
+        Some(rest)
+    }) {
         (true, rest)
     } else if let Some(rest) = strip_routine_keyword(statement, "EXCEPTION") {
         (false, rest)
@@ -2165,6 +2167,7 @@ pub(crate) fn parse_routine_raise(statement: &str) -> Result<RoutineStmt> {
             ));
         }
     }
+    error_fields.severity = raised_level.filter(|level| *level != "NOTICE");
     Ok(RoutineStmt::RaiseException {
         notice,
         message,
@@ -3266,6 +3269,14 @@ pub(crate) fn alter_table_drop_column(
         .position(|candidate| candidate.name.eq_ignore_ascii_case(column))
     else {
         if if_exists {
+            crate::statement_context::report_notice(
+                None,
+                "00000",
+                format!(
+                    "column \"{column}\" of relation \"{}\" does not exist, skipping",
+                    relation_name_for_message(table)
+                ),
+            );
             return Ok(());
         }
         return Err(SqlError::InvalidSql(format!(

@@ -3185,6 +3185,54 @@ impl<'db> SqlSession<'db> {
         }
     }
 
+    /// [`Self::copy_insert_rows`] that also returns the notices its triggers
+    /// reported (RAISE NOTICE), which PostgreSQL sends before COPY's
+    /// completion. A failure carries the notices reported before it.
+    pub fn copy_insert_rows_reporting(
+        &mut self,
+        table: &str,
+        columns: &[String],
+        rows: Vec<Vec<Option<String>>>,
+    ) -> Result<(usize, Vec<SqlNotice>)> {
+        let effects = crate::statement_context::StatementScope::enter();
+        let result = self.copy_insert_rows(table, columns, rows);
+        self.finish_reporting(&effects, result)
+    }
+
+    /// [`Self::fire_deferred_row_triggers`] that also returns the notices
+    /// the triggers reported, which PostgreSQL sends before COMMIT completes.
+    pub fn fire_deferred_row_triggers_reporting(&mut self) -> Result<Vec<SqlNotice>> {
+        let effects = crate::statement_context::StatementScope::enter();
+        let result = self.fire_deferred_row_triggers();
+        self.finish_reporting(&effects, result)
+            .map(|((), notices)| notices)
+    }
+
+    fn finish_reporting<T>(
+        &self,
+        effects: &crate::statement_context::StatementScope,
+        result: Result<T>,
+    ) -> Result<(T, Vec<SqlNotice>)> {
+        let notices = effects.take_notices();
+        match result {
+            Ok(value) => Ok((value, notices)),
+            Err(error) => {
+                let error = match self.authorize_error_value_details(Err(error)) {
+                    Err(error) => error,
+                    Ok(_) => unreachable!("an error stays an error"),
+                };
+                if notices.is_empty() {
+                    Err(error)
+                } else {
+                    Err(SqlError::WithNotices {
+                        error: Box::new(error),
+                        notices,
+                    })
+                }
+            }
+        }
+    }
+
     pub fn copy_insert_rows(
         &mut self,
         table: &str,
@@ -3416,7 +3464,43 @@ impl<'db> SqlSession<'db> {
                 Err(error)
             }
         };
-        effects.finish(result)
+        effects.finish(self.authorize_error_value_details(result))
+    }
+
+    /// A constraint violation's DETAIL shows row values (`Key (a)=(1) already
+    /// exists.`) only when the current role could read them, as PostgreSQL
+    /// decides: never under row-level security that applies to the role,
+    /// otherwise with SELECT on the relation. Other violations keep their
+    /// value-free fallback line.
+    pub(crate) fn authorize_error_value_details(
+        &self,
+        result: Result<SqlResult>,
+    ) -> Result<SqlResult> {
+        let Err(mut error) = result else {
+            return result;
+        };
+        for detail in error.unauthorized_value_details() {
+            if let Some(relation) = detail.values_of.clone() {
+                detail.authorized = self.may_read_row_values(&relation);
+            }
+        }
+        Err(error)
+    }
+
+    fn may_read_row_values(&self, relation: &str) -> bool {
+        let db = self.db_ref();
+        if session_role_is_superuser(db, &self.session_gucs) {
+            return true;
+        }
+        let role = current_user_from_gucs(&self.session_gucs);
+        let Ok(Some(schema)) = load_schema(db, relation) else {
+            return false;
+        };
+        let owner = schema.owner.as_deref().unwrap_or(BOOTSTRAP_ROLE_NAME);
+        if schema.rls_enabled && (schema.rls_forced || normalize_role_name(owner) != role) {
+            return false;
+        }
+        role_has_table_privilege(db, &role, &schema.name, "SELECT").unwrap_or(false)
     }
 
     /// Statement text through the profiled executor; a read-only transaction
@@ -3600,7 +3684,7 @@ impl<'db> SqlSession<'db> {
         self.independent_execution_observed = effects.independent_execution();
         self.latest_independent_sequence = effects.latest_sequence();
         self.observe_independent_commit()?;
-        effects.finish(result)
+        effects.finish(self.authorize_error_value_details(result))
     }
 
     /// Execute a stored procedure directly from its already-typed arguments,
@@ -3628,7 +3712,7 @@ impl<'db> SqlSession<'db> {
         self.independent_execution_observed = effects.independent_execution();
         self.latest_independent_sequence = effects.latest_sequence();
         self.observe_independent_commit()?;
-        effects.finish(result)
+        effects.finish(self.authorize_error_value_details(result))
     }
 
     pub(crate) fn execute_inner(&mut self, sql: &str) -> Result<SqlResult> {
@@ -4699,6 +4783,14 @@ impl<'db> SqlSession<'db> {
             definition.name = sql_index_storage_name(&schema.schema_name, &definition.name);
         }
         let name = definition.name.clone();
+        let unique_shape = definition.unique.then(|| {
+            (
+                definition.collection.clone(),
+                definition.fields.clone(),
+                definition.nulls_not_distinct,
+                definition.predicate.clone(),
+            )
+        });
         // A fresh CREATE TABLE has no corpus to rebuild, in autocommit as well
         // as an explicit transaction. Existing-table builds retain the normal
         // pending-transaction fence, and core also rejects pending target rows.
@@ -4732,6 +4824,11 @@ impl<'db> SqlSession<'db> {
                         *unique_origin = Some(UniqueViolationOrigin::IndexBuild);
                         *message = format!("could not create unique index \"{logical_name}\"");
                     }
+                    if let Some(detail) = unique_shape
+                        .and_then(|shape| self.duplicated_index_key_detail(schema, shape))
+                    {
+                        error = error.with_error_detail(detail);
+                    }
                     return Err(error);
                 }
             }
@@ -4742,6 +4839,34 @@ impl<'db> SqlSession<'db> {
             self.ddl_undo.push(DdlUndo::DropIndex { name });
         }
         Ok(())
+    }
+
+    /// `Key (a)=(1) is duplicated.` of a unique index build that found duplicates.
+    fn duplicated_index_key_detail(
+        &self,
+        schema: &TableSchema,
+        (collection, fields, nulls_not_distinct, predicate): (
+            String,
+            Vec<IndexField>,
+            bool,
+            Option<bicdb_core::IndexPredicate>,
+        ),
+    ) -> Option<ErrorDetail> {
+        let records = match self.tx.as_ref() {
+            Some(tx) => tx.scan_collection_for_integrity_check(&collection),
+            None => self.db_ref().scan_collection_unchecked(&collection),
+        }
+        .ok()?;
+        let key = UniqueKey::IndexFields(fields);
+        let values = crate::error_detail::smallest_duplicated_key(
+            schema,
+            &key,
+            &records,
+            nulls_not_distinct,
+            predicate.as_ref(),
+        )
+        .ok()??;
+        crate::error_detail::unique_key_detail(schema, &key, &values, "is duplicated.")
     }
 
     pub(crate) fn drop_session_index(&mut self, name: &str, table: Option<&str>) -> Result<bool> {

@@ -2594,33 +2594,40 @@ fn handle_frontend_message(
                     }
                 }
             }
-            b'c' => match finish_copy_in(server, state).and_then(|count| {
-                if let Some(seq) = bicdb_core::take_thread_commit_seq() {
-                    server.sync_quorum.wait_for(seq)?;
+            b'c' => {
+                let result = finish_copy_in(server, state).and_then(|count| {
+                    if let Some(seq) = bicdb_core::take_thread_commit_seq() {
+                        server.sync_quorum.wait_for(seq)?;
+                    }
+                    Ok(count)
+                });
+                // Notices the copied rows' triggers reported come first.
+                for notice in std::mem::take(&mut state.pending_notices) {
+                    notice_response(stream, &notice)?;
                 }
-                Ok(count)
-            }) {
-                Ok(count) => {
-                    command_complete(stream, &format!("COPY {count}"))?;
-                    if !extended {
-                        ready_for_query_status(stream, state.transaction_status())?;
+                match result {
+                    Ok(count) => {
+                        command_complete(stream, &format!("COPY {count}"))?;
+                        if !extended {
+                            ready_for_query_status(stream, state.transaction_status())?;
+                        }
+                    }
+                    Err(error) => {
+                        state.failed_queries += 1;
+                        server.failed_queries.fetch_add(1, Ordering::SeqCst);
+                        state.record_query_error(&server.config.sql_profile);
+                        error_response_for_error(stream, &error)?;
+                        if error.closes_connection() {
+                            return Ok(false);
+                        }
+                        if extended {
+                            state.discard_until_sync = true;
+                        } else {
+                            ready_for_query_status(stream, state.transaction_status())?;
+                        }
                     }
                 }
-                Err(error) => {
-                    state.failed_queries += 1;
-                    server.failed_queries.fetch_add(1, Ordering::SeqCst);
-                    state.record_query_error(&server.config.sql_profile);
-                    error_response_for_error(stream, &error)?;
-                    if error.closes_connection() {
-                        return Ok(false);
-                    }
-                    if extended {
-                        state.discard_until_sync = true;
-                    } else {
-                        ready_for_query_status(stream, state.transaction_status())?;
-                    }
-                }
-            },
+            }
             b'f' => {
                 abort_copy_in(server, state)?;
                 let message = cstring_payload(&payload).unwrap_or("COPY failed");
@@ -3138,6 +3145,9 @@ struct ConnectionState {
     reported_time_zone: String,
     catalog_cache: SqlSessionCatalogCache,
     copy_in: Option<CopyInState>,
+    /// Notices of work done outside a statement's own result (COPY rows,
+    /// deferred triggers at COMMIT), sent before that work completes.
+    pending_notices: Vec<bicdb_sql::SqlNotice>,
     /// A COPY FROM STDIN failed: PostgreSQL discards the client's remaining
     /// CopyData until CopyDone or CopyFail instead of treating it as new
     /// protocol messages.
@@ -3265,6 +3275,7 @@ impl ConnectionState {
             reported_time_zone: "UTC".into(),
             catalog_cache: SqlSessionCatalogCache::default(),
             copy_in: None,
+            pending_notices: Vec::new(),
             copy_in_discarding: false,
             cancel_token: Arc::new(AtomicBool::new(false)),
             last_commit_seq: 0,
@@ -4309,7 +4320,7 @@ fn execute_server_db_sql_for_state_inner(
             }
             continue;
         }
-        let res = match result {
+        let mut res = match result {
             Ok(result) => result,
             Err(error) if error.requires_exclusive_database_access() => {
                 // Only the internal lease request needs another execution.
@@ -4361,6 +4372,7 @@ fn execute_server_db_sql_for_state_inner(
                     return Err(error);
                 }
             };
+        res.notices.append(&mut state.pending_notices);
         // Serialize the WAL frames off the serial commit critical section.
         let phase_exec = started.elapsed();
         tx.prepare_wal_payloads();
@@ -5016,7 +5028,7 @@ fn execute_server_sql_with_options_normalized(
             result.notices.push(bicdb_sql::SqlNotice {
                 sqlstate: "25001".to_string(),
                 message: "there is already a transaction in progress".to_string(),
-                fields: Vec::new(),
+                fields: vec![bicdb_sql::SqlErrorField::Severity("WARNING".to_string())],
             });
             Ok(result)
         } else if transaction_control == Some(Some(TransactionControl::Begin)) {
@@ -5098,6 +5110,7 @@ fn execute_server_sql_with_options_normalized(
                 }
                 .into());
             }
+            let had_transaction = state.in_transaction;
             let chain_read_only = state.session_state.transaction_read_only();
             let chain_deferrable = state.session_state.transaction_deferrable();
             let chain_isolation = state
@@ -5105,7 +5118,7 @@ fn execute_server_sql_with_options_normalized(
                 .session_gucs()
                 .get("transaction_isolation")
                 .cloned();
-            let (result, chain) = match ending {
+            let (mut result, chain) = match ending {
                 delegation::TransactionEnd::Commit { chain } if !state.failed_transaction => (
                     commit_buffered_transaction(server, state, &cancellation)?,
                     chain,
@@ -5116,6 +5129,16 @@ fn execute_server_sql_with_options_normalized(
                     (SqlResult::command("ROLLBACK"), chain)
                 }
             };
+            // Notices the deferred triggers reported while committing.
+            result.notices.append(&mut state.pending_notices);
+            if !had_transaction && !bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile)
+            {
+                result.notices.push(bicdb_sql::SqlNotice {
+                    sqlstate: "25P01".to_string(),
+                    message: "there is no transaction in progress".to_string(),
+                    fields: vec![bicdb_sql::SqlErrorField::Severity("WARNING".to_string())],
+                });
+            }
             if chain {
                 begin_buffered_transaction(server, state)?;
                 state

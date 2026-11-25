@@ -141,3 +141,29 @@ builds could persist a path that omitted `payload_json`. Those existing SQL
 indexes need to be recreated from their SQL definitions under the corrected
 runtime; rebuilding stored index contents alone retains their old field paths.
 Recreating a unique index must validate existing records and refuse duplicates.
+
+## Violation DETAIL lines
+
+Constraint violations carry PostgreSQL's DETAIL line in the error response:
+
+| violation | DETAIL |
+|---|---|
+| unique / primary key (`23505`) | `Key (a, b)=(1, x) already exists.` |
+| `CREATE UNIQUE INDEX` / `ADD UNIQUE` / `ADD PRIMARY KEY` over duplicates | `Key (a)=(1) is duplicated.` (the smallest duplicated key, as PostgreSQL's sorted build reports it) |
+| foreign key, referencing row (`23503`) | `Key (x)=(5) is not present in table "p".` |
+| foreign key, referenced row (`23503`) | `Key (a)=(1) is still referenced from table "c".` with PostgreSQL's `update or delete on table ...` message |
+| exclusion (`23P01`) | `Key (r)=([3,8)) conflicts with existing key (r)=([1,5)).` (plain-column constraints) |
+| CHECK (`23514`) and NOT NULL (`23502`) | `Failing row contains (1, null, abc).` (every column in order, each value cut at 64 bytes) |
+
+Values are printed by their types' output functions (`t`/`f`, `null`, PostgreSQL float
+and jsonb text). As in PostgreSQL, values are shown only to a role that may read them:
+a superuser, or a role with SELECT on the relation the values come from when row-level
+security does not apply to it. Otherwise the key DETAIL is omitted and a foreign-key
+violation says `Key is not present in table "p".` / `Key is still referenced from table
+"c".`. Unique keys over expressions other than `lower()`/`upper()` of a column are
+reported without a DETAIL.
+
+`DROP TABLE` / `DROP VIEW` without CASCADE refuse a relation that views or foreign keys
+depend on (`2BP01`, with a DETAIL line per dependent object and PostgreSQL's HINT); with
+CASCADE they drop the dependent views and constraints and report `drop cascades to ...`
+NOTICEs. An Oracle-profile database keeps its views when a table is dropped.

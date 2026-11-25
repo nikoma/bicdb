@@ -766,6 +766,16 @@ pub(crate) fn alter_table_drop_constraint(
             "constraint \"{dropped_constraint}\" of relation \"{table}\" does not exist"
         )));
     }
+    if !dropped_metadata_constraint && !dropped_unique {
+        crate::statement_context::report_notice(
+            None,
+            "00000",
+            format!(
+                "constraint \"{dropped_constraint}\" of relation \"{}\" does not exist, skipping",
+                relation_name_for_message(table)
+            ),
+        );
+    }
     Ok(dropped_unique.then(|| dropped_constraint.to_string()))
 }
 
@@ -933,8 +943,9 @@ pub(crate) fn validate_existing_constraint(
                     return Err(constraint_violation(
                         "23514",
                         format!(
-                            "row for relation \"{}\" violates check constraint \"{}\"",
-                            table, name
+                            "check constraint \"{}\" of relation \"{}\" is violated by some row",
+                            name,
+                            catalog_display_name(table)
                         ),
                         Some(table.to_string()),
                         None,
@@ -947,7 +958,13 @@ pub(crate) fn validate_existing_constraint(
         ConstraintSchema::ForeignKey { name, .. } => {
             for record in db.scan_collection(table)? {
                 validate_foreign_key_constraint(db, None, table, schema, &record, constraint)
-                    .map_err(|_| foreign_key_violation(table, name))?;
+                    .map_err(|error| {
+                        if error.sqlstate() == "23503" {
+                            error
+                        } else {
+                            foreign_key_violation(table, name)
+                        }
+                    })?;
             }
             Ok(())
         }
@@ -1002,11 +1019,12 @@ pub(crate) fn validate_unique_key_records(
     reject_nulls: bool,
     null_policy: UniqueNullPolicy,
 ) -> Result<()> {
-    let mut seen: BTreeMap<Vec<String>, String> = BTreeMap::new();
-    for record in records {
-        let key = record_column_values(record, schema, columns);
-        if let Some(null_idx) = key.iter().position(|value| matches!(value, SqlValue::Null)) {
-            if reject_nulls {
+    // PostgreSQL sets NOT NULL (scanning every row) before it builds the
+    // index, and the build reports the smallest duplicated key it sorted.
+    if reject_nulls {
+        for record in records {
+            let key = record_column_values(record, schema, columns);
+            if let Some(null_idx) = key.iter().position(|value| matches!(value, SqlValue::Null)) {
                 let column = columns.get(null_idx).cloned();
                 return Err(constraint_violation(
                     "23502",
@@ -1021,13 +1039,44 @@ pub(crate) fn validate_unique_key_records(
                 ));
             }
         }
+    }
+    let mut seen: BTreeMap<Vec<String>, String> = BTreeMap::new();
+    let mut duplicated: Option<Vec<SqlValue>> = None;
+    for record in records {
+        let key = record_column_values(record, schema, columns);
         if null_policy.skips_key(&key) {
             continue;
         }
-        let key = typed_column_key_label(schema, columns, &key)?;
-        if seen.insert(key, record.id.clone()).is_some() {
-            return Err(unique_validation_violation(schema, name, reject_nulls));
+        let label = typed_column_key_label(schema, columns, &key)?;
+        if seen.insert(label, record.id.clone()).is_some()
+            && duplicated.as_ref().is_none_or(|smallest| {
+                crate::error_detail::key_precedes(
+                    schema,
+                    &UniqueKey::Columns(columns.to_vec()),
+                    &key,
+                    smallest,
+                )
+            })
+        {
+            duplicated = Some(key);
         }
+    }
+    if let Some(key) = duplicated {
+        let mut error = unique_validation_violation(schema, name, reject_nulls);
+        if let SqlError::ConstraintViolation { message, .. } = &mut error {
+            *message = format!("could not create unique index \"{name}\"");
+        }
+        return Err(
+            match crate::error_detail::unique_key_detail(
+                schema,
+                &UniqueKey::Columns(columns.to_vec()),
+                &key,
+                "is duplicated.",
+            ) {
+                Some(detail) => error.with_error_detail(detail),
+                None => error,
+            },
+        );
     }
     Ok(())
 }
@@ -5249,7 +5298,7 @@ pub(crate) fn record_id_from_fields(
         .get(primary_key)
         .filter(|value| !matches!(value, SqlValue::Null))
         .ok_or_else(|| {
-            SqlError::InvalidSql(format!("INSERT into {table} requires {primary_key}"))
+            crate::error_detail::missing_primary_key_violation(table, schema, primary_key, fields)
         })?;
     let value = schema
         .column(primary_key)
@@ -5282,7 +5331,7 @@ pub(crate) fn composite_record_id_from_fields(
             .get(column)
             .filter(|value| !matches!(value, SqlValue::Null))
             .ok_or_else(|| {
-                SqlError::InvalidSql(format!("INSERT into {table} requires {column}"))
+                crate::error_detail::missing_primary_key_violation(table, schema, column, fields)
             })?;
         let field_value = schema
             .column(column)

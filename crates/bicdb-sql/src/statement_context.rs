@@ -65,6 +65,16 @@ impl StatementScope {
     pub(crate) fn latest_sequence(&self) -> u64 {
         self.effects.latest_sequence.get()
     }
+    /// The notices reported so far; none for a nested scope (they belong to
+    /// the enclosing statement).
+    pub(crate) fn take_notices(&self) -> Vec<SqlNotice> {
+        if self.root {
+            self.effects.notice_bytes.set(0);
+            self.effects.notices.take()
+        } else {
+            Vec::new()
+        }
+    }
     pub(crate) fn finish(&self, result: Result<SqlResult>) -> Result<SqlResult> {
         if !self.root {
             return result;
@@ -133,4 +143,64 @@ pub(crate) fn note_independent_execution() {
 }
 pub(crate) fn latest_independent_commit() -> u64 {
     EFFECTS.with(|c| c.borrow().as_ref().map_or(0, |e| e.latest_sequence.get()))
+}
+
+/// Reports a PostgreSQL NOTICE (or, with `severity`, a WARNING or INFO) of
+/// the running statement, such as `table "t" does not exist, skipping`.
+/// Outside a statement context (internal catalog work) it is dropped.
+pub(crate) fn report_notice(severity: Option<&str>, sqlstate: &str, message: impl Into<String>) {
+    let fields = severity
+        .map(|severity| vec![crate::SqlErrorField::Severity(severity.to_string())])
+        .unwrap_or_default();
+    let _ = note_notice(SqlNotice {
+        sqlstate: sqlstate.to_string(),
+        message: message.into(),
+        fields,
+    });
+}
+
+/// `<kind> "<name>" does not exist, skipping` of `DROP ... IF EXISTS`.
+pub(crate) fn notice_skipping_missing(kind: &str, name: &str) {
+    report_notice(
+        None,
+        "00000",
+        format!("{kind} \"{name}\" does not exist, skipping"),
+    );
+}
+
+/// PostgreSQL's notice of the objects `DROP ... CASCADE` also drops:
+/// `drop cascades to <object>`, or for several, `drop cascades to N other
+/// objects` with one `drop cascades to <object>` DETAIL line each.
+pub(crate) fn notice_drop_cascades(objects: &[String]) {
+    let (message, fields) = match objects {
+        [] => return,
+        [object] => (format!("drop cascades to {object}"), Vec::new()),
+        objects => (
+            format!("drop cascades to {} other objects", objects.len()),
+            vec![crate::SqlErrorField::Detail(
+                objects
+                    .iter()
+                    .map(|object| format!("drop cascades to {object}"))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            )],
+        ),
+    };
+    let _ = note_notice(SqlNotice {
+        sqlstate: "00000".to_string(),
+        message,
+        fields,
+    });
+}
+
+/// `relation "x" already exists, skipping` of `CREATE ... IF NOT EXISTS`.
+pub(crate) fn relation_exists_skipping(name: &str) {
+    report_notice(
+        None,
+        "42P07",
+        format!(
+            "relation \"{}\" already exists, skipping",
+            crate::relation_name_for_message(name)
+        ),
+    );
 }

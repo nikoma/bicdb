@@ -3992,7 +3992,9 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
         "pg_depend" => pg_depend_rows(db),
         "pg_db_role_setting" => Ok(Vec::new()),
         "pg_inherits" => pg_inherits_rows(db),
-        "pg_largeobject_metadata" => Ok(Vec::new()),
+        "pg_largeobject_metadata" => {
+            crate::pg_large_objects::functions::pg_largeobject_metadata_rows(db)
+        }
         "pg_partitioned_table" => pg_partitioned_table_rows(db),
         "pg_statistic_ext" | "pg_statistic_ext_data" => Ok(Vec::new()),
         "pg_enum" => pg_enum_rows(db),

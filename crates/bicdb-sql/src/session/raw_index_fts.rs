@@ -2762,47 +2762,160 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_grant(&mut self, grant: &Grant) -> Result<SqlResult> {
+        self.execute_grant_with(grant, false)
+    }
+
+    /// `maintain_alias`: the statement was rewritten from PostgreSQL's
+    /// MAINTAIN privilege (which the SQL parser does not know) to the AUDIT
+    /// keyword; only then does AUDIT stand for MAINTAIN.
+    pub(crate) fn execute_grant_with(
+        &mut self,
+        grant: &Grant,
+        maintain_alias: bool,
+    ) -> Result<SqlResult> {
         if let Some(result) =
             self.execute_raw_function_privileges(&crate::sql_text::sql_text(grant))?
         {
             return Ok(result);
         }
-        if grant.with_grant_option
-            || grant.as_grantor.is_some()
-            || grant.granted_by.is_some()
-            || grant.current_grants.is_some()
-        {
+        if grant.with_grant_option || grant.as_grantor.is_some() || grant.current_grants.is_some() {
             return Err(SqlError::Unsupported(
                 "grant options, grantors, and current grants are not supported".to_string(),
             ));
         }
+        self.require_grantor_is_current_user(grant.granted_by.as_ref())?;
         let Some(objects) = grant.objects.as_ref() else {
             return Err(SqlError::Unsupported(
                 "role membership grants are not supported".to_string(),
             ));
         };
-        self.apply_privileges(&grant.privileges, objects, &grant.grantees, true)?;
+        self.apply_privileges(
+            &grant.privileges,
+            objects,
+            &grant.grantees,
+            true,
+            maintain_alias,
+        )?;
         Ok(SqlResult::command("GRANT"))
     }
 
     pub(crate) fn execute_revoke(&mut self, revoke: &Revoke) -> Result<SqlResult> {
+        self.execute_revoke_with(revoke, false)
+    }
+
+    pub(crate) fn execute_revoke_with(
+        &mut self,
+        revoke: &Revoke,
+        maintain_alias: bool,
+    ) -> Result<SqlResult> {
         if let Some(result) =
             self.execute_raw_function_privileges(&crate::sql_text::sql_text(revoke))?
         {
             return Ok(result);
         }
-        if revoke.granted_by.is_some() || matches!(revoke.cascade, Some(CascadeOption::Cascade)) {
+        if matches!(revoke.cascade, Some(CascadeOption::Cascade)) {
             return Err(SqlError::Unsupported(
-                "GRANTED BY and CASCADE revokes are not supported".to_string(),
+                "CASCADE revokes are not supported".to_string(),
             ));
         }
+        self.require_grantor_is_current_user(revoke.granted_by.as_ref())?;
         let Some(objects) = revoke.objects.as_ref() else {
             return Err(SqlError::Unsupported(
                 "role membership revokes are not supported".to_string(),
             ));
         };
-        self.apply_privileges(&revoke.privileges, objects, &revoke.grantees, false)?;
+        self.apply_privileges(
+            &revoke.privileges,
+            objects,
+            &revoke.grantees,
+            false,
+            maintain_alias,
+        )?;
         Ok(SqlResult::command("REVOKE"))
+    }
+
+    /// GRANTED BY on an object privilege: PostgreSQL accepts only the current
+    /// role as grantor (0A000 "grantor must be current user" otherwise).
+    fn require_grantor_is_current_user(&self, granted_by: Option<&Ident>) -> Result<()> {
+        let Some(grantor) = granted_by else {
+            return Ok(());
+        };
+        let current = current_user_from_gucs(&self.session_gucs);
+        let name = if grantor.quote_style.is_none()
+            && (grantor.value.eq_ignore_ascii_case("current_user")
+                || grantor.value.eq_ignore_ascii_case("current_role"))
+        {
+            current.clone()
+        } else if grantor.quote_style.is_none()
+            && grantor.value.eq_ignore_ascii_case("session_user")
+        {
+            session_user_from_gucs(&self.session_gucs)
+        } else {
+            normalize_role_name(&ident_value(grantor))
+        };
+        if !role_exists(self.db_ref(), &name)? {
+            return Err(SqlError::UndefinedRole { name });
+        }
+        if name != current {
+            return Err(SqlError::Unsupported("grantor must be current user".into()));
+        }
+        Ok(())
+    }
+
+    /// PostgreSQL 17's MAINTAIN table privilege, which the SQL parser lacks:
+    /// a GRANT/REVOKE naming it is re-parsed with AUDIT in its place and run
+    /// with AUDIT read as MAINTAIN.
+    pub(crate) fn execute_raw_maintain_privileges(
+        &mut self,
+        sql: &str,
+    ) -> Result<Option<SqlResult>> {
+        let statement = trim_sql_statement(sql);
+        let grant = if strip_prefix_ci(statement, "GRANT ").is_some() {
+            true
+        } else if strip_prefix_ci(statement, "REVOKE ").is_some() {
+            false
+        } else {
+            return Ok(None);
+        };
+        let Some(on) = find_top_level_keyword(statement, "ON") else {
+            return Ok(None);
+        };
+        let privileges = &statement[..on];
+        let words = privileges
+            .split(|c: char| c.is_whitespace() || c == ',')
+            .filter(|word| !word.is_empty())
+            .collect::<Vec<_>>();
+        if !words
+            .iter()
+            .any(|word| word.eq_ignore_ascii_case("MAINTAIN"))
+        {
+            return Ok(None);
+        }
+        if words.iter().any(|word| word.eq_ignore_ascii_case("AUDIT")) {
+            return Err(SqlError::InvalidSql(
+                "unrecognized privilege type \"audit\"".into(),
+            ));
+        }
+        let maintain = regex::RegexBuilder::new(r"\bMAINTAIN\b")
+            .case_insensitive(true)
+            .build()
+            .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+        let rewritten = format!(
+            "{}{}",
+            maintain.replace_all(privileges, "AUDIT"),
+            &statement[on..]
+        );
+        let parsed = Parser::parse_sql(&PostgreSqlDialect {}, &rewritten)
+            .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+        match parsed.as_slice() {
+            [Statement::Grant(statement)] if grant => {
+                self.execute_grant_with(statement, true).map(Some)
+            }
+            [Statement::Revoke(statement)] if !grant => {
+                self.execute_revoke_with(statement, true).map(Some)
+            }
+            _ => Ok(None),
+        }
     }
 
     /// CR-2: GRANT/REVOKE had no grantor check at all — any authenticated
@@ -2905,11 +3018,24 @@ impl<'db> SqlSession<'db> {
         objects: &GrantObjects,
         grantees: &[Grantee],
         grant: bool,
+        maintain_alias: bool,
     ) -> Result<()> {
         let privileges = match privileges {
             Privileges::Actions(actions) => {
                 let mut names = Vec::new();
                 for action in actions {
+                    if maintain_alias && matches!(action, Action::Audit) {
+                        if !matches!(
+                            objects,
+                            GrantObjects::Tables(_) | GrantObjects::AllTablesInSchema { .. }
+                        ) {
+                            return Err(SqlError::InvalidSql(
+                                "invalid privilege type MAINTAIN for this object".into(),
+                            ));
+                        }
+                        names.push(("MAINTAIN".to_owned(), None));
+                        continue;
+                    }
                     let column_action = match action {
                         Action::Select {
                             columns: Some(columns),

@@ -3561,6 +3561,7 @@ pub(crate) fn privilege_names(
             GrantObjects::Tables(_) | GrantObjects::AllTablesInSchema { .. } => vec![
                 "DELETE",
                 "INSERT",
+                "MAINTAIN",
                 "REFERENCES",
                 "SELECT",
                 "TRIGGER",
@@ -3971,7 +3972,7 @@ pub(crate) fn acl_value_with_grantor(
             .or_default()
             .insert(privilege_acl_code(&grant.privilege).to_string());
     }
-    let privilege_order = "arwdDxtXUCTc";
+    let privilege_order = "arwdDxtmXUCTc";
     let grantor = pg_quote_ident(grantor);
     let entries = by_grantee
         .into_iter()
@@ -4008,6 +4009,7 @@ pub(crate) fn privilege_acl_code(privilege: &str) -> &str {
         "CREATE" => "C",
         "TEMPORARY" => "T",
         "CONNECT" => "c",
+        "MAINTAIN" => "m",
         _ => privilege,
     }
 }

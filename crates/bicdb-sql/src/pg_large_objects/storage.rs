@@ -147,6 +147,58 @@ pub(super) fn create(
     Ok(())
 }
 
+/// The committed metadata of a large object, for privilege inquiry functions
+/// that run without the statement's transaction. `None` when it does not
+/// exist.
+pub(super) fn committed_metadata(db: &BicDb, oid: u32) -> Result<Option<Metadata>> {
+    match db.get(METADATA, &object_key(oid)) {
+        Ok(Some(record)) => decode_metadata(&record).map(Some),
+        Ok(None) | Err(BicDbError::CollectionNotFound(_)) => Ok(None),
+        Err(error) => Err(error.into()),
+    }
+}
+
+/// Every committed large object's (oid, owner, acl), for
+/// pg_largeobject_metadata.
+pub(super) fn committed_objects(db: &BicDb) -> Result<Vec<(u32, Metadata)>> {
+    let records = match db.scan_collection(METADATA) {
+        Ok(records) => records,
+        Err(BicDbError::CollectionNotFound(_)) => return Ok(Vec::new()),
+        Err(error) => return Err(error.into()),
+    };
+    let mut objects = Vec::new();
+    for record in records {
+        let Ok(oid) = record.id.parse::<u32>() else {
+            continue;
+        };
+        objects.push((oid, decode_metadata(&record)?));
+    }
+    objects.sort_by_key(|(oid, _)| *oid);
+    Ok(objects)
+}
+
+/// Replace a large object's ACL inside the statement transaction (GRANT and
+/// REVOKE ON LARGE OBJECT). The row is locked like any other metadata write.
+pub(super) fn update_acl(
+    db: &BicDb,
+    tx: &mut Transaction,
+    oid: u32,
+    update: impl FnOnce(&mut BTreeMap<String, u8>),
+) -> Result<()> {
+    db.check_recovery_state()?;
+    reserve_object(tx, oid, None)?;
+    tx.refresh_read_committed_snapshot()?;
+    let (record, _) = row_for_write(tx, METADATA, &object_key(oid))?;
+    let record = record.ok_or_else(|| missing(oid))?;
+    let mut metadata = decode_metadata(&record)?;
+    update(&mut metadata.acl);
+    metadata.acl.retain(|_, rights| *rights != 0);
+    let record = Record::new(object_key(oid)).with_metadata(serde_json::to_value(metadata)?);
+    tx.write_upserts_with_statement_snapshots(METADATA, [(record, db.last_commit_seq())])?;
+    db.check_recovery_state()?;
+    Ok(())
+}
+
 pub(super) struct Mutation<'a> {
     db: &'a BicDb,
     tx: &'a mut Transaction,

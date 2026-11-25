@@ -56,6 +56,13 @@ pub(crate) fn eval_privilege_function_value(
             }
             Ok(Some(SqlValue::Bool(has_function_privilege(db, args)?)))
         }
+        "has_largeobject_privilege" | "pg_catalog.has_largeobject_privilege" => Ok(Some(
+            crate::pg_large_objects::functions::has_largeobject_privilege(
+                db,
+                args,
+                &current_user_from_gucs(session_gucs),
+            )?,
+        )),
         "has_type_privilege" | "pg_catalog.has_type_privilege" => {
             if args.iter().any(|value| matches!(value, SqlValue::Null)) {
                 return Ok(Some(SqlValue::Null));
@@ -2101,7 +2108,7 @@ pub(crate) fn eval_acldefault(args: &[SqlValue]) -> Option<SqlValue> {
         'f' => ("X", Some("X")),
         'n' => ("UC", None),
         'F' | 'S' => ("U", None),
-        'r' | 'p' | 'v' | 'm' => ("arwdDxt", None),
+        'r' | 'p' | 'v' | 'm' => ("arwdDxtm", None),
         's' => ("rwU", None),
         'T' | 'l' => ("U", Some("U")),
         _ => return Some(SqlValue::Null),

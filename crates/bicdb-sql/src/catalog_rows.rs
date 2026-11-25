@@ -3918,8 +3918,25 @@ pub(crate) fn filter_catalog_rows_for_role(
                 .and_then(|oid| names_by_oid.get(&oid).cloned())
                 .unwrap_or_default(),
         };
-        if !table.is_empty() && role_has_table_privilege(db, role, &table, "SELECT")? {
+        if table.is_empty() {
+            continue;
+        }
+        if role_has_table_privilege(db, role, &table, "SELECT")? {
             kept.push(row);
+            continue;
+        }
+        // pg_stats rows are per column: PostgreSQL shows a column's
+        // statistics to a role holding SELECT on that column alone.
+        if let Some(column) = row.get("attname").and_then(sql_value_text) {
+            if crate::column_privileges::role_may_use_columns(
+                db,
+                role,
+                &table,
+                "SELECT",
+                std::slice::from_ref(&column),
+            )? {
+                kept.push(row);
+            }
         }
     }
     Ok(kept)

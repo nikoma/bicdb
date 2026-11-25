@@ -3397,6 +3397,7 @@ impl<'db> SqlEngine<'db> {
                 | "has_table_privilege"
                 | "has_function_privilege"
                 | "has_type_privilege"
+                | "has_largeobject_privilege"
                 | "has_column_privilege"
                 | "has_any_column_privilege"
                 | "has_sequence_privilege"

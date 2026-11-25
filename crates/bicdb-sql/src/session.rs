@@ -3917,6 +3917,13 @@ impl<'db> SqlSession<'db> {
             return Ok(result);
         }
 
+        if let Some(result) = self.execute_raw_maintain_privileges(sql)? {
+            return Ok(result);
+        }
+        if let Some(result) = self.execute_raw_large_object_privileges(sql)? {
+            return Ok(result);
+        }
+
         if let Some(result) = self.execute_raw_function_privileges(sql)? {
             return Ok(result);
         }
@@ -4231,6 +4238,12 @@ impl<'db> SqlSession<'db> {
             if let Some(result) = self.execute_raw_type_privileges(sql)? {
                 return Ok(result);
             }
+            if let Some(result) = self.execute_raw_maintain_privileges(sql)? {
+                return Ok(result);
+            }
+            if let Some(result) = self.execute_raw_large_object_privileges(sql)? {
+                return Ok(result);
+            }
             if let Some(result) = self.execute_raw_alter_domain(sql)? {
                 return Ok(result);
             }
@@ -4301,6 +4314,14 @@ impl<'db> SqlSession<'db> {
                 continue;
             }
             if let Some(result) = self.execute_raw_type_privileges(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_maintain_privileges(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_large_object_privileges(&statement)? {
                 last_result = Some(result);
                 continue;
             }

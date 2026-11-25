@@ -2149,6 +2149,7 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
                 | "has_table_privilege"
                 | "has_function_privilege"
                 | "has_type_privilege"
+                | "has_largeobject_privilege"
                 | "has_column_privilege"
                 | "has_any_column_privilege"
                 | "has_sequence_privilege"

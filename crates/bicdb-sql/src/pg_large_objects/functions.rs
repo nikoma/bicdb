@@ -429,6 +429,277 @@ impl SqlSession<'_> {
     }
 }
 
+/// Rights bits of a large-object privilege name (SELECT 1, UPDATE 2).
+fn privilege_bits(name: &str) -> Result<u8> {
+    match name.trim().to_ascii_uppercase().as_str() {
+        "SELECT" => Ok(1),
+        "UPDATE" => Ok(2),
+        "ALL" | "ALL PRIVILEGES" => Ok(3),
+        other => Err(SqlError::data_exception(
+            "0LP01",
+            format!("invalid privilege type {other} for large object"),
+            None,
+        )),
+    }
+}
+
+struct LargeObjectGrant {
+    grant: bool,
+    rights: u8,
+    oids: Vec<u32>,
+    grantees: Vec<String>,
+}
+
+/// `GRANT {SELECT|UPDATE|ALL [PRIVILEGES]} [, ...] ON LARGE OBJECT oid [, ...]
+/// TO role [, ...]` and the REVOKE form. Grant options are refused (0A000).
+fn parse_large_object_grant(sql: &str) -> Result<Option<LargeObjectGrant>> {
+    let statement = trim_sql_statement(sql);
+    let (grant, rest) = if let Some(rest) = strip_prefix_ci(statement, "GRANT ") {
+        (true, rest)
+    } else if let Some(rest) = strip_prefix_ci(statement, "REVOKE ") {
+        (false, rest)
+    } else {
+        return Ok(None);
+    };
+    let Some(on) = find_top_level_keyword(rest, "ON") else {
+        return Ok(None);
+    };
+    let target = rest[on + 2..].trim_start();
+    let Some(target) = strip_prefix_ci(target, "LARGE ") else {
+        return Ok(None);
+    };
+    let Some(target) = strip_prefix_ci(target.trim_start(), "OBJECT ") else {
+        return Ok(None);
+    };
+    let privileges = rest[..on].trim();
+    if !grant && strip_prefix_ci(privileges, "GRANT OPTION FOR").is_some() {
+        return Err(SqlError::Unsupported(
+            "grant options on large objects are not supported".into(),
+        ));
+    }
+    let mut rights = 0;
+    for privilege in privileges.split(',') {
+        rights |= privilege_bits(privilege)?;
+    }
+    let keyword = if grant { "TO" } else { "FROM" };
+    let Some(split) = find_top_level_keyword(target, keyword) else {
+        return Err(SqlError::InvalidSql(format!(
+            "GRANT ON LARGE OBJECT requires {keyword}"
+        )));
+    };
+    let mut oids = Vec::new();
+    for value in target[..split].split(',') {
+        let value = value.trim();
+        let oid = value
+            .parse::<u32>()
+            .map_err(|_| SqlError::InvalidSql(format!("invalid large object OID {value}")))?;
+        oids.push(oid);
+    }
+    let mut roles = target[split + keyword.len()..].trim().to_string();
+    for (suffix, supported) in [
+        (" WITH GRANT OPTION", false),
+        (" CASCADE", false),
+        (" RESTRICT", true),
+    ] {
+        if roles.to_ascii_uppercase().ends_with(suffix) {
+            if !supported {
+                return Err(SqlError::Unsupported(format!(
+                    "{} on large objects is not supported",
+                    suffix.trim()
+                )));
+            }
+            roles.truncate(roles.len() - suffix.len());
+        }
+    }
+    if roles.to_ascii_uppercase().contains(" GRANTED BY ") {
+        return Err(SqlError::Unsupported(
+            "GRANTED BY on large objects is not supported".into(),
+        ));
+    }
+    let mut grantees = Vec::new();
+    for role in roles.split(',') {
+        let role = role.trim();
+        let parts = sql_identifier_parts(role)?;
+        let [role] = parts.as_slice() else {
+            return Err(SqlError::InvalidSql(format!("invalid grantee {role}")));
+        };
+        grantees.push(normalize_role_name(role));
+    }
+    Ok(Some(LargeObjectGrant {
+        grant,
+        rights,
+        oids,
+        grantees,
+    }))
+}
+
+/// `has_largeobject_privilege([role,] oid, privilege)`. NULL for a large
+/// object that does not exist, as in PostgreSQL.
+pub(crate) fn has_largeobject_privilege(
+    db: &BicDb,
+    args: &[SqlValue],
+    current_user: &str,
+) -> Result<SqlValue> {
+    if args.iter().any(|arg| matches!(arg, SqlValue::Null)) {
+        return Ok(SqlValue::Null);
+    }
+    let (role, object, privilege) = match args {
+        [object, privilege] => (current_user.to_string(), object, privilege),
+        [role, object, privilege] => {
+            let role = match role_name_from_value(db, role)? {
+                Some(role) => role,
+                None => return Ok(SqlValue::Null),
+            };
+            if !role_exists(db, &role)? {
+                return Err(SqlError::UndefinedRole { name: role });
+            }
+            (role, object, privilege)
+        }
+        _ => {
+            return Err(SqlError::InvalidSql(
+                "has_largeobject_privilege expects 2 or 3 arguments".into(),
+            ))
+        }
+    };
+    let oid = oid(object)?;
+    let text = sql_value_text(privilege).unwrap_or_default();
+    let mut wanted = 0;
+    for part in text.split(',') {
+        let part = part.trim();
+        let part = part
+            .strip_suffix(" WITH GRANT OPTION")
+            .or_else(|| part.strip_suffix(" with grant option"))
+            .unwrap_or(part);
+        wanted |= match part.to_ascii_uppercase().as_str() {
+            "SELECT" => 1,
+            "UPDATE" => 2,
+            other => {
+                return Err(SqlError::invalid_parameter_value(&format!(
+                    "unrecognized privilege type: \"{other}\""
+                )))
+            }
+        };
+    }
+    let Some(metadata) = storage::committed_metadata(db, oid)? else {
+        return Ok(SqlValue::Null);
+    };
+    let role = normalize_role_name(&role);
+    if role == BOOTSTRAP_ROLE_NAME || load_role_schema(db, &role)?.is_some_and(|r| r.superuser) {
+        return Ok(SqlValue::Bool(true));
+    }
+    let closure = role_privilege_closure(db, &role)?;
+    if closure.contains(&normalize_role_name(&metadata.owner)) {
+        return Ok(SqlValue::Bool(true));
+    }
+    let granted = metadata
+        .acl
+        .iter()
+        .filter(|(grantee, _)| {
+            grantee.eq_ignore_ascii_case("public")
+                || closure.contains(&normalize_role_name(grantee))
+        })
+        .fold(0, |granted, (_, rights)| granted | rights);
+    // A privilege check of any listed privilege succeeds (PostgreSQL ORs them).
+    Ok(SqlValue::Bool(granted & wanted != 0))
+}
+
+/// pg_largeobject_metadata: one row per large object. `lomacl` is NULL until
+/// a GRANT/REVOKE, then lists the owner's implicit `rw` first, as PostgreSQL
+/// materializes it.
+pub(crate) fn pg_largeobject_metadata_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
+    let mut rows = Vec::new();
+    for (oid, metadata) in storage::committed_objects(db)? {
+        let owner = pg_quote_ident(&metadata.owner);
+        let acl = if metadata.acl.is_empty() {
+            SqlValue::Null
+        } else {
+            let code = |rights: u8| {
+                format!(
+                    "{}{}",
+                    if rights & 1 != 0 { "r" } else { "" },
+                    if rights & 2 != 0 { "w" } else { "" }
+                )
+            };
+            let mut entries = vec![format!("{owner}=rw/{owner}")];
+            for (grantee, rights) in &metadata.acl {
+                if grantee.eq_ignore_ascii_case(&metadata.owner) {
+                    continue;
+                }
+                let grantee = if grantee.eq_ignore_ascii_case("public") {
+                    String::new()
+                } else {
+                    pg_quote_ident(grantee)
+                };
+                entries.push(format!("{grantee}={}/{owner}", code(*rights)));
+            }
+            SqlValue::String(format!("{{{}}}", entries.join(",")))
+        };
+        let mut row = BTreeMap::new();
+        row.insert("oid".to_string(), SqlValue::Int(i64::from(oid)));
+        row.insert(
+            "lomowner".to_string(),
+            SqlValue::Int(role_oid(&metadata.owner)),
+        );
+        row.insert("lomacl".to_string(), acl);
+        rows.push(row);
+    }
+    Ok(rows)
+}
+
+impl SqlSession<'_> {
+    pub(crate) fn execute_raw_large_object_privileges(
+        &mut self,
+        sql: &str,
+    ) -> Result<Option<SqlResult>> {
+        let Some(command) = parse_large_object_grant(sql)? else {
+            return Ok(None);
+        };
+        for grantee in &command.grantees {
+            if grantee != "public" && !role_exists(self.db_ref(), grantee)? {
+                return Err(SqlError::UndefinedRole {
+                    name: grantee.clone(),
+                });
+            }
+        }
+        self.prepare_pg_large_object_storage()?;
+        self.with_statement_transaction(|session| {
+            session.require_transaction_write()?;
+            let mut tx = session.tx.take().ok_or_else(|| {
+                SqlError::Unsupported("large object GRANT requires a transaction".into())
+            })?;
+            let result = (|| {
+                for oid in &command.oids {
+                    // Only the owner (or a superuser) holds grant options.
+                    let metadata = storage::metadata(&tx, *oid)?;
+                    if !session.current_user_is_superuser()?
+                        && !session.current_user_holds_role(&metadata.owner)?
+                    {
+                        return Err(denied(*oid, false));
+                    }
+                    storage::update_acl(session.db_ref(), &mut tx, *oid, |acl| {
+                        for grantee in &command.grantees {
+                            let entry = acl.entry(grantee.clone()).or_insert(0);
+                            if command.grant {
+                                *entry |= command.rights;
+                            } else {
+                                *entry &= !command.rights;
+                            }
+                        }
+                    })?;
+                }
+                Ok(())
+            })();
+            session.tx = Some(tx);
+            result
+        })?;
+        Ok(Some(SqlResult::command(if command.grant {
+            "GRANT"
+        } else {
+            "REVOKE"
+        })))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

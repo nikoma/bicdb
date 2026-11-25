@@ -18,7 +18,7 @@ impl<'db> SqlSession<'db> {
         for target in targets {
             match target {
                 Some(table) => {
-                    self.require_table_ownership(&table, "analyze it")?;
+                    self.require_maintain_privilege(&table, "analyze it")?;
                     self.analyze_collection_with_type_statistics(&table)?
                 }
                 None => self.analyze_all_permitted_with_type_statistics()?,
@@ -1327,7 +1327,7 @@ impl<'db> SqlSession<'db> {
             // is a read of the table's contents. Ungated, it turned the
             // statistics catalog into an on-demand exfiltration primitive:
             // analyze someone else's table, then read their values back out.
-            self.require_table_ownership(&collection, "analyze it")?;
+            self.require_maintain_privilege(&collection, "analyze it")?;
             self.analyze_collection_with_type_statistics(&collection)?;
         } else {
             self.analyze_all_permitted_with_type_statistics()?;
@@ -1349,12 +1349,30 @@ impl<'db> SqlSession<'db> {
         let owned = list_schemas(self.db_ref())?
             .into_iter()
             .map(|schema| schema.name)
-            .filter(|table| self.require_table_ownership(table, "analyze it").is_ok())
+            .filter(|table| self.require_maintain_privilege(table, "analyze it").is_ok())
             .collect::<Vec<_>>();
         for collection in owned {
             self.analyze_collection_with_type_statistics(&collection)?;
         }
         Ok(())
+    }
+
+    /// PostgreSQL 17's MAINTAIN rule (ANALYZE, REFRESH MATERIALIZED VIEW,
+    /// ...): the owner, a role granted MAINTAIN, or a pg_maintain member.
+    /// Statistics stay behind pg_stats' own SELECT filter, so this never
+    /// discloses sampled values to a role that cannot read the table.
+    pub(crate) fn require_maintain_privilege(&self, table: &str, action: &str) -> Result<()> {
+        match self.require_table_ownership(table, action) {
+            Ok(()) => Ok(()),
+            Err(error) => {
+                let role = current_user_from_gucs(&self.session_gucs);
+                if role_has_table_privilege(self.db_ref(), &role, table, "MAINTAIN")? {
+                    Ok(())
+                } else {
+                    Err(error)
+                }
+            }
+        }
     }
 
     pub(crate) fn analyze_collection_with_type_statistics(

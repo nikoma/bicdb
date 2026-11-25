@@ -322,3 +322,40 @@ severity and SQLSTATE:
   failing row contains ...` DETAIL lines, GRANT on large objects,
   `has_largeobject_privilege`, the `MAINTAIN` privilege keyword, and
   `GRANTED BY` (still refused with 0A000).
+
+## PL/pgSQL exceptions, partitioned foreign keys and more privileges (2026-11)
+
+- `EXCEPTION WHEN` accepts every PostgreSQL condition name (all of
+  errcodes.txt), `SQLSTATE 'xxxxx'` and `OR` lists. A category condition
+  (`integrity_constraint_violation`, `SQLSTATE '22000'`) traps its whole
+  class. `OTHERS` never traps `query_canceled` or `assert_failure`. An
+  unknown name fails with 42704 `unrecognized exception condition`. A
+  handled block's writes are undone and the outer block's writes stay.
+- `ASSERT condition [, message]` raises P0004. `RAISE condition_name USING
+  ...`, `RAISE USING ...` and `RAISE 'format', ...` default to EXCEPTION.
+  `RAISE ... USING HINT/COLUMN/CONSTRAINT/DATATYPE/TABLE/SCHEMA` send those
+  diagnostic fields.
+- `GET STACKED DIAGNOSTICS` supports RETURNED_SQLSTATE, MESSAGE_TEXT,
+  PG_EXCEPTION_DETAIL, PG_EXCEPTION_HINT, COLUMN_NAME, CONSTRAINT_NAME,
+  PG_DATATYPE_NAME, TABLE_NAME and SCHEMA_NAME. PG_EXCEPTION_CONTEXT is
+  always empty. Outside a handler it fails with 0Z002.
+- The postfix `x ISNULL` / `x NOTNULL` operators work in PL/pgSQL
+  expressions and conditions.
+- A foreign key that references a partitioned table protects rows in every
+  partition, also when a partition is named directly. A blocked delete names
+  the partition and its derived constraint (`<name>_<n>`). `pg_constraint`
+  has one row per referenced partition. A foreign key declared on a
+  partitioned table is reported by that table. Partition rows have a non-zero
+  `conparentid`. ATTACH PARTITION checks the rows against the key and adds the
+  key to the partition.
+- `GRANT/REVOKE {SELECT|UPDATE|ALL} ON LARGE OBJECT` work. Only the owner or
+  a superuser can grant. `has_largeobject_privilege` works and returns NULL
+  for a missing object. `pg_largeobject_metadata` lists large objects and
+  their ACL.
+- The `MAINTAIN` table privilege can be granted and revoked, and `ALL` on
+  tables includes it (`m` in ACLs). The owner, a MAINTAIN grantee or a
+  `pg_maintain` member can run ANALYZE. Statistics stay behind `pg_stats`,
+  which lists a column only to roles that can SELECT it (a column grant is
+  enough). REFRESH MATERIALIZED VIEW still needs ownership.
+- `GRANTED BY` accepts only the current role (0A000 `grantor must be current
+  user` otherwise), as PostgreSQL does for object privileges.

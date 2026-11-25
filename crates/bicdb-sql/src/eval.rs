@@ -784,6 +784,8 @@ pub(crate) fn eval_constant_function_value(function: &Function) -> Result<SqlVal
             | "pg_catalog.has_function_privilege"
             | "has_type_privilege"
             | "pg_catalog.has_type_privilege"
+            | "has_largeobject_privilege"
+            | "pg_catalog.has_largeobject_privilege"
             | "obj_description"
             | "pg_catalog.obj_description"
             | "pg_current_wal_lsn"

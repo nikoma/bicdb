@@ -1015,7 +1015,7 @@ fn postgres_pg_dump_relation_inventory_query_is_supported() {
     assert_eq!(relation_rows.len(), 2);
     assert!(relation_rows.iter().any(|row| {
         row[relname_idx] == SqlValue::String("pg_dump_relation_inventory".to_string())
-            && row[acldefault_idx] == SqlValue::String("{bicdb=arwdDxt/bicdb}".to_string())
+            && row[acldefault_idx] == SqlValue::String("{bicdb=arwdDxtm/bicdb}".to_string())
             && row[amname_idx] == SqlValue::String("heap".to_string())
             && row[identity_idx] == SqlValue::Bool(false)
     }));

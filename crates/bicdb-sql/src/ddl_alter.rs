@@ -4787,6 +4787,9 @@ pub fn pg_type_from_data_type(data_type: &DataType) -> Result<(String, Option<us
         DataType::BitVarying(_) | DataType::VarBit(_) => ("varbit".to_string(), None),
         DataType::Uuid => ("uuid".to_string(), None),
         DataType::Trigger => ("trigger".to_string(), None),
+        // PostgreSQL's built-in geometric types (point, line, lseg, box,
+        // path, polygon, circle), stored in their canonical output text.
+        DataType::GeometricType(kind) => (kind.to_string(), None),
         _ => return pg_type_from_rendered_data_type(data_type),
     };
     if pg_type_oid_by_name(&mapped.0).is_none() {

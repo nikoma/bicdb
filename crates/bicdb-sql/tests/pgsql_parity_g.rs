@@ -357,3 +357,107 @@ fn raise_levels_keep_their_severity() {
         .unwrap();
     assert_eq!(notices(&result), ["NOTICE: n", "WARNING: w", "INFO: i"]);
 }
+
+fn rows(session: &mut SqlSession<'_>, sql: &str) -> Vec<Vec<String>> {
+    session
+        .execute(sql)
+        .unwrap()
+        .rows
+        .into_iter()
+        .map(|row| row.into_iter().map(|value| value.to_cell()).collect())
+        .collect()
+}
+
+/// point, line, lseg, box, path, polygon and circle columns store their
+/// canonical text, survive a reopen in both storage modes and index with GiST.
+#[test]
+fn geometric_columns_store_query_and_index() {
+    use bicdb_core::{DbConfig, StorageMode};
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let open = || {
+            BicDb::open_with_config(
+                root.path(),
+                DbConfig::default().with_storage_mode(mode.clone()),
+            )
+            .unwrap()
+        };
+        {
+            let mut db = open();
+            let mut session = SqlSession::new(&mut db);
+            session
+                .execute(
+                    "CREATE TABLE shapes(id int PRIMARY KEY, p point, l line, s lseg, b box, \
+                     pa path, po polygon, c circle)",
+                )
+                .unwrap();
+            session
+                .execute(
+                    "INSERT INTO shapes VALUES \
+                     (1, '(1,2)', '{1,-1,0}', '[(0,0),(1,1)]', '(2,2),(0,0)', '[(0,0),(1,1)]', \
+                      '((0,0),(1,1),(2,0))', '<(1,1),2>'), \
+                     (2, '(-3.5, 4e1)', NULL, NULL, '1,5,3,1', '((0,0),(4,4))', NULL, '((5,5),1)')",
+                )
+                .unwrap();
+            session
+                .execute("CREATE INDEX shapes_b ON shapes USING gist (b)")
+                .unwrap();
+            let error = failure(
+                &mut session,
+                "INSERT INTO shapes (id, b) VALUES (3, '(1,2')",
+            );
+            assert_eq!(error.sqlstate(), "22P02");
+            assert_eq!(
+                error.to_string(),
+                "invalid input syntax for type box: \"(1,2\""
+            );
+        }
+        let mut db = open();
+        let mut session = SqlSession::new(&mut db);
+        assert_eq!(
+            rows(
+                &mut session,
+                "SELECT p, l, s, b, pa, po, c FROM shapes WHERE id = 1"
+            ),
+            [[
+                "(1,2)",
+                "{1,-1,0}",
+                "[(0,0),(1,1)]",
+                "(2,2),(0,0)",
+                "[(0,0),(1,1)]",
+                "((0,0),(1,1),(2,0))",
+                "<(1,1),2>",
+            ]],
+            "{mode:?}"
+        );
+        assert_eq!(
+            rows(&mut session, "SELECT b, pa, c FROM shapes WHERE id = 2"),
+            [["(3,5),(1,1)", "((0,0),(4,4))", "<(5,5),1>"]],
+            "{mode:?}"
+        );
+        assert_eq!(
+            rows(
+                &mut session,
+                "SELECT p[0], p[1], b[0], b[1][0] FROM shapes WHERE id = 2"
+            ),
+            [["-3.5", "40", "(3,5)", "1"]],
+            "{mode:?}"
+        );
+        assert_eq!(
+            rows(
+                &mut session,
+                "SELECT id FROM shapes WHERE b && box '(1.5,1.5),(1.6,1.6)' ORDER BY id"
+            ),
+            [["1"], ["2"]],
+            "{mode:?}"
+        );
+        assert_eq!(
+            rows(
+                &mut session,
+                "SELECT id FROM shapes WHERE c @> point '(5,5.5)'"
+            ),
+            [["2"]],
+            "{mode:?}"
+        );
+    }
+}

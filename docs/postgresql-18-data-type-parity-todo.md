@@ -621,6 +621,18 @@ contract without duplicating its implementation.
 - [x] DT-1305 Complete arrays, catalogs, COPY, dump, and text/binary wire codecs.
 - [x] DT-1306 Document and test the boundary between PostgreSQL planar geometry,
       BicDB Spatial geographic geometry, and optional PostGIS compatibility.
+- [x] DT-1307 Accept every geometric type as a column type (sqlparser's
+      geometric type names used to be refused for `box`, `polygon` and `point`),
+      read input with PostgreSQL's exact geo_ops.c grammar (`(0,0)(1,1)` boxes,
+      one optional enclosing parenthesis, whitespace between tokens), subscript
+      `point[i]`, `lseg[i]` and `box[i]`, type an untyped literal operand as the
+      other operand's geometric type, and index boxes with infinite or NaN
+      coordinates.
+- [ ] DT-1308 Remaining regression-suite gaps: `extra_float_digits` is not
+      applied to float8 and geometric output; geometric operators, subscripts and
+      the prefix operators `@@`, `#`, `?|`, `?-` are not typed over joins
+      (`SELECT a.p * b.p FROM t a, t b`, `WHERE b.p[1] > 3`), where the joined
+      row carries no column types.
 
 ## P13 - Object identifiers, LSNs, snapshots, and pseudo-types
 

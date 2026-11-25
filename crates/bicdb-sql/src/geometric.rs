@@ -131,13 +131,28 @@ pub(crate) fn geometric_index_bounds(value: &SqlValue, pg_type: &str) -> Result<
             "data type {pg_type} has no geometric index envelope"
         ))
     })?;
-    let values = [x(bounds.low), y(bounds.low), x(bounds.high), y(bounds.high)];
-    if values.iter().any(|value| !value.is_finite()) {
-        return Err(SqlError::numeric_value_out_of_range(
-            "geometric index coordinates must be finite",
-        ));
-    }
-    Ok(Some(values))
+    // The envelope only selects candidates the operator then checks. Stored
+    // and probe envelopes are both clamped to +-1e150 (a monotonic map keeps
+    // every overlap, and keeps the index's area arithmetic finite), and a
+    // NaN widens its side to the whole axis.
+    const LIMIT: f64 = 1.0e150;
+    let [min_x, min_y, max_x, max_y] =
+        [x(bounds.low), y(bounds.low), x(bounds.high), y(bounds.high)];
+    let low = |value: f64| {
+        if value.is_nan() {
+            -LIMIT
+        } else {
+            value.clamp(-LIMIT, LIMIT)
+        }
+    };
+    let high = |value: f64| {
+        if value.is_nan() {
+            LIMIT
+        } else {
+            value.clamp(-LIMIT, LIMIT)
+        }
+    };
+    Ok(Some([low(min_x), low(min_y), high(max_x), high(max_y)]))
 }
 
 pub(crate) fn geometric_index_point(value: &SqlValue, pg_type: &str) -> Result<Option<(f64, f64)>> {
@@ -232,11 +247,29 @@ pub(crate) fn geometric_function_pg_type(
     Some(pg_type.to_string())
 }
 
+/// PostgreSQL's operator resolution: an untyped literal operand (`b << '(1,2),(3,4)'`)
+/// is taken to be of the other operand's geometric type.
+fn with_unknown_as_other<'a>(
+    left: Option<&'a str>,
+    right: Option<&'a str>,
+) -> (Option<&'a str>, Option<&'a str>) {
+    match (left, right) {
+        (Some(left), None | Some("unknown")) if is_geometric_type(Some(left)) => {
+            (Some(left), Some(left))
+        }
+        (None | Some("unknown"), Some(right)) if is_geometric_type(Some(right)) => {
+            (Some(right), Some(right))
+        }
+        other => other,
+    }
+}
+
 pub(crate) fn geometric_binary_result_pg_type(
     op: &BinaryOperator,
     left_type: Option<&str>,
     right_type: Option<&str>,
 ) -> Option<String> {
+    let (left_type, right_type) = with_unknown_as_other(left_type, right_type);
     if !is_geometric_type(left_type) || !is_geometric_type(right_type) {
         return None;
     }
@@ -436,6 +469,7 @@ pub(crate) fn eval_geometric_binary_value(
     let Some(result_type) = geometric_binary_result_pg_type(op, left_type, right_type) else {
         return Ok(None);
     };
+    let (left_type, right_type) = with_unknown_as_other(left_type, right_type);
     if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
         return Ok(Some(SqlValue::Null));
     }
@@ -743,10 +777,7 @@ fn geometric_argument(value: &SqlValue, pg_type: &str) -> Result<PgGeometric> {
         Ok(Some(PgCanonicalValue::Geometric(value))) => Ok(value),
         _ => Err(SqlError::invalid_text_representation(
             pg_type,
-            format!(
-                "invalid input syntax for type {pg_type}: \"{}\"",
-                value.to_cell()
-            ),
+            format!("\"{}\"", value.to_cell()),
         )),
     }
 }
@@ -2232,4 +2263,68 @@ fn circle_polygon_points(count: usize, center: PgPoint, radius: f64) -> Result<V
             )
         })
         .collect())
+}
+
+/// PostgreSQL's subscripts of the fixed-length geometric types: `point[0]`
+/// and `point[1]` are its x and y, `lseg[i]` and `box[i]` its two points
+/// (a box's upper-right corner first). An index outside them is NULL.
+/// `None` when `root_type` is not such a type or the chain is not a run of
+/// plain subscripts.
+pub(crate) fn eval_geometric_access_chain<F>(
+    root_type: Option<&str>,
+    root: &sqlparser::ast::Expr,
+    access_chain: &[sqlparser::ast::AccessExpr],
+    mut eval: F,
+) -> Option<Result<SqlValue>>
+where
+    F: FnMut(&sqlparser::ast::Expr) -> Result<SqlValue>,
+{
+    use sqlparser::ast::{AccessExpr, Subscript};
+    let root_type = root_type?;
+    if !matches!(root_type, "point" | "lseg" | "box") {
+        return None;
+    }
+    if !access_chain
+        .iter()
+        .all(|access| matches!(access, AccessExpr::Subscript(Subscript::Index { .. })))
+    {
+        return None;
+    }
+    let mut run = || -> Result<SqlValue> {
+        let mut value = eval(root)?;
+        let mut pg_type = root_type;
+        for access in access_chain {
+            let AccessExpr::Subscript(Subscript::Index { index }) = access else {
+                unreachable!("checked above")
+            };
+            if pg_type == "float8" {
+                return Err(SqlError::data_exception(
+                    "42804",
+                    "cannot subscript type double precision because it does not support subscripting",
+                    None,
+                ));
+            }
+            let index = eval(index)?;
+            if matches!(value, SqlValue::Null) || matches!(index, SqlValue::Null) {
+                return Ok(SqlValue::Null);
+            }
+            let index = crate::eval::eval_subscript_bound(index)?;
+            value = match (geometric_argument(&value, pg_type)?, index) {
+                (PgGeometric::Point(point), 0) => SqlValue::Float(x(point)),
+                (PgGeometric::Point(point), 1) => SqlValue::Float(y(point)),
+                (PgGeometric::LineSegment { start, .. }, 0) => point_sql_value(start),
+                (PgGeometric::LineSegment { end, .. }, 1) => point_sql_value(end),
+                (PgGeometric::Box { high, .. }, 0) => point_sql_value(high),
+                (PgGeometric::Box { low, .. }, 1) => point_sql_value(low),
+                _ => SqlValue::Null,
+            };
+            pg_type = if pg_type == "point" {
+                "float8"
+            } else {
+                "point"
+            };
+        }
+        Ok(value)
+    };
+    Some(run())
 }

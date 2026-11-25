@@ -1037,10 +1037,7 @@ pub(crate) fn postgres_range_input_error(
             format!("date out of range: \"{value}\""),
             Some(pg_type.to_string()),
         ),
-        _ => SqlError::invalid_text_representation(
-            pg_type,
-            format!("invalid input syntax for type {pg_type}: \"{value}\""),
-        ),
+        _ => SqlError::invalid_text_representation(pg_type, format!("\"{value}\"")),
     }
 }
 

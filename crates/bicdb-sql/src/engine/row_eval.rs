@@ -1254,6 +1254,60 @@ impl<'db> SqlEngine<'db> {
         }
     }
 
+    /// Subscripts and field selection: geometric subscripts by the root's
+    /// type, otherwise arrays, jsonb and composites. Kept out of the
+    /// recursive evaluators' frames.
+    #[inline(never)]
+    fn eval_slot_access_chain(
+        &self,
+        row: &SlotRow,
+        context: &BoundRowContext,
+        root: &Expr,
+        access_chain: &[sqlparser::ast::AccessExpr],
+    ) -> Result<SqlValue> {
+        let root_type = self.row_expr_pg_type(root, context);
+        if let Some(value) = crate::geometric::eval_geometric_access_chain(
+            root_type.as_deref(),
+            root,
+            access_chain,
+            |expr| self.eval_slot_row_value(row, context, expr),
+        ) {
+            return value;
+        }
+        eval_access_chain_expr(
+            root,
+            access_chain,
+            root_type.as_deref() == Some("jsonb"),
+            |expr| self.eval_slot_row_value(row, context, expr),
+        )
+    }
+
+    /// [`Self::eval_slot_access_chain`] over a named-column row.
+    #[inline(never)]
+    fn eval_row_access_chain(
+        &self,
+        row: &SqlRow,
+        root: &Expr,
+        access_chain: &[sqlparser::ast::AccessExpr],
+    ) -> Result<SqlValue> {
+        let root_type =
+            row_columns_expr_pg_type(self.db_ref(), root, row.keys().map(String::as_str));
+        if let Some(value) = crate::geometric::eval_geometric_access_chain(
+            root_type.as_deref(),
+            root,
+            access_chain,
+            |expr| self.eval_row_value(row, expr),
+        ) {
+            return value;
+        }
+        eval_access_chain_expr(
+            root,
+            access_chain,
+            root_type.as_deref() == Some("jsonb"),
+            |expr| self.eval_row_value(row, expr),
+        )
+    }
+
     pub(crate) fn eval_slot_row_value(
         &self,
         row: &SlotRow,
@@ -1612,12 +1666,9 @@ impl<'db> SqlEngine<'db> {
                     .map(|expr| projected_expr_pg_type_with_db(self.db_ref(), expr))
                     .collect(),
             )),
-            Expr::CompoundFieldAccess { root, access_chain } => eval_access_chain_expr(
-                root,
-                access_chain,
-                self.row_expr_pg_type(root, context).as_deref() == Some("jsonb"),
-                |expr| self.eval_slot_row_value(row, context, expr),
-            ),
+            Expr::CompoundFieldAccess { root, access_chain } => {
+                self.eval_slot_access_chain(row, context, root, access_chain)
+            }
             Expr::Interval(interval) => interval_literal_value(interval, |expr| {
                 self.eval_slot_row_value(row, context, expr)
             }),
@@ -3312,14 +3363,9 @@ impl<'db> SqlEngine<'db> {
                     .map(|expr| projected_expr_pg_type_with_db(self.db_ref(), expr))
                     .collect(),
             )),
-            Expr::CompoundFieldAccess { root, access_chain } => eval_access_chain_expr(
-                root,
-                access_chain,
-                row_columns_expr_pg_type(self.db_ref(), root, row.keys().map(String::as_str))
-                    .as_deref()
-                    == Some("jsonb"),
-                |expr| self.eval_row_value(row, expr),
-            ),
+            Expr::CompoundFieldAccess { root, access_chain } => {
+                self.eval_row_access_chain(row, root, access_chain)
+            }
             Expr::Interval(interval) => {
                 interval_literal_value(interval, |expr| self.eval_row_value(row, expr))
             }

@@ -1,0 +1,15 @@
+order_alias_constant|SELECT 1 AS x ORDER BY x
+order_position_constant|SELECT 1 ORDER BY 1
+order_rollup_alias|select 1 as one group by rollup(one) order by one nulls first
+infinite_recurse|create function s1_infinite_recurse() returns int as 'select s1_infinite_recurse()' language sql;select s1_infinite_recurse()
+array_fill_empty|select a, a = '{}' as is_eq, array_dims(a) from (select array_fill(42, '{}') as a) ss
+array_fill_empty_lb|select a, a = '{}' as is_eq, array_dims(a) from (select array_fill(42, '{}', '{}') as a) ss
+date_bin_overflow|select date_bin('15 minutes'::interval, timestamp '294276-12-30', timestamp '4000-12-20 BC')
+date_bin_overflow_tz|select date_bin('15 minutes'::interval, timestamptz '294276-12-30', timestamptz '4000-12-20 BC')
+date_input_too_large|SELECT pg_input_is_valid('6874898-01-01', 'date')
+to_timestamp_infinity|SELECT to_timestamp(' Infinity'::float), to_timestamp('-Infinity'::float)
+window_rows_huge|CREATE TEMP TABLE s4w(a int);INSERT INTO s4w VALUES (1),(2),(3);SELECT a, sum(a) over (order by a rows between 9223372036854775807 following and 1 following) FROM s4w ORDER BY a
+window_groups_huge|CREATE TEMP TABLE s4g(a int);INSERT INTO s4g VALUES (1),(2),(2),(3);SELECT a, sum(a) over (order by a groups between current row and 9223372036854775807 following) FROM s4g ORDER BY a
+copy_missing_relation|COPY s3_no_such_table FROM STDIN;
+to_timestamp_nan|SELECT to_timestamp('NaN'::float)
+to_timestamp_huge|SELECT to_timestamp(1e20)

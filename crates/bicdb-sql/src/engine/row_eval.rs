@@ -481,6 +481,7 @@ impl<'db> SqlEngine<'db> {
                 let exists = if let Some(candidate) = candidate {
                     match candidate {
                         ExistsCandidate::Absent => false,
+                        ExistsCandidate::Present => true,
                         ExistsCandidate::Query(candidate) => !self
                             .run_slot_subquery(row, context, &candidate, None)?
                             .rows
@@ -1162,6 +1163,7 @@ impl<'db> SqlEngine<'db> {
                 {
                     match candidate {
                         ExistsCandidate::Absent => false,
+                        ExistsCandidate::Present => true,
                         ExistsCandidate::Query(candidate) => !self
                             .run_slot_subquery(row, context, &candidate, None)?
                             .rows

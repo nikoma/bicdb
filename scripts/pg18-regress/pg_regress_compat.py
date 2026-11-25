@@ -391,6 +391,9 @@ def main():
     ap.add_argument("--label", default="")
     ap.add_argument("--no-adapt", action="store_true", help="BicDB target: run the SQL files unchanged")
     args = ap.parse_args()
+    global CLIENT
+    # One psql container per run, so runs against different targets can proceed side by side.
+    CLIENT = "pgregress-client-" + re.sub(r"[^a-zA-Z0-9_.-]", "-", args.label or args.target)
 
     regress = ensure_source()
     libdir = ensure_regress_so(regress)
@@ -430,9 +433,17 @@ def main():
                 rc, note, pairs = run_test_file(t, args, regress, builddir, test, res)
                 secs = time.time() - t0
                 crashed = False
-                if not t.alive():
+                hung = rc == 124 and args.target == "bicdb"
+                if hung or not t.alive():
                     crashed = True
-                    note = (note + "; " if note else "") + "SERVER CRASHED or stopped responding during this test"
+                    if hung:
+                        # A statement that outlives psql keeps running (and holding locks) on the
+                        # server and would make the following tests time out too: restart it.
+                        note += "; server restarted to stop the runaway statement"
+                        sh(["systemctl", "kill", "--kill-whom=main", "-s", "KILL", t.unit], check=False)
+                        time.sleep(2)
+                    else:
+                        note = (note + "; " if note else "") + "SERVER CRASHED or stopped responding during this test"
                     if t.restart_after_crash():
                         note += "; restarted on the same store"
                     elif args.target == "bicdb":

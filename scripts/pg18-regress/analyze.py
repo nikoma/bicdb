@@ -54,8 +54,11 @@ def segment(src, out):
             line_anchor[ln] = anchor
             continue
         hit = None
-        if line.strip() and not line.startswith(" "):
-            for k in range(p + 1, min(p + 4, len(src))):
+        if len(line.strip()) > 2 and not line.startswith((" ", "ERROR:", "NOTICE:", "WARNING:", "DETAIL:",
+                                                           "HINT:", "CONTEXT:", "LINE ", "INFO:", "(")):
+            # resynchronise when psql did not echo some source lines (skipped \if branches,
+            # COPY data consumed differently, ...)
+            for k in range(p + 1, min(p + 400, len(src))):
                 if line == src[k]:
                     hit = k
                     break
@@ -128,6 +131,11 @@ CASCADE_PATTERNS = [
 
 
 def classify(sql, exp, act, test=""):
+    last = next((l.strip() for l in reversed(sql) if l.strip() and not l.strip().startswith("--")), "")
+    if re.match(r"^\\d", last):
+        # psql describe commands run psql's own catalog queries: one root cause per command family
+        cmd = re.match(r"^\\(d\w*\+?)", last).group(1)
+        return "psql-describe", f"psql \\{cmd} (catalog queries / output) differs"
     ee = first(exp, "ERROR:")
     ae = first(act, "ERROR:")
     if any(l.startswith(("server closed", "connection to server was lost", "psql: error")) for l in act):
@@ -193,6 +201,7 @@ def analyze(run, scope_sel):
         eo, _, src = segment(src0, read_lines(expp))
         ao, aline, _ = segment(src0, read_lines(resp))
         anchors = sorted(set(eo) | set(ao))
+        max_echo = max(aline.values()) if aline else -1
         differing = {}
         for key in anchors:
             e = [l for l in eo.get(key, []) if l != ""] if key in eo else []
@@ -201,7 +210,10 @@ def analyze(run, scope_sel):
                 sql = statement_text(src, anchors, key) if key >= 0 else ["<before first statement>"]
                 if not e and not a_:
                     continue
-                cat, k = classify(sql, eo.get(key, []), ao.get(key, []), test)
+                if key > max_echo:
+                    cat, k = "not-run", "statement never ran: the test stopped early (server crash, hang or psql exit)"
+                else:
+                    cat, k = classify(sql, eo.get(key, []), ao.get(key, []), test)
                 differing[key] = (sql, eo.get(key, []), ao.get(key, []), cat, k)
         # attribute hunks
         hunks = []

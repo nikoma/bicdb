@@ -1,0 +1,232 @@
+test	status	scope	hunks	diff_lines	seconds	matched	note
+test_setup	fail	in	18	37	0.62	test_setup.out	adapted: 7 COPY file statement(s) sent as \copy
+boolean	fail	in	12	83	0.26	boolean.out	
+char	fail	in	7	138	0.11	char.out	
+name	fail	in	4	88	0.11	name.out	
+varchar	fail	in	6	71	0.11	varchar.out	
+text	fail	in	8	202	0.11	text.out	
+int2	fail	in	19	233	0.11	int2.out	
+int4	fail	in	19	227	0.11	int4.out	
+int8	fail	in	15	387	0.11	int8.out	
+oid	fail	in	5	40	0.11	oid.out	
+float4	fail	in	12	490	0.11	float4.out	
+float8	fail	in	26	957	0.16	float8.out	
+bit	fail	in	11	212	0.31	bit.out	
+numeric	fail	in	44	1877	1.32	numeric.out	
+txid	fail	in	5	77	0.11	txid.out	
+uuid	fail	in	4	63	0.41	uuid.out	
+enum	fail	in	16	190	0.51	enum.out	
+money	fail	in	8	229	0.11	money.out	
+rangetypes	fail	in	28	642	10.28	rangetypes.out	
+pg_lsn	fail	in	5	49	0.11	pg_lsn.out	
+regproc	fail	in	7	387	0.11	regproc.out	
+strings	fail	in	36	1263	0.51	strings.out	
+md5	pass	in	0	0	0.06	md5.out	
+numerology	fail	in	6	438	0.21	numerology.out	
+point	fail	in	8	415	0.16	point.out	
+lseg	fail	in	2	21	0.11	lseg.out	
+line	fail	in	7	75	0.11	line.out	
+box	fail	in	6	517	1.57	box.out	
+path	fail	in	2	32	0.11	path.out	
+polygon	fail	in	5	225	2.32	polygon.out	
+circle	fail	in	2	39	0.11	circle.out	
+date	fail	in	29	996	0.16	date.out	
+time	fail	in	9	106	0.11	time.out	
+timetz	fail	in	4	241	0.11	timetz.out	
+timestamp	fail	in	17	2021	0.26	timestamp.out	
+timestamptz	fail	in	17	2995	0.36	timestamptz.out	
+interval	fail	in	45	1278	0.21	interval.out	
+inet	fail	in	14	258	0.16	inet.out	
+macaddr	fail	in	4	90	0.16	macaddr.out	
+macaddr8	fail	in	5	200	0.16	macaddr8.out	
+multirangetypes	fail	in	39	772	7.33	multirangetypes.out	
+geometry	fail	in	34	5478	0.21	geometry.out	
+horology	fail	in	14	3197	0.16	horology.out	
+tstypes	fail	in	20	548	0.11	tstypes.out	
+regex	fail	in	8	283	0.11	regex.out	
+type_sanity	fail	out	19	121	3.22	type_sanity.out	
+opr_sanity	fail	out	51	2461	12.08	opr_sanity.out	
+misc_sanity	fail	out	3	27	0.06	misc_sanity.out	
+comments	pass	in	0	0	0.06	comments.out	
+expressions	fail	in	16	222	0.16	expressions.out	
+unicode	fail	in	1	46	0.11	unicode_1.out	
+xid	fail	in	15	286	0.16	xid.out	
+mvcc	fail	out	2	12	0.06	mvcc.out	
+database	fail	in	1	10	0.11	database.out	
+stats_import	fail	out	61	550	0.26	stats_import.out	
+encoding	fail	out	5	258	0.21	encoding.out	
+euc_kr	fail	in	1	7	0.06	euc_kr.out	
+copy	fail	in	13	151	0.31	copy.out	adapted: 10 COPY file statement(s) sent as \copy
+copyselect	fail	in	5	68	0.26	copyselect.out	
+copydml	fail	in	2	44	0.21	copydml.out	
+copyencoding	fail	in	3	8	0.11	copyencoding.out	adapted: 8 COPY file statement(s) sent as \copy
+insert	fail	in	17	731	0.81	insert.out	
+insert_conflict	fail	in	24	435	0.86	insert_conflict.out	
+create_function_c	fail	out	1	12	0.06	create_function_c.out	
+create_misc	fail	in	4	371	0.21	create_misc.out	
+create_operator	fail	in	18	91	0.21	create_operator.out	
+create_procedure	fail	in	13	215	0.26	create_procedure.out	
+create_table	fail	in	20	690	2.47	create_table.out	
+create_type	fail	in	10	213	0.21	create_type.out	
+create_schema	fail	in	1	51	0.11	create_schema.out	
+create_index	fail	in	80	2531	5.92	create_index.out	adapted: 2 COPY file statement(s) sent as \copy
+create_index_spgist	fail	in	1	1087	0.11	create_index_spgist.out	
+create_view	fail	in	30	1797	1.87	create_view.out	adapted: 1 COPY file statement(s) sent as \copy
+index_including	fail	in	8	259	0.86	index_including.out	
+index_including_gist	fail	in	7	93	2.02	index_including_gist.out	
+create_aggregate	fail	in	23	91	0.16	create_aggregate.out	
+create_function_sql	fail	in	23	431	0.66	create_function_sql.out	
+create_cast	fail	in	3	55	0.11	create_cast.out	
+constraints	fail	in	34	1001	4.62	constraints.out	adapted: 2 COPY file statement(s) sent as \copy
+triggers	fail	in	90	1355	8.33	triggers.out	
+select	fail	in	11	518	0.47	select.out	SERVER CRASHED or stopped responding during this test; STORE COULD NOT BE REOPENED (kept at /root/pg18-regress-cache/runs/main-1e106b4c8/bicdb-data.unrecoverable-after-select); continued on a fresh store with test_setup replayed
+inherit	fail	in	48	2867	3.77	inherit.out	
+typed_table	fail	in	1	99	0.16	typed_table.out	
+vacuum	fail	out	18	361	31.25	vacuum.out	
+drop_if_exists	fail	in	1	218	0.21	drop_if_exists.out	
+updatable_views	fail	in	75	2993	7.27	updatable_views.out	
+roleattributes	fail	in	1	162	0.91	roleattributes.out	
+create_am	fail	out	13	332	0.41	create_am.out	
+hash_func	fail	in	21	145	0.26	hash_func.out	
+errors	fail	in	7	262	0.16	errors.out	
+infinite_recurse	fail	in	1	7	0.16	infinite_recurse.out	SERVER CRASHED or stopped responding during this test; STORE COULD NOT BE REOPENED (kept at /root/pg18-regress-cache/runs/main-1e106b4c8/bicdb-data.unrecoverable-after-infinite_recurse); continued on a fresh store with test_setup replayed
+sanity_check	fail	out	2	8	0.06	sanity_check.out	
+select_into	fail	in	4	146	0.71	select_into.out	
+select_distinct	fail	in	14	299	0.76	select_distinct.out	
+select_distinct_on	fail	in	8	137	0.51	select_distinct_on.out	
+select_implicit	fail	in	9	155	0.41	select_implicit.out	
+select_having	fail	in	2	71	0.36	select_having.out	
+subselect	timeout	in	11	2362	180.04	subselect.out	timeout after 180s; server restarted to stop the runaway statement; restarted on the same store
+union	fail	in	39	586	100.93	union.out	
+case	fail	in	9	128	0.21	case.out	
+join	timeout	in	62	8761	180.04	join.out	timeout after 180s; server restarted to stop the runaway statement; restarted on the same store
+aggregates	fail	in	77	2042	2.82	aggregates.out	adapted: 1 COPY file statement(s) sent as \copy
+transactions	fail	in	39	244	0.61	transactions.out	
+random	fail	in	7	305	0.11	random.out	
+portals	fail	in	11	1230	0.36	portals.out	
+arrays	fail	in	51	1467	0.76	arrays.out	adapted: 1 COPY file statement(s) sent as \copy
+btree_index	fail	in	23	329	6.17	btree_index.out	adapted: 4 COPY file statement(s) sent as \copy
+hash_index	fail	in	7	33	2.87	hash_index.out	adapted: 4 COPY file statement(s) sent as \copy
+update	fail	in	21	601	0.51	update.out	
+delete	fail	in	1	7	0.11	delete.out	
+namespace	fail	in	5	77	0.11	namespace.out	
+prepared_xacts	fail	in	3	212	0.11	prepared_xacts.out	
+brin	fail	in	9	124	0.41	brin.out	
+gin	fail	in	10	148	5.27	gin.out	
+gist	fail	in	14	169	8.57	gist.out	
+spgist	fail	in	7	30	2.17	spgist.out	
+privileges	fail	in	77	1747	6.67	privileges.out	
+init_privs	fail	out	1	8	0.11	init_privs.out	
+security_label	fail	out	1	16	0.51	security_label.out	
+collate	fail	in	15	355	2.42	collate.out	
+matview	fail	in	11	457	3.22	matview.out	
+lock	fail	in	10	88	0.76	lock.out	
+replica_identity	fail	out	10	124	2.17	replica_identity.out	
+rowsecurity	timeout	in	17	3939	180.05	rowsecurity.out	timeout after 180s; server restarted to stop the runaway statement; STORE COULD NOT BE REOPENED (kept at /root/pg18-regress-cache/runs/main-1e106b4c8/bicdb-data.unrecoverable-after-rowsecurity); continued on a fresh store with test_setup replayed
+object_address	fail	out	6	417	0.21	object_address.out	
+tablesample	fail	in	7	362	0.46	tablesample.out	
+groupingsets	fail	in	13	2199	0.56	groupingsets.out	SERVER CRASHED or stopped responding during this test; restarted on the same store
+drop_operator	fail	in	5	8	5.32	drop_operator.out	
+password	fail	out	6	73	0.26	password_1.out	
+identity	fail	in	19	526	1.06	identity.out	
+generated_stored	timeout	in	8	1246	180.04	generated_stored.out	timeout after 180s; server restarted to stop the runaway statement; restarted on the same store
+join_hash	fail	out	13	798	0.06	join_hash.out	
+brin_bloom	fail	in	4	95	0.21	brin_bloom.out	
+brin_multi	fail	in	11	259	1.82	brin_multi.out	
+create_table_like	fail	in	10	470	1.42	create_table_like.out	
+alter_generic	fail	in	12	498	0.16	alter_generic.out	
+alter_operator	fail	in	6	134	0.11	alter_operator.out	
+misc	fail	in	6	1201	0.26	misc.out	adapted: 4 COPY file statement(s) sent as \copy
+async	fail	in	2	26	0.06	async.out	
+dbsize	fail	in	4	184	0.06	dbsize.out	
+merge	fail	in	107	1205	1.32	merge.out	
+misc_functions	fail	in	11	538	0.11	misc_functions.out	
+sysviews	fail	out	4	141	0.06	sysviews.out	
+tsrf	fail	in	13	504	0.11	tsrf.out	
+tid	fail	out	4	63	0.16	tid.out	
+tidscan	fail	out	3	253	0.61	tidscan.out	
+tidrangescan	fail	out	5	1046	0.11	tidrangescan.out	
+collate.utf8	fail	in	1	170	0.11	collate.utf8_1.out	
+collate.icu.utf8	fail	in	1	2099	0.51	collate.icu.utf8_1.out	
+incremental_sort	fail	out	23	620	0.46	incremental_sort.out	
+create_role	fail	in	2	170	0.21	create_role.out	
+without_overlaps	fail	in	80	1138	1.12	without_overlaps.out	
+generated_virtual	timeout	in	2	1492	180.05	generated_virtual.out	timeout after 180s; server restarted to stop the runaway statement; restarted on the same store
+rules	fail	in	66	2669	1.67	rules.out	
+psql	fail	out	64	1169	9.88	psql.out	adapted: 8 COPY file statement(s) sent as \copy
+psql_crosstab	fail	out	6	104	0.16	psql_crosstab.out	
+psql_pipeline	fail	out	24	144	0.11	psql_pipeline.out	
+amutils	fail	out	7	165	0.11	amutils.out	
+stats_ext	fail	in	33	2503	93.32	stats_ext.out	
+collate.linux.utf8	fail	in	1	607	0.66	collate.linux.utf8_1.out	
+collate.windows.win1252	fail	out	1	47	0.16	collate.windows.win1252_1.out	
+select_parallel	fail	out	11	1082	0.41	select_parallel.out	
+write_parallel	fail	out	1	59	0.06	write_parallel.out	
+vacuum_parallel	fail	out	2	15	1.82	vacuum_parallel.out	
+maintain_every	fail	out	1	2	1.37	maintain_every.out	
+publication	fail	out	16	1228	10.88	publication.out	
+subscription	fail	out	1	390	0.31	subscription.out	
+select_views	fail	in	5	1443	0.82	select_views.out	
+portals_p2	fail	in	1	80	0.16	portals_p2.out	
+foreign_key	fail	in	93	1713	23.4	foreign_key.out	
+cluster	fail	out	14	517	5.42	cluster.out	
+dependency	fail	in	3	77	5.47	dependency.out	
+guc	fail	in	21	552	0.36	guc.out	
+bitmapops	fail	in	2	4	2.17	bitmapops.out	
+combocid	fail	out	3	98	0.46	combocid.out	
+tsearch	fail	in	48	1527	3.82	tsearch.out	adapted: 1 COPY file statement(s) sent as \copy
+tsdicts	fail	in	3	524	0.11	tsdicts.out	
+foreign_data	fail	in	13	1823	4.37	foreign_data.out	
+window	fail	in	122	13197	19.0	window.out	
+xmlmap	fail	in	2	86	0.26	xmlmap_1.out	
+functional_deps	fail	in	8	94	0.46	functional_deps.out	
+advisory_lock	fail	in	2	8	0.11	advisory_lock.out	
+indirect_toast	fail	out	4	120	0.66	indirect_toast.out	
+equivclass	fail	out	15	338	0.81	equivclass.out	
+json	fail	in	44	1278	0.61	json.out	
+jsonb	fail	in	70	2365	2.92	jsonb.out	adapted: 1 COPY file statement(s) sent as \copy
+json_encoding	fail	in	9	122	0.06	json_encoding.out	
+jsonpath	fail	in	26	707	0.11	jsonpath.out	
+jsonpath_encoding	fail	in	6	107	0.11	jsonpath_encoding.out	
+jsonb_jsonpath	fail	in	72	2474	0.21	jsonb_jsonpath.out	
+sqljson	fail	in	33	525	0.61	sqljson.out	
+sqljson_queryfuncs	fail	in	7	1140	1.82	sqljson_queryfuncs.out	
+sqljson_jsontable	fail	in	29	758	0.66	sqljson_jsontable.out	
+plancache	fail	in	8	224	0.96	plancache.out	
+limit	fail	in	8	421	0.81	limit.out	
+plpgsql	fail	in	182	1797	10.08	plpgsql.out	
+copy2	timeout	in	5	753	180.04	copy2.out	timeout after 180s; server restarted to stop the runaway statement; STORE COULD NOT BE REOPENED (kept at /root/pg18-regress-cache/runs/main-1e106b4c8/bicdb-data.unrecoverable-after-copy2); continued on a fresh store with test_setup replayed
+temp	fail	in	16	263	0.66	temp.out	
+domain	fail	in	50	672	1.01	domain.out	
+rangefuncs	fail	in	63	1586	0.56	rangefuncs.out	
+prepare	fail	in	5	99	0.36	prepare.out	
+conversion	fail	out	13	412	0.16	conversion.out	
+truncate	fail	in	18	213	0.56	truncate.out	
+alter_table	fail	in	132	2543	10.13	alter_table.out	
+sequence	fail	in	13	402	0.51	sequence.out	
+polymorphism	fail	in	42	1129	0.51	polymorphism.out	
+rowtypes	fail	in	38	630	0.96	rowtypes.out	
+returning	fail	in	10	751	0.36	returning.out	
+largeobject	fail	in	6	314	0.16	largeobject.out	
+with	timeout	in	2	3387	180.05	with.out	timeout after 180s; server restarted to stop the runaway statement; STORE COULD NOT BE REOPENED (kept at /root/pg18-regress-cache/runs/main-1e106b4c8/bicdb-data.unrecoverable-after-with); continued on a fresh store with test_setup replayed
+xml	fail	in	42	884	0.21	xml_2.out	
+partition_join	fail	in	76	4424	3.97	partition_join.out	
+partition_prune	fail	out	54	4292	3.02	partition_prune.out	
+reloptions	fail	out	3	167	0.21	reloptions.out	
+hash_part	fail	in	2	65	0.21	hash_part.out	
+indexing	fail	in	17	1361	6.28	indexing.out	
+partition_aggregate	fail	in	28	1211	11.94	partition_aggregate.out	
+partition_info	fail	in	2	246	0.31	partition_info.out	
+tuplesort	fail	in	11	522	0.31	tuplesort.out	
+explain	fail	out	4	670	0.21	explain.out	
+memoize	fail	out	10	305	134.96	memoize.out	
+stats	fail	out	24	1171	1.52	stats.out	
+predicate	fail	out	12	289	0.31	predicate.out	
+numa	fail	out	1	7	0.06	numa.out	
+compression	fail	out	4	230	1.01	compression.out	
+compression_pglz	fail	out	1	33	0.06	compression_pglz.out	
+oidjoins	fail	out	1	220	0.06	oidjoins.out	
+event_trigger	fail	in	21	376	1.92	event_trigger.out	
+event_trigger_login	fail	in	1	11	0.16	event_trigger_login.out	
+fast_default	fail	in	37	316	2.87	fast_default.out	
+tablespace	fail	out	14	628	1.82	tablespace.out	

@@ -415,72 +415,6 @@ pub(crate) fn rewrite_order_by_using(sql: &str) -> Option<String> {
     Some(output)
 }
 
-/// `ROWS FROM (f(...), g(...))` zips single-column table functions, padding
-/// the shorter with NULL; sqlparser does not parse it. It is the
-/// multi-argument `unnest` over each function's rows collected as an array,
-/// which keeps WITH ORDINALITY and column aliases after it.
-pub(crate) fn rewrite_rows_from(sql: &str) -> Option<String> {
-    let lower = sql.to_ascii_lowercase();
-    let mut search = 0usize;
-    let mut output = String::new();
-    let mut copied = 0usize;
-    let mut changed = false;
-    while let Some(found) = lower[search..].find("rows") {
-        let start = search + found;
-        search = start + 4;
-        let bytes = sql.as_bytes();
-        if start > 0 && is_word_byte(bytes[start - 1]) {
-            continue;
-        }
-        let rest = &lower[start + 4..];
-        let trimmed = rest.trim_start();
-        if !trimmed.starts_with("from") {
-            continue;
-        }
-        let after_from = start + 4 + (rest.len() - trimmed.len()) + 4;
-        let open_rel = sql[after_from..].find(|ch: char| !ch.is_whitespace())?;
-        let open = after_from + open_rel;
-        if bytes.get(open) != Some(&b'(') {
-            continue;
-        }
-        // Inside a string or comment the text is not SQL; the scanners that
-        // run on the result handle quoting, so only plain text is rewritten.
-        let prefix = &sql[..start];
-        if prefix.matches('\'').count() % 2 == 1 {
-            continue;
-        }
-        let close = crate::find_matching_paren_nested(sql, open)?;
-        let items = crate::split_top_level_commas_nested(&sql[open + 1..close]);
-        if items.is_empty()
-            || items
-                .iter()
-                .any(|item| crate::find_top_level_keyword(item, "AS").is_some())
-        {
-            return None;
-        }
-        let arrays = items
-            .iter()
-            .map(|item| {
-                format!(
-                    "ARRAY(SELECT bicdb_rf.c0 FROM {} AS bicdb_rf(c0))",
-                    item.trim()
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
-        output.push_str(&sql[copied..start]);
-        output.push_str(&format!("unnest({arrays})"));
-        copied = close + 1;
-        search = close + 1;
-        changed = true;
-    }
-    if !changed {
-        return None;
-    }
-    output.push_str(&sql[copied..]);
-    Some(output)
-}
-
 fn is_word_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'$' || byte >= 0x80
 }
@@ -541,15 +475,6 @@ mod tests {
         assert!(rewrite_substring_similar("SELECT 'a' SIMILAR TO 'a'").is_none());
         assert!(
             rewrite_substring_similar("SELECT substring(x, 1), x SIMILAR TO 'a' FROM t").is_none()
-        );
-    }
-
-    #[test]
-    fn rows_from_zips_functions() {
-        assert_eq!(
-            rewrite_rows_from("SELECT * FROM ROWS FROM (generate_series(1,3), unnest(ARRAY['a'])) AS t(n, s)").unwrap(),
-            "SELECT * FROM unnest(ARRAY(SELECT bicdb_rf.c0 FROM generate_series(1,3) AS bicdb_rf(c0)), \
-             ARRAY(SELECT bicdb_rf.c0 FROM unnest(ARRAY['a']) AS bicdb_rf(c0))) AS t(n, s)"
         );
     }
 

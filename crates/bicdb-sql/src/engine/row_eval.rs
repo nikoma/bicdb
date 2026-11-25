@@ -1274,12 +1274,9 @@ impl<'db> SqlEngine<'db> {
         ) {
             return value;
         }
-        eval_access_chain_expr(
-            root,
-            access_chain,
-            root_type.as_deref(),
-            |expr| self.eval_slot_row_value(row, context, expr),
-        )
+        eval_access_chain_expr(root, access_chain, root_type.as_deref(), |expr| {
+            self.eval_slot_row_value(row, context, expr)
+        })
     }
 
     /// [`Self::eval_slot_access_chain`] over a named-column row.
@@ -1300,12 +1297,9 @@ impl<'db> SqlEngine<'db> {
         ) {
             return value;
         }
-        eval_access_chain_expr(
-            root,
-            access_chain,
-            root_type.as_deref(),
-            |expr| self.eval_row_value(row, expr),
-        )
+        eval_access_chain_expr(root, access_chain, root_type.as_deref(), |expr| {
+            self.eval_row_value(row, expr)
+        })
     }
 
     pub(crate) fn eval_slot_row_value(

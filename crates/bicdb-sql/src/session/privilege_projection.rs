@@ -363,6 +363,18 @@ impl<'db> SqlSession<'db> {
             )));
         }
 
+        if create_table
+            .inherits
+            .as_ref()
+            .is_some_and(|parents| !parents.is_empty())
+        {
+            // The child would silently lack the parent's columns, and reads of
+            // the parent would miss the child's rows.
+            return Err(SqlError::Unsupported(
+                "CREATE TABLE ... INHERITS is not supported".to_string(),
+            ));
+        }
+
         let has_like_clause = create_table.like.is_some();
         let mut columns = if let Some(like) = &create_table.like {
             columns_from_create_table_like(self.db_ref(), like)?

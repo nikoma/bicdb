@@ -81,3 +81,12 @@ The runner accepts metadata-only and online-safe ALTER forms, and rejects
 row-rewriting ALTER forms such as `ADD COLUMN DEFAULT`, `DROP COLUMN`,
 `RENAME COLUMN`, `RENAME TO`, and `ALTER COLUMN TYPE` before any pending
 migration mutates the database.
+
+## Table inheritance
+
+`CREATE TABLE child (...) INHERITS (parent)` is refused with 0A000. Table
+inheritance (the child taking the parent's columns, and reads of the parent
+including the child's rows unless `ONLY` is written) is not implemented, and
+earlier builds silently created the child without the parent's columns.
+Declarative partitioning (`PARTITION BY` / `PARTITION OF`) is supported.
+

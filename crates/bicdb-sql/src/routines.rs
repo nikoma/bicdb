@@ -1001,6 +1001,9 @@ fn aggregate_routine_ir(routine: &RoutineSchema) -> Result<RoutineIR> {
         oracle_statement_rollback: false,
         oracle_error_diagnostics: None,
         oracle_autonomous: false,
+        // No body: nothing raises inside an aggregate routine itself.
+        context_label: None,
+        lines: RoutineLines::default(),
     })
 }
 

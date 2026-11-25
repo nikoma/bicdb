@@ -8350,6 +8350,7 @@ fn plpgsql_statement_kind(statement: &RoutineStmt) -> &'static str {
         RoutineStmt::PostgresControl(control) => match control.as_ref() {
             crate::postgres_control::PostgresControl::Execute { .. } => "EXECUTE",
             crate::postgres_control::PostgresControl::RowCount { .. } => "GET DIAGNOSTICS",
+            crate::postgres_control::PostgresControl::Stacked { .. } => "GET STACKED DIAGNOSTICS",
         },
         RoutineStmt::OpenCursor { .. } => "OPEN",
         RoutineStmt::FetchCursor { .. } => "FETCH",

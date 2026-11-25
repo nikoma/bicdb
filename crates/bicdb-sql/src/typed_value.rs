@@ -3368,6 +3368,13 @@ fn range_bound_value_order(lower: &PgRangeBound, upper: &PgRangeBound) -> Option
         PgCanonicalValue::Date(_) => "date",
         PgCanonicalValue::Timestamp(_) => "timestamp",
         PgCanonicalValue::TimestampTz(_) => "timestamptz",
+        PgCanonicalValue::Int2(_) => "int2",
+        PgCanonicalValue::Float4(_) => "float4",
+        PgCanonicalValue::Float8(_) => "float8",
+        PgCanonicalValue::Text(_) => "text",
+        PgCanonicalValue::Time(_) => "time",
+        PgCanonicalValue::TimeTz(_) => "timetz",
+        PgCanonicalValue::Interval(_) => "interval",
         _ => return None,
     };
     range_scalar_order(subtype, lower, upper)
@@ -3404,8 +3411,44 @@ fn render_range_bound(bound: &PgRangeBound, lower: bool) -> (char, String) {
     }
 }
 
+/// A float bound in PostgreSQL's float input syntax.
+fn parse_range_float(value: &str) -> Option<f64> {
+    let value = value.trim();
+    match value.to_ascii_lowercase().as_str() {
+        "infinity" | "+infinity" | "inf" | "+inf" => Some(f64::INFINITY),
+        "-infinity" | "-inf" => Some(f64::NEG_INFINITY),
+        "nan" => Some(f64::NAN),
+        _ => value.parse::<f64>().ok(),
+    }
+}
+
+/// A range bound's text, double-quoted only when PostgreSQL would quote it
+/// (empty, or containing quotes, backslashes, delimiters or whitespace).
+fn range_scalar_text(value: &str) -> String {
+    if value.is_empty()
+        || value
+            .chars()
+            .any(|ch| matches!(ch, '"' | '\\' | ',' | '(' | ')' | '[' | ']') || ch.is_whitespace())
+    {
+        quote_range_scalar(value)
+    } else {
+        value.to_string()
+    }
+}
+
 fn render_range_scalar(value: &PgCanonicalValue) -> String {
     match value {
+        PgCanonicalValue::Int2(value) => value.to_string(),
+        PgCanonicalValue::Float4(value) => {
+            range_scalar_text(&postgres_float_text(f64::from(value.to_value()), "float4"))
+        }
+        PgCanonicalValue::Float8(value) => {
+            range_scalar_text(&postgres_float_text(value.to_value(), "float8"))
+        }
+        PgCanonicalValue::Text(value) => range_scalar_text(value),
+        PgCanonicalValue::Time(value) => range_scalar_text(&value.to_iso_text()),
+        PgCanonicalValue::TimeTz(value) => range_scalar_text(&value.to_iso_text()),
+        PgCanonicalValue::Interval(value) => range_scalar_text(&value.to_postgres_text()),
         PgCanonicalValue::Int4(value) => value.to_string(),
         PgCanonicalValue::Int8(value) => value.to_string(),
         PgCanonicalValue::Numeric(value) => value.to_decimal_text(),
@@ -3846,6 +3889,22 @@ fn parse_range_bound(
         "date" => PgCanonicalValue::Date(PgDate::from_iso_text(&value)?),
         "timestamp" => PgCanonicalValue::Timestamp(PgTimestamp::from_iso_text(&value, false)?),
         "timestamptz" => PgCanonicalValue::TimestampTz(PgTimestamp::from_iso_text(&value, true)?),
+        "int2" => PgCanonicalValue::Int2(
+            value
+                .trim()
+                .parse::<i16>()
+                .map_err(|_| invalid_special(subtype, &value))?,
+        ),
+        "float4" => PgCanonicalValue::Float4(PgFloat4::from_value(
+            parse_range_float(&value).ok_or_else(|| invalid_special(subtype, &value))? as f32,
+        )),
+        "float8" => PgCanonicalValue::Float8(PgFloat8::from_value(
+            parse_range_float(&value).ok_or_else(|| invalid_special(subtype, &value))?,
+        )),
+        "text" => PgCanonicalValue::Text(value.to_string()),
+        "time" => PgCanonicalValue::Time(PgTime::from_postgres_text(&value)?),
+        "timetz" => PgCanonicalValue::TimeTz(PgTimeTz::from_postgres_text(&value, 0)?),
+        "interval" => PgCanonicalValue::Interval(PgInterval::from_postgres_text(&value)?),
         _ => return Err(invalid_special(subtype, value)),
     };
     Ok(if inclusive {

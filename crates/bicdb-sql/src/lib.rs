@@ -215,6 +215,7 @@ pub use type_codec::{
 
 // Phase-1 mechanical module split: each module below was extracted verbatim
 // from this file. `pub use` glob re-exports keep every existing path resolving.
+mod collations;
 mod fetch_ties;
 mod grouping_sets;
 mod join_budget;
@@ -3739,7 +3740,8 @@ fn collation_oid(name: &str) -> Option<i64> {
         "POSIX" => Some(951),
         "ucs_basic" => Some(962),
         "en-x-icu" => Some(810_001),
-        _ => None,
+        _ => crate::collations::resolve_user_collation(None, crate::collations::display_name(name))
+            .map(|collation| collation.oid),
     }
 }
 

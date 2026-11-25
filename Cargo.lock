@@ -1440,6 +1440,7 @@ dependencies = [
  "hex",
  "hmac 0.12.1",
  "icu_collator",
+ "icu_locale_core",
  "itoa",
  "md-5 0.10.6",
  "num-bigint 0.4.6",

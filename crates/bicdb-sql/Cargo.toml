@@ -33,6 +33,7 @@ crc32fast.workspace = true
 geo.workspace = true
 hmac.workspace = true
 icu_collator.workspace = true
+icu_locale_core.workspace = true
 itoa.workspace = true
 md-5 = "0.10"
 num-bigint = "0.4"

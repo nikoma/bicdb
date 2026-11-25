@@ -3243,6 +3243,17 @@ pub(crate) fn pg_language_oid(language: &str) -> i64 {
 }
 
 pub(crate) const PG_BUILTIN_PROC_ROWS: &[(i64, &str, i64, i64)] = &[
+    // Range subtype difference functions (pg_range.rngsubdiff).
+    (205, "float4mi", 700, 2),
+    (219, "float8mi", 701, 2),
+    (1170, "interval_mi", 1186, 2),
+    (1690, "time_mi_time", 1186, 2),
+    (3922, "int4range_subdiff", 701, 2),
+    (3923, "int8range_subdiff", 701, 2),
+    (3924, "numrange_subdiff", 701, 2),
+    (3925, "daterange_subdiff", 701, 2),
+    (3929, "tsrange_subdiff", 701, 2),
+    (3930, "tstzrange_subdiff", 701, 2),
     (3, "heap_tableam_handler", 269, 1),
     (330, "bthandler", 325, 1),
     (331, "hashhandler", 325, 1),
@@ -4583,7 +4594,51 @@ pub(crate) fn pg_collation_rows() -> Vec<BTreeMap<String, SqlValue>> {
             ("collversion", SqlValue::Null),
         ])
     })
+    .chain(
+        crate::collations::active_collations()
+            .iter()
+            .map(user_collation_row),
+    )
     .collect()
+}
+
+fn user_collation_row(
+    collation: &crate::collations::CollationSchema,
+) -> BTreeMap<String, SqlValue> {
+    let libc_locale = (collation.provider == 'c')
+        .then(|| SqlValue::String(collation.locale.clone()))
+        .unwrap_or(SqlValue::Null);
+    virtual_row([
+        ("oid", SqlValue::Int(collation.oid)),
+        ("collname", SqlValue::String(collation.name.clone())),
+        (
+            "collnamespace",
+            SqlValue::Int(namespace_oid(&collation.schema_name)),
+        ),
+        ("collowner", SqlValue::Int(10)),
+        (
+            "collprovider",
+            SqlValue::String(collation.provider.to_string()),
+        ),
+        (
+            "collisdeterministic",
+            SqlValue::Bool(collation.deterministic),
+        ),
+        (
+            "collencoding",
+            SqlValue::Int(if collation.provider == 'c' { 6 } else { -1 }),
+        ),
+        ("collcollate", libc_locale.clone()),
+        ("collctype", libc_locale),
+        (
+            "colllocale",
+            (collation.provider == 'i')
+                .then(|| SqlValue::String(collation.locale.clone()))
+                .unwrap_or(SqlValue::Null),
+        ),
+        ("collicurules", SqlValue::Null),
+        ("collversion", SqlValue::Null),
+    ])
 }
 
 pub(crate) fn pg_sequences_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {

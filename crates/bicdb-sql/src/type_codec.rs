@@ -697,6 +697,13 @@ fn range_bound_key(bound: &PgRangeBound, lower: bool) -> Result<Vec<u8>> {
         PgCanonicalValue::Date(_) => "date",
         PgCanonicalValue::Timestamp(_) => "timestamp",
         PgCanonicalValue::TimestampTz(_) => "timestamptz",
+        PgCanonicalValue::Int2(_) => "int2",
+        PgCanonicalValue::Float4(_) => "float4",
+        PgCanonicalValue::Float8(_) => "float8",
+        PgCanonicalValue::Text(_) => "text",
+        PgCanonicalValue::Time(_) => "time",
+        PgCanonicalValue::TimeTz(_) => "timetz",
+        PgCanonicalValue::Interval(_) => "interval",
         _ => {
             return Err(SqlError::Unsupported(
                 "unsupported range bound type".to_string(),
@@ -706,7 +713,14 @@ fn range_bound_key(bound: &PgRangeBound, lower: bool) -> Result<Vec<u8>> {
     let spec = crate::pg_type_spec(subtype)
         .ok_or_else(|| SqlError::Unsupported(format!("unregistered range subtype {subtype}")))?;
     let mut key = vec![marker];
-    key.extend(canonical_index_key(spec, value)?);
+    let value_key = canonical_index_key(spec, value)?;
+    if subtype == "text" {
+        // Variable-length: terminate so the lower bound's key cannot run
+        // into the upper bound's.
+        push_ordered_bytes(&mut key, &value_key);
+    } else {
+        key.extend(value_key);
+    }
     Ok(key)
 }
 

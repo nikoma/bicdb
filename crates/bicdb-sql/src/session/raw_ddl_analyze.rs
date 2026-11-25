@@ -1163,11 +1163,22 @@ impl<'db> SqlSession<'db> {
     }
 
     fn execute_statement_inner(&mut self, statement: &Statement) -> Result<SqlResult> {
+        let _collations = crate::collations::ActiveCollations::install(self.db_ref())?;
+        crate::collations::reject_unsupported_nondeterministic(statement)?;
         match statement {
             Statement::Query(query) => match self.execute_select_into(query)? {
                 Some(result) => Ok(result),
                 None => self.execute_query(query),
             },
+            Statement::CreateCollation(create) => self.execute_create_collation(create),
+            Statement::AlterCollation(alter) => self.execute_alter_collation(alter),
+            Statement::Drop {
+                object_type: ObjectType::Collation,
+                if_exists,
+                names,
+                cascade,
+                ..
+            } => self.execute_drop_collation(*if_exists, names, *cascade),
             Statement::ShowVariable { variable } => self.sql_engine().execute_show(variable),
             Statement::CreateTable(create_table) => self.execute_create_table(create_table),
             Statement::CreateView(create_view) => self.execute_create_view(create_view),

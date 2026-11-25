@@ -2007,8 +2007,9 @@ impl<'db> SqlEngine<'db> {
             }
         }
         if let Some(value) = eval_network_function_value(&name, &args, &arg_types)?
-            .or(eval_user_range_function_value(
+            .or(eval_user_range_function_value_for(
                 self.db_ref(),
+                function,
                 &name,
                 &args,
                 &arg_types,
@@ -2603,6 +2604,10 @@ impl<'db> SqlEngine<'db> {
             return Ok(());
         }
         self.check_cancellation()?;
+        let order_collations = expressions
+            .iter()
+            .map(|order| self.slot_order_collation(&order.expr, columns))
+            .collect::<Vec<_>>();
         let (scope, context) = self.bound_row_context(columns);
         let bound = expressions
             .iter()
@@ -2662,10 +2667,11 @@ impl<'db> SqlEngine<'db> {
              (right_values, _): &(Vec<(SqlValue, Option<Vec<u8>>)>, SlotRow)| {
                 expressions
                     .iter()
+                    .zip(&order_collations)
                     .zip(left_values.iter().zip(right_values))
-                    .map(|(order, (left, right))| {
-                        typed_order_expr_value_ordering(
-                            &order.expr,
+                    .map(|((order, collation), (left, right))| {
+                        typed_order_collation_value_ordering(
+                            collation.as_deref(),
                             &left.0,
                             left.1.as_deref(),
                             &right.0,
@@ -3534,6 +3540,45 @@ impl<'db> SqlEngine<'db> {
             .iter()
             .map(|column| self.slot_column_type(column))
             .collect()
+    }
+
+    /// The collation an ORDER BY key sorts by: an explicit COLLATE, else
+    /// the declared collation of the table column the key names.
+    pub(crate) fn slot_order_collation(&self, expr: &Expr, columns: &[String]) -> Option<String> {
+        if let Some(collation) = explicit_expr_collation(expr) {
+            return Some(collation);
+        }
+        let mut expr = expr;
+        while let Expr::Nested(inner) = expr {
+            expr = inner;
+        }
+        let candidates: Vec<&String> = match expr {
+            Expr::CompoundIdentifier(parts) if parts.len() >= 2 => {
+                let wanted = parts.iter().map(ident_value).collect::<Vec<_>>().join(".");
+                columns.iter().filter(|column| **column == wanted).collect()
+            }
+            Expr::Identifier(ident) => {
+                let suffix = format!(".{}", ident_value(ident));
+                columns
+                    .iter()
+                    .filter(|column| column.ends_with(&suffix))
+                    .collect()
+            }
+            _ => return None,
+        };
+        // A table column appears under its alias and its table name; the
+        // table-named slot resolves the declared collation.
+        candidates.into_iter().find_map(|column| {
+            let (qualifier, name) = column.rsplit_once('.')?;
+            if self.cte(qualifier).is_some() {
+                return None;
+            }
+            let schema = load_schema_shared(self.db_ref(), qualifier)
+                .ok()
+                .flatten()?;
+            let collation = schema.column(name)?.collation.clone()?;
+            (collation != "default").then(|| crate::collations::semantic_collation(collation))
+        })
     }
 
     pub(crate) fn slot_column_type(&self, column: &str) -> Option<String> {

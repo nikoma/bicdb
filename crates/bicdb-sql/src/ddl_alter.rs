@@ -1792,7 +1792,12 @@ pub(crate) fn column_schema_from_def(db: &BicDb, column: &ColumnDef) -> Result<C
         .options
         .iter()
         .find_map(|option| match &option.option {
-            ColumnOption::Collation(name) => Some(normalize_column_collation(name)),
+            ColumnOption::Collation(name) => {
+                Some(normalize_column_collation(name).and_then(|collation| {
+                    crate::collations::reject_nondeterministic_definition(&collation)?;
+                    Ok(collation)
+                }))
+            }
             _ => None,
         })
         .transpose()?;
@@ -1974,8 +1979,9 @@ pub(crate) fn text_column_schema(name: String) -> ColumnSchema {
 }
 
 pub(crate) fn normalize_column_collation(name: &ObjectName) -> Result<String> {
-    let name = object_name(name)?;
-    let name = name.rsplit('.').next().unwrap_or(&name);
+    let full = object_name(name)?;
+    let qualifier = full.rsplit_once('.').map(|(schema, _)| schema.to_string());
+    let name = full.rsplit('.').next().unwrap_or(&full);
     let canonical = match name.to_ascii_lowercase().as_str() {
         "default" => "default",
         "c" => "C",
@@ -1983,11 +1989,17 @@ pub(crate) fn normalize_column_collation(name: &ObjectName) -> Result<String> {
         "ucs_basic" => "ucs_basic",
         "en-x-icu" => "en-x-icu",
         _ => {
+            let schema = qualifier.filter(|schema| schema != "pg_catalog");
+            if let Some(collation) =
+                crate::collations::resolve_user_collation(schema.as_deref(), name)
+            {
+                return Ok(collation.name);
+            }
             return Err(SqlError::data_exception(
                 "42704",
                 format!("collation \"{name}\" for encoding UTF8 does not exist"),
                 None,
-            ))
+            ));
         }
     };
     Ok(canonical.to_string())

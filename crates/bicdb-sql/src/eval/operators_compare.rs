@@ -203,7 +203,9 @@ pub(crate) fn comparison_collation(
             Err(SqlError::data_exception(
                 "42P21",
                 format!(
-                    "collation mismatch between explicit collations \"{left}\" and \"{right}\""
+                    "collation mismatch between explicit collations \"{}\" and \"{}\"",
+                    crate::collations::display_name(&left),
+                    crate::collations::display_name(&right)
                 ),
                 None,
             ))
@@ -234,25 +236,31 @@ pub(crate) fn compare_values_with_collation(
 
 pub(crate) fn expr_collation(expr: &Expr, schema: Option<&TableSchema>) -> Result<Option<String>> {
     match expr {
-        Expr::Collate { collation, .. } => normalize_column_collation(collation).map(Some),
+        Expr::Collate { collation, .. } => normalize_column_collation(collation)
+            .map(crate::collations::semantic_collation)
+            .map(Some),
         Expr::Identifier(ident) => Ok(schema
             .and_then(|schema| schema.column(&ident.value))
             .filter(|column| pg_type_is_collatable(&column.pg_type))
             .map(|column| {
-                column
-                    .collation
-                    .clone()
-                    .unwrap_or_else(|| "default".to_string())
+                crate::collations::semantic_collation(
+                    column
+                        .collation
+                        .clone()
+                        .unwrap_or_else(|| "default".to_string()),
+                )
             })),
         Expr::CompoundIdentifier(idents) => Ok(idents
             .last()
             .and_then(|ident| schema.and_then(|schema| schema.column(&ident.value)))
             .filter(|column| pg_type_is_collatable(&column.pg_type))
             .map(|column| {
-                column
-                    .collation
-                    .clone()
-                    .unwrap_or_else(|| "default".to_string())
+                crate::collations::semantic_collation(
+                    column
+                        .collation
+                        .clone()
+                        .unwrap_or_else(|| "default".to_string()),
+                )
             })),
         Expr::Nested(expr) => expr_collation(expr, schema),
         _ => Ok(None),
@@ -261,13 +269,18 @@ pub(crate) fn expr_collation(expr: &Expr, schema: Option<&TableSchema>) -> Resul
 
 pub(crate) fn explicit_expr_collation(expr: &Expr) -> Option<String> {
     match expr {
-        Expr::Collate { collation, .. } => normalize_column_collation(collation).ok(),
+        Expr::Collate { collation, .. } => normalize_column_collation(collation)
+            .ok()
+            .map(crate::collations::semantic_collation),
         Expr::Nested(expr) => explicit_expr_collation(expr),
         _ => None,
     }
 }
 
 pub(crate) fn locale_text_ordering(collation: &str, left: &str, right: &str) -> Option<Ordering> {
+    if let Some(ordering) = crate::collations::user_collation_ordering(collation, left, right) {
+        return Some(ordering);
+    }
     if collation != "en-x-icu" {
         return None;
     }

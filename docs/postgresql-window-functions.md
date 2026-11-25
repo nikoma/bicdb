@@ -41,6 +41,18 @@ not window functions. `ORDER BY ... FETCH FIRST n ROWS WITH TIES` (with an
 optional `OFFSET`) returns the first rows plus every row tied with the last
 one, as PostgreSQL does; it uses `rank()` over the ORDER BY keys internally.
 
-Window-frame exclusion clauses (`EXCLUDE ...`) remain unsupported. Unsupported
-window functions and forms return a clear SQL error instead of being silently
-mis-evaluated.
+Frame exclusion `EXCLUDE CURRENT ROW | GROUP | TIES | NO OTHERS` after an
+explicit `ROWS`, `RANGE` or `GROUPS` frame (inline or in a named window)
+removes rows from the frame of aggregate and `FIRST_VALUE` / `LAST_VALUE` /
+`NTH_VALUE` functions, as PostgreSQL does.
+
+In FROM, `ROWS FROM (f(...), g(...)) [WITH ORDINALITY]` runs set-returning
+functions in lockstep, padding the shorter ones with NULLs. Several
+functions (or one with `WITH ORDINALITY`) are supported for the
+single-column set-returning functions (`generate_series`, `unnest`,
+`generate_subscripts`, `regexp_split_to_table`, `string_to_table`,
+`json[b]_array_elements[_text]`, `json[b]_object_keys`); other lists are
+rejected rather than evaluated differently.
+
+Unsupported window functions and forms return a clear SQL error instead of
+being silently mis-evaluated.

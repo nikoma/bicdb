@@ -743,6 +743,52 @@ pub(crate) fn eval_range_function_value(
     Ok(Some(value))
 }
 
+/// `eval_user_range_function_value` for a call whose first argument may be
+/// a user range constructor (`floatrange(1, 2)`): that argument has the
+/// range type, so `lower`/`upper` and friends are the range functions
+/// rather than the text functions of the same name.
+pub(crate) fn eval_user_range_function_value_for(
+    db: &BicDb,
+    function: &Function,
+    name: &str,
+    args: &[SqlValue],
+    arg_types: &[Option<String>],
+) -> Result<Option<SqlValue>> {
+    let bare = name.strip_prefix("pg_catalog.").unwrap_or(name);
+    if matches!(
+        bare,
+        "isempty"
+            | "lower"
+            | "upper"
+            | "lower_inc"
+            | "upper_inc"
+            | "lower_inf"
+            | "upper_inf"
+            | "range_merge"
+    ) {
+        if let Some(Expr::Function(inner)) = function_arg_list(function).first() {
+            if let Ok(inner_name) = object_name(&inner.name) {
+                let (schema_name, type_name) = inner_name
+                    .rsplit_once('.')
+                    .unwrap_or(("public", inner_name.as_str()));
+                if let Some(user_type) = load_user_type(db, schema_name, type_name)? {
+                    if matches!(
+                        user_type.kind,
+                        UserTypeKind::Range { .. } | UserTypeKind::Multirange { .. }
+                    ) {
+                        let mut refined = arg_types.to_vec();
+                        if let Some(first) = refined.first_mut() {
+                            *first = Some(user_type.column_type(false).formatted_name());
+                        }
+                        return eval_user_range_function_value(db, name, args, &refined);
+                    }
+                }
+            }
+        }
+    }
+    eval_user_range_function_value(db, name, args, arg_types)
+}
+
 pub(crate) fn eval_user_range_function_value(
     db: &BicDb,
     name: &str,
@@ -1711,6 +1757,19 @@ pub(crate) fn eval_range_binary_value_with_db(
             }
         }
     }
+    // An untyped literal takes the other operand's range type, as
+    // PostgreSQL resolves `range_column && '[1,2)'`.
+    let unknown = |pg_type: Option<&str>, value: &SqlValue| {
+        matches!(pg_type, None | Some("unknown")) && matches!(value, SqlValue::String(_))
+    };
+    let (left_type, right_type) = match (
+        user_range_set_type(db, left_type)?.is_some(),
+        user_range_set_type(db, right_type)?.is_some(),
+    ) {
+        (true, false) if unknown(right_type, &right) => (left_type, left_type),
+        (false, true) if unknown(left_type, &left) => (right_type, right_type),
+        _ => (left_type, right_type),
+    };
     let left_user = user_range_set_type(db, left_type)?;
     let right_user = user_range_set_type(db, right_type)?;
     if left_user.is_none() && right_user.is_none() {

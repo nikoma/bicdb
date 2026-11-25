@@ -506,6 +506,12 @@ pub(crate) fn alter_table_add_constraint(
 
     let mut constraints =
         table_constraint_schema(table, constraint, oracle::default_unique_null_policy(db)?)?;
+    let own_keys = if schema.has_hidden_primary_key() {
+        Vec::new()
+    } else {
+        primary_key_columns_for_schema(schema)
+    };
+    resolve_implicit_foreign_key_references(db, table, &own_keys, &mut constraints)?;
     if constraints.is_empty() {
         return Err(SqlError::Unsupported(
             "ALTER TABLE ADD PRIMARY KEY is not supported".to_string(),
@@ -1786,7 +1792,12 @@ pub(crate) fn column_schema_from_def(db: &BicDb, column: &ColumnDef) -> Result<C
         .options
         .iter()
         .find_map(|option| match &option.option {
-            ColumnOption::Collation(name) => Some(normalize_column_collation(name)),
+            ColumnOption::Collation(name) => {
+                Some(normalize_column_collation(name).and_then(|collation| {
+                    crate::collations::reject_nondeterministic_definition(&collation)?;
+                    Ok(collation)
+                }))
+            }
             _ => None,
         })
         .transpose()?;
@@ -1968,8 +1979,9 @@ pub(crate) fn text_column_schema(name: String) -> ColumnSchema {
 }
 
 pub(crate) fn normalize_column_collation(name: &ObjectName) -> Result<String> {
-    let name = object_name(name)?;
-    let name = name.rsplit('.').next().unwrap_or(&name);
+    let full = object_name(name)?;
+    let qualifier = full.rsplit_once('.').map(|(schema, _)| schema.to_string());
+    let name = full.rsplit('.').next().unwrap_or(&full);
     let canonical = match name.to_ascii_lowercase().as_str() {
         "default" => "default",
         "c" => "C",
@@ -1977,11 +1989,17 @@ pub(crate) fn normalize_column_collation(name: &ObjectName) -> Result<String> {
         "ucs_basic" => "ucs_basic",
         "en-x-icu" => "en-x-icu",
         _ => {
+            let schema = qualifier.filter(|schema| schema != "pg_catalog");
+            if let Some(collation) =
+                crate::collations::resolve_user_collation(schema.as_deref(), name)
+            {
+                return Ok(collation.name);
+            }
             return Err(SqlError::data_exception(
                 "42704",
                 format!("collation \"{name}\" for encoding UTF8 does not exist"),
                 None,
-            ))
+            ));
         }
     };
     Ok(canonical.to_string())
@@ -2127,6 +2145,59 @@ pub(crate) fn view_column_name_from_expr(expr: &Expr) -> Option<String> {
     }
 }
 
+/// `REFERENCES t` without a column list names t's primary key. The builders
+/// record this placeholder; `resolve_implicit_foreign_key_references` swaps
+/// in the key columns (or fails as PostgreSQL does) before the constraint is
+/// stored.
+pub(crate) const IMPLICIT_REFERENCED_KEY: &str = "\u{0}referenced primary key";
+
+pub(crate) fn resolve_implicit_foreign_key_references(
+    db: &BicDb,
+    own_table: &str,
+    own_keys: &[String],
+    constraints: &mut [ConstraintSchema],
+) -> Result<()> {
+    for constraint in constraints.iter_mut() {
+        let ConstraintSchema::ForeignKey {
+            foreign_table,
+            referred_columns,
+            ..
+        } = constraint
+        else {
+            continue;
+        };
+        if referred_columns.as_slice() != [IMPLICIT_REFERENCED_KEY] {
+            continue;
+        }
+        let resolved = resolve_session_relation_name_if_exists(db, foreign_table);
+        let keys = if resolved == own_table || foreign_table.as_str() == own_table {
+            Some(own_keys.to_vec())
+        } else {
+            load_schema(db, &resolved)?.map(|schema| {
+                if schema.has_hidden_primary_key() {
+                    Vec::new()
+                } else {
+                    primary_key_columns_for_schema(&schema)
+                }
+            })
+        };
+        *referred_columns = match keys {
+            Some(keys) if keys.is_empty() => {
+                return Err(SqlError::data_exception(
+                    "42704",
+                    format!("there is no primary key for referenced table \"{foreign_table}\""),
+                    None,
+                ))
+            }
+            Some(keys) => keys,
+            // A missing table fails later with its own error; a schemaless
+            // collection is keyed by its record id.
+            None => vec!["id".to_string()],
+        };
+    }
+    Ok(())
+}
+
 pub(crate) fn column_constraints_from_def(
     table: &str,
     column: &ColumnDef,
@@ -2168,7 +2239,7 @@ pub(crate) fn column_constraints_from_def(
                 )?;
                 let foreign_table = relation_name(&foreign_key.foreign_table)?;
                 let referred_columns = if foreign_key.referred_columns.is_empty() {
-                    vec!["id".to_string()]
+                    vec![IMPLICIT_REFERENCED_KEY.to_string()]
                 } else {
                     foreign_key
                         .referred_columns
@@ -2264,7 +2335,7 @@ pub(crate) fn table_constraint_schema(
                 columns: foreign_key.columns.iter().map(ident_value).collect(),
                 foreign_table: relation_name(&foreign_key.foreign_table)?,
                 referred_columns: if foreign_key.referred_columns.is_empty() {
-                    vec!["id".to_string()]
+                    vec![IMPLICIT_REFERENCED_KEY.to_string()]
                 } else {
                     foreign_key
                         .referred_columns

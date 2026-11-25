@@ -1,0 +1,13 @@
+nopk_id_not_unique|CREATE TABLE c2a(id int, n int);INSERT INTO c2a VALUES (1,1);INSERT INTO c2a VALUES (1,2);INSERT INTO c2a VALUES (NULL,3);SELECT id, n FROM c2a ORDER BY n;UPDATE c2a SET id=5 WHERE n=3;DELETE FROM c2a WHERE n=1;SELECT id, n FROM c2a ORDER BY n
+nopk_catalog|CREATE TABLE c2b(id int, n int);SELECT count(*) FROM pg_constraint WHERE conrelid='c2b'::regclass;SELECT attnotnull FROM pg_attribute WHERE attrelid='c2b'::regclass AND attname='id'
+declared_id_pk|CREATE TABLE c2c(id int PRIMARY KEY, n int);INSERT INTO c2c VALUES (1,1);INSERT INTO c2c VALUES (1,2)
+declared_id_pk_upsert|CREATE TABLE c2d(id int PRIMARY KEY, n int);INSERT INTO c2d VALUES (1,1);INSERT INTO c2d VALUES (1,2) ON CONFLICT (id) DO UPDATE SET n=excluded.n;SELECT * FROM c2d
+nopk_on_conflict_id|CREATE TABLE c2e(id int, n int);INSERT INTO c2e VALUES (1,1) ON CONFLICT (id) DO NOTHING
+nopk_fk_default_ref|CREATE TABLE c2f(id int, n int);CREATE TABLE c2g(p int REFERENCES c2f)
+window_exclude|CREATE TABLE c2h(id int, g int, v int);INSERT INTO c2h VALUES (1,1,10),(2,1,20),(3,2,30),(4,2,40),(5,3,50);SELECT id, sum(v) OVER (ORDER BY id ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING EXCLUDE CURRENT ROW) a, sum(v) OVER (ORDER BY g ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING EXCLUDE GROUP) b, sum(v) OVER (ORDER BY g ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING EXCLUDE TIES) c, count(*) OVER (ORDER BY g RANGE BETWEEN CURRENT ROW AND CURRENT ROW EXCLUDE CURRENT ROW) d, first_value(v) OVER (ORDER BY id ROWS BETWEEN CURRENT ROW AND 2 FOLLOWING EXCLUDE CURRENT ROW) f, last_value(v) OVER w l FROM c2h WINDOW w AS (ORDER BY g GROUPS BETWEEN 1 PRECEDING AND 1 FOLLOWING EXCLUDE NO OTHERS) ORDER BY id
+window_exclude_partition|CREATE TABLE c2i(id int, g int, v int);INSERT INTO c2i VALUES (1,1,10),(2,1,20),(3,2,30),(4,2,40);SELECT id, sum(v) OVER (PARTITION BY g ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING EXCLUDE CURRENT ROW) FROM c2i ORDER BY id
+rows_from_ordinality|SELECT * FROM ROWS FROM (generate_series(1,3), unnest(ARRAY['a','b'])) WITH ORDINALITY AS t(n, s, o) ORDER BY o
+rows_from_single|SELECT * FROM ROWS FROM (generate_series(1,2)) AS t;SELECT * FROM ROWS FROM (generate_series(1,2)) WITH ORDINALITY AS t(a, o)
+rows_from_zip|SELECT * FROM ROWS FROM (generate_series(1,2), generate_series(5,7)) x;SELECT * FROM ROWS FROM (generate_series(1,2), generate_series(5,5))
+window_exclude_needs_frame|CREATE TABLE c2j(g int, v int);SELECT avg(v) OVER (PARTITION BY g EXCLUDE TIES) FROM c2j
+nopk_id_default_values|CREATE TABLE c2k(id int, n int DEFAULT 4);INSERT INTO c2k DEFAULT VALUES;CREATE TABLE c2l(id int DEFAULT 9, n int);INSERT INTO c2l DEFAULT VALUES;INSERT INTO c2l (n) VALUES (1);SELECT * FROM c2k;SELECT * FROM c2l ORDER BY n

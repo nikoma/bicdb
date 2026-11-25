@@ -3815,6 +3815,13 @@ pub(crate) fn canonical_range_scalar_value(value: &PgCanonicalValue) -> SqlValue
         PgCanonicalValue::Date(value) => SqlValue::String(value.to_iso_text()),
         PgCanonicalValue::Timestamp(value) => SqlValue::String(value.to_iso_text(false)),
         PgCanonicalValue::TimestampTz(value) => SqlValue::String(render_timestamptz(*value)),
+        PgCanonicalValue::Int2(value) => SqlValue::Int(i64::from(*value)),
+        PgCanonicalValue::Float4(value) => SqlValue::Float(f64::from(value.to_value())),
+        PgCanonicalValue::Float8(value) => SqlValue::Float(value.to_value()),
+        PgCanonicalValue::Text(value) => SqlValue::String(value.clone()),
+        PgCanonicalValue::Time(value) => SqlValue::String(value.to_iso_text()),
+        PgCanonicalValue::TimeTz(value) => SqlValue::String(value.to_iso_text()),
+        PgCanonicalValue::Interval(value) => SqlValue::String(value.to_postgres_text()),
         _ => SqlValue::Null,
     }
 }

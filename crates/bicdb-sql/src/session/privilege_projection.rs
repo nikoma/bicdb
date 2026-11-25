@@ -1033,12 +1033,12 @@ impl<'db> SqlSession<'db> {
                 }
                 let (subtype, _) = pg_type_from_data_type(subtype_data_type)?;
                 let subtype = subtype.to_ascii_lowercase();
-                let range_spec = builtin_range_spec_for_subtype(&subtype).ok_or_else(|| {
+                let range_catalog = range_subtype_catalog(&subtype).ok_or_else(|| {
                     SqlError::Unsupported(format!(
                         "range subtype {subtype} has no registered BicDB range comparator"
                     ))
                 })?;
-                if definition.collation.is_some() {
+                if definition.collation.is_some() && subtype != "text" {
                     return Err(SqlError::data_exception(
                         "42804",
                         format!("range subtype {subtype} does not support collation"),
@@ -1080,7 +1080,7 @@ impl<'db> SqlSession<'db> {
                     (None, 0, false)
                 };
 
-                let expected_opclass = default_range_opclass_name(&subtype);
+                let expected_opclass = range_catalog.opclass;
                 let subtype_opclass = definition
                     .subtype_opclass
                     .unwrap_or_else(|| expected_opclass.to_string());
@@ -1095,14 +1095,19 @@ impl<'db> SqlSession<'db> {
 
                 let (subtype_diff, subtype_diff_oid) =
                     if let Some(subtype_diff) = definition.subtype_diff {
-                        let expected = default_range_subdiff_name(&subtype);
+                        let expected = range_catalog.subdiff.map(|(name, _)| name).unwrap_or("");
                         let bare = subtype_diff
                             .strip_prefix("pg_catalog.")
                             .unwrap_or(&subtype_diff);
                         if bare == expected {
                             (
                                 Some(subtype_diff),
-                                i64::from(range_spec.range_subdiff_oid().unwrap_or_default()),
+                                i64::from(
+                                    range_catalog
+                                        .subdiff
+                                        .map(|(_, oid)| oid)
+                                        .unwrap_or_default(),
+                                ),
                             )
                         } else {
                             let routine =
@@ -1169,9 +1174,7 @@ impl<'db> SqlSession<'db> {
                     subtype_user_type: None,
                     subtype_oid: i64::from(pg_type_oid(&subtype)),
                     subtype_opclass,
-                    subtype_opclass_oid: i64::from(
-                        range_spec.range_subopclass_oid().unwrap_or_default(),
-                    ),
+                    subtype_opclass_oid: i64::from(range_catalog.opclass_oid),
                     collation: definition.collation,
                     canonical,
                     canonical_oid,

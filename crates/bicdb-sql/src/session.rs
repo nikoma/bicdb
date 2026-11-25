@@ -4,6 +4,7 @@
 //! Moved items were bumped to `pub(crate)` so existing call sites keep
 //! resolving; `lib.rs` re-exports this module via `pub use session::*;`.
 
+mod collation_ddl;
 mod create_table_as;
 pub(crate) mod deferred_constraints;
 mod domain_types;
@@ -617,41 +618,38 @@ fn paired_type_identity(name: &ObjectName, default_schema: &str) -> Result<(Stri
     }
 }
 
-fn builtin_range_spec_for_subtype(subtype: &str) -> Option<&'static PgTypeSpec> {
-    let range_type = match subtype {
-        "int4" => "int4range",
-        "int8" => "int8range",
-        "numeric" => "numrange",
-        "date" => "daterange",
-        "timestamp" => "tsrange",
-        "timestamptz" => "tstzrange",
+/// The default btree operator class and the subtype difference function of
+/// a range subtype, with their PostgreSQL catalog OIDs: everything a range
+/// type over that subtype records in `pg_range`. Bounds compare through the
+/// subtype's own typed ordering.
+struct RangeSubtypeCatalog {
+    opclass: &'static str,
+    opclass_oid: i32,
+    subdiff: Option<(&'static str, i32)>,
+}
+
+fn range_subtype_catalog(subtype: &str) -> Option<RangeSubtypeCatalog> {
+    let (opclass, opclass_oid, subdiff) = match subtype {
+        "int4" => ("int4_ops", 1978, Some(("int4range_subdiff", 3922))),
+        "int8" => ("int8_ops", 3124, Some(("int8range_subdiff", 3923))),
+        "numeric" => ("numeric_ops", 3125, Some(("numrange_subdiff", 3924))),
+        "date" => ("date_ops", 3122, Some(("daterange_subdiff", 3925))),
+        "timestamp" => ("timestamp_ops", 3128, Some(("tsrange_subdiff", 3929))),
+        "timestamptz" => ("timestamptz_ops", 3127, Some(("tstzrange_subdiff", 3930))),
+        "int2" => ("int2_ops", 1979, None),
+        "float4" => ("float4_ops", 10012, Some(("float4mi", 205))),
+        "float8" => ("float8_ops", 3123, Some(("float8mi", 219))),
+        "text" => ("text_ops", 3126, None),
+        "time" => ("time_ops", 10038, Some(("time_mi_time", 1690))),
+        "timetz" => ("timetz_ops", 10041, None),
+        "interval" => ("interval_ops", 10022, Some(("interval_mi", 1170))),
         _ => return None,
     };
-    pg_type_spec(range_type)
-}
-
-fn default_range_opclass_name(subtype: &str) -> &'static str {
-    match subtype {
-        "int4" => "int4_ops",
-        "int8" => "int8_ops",
-        "numeric" => "numeric_ops",
-        "date" => "date_ops",
-        "timestamp" => "timestamp_ops",
-        "timestamptz" => "timestamptz_ops",
-        _ => unreachable!("range subtype was validated"),
-    }
-}
-
-fn default_range_subdiff_name(subtype: &str) -> &'static str {
-    match subtype {
-        "int4" => "int4range_subdiff",
-        "int8" => "int8range_subdiff",
-        "numeric" => "numrange_subdiff",
-        "date" => "daterange_subdiff",
-        "timestamp" => "tsrange_subdiff",
-        "timestamptz" => "tstzrange_subdiff",
-        _ => unreachable!("range subtype was validated"),
-    }
+    Some(RangeSubtypeCatalog {
+        opclass,
+        opclass_oid,
+        subdiff,
+    })
 }
 
 fn range_canonical_symbol_for_subtype(subtype: &str) -> Option<&'static str> {
@@ -2285,6 +2283,11 @@ pub(crate) enum DdlUndo {
     RestoreOperator {
         id: crate::pg_operators::OperatorRef,
         previous: Option<Box<crate::pg_operators::OperatorSchema>>,
+    },
+    RestoreCollation {
+        schema_name: String,
+        name: String,
+        previous: Option<Box<crate::collations::CollationSchema>>,
     },
     DeleteNamespace {
         namespace: String,
@@ -5605,6 +5608,14 @@ impl<'db> SqlSession<'db> {
             DdlUndo::RestoreRoutine { routine } => {
                 save_routine(self.db_mut()?, &routine)?;
             }
+            DdlUndo::RestoreCollation {
+                schema_name,
+                name,
+                previous,
+            } => match previous {
+                Some(previous) => crate::collations::save_collation(self.db_mut()?, &previous)?,
+                None => crate::collations::delete_collation(self.db_mut()?, &schema_name, &name)?,
+            },
             DdlUndo::RestoreOperator { id, previous } => match previous {
                 Some(previous) => crate::pg_operators::save_operator(self.db_mut()?, &previous)?,
                 None => crate::pg_operators::delete_operator(self.db_mut()?, &id)?,

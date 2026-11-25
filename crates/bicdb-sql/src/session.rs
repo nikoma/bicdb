@@ -6561,7 +6561,24 @@ impl<'db> SqlSession<'db> {
             _ => return Ok(()),
         };
         let display = object_name_parts(&relation).join(".");
-        let table = relation_name(&relation)?;
+        let mut table = relation_name(&relation)?;
+        // An unqualified name resolves through search_path, as other DDL.
+        if relation.0.len() == 1 {
+            if let Some(path) = crate::search_path::binding_path(self.db_ref(), &self.session_gucs)?
+            {
+                for namespace in path.iter() {
+                    let mut parts = vec![sqlparser::ast::ObjectNamePart::Identifier(
+                        Ident::with_quote('"', namespace.clone()),
+                    )];
+                    parts.extend(relation.0.iter().cloned());
+                    let candidate = relation_name(&ObjectName(parts))?;
+                    if load_schema(self.db_ref(), &candidate)?.is_some() {
+                        table = candidate;
+                        break;
+                    }
+                }
+            }
+        }
         let table = resolve_session_relation_name_if_exists(self.db_ref(), &table);
         let Some(mut schema) = load_schema(self.db_ref(), &table)? else {
             if *if_exists {

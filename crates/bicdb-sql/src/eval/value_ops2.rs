@@ -563,13 +563,17 @@ pub(crate) fn eval_array_fill(args: &[SqlValue]) -> Result<SqlValue> {
     } else {
         vec![1; dimensions.len()]
     };
+    // `array_fill(x, '{}')` is the empty array in PostgreSQL. Zero dimensions produced a bare
+    // element here, and the expectation that it was an array aborted the statement with a
+    // contained panic.
+    if dimensions.is_empty() {
+        return Ok(array_value_with_lower_bounds(Vec::new(), Vec::new()));
+    }
     let value = filled_array_json(&args[0], &dimensions)?;
     let values = value
         .as_array()
-        .expect("array_fill dimensions produce an array")
-        .iter()
-        .map(json_to_sql_value)
-        .collect();
+        .map(|values| values.iter().map(json_to_sql_value).collect())
+        .unwrap_or_default();
     Ok(array_value_with_lower_bounds(values, lower_bounds))
 }
 

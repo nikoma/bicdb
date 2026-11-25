@@ -3597,26 +3597,40 @@ pub(crate) fn parse_time_prefix(value: &str) -> Option<(u32, u32, u32)> {
 }
 
 pub(crate) fn days_from_civil(year: i32, month: u32, day: u32) -> i64 {
-    let year = year - i32::from(month <= 2);
+    // i64 throughout: a year near the i32 limits (e.g. from out-of-range input that is then
+    // range-checked) overflowed `era * 146_097` in i32 and panicked.
+    let year = i64::from(year) - i64::from(month <= 2);
     let era = (if year >= 0 { year } else { year - 399 }) / 400;
     let yoe = year - era * 400;
-    let month = month as i32;
-    let doy = (153 * (month + if month > 2 { -3 } else { 9 }) + 2) / 5 + day as i32 - 1;
+    let month = i64::from(month);
+    let doy = (153 * (month + if month > 2 { -3 } else { 9 }) + 2) / 5 + i64::from(day) - 1;
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    (era * 146_097 + doe - 719_468) as i64
+    era * 146_097 + doe - 719_468
 }
 
+/// Calendar date of a day number. Total for every `i64`: day numbers far outside any date
+/// range (e.g. from an infinite or huge float) used to overflow `i32` here and panic; the year
+/// now saturates, and callers apply PostgreSQL's range checks to the result.
 pub(crate) fn civil_from_days(days: i64) -> (i32, u32, u32) {
-    let days = days + 719_468;
-    let era = (if days >= 0 { days } else { days - 146_096 }) / 146_097;
+    let days = days.saturating_add(719_468);
+    let era = (if days >= 0 {
+        days
+    } else {
+        days.saturating_sub(146_096)
+    }) / 146_097;
     let doe = days - era * 146_097;
     let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let year = yoe as i32 + era as i32 * 400;
+    let year = yoe.saturating_add(era.saturating_mul(400));
     let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
     let mp = (5 * doy + 2) / 153;
     let day = doy - (153 * mp + 2) / 5 + 1;
     let month = mp + if mp < 10 { 3 } else { -9 };
-    (year + i32::from(month <= 2), month as u32, day as u32)
+    let year = year.saturating_add(i64::from(month <= 2));
+    (
+        year.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32,
+        month as u32,
+        day as u32,
+    )
 }
 
 pub(crate) fn negate_numeric_value(value: SqlValue) -> Result<SqlValue> {

@@ -981,14 +981,25 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
                         .to_string(),
                 ));
             }
-            let stride = i64::from(stride.days) * MICROS_PER_DAY + stride.micros;
+            let interval_out_of_range =
+                || SqlError::data_exception("22008", "interval out of range", None);
+            let stride = i64::from(stride.days)
+                .checked_mul(MICROS_PER_DAY)
+                .and_then(|days| days.checked_add(stride.micros))
+                .ok_or_else(interval_out_of_range)?;
             if stride <= 0 {
                 return Err(SqlError::invalid_parameter_value(
                     "stride must be greater than zero",
                 ));
             }
             let (source, origin) = (timestamp_micros(&args[1])?, timestamp_micros(&args[2])?);
-            let binned = origin + (source - origin).div_euclid(stride) * stride;
+            // PostgreSQL reports overflow of this arithmetic as "interval out of range"; plain
+            // operators panicked (a contained panic surfaced as an internal error).
+            let binned = source
+                .checked_sub(origin)
+                .and_then(|delta| delta.div_euclid(stride).checked_mul(stride))
+                .and_then(|offset| origin.checked_add(offset))
+                .ok_or_else(interval_out_of_range)?;
             SqlValue::String(render_like_source(binned, has_offset(&text(1))))
         }
         // Oracle DATE includes whole-second time, unlike PostgreSQL date.

@@ -3175,10 +3175,10 @@ impl<'db> SqlEngine<'db> {
                 "window frame start cannot be UNBOUNDED FOLLOWING".to_string(),
             )),
             WindowFrameBound::Preceding(Some(offset_expr)) => {
-                Ok(position as i64 - offset(offset_expr)?)
+                Ok((position as i64).saturating_sub(offset(offset_expr)?))
             }
             WindowFrameBound::Following(Some(offset_expr)) => {
-                Ok(position as i64 + offset(offset_expr)?)
+                Ok((position as i64).saturating_add(offset(offset_expr)?))
             }
         }
     }
@@ -3213,8 +3213,12 @@ impl<'db> SqlEngine<'db> {
                 WindowFrameBound::Following(None) => Err(SqlError::InvalidSql(
                     "window frame start cannot be UNBOUNDED FOLLOWING".to_string(),
                 )),
-                WindowFrameBound::Preceding(Some(expr)) => Ok(current_group as i64 - offset(expr)?),
-                WindowFrameBound::Following(Some(expr)) => Ok(current_group as i64 + offset(expr)?),
+                WindowFrameBound::Preceding(Some(expr)) => {
+                    Ok((current_group as i64).saturating_sub(offset(expr)?))
+                }
+                WindowFrameBound::Following(Some(expr)) => {
+                    Ok((current_group as i64).saturating_add(offset(expr)?))
+                }
             }
         };
         let start_group = bound_group(start_bound, true)?.clamp(0, groups.len() as i64);

@@ -2641,28 +2641,38 @@ fn checked_add_scaled(
 }
 
 fn days_from_civil(year: i32, month: u32, day: u32) -> i64 {
-    let year = year - i32::from(month <= 2);
+    // i64 throughout: a year near the i32 limits (e.g. from out-of-range input that is then
+    // range-checked) overflowed `era * 146_097` in i32 and panicked.
+    let year = i64::from(year) - i64::from(month <= 2);
     let era = (if year >= 0 { year } else { year - 399 }) / 400;
     let yoe = year - era * 400;
-    let month = month as i32;
-    let doy = (153 * (month + if month > 2 { -3 } else { 9 }) + 2) / 5 + day as i32 - 1;
+    let month = i64::from(month);
+    let doy = (153 * (month + if month > 2 { -3 } else { 9 }) + 2) / 5 + i64::from(day) - 1;
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    (era * 146_097 + doe - 719_468) as i64
+    era * 146_097 + doe - 719_468
 }
 
 fn civil_from_days(days: i64) -> (i32, u32, u32) {
-    let days = days + 719_468;
-    let era = (if days >= 0 { days } else { days - 146_096 }) / 146_097;
+    let days = days.saturating_add(719_468);
+    let era = (if days >= 0 {
+        days
+    } else {
+        days.saturating_sub(146_096)
+    }) / 146_097;
     let day_of_era = days - era * 146_097;
     let year_of_era =
         (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
-    let mut year = year_of_era + era * 400;
+    let mut year = year_of_era.saturating_add(era.saturating_mul(400));
     let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
     let month_prime = (5 * day_of_year + 2) / 153;
     let day = day_of_year - (153 * month_prime + 2) / 5 + 1;
     let month = month_prime + if month_prime < 10 { 3 } else { -9 };
-    year += i64::from(month <= 2);
-    (year as i32, month as u32, day as u32)
+    year = year.saturating_add(i64::from(month <= 2));
+    (
+        year.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32,
+        month as u32,
+        day as u32,
+    )
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

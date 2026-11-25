@@ -181,7 +181,7 @@ impl<'db> SqlSession<'db> {
             if strip_only_restriction(&mut only.selection) {
                 let _guard = ExpansionGuard::enter();
                 return self
-                    .execute_update_with_match_policy(&only, ctes.clone(), match_policy)
+                    .execute_update_with_match_policy(&only, ctes.clone(), match_policy, None)
                     .map(Some);
             }
         }

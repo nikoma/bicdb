@@ -2676,6 +2676,18 @@ impl std::fmt::Debug for SqlNotice {
 }
 
 impl SqlNotice {
+    /// The severity clients are told: the notice's `Severity` field, or
+    /// NOTICE when it has none.
+    pub fn severity(&self) -> &str {
+        self.fields
+            .iter()
+            .find_map(|field| match field {
+                SqlErrorField::Severity(severity) => Some(severity.as_str()),
+                _ => None,
+            })
+            .unwrap_or("NOTICE")
+    }
+
     pub fn memory_estimate(&self) -> usize {
         self.sqlstate.len()
             + self.message.len()

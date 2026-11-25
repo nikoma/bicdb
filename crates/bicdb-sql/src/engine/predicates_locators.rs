@@ -5794,7 +5794,7 @@ impl<'db> SqlEngine<'db> {
             // as a scalar call (the session interpreter applies EXECUTE and
             // SECURITY DEFINER) and expand its record.
             if let (false, Some(host)) = (routine.schema.returns_set, self.routine_host) {
-                let arguments = table_function_expr_args(args)?
+                let arguments = call_args
                     .iter()
                     .map(|argument| self.eval_select_constant_expr(argument))
                     .collect::<Result<Vec<_>>>()?;
@@ -5832,22 +5832,9 @@ impl<'db> SqlEngine<'db> {
                         vec![scalar],
                     ),
                 };
-                let alias_name = table_alias
-                    .map(|alias| alias.name.value.clone())
-                    .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(table).to_string());
-                let columns = table_alias_columns(
-                    table,
-                    &alias_name,
-                    table_alias
-                        .map(|alias| alias.columns.as_slice())
-                        .unwrap_or(&[]),
-                    &names,
-                )?;
-                let rows = vec![slot_row_from_values(&columns, &values)];
-                return Ok(Some(RowSet {
-                    rows,
-                    columns: aliased_row_output_columns(&alias_name, &columns),
-                }));
+                let mut result = SqlResult::empty(names);
+                result.rows.push(values);
+                return Ok(Some(result));
             }
             return Err(SqlError::UnsupportedPlpgsqlFeature(format!(
                 "set-returning {} routine {} is not implemented",

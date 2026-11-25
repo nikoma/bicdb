@@ -4759,6 +4759,8 @@ pub(crate) enum RawAlterUserTypeDdl {
 #[derive(Clone, Debug)]
 pub(crate) struct RawTypePrivilegeDdl {
     pub(crate) grant: bool,
+    /// `ON DOMAIN`: every target must be a domain (PostgreSQL 42809).
+    pub(crate) domain: bool,
     pub(crate) types: Vec<RawTypeIdentity>,
     pub(crate) grantees: Vec<String>,
 }
@@ -4818,14 +4820,30 @@ pub(crate) fn parse_raw_alter_user_type(sql: &str) -> Result<Option<RawAlterUser
 
 pub(crate) fn parse_raw_type_privilege_ddl(sql: &str) -> Result<Option<RawTypePrivilegeDdl>> {
     let statement = trim_sql_statement(sql);
-    let (grant, mut rest, role_keyword) =
-        if let Some(rest) = strip_prefix_ci(statement, "GRANT USAGE ON TYPE ") {
-            (true, rest, "TO")
-        } else if let Some(rest) = strip_prefix_ci(statement, "REVOKE USAGE ON TYPE ") {
-            (false, rest, "FROM")
-        } else {
-            return Ok(None);
-        };
+    // USAGE is the only privilege of a type or domain, so ALL [PRIVILEGES]
+    // names exactly it, as in PostgreSQL.
+    let (grant, after_verb, role_keyword) = if let Some(rest) = strip_prefix_ci(statement, "GRANT ")
+    {
+        (true, rest.trim_start(), "TO")
+    } else if let Some(rest) = strip_prefix_ci(statement, "REVOKE ") {
+        (false, rest.trim_start(), "FROM")
+    } else {
+        return Ok(None);
+    };
+    let Some(after_privilege) = strip_prefix_ci(after_verb, "USAGE ON ")
+        .or_else(|| strip_prefix_ci(after_verb, "ALL PRIVILEGES ON "))
+        .or_else(|| strip_prefix_ci(after_verb, "ALL ON "))
+    else {
+        return Ok(None);
+    };
+    let after_privilege = after_privilege.trim_start();
+    let (domain, mut rest) = if let Some(rest) = strip_prefix_ci(after_privilege, "TYPE ") {
+        (false, rest)
+    } else if let Some(rest) = strip_prefix_ci(after_privilege, "DOMAIN ") {
+        (true, rest)
+    } else {
+        return Ok(None);
+    };
     let role_index = find_top_level_keyword(rest, role_keyword).ok_or_else(|| {
         SqlError::InvalidSql(format!(
             "{} USAGE ON TYPE requires {role_keyword}",
@@ -4873,6 +4891,7 @@ pub(crate) fn parse_raw_type_privilege_ddl(sql: &str) -> Result<Option<RawTypePr
     }
     Ok(Some(RawTypePrivilegeDdl {
         grant,
+        domain,
         types,
         grantees,
     }))

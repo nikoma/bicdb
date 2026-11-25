@@ -249,7 +249,7 @@ severity and SQLSTATE:
   overlap with `partition "x" would overlap partition "y"` (42P17). Bound
   expressions that reference a column, an aggregate, a subquery or a
   set-returning function fail with PostgreSQL's messages. Expression
-  partition keys (`PARTITION BY RANGE ((b + 0))`) are not supported.
+  partition keys are supported (see below).
 - LOCK TABLE follows PostgreSQL's privilege rules: UPDATE, DELETE, TRUNCATE
   or MAINTAIN allow any mode, INSERT allows modes up to ROW EXCLUSIVE, and
   SELECT allows ACCESS SHARE. TRUNCATE needs the TRUNCATE privilege (or
@@ -264,3 +264,61 @@ severity and SQLSTATE:
   ADMIN OPTION on itself. Other roles get 42501 `permission denied to grant
   role "x"`, with PostgreSQL's DETAIL. Superusers and CREATEROLE roles keep
   their existing rights. `current_role` works in a SELECT without FROM.
+
+## Partition keys, row movement, partition indexes and predefined roles (2026-11)
+
+- Partition keys may be expressions: `PARTITION BY RANGE ((b + 0))`,
+  `LIST (lower(a))`, `RANGE (a, abs(b), c)`, `HASH ((a + 1))`. Rows route,
+  direct inserts into a partition are bound-checked, ATTACH validates existing
+  rows and bounds are typed by the expression. A cast is an expression key
+  (`(a::text)` orders as text). `((a))` is a column key. CREATE fails with
+  PostgreSQL's errors for an unknown column (42703), a constant key, a mutable
+  function such as `random()` (42P17), an aggregate (42803), a window
+  function, a subquery or a set-returning function. Functions BicDB cannot
+  guarantee to be immutable, user-defined ones included, fail with 0A000.
+  A PRIMARY KEY or UNIQUE constraint on such a table fails with 0A000 and
+  PostgreSQL's DETAIL. A key column cannot be dropped or retyped (42P16).
+  `pg_get_partkeydef` prints `RANGE (a, ((b + 0)))`. `pg_partitioned_table`
+  shows `partattrs` 0 for an expression and a non-null `partexprs` (it holds
+  the expression's SQL text, not a node tree).
+- UPDATE moves a row to the partition its new key belongs to, across levels
+  and only within the table it names. A row that fits no partition fails the
+  whole statement (23514). CHECK and NOT NULL errors name the partition that
+  receives the row. `RETURNING tableoid` gives that partition.
+- CREATE INDEX on a partitioned table creates an index on every partition,
+  at every level, named `<partition>_<columns>_idx`. New partitions and
+  attached partitions get these indexes; ATTACH uses an equivalent index the
+  table already has. DETACH keeps the partition's indexes. A partition's
+  attached index cannot be dropped by itself (2BP01); dropping the parent's
+  index drops them all. A UNIQUE index must include the partition key
+  (0A000). Indexes of partitioned tables have relkind `I`. `pg_inherits`
+  lists index parents.
+- CHECK constraints and SET / DROP NOT NULL added to a partitioned table are
+  added to every partition, and existing rows are validated. ATTACH PARTITION
+  requires every CHECK constraint of the parent on the table, with the same
+  name and definition (42804 `child table is missing constraint "x"`).
+  A routed row is checked against the partition that receives it first, so
+  CHECK, NOT NULL and foreign key errors name that partition. A partition key
+  that lists more than one column for LIST, an unknown strategy, a row or
+  untyped literal key, or a user-defined function in the key fails with
+  PostgreSQL's errors. A user-defined IMMUTABLE function in a key that reads
+  a column fails with 0A000.
+- `GRANT/REVOKE USAGE|ALL ON TYPE|DOMAIN` work. `ON DOMAIN` with a non-domain
+  fails with 42809, and an array type fails with 0LP01. USAGE is checked for
+  CREATE TABLE, ALTER TABLE ADD COLUMN / ALTER COLUMN TYPE, CREATE DOMAIN,
+  composite attributes, and function argument and result types. The error is
+  `permission denied for type x` (42501).
+- The predefined roles (`pg_read_all_data`, `pg_write_all_data`,
+  `pg_maintain`, `pg_monitor`, `pg_read_all_settings`, `pg_signal_backend`,
+  ...) exist and cannot log in. `pg_read_all_data` grants SELECT on every
+  table and `pg_write_all_data` grants INSERT, UPDATE and DELETE. Neither
+  bypasses row security or gives TRUNCATE. `pg_maintain` allows LOCK TABLE.
+  ANALYZE still needs ownership. Only a superuser or a holder of ADMIN OPTION
+  can grant or revoke a predefined role. CREATEROLE is not enough.
+  `pg_`-prefixed role names are reserved (42939), and predefined roles cannot
+  be dropped (2BP01) or altered. A connection that names a predefined role is
+  refused.
+- Not yet supported: `Failing row contains ...` / `Partition key of the
+  failing row contains ...` DETAIL lines, GRANT on large objects,
+  `has_largeobject_privilege`, the `MAINTAIN` privilege keyword, and
+  `GRANTED BY` (still refused with 0A000).

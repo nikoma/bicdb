@@ -2885,9 +2885,71 @@ pub(crate) fn create_role_record(
     Ok(())
 }
 
+/// PostgreSQL's predefined roles (pg_authid.dat). They always exist, cannot
+/// log in and hold nothing by themselves; granting one confers exactly what
+/// PostgreSQL's privilege checks give its members (see
+/// `predefined_role_grants_table_privilege`). A role BicDB attaches no
+/// behaviour to grants nothing, which never exceeds PostgreSQL's access.
+pub(crate) const PREDEFINED_ROLES: &[&str] = &[
+    "pg_checkpoint",
+    "pg_create_subscription",
+    "pg_database_owner",
+    "pg_execute_server_program",
+    "pg_maintain",
+    "pg_monitor",
+    "pg_read_all_data",
+    "pg_read_all_settings",
+    "pg_read_all_stats",
+    "pg_read_server_files",
+    "pg_signal_autovacuum_worker",
+    "pg_signal_backend",
+    "pg_stat_scan_tables",
+    "pg_use_reserved_connections",
+    "pg_write_all_data",
+    "pg_write_server_files",
+];
+
+pub(crate) fn is_predefined_role(name: &str) -> bool {
+    PREDEFINED_ROLES.contains(&normalize_role_name(name).as_str())
+}
+
+/// Whether `name` is a PostgreSQL predefined role (`pg_read_all_data`, ...).
+/// They cannot log in, so a connection naming one must be refused.
+pub fn is_postgres_predefined_role(name: &str) -> bool {
+    is_predefined_role(name)
+}
+
+/// PostgreSQL reserves the `pg_` prefix for predefined roles (42939).
+pub(crate) fn ensure_unreserved_role_name(name: &str) -> Result<()> {
+    if normalize_role_name(name).starts_with("pg_") {
+        return Err(SqlError::RaisedException {
+            sqlstate: "42939".into(),
+            message: format!("role name \"{name}\" is reserved"),
+            detail: Some("Role names starting with \"pg_\" are reserved.".into()),
+        });
+    }
+    Ok(())
+}
+
+/// Table privileges PostgreSQL's pg_class_aclmask adds for predefined-role
+/// members: SELECT for pg_read_all_data, INSERT/UPDATE/DELETE for
+/// pg_write_all_data, MAINTAIN for pg_maintain. Nothing else (no TRUNCATE,
+/// REFERENCES or TRIGGER, no row-security bypass).
+pub(crate) fn predefined_role_grants_table_privilege(
+    inherited: &BTreeSet<String>,
+    privilege: &str,
+) -> bool {
+    match privilege.to_ascii_uppercase().as_str() {
+        "SELECT" => inherited.contains("pg_read_all_data"),
+        "INSERT" | "UPDATE" | "DELETE" => inherited.contains("pg_write_all_data"),
+        "MAINTAIN" => inherited.contains("pg_maintain"),
+        _ => false,
+    }
+}
+
 pub(crate) fn role_exists(db: &BicDb, name: &str) -> Result<bool> {
     let name = normalize_role_name(name);
-    if name == current_role_name() {
+    if name == current_role_name() || is_predefined_role(&name) {
         return Ok(true);
     }
     match db.get(ROLE_COLLECTION, &name) {
@@ -2912,6 +2974,11 @@ pub(crate) fn list_roles(db: &BicDb) -> Result<Vec<RoleSchema>> {
             .any(|candidate| candidate.name.eq_ignore_ascii_case(&role.name))
         {
             roles.push(role);
+        }
+    }
+    for name in PREDEFINED_ROLES {
+        if !roles.iter().any(|candidate| candidate.name == *name) {
+            roles.push(default_role_schema(name));
         }
     }
     roles.sort_by(|left, right| left.name.cmp(&right.name));
@@ -2968,7 +3035,8 @@ pub fn copy_cluster_role_catalog(source: &BicDb, target: &mut BicDb) -> Result<(
     ensure_role_collection(target)?;
     ensure_role_membership_collection(target)?;
     for role in list_roles(source)? {
-        if role.name != current_role_name() {
+        // Predefined roles exist in every database without a stored record.
+        if role.name != current_role_name() && !is_predefined_role(&role.name) {
             if role_exists(target, &role.name)? {
                 delete_role_record(target, &role.name)?;
             }
@@ -3350,6 +3418,9 @@ pub(crate) fn role_schema_shared(
     if name == current_role_name() {
         return Ok(Some(std::sync::Arc::new(current_role_schema())));
     }
+    if is_predefined_role(&name) {
+        return Ok(Some(std::sync::Arc::new(default_role_schema(&name))));
+    }
     let generation = db.collection_generation(ROLE_COLLECTION);
     let key = (db.instance_id(), name);
     let hit = ROLE_SCHEMA_MEMO.with(|memo| {
@@ -3405,6 +3476,16 @@ pub(crate) fn role_privilege_closure(db: &BicDb, user: &str) -> Result<BTreeSet<
                     pending.push(role);
                 }
             }
+        }
+    }
+    // pg_monitor is a member of these predefined roles in PostgreSQL.
+    if closure.contains("pg_monitor") {
+        for implied in [
+            "pg_read_all_settings",
+            "pg_read_all_stats",
+            "pg_stat_scan_tables",
+        ] {
+            closure.insert(implied.to_string());
         }
     }
     Ok(closure)
@@ -4385,6 +4466,9 @@ fn role_has_table_privilege_uncached(
     }
     let inherited = role_privilege_closure(db, &role)?;
     if inherited.contains(&normalize_role_name(&owner)) {
+        return Ok(true);
+    }
+    if predefined_role_grants_table_privilege(&inherited, privilege) {
         return Ok(true);
     }
     Ok(list_privileges(db)?.into_iter().any(|grant| {

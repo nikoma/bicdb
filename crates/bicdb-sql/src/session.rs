@@ -6856,15 +6856,36 @@ impl<'db> SqlSession<'db> {
         let roles = list_roles(self.db_ref())?;
         let mut user_types = Vec::with_capacity(ddl.types.len());
         for identity in &ddl.types {
-            let mut user_type = load_user_type(
-                self.db_ref(),
-                &identity.schema_name,
-                &identity.name,
-            )?
-            .ok_or_else(|| {
-                SqlError::undefined_type(format!("{}.{}", identity.schema_name, identity.name))
-            })?;
-            self.ensure_user_type_owner(&user_type)?;
+            let found = load_user_type(self.db_ref(), &identity.schema_name, &identity.name)?;
+            let Some(mut user_type) = found else {
+                // `_name` is the array type of a user type: PostgreSQL refuses
+                // to set its privileges separately from the element type.
+                if let Some(element) = identity.name.strip_prefix('_') {
+                    if load_user_type(self.db_ref(), &identity.schema_name, element)?.is_some() {
+                        return Err(SqlError::RaisedException {
+                            sqlstate: "0LP01".into(),
+                            message: "cannot set privileges of array types".into(),
+                            detail: None,
+                        });
+                    }
+                }
+                return Err(SqlError::undefined_type(format!(
+                    "{}.{}",
+                    identity.schema_name, identity.name
+                )));
+            };
+            if ddl.domain && !matches!(user_type.kind, UserTypeKind::Domain { .. }) {
+                return Err(SqlError::data_exception(
+                    "42809",
+                    format!("\"{}\" is not a domain", user_type.name),
+                    Some(user_type.name.clone()),
+                ));
+            }
+            // Granting needs a grant option, which only the owner holds here;
+            // PostgreSQL reports a role without one as having no privilege.
+            if self.ensure_user_type_owner(&user_type).is_err() {
+                return Err(type_usage_denied(&user_type));
+            }
             if !user_type.acl_explicit {
                 let object_name = user_type_privilege_name(&user_type.schema_name, &user_type.name);
                 for grantee in ["public", user_type.owner.as_str()] {
@@ -6942,11 +6963,25 @@ impl<'db> SqlSession<'db> {
         if role_can_use_user_type(self.db_ref(), &role, &user_type)? {
             return Ok(());
         }
-        Err(SqlError::BicDb(BicDbError::Authorization(format!(
-            "permission denied for type {}.{}",
-            user_type.schema_name, user_type.name
-        ))))
+        Err(type_usage_denied(&user_type))
     }
+}
+
+/// PostgreSQL's aclcheck_error_type text: the type as format_type_be prints
+/// it, schema-qualified only when not on the default search path.
+pub(crate) fn type_usage_denied(user_type: &UserTypeSchema) -> SqlError {
+    let name = if matches!(user_type.schema_name.as_str(), "public" | "pg_catalog") {
+        pg_partition_key_identifier(&user_type.name)
+    } else {
+        format!(
+            "{}.{}",
+            pg_partition_key_identifier(&user_type.schema_name),
+            pg_partition_key_identifier(&user_type.name)
+        )
+    };
+    SqlError::BicDb(BicDbError::Authorization(format!(
+        "permission denied for type {name}"
+    )))
 }
 
 fn index_expr_collation_oid(columns: &[ColumnSchema], expr: &Expr) -> Result<i64> {

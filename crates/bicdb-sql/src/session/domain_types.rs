@@ -812,6 +812,11 @@ impl<'db> SqlSession<'db> {
                         }
                         return Err(SqlError::UndefinedRole { name: role });
                     }
+                    if is_predefined_role(&role) {
+                        return Err(SqlError::dependent_objects_still_exist(format!(
+                            "cannot drop role {role} because it is required by the database system"
+                        )));
+                    }
                     let target = load_role_schema(self.db_ref(), &role)?
                         .ok_or_else(|| SqlError::UndefinedRole { name: role.clone() })?;
                     self.ensure_role_target_manageable(&target, "drop")?;
@@ -1534,6 +1539,12 @@ impl<'db> SqlSession<'db> {
                         continue;
                     }
                     partition_columns_published = false;
+                    // A column of a user type needs USAGE on it (PostgreSQL's
+                    // aclcheck in ATExecAddColumn), as CREATE TABLE does.
+                    if !*if_not_exists || schema.column(&ident_value(&column_def.name)).is_none() {
+                        let column = column_schema_from_def(self.db_ref(), column_def)?;
+                        self.ensure_user_type_usage(column.user_type.as_ref())?;
+                    }
                     self.capture_table_state_undo(&table, &schema)?;
                     if !self.alter_table_add_generated_column(
                         &table,
@@ -3978,6 +3989,29 @@ impl<'db> SqlSession<'db> {
         Ok(SqlResult::command("CREATE INDEX"))
     }
 
+    /// USAGE on a user type named by a routine signature (`name`,
+    /// `schema.name`, or either with `[]`). Built-in types need nothing.
+    pub(crate) fn ensure_type_name_usage(&self, pg_type: &str) -> Result<()> {
+        let base = pg_type.trim().trim_end_matches("[]").trim();
+        let parts = sql_identifier_parts(base).unwrap_or_default();
+        let (schema_name, name) = match parts.as_slice() {
+            [name] => ("public".to_string(), name.clone()),
+            [schema_name, name] => (schema_name.clone(), name.clone()),
+            _ => return Ok(()),
+        };
+        let Some(user_type) = load_user_type(self.db_ref(), &schema_name, &name)? else {
+            return Ok(());
+        };
+        if self.current_user_is_superuser()? {
+            return Ok(());
+        }
+        let role = current_user_from_gucs(&self.session_gucs);
+        if role_can_use_user_type(self.db_ref(), &role, &user_type)? {
+            return Ok(());
+        }
+        Err(type_usage_denied(&user_type))
+    }
+
     pub(crate) fn execute_create_function(
         &mut self,
         create_function: &CreateFunction,
@@ -4054,6 +4088,11 @@ impl<'db> SqlSession<'db> {
                 "void".to_string(),
             ));
         let arg_types = routine_argument_type_schemas(create_function.args.as_ref())?;
+        // Argument and result types need USAGE (PostgreSQL's
+        // aclcheck_error_type in ProcedureCreate's callers).
+        for routine_type in arg_types.iter().chain(std::iter::once(&return_type_schema)) {
+            self.ensure_type_name_usage(&routine_type.pg_type)?;
+        }
         let (input_types, mut output_types) =
             routine_argument_directions(create_function.args.as_ref(), &arg_types);
         output_types.extend(explicit_return_type_schemas(

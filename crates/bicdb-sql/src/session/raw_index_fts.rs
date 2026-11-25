@@ -1394,6 +1394,7 @@ impl<'db> SqlSession<'db> {
             ));
         };
         let name = normalize_role_name(first.trim_matches('"'));
+        ensure_unreserved_role_name(&name)?;
         let mut role = default_role_schema(&name);
         role.can_login = true;
         let options = rest[first.len()..].trim().to_ascii_uppercase();
@@ -1533,6 +1534,25 @@ impl<'db> SqlSession<'db> {
             };
         }
         let existing_memberships = list_role_memberships(self.db_ref())?;
+        // Predefined roles confer data access (pg_read_all_data, ...). Only a
+        // superuser or a holder of their ADMIN OPTION may grant or revoke
+        // them; CREATEROLE alone never may (as in PostgreSQL 16+).
+        if !self.current_user_is_superuser()? {
+            let current = current_user_from_gucs(&self.session_gucs);
+            for role in roles.iter() {
+                if is_predefined_role(role) && !role_admin_of(&existing_memberships, &current, role)
+                {
+                    let verb = if is_grant { "grant" } else { "revoke" };
+                    return Err(SqlError::RaisedException {
+                        sqlstate: "42501".to_string(),
+                        message: format!("permission denied to {verb} role \"{role}\""),
+                        detail: Some(format!(
+                            "Only roles with the ADMIN option on role \"{role}\" may {verb} this role."
+                        )),
+                    });
+                }
+            }
+        }
         if !self.current_user_can_manage_roles()? {
             // PostgreSQL: a role holding ADMIN OPTION on a role (directly or
             // through any role it is a member of) may grant and revoke it;
@@ -2637,6 +2657,7 @@ impl<'db> SqlSession<'db> {
         }
         for name in &create_role.names {
             let name = normalize_role_name(&object_name(name)?);
+            ensure_unreserved_role_name(&name)?;
             let mut role = default_role_schema(&name);
             role.can_login = create_role.login.unwrap_or(false);
             role.inherit = create_role.inherit.unwrap_or(true);
@@ -2671,10 +2692,19 @@ impl<'db> SqlSession<'db> {
             }
         })?;
         self.ensure_role_target_manageable(&role, "alter")?;
+        if is_predefined_role(&role_name) {
+            if matches!(operation, AlterRoleOperation::RenameRole { .. }) {
+                ensure_unreserved_role_name(&role_name)?;
+            }
+            return Err(SqlError::Unsupported(format!(
+                "ALTER ROLE of predefined role \"{role_name}\" is not supported"
+            )));
+        }
         self.capture_role_undo(&role_name)?;
         match operation {
             AlterRoleOperation::RenameRole { role_name: new } => {
                 let new_name = normalize_role_name(&ident_value(new));
+                ensure_unreserved_role_name(&new_name)?;
                 if role_exists(self.db_ref(), &new_name)? {
                     return Err(SqlError::DuplicateRole { name: new_name });
                 }

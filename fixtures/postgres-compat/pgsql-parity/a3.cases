@@ -11,5 +11,11 @@ drop_cascade.parent|CREATE TABLE dc1p(a int); CREATE TABLE dc1c(b int) INHERITS 
 rename.hierarchy|CREATE TABLE rn1p(a int); CREATE TABLE rn1c(b int) INHERITS (rn1p); INSERT INTO rn1c VALUES (1, 2); ALTER TABLE rn1p RENAME TO rn1pp; ALTER TABLE rn1c RENAME TO rn1cc; SELECT a FROM rn1pp; SELECT c.relname, p.relname FROM pg_inherits i JOIN pg_class c ON c.oid=i.inhrelid JOIN pg_class p ON p.oid=i.inhparent WHERE p.relname='rn1pp'
 inherit.empty_column_list|CREATE TABLE ec1p(a int); CREATE TABLE ec1c () INHERITS (ec1p); INSERT INTO ec1c VALUES (3); SELECT a FROM ec1p
 unlogged.quoted_default|CREATE UNLOGGED TABLE uq1(a text DEFAULT 'it''s', b int GENERATED ALWAYS AS (1)); INSERT INTO uq1 DEFAULT VALUES; SELECT a, b FROM uq1
+hstore.each_skeys_svals|CREATE EXTENSION IF NOT EXISTS hstore; SELECT * FROM each('b=>2, a=>1, c=>NULL'::hstore) ORDER BY key; SELECT skeys('b=>2, aa=>1'); SELECT svals('b=>2, aa=>1'); SELECT key FROM each('x=>1'::hstore)
+hstore.named_functions|CREATE EXTENSION IF NOT EXISTS hstore; SELECT exist('a=>1'::hstore, 'a'), defined('a=>NULL'::hstore, 'a'), delete('a=>1,b=>2'::hstore, 'a'), delete('a=>1,b=>2,c=>3'::hstore, ARRAY['a','c']), slice('a=>1,b=>2,c=>3'::hstore, ARRAY['b','c','z'])
+hstore.error_wording|CREATE EXTENSION IF NOT EXISTS hstore; SELECT 'a=>'::hstore
+hstore.error_wording2|CREATE EXTENSION IF NOT EXISTS hstore; SELECT 'a=1'::hstore
+hstore.error_wording3|CREATE EXTENSION IF NOT EXISTS hstore; SELECT 'a=>1,'::hstore
+hstore.drop_in_batch|CREATE EXTENSION IF NOT EXISTS hstore; CREATE TABLE hb1(h hstore); DROP TABLE hb1; SELECT 1
 noinherit.not_null|CREATE TABLE nn1p(a int NOT NULL NO INHERIT, b int NOT NULL); CREATE TABLE nn1c() INHERITS (nn1p); SELECT column_name, is_nullable FROM information_schema.columns WHERE table_name='nn1c' ORDER BY ordinal_position
 only.with_tableoid|CREATE TABLE ot1p(a int); CREATE TABLE ot1c(b int) INHERITS (ot1p); INSERT INTO ot1p VALUES (1); INSERT INTO ot1c VALUES (2, 2); SELECT relname, x.* FROM ONLY ot1p x, pg_class WHERE x.tableoid = pg_class.oid; SELECT count(*) FROM ot1c c LEFT JOIN ONLY ot1p p ON p.a = c.a

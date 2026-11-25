@@ -47,11 +47,15 @@ order as in PostgreSQL.
 - Functions: `akeys`, `avals`, `hstore(key, value)`, `hstore(text[],
   text[])`, `hstore_to_json`, `hstore_to_jsonb`, `hstore_to_array`.
 
-Limits: the set-returning functions `each`, `skeys`, `svals`, the
-functions `exist`, `defined`, `delete`, `slice`, `hstore(record)`,
-`populate_record`, the `#=` operator, and GIN/GiST/btree/hash indexes on
-hstore columns (refused with "no default operator class") are not
-implemented. Syntax-error messages for invalid input differ in wording.
+- Also `exist`, `defined`, `delete(hstore, text | text[])` and `slice`
+  (created as SQL functions of the extension). Input errors use
+  PostgreSQL's wording (`syntax error in hstore, near "x" at position n`).
+
+Limits: the set-returning functions `each`, `skeys` and `svals` are created
+but fail when called, because set-returning SQL functions are not
+implemented; `hstore(record)`, `populate_record`, the `#=` operator, and
+GIN/GiST/btree/hash indexes on hstore columns (refused with "no default
+operator class") are not implemented.
 
 ## citext
 

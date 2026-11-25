@@ -55,6 +55,13 @@ impl<'db> SqlSession<'db> {
                 },
             )?;
         }
+        let hstore = qualified_type(&user_type.schema_name, "hstore");
+        for (signature, _) in crate::hstore::SQL_FUNCTIONS {
+            let signature = signature.replace("{hstore}", &hstore);
+            let header = signature.split(" RETURNS ").next().unwrap_or(&signature);
+            let name = qualified_function(&user_type.schema_name, header);
+            self.execute_inner(&format!("DROP FUNCTION IF EXISTS {name}"))?;
+        }
         self.delete_session_user_type(&user_type.schema_name, &user_type.name)?;
         Ok(())
     }
@@ -117,6 +124,14 @@ impl<'db> SqlSession<'db> {
             };
             save_operator(self.db_mut()?, &operator)?;
         }
+        let hstore = qualified_type(schema, "hstore");
+        for (signature, body) in crate::hstore::SQL_FUNCTIONS {
+            let signature = signature.replace("{hstore}", &hstore);
+            let name = qualified_function(schema, &signature);
+            self.execute_inner(&format!(
+                "CREATE FUNCTION {name} LANGUAGE sql IMMUTABLE STRICT AS $hstore${body}$hstore$"
+            ))?;
+        }
         Ok(())
     }
 }
@@ -126,6 +141,14 @@ pub(crate) const HSTORE_INPUT: &str = "hstore_in";
 
 pub(crate) fn is_hstore_type(kind: &UserTypeKind) -> bool {
     matches!(kind, UserTypeKind::Base { input, .. } if input == HSTORE_INPUT)
+}
+
+fn qualified_function(schema: &str, signature: &str) -> String {
+    if schema == "public" {
+        signature.to_string()
+    } else {
+        format!("{schema}.{signature}")
+    }
 }
 
 fn qualified_type(schema: &str, pg_type: &str) -> String {

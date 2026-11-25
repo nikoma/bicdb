@@ -7,12 +7,17 @@ use crate::*;
 
 pub(crate) type Pairs = Vec<(String, Option<String>)>;
 
-fn syntax_error(input: &str) -> SqlError {
-    SqlError::data_exception(
-        "42601",
-        format!("syntax error in hstore: \"{input}\""),
-        None,
-    )
+/// PostgreSQL's hstore input errors: the character at char index `at`, and
+/// its byte position, or the end of the string.
+fn syntax_error(chars: &[char], at: usize) -> SqlError {
+    let message = match chars.get(at) {
+        None => "syntax error in hstore: unexpected end of string".to_string(),
+        Some(ch) => format!(
+            "syntax error in hstore, near \"{ch}\" at position {}",
+            chars[..at].iter().map(|ch| ch.len_utf8()).sum::<usize>()
+        ),
+    };
+    SqlError::data_exception("42601", message, None)
 }
 
 /// Parses hstore input text (`a=>1, "b c"=>NULL`).
@@ -32,13 +37,13 @@ pub(crate) fn parse(input: &str) -> Result<Pairs> {
             let mut out = String::new();
             loop {
                 let Some(&ch) = chars.get(*at) else {
-                    return Err(syntax_error(input));
+                    return Err(syntax_error(&chars, *at));
                 };
                 *at += 1;
                 match ch {
                     '\\' => {
                         let Some(&next) = chars.get(*at) else {
-                            return Err(syntax_error(input));
+                            return Err(syntax_error(&chars, *at));
                         };
                         *at += 1;
                         out.push(next);
@@ -56,7 +61,7 @@ pub(crate) fn parse(input: &str) -> Result<Pairs> {
             if ch == '\\' {
                 *at += 1;
                 let Some(&next) = chars.get(*at) else {
-                    return Err(syntax_error(input));
+                    return Err(syntax_error(&chars, *at));
                 };
                 out.push(next);
                 *at += 1;
@@ -66,7 +71,7 @@ pub(crate) fn parse(input: &str) -> Result<Pairs> {
             *at += 1;
         }
         if out.is_empty() {
-            return Err(syntax_error(input));
+            return Err(syntax_error(&chars, *at));
         }
         Ok((out, false))
     };
@@ -75,8 +80,11 @@ pub(crate) fn parse(input: &str) -> Result<Pairs> {
     while at < chars.len() {
         let (key, _) = token(&mut at, false)?;
         skip_space(&mut at);
-        if chars.get(at) != Some(&'=') || chars.get(at + 1) != Some(&'>') {
-            return Err(syntax_error(input));
+        if chars.get(at) != Some(&'=') {
+            return Err(syntax_error(&chars, at));
+        }
+        if chars.get(at + 1) != Some(&'>') {
+            return Err(syntax_error(&chars, at + 1));
         }
         at += 2;
         skip_space(&mut at);
@@ -89,11 +97,8 @@ pub(crate) fn parse(input: &str) -> Result<Pairs> {
             Some(',') => {
                 at += 1;
                 skip_space(&mut at);
-                if at >= chars.len() {
-                    return Err(syntax_error(input));
-                }
             }
-            Some(_) => return Err(syntax_error(input)),
+            Some(_) => return Err(syntax_error(&chars, at)),
         }
     }
     Ok(normalize(pairs))
@@ -273,6 +278,26 @@ pub(crate) fn eval_hstore_function(name: &str, args: &[SqlValue]) -> Result<Opti
                     .collect(),
             )
         }
+        ("hstore_defined", [h, key]) => {
+            if strict(args) {
+                return Ok(Some(SqlValue::Null));
+            }
+            SqlValue::Bool(lookup(&pairs_arg(h)?, &key.to_cell()).is_some_and(Option::is_some))
+        }
+        ("hstore_slice", [h, keys]) => {
+            if strict(args) {
+                return Ok(Some(SqlValue::Null));
+            }
+            let keys = text_array_arg(keys)?;
+            hstore_value(
+                pairs_arg(h)?
+                    .into_iter()
+                    .filter(|(candidate, _)| {
+                        keys.iter().any(|key| key.as_deref() == Some(candidate))
+                    })
+                    .collect(),
+            )
+        }
         ("akeys", [h]) => {
             if strict(args) {
                 return Ok(Some(SqlValue::Null));
@@ -383,6 +408,43 @@ pub(crate) fn eval_hstore_function(name: &str, args: &[SqlValue]) -> Result<Opti
     };
     Ok(Some(value))
 }
+
+/// The SQL functions `CREATE EXTENSION hstore` defines over the native ones,
+/// as (signature, definition); `{hstore}` is the type's qualified name.
+pub(crate) const SQL_FUNCTIONS: &[(&str, &str)] = &[
+    (
+        "exist({hstore}, text) RETURNS boolean",
+        "SELECT hstore_exist($1, $2)",
+    ),
+    (
+        "defined({hstore}, text) RETURNS boolean",
+        "SELECT hstore_defined($1, $2)",
+    ),
+    (
+        "delete({hstore}, text) RETURNS {hstore}",
+        "SELECT hstore_delete($1, $2)",
+    ),
+    (
+        "delete({hstore}, text[]) RETURNS {hstore}",
+        "SELECT hstore_delete_array($1, $2)",
+    ),
+    (
+        "slice({hstore}, text[]) RETURNS {hstore}",
+        "SELECT hstore_slice($1, $2)",
+    ),
+    (
+        "skeys({hstore}) RETURNS SETOF text",
+        "SELECT unnest(akeys($1))",
+    ),
+    (
+        "svals({hstore}) RETURNS SETOF text",
+        "SELECT unnest(avals($1))",
+    ),
+    (
+        "each(hs {hstore}, OUT key text, OUT value text) RETURNS SETOF record",
+        "SELECT * FROM jsonb_each_text(hstore_to_jsonb($1))",
+    ),
+];
 
 /// The operators `CREATE EXTENSION hstore` defines, as
 /// (name, left type, right type, function, result type).

@@ -1442,6 +1442,13 @@ impl<'db> SqlSession<'db> {
             Statement::CreateExtension(create_extension) => {
                 self.execute_create_extension(create_extension)
             }
+            // A DROP EXTENSION inside a statement batch: the extension
+            // catalog command parser owns its semantics.
+            Statement::DropExtension(_) => self
+                .execute_raw_extension_catalog(&statement.to_string())?
+                .ok_or_else(|| {
+                    SqlError::Unsupported(format!("unsupported SQL statement {statement}"))
+                }),
             Statement::Drop {
                 object_type,
                 if_exists,

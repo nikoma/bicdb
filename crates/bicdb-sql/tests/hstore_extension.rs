@@ -40,7 +40,19 @@ fn hstore_type_operators_and_lifecycle() {
         sql.execute("DROP EXTENSION hstore").unwrap_err().sqlstate(),
         "2BP01"
     );
-    sql.execute("DROP TABLE attrs").unwrap();
-    sql.execute("DROP EXTENSION hstore").unwrap();
+    assert_eq!(
+        sql.execute("SELECT exist(h, 'a'), defined(h, 'c'), delete(h, 'a'), slice(h, ARRAY['b']) FROM attrs WHERE id = 1")
+            .unwrap()
+            .rows,
+        vec![vec![
+            SqlValue::Bool(true),
+            SqlValue::Bool(false),
+            text("\"b\"=>\"2\""),
+            text("\"b\"=>\"2\"")
+        ]]
+    );
+    // DROP EXTENSION also runs inside a statement batch.
+    sql.execute("DROP TABLE attrs; DROP EXTENSION hstore")
+        .unwrap();
     assert!(sql.execute("SELECT 'a=>1'::hstore").is_err());
 }

@@ -43,7 +43,19 @@ pub(crate) fn similar_to_escape(pattern: &str, escape: Option<&str>) -> Result<S
     // count): a `]` in the first position is a literal member.
     let mut class_position = 0usize;
     let mut quotes = 0usize;
-    for ch in pattern.chars() {
+    // Inside a bracket expression, a `[:class:]`, `[.coll.]` or `[=equiv=]`
+    // element: its delimiter, so the `]` closing it does not end the
+    // bracket expression.
+    let mut element: Option<char> = None;
+    let chars = pattern.chars().collect::<Vec<_>>();
+    for (index, &ch) in chars.iter().enumerate() {
+        if let Some(delimiter) = element {
+            result.push(ch);
+            if ch == ']' && index > 0 && chars[index - 1] == delimiter {
+                element = None;
+            }
+            continue;
+        }
         if after_escape {
             if ch == '"' && !in_class {
                 match quotes {
@@ -70,6 +82,11 @@ pub(crate) fn similar_to_escape(pattern: &str, escape: Option<&str>) -> Result<S
                 result.push('\\');
             }
             result.push(ch);
+            if ch == '[' && matches!(chars.get(index + 1), Some(':' | '.' | '=')) {
+                element = chars.get(index + 1).copied();
+                class_position += 1;
+                continue;
+            }
             if ch == ']' && class_position > 0 {
                 in_class = false;
             } else if !(ch == '^' && class_position == 0) {
@@ -494,6 +511,15 @@ mod tests {
         );
         assert_eq!(similar_to_escape("[%_]x", None).unwrap(), "^(?:[%_]x)$");
         assert_eq!(similar_to_escape("[]a]", None).unwrap(), "^(?:[]a])$");
+        // A `[:class:]` element does not end the bracket expression.
+        assert_eq!(
+            similar_to_escape("_[_[:alpha:]_]_", None).unwrap(),
+            "^(?:.[_[:alpha:]_].)$"
+        );
+        assert_eq!(
+            similar_to_escape("%[%[:alnum:]%]%", None).unwrap(),
+            "^(?:.*[%[:alnum:]%].*)$"
+        );
         assert_eq!(
             similar_to_escape("a", Some("ab")).unwrap_err().sqlstate(),
             "22025"

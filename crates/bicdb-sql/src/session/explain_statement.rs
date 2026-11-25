@@ -198,6 +198,13 @@ impl SqlSession<'_> {
             if is_virtual_table(&collection) {
                 continue;
             }
+            // A table function (`FROM generate_series(1, 3)`) is no relation;
+            // a missing table is reported by the plan builder.
+            if load_schema(self.db_ref(), &collection)?.is_none()
+                && load_view(self.db_ref(), &collection)?.is_none()
+            {
+                continue;
+            }
             engine.require_relation_privilege(&collection, "SELECT")?;
         }
         Ok(())

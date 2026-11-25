@@ -1153,9 +1153,14 @@ pub(crate) fn postgres_interval_input_error(value: &str, error: PgCanonicalValue
 
 pub(crate) fn unknown_timestamp_timezone(value: &str) -> Option<&str> {
     let (timestamp, candidate) = value.trim().rsplit_once(char::is_whitespace)?;
+    // A plain word that is no known abbreviation is a syntax error in
+    // PostgreSQL; only zone-name shapes report an unrecognized zone.
     if !candidate
         .chars()
         .any(|character| character.is_ascii_alphabetic() || character == '/')
+        || candidate
+            .chars()
+            .all(|character| character.is_ascii_alphabetic())
         || validate_timezone_name(candidate)
         || PgTimestamp::from_postgres_text(timestamp.trim_end(), false).is_err()
     {

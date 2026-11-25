@@ -751,6 +751,30 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
 
     fn function(&mut self, function: &Function, prefix: bool) -> String {
         let name = function.name.to_string().to_ascii_lowercase();
+        // The planner folds similar_to_escape of constants into the
+        // translated pattern (the SIMILAR TO rewrite's argument).
+        if name == "similar_to_escape" {
+            if let FunctionArguments::List(list) = &function.args {
+                let texts = list
+                    .args
+                    .iter()
+                    .map(|arg| match arg {
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(value))) => {
+                            literal_text(&value.value)
+                        }
+                        _ => None,
+                    })
+                    .collect::<Option<Vec<_>>>();
+                if let Some(texts) = texts.filter(|texts| (1..=2).contains(&texts.len())) {
+                    if let Ok(pattern) = crate::similar_to::similar_to_escape(
+                        &texts[0],
+                        texts.get(1).map(String::as_str),
+                    ) {
+                        return const_text(&pattern, "text");
+                    }
+                }
+            }
+        }
         let args = match &function.args {
             FunctionArguments::List(list) => list
                 .args
@@ -1083,6 +1107,13 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
             if !view.materialized {
                 return self.view_scan(&view, &relname, alias, quals);
             }
+        }
+        if !is_virtual_table(&collection)
+            && load_schema(self.engine.db_ref(), &collection)?.is_none()
+        {
+            // Reports a missing relation as executing the statement would.
+            self.engine
+                .require_relation_privilege(&collection, "SELECT")?;
         }
         let refname = self.refname(&relname, alias.map(|alias| alias.name.value.as_str()));
         let columns = self.table_columns(&collection)?;

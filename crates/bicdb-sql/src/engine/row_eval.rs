@@ -1296,12 +1296,9 @@ impl<'db> SqlEngine<'db> {
             }
         }
         let root_type = self.row_expr_pg_type(root, context);
-        eval_access_chain_expr(
-            root,
-            access_chain,
-            root_type.as_deref(),
-            |expr| self.eval_slot_row_value(row, context, expr),
-        )
+        eval_access_chain_expr(root, access_chain, root_type.as_deref(), |expr| {
+            self.eval_slot_row_value(row, context, expr)
+        })
     }
 
     /// A prefix operator (`~`, `!!`, geometric `@@`, `#`, `?|`, ...) over a
@@ -1416,12 +1413,9 @@ impl<'db> SqlEngine<'db> {
         }
         let root_type =
             row_columns_expr_pg_type(self.db_ref(), root, row.keys().map(String::as_str));
-        eval_access_chain_expr(
-            root,
-            access_chain,
-            root_type.as_deref(),
-            |expr| self.eval_row_value(row, expr),
-        )
+        eval_access_chain_expr(root, access_chain, root_type.as_deref(), |expr| {
+            self.eval_row_value(row, expr)
+        })
     }
 
     pub(crate) fn eval_slot_row_value(

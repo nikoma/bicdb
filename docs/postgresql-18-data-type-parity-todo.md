@@ -628,11 +628,14 @@ contract without duplicating its implementation.
       `point[i]`, `lseg[i]` and `box[i]`, type an untyped literal operand as the
       other operand's geometric type, and index boxes with infinite or NaN
       coordinates.
-- [ ] DT-1308 Remaining regression-suite gaps: `extra_float_digits` is not
-      applied to float8 and geometric output; geometric operators, subscripts and
-      the prefix operators `@@`, `#`, `?|`, `?-` are not typed over joins
-      (`SELECT a.p * b.p FROM t a, t b`, `WHERE b.p[1] > 3`), where the joined
-      row carries no column types.
+- [x] DT-1308 Type geometric operands over joins (the FROM relations' column
+      types are recorded for the joined row), so `a.p * b.p`, `b.p[1] > 3`,
+      the prefix operators `@@`, `@-@`, `#`, `?|`, `?-` (also in WHERE), and
+      casts between geometric types (`lseg::point` is `point(lseg)`, as in
+      `pg_cast`) evaluate as in PostgreSQL; line input reports PostgreSQL's
+      `invalid line specification` messages.
+- [ ] DT-1309 `extra_float_digits` is not applied to float8 and geometric
+      output (owned by the float-output work).
 
 ## P13 - Object identifiers, LSNs, snapshots, and pseudo-types
 

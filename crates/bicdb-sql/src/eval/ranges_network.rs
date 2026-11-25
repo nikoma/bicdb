@@ -2019,10 +2019,22 @@ pub(crate) fn eval_unary_bit_not_expr_value(
     value: SqlValue,
     schema: Option<&TableSchema>,
 ) -> Result<SqlValue> {
+    eval_unary_bit_not_expr_value_typed(op, expr, value, schema, None)
+}
+
+/// [`eval_unary_bit_not_expr_value`] where the caller knows the operand's
+/// type (a row column), which a schema-free typer cannot see.
+pub(crate) fn eval_unary_bit_not_expr_value_typed(
+    op: &UnaryOperator,
+    expr: &Expr,
+    value: SqlValue,
+    schema: Option<&TableSchema>,
+    known_type: Option<String>,
+) -> Result<SqlValue> {
     if matches!(value, SqlValue::Null) {
         return Ok(SqlValue::Null);
     }
-    let pg_type = projected_expr_pg_type(expr, schema);
+    let pg_type = known_type.or_else(|| projected_expr_pg_type(expr, schema));
     if let Some(value) = eval_geometric_unary_value(op, &value, pg_type.as_deref())? {
         return Ok(value);
     }

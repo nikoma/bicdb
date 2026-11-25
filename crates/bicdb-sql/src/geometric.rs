@@ -2250,8 +2250,11 @@ const MAX_POLYGON_POINTS: i64 = 1_000_000;
 
 fn circle_polygon_points(count: usize, center: PgPoint, radius: f64) -> Result<Vec<PgPoint>> {
     if pg_float_eq(radius, 0.0) {
-        return Err(SqlError::Unsupported(
-            "cannot convert circle with radius zero to polygon".to_string(),
+        return Err(SqlError::coded(
+            "0A000",
+            "cannot convert circle with radius zero to polygon",
+            None,
+            None,
         ));
     }
     Ok((0..count)
@@ -2263,6 +2266,50 @@ fn circle_polygon_points(count: usize, center: PgPoint, radius: f64) -> Result<V
             )
         })
         .collect())
+}
+
+/// The type of `n` plain subscripts applied to a value of `pg_type`:
+/// point -> float8, lseg/box -> point; `None` for other types.
+pub(crate) fn geometric_subscript_type(pg_type: &str, subscripts: usize) -> Option<&'static str> {
+    let mut current = match pg_type {
+        "point" => "point",
+        "lseg" => "lseg",
+        "box" => "box",
+        _ => return None,
+    };
+    for _ in 0..subscripts {
+        current = match current {
+            "point" => "float8",
+            "lseg" | "box" => "point",
+            _ => return None,
+        };
+    }
+    Some(current)
+}
+
+/// `t.p[1]` reaches the evaluator as root `t` with `.p` then `[1]`: the
+/// column the subscripts apply to (`t.p`) and the subscripts after it.
+pub(crate) fn qualified_access_root<'a>(
+    root: &sqlparser::ast::Expr,
+    access_chain: &'a [sqlparser::ast::AccessExpr],
+) -> Option<(sqlparser::ast::Expr, &'a [sqlparser::ast::AccessExpr])> {
+    use sqlparser::ast::{AccessExpr, Expr};
+    let mut parts = match root {
+        Expr::Identifier(ident) => vec![ident.clone()],
+        Expr::CompoundIdentifier(idents) => idents.clone(),
+        _ => return Some((root.clone(), access_chain)),
+    };
+    let mut next = 0;
+    while let Some(AccessExpr::Dot(Expr::Identifier(ident))) = access_chain.get(next) {
+        parts.push(ident.clone());
+        next += 1;
+    }
+    let column = if parts.len() == 1 {
+        Expr::Identifier(parts.pop().expect("one part"))
+    } else {
+        Expr::CompoundIdentifier(parts)
+    };
+    Some((column, &access_chain[next..]))
 }
 
 /// PostgreSQL's subscripts of the fixed-length geometric types: `point[0]`

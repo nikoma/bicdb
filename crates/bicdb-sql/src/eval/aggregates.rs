@@ -2618,6 +2618,11 @@ pub(crate) fn projected_access_type_state(
                             }
                             current.array = false;
                             pg_type = current.formatted_name();
+                        } else if let Some(element) =
+                            crate::geometric::geometric_subscript_type(&pg_type, 1)
+                        {
+                            // point[i] is float8, lseg[i]/box[i] a point.
+                            pg_type = element.to_string();
                         } else {
                             pg_type = pg_type.strip_suffix("[]")?.to_string();
                         }

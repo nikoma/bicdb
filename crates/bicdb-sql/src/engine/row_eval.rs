@@ -207,17 +207,31 @@ impl<'db> SqlEngine<'db> {
         columns: impl Iterator<Item = &'c str>,
     ) -> Option<String> {
         self.infer_env_expr_type(expr, env).or_else(|| {
-            if !matches!(
-                unwrap_nested_expr(expr),
-                Expr::Identifier(_) | Expr::CompoundIdentifier(_)
-            ) {
+            let subscript = matches!(unwrap_nested_expr(expr), Expr::CompoundFieldAccess { .. });
+            if !subscript
+                && !matches!(
+                    unwrap_nested_expr(expr),
+                    Expr::Identifier(_) | Expr::CompoundIdentifier(_)
+                )
+            {
                 return None;
             }
             let mut keys = columns.map(str::to_string).collect::<Vec<_>>();
             if let Some(outer) = self.outer_row.as_ref() {
                 keys.extend(outer.columns().iter().cloned());
             }
-            row_columns_expr_pg_type(self.db_ref(), expr, keys.iter().map(String::as_str))
+            let pg_type =
+                row_columns_expr_pg_type(self.db_ref(), expr, keys.iter().map(String::as_str));
+            // Of subscripts, only a geometric one (`p[0]` is float8) is typed
+            // here; arrays keep the comparison's own resolution.
+            if subscript
+                && !pg_type
+                    .as_deref()
+                    .is_some_and(|pg_type| matches!(pg_type, "float8" | "point"))
+            {
+                return None;
+            }
+            pg_type
         })
     }
 
@@ -1233,6 +1247,9 @@ impl<'db> SqlEngine<'db> {
                     ))),
                 }
             }
+            Expr::UnaryOp { op, .. } if is_geometric_unary_operator(op) => {
+                sql_value_truth(self.eval_slot_row_value(row, context, expr)?)
+            }
             other => Err(SqlError::Unsupported(format!(
                 "unsupported WHERE expression {other}"
             ))),
@@ -1265,18 +1282,114 @@ impl<'db> SqlEngine<'db> {
         root: &Expr,
         access_chain: &[sqlparser::ast::AccessExpr],
     ) -> Result<SqlValue> {
+        if let Some((column, subscripts)) =
+            crate::geometric::qualified_access_root(root, access_chain)
+        {
+            let column_type = self.row_expr_pg_type(&column, context);
+            if let Some(value) = crate::geometric::eval_geometric_access_chain(
+                column_type.as_deref(),
+                &column,
+                subscripts,
+                |expr| self.eval_slot_row_value(row, context, expr),
+            ) {
+                return value;
+            }
+        }
         let root_type = self.row_expr_pg_type(root, context);
-        if let Some(value) = crate::geometric::eval_geometric_access_chain(
-            root_type.as_deref(),
+        eval_access_chain_expr(
             root,
             access_chain,
+            root_type.as_deref(),
             |expr| self.eval_slot_row_value(row, context, expr),
-        ) {
-            return value;
-        }
-        eval_access_chain_expr(root, access_chain, root_type.as_deref(), |expr| {
-            self.eval_slot_row_value(row, context, expr)
-        })
+        )
+    }
+
+    /// A prefix operator (`~`, `!!`, geometric `@@`, `#`, `?|`, ...) over a
+    /// row value, typed by the row's columns. Kept out of the recursive
+    /// evaluator's frame.
+    #[inline(never)]
+    fn eval_slot_unary_operator(
+        &self,
+        row: &SlotRow,
+        context: &BoundRowContext,
+        op: &UnaryOperator,
+        expr: &Expr,
+    ) -> Result<SqlValue> {
+        let value = self.eval_slot_row_value(row, context, expr)?;
+        let known_type = self.infer_slot_row_expr_type(context.row_lookup.columns(), expr);
+        eval_unary_bit_not_expr_value_typed(op, expr, value, None, known_type)
+    }
+
+    /// [`Self::eval_slot_unary_operator`] over a named-column row.
+    #[inline(never)]
+    fn eval_row_unary_operator(
+        &self,
+        row: &SqlRow,
+        op: &UnaryOperator,
+        expr: &Expr,
+    ) -> Result<SqlValue> {
+        let value = self.eval_row_value(row, expr)?;
+        let known_type = self.infer_sql_row_expr_type(row, expr);
+        eval_unary_bit_not_expr_value_typed(op, expr, value, None, known_type)
+    }
+
+    /// [`Self::cast_row_value`] over a slot row.
+    #[inline(never)]
+    fn cast_slot_row_value(
+        &self,
+        context: &BoundRowContext,
+        value: SqlValue,
+        expr: &Expr,
+        data_type: &DataType,
+    ) -> Result<SqlValue> {
+        let (scope, _) = self.bound_row_context(context.column_keys());
+        // An integer target reads a string source with the integer input
+        // function; a geometric source casts through its conversion function.
+        let integer_target = pg_type_from_data_type(data_type)
+            .is_ok_and(|(pg_type, _)| matches!(pg_type.as_str(), "int2" | "int4" | "int8"));
+        let source_type = scope.known_expr_type(expr).or_else(|| {
+            self.infer_slot_row_expr_type(context.row_lookup.columns(), expr)
+                .filter(|pg_type| integer_target || is_geometric_type(Some(pg_type)))
+        });
+        cast_expr_value_with_db_and_source_type(
+            self.db_ref(),
+            value,
+            expr,
+            data_type,
+            None,
+            source_type,
+        )
+    }
+
+    /// A cast of a value computed from `row`: the row's column types name the
+    /// source type (a geometric column casts through its conversion
+    /// function). Kept out of the recursive evaluator's frame.
+    #[inline(never)]
+    fn cast_row_value(
+        &self,
+        row: &SqlRow,
+        value: SqlValue,
+        expr: &Expr,
+        data_type: &DataType,
+    ) -> Result<SqlValue> {
+        let columns = row.keys().cloned().collect::<Vec<_>>();
+        let (scope, _) = self.bound_row_context(&columns);
+        // An integer target reads a string source with the integer input
+        // function; a geometric source casts through its conversion function.
+        let integer_target = pg_type_from_data_type(data_type)
+            .is_ok_and(|(pg_type, _)| matches!(pg_type.as_str(), "int2" | "int4" | "int8"));
+        let source_type = scope.known_expr_type(expr).or_else(|| {
+            self.infer_sql_row_expr_type(row, expr)
+                .filter(|pg_type| integer_target || is_geometric_type(Some(pg_type)))
+        });
+        cast_expr_value_with_db_and_source_type(
+            self.db_ref(),
+            value,
+            expr,
+            data_type,
+            None,
+            source_type,
+        )
     }
 
     /// [`Self::eval_slot_access_chain`] over a named-column row.
@@ -1287,19 +1400,28 @@ impl<'db> SqlEngine<'db> {
         root: &Expr,
         access_chain: &[sqlparser::ast::AccessExpr],
     ) -> Result<SqlValue> {
+        if let Some((column, subscripts)) =
+            crate::geometric::qualified_access_root(root, access_chain)
+        {
+            let column_type =
+                row_columns_expr_pg_type(self.db_ref(), &column, row.keys().map(String::as_str));
+            if let Some(value) = crate::geometric::eval_geometric_access_chain(
+                column_type.as_deref(),
+                &column,
+                subscripts,
+                |expr| self.eval_row_value(row, expr),
+            ) {
+                return value;
+            }
+        }
         let root_type =
             row_columns_expr_pg_type(self.db_ref(), root, row.keys().map(String::as_str));
-        if let Some(value) = crate::geometric::eval_geometric_access_chain(
-            root_type.as_deref(),
+        eval_access_chain_expr(
             root,
             access_chain,
+            root_type.as_deref(),
             |expr| self.eval_row_value(row, expr),
-        ) {
-            return value;
-        }
-        eval_access_chain_expr(root, access_chain, root_type.as_deref(), |expr| {
-            self.eval_row_value(row, expr)
-        })
+        )
     }
 
     pub(crate) fn eval_slot_row_value(
@@ -1515,23 +1637,7 @@ impl<'db> SqlEngine<'db> {
                         .map(SqlValue::String);
                     }
                 }
-                let (scope, _) = self.bound_row_context(context.column_keys());
-                let source_type = scope.known_expr_type(expr).or_else(|| {
-                    pg_type_from_data_type(data_type)
-                        .is_ok_and(|(pg_type, _)| {
-                            matches!(pg_type.as_str(), "int2" | "int4" | "int8")
-                        })
-                        .then(|| self.infer_slot_row_expr_type(context.row_lookup.columns(), expr))
-                        .flatten()
-                });
-                cast_expr_value_with_db_and_source_type(
-                    self.db_ref(),
-                    value,
-                    expr,
-                    data_type,
-                    None,
-                    source_type,
-                )
+                self.cast_slot_row_value(context, value, expr, data_type)
             }
             Expr::Position { expr, r#in } => eval_position_typed_value(
                 self.eval_slot_row_value(row, context, expr)?,
@@ -1712,12 +1818,7 @@ impl<'db> SqlEngine<'db> {
                     UnaryOperator::BitwiseNot | UnaryOperator::PGPrefixFactorial
                 ) || is_geometric_unary_operator(op) =>
             {
-                eval_unary_bit_not_expr_value(
-                    op,
-                    expr,
-                    self.eval_slot_row_value(row, context, expr)?,
-                    None,
-                )
+                self.eval_slot_unary_operator(row, context, op, expr)
             }
             other => Err(SqlError::Unsupported(format!(
                 "unsupported value expression {other}"
@@ -3095,6 +3196,9 @@ impl<'db> SqlEngine<'db> {
             Expr::Value(_) | Expr::TypedString(_) => {
                 sql_value_truth(self.eval_row_value(row, expr)?)
             }
+            Expr::UnaryOp { op, .. } if is_geometric_unary_operator(op) => {
+                sql_value_truth(self.eval_row_value(row, expr)?)
+            }
             other => Err(SqlError::Unsupported(format!(
                 "unsupported WHERE expression {other}"
             ))),
@@ -3291,24 +3395,7 @@ impl<'db> SqlEngine<'db> {
                         .map(SqlValue::String);
                     }
                 }
-                let columns = row.keys().cloned().collect::<Vec<_>>();
-                let (scope, _) = self.bound_row_context(&columns);
-                let source_type = scope.known_expr_type(expr).or_else(|| {
-                    pg_type_from_data_type(data_type)
-                        .is_ok_and(|(pg_type, _)| {
-                            matches!(pg_type.as_str(), "int2" | "int4" | "int8")
-                        })
-                        .then(|| self.infer_sql_row_expr_type(row, expr))
-                        .flatten()
-                });
-                cast_expr_value_with_db_and_source_type(
-                    self.db_ref(),
-                    value,
-                    expr,
-                    data_type,
-                    None,
-                    source_type,
-                )
+                self.cast_row_value(row, value, expr, data_type)
             }
             Expr::Position { expr, r#in } => eval_position_typed_value(
                 self.eval_row_value(row, expr)?,
@@ -3443,7 +3530,7 @@ impl<'db> SqlEngine<'db> {
                     UnaryOperator::BitwiseNot | UnaryOperator::PGPrefixFactorial
                 ) || is_geometric_unary_operator(op) =>
             {
-                eval_unary_bit_not_expr_value(op, expr, self.eval_row_value(row, expr)?, None)
+                self.eval_row_unary_operator(row, op, expr)
             }
             other => Err(SqlError::Unsupported(format!(
                 "unsupported value expression {other}"

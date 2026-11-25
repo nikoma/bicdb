@@ -2369,6 +2369,23 @@ impl FieldRef {
                 return result;
             }
         }
+        // Between geometric types a cast is the conversion function
+        // (`lseg::point` is `point(lseg)`).
+        if let (Some(target), Some(source)) = (target_type.as_deref(), self.declared_pg_type()) {
+            if target != source
+                && is_geometric_type(Some(target))
+                && is_geometric_type(Some(&source))
+            {
+                validate_catalog_cast(&source, target, PgCastContext::Explicit)?;
+                if let Some(value) = crate::geometric::eval_geometric_function_value(
+                    target,
+                    std::slice::from_ref(&value),
+                    &[Some(source.clone())],
+                )? {
+                    return Ok(value);
+                }
+            }
+        }
         if matches!(
             target_type.as_deref(),
             Some("text" | "varchar" | "bpchar" | "name")

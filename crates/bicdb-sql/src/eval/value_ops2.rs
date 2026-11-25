@@ -3015,6 +3015,20 @@ pub(crate) fn cast_expr_value_with_db_and_source_type(
         if let (Some(source), Some(target)) = (source_pg_type.as_deref(), target_pg_type.as_deref())
         {
             validate_catalog_cast(source, target, PgCastContext::Explicit)?;
+            // PostgreSQL casts between geometric types through their
+            // conversion functions (`lseg::point` is `point(lseg)`).
+            if source != target
+                && is_geometric_type(Some(source))
+                && is_geometric_type(Some(target))
+            {
+                if let Some(value) = crate::geometric::eval_geometric_function_value(
+                    target,
+                    std::slice::from_ref(&value),
+                    &[Some(source.to_string())],
+                )? {
+                    return Ok(value);
+                }
+            }
         }
     }
     if target_pg_type

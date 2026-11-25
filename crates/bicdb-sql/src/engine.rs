@@ -3891,6 +3891,29 @@ pub(crate) fn row_columns_expr_pg_type<'a>(
     columns: impl IntoIterator<Item = &'a str>,
 ) -> Option<String> {
     let columns = columns.into_iter().collect::<Vec<_>>();
+    if let Expr::CompoundFieldAccess { root, access_chain } = expr {
+        if let Some((column, subscripts)) =
+            crate::geometric::qualified_access_root(root, access_chain)
+        {
+            let plain = subscripts.iter().all(|access| {
+                matches!(
+                    access,
+                    sqlparser::ast::AccessExpr::Subscript(sqlparser::ast::Subscript::Index { .. })
+                )
+            });
+            if plain && !subscripts.is_empty() {
+                if let Some(pg_type) =
+                    row_columns_expr_pg_type(db, &column, columns.iter().copied()).and_then(
+                        |pg_type| {
+                            crate::geometric::geometric_subscript_type(&pg_type, subscripts.len())
+                        },
+                    )
+                {
+                    return Some(pg_type.to_string());
+                }
+            }
+        }
+    }
     if let Some(registered) = registered_column_expr_type(expr, &columns) {
         return registered;
     }

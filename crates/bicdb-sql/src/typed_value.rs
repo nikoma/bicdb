@@ -69,6 +69,9 @@ pub enum PgCanonicalValueError {
     RangeCanonicalOverflow(&'static str),
     #[error("invalid input syntax for type {pg_type}: \"{value}\"")]
     InvalidSpecialValue { pg_type: String, value: String },
+    /// A line's input names no line (`invalid line specification: ...`).
+    #[error("invalid line specification: {0}")]
+    InvalidLineSpecification(&'static str),
 }
 
 #[derive(Clone, Copy, Debug, Error, PartialEq, Eq)]
@@ -4316,7 +4319,9 @@ fn parse_geometric(pg_type: &str, value: &str) -> Result<PgGeometric, PgCanonica
                 cursor.expect(b'}')?;
                 cursor.skip_spaces();
                 if pg_float_eq(a, 0.0) && pg_float_eq(b, 0.0) {
-                    return Err(invalid());
+                    return Err(PgCanonicalValueError::InvalidLineSpecification(
+                        "A and B cannot both be zero",
+                    ));
                 }
                 PgGeometric::Line {
                     a: PgFloat8::from_value(a),
@@ -4326,7 +4331,9 @@ fn parse_geometric(pg_type: &str, value: &str) -> Result<PgGeometric, PgCanonica
             } else {
                 let (points, _) = cursor.path(true, 2)?;
                 if pg_point_eq(points[0], points[1]) {
-                    return Err(invalid());
+                    return Err(PgCanonicalValueError::InvalidLineSpecification(
+                        "must be two distinct points",
+                    ));
                 }
                 line_from_points(points[0], points[1])
             }

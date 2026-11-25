@@ -2114,6 +2114,13 @@ impl BoundExprScope {
                 _ if bound_expr_supports_binary_operator(op) => {
                     let left_type = self.known_expr_type(left);
                     let right_type = self.known_expr_type(right);
+                    // Geometric arithmetic (point + point, box * point) is the
+                    // typed evaluator's.
+                    if is_geometric_type(left_type.as_deref())
+                        || is_geometric_type(right_type.as_deref())
+                    {
+                        return None;
+                    }
                     let left = Box::new(self.bind_in(left, ctx)?);
                     let right = Box::new(self.bind_in(right, ctx)?);
                     if temporal_binary_result_type(left_type.as_deref(), op, right_type.as_deref())
@@ -2152,6 +2159,10 @@ impl BoundExprScope {
                         .is_some()
                     || pg_type_from_data_type(data_type).is_ok_and(|(pg_type, _)| {
                         matches!(pg_type.as_str(), "text" | "varchar" | "bpchar" | "name")
+                            // A geometric cast converts by the source type
+                            // (`box::point` is `point(box)`), which this IR
+                            // does not carry.
+                            || is_geometric_type(Some(&pg_type))
                     })
                     // Text to an integer type is the type's input function,
                     // which the typed evaluator applies.

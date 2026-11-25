@@ -461,3 +461,156 @@ fn geometric_columns_store_query_and_index() {
         );
     }
 }
+
+/// Geometric operators, subscripts, prefix operators and casts where the
+/// operands are columns of joined tables or of the scanned table.
+#[test]
+fn geometric_operators_over_joins_prefix_operators_and_casts() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE TABLE gp(id int, p point); CREATE TABLE gb(id int, b box)")
+        .unwrap();
+    session
+        .execute("INSERT INTO gp VALUES (1, '(1,2)'), (2, '(3,4)')")
+        .unwrap();
+    session
+        .execute("INSERT INTO gb VALUES (1, '(2,2),(0,0)')")
+        .unwrap();
+    let mut check = |sql: &str, expected: &[&[&str]]| {
+        let got = rows(&mut session, sql);
+        let expected = expected
+            .iter()
+            .map(|row| row.iter().map(|cell| cell.to_string()).collect::<Vec<_>>())
+            .collect::<Vec<_>>();
+        assert_eq!(got, expected, "{sql}");
+    };
+    check(
+        "SELECT a.id, b.id, a.p + b.p, a.p * b.p FROM gp a, gp b WHERE b.p[1] > 3 ORDER BY 1, 2",
+        &[
+            &["1", "2", "(4,6)", "(-5,10)"],
+            &["2", "2", "(6,8)", "(-7,24)"],
+        ],
+    );
+    check(
+        "SELECT g.b + p.p, g.b * p.p FROM gb g, gp p WHERE p.p[0] < 2",
+        &[&["(3,4),(1,2)", "(0,6),(-2,0)"]],
+    );
+    check("SELECT @@ b, # polygon(b) FROM gb", &[&["(1,1)", "4"]]);
+    check(
+        "SELECT s FROM (SELECT lseg '[(0,0),(0,3)]' AS s) v WHERE ?| s",
+        &[&["[(0,0),(0,3)]"]],
+    );
+    check(
+        "SELECT b::point, b::polygon, p::box FROM gb, gp WHERE gp.id = 1",
+        &[&["(1,1)", "((0,0),(0,2),(2,2),(2,0))", "(1,2),(1,2)"]],
+    );
+    let error = session
+        .execute("SELECT path '[(1,2),(3,4)]'::polygon")
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "open path cannot be converted to polygon"
+    );
+    let error = session
+        .execute("SELECT polygon(circle '<(1,1),0>')")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "0A000");
+    assert_eq!(
+        error.to_string(),
+        "cannot convert circle with radius zero to polygon"
+    );
+}
+
+#[test]
+fn type_cascades_long_identifiers_and_line_specifications_match_postgresql() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE TYPE pair AS (a int, b text); CREATE TABLE holder(id int, c pair)")
+        .unwrap();
+    let error = failure(&mut session, "DROP TYPE pair");
+    assert_eq!(error.sqlstate(), "2BP01");
+    assert_eq!(
+        error.to_string(),
+        "cannot drop type pair because other objects depend on it"
+    );
+    assert_eq!(
+        detail(&error).as_deref(),
+        Some("column c of table holder depends on type pair")
+    );
+    assert_eq!(
+        notices(&session.execute("DROP TYPE pair CASCADE").unwrap()),
+        ["NOTICE: drop cascades to column c of table holder"]
+    );
+
+    let long = format!("t_{}", "x".repeat(70));
+    let cut = &long[..63];
+    let result = session
+        .execute(&format!("CREATE TABLE {long}(a int)"))
+        .unwrap();
+    assert_eq!(
+        notices(&result),
+        [format!(
+            "NOTICE: identifier \"{long}\" will be truncated to \"{cut}\""
+        )]
+    );
+    assert_eq!(
+        rows(&mut session, &format!("SELECT count(*) FROM {cut}")),
+        [["0"]]
+    );
+
+    for (input, message) in [
+        (
+            "{0,0,1}",
+            "invalid line specification: A and B cannot both be zero",
+        ),
+        (
+            "[(1,2),(1,2)]",
+            "invalid line specification: must be two distinct points",
+        ),
+    ] {
+        let error = failure(&mut session, &format!("SELECT line '{input}'"));
+        assert_eq!(error.sqlstate(), "22P02", "{input}");
+        assert_eq!(error.to_string(), message, "{input}");
+    }
+}
+
+#[test]
+fn geometric_casts_and_subscript_comparisons_over_one_table() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE TABLE gs(id int, s lseg, po polygon, p point)")
+        .unwrap();
+    session
+        .execute(
+            "INSERT INTO gs VALUES (1, '[(1,2),(3,4)]', '((0,0),(2,0),(1,3))', '(1e300,2)'), \
+             (2, '[(0,0),(0,2)]', '((0,0),(1,1),(1,0))', '(0.5,1)')",
+        )
+        .unwrap();
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT s::point, po::box, p::box FROM gs ORDER BY id"
+        ),
+        [
+            ["(2,3)", "(2,3),(0,0)", "(1e+300,2),(1e+300,2)"],
+            ["(0,1)", "(1,1),(0,0)", "(0.5,1),(0.5,1)"],
+        ]
+    );
+    assert_eq!(
+        rows(&mut session, "SELECT id FROM gs WHERE p[0] < 1"),
+        [["2"]]
+    );
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT a.id FROM gs a, gs b WHERE a.p[0] < 1 AND b.id = 1"
+        ),
+        [["2"]]
+    );
+}

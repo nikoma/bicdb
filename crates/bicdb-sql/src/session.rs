@@ -13,6 +13,7 @@ mod index_drop;
 mod instead_of_triggers;
 pub(crate) mod materialized_views;
 pub(crate) mod merge;
+mod partition_indexes;
 #[cfg(test)]
 mod timestamp_day_indexes;
 pub(crate) use merge::UpdateMatchPolicy;

@@ -383,6 +383,22 @@ pub(crate) fn resolve_regclass_name(db: &BicDb, oid: i64) -> Result<Option<Strin
             format!("{}.{}", pg_quote_ident(&namespace), logical)
         }));
     }
+    // Indexes are relations too (pg_inherits rows of partition indexes,
+    // indexrelid::regclass).
+    for schema in list_schemas(db)? {
+        for index in &schema.indexes {
+            if secondary_index_oid(&schema.schema_name, &index.name) == oid {
+                let logical = pg_quote_ident(&index.name);
+                return Ok(Some(
+                    if schema.schema_name.is_empty() || schema.schema_name == "public" {
+                        logical
+                    } else {
+                        format!("{}.{}", pg_quote_ident(&schema.schema_name), logical)
+                    },
+                ));
+            }
+        }
+    }
     Ok(None)
 }
 

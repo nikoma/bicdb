@@ -3983,6 +3983,11 @@ struct IndexSchema {
     /// `CREATE INDEX ... WHERE predicate` text of a partial index (PostgreSQL rendering for the catalog).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     predicate: Option<String>,
+    /// For an index on a partition: the name of the partitioned table's
+    /// index it is attached to (PostgreSQL's pg_inherits row for indexes).
+    /// Such an index cannot be dropped on its own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    partition_parent: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

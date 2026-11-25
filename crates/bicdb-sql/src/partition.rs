@@ -1409,6 +1409,44 @@ pub(crate) fn validate_attachment(
             )));
         }
     }
+    // MergeConstraintsIntoExisting: every CHECK of the parent must already
+    // be on the partition, under its name and with the same definition.
+    for constraint in &parent.constraints {
+        let ConstraintSchema::Check {
+            name, expression, ..
+        } = constraint
+        else {
+            continue;
+        };
+        let found = child
+            .constraints
+            .iter()
+            .find_map(|candidate| match candidate {
+                ConstraintSchema::Check {
+                    name: other,
+                    expression,
+                    ..
+                } if other == name => Some(expression),
+                _ => None,
+            });
+        let Some(other) = found else {
+            return Err(mismatch(format!(
+                "child table is missing constraint \"{name}\""
+            )));
+        };
+        let same = match (
+            parse_check_expression(expression),
+            parse_check_expression(other),
+        ) {
+            (Ok(left), Ok(right)) => left.to_string() == right.to_string(),
+            _ => expression == other,
+        };
+        if !same {
+            return Err(mismatch(format!(
+                "child table \"{child_name}\" has different definition for check constraint \"{name}\""
+            )));
+        }
+    }
     let mut ancestor = Some(parent.clone());
     let mut visited = BTreeSet::new();
     while let Some(current) = ancestor {

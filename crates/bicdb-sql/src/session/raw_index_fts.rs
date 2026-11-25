@@ -231,6 +231,7 @@ impl<'db> SqlSession<'db> {
             access_method: "gist".to_string(),
             metadata_only: false,
             predicate: None,
+            partition_parent: None,
         });
         self.save_session_schema(&schema)?;
         Ok(Some(SqlResult::command("CREATE INDEX")))
@@ -828,6 +829,7 @@ impl<'db> SqlSession<'db> {
             access_method: index.access_method,
             metadata_only: true,
             predicate: None,
+            partition_parent: None,
         });
         self.save_session_schema(&schema)?;
         Ok(Some(SqlResult::command("CREATE INDEX")))

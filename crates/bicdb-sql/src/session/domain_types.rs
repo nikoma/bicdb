@@ -1583,6 +1583,7 @@ impl<'db> SqlSession<'db> {
                         )?;
                     }
                     self.capture_table_state_undo(&table, &schema)?;
+                    let constraints_before = schema.constraints.len();
                     if let Some((old_index_name, new_index_name)) = alter_table_add_constraint(
                         self.db_mut()?,
                         &table,
@@ -1595,6 +1596,12 @@ impl<'db> SqlSession<'db> {
                                 "index \"{old_index_name}\" does not exist"
                             )));
                         }
+                    }
+                    if schema.partitioning.is_some() {
+                        let added = schema.constraints
+                            [constraints_before.min(schema.constraints.len())..]
+                            .to_vec();
+                        self.propagate_partition_checks(&schema, &added, *not_valid)?;
                     }
                     schema_dirty = true;
                 }
@@ -1784,6 +1791,36 @@ impl<'db> SqlSession<'db> {
                             self.alter_partition_column_default(&mut schema, &column_name, op)?;
                             continue;
                         }
+                        let not_null_change = schema.partitioning.is_some()
+                            && matches!(
+                                op,
+                                AlterColumnOperation::SetNotNull
+                                    | AlterColumnOperation::DropNotNull
+                            );
+                        // SET NOT NULL reaches every partition (deepest
+                        // first, so no partition is ever nullable under a
+                        // NOT NULL parent); DROP NOT NULL follows the parent.
+                        let descendants = if not_null_change {
+                            partition::physical_tables(self.db_ref(), &schema)?
+                                .into_iter()
+                                .skip(1)
+                                .collect::<Vec<_>>()
+                        } else {
+                            Vec::new()
+                        };
+                        if matches!(op, AlterColumnOperation::SetNotNull) {
+                            for mut child in descendants.iter().rev().cloned() {
+                                let child_name = child.name.clone();
+                                self.capture_table_state_undo(&child_name, &child)?;
+                                alter_table_alter_column(
+                                    self.db_mut()?,
+                                    &child_name,
+                                    &mut child,
+                                    &column_name,
+                                    op,
+                                )?;
+                            }
+                        }
                         self.capture_table_state_undo(&table, &schema)?;
                         alter_table_alter_column(
                             self.ddl_rows()?,
@@ -1792,6 +1829,19 @@ impl<'db> SqlSession<'db> {
                             &column_name,
                             op,
                         )?;
+                        if matches!(op, AlterColumnOperation::DropNotNull) {
+                            for mut child in descendants {
+                                let child_name = child.name.clone();
+                                self.capture_table_state_undo(&child_name, &child)?;
+                                alter_table_alter_column(
+                                    self.db_mut()?,
+                                    &child_name,
+                                    &mut child,
+                                    &column_name,
+                                    op,
+                                )?;
+                            }
+                        }
                     }
                 }
                 AlterTableOperation::EnableRowLevelSecurity => {
@@ -3233,7 +3283,10 @@ impl<'db> SqlSession<'db> {
         Ok(Some(SqlResult::command("DO")))
     }
 
-    pub(crate) fn execute_create_index(&mut self, create_index: &CreateIndex) -> Result<SqlResult> {
+    pub(crate) fn execute_create_index_on_relation(
+        &mut self,
+        create_index: &CreateIndex,
+    ) -> Result<SqlResult> {
         if create_index.concurrently {
             // Refused rather than silently stripped: BicDB's index build
             // holds the database's exclusive write lock for its whole
@@ -3317,6 +3370,7 @@ impl<'db> SqlSession<'db> {
                         .to_string(),
                     metadata_only: true,
                     predicate: None,
+                    partition_parent: None,
                 });
                 save_view(self.db_mut()?, &view)?;
                 return Ok(SqlResult::command("CREATE INDEX"));
@@ -3328,7 +3382,19 @@ impl<'db> SqlSession<'db> {
             .as_ref()
             .map(index_relation_name)
             .transpose()?
-            .unwrap_or_else(|| format!("idx_{}_{}", table, schema.indexes.len() + 1));
+            .map_or_else(
+                || {
+                    // PostgreSQL's ChooseIndexName: <table>_<columns>_idx.
+                    let expression = create_index
+                        .columns
+                        .iter()
+                        .map(crate::sql_text::sql_text)
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    self.choose_default_index_name(&schema, &expression)
+                },
+                Ok,
+            )?;
         if !self
             .db_ref()
             .index_definitions()
@@ -3585,6 +3651,7 @@ impl<'db> SqlSession<'db> {
                 access_method,
                 metadata_only: false,
                 predicate: None,
+                partition_parent: None,
             });
             self.save_session_schema(&schema)?;
             return Ok(SqlResult::command("CREATE INDEX"));
@@ -3631,6 +3698,7 @@ impl<'db> SqlSession<'db> {
                 access_method,
                 metadata_only: false,
                 predicate: None,
+                partition_parent: None,
             });
             self.save_session_schema(&schema)?;
             return Ok(SqlResult::command("CREATE INDEX"));
@@ -3685,6 +3753,7 @@ impl<'db> SqlSession<'db> {
                 access_method,
                 metadata_only: false,
                 predicate: None,
+                partition_parent: None,
             });
             self.save_session_schema(&schema)?;
             return Ok(SqlResult::command("CREATE INDEX"));
@@ -3803,6 +3872,7 @@ impl<'db> SqlSession<'db> {
                 access_method,
                 metadata_only: false,
                 predicate: None,
+                partition_parent: None,
             });
             self.save_session_schema(&schema)?;
             return Ok(SqlResult::command("CREATE INDEX"));
@@ -3828,6 +3898,7 @@ impl<'db> SqlSession<'db> {
                     access_method,
                     metadata_only: true,
                     predicate: None,
+                    partition_parent: None,
                 });
                 self.save_session_schema(&schema)?;
                 return Ok(SqlResult::command("CREATE INDEX"));
@@ -3901,6 +3972,7 @@ impl<'db> SqlSession<'db> {
             access_method,
             metadata_only: false,
             predicate: predicate_text,
+            partition_parent: None,
         });
         self.save_session_schema(&schema)?;
         Ok(SqlResult::command("CREATE INDEX"))

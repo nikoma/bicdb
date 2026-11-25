@@ -633,6 +633,7 @@ impl<'db> SqlSession<'db> {
         self.validate_partition_trigger_attachment(&child, &parent)?;
         self.create_session_collection(&child.name)?;
         self.save_partition_schema_and_triggers(&child, Some(&parent))?;
+        self.inherit_partition_indexes(&child.name, &parent)?;
         Ok(())
     }
 
@@ -715,6 +716,7 @@ impl<'db> SqlSession<'db> {
                     false,
                 )?;
                 self.save_partition_schema_and_triggers(&partition, Some(&parent))?;
+                self.inherit_partition_indexes(&partition.name, &parent)?;
             }
             RawAlterTablePartition::Detach {
                 parent_table,
@@ -733,6 +735,10 @@ impl<'db> SqlSession<'db> {
                     ));
                 }
                 partition.partition_of = None;
+                // Its indexes stay, detached from the parent's indexes.
+                for index in &mut partition.indexes {
+                    index.partition_parent = None;
+                }
                 self.save_partition_schema_and_triggers(&partition, None)?;
             }
         }

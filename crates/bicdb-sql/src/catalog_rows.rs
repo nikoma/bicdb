@@ -730,7 +730,12 @@ pub(crate) fn pg_class_rows_filtered(
             continue;
         }
         let index_name = table_schema.primary_key_constraint_name();
-        if !catalog_name_matches(names, &index_name) || !catalog_relkind_matches(kinds, "i") {
+        let relkind = if table_schema.partitioning.is_some() {
+            "I"
+        } else {
+            "i"
+        };
+        if !catalog_name_matches(names, &index_name) || !catalog_relkind_matches(kinds, relkind) {
             continue;
         }
         let oid = primary_index_oid(*table_oids.get(&table).unwrap_or(&0));
@@ -742,7 +747,7 @@ pub(crate) fn pg_class_rows_filtered(
             &index_name,
             namespace_oid(&schema_name_for_relation(&schemas, &table)),
             None,
-            "i",
+            relkind,
             primary_key_columns.len() as i64,
             false,
             false,
@@ -760,7 +765,16 @@ pub(crate) fn pg_class_rows_filtered(
     }
 
     for index in &catalog_indexes {
-        if !catalog_name_matches(names, &index.name) || !catalog_relkind_matches(kinds, "i") {
+        // An index on a partitioned table has no storage of its own.
+        let relkind = if schema_by_name
+            .get(&index.collection)
+            .is_some_and(|schema| schema.partitioning.is_some())
+        {
+            "I"
+        } else {
+            "i"
+        };
+        if !catalog_name_matches(names, &index.name) || !catalog_relkind_matches(kinds, relkind) {
             continue;
         }
         let oid = secondary_index_oid(&index.schema_name, &index.name);
@@ -772,7 +786,7 @@ pub(crate) fn pg_class_rows_filtered(
             &index.name,
             namespace_oid(&index.schema_name),
             None,
-            "i",
+            relkind,
             index.relnatts,
             false,
             false,
@@ -7262,6 +7276,26 @@ pub(crate) fn pg_inherits_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlVal
         let Some(partition_of) = schema.partition_of.as_ref() else {
             continue;
         };
+        // An attached partition index inherits from the parent's index.
+        for index in &schema.indexes {
+            if let Some(parent_index) = &index.partition_parent {
+                rows.push(virtual_row([
+                    (
+                        "inhrelid",
+                        SqlValue::Int(secondary_index_oid(&schema.schema_name, &index.name)),
+                    ),
+                    (
+                        "inhparent",
+                        SqlValue::Int(secondary_index_oid(
+                            &partition_of.parent_schema,
+                            parent_index,
+                        )),
+                    ),
+                    ("inhseqno", SqlValue::Int(1)),
+                    ("inhdetachpending", SqlValue::Bool(false)),
+                ]));
+            }
+        }
         let Some(child_oid) = table_oids.get(&schema.name) else {
             continue;
         };

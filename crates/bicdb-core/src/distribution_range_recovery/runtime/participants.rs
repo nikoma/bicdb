@@ -306,7 +306,7 @@ impl RangeRecoveryRuntime {
         let authority = Arc::new(quorum.finish()?);
         let mut decision =
             HistoricalCommandDecisionRound::begin(authority, request.command.clone())?;
-        pool.collect(
+        let collected = pool.collect(
             self,
             scope,
             &members,
@@ -316,7 +316,15 @@ impl RangeRecoveryRuntime {
                 decision.record(observation)?;
                 Ok(decision.is_ready())
             },
-        )?;
+        );
+        if let Err(error) = collected {
+            // Diagnostic only: the fenced votes this round did observe.
+            return Err(invalid(&format!(
+                "{error}; historical decision of index {} not reached from the observed fenced votes {}",
+                request.command.index,
+                decision.vote_summary()
+            )));
+        }
         Ok((Arc::new(decision.finish()?), frozen, pool))
     }
     pub(crate) fn certify_historical(

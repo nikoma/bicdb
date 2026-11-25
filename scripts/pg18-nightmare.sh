@@ -66,7 +66,7 @@ fi
 
 mkdir -p "$report_dir"
 
-cargo run -q -p bicdb-cli --features bench -- compat nightmare \
+cargo run -q -p bicdb --features bench -- compat nightmare \
   "$report_dir/db" \
   --fixtures "$fixtures_dir" \
   --json-out "$report_dir/report.json" \

@@ -156,7 +156,7 @@ class CapabilityManifestTests(unittest.TestCase):
             shutil.copy2(SCRIPT.parent / name, scripts / name)
         for name in ('LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md'):
             (self.root / name).write_text('Fixture only\n')
-        (self.root / 'Cargo.lock').write_text('[[package]]\nname="bicdb-cli"\nversion="1.2.3-beta"\n')
+        (self.root / 'Cargo.lock').write_text('[[package]]\nname="bicdb"\nversion="1.2.3-beta"\n')
         self.git('add', '.')
         self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.org', 'commit', '-qm', 'packaging fixture')
         self.revision = self.git('rev-parse', 'HEAD').strip()
@@ -167,7 +167,7 @@ class CapabilityManifestTests(unittest.TestCase):
             binary = temporary / 'fixture'
             subprocess.run(['cc', '-g', str(source), '-o', str(binary)], check=True, capture_output=True)
             metadata = temporary / 'metadata.json'
-            metadata.write_text(json.dumps({'packages': [{'id': 'fixture', 'name': 'bicdb-cli',
+            metadata.write_text(json.dumps({'packages': [{'id': 'fixture', 'name': 'bicdb',
                 'source': None, 'manifest_path': str(self.root / 'crates/bicdb-cli/Cargo.toml')}],
                 'resolve': {'nodes': [{'id': 'fixture', 'dependencies': []}]}}))
             output = temporary / 'release'

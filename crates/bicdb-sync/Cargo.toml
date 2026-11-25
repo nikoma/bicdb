@@ -1,15 +1,24 @@
 [package]
 name = "bicdb-sync"
-version = "1.0.528"
+version = "1.0.529"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Client sync coordination for the BicDB database. Part of BicDB, one database for SQL (PostgreSQL protocol), a Redis-compatible cache, search and vectors; install `bicdb`"
+readme = "README.md"
+keywords = ["bicdb", "database"]
+categories = ["database-implementations"]
+# Build inputs only: test suites, fixtures and examples stay in the repository.
+include = ["/README.md", "/src/**", "/Cargo.toml", "/LICENSE", "/NOTICE", "/THIRD_PARTY_NOTICES.md"]
 
 [features]
 default = ["bicdb-core/default"]
 
 [dependencies]
-bicdb-core = { path = "../bicdb-core", version = "1.0.528", default-features = false }
+bicdb-core = { path = "../bicdb-core", version = "=1.0.529", default-features = false }
 serde.workspace = true
 serde_json.workspace = true
 socket2 = { version = "0.5", features = ["all"] }

@@ -1,9 +1,18 @@
 [package]
 name = "bicdb-resp"
-version = "1.0.528"
+version = "1.0.529"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Redis-compatible (RESP2) cache server of the BicDB database. Part of BicDB, one database for SQL (PostgreSQL protocol), a Redis-compatible cache, search and vectors; install `bicdb`"
+readme = "README.md"
+keywords = ["bicdb", "database"]
+categories = ["database-implementations"]
+# Build inputs only: test suites, fixtures and examples stay in the repository.
+include = ["/README.md", "/src/**", "/Cargo.toml", "/LICENSE", "/NOTICE", "/THIRD_PARTY_NOTICES.md"]
 
 [features]
 default = ["full-sql"]
@@ -11,13 +20,13 @@ default = ["full-sql"]
 full-sql = ["bicdb-sql/default"]
 
 [dependencies]
-bicdb-lua = { path = "../bicdb-lua", version = "1.0.528" }
+bicdb-lua = { path = "../bicdb-lua", version = "=1.0.529" }
 serde.workspace = true
 sha1.workspace = true
 ciborium.workspace = true
 base64.workspace = true
-bicdb-core = { path = "../bicdb-core", version = "1.0.528", default-features = false, features = ["lua", "mmap", "compression"] }
-bicdb-sql = { path = "../bicdb-sql", version = "1.0.528", default-features = false }
+bicdb-core = { path = "../bicdb-core", version = "=1.0.529", default-features = false, features = ["lua", "mmap", "compression"] }
+bicdb-sql = { path = "../bicdb-sql", version = "=1.0.529", default-features = false }
 parking_lot.workspace = true
 sha2.workspace = true
 subtle.workspace = true

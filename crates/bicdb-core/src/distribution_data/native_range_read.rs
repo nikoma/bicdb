@@ -270,11 +270,23 @@ impl ClusterDataNodeService {
         // STRONG_TRACE_END
         observation.require_lifetime()?;
         if self.native_writer_enforcement_version()? == 1 {
-            return self.with_native_serving_read_observation(
+            let started = std::time::Instant::now();
+            let result = self.with_native_serving_read_observation(
                 observation,
                 observation.cancellation(),
                 |_| Ok(()),
             );
+            // Diagnostic only, with BICDB_RANGE_MOVE_TRACE set.
+            if started.elapsed() > std::time::Duration::from_millis(100) {
+                crate::distribution_native_host::range_move_trace(started, || {
+                    format!(
+                        "native range read revalidation of {} slow: ok={}",
+                        observation.scope().range.id,
+                        result.is_ok()
+                    )
+                });
+            }
+            return result;
         }
         let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;

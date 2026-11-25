@@ -68,6 +68,11 @@ pub(crate) use provisional_listener::{
 mod joined_data_handoff;
 #[cfg(feature = "tls-replication")]
 pub(crate) use joined_data_handoff::trace as range_move_trace;
+/// Range-move tracing is part of the native host; without it there is
+/// nothing to trace, but shared callers still compile.
+#[cfg(not(feature = "tls-replication"))]
+#[allow(dead_code)]
+pub(crate) fn range_move_trace(_started: std::time::Instant, _what: impl FnOnce() -> String) {}
 #[cfg(feature = "tls-replication")]
 mod metadata_supervisor;
 #[cfg(feature = "tls-replication")]

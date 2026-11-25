@@ -33,6 +33,7 @@ impl RangeRecoveryRuntime {
         #[cfg(test)]
         eprintln!("ACTUAL_RECOVERY_COMPLETE_REQUEST node={} challenge={} session={} scope={:?} parent_remaining_ms={:?}", self.local_node_id, request.challenge, request.scope.recovery_nonce, request.scope, parent.deadline().map(|d|d.saturating_duration_since(Instant::now()).as_millis()));
         let operation = self.reserve(request.scope.range_id)?;
+        self.refresh_retained_completed_binding(initiator, &request.scope, &token)?;
         // This collection obtains actual fresh leader-only metadata authority
         // and authentic peer evidence without any service/DB latch held. The
         // SAME operation remains owned through durable completion and workers
@@ -221,6 +222,76 @@ impl RangeRecoveryRuntime {
             request,
             token.deadline().unwrap(),
         )
+    }
+    /// An earlier Complete of this same session may have persisted the local
+    /// catalogue completion and failed before refreshing the retained
+    /// binding. Repair it first, exactly as a re-sent Prepare does
+    /// (`ClusterDataNodeService::refresh_retained_completed_native_binding`),
+    /// under this receiver's own fresh role and the session's own freeze.
+    fn refresh_retained_completed_binding(
+        &self,
+        initiator: &MetadataReadParticipant,
+        scope: &RecoveryFenceScope,
+        token: &CancellationToken,
+    ) -> Result<()> {
+        let has = {
+            let sessions = self.sessions.lock();
+            sessions.current.contains_key(&scope.range_id)
+        };
+        let Some(prepared) = (if has {
+            self.retained_native_prepared(scope)?
+        } else {
+            None
+        }) else {
+            return Ok(());
+        };
+        if prepared.frozen_stage()?
+            == crate::distribution_range_recovery::FrozenNativeReadyStage::NativeCompletedFrozen
+        {
+            return Ok(());
+        }
+        let wanted = loop {
+            token.check()?;
+            if let Some(s) = self.service.try_lock_for(LATCH_POLL) {
+                break s.native_completed_binding_repair_wanted(scope);
+            }
+        };
+        if !wanted {
+            return Ok(());
+        }
+        let business = Uuid::now_v7();
+        let challenge = Uuid::now_v7();
+        let witness = self.provider.witness_recovery_role(
+            initiator,
+            business,
+            scope.range_id,
+            scope.range_epoch,
+            scope.recovery_nonce,
+            challenge,
+            scope.purpose.clone(),
+            token,
+        )?;
+        let role = RecoveryRoleAdmission::from_witness(
+            witness,
+            initiator,
+            &self.local_node_id,
+            business,
+            scope.range_id,
+            scope.range_epoch,
+            scope.recovery_nonce,
+            challenge,
+            &scope.purpose,
+        )?;
+        scope.require_role(&role)?;
+        let token = token.child_with_deadline(role.deadline());
+        let frozen = self.frozen(scope, &token, false)?;
+        let mut service = loop {
+            token.check()?;
+            if let Some(s) = self.service.try_lock_for(LATCH_POLL) {
+                break s;
+            }
+        };
+        service.refresh_retained_completed_native_binding(&prepared, &role, &frozen, &token)
     }
     pub(crate) fn observe_native_completion(
         &self,

@@ -118,7 +118,7 @@ Connection defaults for a local BicDB server:
 
 Manual flow for each GUI client:
 
-1. Start BicDB: `cargo run -p bicdb-cli -- serve ./tmp/gui-smoke --host 127.0.0.1 --port 5433`.
+1. Start BicDB: `cargo run -p bicdb -- serve ./tmp/gui-smoke --host 127.0.0.1 --port 5433`.
 2. Create a PostgreSQL connection with the fields above.
 3. Confirm the schema/table browser opens without connection errors.
 4. Run `scripts/manual-gui-client-smoke.sql`.

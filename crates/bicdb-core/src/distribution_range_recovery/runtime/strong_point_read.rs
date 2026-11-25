@@ -149,18 +149,16 @@ impl RangeRecoveryRuntime {
                 error,
             ));
         }
-        let operation = match self.try_reserve_point_context(request.range_id) {
-            Ok(operation) => operation,
-            Err(error) => {
-                return Unavailable(NativeStrongPointReadUnavailable::new(
-                    NativeStrongReadStage::Reservation,
-                    error,
-                ))
-            }
-        };
         let runtime = Arc::clone(self);
         let worker_token = token.clone();
         let (tx, rx) = mpsc::sync_channel(1);
+        // Diagnostic only: when each step of this read ended, for the text of
+        // a refusal. Never consulted for admission or currentness.
+        let begun = Instant::now();
+        let budget_ms = request.budget_ms;
+        let marks = Arc::new(Mutex::new(Vec::<(&'static str, u128)>::new()));
+        let worker_marks = Arc::clone(&marks);
+        let (traced_range, traced_request) = (request.range_id, request.business_request_id);
 
         // STRONG_TRACE_BEGIN
         #[cfg(test)]
@@ -189,7 +187,11 @@ impl RangeRecoveryRuntime {
                 );
                 // STRONG_TRACE_END
 
-                let result = (|| {
+                let marks = worker_marks;
+                let mark =
+                    |step: &'static str| marks.lock().push((step, begun.elapsed().as_millis()));
+                mark("worker started");
+                let mut result = (|| {
                     let check = |stage, error| NativeStrongPointReadUnavailable::new(stage, error);
                     worker_token
                         .check()
@@ -204,6 +206,19 @@ impl RangeRecoveryRuntime {
                     // STRONG_TRACE_END
                     let _reservation = coordinator
                         .reserve_native_point_read(request.range_id, &worker_token)
+                        .map_err(|e| check(NativeStrongReadStage::Reservation, e))?;
+                    mark("range admission");
+                    // The range's exclusive context is taken only once the
+                    // range is admitted, in the order recovery takes them:
+                    // range admission first, then the receiver context. Taken
+                    // before the admission wait, a read held the context for
+                    // as long as a leader recovery held the admission, and
+                    // that recovery's own local receiver step was then
+                    // refused the context ("range has an exclusive context")
+                    // and retried, behind the next read; after a restart no
+                    // Strong read of the range got through for over 20 s.
+                    let operation = runtime
+                        .try_reserve_point_context(request.range_id)
                         .map_err(|e| check(NativeStrongReadStage::Reservation, e))?;
 
                     // STRONG_TRACE_BEGIN
@@ -245,6 +260,7 @@ impl RangeRecoveryRuntime {
                         host.require_for_coordinator(&database, &range, &coordinator)
                             .map_err(|e| check(NativeStrongReadStage::WriterAdmission, e))?;
                     }
+                    mark("writer check");
                     let metadata_leader = first_metadata.metadata_leader_id().clone();
                     // Reuse ONE operation, including its local probe/final IO.
                     // No recursive fifth context or new recovery session is made.
@@ -263,6 +279,7 @@ impl RangeRecoveryRuntime {
                             Arc::clone(&operation),
                         )
                         .map_err(|e| check(NativeStrongReadStage::DataQuorum, e))?;
+                    mark("data quorum");
 
                     // STRONG_TRACE_BEGIN
                     #[cfg(test)]
@@ -279,6 +296,7 @@ impl RangeRecoveryRuntime {
                     let enrolled = candidate
                         .check_enrolled_voter_births()
                         .map_err(|e| check(NativeStrongReadStage::WriterAdmission, e))?;
+                    mark("birth enrollment");
 
                     // STRONG_TRACE_BEGIN
                     #[cfg(test)]
@@ -299,6 +317,7 @@ impl RangeRecoveryRuntime {
                                 break s;
                             }
                         };
+                        mark("snapshot service lock");
                         enrolled
                             .capture_actual_point_read(
                                 &service,
@@ -309,6 +328,7 @@ impl RangeRecoveryRuntime {
                             )
                             .map_err(|e| check(NativeStrongReadStage::Snapshot, e))?
                     };
+                    mark("snapshot");
 
                     // STRONG_TRACE_BEGIN
                     #[cfg(test)]
@@ -360,6 +380,7 @@ impl RangeRecoveryRuntime {
                             &worker_token,
                         )
                         .map_err(|e| check(NativeStrongReadStage::FinalMetadata, e))?;
+                    mark("final metadata");
                     // STRONG_TRACE_BEGIN
                     #[cfg(test)]
                     drop(strong_final_metadata);
@@ -378,6 +399,7 @@ impl RangeRecoveryRuntime {
                             break s;
                         }
                     };
+                    mark("final service lock");
 
                     // STRONG_TRACE_BEGIN
                     #[cfg(test)]
@@ -398,6 +420,41 @@ impl RangeRecoveryRuntime {
                         .finalize(final_metadata, &service, &coordinator, &worker_token)
                         .map_err(|e| check(NativeStrongReadStage::FinalCurrentness, e))
                 })();
+                if let Err(refusal) = &mut result {
+                    let steps = marks
+                        .lock()
+                        .iter()
+                        .map(|(step, ms)| format!("{step} at {ms}ms"))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    refusal.detail.push_str(&format!(
+                        " [point read refused at {}ms of a {budget_ms}ms budget; {steps}]",
+                        begun.elapsed().as_millis()
+                    ));
+                }
+                // Diagnostic only, with BICDB_RANGE_MOVE_TRACE set: every
+                // step of a read that took more than half a second, whatever
+                // its outcome, so a slow read names where its time went even
+                // when its caller already gave up.
+                if begun.elapsed() > std::time::Duration::from_millis(500) {
+                    crate::distribution_native_host::range_move_trace(begun, || {
+                        format!(
+                            "strong point read of {} slow: request {}, budget {budget_ms}ms, {}; {}",
+                            request.range_id,
+                            request.business_request_id,
+                            marks
+                                .lock()
+                                .iter()
+                                .map(|(step, ms)| format!("{step} at {ms}ms"))
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                            match &result {
+                                Ok(_) => "observed".to_string(),
+                                Err(refusal) => format!("refused: {refusal:?}"),
+                            }
+                        )
+                    });
+                }
                 // All actual local IO occurs on this worker. Its operation stays
                 // owned even when the caller abandons this bounded result channel.
 
@@ -412,7 +469,6 @@ impl RangeRecoveryRuntime {
                     ),
                 );
                 // STRONG_TRACE_END
-                drop(operation);
                 let _ = tx.send(match result {
                     Ok(value) => Observed(value),
                     Err(error) => Unavailable(error),
@@ -426,6 +482,20 @@ impl RangeRecoveryRuntime {
         }
         loop {
             if let Err(error) = token.check() {
+                // Diagnostic only, with BICDB_RANGE_MOVE_TRACE set: the
+                // caller's budget ended while its worker still runs; the
+                // worker's last finished step names what it is waiting for.
+                crate::distribution_native_host::range_move_trace(begun, || {
+                    format!(
+                        "strong point read of {traced_range} still running at its caller's deadline: request {traced_request}, budget {budget_ms}ms, {}",
+                        marks
+                            .lock()
+                            .iter()
+                            .map(|(step, ms)| format!("{step} at {ms}ms"))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                });
                 // STRONG_TRACE_BEGIN
                 #[cfg(test)]
                 crate::distribution_native_read::trace::Span::detail(

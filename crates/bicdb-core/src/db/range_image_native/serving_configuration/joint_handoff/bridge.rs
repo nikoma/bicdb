@@ -303,8 +303,16 @@ impl BicDb {
         // Even a genuine globally decided R cannot invent local Applied R.
         // Every retained raw/sparse/certified outcome must match actual native
         // history. Higher or unresolved obligations were refused by catalogue.
+        let history_started = std::time::Instant::now();
+        let mut history_checked = 0usize;
         for (index, decision) in catalogue.decisions() {
-            parent.check()?;
+            if let Err(error) = parent.check() {
+                crate::distribution_native_host::range_move_trace(history_started, || {
+                    format!("joint preparation {id}: history check stopped after {history_checked} catalogue decisions: {error}")
+                });
+                return Err(error);
+            }
+            history_checked += 1;
             committed.require_current(self)?;
             let step = self.export_native_logical_history_step_with_source_pin(
                 &actual, frozen, &pin, *index, 1, parent,
@@ -331,6 +339,11 @@ impl BicDb {
                 ));
             }
         }
+        crate::distribution_native_host::range_move_trace(history_started, || {
+            format!(
+                "joint preparation {id}: history checked for {history_checked} catalogue decisions"
+            )
+        });
         let (global, range) = self.native_range_image_generation_pair(id)?;
         let (term, index, context) = committed.metadata_anchor();
         let mut record = NativeJointServingPreparationRecord {

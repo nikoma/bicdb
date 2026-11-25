@@ -7,21 +7,21 @@ sidecar accounting.
 ## Run
 
 ```bash
-cargo run -p bicdb-cli -- compact ./testdb
-cargo run -p bicdb-cli -- compact ./testdb --collection patients
+cargo run -p bicdb -- compact ./testdb
+cargo run -p bicdb -- compact ./testdb --collection patients
 ```
 
 For encrypted databases, pass the same key options used by `inspect` and
 `verify`:
 
 ```bash
-cargo run -p bicdb-cli -- compact ./encrypted-db --key "$BICDB_KEY"
+cargo run -p bicdb -- compact ./encrypted-db --key "$BICDB_KEY"
 ```
 
 Policy knobs:
 
 ```bash
-cargo run -p bicdb-cli -- compact ./testdb \
+cargo run -p bicdb -- compact ./testdb \
   --reclaim-threshold-percent 20 \
   --max-io-bytes-per-sec 104857600 \
   --max-pause-ms 5000 \
@@ -84,7 +84,7 @@ checkpoint writes replacement files before renaming them.
 Use the ERP benchmark to capture amplification evidence:
 
 ```bash
-cargo run --release -p bicdb-cli --features bench -- bench erp --profile 100gb \
+cargo run --release -p bicdb --features bench -- bench erp --profile 100gb \
   --path /data/bicdb-erp-100gb \
   --json-out reports/erp-100gb.json \
   --csv-out reports/erp-100gb.csv \

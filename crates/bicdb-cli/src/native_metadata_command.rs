@@ -45,6 +45,45 @@ pub enum Command {
         #[arg(long, default_value_t = 3600)]
         run_seconds: u64,
     },
+    /// Restart of an INITIAL member: reopen the EXISTING root that an earlier
+    /// `serve-fresh` process of this node brought at least through `launch`.
+    /// Same plan, node id, address and own TLS files as that process. Nothing
+    /// is created or reset and nothing of the earlier process's memory is
+    /// trusted: the host rejoins metadata as a follower, enables control,
+    /// enrolls a NEW writer policy from current metadata, opens DATA and
+    /// recovers the ranges it leads through the ordinary leader recovery.
+    /// These steps run by themselves and are repeated until they succeed
+    /// (the status file shows the phase and the last refusal); with
+    /// --manual the operator sends enable-control and open-initial-data.
+    /// The earlier process's command/status files must be removed first.
+    ServeReopen {
+        root: PathBuf,
+        /// Manual scheduling: no automatic control/DATA transition, election,
+        /// heartbeat or enrollment; proof/admission guards stay mandatory.
+        #[arg(long = "manual")]
+        manual_enrollment: bool,
+        #[arg(long)]
+        plan: PathBuf,
+        #[arg(long)]
+        node_id: String,
+        #[arg(long)]
+        address: String,
+        #[arg(long)]
+        cluster_tls_cert: PathBuf,
+        #[arg(long)]
+        cluster_tls_key: PathBuf,
+        #[arg(long)]
+        cluster_tls_ca: PathBuf,
+        /// Private operator command/status files must be outside the DB root.
+        #[arg(long)]
+        command_file: PathBuf,
+        #[arg(long)]
+        status_file: PathBuf,
+        #[arg(long, default_value_t = 8_388_608)]
+        buffer_pool_bytes: u64,
+        #[arg(long, default_value_t = 3600)]
+        run_seconds: u64,
+    },
     /// Real fresh fifth factory/birth listener; metadata backend is a later action.
     ServeLearnerFresh {
         root: PathBuf,
@@ -542,8 +581,23 @@ pub fn run(command: Command) -> Result<()> {
         other => other,
     };
     let reopening_learner = matches!(&command, Command::ServeLearnerReopen { .. });
+    let reopening_initial = matches!(&command, Command::ServeReopen { .. });
     match command {
         Command::ServeFresh {
+            root,
+            manual_enrollment,
+            plan,
+            node_id,
+            address,
+            cluster_tls_cert,
+            cluster_tls_key,
+            cluster_tls_ca,
+            command_file,
+            status_file,
+            buffer_pool_bytes,
+            run_seconds,
+        }
+        | Command::ServeReopen {
             root,
             manual_enrollment,
             plan,
@@ -561,10 +615,17 @@ pub fn run(command: Command) -> Result<()> {
                 (1..=86400).contains(&run_seconds),
                 "metadata host run duration outside1..86400 seconds"
             );
-            ensure!(
-                !root.exists(),
-                "native fresh metadata host refuses any existing root"
-            );
+            if reopening_initial {
+                ensure!(
+                    root.is_dir(),
+                    "initial member reopen requires its existing root"
+                );
+            } else {
+                ensure!(
+                    !root.exists(),
+                    "native fresh metadata host refuses any existing root"
+                );
+            }
             ensure!(
                 command_file != status_file
                     && !command_file.starts_with(&root)
@@ -580,14 +641,17 @@ pub fn run(command: Command) -> Result<()> {
                 .filter(|p| !p.as_os_str().is_empty())
                 .unwrap_or(Path::new("."))
                 .canonicalize()?;
-            let actual_root =
-                root_parent.join(root.file_name().context("native root basename absent")?);
+            let actual_root = if reopening_initial {
+                root.canonicalize()?
+            } else {
+                root_parent.join(root.file_name().context("native root basename absent")?)
+            };
             for path in [&command_file, &status_file] {
                 let actual = private_parent(path)?
                     .join(path.file_name().context("operator filename absent")?);
                 ensure!(
                     !actual.starts_with(&actual_root),
-                    "operator files may not occupy the native fresh root"
+                    "operator files may not occupy the native root"
                 );
             }
             let plan: NativeMetadataBootstrapPlan =
@@ -602,7 +666,12 @@ pub fn run(command: Command) -> Result<()> {
                 canceled,
                 Some(command_started + Duration::from_secs(run_seconds)),
             );
-            let mut host = NativeMetadataHost::start_fresh_metadata_only(
+            let constructor = if reopening_initial {
+                NativeMetadataHost::reopen_metadata_only
+            } else {
+                NativeMetadataHost::start_fresh_metadata_only
+            };
+            let mut host = constructor(
                 &root,
                 plan,
                 ClusterNodeId::new(node_id)?,
@@ -611,6 +680,10 @@ pub fn run(command: Command) -> Result<()> {
                 buffer_pool_bytes,
                 &lifetime.child_with_deadline(Instant::now() + Duration::from_secs(30)),
             )?;
+            // Reopened member only: the last refusal of its own automatic
+            // control/DATA transition, shown until an operator command's
+            // reply takes the error field.
+            let mut reopen_error: Option<String> = None;
             let mut status = host.status(&lifetime)?;
             write(
                 &status_file,
@@ -689,6 +762,43 @@ pub fn run(command: Command) -> Result<()> {
                     }
                 }
                 if last_tick.elapsed() >= Duration::from_millis(500) {
+                    // A reopened member performs the two transitions the
+                    // operator sends to a fresh one. Each is the ordinary
+                    // finite action with its own budget; a refusal (peers or
+                    // a metadata leader not reachable yet) is repeated on the
+                    // next tick and never replaced by anything else.
+                    if reopening_initial && !manual_enrollment {
+                        let next = match status.phase {
+                            NativeMetadataHostPhase::OwnedMetadata
+                            | NativeMetadataHostPhase::MetadataControlTransition => {
+                                Some(NativeMetadataHostAction::EnableControl)
+                            }
+                            NativeMetadataHostPhase::MetadataControl
+                            | NativeMetadataHostPhase::InitialDataOpening => {
+                                Some(NativeMetadataHostAction::OpenInitialData)
+                            }
+                            _ => None,
+                        };
+                        if let Some(action) = next {
+                            let token = lifetime
+                                .child_with_deadline(Instant::now() + Duration::from_millis(2500));
+                            match host.apply(action, &token) {
+                                Ok(next) => {
+                                    status = next;
+                                    reopen_error = None;
+                                }
+                                Err(error) => {
+                                    let text = error.to_string();
+                                    if reopen_error.as_ref() != Some(&text) {
+                                        eprintln!(
+                                            "native metadata host: reopened member transition pending: {text}"
+                                        );
+                                    }
+                                    reopen_error = Some(text);
+                                }
+                            }
+                        }
+                    }
                     // The one general supervisor owns election/heartbeats. This
                     // separately bounded controller owns CONFIG enrollment only.
                     if matches!(
@@ -749,7 +859,11 @@ pub fn run(command: Command) -> Result<()> {
                             sequence,
                             process_id: std::process::id(),
                             host: Some(&status),
-                            error: command_error.clone(),
+                            error: if sequence > 0 || refusal.is_some() {
+                                command_error.clone()
+                            } else {
+                                reopen_error.clone()
+                            },
                             data_serving: status.data_serving,
                         },
                     )?;
@@ -895,6 +1009,7 @@ pub fn run(command: Command) -> Result<()> {
             let mut command_error: Option<String> = None;
             let mut refusal: Option<String> = None;
             let mut last_refresh = Instant::now();
+            let mut registry_error: Option<String> = None;
             let mut stopping = false;
             while lifetime.check().is_ok() && !stopping {
                 match pending_request(&command_file, sequence) {
@@ -1015,6 +1130,27 @@ pub fn run(command: Command) -> Result<()> {
                     if automatic_metadata && status.metadata_listener_owned {
                         if let Err(e) = host.start_automatic_metadata(&lifetime) {
                             error = Some(e.to_string());
+                        }
+                    }
+                    if automatic_metadata {
+                        // A distinct finite process-maintenance attempt of a
+                        // member that owns DATA through a range move; its
+                        // outcome is the joined DATA status section only.
+                        let token =
+                            lifetime.child_with_deadline(Instant::now() + Duration::from_secs(5));
+                        // A refusal is reported on stderr, once per distinct
+                        // error.
+                        match host.refresh_joined_data_registry(&token) {
+                            Ok(()) => registry_error = None,
+                            Err(e) => {
+                                let text = e.to_string();
+                                if registry_error.as_ref() != Some(&text) {
+                                    eprintln!(
+                                        "native metadata host: joined DATA writer registry refresh: {text}"
+                                    );
+                                    registry_error = Some(text);
+                                }
+                            }
                         }
                     }
                     write(

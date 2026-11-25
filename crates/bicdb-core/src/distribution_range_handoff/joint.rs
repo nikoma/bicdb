@@ -41,6 +41,11 @@ mod remote_bridge_certificate;
 #[cfg(all(test, feature = "tls-replication"))]
 pub(crate) use bridge::{test_arm_bridge_second_window_fault, NativeBridgeSecondWindowFault};
 #[cfg(feature = "tls-replication")]
+pub(crate) use bridge::{
+    NativeBridgeFirstWindow, NativeOpenFirstWindow, OPEN_RECOVERY_FOUND_NO_ACTIVATION,
+    RECOVERY_ONLY_FOUND_NO_BRIDGE,
+};
+#[cfg(feature = "tls-replication")]
 pub(crate) use remote_bridge_certificate::{
     NativeRemoteBridgePublicationCertificate, NativeRemoteBridgePublicationCertificateRound,
 };

@@ -86,12 +86,28 @@ pub(crate) struct AuthenticatedNativeJointBridgeStepFrame {
     /// The earliest of the request budget, the observer's own metadata
     /// observation and what the member reported was left of its own.
     window_deadline: Instant,
+    /// Diagnostic only, for the range move trace of an expired window: the
+    /// milliseconds left of the observer's own metadata observation and of
+    /// the request when the reply arrived, the member's reported remainder,
+    /// and how long before the arrival the request left.
+    window_origin: [u128; 4],
 }
 impl AuthenticatedNativeJointBridgeStepFrame {
     /// Still inside the one bounded window this frame was observed in.
+    #[track_caller]
     pub(crate) fn require_live(&self) -> Result<()> {
+        let caller = std::panic::Location::caller();
         self.original_request.check()?;
         if Instant::now() >= self.window_deadline {
+            crate::distribution_native_host::range_move_trace(Instant::now(), || {
+                let [own, request, member, sent] = self.window_origin;
+                format!(
+                    "joint bridge step frame of {} expired at {}:{}; at its arrival own metadata left {own} ms, request left {request} ms, member reported {member} ms {sent} ms before",
+                    self.actual_peer,
+                    caller.file(),
+                    caller.line()
+                )
+            });
             return Err(transport_error(
                 "joint bridge step frame freshness window expired",
             ));
@@ -552,6 +568,7 @@ impl TcpClusterRelocationTransport {
         }
         self.require_numeric_metadata_destination(recipient, &token)?;
         let sent = Instant::now();
+        super::clear_request_write_started();
         let (response, actual, actual_birth) = self.call_with_native_destination_cancellable(
             &token,
             recipient,
@@ -559,6 +576,14 @@ impl TcpClusterRelocationTransport {
                 request: request.clone(),
             },
         )?;
+        // The instant this exchange began writing the request, on this same
+        // thread: after the connection and TLS handshake, and not later than
+        // the instant the member began serving it, from which it counts the
+        // window it reports. Counted from `sent` instead, every frame lost
+        // the whole handshake (a large part of a second on a slow host).
+        let sent = super::take_request_write_started()
+            .filter(|written| *written >= sent)
+            .unwrap_or(sent);
         token.check()?;
         own.require_live_request(request.business)?;
         if actual.node_id() != recipient
@@ -588,9 +613,10 @@ impl TcpClusterRelocationTransport {
                 "joint bridge step actual response/metadata identity regressed",
             ));
         }
-        // The window can only shrink: the member's reported remainder counts
-        // from the instant BEFORE this request left, which is earlier than
-        // when the member measured it, so the member's own observation
+        // The window can only shrink: the member reports the remainder of
+        // its own observation counted from the instant it began serving this
+        // request, and it is counted here from the instant this request began
+        // to be written, which is not later, so the member's own observation
         // cannot have expired while this frame still reads as live.
         let mut window_deadline = own.deadline();
         if let Some(deadline) = token.deadline() {
@@ -599,6 +625,14 @@ impl TcpClusterRelocationTransport {
         if let Some(left) = reply.outcome.window_remaining_ms {
             window_deadline = window_deadline.min(sent + Duration::from_millis(left));
         }
+        let arrived = Instant::now();
+        let left_ms = |deadline: Instant| deadline.saturating_duration_since(arrived).as_millis();
+        let window_origin = [
+            left_ms(own.deadline()),
+            token.deadline().map_or(0, left_ms),
+            u128::from(reply.outcome.window_remaining_ms.unwrap_or(0)),
+            arrived.saturating_duration_since(sent).as_millis(),
+        ];
         let frame = AuthenticatedNativeJointBridgeStepFrame {
             reply,
             original_request: token,
@@ -607,6 +641,7 @@ impl TcpClusterRelocationTransport {
             actual_peer_incarnation: actual.member_incarnation(),
             actual_peer_birth: native_birth.clone(),
             window_deadline,
+            window_origin,
         };
         frame.require_live()?;
         own.require_live_request(request.business)?;

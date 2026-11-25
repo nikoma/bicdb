@@ -951,6 +951,13 @@ impl BicDb {
         parent: &CancellationToken,
     ) -> Result<NativeJointServingBridgeReceipt> {
         parent.check()?;
+        let part = std::cell::Cell::new(std::time::Instant::now());
+        let traced = |what: &str| {
+            crate::distribution_native_host::range_move_trace(
+                part.replace(std::time::Instant::now()),
+                || format!("native bridge publication part: {what}"),
+            )
+        };
         // Complete final SAME physical participant set, before the local
         // journal. No foreign service/database or network call occurs below.
         #[cfg(test)]
@@ -966,8 +973,10 @@ impl BicDb {
             drop(foreign_trace);
         }
 
+        traced("final foreign boundary");
         let scope =
             prepared.publication_read_scope(self, store, original, catalogue, image, frozen)?;
+        traced("publication read scope");
         admission.require_local_publication_scope(&scope, store)?;
         admission
             .committed()
@@ -977,9 +986,14 @@ impl BicDb {
                 "scoped native joint publication requires actual fsync/reader fence",
             ));
         }
+        traced("local scope and metadata");
         let (term, index, context) = admission.committed().metadata_anchor();
         let existing = scope.actual_existing_bridge()?;
         let recovered = existing.is_some();
+        if !recovered {
+            // A recovery-only admission never writes.
+            admission.require_may_write()?;
+        }
         // Protected success is historical fact; preserve EXACT original QQ and
         // post-QQ audit even when the new phase has a different MQ context.
         let mut record = existing.unwrap_or_else(|| NativeJointServingBridgeRecord {
@@ -1037,11 +1051,23 @@ impl BicDb {
                         .put(xid, &native_key(&key), &bytes)
                         .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
                 }
+                // Every other member's frame is live at the commit point.
+                admission.pass_commit_point()?;
                 Ok(())
             })?
             .ok_or_else(|| invalid("scoped native joint publisher has no actual page store"))?;
             #[cfg(test)]
             wal_trace.complete();
+        }
+        traced(if recovered {
+            "existing bridge recovered"
+        } else {
+            "journal committed"
+        });
+        if recovered {
+            // An earlier attempt's exact bridge: the recovery decision is this
+            // attempt's commit point.
+            admission.pass_recovery_point()?;
         }
         let receipt = scope.receipt_from_actual(record)?;
         scope.require_bridge_postcondition(&receipt, controlled.as_ref())?;
@@ -1050,6 +1076,7 @@ impl BicDb {
             .committed()
             .require_native_publication_metadata(self, store)?;
         drop(controlled);
+        traced("post-write proofs");
         self.range_mutations
             .validate_quiescent_frozen(prepared.record.range_id, frozen)?;
         // Actual fsync is historical on any later refusal. The SAME actual

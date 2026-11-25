@@ -5,7 +5,7 @@
 // the admin SQL endpoint -> device A bootstraps it from offset zero, writes
 // a note, syncs -> device B bootstraps, must see the announcement AND A's
 // note, writes its own, syncs -> device A syncs again and must converge on
-// all three rows. Requires `cargo build -p bicdb-cli` beforehand.
+// all three rows. Requires `cargo build -p bicdb` beforehand.
 import { spawn } from "node:child_process";
 import { join, resolve } from "node:path";
 import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";

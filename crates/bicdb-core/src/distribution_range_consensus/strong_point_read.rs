@@ -121,8 +121,19 @@ impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
             range_write_error("point range reservation requires original deadline")
         })?;
         let mut active = self.active_ranges.lock();
+        // Diagnostic only: the admission this read last waited behind.
+        let begun = Instant::now();
+        let mut behind: Option<String> = None;
         loop {
-            parent.check()?;
+            if let Err(error) = parent.check() {
+                return Err(match behind {
+                    Some(holder) => range_write_error(format!(
+                        "{error}: point read waited {}ms for range {range_id} admission, last held by {holder}",
+                        begun.elapsed().as_millis()
+                    )),
+                    None => error,
+                });
+            }
             // Necessary scheduling refusal only. BOTH paths hold active_ranges
             // before the waiter map, so retrying readers cannot overtake an
             // actual queued hot repair once an existing holder exits.
@@ -141,6 +152,7 @@ impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
                     },
                 });
             }
+            behind = active.get(&range_id).cloned();
             let remaining = deadline
                 .checked_duration_since(Instant::now())
                 .ok_or_else(|| range_write_error("point range reservation expired"))?;

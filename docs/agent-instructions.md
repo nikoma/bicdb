@@ -48,7 +48,7 @@ application name, routine name, table shape, or schema fixture.
 Build the CLI before workload runs:
 
 ```bash
-cargo build -p bicdb-cli
+cargo build -p bicdb
 ```
 
 Run the PostgreSQL wire server with execution tracing:

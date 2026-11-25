@@ -56,7 +56,7 @@ for size in 40 38 999999; do
   docker exec "$container_name" createdb \
     --username "$postgres_user" "$postgres_database"
 
-  cargo run --locked -q -p bicdb-cli --features bench -- compat diff \
+  cargo run --locked -q -p bicdb --features bench -- compat diff \
     "$database_path-$shard" \
     --target-version 18.4 \
     --fixtures "$shard_fixtures" \

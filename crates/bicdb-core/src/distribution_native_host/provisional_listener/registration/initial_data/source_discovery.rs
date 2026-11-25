@@ -37,10 +37,14 @@ impl NativeInitialDataAdmission {
             .current_metadata_leader_hint(&token)?
             .ok_or_else(|| invalid("actual donor metadata leader unavailable"))?;
         let business = Uuid::now_v7();
+        // The leader serves an acquisition for the budget it is asked. This
+        // first observation only fixes the starting phase, so it asks for less
+        // than the remote reads live (4 s) and leaves room in this collector
+        // for the fresh final observation after them.
         let own = transport.acquire_host_metadata_observation(
             &leader,
             business,
-            Duration::from_secs(5),
+            Duration::from_secs(2),
             &token,
         )?;
         // This first fresh OWN binds the observation phase, not the final
@@ -157,6 +161,27 @@ struct SourceDiscoveryAdmission<'a> {
     caller: &'a CancellationToken,
 }
 impl SourceDiscoveryAdmission<'_> {
+    /// This member's own metadata store, waited for while this request and
+    /// its own observation are live. The store is held only for a moment by
+    /// its own metadata actor (a supervisor tick, an append, another reader);
+    /// refusing at once made a source operation fail on a single unlucky
+    /// tick, whatever was left of its budget. No other guard of this request
+    /// is held while it waits, so the wait adds no lock order.
+    fn lock_metadata(
+        &self,
+    ) -> Result<parking_lot::MutexGuard<'_, crate::distribution_consensus::MetadataConsensusStore>>
+    {
+        loop {
+            self.caller.check()?;
+            self.own.require_live_request(self.business)?;
+            if let Some(store) = self
+                .metadata
+                .try_lock_for(std::time::Duration::from_millis(5))
+            {
+                return Ok(store);
+            }
+        }
+    }
     fn require_current(&self) -> Result<()> {
         self.caller.check()?;
         self.original.require_live()?;
@@ -167,10 +192,7 @@ impl SourceDiscoveryAdmission<'_> {
             self.old.node_id(),
         )?;
         {
-            let store = self
-                .metadata
-                .try_lock()
-                .ok_or_else(|| invalid("source discovery metadata busy at boundary"))?;
+            let store = self.lock_metadata()?;
             store.require_listener_database(&self.original.database)?;
             self.member.require_current(&store)?;
         }
@@ -191,10 +213,7 @@ impl SourceDiscoveryAdmission<'_> {
             self.member.require_database(&db)?;
         }
         {
-            let store = self
-                .metadata
-                .try_lock()
-                .ok_or_else(|| invalid("source discovery metadata busy after local check"))?;
+            let store = self.lock_metadata()?;
             self.member.require_current(&store)?;
         }
         self.original.require_live()?;

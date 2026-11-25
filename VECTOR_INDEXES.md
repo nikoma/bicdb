@@ -146,7 +146,7 @@ Use ANN when:
 Development-mode sample on this machine, run with:
 
 ```bash
-cargo run -p bicdb-cli --features bench -- bench ann --records 1000 --dim 32 --top-k 10 --path /tmp/bicdb-ann-doc-bench
+cargo run -p bicdb --features bench -- bench ann --records 1000 --dim 32 --top-k 10 --path /tmp/bicdb-ann-doc-bench
 ```
 
 Results:

@@ -291,6 +291,12 @@ impl JoinedHandoffMetadataHosts for NativeLeaderRangeMoveHosts {
             .child_with_deadline(Instant::now() + Duration::from_secs(1));
         Ok(self.store(&token)?.committed_topology().clone())
     }
+    /// The entry this node proposed is recorded as outstanding until this
+    /// node's own store shows it decided; without one, a failed commit
+    /// proposed nothing or was decided as another entry.
+    fn commit_outcome_unknown(&self) -> bool {
+        self.outstanding.is_some()
+    }
     fn commit_topology(
         &mut self,
         candidate: ClusterTopology,

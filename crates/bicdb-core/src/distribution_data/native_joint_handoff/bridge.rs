@@ -669,6 +669,13 @@ impl ClusterDataNodeService {
             admission.cancellation(),
         );
         parent.check()?;
+        let part = std::cell::Cell::new(std::time::Instant::now());
+        let traced = |what: &str| {
+            crate::distribution_native_host::range_move_trace(
+                part.replace(std::time::Instant::now()),
+                || format!("service open activation part: {what}"),
+            )
+        };
         if !admission.has_fresh_open_phase() {
             admission.require_external_publications_current()?;
             admission.require_local_open_preparation(self)?;
@@ -685,6 +692,7 @@ impl ClusterDataNodeService {
             &self.range_writes,
             admission.data().activation_range(),
         )?;
+        traced("phase owner, refsync and writer domain");
         if actual.prepared.local_node_id() != &self.node_id {
             return Err(data_error(
                 "joint catalogue activation targets another actual service",
@@ -703,6 +711,7 @@ impl ClusterDataNodeService {
                 )?;
             parent.check()?;
             admission.require_live()?;
+            traced("existing activation recovered and installed");
             #[cfg(test)]
             {
                 eprintln!("ACTUAL_JOINT_OPEN_RECOVERED exact-protected-activation=true node={} no-catalogue-rewrite=true",self.node_id);
@@ -722,9 +731,11 @@ impl ClusterDataNodeService {
                 actual.lease.try_frozen()?,
                 parent,
             )?;
+        traced("recovery check and activation write");
         self.range_writes
             .current_mut()
             .install_native_joint_activated_open(&database, &receipt, actual.lease.try_frozen()?)?;
+        traced("activated open installed");
         #[cfg(test)]
         trace.complete();
         Ok(receipt)

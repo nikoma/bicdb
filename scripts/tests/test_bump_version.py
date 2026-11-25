@@ -95,6 +95,41 @@ bicdb-page = { version = "1.0.0-beta" }
         self.assertIn('mixed internal dependency version', result.stderr)
         self.assertEqual(before, self.hashes())
 
+    def add_binary_package(self):
+        self.put('crates/bicdb-cli/Cargo.toml', '''[package]
+name = "bicdb"
+version = "1.0.1-beta"
+[dependencies]
+bicdb-core = { path = "../bicdb-core", version = "1.0.1-beta" }
+alias = { package = "bicdb-page", path = "../bicdb-page", version = "1.0.1-beta" }
+''')
+        path = self.root / 'Cargo.lock'
+        path.write_text(path.read_text() + '[[package]]\nname = "bicdb"\nversion = "1.0.1-beta"\n')
+        subprocess.run(['git', 'add', '.'], cwd=self.root, check=True)
+
+    def test_stable_target_and_binary_package_then_stable_bump(self):
+        self.add_binary_package()
+        result = self.invoke('1.0.2')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('Checked 3 packages: 1.0.2', self.invoke('--check').stdout)
+        binary = (self.root / 'crates/bicdb-cli/Cargo.toml').read_text()
+        self.assertEqual(binary.count('"1.0.2"'), 3)
+        self.assertIn('name = "bicdb"\nversion = "1.0.2"', (self.root / 'Cargo.lock').read_text())
+        result = self.invoke('1.0.3')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.invoke('--check').returncode, 0)
+
+    def test_stable_number_shared_by_third_party_requirement_refuses(self):
+        self.add_binary_package()
+        self.assertEqual(self.invoke('1.0.2').returncode, 0)
+        path = self.root / 'crates/bicdb-cli/Cargo.toml'
+        path.write_text(path.read_text() + 'unrelated = "1.0.2"\n')
+        before = self.hashes()
+        result = self.invoke('1.0.3')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('unexpected manifest rewrite', result.stderr)
+        self.assertEqual(before, self.hashes())
+
     def test_live_lock_mismatch_refuses_without_partial_writes(self):
         path = self.root / 'Cargo.lock'
         path.write_text(path.read_text().replace('1.0.1-beta', '1.0.0-beta'))

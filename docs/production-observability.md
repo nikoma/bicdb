@@ -10,14 +10,14 @@ probes, backup jobs, and incident collection.
 Use JSON for automation:
 
 ```bash
-cargo run -p bicdb-cli -- metrics ./erpdb --json
+cargo run -p bicdb -- metrics ./erpdb --json
 ```
 
 Use Prometheus text format when a sidecar or node exporter textfile collector
 scrapes command output:
 
 ```bash
-cargo run -p bicdb-cli -- metrics ./erpdb --prometheus > /var/lib/node_exporter/textfile_collector/bicdb.prom
+cargo run -p bicdb -- metrics ./erpdb --prometheus > /var/lib/node_exporter/textfile_collector/bicdb.prom
 ```
 
 Metrics are grouped by server, storage, planner, transaction, backup,
@@ -30,7 +30,7 @@ metrics through the `bicdb_server_metrics` SQL virtual table.
 CLI SQL can write slow queries as JSONL:
 
 ```bash
-cargo run -p bicdb-cli -- sql ./erpdb "SELECT 1" \
+cargo run -p bicdb -- sql ./erpdb "SELECT 1" \
   --slow-query-log ./logs/slow-query.jsonl \
   --slow-query-threshold-ms 1000 \
   --redact-field ssn \
@@ -40,7 +40,7 @@ cargo run -p bicdb-cli -- sql ./erpdb "SELECT 1" \
 Pgwire serving accepts the same controls:
 
 ```bash
-cargo run -p bicdb-cli -- serve-pg ./erpdb \
+cargo run -p bicdb -- serve-pg ./erpdb \
   --slow-query-log ./logs/slow-query.jsonl \
   --slow-query-threshold-ms 1000 \
   --redact-field ssn
@@ -56,13 +56,13 @@ Use liveness when orchestration only needs to know that the database path is
 present:
 
 ```bash
-cargo run -p bicdb-cli -- health liveness ./erpdb --json
+cargo run -p bicdb -- health liveness ./erpdb --json
 ```
 
 Use readiness before serving traffic:
 
 ```bash
-cargo run -p bicdb-cli -- health readiness ./erpdb --json --max-size-bytes 107374182400
+cargo run -p bicdb -- health readiness ./erpdb --json --max-size-bytes 107374182400
 ```
 
 Readiness opens the database, runs integrity checks, checks HA readiness, and
@@ -74,7 +74,7 @@ is exceeded. Non-ready status exits non-zero for systemd and container probes.
 Collect a sanitized incident bundle:
 
 ```bash
-cargo run -p bicdb-cli -- doctor ./erpdb --out ./bicdb-doctor.json
+cargo run -p bicdb -- doctor ./erpdb --out ./bicdb-doctor.json
 ```
 
 The bundle includes stats, metrics, health checks, manifest file presence, and

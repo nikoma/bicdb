@@ -34,6 +34,11 @@ pub(crate) use joint::{
     NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
     NativeJointServingPublicationRound,
 };
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint::{
+    NativeBridgeFirstWindow, NativeOpenFirstWindow, OPEN_RECOVERY_FOUND_NO_ACTIVATION,
+    RECOVERY_ONLY_FOUND_NO_BRIDGE,
+};
 pub(crate) use joint::{
     NativeJointBridgeDecision, NativeJointCertifiedScope, NativeJointCommittedDecision,
 };

@@ -38,7 +38,9 @@ resolver = "2"
 [workspace.package]
 edition = "2021"
 license = "Apache-2.0"
+authors = ["WalkNorth Inc.", "Nikolai Manek"]
 repository = "https://github.com/nikoma/bicdb"
+homepage = "https://bicdb.com"
 rust-version = "1.96"
 
 [workspace.dependencies]

@@ -202,6 +202,23 @@ pub(crate) trait JoinedHandoffMetadataHosts {
     ) -> Result<()>;
     fn planning_view(&mut self, parent: &CancellationToken)
         -> Result<NativeJoinedDataPlanningView>;
+    /// After a failed `commit_topology`: whether the candidate may still
+    /// commit. `false` only when these hosts know that it cannot (nothing
+    /// was proposed, or the proposed entry was decided as another one).
+    /// The default is the careful answer.
+    fn commit_outcome_unknown(&self) -> bool {
+        true
+    }
+}
+
+/// How the commit attempt of a learner allocation ended.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum AllocationCommitOutcome {
+    Committed,
+    /// The attempt failed and the allocation cannot commit any more.
+    NotCommitted,
+    /// The attempt failed and the allocation may still commit.
+    Unknown,
 }
 
 /// The hosts the in-process backend acts on. Every method is an existing host
@@ -299,12 +316,11 @@ pub(crate) trait JoinedHandoffBackend {
         Ok(())
     }
     /// The commit attempt that followed `before_allocation` is over.
-    /// `range` is the descriptor before the allocation; `committed` is false
-    /// when the proposal failed or its outcome is not known.
+    /// `range` is the descriptor before the allocation.
     fn after_allocation(
         &mut self,
         _range: &RangeDescriptor,
-        _committed: bool,
+        _outcome: AllocationCommitOutcome,
         _parent: &CancellationToken,
     ) {
     }
@@ -421,6 +437,13 @@ pub(crate) trait JoinedHandoffBackend {
     fn waiting(&self) -> Option<String> {
         None
     }
+    /// Operator notes of the calls since the last take: conditions that did
+    /// not fail a call but that an operator must be able to see (a write
+    /// hold that was absent, or that ended before its reason was gone).
+    /// Diagnostic text only.
+    fn take_notes(&mut self) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 /// One handoff of `range` onto `target`: the stage logic over a backend that
@@ -484,6 +507,10 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
     /// The backend and what it retains, read-only.
     pub(crate) fn backend(&self) -> &B {
         &self.backend
+    }
+    /// See `JoinedHandoffBackend::take_notes`.
+    pub(crate) fn take_notes(&mut self) -> Vec<String> {
+        self.backend.take_notes()
     }
     /// True once the handoff reached the last stage its backend produces.
     pub(crate) fn completed(&self) -> bool {
@@ -720,8 +747,12 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
                 .map_err(|error| stage_error("learner allocation", error))?;
             let started = Instant::now();
             let committed = hosts.commit_topology(candidate, parent);
-            self.backend
-                .after_allocation(&before, committed.is_ok(), parent);
+            let outcome = match &committed {
+                Ok(()) => AllocationCommitOutcome::Committed,
+                Err(_) if hosts.commit_outcome_unknown() => AllocationCommitOutcome::Unknown,
+                Err(_) => AllocationCommitOutcome::NotCommitted,
+            };
+            self.backend.after_allocation(&before, outcome, parent);
             committed.map_err(|error| stage_error("learner allocation commit", error))?;
             trace(started, || "learner allocation commit".into());
             topology = hosts.committed_topology()?;

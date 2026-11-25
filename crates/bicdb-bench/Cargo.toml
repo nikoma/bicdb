@@ -1,9 +1,18 @@
 [package]
 name = "bicdb-bench"
-version = "1.0.528"
+version = "1.0.529"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Benchmark and PostgreSQL compatibility harnesses for the BicDB database. Part of BicDB, one database for SQL (PostgreSQL protocol), a Redis-compatible cache, search and vectors; install `bicdb`"
+readme = "README.md"
+keywords = ["bicdb", "database"]
+categories = ["database-implementations"]
+# Build inputs only: test suites, fixtures and examples stay in the repository.
+include = ["/README.md", "/src/**", "/Cargo.toml", "/LICENSE", "/NOTICE", "/THIRD_PARTY_NOTICES.md"]
 
 [dependencies]
 # Optional: this crate registers a process-wide #[global_allocator] that counts
@@ -12,11 +21,11 @@ rust-version.workspace = true
 allocation-counter = { workspace = true, optional = true }
 anyhow.workspace = true
 arrow.workspace = true
-bicdb-analytics = { path = "../bicdb-analytics", version = "1.0.528" }
-bicdb-core = { path = "../bicdb-core", version = "1.0.528" }
-bicdb-page = { path = "../bicdb-page", version = "1.0.528" }
-bicdb-pgwire = { path = "../bicdb-pgwire", version = "1.0.528" }
-bicdb-sql = { path = "../bicdb-sql", version = "1.0.528" }
+bicdb-analytics = { path = "../bicdb-analytics", version = "=1.0.529" }
+bicdb-core = { path = "../bicdb-core", version = "=1.0.529" }
+bicdb-page = { path = "../bicdb-page", version = "=1.0.529" }
+bicdb-pgwire = { path = "../bicdb-pgwire", version = "=1.0.529" }
+bicdb-sql = { path = "../bicdb-sql", version = "=1.0.529" }
 fjall = { workspace = true, optional = true }
 hex.workspace = true
 postgres = "0.19.14"

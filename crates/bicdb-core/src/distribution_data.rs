@@ -96,6 +96,8 @@ pub(crate) use native_joint_handoff::{
 pub(crate) use native_writer::NativeWriterRegistryRefresh;
 mod current_image_replacement;
 mod current_image_resume;
+#[cfg(feature = "tls-replication")]
+mod initial_member_cold;
 mod native_completion;
 mod native_image_install;
 mod native_range_read;
@@ -1014,6 +1016,12 @@ impl ClusterDataNodeService {
         replacement: RangeWriteStore,
     ) -> RangeWriteStore {
         self.range_writes.replace(replacement)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_native_writer_host_state(
+        &self,
+    ) -> Result<std::sync::Arc<crate::db::NativeWriterHostState>> {
+        self.range_writes.native_writer_host_state()
     }
     pub(crate) fn initial_consensus_only(&self) -> bool {
         self.initial_consensus_only
@@ -2052,7 +2060,11 @@ impl ClusterDataNodeService {
         &self,
         range: &RangeDescriptor,
         caller: &ClusterNodeId,
-    ) -> Result<(u64, bool, bool)> {
+    ) -> Result<(
+        u64,
+        bool,
+        Option<crate::distribution_range_consensus::UnfinishedNormalRecoveryV1>,
+    )> {
         self.require_catalog_storage_policy()?;
         if &range.leader != caller {
             return Err(data_error(format!(
@@ -2076,8 +2088,17 @@ impl ClusterDataNodeService {
         Ok((
             self.range_writes.progress(range.id).current_epoch,
             unfinished,
-            self.range_writes.normal_recovery_unfinished(range.id),
+            self.range_writes.unfinished_normal_recovery(range.id),
         ))
+    }
+
+    /// This member's installed native writer policy, for the read-only
+    /// range move probe to compare with the member's committed configuration
+    /// outside this service's latch. It grants and changes nothing.
+    pub(crate) fn range_move_probe_writer_state(
+        &self,
+    ) -> Result<Arc<crate::db::NativeWriterHostState>> {
+        self.range_writes.native_writer_host_state()
     }
 
     pub fn install_range_backup_fence(

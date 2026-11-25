@@ -13,7 +13,7 @@ to two audiences:
 - an operator or agent can jump to the checklists and command recipes.
 
 Examples use the installed `bicdb` executable. During source development,
-replace `bicdb` with `cargo run -p bicdb-cli --`. Command flags can evolve, so
+replace `bicdb` with `cargo run -p bicdb --`. Command flags can evolve, so
 confirm the exact interface of the binary being operated with `bicdb help` and
 `bicdb <command> --help`.
 
@@ -153,7 +153,7 @@ memorize them, but the boundaries make debugging and code exploration easier:
 | Broker engine | `bicdb-core` and `bicdb-sql` | durable queues, groups, acknowledgements, retries, dead letters, SQL broker functions; separate protocol adapters consume these APIs |
 | Cell family | `bicdb-cell*` | isolated runtime, admission, device, grants, and Cell HA |
 | Fleet | `bicdb-fleet` | lifecycle and controller-facing fleet facilities |
-| Operator interface | `bicdb-cli` | commands, servers, inspection, maintenance, TUI |
+| Operator interface | `bicdb` (`crates/bicdb-cli`) | commands, servers, inspection, maintenance, TUI |
 
 ### 2.2 A write from client to disk
 
@@ -1208,7 +1208,7 @@ reserve; a completely full filesystem turns routine recovery into an incident.
 ### 13.4 Optional developer benchmarks
 
 Build benchmark and compatibility tooling with
-`cargo build --release -p bicdb-cli --features bench`. Normal CLI builds omit
+`cargo build --release -p bicdb --features bench`. Normal CLI builds omit
 these commands and the `bicdb-bench` dependency. The separate
 `bench-comparison-engines` feature also enables external comparison engines.
 

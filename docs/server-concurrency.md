@@ -118,7 +118,7 @@ Captured on June 20, 2026:
 
 - OS: Linux `6.8.0-110-generic` x86_64.
 - File descriptor limit: `ulimit -n` = `1048576`.
-- Build profile: Cargo dev profile (`cargo run -p bicdb-cli ...`).
+- Build profile: Cargo dev profile (`cargo run -p bicdb ...`).
 - Server bind address: local ephemeral `127.0.0.1:<port>`.
 
 The host limit was sufficient for 1000 local sockets. No separate `ulimit`
@@ -156,7 +156,7 @@ correctness without requiring 1000 local sockets on every CI worker.
 Captured on June 20, 2026 with:
 
 ```bash
-cargo run -p bicdb-cli --features bench -- bench server-cert \
+cargo run -p bicdb --features bench -- bench server-cert \
   --profile full \
   --queries 1000 \
   --json-out target/server-cert-full.json \
@@ -196,14 +196,14 @@ connection and active-query admission.
 Commands used:
 
 ```bash
-cargo run -p bicdb-cli --features bench -- bench server \
+cargo run -p bicdb --features bench -- bench server \
   --clients 100 \
   --queries 10000 \
   --json-out target/server-mixed-100.json \
   --csv-out target/server-mixed-100.csv \
   --markdown-out target/server-mixed-100.md
 
-cargo run -p bicdb-cli --features bench -- bench server \
+cargo run -p bicdb --features bench -- bench server \
   --clients 500 \
   --active-query-concurrency 32 \
   --queries 1000 \
@@ -212,7 +212,7 @@ cargo run -p bicdb-cli --features bench -- bench server \
   --csv-out target/server-readonly-500.csv \
   --markdown-out target/server-readonly-500.md
 
-cargo run -p bicdb-cli --features bench -- bench server \
+cargo run -p bicdb --features bench -- bench server \
   --clients 1000 \
   --active-query-concurrency 32 \
   --queries 0 \
@@ -233,7 +233,7 @@ The idle pooled target was rerun after the hybrid runtime change:
 Command used:
 
 ```bash
-cargo run -p bicdb-cli --features bench -- bench server \
+cargo run -p bicdb --features bench -- bench server \
   --clients 1000 \
   --active-query-concurrency 32 \
   --queries 0 \
@@ -261,7 +261,7 @@ writes; the workload itself is 1000 `SELECT COUNT(*) FROM patients` queries.
 Commands used:
 
 ```bash
-cargo run -p bicdb-cli --features bench -- bench server \
+cargo run -p bicdb --features bench -- bench server \
   --clients 100 \
   --active-query-concurrency 32 \
   --queries 1000 \
@@ -270,7 +270,7 @@ cargo run -p bicdb-cli --features bench -- bench server \
   --csv-out target/server-readonly-100-rwlock.csv \
   --markdown-out target/server-readonly-100-rwlock.md
 
-cargo run -p bicdb-cli --features bench -- bench server \
+cargo run -p bicdb --features bench -- bench server \
   --clients 500 \
   --active-query-concurrency 32 \
   --queries 1000 \
@@ -279,7 +279,7 @@ cargo run -p bicdb-cli --features bench -- bench server \
   --csv-out target/server-readonly-500-rwlock-seq.csv \
   --markdown-out target/server-readonly-500-rwlock-seq.md
 
-cargo run -p bicdb-cli --features bench -- bench server \
+cargo run -p bicdb --features bench -- bench server \
   --clients 1000 \
   --active-query-concurrency 32 \
   --queries 1000 \
@@ -312,7 +312,7 @@ active.
 Command:
 
 ```bash
-cargo run -p bicdb-cli --features bench -- bench server \
+cargo run -p bicdb --features bench -- bench server \
   --clients 32 \
   --active-query-concurrency 8 \
   --queries 64 \
@@ -345,7 +345,7 @@ mixed read/write benchmark surface:
 Command:
 
 ```bash
-cargo run -p bicdb-cli --features bench -- bench server \
+cargo run -p bicdb --features bench -- bench server \
   --clients 100 \
   --active-query-concurrency 32 \
   --queries 1000 \

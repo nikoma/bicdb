@@ -2,7 +2,10 @@
 
 ## One database. Not six services.
 
-**Beta · Built in Rust · From embedded applications to distributed clusters**
+**Built in Rust · In production · From embedded applications to distributed clusters**
+
+**In production.** BicDB is production software, not an experiment. It runs a
+search cluster with 2.1 billion records, health-record backends and field apps.
 
 BicDB is a next-generation database for AI-native applications. SQL, durable
 cache, queues, full-text search, vectors, spatial queries, and analytics share
@@ -121,8 +124,18 @@ cd bicdb-1.0.438-beta-linux-x86_64
 ```
 
 See the [release notes](https://github.com/nikoma/bicdb/releases/tag/v1.0.438-beta)
-for Linux requirements. On other platforms, [build from source](#build-from-source);
-the initial compilation takes longer than this quickstart.
+for Linux requirements. On other platforms, install from crates.io or
+[build from source](#build-from-source); the initial compilation takes longer
+than this quickstart:
+
+```sh
+cargo install bicdb --locked
+bicdb --version
+```
+
+`cargo install` puts `bicdb` on your `PATH`; use `bicdb` in place of `./bicdb`
+in the quickstart. It needs the native build prerequisites listed under
+[build from source](#build-from-source).
 
 ### 2. Store two rows and search them
 
@@ -167,8 +180,8 @@ psql -h 127.0.0.1 -p 5433 -U bicdb -d bicdb -c 'SELECT * FROM notes ORDER BY id;
 Stop the server with Ctrl-C. This loopback demo has no authentication configured;
 follow [server setup](SERVER_MODE.md) before exposing a service remotely.
 
-BicDB is **beta**, with a tested subset of PostgreSQL behavior. Read
-[current limitations](#current-limitations) before choosing it for critical data.
+BicDB implements a tested subset of PostgreSQL behavior. Read
+[current limitations](#current-limitations) for what is not covered yet.
 
 ## Coming from PostgreSQL?
 
@@ -249,7 +262,7 @@ separation is not a Cell boundary. For hard Cell isolation, deploy one
 and cgroup resource limits; see the [Cell architecture](docs/bicdb-cell-application-architecture.md).
 
 ```bash
-cargo run --release -p bicdb-cli -- serve ./testdb --host 127.0.0.1 --port 5433
+cargo run --release -p bicdb -- serve ./testdb --host 127.0.0.1 --port 5433
 psql -h 127.0.0.1 -p 5433 -U bicdb -d bicdb
 ```
 
@@ -313,7 +326,7 @@ the operator/API contract for multi-day builds.
 ### Durable Redis cache
 
 ```bash
-cargo run --release -p bicdb-cli -- cache-serve ./cachedb --port 6379
+cargo run --release -p bicdb -- cache-serve ./cachedb --port 6379
 redis-cli SET greeting "hello" EX 300
 ```
 
@@ -518,8 +531,8 @@ restore drills, replication, HA, cluster operations, and incident handling.
 Developer `bench` and `compat` commands are optional:
 
 ```bash
-cargo build --release -p bicdb-cli --features bench
-cargo test -p bicdb-cli --features bench --test paged_recovery_cli
+cargo build --release -p bicdb --features bench
+cargo test -p bicdb --features bench --test paged_recovery_cli
 ```
 
 The default CLI excludes `bicdb-bench` and its benchmark-only dependencies.
@@ -539,7 +552,7 @@ checked-in evidence.
 
 ## Current limitations
 
-- BicDB is beta software. Rehearse backup/restore and failure procedures before
+- As with any database, rehearse backup/restore and failure procedures before
   making it the only copy of data you cannot recreate.
 - PostgreSQL compatibility is broad, not exhaustive. The generated report and
   client matrix are the source of truth; Prisma remains outside the passing
@@ -561,13 +574,22 @@ checked-in evidence.
 
 Install the Rust toolchain from `rust-toolchain.toml` and native build
 prerequisites. On Ubuntu, these include `build-essential`, `pkg-config`,
-`libssl-dev`, `clang`, `libclang-dev`, and `cmake`. Then:
+`libssl-dev`, `clang`, `libclang-dev`, and `cmake`.
+
+The quickest source install is the published crate, which builds the same
+default CLI:
+
+```sh
+cargo install bicdb --locked
+```
+
+To build a checkout instead:
 
 ```sh
 git clone https://github.com/nikoma/bicdb.git
 cd bicdb
 git checkout v1.0.438-beta
-cargo build --locked --release -p bicdb-cli
+cargo build --locked --release --bin bicdb
 ./target/release/bicdb --version
 ```
 

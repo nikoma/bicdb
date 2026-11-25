@@ -204,12 +204,20 @@ impl NativeJointPreparationCustody {
                 "fresh preparation phase changed actual recipient/incarnation",
             ));
         }
+        let part = std::cell::Cell::new(std::time::Instant::now());
+        let traced = |what: &str| {
+            crate::distribution_native_host::range_move_trace(
+                part.replace(std::time::Instant::now()),
+                || format!("served phase observation part: {what}"),
+            )
+        };
         let point = ClusterDataNodeService::capture_actual_joint_metadata_point(
             &self.service,
             &metadata,
             business,
             &request,
         )?;
+        traced("metadata point captured");
         let facts = {
             let service = self
                 .service
@@ -222,6 +230,7 @@ impl NativeJointPreparationCustody {
                 data.old_range().id,
                 point,
             )?;
+            traced("committed decision observed");
             // The complete protected CURRENT/archive/State/writer check the
             // in-process phase performs for this member under this lock.
             let writer = match bridge {
@@ -242,6 +251,11 @@ impl NativeJointPreparationCustody {
                     )?
                 }
             };
+            traced(if bridge.is_some() {
+                "member and bridge proved current"
+            } else {
+                "member proved current"
+            });
             if fresh.data() != data {
                 return Err(invalid(
                     "fresh preparation phase changed protected global decision",

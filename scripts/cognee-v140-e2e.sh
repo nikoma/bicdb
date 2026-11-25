@@ -56,7 +56,7 @@ start_bicdb() {
 
 export CARGO_BUILD_JOBS="$build_jobs"
 if [[ ! -x "$bicdb_bin" ]]; then
-  (cd "$repo_root" && cargo build --locked -p bicdb-cli)
+  (cd "$repo_root" && cargo build --locked -p bicdb)
 fi
 
 python3 "$repo_root/scripts/cognee-v140-embedding-fixture.py" \

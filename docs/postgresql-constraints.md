@@ -11,6 +11,14 @@ BicDB enforces a practical PostgreSQL-compatible subset of table constraints for
 SQL tables created through `CREATE TABLE` or added later with supported
 `ALTER TABLE ... ADD CONSTRAINT` forms.
 
+A table without a declared `PRIMARY KEY` has none, as in PostgreSQL: rows
+carry a hidden internal identity, and no column becomes unique or `NOT NULL`
+implicitly (earlier releases promoted a column named `id` to the primary key;
+tables created by those releases keep their stored definition). `REFERENCES t`
+without a column list names t's primary key and fails with 42704 when t has
+none, and `ON CONFLICT (columns)` on a table with no unique arbiter fails with
+42P10.
+
 Supported constraint classes:
 
 - `NOT NULL` on columns, including primary-key columns.

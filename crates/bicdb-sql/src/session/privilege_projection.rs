@@ -304,14 +304,13 @@ impl<'db> SqlSession<'db> {
         self.execute_create_table_definition(create_table, compression, true)
     }
 
-    /// `implicit_id_key` keeps the legacy rule that makes a column named
-    /// `id` the key of a table declared without one; a table created from a
-    /// query (CREATE TABLE AS) takes no key, as in PostgreSQL.
+    /// `_implicit_id_key` is no longer used: no table takes a key from a
+    /// column named `id` (as in PostgreSQL); callers still pass it.
     pub(crate) fn execute_create_table_definition(
         &mut self,
         create_table: &CreateTable,
         compression: &[RawColumnCompression],
-        implicit_id_key: bool,
+        _implicit_id_key: bool,
     ) -> Result<SqlResult> {
         if create_table.partition_of.is_some() {
             // A mixed statement list reaches this parsed path even though a
@@ -376,7 +375,6 @@ impl<'db> SqlSession<'db> {
             ));
         }
 
-        let has_like_clause = create_table.like.is_some();
         let mut columns = if let Some(like) = &create_table.like {
             columns_from_create_table_like(self.db_ref(), like)?
         } else {
@@ -560,6 +558,12 @@ impl<'db> SqlSession<'db> {
             .filter(|column| column.primary_key)
             .map(|column| column.name.clone())
             .collect::<Vec<_>>();
+        resolve_implicit_foreign_key_references(
+            self.db_ref(),
+            &table,
+            &primary_columns,
+            &mut constraints,
+        )?;
         reject_missing_default_operator_class(self.db_ref(), &columns, &primary_columns, "btree")?;
         self.require_reference_privilege(&table, &constraints)?;
         for constraint in &constraints {
@@ -581,16 +585,10 @@ impl<'db> SqlSession<'db> {
             }
         }
 
-        if implicit_id_key
-            && !has_like_clause
-            && create_table.partition_by.is_none()
-            && !columns.iter().any(|column| column.primary_key)
-        {
-            if let Some(id_column) = columns.iter_mut().find(|column| column.name == "id") {
-                id_column.primary_key = true;
-                id_column.nullable = false;
-            }
-        }
+        // A table without a declared primary key has none, as in
+        // PostgreSQL: rows take the hidden synthetic identity added below,
+        // and no user column (not even one named `id`) becomes unique or
+        // NOT NULL. Tables created before this keep their stored schema.
 
         let mut implicit_primary_key_name = None;
         if primary_key_name.is_none() && columns.iter().any(|column| column.primary_key) {

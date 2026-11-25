@@ -1561,6 +1561,20 @@ impl<'db> SqlSession<'db> {
         let select_required = on_conflict.conflict_target.is_some()
             || matches!(on_conflict.action, OnConflictAction::DoUpdate(_))
             || returning.is_some_and(select_items_reference_stored_columns);
+        // A column conflict target needs some unique arbiter to infer; a
+        // table with none (no primary key, unique constraint or unique
+        // index) fails as in PostgreSQL instead of never conflicting.
+        if let (Some(ConflictTarget::Columns(_)), Some(schema)) =
+            (on_conflict.conflict_target.as_ref(), schema)
+        {
+            if unique_arbiters_for_table(self.db_ref(), table, schema).is_empty() {
+                return Err(SqlError::data_exception(
+                    "42P10",
+                    "there is no unique or exclusion constraint matching the ON CONFLICT specification",
+                    None,
+                ));
+            }
+        }
         if partition_parent.is_none() && matches!(on_conflict.action, OnConflictAction::DoNothing) {
             if on_conflict.conflict_target.is_none() {
                 return self.execute_insert_on_conflict_do_nothing_all_unique(

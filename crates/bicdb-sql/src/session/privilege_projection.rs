@@ -363,6 +363,18 @@ impl<'db> SqlSession<'db> {
             )));
         }
 
+        if create_table
+            .inherits
+            .as_ref()
+            .is_some_and(|parents| !parents.is_empty())
+        {
+            // The child would silently lack the parent's columns, and reads of
+            // the parent would miss the child's rows.
+            return Err(SqlError::Unsupported(
+                "CREATE TABLE ... INHERITS is not supported".to_string(),
+            ));
+        }
+
         let has_like_clause = create_table.like.is_some();
         let mut columns = if let Some(like) = &create_table.like {
             columns_from_create_table_like(self.db_ref(), like)?
@@ -416,6 +428,18 @@ impl<'db> SqlSession<'db> {
             } else {
                 column_default_value(column)?
             };
+            if constant_default.is_none() {
+                if let Some(expr) = column
+                    .options
+                    .iter()
+                    .find_map(|option| match &option.option {
+                        ColumnOption::Default(expr) => Some(expr),
+                        _ => None,
+                    })
+                {
+                    self.validate_catalog_type_literal_casts(expr)?;
+                }
+            }
             if let Some(serial_type) = serial_type(&column.data_type) {
                 column_schema.pg_type = serial_type.to_string();
                 column_schema.nullable = false;
@@ -495,6 +519,7 @@ impl<'db> SqlSession<'db> {
                     reject_unsupported_constraint_characteristics(
                         primary_key.characteristics.as_ref(),
                     )?;
+                    reject_deferrable_primary_key(primary_key.characteristics.as_ref())?;
                     if let Some(name) = primary_key.name.as_ref().map(ident_value) {
                         primary_key_name = Some(name);
                     } else {
@@ -644,6 +669,81 @@ impl<'db> SqlSession<'db> {
             self.create_new_table_index(definition)?;
         }
         Ok(SqlResult::command("CREATE TABLE"))
+    }
+
+    /// PostgreSQL converts a quoted literal cast to an enum or composite type
+    /// while it analyses a column default, so a bad label fails the
+    /// definition rather than the first insert. A domain's constraints still
+    /// run only when the default is used.
+    /// The value existing rows take when ADD COLUMN's default is a constant
+    /// cast to a catalog type, which only the session can evaluate.
+    pub(crate) fn catalog_cast_default_backfill(
+        &mut self,
+        table: &str,
+        column_def: &ColumnDef,
+    ) -> Result<Option<SqlValue>> {
+        let Some(expr) = column_def
+            .options
+            .iter()
+            .find_map(|option| match &option.option {
+                ColumnOption::Default(expr) => Some(expr),
+                _ => None,
+            })
+        else {
+            return Ok(None);
+        };
+        if !default_expr_casts_to_catalog_type(expr) || default_expr_contains_function(expr) {
+            return Ok(None);
+        }
+        self.validate_catalog_type_literal_casts(expr)?;
+        if self.db_ref().scan_collection(table)?.is_empty() {
+            return Ok(None);
+        }
+        let pg_type = column_schema_from_def(self.db_ref(), column_def)?.pg_type;
+        self.eval_parsed_default_expr(expr, &pg_type).map(Some)
+    }
+
+    pub(crate) fn validate_catalog_type_literal_casts(&mut self, expr: &Expr) -> Result<()> {
+        if !default_expr_casts_to_catalog_type(expr) {
+            return Ok(());
+        }
+        let mut casts = Vec::new();
+        let _ = sqlparser::ast::visit_expressions(expr, |candidate| {
+            if let Expr::Cast {
+                expr: operand,
+                data_type,
+                ..
+            } = candidate
+            {
+                if matches!(
+                    operand.as_ref(),
+                    Expr::Value(value) if matches!(value.value, sqlparser::ast::Value::SingleQuotedString(_))
+                ) && pg_type_from_data_type(data_type).is_err()
+                {
+                    casts.push(candidate.clone());
+                }
+            }
+            std::ops::ControlFlow::<()>::Continue(())
+        });
+        for cast in casts {
+            let Expr::Cast { data_type, .. } = &cast else {
+                continue;
+            };
+            let validates_at_definition =
+                user_type_column_from_data_type(self.db_ref(), data_type)?.is_some_and(
+                    |user_type| {
+                        !user_type.array
+                            && matches!(
+                                user_type.kind,
+                                UserTypeKind::Enum { .. } | UserTypeKind::Composite { .. }
+                            )
+                    },
+                );
+            if validates_at_definition {
+                self.eval_session_expr(&cast)?;
+            }
+        }
+        Ok(())
     }
 
     pub(crate) fn execute_create_type(

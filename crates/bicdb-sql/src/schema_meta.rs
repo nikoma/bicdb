@@ -1424,7 +1424,9 @@ pub(crate) fn unique_constraint_index_definitions_for_schema(
                 name: sql_index_storage_name(&schema.schema_name, name),
                 collection: schema.name.clone(),
                 fields: primary_key_index_fields_for_columns(columns),
-                unique: true,
+                // A deferrable key may be duplicated until its check runs;
+                // the SQL arbiter, not the storage index, then enforces it.
+                unique: constraint.unique_deferral().is_none(),
                 kind: IndexKind::BTree,
                 predicate,
                 exclusion: None,

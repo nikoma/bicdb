@@ -557,8 +557,19 @@ impl<'db> SqlSession<'db> {
             if hooks.is_empty() {
                 return Ok(());
             }
+            // Deferred unique checks run once per batch over the final row
+            // states; rows queued again by trigger bodies form a later batch.
+            super::deferred_constraints::validate_unique_hooks(
+                self.db_ref(),
+                self.tx.as_ref(),
+                &hooks,
+                None,
+            )?;
             let mut checked_foreign_keys = BTreeSet::new();
             for hook in hooks {
+                if hook.get("unique_check").is_some() {
+                    continue;
+                }
                 if hook.get("foreign_key_check").is_some() {
                     // A row can be updated repeatedly. Check its final state
                     // once per batch; triggers may enqueue a fresh later batch.

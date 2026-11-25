@@ -97,6 +97,30 @@ impl UniqueNullPolicy {
     }
 }
 
+/// The timing of a `DEFERRABLE` unique constraint. The identity is stable
+/// across renames, so a pending check and `SET CONSTRAINTS` keep their target.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct UniqueDeferral {
+    pub(crate) constraint_id: String,
+    #[serde(default)]
+    pub(crate) initially_deferred: bool,
+}
+
+impl UniqueDeferral {
+    pub(crate) fn from_characteristics(
+        characteristics: Option<&sqlparser::ast::ConstraintCharacteristics>,
+    ) -> Option<Self> {
+        let characteristics = characteristics?;
+        characteristics.deferrable.unwrap_or(false).then(|| Self {
+            constraint_id: uuid::Uuid::new_v4().to_string(),
+            initially_deferred: matches!(
+                characteristics.initially,
+                Some(sqlparser::ast::DeferrableInitial::Deferred)
+            ),
+        })
+    }
+}
+
 impl ConstraintSchema {
     pub(crate) fn unique(
         name: String,
@@ -104,7 +128,16 @@ impl ConstraintSchema {
         validated: bool,
         null_policy: UniqueNullPolicy,
     ) -> Self {
-        if null_policy == UniqueNullPolicy::Distinct {
+        Self::unique_with_deferral(name, columns, validated, null_policy, None)
+    }
+    pub(crate) fn unique_with_deferral(
+        name: String,
+        columns: Vec<String>,
+        validated: bool,
+        null_policy: UniqueNullPolicy,
+        deferral: Option<UniqueDeferral>,
+    ) -> Self {
+        if null_policy == UniqueNullPolicy::Distinct && deferral.is_none() {
             Self::Unique {
                 name,
                 columns,
@@ -116,6 +149,7 @@ impl ConstraintSchema {
                 columns,
                 validated,
                 null_policy,
+                deferral,
             }
         }
     }
@@ -123,6 +157,12 @@ impl ConstraintSchema {
         match self {
             Self::UniqueWithNullPolicy { null_policy, .. } => *null_policy,
             _ => UniqueNullPolicy::Distinct,
+        }
+    }
+    pub(crate) fn unique_deferral(&self) -> Option<&UniqueDeferral> {
+        match self {
+            Self::UniqueWithNullPolicy { deferral, .. } => deferral.as_ref(),
+            _ => None,
         }
     }
 }

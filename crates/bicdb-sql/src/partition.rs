@@ -754,6 +754,11 @@ pub(crate) fn validate_definition(schema: &TableSchema) -> Result<()> {
                         .into(),
                 ));
             }
+            if constraint.unique_deferral().is_some() {
+                return Err(SqlError::Unsupported(
+                    "DEFERRABLE unique constraints on partitioned tables are not supported".into(),
+                ));
+            }
         }
     }
     Ok(())

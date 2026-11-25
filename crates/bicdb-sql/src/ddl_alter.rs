@@ -289,7 +289,10 @@ pub(crate) fn alter_column_default(
                     value,
                     &schema.columns[index].pg_type,
                 )?;
-                schema.columns[index].default_expr = Some(crate::sql_text::sql_text(value));
+                schema.columns[index].default_expr = Some(
+                    catalog_cast_default_text(db, value)?
+                        .unwrap_or_else(|| crate::sql_text::sql_text(value)),
+                );
             }
         }
         AlterColumnOperation::DropDefault => {
@@ -350,6 +353,7 @@ pub(crate) fn alter_table_add_constraint(
 ) -> Result<Option<(String, String)>> {
     if let TableConstraint::PrimaryKey(primary_key) = constraint {
         reject_unsupported_constraint_characteristics(primary_key.characteristics.as_ref())?;
+        reject_deferrable_primary_key(primary_key.characteristics.as_ref())?;
         let columns = simple_index_column_names(&primary_key.columns)?;
         let existing_columns = primary_key_columns_for_schema(schema);
         if !existing_columns.is_empty() {
@@ -389,6 +393,7 @@ pub(crate) fn alter_table_add_constraint(
 
     if let TableConstraint::PrimaryKeyUsingIndex(primary_key) = constraint {
         reject_unsupported_constraint_characteristics(primary_key.characteristics.as_ref())?;
+        reject_deferrable_primary_key(primary_key.characteristics.as_ref())?;
         if not_valid {
             return Err(SqlError::Unsupported(
                 "PRIMARY KEY USING INDEX cannot be marked NOT VALID".to_string(),
@@ -1324,7 +1329,10 @@ pub(crate) fn literal_default_value_from_data_type(
     if default_expr_contains_function(expr) {
         return Ok(None);
     }
-    match cast_value(eval_constant_expr(expr)?, data_type) {
+    let Some(value) = eval_constant_default(expr)? else {
+        return Ok(None);
+    };
+    match cast_value(value, data_type) {
         Ok(value) => Ok(Some(value)),
         Err(SqlError::Unsupported(_)) => Ok(None),
         Err(SqlError::DataException {
@@ -1334,6 +1342,98 @@ pub(crate) fn literal_default_value_from_data_type(
     }
 }
 
+/// Folds a column default to a constant when the context-free evaluator can.
+/// `None` means the default stays an expression: a cast to a catalog type
+/// (enum, domain, composite) needs the database, so the session evaluates it
+/// on every insert, exactly like the uncast `DEFAULT 'label'` form. Any other
+/// evaluation error still rejects the definition.
+fn eval_constant_default(expr: &Expr) -> Result<Option<SqlValue>> {
+    match eval_constant_expr(expr) {
+        Ok(value) => Ok(Some(value)),
+        Err(SqlError::Unsupported(_)) if default_expr_casts_to_catalog_type(expr) => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+/// PostgreSQL's catalog text for a default that is one literal cast to a
+/// catalog type: the type name is shown as `format_type` does (unqualified
+/// in `public`), and a cast to a domain shows the literal converted to the
+/// base type first (`('x'::text)::code`, `(7)::pos`). `None` keeps the
+/// default's own text.
+pub(crate) fn catalog_cast_default_text(db: &BicDb, expr: &Expr) -> Result<Option<String>> {
+    let Expr::Cast {
+        expr: operand,
+        data_type,
+        ..
+    } = expr
+    else {
+        return Ok(None);
+    };
+    if pg_type_from_data_type(data_type).is_ok() {
+        return Ok(None);
+    }
+    let Some(user_type) = user_type_column_from_data_type(db, data_type)
+        .ok()
+        .flatten()
+    else {
+        return Ok(None);
+    };
+    let name = user_type.formatted_name();
+    let Expr::Value(value) = operand.as_ref() else {
+        return Ok(Some(format!(
+            "{}::{name}",
+            crate::sql_text::sql_text(operand.as_ref())
+        )));
+    };
+    let UserTypeKind::Domain {
+        base_type,
+        base_user_type: None,
+        ..
+    } = &user_type.kind
+    else {
+        return Ok(Some(format!(
+            "{}::{name}",
+            crate::sql_text::sql_text(operand.as_ref())
+        )));
+    };
+    if user_type.array {
+        return Ok(None);
+    }
+    let base_name = pg_type_oid_by_name(base_type)
+        .and_then(|oid| crate::pg_types::pg_format_type(oid as i32, -1));
+    Ok(match (&value.value, base_type.as_str(), base_name) {
+        (sqlparser::ast::Value::Number(number, _), "int2" | "int4" | "int8", _)
+            if !number.starts_with('-') =>
+        {
+            Some(format!("({number})::{name}"))
+        }
+        (
+            sqlparser::ast::Value::SingleQuotedString(text),
+            "text" | "varchar" | "bpchar",
+            Some(base_name),
+        ) => Some(format!(
+            "('{}'::{base_name})::{name}",
+            text.replace('\'', "''")
+        )),
+        _ => None,
+    })
+}
+
+/// Whether `expr` contains a cast whose target is not a built-in type.
+pub(crate) fn default_expr_casts_to_catalog_type(expr: &Expr) -> bool {
+    let mut found = false;
+    let _ = sqlparser::ast::visit_expressions(expr, |expr| {
+        if let Expr::Cast { data_type, .. } = expr {
+            if pg_type_from_data_type(data_type).is_err() {
+                found = true;
+                return std::ops::ControlFlow::Break(());
+            }
+        }
+        std::ops::ControlFlow::Continue(())
+    });
+    found
+}
+
 pub(crate) fn literal_default_value_from_expr(
     expr: &Expr,
     pg_type: &str,
@@ -1341,7 +1441,10 @@ pub(crate) fn literal_default_value_from_expr(
     if default_expr_contains_function(expr) {
         return Ok(None);
     }
-    match cast_value_to_pg_type(eval_constant_expr(expr)?, pg_type) {
+    let Some(value) = eval_constant_default(expr)? else {
+        return Ok(None);
+    };
+    match cast_value_to_pg_type(value, pg_type) {
         Ok(value) => Ok(Some(value)),
         Err(SqlError::Unsupported(_)) => Ok(None),
         Err(SqlError::DataException {
@@ -1697,7 +1800,16 @@ pub(crate) fn column_schema_from_def(db: &BicDb, column: &ColumnDef) -> Result<C
             Some(pg_type),
         ));
     }
-    let default_expr = column_default_expr(column);
+    let default_expr = match column
+        .options
+        .iter()
+        .find_map(|option| match &option.option {
+            ColumnOption::Default(expr) => Some(expr),
+            _ => None,
+        }) {
+        Some(expr) => catalog_cast_default_text(db, expr)?.or_else(|| column_default_expr(column)),
+        None => None,
+    };
     let generated_expr = column
         .options
         .iter()
@@ -2024,7 +2136,7 @@ pub(crate) fn column_constraints_from_def(
         match &option.option {
             ColumnOption::Unique(unique) => {
                 reject_unsupported_constraint_characteristics(unique.characteristics.as_ref())?;
-                constraints.push(ConstraintSchema::unique(
+                constraints.push(ConstraintSchema::unique_with_deferral(
                     option
                         .name
                         .as_ref()
@@ -2033,7 +2145,11 @@ pub(crate) fn column_constraints_from_def(
                     vec![column_schema.name.clone()],
                     true,
                     UniqueNullPolicy::from_sql(unique.nulls_distinct, default_null_policy),
+                    UniqueDeferral::from_characteristics(unique.characteristics.as_ref()),
                 ));
+            }
+            ColumnOption::PrimaryKey(primary_key) => {
+                reject_deferrable_primary_key(primary_key.characteristics.as_ref())?;
             }
             ColumnOption::Check(check) => constraints.push(ConstraintSchema::Check {
                 name: option
@@ -2098,7 +2214,7 @@ pub(crate) fn table_constraint_schema(
     Ok(match constraint {
         TableConstraint::Unique(unique) => {
             reject_unsupported_constraint_characteristics(unique.characteristics.as_ref())?;
-            vec![ConstraintSchema::unique(
+            vec![ConstraintSchema::unique_with_deferral(
                 unique.name.as_ref().map(ident_value).unwrap_or_else(|| {
                     format!(
                         "{}_{}_key",
@@ -2111,6 +2227,7 @@ pub(crate) fn table_constraint_schema(
                 simple_index_column_names(&unique.columns)?,
                 true,
                 UniqueNullPolicy::from_sql(unique.nulls_distinct, default_null_policy),
+                UniqueDeferral::from_characteristics(unique.characteristics.as_ref()),
             )]
         }
         TableConstraint::Check(check) => vec![ConstraintSchema::Check {
@@ -2171,6 +2288,7 @@ pub(crate) fn table_constraint_schema(
         }
         TableConstraint::PrimaryKey(primary_key) => {
             reject_unsupported_constraint_characteristics(primary_key.characteristics.as_ref())?;
+            reject_deferrable_primary_key(primary_key.characteristics.as_ref())?;
             vec![ConstraintSchema::Unique {
                 name: primary_key
                     .name
@@ -2198,6 +2316,19 @@ pub(crate) fn reject_unsupported_constraint_characteristics(
     if characteristics.enforced == Some(false) {
         return Err(SqlError::Unsupported(
             "NOT ENFORCED constraints are not supported".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// A primary key is the row identity in storage, so two rows can never hold
+/// one key even transiently; deferring its check cannot be honoured.
+pub(crate) fn reject_deferrable_primary_key(
+    characteristics: Option<&ConstraintCharacteristics>,
+) -> Result<()> {
+    if characteristics.is_some_and(|characteristics| characteristics.deferrable == Some(true)) {
+        return Err(SqlError::Unsupported(
+            "DEFERRABLE primary keys are not supported".to_string(),
         ));
     }
     Ok(())

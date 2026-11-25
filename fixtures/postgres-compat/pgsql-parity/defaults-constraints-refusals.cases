@@ -1,0 +1,2 @@
+defer.primary_key_deferrable|CREATE TABLE df17(a int PRIMARY KEY DEFERRABLE INITIALLY DEFERRED); INSERT INTO df17 VALUES (1),(2); BEGIN; UPDATE df17 SET a=a+1; COMMIT; SELECT a FROM df17 ORDER BY a
+inherit.create_child_refused|CREATE TABLE ihr_p(a int); CREATE TABLE ihr_c(b int) INHERITS (ihr_p); INSERT INTO ihr_c(a,b) VALUES (1,2); SELECT count(*) FROM ihr_p

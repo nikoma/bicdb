@@ -140,9 +140,10 @@ with the authenticated actor's security context. A direct core commit refuses
 unprocessed SQL effects. Stable constraint identities prevent renaming a
 constraint or relation from dropping its pending validation.
 
-This timing implementation covers foreign keys. Named timing changes for other
-constraint classes fail explicitly. `SET CONSTRAINTS ALL` covers foreign keys
-and refuses when constraint triggers are present, since changing their firing
+This timing implementation covers foreign keys and `DEFERRABLE` unique
+constraints (see [constraints](postgresql-constraints.md)). Named timing
+changes for other constraint classes fail explicitly. `SET CONSTRAINTS ALL`
+covers both and refuses when constraint triggers are present, since changing their firing
 mode through ALL is not implemented. Existing INITIALLY DEFERRED constraint
 triggers still fire at commit. Finalization grants no new mutation authority.
 

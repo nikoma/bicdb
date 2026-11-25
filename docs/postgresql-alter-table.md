@@ -29,10 +29,17 @@ ALTER TABLE people ALTER COLUMN status SET DEFAULT 'active';
 Supported `ADD COLUMN` defaults are constant scalar and JSON expressions that
 can be evaluated without reading other columns. Existing rows are backfilled
 with the default value. Adding a `NOT NULL` column without a default fails when
-existing rows would contain nulls.
+existing rows would contain nulls. A constant default cast to an enum, domain
+or composite type (`ADD COLUMN s status DEFAULT 'new'::status`) also fills the
+existing rows, while new rows evaluate the default expression.
 
 `DROP COLUMN` removes the column from schema/catalog metadata and from stored
-record metadata. Dropping primary key columns is not supported.
+record metadata. Dropping a primary-key column drops the primary key with it,
+as in PostgreSQL: the constraint and its index are removed, the remaining key
+columns keep NOT NULL, and the rows are re-keyed under the hidden row identity
+of a table without a primary key (a full rewrite of the table). When another
+table's foreign key references the primary key the command fails with 2BP01;
+the CASCADE form that would drop those foreign keys is not supported.
 
 `RENAME COLUMN` updates schema/catalog metadata, stored record metadata, and
 simple constraint/index column references. Renaming primary key columns is not
@@ -74,3 +81,12 @@ The runner accepts metadata-only and online-safe ALTER forms, and rejects
 row-rewriting ALTER forms such as `ADD COLUMN DEFAULT`, `DROP COLUMN`,
 `RENAME COLUMN`, `RENAME TO`, and `ALTER COLUMN TYPE` before any pending
 migration mutates the database.
+
+## Table inheritance
+
+`CREATE TABLE child (...) INHERITS (parent)` is refused with 0A000. Table
+inheritance (the child taking the parent's columns, and reads of the parent
+including the child's rows unless `ONLY` is written) is not implemented, and
+earlier builds silently created the child without the parent's columns.
+Declarative partitioning (`PARTITION BY` / `PARTITION OF`) is supported.
+

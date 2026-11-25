@@ -1550,6 +1550,9 @@ impl<'db> SqlSession<'db> {
                 "INSERT ON DUPLICATE KEY UPDATE is not supported".to_string(),
             ));
         };
+        if let Some(schema) = schema.filter(|_| !records.is_empty()) {
+            self.reject_deferrable_conflict_arbiters(table, schema, on_conflict)?;
+        }
         let access_table = table;
         let access_schema = schema;
         let partition_parent = schema.filter(|schema| schema.partitioning.is_some());
@@ -2519,6 +2522,38 @@ impl<'db> SqlSession<'db> {
         )
     }
 
+    /// PostgreSQL checks an ON CONFLICT arbiter immediately, which a
+    /// DEFERRABLE unique constraint cannot promise. Without a conflict
+    /// target every unique constraint of the table is an arbiter.
+    fn reject_deferrable_conflict_arbiters(
+        &self,
+        table: &str,
+        schema: &TableSchema,
+        on_conflict: &sqlparser::ast::OnConflict,
+    ) -> Result<()> {
+        if !schema
+            .constraints
+            .iter()
+            .any(|constraint| constraint.unique_deferral().is_some())
+        {
+            return Ok(());
+        }
+        let deferrable_arbiter = match on_conflict.conflict_target.as_ref() {
+            None => true,
+            Some(target) => {
+                let columns = conflict_target_columns(table, Some(schema), Some(target))?;
+                self.memoized_unique_arbiter(table, schema, &columns)?
+                    .is_some_and(|arbiter| arbiter.deferral.is_some())
+            }
+        };
+        if deferrable_arbiter {
+            return Err(SqlError::object_not_in_prerequisite_state(
+                "ON CONFLICT does not support deferrable unique constraints/exclusion constraints as arbiters",
+            ));
+        }
+        Ok(())
+    }
+
     pub(crate) fn execute_insert_on_conflict_do_nothing_all_unique(
         &mut self,
         table: &str,
@@ -2620,6 +2655,7 @@ impl<'db> SqlSession<'db> {
                     key: UniqueKey::Columns(conflict_columns.to_vec()),
                     index_name: None,
                     predicate: None,
+                    deferral: None,
                 },
                 records,
                 &existing_records,

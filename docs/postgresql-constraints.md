@@ -25,8 +25,39 @@ Supported constraint classes:
 Foreign keys support `DEFERRABLE INITIALLY IMMEDIATE`, `DEFERRABLE INITIALLY
 DEFERRED`, and transaction-local `SET CONSTRAINTS` timing. Savepoints restore
 timing and queued checks; invalid final references abort commit with 23503.
-Other constraint classes remain immediate. See [deferred foreign keys](postgresql-procedural.md#deferred-foreign-keys)
+See [deferred foreign keys](postgresql-procedural.md#deferred-foreign-keys)
 for the supported timing commands and constraint-trigger limits.
+
+`UNIQUE` constraints (column or table form, and `ALTER TABLE ... ADD
+CONSTRAINT`) also accept `DEFERRABLE [INITIALLY IMMEDIATE | INITIALLY
+DEFERRED]`, with PostgreSQL's timing:
+
+- A non-deferrable `UNIQUE` constraint is checked row by row, so
+  `UPDATE t SET a = a + 1` over keys 1 and 2 fails with 23505, as in
+  PostgreSQL.
+- A `DEFERRABLE` constraint in IMMEDIATE mode is checked when the statement
+  ends, so the same `UPDATE` succeeds.
+- In DEFERRED mode (`INITIALLY DEFERRED` or `SET CONSTRAINTS name|ALL
+  DEFERRED`) the changed rows are queued and their final state is checked at
+  `COMMIT`, or when `SET CONSTRAINTS ... IMMEDIATE` switches the constraint
+  back. A duplicate left at commit fails with 23505 and the transaction rolls
+  back. Savepoint rollback restores the queue and the timing.
+- `pg_constraint.condeferrable`/`condeferred`, `pg_get_constraintdef`,
+  `information_schema.table_constraints` and `pg_index.indimmediate` report
+  the timing.
+- `ON CONFLICT` refuses a deferrable arbiter with 55000, as PostgreSQL does
+  (without a conflict target every unique constraint is an arbiter).
+
+The storage index behind a deferrable constraint is non-unique, because the
+key may be duplicated until the check runs. The SQL write path enforces the
+constraint and reserves each checked key until the transaction ends, so
+concurrent transactions cannot both commit one key. Writes made through the
+native record API bypass SQL constraint checks and are not covered.
+
+`PRIMARY KEY ... DEFERRABLE` is refused with 0A000: the primary key is the row
+identity in storage, so two rows can never share one even transiently.
+`DEFERRABLE` unique constraints on partitioned tables are also refused with
+0A000. Other constraint classes remain immediate.
 
 `ALTER TABLE ... ADD CONSTRAINT` validates existing rows before committing the
 catalog change by default. Add `NOT VALID` to skip that initial scan for
@@ -71,9 +102,9 @@ Current limits:
 - `SET DEFAULT` foreign-key actions require a supported default on each
   referencing column; otherwise the action sets `NULL`, which can still fail
   `NOT NULL` or foreign-key validation.
-- Deferred timing is implemented for foreign keys. Named timing changes for
-  other constraint classes, and ALL when constraint triggers are present, fail
-  explicitly.
+- Deferred timing is implemented for foreign keys and unique constraints.
+  Named timing changes for other constraint classes, and ALL when constraint
+  triggers are present, fail explicitly.
 - `ALTER TABLE DROP CONSTRAINT IF EXISTS` removes persisted `UNIQUE`, `CHECK`,
   and `FOREIGN KEY` table constraints by name. Dropping primary keys is not
   supported.

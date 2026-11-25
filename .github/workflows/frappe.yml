@@ -64,7 +64,7 @@ jobs:
           npm install -g yarn
           python3.14 -m pip install "frappe-bench==${FRAPPE_BENCH_VERSION}"
       - name: Build BicDB from the tested source
-        run: cargo build --locked -p bicdb-cli --bin bicdb
+        run: cargo build --locked -p bicdb --bin bicdb
       - name: bench new-site, HTTP smoke test and Frappe test slice
         env:
           BICDB_BIN: ${{ github.workspace }}/target/debug/bicdb

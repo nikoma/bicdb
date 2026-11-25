@@ -883,7 +883,7 @@ fn expression_operator_and_cast_baseline_matches_postgres_shapes() {
 }
 
 #[test]
-fn unsupported_expressions_return_stable_errors() {
+fn similar_to_matches_postgresql() {
     let dir = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(dir.path()).unwrap();
     let mut session = SqlSession::new(&mut db);
@@ -894,11 +894,14 @@ fn unsupported_expressions_return_stable_errors() {
         .execute("INSERT INTO expr_unsupported (id, age) VALUES ('e1', 36)")
         .unwrap();
 
-    let error = session
+    let result = session
         .execute("SELECT id FROM expr_unsupported WHERE id SIMILAR TO 'e[0-9]'")
-        .unwrap_err();
-    assert!(matches!(error, SqlError::Unsupported(_)));
-    assert_eq!(error.sqlstate(), "0A000");
+        .unwrap();
+    assert_eq!(result.rows, vec![vec![SqlValue::String("e1".to_string())]]);
+    let result = session
+        .execute("SELECT id FROM expr_unsupported WHERE id NOT SIMILAR TO 'e[0-9]'")
+        .unwrap();
+    assert!(result.rows.is_empty());
 }
 
 #[test]

@@ -2511,7 +2511,7 @@ pub(crate) fn memoized_element_oid(
 /// double-quoted; NOTIFY takes an optional single-quoted payload.
 pub(crate) fn try_listen_notify_statement(
     server: &PgWireServer,
-    state: &ConnectionState,
+    state: &mut ConnectionState,
     query: &str,
 ) -> Result<Option<&'static str>> {
     // Only LISTEN / UNLISTEN / NOTIFY statements are handled here; decide
@@ -2599,8 +2599,12 @@ pub(crate) fn try_listen_notify_statement(
             None => (rest, String::new()),
         };
         let channel = parse_channel(channel_raw)?;
-        if let Ok(mut bus) = server.notifications.lock() {
-            bus.notify(&channel, &payload, state.connection_id as i32);
+        // As in PostgreSQL, a notification sent inside a transaction block is
+        // delivered when the transaction commits and dropped on rollback.
+        if state.in_transaction {
+            state.tx_notifications.push((channel, payload));
+        } else {
+            crate::deliver_notifications(server, state.connection_id, vec![(channel, payload)]);
         }
         return Ok(Some("NOTIFY"));
     }

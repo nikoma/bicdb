@@ -485,6 +485,7 @@ impl<'db> SqlSession<'db> {
 
         if !columns.iter().any(|column| column.primary_key) {
             columns.push(ColumnSchema {
+                comment: None,
                 name: SYNTHETIC_PRIMARY_KEY.to_string(),
                 pg_type: "text".to_string(),
                 user_type: None,
@@ -510,6 +511,7 @@ impl<'db> SqlSession<'db> {
         let row_array_type_oid =
             table_row_array_type_oid(namespace_oid(&definition.schema_name), &definition.table);
         self.save_session_schema(&TableSchema {
+            comment: None,
             name: definition.table,
             schema_name: definition.schema_name,
             row_type_oid: Some(row_type_oid),
@@ -589,6 +591,7 @@ impl<'db> SqlSession<'db> {
         let primary_key_name = (!parent.has_hidden_primary_key())
             .then(|| default_primary_key_name(&partition.partition_table));
         let child = TableSchema {
+            comment: None,
             name: partition.partition_table,
             schema_name: partition.partition_schema,
             row_type_oid: Some(row_type_oid),
@@ -1046,6 +1049,13 @@ impl<'db> SqlSession<'db> {
                 Ok(())
             }
             "timezone" => self.apply_timezone_value(value),
+            other if super::planner_gucs::is_planner_guc(other) => {
+                let normalized =
+                    super::planner_gucs::normalize_planner_guc(other, &value.to_cell())?
+                        .expect("planner setting checked");
+                Arc::make_mut(&mut self.session_gucs).insert(setting, normalized);
+                Ok(())
+            }
             "role" => self.apply_set_role(&value.to_cell()),
             "session_authorization" => self.apply_set_session_authorization(Some(&value.to_cell())),
             // Reserved identity plumbing; forging either would allow RLS or
@@ -1098,6 +1108,10 @@ impl<'db> SqlSession<'db> {
             None => None,
         };
         let statement = bound.as_ref().unwrap_or(statement);
+        // Named, defaulted and variadic user-function calls bind to their
+        // positional form before execution.
+        let calls_bound = crate::routine_calls::bind_statement_calls(self.db_ref(), statement)?;
+        let statement = calls_bound.as_ref().unwrap_or(statement);
         if let Some(result) = self.apply_instead_rule(statement)? {
             return Ok(result);
         }

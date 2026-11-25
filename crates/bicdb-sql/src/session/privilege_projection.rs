@@ -185,6 +185,7 @@ impl<'db> SqlSession<'db> {
         or_replace: bool,
     ) -> Result<()> {
         oracle::validate_routine_language(self.db_ref(), &routine.language)?;
+        crate::routine_calls::apply_output_return_type(&mut routine)?;
         if oracle::preview_routine_language_version(&routine.language)
             .is_some_and(|version| version >= 2)
         {
@@ -611,6 +612,7 @@ impl<'db> SqlSession<'db> {
 
         if !columns.iter().any(|column| column.primary_key) {
             columns.push(ColumnSchema {
+                comment: None,
                 name: SYNTHETIC_PRIMARY_KEY.to_string(),
                 pg_type: "text".to_string(),
                 user_type: None,
@@ -637,6 +639,7 @@ impl<'db> SqlSession<'db> {
             .transpose()?;
 
         let mut schema = TableSchema {
+            comment: None,
             name: table.clone(),
             schema_name: schema_name.clone(),
             row_type_oid: None,

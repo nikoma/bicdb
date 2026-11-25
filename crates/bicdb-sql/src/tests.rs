@@ -4480,6 +4480,7 @@ fn row_value_key_capacity_accounts_for_qualified_aliases() {
 fn schema_bound_row_materialization_preserves_record_fields() {
     fn column(name: &str, pg_type: &str, primary_key: bool) -> ColumnSchema {
         ColumnSchema {
+            comment: None,
             name: name.to_string(),
             pg_type: pg_type.to_string(),
             user_type: None,
@@ -4500,6 +4501,7 @@ fn schema_bound_row_materialization_preserves_record_fields() {
     }
 
     let schema = TableSchema {
+        comment: None,
         name: "arbitrary_slot_rows".to_string(),
         schema_name: "public".to_string(),
         row_type_oid: None,
@@ -4561,6 +4563,7 @@ fn schema_bound_row_materialization_preserves_record_fields() {
 fn select_projection_binds_schema_columns_to_direct_record_slots() {
     fn column(name: &str, pg_type: &str, primary_key: bool) -> ColumnSchema {
         ColumnSchema {
+            comment: None,
             name: name.to_string(),
             pg_type: pg_type.to_string(),
             user_type: None,
@@ -4581,6 +4584,7 @@ fn select_projection_binds_schema_columns_to_direct_record_slots() {
     }
 
     let schema = TableSchema {
+        comment: None,
         name: "arbitrary_projection_rows".to_string(),
         schema_name: "public".to_string(),
         row_type_oid: None,

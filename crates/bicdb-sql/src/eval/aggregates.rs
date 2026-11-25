@@ -1415,16 +1415,31 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             .iter()
             .map(|element| projected_expr_pg_type(element, schema))
             .collect::<Vec<_>>();
-        return select_common_builtin_projected_type(&element_types)
-            .map(|element_type| format!("{element_type}[]"));
+        // ARRAY[ARRAY[..], ..] is a multi-dimensional array of the same
+        // element type: PostgreSQL array types carry no dimension count.
+        return select_common_builtin_projected_type(&element_types).map(|element_type| {
+            if element_type.ends_with("[]") {
+                element_type
+            } else {
+                format!("{element_type}[]")
+            }
+        });
     }
-    if let Expr::CompoundFieldAccess { root, .. } = expr {
+    if let Expr::CompoundFieldAccess { root, access_chain } = expr {
         if let Some((pg_type, _)) = projected_access_type_state(expr, schema) {
             return Some(pg_type);
         }
+        let only_subscripts = access_chain
+            .iter()
+            .all(|access| matches!(access, AccessExpr::Subscript(_)));
+        let sliced = access_chain
+            .iter()
+            .any(|access| matches!(access, AccessExpr::Subscript(Subscript::Slice { .. })));
         return projected_expr_pg_type(root, schema).and_then(|pg_type| {
             if pg_type == "jsonb" {
                 Some(pg_type)
+            } else if only_subscripts && sliced {
+                pg_type.ends_with("[]").then_some(pg_type)
             } else {
                 pg_type.strip_suffix("[]").map(str::to_string)
             }
@@ -2054,11 +2069,16 @@ pub(crate) fn projected_access_type_state(
             let array_slice_mode = access_chain
                 .iter()
                 .any(|access| matches!(access, AccessExpr::Subscript(Subscript::Slice { .. })));
+            // Consecutive subscripts index one (multi-dimensional) array:
+            // PostgreSQL array types carry no dimension count.
+            let mut subscripted = false;
             for access in access_chain {
                 match access {
                     AccessExpr::Subscript(Subscript::Slice { .. }) => {}
                     AccessExpr::Subscript(Subscript::Index { .. }) if array_slice_mode => {}
+                    AccessExpr::Subscript(Subscript::Index { .. }) if subscripted => {}
                     AccessExpr::Subscript(Subscript::Index { .. }) => {
+                        subscripted = true;
                         if let Some(current) = &mut user_type {
                             if !current.array {
                                 return None;
@@ -2070,6 +2090,7 @@ pub(crate) fn projected_access_type_state(
                         }
                     }
                     AccessExpr::Dot(Expr::Identifier(field)) => {
+                        subscripted = false;
                         let current = user_type.as_ref()?;
                         let UserTypeKind::Composite { attributes, .. } = &current.kind else {
                             return None;
@@ -2213,7 +2234,13 @@ fn projected_expr_pg_type_with_db_uncached(db: &BicDb, expr: &Expr) -> Option<St
             .collect::<Vec<_>>();
         return select_common_pg_type(db, &types, "ARRAY")
             .ok()
-            .map(|element| format!("{element}[]"));
+            .map(|element| {
+                if element.ends_with("[]") {
+                    element
+                } else {
+                    format!("{element}[]")
+                }
+            });
     }
     if let Expr::Function(function) = expr {
         if is_current_catalog_keyword(function) {

@@ -264,6 +264,13 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
                 &mut statements,
                 &mut exception_handlers,
             )?;
+            crate::routine_calls::bind_routine_calls(
+                db,
+                &mut params,
+                &mut declarations,
+                &mut statements,
+                &mut exception_handlers,
+            )?;
         }
     }
     let symbol_names =
@@ -878,6 +885,9 @@ pub(crate) fn procedure_actual_arguments<'a>(
 }
 
 pub(crate) fn parse_routine_param(arg: &str, index: usize) -> Result<RoutineParam> {
+    // A VARIADIC parameter is an IN parameter of its array type; calls
+    // collect their trailing arguments into it (see routine_calls).
+    let arg = crate::routine_calls::routine_arg_without_variadic(arg);
     let default_expr = routine_arg_default_expr(arg)?;
     let arg = routine_arg_without_default(arg);
     let words = split_sql_words(&arg);
@@ -3418,6 +3428,7 @@ pub(crate) fn synthetic_primary_key_column() -> ColumnSchema {
         default_expr: None,
         generated_expr: None,
         identity: None,
+        comment: None,
     }
 }
 

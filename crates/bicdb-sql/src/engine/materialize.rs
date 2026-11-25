@@ -3221,6 +3221,31 @@ impl<'db> SqlEngine<'db> {
                 self.common_branch_type(&branches, env)
             }
             Expr::Subquery(query) => self.scalar_query_output_type(query),
+            // Array subscripts: PostgreSQL array types carry no dimension
+            // count, so any number of index subscripts yields the element
+            // type and any slice keeps the array type.
+            Expr::CompoundFieldAccess { root, access_chain }
+                if !access_chain.is_empty()
+                    && access_chain
+                        .iter()
+                        .all(|access| matches!(access, AccessExpr::Subscript(_))) =>
+            {
+                let array_type = self.infer_env_expr_type(root, env)?;
+                if access_chain
+                    .iter()
+                    .any(|access| matches!(access, AccessExpr::Subscript(Subscript::Slice { .. })))
+                {
+                    return array_type.ends_with("[]").then_some(array_type);
+                }
+                array_type
+                    .strip_suffix("[]")
+                    .map(str::to_string)
+                    .or_else(|| match array_type.as_str() {
+                        "int2vector" => Some("int2".to_string()),
+                        "oidvector" => Some("oid".to_string()),
+                        _ => None,
+                    })
+            }
             _ => None,
         }
     }

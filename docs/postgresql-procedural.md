@@ -25,6 +25,38 @@ INSERT, UPDATE, and DELETE. They are not limited to a special notification
 pattern. The authorization integration suites cover routine owners, trigger
 execution, and inherited object privileges.
 
+## Function call forms
+
+Calls of SQL and PL/pgSQL functions resolve as PostgreSQL resolves them:
+
+- Named notation `f(b => 2, a => 1)` (also `:=`) and mixed notation
+  `f(1, b => 2)`, with defaults filling any omitted parameter. Positional
+  arguments must come first (`42601` otherwise); an unknown parameter name, a
+  parameter given twice or a missing non-default parameter is `42883`
+  ("function ... does not exist").
+- `VARIADIC` parameters: trailing arguments are collected into the array
+  (`f(1, 2, 3)`), and `f(VARIADIC ARRAY[...])` passes the array itself. A
+  non-variadic overload that takes the same arguments is preferred. As in
+  PostgreSQL, named notation cannot target the variadic parameter without
+  `VARIADIC`; the combined `VARIADIC name => array` form is not supported.
+- OUT and INOUT parameters: a function declared without RETURNS returns its
+  single OUT parameter's type, or a `record` whose fields are the OUT
+  parameters, so `(f(1)).c`, `SELECT * FROM f(1)` and `RETURNS TABLE`
+  functions in FROM work for SQL and PL/pgSQL functions.
+
+The call is rewritten to its positional form before execution (named
+arguments moved into place, defaults inserted, variadic arguments gathered),
+then overload resolution proceeds as for any positional call. Overloads that
+would place named arguments differently are refused with `0A000`. A
+set-returning function in a select list (`SELECT (f()).x` over a `RETURNS
+TABLE` function) is still not supported.
+
+`pg_notify(channel, payload)` queues a notification exactly like `NOTIFY`:
+inside a transaction block both are delivered at commit and discarded on
+rollback, and identical channel/payload pairs of one transaction are delivered
+once. Empty or over-long channel names and payloads of 8000 bytes or more are
+`22023`.
+
 ## Migration control flow
 
 Procedural IF matching distinguishes actual statement boundaries from SQL

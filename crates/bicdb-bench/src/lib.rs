@@ -6370,23 +6370,18 @@ pub fn run_postgres_compat_suite(
     }
     record_pg_case(
         &mut cases,
-        "guardrails.unsupported_similar_to_expression_error",
-        "guardrails",
-        "Unsupported SIMILAR TO expression returns a clear PostgreSQL-shaped error",
-        PostgresCompatExpectation::ClearUnsupportedError,
+        "expressions.supported.similar_to",
+        "expressions",
+        "SIMILAR TO and NOT SIMILAR TO match as PostgreSQL does",
+        PostgresCompatExpectation::Works,
         || {
-            let error = bench_pg_simple_query_error(
-                &mut client,
-                "SELECT id FROM patients WHERE id SIMILAR TO 'p[0-9]';",
-            )?;
-            if error.contains("ERROR")
-                && error.contains("0A000")
-                && error.contains("SIMILAR TO is not supported")
-            {
-                Ok(format!("clear error: {}", compact_error(&error)))
-            } else {
-                anyhow::bail!("expected clear SIMILAR TO unsupported error, got {error:?}")
-            }
+            expect_rows(
+                bench_pg_simple_query(
+                    &mut client,
+                    "SELECT 'p1' SIMILAR TO 'p[0-9]', 'px' SIMILAR TO 'p[0-9]', 'ab' NOT SIMILAR TO 'a%';",
+                )?,
+                &[&["t", "f", "f"]],
+            )
         },
     );
     record_pg_case(
@@ -6534,11 +6529,11 @@ pub fn run_postgres_compat_suite(
     );
     add_pg_documented_case(
         &mut cases,
-        "expressions.expected_difference.unsupported_similar_to",
+        "expressions.supported.similar_to_fixture",
         "expressions",
-        "Unsupported SIMILAR TO expression behavior is covered by PostgreSQL diff fixtures",
-        PostgresCompatExpectation::ExpectedDifference,
-        PostgresCompatCoverageState::ExpectedDifference,
+        "SIMILAR TO behavior is covered by PostgreSQL diff fixtures",
+        PostgresCompatExpectation::Works,
+        PostgresCompatCoverageState::Supported,
         "covered by fixtures/postgres-compat/024-expected-difference-unsupported-expressions.json in compat diff",
     );
     add_pg_documented_case(
@@ -10011,17 +10006,15 @@ fn default_postgres_diff_fixtures() -> Vec<PostgresDiffFixture> {
         },
         PostgresDiffFixture {
             id: "expected_difference_unsupported_expressions".to_string(),
-            description: "Unsupported expression forms return stable unsupported errors".to_string(),
+            description: "SIMILAR TO matches PostgreSQL".to_string(),
             cleanup_sql: vec!["DROP TABLE IF EXISTS diff_expr_unsupported;".to_string()],
             sql: vec![
                 "CREATE TABLE diff_expr_unsupported (id TEXT PRIMARY KEY, age INT);".to_string(),
                 "INSERT INTO diff_expr_unsupported (id, age) VALUES ('e1', 36);".to_string(),
                 "SELECT id FROM diff_expr_unsupported WHERE id SIMILAR TO 'e[0-9]';".to_string(),
             ],
-            expectation: PostgresDiffExpectation::ExpectedDifference,
-            expected_difference: Some(
-                "BicDB explicitly rejects unsupported SIMILAR TO expressions".to_string(),
-            ),
+            expectation: PostgresDiffExpectation::Match,
+            expected_difference: None,
         },
         PostgresDiffFixture {
             id: "expected_difference_procedural_languages".to_string(),

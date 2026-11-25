@@ -3274,6 +3274,9 @@ impl<'db> SqlSession<'db> {
             Expr::Function(function) if is_set_config_function(function)? => {
                 self.eval_set_config_function(function)
             }
+            Expr::Function(function) if is_pg_notify_function(function)? => {
+                self.eval_pg_notify_function(function)
+            }
             Expr::Function(function)
                 if matches!(function.args, FunctionArguments::Subquery(_))
                     && object_name_lowercase(&function.name)? == "array" =>
@@ -3885,9 +3888,52 @@ impl<'db> SqlSession<'db> {
         }
         let targets = GucAssignmentTargets::setting(&setting);
         self.apply_scoped_guc_change(local, targets, |session| {
-            session.apply_setting_value(setting, SqlValue::String(value.clone()))
+            session.apply_setting_value(setting.clone(), SqlValue::String(value.clone()))
         })?;
+        // PostgreSQL returns the setting's normalised value (`65536` -> `64MB`).
+        if crate::session::planner_gucs::is_planner_guc(&setting) {
+            if let Some(normalized) = self.session_gucs.get(&setting) {
+                return Ok(SqlValue::String(normalized.clone()));
+            }
+        }
         Ok(SqlValue::String(value))
+    }
+
+    /// `pg_notify(channel, payload)`: queue the notification exactly as the
+    /// NOTIFY statement does; the host delivers it when the transaction
+    /// commits and discards it on rollback.
+    pub(crate) fn eval_pg_notify_function(&mut self, function: &Function) -> Result<SqlValue> {
+        let args = function_arg_list(function);
+        if args.len() != 2 {
+            return Err(SqlError::undefined_function(format!(
+                "function pg_notify with {} argument(s) does not exist",
+                args.len()
+            )));
+        }
+        let channel =
+            match self.eval_session_expr(args.get(0).expect("validated argument count"))? {
+                SqlValue::Null => String::new(),
+                value => value.to_cell(),
+            };
+        let payload =
+            match self.eval_session_expr(args.get(1).expect("validated argument count"))? {
+                SqlValue::Null => String::new(),
+                value => value.to_cell(),
+            };
+        if channel.is_empty() {
+            return Err(SqlError::invalid_parameter_value(
+                "channel name cannot be empty",
+            ));
+        }
+        // NAMEDATALEN - 1 bytes, and payloads under 8000 bytes.
+        if channel.len() >= 64 {
+            return Err(SqlError::invalid_parameter_value("channel name too long"));
+        }
+        if payload.len() >= 8000 {
+            return Err(SqlError::invalid_parameter_value("payload string too long"));
+        }
+        self.pending_notifications.push((channel, payload));
+        Ok(SqlValue::String(String::new()))
     }
 
     pub(crate) fn eval_sequence_function(&mut self, function: &Function) -> Result<SqlValue> {
@@ -4581,6 +4627,22 @@ impl<'db> SqlSession<'db> {
             }
             RoutineControl::ExitLoop => Err(SqlError::InvalidSql("EXIT escaped a loop".into())),
             RoutineControl::Return(Some(value)) => Ok(value),
+            // Several OUT parameters: the function returns them as one record
+            // when the body ends or executes a bare RETURN.
+            RoutineControl::Return(None) | RoutineControl::Continue
+                if frame.output_names.len() > 1 && !routine.returns_set =>
+            {
+                let outputs = crate::routine_calls::routine_output_params(&ir.params);
+                let values = frame
+                    .output_names
+                    .iter()
+                    .map(|name| frame.get(name))
+                    .collect();
+                return crate::routine_calls::output_record_value(&outputs, values);
+            }
+            RoutineControl::Return(None) if frame.output_names.len() == 1 => {
+                Ok(frame.get(&frame.output_names[0]))
+            }
             RoutineControl::Return(None) => Ok(SqlValue::Null),
             RoutineControl::Continue => {
                 if frame.output_names.len() == 1 {
@@ -4630,6 +4692,13 @@ impl<'db> SqlSession<'db> {
                 )));
             };
             result = Some(self.execute_routine_sql(&mut frame, statement)?);
+        }
+        let outputs = crate::routine_calls::routine_output_params(&ir.params);
+        if outputs.len() > 1 {
+            return match result.and_then(|result| result.rows.into_iter().next()) {
+                Some(row) => crate::routine_calls::output_record_value(&outputs, row),
+                None => Ok(SqlValue::Null),
+            };
         }
         let value = result
             .and_then(|result| result.rows.into_iter().next())

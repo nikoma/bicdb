@@ -1271,7 +1271,10 @@ impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
             "lower" | "upper" | "trim" | "ltrim" | "rtrim" | "substr" | "substring" | "replace"
             | "translate" | "initcap" | "md5" | "left" | "right" | "repeat" | "reverse"
             | "length" | "char_length" | "character_length" | "position" | "strpos" => Some("text"),
-            "set_config" => Some("text"),
+            "set_config" | "similar_to_escape" | "similar_escape" | "bicdb_similar_substring" => {
+                Some("text")
+            }
+            "pg_notify" => Some("void"),
             "coalesce" | "nullif" | "greatest" | "least" | "ifnull" => common.as_deref(),
             "abs" | "ceil" | "ceiling" | "floor" | "round" | "mod" | "power" | "sqrt" => {
                 common.as_deref().or(Some("numeric"))

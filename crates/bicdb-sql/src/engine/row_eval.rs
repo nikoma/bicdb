@@ -3626,6 +3626,13 @@ impl<'db> SqlEngine<'db> {
             };
             result = Some(routine_engine.execute_query(query)?);
         }
+        let outputs = crate::routine_calls::routine_output_params(&routine.ir.params);
+        if outputs.len() > 1 {
+            return match result.and_then(|result| result.rows.into_iter().next()) {
+                Some(row) => crate::routine_calls::output_record_value(&outputs, row).map(Some),
+                None => Ok(Some(SqlValue::Null)),
+            };
+        }
         let value = result
             .and_then(|result| result.rows.into_iter().next())
             .and_then(|row| row.into_iter().next())

@@ -154,6 +154,20 @@ any other processing, so every statement form sees the same value:
 - Dollar quoting `$$...$$`, `$tag$...$tag$` is taken verbatim.
 - `quote_literal` and `format('%L')` write a value holding a backslash as
   `E'...'` with doubled backslashes, as PostgreSQL does.
+- With standard_conforming_strings off, a backslash escape in a plain
+  constant gives PostgreSQL's WARNING (`nonstandard use of \\ in a string
+  literal`, SQLSTATE 22P06) unless `escape_string_warning` is off. Statements
+  sent with the extended protocol's Parse do not report it yet.
+
+## Quantified operators
+
+`x OP ANY (array)` and `x OP ALL (array)` also work for `@@`, `@>`, `<@`,
+`&&`, `?`, `?|`, `?&` and custom operators, with PostgreSQL's result for
+NULL elements, a NULL array and an empty array, and for a subquery in place
+of the array. An array written out (`ARRAY[...]`, `'{a,b}'`) compares each
+element with its own type; an array from a column is read with `unnest`,
+whose elements carry no type, so an operator that needs typed operands
+fails there.
 
 ## Predicate values in projections and ordering
 
@@ -205,5 +219,5 @@ cases protect the two front ends.
   excludes (`s:A`), as PostgreSQL's cover density does.
 
 Limits: these fail instead of answering:
-- `ts_debug`, `ts_parse`, `unnest(tsvector)` and `x @@ ANY (array)`
+- `ts_debug`, `ts_parse` and `unnest(tsvector)`
 - `CREATE TEXT SEARCH CONFIGURATION/DICTIONARY`

@@ -282,11 +282,66 @@ pub(crate) fn pg_default_opclass(
     })
 }
 
+/// Operator classes extensions define over their own types, matched by
+/// type name (extension types have no fixed oid). Only classes whose index
+/// the planner never consults for these types are listed: a GIN or GiST
+/// index over hstore is built and kept, and its operators run as filters.
+static EXTENSION_OPCLASS_SPECS: [(&str, PgOpclassSpec); 2] = [
+    (
+        "hstore",
+        PgOpclassSpec {
+            oid: 9_900_001,
+            method_oid: 2742,
+            name: "gin_hstore_ops",
+            namespace_oid: 2200,
+            owner_oid: 10,
+            family_oid: 9_900_101,
+            input_type_oid: 0,
+            is_default: true,
+            key_type_oid: 25,
+        },
+    ),
+    (
+        "hstore",
+        PgOpclassSpec {
+            oid: 9_900_002,
+            method_oid: 783,
+            name: "gist_hstore_ops",
+            namespace_oid: 2200,
+            owner_oid: 10,
+            family_oid: 9_900_102,
+            input_type_oid: 0,
+            is_default: true,
+            key_type_oid: 0,
+        },
+    ),
+];
+
+fn extension_opclass(
+    pg_type: &str,
+    access_method: &str,
+    name: Option<&str>,
+) -> Option<&'static PgOpclassSpec> {
+    let type_name = pg_type.rsplit('.').next().unwrap_or(pg_type);
+    let method_oid = access_method_oid(access_method);
+    EXTENSION_OPCLASS_SPECS
+        .iter()
+        .find(|(owner, spec)| {
+            *owner == type_name
+                && spec.method_oid == method_oid
+                && name.map_or(spec.is_default, |name| spec.name == name)
+        })
+        .map(|(_, spec)| spec)
+}
+
 pub(crate) fn pg_default_opclass_for_type(
     db: &BicDb,
     access_method: &str,
     pg_type: &str,
 ) -> Result<Option<&'static PgOpclassSpec>> {
+    if let Some(spec) = extension_opclass(pg_type, access_method, None) {
+        return Ok(Some(spec));
+    }
     let Some(input_oid) = pg_opclass_input(db, pg_type)? else {
         return Ok(None);
     };
@@ -307,6 +362,9 @@ pub(crate) fn pg_opclass_named_for_type(
     };
     let method_oid = access_method_oid(access_method);
     let name = name.rsplit('.').next().unwrap_or(name);
+    if let Some(spec) = extension_opclass(pg_type, access_method, Some(name)) {
+        return Ok(Some(spec));
+    }
     Ok(pg_opclass_specs().iter().find(|spec| {
         spec.method_oid == method_oid && spec.name == name && spec.input_type_oid == input_oid
     }))

@@ -705,6 +705,11 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
         changed = true;
     }
 
+    if let Some(next) = crate::quantified_operators::rewrite_operator_quantifiers(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
     if let Some(next) = rewrite_locking_clause_before_limit(&rewritten) {
         rewritten = next;
         changed = true;

@@ -143,3 +143,36 @@ inh.con_multi|CREATE TABLE ihm(a int NOT NULL); CREATE TABLE ihm_c() INHERITS (i
 inh.con_pkey|CREATE TABLE ihk(a int PRIMARY KEY, b int NOT NULL); ALTER TABLE ihk ALTER CONSTRAINT ihk_pkey INHERIT
 inh.con_child|CREATE TABLE ihp(a int, b int NOT NULL); CREATE TABLE ihp_c() INHERITS (ihp); ALTER TABLE ihp_c ALTER CONSTRAINT ihp_b_not_null NO INHERIT
 ts.rank_cd_weights|SELECT ts_rank_cd(' a:1 s:2,3A d:2A g'::tsvector, 'a <2> s:A'), ts_rank_cd(' a:1 b:2 s:3A d:2A g'::tsvector, 'a <2> s:A')
+flt2.json|SELECT to_json(1.1::float4), to_jsonb(1.1::float4), json_build_object('a', 1.1::float4), row_to_json(ROW(1.1::float4, 0.1::float8)), json_build_array(1.1::float4)
+flt2.to_char|SELECT to_char(1.1::float4, '9.99999999'), to_char(123456.789::float4, '999999.999'), to_char(1.1::float8, '9.99999999999999999'), to_char(0.1::float8, '0.99')
+flt2.mul_overflow|CREATE TABLE flm(f float8); INSERT INTO flm VALUES (1e300); SELECT f * '1e200' FROM flm
+flt2.mul_ok|CREATE TABLE flm2(f float8); INSERT INTO flm2 VALUES (2); SELECT f * '1e200', f + '0.5', f / '4' FROM flm2
+flt2.div_under|CREATE TABLE flm3(f float8); INSERT INTO flm3 VALUES (1e-300); SELECT f / '1e300' FROM flm3
+flt2.exp|SELECT exp(1::float8), exp(-1000::float8)
+flt2.exp_over|SELECT exp(1000::float8)
+flt2.ln_zero|SELECT ln(0::float8)
+flt2.ln_neg|SELECT ln(-1::float8)
+warn.backslash|SET standard_conforming_strings = off; SELECT 'a\\b'
+warn.quote|SET standard_conforming_strings = off; SELECT 'a\'b'
+warn.off|SET standard_conforming_strings = off; SET escape_string_warning = off; SELECT 'x\\y'; SHOW escape_string_warning
+srf2.two_calls|CREATE FUNCTION s2a() RETURNS SETOF int LANGUAGE sql AS 'SELECT 1 UNION ALL SELECT 2'; CREATE FUNCTION s2b() RETURNS SETOF int LANGUAGE sql AS 'SELECT 10 UNION ALL SELECT 20 UNION ALL SELECT 30'; SELECT s2a(), s2b(); SELECT s2a() + s2b()
+srf2.composite|CREATE FUNCTION s2c(n int) RETURNS TABLE(a int, b text) LANGUAGE sql AS $$ SELECT g, 'v' || g FROM generate_series(1, n) g $$; SELECT s2c(2); SELECT s2c(1), 'x'
+srf2.setof_table|CREATE TABLE s2t(a int, b text); INSERT INTO s2t VALUES (1, 'x'); CREATE FUNCTION s2d() RETURNS SETOF s2t LANGUAGE sql AS 'SELECT * FROM s2t'; SELECT s2d()
+srf2.with_table|CREATE TABLE s2u(n int); INSERT INTO s2u VALUES (1), (2); CREATE FUNCTION s2e(k int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, k) g'; CREATE FUNCTION s2f(k int) RETURNS SETOF int LANGUAGE sql AS 'SELECT k * 100'; SELECT n, s2e(n), s2f(n) FROM s2u ORDER BY 1, 2
+srf2.return_next|CREATE FUNCTION s2g(n int) RETURNS SETOF int LANGUAGE plpgsql AS $$ BEGIN FOR i IN 1..n LOOP RETURN NEXT i * 2; END LOOP; END $$; SELECT * FROM s2g(3)
+hs2.hash_eq|CREATE EXTENSION IF NOT EXISTS hstore; CREATE TABLE hsq2(a int, b text); SELECT (ROW(1, 'q')::hsq2 #= 'b=>z'::hstore).*
+hs2.populate_from|CREATE EXTENSION IF NOT EXISTS hstore; CREATE TABLE hsp3(a int, b text); SELECT * FROM populate_record(ROW(5, 'q')::hsp3, 'a=>7'::hstore)
+hs2.jsonb_from|CREATE TABLE jpr(a int, b text); SELECT * FROM jsonb_populate_record(ROW(5, 'q')::jpr, '{"a": 7}')
+hs2.gin|CREATE EXTENSION IF NOT EXISTS hstore; CREATE TABLE hsg2(h hstore); INSERT INTO hsg2 VALUES ('a=>1'), ('b=>2'); CREATE INDEX hsg2_i ON hsg2 USING gin (h); SELECT count(*) FROM hsg2 WHERE h ? 'a'; SELECT count(*) FROM hsg2 WHERE h @> 'b=>2'
+hs2.gist|CREATE EXTENSION IF NOT EXISTS hstore; CREATE TABLE hst2(h hstore); INSERT INTO hst2 VALUES ('a=>1'), ('b=>2'); CREATE INDEX hst2_i ON hst2 USING gist (h); SELECT count(*) FROM hst2 WHERE h ?| ARRAY['a', 'b']
+any.ts|SELECT to_tsvector('english', 'fat cats') @@ ANY(ARRAY[to_tsquery('english', 'cat'), to_tsquery('english', 'dog')]), 'a b'::tsvector @@ ALL(ARRAY['a'::tsquery, 'b'::tsquery]), 'a b'::tsvector @@ ALL(ARRAY['a'::tsquery, 'c'::tsquery])
+any.null|SELECT 'a'::tsvector @@ ANY(NULL::tsquery[]), 'a'::tsvector @@ ANY(ARRAY[]::tsquery[]), 'a'::tsvector @@ ALL(ARRAY[]::tsquery[]), 'a'::tsvector @@ ANY(ARRAY[NULL, 'b']::tsquery[])
+any.table|CREATE TABLE anyt(v tsvector); INSERT INTO anyt VALUES ('a b'), ('c'), (NULL); SELECT count(*) FROM anyt WHERE v @@ ANY(ARRAY['a'::tsquery, 'c'::tsquery]); SELECT count(*) FROM anyt WHERE NOT v @@ ANY(ARRAY['a'::tsquery])
+any.jsonb|SELECT '{"a":1}'::jsonb @> ANY(ARRAY['{"a":1}'::jsonb, '{"b":2}'::jsonb]), '{"a":1}'::jsonb ? ANY(ARRAY['b', 'a'])
+any.subquery|CREATE TABLE anys(q tsquery); INSERT INTO anys VALUES ('a'), ('z'); SELECT 'a b'::tsvector @@ ANY(SELECT q FROM anys), 'a b'::tsvector @@ ALL(SELECT q FROM anys)
+inh2.nn_name|CREATE TABLE inn1(a int NOT NULL); CREATE TABLE inn2() INHERITS (inn1); SELECT conrelid::regclass::text, conname, coninhcount, conislocal FROM pg_constraint WHERE contype = 'n' AND conrelid::regclass::text IN ('inn1', 'inn2') ORDER BY 1
+inh2.con_multi_all|CREATE TABLE ihm2(a int NOT NULL); CREATE TABLE ihm2_c() INHERITS (ihm2); ALTER TABLE ihm2 ALTER CONSTRAINT ihm2_a_not_null NO INHERIT, ALTER CONSTRAINT ihm2_a_not_null INHERIT; SELECT conrelid::regclass::text, connoinherit FROM pg_constraint WHERE conname = 'ihm2_a_not_null' ORDER BY 1
+any.untyped|CREATE TABLE anyu(v tsvector); INSERT INTO anyu VALUES ('a b'), ('c'), ('d'); SELECT count(*) FROM anyu WHERE v @@ ANY('{a,c}'); SELECT count(*) FROM anyu WHERE v @@ ALL('{a,b}')
+flt2.row_text2|SELECT ROW(1.1::float4, 'NaN'::float8, 1e20::float8, '-0'::float4)
+srf2.plpgsql_select|CREATE FUNCTION s2h(n int) RETURNS SETOF int LANGUAGE plpgsql AS $$ BEGIN FOR i IN 1..n LOOP RETURN NEXT i; END LOOP; END $$; SELECT s2h(2); SELECT s2h(2), 'x'
+srf2.order|CREATE FUNCTION s2i(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT s2i(3) AS v ORDER BY v DESC; SELECT s2i(3) ORDER BY 1 DESC

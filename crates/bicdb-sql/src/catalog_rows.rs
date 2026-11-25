@@ -433,6 +433,43 @@ pub(crate) fn not_null_constraint_name(table: &str, column: &str) -> String {
     format!("{table}_{column}_not_null")
 }
 
+/// The direct parents whose not-null constraint on `column` `schema`
+/// inherits (constraints declared NO INHERIT are not passed on).
+pub(crate) fn inherited_not_null_parents<'a>(
+    schemas: &'a [TableSchema],
+    schema: &TableSchema,
+    column: &str,
+) -> Vec<&'a TableSchema> {
+    schema
+        .inherits
+        .iter()
+        .filter_map(|parent| schemas.iter().find(|candidate| candidate.name == *parent))
+        .filter(|parent| {
+            parent.columns.iter().any(|candidate| {
+                candidate.name == column
+                    && !candidate.hidden
+                    && (!candidate.nullable || candidate.primary_key)
+            }) && !parent
+                .no_inherit_constraints
+                .contains(&not_null_constraint_name(&parent.name, column))
+        })
+        .collect()
+}
+
+/// The name of the not-null constraint on `column` of `schema`, which is
+/// that of the ancestor it was first declared on.
+pub(crate) fn inherited_not_null_name(
+    schemas: &[TableSchema],
+    schema: &TableSchema,
+    column: &str,
+    depth: usize,
+) -> String {
+    match inherited_not_null_parents(schemas, schema, column).first() {
+        Some(parent) if depth < 64 => inherited_not_null_name(schemas, parent, column, depth + 1),
+        _ => not_null_constraint_name(&schema.name, column),
+    }
+}
+
 pub(crate) fn key_column_usage_row(
     schema: &TableSchema,
     constraint: &str,
@@ -5452,7 +5489,12 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                 continue;
             }
             if !column.nullable || column.primary_key {
-                let name = not_null_constraint_name(&schema.name, &column.name);
+                // An inherited not-null constraint keeps its parent's name.
+                let parents = inherited_not_null_parents(schemas, schema, &column.name);
+                let name = match parents.first() {
+                    Some(parent) => inherited_not_null_name(schemas, parent, &column.name, 0),
+                    None => not_null_constraint_name(&schema.name, &column.name),
+                };
                 if pg_constraint_filter_matches(&name, "n", table_oid, names, types, relation_oids)
                 {
                     rows.push(pg_constraint_row(PgConstraintRow {
@@ -5477,8 +5519,14 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                     let no_inherit = schema
                         .no_inherit_constraints
                         .contains(&not_null_constraint_name(&schema.name, &column.name));
-                    if let (true, Some(row)) = (no_inherit, rows.last_mut()) {
-                        row.insert("connoinherit".into(), SqlValue::Bool(true));
+                    if let Some(row) = rows.last_mut() {
+                        if no_inherit {
+                            row.insert("connoinherit".into(), SqlValue::Bool(true));
+                        }
+                        if !parents.is_empty() {
+                            row.insert("conislocal".into(), SqlValue::Bool(false));
+                            row.insert("coninhcount".into(), SqlValue::Int(parents.len() as i64));
+                        }
                     }
                 }
                 constraint_slot += 1;

@@ -244,6 +244,8 @@ pub mod search_path;
 mod similar_to;
 mod sql_json;
 mod srf_projection;
+mod user_aggregates;
+mod user_casts;
 pub use application_copy::{copy_application_tables, ApplicationCopyReport};
 pub(crate) use constraint_nulls::*;
 pub use role_settings::role_session_settings;

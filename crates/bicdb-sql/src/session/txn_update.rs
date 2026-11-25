@@ -3355,6 +3355,14 @@ impl<'db> SqlSession<'db> {
                 self.eval_pg_notify_function(function)
             }
             Expr::Function(function)
+                if matches!(
+                    object_name(&function.name)?.to_ascii_lowercase().as_str(),
+                    "pg_export_snapshot" | "pg_catalog.pg_export_snapshot"
+                ) && function_arg_list(function).is_empty() =>
+            {
+                self.export_transaction_snapshot()
+            }
+            Expr::Function(function)
                 if matches!(function.args, FunctionArguments::Subquery(_))
                     && object_name_lowercase(&function.name)? == "array" =>
             {
@@ -4136,11 +4144,22 @@ impl<'db> SqlSession<'db> {
         args: &[SqlValue],
         arg_types: &[Option<String>],
     ) -> Result<Option<SqlValue>> {
+        if crate::user_aggregates::is_fold_call(args) {
+            self.ensure_routine_execute_privilege(name)?;
+            let plan = crate::user_aggregates::fold_plan(self.db_ref(), name, args)?;
+            let mut call = |function: &str, values: &[SqlValue], types: &[Option<String>]| {
+                self.eval_stored_function_value_typed(function, values, types)
+            };
+            return crate::user_aggregates::run_fold(&plan, args, &mut call).map(Some);
+        }
         let Some(routine) =
             resolve_routine_for_call(self.db_ref(), RoutineKind::Function, name, arg_types, args)?
         else {
             return Ok(None);
         };
+        if crate::user_aggregates::is_aggregate_routine(&routine.schema) {
+            return Err(crate::user_aggregates::unbound_aggregate_call(name));
+        }
         self.ensure_routine_execute_privilege(name)?;
         let args = self.complete_routine_default_args(&routine, args)?;
         let args = args.as_ref();

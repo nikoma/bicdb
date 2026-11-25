@@ -560,6 +560,16 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
         changed = true;
     }
 
+    if let Some(next) = crate::similar_to::rewrite_rows_from(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
+    if let Some(next) = crate::similar_to::rewrite_order_by_using(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
     if let Some(next) = crate::similar_to::rewrite_substring_similar(&rewritten) {
         rewritten = next;
         changed = true;

@@ -3651,11 +3651,28 @@ impl<'db> SqlEngine<'db> {
         args: &[SqlValue],
         arg_types: &[Option<String>],
     ) -> Result<Option<SqlValue>> {
+        if crate::user_aggregates::is_fold_call(args) {
+            let role = current_user_from_gucs(&self.session_gucs);
+            if !role_can_execute_routine(self.db_ref(), &role, name)? {
+                return Err(SqlError::BicDb(BicDbError::Authorization(format!(
+                    "permission denied for aggregate {}",
+                    normalize_object_name(name)
+                ))));
+            }
+            let plan = crate::user_aggregates::fold_plan(self.db_ref(), name, args)?;
+            let mut call = |function: &str, values: &[SqlValue], types: &[Option<String>]| {
+                self.eval_stored_sql_function_value(function, values, types)
+            };
+            return crate::user_aggregates::run_fold(&plan, args, &mut call).map(Some);
+        }
         let Some(routine) =
             resolve_routine_for_call(self.db_ref(), RoutineKind::Function, name, arg_types, args)?
         else {
             return Ok(None);
         };
+        if crate::user_aggregates::is_aggregate_routine(&routine.schema) {
+            return Err(crate::user_aggregates::unbound_aggregate_call(name));
+        }
         if !routine.schema.language.eq_ignore_ascii_case("sql") {
             // PL/pgSQL runs in the session's interpreter; the host applies the
             // EXECUTE privilege check and SECURITY DEFINER itself.

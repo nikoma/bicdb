@@ -61,6 +61,49 @@ record-returning functions in one select list are refused with `0A000`.
 PL/pgSQL `RETURN NEXT expression` appends a row to a `SETOF` result; in a
 function with OUT parameters it is refused with `42804` as in PostgreSQL.
 
+## User-defined aggregates and casts
+
+`CREATE [OR REPLACE] AGGREGATE name (arg types) (SFUNC = f, STYPE = t
+[, FINALFUNC = f] [, INITCOND = 'v'] [, COMBINEFUNC = f] ...)` and `DROP
+AGGREGATE [IF EXISTS] name (arg types) [, ...]` define aggregates usable with
+GROUP BY, DISTINCT, ORDER BY inside the call, FILTER and as window aggregates
+(`OVER (...)`), with SQL or PL/pgSQL transition and final functions and
+PostgreSQL's strictness rules (a strict transition function skips NULL inputs
+and, without INITCOND, starts from the first non-NULL input). An aggregate is
+recorded as a routine (`prokind = 'a'`), so `regproc`, EXECUTE privileges,
+ownership, transactional DDL and restart persistence are those of functions,
+and `pg_aggregate` lists it. A call is collected with the built-in `array_agg`
+(which supplies grouping, ordering, filtering and window frames) and then
+folded through the transition function; COMBINEFUNC, the moving-aggregate
+options and SORTOP are recorded but not needed for that. Ordered-set and
+hypothetical-set aggregates, `FINALFUNC_EXTRA` and aggregates over `*` are
+refused with `0A000`.
+
+`CREATE CAST (source AS target) WITH FUNCTION f[(types)] | WITHOUT FUNCTION |
+WITH INOUT [AS ASSIGNMENT | AS IMPLICIT]` and `DROP CAST [IF EXISTS] (source AS
+target)` are catalogued in `pg_cast` and require ownership of one of the two
+types (or a superuser). Explicit casts (`CAST(x AS t)`, `x::t`) of a source
+type a user cast converts use it; `AS IMPLICIT` casts also convert arguments of
+a user function call whose only candidate of that arity needs them, and `AS
+ASSIGNMENT`/`AS IMPLICIT` casts convert `INSERT ... VALUES` items to the column
+type. Implicit user casts do not take part in operator or overload resolution
+among several candidates.
+
+User-defined operators (`CREATE OPERATOR`) also bind `<->`. `ORDER BY expr
+USING <` / `USING >` order ascending / descending; other operators in `USING`
+and operator symbols the parser cannot tokenize as one operator (`@@@`, `===`,
+prefix `~~~`) are refused with a syntax error.
+
+## Exported snapshots
+
+`pg_export_snapshot()` in a REPEATABLE READ transaction returns an identifier
+that another session's REPEATABLE READ transaction adopts with `SET
+TRANSACTION SNAPSHOT 'id'` before its first query; it then reads exactly the
+exporter's snapshot. Identifiers are valid while the exporting transaction is
+open; others are `22023` (invalid snapshot identifier). Importing into a READ
+COMMITTED or SERIALIZABLE transaction, and exporting from a READ COMMITTED
+one, are refused with `0A000`.
+
 ## SQL cursors
 
 `DECLARE name [BINARY] [ASENSITIVE|INSENSITIVE] [[NO] SCROLL] CURSOR
@@ -75,8 +118,8 @@ cursor `55000`, and a `WHERE CURRENT OF` on a cursor that is not on a row
 declaring role's privileges and row security: its query runs at DECLARE and
 its rows are kept, which is also what makes a `WITH HOLD` cursor survive
 COMMIT. COMMIT closes cursors without HOLD and ROLLBACK closes every cursor
-the transaction declared; `ROLLBACK TO SAVEPOINT` does not close cursors
-declared after the savepoint. A cursor declared without SCROLL or NO SCROLL
+the transaction declared; `ROLLBACK TO SAVEPOINT` closes the cursors declared
+after the savepoint. A cursor declared without SCROLL or NO SCROLL
 can move backward when its query is a plain scan of one table or function
 (PostgreSQL decides this from the plan). `WHERE CURRENT OF` needs a cursor
 over one table with a primary key (others are refused with `0A000`), and a

@@ -3585,6 +3585,7 @@ fn pg_proc_rows_uncached(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> 
     }
     for routine in list_routines(db)? {
         let prokind = match routine.kind {
+            _ if crate::user_aggregates::is_aggregate_routine(&routine) => "a",
             RoutineKind::Function => "f",
             RoutineKind::Procedure => "p",
         };

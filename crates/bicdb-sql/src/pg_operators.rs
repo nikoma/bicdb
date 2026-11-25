@@ -827,6 +827,7 @@ pub(crate) fn binary_operator_name(op: &BinaryOperator) -> Option<(Option<String
         BinaryOperator::Question => "?",
         BinaryOperator::QuestionAnd => "?&",
         BinaryOperator::QuestionPipe => "?|",
+        BinaryOperator::LtDashGt => "<->",
         _ => return None,
     };
     Some((None, name.to_string()))
@@ -858,6 +859,7 @@ fn standard_binary_operator(name: &str) -> Option<BinaryOperator> {
         "~*" => BinaryOperator::PGRegexIMatch,
         "!~" => BinaryOperator::PGRegexNotMatch,
         "!~*" => BinaryOperator::PGRegexNotIMatch,
+        "<->" => BinaryOperator::LtDashGt,
         "~~" => BinaryOperator::PGLikeMatch,
         "~~*" => BinaryOperator::PGILikeMatch,
         "!~~" => BinaryOperator::PGNotLikeMatch,

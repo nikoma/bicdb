@@ -138,6 +138,25 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
             oracle_autonomous: false,
         });
     }
+    if crate::user_aggregates::is_aggregate_routine(routine) {
+        // An aggregate has no body: its calls fold through the transition
+        // function (see user_aggregates).
+        let params = parse_routine_params(&routine.args)?;
+        let symbol_names = routine_symbol_names(&params, &[], &[], &[]);
+        return Ok(RoutineIR {
+            node_ownership: CompiledNodeOwnership::default(),
+            params,
+            symbol_names,
+            declarations: Vec::new(),
+            statements: Vec::new(),
+            exception_handlers: Vec::new(),
+            oracle_date_return: false,
+            oracle_procedural_evaluation: false,
+            oracle_statement_rollback: false,
+            oracle_error_diagnostics: None,
+            oracle_autonomous: false,
+        });
+    }
     if !routine_language_is_plpgsql(routine) {
         return Err(SqlError::UnsupportedPlpgsqlFeature(format!(
             "stored routine {} uses unsupported language {}",

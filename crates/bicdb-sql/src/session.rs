@@ -50,6 +50,7 @@ pub use partition_admission::{
     PartitionPolicyDecision, PartitionRowRelocation, PartitionUpgradeApplied,
     PartitionUpgradeInspection, PartitionUpgradePlan,
 };
+mod exported_snapshots;
 mod partition_triggers;
 pub(crate) mod planner_gucs;
 #[cfg(test)]
@@ -1356,6 +1357,8 @@ impl SqlSessionGucState {
     }
 
     pub fn restore_savepoint(&mut self, savepoint: &Self) {
+        self.sql_cursors
+            .rollback_to(savepoint.sql_cursors.copy_mark());
         let lastval = self.session_gucs.get(LASTVAL_SESSION_KEY).cloned();
         self.settings = savepoint.settings;
         self.session_gucs = savepoint.session_gucs.clone();
@@ -2297,6 +2300,11 @@ pub(crate) enum DdlUndo {
         name: String,
         previous: Option<Box<crate::collations::CollationSchema>>,
     },
+    RestoreUserCast {
+        source: String,
+        target: String,
+        previous: Option<Box<crate::user_casts::UserCast>>,
+    },
     DeleteNamespace {
         namespace: String,
     },
@@ -2352,6 +2360,7 @@ pub(crate) struct SavepointMark {
     pub(crate) session_gucs: Arc<HashMap<String, String>>,
     pub(crate) guc_local_restore: HashMap<String, Option<String>>,
     pub(crate) guc_local_settings_restore: SqlSettingsRestore,
+    pub(crate) cursor_mark: u64,
 }
 
 pub(crate) fn user_type_identity(name: &ObjectName) -> Result<(String, String)> {
@@ -2770,7 +2779,7 @@ impl<'db> SqlSession<'db> {
             local_restore: std::mem::take(&mut self.guc_local_restore),
             local_settings_restore: std::mem::take(&mut self.guc_local_settings_restore),
             currvals: std::mem::take(&mut self.currvals),
-            sql_cursors: self.sql_cursors.clone(),
+            sql_cursors: self.sql_cursors.snapshot(),
             oracle_output: std::mem::take(&mut self.oracle_output),
         };
         if !preserve_postgres_compatibility_gucs {
@@ -3021,7 +3030,7 @@ impl<'db> SqlSession<'db> {
             local_restore: self.guc_local_restore.clone(),
             local_settings_restore: self.guc_local_settings_restore.clone(),
             currvals: self.currvals.clone(),
-            sql_cursors: self.sql_cursors.clone(),
+            sql_cursors: self.sql_cursors.snapshot(),
             oracle_output: self.oracle_output.clone(),
         }
     }
@@ -3765,6 +3774,22 @@ impl<'db> SqlSession<'db> {
             return Ok(result);
         }
 
+        if let Some(result) = self.execute_raw_create_aggregate(sql)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.execute_raw_drop_aggregate(sql)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.execute_raw_create_cast(sql)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.execute_raw_drop_cast(sql)? {
+            return Ok(result);
+        }
+
         if let Some(result) = self.execute_raw_analyze(sql)? {
             return Ok(result);
         }
@@ -4302,6 +4327,22 @@ impl<'db> SqlSession<'db> {
                 last_result = Some(result);
                 continue;
             }
+            if let Some(result) = self.execute_raw_create_aggregate(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_drop_aggregate(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_create_cast(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_drop_cast(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
             if let Some(result) = self.execute_raw_create_sequence(&statement)? {
                 last_result = Some(result);
                 continue;
@@ -4703,6 +4744,7 @@ impl<'db> SqlSession<'db> {
             session_gucs: self.session_gucs.clone(),
             guc_local_restore: self.guc_local_restore.clone(),
             guc_local_settings_restore: self.guc_local_settings_restore.clone(),
+            cursor_mark: self.sql_cursors.mark(),
         });
         Ok(SqlResult::command("SAVEPOINT"))
     }
@@ -4724,6 +4766,8 @@ impl<'db> SqlSession<'db> {
         let guc_local_restore = self.savepoints[position].guc_local_restore.clone();
         let guc_local_settings_restore =
             self.savepoints[position].guc_local_settings_restore.clone();
+        self.sql_cursors
+            .rollback_to(self.savepoints[position].cursor_mark);
         let descriptor_rollback = self
             .pg_large_objects
             .restore(self.savepoints[position].pg_large_objects);
@@ -5788,6 +5832,14 @@ impl<'db> SqlSession<'db> {
                 Some(previous) => crate::pg_operators::save_operator(self.db_mut()?, &previous)?,
                 None => crate::pg_operators::delete_operator(self.db_mut()?, &id)?,
             },
+            DdlUndo::RestoreUserCast {
+                source,
+                target,
+                previous,
+            } => match previous {
+                Some(previous) => crate::user_casts::save_user_cast(self.db_mut()?, &previous)?,
+                None => crate::user_casts::delete_user_cast(self.db_mut()?, &source, &target)?,
+            },
             DdlUndo::DeleteNamespace { namespace } => {
                 delete_namespace(self.db_mut()?, &namespace)?;
             }
@@ -5947,10 +5999,18 @@ impl<'db> SqlSession<'db> {
                 snapshot,
                 session,
             } => {
-                if snapshot.is_some() {
-                    return Err(SqlError::Unsupported(
-                        "transaction snapshots are not supported".to_string(),
-                    ));
+                if let Some(snapshot) = snapshot {
+                    if *session || !modes.is_empty() {
+                        return Err(SqlError::Unsupported(
+                            "SET TRANSACTION SNAPSHOT takes no other transaction modes".to_string(),
+                        ));
+                    }
+                    let id = match &snapshot.value {
+                        sqlparser::ast::Value::SingleQuotedString(text) => text.clone(),
+                        other => other.to_string(),
+                    };
+                    self.set_transaction_snapshot(&id)?;
+                    return Ok(SqlResult::command("SET"));
                 }
                 if *session {
                     self.set_session_transaction_modes(modes)?;

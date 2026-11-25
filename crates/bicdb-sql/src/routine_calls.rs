@@ -421,6 +421,22 @@ impl VisitorMut for CallBinder<'_> {
 
     fn post_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<()> {
         if let Expr::Function(function) = expr {
+            match crate::user_aggregates::rewrite_aggregate_call(self.db, function) {
+                Ok(Some(folded)) => {
+                    *expr = folded;
+                    self.changed = true;
+                    return ControlFlow::Continue(());
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    if self.strict {
+                        self.error = Some(error);
+                        return ControlFlow::Break(());
+                    }
+                }
+            }
+        }
+        if let Expr::Function(function) = expr {
             if let Err(error) = self.bind(function) {
                 if self.strict {
                     self.error = Some(error);
@@ -534,7 +550,15 @@ pub(crate) fn bind_statement_calls(db: &BicDb, statement: &Statement) -> Result<
     let Some(mut binder) = binder(db, true)? else {
         return Ok(None);
     };
-    let variadic = variadic_function_names(db)?;
+    let mut variadic = variadic_function_names(db)?;
+    let aggregates = crate::user_aggregates::aggregate_names(db)?;
+    if !aggregates.is_empty() {
+        // Aggregate calls are rewritten too: treat their names like the
+        // names whose every call needs binding.
+        let mut names = (*variadic).clone();
+        names.extend(aggregates.iter().cloned());
+        variadic = Arc::new(names);
+    }
     if !mentions_call_form(statement, binder.names.as_ref(), variadic.as_ref()) {
         return Ok(None);
     }

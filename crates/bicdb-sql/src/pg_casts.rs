@@ -244,6 +244,7 @@ pub(crate) fn pg_cast_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>
             ("castmethod", SqlValue::String("f".to_string())),
         ]));
     }
+    rows.extend(crate::user_casts::user_cast_rows(db)?);
     Ok(rows)
 }
 

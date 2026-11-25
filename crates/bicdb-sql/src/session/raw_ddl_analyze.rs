@@ -1141,6 +1141,10 @@ impl<'db> SqlSession<'db> {
         // positional form before execution.
         let calls_bound = crate::routine_calls::bind_statement_calls(self.db_ref(), statement)?;
         let statement = calls_bound.as_ref().unwrap_or(statement);
+        // User-defined casts convert explicit casts, implicit function
+        // arguments and INSERT assignments.
+        let casts_bound = crate::user_casts::bind_statement_casts(&self.sql_engine(), statement)?;
+        let statement = casts_bound.as_ref().unwrap_or(statement);
         // Set-returning functions of a select list that the executors do not
         // expand themselves run from the FROM clause (ProjectSet semantics).
         let srf_bound =

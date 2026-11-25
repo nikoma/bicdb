@@ -2848,7 +2848,15 @@ impl<'db> SqlEngine<'db> {
         let args = function_args(function);
         let aggregate = matches!(
             name,
-            "count" | "sum" | "avg" | "min" | "max" | "bool_and" | "bool_or" | "every"
+            "count"
+                | "sum"
+                | "avg"
+                | "min"
+                | "max"
+                | "bool_and"
+                | "bool_or"
+                | "every"
+                | "array_agg"
         )
         .then(|| RowAggregate::from_function(function))
         .transpose()?;
@@ -3036,7 +3044,8 @@ impl<'db> SqlEngine<'db> {
                         SqlValue::Null
                     }
                 }
-                "count" | "sum" | "avg" | "min" | "max" | "bool_and" | "bool_or" | "every" => {
+                "count" | "sum" | "avg" | "min" | "max" | "bool_and" | "bool_or" | "every"
+                | "array_agg" => {
                     let frame = self
                         .window_frame_range(spec, rows, context, partition, order_keys, position)?;
                     if let Some((frame_start, frame_end)) = frame {

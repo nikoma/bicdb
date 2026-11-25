@@ -12,9 +12,41 @@
 use crate::*;
 use std::sync::{Arc, Mutex};
 
-/// The cursors of one connection, shared by every session state copy.
-#[derive(Clone, Debug, Default)]
-pub struct SqlCursors(Arc<Mutex<Vec<SqlCursor>>>);
+/// The cursors of one connection, shared by every session state copy. A
+/// copy remembers how many cursors had been declared when it was taken, so
+/// a savepoint's copy can close the cursors declared after it.
+#[derive(Debug, Default)]
+pub struct SqlCursors {
+    shared: Arc<Mutex<CursorState>>,
+    mark: u64,
+}
+
+#[derive(Debug, Default)]
+struct CursorState {
+    cursors: Vec<SqlCursor>,
+    declared: u64,
+}
+
+impl Clone for SqlCursors {
+    fn clone(&self) -> Self {
+        Self {
+            shared: Arc::clone(&self.shared),
+            mark: self.mark,
+        }
+    }
+}
+
+impl SqlCursors {
+    /// A copy marked at the cursors declared so far: the session state a
+    /// statement hands back carries it, so a savepoint taken from that state
+    /// later closes only the cursors declared after it.
+    pub(crate) fn snapshot(&self) -> Self {
+        Self {
+            shared: Arc::clone(&self.shared),
+            mark: self.mark(),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub(crate) struct SqlCursor {
@@ -31,6 +63,8 @@ pub(crate) struct SqlCursor {
     position: usize,
     /// Survives its transaction (a committed WITH HOLD cursor).
     committed: bool,
+    /// Declaration order on the connection (1 = first).
+    seq: u64,
     target: Option<CursorTarget>,
 }
 
@@ -45,8 +79,39 @@ struct CursorTarget {
 
 impl SqlCursors {
     fn with<T>(&self, f: impl FnOnce(&mut Vec<SqlCursor>) -> T) -> T {
-        let mut guard = self.0.lock().unwrap_or_else(|poison| poison.into_inner());
-        f(&mut guard)
+        let mut guard = self
+            .shared
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        f(&mut guard.cursors)
+    }
+
+    /// How many cursors this connection has declared so far.
+    pub(crate) fn mark(&self) -> u64 {
+        self.shared
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .declared
+    }
+
+    /// ROLLBACK TO SAVEPOINT: cursors declared after the savepoint close.
+    pub(crate) fn rollback_to(&self, mark: u64) {
+        self.with(|cursors| cursors.retain(|cursor| cursor.seq <= mark));
+    }
+
+    /// The mark this copy was taken at.
+    pub(crate) fn copy_mark(&self) -> u64 {
+        self.mark
+    }
+
+    fn push(&self, mut cursor: SqlCursor) {
+        let mut guard = self
+            .shared
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        guard.declared += 1;
+        cursor.seq = guard.declared;
+        guard.cursors.push(cursor);
     }
 
     /// COMMIT: cursors without HOLD close; held ones survive.
@@ -543,9 +608,10 @@ impl SqlSession<'_> {
             // A WITH HOLD cursor declared outside a transaction block belongs
             // to the statement's own, already committed, transaction.
             committed: autocommit,
+            seq: 0,
             target,
         };
-        self.sql_cursors.with(|cursors| cursors.push(cursor));
+        self.sql_cursors.push(cursor);
         Ok(SqlResult::command("DECLARE CURSOR"))
     }
 
@@ -733,6 +799,7 @@ mod tests {
             rows: (1..=rows as i64).map(|n| vec![SqlValue::Int(n)]).collect(),
             position: 0,
             committed: false,
+            seq: 0,
             target: None,
         }
     }

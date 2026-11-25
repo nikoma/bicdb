@@ -968,9 +968,9 @@ pub fn parse_transaction_control_for_session(
             session,
         }) => {
             if snapshot.is_some() {
-                return Err(SqlError::Unsupported(
-                    "transaction snapshots are not supported".to_string(),
-                ));
+                // SET TRANSACTION SNAPSHOT runs as an ordinary statement of
+                // the open transaction (see session/exported_snapshots.rs).
+                return Ok(None);
             }
             if *session || profile == oracle::ORACLE_PREVIEW_PROFILE {
                 validate_profile_transaction_modes(

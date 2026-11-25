@@ -47,7 +47,11 @@ Supported expression forms:
   ORDINALITY`, typed `PATH` columns with ON EMPTY/ON ERROR, `EXISTS PATH`
   and one `NESTED PATH ... COLUMNS` per level, and joined laterally with
   earlier FROM items (`FROM t, JSON_TABLE(t.doc, ...)`). Sibling NESTED PATH
-  clauses, PASSING and table-level ON ERROR are refused with `0A000`.
+  clauses are refused with `0A000`; `PASSING` and a table-level `ON ERROR`
+  clause are not parsed (syntax error).
+- `ROWS FROM (f(...), g(...)) [WITH ORDINALITY]` over single-column
+  functions, and multi-array `unnest(a, b, ...)` in FROM, zip the functions'
+  rows and pad the shorter ones with NULL.
 - Literal `IN` lists, single-column `IN` subqueries, `BETWEEN`, and
   comparison `ANY`/`ALL` over array literals.
 - JSON access with dotted metadata paths, `->`, and `->>`.

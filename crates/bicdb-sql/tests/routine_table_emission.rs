@@ -72,7 +72,6 @@ fn return_next_expressions_are_refused_with_out_parameters() {
     session.execute("CREATE FUNCTION unsupported_rows() RETURNS TABLE(n int) LANGUAGE plpgsql AS $$ BEGIN RETURN NEXT 7;END $$").unwrap();
     // PostgreSQL: RETURN NEXT cannot have a parameter in function with OUT
     // parameters (42804).
-    // As in PostgreSQL: a RETURNS TABLE function returns its OUT parameters.
     let error = session
         .execute("SELECT * FROM unsupported_rows()")
         .unwrap_err();

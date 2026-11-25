@@ -3085,6 +3085,7 @@ impl<'db> SqlSession<'db> {
             .unwrap_or("postgres")
             .to_string();
         SqlTemporalScope::new(transaction_timestamp_micros, timezone, interval_style)
+            .with_datestyle(self.session_gucs.get("datestyle").map(String::as_str))
     }
 
     fn commit_guc_transaction(&mut self) {
@@ -3391,6 +3392,42 @@ impl<'db> SqlSession<'db> {
         self.insert_session_records(&table, records.clone())?;
         self.fire_after_insert_triggers(&table, schema.as_ref(), &records)?;
         Ok(count)
+    }
+
+    /// CREATE/DROP AGGREGATE and CAST, ALTER/DROP ROUTINE, statistics
+    /// objects and REINDEX, and the temporal-key refusal (single-statement
+    /// path only). Outlined so the recursive `execute` frames stay small.
+    #[inline(never)]
+    fn execute_raw_catalog_compat(
+        &mut self,
+        sql: &str,
+        refuse_temporal_keys: bool,
+    ) -> Result<Option<SqlResult>> {
+        if let Some(result) = self.execute_raw_create_aggregate(sql)? {
+            return Ok(Some(result));
+        }
+        if let Some(result) = self.execute_raw_drop_aggregate(sql)? {
+            return Ok(Some(result));
+        }
+        if let Some(result) = self.execute_raw_create_cast(sql)? {
+            return Ok(Some(result));
+        }
+        if let Some(result) = self.execute_raw_routine_statement(sql)? {
+            return Ok(Some(result));
+        }
+        if let Some(result) = self.execute_raw_statistics(sql)? {
+            return Ok(Some(result));
+        }
+        if let Some(result) = self.execute_raw_reindex(sql)? {
+            return Ok(Some(result));
+        }
+        if refuse_temporal_keys {
+            self.refuse_temporal_keys(sql)?;
+        }
+        if let Some(result) = self.execute_raw_drop_cast(sql)? {
+            return Ok(Some(result));
+        }
+        Ok(None)
     }
 
     pub fn execute(&mut self, sql: &str) -> Result<SqlResult> {
@@ -3779,32 +3816,7 @@ impl<'db> SqlSession<'db> {
             return Ok(result);
         }
 
-        if let Some(result) = self.execute_raw_create_aggregate(sql)? {
-            return Ok(result);
-        }
-
-        if let Some(result) = self.execute_raw_drop_aggregate(sql)? {
-            return Ok(result);
-        }
-
-        if let Some(result) = self.execute_raw_create_cast(sql)? {
-            return Ok(result);
-        }
-
-        if let Some(result) = self.execute_raw_routine_statement(sql)? {
-            return Ok(result);
-        }
-
-        if let Some(result) = self.execute_raw_statistics(sql)? {
-            return Ok(result);
-        }
-
-        if let Some(result) = self.execute_raw_reindex(sql)? {
-            return Ok(result);
-        }
-        self.refuse_temporal_keys(sql)?;
-
-        if let Some(result) = self.execute_raw_drop_cast(sql)? {
+        if let Some(result) = self.execute_raw_catalog_compat(sql, true)? {
             return Ok(result);
         }
 
@@ -4345,31 +4357,7 @@ impl<'db> SqlSession<'db> {
                 last_result = Some(result);
                 continue;
             }
-            if let Some(result) = self.execute_raw_create_aggregate(&statement)? {
-                last_result = Some(result);
-                continue;
-            }
-            if let Some(result) = self.execute_raw_drop_aggregate(&statement)? {
-                last_result = Some(result);
-                continue;
-            }
-            if let Some(result) = self.execute_raw_create_cast(&statement)? {
-                last_result = Some(result);
-                continue;
-            }
-            if let Some(result) = self.execute_raw_routine_statement(&statement)? {
-                last_result = Some(result);
-                continue;
-            }
-            if let Some(result) = self.execute_raw_statistics(&statement)? {
-                last_result = Some(result);
-                continue;
-            }
-            if let Some(result) = self.execute_raw_reindex(&statement)? {
-                last_result = Some(result);
-                continue;
-            }
-            if let Some(result) = self.execute_raw_drop_cast(&statement)? {
+            if let Some(result) = self.execute_raw_catalog_compat(&statement, false)? {
                 last_result = Some(result);
                 continue;
             }
@@ -6072,7 +6060,22 @@ impl<'db> SqlSession<'db> {
                         session.apply_search_path_setting(values)
                     })?;
                 } else {
-                    let [value] = values.as_slice() else {
+                    // `SET datestyle = iso, ymd`: the list is one setting value.
+                    let joined;
+                    let values = if setting == "datestyle" && values.len() > 1 {
+                        let text = values
+                            .iter()
+                            .map(|value| value.to_string().trim_matches('\'').to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        joined = [Expr::Value(
+                            sqlparser::ast::Value::SingleQuotedString(text).into(),
+                        )];
+                        &joined[..]
+                    } else {
+                        values.as_slice()
+                    };
+                    let [value] = values else {
                         return Err(SqlError::Unsupported(
                             "SET supports one value per BicDB setting".to_string(),
                         ));
@@ -6576,11 +6579,30 @@ impl<'db> SqlSession<'db> {
             Arc::make_mut(&mut self.session_gucs).retain(|key, _| {
                 preserved.contains(&key.as_str())
                     || key == POSTGRES_VERSION_BANNER_GUC
+                    || key.starts_with(crate::datestyle_output::STARTUP_DEFAULT_PREFIX)
                     || is_protected_security_setting(key)
             });
+            // Settings given at connection start reset to those values.
+            let defaults = self
+                .session_gucs
+                .iter()
+                .filter_map(|(key, value)| {
+                    key.strip_prefix(crate::datestyle_output::STARTUP_DEFAULT_PREFIX)
+                        .map(|name| (name.to_string(), value.clone()))
+                })
+                .collect::<Vec<_>>();
+            for (name, value) in defaults {
+                Arc::make_mut(&mut self.session_gucs).insert(name, value);
+            }
             self.settings = SqlSettings::default();
             return Ok(targets);
         }
+        // `RESET TIME ZONE` is RESET timezone.
+        let setting = if setting.eq_ignore_ascii_case("time zone") {
+            "timezone"
+        } else {
+            setting
+        };
         let raw = setting.split_whitespace().next().unwrap_or(setting);
         // Keep dotted GUC names whole; normalize_object_name would strip the
         // qualifier ("app.tenant" -> "tenant").
@@ -6644,7 +6666,22 @@ impl<'db> SqlSession<'db> {
             | "search_path"
             | "synchronize_seqscans"
             | "timezone" => {
-                Arc::make_mut(&mut self.session_gucs).remove(&setting);
+                // A setting given at connection start resets to that value.
+                let startup = self
+                    .session_gucs
+                    .get(&format!(
+                        "{}{setting}",
+                        crate::datestyle_output::STARTUP_DEFAULT_PREFIX
+                    ))
+                    .cloned();
+                match startup {
+                    Some(value) => {
+                        Arc::make_mut(&mut self.session_gucs).insert(setting.clone(), value);
+                    }
+                    None => {
+                        Arc::make_mut(&mut self.session_gucs).remove(&setting);
+                    }
+                }
                 Ok(())
             }
             other if planner_gucs::is_planner_guc(other) => {

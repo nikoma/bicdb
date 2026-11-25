@@ -3354,12 +3354,7 @@ impl<'db> SqlSession<'db> {
             Expr::Function(function) if is_pg_notify_function(function)? => {
                 self.eval_pg_notify_function(function)
             }
-            Expr::Function(function)
-                if matches!(
-                    object_name(&function.name)?.to_ascii_lowercase().as_str(),
-                    "pg_export_snapshot" | "pg_catalog.pg_export_snapshot"
-                ) && function_arg_list(function).is_empty() =>
-            {
+            Expr::Function(function) if is_export_snapshot_call(function) => {
                 self.export_transaction_snapshot()
             }
             Expr::Function(function)
@@ -3453,7 +3448,10 @@ impl<'db> SqlSession<'db> {
     ) -> Result<SqlValue> {
         let value = self.eval_session_expr(timestamp)?;
         let zone = self.eval_session_expr(time_zone)?;
-        let source_type = self.routine_unary_operand_type(timestamp);
+        let source_type = crate::eval::at_time_zone_source_type(
+            timestamp,
+            self.routine_unary_operand_type(timestamp),
+        );
         eval_at_time_zone_value(value, zone, source_type.as_deref())
     }
 
@@ -4145,12 +4143,7 @@ impl<'db> SqlSession<'db> {
         arg_types: &[Option<String>],
     ) -> Result<Option<SqlValue>> {
         if crate::user_aggregates::is_fold_call(args) {
-            self.ensure_routine_execute_privilege(name)?;
-            let plan = crate::user_aggregates::fold_plan(self.db_ref(), name, args)?;
-            let mut call = |function: &str, values: &[SqlValue], types: &[Option<String>]| {
-                self.eval_stored_function_value_typed(function, values, types)
-            };
-            return crate::user_aggregates::run_fold(&plan, args, &mut call).map(Some);
+            return self.eval_user_aggregate_fold(name, args).map(Some);
         }
         let Some(routine) =
             resolve_routine_for_call(self.db_ref(), RoutineKind::Function, name, arg_types, args)?
@@ -5477,18 +5470,7 @@ impl<'db> SqlSession<'db> {
                 Ok(RoutineControl::Continue)
             }
             RoutineStmt::ReturnQuery(query) => {
-                if !frame.output_names.is_empty()
-                    && matches!(query.body.as_ref(), SetExpr::Select(select)
-                        if matches!(select.projection.as_slice(),
-                            [SelectItem::ExprWithAlias { alias, .. }]
-                                if alias.value == crate::routines::RETURN_NEXT_EXPRESSION_COLUMN))
-                {
-                    return Err(SqlError::data_exception_public(
-                        "42804",
-                        "RETURN NEXT cannot have a parameter in function with OUT parameters",
-                        None,
-                    ));
-                }
+                check_return_next_target(!frame.output_names.is_empty(), query)?;
                 if frame.returned_set.is_none() {
                     return Err(SqlError::InvalidSql(
                         "RETURN QUERY requires a set-returning function".into(),
@@ -8146,4 +8128,48 @@ pub(crate) fn foreign_key_declaring_relation(
         current = parent;
     }
     Ok(current.name)
+}
+
+/// `pg_export_snapshot()` (outlined: the session evaluator recurses).
+#[inline(never)]
+fn is_export_snapshot_call(function: &sqlparser::ast::Function) -> bool {
+    object_name(&function.name).is_ok_and(|name| {
+        matches!(
+            name.to_ascii_lowercase().as_str(),
+            "pg_export_snapshot" | "pg_catalog.pg_export_snapshot"
+        )
+    }) && function_arg_list(function).is_empty()
+}
+
+impl SqlSession<'_> {
+    /// A user aggregate's fold over its collected arguments (outlined: the
+    /// stored-function path recurses through nested calls).
+    #[inline(never)]
+    fn eval_user_aggregate_fold(&mut self, name: &str, args: &[SqlValue]) -> Result<SqlValue> {
+        self.ensure_routine_execute_privilege(name)?;
+        let plan = crate::user_aggregates::fold_plan(self.db_ref(), name, args)?;
+        let mut call = |function: &str, values: &[SqlValue], types: &[Option<String>]| {
+            self.eval_stored_function_value_typed(function, values, types)
+        };
+        crate::user_aggregates::run_fold(&plan, args, &mut call)
+    }
+}
+
+/// `RETURN NEXT expression` in a function with OUT parameters is 42804.
+/// Outlined: the routine statement executor recurses per nested block.
+#[inline(never)]
+fn check_return_next_target(has_out_parameters: bool, query: &Query) -> Result<()> {
+    if has_out_parameters
+        && matches!(query.body.as_ref(), SetExpr::Select(select)
+            if matches!(select.projection.as_slice(),
+                [SelectItem::ExprWithAlias { alias, .. }]
+                    if alias.value == crate::routines::RETURN_NEXT_EXPRESSION_COLUMN))
+    {
+        return Err(SqlError::data_exception_public(
+            "42804",
+            "RETURN NEXT cannot have a parameter in function with OUT parameters",
+            None,
+        ));
+    }
+    Ok(())
 }

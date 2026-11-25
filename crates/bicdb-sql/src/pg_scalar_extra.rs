@@ -130,6 +130,62 @@ fn oracle_add_months(date: &SqlValue, months: &SqlValue) -> Result<SqlValue> {
     oracle_date_coerce(SqlValue::String(shifted.to_iso_text(false)))
 }
 
+/// Days from 2000-01-01 of `make_date(year, month, day)`; a negative year
+/// is BC, as in PostgreSQL.
+fn make_date_days(year: i64, month: i64, day: i64) -> Result<i64> {
+    let out_of_range = || {
+        SqlError::data_exception(
+            "22008",
+            format!("date field value out of range: {year}-{month:02}-{day:02}"),
+            None,
+        )
+    };
+    if year == 0 {
+        return Err(out_of_range());
+    }
+    let astronomical = if year < 0 { year + 1 } else { year };
+    let leap = (astronomical % 4 == 0 && astronomical % 100 != 0) || astronomical % 400 == 0;
+    let month_days = match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if leap => 29,
+        2 => 28,
+        _ => return Err(out_of_range()),
+    };
+    if day < 1 || day > month_days || !(-4713..=5_874_897).contains(&astronomical) {
+        return Err(out_of_range());
+    }
+    let y = if month <= 2 {
+        astronomical - 1
+    } else {
+        astronomical
+    };
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = y - era * 400;
+    let mp = (month + 9) % 12;
+    let doy = (153 * mp + 2) / 5 + day - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    Ok(era * 146_097 + doe - 719_468 - 10_957)
+}
+
+/// Microseconds since midnight of `make_time(hour, min, sec)`.
+fn make_time_micros(hour: i64, minute: i64, second: f64) -> Result<i64> {
+    let micros = (second * 1_000_000.0).round();
+    let total = (hour * 60 + minute) as f64 * 60_000_000.0 + micros;
+    if !(0..=24).contains(&hour)
+        || !(0..60).contains(&minute)
+        || !(0.0..=60.0).contains(&second)
+        || total > 86_400_000_000.0
+    {
+        return Err(SqlError::data_exception(
+            "22008",
+            format!("time field value out of range: {hour}:{minute:02}:{second:02}"),
+            None,
+        ));
+    }
+    Ok(total as i64)
+}
+
 fn int_arg(name: &str, value: &SqlValue) -> Result<i64> {
     match value {
         SqlValue::Int(number) => Ok(*number),
@@ -686,6 +742,10 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             | "make_date"
             | "make_time"
             | "make_timestamp"
+            | "make_timestamptz"
+            | "isfinite"
+            | "timestamptz"
+            | "timestamp"
             | "date_bin"
             | "to_date"
             | "date"
@@ -949,132 +1009,16 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             };
             SqlValue::String(render_interval(interval))
         }
-        "make_date" | "make_time" | "make_timestamp" => {
-            let expected = match name {
-                "make_date" | "make_time" => 3,
-                _ => 6,
-            };
-            arity(name, args, expected..=expected)?;
-            if any_null(args) {
-                return Ok(Some(SqlValue::Null));
-            }
-            let (date, time_at) = match name {
-                "make_time" => (None, 0),
-                _ => {
-                    let (year, month, day) = (
-                        int_arg(name, &args[0])?,
-                        int_arg(name, &args[1])?,
-                        int_arg(name, &args[2])?,
-                    );
-                    // Negative years are BC; there is no year 0.
-                    let calendar_year = if year < 0 { year + 1 } else { year };
-                    let date = (year != 0)
-                        .then(|| {
-                            chrono::NaiveDate::from_ymd_opt(
-                                i32::try_from(calendar_year).ok()?,
-                                u32::try_from(month).ok()?,
-                                u32::try_from(day).ok()?,
-                            )
-                        })
-                        .flatten()
-                        .ok_or_else(|| {
-                            SqlError::data_exception(
-                                "22008",
-                                format!(
-                                    "date field value out of range: {year}-{month:02}-{day:02}"
-                                ),
-                                None,
-                            )
-                        })?;
-                    (Some((date, year < 0)), 3)
-                }
-            };
-            let time = if name == "make_date" {
-                None
-            } else {
-                let (hour, minute, second) = (
-                    int_arg(name, &args[time_at])?,
-                    int_arg(name, &args[time_at + 1])?,
-                    float_arg(name, &args[time_at + 2])?,
-                );
-                let micros = (second * 1_000_000.0).round() as i64;
-                if !(0..=24).contains(&hour)
-                    || !(0..=59).contains(&minute)
-                    || !(0.0..60.0).contains(&second)
-                    || (hour == 24 && (minute != 0 || micros != 0))
-                {
-                    return Err(SqlError::data_exception(
-                        "22008",
-                        format!("time field value out of range: {hour}:{minute:02}:{second:02}"),
-                        None,
-                    ));
-                }
-                let whole = micros / 1_000_000;
-                let fraction = micros % 1_000_000;
-                let mut rendered = format!("{hour:02}:{minute:02}:{whole:02}");
-                if fraction != 0 {
-                    let digits = format!("{fraction:06}");
-                    rendered.push('.');
-                    rendered.push_str(digits.trim_end_matches('0'));
-                }
-                Some(rendered)
-            };
-            let render_date = |date: chrono::NaiveDate, bc: bool| {
-                use chrono::Datelike;
-                // PostgreSQL shows a BC year as its positive number.
-                let year = if bc {
-                    1 - i64::from(date.year())
-                } else {
-                    i64::from(date.year())
-                };
-                format!("{year:04}-{:02}-{:02}", date.month(), date.day())
-            };
-            SqlValue::String(match (date, time) {
-                (Some((date, bc)), None) => {
-                    let text = render_date(date, bc);
-                    if bc {
-                        format!("{text} BC")
-                    } else {
-                        text
-                    }
-                }
-                (Some((date, bc)), Some(time)) => {
-                    let text = format!("{} {time}", render_date(date, bc));
-                    if bc {
-                        format!("{text} BC")
-                    } else {
-                        text
-                    }
-                }
-                (None, Some(time)) => time,
-                (None, None) => unreachable!(),
-            })
+        "make_date" | "make_time" | "make_timestamp" | "make_timestamptz" | "isfinite"
+        | "make_interval"
+            if any_null(args) =>
+        {
+            SqlValue::Null
         }
-        "make_interval" => {
-            arity(name, args, 0..=7)?;
-            let field = |index: usize| -> Result<f64> {
-                match args.get(index) {
-                    None | Some(SqlValue::Null) => Ok(0.0),
-                    Some(value) => float_arg(name, value),
-                }
-            };
-            if any_null(args) {
-                return Ok(Some(SqlValue::Null));
-            }
-            let (years, months, weeks, days) = (
-                field(0)? as i64,
-                field(1)? as i64,
-                field(2)? as i64,
-                field(3)? as i64,
-            );
-            let (hours, minutes, seconds) = (field(4)? as i64, field(5)? as i64, field(6)?);
-            SqlValue::String(render_interval(PgInterval {
-                months: (years * 12 + months) as i32,
-                days: (weeks * 7 + days) as i32,
-                micros: (hours * 3600 + minutes * 60) * 1_000_000
-                    + (seconds * 1_000_000.0).round() as i64,
-            }))
-        }
+        "timestamptz" | "timestamp" if args.len() == 2 && any_null(args) => SqlValue::Null,
+        "make_date" | "make_time" | "make_timestamp" | "make_timestamptz" | "isfinite"
+        | "make_interval" => eval_datetime_constructor(name, args)?,
+        "timestamptz" | "timestamp" if args.len() == 2 => eval_datetime_constructor(name, args)?,
         "date_bin" => {
             arity(name, args, 3..=3)?;
             let stride = PgInterval::from_postgres_text(&text(0))
@@ -1297,4 +1241,141 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
         _ => return Ok(None),
     };
     Ok(Some(value))
+}
+
+/// The date/time constructors, outlined so their locals stay off the
+/// recursive evaluator's frame.
+#[inline(never)]
+fn eval_datetime_constructor(name: &str, args: &[SqlValue]) -> Result<SqlValue> {
+    let text = |index: usize| args[index].to_cell();
+    Ok(match name {
+        "make_date" => {
+            arity(name, args, 3..=3)?;
+            let days = make_date_days(
+                int_arg(name, &args[0])?,
+                int_arg(name, &args[1])?,
+                int_arg(name, &args[2])?,
+            )?;
+            SqlValue::String(PgDate::Finite(days as i32).to_iso_text())
+        }
+        "make_time" => {
+            arity(name, args, 3..=3)?;
+            let micros = make_time_micros(
+                int_arg(name, &args[0])?,
+                int_arg(name, &args[1])?,
+                float_arg(name, &args[2])?,
+            )?;
+            SqlValue::String(
+                PgTimestamp::Finite(micros)
+                    .to_iso_text(false)
+                    .split_once(' ')
+                    .map(|(_, time)| time.to_string())
+                    .unwrap_or_default(),
+            )
+        }
+        "make_timestamp" | "make_timestamptz" => {
+            arity(name, args, 6..=if name == "make_timestamp" { 6 } else { 7 })?;
+            let days = make_date_days(
+                int_arg(name, &args[0])?,
+                int_arg(name, &args[1])?,
+                int_arg(name, &args[2])?,
+            )?;
+            let micros = make_time_micros(
+                int_arg(name, &args[3])?,
+                int_arg(name, &args[4])?,
+                float_arg(name, &args[5])?,
+            )?;
+            let local = days
+                .checked_mul(86_400_000_000)
+                .and_then(|base| base.checked_add(micros))
+                .ok_or_else(|| SqlError::data_exception("22008", "timestamp out of range", None))?;
+            if name == "make_timestamp" {
+                SqlValue::String(PgTimestamp::Finite(local).to_iso_text(false))
+            } else {
+                let zone = args
+                    .get(6)
+                    .map(SqlValue::to_cell)
+                    .unwrap_or_else(current_timezone_name);
+                if !validate_timezone_name(&zone) {
+                    return Err(SqlError::invalid_parameter_value(format!(
+                        "time zone \"{zone}\" not recognized"
+                    )));
+                }
+                // A numeric zone argument is an ISO offset (east positive).
+                let offset = match parse_fixed_timezone_offset(&zone) {
+                    Some(posix) if args.len() == 7 => -posix,
+                    _ => local_timestamp_offset_seconds(PgTimestamp::Finite(local), &zone)
+                        .unwrap_or(0),
+                };
+                SqlValue::String(render_timestamptz(PgTimestamp::Finite(
+                    local - i64::from(offset) * 1_000_000,
+                )))
+            }
+        }
+        // timestamptz(date, time[tz]) / timestamp(date, time).
+        "timestamptz" | "timestamp" if args.len() == 2 => {
+            let time = text(1);
+            let has_offset = time
+                .char_indices()
+                .any(|(index, ch)| index > 0 && matches!(ch, '+' | '-'));
+            SqlValue::String(if name == "timestamptz" && has_offset {
+                crate::overlaps::date_and_timetz(&text(0), &time)?
+            } else {
+                crate::overlaps::date_and_time(&text(0), &time, name == "timestamptz")?
+            })
+        }
+        "isfinite" => {
+            arity(name, args, 1..=1)?;
+            SqlValue::Bool(!matches!(
+                text(0).trim(),
+                "infinity" | "-infinity" | "+infinity"
+            ))
+        }
+        "make_interval" => {
+            arity(name, args, 0..=7)?;
+            let field = |index: usize| -> Result<f64> {
+                match args.get(index) {
+                    None | Some(SqlValue::Null) => Ok(0.0),
+                    Some(value) => float_arg(name, value),
+                }
+            };
+            if any_null(args) {
+                return Ok(SqlValue::Null);
+            }
+            let (years, months, weeks, days) = (
+                field(0)? as i64,
+                field(1)? as i64,
+                field(2)? as i64,
+                field(3)? as i64,
+            );
+            let (hours, minutes, seconds) = (field(4)? as i64, field(5)? as i64, field(6)?);
+            let out_of_range = || SqlError::data_exception("22008", "interval out of range", None);
+            let months = years
+                .checked_mul(12)
+                .and_then(|value| value.checked_add(months))
+                .and_then(|value| i32::try_from(value).ok())
+                .ok_or_else(out_of_range)?;
+            let days = weeks
+                .checked_mul(7)
+                .and_then(|value| value.checked_add(days))
+                .and_then(|value| i32::try_from(value).ok())
+                .ok_or_else(out_of_range)?;
+            let second_micros = seconds * 1_000_000.0;
+            if !second_micros.is_finite() || second_micros.abs() >= 9.2e18 {
+                return Err(out_of_range());
+            }
+            let micros = hours
+                .checked_mul(3600)
+                .and_then(|value| value.checked_add(minutes.checked_mul(60)?))
+                .and_then(|value| value.checked_mul(1_000_000))
+                .and_then(|value| value.checked_add(second_micros.round() as i64))
+                .ok_or_else(out_of_range)?;
+            SqlValue::String(render_interval(PgInterval {
+                months,
+                days,
+                micros,
+            }))
+        }
+        _ => unreachable!("dispatched date/time constructor"),
+    })
 }

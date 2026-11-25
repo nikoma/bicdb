@@ -380,7 +380,11 @@ pub(crate) fn eval_value(record: &Record, expr: &Expr) -> Result<SqlValue> {
         } => eval_at_time_zone_value(
             eval_value(record, timestamp)?,
             eval_value(record, time_zone)?,
-            projected_expr_pg_type(timestamp, None).as_deref(),
+            crate::eval::at_time_zone_source_type(
+                timestamp,
+                projected_expr_pg_type(timestamp, None),
+            )
+            .as_deref(),
         ),
         Expr::UnaryOp { op, expr } if op.to_string().eq_ignore_ascii_case("NOT") => {
             eval_predicate_truth(record, expr)
@@ -660,7 +664,11 @@ pub(crate) fn eval_constant_expr(expr: &Expr) -> Result<SqlValue> {
         } => eval_at_time_zone_value(
             eval_constant_expr(timestamp)?,
             eval_constant_expr(time_zone)?,
-            projected_expr_pg_type(timestamp, None).as_deref(),
+            crate::eval::at_time_zone_source_type(
+                timestamp,
+                projected_expr_pg_type(timestamp, None),
+            )
+            .as_deref(),
         ),
         Expr::Trim {
             trim_where,
@@ -700,34 +708,78 @@ pub(crate) fn eval_constant_expr(expr: &Expr) -> Result<SqlValue> {
 }
 
 pub(crate) fn normalize_datestyle_setting(value: &str) -> Result<String> {
-    let mut output = None;
-    let mut order = None;
+    merge_datestyle_setting(None, value)
+}
 
+/// PostgreSQL's `DateStyle` assignment: output style and field order may be
+/// given separately; an omitted part keeps its current value (`current`),
+/// `German` alone implies DMY, and `DEFAULT` means `ISO, MDY`.
+pub(crate) fn merge_datestyle_setting(current: Option<&str>, value: &str) -> Result<String> {
+    let (mut output, mut order) = match current {
+        Some(current) => {
+            let mut parts = current.split(',').map(str::trim);
+            (
+                parts.next().unwrap_or("ISO").to_string(),
+                parts.next().unwrap_or("MDY").to_string(),
+            )
+        }
+        None => ("ISO".to_string(), "MDY".to_string()),
+    };
+    let mut have_style = false;
+    let mut have_order = false;
+    let invalid = |detail: String| {
+        SqlError::data_exception_public(
+            "22023",
+            format!("invalid value for parameter \"DateStyle\": \"{value}\"\nDETAIL:  {detail}"),
+            None,
+        )
+    };
     for token in value
         .split(|ch: char| ch == ',' || ch.is_whitespace())
         .filter(|token| !token.is_empty())
     {
-        match token.to_ascii_lowercase().as_str() {
-            "iso" => output = Some("ISO"),
-            "sql" => output = Some("SQL"),
-            "postgres" => output = Some("Postgres"),
-            "german" => output = Some("German"),
-            "mdy" => order = Some("MDY"),
-            "dmy" => order = Some("DMY"),
-            "ymd" => order = Some("YMD"),
-            other => {
-                return Err(SqlError::Unsupported(format!(
-                    "SET datestyle got unsupported value {other}"
-                )));
+        let token = token.trim_matches('\'');
+        let (style, new_order) = match token.to_ascii_lowercase().as_str() {
+            "iso" => (Some("ISO"), None),
+            "sql" => (Some("SQL"), None),
+            "postgres" => (Some("Postgres"), None),
+            "german" => (Some("German"), None),
+            "ymd" => (None, Some("YMD")),
+            "dmy" | "euro" | "european" => (None, Some("DMY")),
+            "mdy" | "us" | "noneuropean" => (None, Some("MDY")),
+            "default" => {
+                if have_style || have_order {
+                    return Err(invalid("Conflicting \"datestyle\" specifications.".into()));
+                }
+                output = "ISO".into();
+                order = "MDY".into();
+                have_style = true;
+                have_order = true;
+                continue;
             }
+            _ => {
+                return Err(invalid(format!("Unrecognized key word: \"{token}\".")));
+            }
+        };
+        if let Some(style) = style {
+            if have_style && output != style {
+                return Err(invalid("Conflicting \"datestyle\" specifications.".into()));
+            }
+            output = style.to_string();
+            have_style = true;
+        }
+        if let Some(new_order) = new_order {
+            if have_order && order != new_order {
+                return Err(invalid("Conflicting \"datestyle\" specifications.".into()));
+            }
+            order = new_order.to_string();
+            have_order = true;
         }
     }
-
-    Ok(format!(
-        "{}, {}",
-        output.unwrap_or("ISO"),
-        order.unwrap_or("MDY")
-    ))
+    if output == "German" && have_style && !have_order {
+        order = "DMY".to_string();
+    }
+    Ok(format!("{output}, {order}"))
 }
 
 pub(crate) fn normalize_bool_setting(setting: &str, value: &str) -> Result<String> {

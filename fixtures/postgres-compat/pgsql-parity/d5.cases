@@ -1,0 +1,40 @@
+ds.postgres_mdy|SET timezone = 'America/Los_Angeles'; SET datestyle = 'Postgres, MDY'; SELECT date '1997-02-10', timestamp '1997-02-10 17:32:01.4', timestamptz '1997-02-10 17:32:01-08', timestamptz '1997-07-10 17:32:01-07', timestamp '0097-02-16 17:32:01 BC', 'infinity'::timestamp
+ds.postgres_dmy|SET timezone = 'UTC'; SET datestyle = 'Postgres, DMY'; SELECT date '1997-02-10', timestamp '2000-01-01 00:00:00', timestamptz '2000-01-01 00:00:00+00'
+ds.sql_styles|SET timezone = 'America/New_York'; SET datestyle = 'SQL, MDY'; SELECT date '1997-07-10', timestamptz '1997-07-10 17:32:01-04'; SET datestyle = 'SQL, DMY'; SELECT date '1997-07-10', timestamp '1997-07-10 17:32:01'
+ds.german|SET timezone = 'Europe/Berlin'; SET datestyle = 'German'; SELECT date '1997-07-10', timestamptz '1997-07-10 17:32:01+02'; SHOW datestyle
+ds.partial_set|SET datestyle = 'Postgres, MDY'; SET datestyle = 'DMY'; SHOW datestyle; SET datestyle = 'ISO'; SHOW datestyle
+ds.invalid|SET datestyle = 'nonsense'
+ds.conflict|SET datestyle = 'ISO, Postgres'
+ds.fixed_zone|SET timezone = '+05'; SET datestyle = 'Postgres'; SELECT timestamptz '2000-01-01 00:00:00-05'
+ds.table_rows|SET timezone = 'America/Los_Angeles'; SET datestyle = 'Postgres, MDY'; CREATE TABLE dsr(d date, t timestamp, tz timestamptz); INSERT INTO dsr VALUES ('1997-02-10', '1997-02-10 17:32:01', '1997-02-10 17:32:01-08'); SELECT * FROM dsr
+iv.infinity|SELECT 'infinity'::interval, '-infinity'::interval, timestamp '2000-01-01' + 'infinity'::interval, 'infinity'::timestamp - timestamp '2000-01-01', isfinite('infinity'::interval), isfinite(interval '1 day')
+iv.infinity_errors|SELECT 'infinity'::timestamp - 'infinity'::timestamp
+ov.basic|SELECT (timestamp '2000-11-27', timestamp '2000-11-28') OVERLAPS (timestamp '2000-11-27 12:00', timestamp '2000-11-30'), (timestamp '2000-11-26', timestamp '2000-11-27') OVERLAPS (timestamp '2000-11-27 12:00', timestamp '2000-11-30'), (timestamp '2000-11-27', interval '12 hours') OVERLAPS (timestamp '2000-11-27 12:00', timestamp '2000-11-30'), (date '2000-01-01', NULL::date) OVERLAPS (date '1999-01-01', date '2001-01-01')
+ov.time|SELECT (time '00:00', time '01:00') OVERLAPS (time '00:30', time '01:30'), (time '02:30', time '01:30') OVERLAPS (time '00:30', time '01:00')
+mk.functions|SET timezone = 'America/Los_Angeles'; SELECT make_date(2013, 7, 15), make_date(-44, 3, 15), make_time(8, 15, 23.5), make_timestamp(2014, 12, 28, 6, 30, 45.887), make_timestamptz(1973, 07, 15, 08, 15, 55.33, '+2'), make_timestamptz(2014, 12, 10, 10, 10, 10)
+mk.errors|SELECT make_date(2013, 2, 30)
+mk.time_error|SELECT make_time(10, 55, 100.1)
+dt.trunc_zone|SELECT date_trunc('day', timestamptz '2001-02-16 20:38:40+00', 'Australia/Sydney'), date_trunc('hour', timestamptz '2001-02-16 20:38:40+00', 'Asia/Kolkata')
+dt.trunc_zone_bad|SELECT date_trunc('day', timestamptz '2001-02-16 20:38:40+00', 'Nowhere/Land')
+tz.posix_input|SET timezone = 'UTC'; SELECT '2000-03-15 08:14:01 GMT+8'::timestamptz, '2000-03-15 13:14:02 GMT-1'::timestamptz, '2000-03-15 02:14:05 MST+7:00'::timestamptz
+tz.posix_session|SET timezone = 'UTC-3'; SELECT timestamptz '2000-01-01 00:00:00+00'; SET timezone = '<+05>-5'; SELECT timestamptz '2000-01-01 00:00:00+00'; SELECT timestamptz '2000-01-01 00:00:00+00' AT TIME ZONE 'GMT+8'
+in.date_ymd|SET datestyle TO iso; SET datestyle TO ymd; SELECT date 'January 8, 1999', date '01/02/03', date '990108', date '1999.008', date 'J2451187', date '99-Jan-08', date '99 Jan 08'
+in.date_ymd_errors|SET datestyle TO iso, ymd; SELECT date '1/8/1999'
+in.date_dmy|SET datestyle TO iso, dmy; SELECT date '01/02/03', date '08-Jan-99', date 'Jan-08-99', date '08 Jan 99'
+in.date_mdy|SET datestyle TO iso, mdy; SELECT date '01/02/03', date 'January 8, 99 BC', date '1/18/1999'
+in.date_bad|SET datestyle TO iso, ymd; SELECT date '99-08-Jan'
+in.timestamp_forms|SET timezone = 'America/Los_Angeles'; SET datestyle = 'ISO, MDY'; SELECT timestamp 'Mon Feb 10 17:32:01.4 1997 PST', timestamp 'Feb 10 5:32PM 1997', timestamp '19970210 173201 -0800', timestamptz '1997-02-10 17:32:01 America/New_York', timestamptz '2000-03-15 08:14:01 GMT+8', timestamptz '2001-12-27 04:05:06.789 MET DST', timestamptz '1997.041 17:32:01 UTC'
+in.bad_zone|SELECT timestamp '19970710 173201 America/Does_not_exist'
+jp.print|SELECT '$ ? (@.a < 1)'::jsonpath, '$.a[1, 2 to last]'::jsonpath, '1 + 2 * 3'::jsonpath, '(1 + 2) * 3'::jsonpath, '-1'::jsonpath, '$.a.**{2 to 5}.b'::jsonpath, '$ ? (@ like_regex "^a" flag "i")'::jsonpath, 'strict $.a'::jsonpath
+jp.numbers|SELECT '.001'::jsonpath, '1.e1'::jsonpath, '0x42F'::jsonpath, '0o273'::jsonpath, '0b100101'::jsonpath, '1_000_000'::jsonpath, '1_000.000_005'::jsonpath, '(1.).e3'::jsonpath
+jp.junk|SELECT '1a'::jsonpath
+jp.junk_dot|SELECT '1.type()'::jsonpath
+jp.escapes|SELECT '"\b\f\r\n\t\v\"\''\\"'::jsonpath, '"\x50g\u{53}\u{051}\u{00004C}"'::jsonpath, '"\z"'::jsonpath
+jp.bad_unicode|SELECT '"\u00"'::jsonpath
+jp.subscripts|SELECT jsonb_path_query('[1,2,3,4]', '$[$.size() - 2]'); SELECT jsonb_path_query_array('[1,2,3,4]', '$[last - 1 to last]')
+jp.methods|SELECT jsonb_path_query_first('"1.23"', '$.double()'), jsonb_path_query_first('1.5', '$.integer()'), jsonb_path_query_first('"yes"', '$.boolean()')
+jp.method_errors|SELECT jsonb_path_query('"1.23"', '$.integer()')
+jp.method_type_error|SELECT jsonb_path_query('[]', 'strict $.integer()')
+jp.named_args|SELECT * FROM jsonb_path_query('{"a": [1,2,3]}', '$.a[*] ? (@ > $x)', vars => '{"x": 1}', silent => true)
+dt.at_time_zone_unknown|SET timezone = 'America/Los_Angeles'; SELECT '19970210 173201' AT TIME ZONE 'America/New_York'
+dt.date_plus_timetz|SET timezone = 'UTC'; SELECT date '1991-02-03' + time with time zone '04:05:06 PST', timestamptz(date '1994-01-01', time with time zone '11:00-5'), timestamptz(date '1994-01-01', time '11:00')

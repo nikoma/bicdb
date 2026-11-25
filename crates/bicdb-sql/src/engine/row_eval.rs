@@ -1678,7 +1678,11 @@ impl<'db> SqlEngine<'db> {
             } => eval_at_time_zone_value(
                 self.eval_slot_row_value(row, context, timestamp)?,
                 self.eval_slot_row_value(row, context, time_zone)?,
-                projected_expr_pg_type_with_db(self.db_ref(), timestamp).as_deref(),
+                crate::eval::at_time_zone_source_type(
+                    timestamp,
+                    projected_expr_pg_type_with_db(self.db_ref(), timestamp),
+                )
+                .as_deref(),
             ),
             Expr::Subquery(query) => {
                 self.execute_correlated_slot_scalar_subquery(row, context, query)
@@ -3377,7 +3381,11 @@ impl<'db> SqlEngine<'db> {
             } => eval_at_time_zone_value(
                 self.eval_row_value(row, timestamp)?,
                 self.eval_row_value(row, time_zone)?,
-                projected_expr_pg_type_with_db(self.db_ref(), timestamp).as_deref(),
+                crate::eval::at_time_zone_source_type(
+                    timestamp,
+                    projected_expr_pg_type_with_db(self.db_ref(), timestamp),
+                )
+                .as_deref(),
             ),
             Expr::Subquery(query) => self.execute_correlated_scalar_subquery(row, query),
             Expr::Nested(expr) => self.eval_row_value(row, expr),

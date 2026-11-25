@@ -845,8 +845,14 @@ impl PgDate {
             }
             _ => {}
         }
-        if let Some(normalized) = normalize_postgres_datetime_words(value) {
-            return Self::from_postgres_text(&normalized);
+        // Anything but plain ISO text goes through PostgreSQL's decoder.
+        if !value.is_empty()
+            && !crate::datetime_input::is_plain_iso_timestamp(value)
+            && !(value.starts_with(['J', 'j'])
+                && value.len() > 1
+                && value[1..].bytes().all(|byte| byte.is_ascii_digit()))
+        {
+            return crate::datetime_input::decode_date(value);
         }
 
         if let Some(julian_day) = value
@@ -1092,6 +1098,15 @@ impl PgTimeTz {
         value: &str,
         default_offset_seconds: i32,
     ) -> Result<Self, PgCanonicalValueError> {
+        // `04:05:06 PST`: a zone abbreviation or POSIX zone after the clock.
+        if let Some((clock, zone)) = value.trim().rsplit_once(char::is_whitespace) {
+            if zone.bytes().any(|byte| byte.is_ascii_alphabetic()) {
+                if let Some(offset) = crate::eval::posix_or_abbreviation_offset(zone) {
+                    let time = PgTime::from_postgres_text(clock.trim())?;
+                    return Self::new(time, offset);
+                }
+            }
+        }
         let (clock, offset) = split_clock_offset(value.trim(), "timetz")?;
         let time = PgTime::from_postgres_text(clock)?;
         Self::new(time, offset.unwrap_or(default_offset_seconds))
@@ -1174,8 +1189,13 @@ impl PgTimestamp {
             }
             _ => {}
         }
-        if let Some(normalized) = normalize_postgres_datetime_words(value) {
-            return Self::from_postgres_text(&normalized, with_timezone);
+        // Anything but plain ISO text goes through PostgreSQL's decoder.
+        if !crate::datetime_input::is_plain_iso_timestamp(value.trim()) {
+            return crate::datetime_input::decode_timestamp(
+                value.trim(),
+                with_timezone,
+                &crate::eval::current_timezone_name(),
+            );
         }
         let original = value.trim();
         // A time zone on timestamp-without-time-zone input is ignored.
@@ -1241,6 +1261,20 @@ impl PgTimestamp {
     }
 
     pub fn checked_add_interval(self, interval: PgInterval) -> Result<Self, PgCanonicalValueError> {
+        // Infinite operands: like signs stay infinite, opposite ones overflow.
+        if !interval.is_finite() {
+            let positive = interval.is_positive_infinity();
+            return match self {
+                Self::PositiveInfinity if !positive => {
+                    Err(PgCanonicalValueError::TemporalOverflow("timestamp"))
+                }
+                Self::NegativeInfinity if positive => {
+                    Err(PgCanonicalValueError::TemporalOverflow("timestamp"))
+                }
+                _ if positive => Ok(Self::PositiveInfinity),
+                _ => Ok(Self::NegativeInfinity),
+            };
+        }
         let Self::Finite(micros) = self else {
             return Ok(self);
         };
@@ -1269,6 +1303,12 @@ impl PgTimestamp {
     }
 
     pub fn checked_sub_interval(self, interval: PgInterval) -> Result<Self, PgCanonicalValueError> {
+        if interval.is_positive_infinity() {
+            return self.checked_add_interval(PgInterval::NEGATIVE_INFINITY);
+        }
+        if interval.is_negative_infinity() {
+            return self.checked_add_interval(PgInterval::POSITIVE_INFINITY);
+        }
         self.checked_add_interval(PgInterval {
             months: interval
                 .months
@@ -1286,6 +1326,21 @@ impl PgTimestamp {
     }
 
     pub fn checked_difference(self, other: Self) -> Result<PgInterval, PgCanonicalValueError> {
+        // PostgreSQL 18: an infinite timestamp minus a different one is an
+        // infinite interval; infinity minus itself overflows.
+        match (self, other) {
+            (Self::PositiveInfinity, Self::PositiveInfinity)
+            | (Self::NegativeInfinity, Self::NegativeInfinity) => {
+                return Err(PgCanonicalValueError::TemporalOverflow("interval"))
+            }
+            (Self::PositiveInfinity, _) | (_, Self::NegativeInfinity) => {
+                return Ok(PgInterval::POSITIVE_INFINITY)
+            }
+            (Self::NegativeInfinity, _) | (_, Self::PositiveInfinity) => {
+                return Ok(PgInterval::NEGATIVE_INFINITY)
+            }
+            _ => {}
+        }
         let (Self::Finite(left), Self::Finite(right)) = (self, other) else {
             return Err(PgCanonicalValueError::TemporalOverflow("timestamp"));
         };
@@ -1492,83 +1547,6 @@ fn split_timestamp_era(value: &str) -> Result<(&str, bool), PgCanonicalValueErro
     Ok((value, false))
 }
 
-/// PostgreSQL's textual datetime layout `[Dow] Mon DD HH:MM[:SS[.f]] YYYY
-/// [zone] [BC]` (the `Postgres` DateStyle output) rewritten as ISO text
-/// `YYYY-MM-DD HH:MM:SS [zone] [BC]`; `None` for other shapes.
-pub fn normalize_postgres_datetime_words(value: &str) -> Option<String> {
-    const DAYS: [&str; 14] = [
-        "mon",
-        "tue",
-        "wed",
-        "thu",
-        "fri",
-        "sat",
-        "sun",
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-        "sunday",
-    ];
-    let tokens = value
-        .split_whitespace()
-        .filter(|token| !DAYS.contains(&token.trim_end_matches(',').to_ascii_lowercase().as_str()))
-        .collect::<Vec<_>>();
-    let month_at = tokens
-        .iter()
-        .position(|token| postgres_month_number(token).is_some())?;
-    if month_at != 0 {
-        return None;
-    }
-    let month = postgres_month_number(tokens[0])?;
-    let day = tokens.get(1)?;
-    if !(1..=2).contains(&day.len()) || !day.bytes().all(|byte| byte.is_ascii_digit()) {
-        return None;
-    }
-    let mut time = None;
-    let mut year = None;
-    let mut rest = Vec::new();
-    for token in &tokens[2..] {
-        if time.is_none() && token.contains(':') && token.as_bytes()[0].is_ascii_digit() {
-            time = Some(*token);
-        } else if year.is_none()
-            && !token.is_empty()
-            && token.bytes().all(|byte| byte.is_ascii_digit())
-        {
-            year = Some(*token);
-        } else {
-            rest.push(*token);
-        }
-    }
-    let year = year?;
-    let year = if year.len() <= 2 {
-        let short = year.parse::<i32>().ok()?;
-        if short < 70 {
-            2000 + short
-        } else {
-            1900 + short
-        }
-    } else {
-        year.parse::<i32>().ok()?
-    };
-    let mut output = format!("{year:04}-{month:02}-{:02}", day.parse::<u32>().ok()?);
-    if let Some(time) = time {
-        output.push(' ');
-        output.push_str(time);
-    }
-    // Zone words first, the era last.
-    let (era, zone): (Vec<&str>, Vec<&str>) = rest
-        .into_iter()
-        .partition(|token| token.eq_ignore_ascii_case("bc") || token.eq_ignore_ascii_case("ad"));
-    for token in zone.into_iter().chain(era) {
-        output.push(' ');
-        output.push_str(token);
-    }
-    Some(output)
-}
-
 fn split_timestamp_date_clock(value: &str) -> Result<(&str, Option<&str>), PgCanonicalValueError> {
     if let Some(index) = value.find(['T', 't']) {
         let date = value[..index].trim();
@@ -1621,10 +1599,39 @@ pub struct PgInterval {
 }
 
 impl PgInterval {
+    /// PostgreSQL 18's infinite intervals.
+    pub const POSITIVE_INFINITY: Self = Self {
+        months: i32::MAX,
+        days: i32::MAX,
+        micros: i64::MAX,
+    };
+    pub const NEGATIVE_INFINITY: Self = Self {
+        months: i32::MIN,
+        days: i32::MIN,
+        micros: i64::MIN,
+    };
+
+    pub fn is_positive_infinity(self) -> bool {
+        self == Self::POSITIVE_INFINITY
+    }
+
+    pub fn is_negative_infinity(self) -> bool {
+        self == Self::NEGATIVE_INFINITY
+    }
+
+    pub fn is_finite(self) -> bool {
+        !self.is_positive_infinity() && !self.is_negative_infinity()
+    }
+
     pub fn from_postgres_text(value: &str) -> Result<Self, PgCanonicalValueError> {
         let original = value.trim();
         if original.is_empty() {
             return Err(invalid_temporal("interval", original));
+        }
+        match original.to_ascii_lowercase().as_str() {
+            "infinity" | "+infinity" => return Ok(Self::POSITIVE_INFINITY),
+            "-infinity" => return Ok(Self::NEGATIVE_INFINITY),
+            _ => {}
         }
         if original
             .trim_start_matches(['+', '-'])
@@ -1694,6 +1701,12 @@ impl PgInterval {
     }
 
     pub fn to_postgres_text(self) -> String {
+        if self.is_positive_infinity() {
+            return "infinity".to_string();
+        }
+        if self.is_negative_infinity() {
+            return "-infinity".to_string();
+        }
         let mut parts = Vec::new();
         if self.months != 0 {
             let years = self.months / 12;
@@ -1846,6 +1859,12 @@ impl PgInterval {
     }
 
     pub fn to_style_text(self, style: &str) -> String {
+        if self.is_positive_infinity() {
+            return "infinity".to_string();
+        }
+        if self.is_negative_infinity() {
+            return "-infinity".to_string();
+        }
         match style.to_ascii_lowercase().as_str() {
             "postgres_verbose" => self.to_postgres_verbose_text(),
             "sql_standard" => self.to_sql_standard_text(),

@@ -3977,26 +3977,39 @@ pub(crate) fn eval_compatibility_function_value(
             Ok(Some(SqlValue::String(render_interval(interval))))
         }
         "date_trunc" | "pg_catalog.date_trunc" => {
-            require_arg_count("date_trunc", args, 2)?;
+            if args.len() != 2 && args.len() != 3 {
+                require_arg_count("date_trunc", args, 2)?;
+            }
             if args.iter().any(|value| matches!(value, SqlValue::Null)) {
                 return Ok(Some(SqlValue::Null));
             }
             let field = args[0].to_cell();
             let timestamp_text = args[1].to_cell();
+            // date_trunc(field, timestamptz, zone) truncates in that zone.
+            let explicit_zone = args.get(2).map(SqlValue::to_cell);
+            if let Some(zone) = &explicit_zone {
+                if !validate_timezone_name(zone) {
+                    return Err(SqlError::invalid_parameter_value(format!(
+                        "time zone \"{zone}\" not recognized"
+                    )));
+                }
+            }
             // date_trunc(text, date) resolves to the timestamptz form, as
             // PostgreSQL casts the date to timestamptz.
-            if matches!(
-                arg_types
-                    .and_then(|types| types.get(1))
-                    .and_then(Option::as_deref),
-                Some("timestamptz" | "date")
-            ) {
+            if explicit_zone.is_some()
+                || matches!(
+                    arg_types
+                        .and_then(|types| types.get(1))
+                        .and_then(Option::as_deref),
+                    Some("timestamptz" | "date")
+                )
+            {
                 let timestamp = parse_timestamptz(&timestamp_text)
                     .map_err(|error| postgres_timestamptz_input_error(&timestamp_text, error))?;
                 let Some(micros) = timestamp.finite_micros() else {
                     return Ok(Some(SqlValue::String(render_timestamptz(timestamp))));
                 };
-                let timezone = current_timezone_name();
+                let timezone = explicit_zone.unwrap_or_else(current_timezone_name);
                 let offset =
                     timezone_offset_at_timestamp(&timezone, timestamp).ok_or_else(|| {
                         SqlError::invalid_parameter_value(format!(

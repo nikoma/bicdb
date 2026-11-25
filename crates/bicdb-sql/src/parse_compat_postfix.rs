@@ -1474,3 +1474,167 @@ pub(crate) fn bind_insert_element_targets(
     bound.source = Some(Box::new(source));
     Ok(Some(Statement::Insert(bound)))
 }
+
+/// `jsonb_path_*(target, path, vars => ..., silent => ...)`: the named
+/// notation of the built-in SQL/JSON path functions, bound to positions
+/// (`vars` defaults to `'{}'`, `silent` to `false`).
+pub(crate) fn bind_jsonpath_named_args(
+    statements: &mut [sqlparser::ast::Statement],
+) -> crate::Result<()> {
+    use sqlparser::ast::{VisitMut, VisitorMut};
+    struct Binder(Option<crate::SqlError>);
+    impl VisitorMut for Binder {
+        type Break = ();
+        fn pre_visit_expr(&mut self, expr: &mut sqlparser::ast::Expr) -> std::ops::ControlFlow<()> {
+            if let sqlparser::ast::Expr::Function(function) = expr {
+                if let sqlparser::ast::FunctionArguments::List(list) = &mut function.args {
+                    if let Err(error) = bind_named(&function.name, &mut list.args) {
+                        self.0 = Some(error);
+                        return std::ops::ControlFlow::Break(());
+                    }
+                }
+            }
+            std::ops::ControlFlow::Continue(())
+        }
+        fn pre_visit_table_factor(
+            &mut self,
+            factor: &mut sqlparser::ast::TableFactor,
+        ) -> std::ops::ControlFlow<()> {
+            let result = match factor {
+                sqlparser::ast::TableFactor::Function { name, args, .. } => bind_named(name, args),
+                sqlparser::ast::TableFactor::Table {
+                    name,
+                    args: Some(args),
+                    ..
+                } => bind_named(name, &mut args.args),
+                _ => Ok(()),
+            };
+            if let Err(error) = result {
+                self.0 = Some(error);
+                return std::ops::ControlFlow::Break(());
+            }
+            std::ops::ControlFlow::Continue(())
+        }
+    }
+    let mut binder = Binder(None);
+    for statement in statements {
+        let _ = statement.visit(&mut binder);
+        if let Some(error) = binder.0.take() {
+            return Err(error);
+        }
+    }
+    Ok(())
+}
+
+fn bind_named(
+    name: &sqlparser::ast::ObjectName,
+    args: &mut Vec<sqlparser::ast::FunctionArg>,
+) -> crate::Result<()> {
+    use sqlparser::ast::{Expr, FunctionArg, FunctionArgExpr, Value};
+    if !args.iter().any(|arg| {
+        matches!(
+            arg,
+            FunctionArg::Named { .. } | FunctionArg::ExprNamed { .. }
+        )
+    }) {
+        return Ok(());
+    }
+    let function = name.to_string().to_ascii_lowercase();
+    let function = function.strip_prefix("pg_catalog.").unwrap_or(&function);
+    if !matches!(
+        function,
+        "jsonb_path_query"
+            | "jsonb_path_query_array"
+            | "jsonb_path_query_first"
+            | "jsonb_path_exists"
+            | "jsonb_path_match"
+            | "jsonb_path_query_tz"
+            | "jsonb_path_query_array_tz"
+            | "jsonb_path_query_first_tz"
+            | "jsonb_path_exists_tz"
+            | "jsonb_path_match_tz"
+    ) {
+        return Ok(());
+    }
+    const NAMES: [&str; 4] = ["target", "path", "vars", "silent"];
+    let mut slots: [Option<Expr>; 4] = [None, None, None, None];
+    let mut position = 0usize;
+    for arg in args.drain(..) {
+        let (slot, expr) = match arg {
+            FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => {
+                let slot = position;
+                position += 1;
+                (slot, expr)
+            }
+            FunctionArg::Named {
+                name,
+                arg: FunctionArgExpr::Expr(expr),
+                ..
+            } => {
+                let lower = name.value.to_ascii_lowercase();
+                let slot = NAMES
+                    .iter()
+                    .position(|candidate| *candidate == lower)
+                    .ok_or_else(|| {
+                        crate::SqlError::undefined_function(format!(
+                            "function {function}(...) does not exist"
+                        ))
+                    })?;
+                (slot, expr)
+            }
+            FunctionArg::ExprNamed {
+                name: Expr::Identifier(name),
+                arg: FunctionArgExpr::Expr(expr),
+                ..
+            } => {
+                let lower = name.value.to_ascii_lowercase();
+                let slot = NAMES
+                    .iter()
+                    .position(|candidate| *candidate == lower)
+                    .ok_or_else(|| {
+                        crate::SqlError::undefined_function(format!(
+                            "function {function}(...) does not exist"
+                        ))
+                    })?;
+                (slot, expr)
+            }
+            _ => {
+                return Err(crate::SqlError::Unsupported(format!(
+                    "unsupported argument form in {function}"
+                )))
+            }
+        };
+        if slot >= 4 || slots[slot].is_some() {
+            return Err(crate::SqlError::undefined_function(format!(
+                "function {function}(...) does not exist"
+            )));
+        }
+        slots[slot] = Some(expr);
+    }
+    let [target, path, vars, silent] = slots;
+    let (Some(target), Some(path)) = (target, path) else {
+        return Err(crate::SqlError::undefined_function(format!(
+            "function {function}(...) does not exist"
+        )));
+    };
+    let vars =
+        vars.unwrap_or_else(|| Expr::Value(Value::SingleQuotedString("{}".to_string()).into()));
+    let silent = silent.unwrap_or_else(|| Expr::Value(Value::Boolean(false).into()));
+    for expr in [target, path, vars, silent] {
+        args.push(FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)));
+    }
+    Ok(())
+}
+
+/// Composite-field UPDATE targets and element/field INSERT targets bound to
+/// whole-column forms (boxed: the caller is the recursive statement path).
+#[inline(never)]
+pub(crate) fn bind_assignment_targets(
+    db: &crate::BicDb,
+    statement: &sqlparser::ast::Statement,
+) -> crate::Result<Option<Box<sqlparser::ast::Statement>>> {
+    if let Some(bound) = bind_composite_field_assignments(db, statement)? {
+        return Ok(Some(Box::new(bound)));
+    }
+    Ok(bind_insert_element_targets(db, statement)?.map(Box::new))
+}

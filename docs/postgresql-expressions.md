@@ -36,6 +36,14 @@ Supported expression forms:
   (`(ARRAY[[1,2],[3,4]])[2]`) returns NULL as in PostgreSQL whenever the
   array's type is known; elements of `json[]`/`jsonb[]` arrays that are
   themselves JSON arrays are returned as elements.
+- jsonpath values print as PostgreSQL prints them (operator precedence
+  parentheses, folded signed literals, canonical numbers including
+  hexadecimal, octal, binary and `_`-separated literals, string escapes
+  `\b \f \n \r \t \v \xHH \uXXXX \u{X}`), scanner errors use
+  PostgreSQL's texts (`trailing junk after numeric literal at or near "1a" of
+  jsonpath input`), array subscripts take any expression with `last`, item
+  method errors use PostgreSQL's texts, and `jsonb_path_*` accept
+  `vars =>` / `silent =>` named arguments.
 - SQL/JSON query functions `JSON_VALUE`, `JSON_QUERY` and `JSON_EXISTS` with
   `PASSING`, `RETURNING`, `WITH [CONDITIONAL|UNCONDITIONAL] [ARRAY] WRAPPER`,
   `KEEP|OMIT QUOTES`, and `NULL|ERROR|DEFAULT expr|EMPTY ARRAY|EMPTY OBJECT`
@@ -61,11 +69,29 @@ Supported expression forms:
 - Assignment to array elements and slices, composite fields and jsonb
   subscripts: `UPDATE t SET a[2] = 5, a[1:2] = '{7,8}', c.f = 1, j['k'] =
   '2'` and `INSERT INTO t (a[1], a[3], c.f) VALUES (...)` (VALUES sources).
-- Date/time input accepts `now`, `today`, `tomorrow`, `yesterday`, `epoch`
-  and `±infinity`, the `Postgres` DateStyle layout (`Mon Feb 10 17:32:01 1997
-  PST`), and PostgreSQL's default time zone abbreviations (`PST`, `PDT`,
-  `EST`, `CET`, ...) in input and `AT TIME ZONE`; timestamp without time
-  zone ignores a zone in its input.
+- Date and timestamp input is decoded as PostgreSQL decodes it (field
+  splitting, the DateStyle field order MDY/DMY/YMD for ambiguous dates,
+  two-digit years, `YYYYMMDD`/`YYMMDD`/`hhmmss` run-together fields, day of
+  year `1999.008`, Julian `J2451187`, `BC`, `AM`/`PM`, text months and day
+  names), with its errors (including the DateStyle hint). It accepts `now`,
+  `today`, `tomorrow`, `yesterday`, `epoch`, `±infinity` and `allballs`,
+  PostgreSQL's default time zone abbreviations (`PST`, `PDT`, `EST`, `CET`,
+  ... with `DST`), full zone names in any case, numeric offsets and POSIX
+  zones without daylight rules (`GMT+8`, `UTC-3`, `<+05>-5`), in input,
+  `AT TIME ZONE` and `SET TIME ZONE`; timestamp without time zone checks and
+  ignores a zone in its input. An untyped literal before `AT TIME ZONE` is
+  a timestamptz.
+- Output follows the session's `DateStyle` (`ISO`, `Postgres`, `SQL`,
+  `German`, with MDY/DMY order) and `IntervalStyle` for date, timestamp,
+  timestamptz and interval results over the protocol; `DateStyle`,
+  `TimeZone` and `IntervalStyle` given at connection start (`PGDATESTYLE`,
+  `PGTZ`, `-c` options) apply, and `RESET` returns to them.
+- Infinite intervals (`'infinity'::interval`), timestamp arithmetic with
+  them and `isfinite`; `(a, b) OVERLAPS (c, d)` over dates, times and
+  timestamps (an interval as the second item) with PostgreSQL's NULL rules;
+  `make_date`, `make_time`, `make_timestamp`, `make_timestamptz`,
+  `timestamptz(date, time[tz])`, `date + timetz` and the three-argument
+  `date_trunc(field, timestamptz, zone)`.
 - `to_timestamp(text, text)` and `to_date(text, text)` follow PostgreSQL's
   template parser: every field (`YYYY`..`Y`, `Y,YYY`, `IYYY`, `CC`, `MM`,
   `MON`, `MONTH`, `RM`, `DD`, `DDD`, `D`, `DAY`, `DY`, `IW`, `ID`, `IDDD`,

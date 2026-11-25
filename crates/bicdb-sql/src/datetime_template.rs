@@ -753,7 +753,7 @@ fn parse_fields(input: &str, format: &str) -> Result<Fields> {
                         .parse::<i32>()
                         .ok()?;
                     Some((
-                        millennia * 1000 + years,
+                        millennia.checked_mul(1000)?.checked_add(years)?,
                         skipped + sign + digits + 1 + space + year_sign + year_digits,
                     ))
                 })();

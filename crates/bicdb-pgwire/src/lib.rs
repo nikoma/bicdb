@@ -2884,6 +2884,7 @@ fn handle_frontend_message(
                     false,
                     !executed.suspended,
                     Some(&mut state.catalog_cache),
+                    &bicdb_sql::TemporalOutput::from_gucs(state.session_state.session_gucs()),
                 )?;
                 Ok((executed.suspended, stats))
             });
@@ -3482,6 +3483,7 @@ fn execute_server_query(
             true,
             true,
             Some(&mut state.catalog_cache),
+            &bicdb_sql::TemporalOutput::from_gucs(state.session_state.session_gucs()),
         )?;
         return Ok(QueryFlow::Complete);
     }
@@ -3500,6 +3502,7 @@ fn execute_server_query(
                     true,
                     true,
                     Some(&mut state.catalog_cache),
+                    &bicdb_sql::TemporalOutput::from_gucs(state.session_state.session_gucs()),
                 )?;
             }
             None => live_queries::run_subscription(
@@ -3704,6 +3707,7 @@ fn execute_server_query(
                 true,
                 true,
                 Some(&mut state.catalog_cache),
+                &bicdb_sql::TemporalOutput::from_gucs(state.session_state.session_gucs()),
             )?;
         } else {
             let result =
@@ -3719,6 +3723,7 @@ fn execute_server_query(
                 true,
                 true,
                 Some(&mut state.catalog_cache),
+                &bicdb_sql::TemporalOutput::from_gucs(state.session_state.session_gucs()),
             )?;
         }
         Ok(QueryFlow::Complete)

@@ -70,6 +70,8 @@ enum Expr {
     Binary(Box<Expr>, BinaryOp, Box<Expr>),
     LikeRegex(Box<Expr>, Box<Expr>, String),
     IsUnknown(Box<Expr>),
+    /// `last` inside an array subscript.
+    Last,
 }
 
 #[derive(Clone, Debug)]
@@ -85,6 +87,8 @@ enum Endpoint {
     Absolute(i64),
     Variable(String, i64),
     LastVariable(String, i64),
+    /// Any other subscript expression.
+    Expr(Box<Expr>),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -210,6 +214,10 @@ impl<'a> Lexer<'a> {
             }
             '@' => Token::Current,
             '"' => Token::String(self.quoted_string()?),
+            '.' if self.peek().is_some_and(|next| next.is_ascii_digit()) => {
+                self.offset -= width;
+                Token::Number(self.number()?)
+            }
             '.' => Token::Dot,
             '?' => Token::Question,
             '(' => Token::LParen,
@@ -277,37 +285,306 @@ impl<'a> Lexer<'a> {
         self.input[start..self.offset].to_string()
     }
 
+    /// A double-quoted string with PostgreSQL's jsonpath escapes:
+    /// `\b \f \n \r \t \v`, `\xHH`, `\uXXXX`, `\u{X..}` (surrogate pairs
+    /// combine), and any other escaped character standing for itself.
     fn quoted_string(&mut self) -> Result<String> {
-        let start = self.offset - 1;
-        let mut escaped = false;
-        while let Some(character) = self.peek() {
+        let mut output = String::new();
+        let mut pending_high: Option<u32> = None;
+        let surrogate_error = |detail: &str| {
+            SqlError::InvalidTextRepresentation(format!(
+                "invalid input syntax for type jsonpath\nDETAIL:  {detail}"
+            ))
+        };
+        loop {
+            let Some(character) = self.peek() else {
+                return Err(syntax_error(
+                    "unexpected end of quoted string at end of jsonpath input",
+                ));
+            };
             self.offset += character.len_utf8();
-            if character == '"' && !escaped {
-                return serde_json::from_str(&self.input[start..self.offset]).map_err(|error| {
-                    syntax_error(format!("invalid quoted jsonpath member: {error}"))
-                });
+            if character == '"' {
+                if pending_high.is_some() {
+                    return Err(surrogate_error(
+                        "Unicode low surrogate must follow a high surrogate.",
+                    ));
+                }
+                return Ok(output);
             }
-            escaped = character == '\\' && !escaped;
             if character != '\\' {
-                escaped = false;
+                if pending_high.is_some() {
+                    return Err(surrogate_error(
+                        "Unicode low surrogate must follow a high surrogate.",
+                    ));
+                }
+                output.push(character);
+                continue;
             }
+            let escape_start = self.offset - 1;
+            let Some(escaped) = self.peek() else {
+                return Err(syntax_error(
+                    "unexpected end of quoted string at end of jsonpath input",
+                ));
+            };
+            self.offset += escaped.len_utf8();
+            let code = match escaped {
+                'u' => {
+                    let rest = &self.input[self.offset..];
+                    let (code, used) = if let Some(braced) = rest.strip_prefix('{') {
+                        let digits = braced.bytes().take_while(u8::is_ascii_hexdigit).count();
+                        if digits == 0 || digits > 6 || braced.as_bytes().get(digits) != Some(&b'}')
+                        {
+                            let shown = &self.input[escape_start..self.offset + 1 + digits.min(6)];
+                            return Err(syntax_error(format!(
+                                "invalid Unicode escape sequence at or near \"{shown}\" of jsonpath input"
+                            )));
+                        }
+                        (
+                            u32::from_str_radix(&braced[..digits], 16).unwrap_or(u32::MAX),
+                            digits + 2,
+                        )
+                    } else {
+                        let digits = rest
+                            .bytes()
+                            .take(4)
+                            .take_while(u8::is_ascii_hexdigit)
+                            .count();
+                        if digits < 4 {
+                            let shown = &self.input[escape_start..self.offset + digits];
+                            return Err(syntax_error(format!(
+                                "invalid Unicode escape sequence at or near \"{shown}\" of jsonpath input"
+                            )));
+                        }
+                        (u32::from_str_radix(&rest[..4], 16).unwrap_or(u32::MAX), 4)
+                    };
+                    self.offset += used;
+                    if code == 0 {
+                        return Err(SqlError::data_exception(
+                            "22P05",
+                            "unsupported Unicode escape sequence\nDETAIL:  \\u0000 cannot be converted to text.",
+                            Some("jsonpath".to_string()),
+                        ));
+                    }
+                    if (0xD800..0xDC00).contains(&code) {
+                        if pending_high.is_some() {
+                            return Err(surrogate_error(
+                                "Unicode high surrogate must not follow a high surrogate.",
+                            ));
+                        }
+                        pending_high = Some(code);
+                        continue;
+                    }
+                    if (0xDC00..0xE000).contains(&code) {
+                        let Some(high) = pending_high.take() else {
+                            return Err(surrogate_error(
+                                "Unicode low surrogate must follow a high surrogate.",
+                            ));
+                        };
+                        0x10000 + ((high - 0xD800) << 10) + (code - 0xDC00)
+                    } else {
+                        code
+                    }
+                }
+                'x' => {
+                    let rest = &self.input[self.offset..];
+                    let digits = rest
+                        .bytes()
+                        .take(2)
+                        .take_while(u8::is_ascii_hexdigit)
+                        .count();
+                    if digits < 2 {
+                        u32::from('x')
+                    } else {
+                        self.offset += 2;
+                        u32::from_str_radix(&rest[..2], 16).unwrap_or(u32::from('x'))
+                    }
+                }
+                'b' => 0x08,
+                'f' => 0x0C,
+                'n' => 0x0A,
+                'r' => 0x0D,
+                't' => 0x09,
+                'v' => 0x0B,
+                other => u32::from(other),
+            };
+            if pending_high.is_some() {
+                return Err(surrogate_error(
+                    "Unicode low surrogate must follow a high surrogate.",
+                ));
+            }
+            output.push(char::from_u32(code).ok_or_else(|| {
+                syntax_error("invalid Unicode escape value at end of jsonpath input")
+            })?);
         }
-        Err(syntax_error("unterminated quoted string in jsonpath"))
     }
 
+    /// A numeric literal by PostgreSQL's jsonpath scanner rules, as its
+    /// canonical numeric text; trailing identifier characters are an error.
     fn number(&mut self) -> Result<String> {
-        let start = self.offset;
-        while self.peek().is_some_and(|character| {
-            character.is_ascii_digit() || matches!(character, '.' | 'e' | 'E' | '+' | '-')
-        }) {
-            self.offset += self.peek().unwrap().len_utf8();
+        let rest = &self.input[self.offset..];
+        let bytes = rest.as_bytes();
+        let digits_with_underscores = |from: usize, radix: u32| -> usize {
+            // digit(_?digit)*
+            let is_digit = |byte: u8| (byte as char).is_digit(radix);
+            let mut end = from;
+            if !bytes.get(end).is_some_and(|byte| is_digit(*byte)) {
+                return from;
+            }
+            end += 1;
+            loop {
+                if bytes.get(end).is_some_and(|byte| is_digit(*byte)) {
+                    end += 1;
+                } else if bytes.get(end) == Some(&b'_')
+                    && bytes.get(end + 1).is_some_and(|byte| is_digit(*byte))
+                {
+                    end += 2;
+                } else {
+                    return end;
+                }
+            }
+        };
+        let mut end;
+        let mut value = None;
+        // 0x / 0o / 0b integers.
+        if bytes.first() == Some(&b'0') {
+            let radix = match bytes.get(1) {
+                Some(b'x' | b'X') => Some(16),
+                Some(b'o' | b'O') => Some(8),
+                Some(b'b' | b'B') => Some(2),
+                _ => None,
+            };
+            if let Some(radix) = radix {
+                let digits_end = digits_with_underscores(2, radix);
+                if digits_end > 2 {
+                    let digits = rest[2..digits_end].replace('_', "");
+                    let number = num_bigint::BigInt::parse_bytes(digits.as_bytes(), radix)
+                        .ok_or_else(|| syntax_error("invalid numeric literal"))?;
+                    value = Some(number.to_string());
+                    end = digits_end;
+                } else {
+                    end = 1;
+                }
+            } else {
+                end = 1;
+            }
+        } else {
+            end = digits_with_underscores(0, 10);
         }
-        let value = &self.input[start..self.offset];
-        value
-            .parse::<Number>()
-            .map_err(|_| syntax_error(format!("invalid jsonpath number '{value}'")))?;
-        Ok(value.to_string())
+        if value.is_none() {
+            // decinteger, decimal, real
+            let integer_end = end;
+            let mut fraction_end = None;
+            if bytes.get(end) == Some(&b'.') {
+                let after = digits_with_underscores(end + 1, 10);
+                if integer_end > 0 || after > end + 1 {
+                    fraction_end = Some(after);
+                    end = after;
+                }
+            }
+            let mantissa_end = end;
+            let mut exponent = 0i64;
+            if matches!(bytes.get(end), Some(b'e' | b'E')) && mantissa_end > 0 {
+                let mut cursor = end + 1;
+                let negative = bytes.get(cursor) == Some(&b'-');
+                if matches!(bytes.get(cursor), Some(b'+' | b'-')) {
+                    cursor += 1;
+                }
+                let exponent_end = digits_with_underscores(cursor, 10);
+                if exponent_end > cursor {
+                    exponent = rest[cursor..exponent_end]
+                        .replace('_', "")
+                        .parse::<i64>()
+                        .map_err(|_| syntax_error("invalid numeric literal"))?;
+                    if negative {
+                        exponent = -exponent;
+                    }
+                    end = exponent_end;
+                } else if cursor > end + 1 {
+                    // `1e+`: sign without digits.
+                    self.offset += cursor;
+                    return Err(self.junk_error("invalid numeric literal", &rest[..cursor]));
+                }
+            }
+            let integer = rest[..integer_end].replace('_', "");
+            let fraction = fraction_end
+                .map(|fraction_end| rest[integer_end + 1..fraction_end].replace('_', ""))
+                .unwrap_or_default();
+            value = Some(canonical_numeric(&integer, &fraction, exponent));
+        }
+        // {number}{other}: trailing junk.
+        if let Some(next) = rest[end..].chars().next() {
+            if is_other_char(next) {
+                let junk = &rest[..end + next.len_utf8()];
+                return Err(self.junk_error("trailing junk after numeric literal", junk));
+            }
+        }
+        self.offset += end;
+        Ok(value.expect("numeric literal value"))
     }
+
+    fn junk_error(&self, message: &str, text: &str) -> SqlError {
+        syntax_error(format!("{message} at or near \"{text}\" of jsonpath input"))
+    }
+}
+
+/// Characters of PostgreSQL's jsonpath scanner class `other`.
+fn is_other_char(character: char) -> bool {
+    !matches!(
+        character,
+        '?' | '%'
+            | '$'
+            | '.'
+            | '['
+            | ']'
+            | '{'
+            | '}'
+            | '('
+            | ')'
+            | '|'
+            | '&'
+            | '!'
+            | '='
+            | '<'
+            | '>'
+            | '@'
+            | '#'
+            | ','
+            | '*'
+            | ':'
+            | '-'
+            | '+'
+            | '/'
+            | '\\'
+            | '"'
+            | ' '
+            | '\t'
+            | '\n'
+            | '\r'
+            | '\x0c'
+    )
+}
+
+/// `numeric_in` text of `integer.fraction e exponent`.
+fn canonical_numeric(integer: &str, fraction: &str, exponent: i64) -> String {
+    let digits = format!("{integer}{fraction}");
+    let scale = fraction.len() as i64 - exponent;
+    let digits = digits.trim_start_matches('0');
+    let display_scale = scale.max(0) as usize;
+    let mut digits = digits.to_string();
+    if scale < 0 {
+        digits.push_str(&"0".repeat((-scale) as usize));
+    }
+    if digits.is_empty() {
+        digits.push('0');
+    }
+    if display_scale == 0 {
+        return digits;
+    }
+    if digits.len() <= display_scale {
+        digits = format!("{}{digits}", "0".repeat(display_scale - digits.len() + 1));
+    }
+    let split = digits.len() - display_scale;
+    format!("{}.{}", &digits[..split], &digits[split..])
 }
 
 fn is_ident_start(character: char) -> bool {
@@ -327,8 +604,40 @@ enum Postfix {
 
 #[cold]
 #[inline(never)]
-fn unexpected_token(context: &str, token: Token) -> SqlError {
-    syntax_error(format!("{context}, found {token:?}"))
+fn unexpected_token(_context: &str, token: Token) -> SqlError {
+    let text = match token {
+        Token::Eof => return syntax_error("syntax error at end of jsonpath input"),
+        Token::Root => "$".to_string(),
+        Token::Current => "@".to_string(),
+        Token::Variable(name) => format!("${name}"),
+        Token::String(text) | Token::Number(text) | Token::Ident(text) => text,
+        Token::Dot => ".".into(),
+        Token::Question => "?".into(),
+        Token::LParen => "(".into(),
+        Token::RParen => ")".into(),
+        Token::LBracket => "[".into(),
+        Token::RBracket => "]".into(),
+        Token::LBrace => "{".into(),
+        Token::RBrace => "}".into(),
+        Token::Comma => ",".into(),
+        Token::Plus => "+".into(),
+        Token::Minus => "-".into(),
+        Token::Star => "*".into(),
+        Token::Slash => "/".into(),
+        Token::Percent => "%".into(),
+        Token::Eq => "==".into(),
+        Token::NotEq => "!=".into(),
+        Token::Lt => "<".into(),
+        Token::LtEq => "<=".into(),
+        Token::Gt => ">".into(),
+        Token::GtEq => ">=".into(),
+        Token::And => "&&".into(),
+        Token::Or => "||".into(),
+        Token::Not => "!".into(),
+    };
+    syntax_error(format!(
+        "syntax error at or near \"{text}\" of jsonpath input"
+    ))
 }
 
 struct Parser {
@@ -338,6 +647,8 @@ struct Parser {
     /// `jsonb_path_exists('{}', '(((((…')` recurses once per token and
     /// overflows the stack without this. See `bicdb_core::parse_budget`.
     budget: bicdb_core::parse_budget::ParseBudget,
+    /// Nesting depth of array subscripts (`last` is allowed inside one).
+    subscript_depth: usize,
 }
 
 impl Parser {
@@ -347,6 +658,7 @@ impl Parser {
             tokens,
             cursor: 0,
             budget: bicdb_core::parse_budget::ParseBudget::new("jsonpath"),
+            subscript_depth: 0,
         };
         let mode = match parser.peek() {
             Token::Ident(value) if value.eq_ignore_ascii_case("strict") => {
@@ -570,7 +882,27 @@ impl Parser {
             Token::Plus => UnaryOp::Plus,
             _ => UnaryOp::Minus,
         };
-        Ok(Expr::Unary(operator, Box::new(self.nested_expression(11)?)))
+        let operand = self.nested_expression(11)?;
+        // A sign on a numeric literal folds into the literal, as in
+        // PostgreSQL's makeItemUnary.
+        if let Expr::Literal(JsonValue::Number(number)) = &operand {
+            match operator {
+                UnaryOp::Plus => return Ok(operand),
+                UnaryOp::Minus => {
+                    let text = number.to_string();
+                    let negated = match text.strip_prefix('-') {
+                        Some(positive) => positive.to_string(),
+                        None if text.bytes().all(|byte| matches!(byte, b'0' | b'.')) => text,
+                        None => format!("-{text}"),
+                    };
+                    if let Ok(number) = negated.parse() {
+                        return Ok(Expr::Literal(JsonValue::Number(number)));
+                    }
+                }
+                UnaryOp::Not => {}
+            }
+        }
+        Ok(Expr::Unary(operator, Box::new(operand)))
     }
 
     #[inline(never)]
@@ -604,11 +936,13 @@ impl Parser {
             Token::Ident(value) if value.eq_ignore_ascii_case("null") => {
                 Expr::Literal(JsonValue::Null)
             }
-            token => {
-                return Err(syntax_error(format!(
-                    "unexpected token {token:?} in jsonpath expression"
-                )))
+            Token::Ident(value) if value == "last" => {
+                if self.subscript_depth == 0 {
+                    return Err(syntax_error("LAST is allowed only in array subscripts"));
+                }
+                Expr::Last
             }
+            token => return Err(unexpected_token("jsonpath expression", token)),
         })
     }
 
@@ -749,60 +1083,10 @@ impl Parser {
     }
 
     fn endpoint(&mut self) -> Result<Endpoint> {
-        let negative = matches!(self.peek(), Token::Minus);
-        if negative {
-            self.next();
-        }
-        match self.next() {
-            Token::Number(value) => {
-                let mut value = value
-                    .parse::<i64>()
-                    .map_err(|_| syntax_error("array subscript must be an integer"))?;
-                if matches!(self.peek(), Token::Minus | Token::Plus) {
-                    let subtract = matches!(self.next(), Token::Minus);
-                    let Token::Number(offset) = self.next() else {
-                        return Err(syntax_error(
-                            "array subscript arithmetic requires an integer",
-                        ));
-                    };
-                    let offset = offset.parse::<i64>().map_err(|_| {
-                        syntax_error("array subscript arithmetic requires an integer")
-                    })?;
-                    value = if subtract {
-                        value.checked_sub(offset)
-                    } else {
-                        value.checked_add(offset)
-                    }
-                    .ok_or_else(|| syntax_error("array subscript is out of range"))?;
-                }
-                Ok(Endpoint::Absolute(if negative { -value } else { value }))
-            }
-            Token::Variable(name) => Ok(Endpoint::Variable(name, if negative { -1 } else { 1 })),
-            Token::Ident(value) if value.eq_ignore_ascii_case("last") => {
-                let mut offset = 0_i64;
-                if matches!(self.peek(), Token::Minus | Token::Plus) {
-                    let subtract = matches!(self.next(), Token::Minus);
-                    match self.next() {
-                        Token::Number(value) => {
-                            offset = value
-                                .parse::<i64>()
-                                .map_err(|_| syntax_error("LAST offset must be an integer"))?;
-                            if subtract {
-                                offset = -offset;
-                            }
-                        }
-                        Token::Variable(name) => {
-                            return Ok(Endpoint::LastVariable(name, if subtract { -1 } else { 1 }));
-                        }
-                        _ => return Err(syntax_error("LAST offset must be an integer")),
-                    }
-                }
-                Ok(Endpoint::Last(offset))
-            }
-            token => Err(syntax_error(format!(
-                "unsupported jsonpath array subscript {token:?}"
-            ))),
-        }
+        self.subscript_depth += 1;
+        let expression = self.nested_expression(0);
+        self.subscript_depth -= 1;
+        Ok(Endpoint::simplify(expression?))
     }
 
     fn expect(&mut self, expected: Token) -> Result<()> {
@@ -831,6 +1115,8 @@ struct EvalContext<'a> {
     mode: Mode,
     timezone_aware: bool,
     keyvalue_counter: &'a Cell<u64>,
+    /// The innermost array subscript's `last`.
+    last: Option<i64>,
 }
 
 impl JsonPath {
@@ -852,6 +1138,7 @@ impl JsonPath {
             mode: self.mode,
             timezone_aware,
             keyvalue_counter: &keyvalue_counter,
+            last: None,
         })
     }
 
@@ -864,11 +1151,125 @@ impl JsonPath {
     }
 
     fn canonical_text(&self) -> String {
-        let expression = self.expression.canonical_text();
+        let expression = self.expression.pg_text(true);
         if self.mode == Mode::Strict {
             format!("strict {expression}")
         } else {
             expression
+        }
+    }
+}
+
+/// PostgreSQL's `operationPriority`.
+fn operation_priority(expression: &Expr) -> u8 {
+    match expression {
+        Expr::Binary(_, operator, _) => match operator {
+            BinaryOp::Or => 0,
+            BinaryOp::And => 1,
+            BinaryOp::Eq
+            | BinaryOp::NotEq
+            | BinaryOp::Lt
+            | BinaryOp::LtEq
+            | BinaryOp::Gt
+            | BinaryOp::GtEq
+            | BinaryOp::StartsWith => 2,
+            BinaryOp::Add | BinaryOp::Subtract => 3,
+            BinaryOp::Multiply | BinaryOp::Divide | BinaryOp::Modulo => 4,
+        },
+        Expr::Unary(UnaryOp::Plus | UnaryOp::Minus, _) => 5,
+        _ => 6,
+    }
+}
+
+impl Expr {
+    /// The base of an accessor chain: printed with brackets, and a numeric
+    /// literal parenthesized (`(1).type()`).
+    fn pg_chain_base(&self) -> String {
+        match self {
+            Self::Literal(JsonValue::Number(number)) => format!("({number})"),
+            other => other.pg_text(true),
+        }
+    }
+
+    /// PostgreSQL's `printJsonPathItem` output.
+    fn pg_text(&self, brackets: bool) -> String {
+        let operand = |child: &Expr, parent: &Expr| {
+            child.pg_text(operation_priority(child) <= operation_priority(parent))
+        };
+        let wrap = |text: String| if brackets { format!("({text})") } else { text };
+        match self {
+            Self::Root => "$".to_string(),
+            Self::Current => "@".to_string(),
+            Self::Variable(name) => format!("${}", quoted(name)),
+            Self::Literal(value) => value.to_string(),
+            Self::Member(base, name) => format!("{}.{}", base.pg_chain_base(), quoted(name)),
+            Self::MemberWildcard(base) => format!("{}.*", base.pg_chain_base()),
+            Self::Descendant(base, minimum, maximum) => {
+                let bounds = match maximum {
+                    None if *minimum == 0 => String::new(),
+                    None => format!("{{{minimum} to last}}"),
+                    Some(maximum) if maximum == minimum => format!("{{{minimum}}}"),
+                    Some(maximum) => format!("{{{minimum} to {maximum}}}"),
+                };
+                format!("{}.**{bounds}", base.pg_chain_base())
+            }
+            Self::Array(base, selectors) => format!(
+                "{}[{}]",
+                base.pg_chain_base(),
+                selectors
+                    .iter()
+                    .map(ArraySelector::canonical_text)
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
+            Self::Filter(base, predicate) => {
+                format!("{}?({})", base.pg_chain_base(), predicate.pg_text(false))
+            }
+            Self::Method(base, method, arguments) => format!(
+                "{}.{}({})",
+                base.pg_chain_base(),
+                method.name(),
+                arguments
+                    .iter()
+                    .map(|argument| argument.pg_text(false))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
+            Self::Exists(expression) => format!("exists ({})", expression.pg_text(false)),
+            Self::Unary(UnaryOp::Not, expression) => format!("!({})", expression.pg_text(false)),
+            Self::Unary(operator, expression) => {
+                let sign = if matches!(operator, UnaryOp::Plus) {
+                    "+"
+                } else {
+                    "-"
+                };
+                wrap(format!("{sign}{}", operand(expression, self)))
+            }
+            Self::Binary(left, operator, right) => wrap(format!(
+                "{} {} {}",
+                operand(left, self),
+                operator.name(),
+                operand(right, self)
+            )),
+            Self::LikeRegex(left, pattern, flags) => {
+                let pattern = match pattern.as_ref() {
+                    Self::Literal(JsonValue::String(text)) => quoted(text),
+                    other => other.pg_text(false),
+                };
+                let mut text = format!("{} like_regex {pattern}", operand(left, self));
+                if !flags.is_empty() {
+                    let mut ordered = String::new();
+                    for flag in ['i', 's', 'm', 'x', 'q'] {
+                        if flags.contains(flag) {
+                            ordered.push(flag);
+                        }
+                    }
+                    text.push_str(&format!(" flag \"{ordered}\""));
+                }
+                wrap(text)
+            }
+            Self::IsUnknown(expression) => format!("({}) is unknown", expression.pg_text(false)),
+            Self::Last => "last".to_string(),
         }
     }
 }
@@ -947,6 +1348,7 @@ impl Expr {
                 )
             }
             Self::IsUnknown(expression) => format!("({} is unknown)", expression.canonical_text()),
+            Self::Last => "last".to_string(),
         }
     }
 
@@ -968,6 +1370,7 @@ impl Expr {
             | Self::Current
             | Self::Variable(_)
             | Self::Literal(_)
+            | Self::Last
             | Self::Binary(..)
             | Self::LikeRegex(..) => {}
         }
@@ -982,7 +1385,9 @@ impl Expr {
                 .get(name)
                 .cloned()
                 .map(|value| vec![value])
-                .ok_or_else(|| execution_error(format!("could not find jsonpath variable {name}"))),
+                .ok_or_else(|| {
+                    execution_error(format!("could not find jsonpath variable {}", quoted(name)))
+                }),
             Self::Literal(value) => Ok(vec![value.clone()]),
             Self::Member(base, name) => {
                 let mut output = Vec::new();
@@ -1006,11 +1411,9 @@ impl Expr {
                                 }
                             }
                         }
-                        _ if context.mode == Mode::Strict => {
-                            return Err(execution_error(
-                                "jsonpath member wildcard can only be applied to an object",
-                            ))
-                        }
+                        _ if context.mode == Mode::Strict => return Err(execution_error(
+                            "jsonpath wildcard member accessor can only be applied to an object",
+                        )),
                         _ => {}
                     }
                 }
@@ -1164,6 +1567,12 @@ impl Expr {
             Self::IsUnknown(expression) => Ok(vec![JsonValue::Bool(
                 expression.truth(context)? == Truth::Unknown,
             )]),
+            Self::Last => match context.last {
+                Some(last) => Ok(vec![JsonValue::from(last)]),
+                None => Err(execution_error(
+                    "evaluating jsonpath LAST outside of array subscript",
+                )),
+            },
         }
     }
 
@@ -1249,8 +1658,45 @@ impl ArraySelector {
 }
 
 impl Endpoint {
+    /// The fast forms of a subscript expression; anything else is kept as
+    /// an expression evaluated with `last` bound.
+    fn simplify(expression: Expr) -> Self {
+        let integer = |value: &JsonValue| value.as_i64();
+        match &expression {
+            Expr::Literal(value) if integer(value).is_some() => {
+                return Self::Absolute(integer(value).expect("checked integer"))
+            }
+            Expr::Variable(name) => return Self::Variable(name.clone(), 1),
+            Expr::Unary(UnaryOp::Minus, inner) => {
+                if let Expr::Variable(name) = inner.as_ref() {
+                    return Self::Variable(name.clone(), -1);
+                }
+            }
+            Expr::Last => return Self::Last(0),
+            Expr::Binary(left, operator @ (BinaryOp::Add | BinaryOp::Subtract), right)
+                if matches!(left.as_ref(), Expr::Last) =>
+            {
+                let sign = if matches!(operator, BinaryOp::Subtract) {
+                    -1
+                } else {
+                    1
+                };
+                match right.as_ref() {
+                    Expr::Literal(value) if integer(value).is_some() => {
+                        return Self::Last(sign * integer(value).expect("checked integer"))
+                    }
+                    Expr::Variable(name) => return Self::LastVariable(name.clone(), sign),
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+        Self::Expr(Box::new(expression))
+    }
+
     fn canonical_text(&self) -> String {
         match self {
+            Self::Expr(expression) => expression.pg_text(false),
             Self::Last(0) => "last".to_string(),
             Self::Last(offset) if *offset < 0 => format!("last - {}", offset.unsigned_abs()),
             Self::Last(offset) => format!("last + {offset}"),
@@ -1277,6 +1723,29 @@ impl Endpoint {
             Self::Variable(name, multiplier) => variable_integer(context, name)? * multiplier,
             Self::LastVariable(name, multiplier) => {
                 length - 1 + variable_integer(context, name)? * multiplier
+            }
+            Self::Expr(expression) => {
+                let local = EvalContext {
+                    last: Some(length - 1),
+                    ..*context
+                };
+                let values = expression.evaluate(&local)?;
+                let [JsonValue::Number(number)] = values.as_slice() else {
+                    return Err(SqlError::data_exception(
+                        "22033",
+                        "jsonpath array subscript is not a single numeric value",
+                        Some("jsonpath".to_string()),
+                    ));
+                };
+                let value = number.as_f64().unwrap_or(f64::NAN).trunc();
+                if !(i32::MIN as f64..=i32::MAX as f64).contains(&value) {
+                    return Err(SqlError::data_exception(
+                        "22033",
+                        "jsonpath array subscript is out of integer range",
+                        Some("jsonpath".to_string()),
+                    ));
+                }
+                value as i64
             }
         };
         Ok((index >= 0 && index < length).then_some(index as usize))
@@ -1353,7 +1822,8 @@ fn member_values(
             Some(value) => output.push(value.clone()),
             None if mode == Mode::Strict => {
                 return Err(execution_error(format!(
-                    "jsonpath member '{name}' was not found"
+                    "JSON object does not contain key {}",
+                    quoted(name)
                 )))
             }
             None => {}
@@ -1801,44 +2271,60 @@ fn apply_method(
             _ if context.mode == Mode::Lax => 1,
             _ => {
                 return Err(execution_error(
-                    "jsonpath size() method requires an array in strict mode",
+                    "jsonpath item method .size() can only be applied to an array",
                 ))
             }
         })),
         Method::Double => match value {
             JsonValue::Number(_) => value,
-            JsonValue::String(value) => {
-                finite_json_number(value.parse::<f64>().map_err(|_| {
-                    execution_error("jsonpath numeric conversion requires a numeric string")
-                })?)?
+            JsonValue::String(text) => {
+                let parsed =
+                    text.trim().parse::<f64>().ok().ok_or_else(|| {
+                        method_invalid_argument(&text, method, "double precision")
+                    })?;
+                if !parsed.is_finite() {
+                    return Err(execution_error(
+                        "NaN or Infinity is not allowed for jsonpath item method .double()",
+                    ));
+                }
+                finite_json_number(parsed)?
             }
-            _ => {
-                return Err(execution_error(
-                    "jsonpath value cannot be converted to a number",
-                ))
-            }
+            _ => return Err(method_type_error(method, "a string or numeric value")),
         },
         Method::Number => match value {
             JsonValue::Number(_) => value,
-            JsonValue::String(value) => exact_json_number(&value)?,
-            _ => {
-                return Err(execution_error(
-                    "jsonpath value cannot be converted to a number",
-                ))
+            JsonValue::String(text) => {
+                let lower = text.trim().to_ascii_lowercase();
+                if matches!(
+                    lower.as_str(),
+                    "nan" | "infinity" | "-infinity" | "+infinity" | "inf" | "-inf"
+                ) {
+                    return Err(execution_error(
+                        "NaN or Infinity is not allowed for jsonpath item method .number()",
+                    ));
+                }
+                exact_json_number(text.trim())
+                    .map_err(|_| method_invalid_argument(&text, method, "numeric"))?
             }
+            _ => return Err(method_type_error(method, "a string or numeric value")),
         },
         Method::Decimal => {
             let text = match value {
                 JsonValue::Number(value) => value.to_string(),
                 JsonValue::String(value) => value,
-                _ => {
-                    return Err(execution_error(
-                        "jsonpath value cannot be converted to a decimal",
-                    ))
-                }
+                _ => return Err(method_type_error(method, "a string or numeric value")),
             };
-            let mut numeric = crate::PgNumeric::from_decimal_text(&text)
-                .map_err(|_| execution_error("jsonpath decimal conversion failed"))?;
+            let lower = text.trim().to_ascii_lowercase();
+            if matches!(
+                lower.as_str(),
+                "nan" | "infinity" | "-infinity" | "+infinity" | "inf" | "-inf"
+            ) {
+                return Err(execution_error(
+                    "NaN or Infinity is not allowed for jsonpath item method .decimal()",
+                ));
+            }
+            let mut numeric = crate::PgNumeric::from_decimal_text(text.trim())
+                .map_err(|_| method_invalid_argument(&text, method, "numeric"))?;
             if !arguments.is_empty() {
                 let precision = method_integer_argument(&arguments[0], context)?;
                 let scale = if arguments.len() == 2 {
@@ -1866,36 +2352,81 @@ fn apply_method(
         }
         Method::Ceiling | Method::Floor | Method::Abs => exact_numeric_method(&value, method)?,
         Method::BigInt | Method::Integer => {
-            let text = match value {
-                JsonValue::Number(value) => value.to_string(),
-                JsonValue::String(value) => value,
-                _ => return Err(execution_error("jsonpath integer conversion failed")),
+            let type_name = if matches!(method, Method::Integer) {
+                "integer"
+            } else {
+                "bigint"
             };
-            let number = text
-                .parse::<i64>()
-                .map_err(|_| execution_error("jsonpath integer conversion failed"))?;
+            let number = match &value {
+                // A numeric rounds to the nearest integer (numeric_int4/8).
+                JsonValue::Number(number) => {
+                    let text = number.to_string();
+                    let rounded = crate::PgNumeric::from_decimal_text(&text)
+                        .ok()
+                        .and_then(|numeric| numeric.with_typmod(1000, 0).ok())
+                        .map(|numeric| numeric.to_decimal_text());
+                    rounded
+                        .and_then(|text| text.parse::<i64>().ok())
+                        .ok_or_else(|| method_invalid_argument(&text, method, type_name))?
+                }
+                JsonValue::String(text) => text
+                    .trim()
+                    .parse::<i64>()
+                    .map_err(|_| method_invalid_argument(text, method, type_name))?,
+                _ => return Err(method_type_error(method, "a string or numeric value")),
+            };
             if matches!(method, Method::Integer) && i32::try_from(number).is_err() {
-                return Err(execution_error("jsonpath integer value is out of range"));
+                return Err(method_invalid_argument(
+                    &value_text(&value),
+                    method,
+                    type_name,
+                ));
             }
             JsonValue::Number(Number::from(number))
         }
-        Method::Boolean => match value {
+        Method::Boolean => match &value {
             JsonValue::Bool(_) => value,
-            JsonValue::String(value) if value.eq_ignore_ascii_case("true") => JsonValue::Bool(true),
-            JsonValue::String(value) if value.eq_ignore_ascii_case("false") => {
-                JsonValue::Bool(false)
+            JsonValue::Number(number) => match number.as_i64() {
+                Some(integer)
+                    if number
+                        .to_string()
+                        .bytes()
+                        .all(|b| b.is_ascii_digit() || b == b'-') =>
+                {
+                    JsonValue::Bool(integer != 0)
+                }
+                _ => {
+                    return Err(method_invalid_argument(
+                        &number.to_string(),
+                        method,
+                        "boolean",
+                    ))
+                }
+            },
+            JsonValue::String(text) => match parse_bool_text(text) {
+                Some(flag) => JsonValue::Bool(flag),
+                None => return Err(method_invalid_argument(text, method, "boolean")),
+            },
+            _ => {
+                return Err(method_type_error(
+                    method,
+                    "a boolean, string, or numeric value",
+                ))
             }
-            _ => return Err(execution_error("jsonpath boolean conversion failed")),
         },
         Method::String => JsonValue::String(match value {
             JsonValue::String(value) => value,
-            value => value.to_string(),
+            value @ (JsonValue::Bool(_) | JsonValue::Number(_)) => value.to_string(),
+            _ => {
+                return Err(method_type_error(
+                    method,
+                    "a boolean, string, numeric, or datetime value",
+                ))
+            }
         }),
         Method::KeyValue => {
             let JsonValue::Object(object) = value else {
-                return Err(execution_error(
-                    "jsonpath keyvalue() method requires an object",
-                ));
+                return Err(method_type_error(method, "an object"));
             };
             let id = context.keyvalue_counter.get();
             context.keyvalue_counter.set(id.saturating_add(1));
@@ -1913,9 +2444,7 @@ fn apply_method(
         | Method::TimestampTz
         | Method::DateTime => {
             let JsonValue::String(value) = value else {
-                return Err(execution_error(
-                    "jsonpath datetime method requires a string",
-                ));
+                return Err(method_type_error(method, "a string"));
             };
             validate_datetime_method(method, &value, context.timezone_aware)?;
             JsonValue::String(value)
@@ -1957,10 +2486,71 @@ fn validate_datetime_method(method: Method, value: &str, timezone_aware: bool) -
     Ok(())
 }
 
+/// `argument "X" of jsonpath item method .m() is invalid for type T`.
+fn method_invalid_argument(text: &str, method: Method, type_name: &str) -> SqlError {
+    SqlError::data_exception(
+        "22036",
+        format!(
+            "argument \"{text}\" of jsonpath item method .{}() is invalid for type {type_name}",
+            method.name()
+        ),
+        Some("jsonpath".to_string()),
+    )
+}
+
+/// `jsonpath item method .m() can only be applied to ...`.
+fn method_type_error(method: Method, what: &str) -> SqlError {
+    let code = match method {
+        Method::Double
+        | Method::Number
+        | Method::Decimal
+        | Method::BigInt
+        | Method::Integer
+        | Method::Ceiling
+        | Method::Floor
+        | Method::Abs => "22036",
+        Method::KeyValue => "2203C",
+        _ => "22038",
+    };
+    SqlError::data_exception(
+        code,
+        format!(
+            "jsonpath item method .{}() can only be applied to {what}",
+            method.name()
+        ),
+        Some("jsonpath".to_string()),
+    )
+}
+
+/// PostgreSQL's `boolin`: unique prefixes of true/false/yes/no, on/off,
+/// 1/0, ignoring case and surrounding space.
+fn parse_bool_text(text: &str) -> Option<bool> {
+    let lower = text.trim().to_ascii_lowercase();
+    let prefix_of = |word: &str, minimum: usize| lower.len() >= minimum && word.starts_with(&lower);
+    if prefix_of("true", 1) || prefix_of("yes", 1) || prefix_of("on", 2) || lower == "1" {
+        Some(true)
+    } else if prefix_of("false", 1) || prefix_of("no", 1) || prefix_of("off", 2) || lower == "0" {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+fn value_text(value: &JsonValue) -> String {
+    match value {
+        JsonValue::String(text) => text.clone(),
+        other => other.to_string(),
+    }
+}
+
 fn validate_method_argument_count(method: Method, actual: usize) -> Result<()> {
     let valid = match method {
         Method::Decimal => actual <= 2,
-        Method::DateTime => actual <= 1,
+        Method::DateTime
+        | Method::Time
+        | Method::TimeTz
+        | Method::Timestamp
+        | Method::TimestampTz => actual <= 1,
         _ => actual == 0,
     };
     valid

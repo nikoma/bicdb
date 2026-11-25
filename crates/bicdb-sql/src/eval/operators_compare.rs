@@ -836,26 +836,28 @@ pub(crate) fn eval_arithmetic_value_ref(
         .ok_or_else(|| SqlError::InvalidSql("arithmetic operands must be numeric".to_string()))?;
     let right = sql_value_f64(&right)
         .ok_or_else(|| SqlError::InvalidSql("arithmetic operands must be numeric".to_string()))?;
-    match op {
-        BinaryOperator::Plus => Ok(SqlValue::Float(left + right)),
-        BinaryOperator::Minus => Ok(SqlValue::Float(left - right)),
-        BinaryOperator::Multiply => Ok(SqlValue::Float(left * right)),
+    let result = match op {
+        BinaryOperator::Plus => left + right,
+        BinaryOperator::Minus => left - right,
+        BinaryOperator::Multiply => left * right,
         BinaryOperator::Divide => {
-            if right == 0.0 {
-                Err(division_by_zero())
-            } else {
-                Ok(SqlValue::Float(left / right))
+            if right == 0.0 && !left.is_nan() {
+                return Err(division_by_zero());
             }
+            left / right
         }
         BinaryOperator::Modulo => {
             if right == 0.0 {
-                Err(division_by_zero())
-            } else {
-                Ok(SqlValue::Float(left % right))
+                return Err(division_by_zero());
             }
+            left % right
         }
         _ => unreachable!(),
-    }
+    };
+    // Float arithmetic (an untyped literal operand resolves to float8)
+    // checks overflow and underflow as float8_mul and friends do.
+    validate_float_arithmetic_result(left, op, right, result)?;
+    Ok(SqlValue::Float(result))
 }
 
 pub(crate) fn eval_interval_scale(

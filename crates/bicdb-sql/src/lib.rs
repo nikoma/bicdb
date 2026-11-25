@@ -96,7 +96,9 @@ mod pg_condition_names;
 pub mod sql_text;
 mod stack_depth;
 mod string_constants;
-pub use string_constants::normalize_client_string_constants;
+pub use string_constants::{
+    normalize_client_string_constants, normalize_client_string_constants_with_warnings,
+};
 mod table_queries;
 pub use identity::{
     bicdb_version_banner, postgres_version_banner, BICDB_VERSION, POSTGRES_COMPATIBILITY_VERSION,
@@ -283,6 +285,7 @@ mod only_rewrite;
 mod persistence_ddl;
 mod pg_scalar_extra;
 mod pgcrypto;
+mod quantified_operators;
 mod records;
 mod routine_srf_projection;
 mod row_types;
@@ -2673,6 +2676,17 @@ impl std::fmt::Debug for SqlNotice {
 }
 
 impl SqlNotice {
+    /// The severity clients are told. Notices are NOTICE except the lexer's
+    /// nonstandard-escape warning (22P06), which PostgreSQL reports at
+    /// WARNING; a notice-level field can replace this rule.
+    pub fn severity(&self) -> &'static str {
+        if self.sqlstate == "22P06" {
+            "WARNING"
+        } else {
+            "NOTICE"
+        }
+    }
+
     pub fn memory_estimate(&self) -> usize {
         self.sqlstate.len()
             + self.message.len()
@@ -2999,10 +3013,27 @@ fn composite_field_text(field: &SqlCompositeField) -> String {
     if matches!(field.value, SqlValue::Null) {
         return String::new();
     }
-    let text = if field.pg_type.ends_with("[]") {
-        composite_array_text(&field.value).unwrap_or_else(|| field.value.to_cell())
+    let float_type = |pg_type: &str| match pg_type {
+        "float4" | "real" => Some("float4"),
+        "float8" | "double precision" => Some("float8"),
+        _ => None,
+    };
+    let text = if let Some(element) = field.pg_type.strip_suffix("[]") {
+        match float_type(element) {
+            // float4[]/float8[] fields print their elements as float4out/float8out.
+            Some(element) => {
+                crate::eval::postgres_array_cast_text_value_of(element, &field.value, ',').ok()
+            }
+            None => None,
+        }
+        .or_else(|| composite_array_text(&field.value))
+        .unwrap_or_else(|| field.value.to_cell())
     } else {
-        field.value.to_cell()
+        match (&field.value, float_type(&field.pg_type)) {
+            // A float4 field prints as float4out, not as the widened double.
+            (SqlValue::Float(value), Some(float_type)) => postgres_float_text(*value, float_type),
+            _ => field.value.to_cell(),
+        }
     };
     let quoted = text.is_empty()
         || text.chars().any(|character| {

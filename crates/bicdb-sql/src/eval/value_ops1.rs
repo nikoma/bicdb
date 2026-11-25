@@ -2950,6 +2950,7 @@ pub(crate) fn default_session_guc(name: &str) -> Option<&'static str> {
         "default_transaction_isolation" => Some("read committed"),
         "transaction_deferrable" => Some("off"),
         "standard_conforming_strings" => Some("on"),
+        "escape_string_warning" => Some("on"),
         "extra_float_digits" => Some("1"),
         "default_text_search_config" => Some("pg_catalog.english"),
         _ => crate::session::planner_gucs::planner_guc_default(name),
@@ -3871,7 +3872,17 @@ pub(crate) fn eval_compatibility_function_value(
             Ok(Some(SqlValue::String(character.to_string())))
         }
         "format" | "pg_catalog.format" => Ok(Some(eval_pg_format(args)?)),
-        "to_char" | "pg_catalog.to_char" => Ok(Some(eval_to_char(args)?)),
+        "to_char" | "pg_catalog.to_char" => {
+            let float_type = arg_types
+                .and_then(|types| types.first().cloned().flatten())
+                .filter(|pg_type| matches!(pg_type.as_str(), "float4" | "real" | "float8"));
+            match (float_type, args) {
+                (Some(float_type), [SqlValue::Float(value), format]) if value.is_finite() => {
+                    Ok(Some(eval_float_to_char(*value, &float_type, format)?))
+                }
+                _ => Ok(Some(eval_to_char(args)?)),
+            }
+        }
         "char_length"
         | "pg_catalog.char_length"
         | "character_length"
@@ -4733,6 +4744,58 @@ fn to_char_fraction_micros(value: &str) -> i64 {
         .take(6)
         .collect::<String>();
     format!("{digits:0<6}").parse().unwrap_or(0)
+}
+
+/// float4_to_char/float8_to_char: the fraction is cut so integer and
+/// fraction digits together stay within FLT_DIG (6) or DBL_DIG (15), and the
+/// value is rounded there before the picture is applied.
+fn eval_float_to_char(value: f64, float_type: &str, format: &SqlValue) -> Result<SqlValue> {
+    let Some(format) = sql_value_text(format) else {
+        return eval_to_char(&[SqlValue::Float(value), format.clone()]);
+    };
+    let upper = format.to_ascii_uppercase();
+    let Some(point) = upper.find(['.', 'D']) else {
+        return eval_to_char(&[SqlValue::Float(value), SqlValue::String(format)]);
+    };
+    let digits = if matches!(float_type, "float4" | "real") {
+        6
+    } else {
+        15
+    };
+    let value = if digits == 6 {
+        f64::from(value as f32)
+    } else {
+        value
+    };
+    let post = upper[point + 1..]
+        .chars()
+        .take_while(|c| matches!(c, '9' | '0'))
+        .count();
+    if post == 0
+        || upper[point + 1 + post..]
+            .chars()
+            .any(|c| c.is_ascii_alphanumeric())
+    {
+        return eval_to_char(&[SqlValue::Float(value), SqlValue::String(format)]);
+    }
+    let pre = format!("{:.0}", value.abs()).len();
+    let kept = if pre >= digits {
+        0
+    } else {
+        post.min(digits - pre)
+    };
+    let rounded = format!("{value:.kept$}");
+    let picture = format!(
+        "{}{}",
+        &format[..point + 1 + kept],
+        &format[point + 1 + post..]
+    );
+    let picture = if kept == 0 {
+        format!("{}{}", &format[..point], &format[point + 1 + post..])
+    } else {
+        picture
+    };
+    eval_to_char(&[SqlValue::String(rounded), SqlValue::String(picture)])
 }
 
 pub(crate) fn format_numeric_to_char(value: f64, format: &str) -> Result<String> {

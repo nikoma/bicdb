@@ -17,5 +17,23 @@ hstore.error_wording|CREATE EXTENSION IF NOT EXISTS hstore; SELECT 'a=>'::hstore
 hstore.error_wording2|CREATE EXTENSION IF NOT EXISTS hstore; SELECT 'a=1'::hstore
 hstore.error_wording3|CREATE EXTENSION IF NOT EXISTS hstore; SELECT 'a=>1,'::hstore
 hstore.drop_in_batch|CREATE EXTENSION IF NOT EXISTS hstore; CREATE TABLE hb1(h hstore); DROP TABLE hb1; SELECT 1
+ts.vector_at_unknown|SELECT to_tsvector('simple', '1 2 3 1') @@ '1 <-> 2', to_tsvector('simple', '1 2 3 1') @@ '2 & 7', 'a:1 b:2'::tsvector @@ 'a & b', 'a & b' @@ 'a:1 b:2'::tsvector
+ts.column_at_unknown|CREATE TABLE tsu1(v tsvector); INSERT INTO tsu1 VALUES ('a b c'), ('d e'); SELECT count(*) FROM tsu1 WHERE v @@ 'a | d'; SELECT count(*) FROM tsu1 WHERE v @@ 'a & d'
+ts.lexize|SELECT ts_lexize('english_stem', 'identity'), ts_lexize('english_stem', 'the'), ts_lexize('simple', 'Hello'), ts_lexize('russian_stem', 'приветствие')
+ts.weights_lowercase|SELECT 'a b:89  ca:23A,64b d:34c'::tsvector, 'a:1a,2b,3c,4d'::tsvector
 noinherit.not_null|CREATE TABLE nn1p(a int NOT NULL NO INHERIT, b int NOT NULL); CREATE TABLE nn1c() INHERITS (nn1p); SELECT column_name, is_nullable FROM information_schema.columns WHERE table_name='nn1c' ORDER BY ordinal_position
 only.with_tableoid|CREATE TABLE ot1p(a int); CREATE TABLE ot1c(b int) INHERITS (ot1p); INSERT INTO ot1p VALUES (1); INSERT INTO ot1c VALUES (2, 2); SELECT relname, x.* FROM ONLY ot1p x, pg_class WHERE x.tableoid = pg_class.oid; SELECT count(*) FROM ot1c c LEFT JOIN ONLY ot1p p ON p.a = c.a
+ts.tsquery_ops_untyped|SELECT 'foo & bar'::tsquery && 'asd', 'foo & bar'::tsquery || 'asd | fg', 'a' <-> 'b & d'::tsquery, 'a & g' <-> 'b | d'::tsquery, 'x'::tsquery <-> 'y'::tsquery
+ts.setweight_filter_literal_arrays|SELECT setweight('a:1,3A asd:1C w:5,6,12B,13A zxc:81,222A,567'::tsvector, 'c', '{a}'), ts_filter('base:7A empir:17 evil:15 first:11 hidden:6A'::tsvector, '{a}')
+ts.scalar_function_in_from|SELECT query, numnode(query) FROM to_tsquery('english', 'moscow & hotels') AS query; SELECT * FROM plainto_tsquery('english', 'The fat rats') q; SELECT v FROM to_tsvector('simple', 'a b a') AS v
+ts.tsvector_concat_untyped|SELECT 'a:3A b:2a'::tsvector || 'ba:1234 a:1B'
+ts.tsvector_input_weights|SELECT strip('w:12B w:13* w:12,5,6 a:1,3* a:3 w asd:1dc asd'::tsvector), 'a:1*,2b3 b:4dc'::tsvector
+ts.tsvector_input_double_weight|SELECT 'a:1cd'::tsvector
+ts.tsvector_syntax_error_state|SELECT $$'' '1' '2'$$::tsvector
+ts.tsquery_syntax_error_state|SELECT 'foo!'::tsquery
+ts.array_nulls|SELECT ts_delete('base hidden rebel spaceship strike'::tsvector, ARRAY['spaceship','leya','rebel', '', NULL]), setweight('a asd w:5,6,12B,13A zxc'::tsvector, 'c', ARRAY['a', 'zxc', '', NULL])
+ts.array_to_tsvector_null|SELECT array_to_tsvector(ARRAY['base', NULL])
+ts.array_to_tsvector_empty|SELECT array_to_tsvector(ARRAY['base', ''])
+ts.filter_null_weight|SELECT ts_filter('base hidden'::tsvector, '{a,b,NULL}')
+ts.position_errors|SELECT '''a'':0'::tsvector; SELECT '''a'':1Z'::tsvector
+ts.tsquery_weight_error|SELECT 'a:Z'::tsquery

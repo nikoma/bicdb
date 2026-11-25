@@ -2811,6 +2811,17 @@ pub(crate) fn projected_binary_expr_pg_type_with_types(
     {
         return Some(pg_type);
     }
+    let text_search_operand = |pg_type: Option<&str>| {
+        pg_type.is_none_or(|pg_type| matches!(pg_type, "unknown" | "text" | "tsquery"))
+    };
+    if vector_distance_operator(op) == Some("<->")
+        && (left_type.as_deref() == Some("tsquery") || right_type.as_deref() == Some("tsquery"))
+        && text_search_operand(left_type.as_deref())
+        && text_search_operand(right_type.as_deref())
+    {
+        // tsquery <-> tsquery is the phrase operator.
+        return Some("tsquery".to_string());
+    }
     if vector_distance_operator(op).is_some() {
         return Some("float8".to_string());
     }
@@ -2875,7 +2886,10 @@ pub(crate) fn projected_binary_expr_pg_type_with_types(
         | BinaryOperator::PGRegexNotMatch
         | BinaryOperator::PGRegexNotIMatch => Some("bool".to_string()),
         BinaryOperator::PGOverlap => {
-            if left_type.as_deref() == Some("tsquery") && right_type.as_deref() == Some("tsquery") {
+            if (left_type.as_deref() == Some("tsquery") || right_type.as_deref() == Some("tsquery"))
+                && text_search_operand(left_type.as_deref())
+                && text_search_operand(right_type.as_deref())
+            {
                 Some("tsquery".to_string())
             } else {
                 Some("bool".to_string())
@@ -2884,6 +2898,13 @@ pub(crate) fn projected_binary_expr_pg_type_with_types(
         BinaryOperator::StringConcat => match (left_type, right_type) {
             (Some(left), _) if left.ends_with("[]") => Some(left),
             (_, Some(right)) if right.ends_with("[]") => Some(right),
+            // An untyped literal concatenated to a text search value.
+            (left, Some(right))
+                if matches!(right.as_str(), "tsvector" | "tsquery")
+                    && left.as_deref().is_none_or(|left| left == "unknown") =>
+            {
+                Some(right)
+            }
             (Some(left), _)
                 if matches!(
                     left.as_str(),

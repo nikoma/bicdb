@@ -3744,6 +3744,18 @@ pub(crate) fn is_one_row_catalog_table_function(table: &str) -> bool {
     matches!(table.to_ascii_lowercase().as_str(), "pg_control_system")
 }
 
+pub(crate) fn is_scalar_text_search_table_function(table: &str) -> bool {
+    let table = table.strip_prefix("pg_catalog.").unwrap_or(table);
+    matches!(
+        table.to_ascii_lowercase().as_str(),
+        "to_tsquery"
+            | "plainto_tsquery"
+            | "phraseto_tsquery"
+            | "websearch_to_tsquery"
+            | "to_tsvector"
+    )
+}
+
 pub(crate) fn validate_zero_arg_table_function(
     table: &str,
     args: &TableFunctionArgs,

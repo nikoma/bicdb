@@ -3094,17 +3094,54 @@ pub(crate) fn eval_binary_expr_value_typed(
         left_type.as_deref() == Some("tsvector") || is_explicit_tsvector_expr(left_expr);
     let right_is_vector =
         right_type.as_deref() == Some("tsvector") || is_explicit_tsvector_expr(right_expr);
-    let left_is_query =
+    let mut left_is_query =
         left_type.as_deref() == Some("tsquery") || matches!(left, SqlValue::TsQuery(_));
-    let right_is_query =
+    let mut right_is_query =
         right_type.as_deref() == Some("tsquery") || matches!(right, SqlValue::TsQuery(_));
     // `jsonb @@ 'path'`: an unknown literal resolves as jsonpath.
+    // An untyped literal opposite a tsvector resolves to tsquery, as in
+    // PostgreSQL's operator resolution (`tsvector @@ unknown`).
+    if matches!(op, BinaryOperator::AtAt) {
+        let untyped = |pg_type: &Option<String>, value: &SqlValue| {
+            pg_type
+                .as_deref()
+                .is_none_or(|pg_type| pg_type == "unknown")
+                && matches!(value, SqlValue::String(_) | SqlValue::Null)
+        };
+        if left_is_vector && !right_is_query && untyped(&right_type, &right) {
+            right_is_query = true;
+        }
+        if right_is_vector && !left_is_query && untyped(&left_type, &left) {
+            left_is_query = true;
+        }
+    }
+    let tsquery_or_untyped = |pg_type: &Option<String>, value: &SqlValue| {
+        pg_type.as_deref() == Some("tsquery")
+            || matches!(value, SqlValue::TsQuery(_))
+            || (pg_type
+                .as_deref()
+                .is_none_or(|pg_type| pg_type == "unknown")
+                && matches!(value, SqlValue::String(_) | SqlValue::Null))
+    };
     let value = if matches!(op, BinaryOperator::AtAt)
         && left_type.as_deref() == Some("jsonb")
         && (right_type.as_deref() == Some("jsonpath")
             || (right_type.is_none() && matches!(right, SqlValue::String(_))))
     {
         eval_jsonpath_operator_value(left, right, true)?
+    } else if vector_distance_operator(op) == Some("<->")
+        && (left_is_query || right_is_query)
+        && tsquery_or_untyped(&left_type, &left)
+        && tsquery_or_untyped(&right_type, &right)
+    {
+        // tsquery <-> tsquery: the phrase operator (FOLLOWED BY).
+        if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
+            SqlValue::Null
+        } else {
+            SqlValue::TsQuery(
+                tsquery_from_sql_value(&left)?.phrase(tsquery_from_sql_value(&right)?, 1),
+            )
+        }
     } else if matches!(op, BinaryOperator::AtAt)
         && ((left_is_vector && right_is_query) || (left_is_query && right_is_vector))
     {
@@ -3129,8 +3166,15 @@ pub(crate) fn eval_binary_expr_value_typed(
             right_type.as_deref().unwrap_or("unknown")
         )));
     } else if matches!(op, BinaryOperator::PGOverlap | BinaryOperator::StringConcat)
-        && left_type.as_deref() == Some("tsquery")
-        && right_type.as_deref() == Some("tsquery")
+        && (left_type.as_deref() == Some("tsquery") || right_type.as_deref() == Some("tsquery"))
+        // An untyped literal opposite a tsquery resolves to tsquery.
+        && [(&left_type, &left), (&right_type, &right)]
+            .iter()
+            .all(|(pg_type, value)| {
+                pg_type.as_deref() == Some("tsquery")
+                    || (pg_type.as_deref().is_none_or(|pg_type| pg_type == "unknown")
+                        && matches!(value, SqlValue::String(_) | SqlValue::Null))
+            })
     {
         if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
             SqlValue::Null
@@ -3156,8 +3200,15 @@ pub(crate) fn eval_binary_expr_value_typed(
     {
         eval_bit_binary_value(left, op, right)?
     } else if matches!(op, BinaryOperator::StringConcat)
-        && matches!(left_type.as_deref(), Some("tsvector"))
-        && matches!(right_type.as_deref(), Some("tsvector"))
+        && (left_type.as_deref() == Some("tsvector") || right_type.as_deref() == Some("tsvector"))
+        // An untyped literal opposite a tsvector resolves to tsvector.
+        && [(&left_type, &left), (&right_type, &right)]
+            .iter()
+            .all(|(pg_type, value)| {
+                pg_type.as_deref() == Some("tsvector")
+                    || (pg_type.as_deref().is_none_or(|pg_type| pg_type == "unknown")
+                        && matches!(value, SqlValue::String(_) | SqlValue::Null))
+            })
     {
         if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
             SqlValue::Null
@@ -3437,9 +3488,19 @@ pub(crate) fn eval_text_search_match_value(
     if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
         return Ok(SqlValue::Null);
     }
+    // An untyped literal opposite a tsvector resolves to tsquery.
+    let untyped = |pg_type: Option<&str>, value: &SqlValue| {
+        pg_type.is_none_or(|pg_type| pg_type == "unknown") && matches!(value, SqlValue::String(_))
+    };
     let (vector, query) = match (left_type, right_type) {
         (Some("tsvector"), Some("tsquery")) => (left.to_cell(), tsquery_from_sql_value(&right)?),
         (Some("tsquery"), Some("tsvector")) => (right.to_cell(), tsquery_from_sql_value(&left)?),
+        (Some("tsvector"), right_type) if untyped(right_type, &right) => {
+            (left.to_cell(), tsquery_from_sql_value(&right)?)
+        }
+        (left_type, Some("tsvector")) if untyped(left_type, &left) => {
+            (right.to_cell(), tsquery_from_sql_value(&left)?)
+        }
         _ => {
             return Err(SqlError::undefined_function(format!(
                 "operator does not exist: {} @@ {}",

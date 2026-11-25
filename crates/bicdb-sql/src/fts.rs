@@ -1364,9 +1364,11 @@ fn difference_positions(left: &[u16], right: &[u16]) -> Vec<u16> {
 }
 
 fn tsquery_syntax_error(input: &str) -> SqlError {
-    SqlError::invalid_text_representation(
-        "tsquery",
+    // PostgreSQL reports text search input errors as syntax errors (42601).
+    SqlError::data_exception(
+        "42601",
         format!("syntax error in tsquery: \"{input}\""),
+        Some("tsquery".to_string()),
     )
 }
 
@@ -1510,6 +1512,46 @@ impl TextSearchConfig {
         };
         normalized.filter(|lexeme| bicdb_core::full_text_term_is_indexable(lexeme))
     }
+}
+
+/// `ts_lexize(dictionary, token)` for the built-in dictionaries: `simple`
+/// (the lower-cased token) and each `<language>_stem` Snowball dictionary
+/// (an empty array for a stop word, else the stem).
+fn ts_lexize(dictionary: &SqlValue, token: &SqlValue) -> Result<SqlValue> {
+    if matches!(dictionary, SqlValue::Null) || matches!(token, SqlValue::Null) {
+        return Ok(SqlValue::Null);
+    }
+    let name = dictionary.to_cell().to_ascii_lowercase();
+    let name = name
+        .strip_prefix("pg_catalog.")
+        .unwrap_or(&name)
+        .to_string();
+    let config = if name == "simple" {
+        TextSearchConfig::Simple
+    } else if let Some(language) = name.strip_suffix("_stem") {
+        match TextSearchConfig::parse(&SqlValue::String(language.to_string())) {
+            Ok(config @ TextSearchConfig::Snowball { .. }) => config,
+            _ => {
+                return Err(SqlError::data_exception(
+                    "42704",
+                    format!("text search dictionary \"{name}\" does not exist"),
+                    None,
+                ))
+            }
+        }
+    } else {
+        return Err(SqlError::data_exception(
+            "42704",
+            format!("text search dictionary \"{name}\" does not exist"),
+            None,
+        ));
+    };
+    let token = token.to_cell();
+    let lexemes = match config.normalize(&token) {
+        Some(lexeme) => vec![SqlValue::String(lexeme)],
+        None => Vec::new(),
+    };
+    Ok(crate::array_value(lexemes))
 }
 
 fn snowball_config(algorithm: Algorithm, stopwords: &'static str) -> TextSearchConfig {
@@ -2486,24 +2528,28 @@ pub(crate) fn fts_doc_terms_parts(value: &SqlValue) -> Result<(u32, u32, Vec<(St
     Ok((total_positions as u32, vector.lexemes.len() as u32, terms))
 }
 
-fn sql_value_string_array(value: &SqlValue) -> Result<Vec<String>> {
+/// The elements of a text[] argument; NULL elements are `None`.
+fn sql_value_nullable_string_array(value: &SqlValue) -> Result<Vec<Option<String>>> {
     match value {
         SqlValue::Json(json) if json.is_array() => json
             .as_array()
             .expect("checked array")
             .iter()
             .map(|value| match value {
-                serde_json::Value::String(value) => Ok(value.clone()),
-                serde_json::Value::Null => Err(SqlError::data_exception(
-                    "22004",
-                    "text search array must not contain nulls",
-                    None,
-                )),
+                serde_json::Value::String(value) => Ok(Some(value.clone())),
+                serde_json::Value::Null => Ok(None),
                 _ => Err(SqlError::undefined_function(
                     "text search array must contain text values",
                 )),
             })
             .collect(),
+        // An array literal (`'{a,b}'`) resolves to the text[] parameter.
+        SqlValue::String(_) => match crate::cast_value_to_array(value.clone(), "text")? {
+            array @ SqlValue::Json(_) => sql_value_nullable_string_array(&array),
+            _ => Err(SqlError::undefined_function(
+                "text search input must be an array",
+            )),
+        },
         _ => Err(SqlError::undefined_function(
             "text search input must be an array",
         )),
@@ -3039,6 +3085,9 @@ pub(crate) fn eval_fts_function_value(
     arg_types: Option<&[Option<String>]>,
 ) -> Result<Option<SqlValue>> {
     let name = name.strip_prefix("pg_catalog.").unwrap_or(name);
+    if name == "ts_lexize" && args.len() == 2 {
+        return ts_lexize(&args[0], &args[1]).map(Some);
+    }
     let first_type = arg_types
         .and_then(|types| types.first())
         .and_then(Option::as_deref);
@@ -3152,7 +3201,12 @@ pub(crate) fn eval_fts_function_value(
             }
             let vector = sql_value_tsvector(&args[0])?;
             let weight = sql_value_weight(&args[1])?;
-            let lexemes = args.get(2).map(sql_value_string_array).transpose()?;
+            // NULL elements of the lexeme filter are ignored.
+            let lexemes = args
+                .get(2)
+                .map(sql_value_nullable_string_array)
+                .transpose()?
+                .map(|lexemes| lexemes.into_iter().flatten().collect::<Vec<_>>());
             SqlValue::String(setweight(&vector, weight, lexemes.as_deref()).to_postgres_text())
         }
         "ts_delete" => {
@@ -3160,22 +3214,47 @@ pub(crate) fn eval_fts_function_value(
             let vector = sql_value_tsvector(&args[0])?;
             let lexemes = match &args[1] {
                 SqlValue::String(value) => vec![value.clone()],
-                value => sql_value_string_array(value)?,
+                value => sql_value_nullable_string_array(value)?
+                    .into_iter()
+                    .flatten()
+                    .collect(),
             };
             SqlValue::String(delete_lexemes(&vector, &lexemes).to_postgres_text())
         }
         "ts_filter" => {
             require_argument_count(name, args, 2)?;
             let vector = sql_value_tsvector(&args[0])?;
-            let weights = sql_value_string_array(&args[1])?
-                .iter()
-                .map(|value| sql_value_weight(&SqlValue::String(value.clone())))
+            let weights = sql_value_nullable_string_array(&args[1])?
+                .into_iter()
+                .map(|value| match value {
+                    Some(value) => sql_value_weight(&SqlValue::String(value)),
+                    None => Err(SqlError::data_exception(
+                        "22004",
+                        "weight array may not contain nulls",
+                        None,
+                    )),
+                })
                 .collect::<Result<Vec<_>>>()?;
             SqlValue::String(filter_weights(&vector, &weights).to_postgres_text())
         }
         "array_to_tsvector" => {
             require_argument_count(name, args, 1)?;
-            let mut lexemes = sql_value_string_array(&args[0])?;
+            let mut lexemes = sql_value_nullable_string_array(&args[0])?
+                .into_iter()
+                .map(|lexeme| match lexeme {
+                    None => Err(SqlError::data_exception(
+                        "22004",
+                        "lexeme array may not contain nulls",
+                        None,
+                    )),
+                    Some(lexeme) if lexeme.is_empty() => Err(SqlError::data_exception(
+                        "2200F",
+                        "lexeme array may not contain empty strings",
+                        None,
+                    )),
+                    Some(lexeme) => Ok(lexeme),
+                })
+                .collect::<Result<Vec<_>>>()?;
             lexemes.retain(|term| bicdb_core::full_text_term_is_indexable(term));
             lexemes.sort();
             lexemes.dedup();
@@ -3428,7 +3507,7 @@ pub(crate) fn fts_function_pg_type(
         "numnode" => Some("int4"),
         "querytree" => Some("text"),
         "setweight" | "ts_delete" | "ts_filter" | "array_to_tsvector" => Some("tsvector"),
-        "tsvector_to_array" => Some("text[]"),
+        "tsvector_to_array" | "ts_lexize" => Some("text[]"),
         "ts_rank" | "ts_rank_cd" => Some("float4"),
         "ts_headline" => arg_types
             .iter()
@@ -3835,12 +3914,24 @@ impl<'a> TsVectorParser<'a> {
             if raw == 0 {
                 return Err(tsvector_position_error(self.input));
             }
-            let weight_byte = self
-                .current_byte()
-                .filter(|byte| byte.is_ascii_alphabetic());
-            let weight =
-                PgTsWeight::parse(weight_byte).ok_or_else(|| tsvector_syntax_error(self.input))?;
-            if weight_byte.is_some() {
+            // As in PostgreSQL's parser: weight letters are case-insensitive,
+            // `*` means A, a second non-D weight is an error, `d` only checks
+            // that no weight was set, and digits after the number are skipped.
+            let mut weight = PgTsWeight::D;
+            while let Some(byte) = self.current_byte() {
+                let letter = match byte.to_ascii_uppercase() {
+                    b'*' => b'A',
+                    letter @ b'A'..=b'D' => letter,
+                    digit if digit.is_ascii_digit() => {
+                        self.offset += 1;
+                        continue;
+                    }
+                    _ => break,
+                };
+                if weight != PgTsWeight::D {
+                    return Err(tsvector_syntax_error(self.input));
+                }
+                weight = PgTsWeight::parse(Some(letter)).expect("weight letter");
                 self.offset += 1;
             }
             positions.push(PgTsPosition {
@@ -3880,16 +3971,18 @@ impl<'a> TsVectorParser<'a> {
 }
 
 fn tsvector_syntax_error(input: &str) -> SqlError {
-    SqlError::invalid_text_representation(
-        "tsvector",
+    SqlError::data_exception(
+        "42601",
         format!("syntax error in tsvector: \"{input}\""),
+        Some("tsvector".to_string()),
     )
 }
 
 fn tsvector_position_error(input: &str) -> SqlError {
-    SqlError::invalid_text_representation(
-        "tsvector",
+    SqlError::data_exception(
+        "42601",
         format!("wrong position info in tsvector: \"{input}\""),
+        Some("tsvector".to_string()),
     )
 }
 

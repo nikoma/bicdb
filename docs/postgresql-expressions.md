@@ -149,3 +149,27 @@ The Oracle preview regression uses its NULL predicate for unknown boolean values
 matching the Oracle 23.26.3 reference observations. That reference rejects
 PostgreSQL's `IS UNKNOWN` spelling. Separate regression
 cases protect the two front ends.
+
+## Text search operators and functions
+
+- An untyped literal next to a text search value takes that value's
+  type, as in PostgreSQL: `tsvector @@ 'a & b'`, `tsquery && 'c'`,
+  `tsquery || 'c'`, `'a' <-> 'b'::tsquery` (the phrase operator) and
+  `tsvector || 'b:2'`.
+- `ts_lexize(dictionary, token)` works for `simple` and each built-in
+  `<language>_stem` dictionary.
+- The scalar functions `to_tsvector`, `to_tsquery`, `plainto_tsquery`,
+  `phraseto_tsquery` and `websearch_to_tsquery` can be used in FROM
+  (`FROM to_tsquery('english', 'x') AS q`).
+- tsvector input follows PostgreSQL's parser: weight letters are
+  case-insensitive, `*` means A, and a second weight on one position is
+  an error. Syntax errors report SQLSTATE 42601.
+- `ts_delete` and `setweight` ignore NULL elements of their lexeme
+  arrays. `ts_filter` rejects NULL weights, and `array_to_tsvector`
+  rejects NULL and empty lexemes, with PostgreSQL's messages.
+
+Limits: these fail instead of answering:
+- `ts_debug`, `ts_parse`, `ts_token_type`, `ts_stat`, `unnest(tsvector)`
+  and `x @@ ANY (array)`
+- `SET default_text_search_config`
+- `CREATE TEXT SEARCH CONFIGURATION/DICTIONARY`

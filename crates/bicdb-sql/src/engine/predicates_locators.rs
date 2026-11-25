@@ -676,6 +676,9 @@ impl<'db> SqlEngine<'db> {
                 validate_zero_arg_table_function(&table, args)?;
                 return Ok(1);
             }
+            if is_scalar_text_search_table_function(&table) {
+                return Ok(1);
+            }
             return Ok(usize::MAX / 2);
         }
         let table = resolve_session_relation_name_if_exists(self.db_ref(), &table);
@@ -901,6 +904,9 @@ impl<'db> SqlEngine<'db> {
                 self.partition_info_row_set(&table, table_alias, args, *with_ordinality)?
             {
                 return Ok(row_set);
+            }
+            if is_scalar_text_search_table_function(&table) && !*with_ordinality {
+                return self.scalar_text_search_row_set(&table, table_alias, args);
             }
             if let Some(row_set) = self.stored_routine_table_function_row_set(
                 &table,
@@ -5258,6 +5264,50 @@ impl<'db> SqlEngine<'db> {
         }))
     }
 
+    /// A scalar text search function in FROM (`FROM to_tsquery('x') AS q`)
+    /// is a one-row relation whose single column is named after the alias.
+    pub(crate) fn scalar_text_search_row_set(
+        &self,
+        table: &str,
+        table_alias: Option<&TableAlias>,
+        args: &TableFunctionArgs,
+    ) -> Result<RowSet> {
+        let function = table
+            .rsplit('.')
+            .next()
+            .unwrap_or(table)
+            .to_ascii_lowercase();
+        let alias_name = table_alias
+            .map(|alias| alias.name.value.clone())
+            .unwrap_or_else(|| function.clone());
+        let source_columns = table_function_source_columns_for_alias(
+            table_alias,
+            &alias_name,
+            vec![function.clone()],
+        );
+        let columns = table_alias_columns(
+            table,
+            &alias_name,
+            table_alias
+                .map(|alias| alias.columns.as_slice())
+                .unwrap_or(&[]),
+            &source_columns,
+        )?;
+        let values = table_function_expr_args(args)?
+            .iter()
+            .map(|expr| self.eval_select_constant_expr(expr))
+            .collect::<Result<Vec<_>>>()?;
+        let value =
+            crate::fts::eval_fts_function_value(&function, &values, None)?.ok_or_else(|| {
+                SqlError::Unsupported(format!("table function {table} is not supported"))
+            })?;
+        let rows = vec![slot_row_from_values(&columns, &[value])];
+        Ok(RowSet {
+            rows,
+            columns: aliased_row_output_columns(&alias_name, &columns),
+        })
+    }
+
     pub(crate) fn regexp_split_to_table_row_set(
         &self,
         table: &str,
@@ -6680,6 +6730,7 @@ impl<'db> SqlEngine<'db> {
             if is_regexp_split_to_table_function(&table)
                 || is_regexp_matches_table_function(&table)
                 || is_generate_subscripts_table_function(&table)
+                || is_scalar_text_search_table_function(&table)
             {
                 let mut source_columns = table_function_source_columns_for_alias(
                     table_alias,

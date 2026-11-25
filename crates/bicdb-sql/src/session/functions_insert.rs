@@ -4008,7 +4008,7 @@ pub(crate) fn validate_integer_text_literals(
         return Ok(());
     }
     for row in &values.rows {
-        for (expr, target) in row.iter().zip(&targets) {
+        for ((expr, target), column) in row.iter().zip(&targets).zip(columns) {
             let Some(pg_type) = target else {
                 continue;
             };
@@ -4016,7 +4016,20 @@ pub(crate) fn validate_integer_text_literals(
                 continue;
             }
             if let SqlValue::String(text) = eval_constant_expr(expr)? {
-                pg_integer_input(&text, pg_type)?;
+                // PostgreSQL's message; the table and column ride along as
+                // the error's fields, as for other assignment errors.
+                pg_integer_input(&text, pg_type).map_err(|error| {
+                    if error.sqlstate() == "22P02" {
+                        SqlError::TypeMismatch {
+                            table: catalog_display_name(&schema.name),
+                            column: column.clone(),
+                            expected: (*pg_type).to_string(),
+                            message: error.to_string(),
+                        }
+                    } else {
+                        error
+                    }
+                })?;
             }
         }
     }

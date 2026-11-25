@@ -365,3 +365,34 @@ severity and SQLSTATE:
   PostgreSQL's lexer does, with `NOTICE: identifier "..." will be truncated to "..."`
   (not inside string literals, comments or dollar-quoted bodies). Statements built
   through the embedding API's parsed-statement entry point are not cut.
+## EXPLAIN in PostgreSQL's plan layout (2026-11)
+
+`EXPLAIN` with an option list (`EXPLAIN (COSTS OFF) ...`, `(VERBOSE)`,
+`(FORMAT JSON|YAML|XML)`, `(ANALYZE, TIMING OFF, ...)`) prints the plan in
+PostgreSQL's node vocabulary and layout: `Seq Scan on t`, `Index Scan using i
+on t` with `Index Cond:`, `Filter:`, `Sort` / `Sort Key:`, `Limit`,
+`Aggregate` / `HashAggregate` with `Group Key:`, `WindowAgg`, `Unique`,
+`Append`, `HashSetOp`, `Hash Join` / `Hash Cond:` over `Hash`, `Nested Loop`
+with `Join Filter:`, `Subquery Scan`, `CTE Scan`, `Function Scan`,
+`Values Scan`, `Result` / `One-Time Filter:`, InitPlans and SubPlans, and
+`Insert on t` / `Update on t` / `Delete on t` (with ON CONFLICT resolution and
+arbiter indexes). Qualifications are printed as PostgreSQL deparses them
+(`(a = 1)`, `(b = 'x'::text)`, `(c = '1'::numeric)`, `(a = ANY
+('{1,2}'::integer[]))`, `~~` for LIKE, dates in the session's DateStyle).
+The plan describes what BicDB executes, using the same access-path
+predictions as the native report, so it differs from PostgreSQL's where the
+planners differ (no Bitmap, Materialize, Memoize or parallel nodes; derived
+tables are Subquery Scans over their materialized rows). INSERT, UPDATE,
+DELETE, CREATE TABLE AS and set operations are explainable, and EXPLAIN
+requires the explained statement's privileges. The option list is parsed as
+PostgreSQL parses it, with its errors (`unrecognized EXPLAIN option`,
+`EXPLAIN option TIMING requires ANALYZE`, ...).
+
+Not yet covered: estimated costs (`COSTS ON` prints the nodes without cost
+figures), `Output:` lists under VERBOSE, `EXPLAIN ANALYZE` of plans with more
+than one scan (refused with `0A000`; single-scan plans and INSERT/UPDATE/DELETE
+over one scan report their actual rows), and `EXPLAIN EXECUTE`. A bare
+`EXPLAIN [ANALYZE] SELECT ...` keeps BicDB's native access-path report
+(`FullScan`, `IndexScan ...`, `EstimatedRows`, `ActualRows`), which tools and
+tests read; statement shapes that report does not cover fall back to the
+PostgreSQL layout.

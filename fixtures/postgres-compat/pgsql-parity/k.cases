@@ -47,3 +47,21 @@ dt.date_bin_result_overflow|SELECT date_bin('365000 days'::interval, '4400-01-01
 dt.date_bin_months|SELECT date_bin('5 months'::interval, timestamp '2020-02-01 01:01:01', timestamp '2001-01-01')
 dt.date_bin_ok|SELECT date_bin('15 minutes'::interval, timestamp '2020-02-11 15:44:17', timestamp '2001-01-01'), date_bin('15 minutes'::interval, timestamp '1990-02-11 15:44:17', timestamp '2001-01-01 00:02:30'), date_bin('1 day'::interval, 'infinity'::timestamp, timestamp '2001-01-01')
 dt.input_valid_big_date|SELECT pg_input_is_valid('6874898-01-01', 'date'), pg_input_is_valid('now', 'date'), pg_input_is_valid('garbage', 'date')
+ex.seq_filter|CREATE TABLE k_ex1 (a int, b text, c numeric); EXPLAIN (COSTS OFF) SELECT * FROM k_ex1 WHERE a = 1; EXPLAIN (COSTS OFF) SELECT * FROM k_ex1 WHERE a > 1 AND b = 'x'; EXPLAIN (COSTS OFF) SELECT a FROM k_ex1 WHERE c = 1
+ex.sort_limit|CREATE TABLE k_ex2 (a int, b text); EXPLAIN (COSTS OFF) SELECT * FROM k_ex2 ORDER BY a; EXPLAIN (COSTS OFF) SELECT * FROM k_ex2 ORDER BY b DESC, a LIMIT 3
+ex.aggregate|CREATE TABLE k_ex3 (a int, b int); EXPLAIN (COSTS OFF) SELECT count(*) FROM k_ex3; EXPLAIN (COSTS OFF) SELECT count(*) FROM k_ex3 WHERE b = 2
+ex.result|EXPLAIN (COSTS OFF) SELECT 1; EXPLAIN (COSTS OFF) SELECT 1 WHERE false
+ex.dml|CREATE TABLE k_ex4 (a int, b text); EXPLAIN (COSTS OFF) INSERT INTO k_ex4 VALUES (1, 'x'); EXPLAIN (COSTS OFF) INSERT INTO k_ex4 VALUES (1, 'x'), (2, 'y'); EXPLAIN (COSTS OFF) UPDATE k_ex4 SET b = 'z' WHERE a = 1; EXPLAIN (COSTS OFF) DELETE FROM k_ex4 WHERE a < 3; SELECT count(*) FROM k_ex4
+ex.union_all|CREATE TABLE k_ex5 (a int); EXPLAIN (COSTS OFF) SELECT a FROM k_ex5 UNION ALL SELECT a FROM k_ex5
+ex.between_like_in|CREATE TABLE k_ex6 (a int, b text, d date); SET datestyle = 'Postgres, MDY'; EXPLAIN (COSTS OFF) SELECT * FROM k_ex6 WHERE d BETWEEN '1997-01-01' AND '1998-01-01'; EXPLAIN (COSTS OFF) SELECT * FROM k_ex6 WHERE b LIKE 'foo%'; EXPLAIN (COSTS OFF) SELECT * FROM k_ex6 WHERE a IN (1, 2, 3); EXPLAIN (COSTS OFF) SELECT * FROM k_ex6 WHERE b IS NULL
+ex.alias|CREATE TABLE k_ex7 (a int); EXPLAIN (COSTS OFF) SELECT * FROM k_ex7 t WHERE t.a = 5
+ex.options_errors|EXPLAIN (BOGUS) SELECT 1
+ex.format_value_error|EXPLAIN (FORMAT CSV) SELECT 1
+ex.timing_requires_analyze|EXPLAIN (TIMING) SELECT 1
+ex.json|CREATE TABLE k_ex8 (a int); EXPLAIN (COSTS OFF, FORMAT JSON) SELECT * FROM k_ex8 WHERE a = 1
+ex.yaml|CREATE TABLE k_ex9 (a int); EXPLAIN (COSTS OFF, FORMAT YAML) SELECT * FROM k_ex9
+ex.xml|CREATE TABLE k_ex10 (a int); EXPLAIN (COSTS OFF, FORMAT XML) SELECT * FROM k_ex10
+ex.analyze_insert|CREATE TABLE k_ex11 (a int); EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF, BUFFERS OFF) INSERT INTO k_ex11 VALUES (1); SELECT count(*) FROM k_ex11
+ex.ctas|EXPLAIN (COSTS OFF) CREATE TABLE k_ex12 AS SELECT 1 AS a
+ex.group|CREATE TABLE k_ex13 (a int, b int); EXPLAIN (COSTS OFF) SELECT a, count(*) FROM k_ex13 GROUP BY a
+ex.between_symmetric|CREATE TABLE k_ex16 (f1 date); SET datestyle = 'Postgres, MDY'; EXPLAIN (COSTS OFF) SELECT count(*) FROM k_ex16 WHERE f1 BETWEEN SYMMETRIC '1997-01-01' AND '1998-01-01'

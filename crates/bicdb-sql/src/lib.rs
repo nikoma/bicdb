@@ -346,6 +346,7 @@ pub(crate) use jsonb::{
     json_object_aggregate_key, json_text_array_path, jsonb_index_key_token, jsonb_index_terms,
 };
 pub use jsonb::{postgres_jsonb_pretty_text, postgres_jsonb_text};
+mod explain_format;
 mod jsonpath;
 mod posix_tz;
 pub(crate) use jsonpath::{

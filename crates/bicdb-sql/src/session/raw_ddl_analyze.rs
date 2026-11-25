@@ -1606,9 +1606,7 @@ impl<'db> SqlSession<'db> {
             Statement::CreatePolicy(create_policy) => self.execute_create_policy(create_policy),
             Statement::AlterPolicy(alter_policy) => self.execute_alter_policy(alter_policy),
             Statement::DropPolicy(drop_policy) => self.execute_drop_policy(drop_policy),
-            Statement::Explain {
-                analyze, statement, ..
-            } => self.sql_engine().execute_explain(statement, *analyze),
+            Statement::Explain { .. } => self.execute_explain_statement(statement),
             other => Err(SqlError::Unsupported(format!(
                 "unsupported SQL statement {other}"
             ))),

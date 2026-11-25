@@ -412,9 +412,19 @@ impl Rewriter<'_, '_> {
         if let Some(order_by) = query.order_by.as_mut() {
             if let OrderByKind::Expressions(keys) = &mut order_by.kind {
                 for (key, target) in keys.iter_mut().zip(targets) {
-                    if let Some(target) = target {
-                        key.expr = target;
-                        self.changed = true;
+                    match target {
+                        // The key names an output column that is an integer constant
+                        // (`SELECT 1 AS x ORDER BY x`, `SELECT 1 ORDER BY 1`). Writing the
+                        // constant back would read as a position again on the next pass: the
+                        // query was rewritten and re-executed until the stack overflowed and the
+                        // server aborted. Leave such a key as written; sorting by a constant is a
+                        // no-op, and grouping sets resolve the alias by name.
+                        Some(target) if ordinal(&target).is_some() => {}
+                        Some(target) => {
+                            key.expr = target;
+                            self.changed = true;
+                        }
+                        None => {}
                     }
                 }
             }

@@ -1455,6 +1455,7 @@ dependencies = [
  "sha2 0.10.9",
  "smallvec",
  "sqlparser",
+ "stacker",
  "sxd-document-no-unsafe",
  "sxd-xpath-no-unsafe",
  "tempfile",

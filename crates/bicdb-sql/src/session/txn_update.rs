@@ -4047,6 +4047,19 @@ impl<'db> SqlSession<'db> {
         args: &[SqlValue],
         arg_types: &[Option<String>],
     ) -> Result<Option<SqlValue>> {
+        // A function calling itself recurses through here; fail with 54001, never abort.
+        crate::stack_depth::guarded(|| {
+            self.eval_stored_function_value_guarded(name, args, arg_types)
+        })
+    }
+
+    #[inline(never)]
+    fn eval_stored_function_value_guarded(
+        &mut self,
+        name: &str,
+        args: &[SqlValue],
+        arg_types: &[Option<String>],
+    ) -> Result<Option<SqlValue>> {
         let Some(routine) =
             resolve_routine_for_call(self.db_ref(), RoutineKind::Function, name, arg_types, args)?
         else {

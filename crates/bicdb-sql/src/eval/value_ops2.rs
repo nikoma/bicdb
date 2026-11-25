@@ -819,7 +819,10 @@ fn eval_jsonb_subscript_assign(args: &[SqlValue]) -> Result<SqlValue> {
 pub(crate) fn eval_array_assign(args: &[SqlValue]) -> Result<SqlValue> {
     require_arg_count("bicdb_array_assign", args, 5)?;
     // `jsonb_col['key'] = value`: a jsonb subscript assignment.
-    if matches!(&args[0], SqlValue::Json(json) if !json.is_array())
+    // An array with non-default lower bounds is stored as the
+    // `$bicdb_array_input` wrapper object; it is an array, not jsonb.
+    if matches!(&args[0], SqlValue::Json(json)
+        if !json.is_array() && json.get("$bicdb_array_input").is_none())
         || matches!(&args[0], SqlValue::JsonText(_))
         || nullable_array_values(&args[1], "array assignment")?.is_some_and(|values| {
             values.iter().any(

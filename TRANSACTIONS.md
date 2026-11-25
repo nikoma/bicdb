@@ -166,7 +166,7 @@ Run strict verification before recovery when operators need corruption to fail
 closed:
 
 ```bash
-cargo run -p bicdb-cli -- check ./testdb
+cargo run -p bicdb -- check ./testdb
 ```
 
 See `docs/crash-safety.md` for the full repair and restore matrix.
@@ -174,7 +174,7 @@ See `docs/crash-safety.md` for the full repair and restore matrix.
 ## Benchmark
 
 ```bash
-cargo run -p bicdb-cli --features bench -- bench transactions --records 100000 --batch-size 1000
+cargo run -p bicdb --features bench -- bench transactions --records 100000 --batch-size 1000
 ```
 
 The benchmark reports:

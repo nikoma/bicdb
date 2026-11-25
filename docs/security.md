@@ -282,7 +282,7 @@ Run the release-blocking evidence suite locally and in CI with:
 ```bash
 BICDB_PROTECTED_FIELD_ENCRYPTION_KEY=<64-hex-random-key> \
 BICDB_PROTECTED_LOOKUP_HMAC_KEY=<different-64-hex-random-key> \
-cargo run -p bicdb-cli -- security protected-data-release-gate /path/to/db --source-root . --json
+cargo run -p bicdb -- security protected-data-release-gate /path/to/db --source-root . --json
 ```
 
 Expected successful output is a JSON `ProtectedDataSecurityEvidenceReport` with
@@ -316,7 +316,7 @@ For production transactional deployments, layer the operational hardening gate i
 protected-data evidence:
 
 ```bash
-cargo run -p bicdb-cli -- security production-gate /path/to/db \
+cargo run -p bicdb -- security production-gate /path/to/db \
   --profile production-server \
   --host 0.0.0.0 \
   --require-auth \

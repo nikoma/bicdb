@@ -35,6 +35,9 @@ impl NativeInitialDataAdmission {
         request: &NativeJointHandoffStepRequestV1,
         parent: &CancellationToken,
     ) -> Result<NativeJointHandoffStepReplyV1> {
+        // After the request arrived, so not earlier than the instant it left
+        // its observer: see `observe_bridge_phase`.
+        let served_from = std::time::Instant::now();
         let token = request.cancellation(parent)?;
         if request.operation.bridge_decision_sha256().is_none() {
             return Err(invalid(
@@ -84,6 +87,7 @@ impl NativeInitialDataAdmission {
                 *kind,
                 fresh,
                 &mut writer_audit,
+                served_from,
                 &token,
             )?,
             // A survivor keeps its writer State and socket: its own retained
@@ -253,6 +257,13 @@ impl NativeInitialDataAdmission {
     ) -> Result<(NativeJointHandoffStepOutcomeV1, (u64, u64, Uuid))> {
         let range = request.range_id;
         let mut anchor = fresh.anchor;
+        let part = std::cell::Cell::new(std::time::Instant::now());
+        let traced = |what: &str| {
+            crate::distribution_native_host::range_move_trace(
+                part.replace(std::time::Instant::now()),
+                || format!("member prepare part {range} survivor: {what}"),
+            )
+        };
         // What this member's own fresh metadata shows finished is released
         // first and never counts against the capacity.
         let own_topology = fresh.own.committed_topology(fresh.business)?;
@@ -278,6 +289,7 @@ impl NativeInitialDataAdmission {
             range,
             token,
         )?;
+        traced("decision confirmed");
         let domains = self
             .writer_data_domains
             .upgrade()
@@ -303,14 +315,25 @@ impl NativeInitialDataAdmission {
         let mut prepared = Some(fresh);
         let mut metadata_substeps = 0u32;
         // Fresh OWN for one sub-step: the request's first observation while it
-        // is still live, otherwise a new one under the same full peer check.
+        // still leaves a sub-step's budget, otherwise a new one under the same
+        // full peer check. A sub-step runs under its observation, so one that
+        // is about to expire would only fail that sub-step on every repetition.
         let mut own = |anchor: &mut (u64, u64, Uuid)| -> Result<Option<BridgeStepOwn>> {
             if metadata_substeps != 0 && bridge_remaining(token)? < MIN_BRIDGE_SUBSTEP_BUDGET {
                 return Ok(None);
             }
             metadata_substeps += 1;
             let fresh = match prepared.take() {
-                Some(fresh) if fresh.own.require_live_request(fresh.business).is_ok() => fresh,
+                Some(fresh)
+                    if fresh.own.require_live_request(fresh.business).is_ok()
+                        && fresh
+                            .own
+                            .deadline()
+                            .saturating_duration_since(std::time::Instant::now())
+                            >= MIN_BRIDGE_SUBSTEP_BUDGET =>
+                {
+                    fresh
+                }
                 _ => acquire_bridge_step_own(
                     &owners.provider,
                     &owners.transport,
@@ -347,6 +370,7 @@ impl NativeInitialDataAdmission {
                 )?;
                 // Retained by the original host BEFORE the first native write.
                 domains.retain(range, attempt)?;
+                traced("CLOSED writer transition begun");
             }
             if domains.closed(range).is_err() {
                 let Some(BridgeStepOwn { own, business, .. }) = own(&mut anchor)? else {
@@ -360,6 +384,7 @@ impl NativeInitialDataAdmission {
                     token,
                 )?;
                 domains.advance_closed(range, &coordinator, &policy)?;
+                traced("CLOSED writer transition advanced");
             }
             let closed = domains.closed(range)?;
             closed.require_lifetime()?;
@@ -369,12 +394,14 @@ impl NativeInitialDataAdmission {
             // The real lease leaves the transition exactly once and is kept
             // here before the fallible native preparation.
             step.lease = Some(domains.take_joint_lease(range, &db)?);
+            traced("lease taken");
         }
         let closed = domains.closed(range)?;
         closed.require_lifetime()?;
         let Some(BridgeStepOwn { own, business, .. }) = own(&mut anchor)? else {
             return Ok((step.prepare_outcome(Stage::BridgePreparation)?, anchor));
         };
+        traced("own metadata for the preparation");
         // The actual attached local MStore point BEFORE any service guard.
         let point = ClusterDataNodeService::capture_actual_joint_metadata_point(
             &owners.service,
@@ -382,6 +409,7 @@ impl NativeInitialDataAdmission {
             business,
             token,
         )?;
+        traced("metadata point captured");
         let session = step.session().clone();
         let lease = step
             .lease
@@ -398,10 +426,12 @@ impl NativeInitialDataAdmission {
             )?;
             // The decision this member itself protected and sees committed.
             request.require_decision(committed.data())?;
+            traced("committed decision observed");
             service.prepare_local_joint_serving_with_closed_writer(
                 closed, committed, lease, &session,
             )?
         };
+        traced("native preparation");
         // Native facts/State/A/pin enter retained custody BEFORE any later
         // check or reply can fail.
         step.retain_custody(NativeJointPreparationCustody::retain(

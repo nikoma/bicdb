@@ -10,7 +10,7 @@ authenticated encryption for frame payloads.
 Use `check` before opening a database when you need strict corruption detection:
 
 ```bash
-cargo run -p bicdb-cli -- check ./testdb
+cargo run -p bicdb -- check ./testdb
 ```
 
 `check` validates:
@@ -27,14 +27,14 @@ cargo run -p bicdb-cli -- check ./testdb
 Encrypted databases use the same key options as `verify`:
 
 ```bash
-cargo run -p bicdb-cli -- check ./securedb --key "$BICDB_KEY"
+cargo run -p bicdb -- check ./securedb --key "$BICDB_KEY"
 ```
 
 Use `--json` when the integrity report is release evidence or needs to be
 ingested by automation:
 
 ```bash
-cargo run -p bicdb-cli -- integrity check ./testdb --json
+cargo run -p bicdb -- integrity check ./testdb --json
 ```
 
 `bicdb integrity check` is the database-only form of the same strict checker.
@@ -52,7 +52,7 @@ Backups are checked explicitly because they can be stored outside the database
 directory:
 
 ```bash
-cargo run -p bicdb-cli -- check ./testdb \
+cargo run -p bicdb -- check ./testdb \
   --backup ./testdb-full.bicbackup \
   --backup-key "$BICDB_BACKUP_KEY"
 ```
@@ -61,8 +61,8 @@ Use `backup verify` to validate one archive or an ordered full/incremental
 chain, and `backup drill` to rehearse restore into an isolated path:
 
 ```bash
-cargo run -p bicdb-cli -- backup verify ./testdb-full.bicbackup ./testdb-inc.bicbackup
-cargo run -p bicdb-cli -- backup drill ./testdb-full.bicbackup \
+cargo run -p bicdb -- backup verify ./testdb-full.bicbackup ./testdb-inc.bicbackup
+cargo run -p bicdb -- backup drill ./testdb-full.bicbackup \
   --json-out ./backup-drill.json
 ```
 

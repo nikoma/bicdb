@@ -19,7 +19,7 @@ infrastructure are needed. The test runs with `:ssh {:dummy? true}` and
 `jepsen.bicdb.db` shells out directly.
 
 ```sh
-cargo build -p bicdb-cli                    # BICDB_BIN defaults to target/debug/bicdb
+cargo build -p bicdb                    # BICDB_BIN defaults to target/debug/bicdb
 ./run.sh --node n1 --time-limit 60 --concurrency 5
 ./run.sh --node n1 --time-limit 60 --concurrency 5 --crash   # with SIGKILL faults
 ```

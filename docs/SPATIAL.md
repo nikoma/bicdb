@@ -563,11 +563,11 @@ The spatial benchmark suite uses synthetic but deterministic fixtures so runs
 are reproducible and do not require map downloads:
 
 ```sh
-cargo run -p bicdb-cli --features bench -- bench spatial --points 100000 \
+cargo run -p bicdb --features bench -- bench spatial --points 100000 \
   --json-out target/spatial.json --csv-out target/spatial.csv
-cargo run -p bicdb-cli --features bench -- bench spatial-nearest --points 100000 --queries 10000 \
+cargo run -p bicdb --features bench -- bench spatial-nearest --points 100000 --queries 10000 \
   --json-out target/spatial-nearest.json --csv-out target/spatial-nearest.csv
-cargo run -p bicdb-cli --features bench -- bench route --nodes 10000 --edges 30000 \
+cargo run -p bicdb --features bench -- bench route --nodes 10000 --edges 30000 \
   --json-out target/route.json --csv-out target/route.csv
 ```
 
@@ -581,9 +581,9 @@ storage and reports route query p50/p95/p99 and database size.
 CI and local smoke checks can use reduced fixtures, for example:
 
 ```sh
-cargo run -p bicdb-cli --features bench -- bench spatial --points 10000
-cargo run -p bicdb-cli --features bench -- bench spatial-nearest --points 10000 --queries 100
-cargo run -p bicdb-cli --features bench -- bench route --nodes 1000 --edges 3000
+cargo run -p bicdb --features bench -- bench spatial --points 10000
+cargo run -p bicdb --features bench -- bench spatial-nearest --points 10000 --queries 100
+cargo run -p bicdb --features bench -- bench route --nodes 1000 --edges 3000
 ```
 
 Checked-in sample reports from a local debug run are available in

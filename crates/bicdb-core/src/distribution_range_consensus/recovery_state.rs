@@ -224,14 +224,76 @@ pub(super) fn catalog_normal_recovery_unfinished(
     catalog: &RangeWriteCatalog,
     range_id: RangeId,
 ) -> bool {
-    catalog.recovery_fences.get(&range_id).is_some_and(|fence| {
-        matches!(
-            fence.scope.purpose,
-            MetadataRecoveryRolePurpose::NormalRecovery
-        ) && !matches!(
-            fence.phase,
-            RecoveryFencePhase::NativeActivated(_) | RecoveryFencePhase::Completed { .. }
+    catalog_unfinished_normal_recovery(catalog, range_id).is_some()
+}
+
+/// The unfinished normal recovery record a member's range catalogue holds,
+/// as an operator must be able to name it. Diagnostic DATA only: it is read
+/// from the member's own catalogue, admits nothing and proves nothing.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct UnfinishedNormalRecoveryV1 {
+    /// The range epoch the recovery was fenced for.
+    pub range_epoch: u64,
+    /// The epoch of the member's range log now.
+    pub log_epoch: u64,
+    pub recovery_nonce: Uuid,
+    /// The node that fenced the recovery.
+    pub initiator_node_id: ClusterNodeId,
+    /// `active` (fenced), `native_prepared` or `native_completed`.
+    pub phase: String,
+}
+impl std::fmt::Display for UnfinishedNormalRecoveryV1 {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "recovery record {} in phase {}, fenced by {} for range epoch {} (the member's range log is at epoch {})",
+            self.recovery_nonce,
+            self.phase,
+            self.initiator_node_id,
+            self.range_epoch,
+            self.log_epoch
         )
+    }
+}
+
+/// The record `catalog_normal_recovery_unfinished` answers for.
+///
+/// The record's epoch is deliberately not compared with the log's. A
+/// prepared or completed record of another epoch than the log is a
+/// catalogue the loader refuses, so only a fenced (`active`) record can
+/// stand below the log's epoch, and that one is not known to be dead: a
+/// normal recovery may be fenced below the log's epoch while a handoff
+/// promise holds the log at its activation epoch (`preflight` of the fence),
+/// and such a recovery is live.
+pub(super) fn catalog_unfinished_normal_recovery(
+    catalog: &RangeWriteCatalog,
+    range_id: RangeId,
+) -> Option<UnfinishedNormalRecoveryV1> {
+    let fence = catalog.recovery_fences.get(&range_id)?;
+    if !matches!(
+        fence.scope.purpose,
+        MetadataRecoveryRolePurpose::NormalRecovery
+    ) {
+        return None;
+    }
+    let phase = match fence.phase {
+        RecoveryFencePhase::NativeActivated(_) | RecoveryFencePhase::Completed { .. } => {
+            return None
+        }
+        RecoveryFencePhase::Active => "active",
+        RecoveryFencePhase::NativePrepared(_) => "native_prepared",
+        RecoveryFencePhase::NativeCompleted(_) => "native_completed",
+    };
+    Some(UnfinishedNormalRecoveryV1 {
+        range_epoch: fence.scope.range_epoch,
+        log_epoch: catalog
+            .ranges
+            .get(&range_id)
+            .map_or(0, |log| log.current_epoch),
+        recovery_nonce: fence.scope.recovery_nonce,
+        initiator_node_id: fence.scope.initiator_node_id.clone(),
+        phase: phase.into(),
     })
 }
 
@@ -708,6 +770,106 @@ impl RangeWriteStore {
     pub(super) fn recovery_range_catalog_sha256(&self, range_id: RangeId) -> Result<String> {
         self.recovery_range_catalog_sha256_with_phase(range_id, None)
     }
+    /// Diagnostic only: one short digest per part of the range's recovery
+    /// catalogue commitment, so a refusal can name the part that changed.
+    /// Never compared for a decision.
+    pub(super) fn recovery_range_catalog_part_digests(
+        &self,
+        range_id: RangeId,
+    ) -> Vec<(&'static str, String)> {
+        fn digest<T: serde::Serialize>(value: &T) -> String {
+            serde_json::to_vec(value)
+                .map(|bytes| hex::encode(Sha256::digest(&bytes))[..12].to_string())
+                .unwrap_or_else(|_| "unserializable".into())
+        }
+        let saved = self.catalog.recovery_fences.get(&range_id);
+        vec![
+            ("range_log", digest(&self.catalog.ranges.get(&range_id))),
+            ("fence_scope", digest(&saved.map(|s| &s.scope))),
+            ("fence_phase", digest(&saved.map(|s| &s.phase))),
+            (
+                "fence_local",
+                digest(&saved.map(|s| {
+                    (
+                        &s.local_node_id,
+                        s.local_member_incarnation,
+                        &s.native_database_incarnation,
+                    )
+                })),
+            ),
+            (
+                "historical_certifications",
+                digest(&saved.map(|s| &s.historical_certifications)),
+            ),
+            ("retired_nonces", digest(&saved.map(|s| &s.retired_nonces))),
+            (
+                "handoff_promise",
+                digest(&self.catalog.handoff_promises.get(&range_id)),
+            ),
+            (
+                "image_install_intent",
+                digest(&self.catalog.image_install_intents.get(&range_id)),
+            ),
+            (
+                "native_image_base",
+                digest(&self.catalog.native_image_bases.get(&range_id)),
+            ),
+            (
+                "backup_fence",
+                digest(&self.catalog.backup_fences.get(&range_id)),
+            ),
+            (
+                "sparse_committed",
+                digest(
+                    &self
+                        .catalog
+                        .sparse_committed_decisions
+                        .as_ref()
+                        .and_then(|m| m.get(&range_id)),
+                ),
+            ),
+            (
+                "installing_certifications",
+                digest(
+                    &self
+                        .catalog
+                        .installing_committed_certifications
+                        .as_ref()
+                        .and_then(|m| m.get(&range_id)),
+                ),
+            ),
+            (
+                "installing_handovers",
+                digest(
+                    &self
+                        .catalog
+                        .installing_recovery_handovers
+                        .as_ref()
+                        .and_then(|m| m.get(&range_id)),
+                ),
+            ),
+            (
+                "native_abort_control",
+                digest(
+                    &self
+                        .catalog
+                        .native_abort_protocol
+                        .as_ref()
+                        .and_then(|p| p.range(range_id)),
+                ),
+            ),
+            (
+                "current_joint",
+                digest(
+                    &self
+                        .catalog
+                        .current_joint_recoveries
+                        .as_ref()
+                        .and_then(|m| m.get(&range_id)),
+                ),
+            ),
+        ]
+    }
     pub(super) fn recovery_range_catalog_sha256_with_phase(
         &self,
         range_id: RangeId,
@@ -1143,6 +1305,13 @@ impl RangeWriteStore {
     /// only continue under the range configuration it was fenced for.
     pub(crate) fn normal_recovery_unfinished(&self, range_id: RangeId) -> bool {
         catalog_normal_recovery_unfinished(&self.catalog, range_id)
+    }
+    /// Read-only: that record, named for an operator.
+    pub(crate) fn unfinished_normal_recovery(
+        &self,
+        range_id: RangeId,
+    ) -> Option<UnfinishedNormalRecoveryV1> {
+        catalog_unfinished_normal_recovery(&self.catalog, range_id)
     }
     pub(crate) fn recovery_store_open_id(&self) -> Uuid {
         self.open_id

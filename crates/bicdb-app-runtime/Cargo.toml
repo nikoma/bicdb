@@ -1,10 +1,18 @@
 [package]
 name = "bicdb-app-runtime"
-version = "1.0.523-beta"
+version = "1.0.529"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
-description = "Capability-mediated batteries-included application runtime for BicDB"
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Capability-mediated application runtime of the BicDB database. Part of BicDB, one database for SQL (PostgreSQL protocol), a Redis-compatible cache, search and vectors; install `bicdb`"
+readme = "README.md"
+keywords = ["bicdb", "database"]
+categories = ["database-implementations"]
+# Build inputs only: test suites, fixtures and examples stay in the repository.
+include = ["/README.md", "/src/**", "/Cargo.toml", "/LICENSE", "/NOTICE", "/THIRD_PARTY_NOTICES.md"]
 
 [dependencies]
 aes-gcm.workspace = true
@@ -13,12 +21,12 @@ base64.workspace = true
 axum.workspace = true
 axum-server.workspace = true
 bytes.workspace = true
-bicdb-core = { path = "../bicdb-core", version = "1.0.523-beta" }
-bicdb-lua = { path = "../bicdb-lua", version = "1.0.523-beta" }
-bicdb-script = { path = "../bicdb-script", version = "1.0.523-beta" }
-bicdb-workflow = { path = "../bicdb-workflow", version = "1.0.523-beta" }
-bicdb-extension = { path = "../bicdb-extension", version = "1.0.523-beta", features = ["http"] }
-bicdb-sql = { path = "../bicdb-sql", version = "1.0.523-beta", default-features = false }
+bicdb-core = { path = "../bicdb-core", version = "=1.0.529" }
+bicdb-lua = { path = "../bicdb-lua", version = "=1.0.529" }
+bicdb-script = { path = "../bicdb-script", version = "=1.0.529" }
+bicdb-workflow = { path = "../bicdb-workflow", version = "=1.0.529" }
+bicdb-extension = { path = "../bicdb-extension", version = "=1.0.529", features = ["http"] }
+bicdb-sql = { path = "../bicdb-sql", version = "=1.0.529", default-features = false }
 chacha20poly1305.workspace = true
 chrono.workspace = true
 chrono-tz = "0.10"

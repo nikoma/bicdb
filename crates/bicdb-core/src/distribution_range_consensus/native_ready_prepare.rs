@@ -158,6 +158,9 @@ pub(crate) struct PreparedNativeRecoveryReady {
 struct NativeReadyCatalogueBinding {
     catalog_sha256: String,
     native_completed_serving_sha256: Option<String>,
+    // Diagnostic only: the part digests behind `catalog_sha256`, so a stale
+    // refusal can name the part that changed. Never compared for a decision.
+    catalog_parts: Vec<(&'static str, String)>,
 }
 impl PreparedNativeRecoveryReady {
     pub(crate) fn require_completed_for_activation(
@@ -304,9 +307,27 @@ impl PreparedNativeRecoveryReady {
             || binding.catalog_sha256 != store.recovery_range_catalog_sha256(self.scope.range_id)?
             || self.point != NativePreparedPoint::from_actual(&self.physical)
         {
-            return Err(range_write_error(
-                "owned native readiness has stale actual catalogue/materialization",
-            ));
+            let now = store.recovery_range_catalog_part_digests(self.scope.range_id);
+            let changed = binding
+                .catalog_parts
+                .iter()
+                .zip(now.iter())
+                .filter(|(a, b)| a.1 != b.1)
+                .map(|(a, _)| a.0)
+                .collect::<Vec<_>>();
+            return Err(range_write_error(format!(
+                "owned native readiness has stale actual catalogue/materialization (diagnostic: store_open_changed={} point_changed={} saved_phase={} binding_completed={} changed_parts={changed:?})",
+                self.store_open_id != store.open_id,
+                self.point != NativePreparedPoint::from_actual(&self.physical),
+                match &saved.phase {
+                    RecoveryFencePhase::Active => "Active",
+                    RecoveryFencePhase::NativePrepared(_) => "NativePrepared",
+                    RecoveryFencePhase::NativeCompleted(_) => "NativeCompleted",
+                    RecoveryFencePhase::NativeActivated(_) => "NativeActivated",
+                    _ => "other",
+                },
+                binding.native_completed_serving_sha256.is_some(),
+            )));
         }
         match (&saved.phase, &binding.native_completed_serving_sha256) {
             (RecoveryFencePhase::NativePrepared(point), None) if point == &self.point => {}
@@ -433,6 +454,7 @@ impl PreparedNativeRecoveryReady {
         let updated = NativeReadyCatalogueBinding {
             catalog_sha256: store.recovery_range_catalog_sha256(self.scope.range_id)?,
             native_completed_serving_sha256: Some(completed.native_serving_sha256.clone()),
+            catalog_parts: store.recovery_range_catalog_part_digests(self.scope.range_id),
         };
         *self
             .binding
@@ -1039,6 +1061,7 @@ impl RangeWriteStore {
             binding: Mutex::new(NativeReadyCatalogueBinding {
                 catalog_sha256: self.recovery_range_catalog_sha256(scope.range_id)?,
                 native_completed_serving_sha256,
+                catalog_parts: self.recovery_range_catalog_part_digests(scope.range_id),
             }),
         };
         #[cfg(test)]

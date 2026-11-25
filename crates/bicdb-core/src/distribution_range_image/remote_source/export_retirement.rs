@@ -9,11 +9,16 @@ mod work_diagnostics;
 #[cfg(test)]
 pub(super) use work_diagnostics::ExportWorkDiagnostics;
 
+/// Observations of retirement attempts that did not complete, kept at once.
+const MAX_EXPORT_OBSERVATIONS: usize = 8;
 #[derive(Default)]
 pub(super) struct RetainedExportRetirement {
-    requests: BTreeMap<Uuid, Vec<u8>>,
-    // Even a failed post-retention check keeps the exact actual observation.
-    // No retry can overwrite or silently evict an uncertain attempt.
+    // Exact request bytes and the end of the request's own budget.
+    requests: BTreeMap<Uuid, (Vec<u8>, Instant)>,
+    // Even a failed post-retention check keeps the exact actual observation,
+    // and no retry overwrites it. An attempt changes this source only when
+    // it completes (one step, under this custody); the failed ones are kept
+    // for diagnosis, the latest `MAX_EXPORT_OBSERVATIONS` of them.
     observations: Vec<RetainedExportRetirementAttempt>,
     completed: Option<NativeSourceExportRetiredV1>,
 }
@@ -441,15 +446,28 @@ impl NativeRetainedRemoteImageSource {
             .export_retirement
             .try_lock()
             .ok_or_else(|| invalid("export retirement request custody busy"))?;
-        if let Some(old) = state.requests.get(&request.challenge) {
+        if let Some((old, _)) = state.requests.get(&request.challenge) {
             if old != &bytes {
                 return Err(invalid("export retirement challenge changed exact request"));
             }
         } else {
+            // An exact request is bound while its own budget can still be running:
+            // its reply, if any, was bound to its exact bytes, and nothing here is
+            // retained for it afterwards. A request whose budget ended frees its
+            // slot, so repetition over time cannot use the table up.
+            let now = Instant::now();
+            state
+                .requests
+                .retain(|_, (_, live_until)| now < *live_until);
             if state.requests.len() >= 64 {
-                return Err(invalid("export retirement request capacity; no eviction"));
+                return Err(invalid(
+                    "export retirement request custody busy: 64 exact requests are still running; none is evicted",
+                ));
             }
-            state.requests.insert(request.challenge, bytes);
+            state.requests.insert(
+                request.challenge,
+                (bytes, now + Duration::from_millis(request.budget_ms)),
+            );
         }
         Ok(state.completed.clone())
     }
@@ -497,10 +515,14 @@ impl NativeRetainedRemoteImageSource {
                 "completed export cannot execute a second transition",
             ));
         }
-        if state.observations.len() >= 8 {
-            return Err(invalid(
-                "export NEW observation custody capacity; no eviction",
-            ));
+        // Not completed (checked above), so every retained observation
+        // belongs to an attempt that ended before the single completing step
+        // and changed nothing: neither the export capture nor its pin. A
+        // retirement that keeps failing (an expired budget on a slow member)
+        // must stay repeatable, so at the bound the oldest such observation
+        // makes room. Memory stays bounded by the same number.
+        if state.observations.len() >= MAX_EXPORT_OBSERVATIONS {
+            state.observations.remove(0);
         }
         let outcome = NativeSourceExportRetiredV1 {
             binding: request.binding.clone(),

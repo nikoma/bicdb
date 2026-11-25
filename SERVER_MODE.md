@@ -19,13 +19,13 @@ supported data path and transaction boundaries.
 ## Start A Local Server
 
 ```bash
-cargo run --release -p bicdb-cli -- serve ./testdb --host 127.0.0.1 --port 5433
+cargo run --release -p bicdb -- serve ./testdb --host 127.0.0.1 --port 5433
 ```
 
 `serve-pg` remains an alias:
 
 ```bash
-cargo run --release -p bicdb-cli -- serve-pg ./testdb --port 5433
+cargo run --release -p bicdb -- serve-pg ./testdb --port 5433
 ```
 
 Connect with `psql`:
@@ -83,14 +83,14 @@ procedures and DR rehearsals, see [backup and recovery](docs/backup-recovery.md)
 Bind to all interfaces:
 
 ```bash
-cargo run --release -p bicdb-cli -- serve ./testdb --host 0.0.0.0 --port 5433 --require-auth
+cargo run --release -p bicdb -- serve ./testdb --host 0.0.0.0 --port 5433 --require-auth
 ```
 
 BicDB refuses no-auth non-local server mode by default. For an explicit
 development exception:
 
 ```bash
-cargo run --release -p bicdb-cli -- serve ./testdb --host 0.0.0.0 --allow-remote-no-auth
+cargo run --release -p bicdb -- serve ./testdb --host 0.0.0.0 --allow-remote-no-auth
 ```
 
 That mode is not appropriate for production or shared LANs.
@@ -100,20 +100,20 @@ That mode is not appropriate for production or shared LANs.
 Create a local server user:
 
 ```bash
-cargo run --release -p bicdb-cli -- user create admin --password change-me --path ./testdb
+cargo run --release -p bicdb -- user create admin --password change-me --path ./testdb
 ```
 
 Start with required auth:
 
 ```bash
-cargo run --release -p bicdb-cli -- serve ./testdb --require-auth --port 5433
+cargo run --release -p bicdb -- serve ./testdb --require-auth --port 5433
 psql -h 127.0.0.1 -p 5433 -U admin -d bicdb
 ```
 
 Use SCRAM-SHA-256 instead of cleartext password exchange:
 
 ```bash
-cargo run --release -p bicdb-cli -- serve ./testdb \
+cargo run --release -p bicdb -- serve ./testdb \
   --require-auth \
   --auth-method scram-sha-256 \
   --port 5433
@@ -137,7 +137,7 @@ The CLI accepts TLS flags and upgrades PostgreSQL SSLRequest connections using
 Rustls:
 
 ```bash
-cargo run --release -p bicdb-cli -- serve ./testdb \
+cargo run --release -p bicdb -- serve ./testdb \
   --tls-cert cert.pem \
   --tls-key key.pem
 ```
@@ -147,7 +147,7 @@ reject clients that send a plaintext StartupMessage instead of first negotiating
 PostgreSQL SSLRequest:
 
 ```bash
-cargo run --release -p bicdb-cli -- serve ./testdb \
+cargo run --release -p bicdb -- serve ./testdb \
   --tls-cert cert.pem \
   --tls-key key.pem \
   --require-tls
@@ -259,7 +259,7 @@ Configuration flags:
 Offline/local database status:
 
 ```bash
-cargo run --release -p bicdb-cli -- server status ./testdb
+cargo run --release -p bicdb -- server status ./testdb
 ```
 
 Live status from a running server:
@@ -360,9 +360,9 @@ COPY finalization, and other long loops where practical.
 ## Benchmark
 
 ```bash
-cargo run --release -p bicdb-cli --features bench -- bench server --clients 10 --queries 10000
-cargo run --release -p bicdb-cli --features bench -- bench server-cert --profile ci
-cargo run --release -p bicdb-cli --features bench -- bench server-cert --profile full --queries 1000
+cargo run --release -p bicdb --features bench -- bench server --clients 10 --queries 10000
+cargo run --release -p bicdb --features bench -- bench server-cert --profile ci
+cargo run --release -p bicdb --features bench -- bench server-cert --profile full --queries 1000
 ```
 
 The benchmark starts a real local pgwire listener, creates a table, drives
@@ -399,7 +399,7 @@ subset issues workload queries.
 Exports:
 
 ```bash
-cargo run --release -p bicdb-cli --features bench -- bench server \
+cargo run --release -p bicdb --features bench -- bench server \
   --clients 10 \
   --queries 10000 \
   --json-out target/bicdb-server.json \

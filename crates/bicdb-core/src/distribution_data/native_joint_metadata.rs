@@ -150,8 +150,14 @@ impl ClusterDataNodeService {
         let metadata = registration.actual_metadata()?;
         let phase = parent.child_with_deadline(own.deadline());
         let member = {
+            let waited = std::time::Instant::now();
             let actual = loop {
-                phase.check()?;
+                if let Err(error) = phase.check() {
+                    crate::distribution_native_host::range_move_trace(waited, || {
+                        format!("joint metadata point: local MStore lock not obtained: {error}")
+                    });
+                    return Err(error);
+                }
                 own.require_live_request(business)?;
                 if let Some(actual) = metadata.try_lock_for(std::time::Duration::from_millis(5)) {
                     break actual;

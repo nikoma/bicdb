@@ -22,8 +22,11 @@ use crate::distribution_transport::{
 };
 use std::time::{Duration, Instant};
 
-/// One whole remote phase, as the in-process phase round is bounded.
-pub(super) const REMOTE_PHASE_BUDGET: Duration = Duration::from_secs(4);
+/// One whole remote phase, as the in-process phase round is bounded. A
+/// member's phase is also bounded by its own step request, which a receiver
+/// serves for at most 5 s less the reply margin; the phase does not end
+/// earlier than that request on its own.
+pub(super) const REMOTE_PHASE_BUDGET: Duration = Duration::from_secs(5);
 
 /// What one other NEW member reported about itself in one authenticated
 /// exchange: everything the in-process phase compares for that member.
@@ -177,7 +180,13 @@ impl RemotePreparationWindow {
         let observer = client.local_metadata_read_participant().node_id().clone();
         let mut frames = BTreeMap::new();
         let mut identities = BTreeMap::new();
-        for node in data.new_members().keys().filter(|node| **node != observer) {
+        let nodes = data
+            .new_members()
+            .keys()
+            .filter(|node| **node != observer)
+            .cloned()
+            .collect::<Vec<_>>();
+        let observe = |node: &ClusterNodeId| -> Result<AuthenticatedNativeJointBridgeStepFrame> {
             let budget_ms = remaining(token)?.as_millis().clamp(1, 5000) as u64;
             let request = NativeJointHandoffStepRequestV1::from_decision(
                 data,
@@ -192,6 +201,11 @@ impl RemotePreparationWindow {
                 node, data, kind, &request, own, token,
             )?;
             frame.require_live()?;
+            Ok(frame)
+        };
+        for (node, frame) in observe_every_member(&nodes, &observe) {
+            let node = &node;
+            let frame = frame?;
             // The counted member is the peer this exchange authenticated.
             let actual = frame.actual_peer().clone();
             if &actual != node || frames.contains_key(&actual) {
@@ -216,6 +230,7 @@ impl RemotePreparationWindow {
         Ok(window)
     }
     /// EVERY other NEW member exactly once, each frame unchanged and live.
+    #[track_caller]
     pub(super) fn require_complete(&self, data: &NativeJointDecisionData) -> Result<()> {
         if data.new_members().contains_key(&self.observer) != self.member_observer
             || self.frames.keys().ne(data
@@ -238,6 +253,7 @@ impl RemotePreparationWindow {
         }
         Ok(())
     }
+    #[track_caller]
     pub(super) fn require_live(&self) -> Result<()> {
         for frame in self.frames.values() {
             frame.require_live()?;
@@ -250,6 +266,72 @@ impl RemotePreparationWindow {
             .map(|frame| frame.metadata_anchor().2)
             .collect()
     }
+}
+
+/// One observation exchange per member, each on its own scoped thread, so
+/// that every frame of one window is observed at about the same time. A
+/// window is complete only while EVERY frame is still inside its own bounded
+/// window; collected one after the other, the first frame's window had to
+/// outlast all later exchanges, which on a slow host it never did, and the
+/// same window was observed again on every repetition. Each exchange is the
+/// unchanged authenticated request of the sequential collection; the
+/// results keep the order of `nodes`, and the caller checks them in that
+/// order as before. A thread that cannot be started runs its exchange on the
+/// calling thread; a worker that panicked is an error of its member.
+fn observe_every_member(
+    nodes: &[ClusterNodeId],
+    observe: &(dyn Fn(&ClusterNodeId) -> Result<AuthenticatedNativeJointBridgeStepFrame> + Sync),
+) -> Vec<(
+    ClusterNodeId,
+    Result<AuthenticatedNativeJointBridgeStepFrame>,
+)> {
+    if nodes.len() < 2 {
+        return nodes
+            .iter()
+            .map(|node| (node.clone(), observe(node)))
+            .collect();
+    }
+    std::thread::scope(|scope| {
+        let started = nodes
+            .iter()
+            .map(|node| {
+                let worker = std::thread::Builder::new()
+                    .name("joint-window-observation".into())
+                    .spawn_scoped(scope, move || observe(node));
+                (node, worker)
+            })
+            .collect::<Vec<_>>();
+        started
+            .into_iter()
+            .map(|(node, worker)| {
+                let answer = match worker {
+                    Ok(worker) => worker.join().unwrap_or_else(|_| {
+                        Err(invalid(&format!(
+                            "the window observation worker of member {node} panicked"
+                        )))
+                    }),
+                    Err(_) => observe(node),
+                };
+                (node.clone(), answer)
+            })
+            .collect()
+    })
+}
+
+/// The budget to ask the metadata leader for, so that the observation lives
+/// until `token`'s deadline. The leader serves an acquisition for its budget
+/// less the reply margin (`SERVED_REPLY_MARGIN`), and the observation's
+/// context ends there; asked for the bare remainder, every observation of a
+/// phase ended half a second before the phase, and a member observed inside
+/// another member's window (whose own step also ends half a second before
+/// that window) a whole second before. The margin is added back here, so
+/// the observation ends with `token` and never later: the acquisition is a
+/// child of `token`, and the protocol's five-second cap still applies.
+pub(crate) fn observation_budget(token: &crate::CancellationToken) -> Result<Duration> {
+    Ok(
+        (remaining(token)? + crate::distribution_transport::SERVED_REPLY_MARGIN)
+            .min(Duration::from_secs(5)),
+    )
 }
 
 pub(super) fn remaining(token: &crate::CancellationToken) -> Result<Duration> {
@@ -269,9 +351,60 @@ pub(super) struct RemoteActivationBacking {
     /// registration it proved current under its own service lock.
     local_phase: CommittedNativeJointDecisionObservation,
     local_writer: crate::db::NativeJointPhaseOwner,
-    window: RemotePreparationWindow,
+    /// `None` only for a recovery of this member's own existing bridge (see
+    /// `recover_remote_bridge`): such an admission can never write.
+    window: Option<RemotePreparationWindow>,
+    /// Set once this member's journal commit point is passed (see
+    /// `pass_commit_point`); every frame was live at that point.
+    past_commit_point: std::sync::atomic::AtomicBool,
 }
+/// Refusal of a recovery-only publication that found no bridge to recover.
+pub(crate) const RECOVERY_ONLY_FOUND_NO_BRIDGE: &str =
+    "a recovery of this member's own bridge found no durable bridge to recover";
 impl RemoteActivationBacking {
+    fn window(&self) -> Result<&RemotePreparationWindow> {
+        self.window
+            .as_ref()
+            .ok_or_else(|| invalid(RECOVERY_ONLY_FOUND_NO_BRIDGE))
+    }
+    /// Whether this admission may write a bridge at all.
+    pub(super) fn require_may_write(&self) -> Result<()> {
+        self.window().map(|_| ())
+    }
+    /// The decision to recover an existing exact bridge. With a first window
+    /// it is the commit point; a recovery-only admission has no frame to
+    /// check, as its bridge was written by an earlier attempt that passed
+    /// its own commit point with every frame live.
+    pub(super) fn pass_recovery_point(&self) -> Result<()> {
+        if self.window.is_some() {
+            return self.pass_commit_point();
+        }
+        self.past_commit_point
+            .store(true, std::sync::atomic::Ordering::Release);
+        Ok(())
+    }
+    pub(super) fn passed_commit_point(&self) -> bool {
+        self.window.is_some()
+            && self
+                .past_commit_point
+                .load(std::sync::atomic::Ordering::Acquire)
+    }
+    /// The commit point of this member's own durable bridge: every other
+    /// member's frame must be live here, immediately before the journal
+    /// commit (or, when an earlier attempt's exact bridge is recovered, at
+    /// the recovery decision). After it, the frames no longer gate anything:
+    /// what they attested decided only whether to write, the write is
+    /// historical, and the publication stays unconfirmed until a SECOND
+    /// window, observed after the write, reports every other member
+    /// unchanged. Checking the first window again after the post-write
+    /// proofs only refused a durable bridge on every repetition once those
+    /// proofs took longer than the frames lasted.
+    pub(super) fn pass_commit_point(&self) -> Result<()> {
+        self.window()?.require_live()?;
+        self.past_commit_point
+            .store(true, std::sync::atomic::Ordering::Release);
+        Ok(())
+    }
     pub(super) fn require_live(&self, local: &NativeJointPreparedServingObservation) -> Result<()> {
         self.local_phase.require_metadata_current()?;
         local
@@ -280,14 +413,23 @@ impl RemoteActivationBacking {
         if let Some(custody) = &local.custody {
             custody.require_original_caller()?;
         }
-        if &self.window.observer != local.local_node_id()
-            || self.window.kind != NativeJointBridgePhaseKindV1::Preparation
+        let Some(window) = &self.window else {
+            return Ok(());
+        };
+        if &window.observer != local.local_node_id()
+            || window.kind != NativeJointBridgePhaseKindV1::Preparation
         {
             return Err(invalid(
                 "remote preparation window was observed by another member/phase",
             ));
         }
-        self.window.require_live()
+        if self
+            .past_commit_point
+            .load(std::sync::atomic::Ordering::Acquire)
+        {
+            return Ok(());
+        }
+        window.require_live()
     }
     /// The same complete local check a fresh in-process phase performs for
     /// its local member, under the caller's own service guard.
@@ -322,16 +464,17 @@ impl RemoteActivationBacking {
         data: &NativeJointDecisionData,
         local: &ClusterNodeId,
     ) -> Result<Vec<(u64, u64, Uuid)>> {
-        if &self.window.observer != local
-            || self.window.frames.len() + 1 != data.new_members().len()
-        {
+        let mut anchors = vec![self.local_phase.metadata_anchor()];
+        let Some(window) = &self.window else {
+            return Ok(anchors);
+        };
+        if &window.observer != local || window.frames.len() + 1 != data.new_members().len() {
             return Err(invalid(
                 "remote preparation window omits or replaces a NEW member",
             ));
         }
-        let mut anchors = vec![self.local_phase.metadata_anchor()];
         anchors.extend(
-            self.window
+            window
                 .frames
                 .values()
                 .map(AuthenticatedNativeJointBridgeStepFrame::metadata_anchor),
@@ -345,12 +488,17 @@ impl RemoteActivationBacking {
         data: &NativeJointDecisionData,
         local: &ClusterNodeId,
     ) -> Result<()> {
-        if &self.window.observer != local {
+        // A recovery-only admission trusts no other member and may only
+        // recover a bridge that already exists (`require_may_write`).
+        let Some(window) = &self.window else {
+            return Ok(());
+        };
+        if &window.observer != local {
             return Err(invalid(
                 "remote preparation window was observed by another member",
             ));
         }
-        self.window.require_complete(data)
+        window.require_complete(data)
     }
     /// The same durable audit the in-process publisher writes: every NEW
     /// member's preparation identity and the anchor of ITS phase observation.
@@ -372,8 +520,11 @@ impl RemoteActivationBacking {
                 metadata_read_index: index,
             },
         );
-        for (node, frame) in &self.window.frames {
-            let identity = &self.window.identities[node];
+        let Some(window) = &self.window else {
+            return votes;
+        };
+        for (node, frame) in &window.frames {
+            let identity = &window.identities[node];
             let (term, index, context) = frame.metadata_anchor();
             votes.insert(
                 node.clone(),
@@ -394,6 +545,33 @@ impl RemoteActivationBacking {
 /// This member's durable native bridge receipt together with the identity
 /// every other NEW member reported BEFORE the write. Not yet a confirmed
 /// publication: `confirm_second_window` must still succeed.
+/// What one publication attempt's first window attested, retained once that
+/// attempt passed its commit point: every other member's identity before the
+/// write, the contexts of those observations and the post-quorum anchor. DATA
+/// for the second window's comparison; it grants nothing.
+#[derive(Clone)]
+pub(crate) struct NativeBridgeFirstWindow {
+    identities: BTreeMap<ClusterNodeId, NativeJointBridgeMemberIdentity>,
+    first_contexts: std::collections::BTreeSet<Uuid>,
+    post_quorum: (u64, u64, Uuid),
+}
+impl NativeBridgeFirstWindow {
+    /// The publication a second window confirms, for this member's bridge
+    /// receipt retained after an earlier attempt's recovery or write and its
+    /// post-write proofs completed: the second window then compares against
+    /// this first window and re-reads the bridge under the member's lock.
+    pub(crate) fn published(
+        &self,
+        receipt: Arc<crate::db::NativeJointServingBridgeReceipt>,
+    ) -> NativeRemoteBridgePublished {
+        NativeRemoteBridgePublished {
+            receipt,
+            identities: self.identities.clone(),
+            first_contexts: self.first_contexts.clone(),
+            post_quorum: self.post_quorum,
+        }
+    }
+}
 pub(crate) struct NativeRemoteBridgePublished {
     receipt: Arc<crate::db::NativeJointServingBridgeReceipt>,
     identities: BTreeMap<ClusterNodeId, NativeJointBridgeMemberIdentity>,
@@ -460,6 +638,64 @@ impl NativeJointPreparationCustody {
         }
         Ok(())
     }
+    /// This member's own fresh pre-quorum phase observation for a remote
+    /// publication: its own metadata observation, its attached MStore point
+    /// (both before any engine guard), then the committed decision observed
+    /// and the member proved current under its own service lock.
+    fn observe_publication_local_phase(
+        self: &Arc<Self>,
+        client: &TcpClusterRelocationTransport,
+        metadata_leader: &ClusterNodeId,
+        data: &NativeJointDecisionData,
+        phase: &crate::CancellationToken,
+    ) -> Result<(
+        CommittedNativeJointDecisionObservation,
+        crate::db::NativeJointPhaseOwner,
+    )> {
+        let part = std::cell::Cell::new(Instant::now());
+        let traced = |what: &str| {
+            crate::distribution_native_host::range_move_trace(part.replace(Instant::now()), || {
+                format!("member publication local phase: {what}")
+            })
+        };
+        let business = Uuid::now_v7();
+        let metadata = client.acquire_host_metadata_observation(
+            metadata_leader,
+            business,
+            observation_budget(phase)?,
+            phase,
+        )?;
+        traced("own metadata observation");
+        let point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &self.service,
+            &metadata,
+            business,
+            phase,
+        )?;
+        traced("metadata point captured");
+        let service = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("remote publication phase actual service busy"))?;
+        let committed = self.actual.observe_fresh_committed_with_point(
+            &service,
+            metadata,
+            business,
+            data.old_range().id,
+            point,
+        )?;
+        traced("committed decision observed");
+        let writer = self
+            .actual
+            .require_current_under_preparation_custody(&service, &committed, self)?;
+        traced("member proved current");
+        if committed.data() != data {
+            return Err(invalid(
+                "remote publication phase changed protected global decision",
+            ));
+        }
+        Ok((committed, writer))
+    }
     /// This member's own complete publication of its native serving bridge.
     ///
     /// The member takes its own fresh pre-quorum phase observation under its
@@ -478,6 +714,7 @@ impl NativeJointPreparationCustody {
         metadata_leader: &ClusterNodeId,
         collector: &crate::distribution_consensus::HostMetadataReadObservation,
         collector_business: Uuid,
+        retain_first: &mut dyn FnMut(NativeBridgeFirstWindow),
         parent: &crate::CancellationToken,
     ) -> Result<NativeRemoteBridgePublished> {
         // A fresh request may not detach from the ORIGINAL session ancestry.
@@ -487,64 +724,81 @@ impl NativeJointPreparationCustody {
         self.require_remote_actor(client)?;
         let data = self.data();
         let phase = request.child_with_deadline(Instant::now() + REMOTE_PHASE_BUDGET);
-        // (1) Own pre-quorum phase observation. Actual TLS OWN and MStore
-        // acquisition precede all engine guards.
-        let business = Uuid::now_v7();
-        let metadata = client.acquire_host_metadata_observation(
-            metadata_leader,
-            business,
-            remaining(&phase)?,
-            &phase,
-        )?;
-        let point = ClusterDataNodeService::capture_actual_joint_metadata_point(
-            &self.service,
-            &metadata,
-            business,
-            &phase,
-        )?;
-        let (local_phase, local_writer) = {
-            let service = self
-                .service
-                .try_lock()
-                .ok_or_else(|| invalid("remote publication phase actual service busy"))?;
-            let committed = self.actual.observe_fresh_committed_with_point(
-                &service,
-                metadata,
-                business,
-                data.old_range().id,
-                point,
-            )?;
-            let writer = self
-                .actual
-                .require_current_under_preparation_custody(&service, &committed, self)?;
-            (committed, writer)
+        let part = std::cell::Cell::new(Instant::now());
+        let traced = |what: &str, phase: &crate::CancellationToken| {
+            crate::distribution_native_host::range_move_trace(part.replace(Instant::now()), || {
+                format!(
+                    "member publication part: {what}; phase left {} ms",
+                    phase.deadline().map_or(0, |deadline| deadline
+                        .saturating_duration_since(Instant::now())
+                        .as_millis())
+                )
+            })
         };
-        if local_phase.data() != data {
-            return Err(invalid(
-                "remote publication phase changed protected global decision",
-            ));
-        }
+        // (1) Own pre-quorum phase observation and (2) one observation of
+        // every other NEW member, taken at the same time. Both are the
+        // pre-quorum observations of this publication: the post-quorum one
+        // below must follow every one of them (`anchors`), and no order is
+        // required among them, as the in-process phase observes all its
+        // members in one round. Taken one after the other, the window
+        // started only after this member's own observation, which on a slow
+        // host took up to 2 s, and its frames then ran out before the
+        // durable write. The window's exchanges are bound to `collector`,
+        // not to the local observation; the phase is bounded by the local
+        // observation once both are in.
+        let (local, window) = std::thread::scope(|scope| {
+            let observe_local =
+                || self.observe_publication_local_phase(client, metadata_leader, data, &phase);
+            let local = std::thread::Builder::new()
+                .name("joint-publication-local-phase".into())
+                .spawn_scoped(scope, observe_local);
+            let window = RemotePreparationWindow::collect(
+                NativeJointBridgePhaseKindV1::Preparation,
+                data,
+                client,
+                collector,
+                collector_business,
+                &phase,
+            );
+            let local = match local {
+                Ok(worker) => worker.join().unwrap_or_else(|_| {
+                    Err(invalid("the publication local phase worker panicked"))
+                }),
+                Err(_) => observe_local(),
+            };
+            (local, window)
+        });
+        let (local_phase, local_writer) = local?;
+        let window = window?;
         let phase = phase.child_with_deadline(local_phase.deadline());
         phase.check()?;
-        // (2) Every other NEW member, each under its own lock and metadata.
-        let window = RemotePreparationWindow::collect(
-            NativeJointBridgePhaseKindV1::Preparation,
-            data,
-            client,
-            collector,
-            collector_business,
-            &phase,
-        )?;
+        window.require_live()?;
+        traced("window of every other member", &phase);
         // (3) Only THIS member's read pin. It is a slot of this database's
-        // own mutation gate; no other member's pin gates this journal. The
-        // release validates this member completely before and after.
+        // own mutation gate; no other member's pin gates this journal. It is
+        // released only after a complete window observed every other NEW
+        // member prepared. The release validates this member completely
+        // before and after. A pin is monotone: a repeated publication whose
+        // earlier attempt already released it skips the release and its two
+        // complete checks, as the in-process phase does. Repeated anyway, it
+        // spent about 0.7 s of a slow host's window, after the frames had
+        // arrived, only to take nothing.
+        // The released fact is read under the service guard, the same guard
+        // the release takes; read without it, a concurrent holder of the pin
+        // slot made this publication refuse ("pin transition busy").
         {
             let service = self
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("remote publication pin release service busy"))?;
-            self.actual
-                .release_read_pin_under_preparation_custody(&service, &local_phase, self)?;
+            if !self.actual.read_pin_already_released().unwrap_or(false) {
+                self.actual.release_read_pin_under_preparation_custody(
+                    &service,
+                    &local_phase,
+                    self,
+                )?;
+                traced("own read pin released", &phase);
+            }
         }
         window.require_live()?;
         // (4) Distinct post-quorum observation, no guard across the I/O.
@@ -552,7 +806,7 @@ impl NativeJointPreparationCustody {
         let metadata = client.acquire_host_metadata_observation(
             metadata_leader,
             business,
-            remaining(&phase)?,
+            observation_budget(&phase)?,
             &phase,
         )?;
         let point = ClusterDataNodeService::capture_actual_joint_metadata_point(
@@ -582,7 +836,8 @@ impl NativeJointPreparationCustody {
             backing: ActivationBacking::Remote(RemoteActivationBacking {
                 local_phase,
                 local_writer,
-                window,
+                window: Some(window),
+                past_commit_point: std::sync::atomic::AtomicBool::new(false),
             }),
             publication_claimed: std::sync::atomic::AtomicBool::new(false),
             local: Arc::new(NativeJointPreparedServingObservation {
@@ -594,11 +849,27 @@ impl NativeJointPreparationCustody {
             fresh,
             cancellation,
         };
+        traced("post-quorum observation", &phase);
         admission.require_live()?;
         admission.claim_publication_attempt()?;
         // (5) The unchanged scoped native publisher: final foreign boundary,
         // local journal scope, reconcile-or-write, post-write proof.
-        let receipt = admission.publish_local_native_bridge(parent)?;
+        let receipt = admission.publish_local_native_bridge(parent);
+        traced(
+            &format!("native publication ok={}", receipt.is_ok()),
+            &phase,
+        );
+        // Whatever follows, a first window that passed its commit point
+        // decided this member's bridge; a later attempt that finds the bridge
+        // recovers it without asking anyone again (`recover_remote_bridge`).
+        if admission.passed_commit_point() {
+            retain_first(NativeBridgeFirstWindow {
+                identities: identities.clone(),
+                first_contexts: first_contexts.clone(),
+                post_quorum,
+            });
+        }
+        let receipt = receipt?;
         if receipt.data() != data || receipt.local_node_id() != self.local_node_id() {
             return Err(invalid(
                 "remote bridge publication changed decision or local native history",
@@ -608,6 +879,113 @@ impl NativeJointPreparationCustody {
             receipt: Arc::new(receipt),
             identities,
             first_contexts,
+            post_quorum,
+        })
+    }
+    /// A later attempt of a publication whose first window already passed
+    /// its commit point (`first`): this member's bridge was decided then,
+    /// with every other member's frame live, and nothing here asks another
+    /// member again. Under a full fresh phase the member takes its own
+    /// pre-quorum and post-quorum observations and runs the unchanged
+    /// publisher with an admission that may only RECOVER the exact existing
+    /// bridge and its post-write proofs; with no bridge it refuses
+    /// (`RECOVERY_ONLY_FOUND_NO_BRIDGE`) and the caller starts over. The
+    /// publication still stays unconfirmed until a second window reports
+    /// every other member unchanged against `first`.
+    pub(crate) fn recover_remote_bridge(
+        self: &Arc<Self>,
+        client: &TcpClusterRelocationTransport,
+        metadata_leader: &ClusterNodeId,
+        first: &NativeBridgeFirstWindow,
+        parent: &crate::CancellationToken,
+    ) -> Result<NativeRemoteBridgePublished> {
+        let request = self.actual.bound_preparation_request(parent);
+        request.check()?;
+        self.require_original_caller()?;
+        self.require_remote_actor(client)?;
+        let data = self.data();
+        let phase = request.child_with_deadline(Instant::now() + REMOTE_PHASE_BUDGET);
+        let started = Instant::now();
+        let (local_phase, local_writer) =
+            self.observe_publication_local_phase(client, metadata_leader, data, &phase)?;
+        let phase = phase.child_with_deadline(local_phase.deadline());
+        phase.check()?;
+        let business = Uuid::now_v7();
+        let metadata = client.acquire_host_metadata_observation(
+            metadata_leader,
+            business,
+            observation_budget(&phase)?,
+            &phase,
+        )?;
+        let point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &self.service,
+            &metadata,
+            business,
+            &phase,
+        )?;
+        let fresh = {
+            let service = self
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("remote publication recovery service busy"))?;
+            self.actual.observe_fresh_committed_with_point(
+                &service,
+                metadata,
+                business,
+                data.old_range().id,
+                point,
+            )?
+        };
+        let post_quorum = fresh.metadata_anchor();
+        if post_quorum.0 < first.post_quorum.0
+            || post_quorum.1 < first.post_quorum.1
+            || post_quorum.2 == first.post_quorum.2
+        {
+            return Err(invalid(
+                "remote publication recovery is not after the deciding post-quorum observation",
+            ));
+        }
+        let cancellation = phase.child_with_deadline(fresh.deadline());
+        let admission = NativeJointActivationAdmission {
+            backing: ActivationBacking::Remote(RemoteActivationBacking {
+                local_phase,
+                local_writer,
+                window: None,
+                past_commit_point: std::sync::atomic::AtomicBool::new(false),
+            }),
+            publication_claimed: std::sync::atomic::AtomicBool::new(false),
+            local: Arc::new(NativeJointPreparedServingObservation {
+                actual: self.actual.clone(),
+                service: self.service.clone(),
+                fresh: None,
+                custody: Some(self.clone()),
+            }),
+            fresh,
+            cancellation,
+        };
+        crate::distribution_native_host::range_move_trace(started, || {
+            "member publication recovery: own observations".into()
+        });
+        admission.require_live()?;
+        admission.claim_publication_attempt()?;
+        let started = Instant::now();
+        let receipt = admission.publish_local_native_bridge(parent);
+        crate::distribution_native_host::range_move_trace(started, || {
+            format!(
+                "member publication recovery: native recovery ok={}",
+                receipt.is_ok()
+            )
+        });
+        let receipt = receipt?;
+        if receipt.data() != data || receipt.local_node_id() != self.local_node_id() {
+            return Err(invalid(
+                "remote bridge recovery changed decision or local native history",
+            ));
+        }
+        Ok(NativeRemoteBridgePublished {
+            receipt: Arc::new(receipt),
+            identities: first.identities.clone(),
+            first_contexts: first.first_contexts.clone(),
             post_quorum,
         })
     }
@@ -640,7 +1018,7 @@ impl NativeJointPreparationCustody {
         let own = client.acquire_host_metadata_observation(
             metadata_leader,
             business,
-            remaining(&phase)?,
+            observation_budget(&phase)?,
             &phase,
         )?;
         if own.term() < published.post_quorum.0

@@ -1363,6 +1363,75 @@ fn verify_destination_certificate(
     Ok(())
 }
 
+thread_local! {
+    static REQUEST_WRITE_STARTED: std::cell::Cell<Option<Instant>> =
+        const { std::cell::Cell::new(None) };
+}
+/// Records, for this thread's current exchange, the instant its request
+/// began to be written: after the connection and its TLS handshake, and
+/// not later than the instant the receiver can have begun serving it.
+fn note_request_write_started() {
+    REQUEST_WRITE_STARTED.with(|started| started.set(Some(Instant::now())));
+}
+/// Clears the instant recorded by this thread's last exchange. Call before
+/// an exchange whose instant `take_request_write_started` then reads.
+pub(crate) fn clear_request_write_started() {
+    REQUEST_WRITE_STARTED.with(|started| started.set(None));
+}
+/// The instant this thread's last exchange began writing its request, if
+/// one did since `clear_request_write_started`. Diagnostic of an exchange
+/// on THIS thread only; it bounds nothing by itself.
+pub(crate) fn take_request_write_started() -> Option<Instant> {
+    REQUEST_WRITE_STARTED.with(|started| started.take())
+}
+
+/// The longest own budget a receiver serves a request for.
+const MAX_SERVED_BUDGET: Duration = Duration::from_millis(5000);
+/// What a caller waits beyond a served budget for the reply itself.
+pub(crate) const SERVED_REPLY_MARGIN: Duration = Duration::from_millis(500);
+
+/// The own budget of a request that a receiver serves for that budget
+/// instead of the network deadline: a joint decision request, a joint
+/// handoff step and a host metadata acquisition. A member performs several
+/// bounded parts inside one such request (its own metadata reading, its
+/// callbacks to the other members, its local work); on a slow host they need
+/// longer than the network deadline, and a member cut off by it repeats the
+/// same parts on every repetition without ever finishing. The budget is
+/// request DATA that only bounds work: it grants nothing, and it is capped
+/// here.
+///
+/// A host metadata acquisition is listed because the member's work runs
+/// under the observation it returns: the leader bounds the observation's
+/// context by its own request deadline, so with the network deadline alone a
+/// member's observation lived at most that long (2 s on a native host)
+/// whatever budget the member asked for and whatever budget its step had.
+/// Every phase bounded by that observation (a preparation's native part, a
+/// publication or Open window) then ran out on a slow host on every
+/// repetition. The protocol already admits an observation of up to five
+/// seconds (the acquisition refuses a larger budget), and a transport with
+/// the default 30 s network deadline always granted that. This makes the
+/// requested budget, not the connection's I/O timeout, the bound; nothing a
+/// receiver checks changes.
+fn served_budget(request: &ClusterDataRequest) -> Option<Duration> {
+    let budget_ms = match request {
+        ClusterDataRequest::NativeRemoteNew { request } => request.budget_ms,
+        ClusterDataRequest::NativeJointHandoffStep { request } => request.budget_ms,
+        ClusterDataRequest::HostMetadataReadAcquire { request } => request.budget_ms,
+        _ => return None,
+    };
+    Some(Duration::from_millis(budget_ms).min(MAX_SERVED_BUDGET))
+}
+
+/// The receiver's deadline of a request with an own budget: the network
+/// deadline of the connection, extended to the (capped) budget from now
+/// less `SERVED_REPLY_MARGIN`. The caller's budget began when it sent the
+/// request, so the receiver ends its work while the caller still waits and
+/// its reply, a completed outcome or its own refusal, is heard.
+fn served_deadline(network: Instant, budget_ms: u64) -> Instant {
+    let budget = Duration::from_millis(budget_ms).min(MAX_SERVED_BUDGET);
+    network.max(Instant::now() + budget.saturating_sub(SERVED_REPLY_MARGIN))
+}
+
 fn handle_cluster_data_connection(
     stream: &mut (impl Read + Write),
     config: &ClusterNetworkTransportConfig,
@@ -1776,8 +1845,10 @@ fn handle_cluster_data_connection(
             let peer = authenticated_caller.as_ref().ok_or_else(|| {
                 transport_error("remote NEW requires actual authenticated caller")
             })?;
-            let parent =
-                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            let parent = CancellationToken::new(
+                Arc::new(AtomicBool::new(false)),
+                Some(served_deadline(request_deadline, request.budget_ms)),
+            );
             let reply = if let Some(source) = initial_data {
                 source.observe_remote_new(peer, &request, &parent)?
             } else if let Some(target) = registered_replica {
@@ -1793,8 +1864,10 @@ fn handle_cluster_data_connection(
             let peer = authenticated_caller.as_ref().ok_or_else(|| {
                 transport_error("joint handoff step requires actual authenticated caller")
             })?;
-            let parent =
-                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            let parent = CancellationToken::new(
+                Arc::new(AtomicBool::new(false)),
+                Some(served_deadline(request_deadline, request.budget_ms)),
+            );
             // An original Registered receiver whose host became a DATA owner
             // and rebound this socket keeps serving its own bridge
             // observations and host commands, and nothing else.
@@ -1861,8 +1934,11 @@ fn handle_cluster_data_connection(
             let caller = authenticated_caller.as_ref().ok_or_else(|| {
                 transport_error("host metadata acquisition requires authenticated membership")
             })?;
-            let cancellation =
-                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            // Served for the caller's own (capped) budget: see `served_budget`.
+            let cancellation = CancellationToken::new(
+                Arc::new(AtomicBool::new(false)),
+                Some(served_deadline(request_deadline, request.budget_ms)),
+            );
             return provider
                 .acquire_host_metadata(caller, request, &cancellation)
                 .map(ClusterDataResponse::HostMetadataReadAcquire);
@@ -5560,6 +5636,15 @@ impl TcpClusterRelocationTransport {
             .map(|(response, peer, _)| (response, peer))
     }
 
+    /// How long a caller waits for the reply of `request`: the network
+    /// deadline, or for a request the receiver serves for its own budget
+    /// (see `served_budget`) that budget and a margin for the reply, so a
+    /// member that completes its work inside its budget is heard.
+    fn network_wait(&self, request: &ClusterDataRequest) -> Duration {
+        let network = Duration::from_millis(self.config.io_timeout_ms);
+        served_budget(request).map_or(network, |budget| network.max(budget + SERVED_REPLY_MARGIN))
+    }
+
     fn call_with_native_destination_cancellable(
         &self,
         cancellation: &CancellationToken,
@@ -5627,7 +5712,7 @@ impl TcpClusterRelocationTransport {
         };
         // Diagnostic IO consumes the same network/caller window; it cannot
         // move the original connect/read deadline into the future.
-        let network_deadline = Instant::now() + Duration::from_millis(self.config.io_timeout_ms);
+        let network_deadline = Instant::now() + self.network_wait(&request);
         let deadline = cancellation
             .deadline()
             .map_or(network_deadline, |parent| parent.min(network_deadline));
@@ -5735,7 +5820,7 @@ impl TcpClusterRelocationTransport {
                     | ClusterDataRequest::RecoveryApplyHistorical { .. }
             );
         let network_deadline = observed_network_deadline
-            .unwrap_or_else(|| Instant::now() + Duration::from_millis(self.config.io_timeout_ms));
+            .unwrap_or_else(|| Instant::now() + self.network_wait(&request));
         let deadline = cancellation
             .deadline()
             .map_or(network_deadline, |parent| parent.min(network_deadline));
@@ -5860,6 +5945,7 @@ impl TcpClusterRelocationTransport {
                     pending_certificate_sha256.as_deref(),
                     Some(&peer_certificate_sha256),
                 )?;
+                note_request_write_started();
                 let response = if let Some(observed) = observed.as_deref_mut() {
                     observed.send(&mut stream)?;
                     observed.receive(&mut stream, self.config.max_frame_bytes)?
@@ -5879,6 +5965,7 @@ impl TcpClusterRelocationTransport {
                     pending_certificate_sha256.as_deref(),
                     None,
                 )?;
+                note_request_write_started();
                 let response = if let Some(observed) = observed.as_deref_mut() {
                     observed.send(&mut stream)?;
                     observed.receive(&mut stream, self.config.max_frame_bytes)?

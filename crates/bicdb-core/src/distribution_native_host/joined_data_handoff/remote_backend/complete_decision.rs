@@ -32,22 +32,108 @@
 //!
 //! What this stage cannot do. It runs after the source cut: every old voter
 //! holds its permanent promise, so the handoff cannot be aborted here; it
-//! can only be repeated. The repetition is not unbounded on the members'
-//! side: a participant retains at most 64 exact requests and 8 preparation
-//! attempts for its lifetime and evicts none. A missing member that is
-//! unreachable costs the other members nothing (the observation is not
-//! retained, and this object asks them to materialize once); a missing
-//! member that answers its preparation and then fails its publication uses
-//! one of its 8 attempts per repetition.
+//! can only be repeated.
+//!
+//! Repetition costs a member nothing lasting. A member that already
+//! completed its preparation, or already committed its decision, for the
+//! same fact set answers a repeated request from what it retained: it takes
+//! no further attempt. A request that is refused before it changed anything
+//! (a busy service, an expired budget) leaves nothing behind either. While
+//! an earlier request is still running on a member, a repetition is refused
+//! as busy rather than started a second time. A member's caps (8 preparation
+//! attempts, 8 publication contexts) therefore count only attempts that
+//! changed its state, and its request table only requests that are held by
+//! such an attempt or still inside their own budget.
+//!
+//! A member can be slower than the caller's network deadline: its reply is
+//! then lost while its work completes. Within one call the publication is
+//! repeated by time (the round budget), not by count, for as long as every
+//! missing member is merely slow or busy. A member that is missing for
+//! another reason ends the call after `DECISION_PUBLICATION_ROUNDS`.
 use super::*;
 use crate::distribution_range_handoff::{
     NativeRemoteJointDecisionCertificateRound, NativeRemoteNewOperationV1, NativeRemoteNewRound,
 };
 
-/// Publications towards the missing members inside one call.
-const DECISION_PUBLICATION_ROUNDS: usize = 2;
+/// Publications towards the missing members inside one call when a member
+/// is missing for another reason than being slow or busy.
+const DECISION_PUBLICATION_ROUNDS: u32 = 2;
+
+/// Whether a member's refusal is one a later repetition cures by itself: the
+/// member (or a member it asked) was busy, still running an earlier request,
+/// or did not answer inside the deadline. There is no typed answer for it.
+fn cured_by_repetition(text: &str) -> bool {
+    [
+        "busy",
+        "already active",
+        "attempt active",
+        "deadline expired",
+        "timed out",
+    ]
+    .iter()
+    .any(|word| text.contains(word))
+}
+
+/// One decision exchange with one member, as this coordinator, with its
+/// time reported to the move trace.
+fn decision_exchange(
+    transport: &TcpClusterRelocationTransport,
+    metadata_leader: &ClusterNodeId,
+    recipient: &ClusterNodeId,
+    manifest: &NativeRemoteImageManifestV1,
+    phase: Uuid,
+    operation: NativeRemoteNewOperationV1,
+    token: &CancellationToken,
+) -> Result<crate::distribution_transport::AuthenticatedNativeRemoteNewFrame> {
+    let started = Instant::now();
+    let name = match &operation {
+        NativeRemoteNewOperationV1::Materialize => "materialize",
+        NativeRemoteNewOperationV1::Observe => "observe",
+        NativeRemoteNewOperationV1::PrepareDecision { .. } => "prepare",
+        NativeRemoteNewOperationV1::PublishDecision { .. } => "publish",
+        NativeRemoteNewOperationV1::ObserveDecision => "observe-decision",
+    };
+    let answer = transport.remote_joint_decision_exchange(
+        metadata_leader,
+        recipient,
+        manifest,
+        phase,
+        operation,
+        token,
+    );
+    trace(started, || {
+        format!(
+            "decision {name} of {recipient}: {}",
+            match &answer {
+                Ok(_) => "ok".to_string(),
+                Err(error) => format!("error {error}"),
+            }
+        )
+    });
+    answer
+}
 
 impl RemoteJoinedHandoffBackend {
+    fn decision_exchange(
+        &self,
+        metadata_leader: &ClusterNodeId,
+        recipient: &ClusterNodeId,
+        manifest: &NativeRemoteImageManifestV1,
+        phase: Uuid,
+        operation: NativeRemoteNewOperationV1,
+        token: &CancellationToken,
+    ) -> Result<crate::distribution_transport::AuthenticatedNativeRemoteNewFrame> {
+        decision_exchange(
+            &self.transport,
+            metadata_leader,
+            recipient,
+            manifest,
+            phase,
+            operation,
+            token,
+        )
+    }
+
     /// Test only: see `decision_publish_fault`.
     #[cfg(test)]
     pub(crate) fn test_decision_publish_fault(
@@ -77,8 +163,16 @@ impl RemoteJoinedHandoffBackend {
         let mut round =
             NativeRemoteJointDecisionCertificateRound::begin(plan, manifest.clone(), phase, token)?;
         let mut missing = Vec::new();
+        // One member after the other, although the observation is read-only:
+        // each exchange takes a metadata read on the metadata leader for this
+        // coordinator and one for the answering member, and the leader
+        // admits four at a time. Sent together, an observation was refused
+        // as "bounded acquisition capacity is busy" in a measured move; a
+        // refused observation counts as a missing decision, which costs the
+        // member a repeated preparation (it has eight for its lifetime) and
+        // can fail the step. The four observations take about 0.15 s.
         for id in publishers {
-            match self.transport.remote_joint_decision_exchange(
+            match self.decision_exchange(
                 &members.metadata_leader,
                 id,
                 manifest,
@@ -119,8 +213,7 @@ impl RemoteJoinedHandoffBackend {
         let mut round = NativeRemoteNewRound::begin(plan.clone(), manifest.clone(), phase, token)?;
         for id in publishers {
             let frame = self
-                .transport
-                .remote_joint_decision_exchange(
+                .decision_exchange(
                     &members.metadata_leader,
                     id,
                     manifest,
@@ -142,7 +235,7 @@ impl RemoteJoinedHandoffBackend {
         Ok(facts)
     }
 
-    /// Prepare and publish the decision on the members in `missing` only.
+    /// Prepare the members in `missing`, then publish the decision on them.
     /// A member that fails is reported, never fatal: the observation that
     /// follows is what counts.
     #[allow(clippy::too_many_arguments)]
@@ -158,8 +251,17 @@ impl RemoteJoinedHandoffBackend {
     ) -> Result<BTreeMap<ClusterNodeId, String>> {
         let facts = self.decision_fact_set(plan, manifest, phase, publishers, members, token)?;
         let mut failures = BTreeMap::new();
+        // Every preparation before any publication. A member publishes over
+        // the fact set it fetches itself, and that set must show the
+        // preparation (the pin handoff) of EVERY new member; a member asked
+        // to publish while another new member is not yet prepared refuses
+        // with "requires actual participant pin handoff", and its
+        // preparation attempt, of which a participant has eight for its
+        // lifetime, is spent for nothing. This is the order of the
+        // transport's own decision round.
+        let mut prepared = Vec::new();
         for id in missing {
-            if let Err(error) = self.transport.remote_joint_decision_exchange(
+            match self.decision_exchange(
                 &members.metadata_leader,
                 id,
                 manifest,
@@ -169,9 +271,32 @@ impl RemoteJoinedHandoffBackend {
                 },
                 token,
             ) {
-                failures.insert(id.clone(), format!("prepare: {error}"));
-                continue;
+                Ok(_) => prepared.push(id),
+                Err(error) => {
+                    failures.insert(id.clone(), format!("prepare: {error}"));
+                }
             }
+        }
+        // The members that are not missing hold the decision, so they
+        // prepared. While a missing NEW member has not, no publication is
+        // sent in this round: its preparation may still complete on the
+        // member (the reply was lost) and the next round then finds it.
+        if let Some((unprepared, refusal)) = failures
+            .iter()
+            .find(|(id, _)| manifest.new_members.contains_key(*id))
+            .map(|(id, error)| (id.clone(), error.clone()))
+        {
+            for id in prepared {
+                failures.insert(
+                    id.clone(),
+                    format!(
+                        "publish: not sent in this round, because new member {unprepared} has not prepared ({refusal})"
+                    ),
+                );
+            }
+            return Ok(failures);
+        }
+        for id in prepared {
             #[cfg(test)]
             if self
                 .decision_publish_fault
@@ -185,7 +310,7 @@ impl RemoteJoinedHandoffBackend {
                 continue;
             }
             // A lost reply may still be durable: the observation decides.
-            if let Err(error) = self.transport.remote_joint_decision_exchange(
+            if let Err(error) = self.decision_exchange(
                 &members.metadata_leader,
                 id,
                 manifest,
@@ -220,7 +345,7 @@ impl RemoteJoinedHandoffBackend {
         publishers.push(self.target.clone());
         let token = bounded(parent, DECISION_ROUND);
         let mut published: BTreeMap<ClusterNodeId, String> = BTreeMap::new();
-        let mut round = 0;
+        let mut round = 0u32;
         loop {
             let Some(plan) = self.plan.clone() else {
                 return Err(remote_error(
@@ -247,7 +372,13 @@ impl RemoteJoinedHandoffBackend {
                 Err(missing) => missing,
             };
             parent.check()?;
-            if round == DECISION_PUBLICATION_ROUNDS || token.check().is_err() {
+            // By time while every missing member is only slow or busy: its
+            // work may have completed after its reply was lost, and a
+            // repetition costs it nothing. By count otherwise.
+            let curable = missing
+                .iter()
+                .all(|(id, observed)| cured_by_repetition(published.get(id).unwrap_or(observed)));
+            if token.check().is_err() || (round >= DECISION_PUBLICATION_ROUNDS && !curable) {
                 let named = missing
                     .iter()
                     .map(|(id, observed)| match published.get(id) {
@@ -261,6 +392,8 @@ impl RemoteJoinedHandoffBackend {
                 )));
             }
             round += 1;
+            std::thread::sleep(repeat_pause(round));
+            parent.check()?;
             // The publication issues new work: it starts under a live plan.
             let fresh = self
                 .renewed_plan(members, parent)

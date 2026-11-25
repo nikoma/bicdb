@@ -206,21 +206,42 @@ impl NativeJointMemberRelease {
         self.require_actor(client)?;
         let data = self.data();
         let phase = request.child_with_deadline(Instant::now() + REMOTE_PHASE_BUDGET);
-        // (1) Own pre-quorum RELEASE observation: released and armed.
-        let local_phase = self.acquire_and_observe(client, metadata_leader, &phase)?;
+        // (1) Own pre-quorum RELEASE observation (released and armed) and
+        // (2) one WRITER AUDIT observation of every other NEW member, taken
+        // at the same time. All are pre-quorum observations of this policy:
+        // the post-quorum observation below must follow every one of them
+        // (`require_post_all`), and no order is required among them. Taken
+        // one after the other, the other members' frames ran out on a slow
+        // host before the durable policy. The window's exchanges are bound
+        // to `collector`; the phase is bounded by the local observation once
+        // both are in.
+        let (local, window) = std::thread::scope(|scope| {
+            let observe_local = || self.acquire_and_observe(client, metadata_leader, &phase);
+            let local = std::thread::Builder::new()
+                .name("joint-policy-local-phase".into())
+                .spawn_scoped(scope, observe_local);
+            let window = RemotePreparationWindow::collect(
+                NativeJointBridgePhaseKindV1::WriterAudit,
+                data,
+                client,
+                collector,
+                collector_business,
+                &phase,
+            );
+            let local = match local {
+                Ok(worker) => worker
+                    .join()
+                    .unwrap_or_else(|_| Err(invalid("the policy local phase worker panicked"))),
+                Err(_) => observe_local(),
+            };
+            (local, window)
+        });
+        let local_phase = local?;
         self.facts_of(&local_phase)?;
         local_phase.require_released_open()?;
         let phase = phase.child_with_deadline(local_phase.committed().deadline());
         phase.check()?;
-        // (2) Every other NEW member, each under its own lock and metadata.
-        let window = RemotePreparationWindow::collect(
-            NativeJointBridgePhaseKindV1::WriterAudit,
-            data,
-            client,
-            collector,
-            collector_business,
-            &phase,
-        )?;
+        let window = window?;
         require_policy_window(&window, &self.local, data)?;
         let mut audits = BTreeMap::new();
         for (node, frame) in &window.frames {

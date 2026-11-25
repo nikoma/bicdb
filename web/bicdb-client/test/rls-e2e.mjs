@@ -7,7 +7,7 @@
 // the master under the user's session, an UNAUTHORIZED write (alice forging
 // owner='bob') is rejected by WITH CHECK and visibly reverted on her own
 // device, and an ownership transfer propagates as revoke+grant.
-// Requires `cargo build -p bicdb-cli`.
+// Requires `cargo build -p bicdb`.
 import { spawn } from "node:child_process";
 import { join, resolve } from "node:path";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";

@@ -22,6 +22,6 @@ Provision SQL privileges and the identity-bound login deliberately, then test
 the resulting workload login over authenticated TLS. Do not treat a management
 token or a SQL role name as proof of workload access.
 
-Run `cargo test -p bicdb-cli --test user_password_env --release --locked` for the
+Run `cargo test -p bicdb --test user_password_env --release --locked` for the
 CLI boundary tests. TLS connection and restore acceptance belongs in the
 deployment adapter's integration suite.

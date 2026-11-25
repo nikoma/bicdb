@@ -110,6 +110,10 @@ mod native_activation_domain_tests;
 pub(crate) use native_activation::NativeActivationReceipt;
 use native_activation::NATIVE_ACTIVATED_FORMAT;
 mod native_ready_completion;
+#[cfg(test)]
+pub(crate) use native_ready_completion::{
+    test_arm_completion_refresh_failure, test_completion_refresh_failure_armed,
+};
 mod native_ready_prepare;
 #[cfg(test)]
 pub(crate) use native_ready_catalog::native_ready_test_command;
@@ -146,6 +150,7 @@ use recovery_state::RecoveryFenceRecord;
 pub(crate) use recovery_state::{
     HistoricalRangeCertification, RecoveryFenceScope, RecoveryImageInstallSessionObservation,
     RecoveryLocalHistoricalApplyObservation, RecoveryResolvedCatalogObservation,
+    UnfinishedNormalRecoveryV1,
 };
 
 mod native_limits;
@@ -3715,6 +3720,26 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         } else {
             None
         };
+        #[cfg(test)]
+        if native_database.is_some()
+            && native_abort::test_take_native_admission_stop(
+                range.id,
+                native_abort::TestNativeAdmissionStop::AfterWriterStart,
+            )
+        {
+            self.recovered_epochs.lock().remove(&range.id);
+            return Err(self.retain_native_uncertain_admission(
+                &command,
+                mutation,
+                admission_rejection,
+                BicDbError::CommitOutcomeUnknown {
+                    sequence: None,
+                    transaction_id: Some(command.transaction_id),
+                    incarnation: self.local_incarnation.clone(),
+                    detail: "injected admission stop AfterWriterStart".into(),
+                },
+            ));
+        }
         let local_prepare = self.local_service.lock().prepare_range_write_with_mutation(
             &range,
             &self.local_node_id,
@@ -3729,6 +3754,26 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                 ));
             }
             return Err(error);
+        }
+        #[cfg(test)]
+        if native_database.is_some()
+            && native_abort::test_take_native_admission_stop(
+                range.id,
+                native_abort::TestNativeAdmissionStop::AfterLocalPrepare,
+            )
+        {
+            self.recovered_epochs.lock().remove(&range.id);
+            return Err(self.retain_native_uncertain_admission(
+                &command,
+                mutation,
+                admission_rejection,
+                BicDbError::CommitOutcomeUnknown {
+                    sequence: None,
+                    transaction_id: Some(command.transaction_id),
+                    incarnation: self.local_incarnation.clone(),
+                    detail: "injected admission stop AfterLocalPrepare".into(),
+                },
+            ));
         }
 
         let quorum = voters.len() / 2 + 1;
@@ -3850,6 +3895,26 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             )));
         }
 
+        #[cfg(test)]
+        if native_database.is_some()
+            && native_abort::test_take_native_admission_stop(
+                range.id,
+                native_abort::TestNativeAdmissionStop::AfterPrepareQuorum,
+            )
+        {
+            self.recovered_epochs.lock().remove(&range.id);
+            return Err(self.retain_native_uncertain_admission(
+                &command,
+                mutation,
+                admission_rejection,
+                BicDbError::CommitOutcomeUnknown {
+                    sequence: None,
+                    transaction_id: Some(command.transaction_id),
+                    incarnation: self.local_incarnation.clone(),
+                    detail: "injected admission stop AfterPrepareQuorum".into(),
+                },
+            ));
+        }
         // Native uncertainty starts BEFORE attempting the local Commit write:
         // persistence can succeed even when its error/reply is lost. No native
         // abort may be inferred from any failure after this boundary.
@@ -3901,6 +3966,26 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             }
             return Err(error);
         }
+        #[cfg(test)]
+        if native_database.is_some()
+            && native_abort::test_take_native_admission_stop(
+                range.id,
+                native_abort::TestNativeAdmissionStop::AfterLocalCommit,
+            )
+        {
+            self.recovered_epochs.lock().remove(&range.id);
+            return Err(self.retain_native_uncertain_admission(
+                &command,
+                mutation,
+                admission_rejection,
+                BicDbError::CommitOutcomeUnknown {
+                    sequence: None,
+                    transaction_id: Some(command.transaction_id),
+                    incarnation: self.local_incarnation.clone(),
+                    detail: "injected admission stop AfterLocalCommit".into(),
+                },
+            ));
+        }
         let mut committed = 1usize;
         let mut committed_nodes = Vec::new();
         for (voter, ack) in voter_fan_out(&prepared_nodes, concurrent_voters, |voter| {
@@ -3942,6 +4027,26 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             )));
         }
 
+        #[cfg(test)]
+        if native_database.is_some()
+            && native_abort::test_take_native_admission_stop(
+                range.id,
+                native_abort::TestNativeAdmissionStop::AfterCommitQuorum,
+            )
+        {
+            self.recovered_epochs.lock().remove(&range.id);
+            return Err(self.retain_native_uncertain_admission(
+                &command,
+                mutation,
+                admission_rejection,
+                BicDbError::CommitOutcomeUnknown {
+                    sequence: None,
+                    transaction_id: Some(command.transaction_id),
+                    incarnation: self.local_incarnation.clone(),
+                    detail: "injected admission stop AfterCommitQuorum".into(),
+                },
+            ));
+        }
         // The leader persists the quorum certificate before any replica is
         // allowed to apply. From this point onward the command must be
         // recovered/applied and may not be overtaken by a later command.
@@ -4109,6 +4214,10 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         let authority = &RangeMutationAuthority::Mutation(&evidence.mutation);
         let mut problems = Vec::new();
         let mut actual_native_apply_verified = !self.native_image_mode;
+        // Test only: the process "ends" between the native completion and
+        // the raw Applied mark (the raw log is left one below the prefix).
+        #[allow(unused_mut)]
+        let mut injected_stop = false;
         if let Some(native) = &evidence.native {
             if let Some((receipt, database)) = native_context {
                 let current_range = {
@@ -4142,6 +4251,16 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                             });
                         if let Err(error) = completion {
                             problems.push(format!("native prefix completion failed: {error}"));
+                        } else {
+                            #[cfg(test)]
+                            if native_abort::test_take_native_admission_stop(
+                                evidence.range_id,
+                                native_abort::TestNativeAdmissionStop::AfterNativeCompletion,
+                            ) {
+                                injected_stop = true;
+                                problems
+                                    .push("injected admission stop AfterNativeCompletion".into());
+                            }
                         }
                     }
                 }
@@ -4151,7 +4270,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         } else if self.native_image_mode {
             problems.push("native callback has no admitted native command journal".to_string());
         }
-        if actual_native_apply_verified {
+        if actual_native_apply_verified && !injected_stop {
             if let Err(error) = self
                 .local_service
                 .lock()

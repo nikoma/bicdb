@@ -13,7 +13,8 @@ pub(super) struct RegisteredExportNewPin {
     binding: NativeSourceExportBindingV1,
     frozen: Arc<crate::distribution_range_image_install::NativeImageInstallFreeze>,
     pin: Option<Arc<SourceCaptureReadPin>>,
-    requests: std::collections::BTreeMap<Uuid, Vec<u8>>,
+    // Exact request bytes and the end of the request's own budget.
+    requests: std::collections::BTreeMap<Uuid, (Vec<u8>, Instant)>,
 }
 impl NativeRegisteredReplicaAdmission {
     /// Dedicated immutable Registered ingress. A retained original owner is a
@@ -176,19 +177,30 @@ impl NativeRegisteredReplicaAdmission {
                     });
                 }
                 let retained = retained.as_mut().unwrap();
-                if let Some(old) = retained.requests.get(&request.challenge) {
+                if let Some((old, _)) = retained.requests.get(&request.challenge) {
                     if old != &exact_bytes {
                         return Err(invalid(
                             "Registered NEW challenge reused with changed exact request",
                         ));
                     }
                 } else {
+                    // An exact request is bound while its own budget can
+                    // still be running; its reply was bound to its exact
+                    // bytes and nothing is retained for it afterwards. A
+                    // request whose budget ended frees its slot, so a
+                    // retirement that is repeated over time cannot use the
+                    // table up.
+                    let now = Instant::now();
+                    retained.requests.retain(|_, (_, live_until)| now < *live_until);
                     if retained.requests.len() >= 64 {
                         return Err(invalid(
-                            "Registered NEW request custody capacity; no eviction",
+                            "Registered NEW request custody busy: 64 exact requests are still running; none is evicted",
                         ));
                     }
-                    retained.requests.insert(request.challenge, exact_bytes);
+                    retained.requests.insert(
+                        request.challenge,
+                        (exact_bytes, now + Duration::from_millis(request.budget_ms)),
+                    );
                 }
                 db.range_mutation_gate().validate_source_capture_read_pin(
                     request.binding.range_id,

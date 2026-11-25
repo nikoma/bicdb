@@ -75,7 +75,7 @@ controls **passed** in their separate hosted run below. A source review or
 successful formatting check alone is not execution evidence.
 
 On an isolated build/test host, the integration target is reproducible with
-`CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 cargo test -p bicdb-cli --test ha_failover_cli --locked -- --test-threads=4 --show-output`.
+`CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 cargo test -p bicdb --test ha_failover_cli --locked -- --test-threads=4 --show-output`.
 Pin the actual tested source and retain complete output. The original port
 race at main505 is intermittent; the smallest deterministic successor control
 is `occupied_replication_listener_is_reported_before_ha_fault`, which retains

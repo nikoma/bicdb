@@ -48,7 +48,7 @@ A checkout containing only this repository can:
 ```bash
 cargo build --workspace --locked
 cargo test --workspace --locked
-cargo run --release -p bicdb-cli -- serve ./database --host 127.0.0.1 --port 5433
+cargo run --release -p bicdb -- serve ./database --host 127.0.0.1 --port 5433
 ```
 
 The community CLI installs `BalancedDistributionHostService` for a distributed

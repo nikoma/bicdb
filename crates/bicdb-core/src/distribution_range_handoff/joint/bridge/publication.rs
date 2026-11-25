@@ -10,6 +10,8 @@ pub(crate) use release_phase::{
     NativeJointActivatedQuorum, NativeJointReleaseAdmission, NativeJointReleaseContinuation,
     NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
 };
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_open::{NativeOpenFirstWindow, OPEN_RECOVERY_FOUND_NO_ACTIVATION};
 
 pub(crate) use release_phase::NativeJointActivationProof;
 #[cfg(feature = "tls-replication")]
@@ -573,6 +575,33 @@ impl NativeJointOpenAdmission {
             }
         }
         Ok(())
+    }
+    /// The commit point of this member's own catalogue activation; see
+    /// `RemoteOpenBacking::pass_commit_point`. In-process phases keep every
+    /// check unchanged.
+    pub(crate) fn pass_commit_point(&self) -> Result<()> {
+        #[cfg(feature = "tls-replication")]
+        if let OpenBacking::Remote(remote) = &self.backing {
+            return remote.pass_commit_point();
+        }
+        Ok(())
+    }
+    /// The decision to recover this member's existing exact activation; see
+    /// `RemoteOpenBacking::pass_recovery_point`.
+    pub(crate) fn pass_recovery_point(&self) -> Result<()> {
+        #[cfg(feature = "tls-replication")]
+        if let OpenBacking::Remote(remote) = &self.backing {
+            return remote.pass_recovery_point();
+        }
+        Ok(())
+    }
+    /// Whether this admission's first window passed its commit point.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn passed_commit_point(&self) -> bool {
+        match &self.backing {
+            OpenBacking::Remote(remote) => remote.passed_commit_point(),
+            _ => false,
+        }
     }
     pub(crate) fn has_fresh_open_phase(&self) -> bool {
         match &self.backing {

@@ -157,6 +157,62 @@ impl ClusterDataNodeService {
         parent.check()?;
         Ok(evidence)
     }
+    /// A Complete of this session that persisted the catalogue completion and
+    /// then failed before refreshing the retained binding (a busy native
+    /// journal, an expired budget) leaves the binding at the prepared
+    /// catalogue, and every later Complete would refuse it as stale. The
+    /// same repair as a re-sent Prepare (`reattest_local_native_ready`) runs
+    /// first: re-fsync of the exact saved refusal, then the full native
+    /// readback refresh. It is a no-op unless the saved phase is completed
+    /// (or its persistence is uncertain); nothing else changes.
+    /// Scheduling only: whether `refresh_retained_completed_native_binding`
+    /// can have work (the saved phase is completed or not durably known).
+    pub(crate) fn native_completed_binding_repair_wanted(
+        &self,
+        scope: &crate::distribution_range_consensus::RecoveryFenceScope,
+    ) -> bool {
+        matches!(
+            self.range_writes.recovery_observation_phase(scope),
+            Ok(crate::distribution_range_recovery::RecoveryFenceObservationPhase::NativeCompletedFrozen)
+                | Err(_)
+        )
+    }
+    pub(crate) fn refresh_retained_completed_native_binding(
+        &mut self,
+        prepared: &PreparedNativeRecoveryReady,
+        role: &RecoveryRoleAdmission,
+        frozen: &FrozenRangeMutationPermit,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        use crate::distribution_range_recovery::RecoveryFenceObservationPhase as Phase;
+        parent.check()?;
+        prepared.scope().require_role(role)?;
+        if !matches!(
+            self.range_writes
+                .recovery_observation_phase(prepared.scope()),
+            Ok(Phase::NativeCompletedFrozen) | Err(_)
+        ) {
+            return Ok(());
+        }
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
+        let native = db.native_recovery_admission(
+            role.cluster_id(),
+            role.bootstrap_id(),
+            role.local_node_id(),
+            role.local_member_incarnation(),
+        )?;
+        self.range_writes
+            .current_mut()
+            .refsync_native_prepared_refusal(&db, &native, role, frozen, parent)?;
+        if self
+            .range_writes
+            .recovery_observation_phase(prepared.scope())?
+            == Phase::NativeCompletedFrozen
+        {
+            prepared.refresh_after_durable_native_completion(&db, &self.range_writes, role)?;
+        }
+        parent.check()
+    }
     pub(crate) fn observe_local_native_ready(
         &self,
         prepared: &PreparedNativeRecoveryReady,

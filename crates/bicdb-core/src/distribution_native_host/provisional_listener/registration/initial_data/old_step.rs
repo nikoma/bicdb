@@ -347,6 +347,79 @@ pub(super) struct RetainedInitialOld {
 }
 pub(super) type RetainedInitialOldTable =
     Mutex<BTreeMap<crate::RangeId, Arc<Mutex<RetainedInitialOld>>>>;
+/// The most OLD closures one member retains for handoffs that are NOT
+/// finished in its own committed metadata.
+const MAX_UNFINISHED_OLD_OWNERS: usize = 8;
+/// How many retained OLD owners count against the capacity: every entry
+/// whose handoff is not finished in `own_topology`, which must be this
+/// member's OWN fresh committed metadata, and every entry that is in use
+/// right now. An entry of a finished handoff (the closure of a completed
+/// move's retired source) is NOT removed and keeps everything it holds,
+/// its freeze included; it only stops counting, so the capacity bounds the
+/// unfinished handoffs of this member and not the moves of its lifetime.
+fn unfinished_old_owners(
+    entries: &BTreeMap<crate::RangeId, Arc<Mutex<RetainedInitialOld>>>,
+    own_topology: &crate::distribution::ClusterTopology,
+) -> usize {
+    count_unfinished(
+        entries.values().map(|owner| {
+            owner
+                .try_lock()
+                .map(|held| held.plan.promise().relocation_id)
+        }),
+        &|relocation| super::super::bridge_step::handoff_finished(own_topology, relocation),
+    )
+}
+/// `None` is an entry that is in use right now: it always counts.
+fn count_unfinished(
+    relocations: impl Iterator<Item = Option<crate::distribution::RelocationId>>,
+    finished: &dyn Fn(crate::distribution::RelocationId) -> bool,
+) -> usize {
+    relocations
+        .filter(|relocation| relocation.is_none_or(|relocation| !finished(relocation)))
+        .count()
+}
+#[cfg(test)]
+mod capacity_tests {
+    use super::count_unfinished;
+    use crate::distribution::RelocationId;
+
+    /// The capacity of the retained OLD owner table counts the handoffs that
+    /// are not finished and the entries in use; the closures of finished
+    /// handoffs stay retained and never count, however many there are.
+    #[test]
+    fn native_old_owner_capacity_counts_unfinished_handoffs_not_lifetime_moves() {
+        let id = |n: u64| RelocationId::new(n).unwrap();
+        let finished = |relocation: RelocationId| relocation.get() <= 20;
+        // Twenty finished moves and nothing else: the table is not full.
+        assert_eq!(
+            count_unfinished((1..=20).map(|n| Some(id(n))), &finished),
+            0
+        );
+        // Unfinished handoffs count one each, among any number of finished.
+        assert_eq!(
+            count_unfinished((1..=27).map(|n| Some(id(n))), &finished),
+            7
+        );
+        assert_eq!(
+            count_unfinished((1..=28).map(|n| Some(id(n))), &finished),
+            super::MAX_UNFINISHED_OLD_OWNERS
+        );
+        // An entry in use cannot be read: it counts, finished or not.
+        assert_eq!(
+            count_unfinished(
+                [Some(id(1)), None, Some(id(21)), None].into_iter(),
+                &finished
+            ),
+            3
+        );
+        // Nothing finished: every entry counts, as before.
+        assert_eq!(
+            count_unfinished((1..=8).map(|n| Some(id(n))), &|_| false),
+            8
+        );
+    }
+}
 impl NativeInitialDataHost {
     pub(super) fn retained_actual_old_source(
         &self,
@@ -408,6 +481,7 @@ impl NativeInitialDataHost {
         step.require_joint_runtime(&runtime)?;
         let range = step.plan().old_range().id;
         let digest = step.plan().checksum_sha256()?;
+        let own_topology = step.own.committed_topology(step.business)?.clone();
         let retained = {
             let mut owners = self
                 .old_closures
@@ -416,7 +490,7 @@ impl NativeInitialDataHost {
             if let Some(previous) = owners.get(&range) {
                 previous.clone()
             } else {
-                if owners.len() >= 8 {
+                if unfinished_old_owners(&owners, &own_topology) >= MAX_UNFINISHED_OLD_OWNERS {
                     return Err(invalid(
                         "retained OLD capacity; existing refusals not evicted",
                     ));

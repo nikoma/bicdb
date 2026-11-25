@@ -11,7 +11,8 @@
 //! construction: the unchanged owner release runs under an admission whose
 //! foreign half is the bounded window.
 use super::super::super::remote_publication::{
-    NativeJointBridgeMemberIdentity, RemotePreparationWindow, REMOTE_PHASE_BUDGET,
+    observation_budget, NativeJointBridgeMemberIdentity, RemotePreparationWindow,
+    REMOTE_PHASE_BUDGET,
 };
 use super::*;
 use crate::distribution_range_handoff::NativeJointBridgePhaseKindV1;
@@ -446,7 +447,7 @@ impl NativeJointMemberRelease {
         let host = client.acquire_host_metadata_observation(
             metadata_leader,
             business,
-            remaining(token)?,
+            observation_budget(token)?,
             token,
         )?;
         self.observe(host, business, token)
@@ -678,7 +679,7 @@ impl NativeJointMemberRelease {
         let own = client.acquire_host_metadata_observation(
             metadata_leader,
             business,
-            remaining(&phase)?,
+            observation_budget(&phase)?,
             &phase,
         )?;
         if own.term() < released.post_quorum.0
@@ -833,7 +834,7 @@ impl NativeJointMemberRelease {
         let collector = client.acquire_host_metadata_observation(
             metadata_leader,
             business,
-            remaining(&phase)?,
+            observation_budget(&phase)?,
             &phase,
         )?;
         let window = RemotePreparationWindow::collect(
@@ -897,7 +898,7 @@ impl NativeRemoteJointActivationCertificate {
         let collector = client.acquire_host_metadata_observation(
             metadata_leader,
             business,
-            remaining(&phase)?,
+            observation_budget(&phase)?,
             &phase,
         )?;
         let phase = phase.child_with_deadline(collector.deadline());

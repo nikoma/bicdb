@@ -42,6 +42,10 @@ pub struct NativeInitialDataStatus {
     pub writer_binding_diagnostic: Option<serde_json::Value>,
     pub registry_refresh_last_attempt: Option<serde_json::Value>,
     pub hot_recovery_last_attempt: Option<serde_json::Value>,
+    /// Reopened owner only: the last attempt to recover the ranges this node
+    /// leads through the ordinary leader recovery. Diagnostic DATA only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reopened_leader_recovery_last_attempt: Option<serde_json::Value>,
 }
 
 /// Only this actual INITIAL owner constructs it after policy publication. It
@@ -281,6 +285,7 @@ pub(super) struct NativeInitialDataHost {
     cleanup: Option<NativeInitialDataCleanupSender>,
     hot_recovery: Option<Arc<NativeHotRecoveryMaintenance>>,
     registry_refresh_last_attempt: Option<serde_json::Value>,
+    reopened_leader_recovery_last_attempt: Option<serde_json::Value>,
     image_sources: Option<Arc<crate::distribution_range_image::NativeRemoteImageSourceRegistry>>,
     old_closures: Arc<RetainedInitialOldTable>,
     writer_data_domains: Arc<Mutex<super::writer_data_domain::NativeHostWriterDataDomains>>,
@@ -364,6 +369,7 @@ impl NativeInitialDataHost {
             image_sources: None,
             old_closures: Arc::new(Mutex::new(BTreeMap::new())),
             registry_refresh_last_attempt: None,
+            reopened_leader_recovery_last_attempt: None,
             writer_data_domains: Default::default(),
             bridge_steps: Default::default(),
             genesis: BTreeMap::new(),
@@ -410,13 +416,17 @@ impl NativeInitialDataHost {
                 .ok_or_else(|| invalid("initial DATA database busy"))?;
             // No R0 reconstruction: these sealed facts come from this SAME
             // retained INITIAL factory, protected original native anchors.
-            for range in &self.initial.seed.spec.initial_ranges {
-                let proof = database.observe_initial_data_genesis(
-                    &self.initial.seed.factory,
-                    range,
-                    &topology,
-                )?;
-                self.genesis.insert(range.id, proof);
+            // A reopened owner holds no genesis proof and never asks for
+            // one: its ranges take the ordinary leader recovery below.
+            if !self.initial.reopened() {
+                for range in &self.initial.seed.spec.initial_ranges {
+                    let proof = database.observe_initial_data_genesis(
+                        &self.initial.seed.factory,
+                        range,
+                        &topology,
+                    )?;
+                    self.genesis.insert(range.id, proof);
+                }
             }
             drop(database);
             let initial = self.initial.clone();
@@ -458,7 +468,32 @@ impl NativeInitialDataHost {
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("initial DATA service busy"))?;
-            let range = self.genesis.values().next().unwrap().range();
+            let reopened_range;
+            let range = match self.genesis.values().next() {
+                Some(proof) => proof.range(),
+                None => {
+                    // Reopened owner: any range this node currently votes
+                    // in, from the configuration its new policy was built on.
+                    reopened_range = self
+                        .initial
+                        .topology
+                        .try_read()
+                        .ok_or_else(|| invalid("reopened DATA routing busy"))?
+                        .ranges
+                        .values()
+                        .find(|range| {
+                            range.replicas.iter().any(|replica| {
+                                replica.node_id == self.initial.seed.spec.node_id
+                                    && replica.role == crate::distribution::RangeReplicaRole::Voter
+                            })
+                        })
+                        .cloned()
+                        .ok_or_else(|| {
+                            invalid("reopened INITIAL owner votes in no committed range")
+                        })?;
+                    &reopened_range
+                }
+            };
             let (writer, root) = service.retain_initial_data_writer(
                 &enrollment.coordinator,
                 &enrollment.guard,
@@ -545,7 +580,154 @@ impl NativeInitialDataHost {
         // Ingress publication is the successful action's linearization point.
         // Do not revoke an earlier successful publication on a later retry.
         self.published.store(true, Ordering::Release);
+        if self.initial.reopened() {
+            // Publication admits nothing for a led range by itself: every
+            // write still requires that range's recovered epoch, which only
+            // the recovery below (or the hot maintenance) can establish.
+            // Its refusal is retained for the owner's later attempts.
+            let _ = self.recover_reopened_leadership(parent);
+        }
         Ok(())
+    }
+    /// Reopened owner only. The ranges this node leads have no recovered
+    /// epoch in this process. Run the ordinary leader recovery: it needs a
+    /// current voter quorum, refuses a leader that is behind that quorum and
+    /// refuses any unresolved tail (those need native recovery), and grants
+    /// nothing else. Returns the number of led ranges still unrecovered.
+    fn recover_reopened_leadership(&mut self, parent: &CancellationToken) -> Result<usize> {
+        parent.check()?;
+        if !self.initial.reopened() || self.stopping || !self.published.load(Ordering::Acquire) {
+            return Ok(0);
+        }
+        let coordinator = Arc::clone(
+            &self
+                .enrollment
+                .as_ref()
+                .ok_or_else(|| invalid("reopened leader recovery requires the retained writer"))?
+                .coordinator,
+        );
+        self.admission
+            .as_ref()
+            .ok_or_else(|| invalid("reopened leader recovery requires the retained admission"))?
+            .require_live()?;
+        let led = self
+            .initial
+            .topology
+            .try_read()
+            .ok_or_else(|| invalid("reopened leader recovery routing busy"))?
+            .ranges
+            .values()
+            .filter(|range| range.leader == self.initial.seed.spec.node_id)
+            .cloned()
+            .collect::<Vec<_>>();
+        let pending = |coordinator: &RangeWriteCoordinator<TcpClusterRelocationTransport>| {
+            led.iter()
+                .filter(|range| !coordinator.initial_data_leader_admission_observed(range))
+                .count()
+        };
+        if pending(&coordinator) == 0 {
+            // A refusal shown earlier is stale once every led range is
+            // admitted again (here, or by the hot recovery's publication).
+            if self
+                .reopened_leader_recovery_last_attempt
+                .as_ref()
+                .is_some_and(|last| last["result"] != "recovered")
+            {
+                self.reopened_leader_recovery_last_attempt = Some(serde_json::json!({
+                    "result": "recovered", "still_unrecovered": 0,
+                    "scope": "every led range is admitted again in this process; diagnostic, not authority"}));
+            }
+            return Ok(0);
+        }
+        // The tails this attempt starts from (local reads only), so a
+        // recovered attempt still names what it recovered.
+        let tails = led
+            .iter()
+            .filter(|range| !coordinator.initial_data_leader_admission_observed(range))
+            .map(|range| self.reopened_tail_diagnostic(range))
+            .collect::<Vec<_>>();
+        let outcome = coordinator.recover_reopened_local_leadership(64);
+        let remaining = pending(&coordinator);
+        self.reopened_leader_recovery_last_attempt = Some(match &outcome {
+            Ok(recovered) => serde_json::json!({
+                "result": "recovered", "ranges": recovered, "still_unrecovered": remaining,
+                "recovered_tails": tails,
+                "scope": "ordinary leader recovery of this process; diagnostic, not authority"}),
+            Err(error) => {
+                let unrecovered = led
+                    .iter()
+                    .filter(|range| !coordinator.initial_data_leader_admission_observed(range))
+                    .map(|range| self.reopened_tail_diagnostic(range))
+                    .collect::<Vec<_>>();
+                serde_json::json!({
+                    "result": "refused_or_pending", "still_unrecovered": remaining,
+                    "error": error.to_string().chars().take(2048).collect::<String>(),
+                    "unrecovered_ranges": unrecovered,
+                    "scope": "this node's own durable log tail; diagnostic, not authority"})
+            }
+        });
+        parent.check()?;
+        outcome.map(|_| remaining)
+    }
+    /// What this node's own durable state says about the tail of a led range
+    /// whose leadership the ordinary recovery refused: local reads only, no
+    /// peer is asked and nothing is decided from it.
+    fn reopened_tail_diagnostic(&self, range: &crate::RangeDescriptor) -> serde_json::Value {
+        let local = (|| -> Result<serde_json::Value> {
+            let service = self
+                .initial
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("tail diagnostic service busy"))?;
+            let progress = service.range_write_progress(range.id);
+            let next = progress.resolved_through.saturating_add(1);
+            let entry = service
+                .probe_range_write_for_peer(range, &self.initial.seed.spec.node_id, next)?
+                .entry;
+            drop(service);
+            let database = self
+                .initial
+                .seed
+                .database
+                .try_read()
+                .ok_or_else(|| invalid("tail diagnostic database busy"))?;
+            let prefix = database.native_range_prefix_observation(range.id)?;
+            let writer_start = self
+                .initial
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("tail diagnostic service busy"))?
+                .unfinished_native_writer_start(&database, range)?;
+            let tail_state = reopened_tail_state(
+                &progress,
+                &prefix,
+                entry.as_ref().map(|e| e.state),
+                writer_start,
+            );
+            Ok(serde_json::json!({
+                "tail_state": tail_state,
+                "unfinished_native_writer_start_index": writer_start,
+                "resolved_through": progress.resolved_through,
+                "last_index": progress.last_index,
+                "first_unresolved_index": next,
+                "first_unresolved_state": entry.as_ref().map(|e| format!("{:?}", e.state)),
+                "first_unresolved_command_id": entry.as_ref().map(|e| e.command.command_id.clone()),
+                "native_applied_index": prefix.native_applied_index,
+                "native_pending_command_index": prefix.pending_command_index,
+                "native_materialized_pending_index": prefix.materialized_pending_index,
+                "native_prefix_invalidated": prefix.invalidated,
+            }))
+        })();
+        match local {
+            Ok(mut value) => {
+                value["range_id"] = serde_json::json!(range.id);
+                value["epoch"] = serde_json::json!(range.epoch);
+                value
+            }
+            Err(error) => serde_json::json!({
+                "range_id": range.id, "epoch": range.epoch,
+                "unreadable": error.to_string().chars().take(512).collect::<String>()}),
+        }
     }
     /// Start the immutable DATA listener from the retained original runtime
     /// and admission. Finite and non-waiting: a busy latch is an error the
@@ -785,20 +967,39 @@ impl NativeInitialDataHost {
             }
             None => false,
         };
-        let ranges = self
-            .genesis
-            .values()
-            .map(|proof| NativeInitialDataRangeStatus {
-                range_id: proof.range().id,
-                epoch: proof.range().epoch,
-                local_leader: proof.range().leader == self.initial.seed.spec.node_id,
-                leader_admission_observed: self.enrollment.as_ref().is_some_and(|owner| {
-                    owner
-                        .coordinator
-                        .initial_data_leader_admission_observed(proof.range())
-                }),
-            })
-            .collect();
+        let observed = |range: &crate::RangeDescriptor| NativeInitialDataRangeStatus {
+            range_id: range.id,
+            epoch: range.epoch,
+            local_leader: range.leader == self.initial.seed.spec.node_id,
+            leader_admission_observed: self.enrollment.as_ref().is_some_and(|owner| {
+                owner
+                    .coordinator
+                    .initial_data_leader_admission_observed(range)
+            }),
+        };
+        let ranges = if self.initial.reopened() {
+            // A reopened owner has no genesis proofs: report the ranges it
+            // votes in according to its own published routing DATA.
+            self.initial
+                .topology
+                .try_read()
+                .ok_or_else(|| invalid("reopened DATA status routing busy"))?
+                .ranges
+                .values()
+                .filter(|range| {
+                    range
+                        .replicas
+                        .iter()
+                        .any(|replica| replica.node_id == self.initial.seed.spec.node_id)
+                })
+                .map(observed)
+                .collect()
+        } else {
+            self.genesis
+                .values()
+                .map(|proof| observed(proof.range()))
+                .collect()
+        };
         Ok(NativeInitialDataStatus {
             receiver_listening: self.listener.is_some(),
             writer_policy_current,
@@ -809,6 +1010,9 @@ impl NativeInitialDataHost {
             ranges,
             cleanup_quarantined_owners: NativeInitialDataCleanupSender::quarantined_owners(),
             registry_refresh_last_attempt: self.registry_refresh_last_attempt.clone(),
+            reopened_leader_recovery_last_attempt: self
+                .reopened_leader_recovery_last_attempt
+                .clone(),
             hot_recovery_last_attempt: self.hot_recovery.as_ref().and_then(|h| h.diagnostic()),
             writer_binding_diagnostic: self.enrollment.as_ref().map(|owner| {
                 let mut diagnostic = owner.guard.binding_diagnostic();
@@ -1125,6 +1329,63 @@ impl NativeInitialDataHost {
         Ok(())
     }
 }
+/// The name of a reopened led range's tail shape, from this node's own
+/// durable raw log and native prefix (`next` = the raw log's first
+/// unresolved entry). Diagnostic only: every recovery path re-proves its own
+/// state, and a name here neither grants nor refuses anything. The names
+/// say which recovery handles the shape:
+/// - ordinary reopened leader recovery: `clean`,
+///   `native_completed_raw_unresolved` (State C: the native prefix covers
+///   the own certified first unresolved entry);
+/// - hot recovery: `native_pending`, `own_commit_tail`, `prepared_tail`,
+///   `writer_start_only_tail`;
+/// - none (the range stays refused until an operator repairs it):
+///   `native_prefix_invalidated`, `native_materialized_pending`,
+///   `native_prefix_unknown`, `unhandled_reopened_tail`.
+pub(super) fn reopened_tail_state(
+    progress: &crate::RangeWriteProgress,
+    prefix: &crate::db::NativeRangePrefixObservation,
+    next_state: Option<crate::distribution_range_consensus::RangeWriteState>,
+    writer_start: Option<u64>,
+) -> &'static str {
+    use crate::distribution_range_consensus::RangeWriteState as S;
+    if prefix.invalidated {
+        return "native_prefix_invalidated";
+    }
+    if prefix.materialized_pending_index.is_some() {
+        return "native_materialized_pending";
+    }
+    if prefix.pending_command_index.is_some() {
+        return "native_pending";
+    }
+    let Some(native) = prefix.native_applied_index else {
+        return "native_prefix_unknown";
+    };
+    let (resolved, last) = (progress.resolved_through, progress.last_index);
+    let above = native.checked_add(1);
+    if resolved == native && last == native {
+        return match writer_start {
+            None => "clean",
+            Some(index) if Some(index) == above => "writer_start_only_tail",
+            Some(_) => "unhandled_reopened_tail",
+        };
+    }
+    if resolved.checked_add(1) == Some(native)
+        && last == native
+        && next_state == Some(S::QuorumCommitted)
+    {
+        return "native_completed_raw_unresolved";
+    }
+    if resolved == native && Some(last) == above {
+        return match next_state {
+            Some(S::Committed | S::QuorumCommitted | S::Applied) => "own_commit_tail",
+            Some(S::Prepared) => "prepared_tail",
+            _ => "unhandled_reopened_tail",
+        };
+    }
+    "unhandled_reopened_tail"
+}
+
 fn network_address(
     initial: &NativeInitialConsensusLaunch,
     parent: &CancellationToken,
@@ -1176,8 +1437,10 @@ impl NativeMetadataControlHost {
                 .hot_recovery
                 .as_ref()
                 .map_or(Ok(()), |h| h.tick(parent));
+            let reopened = data.recover_reopened_leadership(parent);
             registry?;
             hot?;
+            reopened?;
         }
         Ok(())
     }

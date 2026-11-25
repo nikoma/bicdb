@@ -1,9 +1,18 @@
 [package]
 name = "bicdb-pgwire"
-version = "1.0.523-beta"
+version = "1.0.529"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "PostgreSQL wire-protocol server of the BicDB database. Part of BicDB, one database for SQL (PostgreSQL protocol), a Redis-compatible cache, search and vectors; install `bicdb`"
+readme = "README.md"
+keywords = ["bicdb", "database"]
+categories = ["database-implementations"]
+# Build inputs only: test suites, fixtures and examples stay in the repository.
+include = ["/README.md", "/src/**", "/Cargo.toml", "/LICENSE", "/NOTICE", "/THIRD_PARTY_NOTICES.md"]
 
 [features]
 default = ["bicdb-sql/default"]
@@ -16,8 +25,8 @@ axum.workspace = true
 axum-server.workspace = true
 argon2.workspace = true
 base64.workspace = true
-bicdb-core = { path = "../bicdb-core", version = "1.0.523-beta" }
-bicdb-sql = { path = "../bicdb-sql", version = "1.0.523-beta", default-features = false }
+bicdb-core = { path = "../bicdb-core", version = "=1.0.529" }
+bicdb-sql = { path = "../bicdb-sql", version = "=1.0.529", default-features = false }
 ctrlc.workspace = true
 hex.workspace = true
 hmac.workspace = true
@@ -39,7 +48,7 @@ uuid.workspace = true
 x509-parser.workspace = true
 
 [dev-dependencies]
-bicdb-page = { path = "../bicdb-page", version = "1.0.523-beta" }
+bicdb-page = { path = "../bicdb-page", version = "=1.0.529" }
 futures-util = "0.3"
 openssl = "0.10"
 postgres-openssl = "0.5.3"

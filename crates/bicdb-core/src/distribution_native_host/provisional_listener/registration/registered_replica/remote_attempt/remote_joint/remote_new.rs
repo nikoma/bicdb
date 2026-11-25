@@ -131,10 +131,33 @@ impl NativeRegisteredReplicaAdmission {
         state.require_current(&token)?;
         first.require_current()?;
         let mut native_decision = None;
-        let current = if matches!(
+        // A repeated preparation or publication of what this participant
+        // already completed for the same fact set (the earlier caller may
+        // have stopped waiting for a reply that was then retained) is
+        // answered from the retained outcome: no callback is fetched, no
+        // further Role is acquired and no attempt or context is taken.
+        let repeated_publish = if matches!(
             &request.operation,
             NativeRemoteNewOperationV1::PublishDecision { .. }
         ) {
+            state.repeated_publish_receipt(request, &token)?
+        } else {
+            None
+        };
+        let repeated_prepare = matches!(
+            &request.operation,
+            NativeRemoteNewOperationV1::PrepareDecision { .. }
+        ) && state.repeated_prepare_outcome(request)?.is_some();
+        let current = if let Some(receipt) = repeated_publish {
+            native_decision = Some(receipt);
+            first
+        } else if repeated_prepare {
+            first
+        } else if matches!(
+            &request.operation,
+            NativeRemoteNewOperationV1::PublishDecision { .. }
+        ) {
+            let _work = state.begin_work(request)?;
             let role = first
                 .role
                 .as_ref()
@@ -192,6 +215,7 @@ impl NativeRegisteredReplicaAdmission {
             &request.operation,
             NativeRemoteNewOperationV1::PrepareDecision { .. }
         ) {
+            let _work = state.begin_work(request)?;
             // The ORIGINAL source must already have completed S2 retirement.
             // Fetch its real historical terminal before preventing export-pin
             // reacquisition; otherwise a still-live capture could deadlock.
@@ -349,6 +373,17 @@ impl NativeMetadataControlHost {
             .cloned()
             .ok_or_else(|| invalid("remote NEW actual participant not created"))?;
         phase.test_arm_original_request_cancel(after)
+    }
+    pub(crate) fn test_arm_remote_new_slow_handoff(&self, range: crate::RangeId) -> Result<()> {
+        let owner = self.registered_remote_joint_owner(range)?;
+        let phase = owner
+            .remote_new
+            .try_lock()
+            .ok_or_else(|| invalid("remote NEW diagnostic owner busy"))?
+            .as_ref()
+            .cloned()
+            .ok_or_else(|| invalid("remote NEW actual participant not created"))?;
+        phase.test_arm_slow_handoff()
     }
     pub(crate) fn test_remote_new_phase_evidence(
         &self,

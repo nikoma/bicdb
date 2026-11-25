@@ -392,6 +392,28 @@ impl NativeWriterHostState {
         }
         Ok(())
     }
+    /// Every range of the enrolled policy and every range with a published
+    /// Serving audit: none is CLOSED or unresolved, and each published audit
+    /// is current in the actual database. Refusal only.
+    fn require_every_serving_data_database(&self, database: &BicDb) -> Result<()> {
+        #[cfg(feature = "tls-replication")]
+        {
+            let mut ranges = self
+                .record
+                .facts
+                .ranges
+                .keys()
+                .copied()
+                .collect::<std::collections::BTreeSet<_>>();
+            ranges.extend(self.serving_data_ranges());
+            for range in ranges {
+                self.require_serving_data_database(database, range)?;
+            }
+        }
+        #[cfg(not(feature = "tls-replication"))]
+        let _ = database;
+        Ok(())
+    }
     fn require_original_database(&self, database: &BicDb, range: &RangeDescriptor) -> Result<()> {
         self.require_original_identity_database(database)?;
         self.require_range(range)?;

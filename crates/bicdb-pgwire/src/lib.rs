@@ -3542,11 +3542,6 @@ fn execute_server_query(
                 if state.failed_transaction {
                     return Err(PgWireError::InFailedTransaction);
                 }
-                // Resolve the target before entering COPY mode, as PostgreSQL does: a missing
-                // relation is reported instead of CopyInResponse. Resolving it after the session
-                // had entered COPY mode left the server waiting for CopyData while the client had
-                // already seen the error and went on sending queries, so the session hung.
-                let column_count = copy_in_column_count(server, &copy)?;
                 let owns_serializable_transaction = !state.in_transaction
                     && !bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile)
                     && state
@@ -3567,36 +3562,63 @@ fn execute_server_query(
                     state.session_state.begin_transaction();
                 }
                 let mut copy = copy;
-                if copy.binary {
+                // Resolve the target before entering COPY mode, as PostgreSQL does and as the
+                // session would (search_path, role): a missing relation is reported instead of
+                // CopyInResponse. Resolving it after the session had entered COPY mode left the
+                // server waiting for CopyData while the client had already seen the error and
+                // went on sending queries, so the session hung.
+                let prepared = (|| -> Result<usize> {
                     let relation = copy.relation_sql.clone().unwrap_or_default();
-                    let target = if copy.columns.is_empty() {
-                        "*".to_string()
-                    } else {
-                        copy.columns
-                            .iter()
-                            .map(|column| format!("\"{}\"", column.replace('"', "\"\"")))
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    };
-                    let described = execute_server_sql_for_describe(
-                        server,
-                        &format!("SELECT {target} FROM {relation} LIMIT 0"),
-                    )?;
-                    let db = server.read_db_for_transaction_progress()?;
-                    copy.binary_column_oids = result_column_types_with_db(&db, &described, None)?;
-                }
-                if copy.header_match {
-                    copy.header_expected = if copy.columns.is_empty() {
-                        let relation = copy.relation_sql.clone().unwrap_or_default();
-                        execute_server_sql_for_describe(
+                    let describe = |state: &mut ConnectionState, sql: String| {
+                        execute_server_sql_for_describe_with_session(
                             server,
-                            &format!("SELECT * FROM {relation} LIMIT 0"),
-                        )?
-                        .columns
-                    } else {
-                        copy.columns.clone()
+                            &sql,
+                            &state.session_state,
+                            state.security_context.as_ref(),
+                            &mut state.catalog_cache,
+                        )
                     };
-                }
+                    let all_columns = describe(state, format!("SELECT * FROM {relation} LIMIT 0"))?;
+                    if copy.binary {
+                        let target = if copy.columns.is_empty() {
+                            "*".to_string()
+                        } else {
+                            copy.columns
+                                .iter()
+                                .map(|column| format!("\"{}\"", column.replace('"', "\"\"")))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        };
+                        let described =
+                            describe(state, format!("SELECT {target} FROM {relation} LIMIT 0"))?;
+                        let db = server.read_db_for_transaction_progress()?;
+                        copy.binary_column_oids =
+                            result_column_types_with_db(&db, &described, None)?;
+                    }
+                    if copy.header_match {
+                        copy.header_expected = if copy.columns.is_empty() {
+                            all_columns.columns.clone()
+                        } else {
+                            copy.columns.clone()
+                        };
+                    }
+                    Ok(if copy.columns.is_empty() {
+                        all_columns.columns.len()
+                    } else {
+                        copy.columns.len()
+                    })
+                })();
+                let column_count = match prepared {
+                    Ok(count) => count,
+                    Err(error) => {
+                        if owns_serializable_transaction {
+                            rollback_open_transaction(server, state)?;
+                        } else if started_guc_transaction {
+                            state.session_state.rollback_transaction();
+                        }
+                        return Err(error);
+                    }
+                };
                 state.copy_in = Some(CopyInState {
                     spec: copy,
                     rows: Vec::new(),

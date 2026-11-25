@@ -137,11 +137,84 @@ fn bound_literal(tokens: &[Token], column: &ColumnSchema) -> Result<SqlValue> {
         }
     }
     if !immutable(&expr) {
+        if let Some(error) = forbidden_bound_expression(&expr) {
+            return Err(error);
+        }
         return Err(SqlError::Unsupported(
             "partition bounds require immutable literal expressions".into(),
         ));
     }
     cast_value_to_column_type(eval_constant_expr(&expr)?, column)
+}
+
+/// PostgreSQL's EXPR_KIND_PARTITION_BOUND diagnostics, in its order: column
+/// references are rejected while the arguments are transformed, then
+/// subqueries, aggregates, window functions and set-returning functions.
+fn forbidden_bound_expression(expr: &Expr) -> Option<SqlError> {
+    use sqlparser::ast::visit_expressions;
+    use std::ops::ControlFlow;
+    let mut column = false;
+    let mut subquery = false;
+    let mut aggregate = false;
+    let mut window = false;
+    let mut set_returning = false;
+    let _ = visit_expressions(expr, |expr| {
+        match expr {
+            Expr::Identifier(_) | Expr::CompoundIdentifier(_) => column = true,
+            Expr::Subquery(_) | Expr::Exists { .. } | Expr::InSubquery { .. } => subquery = true,
+            Expr::Function(function) => {
+                if function.over.is_some() {
+                    window = true;
+                } else if is_aggregate_function(function) {
+                    aggregate = true;
+                } else if object_name(&function.name).is_ok_and(|name| {
+                    matches!(
+                        name.to_ascii_lowercase().as_str(),
+                        "generate_series"
+                            | "generate_subscripts"
+                            | "unnest"
+                            | "regexp_matches"
+                            | "regexp_split_to_table"
+                            | "json_array_elements"
+                            | "jsonb_array_elements"
+                            | "json_each"
+                            | "jsonb_each"
+                    )
+                }) {
+                    set_returning = true;
+                }
+            }
+            _ => {}
+        }
+        ControlFlow::<()>::Continue(())
+    });
+    if column {
+        Some(SqlError::Unsupported(
+            "cannot use column reference in partition bound expression".into(),
+        ))
+    } else if subquery {
+        Some(SqlError::Unsupported(
+            "cannot use subquery in partition bound".into(),
+        ))
+    } else if aggregate {
+        Some(SqlError::data_exception(
+            "42803",
+            "aggregate functions are not allowed in partition bound",
+            None,
+        ))
+    } else if window {
+        Some(SqlError::data_exception(
+            "42P20",
+            "window functions are not allowed in partition bound",
+            None,
+        ))
+    } else if set_returning {
+        Some(SqlError::Unsupported(
+            "set-returning functions are not allowed in partition bound".into(),
+        ))
+    } else {
+        None
+    }
 }
 
 pub(crate) fn key_columns(parent: &TableSchema) -> Result<Vec<&ColumnSchema>> {
@@ -628,16 +701,60 @@ pub(crate) fn validate_attachment(
         .iter()
         .filter(|column| !column.hidden)
         .collect::<Vec<_>>();
-    if parent_columns.len() != child_columns.len()
-        || parent_columns.iter().zip(&child_columns).any(|(a, b)| {
-            a.name != b.name
-                || a.pg_type != b.pg_type
-                || a.type_modifier != b.type_modifier
-                || a.collation != b.collation
-                || (!a.nullable && b.nullable)
-        })
-    {
-        return Err(invalid("partition columns must match the parent table"));
+    // Rows are stored by column name, so a partition may order its columns
+    // differently (PostgreSQL maps attributes by name); every column must
+    // still match the parent's name, type, typmod, collation and NOT NULL.
+    let mismatch = |message: String| SqlError::data_exception("42804", message, None);
+    let child_name = catalog_display_name(&child.name);
+    let child_name = child_name.rsplit('.').next().unwrap_or(&child_name);
+    let parent_name = catalog_display_name(&parent.name);
+    let parent_name = parent_name.rsplit('.').next().unwrap_or(&parent_name);
+    for column in &child_columns {
+        if !parent_columns
+            .iter()
+            .any(|parent| parent.name == column.name)
+        {
+            return Err(SqlError::RaisedException {
+                sqlstate: "42804".to_string(),
+                message: format!(
+                    "table \"{child_name}\" contains column \"{}\" not found in parent \"{parent_name}\"",
+                    column.name
+                ),
+                detail: Some(
+                    "The new partition may contain only the columns present in parent.".into(),
+                ),
+            });
+        }
+    }
+    for column in &parent_columns {
+        let Some(other) = child_columns.iter().find(|child| child.name == column.name) else {
+            return Err(mismatch(format!(
+                "child table is missing column \"{}\"",
+                column.name
+            )));
+        };
+        if column.pg_type != other.pg_type || column.type_modifier != other.type_modifier {
+            return Err(mismatch(format!(
+                "child table \"{child_name}\" has different type for column \"{}\"",
+                column.name
+            )));
+        }
+        if column.collation != other.collation {
+            return Err(SqlError::data_exception(
+                "42P21",
+                format!(
+                    "child table \"{child_name}\" has different collation for column \"{}\"",
+                    column.name
+                ),
+                None,
+            ));
+        }
+        if !column.nullable && other.nullable {
+            return Err(mismatch(format!(
+                "column \"{}\" in child table \"{child_name}\" must be marked NOT NULL",
+                column.name
+            )));
+        }
     }
     let mut ancestor = Some(parent.clone());
     let mut visited = BTreeSet::new();
@@ -659,11 +776,15 @@ pub(crate) fn validate_attachment(
         }
         let other = parse_bound(parent, &sibling.partition_of.as_ref().unwrap().bound)?;
         if bounds_overlap(parent, &bound, &other)? {
-            return Err(invalid(format!(
-                "partition \"{}\" would overlap partition \"{}\"",
-                catalog_display_name(&child.name),
-                catalog_display_name(&sibling.name)
-            )));
+            return Err(SqlError::data_exception(
+                "42P17",
+                format!(
+                    "partition \"{}\" would overlap partition \"{}\"",
+                    catalog_display_name(&child.name),
+                    catalog_display_name(&sibling.name)
+                ),
+                None,
+            ));
         }
     }
     fn physical_relations(
@@ -700,7 +821,10 @@ pub(crate) fn validate_attachment(
             if !matches_partition(db, parent, child, &record)? {
                 return Err(violation(
                     &child.name,
-                    "partition constraint is violated by an existing row",
+                    format!(
+                        "partition constraint of relation \"{}\" is violated by some row",
+                        catalog_display_name(&table)
+                    ),
                 ));
             }
             validate_record(db, parent, &record)?;
@@ -719,7 +843,13 @@ pub(crate) fn validate_attachment(
             for table in relations {
                 for record in scan(db, tx, &table)? {
                     if matches_bound(parent, &bound, &record)? {
-                        return Err(violation(&sibling.name, "updated default partition constraint would be violated by an existing row"));
+                        return Err(violation(
+                            &sibling.name,
+                            format!(
+                                "updated partition constraint for default partition \"{}\" would be violated by some row",
+                                catalog_display_name(&sibling.name)
+                            ),
+                        ));
                     }
                 }
             }
@@ -795,13 +925,15 @@ pub(crate) fn validate_existing_tree(db: &BicDb, schemas: &[TableSchema]) -> Res
                 .iter()
                 .filter(|column| !column.hidden)
                 .collect::<Vec<_>>();
+            // Matched by name, as ATTACH admits them (rows are stored by name).
             if a.len() != b.len()
-                || a.iter().zip(&b).any(|(a, b)| {
-                    a.name != b.name
-                        || a.pg_type != b.pg_type
-                        || a.type_modifier != b.type_modifier
-                        || a.collation != b.collation
-                        || (!a.nullable && b.nullable)
+                || a.iter().any(|a| {
+                    b.iter().find(|b| b.name == a.name).is_none_or(|b| {
+                        a.pg_type != b.pg_type
+                            || a.type_modifier != b.type_modifier
+                            || a.collation != b.collation
+                            || (!a.nullable && b.nullable)
+                    })
                 })
             {
                 return Err(invalid("legacy partition columns do not match parent"));

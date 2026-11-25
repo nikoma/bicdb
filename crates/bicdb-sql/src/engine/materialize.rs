@@ -3639,6 +3639,15 @@ impl<'db> SqlEngine<'db> {
             | "justify_interval"
             | "pg_catalog.justify_interval" => Some("interval".to_string()),
             "count" => Some("int8".to_string()),
+            "stddev" | "stddev_samp" | "stddev_pop" | "variance" | "var_samp" | "var_pop"
+            | "corr" | "covar_pop" | "covar_samp" | "regr_avgx" | "regr_avgy" | "regr_count"
+            | "regr_intercept" | "regr_r2" | "regr_slope" | "regr_sxx" | "regr_sxy"
+            | "regr_syy" | "bit_and" | "bit_or" | "bit_xor" => stat_aggregate_result_type(
+                &name,
+                args.first()
+                    .and_then(|arg| self.infer_env_expr_type(arg, env))
+                    .as_deref(),
+            ),
             "row_number" | "rank" | "dense_rank" | "ntile" => Some("int8".to_string()),
             "percent_rank" | "cume_dist" => Some("float8".to_string()),
             "min" | "max" => self.infer_env_expr_type(args.first()?, env),
@@ -3725,6 +3734,7 @@ impl<'db> SqlEngine<'db> {
             | "transaction_timestamp"
             | "make_timestamptz" => Some("timestamptz".to_string()),
             "make_date" => Some("date".to_string()),
+            "pg_partition_root" => Some("regclass".to_string()),
             "localtimestamp" => Some("timestamp".to_string()),
             "localtime" => Some("time".to_string()),
             "current_time" => Some("timetz".to_string()),

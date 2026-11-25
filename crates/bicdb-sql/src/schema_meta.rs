@@ -155,7 +155,46 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>> {
     restore_postgres_distinct_boolean_precedence(&mut statements);
     restore_postgres_whole_row_function_args(&mut statements);
     crate::similar_to::rewrite_similar_to(&mut statements);
+    resolve_pg_typeof_unknown_literals(&mut statements);
     Ok(statements)
+}
+
+/// `pg_typeof('literal')` is `unknown` in PostgreSQL: the untyped literal
+/// is never resolved to text when nothing asks for a type.
+fn resolve_pg_typeof_unknown_literals(statements: &mut Vec<Statement>) {
+    let _ = visit_expressions_mut(statements, |expr| {
+        if let Expr::Function(function) = expr {
+            let is_typeof = object_name(&function.name).is_ok_and(|name| {
+                name.eq_ignore_ascii_case("pg_typeof")
+                    || name.eq_ignore_ascii_case("pg_catalog.pg_typeof")
+            });
+            if is_typeof {
+                if let FunctionArguments::List(list) = &function.args {
+                    if let [FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        ValueWithSpan {
+                            value: Value::SingleQuotedString(_),
+                            ..
+                        },
+                    )))] = list.args.as_slice()
+                    {
+                        *expr = Expr::Cast {
+                            kind: sqlparser::ast::CastKind::DoubleColon,
+                            expr: Box::new(Expr::Value(
+                                Value::SingleQuotedString("unknown".to_string()).into(),
+                            )),
+                            data_type: DataType::Custom(
+                                ObjectName::from(vec![Ident::new("regtype")]),
+                                Vec::new(),
+                            ),
+                            array: false,
+                            format: None,
+                        };
+                    }
+                }
+            }
+        }
+        std::ops::ControlFlow::<()>::Continue(())
+    });
 }
 
 fn ensure_parser_stack_margin() {

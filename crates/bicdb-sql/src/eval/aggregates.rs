@@ -4,56 +4,233 @@ use super::*;
 #[allow(unused_imports)]
 use crate::*;
 
-/// PostgreSQL's two-input least-squares slope. Both expressions must be non-null
-/// in a pair; centering the accumulators avoids cancellation for epoch/day axes.
+/// The statistics aggregates, computed as PostgreSQL computes them:
+/// `stddev`/`variance` and their `_samp`/`_pop` forms (exact numeric
+/// arithmetic for integer and numeric input, the Youngs-Cramer float8
+/// accumulation otherwise), and the two-input float8 aggregates `corr`,
+/// `covar_pop`, `covar_samp` and `regr_*`.
 #[derive(Clone, Debug)]
 pub(crate) struct RegressionSlope {
+    kind: StatKind,
     y: Expr,
-    x: Expr,
+    x: Option<Expr>,
     distinct: bool,
     filter: Option<Expr>,
+    /// The single input's type, recorded by `validate_types`.
+    input_type: std::cell::RefCell<Option<String>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum StatKind {
+    StddevSamp,
+    StddevPop,
+    VarSamp,
+    VarPop,
+    Corr,
+    CovarPop,
+    CovarSamp,
+    RegrAvgX,
+    RegrAvgY,
+    RegrCount,
+    RegrIntercept,
+    RegrR2,
+    RegrSlope,
+    RegrSxx,
+    RegrSxy,
+    RegrSyy,
+    BitAnd,
+    BitOr,
+    BitXor,
+}
+
+impl StatKind {
+    fn from_name(name: &str) -> Option<(Self, &'static str)> {
+        let name = name.strip_prefix("pg_catalog.").unwrap_or(name);
+        Some(match name {
+            "stddev" => (Self::StddevSamp, "stddev"),
+            "stddev_samp" => (Self::StddevSamp, "stddev_samp"),
+            "stddev_pop" => (Self::StddevPop, "stddev_pop"),
+            "variance" => (Self::VarSamp, "variance"),
+            "var_samp" => (Self::VarSamp, "var_samp"),
+            "var_pop" => (Self::VarPop, "var_pop"),
+            "corr" => (Self::Corr, "corr"),
+            "covar_pop" => (Self::CovarPop, "covar_pop"),
+            "covar_samp" => (Self::CovarSamp, "covar_samp"),
+            "regr_avgx" => (Self::RegrAvgX, "regr_avgx"),
+            "regr_avgy" => (Self::RegrAvgY, "regr_avgy"),
+            "regr_count" => (Self::RegrCount, "regr_count"),
+            "regr_intercept" => (Self::RegrIntercept, "regr_intercept"),
+            "regr_r2" => (Self::RegrR2, "regr_r2"),
+            "regr_slope" => (Self::RegrSlope, "regr_slope"),
+            "regr_sxx" => (Self::RegrSxx, "regr_sxx"),
+            "regr_sxy" => (Self::RegrSxy, "regr_sxy"),
+            "regr_syy" => (Self::RegrSyy, "regr_syy"),
+            "bit_and" => (Self::BitAnd, "bit_and"),
+            "bit_or" => (Self::BitOr, "bit_or"),
+            "bit_xor" => (Self::BitXor, "bit_xor"),
+            _ => return None,
+        })
+    }
+
+    fn single_input(self) -> bool {
+        matches!(
+            self,
+            Self::StddevSamp
+                | Self::StddevPop
+                | Self::VarSamp
+                | Self::VarPop
+                | Self::BitAnd
+                | Self::BitOr
+                | Self::BitXor
+        )
+    }
+
+    fn bitwise(self) -> bool {
+        matches!(self, Self::BitAnd | Self::BitOr | Self::BitXor)
+    }
 }
 
 pub(crate) fn is_regression_slope(function: &Function) -> bool {
-    matches!(
-        object_name(&function.name)
+    StatKind::from_name(
+        &object_name(&function.name)
             .unwrap_or_default()
-            .to_ascii_lowercase()
-            .as_str(),
-        "regr_slope" | "pg_catalog.regr_slope"
+            .to_ascii_lowercase(),
     )
+    .is_some()
+}
+
+/// The result type of a statistics aggregate for its (first) input type.
+pub(crate) fn stat_aggregate_result_type(name: &str, input: Option<&str>) -> Option<String> {
+    let (kind, _) = StatKind::from_name(&name.to_ascii_lowercase())?;
+    if kind.bitwise() {
+        return input.map(str::to_string);
+    }
+    Some(
+        if kind == StatKind::RegrCount {
+            "int8"
+        } else if kind.single_input() && !matches!(input, Some("float4" | "float8")) {
+            "numeric"
+        } else {
+            "float8"
+        }
+        .to_string(),
+    )
+}
+
+fn stat_argument_error(name: &str, single: bool) -> SqlError {
+    SqlError::undefined_function(if single {
+        format!("function {name} requires one numeric argument")
+    } else {
+        format!("{name} requires two numeric arguments")
+    })
+}
+
+/// Square root of a non-negative decimal, rounded half up to `scale`.
+fn decimal_sqrt(value: &Decimal, scale: u32) -> Decimal {
+    // value * 10^(2*(scale+1)) as an integer, then one guard digit.
+    let target = 2 * (scale + 1);
+    let mantissa = if target >= value.scale {
+        &value.mantissa * pow10_bigint(target - value.scale)
+    } else {
+        &value.mantissa / pow10_bigint(value.scale - target)
+    };
+    let root = mantissa.sqrt();
+    let ten = BigInt::from(10);
+    let rounded = (&root + BigInt::from(5)) / &ten;
+    Decimal {
+        mantissa: rounded,
+        scale,
+    }
 }
 
 impl RegressionSlope {
     pub(crate) fn from_function(function: &Function) -> Result<Self> {
+        let name = object_name(&function.name)?.to_ascii_lowercase();
+        let (kind, display) =
+            StatKind::from_name(&name).ok_or_else(|| stat_argument_error(&name, true))?;
         let args = function_arg_list(function);
-        if args.len() != 2 || !function.within_group.is_empty() {
-            return Err(SqlError::undefined_function(
-                "regr_slope requires two numeric arguments",
-            ));
+        let expected = if kind.single_input() { 1 } else { 2 };
+        if args.len() != expected || !function.within_group.is_empty() {
+            return Err(stat_argument_error(display, kind.single_input()));
         }
         Ok(Self {
+            kind,
             y: args.get(0).unwrap().clone(),
-            x: args.get(1).unwrap().clone(),
+            x: args.get(1).cloned(),
             distinct: function_args_are_distinct(function),
             filter: function.filter.as_deref().cloned(),
+            input_type: std::cell::RefCell::new(None),
         })
+    }
+
+    pub(crate) fn column_name(&self) -> String {
+        match self.kind {
+            StatKind::StddevSamp => "stddev",
+            StatKind::StddevPop => "stddev_pop",
+            StatKind::VarSamp => "variance",
+            StatKind::VarPop => "var_pop",
+            StatKind::Corr => "corr",
+            StatKind::CovarPop => "covar_pop",
+            StatKind::CovarSamp => "covar_samp",
+            StatKind::RegrAvgX => "regr_avgx",
+            StatKind::RegrAvgY => "regr_avgy",
+            StatKind::RegrCount => "regr_count",
+            StatKind::RegrIntercept => "regr_intercept",
+            StatKind::RegrR2 => "regr_r2",
+            StatKind::RegrSlope => "regr_slope",
+            StatKind::RegrSxx => "regr_sxx",
+            StatKind::RegrSxy => "regr_sxy",
+            StatKind::RegrSyy => "regr_syy",
+            StatKind::BitAnd => "bit_and",
+            StatKind::BitOr => "bit_or",
+            StatKind::BitXor => "bit_xor",
+        }
+        .to_string()
+    }
+
+    pub(crate) fn result_pg_type(&self) -> String {
+        if self.kind.bitwise() {
+            return self
+                .input_type
+                .borrow()
+                .clone()
+                .unwrap_or_else(|| "int4".to_string());
+        }
+        if self.kind == StatKind::RegrCount {
+            "int8".to_string()
+        } else if self.kind.single_input()
+            && !matches!(
+                self.input_type.borrow().as_deref(),
+                Some("float4" | "float8")
+            )
+        {
+            "numeric".to_string()
+        } else {
+            "float8".to_string()
+        }
     }
 
     pub(crate) fn validate_types(
         &self,
         mut lookup: impl FnMut(&Expr) -> Option<String>,
     ) -> Result<()> {
-        for expr in [&self.y, &self.x] {
-            if lookup(expr).is_some_and(|ty| {
-                !matches!(
-                    ty.as_str(),
-                    "int2" | "int4" | "int8" | "float4" | "float8" | "numeric"
-                )
-            }) {
-                return Err(SqlError::undefined_function(
-                    "regr_slope requires two numeric arguments",
+        let mut first = true;
+        for expr in std::iter::once(&self.y).chain(self.x.as_ref()) {
+            let ty = lookup(expr);
+            let allowed: &[&str] = if self.kind.bitwise() {
+                &["int2", "int4", "int8"]
+            } else {
+                &["int2", "int4", "int8", "float4", "float8", "numeric"]
+            };
+            if ty.as_deref().is_some_and(|ty| !allowed.contains(&ty)) {
+                return Err(stat_argument_error(
+                    &self.column_name(),
+                    self.kind.single_input(),
                 ));
+            }
+            if first {
+                *self.input_type.borrow_mut() = ty;
+                first = false;
             }
         }
         Ok(())
@@ -65,8 +242,8 @@ impl RegressionSlope {
         mut eval: impl FnMut(&T, &Expr) -> Result<SqlValue>,
     ) -> Result<SqlValue> {
         let mut seen = BTreeSet::new();
-        let (mut n, mut mean_x, mut mean_y, mut sxx, mut sxy) =
-            (0.0_f64, 0.0_f64, 0.0_f64, 0.0_f64, 0.0_f64);
+        let mut seen_single = BTreeSet::new();
+        let mut inputs: Vec<(SqlValue, Option<SqlValue>)> = Vec::new();
         for row in rows {
             if let Some(filter) = &self.filter {
                 if !matches!(sql_value_truth(eval(row, filter)?)?, Some(true)) {
@@ -74,15 +251,67 @@ impl RegressionSlope {
                 }
             }
             let y = eval(row, &self.y)?;
-            let x = eval(row, &self.x)?;
-            if matches!(y, SqlValue::Null) || matches!(x, SqlValue::Null) {
+            if matches!(y, SqlValue::Null) {
                 continue;
             }
-            // PostgreSQL resolves both arguments to float8 before DISTINCT.
+            let x = match &self.x {
+                Some(x) => {
+                    let x = eval(row, x)?;
+                    if matches!(x, SqlValue::Null) {
+                        continue;
+                    }
+                    Some(x)
+                }
+                None => None,
+            };
+            inputs.push((y, x));
+        }
+        if self.kind.bitwise() {
+            let mut result: Option<i64> = None;
+            for (value, _) in inputs {
+                let value = match value {
+                    SqlValue::Int(value) => value,
+                    other => cast_value_to_pg_type(other, "int8")?
+                        .to_cell()
+                        .parse::<i64>()
+                        .map_err(|_| stat_argument_error(&self.column_name(), true))?,
+                };
+                result = Some(match (result, self.kind) {
+                    (None, _) => value,
+                    (Some(acc), StatKind::BitAnd) => acc & value,
+                    (Some(acc), StatKind::BitOr) => acc | value,
+                    (Some(acc), _) => acc ^ value,
+                });
+            }
+            return Ok(result.map_or(SqlValue::Null, SqlValue::Int));
+        }
+        if self.kind.single_input() {
+            let numeric = !matches!(
+                self.input_type.borrow().as_deref(),
+                Some("float4" | "float8")
+            ) && inputs
+                .iter()
+                .all(|(value, _)| !matches!(value, SqlValue::Float(_)));
+            let mut values = Vec::with_capacity(inputs.len());
+            for (value, _) in inputs {
+                if self.distinct && !seen_single.insert(sql_value_distinct_key(&value)) {
+                    continue;
+                }
+                values.push(value);
+            }
+            return if numeric {
+                self.numeric_variance(values)
+            } else {
+                self.float_variance(values)
+            };
+        }
+        // Two inputs: PostgreSQL resolves both to float8 before DISTINCT.
+        let mut pairs = Vec::with_capacity(inputs.len());
+        for (y, x) in inputs {
             let SqlValue::Float(y) = cast_value_to_float(y, "float8")? else {
                 unreachable!()
             };
-            let SqlValue::Float(x) = cast_value_to_float(x, "float8")? else {
+            let SqlValue::Float(x) = cast_value_to_float(x.expect("two inputs"), "float8")? else {
                 unreachable!()
             };
             if self.distinct
@@ -93,36 +322,245 @@ impl RegressionSlope {
             {
                 continue;
             }
+            pairs.push((y, x));
+        }
+        self.regression(&pairs)
+    }
+
+    /// float8_accum and the float8 variance finals.
+    fn float_variance(&self, values: Vec<SqlValue>) -> Result<SqlValue> {
+        let (mut n, mut sx, mut sxx) = (0.0_f64, 0.0_f64, 0.0_f64);
+        for value in values {
+            let SqlValue::Float(value) = cast_value_to_float(value, "float8")? else {
+                unreachable!()
+            };
+            let previous_n = n;
+            let previous_sx = sx;
             n += 1.0;
-            if n == 1.0 {
-                mean_x = x;
-                mean_y = y;
-                if !x.is_finite() {
+            sx += value;
+            if previous_n > 0.0 {
+                let tmp = value * n - sx;
+                sxx += tmp * tmp / (n * previous_n);
+                if sx.is_infinite() || sxx.is_infinite() {
+                    if !previous_sx.is_infinite() && !value.is_infinite() {
+                        return Err(float_arithmetic_out_of_range("overflow"));
+                    }
                     sxx = f64::NAN;
                 }
-                if !x.is_finite() || !y.is_finite() {
-                    sxy = f64::NAN;
-                }
+            } else if value.is_nan() || value.is_infinite() {
+                sxx = f64::NAN;
+            }
+        }
+        let sample = matches!(self.kind, StatKind::StddevSamp | StatKind::VarSamp);
+        if n == 0.0 || (sample && n <= 1.0) {
+            return Ok(SqlValue::Null);
+        }
+        let variance = sxx / if sample { n - 1.0 } else { n };
+        Ok(SqlValue::Float(
+            if matches!(self.kind, StatKind::StddevSamp | StatKind::StddevPop) {
+                variance.sqrt()
+            } else {
+                variance
+            },
+        ))
+    }
+
+    /// numeric_stddev_internal: exact sums, PostgreSQL's division scale,
+    /// and the square root at that scale.
+    fn numeric_variance(&self, values: Vec<SqlValue>) -> Result<SqlValue> {
+        let sample = matches!(self.kind, StatKind::StddevSamp | StatKind::VarSamp);
+        let count = values.len() as i64;
+        if count == 0 || (sample && count <= 1) {
+            return Ok(SqlValue::Null);
+        }
+        let mut sum = Decimal {
+            mantissa: BigInt::from(0),
+            scale: 0,
+        };
+        let mut sum_squares = sum.clone();
+        let mut special = false;
+        for value in values {
+            let numeric = pg_numeric_from_sql_value(value)?;
+            if !matches!(numeric, PgNumeric::Finite { .. }) {
+                special = true;
                 continue;
             }
-            let dx = x - mean_x;
-            let dy = y - mean_y;
-            mean_x += dx / n;
-            mean_y += dy / n;
-            let next_sxx = sxx + dx * (x - mean_x);
-            let next_sxy = sxy + dx * (y - mean_y);
-            if (next_sxx.is_infinite() && sxx.is_finite() && x.is_finite())
-                || (next_sxy.is_infinite() && sxy.is_finite() && x.is_finite() && y.is_finite())
-            {
-                return Err(float_arithmetic_out_of_range("overflow"));
-            }
-            sxx = next_sxx;
-            sxy = next_sxy;
+            let value = decimal_from_pg_numeric(numeric)?;
+            let square = Decimal {
+                mantissa: &value.mantissa * &value.mantissa,
+                scale: value.scale * 2,
+            };
+            sum = decimal_add(sum, value);
+            sum_squares = decimal_add(sum_squares, square);
         }
-        if n == 0.0 || sxx == 0.0 {
-            Ok(SqlValue::Null)
-        } else {
-            Ok(SqlValue::Float(sxy / sxx))
+        if special {
+            return Ok(SqlValue::String("NaN".to_string()));
+        }
+        // N * sumX2 - sumX * sumX, at twice sumX's scale.
+        let scale = sum.scale * 2;
+        let n = BigInt::from(count);
+        let squared_sum = Decimal {
+            mantissa: &sum.mantissa * &sum.mantissa,
+            scale: sum.scale * 2,
+        };
+        let n_sum_squares = Decimal {
+            mantissa: &n * &sum_squares.mantissa,
+            scale: sum_squares.scale,
+        };
+        let numerator = decimal_rescale(decimal_add(n_sum_squares, squared_sum.neg()), scale);
+        if numerator.mantissa.sign() != num_bigint::Sign::Plus {
+            return Ok(SqlValue::String("0".to_string()));
+        }
+        let denominator = Decimal {
+            mantissa: if sample { &n * (&n - 1) } else { &n * &n },
+            scale: 0,
+        };
+        let SqlValue::String(variance_text) =
+            eval_decimal_arithmetic(numerator, &BinaryOperator::Divide, denominator)?
+        else {
+            unreachable!()
+        };
+        if matches!(self.kind, StatKind::VarSamp | StatKind::VarPop) {
+            return Ok(SqlValue::String(variance_text));
+        }
+        let variance = parse_decimal(&variance_text)?;
+        let scale = variance.scale;
+        Ok(SqlValue::String(decimal_sqrt(&variance, scale).format()))
+    }
+
+    /// float8_regr_accum and the two-input finals.
+    fn regression(&self, pairs: &[(f64, f64)]) -> Result<SqlValue> {
+        let (mut n, mut sx, mut sxx, mut sy, mut syy, mut sxy) =
+            (0.0_f64, 0.0_f64, 0.0_f64, 0.0_f64, 0.0_f64, 0.0_f64);
+        for &(y, x) in pairs {
+            let previous_n = n;
+            let (previous_sx, previous_sy) = (sx, sy);
+            n += 1.0;
+            sx += x;
+            sy += y;
+            if previous_n > 0.0 {
+                let tmp_x = x * n - sx;
+                let tmp_y = y * n - sy;
+                let scale = 1.0 / (n * previous_n);
+                sxx += tmp_x * tmp_x * scale;
+                syy += tmp_y * tmp_y * scale;
+                sxy += tmp_x * tmp_y * scale;
+                if sx.is_infinite()
+                    || sxx.is_infinite()
+                    || sy.is_infinite()
+                    || syy.is_infinite()
+                    || sxy.is_infinite()
+                {
+                    if ((sx.is_infinite() || sxx.is_infinite())
+                        && !previous_sx.is_infinite()
+                        && !x.is_infinite())
+                        || ((sy.is_infinite() || syy.is_infinite())
+                            && !previous_sy.is_infinite()
+                            && !y.is_infinite())
+                        || (sxy.is_infinite()
+                            && !previous_sx.is_infinite()
+                            && !x.is_infinite()
+                            && !previous_sy.is_infinite()
+                            && !y.is_infinite())
+                    {
+                        return Err(float_arithmetic_out_of_range("overflow"));
+                    }
+                    if sxx.is_infinite() {
+                        sxx = f64::NAN;
+                    }
+                    if syy.is_infinite() {
+                        syy = f64::NAN;
+                    }
+                    if sxy.is_infinite() {
+                        sxy = f64::NAN;
+                    }
+                }
+            } else {
+                if x.is_nan() || x.is_infinite() {
+                    sxx = f64::NAN;
+                    sxy = f64::NAN;
+                }
+                if y.is_nan() || y.is_infinite() {
+                    syy = f64::NAN;
+                    sxy = f64::NAN;
+                }
+            }
+        }
+        if self.kind == StatKind::RegrCount {
+            return Ok(SqlValue::Int(n as i64));
+        }
+        let float = |value: f64| Ok(SqlValue::Float(value));
+        if n < 1.0 {
+            return Ok(SqlValue::Null);
+        }
+        match self.kind {
+            StatKind::RegrSxx => float(sxx),
+            StatKind::RegrSyy => float(syy),
+            StatKind::RegrSxy => float(sxy),
+            StatKind::RegrAvgX => float(sx / n),
+            StatKind::RegrAvgY => float(sy / n),
+            StatKind::CovarPop => float(sxy / n),
+            StatKind::CovarSamp => {
+                if n < 2.0 {
+                    Ok(SqlValue::Null)
+                } else {
+                    float(sxy / (n - 1.0))
+                }
+            }
+            StatKind::Corr => {
+                if sxx == 0.0 || syy == 0.0 {
+                    Ok(SqlValue::Null)
+                } else {
+                    float(sxy / (sxx * syy).sqrt())
+                }
+            }
+            StatKind::RegrR2 => {
+                if sxx == 0.0 {
+                    Ok(SqlValue::Null)
+                } else if syy == 0.0 {
+                    float(1.0)
+                } else {
+                    float((sxy * sxy) / (sxx * syy))
+                }
+            }
+            StatKind::RegrSlope => {
+                if sxx == 0.0 {
+                    Ok(SqlValue::Null)
+                } else {
+                    float(sxy / sxx)
+                }
+            }
+            StatKind::RegrIntercept => {
+                if sxx == 0.0 {
+                    Ok(SqlValue::Null)
+                } else {
+                    float((sy - sx * sxy / sxx) / n)
+                }
+            }
+            _ => Ok(SqlValue::Null),
+        }
+    }
+}
+
+fn decimal_add(left: Decimal, right: Decimal) -> Decimal {
+    let scale = left.scale.max(right.scale);
+    Decimal {
+        mantissa: left.mantissa * pow10_bigint(scale - left.scale)
+            + right.mantissa * pow10_bigint(scale - right.scale),
+        scale,
+    }
+}
+
+fn decimal_rescale(value: Decimal, scale: u32) -> Decimal {
+    if scale >= value.scale {
+        Decimal {
+            mantissa: value.mantissa * pow10_bigint(scale - value.scale),
+            scale,
+        }
+    } else {
+        Decimal {
+            mantissa: value.mantissa / pow10_bigint(value.scale - scale),
+            scale,
         }
     }
 }
@@ -365,7 +803,7 @@ impl Aggregate {
     pub(crate) fn column_name(&self) -> String {
         match self {
             Self::OrderedSet(aggregate) => aggregate.column_name(),
-            Self::RegressionSlope(_) => "regr_slope".to_string(),
+            Self::RegressionSlope(aggregate) => aggregate.column_name(),
             Self::CountAll | Self::CountField(_, _) => "count".to_string(),
             Self::Sum(_, _, _) => "sum".to_string(),
             Self::ExactSumUnits(_, _) => "bicdb_exact_sum_units".to_string(),
@@ -1125,7 +1563,20 @@ pub(crate) fn aggregate_result_pg_type(
                 .as_ref()
                 .and_then(|fraction| projected_expr_pg_type(fraction, schema)),
         ),
-        Aggregate::RegressionSlope(_) => Some("float8".to_string()),
+        Aggregate::RegressionSlope(aggregate) => {
+            if aggregate.input_type.borrow().is_none() {
+                let _ = aggregate.validate_types(|expr| projected_expr_pg_type(expr, schema));
+            }
+            // A one-input statistic or bit aggregate takes its type from an
+            // input this typer could not see: let a schema-aware caller decide.
+            if aggregate.input_type.borrow().is_none()
+                && (aggregate.kind.bitwise()
+                    || (aggregate.kind.single_input() && aggregate.kind != StatKind::RegrCount))
+            {
+                return None;
+            }
+            Some(aggregate.result_pg_type())
+        }
         Aggregate::CountAll | Aggregate::CountField(_, _) => Some("int8".to_string()),
         Aggregate::ExactSumUnits(_, _) => Some("text".to_string()),
         Aggregate::Min(field, _) | Aggregate::Max(field, _) => field_pg_type(field, schema),
@@ -1934,7 +2385,10 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             }
             "similarity" => return Some("float4".to_string()),
             "age" | "make_interval" => return Some("interval".to_string()),
-            "to_date" | "date" => return Some("date".to_string()),
+            "to_date" | "date" | "make_date" => return Some("date".to_string()),
+            "make_time" => return Some("time".to_string()),
+            "make_timestamp" => return Some("timestamp".to_string()),
+            "pg_partition_root" => return Some("regclass".to_string()),
             "trunc" if argument_nodes.len() == 2 => return Some("numeric".to_string()),
             "bicdb_oracle_nvl_number"
             | "bicdb_oracle_nvl2_number"

@@ -609,7 +609,7 @@ impl<'db> SqlSession<'db> {
             referential_checks_disabled: false,
             policies: Vec::new(),
             owner: Some(current_user_from_gucs(&self.session_gucs)),
-            partitioning: None,
+            partitioning: partition.partitioning,
             partition_of: Some(PartitionOfSchema {
                 parent_table: partition.parent_table,
                 parent_schema: if parent.schema_name.is_empty() {

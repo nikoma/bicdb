@@ -31,6 +31,14 @@ pub(crate) fn eval_privilege_function_value(
                 &current_user_from_gucs(session_gucs),
             )?)))
         }
+        "pg_partition_root" | "pg_catalog.pg_partition_root" => {
+            if args.len() != 1 {
+                return Err(SqlError::undefined_function(
+                    "function pg_partition_root expects one argument",
+                ));
+            }
+            Ok(Some(crate::partition_info::partition_root(db, &args[0])?))
+        }
         "has_column_privilege"
         | "pg_catalog.has_column_privilege"
         | "has_any_column_privilege"

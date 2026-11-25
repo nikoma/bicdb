@@ -5389,6 +5389,11 @@ impl<'db> SqlEngine<'db> {
             if has_windows {
                 return self.execute_window_query_without_from(select, query);
             }
+            // A FROM-less SELECT reads one row; aggregates and GROUP BY
+            // over it run through the ordinary aggregate path.
+            if let Some(rewritten) = one_row_aggregate_query(query, select) {
+                return self.execute_query(&rewritten);
+            }
             return self.execute_select_without_from(select, query);
         }
 
@@ -5746,6 +5751,31 @@ pub(crate) fn scalar_subquery_value(result: SqlResult) -> Result<SqlValue> {
             "scalar subquery returned more than one row".to_string(),
         )),
     }
+}
+
+/// `SELECT agg(...)` without FROM, as a query over a one-row relation.
+pub(crate) fn one_row_aggregate_query(query: &Query, select: &Select) -> Option<Query> {
+    let grouped = select.having.is_some()
+        || !matches!(&select.group_by, GroupByExpr::Expressions(exprs, _) if exprs.is_empty());
+    let aggregated = select.projection.iter().any(|item| match item {
+        SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => {
+            expr_contains_aggregate(expr)
+        }
+        _ => false,
+    });
+    if !grouped && !aggregated {
+        return None;
+    }
+    let mut rewritten = query.clone();
+    let SetExpr::Select(target) = rewritten.body.as_mut() else {
+        return None;
+    };
+    let from = parse_query("SELECT 1 FROM (VALUES (1)) AS __bicdb_one_row(__bicdb_one)").ok()?;
+    let SetExpr::Select(source) = *from.body else {
+        return None;
+    };
+    target.from = source.from;
+    Some(rewritten)
 }
 
 pub(crate) fn subquery_values(result: SqlResult) -> Result<Vec<SqlValue>> {

@@ -1102,6 +1102,11 @@ impl<'db> SqlSession<'db> {
             return self.sql_engine().execute_query(query);
         }
         if select.from.is_empty() {
+            // Aggregates over the implicit single row run as a query over
+            // a one-row relation, like PostgreSQL's Result node.
+            if let Some(rewritten) = crate::engine::one_row_aggregate_query(query, select) {
+                return self.execute_query(&rewritten);
+            }
             return self.execute_session_select_without_from(select, query);
         }
         if let Some(result) = self.try_execute_scalar_derived_command(query)? {
@@ -1513,7 +1518,7 @@ impl<'db> SqlSession<'db> {
         let Some(mut command) = parse_raw_role_membership_ddl(sql)? else {
             return Ok(None);
         };
-        self.require_role_management_privilege("manage role memberships")?;
+        let is_grant = matches!(command, RawRoleMembershipDdl::Grant { .. });
         let (roles, members) = match &mut command {
             RawRoleMembershipDdl::Grant { roles, members, .. }
             | RawRoleMembershipDdl::Revoke { roles, members } => (roles, members),
@@ -1526,6 +1531,24 @@ impl<'db> SqlSession<'db> {
             };
         }
         let existing_memberships = list_role_memberships(self.db_ref())?;
+        if !self.current_user_can_manage_roles()? {
+            // PostgreSQL: a role holding ADMIN OPTION on a role (directly or
+            // through any role it is a member of) may grant and revoke it;
+            // no role holds ADMIN OPTION on itself.
+            let current = current_user_from_gucs(&self.session_gucs);
+            for role in roles.iter() {
+                if !role_admin_of(&existing_memberships, &current, role) {
+                    let verb = if is_grant { "grant" } else { "revoke" };
+                    return Err(SqlError::RaisedException {
+                        sqlstate: "42501".to_string(),
+                        message: format!("permission denied to {verb} role \"{role}\""),
+                        detail: Some(format!(
+                            "Only roles with the ADMIN option on role \"{role}\" may {verb} this role."
+                        )),
+                    });
+                }
+            }
+        }
         let grantor = if self.current_user_is_superuser()? {
             current_role_name()
         } else {
@@ -2999,22 +3022,40 @@ fn is_native_extension_function(name: &str) -> bool {
 /// A cast with a type modifier keeps it on its result column, whichever
 /// execution path produced the result.
 fn with_cast_type_modifiers(mut result: SqlResult, query: &Query) -> SqlResult {
-    let SetExpr::Select(select) = query.body.as_ref() else {
-        return result;
-    };
-    if select.projection.len() != result.columns.len() {
-        return result;
-    }
-    let modifiers: Vec<Option<SqlColumnMetadata>> = select
-        .projection
-        .iter()
-        .map(|item| match item {
-            SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => {
-                crate::materialize::cast_column_metadata(expr)
+    let modifiers: Vec<Option<SqlColumnMetadata>> = match query.body.as_ref() {
+        SetExpr::Select(select) => {
+            if select.projection.len() != result.columns.len() {
+                return result;
             }
-            _ => None,
-        })
-        .collect();
+            select
+                .projection
+                .iter()
+                .map(|item| match item {
+                    SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => {
+                        crate::materialize::cast_column_metadata(expr)
+                    }
+                    _ => None,
+                })
+                .collect()
+        }
+        // A VALUES column keeps a modifier every row agrees on.
+        SetExpr::Values(values) => (0..result.columns.len())
+            .map(|index| {
+                let mut shared: Option<SqlColumnMetadata> = None;
+                for row in &values.rows {
+                    let modifier = crate::materialize::cast_column_metadata(row.get(index)?)?;
+                    match &shared {
+                        Some(existing) if existing.type_modifier != modifier.type_modifier => {
+                            return None;
+                        }
+                        _ => shared = Some(modifier),
+                    }
+                }
+                shared
+            })
+            .collect(),
+        _ => return result,
+    };
     if modifiers.iter().all(Option::is_none) {
         return result;
     }
@@ -3029,4 +3070,33 @@ fn with_cast_type_modifiers(mut result: SqlResult, query: &Query) -> SqlResult {
     }
     result.column_metadata = metadata;
     result
+}
+
+/// Whether `member` holds ADMIN OPTION on `role` through any chain of
+/// memberships (PostgreSQL's `is_admin_of_role`, superusers aside).
+fn role_admin_of(memberships: &[RoleMembership], member: &str, role: &str) -> bool {
+    let member = normalize_role_name(member);
+    let role = normalize_role_name(role);
+    if member == role {
+        return false;
+    }
+    let mut closure = vec![member];
+    let mut index = 0;
+    while index < closure.len() && closure.len() <= 10_000 {
+        let current = closure[index].clone();
+        index += 1;
+        for membership in memberships {
+            if normalize_role_name(&membership.member) != current {
+                continue;
+            }
+            let granted = normalize_role_name(&membership.role);
+            if granted == role && membership.admin_option {
+                return true;
+            }
+            if !closure.contains(&granted) {
+                closure.push(granted);
+            }
+        }
+    }
+    false
 }

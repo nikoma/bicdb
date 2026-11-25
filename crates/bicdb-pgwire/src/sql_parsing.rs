@@ -2062,8 +2062,14 @@ pub(crate) fn finish_copy_in_inner(
         let relation_sql = copy.spec.relation_sql.as_ref().ok_or_else(|| {
             PgWireError::Server("COPY FROM STDIN missing SQL relation".to_string())
         })?;
-        let result =
-            execute_server_sql_for_describe(server, &format!("SELECT * FROM {relation_sql}"))?;
+        // Resolve the relation as the session does (search_path, role).
+        let result = execute_server_sql_for_describe_with_session(
+            server,
+            &format!("SELECT * FROM {relation_sql}"),
+            &state.session_state,
+            state.security_context.as_ref(),
+            &mut state.catalog_cache,
+        )?;
         result.columns
     } else {
         copy.spec.columns.clone()
@@ -2605,23 +2611,6 @@ pub(crate) fn render_copy_csv_value(value: Option<&str>) -> String {
     } else {
         value.to_string()
     }
-}
-
-/// Columns a COPY FROM STDIN will receive; fails when the target relation does not resolve.
-pub(crate) fn copy_in_column_count(
-    server: &Arc<PgWireServer>,
-    copy: &CopyStatement,
-) -> Result<usize> {
-    let relation = copy
-        .relation_sql
-        .as_ref()
-        .ok_or_else(|| PgWireError::Server("COPY FROM STDIN missing relation".to_string()))?;
-    let described = execute_server_sql_for_describe(server, &format!("SELECT * FROM {relation}"))?;
-    Ok(if copy.columns.is_empty() {
-        described.columns.len()
-    } else {
-        copy.columns.len()
-    })
 }
 
 pub(crate) fn copy_in_response(

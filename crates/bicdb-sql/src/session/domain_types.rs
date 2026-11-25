@@ -429,10 +429,37 @@ impl<'db> SqlSession<'db> {
             if !relation_names.contains(&table.to_ascii_lowercase()) {
                 return Err(SqlError::InvalidCollection(table));
             }
-            // PostgreSQL requires a privilege on the relation to lock it; this
-            // validated existence only, so any role could lock any tenant's
-            // table. SELECT is the weakest right any LOCK mode accepts.
-            self.require_table_privilege(&table, "SELECT")?;
+            // PostgreSQL's LockTableAclCheck: UPDATE, DELETE, TRUNCATE or
+            // MAINTAIN permit any mode; SELECT also permits ACCESS SHARE and
+            // INSERT also permits modes up to ROW EXCLUSIVE.
+            use sqlparser::ast::LockTableMode;
+            let mode = lock
+                .lock_mode
+                .clone()
+                .unwrap_or(LockTableMode::AccessExclusive);
+            let mut privileges = vec!["UPDATE", "DELETE", "TRUNCATE", "MAINTAIN"];
+            if matches!(mode, LockTableMode::AccessShare) {
+                privileges.push("SELECT");
+            }
+            if matches!(
+                mode,
+                LockTableMode::AccessShare | LockTableMode::RowShare | LockTableMode::RowExclusive
+            ) {
+                privileges.push("INSERT");
+            }
+            let role = current_user_from_gucs(&self.session_gucs);
+            let mut allowed = false;
+            for privilege in privileges {
+                if role_has_table_privilege(self.db_ref(), &role, &table, privilege)? {
+                    allowed = true;
+                    break;
+                }
+            }
+            if !allowed {
+                return Err(SqlError::BicDb(BicDbError::Authorization(
+                    relation_permission_denied_message(self.db_ref(), &table),
+                )));
+            }
         }
         Ok(SqlResult::command("LOCK TABLE"))
     }

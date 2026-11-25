@@ -2117,7 +2117,7 @@ impl RowAggregate {
     pub(crate) fn column_name(&self) -> String {
         match self {
             Self::OrderedSet(aggregate) => aggregate.column_name(),
-            Self::RegressionSlope(_) => "regr_slope".to_string(),
+            Self::RegressionSlope(aggregate) => aggregate.column_name(),
             Self::CountAll | Self::CountExpr(_, _) => "count".to_string(),
             Self::Sum(_, _) => "sum".to_string(),
             Self::ExactSumUnits(_) => "bicdb_exact_sum_units".to_string(),

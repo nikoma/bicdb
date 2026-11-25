@@ -220,3 +220,47 @@ severity and SQLSTATE:
   (HEADER MATCH)` checks the header names (22P04). `COPY ... (FORMAT binary)`
   and the `BINARY` keyword read and write PostgreSQL's binary COPY format for
   built-in types; HEADER with binary is refused (42601).
+
+## Statistics aggregates, partitions and lock privileges (2026-11)
+
+- `stddev`, `stddev_samp`, `stddev_pop`, `variance`, `var_samp`, `var_pop`
+  return numeric for integer and numeric input (PostgreSQL's scale rules)
+  and double precision for real and double precision input. `corr`,
+  `covar_pop`, `covar_samp` and every `regr_*` aggregate use PostgreSQL's
+  Youngs-Cramer accumulation, so results match to the last digit;
+  `regr_count` is bigint. `bit_and`, `bit_or` and `bit_xor` keep their
+  integer input type. The window forms of these aggregates are not
+  supported (0A000).
+- An aggregate without FROM (`SELECT sum(1)`, `SELECT var_pop(1.0)`) reads
+  one row. `make_date`, `make_time` and `make_timestamp` are available (BC
+  years as negative years, 22008 for out-of-range fields).
+  `pg_typeof('a')` is `unknown`. A `VALUES` list keeps a type modifier
+  shared by every row in its description.
+- A partition can itself be partitioned (`CREATE TABLE p1 PARTITION OF p
+  FOR VALUES ... PARTITION BY ...`, also with DEFAULT). Rows route through
+  every level. `pg_partition_tree`, `pg_partition_ancestors` and
+  `pg_partition_root` report the tree. Siblings in `pg_partition_tree` are
+  listed by name, not by OID.
+- ATTACH PARTITION matches columns by name, so a partition may order its
+  columns differently from the parent. A mismatch fails with PostgreSQL's
+  message (42804): a column not in the parent, a missing column, a different
+  type or a missing NOT NULL. Rows that break the bound fail with
+  `partition constraint of relation "x" is violated by some row`, and an
+  overlap with `partition "x" would overlap partition "y"` (42P17). Bound
+  expressions that reference a column, an aggregate, a subquery or a
+  set-returning function fail with PostgreSQL's messages. Expression
+  partition keys (`PARTITION BY RANGE ((b + 0))`) are not supported.
+- LOCK TABLE follows PostgreSQL's privilege rules: UPDATE, DELETE, TRUNCATE
+  or MAINTAIN allow any mode, INSERT allows modes up to ROW EXCLUSIVE, and
+  SELECT allows ACCESS SHARE. TRUNCATE needs the TRUNCATE privilege (or
+  ownership).
+- COPY FROM STDIN finds its table the way the session does (search_path).
+  If the table cannot be found, the statement fails before COPY starts. A
+  simple-query client that sends something other than COPY data during COPY
+  gets an error and the connection returns to idle; it no longer waits for a
+  Sync that such a client never sends.
+- A role with ADMIN OPTION on a role, held directly or through a role it
+  belongs to, can grant and revoke that role, as in PostgreSQL. No role holds
+  ADMIN OPTION on itself. Other roles get 42501 `permission denied to grant
+  role "x"`, with PostgreSQL's DETAIL. Superusers and CREATEROLE roles keep
+  their existing rights. `current_role` works in a SELECT without FROM.

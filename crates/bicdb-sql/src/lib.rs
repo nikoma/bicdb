@@ -91,6 +91,7 @@ mod builtin_signatures;
 mod column_privileges;
 mod identity;
 pub mod oracle;
+mod partition_info;
 pub mod sql_text;
 mod stack_depth;
 mod table_queries;

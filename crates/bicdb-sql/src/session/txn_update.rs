@@ -2733,7 +2733,8 @@ impl<'db> SqlSession<'db> {
         // tenant's tables. PostgreSQL requires ownership or the TRUNCATE
         // privilege.
         for target in &tables {
-            self.require_table_ownership(&target.name, "truncate it")?;
+            // Ownership (including through a role) or the TRUNCATE privilege.
+            self.require_table_privilege(&target.name, "TRUNCATE")?;
         }
         let cascade = matches!(truncate.cascade, Some(CascadeOption::Cascade));
         let schemas = list_schemas(self.db_ref())?;
@@ -2796,7 +2797,8 @@ impl<'db> SqlSession<'db> {
         // whoever owned those. The children are truncated, so the children
         // must be authorized.
         for target in &tables {
-            self.require_table_ownership(&target.name, "truncate it")?;
+            // Ownership (including through a role) or the TRUNCATE privilege.
+            self.require_table_privilege(&target.name, "TRUNCATE")?;
         }
 
         tables.sort_by(|left, right| {
@@ -3316,6 +3318,10 @@ impl<'db> SqlSession<'db> {
                 // that use the generic evaluator instead of bound slots.
                 if let Some(value) = routine_var_from_name(&self.routine_vars, &ident.value) {
                     return Ok(value);
+                }
+                // `current_role` is an SQL value function, like current_user.
+                if ident.quote_style.is_none() && ident.value.eq_ignore_ascii_case("current_role") {
+                    return Ok(SqlValue::String(current_user_from_gucs(&self.session_gucs)));
                 }
                 eval_constant_expr(expr)
             }

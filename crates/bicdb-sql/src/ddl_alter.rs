@@ -3331,6 +3331,8 @@ pub(crate) struct RawCreatePartitionTable {
     pub(crate) parent_schema: String,
     pub(crate) bound: String,
     pub(crate) if_not_exists: bool,
+    /// `PARTITION OF parent ... PARTITION BY ...`: a sub-partitioned child.
+    pub(crate) partitioning: Option<PartitioningSchema>,
 }
 
 pub(crate) struct RawCreateTableLike {
@@ -3511,7 +3513,14 @@ pub(crate) fn raw_partition_by_clause(sql: &str) -> Result<Option<PartitioningSc
     }
     let key_columns = after_open[..close]
         .split(',')
-        .map(|part| part.trim().trim_matches('"').to_string())
+        .map(|part| {
+            let part = part.trim();
+            if part.starts_with('"') {
+                part.trim_matches('"').to_string()
+            } else {
+                part.to_ascii_lowercase()
+            }
+        })
         .filter(|part| !part.is_empty())
         .collect::<Vec<_>>();
     if key_columns.is_empty() {
@@ -3573,7 +3582,13 @@ pub(crate) fn raw_create_partition_table(sql: &str) -> Result<Option<RawCreatePa
         return Ok(None);
     };
     let (parent, after_parent) = parse_leading_qualified_sql_identifier(rest)?;
-    let bound = after_parent.trim();
+    let (bound, partitioning) = match top_level_partition_by(after_parent) {
+        Some(index) => (
+            after_parent[..index].trim(),
+            raw_partition_by_clause(&after_parent[index..])?,
+        ),
+        None => (after_parent.trim(), None),
+    };
     if !bound.eq_ignore_ascii_case("DEFAULT")
         && !bound
             .get(.."FOR VALUES".len())
@@ -3601,7 +3616,55 @@ pub(crate) fn raw_create_partition_table(sql: &str) -> Result<Option<RawCreatePa
         parent_schema,
         bound: bound.to_string(),
         if_not_exists,
+        partitioning,
     }))
+}
+
+/// Byte offset of a `PARTITION BY` outside parentheses and quotes.
+fn top_level_partition_by(sql: &str) -> Option<usize> {
+    let bytes = sql.as_bytes();
+    let mut depth = 0_i32;
+    let mut index = 0;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'\'' | b'"' => {
+                let quote = bytes[index];
+                index += 1;
+                while index < bytes.len() {
+                    if bytes[index] == quote {
+                        if bytes.get(index + 1) == Some(&quote) {
+                            index += 2;
+                            continue;
+                        }
+                        break;
+                    }
+                    index += 1;
+                }
+            }
+            b'(' => depth += 1,
+            b')' => depth -= 1,
+            _ if depth == 0
+                && (index == 0 || !is_ident_char(bytes[index - 1] as char))
+                && sql[index..]
+                    .get(.."PARTITION".len())
+                    .is_some_and(|word| word.eq_ignore_ascii_case("PARTITION")) =>
+            {
+                let after = &sql[index + "PARTITION".len()..];
+                let trimmed = after.trim_start();
+                if trimmed.len() < after.len()
+                    && trimmed
+                        .get(..2)
+                        .is_some_and(|word| word.eq_ignore_ascii_case("BY"))
+                    && !trimmed[2..].starts_with(|ch: char| is_ident_char(ch))
+                {
+                    return Some(index);
+                }
+            }
+            _ => {}
+        }
+        index += 1;
+    }
+    None
 }
 
 pub(crate) fn raw_alter_table_partition_action(

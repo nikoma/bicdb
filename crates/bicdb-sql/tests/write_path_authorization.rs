@@ -125,8 +125,13 @@ fn writes_without_returning_still_work_for_a_write_only_grant() {
         .execute("INSERT INTO secrets VALUES (7, 'written')")
         .expect("a write-only grant must still be able to write");
     mallory
-        .execute("UPDATE secrets SET v = 'changed' WHERE id = 7")
+        .execute("UPDATE secrets SET v = 'changed'")
         .expect("a write-only grant must still be able to update");
+    // As in PostgreSQL, a WHERE clause reads the columns it names, which
+    // needs SELECT on them.
+    assert!(mallory
+        .execute("UPDATE secrets SET v = 'changed' WHERE id = 7")
+        .is_err());
 }
 
 /// The cascade loop appended FK children to the truncate set AFTER the

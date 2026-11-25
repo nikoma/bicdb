@@ -3512,6 +3512,16 @@ impl<'db> SqlSession<'db> {
             )?
         };
         let sql: &str = &constants;
+        // PostgreSQL's lexer cuts identifiers to 63 bytes (and says so).
+        let truncated = if oracle::is_oracle_database(self.db_ref())? {
+            None
+        } else {
+            crate::identifier_truncation::truncate_long_identifiers(sql)
+        };
+        let (sql, truncations) = match &truncated {
+            Some((rewritten, truncations)) => (rewritten.as_str(), truncations.as_slice()),
+            None => (sql, &[][..]),
+        };
         let _cursor_scope = sql_cursors::CursorScope::enter(&self.sql_cursors);
         let current_of = self.rewrite_where_current_of(sql)?;
         let sql = current_of.as_deref().unwrap_or(sql);
@@ -3569,6 +3579,16 @@ impl<'db> SqlSession<'db> {
         // The lexer's warnings belong to this statement's diagnostics.
         for warning in lexer_warnings {
             crate::statement_context::note_notice(warning)?;
+        }
+        for truncation in truncations {
+            crate::statement_context::report_notice(
+                None,
+                "42622",
+                format!(
+                    "identifier \"{}\" will be truncated to \"{}\"",
+                    truncation.identifier, truncation.truncated
+                ),
+            );
         }
         let atomic = self.tx.is_some() && oracle::preview_routine_language_enabled(self.db_ref())?;
         let execute = |session: &mut Self| {

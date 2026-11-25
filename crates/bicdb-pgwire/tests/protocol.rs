@@ -5676,9 +5676,14 @@ fn pgwire_currval_map_overage_reports_error_then_closes_without_ready() {
         let mut db = BicDb::open(dir.path()).unwrap();
         let mut session = bicdb_sql::SqlSession::new(&mut db);
         let sequence = format!("currval_memory_seq_{}", "s".repeat(64 * 1024));
-        session
-            .execute(&format!("CREATE SEQUENCE {sequence}"))
-            .unwrap();
+        // SQL text cuts identifiers to 63 bytes as PostgreSQL does; an
+        // embedding host can still name a 64 KiB sequence through the AST.
+        let create = sqlparser::parser::Parser::parse_sql(
+            &sqlparser::dialect::PostgreSqlDialect {},
+            &format!("CREATE SEQUENCE {sequence}"),
+        )
+        .unwrap();
+        session.execute_statement_ast(&create[0]).unwrap();
         session
             .execute("CREATE TABLE currval_memory_source (name TEXT PRIMARY KEY)")
             .unwrap();

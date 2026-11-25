@@ -286,6 +286,7 @@ mod persistence_ddl;
 mod pg_float_text_functions;
 mod pg_functions_more;
 mod pg_number_input;
+mod identifier_truncation;
 mod pg_scalar_extra;
 mod pgcrypto;
 mod quantified_operators;

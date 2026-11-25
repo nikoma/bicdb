@@ -1,0 +1,1 @@
+excl.deferrable_refused|CREATE TABLE ex8(r int4range, EXCLUDE USING gist (r WITH &&) DEFERRABLE INITIALLY DEFERRED); BEGIN; INSERT INTO ex8 VALUES ('[1,5)'),('[2,3)'); DELETE FROM ex8 WHERE r='[2,3)'; COMMIT; SELECT count(*) FROM ex8

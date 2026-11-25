@@ -67,6 +67,17 @@ identity in storage, so two rows can never share one even transiently.
 `DEFERRABLE` unique constraints on partitioned tables are also refused with
 0A000. Other constraint classes remain immediate.
 
+Exclusion constraints (`EXCLUDE USING gist (col WITH =, range_col WITH &&)`,
+optionally with `WHERE (predicate)`) can be written inline in `CREATE TABLE`
+or added with `ALTER TABLE ... ADD CONSTRAINT`; unnamed inline ones get
+PostgreSQL's `<table>_<columns>_excl` name. Each element is a column compared
+with `=` or one range (a range column, or a range built from two columns)
+compared with `&&` or `-|-`. A violation fails with 23P01. The check sees
+rows written earlier in the same transaction, and writers to the same
+equality group are serialized until commit, so concurrent transactions
+cannot both insert overlapping rows. `DEFERRABLE` exclusion constraints are
+refused with 0A000.
+
 `ALTER TABLE ... ADD CONSTRAINT` validates existing rows before committing the
 catalog change by default. Add `NOT VALID` to skip that initial scan for
 `UNIQUE`, `CHECK`, or `FOREIGN KEY` constraints during large backfills; new

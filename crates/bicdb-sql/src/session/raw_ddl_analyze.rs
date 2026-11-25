@@ -766,6 +766,15 @@ impl<'db> SqlSession<'db> {
         if statements.is_empty() {
             return Ok(None);
         }
+        if let [statement] = statements.as_slice() {
+            if let Some((create, table, constraints)) =
+                raw_create_table_exclusion_constraints(statement)?
+            {
+                return self
+                    .execute_create_table_with_exclusions(&create, &table, constraints)
+                    .map(Some);
+            }
+        }
         let mut parsed = Vec::new();
         for statement in &statements {
             let Some((table, constraint)) = raw_alter_table_exclusion_constraint(statement)? else {
@@ -791,6 +800,50 @@ impl<'db> SqlSession<'db> {
             self.save_session_schema(&schema)?;
         }
         Ok(Some(SqlResult::command("ALTER TABLE")))
+    }
+
+    /// `CREATE TABLE` with `EXCLUDE` table constraints: the table is created
+    /// from the remaining definition and the constraints are added to it in
+    /// the same statement; if adding one fails the table is dropped again.
+    fn execute_create_table_with_exclusions(
+        &mut self,
+        create: &str,
+        table: &str,
+        constraints: Vec<String>,
+    ) -> Result<SqlResult> {
+        let result = self.execute_inner(create)?;
+        let resolved = resolve_session_relation_name(self.db_ref(), table)?;
+        let added = (|| -> Result<()> {
+            for constraint in constraints {
+                let alter = format!("ALTER TABLE {table} ADD {constraint}");
+                let Some((_, constraint)) = raw_alter_table_exclusion_constraint(&alter)? else {
+                    return Err(SqlError::InvalidSql(format!(
+                        "invalid exclusion constraint {constraint}"
+                    )));
+                };
+                let mut schema = load_schema(self.db_ref(), &resolved)?
+                    .ok_or_else(|| SqlError::InvalidCollection(resolved.clone()))?;
+                validate_constraint_columns(self.db_ref(), &resolved, &schema, &constraint)?;
+                let name = constraint_name(&constraint);
+                if schema
+                    .constraints
+                    .iter()
+                    .any(|candidate| constraint_name(candidate) == name)
+                {
+                    return Err(SqlError::duplicate_constraint(&resolved, name));
+                }
+                schema.constraints.push(constraint);
+                self.save_session_schema(&schema)?;
+            }
+            Ok(())
+        })();
+        if let Err(error) = added {
+            if self.tx.is_none() {
+                let _ = self.execute_inner(&format!("DROP TABLE {table}"));
+            }
+            return Err(error);
+        }
+        Ok(result)
     }
 
     pub(crate) fn apply_search_path_setting(&mut self, values: &[Expr]) -> Result<()> {

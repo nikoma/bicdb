@@ -398,7 +398,7 @@ pub(crate) fn validate_records_for_write(
         validate_foreign_keys_in_statement(db, tx, table, schema, record, records)?;
     }
     validate_unique_constraints(db, tx, table, schema, records, allow_existing_same_id)?;
-    validate_exclusion_constraints(db, table, schema, records, allow_existing_same_id)
+    validate_exclusion_constraints(db, tx, table, schema, records, allow_existing_same_id)
 }
 
 /// `validate_records_for_write` for rows whose local constraints (NOT NULL,
@@ -420,7 +420,7 @@ pub(crate) fn validate_records_for_write_prechecked(
         validate_foreign_keys_in_statement(db, tx, table, schema, record, records)?;
     }
     validate_unique_constraints(db, tx, table, schema, records, allow_existing_same_id)?;
-    validate_exclusion_constraints(db, table, schema, records, allow_existing_same_id)
+    validate_exclusion_constraints(db, tx, table, schema, records, allow_existing_same_id)
 }
 
 /// Validates UPDATE results. Before images are retained whenever foreign keys
@@ -482,7 +482,7 @@ pub(crate) fn validate_updated_records(
     if !before_after_records.is_empty() {
         validate_unique_constraints_for_update(db, tx, table, schema, before_after_records)?;
     }
-    validate_exclusion_constraints(db, table, schema, after_records, true)
+    validate_exclusion_constraints(db, tx, table, schema, after_records, true)
 }
 
 pub(crate) fn validate_record_local_constraints(
@@ -2586,6 +2586,7 @@ pub(crate) fn index_key_matches_prefix_range_and_filters(
 
 pub(crate) fn validate_exclusion_constraints(
     db: &BicDb,
+    tx: Option<&Transaction>,
     table: &str,
     schema: &TableSchema,
     records: &[Record],
@@ -2613,10 +2614,32 @@ pub(crate) fn validate_exclusion_constraints(
             records,
             allow_existing_same_id,
         )?;
-        let existing_records = db.scan_collection_unchecked(table)?;
+        // Serialize writers on the constraint (per equality group when it has
+        // equality columns), then read current committed rows with this
+        // transaction's own writes overlaid: overlapping transactions cannot
+        // both pass, and a row written earlier in this transaction counts.
+        if let Some(tx) = tx {
+            let scope = format!("exclusion:{}", serde_json::to_string(&(table, name))?);
+            for record in records {
+                let key = equal_columns
+                    .iter()
+                    .map(|column| record_column_value(record, schema, column).to_cell())
+                    .collect::<Vec<_>>();
+                tx.reserve_integrity_key(&scope, &serde_json::to_string(&key)?)?;
+            }
+        }
+        let existing_records = current_integrity_records(db, tx, table)?;
+        let batch_ids = records
+            .iter()
+            .map(|record| record.id.as_str())
+            .collect::<BTreeSet<_>>();
         for record in records {
             for existing in &existing_records {
                 if allow_existing_same_id && existing.id == record.id {
+                    continue;
+                }
+                // Rows of this batch are compared with each other above.
+                if batch_ids.contains(existing.id.as_str()) {
                     continue;
                 }
                 if exclusion_record_pair_conflicts(

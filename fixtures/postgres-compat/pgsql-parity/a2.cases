@@ -17,3 +17,11 @@ pgcrypto.gen_salt_sha|CREATE EXTENSION IF NOT EXISTS pgcrypto; SELECT left(gen_s
 pgcrypto.gen_salt_rounds_errors|CREATE EXTENSION IF NOT EXISTS pgcrypto; SELECT gen_salt('xdes', 2)
 pgcrypto.gen_salt_md5_rounds|CREATE EXTENSION IF NOT EXISTS pgcrypto; SELECT length(gen_salt('md5', 1000)), left(gen_salt('md5', 1000), 3)
 pgcrypto.null_args|CREATE EXTENSION IF NOT EXISTS pgcrypto; SELECT crypt(NULL, 'ab') IS NULL, crypt('a', NULL) IS NULL, gen_salt(NULL) IS NULL
+excl.inline_range|CREATE TABLE ex1(r int4range, EXCLUDE USING gist (r WITH &&)); INSERT INTO ex1 VALUES ('[1,5)'); INSERT INTO ex1 VALUES ('[5,9)'); SELECT count(*) FROM ex1; SELECT conname, contype FROM pg_constraint WHERE conrelid='ex1'::regclass
+excl.inline_range_violation|CREATE TABLE ex2(r int4range, EXCLUDE USING gist (r WITH &&)); INSERT INTO ex2 VALUES ('[1,5)'); INSERT INTO ex2 VALUES ('[3,7)')
+excl.named_with_equality|CREATE EXTENSION IF NOT EXISTS btree_gist; CREATE TABLE ex3(room int, during tsrange, CONSTRAINT ex3_no_overlap EXCLUDE USING gist (room WITH =, during WITH &&)); INSERT INTO ex3 VALUES (1, '[2024-01-01 10:00, 2024-01-01 11:00)'), (2, '[2024-01-01 10:00, 2024-01-01 11:00)'); INSERT INTO ex3 VALUES (1, '[2024-01-01 10:30, 2024-01-01 12:00)')
+excl.same_transaction|CREATE TABLE ex4(r int4range, EXCLUDE USING gist (r WITH &&)); BEGIN; INSERT INTO ex4 VALUES ('[1,5)'); INSERT INTO ex4 VALUES ('[2,3)'); COMMIT
+excl.update_shift|CREATE TABLE ex5(id int PRIMARY KEY, r int4range, EXCLUDE USING gist (r WITH &&)); INSERT INTO ex5 VALUES (1,'[1,3)'),(2,'[5,7)'); UPDATE ex5 SET r='[2,4)' WHERE id=1; UPDATE ex5 SET r='[3,6)' WHERE id=1
+excl.where_predicate|CREATE TABLE ex6(r int4range, active boolean, EXCLUDE USING gist (r WITH &&) WHERE (active)); INSERT INTO ex6 VALUES ('[1,5)', true), ('[1,5)', false); SELECT count(*) FROM ex6; INSERT INTO ex6 VALUES ('[2,3)', true)
+excl.catalog_def|CREATE TABLE ex7(r int4range, CONSTRAINT ex7_r_excl EXCLUDE USING gist (r WITH &&)); SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid='ex7'::regclass
+excl.alter_add|CREATE TABLE ex9(r int4range); INSERT INTO ex9 VALUES ('[1,5)'),('[5,6)'); ALTER TABLE ex9 ADD CONSTRAINT ex9_x EXCLUDE USING gist (r WITH &&); INSERT INTO ex9 VALUES ('[0,2)')

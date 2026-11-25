@@ -154,6 +154,7 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>> {
     crate::table_queries::reject_unlowered(&statements)?;
     restore_postgres_distinct_boolean_precedence(&mut statements);
     restore_postgres_whole_row_function_args(&mut statements);
+    crate::similar_to::rewrite_similar_to(&mut statements);
     Ok(statements)
 }
 
@@ -3910,9 +3911,18 @@ pub(crate) fn has_schema_privilege(db: &BicDb, args: &[SqlValue]) -> Result<bool
 }
 
 pub(crate) fn has_table_privilege(db: &BicDb, args: &[SqlValue]) -> Result<bool> {
+    has_table_privilege_as(db, args, &current_role_name())
+}
+
+/// `has_table_privilege`, whose two-argument form answers for `current_user`.
+pub(crate) fn has_table_privilege_as(
+    db: &BicDb,
+    args: &[SqlValue],
+    current_user: &str,
+) -> Result<bool> {
     let (role, table, privilege) = match args {
         [table, privilege] => (
-            Some(current_role_name()),
+            Some(current_user.to_string()),
             table_name_from_value(db, table),
             sql_value_text(privilege),
         ),
@@ -3942,12 +3952,49 @@ pub(crate) fn has_table_privilege(db: &BicDb, args: &[SqlValue]) -> Result<bool>
         return Ok(false);
     }
     let role = role.unwrap_or_else(current_role_name);
+    if let Some(catalog) = system_catalog_relation(db, &table) {
+        // System catalogs are not SQL relations here; answer as PostgreSQL's
+        // default catalog ACLs do: a superuser holds every privilege, PUBLIC
+        // may SELECT from all but the catalogs that hold secrets.
+        let superuser = role == BOOTSTRAP_ROLE_NAME
+            || load_role_schema(db, &role)?.is_some_and(|role| role.superuser);
+        return Ok(privileges.iter().any(|privilege| {
+            superuser
+                || (privilege.eq_ignore_ascii_case("SELECT")
+                    && !matches!(
+                        catalog.as_str(),
+                        "pg_catalog.pg_authid"
+                            | "pg_catalog.pg_shadow"
+                            | "pg_catalog.pg_statistic"
+                            | "pg_catalog.pg_statistic_ext_data"
+                            | "pg_catalog.pg_user_mapping"
+                            | "pg_catalog.pg_largeobject"
+                            | "pg_catalog.pg_subscription"
+                    ))
+        }));
+    }
     for privilege in privileges {
         if role_has_table_privilege(db, &role, &table, privilege)? {
             return Ok(true);
         }
     }
     Ok(false)
+}
+
+/// The qualified name of the system catalog relation `table` names (an
+/// unqualified name resolves through the implicit leading `pg_catalog`), or
+/// `None` for a user relation.
+fn system_catalog_relation(db: &BicDb, table: &str) -> Option<String> {
+    let lower = table.trim().to_ascii_lowercase();
+    let qualified = if lower.contains('.') {
+        lower
+    } else {
+        format!("pg_catalog.{lower}")
+    };
+    let catalog_schema =
+        qualified.starts_with("pg_catalog.") || qualified.starts_with("information_schema.");
+    (catalog_schema && is_virtual_table(&qualified) && !relation_exists(db, &qualified))
+        .then_some(qualified)
 }
 
 /// A relation given by name or by OID (`class.oid`, `policy.polrelid`), as

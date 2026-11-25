@@ -5411,6 +5411,65 @@ impl<'db> SqlEngine<'db> {
             )));
         }
         if !routine.schema.language.eq_ignore_ascii_case("sql") {
+            // A PL/pgSQL function with OUT parameters returns one row: run it
+            // as a scalar call (the session interpreter applies EXECUTE and
+            // SECURITY DEFINER) and expand its record.
+            if let (false, Some(host)) = (routine.schema.returns_set, self.routine_host) {
+                let arguments = table_function_expr_args(args)?
+                    .iter()
+                    .map(|argument| self.eval_select_constant_expr(argument))
+                    .collect::<Result<Vec<_>>>()?;
+                let arg_types = vec![None; arguments.len()];
+                let value = host.call_function(self, table, &arguments, &arg_types)?;
+                let outputs = crate::routine_calls::routine_output_params(&routine.ir.params);
+                let (names, values): (Vec<String>, Vec<SqlValue>) = match value {
+                    SqlValue::Composite(record) => record
+                        .fields
+                        .into_iter()
+                        .map(|field| (field.name, field.value))
+                        .unzip(),
+                    SqlValue::Null if outputs.len() > 1 => outputs
+                        .iter()
+                        .enumerate()
+                        .map(|(position, param)| {
+                            (
+                                param
+                                    .name
+                                    .as_deref()
+                                    .map(normalize_object_name)
+                                    .unwrap_or_else(|| format!("column{}", position + 1)),
+                                SqlValue::Null,
+                            )
+                        })
+                        .unzip(),
+                    scalar => (
+                        vec![outputs
+                            .first()
+                            .and_then(|param| param.name.as_deref())
+                            .map(normalize_object_name)
+                            .unwrap_or_else(|| {
+                                table.rsplit('.').next().unwrap_or(table).to_string()
+                            })],
+                        vec![scalar],
+                    ),
+                };
+                let alias_name = table_alias
+                    .map(|alias| alias.name.value.clone())
+                    .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(table).to_string());
+                let columns = table_alias_columns(
+                    table,
+                    &alias_name,
+                    table_alias
+                        .map(|alias| alias.columns.as_slice())
+                        .unwrap_or(&[]),
+                    &names,
+                )?;
+                let rows = vec![slot_row_from_values(&columns, &values)];
+                return Ok(Some(RowSet {
+                    rows,
+                    columns: aliased_row_output_columns(&alias_name, &columns),
+                }));
+            }
             return Err(SqlError::UnsupportedPlpgsqlFeature(format!(
                 "set-returning {} routine {} is not implemented",
                 routine.schema.language, routine.schema.name
@@ -6613,7 +6672,9 @@ impl<'db> SqlEngine<'db> {
                         routine.schema.name
                     )));
                 }
-                if !routine.schema.language.eq_ignore_ascii_case("sql") {
+                if !routine.schema.language.eq_ignore_ascii_case("sql")
+                    && (routine.schema.returns_set || self.routine_host.is_none())
+                {
                     return Err(SqlError::UnsupportedPlpgsqlFeature(format!(
                         "set-returning {} routine {} is not implemented",
                         routine.schema.language, routine.schema.name

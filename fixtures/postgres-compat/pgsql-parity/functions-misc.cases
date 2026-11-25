@@ -1,0 +1,60 @@
+array.md_subscript|SELECT (ARRAY[[1,2],[3,4]])[2][1]
+array.md_subscript_types|SELECT (ARRAY[[1,2],[3,4]])[1][2] + 1, pg_typeof((ARRAY[[1,2],[3,4]])[2][1]), (ARRAY[['a','b'],['c','d']])[2][2]
+array.md_subscript_out_of_range|SELECT (ARRAY[[1,2],[3,4]])[3][1] IS NULL, (ARRAY[[1,2],[3,4]])[1][5] IS NULL
+array.md_slice|SELECT (ARRAY[[1,2],[3,4]])[1:2][1:1], (ARRAY[1,2,3,4])[2:3], pg_typeof((ARRAY[1,2,3])[1:2])
+array.md_partial_slice|SELECT (ARRAY[[1,2],[3,4]])[2:2], (ARRAY[[1,2],[3,4]])[1:1][2:2]
+array.md_column|CREATE TABLE amd(m int[]); INSERT INTO amd VALUES ('{{1,2},{3,4}}'); SELECT m[2][1], m[1][2] FROM amd
+array.md_text_column|CREATE TABLE amdt(m text[]); INSERT INTO amdt VALUES ('{{a,b},{c,d}}'); SELECT m[2][1], m[1:1][2:2] FROM amdt
+guc.work_mem_set_show|SET work_mem = '64MB'; SHOW work_mem; SET work_mem = 65536; SHOW work_mem; SET work_mem TO '1.5MB'; SELECT current_setting('work_mem')
+guc.work_mem_default_reset|SHOW work_mem; SET work_mem = '128MB'; RESET work_mem; SHOW work_mem; SHOW maintenance_work_mem; SHOW effective_cache_size
+guc.work_mem_invalid|SET work_mem = '64XB'
+guc.work_mem_out_of_range|SET work_mem = '10kB'
+guc.set_local_planner|BEGIN; SET LOCAL work_mem = '32MB'; SHOW work_mem; COMMIT; SHOW work_mem
+guc.set_config_planner|SELECT set_config('work_mem', '2048', false), current_setting('work_mem'); SELECT set_config('random_page_cost', '1.1', false)
+guc.planner_costs|SET random_page_cost = 1.1; SHOW random_page_cost; SET seq_page_cost = 2; SHOW seq_page_cost; SHOW cpu_operator_cost; SET effective_cache_size = '8GB'; SHOW effective_cache_size
+guc.enable_switches|SET enable_seqscan = off; SHOW enable_seqscan; SET enable_hashjoin TO false; SHOW enable_hashjoin; SHOW enable_partitionwise_join; RESET enable_seqscan; SHOW enable_seqscan
+guc.enable_invalid|SET enable_seqscan = 'maybe'
+guc.real_out_of_range|SET random_page_cost = -1
+guc.plan_cache_mode|SET plan_cache_mode = force_custom_plan; SHOW plan_cache_mode; SET plan_cache_mode = 'bogus'
+guc.reset_all_planner|SET work_mem = '1GB'; SET enable_nestloop = off; RESET ALL; SHOW work_mem; SHOW enable_nestloop
+guc.synchronous_commit_refused_or_honoured|SET maintenance_work_mem = '256MB'; SHOW maintenance_work_mem
+comment.obj_description|CREATE TABLE cmt1(a int, b text); COMMENT ON TABLE cmt1 IS 'the table'; COMMENT ON COLUMN cmt1.b IS 'column b'; SELECT obj_description('cmt1'::regclass, 'pg_class'), obj_description('cmt1'::regclass), col_description('cmt1'::regclass, 2), col_description('cmt1'::regclass, 1)
+comment.replace_and_remove|CREATE TABLE cmt2(a int); COMMENT ON TABLE cmt2 IS 'one'; COMMENT ON TABLE cmt2 IS 'two'; SELECT obj_description('cmt2'::regclass, 'pg_class'); COMMENT ON TABLE cmt2 IS NULL; SELECT obj_description('cmt2'::regclass, 'pg_class') IS NULL; COMMENT ON TABLE cmt2 IS ''; SELECT obj_description('cmt2'::regclass, 'pg_class') IS NULL
+comment.pg_description|CREATE TABLE cmt3(a int, b int); COMMENT ON TABLE cmt3 IS 'tbl'; COMMENT ON COLUMN cmt3.b IS 'colb'; SELECT objsubid, description FROM pg_description WHERE objoid = 'cmt3'::regclass ORDER BY objsubid
+comment.missing_column|CREATE TABLE cmt4(a int); COMMENT ON COLUMN cmt4.nope IS 'x'
+comment.missing_table|COMMENT ON TABLE cmt_missing IS 'x'
+comment.rollback|CREATE TABLE cmt5(a int); BEGIN; COMMENT ON TABLE cmt5 IS 'temp'; ROLLBACK; SELECT obj_description('cmt5'::regclass, 'pg_class') IS NULL
+priv.catalog_superuser|SELECT has_table_privilege('pg_class','SELECT'), has_table_privilege('pg_catalog.pg_class','SELECT'), has_table_privilege('pg_class','INSERT'), has_table_privilege('information_schema.tables','SELECT')
+priv.catalog_unprivileged|CREATE ROLE privcat_r; SET ROLE privcat_r; SELECT has_table_privilege('pg_class','SELECT'), has_table_privilege('pg_class','UPDATE'), has_table_privilege('pg_authid','SELECT'); RESET ROLE; DROP ROLE privcat_r
+priv.user_table_current_user|CREATE TABLE privt(a int); CREATE ROLE privt_r; SET ROLE privt_r; SELECT has_table_privilege('privt','SELECT'); RESET ROLE; SELECT has_table_privilege('privt','SELECT'), has_table_privilege('privt_r','privt','SELECT'), has_table_privilege(NULL::text,'SELECT') IS NULL; DROP TABLE privt; DROP ROLE privt_r
+fts.ts_headline_overloads|SELECT ts_headline('english'::regconfig, 'quick fox'::text, to_tsquery('english','fox')), ts_headline('quick brown fox', to_tsquery('fox')), ts_headline('english', 'quick brown fox', to_tsquery('english','fox'), 'StartSel=<, StopSel=>'), ts_headline('quick fox jumps', to_tsquery('fox'), 'StartSel=[, StopSel=]')
+similar.basic|SELECT 'abc' SIMILAR TO 'a%', 'abc' SIMILAR TO 'b%', 'abc' NOT SIMILAR TO 'a_c', 'abc' SIMILAR TO '(a|x)(b|y)c', 'a%c' SIMILAR TO 'a#%c' ESCAPE '#', 'abc' SIMILAR TO 'a#%c' ESCAPE '#'
+similar.nulls_and_column|SELECT NULL SIMILAR TO 'a', 'a' SIMILAR TO NULL; SELECT x, x SIMILAR TO '[a-c]+' FROM (VALUES ('abc'), ('abd'), ('')) t(x) ORDER BY x
+similar.where|CREATE TABLE simt(s text); INSERT INTO simt VALUES ('apple'),('banana'),('avocado'); SELECT s FROM simt WHERE s SIMILAR TO 'a%' ORDER BY s; SELECT s FROM simt WHERE s NOT SIMILAR TO '%an%' ORDER BY s
+similar.escape_fn|SELECT similar_to_escape('a%'), similar_to_escape('a#%b', '#'), similar_escape('x_y', NULL)
+similar.substring|SELECT substring('foobar' SIMILAR '%#"o_b#"%' ESCAPE '#'), substring('foobar' FROM '%#"o_b#"%' FOR '#'), substring('foobar' SIMILAR '#"f%#"' ESCAPE '#')
+similar.bad_escape|SELECT 'a' SIMILAR TO 'a' ESCAPE 'xy'
+notify.function|SELECT pg_notify('pgnch', 'hello')
+notify.empty_channel|SELECT pg_notify('', 'x')
+notify.in_transaction|BEGIN; SELECT pg_notify('pgnt', 'a'); NOTIFY pgnt, 'b'; COMMIT
+notify.rollback|LISTEN pgnr; BEGIN; SELECT pg_notify('pgnr', 'gone'); ROLLBACK; SELECT 1
+call.named_args|CREATE FUNCTION fna(a int, b int DEFAULT 1) RETURNS int LANGUAGE sql AS 'SELECT a*10+b'; SELECT fna(b => 2, a => 1), fna(a => 3), fna(4, b => 5), fna(6), fna(a := 7, b := 8)
+call.named_args_plpgsql|CREATE FUNCTION fnp(x text, y text DEFAULT 'd', z text DEFAULT 'z') RETURNS text LANGUAGE plpgsql AS $$BEGIN RETURN x || y || z; END$$; SELECT fnp('a', z => 'Z'), fnp(y => 'Y', x => 'X'), fnp('p')
+call.named_args_errors|CREATE FUNCTION fne(a int, b int) RETURNS int LANGUAGE sql AS 'SELECT a+b'; SELECT fne(a => 1, c => 2)
+call.named_args_duplicate|CREATE FUNCTION fnd(a int, b int) RETURNS int LANGUAGE sql AS 'SELECT a+b'; SELECT fnd(1, a => 2)
+call.named_args_missing|CREATE FUNCTION fnm(a int, b int) RETURNS int LANGUAGE sql AS 'SELECT a+b'; SELECT fnm(b => 2)
+call.named_args_in_query|CREATE FUNCTION fnq(a int, b int DEFAULT 100) RETURNS int LANGUAGE sql AS 'SELECT a+b'; CREATE TABLE fnqt(v int); INSERT INTO fnqt VALUES (1),(2); SELECT v, fnq(b => v, a => 10) FROM fnqt ORDER BY v
+call.named_overload|CREATE FUNCTION fno(a int, b int) RETURNS text LANGUAGE sql AS 'SELECT ''int'''; CREATE FUNCTION fno(a text, b text) RETURNS text LANGUAGE sql AS 'SELECT ''text'''; SELECT fno(b => 1, a => 2), fno(b => 'x'::text, a => 'y'::text)
+out.record_field|CREATE FUNCTION op(a int, OUT b int, OUT c int) LANGUAGE sql AS 'SELECT a, a*2'; SELECT (op(1)).c, (op(2)).b
+out.select_star|CREATE FUNCTION op2(a int, OUT b int, OUT c text) LANGUAGE sql AS 'SELECT a, ''x'' || a'; SELECT * FROM op2(5)
+out.whole_record|CREATE FUNCTION op3(a int, OUT b int, OUT c int) LANGUAGE sql AS 'SELECT a, a+1'; SELECT op3(7)
+out.single_out|CREATE FUNCTION op4(a int, OUT b int) LANGUAGE sql AS 'SELECT a * 3'; SELECT op4(2), pg_typeof(op4(2))
+out.plpgsql|CREATE FUNCTION op5(a int, OUT s int, OUT p int) LANGUAGE plpgsql AS $$BEGIN s := a + a; p := a * a; END$$; SELECT (op5(3)).p, (op5(3)).s; SELECT * FROM op5(4)
+out.inout|CREATE FUNCTION op6(INOUT x int, OUT y int) LANGUAGE plpgsql AS $$BEGIN x := x + 1; y := x * 10; END$$; SELECT * FROM op6(1)
+out.returns_table|CREATE FUNCTION rt(n int) RETURNS TABLE(i int, sq int) LANGUAGE sql AS 'SELECT g, g*g FROM generate_series(1, n) g'; SELECT * FROM rt(3); SELECT i FROM rt(2) WHERE sq > 1
+out.returns_table_plpgsql|CREATE FUNCTION rtp(n int) RETURNS TABLE(i int, label text) LANGUAGE plpgsql AS $$BEGIN FOR k IN 1..n LOOP i := k; label := 'n' || k; RETURN NEXT; END LOOP; END$$; SELECT * FROM rtp(2)
+variadic.basic|CREATE FUNCTION va(VARIADIC xs int[]) RETURNS int LANGUAGE sql AS 'SELECT sum(x)::int FROM unnest(xs) x'; SELECT va(1,2,3), va(5), va(VARIADIC ARRAY[4,5])
+variadic.mixed|CREATE FUNCTION vb(sep text, VARIADIC parts text[]) RETURNS text LANGUAGE sql AS 'SELECT array_to_string(parts, sep)'; SELECT vb('-', 'a', 'b', 'c'), vb(',', VARIADIC ARRAY['x','y'])
+variadic.plpgsql|CREATE FUNCTION vc(VARIADIC nums numeric[]) RETURNS numeric LANGUAGE plpgsql AS $$DECLARE t numeric := 0; n numeric; BEGIN FOREACH n IN ARRAY nums LOOP t := t + n; END LOOP; RETURN t; END$$; SELECT vc(1, 2.5, 3)
+variadic.named|CREATE FUNCTION vd(VARIADIC arr int[]) RETURNS int LANGUAGE sql AS 'SELECT array_length(arr, 1)'; SELECT vd(arr => ARRAY[1,2,3])
+guc.block_unit_rounding|SET effective_cache_size = '100kB'; SHOW effective_cache_size; SET temp_buffers = 1000; SHOW temp_buffers

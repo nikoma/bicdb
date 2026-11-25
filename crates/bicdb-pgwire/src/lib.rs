@@ -4492,9 +4492,14 @@ pub(crate) fn deliver_notifications(
     if notifications.is_empty() {
         return;
     }
+    // PostgreSQL delivers a transaction's identical (channel, payload) pairs
+    // once, in the order they were first sent.
+    let mut seen = std::collections::HashSet::new();
     if let Ok(mut bus) = server.notifications.lock() {
         for (channel, payload) in notifications {
-            bus.notify(&channel, &payload, connection_id as i32);
+            if seen.insert((channel.clone(), payload.clone())) {
+                bus.notify(&channel, &payload, connection_id as i32);
+            }
         }
     }
 }

@@ -949,6 +949,7 @@ fn user_type_column_for_name(
 
 fn enum_runtime_column(user_type: crate::UserTypeColumnSchema) -> ColumnSchema {
     ColumnSchema {
+        comment: None,
         name: String::new(),
         pg_type: user_type.formatted_name(),
         user_type: Some(user_type),
@@ -983,6 +984,7 @@ fn domain_base_runtime_column(user_type: &crate::UserTypeColumnSchema) -> Column
         let mut base_user_type = (**base_user_type).clone();
         base_user_type.array |= user_type.array;
         return ColumnSchema {
+            comment: None,
             name: String::new(),
             pg_type: base_user_type.formatted_name(),
             user_type: Some(base_user_type),
@@ -1007,6 +1009,7 @@ fn domain_base_runtime_column(user_type: &crate::UserTypeColumnSchema) -> Column
         base_type.clone()
     };
     ColumnSchema {
+        comment: None,
         name: String::new(),
         pg_type,
         user_type: None,

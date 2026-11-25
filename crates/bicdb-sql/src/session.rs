@@ -49,6 +49,7 @@ pub use partition_admission::{
     PartitionUpgradeInspection, PartitionUpgradePlan,
 };
 mod partition_triggers;
+pub(crate) mod planner_gucs;
 #[cfg(test)]
 mod primary_key_range_tests;
 mod primary_key_updates;
@@ -6367,6 +6368,10 @@ impl<'db> SqlSession<'db> {
                 Arc::make_mut(&mut self.session_gucs).remove(&setting);
                 Ok(())
             }
+            other if planner_gucs::is_planner_guc(other) => {
+                Arc::make_mut(&mut self.session_gucs).remove(other);
+                Ok(())
+            }
             "bicdb.vector_search" => {
                 self.settings.vector_search = SqlSettings::default().vector_search;
                 Ok(())
@@ -6473,6 +6478,12 @@ impl<'db> SqlSession<'db> {
         }
         for statement in statements {
             let normalized = normalize_sql(&statement);
+            if normalized.starts_with("comment on table ")
+                || normalized.starts_with("comment on column ")
+            {
+                self.execute_relation_comment(&statement)?;
+                continue;
+            }
             if !normalized.starts_with("comment on type ")
                 && !normalized.starts_with("comment on domain ")
             {
@@ -6514,6 +6525,74 @@ impl<'db> SqlSession<'db> {
             self.save_session_user_type(&user_type)?;
         }
         Ok(Some(SqlResult::command("COMMENT")))
+    }
+
+    /// `COMMENT ON TABLE t` / `COMMENT ON COLUMN t.c`: kept on the table's
+    /// schema so `obj_description`, `col_description` and `pg_description`
+    /// report it. An empty comment removes it, as in PostgreSQL.
+    fn execute_relation_comment(&mut self, statement: &str) -> Result<()> {
+        let parsed = parse_statements(statement)?;
+        let [Statement::Comment {
+            object_type,
+            object_name,
+            comment,
+            if_exists,
+        }] = parsed.as_slice()
+        else {
+            return Err(SqlError::Unsupported(format!(
+                "unsupported COMMENT statement: {statement}"
+            )));
+        };
+        let (relation, column) = match object_type {
+            CommentObject::Table => (object_name.clone(), None),
+            CommentObject::Column => {
+                let mut parts = object_name.0.clone();
+                let column = parts.pop();
+                if parts.is_empty() {
+                    return Err(SqlError::InvalidSql(
+                        "column name must be qualified".to_string(),
+                    ));
+                }
+                let column = column
+                    .map(|part| object_name_parts(&ObjectName(vec![part])).remove(0))
+                    .ok_or_else(|| SqlError::InvalidSql("invalid column name".to_string()))?;
+                (ObjectName(parts), Some(column))
+            }
+            _ => return Ok(()),
+        };
+        let display = object_name_parts(&relation).join(".");
+        let table = relation_name(&relation)?;
+        let table = resolve_session_relation_name_if_exists(self.db_ref(), &table);
+        let Some(mut schema) = load_schema(self.db_ref(), &table)? else {
+            if *if_exists {
+                return Ok(());
+            }
+            return Err(SqlError::data_exception_public(
+                "42P01",
+                format!("relation \"{display}\" does not exist"),
+                None,
+            ));
+        };
+        self.require_table_ownership(&table, "COMMENT")?;
+        let comment = comment.clone().filter(|comment| !comment.is_empty());
+        match column {
+            None => schema.comment = comment,
+            Some(column) => {
+                let Some(target) = schema
+                    .columns
+                    .iter_mut()
+                    .find(|candidate| !candidate.hidden && candidate.name == column)
+                else {
+                    return Err(SqlError::data_exception_public(
+                        "42703",
+                        format!("column \"{column}\" of relation \"{display}\" does not exist"),
+                        None,
+                    ));
+                };
+                target.comment = comment;
+            }
+        }
+        self.save_session_schema(&schema)
     }
 
     pub(crate) fn execute_raw_alter_user_type(&mut self, sql: &str) -> Result<Option<SqlResult>> {

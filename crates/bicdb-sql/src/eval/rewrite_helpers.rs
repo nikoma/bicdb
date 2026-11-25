@@ -550,6 +550,16 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
         changed = true;
     }
 
+    if let Some(next) = crate::routine_calls::rewrite_assignment_named_args(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
+    if let Some(next) = crate::similar_to::rewrite_substring_similar(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
     if let Some(next) = rewrite_variadic_builtin_calls(&rewritten) {
         rewritten = next;
         changed = true;
@@ -1033,6 +1043,43 @@ pub(crate) fn rewrite_variadic_builtin_calls(input: &str) -> Option<String> {
                     .trim_matches('"')
                     .to_ascii_lowercase();
                 if !matches!(bare_name.as_str(), "concat" | "concat_ws" | "format") {
+                    // A user function's `VARIADIC array` argument reaches the
+                    // parser as a marker-named argument that call binding
+                    // (routine_calls) passes as the variadic parameter. A
+                    // routine signature (CREATE/DROP/ALTER FUNCTION f(VARIADIC
+                    // int[]), ...) keeps its declaration as written.
+                    let before = input[..name_start].trim_end();
+                    let previous_word = before
+                        .rsplit(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
+                        .next()
+                        .unwrap_or("")
+                        .to_ascii_lowercase();
+                    let statement_start = before.rfind(';').map_or(0, |at| at + 1);
+                    let first_word = input[statement_start..]
+                        .split_whitespace()
+                        .next()
+                        .unwrap_or("")
+                        .to_ascii_lowercase();
+                    let signature = matches!(
+                        previous_word.as_str(),
+                        "function" | "procedure" | "routine" | "aggregate"
+                    ) || matches!(
+                        first_word.as_str(),
+                        "drop" | "alter" | "comment" | "grant" | "revoke" | "security"
+                    );
+                    if !signature && !raw_name.is_empty() {
+                        let mut variadic_end = index + "VARIADIC".len();
+                        while bytes.get(variadic_end).is_some_and(u8::is_ascii_whitespace) {
+                            variadic_end += 1;
+                        }
+                        edits.push((
+                            index,
+                            variadic_end,
+                            format!("\"{}\" => ", crate::routine_calls::VARIADIC_ARGUMENT_MARKER),
+                        ));
+                        index = variadic_end;
+                        continue;
+                    }
                     index += "VARIADIC".len();
                     continue;
                 }

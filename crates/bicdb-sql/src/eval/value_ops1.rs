@@ -20,7 +20,16 @@ pub(crate) fn eval_privilege_function_value(
             Ok(Some(SqlValue::Bool(has_schema_privilege(db, args)?)))
         }
         "has_table_privilege" | "pg_catalog.has_table_privilege" => {
-            Ok(Some(SqlValue::Bool(has_table_privilege(db, args)?)))
+            if matches!(args.len(), 2 | 3)
+                && args.iter().any(|value| matches!(value, SqlValue::Null))
+            {
+                return Ok(Some(SqlValue::Null));
+            }
+            Ok(Some(SqlValue::Bool(has_table_privilege_as(
+                db,
+                args,
+                &current_user_from_gucs(session_gucs),
+            )?)))
         }
         "has_function_privilege" | "pg_catalog.has_function_privilege" => {
             if args.iter().any(|value| matches!(value, SqlValue::Null)) {
@@ -49,6 +58,35 @@ pub(crate) fn eval_privilege_function_value(
                     .map(|oid| user_type_comment_by_oid(db, oid))
                     .transpose()?
                     .flatten()
+                    .map(SqlValue::String)
+                    .unwrap_or(SqlValue::Null),
+            ))
+        }
+        "obj_description" | "pg_catalog.obj_description"
+            if matches!(args.len(), 1 | 2)
+                && args.get(1).is_none_or(|catalog| {
+                    sql_value_text(catalog)
+                        .is_some_and(|catalog| catalog.eq_ignore_ascii_case("pg_class"))
+                }) =>
+        {
+            Ok(Some(
+                args.first()
+                    .and_then(|value| relation_oid_argument(db, value))
+                    .map(|oid| relation_comment_by_oid(db, oid, None))
+                    .transpose()?
+                    .flatten()
+                    .map(SqlValue::String)
+                    .unwrap_or(SqlValue::Null),
+            ))
+        }
+        "col_description" | "pg_catalog.col_description" if args.len() == 2 => {
+            let (Some(oid), Some(attnum)) =
+                (relation_oid_argument(db, &args[0]), sql_value_i64(&args[1]))
+            else {
+                return Ok(Some(SqlValue::Null));
+            };
+            Ok(Some(
+                relation_comment_by_oid(db, oid, Some(attnum))?
                     .map(SqlValue::String)
                     .unwrap_or(SqlValue::Null),
             ))
@@ -2246,6 +2284,42 @@ pub(crate) fn eval_session_function_value(
                 )))
             }
         }
+        "similar_to_escape"
+        | "pg_catalog.similar_to_escape"
+        | "similar_escape"
+        | "pg_catalog.similar_escape"
+            if matches!(args.len(), 1 | 2) =>
+        {
+            let legacy = name.ends_with("similar_escape");
+            // similar_escape(pattern, NULL) is the default escape; the
+            // newer similar_to_escape is strict.
+            let escape = match args.get(1) {
+                Some(SqlValue::Null) if legacy => None,
+                Some(SqlValue::Null) => return Ok(Some(SqlValue::Null)),
+                Some(value) => Some(value.to_cell()),
+                None => None,
+            };
+            if matches!(args[0], SqlValue::Null) {
+                return Ok(Some(SqlValue::Null));
+            }
+            Ok(Some(SqlValue::String(
+                crate::similar_to::similar_to_escape(&args[0].to_cell(), escape.as_deref())?,
+            )))
+        }
+        crate::similar_to::SIMILAR_SUBSTRING_FUNCTION if args.len() == 3 => {
+            if args.iter().any(|value| matches!(value, SqlValue::Null)) {
+                return Ok(Some(SqlValue::Null));
+            }
+            Ok(Some(
+                crate::similar_to::similar_substring(
+                    &args[0].to_cell(),
+                    &args[1].to_cell(),
+                    &args[2].to_cell(),
+                )?
+                .map(SqlValue::String)
+                .unwrap_or(SqlValue::Null),
+            ))
+        }
         "replace" | "pg_catalog.replace" => {
             require_arg_count("replace", args, 3)?;
             if args.iter().any(|value| matches!(value, SqlValue::Null)) {
@@ -2717,6 +2791,43 @@ pub(crate) fn is_leap_year(year: i32) -> bool {
     (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
 }
 
+/// A relation argument given as an OID or (a regclass rendered as) its name.
+fn relation_oid_argument(db: &BicDb, value: &SqlValue) -> Option<i64> {
+    sql_value_i64(value).or_else(|| {
+        let name = sql_value_text(value)?;
+        let name = resolve_session_relation_name_if_exists(db, &normalize_object_name(&name));
+        table_oids(db).get(&name).copied()
+    })
+}
+
+/// The comment on the relation with `oid` (`attnum` None) or on its column
+/// `attnum`, as `obj_description(oid, 'pg_class')` / `col_description` read.
+pub(crate) fn relation_comment_by_oid(
+    db: &BicDb,
+    oid: i64,
+    attnum: Option<i64>,
+) -> Result<Option<String>> {
+    let Some(table) = table_oids(db)
+        .iter()
+        .find(|(_, table_oid)| **table_oid == oid)
+        .map(|(name, _)| name.clone())
+    else {
+        return Ok(None);
+    };
+    let Some(schema) = load_schema(db, &table)? else {
+        return Ok(None);
+    };
+    Ok(match attnum {
+        None => schema.comment,
+        Some(attnum) => usize::try_from(attnum)
+            .ok()
+            .and_then(|attnum| attnum.checked_sub(1))
+            .and_then(|index| schema.columns.get(index))
+            .filter(|column| !column.hidden)
+            .and_then(|column| column.comment.clone()),
+    })
+}
+
 pub(crate) fn default_session_guc(name: &str) -> Option<&'static str> {
     match name {
         "bicdb_version" => Some(BICDB_VERSION),
@@ -2731,7 +2842,7 @@ pub(crate) fn default_session_guc(name: &str) -> Option<&'static str> {
         "search_path" => Some("public"),
         "default_transaction_isolation" => Some("read committed"),
         "transaction_deferrable" => Some("off"),
-        _ => None,
+        _ => crate::session::planner_gucs::planner_guc_default(name),
     }
 }
 

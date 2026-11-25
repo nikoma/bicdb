@@ -118,6 +118,7 @@ pub(crate) fn graph_virtual_table_columns(table: &str) -> Vec<ColumnSchema> {
     columns
         .into_iter()
         .map(|(name, pg_type)| ColumnSchema {
+            comment: None,
             name: name.to_string(),
             pg_type: pg_type.to_string(),
             user_type: None,
@@ -141,6 +142,7 @@ pub(crate) fn graph_virtual_table_columns(table: &str) -> Vec<ColumnSchema> {
 pub(crate) fn default_record_columns() -> Vec<ColumnSchema> {
     vec![
         ColumnSchema {
+            comment: None,
             name: "id".to_string(),
             pg_type: "text".to_string(),
             user_type: None,
@@ -159,6 +161,7 @@ pub(crate) fn default_record_columns() -> Vec<ColumnSchema> {
             identity: None,
         },
         ColumnSchema {
+            comment: None,
             name: "metadata".to_string(),
             pg_type: "jsonb".to_string(),
             user_type: None,
@@ -177,6 +180,7 @@ pub(crate) fn default_record_columns() -> Vec<ColumnSchema> {
             identity: None,
         },
         ColumnSchema {
+            comment: None,
             name: "timestamp".to_string(),
             pg_type: "int8".to_string(),
             user_type: None,
@@ -195,6 +199,7 @@ pub(crate) fn default_record_columns() -> Vec<ColumnSchema> {
             identity: None,
         },
         ColumnSchema {
+            comment: None,
             name: "payload".to_string(),
             pg_type: "bytea".to_string(),
             user_type: None,
@@ -213,6 +218,7 @@ pub(crate) fn default_record_columns() -> Vec<ColumnSchema> {
             identity: None,
         },
         ColumnSchema {
+            comment: None,
             name: "vector".to_string(),
             pg_type: "vector".to_string(),
             user_type: None,

@@ -3945,19 +3945,39 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
         "pg_index" => pg_index_rows(db),
         "pg_indexes" => pg_indexes_rows(db),
         "pg_constraint" => pg_constraint_rows(db),
-        "pg_description" => Ok(list_user_types(db)?
-            .into_iter()
-            .filter_map(|user_type| {
-                user_type.comment.map(|description| {
-                    virtual_row([
-                        ("objoid", SqlValue::Int(user_type.oid)),
-                        ("classoid", SqlValue::Int(1247)),
-                        ("objsubid", SqlValue::Int(0)),
-                        ("description", SqlValue::String(description)),
-                    ])
+        "pg_description" => {
+            let description_row = |objoid: i64, classoid: i64, objsubid: i64, text: String| {
+                virtual_row([
+                    ("objoid", SqlValue::Int(objoid)),
+                    ("classoid", SqlValue::Int(classoid)),
+                    ("objsubid", SqlValue::Int(objsubid)),
+                    ("description", SqlValue::String(text)),
+                ])
+            };
+            let mut rows = list_user_types(db)?
+                .into_iter()
+                .filter_map(|user_type| {
+                    user_type
+                        .comment
+                        .map(|description| description_row(user_type.oid, 1247, 0, description))
                 })
-            })
-            .collect()),
+                .collect::<Vec<_>>();
+            let table_oids = table_oids(db);
+            for schema in list_schemas(db)? {
+                let Some(&oid) = table_oids.get(&schema.name) else {
+                    continue;
+                };
+                if let Some(description) = schema.comment {
+                    rows.push(description_row(oid, 1259, 0, description));
+                }
+                for (index, column) in schema.columns.into_iter().enumerate() {
+                    if let (false, Some(description)) = (column.hidden, column.comment) {
+                        rows.push(description_row(oid, 1259, index as i64 + 1, description));
+                    }
+                }
+            }
+            Ok(rows)
+        }
         "pg_seclabel" | "pg_shseclabel" | "pg_seclabels" => Ok(Vec::new()),
         "pg_attrdef" => pg_attrdef_rows(db),
         "pg_rewrite" => pg_rewrite_rows(db),

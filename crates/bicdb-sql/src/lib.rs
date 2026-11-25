@@ -229,9 +229,11 @@ mod constraint_nulls;
 mod lock_lists;
 mod query_rules;
 mod role_settings;
+mod routine_calls;
 mod routine_overloads;
 mod schema_meta;
 pub mod search_path;
+mod similar_to;
 pub use application_copy::{copy_application_tables, ApplicationCopyReport};
 pub(crate) use constraint_nulls::*;
 pub use role_settings::role_session_settings;
@@ -3180,6 +3182,9 @@ struct TableSchema {
     /// Oracle logical partitioning (see `oracle::partitioning`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     oracle_partitioning: Option<oracle::partitioning::Partitioning>,
+    /// `COMMENT ON TABLE` (also views and sequences stored as relations).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    comment: Option<String>,
 }
 
 /// A logical SQL column projected over an existing BicDB collection for an
@@ -3253,6 +3258,9 @@ struct PartitionOfSchema {
 struct ColumnSchema {
     name: String,
     pg_type: String,
+    /// `COMMENT ON COLUMN`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    comment: Option<String>,
     #[serde(default)]
     user_type: Option<UserTypeColumnSchema>,
     #[serde(default)]
@@ -5596,6 +5604,7 @@ pub fn ensure_embedded_table_schema(
 
     let previous = load_schema(db, table)?;
     let mut schema = previous.clone().unwrap_or_else(|| TableSchema {
+        comment: None,
         name: table.to_string(),
         schema_name: default_schema_name(),
         row_type_oid: Some(table_row_type_oid(
@@ -5656,6 +5665,7 @@ pub fn ensure_embedded_table_schema(
             continue;
         }
         schema.columns.push(ColumnSchema {
+            comment: None,
             name: requested.name.clone(),
             pg_type: requested.pg_type.clone(),
             user_type: None,

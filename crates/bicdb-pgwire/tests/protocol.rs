@@ -13535,6 +13535,80 @@ fn listen_notify_delivers_across_connections() {
     server_thread.join().unwrap().unwrap();
 }
 
+/// NOTIFY and pg_notify() inside a transaction block are delivered when it
+/// commits (identical pairs once) and dropped when it rolls back.
+#[test]
+fn notifications_in_transactions_wait_for_commit() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = PgWireServer::open(dir.path(), PgWireConfig::default()).unwrap();
+    let server_for_thread = server.clone();
+    let server_thread =
+        thread::spawn(move || bicdb_pgwire::serve_existing_listener(server_for_thread, listener));
+
+    let mut listener_conn = TcpStream::connect(address).unwrap();
+    startup(&mut listener_conn);
+    read_until_ready(&mut listener_conn);
+    send_query(&mut listener_conn, "LISTEN tx_events;");
+    read_tags_until_ready(&mut listener_conn);
+
+    let mut notifier_conn = TcpStream::connect(address).unwrap();
+    startup(&mut notifier_conn);
+    read_until_ready(&mut notifier_conn);
+    for sql in [
+        "BEGIN;",
+        "SELECT pg_notify('tx_events', 'dropped');",
+        "NOTIFY tx_events, 'dropped too';",
+        "ROLLBACK;",
+        "BEGIN;",
+        "SELECT pg_notify('tx_events', 'first');",
+        "NOTIFY tx_events, 'first';",
+        "NOTIFY tx_events, 'second';",
+    ] {
+        send_query(&mut notifier_conn, sql);
+        read_tags_until_ready(&mut notifier_conn);
+    }
+    // Nothing is delivered while the transaction is open.
+    listener_conn
+        .set_read_timeout(Some(Duration::from_millis(800)))
+        .unwrap();
+    let mut byte = [0_u8; 1];
+    match listener_conn.read(&mut byte) {
+        Err(error)
+            if error.kind() == std::io::ErrorKind::WouldBlock
+                || error.kind() == std::io::ErrorKind::TimedOut => {}
+        other => panic!("expected no notification before COMMIT, got {other:?}"),
+    }
+    send_query(&mut notifier_conn, "COMMIT;");
+    read_tags_until_ready(&mut notifier_conn);
+    listener_conn
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
+    assert_eq!(
+        read_notification(&mut listener_conn),
+        ("tx_events".to_string(), "first".to_string())
+    );
+    assert_eq!(
+        read_notification(&mut listener_conn),
+        ("tx_events".to_string(), "second".to_string())
+    );
+    listener_conn
+        .set_read_timeout(Some(Duration::from_millis(800)))
+        .unwrap();
+    match listener_conn.read(&mut byte) {
+        Err(error)
+            if error.kind() == std::io::ErrorKind::WouldBlock
+                || error.kind() == std::io::ErrorKind::TimedOut => {}
+        other => panic!("expected the duplicate to be folded, got {other:?}"),
+    }
+
+    listener_conn.write_all(b"X\0\0\0\x04").unwrap();
+    notifier_conn.write_all(b"X\0\0\0\x04").unwrap();
+    server.request_shutdown();
+    server_thread.join().unwrap().unwrap();
+}
+
 #[test]
 fn broker_publish_wakes_queue_listeners() {
     let dir = tempfile::tempdir().unwrap();

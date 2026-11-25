@@ -1539,6 +1539,7 @@ fn composite_attribute_columns(attributes: Vec<CompositeAttributeSchema>) -> Vec
         .map(|(index, attribute)| {
             let dropped = attribute.dropped;
             ColumnSchema {
+                comment: None,
                 name: if dropped {
                     format!("........pg.dropped.{}........", index + 1)
                 } else {
@@ -7491,6 +7492,7 @@ pub(crate) fn catalog_view_schema(db: &BicDb, view: ViewSchema) -> Result<TableS
     let columns = catalog_view_columns(&view);
     let schema_name = relation_catalog_namespace(db, &view.name)?;
     Ok(TableSchema {
+        comment: None,
         name: view.name,
         schema_name,
         row_type_oid: view.row_type_oid,

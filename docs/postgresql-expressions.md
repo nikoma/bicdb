@@ -23,6 +23,18 @@ Supported expression forms:
 - `COALESCE(...)`, `NULLIF(...)`, and `date_part(...)` for year/month/day and
   hour/minute/second fields.
 - `LIKE` and `ILIKE` with `%`, `_`, and a single-character `ESCAPE`.
+- `SIMILAR TO` / `NOT SIMILAR TO` with an optional `ESCAPE` (empty or one
+  character, otherwise SQLSTATE `22025`), and the SQL regular-expression
+  substring `substring(x SIMILAR pattern ESCAPE e)` (also spelled
+  `substring(x FROM pattern FOR e)`), whose two escape-double-quote separators
+  delimit the returned part. As in PostgreSQL, `SIMILAR TO` runs as
+  `x ~ similar_to_escape(pattern [, e])`; `similar_to_escape` and
+  `similar_escape` are callable directly.
+- Array subscripts on multi-dimensional arrays: `a[i][j]` yields the element
+  type (also in the protocol's RowDescription) and any slice `a[i:j]` keeps the
+  array type. Remaining difference: a value subscripted with fewer indexes than
+  it has dimensions (`(ARRAY[[1,2],[3,4]])[2]`) returns the sub-array, where
+  PostgreSQL returns NULL.
 - Literal `IN` lists, single-column `IN` subqueries, `BETWEEN`, and
   comparison `ANY`/`ALL` over array literals.
 - JSON access with dotted metadata paths, `->`, and `->>`.
@@ -34,12 +46,11 @@ Supported expression forms:
 or unknown and reject only false, matching PostgreSQL's common NULL behavior.
 
 Unsupported expression forms return PostgreSQL-shaped unsupported-feature
-errors with SQLSTATE `0A000` when they reach execution. Current unsupported
-forms include `SIMILAR TO`, PostgreSQL regex operators, month-aware interval
+errors with SQLSTATE `0A000` when they reach execution. Forms listed as
+unsupported in earlier releases (PostgreSQL regex operators, month-aware interval
 calendar arithmetic, row constructors, array column types, enums, domains,
-custom types, and custom operator classes. Array values are supported only as
-expression literals for selected functions and comparison `ANY`/`ALL`; generated-application
-schemas should model repeated values as child tables or `JSONB`.
+custom types, and custom operator classes) are covered by their own pages and
+fixtures.
 
 Differential coverage lives in:
 

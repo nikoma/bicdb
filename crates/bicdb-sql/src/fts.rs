@@ -3217,9 +3217,28 @@ pub(crate) fn eval_fts_function_value(
             )
         }
         "ts_headline" => {
-            let (config, value_index) = if matches!(args.first(), Some(SqlValue::String(value)) if matches!(value.to_ascii_lowercase().as_str(), "english" | "simple" | "pg_catalog.english" | "pg_catalog.simple"))
-                && args.len() >= 3
-            {
+            // ts_headline([config,] document, query [, options]): with three
+            // arguments the query's position decides whether the first one is
+            // the configuration, as PostgreSQL's overload resolution does.
+            let arg_type = |index: usize| {
+                arg_types
+                    .and_then(|types| types.get(index))
+                    .and_then(Option::as_deref)
+            };
+            let is_query = |index: usize| {
+                matches!(args.get(index), Some(SqlValue::TsQuery(_)))
+                    || arg_type(index) == Some("tsquery")
+            };
+            let has_config = match args.len() {
+                4 => true,
+                3 if arg_type(0) == Some("regconfig") || is_query(2) => true,
+                3 if is_query(1) => false,
+                3 => {
+                    matches!(args.first(), Some(SqlValue::String(value)) if matches!(value.to_ascii_lowercase().as_str(), "english" | "simple" | "pg_catalog.english" | "pg_catalog.simple"))
+                }
+                _ => false,
+            };
+            let (config, value_index) = if has_config {
                 (TextSearchConfig::parse(&args[0])?, 1)
             } else {
                 (english_config(), 0)

@@ -1835,6 +1835,7 @@ pub(crate) fn column_schema_from_def(db: &BicDb, column: &ColumnDef) -> Result<C
         type_modifier = Some(source);
     }
     Ok(ColumnSchema {
+        comment: None,
         name: ident_value(&column.name),
         pg_type,
         user_type,
@@ -1946,6 +1947,7 @@ pub(crate) fn user_type_column_from_data_type(
 
 pub(crate) fn text_column_schema(name: String) -> ColumnSchema {
     ColumnSchema {
+        comment: None,
         name,
         pg_type: "text".to_string(),
         user_type: None,
@@ -4522,6 +4524,13 @@ pub(crate) fn is_sequence_function(function: &Function) -> Result<bool> {
             | "pg_catalog.lastval"
             | "setval"
             | "pg_catalog.setval"
+    ))
+}
+
+pub(crate) fn is_pg_notify_function(function: &Function) -> Result<bool> {
+    Ok(matches!(
+        object_name(&function.name)?.to_ascii_lowercase().as_str(),
+        "pg_notify" | "pg_catalog.pg_notify"
     ))
 }
 

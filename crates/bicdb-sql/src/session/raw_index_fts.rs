@@ -959,6 +959,11 @@ impl<'db> SqlSession<'db> {
     }
 
     fn execute_query_in_sql(&mut self, query: &Query) -> Result<SqlResult> {
+        if let Some((rewritten, hidden)) = crate::fetch_ties::rewrite_with_ties(query)? {
+            let mut result = self.execute_temporary_query(&rewritten)?;
+            crate::fetch_ties::drop_trailing_columns(&mut result, hidden);
+            return Ok(result);
+        }
         if let Some(rewritten) = normalize_fetch_clause(query)? {
             return self.execute_temporary_query(&rewritten);
         }

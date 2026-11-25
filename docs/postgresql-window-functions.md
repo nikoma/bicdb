@@ -33,6 +33,14 @@ arguments and ordering, including `SUM(SUM(amount)) OVER (...)`. Named windows
 can inherit and extend earlier named windows. `LAG`, `LEAD`, `FIRST_VALUE`,
 `LAST_VALUE`, and `NTH_VALUE` accept `IGNORE NULLS` and `RESPECT NULLS`.
 
-Window-frame exclusion clauses and ordered-set aggregates used with `WITHIN
-GROUP` remain unsupported. Unsupported window functions and forms return a
-clear SQL error instead of being silently mis-evaluated.
+Ordered-set aggregates `percentile_cont`, `percentile_disc` and `mode` and
+the hypothetical-set aggregates `rank`, `dense_rank`, `percent_rank` and
+`cume_dist` (`rank(x) WITHIN GROUP (ORDER BY key)`, one ORDER BY key; NULL
+keys take part by their null placement, as in PostgreSQL) are aggregates,
+not window functions. `ORDER BY ... FETCH FIRST n ROWS WITH TIES` (with an
+optional `OFFSET`) returns the first rows plus every row tied with the last
+one, as PostgreSQL does; it uses `rank()` over the ORDER BY keys internally.
+
+Window-frame exclusion clauses (`EXCLUDE ...`) remain unsupported. Unsupported
+window functions and forms return a clear SQL error instead of being silently
+mis-evaluated.

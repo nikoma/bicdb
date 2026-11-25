@@ -7878,6 +7878,12 @@ pub(crate) enum OrderedSetKind {
     PercentileCont,
     PercentileDisc,
     Mode,
+    /// Hypothetical-set aggregates: the rank of the direct argument as if
+    /// it were inserted into the group.
+    Rank,
+    DenseRank,
+    PercentRank,
+    CumeDist,
 }
 
 /// An ordered-set aggregate: `percentile_cont(f) WITHIN GROUP (ORDER BY x)`,
@@ -7891,7 +7897,49 @@ pub(crate) struct OrderedSetAggregate {
     pub(crate) filter: Option<Expr>,
 }
 
+impl OrderedSetKind {
+    pub(crate) fn is_hypothetical(self) -> bool {
+        matches!(
+            self,
+            Self::Rank | Self::DenseRank | Self::PercentRank | Self::CumeDist
+        )
+    }
+}
+
 impl OrderedSetAggregate {
+    /// PostgreSQL's hypothetical-set finals: NULL keys take part and sort by
+    /// the ORDER BY null placement; `values` are the group's sort keys and
+    /// `hypothetical` the direct argument.
+    fn hypothetical(&self, values: Vec<SqlValue>, hypothetical: SqlValue) -> SqlValue {
+        let order = std::slice::from_ref(&self.order);
+        let probe = (hypothetical.clone(), vec![hypothetical]);
+        let total = values.len();
+        let mut before = 0usize;
+        let mut peers = 0usize;
+        let mut distinct_before = BTreeSet::new();
+        for value in values {
+            let entry = (value.clone(), vec![value]);
+            match json_agg_entry_ordering(&entry, &probe, order) {
+                std::cmp::Ordering::Less => {
+                    before += 1;
+                    distinct_before.insert(sql_value_distinct_key(&entry.0));
+                }
+                std::cmp::Ordering::Equal => peers += 1,
+                std::cmp::Ordering::Greater => {}
+            }
+        }
+        match self.kind {
+            OrderedSetKind::Rank => SqlValue::Int(before as i64 + 1),
+            OrderedSetKind::DenseRank => SqlValue::Int(distinct_before.len() as i64 + 1),
+            OrderedSetKind::PercentRank => SqlValue::Float(if total == 0 {
+                0.0
+            } else {
+                before as f64 / total as f64
+            }),
+            _ => SqlValue::Float((before + peers + 1) as f64 / (total + 1) as f64),
+        }
+    }
+
     pub(crate) fn kind_of(function: &Function) -> Option<OrderedSetKind> {
         if function.within_group.is_empty() {
             return None;
@@ -7901,6 +7949,10 @@ impl OrderedSetAggregate {
             "percentile_cont" => Some(OrderedSetKind::PercentileCont),
             "percentile_disc" => Some(OrderedSetKind::PercentileDisc),
             "mode" => Some(OrderedSetKind::Mode),
+            "rank" => Some(OrderedSetKind::Rank),
+            "dense_rank" => Some(OrderedSetKind::DenseRank),
+            "percent_rank" => Some(OrderedSetKind::PercentRank),
+            "cume_dist" => Some(OrderedSetKind::CumeDist),
             _ => None,
         }
     }
@@ -7909,6 +7961,13 @@ impl OrderedSetAggregate {
         let Some(kind) = Self::kind_of(function) else {
             return Ok(None);
         };
+        let hypothetical = kind.is_hypothetical();
+        if hypothetical && function.within_group.len() > 1 {
+            return Err(SqlError::Unsupported(format!(
+                "hypothetical-set {}() over more than one ORDER BY key is not supported",
+                function.name
+            )));
+        }
         let [order] = function.within_group.as_slice() else {
             return Err(SqlError::undefined_function(format!(
                 "function {}() WITHIN GROUP takes exactly one ORDER BY expression",
@@ -7927,6 +7986,7 @@ impl OrderedSetAggregate {
             (OrderedSetKind::PercentileCont | OrderedSetKind::PercentileDisc, [fraction]) => {
                 Some(fraction.clone())
             }
+            (_, [argument]) if hypothetical => Some(argument.clone()),
             _ => {
                 return Err(SqlError::undefined_function(format!(
                     "function {} has the wrong number of direct arguments",
@@ -7947,6 +8007,10 @@ impl OrderedSetAggregate {
             OrderedSetKind::PercentileCont => "percentile_cont",
             OrderedSetKind::PercentileDisc => "percentile_disc",
             OrderedSetKind::Mode => "mode",
+            OrderedSetKind::Rank => "rank",
+            OrderedSetKind::DenseRank => "dense_rank",
+            OrderedSetKind::PercentRank => "percent_rank",
+            OrderedSetKind::CumeDist => "cume_dist",
         }
         .to_string()
     }
@@ -7964,6 +8028,8 @@ impl OrderedSetAggregate {
         let element = match self.kind {
             OrderedSetKind::PercentileCont => Some("float8".to_string()),
             OrderedSetKind::PercentileDisc | OrderedSetKind::Mode => input_type,
+            OrderedSetKind::Rank | OrderedSetKind::DenseRank => return Some("int8".into()),
+            OrderedSetKind::PercentRank | OrderedSetKind::CumeDist => return Some("float8".into()),
         }?;
         Some(if array {
             format!("{element}[]")
@@ -7975,6 +8041,9 @@ impl OrderedSetAggregate {
     /// `values` are the non-filtered sort-key values of the group; `fraction`
     /// is the evaluated direct argument (ignored for mode).
     pub(crate) fn finish(&self, values: Vec<SqlValue>, fraction: SqlValue) -> Result<SqlValue> {
+        if self.kind.is_hypothetical() {
+            return Ok(self.hypothetical(values, fraction));
+        }
         let mut entries = values
             .into_iter()
             .filter(|value| !matches!(value, SqlValue::Null))
@@ -8139,9 +8208,16 @@ mod scalar_fetch_tests {
         assert_eq!(
             session
                 .execute("SELECT id FROM fetch_rows ORDER BY id FETCH FIRST ROW WITH TIES")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(1)]]
+        );
+        assert_eq!(
+            session
+                .execute("SELECT id FROM fetch_rows FETCH FIRST ROW WITH TIES")
                 .unwrap_err()
                 .sqlstate(),
-            "0A000"
+            "42601"
         );
     }
 }

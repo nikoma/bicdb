@@ -589,6 +589,108 @@ pub(crate) fn rewrite_partition_ancestor_projection(sql: &str) -> Option<String>
     // Replacement text for token ranges: (start, end exclusive, text).
     let mut edits: Vec<(usize, usize, String)> = Vec::new();
     let mut close_after: Vec<usize> = Vec::new();
+    // `FROM pg_partition_ancestors(x)` (and `FROM a, pg_partition_ancestors(x)`):
+    // the table form, column `relid`.
+    let in_from_list = |position: usize| -> bool {
+        let mut depth = 0i32;
+        for back in (0..position).rev() {
+            let token = &tokens[code[back]].0;
+            match token {
+                Token::RParen => depth += 1,
+                Token::LParen => {
+                    if depth == 0 {
+                        return false;
+                    }
+                    depth -= 1;
+                }
+                _ if depth > 0 => {}
+                Token::Word(word) if word.quote_style.is_none() => {
+                    let value = word.value.to_ascii_lowercase();
+                    if matches!(value.as_str(), "from" | "join") {
+                        return true;
+                    }
+                    if matches!(
+                        value.as_str(),
+                        "select" | "where" | "on" | "group" | "order" | "having" | "values"
+                    ) {
+                        return false;
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    };
+    let mut from_edits: Vec<(usize, usize, String)> = Vec::new();
+    let mut from_alias_after: Vec<usize> = Vec::new();
+    for position in 0..code.len() {
+        let index = code[position];
+        let (name_start, name_end) = if word(index, "pg_catalog")
+            && code
+                .get(position + 1)
+                .is_some_and(|&next| matches!(tokens[next].0, Token::Period))
+        {
+            (position, position + 2)
+        } else {
+            (position, position)
+        };
+        let Some(&function) = code.get(name_end) else {
+            continue;
+        };
+        if !word(function, "pg_partition_ancestors")
+            || !code
+                .get(name_end + 1)
+                .is_some_and(|&next| matches!(tokens[next].0, Token::LParen))
+            || name_start == 0
+        {
+            continue;
+        }
+        let previous = &tokens[code[name_start - 1]].0;
+        let from_form = matches!(previous, Token::Word(word) if word.value.eq_ignore_ascii_case("from") || word.value.eq_ignore_ascii_case("join"))
+            || (matches!(previous, Token::Comma) && in_from_list(name_start));
+        if !from_form {
+            continue;
+        }
+        let open = code[name_end + 1];
+        let mut depth = 0usize;
+        let mut close_position = None;
+        for (offset, &candidate) in code[name_end + 1..].iter().enumerate() {
+            match tokens[candidate].0 {
+                Token::LParen => depth += 1,
+                Token::RParen => {
+                    depth -= 1;
+                    if depth == 0 {
+                        close_position = Some(name_end + 1 + offset);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        let Some(close_position) = close_position else {
+            continue;
+        };
+        let aliased = code.get(close_position + 1).is_some_and(|&next| {
+            matches!(&tokens[next].0, Token::Word(word)
+            if word.value.eq_ignore_ascii_case("as")
+                || !matches!(
+                    word.value.to_ascii_lowercase().as_str(),
+                    "where" | "join" | "on" | "group" | "order" | "limit" | "union"
+                        | "inner" | "left" | "right" | "full" | "cross" | "having"
+                        | "offset" | "except" | "intersect" | "window"
+                ))
+        });
+        from_edits.push((
+            code[name_start],
+            open,
+            "unnest(pg_catalog.bicdb_partition_ancestor_oids".to_string(),
+        ));
+        from_alias_after.push(code[close_position]);
+        if aliased {
+            from_alias_after.pop();
+            from_alias_after.push(usize::MAX - code[close_position]);
+        }
+    }
     for position in 0..code.len() {
         let index = code[position];
         if !word(index, "select") {
@@ -642,9 +744,10 @@ pub(crate) fn rewrite_partition_ancestor_projection(sql: &str) -> Option<String>
         ));
         close_after.push(close);
     }
-    if edits.is_empty() {
+    if edits.is_empty() && from_edits.is_empty() {
         return None;
     }
+    edits.extend(from_edits);
     let mut out = String::with_capacity(sql.len() + 64);
     let mut index = 0;
     while index < tokens.len() {
@@ -655,6 +758,11 @@ pub(crate) fn rewrite_partition_ancestor_projection(sql: &str) -> Option<String>
         }
         out.push_str(tokens[index].1);
         if close_after.contains(&index) {
+            out.push(')');
+        }
+        if from_alias_after.contains(&index) {
+            out.push_str(") AS pg_partition_ancestors(relid)");
+        } else if from_alias_after.contains(&(usize::MAX - index)) {
             out.push(')');
         }
         index += 1;

@@ -4812,7 +4812,7 @@ impl<'db> SqlSession<'db> {
             }
         }
         if self.tx.is_some() {
-            self.apply_temp_on_commit_actions()?;
+            self.run_temp_on_commit_actions()?;
         }
         self.pg_large_objects.clear();
         let mut committed_sequence = 0;
@@ -4852,6 +4852,13 @@ impl<'db> SqlSession<'db> {
                 finish_committed_recycle_bin_purges(self.db_mut()?)?;
             } else {
                 recycle_bin_journal::recover_purges(self.db_mut()?)?;
+            }
+            // ON COMMIT DROP tables go once their transaction has committed
+            // (dropping a table with buffered writes inside it conflicts).
+            if let Some(temp) = self.temp_schema_name() {
+                if temp_tables::temp_on_commit_drop_pending(&temp) {
+                    self.apply_temp_on_commit_actions()?;
+                }
             }
         }
         Ok(SqlResult::command("COMMIT"))

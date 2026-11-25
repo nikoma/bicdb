@@ -54,6 +54,7 @@ pub(crate) fn is_internal_sql_collection(name: &str) -> bool {
         MIGRATION_VERSION_COLLECTION,
         MIGRATION_HISTORY_COLLECTION,
         crate::session::RECYCLE_BIN_COLLECTION,
+        crate::session::partition_admission::CERTIFICATE_COLLECTION,
     ]
     .contains(&name)
         || crate::session::is_catalog_journal_collection(name)

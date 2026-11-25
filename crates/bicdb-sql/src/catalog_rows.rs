@@ -7066,6 +7066,34 @@ pub(crate) fn typed_check_comparison_definition(
                 if column.user_type.is_some() {
                     return None;
                 }
+                // A negative integer constant is the quoted integer, then the
+                // coercion: `d > '-1'::integer::double precision`.
+                if let Expr::UnaryOp {
+                    op: UnaryOperator::Minus,
+                    expr: operand,
+                } = unwrap_nested_expr(right)
+                {
+                    let Expr::Value(value) = unwrap_nested_expr(operand) else {
+                        return None;
+                    };
+                    let Value::Number(number, _) = &value.value else {
+                        return None;
+                    };
+                    if number.contains(['.', 'e', 'E']) {
+                        return None;
+                    }
+                    let coercion = match column.pg_type.as_str() {
+                        "int4" => "",
+                        "numeric" => "::numeric",
+                        "float8" => "::double precision",
+                        "float4" => "::real",
+                        _ => return None,
+                    };
+                    return Some(format!(
+                        "{} {op} '-{number}'::integer{coercion}",
+                        pg_partition_key_identifier(&column.name)
+                    ));
+                }
                 let Expr::Value(value) = unwrap_nested_expr(right) else {
                     return None;
                 };

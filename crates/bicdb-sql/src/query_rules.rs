@@ -503,7 +503,15 @@ impl SqlSession<'_> {
                 })
                 .unwrap_or_default(),
         };
-        let alias = alias.unwrap_or_else(|| table.rsplit('.').next().unwrap_or(table).to_string());
+        // Without an alias the rows are qualified by the name the statement
+        // wrote: `table` is the storage key, which for a table outside public
+        // is the reserved schema-isolated name.
+        let alias = alias.unwrap_or_else(|| {
+            object_name_parts(table_name)
+                .last()
+                .cloned()
+                .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(table).to_string())
+        });
         let target_rows = |session: &mut Self, extra: Vec<Expr>, selection: Option<&Expr>| {
             let mut query = parse_query(&format!(
                 "SELECT \"{0}\".* FROM {1} AS \"{0}\"",

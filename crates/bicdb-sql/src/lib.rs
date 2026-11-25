@@ -3431,9 +3431,38 @@ struct TableCatalogSummary {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct PartitioningSchema {
     strategy: String,
+    /// One entry per key position: the column name, or the expression's SQL
+    /// text when `key_expressions` marks the position as an expression.
     key_columns: Vec<String>,
+    /// PostgreSQL `partexprs`: per key position, the SQL of an expression key
+    /// (`PARTITION BY RANGE ((b + 0))`), `None` for a plain column. Empty for
+    /// tables whose keys are all columns.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    key_expressions: Vec<Option<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     execution_version: Option<u32>,
+}
+
+impl PartitioningSchema {
+    /// The expression SQL of key position `index`, `None` for a column key.
+    fn key_expression(&self, index: usize) -> Option<&str> {
+        self.key_expressions
+            .get(index)
+            .and_then(|expression| expression.as_deref())
+    }
+
+    /// The plain column names of the key (expression positions excluded).
+    fn key_column_names(&self) -> impl Iterator<Item = &String> {
+        self.key_columns
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| self.key_expression(*index).is_none())
+            .map(|(_, name)| name)
+    }
+
+    fn has_key_expressions(&self) -> bool {
+        self.key_expressions.iter().any(Option::is_some)
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

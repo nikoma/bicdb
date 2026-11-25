@@ -1518,7 +1518,11 @@ pub(crate) fn pg_get_partkeydef(db: &BicDb, args: &[SqlValue]) -> Result<SqlValu
     let keys = partitioning
         .key_columns
         .iter()
-        .map(|column| pg_partition_key_identifier(column))
+        .enumerate()
+        .map(|(index, column)| match partitioning.key_expression(index) {
+            Some(sql) => partition::deparse_key_definition(sql),
+            None => pg_partition_key_identifier(column),
+        })
         .collect::<Vec<_>>()
         .join(", ");
     Ok(SqlValue::String(format!(

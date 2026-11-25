@@ -3493,9 +3493,11 @@ pub(crate) fn raw_partition_by_clause(sql: &str) -> Result<Option<PartitioningSc
         .unwrap_or(rest.len());
     let strategy = rest[..strategy_end].to_ascii_lowercase();
     if !matches!(strategy.as_str(), "range" | "list" | "hash") {
-        return Err(SqlError::Unsupported(format!(
-            "unsupported PARTITION BY strategy {strategy}"
-        )));
+        return Err(SqlError::data_exception(
+            "22023",
+            format!("unrecognized partitioning strategy \"{strategy}\""),
+            None,
+        ));
     }
     let rest = rest[strategy_end..].trim_start();
     let Some(after_open) = rest.strip_prefix('(') else {
@@ -3511,28 +3513,27 @@ pub(crate) fn raw_partition_by_clause(sql: &str) -> Result<Option<PartitioningSc
             "unsupported trailing PARTITION BY clause `{trailing}`"
         )));
     }
-    let key_columns = after_open[..close]
-        .split(',')
-        .map(|part| {
-            let part = part.trim();
-            if part.starts_with('"') {
-                part.trim_matches('"').to_string()
-            } else {
-                part.to_ascii_lowercase()
-            }
-        })
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>();
-    if key_columns.is_empty() {
+    // Parse the key list as expressions so `(a, abs(b), (c + 0))` keeps its
+    // nesting; the element rules are shared with CREATE TABLE.
+    let keys = &after_open[..close];
+    if keys.trim().is_empty() {
         return Err(SqlError::InvalidSql(
             "PARTITION BY expects at least one key column".to_string(),
         ));
     }
-    Ok(Some(PartitioningSchema {
-        strategy,
-        key_columns,
-        execution_version: None,
-    }))
+    let dialect = PostgreSqlDialect {};
+    let mut parser = Parser::new(&dialect)
+        .try_with_sql(&format!("{strategy}({keys})"))
+        .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+    let expr = parser
+        .parse_expr()
+        .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+    if parser.peek_token().token != Token::EOF {
+        return Err(SqlError::Unsupported(format!(
+            "unsupported PARTITION BY key list `{keys}`"
+        )));
+    }
+    partitioning_schema_from_expr(&expr).map(Some)
 }
 
 pub(crate) fn trim_sql_trailing_comments(mut sql: &str) -> &str {

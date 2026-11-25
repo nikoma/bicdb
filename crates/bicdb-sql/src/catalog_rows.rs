@@ -7289,11 +7289,29 @@ pub(crate) fn pg_partitioned_table_rows(db: &BicDb) -> Result<Vec<BTreeMap<Strin
         let Some(partrelid) = table_oids.get(&schema.name) else {
             continue;
         };
+        // PostgreSQL stores 0 for an expression key position and lists the
+        // expressions in partexprs (a node tree there, the SQL text here).
         let partattrs = partitioning
             .key_columns
             .iter()
-            .filter_map(|column| attnum_for_column(&schemas, &schema.name, column))
+            .enumerate()
+            .filter_map(|(index, column)| match partitioning.key_expression(index) {
+                Some(_) => Some(0),
+                None => attnum_for_column(&schemas, &schema.name, column),
+            })
             .collect::<Vec<_>>();
+        let partexprs = partitioning
+            .has_key_expressions()
+            .then(|| {
+                partitioning
+                    .key_expressions
+                    .iter()
+                    .flatten()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            })
+            .map_or(SqlValue::Null, SqlValue::String);
         rows.push(virtual_row([
             ("partrelid", SqlValue::Int(*partrelid)),
             (
@@ -7305,7 +7323,7 @@ pub(crate) fn pg_partitioned_table_rows(db: &BicDb) -> Result<Vec<BTreeMap<Strin
             ("partattrs", constraint_key_value(&partattrs)),
             ("partclass", SqlValue::Null),
             ("partcollation", SqlValue::Null),
-            ("partexprs", SqlValue::Null),
+            ("partexprs", partexprs),
         ]));
     }
     Ok(rows)

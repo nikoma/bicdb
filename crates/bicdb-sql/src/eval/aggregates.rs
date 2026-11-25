@@ -4003,24 +4003,80 @@ pub(crate) fn partitioning_schema_from_expr(expr: &Expr) -> Result<PartitioningS
     };
     let strategy = object_name(&function.name)?.to_ascii_lowercase();
     if !matches!(strategy.as_str(), "range" | "list" | "hash") {
-        return Err(SqlError::Unsupported(format!(
-            "unsupported PARTITION BY strategy {strategy}"
-        )));
+        return Err(SqlError::data_exception(
+            "22023",
+            format!("unrecognized partitioning strategy \"{strategy}\""),
+            None,
+        ));
     }
-    let key_columns = function_args(function)
-        .into_iter()
-        .map(|arg| partition_key_column_name(&arg))
-        .collect::<Result<Vec<_>>>()?;
+    let mut key_columns = Vec::new();
+    let mut key_expressions = Vec::new();
+    for arg in function_args(function) {
+        match partition_key_element(&arg)? {
+            PartitionKeyElement::Column(name) => {
+                key_columns.push(name);
+                key_expressions.push(None);
+            }
+            PartitionKeyElement::Expression(sql) => {
+                key_columns.push(sql.clone());
+                key_expressions.push(Some(sql));
+            }
+        }
+    }
     if key_columns.is_empty() {
         return Err(SqlError::InvalidSql(
             "PARTITION BY expects at least one key column".to_string(),
         ));
     }
+    if key_expressions.iter().all(Option::is_none) {
+        key_expressions.clear();
+    }
     Ok(PartitioningSchema {
         strategy,
         key_columns,
+        key_expressions,
         execution_version: None,
     })
+}
+
+pub(crate) enum PartitionKeyElement {
+    Column(String),
+    Expression(String),
+}
+
+/// One PARTITION BY element, as PostgreSQL's ComputePartitionAttrs reads it:
+/// a bare or parenthesized column reference (also under COLLATE) is a column
+/// key; anything else, a cast included, is an expression key whose value is
+/// computed per row. A cast is never stripped: `(a::text)` orders as text.
+pub(crate) fn partition_key_element(expr: &Expr) -> Result<PartitionKeyElement> {
+    fn column(expr: &Expr) -> Option<String> {
+        match expr {
+            Expr::Identifier(ident) => Some(normalize_partition_key_ident(ident)),
+            Expr::Nested(inner) => column(inner),
+            _ => None,
+        }
+    }
+    if let Some(name) = column(expr) {
+        return Ok(PartitionKeyElement::Column(name));
+    }
+    if let Expr::Collate { .. } = expr {
+        return Err(SqlError::Unsupported(
+            "COLLATE in a partition key is not supported".into(),
+        ));
+    }
+    let mut inner = expr;
+    while let Expr::Nested(nested) = inner {
+        inner = nested;
+    }
+    Ok(PartitionKeyElement::Expression(inner.to_string()))
+}
+
+fn normalize_partition_key_ident(ident: &Ident) -> String {
+    if ident.quote_style.is_some() {
+        ident.value.clone()
+    } else {
+        ident.value.to_ascii_lowercase()
+    }
 }
 
 pub(crate) fn partition_key_column_name(expr: &Expr) -> Result<String> {

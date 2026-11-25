@@ -508,12 +508,11 @@ impl<'db> SqlSession<'db> {
             });
         }
 
-        self.create_session_collection(&definition.table)?;
         let row_type_oid =
             table_row_type_oid(namespace_oid(&definition.schema_name), &definition.table);
         let row_array_type_oid =
             table_row_array_type_oid(namespace_oid(&definition.schema_name), &definition.table);
-        self.save_session_schema(&TableSchema {
+        let schema = TableSchema {
             comment: None,
             name: definition.table,
             schema_name: definition.schema_name,
@@ -532,7 +531,13 @@ impl<'db> SqlSession<'db> {
             partitioning: definition.partitioning,
             partition_of: None,
             oracle_partitioning: None,
-        })?;
+        };
+        partition::validate_new_key(self.db_ref(), &schema)?;
+        if schema.partitioning.is_some() {
+            partition::validate_definition(&schema)?;
+        }
+        self.create_session_collection(&schema.name)?;
+        self.save_session_schema(&schema)?;
         Ok(())
     }
 
@@ -622,6 +627,8 @@ impl<'db> SqlSession<'db> {
             }),
             oracle_partitioning: None,
         };
+        partition::validate_new_key(self.db_ref(), &child)?;
+        partition::validate_definition(&child)?;
         partition::validate_attachment(self.db_ref(), self.read_tx(), &parent, &child, true)?;
         self.validate_partition_trigger_attachment(&child, &parent)?;
         self.create_session_collection(&child.name)?;

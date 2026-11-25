@@ -1645,6 +1645,18 @@ impl<'db> SqlSession<'db> {
                 } => {
                     for column in column_names {
                         let column_name = ident_value(column);
+                        if schema.column(&column_name).is_some()
+                            && partition::key_references_column(&schema, &column_name)
+                        {
+                            return Err(SqlError::data_exception(
+                                "42P16",
+                                format!(
+                                    "cannot drop column \"{column_name}\" because it is part of the partition key of relation \"{}\"",
+                                    catalog_display_name(&table)
+                                ),
+                                Some(column_name.clone()),
+                            ));
+                        }
                         if !*if_exists || schema.column(&column_name).is_some() {
                             self.ensure_table_row_type_change_allowed(&schema)?;
                         }
@@ -1928,12 +1940,7 @@ impl<'db> SqlSession<'db> {
                 Some(column_name.to_string()),
             ));
         }
-        if schema.partitioning.as_ref().is_some_and(|partitioning| {
-            partitioning
-                .key_columns
-                .iter()
-                .any(|column| column.eq_ignore_ascii_case(column_name))
-        }) {
+        if partition::key_references_column(schema, column_name) {
             return Err(SqlError::data_exception(
                 "42P16",
                 format!(

@@ -67,3 +67,27 @@ DELETE FROM patient_names;
 ```
 
 These unsupported operations return SQLSTATE `0A000` with explicit errors.
+
+## CREATE TABLE AS and SELECT INTO
+
+```sql
+CREATE TABLE recent AS SELECT id, name FROM patients WHERE created > now() - interval '1 day';
+CREATE TABLE named_copy (patient_id, patient_name) AS SELECT id, name FROM patients;
+CREATE TABLE IF NOT EXISTS shape_only AS SELECT * FROM patients WITH NO DATA;
+CREATE TEMP TABLE scratch AS TABLE patients;
+SELECT id, name INTO archive FROM patients WHERE NOT active;
+```
+
+The new table gets the query's output column names (`?column?`, function and
+cast names as PostgreSQL figures them) and types, including type modifiers
+(`varchar(10)`, `numeric(8,2)`, `timestamp(3)`). A column-name list renames the
+leading columns; too many names fail with `42601` and duplicate names with
+`42701`. The table has no key and no constraints. The query runs once with the
+creator's privileges and row-level security (SELECT on every source is
+required); its rows are written through the normal write path in the same
+statement transaction as the table, so a failing query leaves no table. The
+command tag is `SELECT n`, or `CREATE TABLE AS` for `WITH NO DATA` and a skipped
+`IF NOT EXISTS`. `SELECT ... INTO` inside a subquery fails with `42601`.
+`CREATE TABLE ... AS EXECUTE` and `SELECT ... INTO UNLOGGED` are not supported
+(`0A000`). Temporary tables follow BicDB's existing `CREATE TEMP TABLE`
+behavior.

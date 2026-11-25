@@ -4,6 +4,7 @@
 //! Moved items were bumped to `pub(crate)` so existing call sites keep
 //! resolving; `lib.rs` re-exports this module via `pub use session::*;`.
 
+mod create_table_as;
 pub(crate) mod deferred_constraints;
 mod domain_types;
 mod flashback;
@@ -3727,6 +3728,10 @@ impl<'db> SqlSession<'db> {
         }
 
         if let Some(result) = self.execute_raw_alter_user_type(sql)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.execute_raw_relation_forms(sql)? {
             return Ok(result);
         }
 

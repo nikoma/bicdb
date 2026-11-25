@@ -2728,13 +2728,49 @@ impl<'db> SqlEngine<'db> {
         rows: &mut [SlotRow],
         columns: &mut Vec<String>,
     ) -> Result<()> {
+        // PostgreSQL emits a WindowAgg's rows in its window's sort order (partition keys, then
+        // the window ORDER BY). When every window function shares one sort, BicDB has computed
+        // that order anyway, so rows leave in it too; any explicit ORDER BY is applied after this
+        // (stably). With differently sorted windows the order depends on PostgreSQL's plan and
+        // is left as it was.
+        let mut shared_order: Option<(String, Vec<usize>)> = None;
+        let mut mixed = false;
         for function in query_window_functions(select, query)? {
             self.check_cancellation()?;
-            let values = self.evaluate_row_window(&function, select, rows, columns)?;
+            let (values, order) =
+                self.evaluate_row_window_ordered(&function, select, rows, columns)?;
             for (row, value) in rows.iter_mut().zip(values) {
                 row.push(value);
             }
             columns.push(window_column_name(&function));
+            let spec = resolve_window_spec(&function, select)?;
+            // Display, not Debug: identifiers carry source spans that differ between calls.
+            let key = format!(
+                "{}|{}",
+                spec.partition_by
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(","),
+                spec.order_by
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(",")
+            );
+            match &shared_order {
+                Some((existing, _)) if *existing != key => mixed = true,
+                Some(_) => {}
+                None => shared_order = Some((key, order)),
+            }
+        }
+        if let (false, Some((_, order))) = (mixed, shared_order) {
+            if order.len() == rows.len() && order.iter().enumerate().any(|(at, from)| at != *from) {
+                let mut taken = rows.iter_mut().map(std::mem::take).collect::<Vec<_>>();
+                for (slot, from) in rows.iter_mut().zip(order) {
+                    *slot = std::mem::take(&mut taken[from]);
+                }
+            }
         }
         Ok(())
     }
@@ -2746,6 +2782,20 @@ impl<'db> SqlEngine<'db> {
         rows: &[SlotRow],
         columns: &[String],
     ) -> Result<Vec<SqlValue>> {
+        Ok(self
+            .evaluate_row_window_ordered(function, select, rows, columns)?
+            .0)
+    }
+
+    /// The window function's values, and the row order its evaluation sorted into (partition
+    /// keys, then the window ORDER BY; ties keep their input order).
+    pub(crate) fn evaluate_row_window_ordered(
+        &self,
+        function: &Function,
+        select: &Select,
+        rows: &[SlotRow],
+        columns: &[String],
+    ) -> Result<(Vec<SqlValue>, Vec<usize>)> {
         let spec = resolve_window_spec(function, select)?;
         let (scope, context) = self.bound_row_context(columns);
         let eval = |row: &SlotRow, expr: &Expr| -> Result<SqlValue> {
@@ -2832,7 +2882,7 @@ impl<'db> SqlEngine<'db> {
             )?;
             start = end;
         }
-        Ok(result)
+        Ok((result, indices))
     }
 
     #[allow(clippy::too_many_arguments)]

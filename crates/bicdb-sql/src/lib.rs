@@ -218,7 +218,9 @@ pub use type_codec::{
 mod fetch_ties;
 mod grouping_sets;
 mod join_budget;
+mod rows_from;
 mod statement_context;
+mod window_exclusion;
 pub use statement_context::SqlDescriptionScope;
 mod session;
 pub use session::*;

@@ -2721,9 +2721,6 @@ pub struct SqlNotice {
     pub message: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fields: Vec<SqlErrorField>,
-    /// Reported at WARNING rather than NOTICE severity.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub warning: bool,
 }
 
 impl std::fmt::Debug for SqlNotice {

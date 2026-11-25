@@ -2384,7 +2384,6 @@ mod diagnostic_framing_tests {
                 sqlstate: "01000".into(),
                 message: "通知\0complete".into(),
                 fields: vec![SqlErrorField::Table("a\0b".into())],
-                warning: false,
             },
         )
         .unwrap();

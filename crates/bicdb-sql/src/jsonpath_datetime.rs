@@ -470,8 +470,7 @@ fn typmod_check(target: Target, precision: i32) -> Result<i32> {
             message: format!(
                 "{type_name}({precision}){suffix} precision reduced to maximum allowed, 6"
             ),
-            fields: Vec::new(),
-            warning: true,
+            fields: vec![crate::SqlErrorField::Severity("WARNING".to_string())],
         });
         return Ok(6);
     }

@@ -18,15 +18,6 @@ use std::ops::ControlFlow;
 const SOURCE_ALIAS: &str = "__bicdb_srf";
 const VALUE_COLUMN: &str = "__bicdb_srf_value";
 
-/// The set-returning call a select-list item contains: the call, the field
-/// selected from its row (`(f()).col`), and whether it is the whole item.
-struct Candidate {
-    index: usize,
-    function: Function,
-    field: Option<Ident>,
-    whole_item: bool,
-}
-
 /// `expr` as a call, possibly under a field selection.
 fn call_target(expr: &Expr) -> Option<(&Function, Option<&Ident>)> {
     let mut expr = expr;
@@ -74,38 +65,89 @@ fn returns_scalar_set(db: &BicDb, name: &str, routine: &RoutineSchema) -> bool {
         && crate::engine::materialize::declared_table_function_columns(db, name).is_none()
 }
 
+/// The FROM source the rewrite adds: `__bicdb_srf_zip(call, ...)` runs the
+/// calls in lockstep (see `set_returning_zip_row_set`).
+pub(crate) const ZIP_FUNCTION: &str = "__bicdb_srf_zip";
+
+/// The zip source's column for call `index`.
+pub(crate) fn zip_column(index: usize) -> String {
+    format!("{VALUE_COLUMN}_{index}")
+}
+
+/// A zip argument as its call and selected field.
+pub(crate) fn zip_call(expr: &Expr) -> Option<(&Function, Option<&Ident>)> {
+    call_target(expr)
+}
+
+/// The argument expressions of a zip call.
+pub(crate) fn zip_call_args(function: &Function) -> Vec<Expr> {
+    call_args(function)
+        .into_iter()
+        .filter_map(|arg| match arg {
+            FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => Some(expr),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Whether the set-returning function `name` returns rows (a composite)
+/// rather than one base-type value per row.
+pub(crate) fn returns_row(db: &BicDb, name: &str) -> Result<bool> {
+    Ok(resolve_routine_cached(db, RoutineKind::Function, name)?
+        .is_some_and(|routine| !returns_scalar_set(db, name, &routine.schema)))
+}
+
+/// The field types of the rows `name` returns, for a whole-row value.
+pub(crate) fn row_field_types(db: &BicDb, name: &str, count: usize) -> Result<Vec<Option<String>>> {
+    if let Some(declared) = crate::engine::materialize::declared_table_function_columns(db, name) {
+        return Ok(declared.into_iter().map(|(_, pg_type)| pg_type).collect());
+    }
+    if let Some(routine) = resolve_routine_cached(db, RoutineKind::Function, name)? {
+        if let Some(schema) = load_schema(db, &routine.schema.return_type)? {
+            return Ok(schema
+                .columns
+                .iter()
+                .filter(|column| !column.hidden)
+                .map(|column| Some(column.pg_type.clone()))
+                .collect());
+        }
+    }
+    Ok(vec![None; count])
+}
+
 /// Finds (and, with `replacement`, replaces) set-returning SQL function
 /// calls in one select-list item, outside any subquery.
 struct CallFinder<'a> {
     db: &'a BicDb,
     depth: usize,
-    calls: Vec<(Function, Option<Ident>)>,
-    /// A call this rewrite cannot place (a whole composite row).
-    blocked: bool,
-    replacement: Option<Expr>,
+    calls: Vec<Expr>,
+    /// Replaces call `n` (counted from `first`) with its zip column.
+    replacement: Option<usize>,
+    first: usize,
 }
 
 impl CallFinder<'_> {
-    fn set_returning(&mut self, expr: &Expr) -> Option<(Function, Option<Ident>)> {
+    fn set_returning(&mut self, expr: &Expr) -> bool {
         if self.depth > 0 {
-            return None;
+            return false;
         }
-        let (function, field) = call_target(expr)?;
+        let Some((function, _)) = call_target(expr) else {
+            return false;
+        };
         if !plain_call(function) {
-            return None;
+            return false;
         }
-        let name = object_name(&function.name).ok()?;
+        let Ok(name) = object_name(&function.name) else {
+            return false;
+        };
         // A lookup that fails leaves the query to its normal handling.
-        let routine = resolve_routine_cached(self.db, RoutineKind::Function, &name).ok()??;
-        let routine = &routine.schema;
-        if !routine.returns_set || !routine.language.eq_ignore_ascii_case("sql") {
-            return None;
-        }
-        if field.is_none() && !returns_scalar_set(self.db, &name, routine) {
-            self.blocked = true;
-            return None;
-        }
-        Some((function.clone(), field.cloned()))
+        let Ok(Some(routine)) = resolve_routine_cached(self.db, RoutineKind::Function, &name)
+        else {
+            return false;
+        };
+        routine.schema.returns_set
+            && (routine.schema.language.eq_ignore_ascii_case("sql")
+                || routine.schema.language.eq_ignore_ascii_case("plpgsql"))
     }
 }
 
@@ -125,16 +167,35 @@ impl VisitorMut for CallFinder<'_> {
     fn pre_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<()> {
         // Pre-order, so `(f()).col` is taken whole rather than as `f()`;
         // the replaced node has no call left to visit.
-        let Some(call) = self.set_returning(expr) else {
+        if !self.set_returning(expr) {
             return ControlFlow::Continue(());
-        };
-        *expr = self
-            .replacement
-            .clone()
-            .unwrap_or_else(|| Expr::value(Value::Null));
+        }
+        let index = self.first + self.calls.len();
+        let call = std::mem::replace(
+            expr,
+            match self.replacement {
+                Some(_) => Expr::CompoundIdentifier(vec![
+                    Ident::new(SOURCE_ALIAS),
+                    Ident::new(zip_column(index)),
+                ]),
+                None => Expr::value(Value::Null),
+            },
+        );
         self.calls.push(call);
         ControlFlow::Continue(())
     }
+}
+
+/// The name PostgreSQL gives a select-list item that is just the call.
+fn call_column_name(expr: &Expr) -> Option<Ident> {
+    let (function, field) = call_target(expr)?;
+    Some(match field {
+        Some(field) => field.clone(),
+        None => {
+            let name = object_name(&function.name).ok()?;
+            Ident::new(name.rsplit('.').next().unwrap_or(&name))
+        }
+    })
 }
 
 pub(crate) fn rewrite_routine_set_returning_projection(
@@ -144,55 +205,26 @@ pub(crate) fn rewrite_routine_set_returning_projection(
     let SetExpr::Select(select) = query.body.as_ref() else {
         return Ok(None);
     };
-    if !select.projection.iter().any(|item| {
-        matches!(
-            item,
-            SelectItem::UnnamedExpr(_) | SelectItem::ExprWithAlias { .. }
-        )
-    }) {
-        return Ok(None);
-    }
-    let mut candidate = None;
-    for (index, item) in select.projection.iter().enumerate() {
-        let mut expr = match item {
-            SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => expr.clone(),
-            _ => continue,
+    // Find the calls first (on copies), so a query without any is untouched.
+    let mut found = 0usize;
+    for item in &select.projection {
+        let (SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. }) = item else {
+            continue;
         };
-        let item_call =
-            call_target(&expr).map(|(function, field)| (function.clone(), field.cloned()));
+        let mut copy = expr.clone();
         let mut finder = CallFinder {
             db,
             depth: 0,
             calls: Vec::new(),
-            blocked: false,
             replacement: None,
+            first: 0,
         };
-        let _ = VisitMut::visit(&mut expr, &mut finder);
-        if finder.blocked {
-            return Ok(None);
-        }
-        let mut calls = finder.calls;
-        match calls.len() {
-            0 => continue,
-            1 if candidate.is_none() => {
-                let (function, field) = calls.pop().expect("one call");
-                let whole_item = item_call.as_ref().is_some_and(|(found, found_field)| {
-                    *found == function && *found_field == field
-                });
-                candidate = Some(Candidate {
-                    index,
-                    function,
-                    field,
-                    whole_item,
-                });
-            }
-            // Several set-returning calls advance in lockstep; not a join.
-            _ => return Ok(None),
-        }
+        let _ = VisitMut::visit(&mut copy, &mut finder);
+        found += finder.calls.len();
     }
-    let Some(candidate) = candidate else {
+    if found == 0 {
         return Ok(None);
-    };
+    }
     let grouped = !matches!(&select.group_by, GroupByExpr::Expressions(expressions, modifiers)
         if expressions.is_empty() && modifiers.is_empty());
     if grouped
@@ -203,21 +235,50 @@ pub(crate) fn rewrite_routine_set_returning_projection(
     {
         return Ok(None);
     }
+    let mut rewritten = query.clone();
+    let SetExpr::Select(select) = rewritten.body.as_mut() else {
+        return Ok(None);
+    };
+    let mut calls = Vec::new();
+    // Replacement for ORDER BY: each call expression and its zip column.
+    let mut call_columns = Vec::new();
+    for item in select.projection.iter_mut() {
+        let (expr, aliased) = match item {
+            SelectItem::UnnamedExpr(expr) => (expr, false),
+            SelectItem::ExprWithAlias { expr, .. } => (expr, true),
+            _ => continue,
+        };
+        let name = call_column_name(expr);
+        let before = calls.len();
+        let mut finder = CallFinder {
+            db,
+            depth: 0,
+            calls: Vec::new(),
+            replacement: Some(0),
+            first: before,
+        };
+        let _ = VisitMut::visit(expr, &mut finder);
+        for (offset, call) in finder.calls.into_iter().enumerate() {
+            call_columns.push((call.clone(), before + offset));
+            calls.push(call);
+        }
+        // A bare call keeps the column name PostgreSQL gives it.
+        let bare =
+            !aliased && calls.len() == before + 1 && matches!(expr, Expr::CompoundIdentifier(_));
+        if let (true, Some(name)) = (bare, name) {
+            let expr = expr.clone();
+            *item = SelectItem::ExprWithAlias { expr, alias: name };
+        }
+    }
     // The source factor, built from a parsed template so every AST field
     // has its parser default.
     let template = format!(
-        "SELECT 1 FROM {}{}() AS {SOURCE_ALIAS}{}",
+        "SELECT 1 FROM {}{ZIP_FUNCTION}() AS {SOURCE_ALIAS}",
         if select.from.is_empty() {
             ""
         } else {
             "LATERAL "
         },
-        candidate.function.name,
-        if candidate.field.is_some() {
-            String::new()
-        } else {
-            format!("({VALUE_COLUMN})")
-        }
     );
     let Ok(mut parsed) = Parser::parse_sql(&PostgreSqlDialect {}, &template) else {
         return Ok(None);
@@ -231,82 +292,42 @@ pub(crate) fn rewrite_routine_set_returning_projection(
     let Some(mut source) = parsed.from.pop() else {
         return Ok(None);
     };
-    let call_name = candidate.function.name.clone();
-    let arguments = call_args(&candidate.function);
+    let arguments = calls
+        .into_iter()
+        .map(|call| FunctionArg::Unnamed(FunctionArgExpr::Expr(call)))
+        .collect::<Vec<_>>();
     match &mut source.relation {
-        TableFactor::Function { name, args, .. } => {
-            *name = call_name;
-            *args = arguments;
-        }
+        TableFactor::Function { args, .. } => *args = arguments,
         TableFactor::Table {
-            name,
-            args: Some(args),
-            ..
-        } => {
-            *name = call_name;
-            args.args = arguments;
-        }
+            args: Some(args), ..
+        } => args.args = arguments,
         _ => return Ok(None),
     }
-    let column = candidate
-        .field
-        .clone()
-        .unwrap_or_else(|| Ident::new(VALUE_COLUMN));
-    let reference = Expr::CompoundIdentifier(vec![Ident::new(SOURCE_ALIAS), column]);
-    let mut rewritten = query.clone();
-    let SetExpr::Select(select) = rewritten.body.as_mut() else {
-        return Ok(None);
-    };
-    let item = &mut select.projection[candidate.index];
-    *item = match std::mem::replace(item, SelectItem::UnnamedExpr(Expr::value(Value::Null))) {
-        SelectItem::ExprWithAlias { mut expr, alias } => {
-            replace_call(db, &mut expr, &reference)?;
-            SelectItem::ExprWithAlias { expr, alias }
-        }
-        SelectItem::UnnamedExpr(mut expr) => {
-            if candidate.whole_item {
-                // The column keeps the name PostgreSQL gives the call.
-                let name = candidate.field.clone().unwrap_or_else(|| {
-                    let name = object_name(&candidate.function.name).unwrap_or_default();
-                    Ident::new(name.rsplit('.').next().unwrap_or(&name))
-                });
-                SelectItem::ExprWithAlias {
-                    expr: reference.clone(),
-                    alias: name,
-                }
-            } else {
-                replace_call(db, &mut expr, &reference)?;
-                SelectItem::UnnamedExpr(expr)
-            }
-        }
-        other => other,
-    };
     select.from.push(source);
-    // ORDER BY may name the call itself (an ordinal or output alias is
+    // ORDER BY may name a call itself (an ordinal or output alias is
     // resolved to the item's expression before this rewrite runs).
     if let Some(order_by) = rewritten.order_by.as_mut() {
-        let mut finder = CallFinder {
-            db,
-            depth: 0,
-            calls: Vec::new(),
-            blocked: false,
-            replacement: Some(reference),
-        };
-        let _ = VisitMut::visit(order_by, &mut finder);
+        let mut replace = ReplaceCalls(call_columns);
+        let _ = VisitMut::visit(order_by, &mut replace);
     }
     Ok(Some(rewritten))
 }
 
-fn replace_call(db: &BicDb, expr: &mut Expr, reference: &Expr) -> Result<()> {
-    let mut finder = CallFinder {
-        db,
-        depth: 0,
-        calls: Vec::new(),
-        blocked: false,
-        replacement: Some(reference.clone()),
-    };
-    let _ = VisitMut::visit(expr, &mut finder);
-    Ok(())
+/// Replaces each listed call expression by its zip column.
+struct ReplaceCalls(Vec<(Expr, usize)>);
+
+impl VisitorMut for ReplaceCalls {
+    type Break = ();
+
+    fn pre_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<()> {
+        if let Some((_, index)) = self.0.iter().find(|(call, _)| call == expr) {
+            *expr = Expr::CompoundIdentifier(vec![
+                Ident::new(SOURCE_ALIAS),
+                Ident::new(zip_column(*index)),
+            ]);
+        }
+        ControlFlow::Continue(())
+    }
 }
 
 /// hstore's `populate_record(base, h)` is `jsonb_populate_record(base,
@@ -318,8 +339,10 @@ pub(crate) fn rewrite_hstore_populate_record(query: &Query) -> Option<Query> {
     impl Visitor for Finder {
         type Break = ();
         fn pre_visit_expr(&mut self, expr: &Expr) -> ControlFlow<()> {
-            if let Expr::Function(function) = expr {
-                self.0 |= is_populate_record(&function.name);
+            match expr {
+                Expr::Function(function) => self.0 |= is_populate_record(&function.name),
+                Expr::BinaryOp { op, .. } => self.0 |= is_hash_equals(op),
+                _ => {}
             }
             ControlFlow::Continue(())
         }
@@ -340,6 +363,31 @@ pub(crate) fn rewrite_hstore_populate_record(query: &Query) -> Option<Query> {
     impl VisitorMut for Rename {
         type Break = ();
         fn pre_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<()> {
+            // hstore's `record #= hstore` is populate_record(record, hstore).
+            if let Expr::BinaryOp { left, op, right } = expr {
+                if is_hash_equals(op) {
+                    let mut args = vec![
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(*left.clone())),
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(*right.clone())),
+                    ];
+                    wrap_second_argument(&mut args);
+                    *expr = Expr::Nested(Box::new(Expr::Function(Function {
+                        name: ObjectName::from(vec![Ident::new("jsonb_populate_record")]),
+                        uses_odbc_syntax: false,
+                        parameters: FunctionArguments::None,
+                        args: FunctionArguments::List(FunctionArgumentList {
+                            duplicate_treatment: None,
+                            args,
+                            clauses: Vec::new(),
+                        }),
+                        filter: None,
+                        null_treatment: None,
+                        over: None,
+                        within_group: Vec::new(),
+                    })));
+                    return ControlFlow::Continue(());
+                }
+            }
             if let Expr::Function(function) = expr {
                 if is_populate_record(&function.name) {
                     if let FunctionArguments::List(list) = &mut function.args {
@@ -377,6 +425,16 @@ pub(crate) fn rewrite_hstore_populate_record(query: &Query) -> Option<Query> {
     let mut rewritten = query.clone();
     let _ = VisitMut::visit(&mut rewritten, &mut Rename);
     Some(rewritten)
+}
+
+fn is_hash_equals(op: &BinaryOperator) -> bool {
+    match op {
+        BinaryOperator::Custom(name) => name == "#=",
+        BinaryOperator::PGCustomBinaryOperator(parts) => {
+            parts.last().is_some_and(|part| part == "#=")
+        }
+        _ => false,
+    }
 }
 
 fn is_populate_record(name: &ObjectName) -> bool {

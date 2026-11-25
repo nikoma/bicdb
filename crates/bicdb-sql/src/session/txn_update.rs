@@ -5491,6 +5491,8 @@ impl<'db> SqlSession<'db> {
             }
             RoutineStmt::ReturnQuery(query) => {
                 check_return_next_target(!frame.output_names.is_empty(), query)?;
+                // RETURN NEXT does not set FOUND, unlike RETURN QUERY.
+                let return_next = query_is_return_next(query);
                 if frame.returned_set.is_none() {
                     return Err(SqlError::InvalidSql(
                         "RETURN QUERY requires a set-returning function".into(),
@@ -5515,7 +5517,9 @@ impl<'db> SqlSession<'db> {
                         .collect::<Result<Vec<_>>>()?;
                     target.rows.push(row);
                 }
-                frame.set("found", SqlValue::Bool(found));
+                if !return_next {
+                    frame.set("found", SqlValue::Bool(found));
+                }
                 Ok(RoutineControl::Continue)
             }
             RoutineStmt::Return(expr) => {
@@ -8069,6 +8073,26 @@ impl RoutineCallHost for SessionRoutineHost {
             .eval_stored_function_value_typed(name, args, arg_types)?
             .ok_or_else(|| SqlError::undefined_function(format!("function {name} does not exist")))
     }
+
+    fn call_set_function(
+        &self,
+        engine: &SqlEngine<'_>,
+        name: &str,
+        args: &[SqlValue],
+    ) -> Result<SqlResult> {
+        let mut session = SqlSession::for_row_routine_call(engine);
+        session.execute_plpgsql_set_function(name, args)
+    }
+}
+
+/// Whether `query` is the one-row query `RETURN NEXT expr` compiles to.
+#[inline(never)]
+fn query_is_return_next(query: &Query) -> bool {
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        return false;
+    };
+    matches!(select.projection.as_slice(), [SelectItem::ExprWithAlias { alias, .. }]
+        if alias.value == crate::routines::RETURN_NEXT_EXPRESSION_COLUMN)
 }
 
 fn routine_value_literal(value: &SqlValue) -> Expr {

@@ -3512,7 +3512,7 @@ impl<'db> SqlSession<'db> {
             Expr::CompoundFieldAccess { root, access_chain } => eval_access_chain_expr(
                 root,
                 access_chain,
-                projected_expr_pg_type(root, Some(schema)).as_deref() == Some("jsonb"),
+                projected_expr_pg_type(root, Some(schema)).as_deref(),
                 |expr| {
                     self.eval_target_record_expr(table, alias, schema, record, expr)?
                         .ok_or_else(|| {

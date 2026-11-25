@@ -1141,6 +1141,11 @@ impl<'db> SqlSession<'db> {
         // positional form before execution.
         let calls_bound = crate::routine_calls::bind_statement_calls(self.db_ref(), statement)?;
         let statement = calls_bound.as_ref().unwrap_or(statement);
+        // Set-returning functions of a select list that the executors do not
+        // expand themselves run from the FROM clause (ProjectSet semantics).
+        let srf_bound =
+            crate::srf_projection::bind_statement_set_returning_calls(self.db_ref(), statement)?;
+        let statement = srf_bound.as_ref().unwrap_or(statement);
         if let Some(result) = self.apply_instead_rule(statement)? {
             return Ok(result);
         }

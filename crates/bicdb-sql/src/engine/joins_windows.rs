@@ -1838,8 +1838,7 @@ impl<'db> SqlEngine<'db> {
                 root,
                 access_chain,
                 row_columns_expr_pg_type(self.db_ref(), root, columns.iter().map(String::as_str))
-                    .as_deref()
-                    == Some("jsonb"),
+                    .as_deref(),
                 |expr| self.eval_row_aggregate_expr(rows, columns, expr),
             ),
             Expr::Interval(interval) => interval_literal_value(interval, |expr| {

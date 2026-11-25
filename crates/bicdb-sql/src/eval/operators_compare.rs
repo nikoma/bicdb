@@ -2201,12 +2201,21 @@ pub(crate) fn array_like_values(value: &SqlValue) -> Option<Vec<SqlValue>> {
 pub(crate) fn eval_access_chain_expr<F>(
     root: &Expr,
     access_chain: &[AccessExpr],
-    jsonb_subscript: bool,
+    root_type: Option<&str>,
     mut eval: F,
 ) -> Result<SqlValue>
 where
     F: FnMut(&Expr) -> Result<SqlValue>,
 {
+    let jsonb_subscript = root_type == Some("jsonb");
+    // A value of a known array type whose elements are not themselves JSON:
+    // an index subscript that leaves an array behind used fewer subscripts
+    // than the array has dimensions, which PostgreSQL answers with NULL.
+    let known_scalar_array = root_type.is_some_and(|pg_type| {
+        pg_type
+            .strip_suffix("[]")
+            .is_some_and(|element| !matches!(element, "json" | "jsonb"))
+    });
     let mut next_access = 0;
     let mut compound_root = None;
     let mut parts = match root {
@@ -2279,6 +2288,16 @@ where
         if matches!(access, AccessExpr::Subscript(_)) && array_slice_mode {
             array_subscript_dimension += 1;
         }
+    }
+    if known_scalar_array
+        && !array_slice_mode
+        && next_access == 0
+        && access_chain
+            .iter()
+            .all(|access| matches!(access, AccessExpr::Subscript(Subscript::Index { .. })))
+        && matches!(&value, SqlValue::Json(json) if json.is_array())
+    {
+        return Ok(SqlValue::Null);
     }
     if let Some(object) = match &value {
         SqlValue::Json(json) => json.as_object(),
@@ -3227,7 +3246,7 @@ fn eval_record_aggregate_expr_inner(
         Expr::CompoundFieldAccess { root, access_chain } => eval_access_chain_expr(
             root,
             access_chain,
-            projected_expr_pg_type(root, schema).as_deref() == Some("jsonb"),
+            projected_expr_pg_type(root, schema).as_deref(),
             |expr| eval_record_aggregate_expr(records, expr, schema),
         ),
         Expr::Interval(interval) => interval_literal_value(interval, |expr| {

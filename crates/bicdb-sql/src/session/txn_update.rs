@@ -3419,7 +3419,7 @@ impl<'db> SqlSession<'db> {
             Expr::CompoundFieldAccess { root, access_chain } => eval_access_chain_expr(
                 root,
                 access_chain,
-                projected_expr_pg_type_with_db(self.db_ref(), root).as_deref() == Some("jsonb"),
+                projected_expr_pg_type_with_db(self.db_ref(), root).as_deref(),
                 |expr| self.eval_session_expr(expr),
             ),
             Expr::Interval(interval) => {
@@ -5458,6 +5458,18 @@ impl<'db> SqlSession<'db> {
                 Ok(RoutineControl::Continue)
             }
             RoutineStmt::ReturnQuery(query) => {
+                if !frame.output_names.is_empty()
+                    && matches!(query.body.as_ref(), SetExpr::Select(select)
+                        if matches!(select.projection.as_slice(),
+                            [SelectItem::ExprWithAlias { alias, .. }]
+                                if alias.value == crate::routines::RETURN_NEXT_EXPRESSION_COLUMN))
+                {
+                    return Err(SqlError::data_exception_public(
+                        "42804",
+                        "RETURN NEXT cannot have a parameter in function with OUT parameters",
+                        None,
+                    ));
+                }
                 if frame.returned_set.is_none() {
                     return Err(SqlError::InvalidSql(
                         "RETURN QUERY requires a set-returning function".into(),

@@ -368,7 +368,7 @@ pub(crate) fn eval_value(record: &Record, expr: &Expr) -> Result<SqlValue> {
         Expr::CompoundFieldAccess { root, access_chain } => eval_access_chain_expr(
             root,
             access_chain,
-            projected_expr_pg_type(root, None).as_deref() == Some("jsonb"),
+            projected_expr_pg_type(root, None).as_deref(),
             |expr| eval_value(record, expr),
         ),
         Expr::Interval(interval) => {
@@ -649,7 +649,7 @@ pub(crate) fn eval_constant_expr(expr: &Expr) -> Result<SqlValue> {
         Expr::CompoundFieldAccess { root, access_chain } => eval_access_chain_expr(
             root,
             access_chain,
-            projected_expr_pg_type(root, None).as_deref() == Some("jsonb"),
+            projected_expr_pg_type(root, None).as_deref(),
             eval_constant_expr,
         ),
         Expr::Interval(interval) => interval_literal_value(interval, eval_constant_expr),

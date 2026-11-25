@@ -47,9 +47,41 @@ Calls of SQL and PL/pgSQL functions resolve as PostgreSQL resolves them:
 The call is rewritten to its positional form before execution (named
 arguments moved into place, defaults inserted, variadic arguments gathered),
 then overload resolution proceeds as for any positional call. Overloads that
-would place named arguments differently are refused with `0A000`. A
-set-returning function in a select list (`SELECT (f()).x` over a `RETURNS
-TABLE` function) is still not supported.
+would place named arguments differently are refused with `0A000`.
+
+Set-returning functions in a select list follow PostgreSQL 10+ (ProjectSet):
+`SELECT srf(3)`, `SELECT id, srf(id) FROM t`, `SELECT (rt(2)).sq` over a
+`RETURNS TABLE` function, `SELECT rt(2)` (one record per row) and nested
+uses such as `generate_series(1, 3) * 10` repeat the row once per returned
+value, several functions advance in lockstep with the shorter ones padded
+with NULL, and a row whose functions return nothing disappears. User
+functions and nested calls run from the FROM clause (`LATERAL`); in a
+grouped, DISTINCT or windowed query they are left as written, and several
+record-returning functions in one select list are refused with `0A000`.
+PL/pgSQL `RETURN NEXT expression` appends a row to a `SETOF` result; in a
+function with OUT parameters it is refused with `42804` as in PostgreSQL.
+
+## SQL cursors
+
+`DECLARE name [BINARY] [ASENSITIVE|INSENSITIVE] [[NO] SCROLL] CURSOR
+[WITH|WITHOUT HOLD] FOR query`, `FETCH` and `MOVE` with every direction
+(`NEXT`, `PRIOR`, `FIRST`, `LAST`, `ABSOLUTE n`, `RELATIVE n`, `n`, `ALL`,
+`FORWARD`/`BACKWARD [n|ALL]`), `CLOSE name|ALL`, the `pg_cursors` view and
+`UPDATE/DELETE ... WHERE CURRENT OF name` behave as in PostgreSQL:
+DECLARE without HOLD outside a transaction block is `25P01`, missing
+cursors `34000`, duplicates `42P03`, backward motion of a non-scrollable
+cursor `55000`, and a `WHERE CURRENT OF` on a cursor that is not on a row
+`24000`. A cursor reads with the declaring transaction's snapshot and the
+declaring role's privileges and row security: its query runs at DECLARE and
+its rows are kept, which is also what makes a `WITH HOLD` cursor survive
+COMMIT. COMMIT closes cursors without HOLD and ROLLBACK closes every cursor
+the transaction declared; `ROLLBACK TO SAVEPOINT` does not close cursors
+declared after the savepoint. A cursor declared without SCROLL or NO SCROLL
+can move backward when its query is a plain scan of one table or function
+(PostgreSQL decides this from the plan). `WHERE CURRENT OF` needs a cursor
+over one table with a primary key (others are refused with `0A000`), and a
+`FOR UPDATE` cursor locks its rows at DECLARE rather than as they are
+fetched.
 
 `pg_notify(channel, payload)` queues a notification exactly like `NOTIFY`:
 inside a transaction block both are delivered at commit and discarded on

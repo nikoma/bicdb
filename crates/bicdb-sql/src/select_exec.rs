@@ -3723,6 +3723,7 @@ pub(crate) fn is_virtual_table(table: &str) -> bool {
             | "pg_catalog.pg_seclabel"
             | "pg_catalog.pg_shseclabel"
             | "pg_catalog.pg_seclabels"
+            | "pg_catalog.pg_cursors"
             | "pg_catalog.pg_attrdef"
             | "pg_catalog.pg_rewrite"
             | "pg_catalog.pg_init_privs"
@@ -3797,6 +3798,7 @@ pub(crate) fn is_virtual_table(table: &str) -> bool {
             | "pg_seclabel"
             | "pg_shseclabel"
             | "pg_seclabels"
+            | "pg_cursors"
             | "pg_attrdef"
             | "pg_rewrite"
             | "pg_init_privs"
@@ -4025,6 +4027,7 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
         "pg_subscription" | "pg_subscription_rel" => Ok(Vec::new()),
         "pg_publication" | "pg_publication_rel" | "pg_publication_namespace" => Ok(Vec::new()),
         "pg_timezone_names" => Ok(pg_timezone_names_rows()),
+        "pg_cursors" => Ok(crate::session::pg_cursors_rows()),
         "pg_settings" => Ok(pg_settings_rows()),
         "pg_stat_database" => pg_stat_database_rows(db),
         "pg_stat_all_tables" | "pg_stat_user_tables" => pg_stat_table_rows(db, None),
@@ -5042,6 +5045,12 @@ pub(crate) fn virtual_table_columns(table: &str) -> Option<Vec<String>> {
             .map(str::to_string)
             .collect(),
         ),
+        "pg_cursors" => Some(
+            crate::session::PG_CURSORS_COLUMNS
+                .iter()
+                .map(|(name, _)| name.to_string())
+                .collect(),
+        ),
         "pg_timezone_names" => Some(
             ["name", "abbrev", "utc_offset", "is_dst"]
                 .into_iter()
@@ -5684,6 +5693,7 @@ pub(crate) fn virtual_table_column_types(table: &str) -> Option<Vec<(String, Opt
             ("reloptions", "text[]"),
             ("relpartbound", "pg_node_tree"),
         ],
+        "pg_cursors" => &crate::session::PG_CURSORS_COLUMNS,
         "pg_timezone_names" => &[
             ("name", "text"),
             ("abbrev", "text"),

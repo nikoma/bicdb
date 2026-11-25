@@ -32,9 +32,22 @@ Supported expression forms:
   `similar_escape` are callable directly.
 - Array subscripts on multi-dimensional arrays: `a[i][j]` yields the element
   type (also in the protocol's RowDescription) and any slice `a[i:j]` keeps the
-  array type. Remaining difference: a value subscripted with fewer indexes than
-  it has dimensions (`(ARRAY[[1,2],[3,4]])[2]`) returns the sub-array, where
-  PostgreSQL returns NULL.
+  array type. Subscripting with fewer indexes than the array has dimensions
+  (`(ARRAY[[1,2],[3,4]])[2]`) returns NULL as in PostgreSQL whenever the
+  array's type is known; elements of `json[]`/`jsonb[]` arrays that are
+  themselves JSON arrays are returned as elements.
+- SQL/JSON query functions `JSON_VALUE`, `JSON_QUERY` and `JSON_EXISTS` with
+  `PASSING`, `RETURNING`, `WITH [CONDITIONAL|UNCONDITIONAL] [ARRAY] WRAPPER`,
+  `KEEP|OMIT QUOTES`, and `NULL|ERROR|DEFAULT expr|EMPTY ARRAY|EMPTY OBJECT`
+  (`TRUE|FALSE|UNKNOWN` for JSON_EXISTS) `ON EMPTY` / `ON ERROR`, with
+  PostgreSQL's defaults and SQLSTATEs (`2203F`, `22034`, `22035`). The
+  constructors `JSON_OBJECT`, `JSON_ARRAY`, `JSON_OBJECTAGG`, `JSON_ARRAYAGG`
+  and the `IS [NOT] JSON [VALUE|OBJECT|ARRAY|SCALAR]` predicate are supported.
+- `JSON_TABLE(context, path COLUMNS (...))` in FROM, including `FOR
+  ORDINALITY`, typed `PATH` columns with ON EMPTY/ON ERROR, `EXISTS PATH`
+  and one `NESTED PATH ... COLUMNS` per level, and joined laterally with
+  earlier FROM items (`FROM t, JSON_TABLE(t.doc, ...)`). Sibling NESTED PATH
+  clauses, PASSING and table-level ON ERROR are refused with `0A000`.
 - Literal `IN` lists, single-column `IN` subqueries, `BETWEEN`, and
   comparison `ANY`/`ALL` over array literals.
 - JSON access with dotted metadata paths, `->`, and `->>`.

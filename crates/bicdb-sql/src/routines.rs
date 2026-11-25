@@ -895,6 +895,10 @@ pub(crate) fn procedure_actual_arguments<'a>(
     Ok(actuals)
 }
 
+/// The column name marking a `RETURN NEXT expression` compiled as `RETURN
+/// QUERY SELECT expression`.
+pub(crate) const RETURN_NEXT_EXPRESSION_COLUMN: &str = "bicdb$return_next";
+
 pub(crate) fn parse_routine_param(arg: &str, index: usize) -> Result<RoutineParam> {
     // A VARIADIC parameter is an IN parameter of its array type; calls
     // collect their trailing arguments into it (see routine_calls).
@@ -1990,9 +1994,12 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
             if expression.trim().is_empty() {
                 return Ok(RoutineStmt::ReturnNext);
             }
-            return Err(SqlError::UnsupportedPlpgsqlFeature(
-                "RETURN NEXT is not implemented".to_string(),
-            ));
+            // `RETURN NEXT expression` appends the expression's value as
+            // one row, as `RETURN QUERY SELECT expression` does.
+            return Ok(RoutineStmt::ReturnQuery(parse_single_query(&format!(
+                "SELECT {} AS \"{RETURN_NEXT_EXPRESSION_COLUMN}\"",
+                expression.trim()
+            ))?));
         }
         return Ok(RoutineStmt::Return(
             (!rest.is_empty())
@@ -4241,7 +4248,7 @@ mod return_keyword_tests {
         ));
         assert!(matches!(
             parse_routine_statement("RETURN NEXT 1"),
-            Err(SqlError::UnsupportedPlpgsqlFeature(_))
+            Ok(RoutineStmt::ReturnQuery(_))
         ));
     }
 }

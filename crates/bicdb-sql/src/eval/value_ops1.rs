@@ -2336,6 +2336,9 @@ pub(crate) fn eval_session_function_value(
                 crate::similar_to::similar_to_escape(&args[0].to_cell(), escape.as_deref())?,
             )))
         }
+        "bicdb_json_value" | "bicdb_json_query" | "bicdb_json_exists" => {
+            crate::sql_json::eval_sql_json_function(name, args)
+        }
         crate::similar_to::SIMILAR_SUBSTRING_FUNCTION if args.len() == 3 => {
             if args.iter().any(|value| matches!(value, SqlValue::Null)) {
                 return Ok(Some(SqlValue::Null));

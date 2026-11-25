@@ -1820,6 +1820,9 @@ pub(crate) fn postgres_xml_function_column_name(name: &str) -> String {
         "bicdb_xmlelement" => "xmlelement".to_string(),
         "bicdb_xmlpi" => "xmlpi".to_string(),
         "bicdb_xmlroot" => "xmlroot".to_string(),
+        "bicdb_json_value" => "json_value".to_string(),
+        "bicdb_json_query" => "json_query".to_string(),
+        "bicdb_json_exists" => "json_exists".to_string(),
         other => other.to_string(),
     }
 }

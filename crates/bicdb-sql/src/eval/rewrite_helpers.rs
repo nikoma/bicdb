@@ -550,6 +550,11 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
         changed = true;
     }
 
+    if let Some(next) = crate::sql_json::rewrite_sql_json_functions(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
     if let Some(next) = crate::routine_calls::rewrite_assignment_named_args(&rewritten) {
         rewritten = next;
         changed = true;

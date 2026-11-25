@@ -61,6 +61,9 @@ mod raw_index_fts;
 mod read_only;
 mod row_assignments;
 mod row_triggers;
+mod sql_cursors;
+pub use sql_cursors::SqlCursors;
+pub(crate) use sql_cursors::{pg_cursors_rows, PG_CURSORS_COLUMNS};
 mod set_functions;
 #[cfg(test)]
 mod subquery_scope_tests;
@@ -1233,6 +1236,7 @@ pub struct SqlSession<'db> {
     /// enable this mode.
     pub(crate) signed_application_security_guc_compatibility: bool,
     pub(crate) currvals: FxHashMap<String, i64>,
+    pub(crate) sql_cursors: sql_cursors::SqlCursors,
     pub(crate) oracle_output: oracle::output::State,
     pub(crate) oracle_lobs: oracle::lobs::State,
     pub(crate) pg_large_objects: crate::pg_large_objects::DescriptorState,
@@ -1261,6 +1265,7 @@ pub struct SqlSessionGucState {
     local_restore: HashMap<String, Option<String>>,
     local_settings_restore: SqlSettingsRestore,
     currvals: FxHashMap<String, i64>,
+    sql_cursors: sql_cursors::SqlCursors,
     oracle_output: oracle::output::State,
 }
 
@@ -1326,9 +1331,11 @@ impl SqlSessionGucState {
         }
         self.transaction_start = None;
         self.transaction_timestamp_micros = None;
+        self.sql_cursors.commit();
     }
 
     pub fn rollback_transaction(&mut self) {
+        self.sql_cursors.rollback();
         if let Some(start) = self.transaction_start.take() {
             let lastval = self.session_gucs.get(LASTVAL_SESSION_KEY).cloned();
             self.settings = start.settings;
@@ -2614,6 +2621,7 @@ impl<'db> SqlSession<'db> {
             signed_mutation_grants: BTreeMap::new(),
             signed_application_security_guc_compatibility: false,
             currvals: FxHashMap::default(),
+            sql_cursors: sql_cursors::SqlCursors::default(),
             oracle_output: oracle::output::State::default(),
             oracle_lobs: oracle::lobs::State::default(),
             pg_large_objects: crate::pg_large_objects::DescriptorState::default(),
@@ -2745,6 +2753,7 @@ impl<'db> SqlSession<'db> {
         self.guc_local_restore = state.local_restore;
         self.guc_local_settings_restore = state.local_settings_restore;
         self.currvals = state.currvals;
+        self.sql_cursors = state.sql_cursors;
         self.oracle_output = state.oracle_output;
         self.rebind_trusted_security_settings();
         self.apply_database_setting_defaults();
@@ -2761,6 +2770,7 @@ impl<'db> SqlSession<'db> {
             local_restore: std::mem::take(&mut self.guc_local_restore),
             local_settings_restore: std::mem::take(&mut self.guc_local_settings_restore),
             currvals: std::mem::take(&mut self.currvals),
+            sql_cursors: self.sql_cursors.clone(),
             oracle_output: std::mem::take(&mut self.oracle_output),
         };
         if !preserve_postgres_compatibility_gucs {
@@ -3011,6 +3021,7 @@ impl<'db> SqlSession<'db> {
             local_restore: self.guc_local_restore.clone(),
             local_settings_restore: self.guc_local_settings_restore.clone(),
             currvals: self.currvals.clone(),
+            sql_cursors: self.sql_cursors.clone(),
             oracle_output: self.oracle_output.clone(),
         }
     }
@@ -3369,6 +3380,12 @@ impl<'db> SqlSession<'db> {
     }
 
     pub fn execute(&mut self, sql: &str) -> Result<SqlResult> {
+        let _cursor_scope = sql_cursors::CursorScope::enter(&self.sql_cursors);
+        let current_of = self.rewrite_where_current_of(sql)?;
+        let sql = current_of.as_deref().unwrap_or(sql);
+        if let Some(result) = self.execute_raw_cursor_statement(sql)? {
+            return Ok(result);
+        }
         if !matches!(
             normalize_sql(sql).as_str(),
             "rollback" | "rollback work" | "rollback transaction"
@@ -4274,6 +4291,10 @@ impl<'db> SqlSession<'db> {
                 continue;
             }
             if let Some(result) = self.execute_raw_reset(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_cursor_statement(&statement)? {
                 last_result = Some(result);
                 continue;
             }
@@ -6618,6 +6639,7 @@ impl<'db> SqlSession<'db> {
         self.guc_local_restore.clear();
         self.guc_local_settings_restore = SqlSettingsRestore::default();
         self.currvals.clear();
+        self.sql_cursors.close_all();
         self.oracle_output.reset()?;
         self.rebind_trusted_security_settings();
         Ok(())

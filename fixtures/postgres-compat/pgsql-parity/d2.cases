@@ -1,0 +1,50 @@
+srf.builtin_generate_series|SELECT generate_series(1,3)
+srf.builtin_two_lockstep|SELECT generate_series(1,3) AS a, generate_series(1,2) AS b
+srf.builtin_with_column|CREATE TABLE srft(id int, tags text[]); INSERT INTO srft VALUES (1, ARRAY['a','b']), (2, ARRAY['c']), (3, '{}'); SELECT id, unnest(tags) FROM srft ORDER BY id, 2
+srf.builtin_expression|SELECT generate_series(1,3) * 10 AS x
+srf.user_sql_setof|CREATE FUNCTION srf1(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT generate_series(1, n)'; SELECT srf1(3)
+srf.user_returns_table_field|CREATE FUNCTION rt2(n int) RETURNS TABLE(i int, sq int) LANGUAGE sql AS 'SELECT g, g*g FROM generate_series(1, n) g'; SELECT (rt2(3)).sq
+srf.user_returns_table_whole|CREATE FUNCTION rt3(n int) RETURNS TABLE(i int, sq int) LANGUAGE sql AS 'SELECT g, g*g FROM generate_series(1, n) g'; SELECT rt3(2)
+srf.user_plpgsql_setof|CREATE FUNCTION srfp(n int) RETURNS SETOF int LANGUAGE plpgsql AS $$BEGIN FOR k IN 1..n LOOP RETURN NEXT k * 2; END LOOP; END$$; SELECT srfp(3)
+srf.user_lockstep|CREATE FUNCTION srf2(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT generate_series(1, n)'; SELECT srf2(3) AS a, srf2(1) AS b
+srf.user_per_row|CREATE FUNCTION srf3(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT generate_series(1, n)'; CREATE TABLE srfr(id int); INSERT INTO srfr VALUES (1),(2); SELECT id, srf3(id) FROM srfr ORDER BY id, 2
+srf.plpgsql_return_next_out|CREATE FUNCTION rnx() RETURNS TABLE(n int) LANGUAGE plpgsql AS $$ BEGIN RETURN NEXT 7;END $$; SELECT * FROM rnx()
+srf.user_in_from|CREATE FUNCTION srf5(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT generate_series(1, n)'; SELECT * FROM srf5(2)
+srf.nested_subquery|CREATE FUNCTION srf6(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT generate_series(1, n)'; SELECT (SELECT count(*) FROM (SELECT srf6(4)) s)
+srf.empty_set|CREATE FUNCTION srf4(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT generate_series(1, n)'; SELECT 1 AS k, srf4(0)
+array.partial_subscript_null|SELECT (ARRAY[[1,2],[3,4]])[2] IS NULL, (ARRAY[[1,2],[3,4]])[2:2]
+array.partial_subscript_column|CREATE TABLE apc(m int[]); INSERT INTO apc VALUES ('{{1,2},{3,4}}'); SELECT m[1] IS NULL, m[1][1] FROM apc
+array.json_element_subscript|SELECT (ARRAY['[1,2]'::json, '[3]'::json])[1]
+cursor.basic|BEGIN; DECLARE c1 CURSOR FOR SELECT g FROM generate_series(1,5) g; FETCH 2 FROM c1; FETCH NEXT FROM c1; FETCH ALL FROM c1; CLOSE c1; COMMIT
+cursor.scroll|BEGIN; DECLARE c2 SCROLL CURSOR FOR SELECT g FROM generate_series(1,5) g ORDER BY g; FETCH LAST FROM c2; FETCH PRIOR FROM c2; FETCH FIRST FROM c2; FETCH ABSOLUTE 4 FROM c2; FETCH RELATIVE -2 FROM c2; FETCH BACKWARD 1 FROM c2; FETCH FORWARD ALL FROM c2; COMMIT
+cursor.move|BEGIN; DECLARE c3 SCROLL CURSOR FOR SELECT g FROM generate_series(1,5) g; MOVE 2 IN c3; FETCH 1 FROM c3; MOVE LAST IN c3; FETCH BACKWARD 2 FROM c3; COMMIT
+cursor.no_scroll_backward|BEGIN; DECLARE c4 NO SCROLL CURSOR FOR SELECT g FROM generate_series(1,3) g; FETCH 2 FROM c4; FETCH PRIOR FROM c4
+cursor.outside_tx|DECLARE c5 CURSOR FOR SELECT 1
+cursor.with_hold|CREATE TABLE curh(a int); INSERT INTO curh VALUES (1),(2),(3); BEGIN; DECLARE c6 CURSOR WITH HOLD FOR SELECT a FROM curh ORDER BY a; COMMIT; DELETE FROM curh; FETCH ALL FROM c6; CLOSE c6
+cursor.rollback_closes|BEGIN; DECLARE c7 CURSOR FOR SELECT 1; ROLLBACK; FETCH c7
+cursor.close_all|BEGIN; DECLARE c8 CURSOR FOR SELECT 1; DECLARE c9 CURSOR FOR SELECT 2; CLOSE ALL; FETCH c8
+cursor.pg_cursors|BEGIN; DECLARE c10 SCROLL CURSOR WITH HOLD FOR SELECT 1; DECLARE c11 CURSOR FOR SELECT 2; SELECT name, statement, is_holdable, is_binary, is_scrollable FROM pg_cursors ORDER BY name; COMMIT; SELECT name, is_holdable FROM pg_cursors ORDER BY name
+cursor.current_of|CREATE TABLE curu(id int, v text); INSERT INTO curu VALUES (1,'a'),(2,'b'),(3,'c'); BEGIN; DECLARE c12 CURSOR FOR SELECT id, v FROM curu ORDER BY id FOR UPDATE; FETCH 2 FROM c12; UPDATE curu SET v = 'X' WHERE CURRENT OF c12; FETCH 1 FROM c12; DELETE FROM curu WHERE CURRENT OF c12; COMMIT; SELECT * FROM curu ORDER BY id
+cursor.snapshot|CREATE TABLE curs(a int); INSERT INTO curs VALUES (1); BEGIN ISOLATION LEVEL REPEATABLE READ; DECLARE c13 CURSOR FOR SELECT a FROM curs; INSERT INTO curs VALUES (2); FETCH ALL FROM c13; COMMIT
+cursor.duplicate|BEGIN; DECLARE c14 CURSOR FOR SELECT 1; DECLARE c14 CURSOR FOR SELECT 2
+cursor.missing|BEGIN; FETCH 1 FROM nosuchcursor
+cursor.default_scrollability|CREATE TABLE cursc(a int); INSERT INTO cursc VALUES (1),(2); BEGIN; DECLARE d1 CURSOR FOR SELECT a FROM cursc ORDER BY a; DECLARE d2 CURSOR FOR SELECT count(*) FROM cursc; DECLARE d3 CURSOR FOR SELECT 1; SELECT name, is_scrollable FROM pg_cursors ORDER BY name; FETCH 2 FROM d1; FETCH PRIOR FROM d1; COMMIT
+cursor.fetch_past_end|BEGIN; DECLARE c15 CURSOR FOR SELECT 1; FETCH 5 FROM c15; FETCH c15; COMMIT
+json.value|SELECT JSON_VALUE('{"a":{"b":5}}', '$.a.b'), JSON_VALUE('{"a":"x"}', '$.a' RETURNING text), JSON_VALUE('{"a":1}', '$.zz' DEFAULT 'd' ON EMPTY), JSON_VALUE('{"a":[1]}', '$.a' NULL ON ERROR)
+json.value_error|SELECT JSON_VALUE('{"a":[1,2]}', '$.a' ERROR ON ERROR)
+json.value_returning_int|SELECT JSON_VALUE('{"a":"12"}', '$.a' RETURNING int) + 1
+json.query|SELECT JSON_QUERY('{"a":[1,2]}', '$.a'), JSON_QUERY('{"a":[1,2]}', '$.a[*]' WITH WRAPPER), JSON_QUERY('{"a":"s"}', '$.a' OMIT QUOTES), JSON_QUERY('{"a":"s"}', '$.a' KEEP QUOTES), JSON_QUERY('{}', '$.x' EMPTY ARRAY ON EMPTY)
+json.query_conditional|SELECT JSON_QUERY('{"a":[1,2]}', '$.a' WITH CONDITIONAL WRAPPER), JSON_QUERY('{"a":5}', '$.a' WITH CONDITIONAL WRAPPER)
+json.exists|SELECT JSON_EXISTS('{"a":1}', '$.a'), JSON_EXISTS('{"a":1}', '$.b'), JSON_EXISTS('{"a":[1,2,3]}', '$.a[*] ? (@ > 2)')
+json.constructors|SELECT JSON_OBJECT('a': 1, 'b': 'x'), JSON_OBJECT('a' VALUE NULL ABSENT ON NULL), JSON_ARRAY(1, 'two', NULL), JSON_ARRAY(1, NULL NULL ON NULL)
+json.aggregates|SELECT JSON_OBJECTAGG(k VALUE v), JSON_ARRAYAGG(v ORDER BY v DESC) FROM (VALUES ('a', 1)) t(k, v)
+json.is_json|SELECT '{"a":1}' IS JSON, '[1]' IS JSON ARRAY, '{"a":1}' IS JSON OBJECT, '5' IS JSON SCALAR, 'x' IS JSON, '{"a":1}' IS NOT JSON ARRAY, '[1]' IS JSON VALUE
+json.table_basic|SELECT * FROM JSON_TABLE('[{"a":1,"b":"x"},{"a":2,"b":"y"}]', '$[*]' COLUMNS (id FOR ORDINALITY, a int PATH '$.a', b text PATH '$.b'))
+json.table_exists_nested|SELECT * FROM JSON_TABLE('[{"a":1,"t":[10,20]},{"a":2,"t":[]}]', '$[*]' COLUMNS (a int PATH '$.a', has_t boolean EXISTS PATH '$.t[0]', NESTED PATH '$.t[*]' COLUMNS (t int PATH '$')))
+json.table_lateral|CREATE TABLE jtt(id int, doc jsonb); INSERT INTO jtt VALUES (1, '{"items":[{"n":"p","q":2},{"n":"r","q":1}]}'), (2, '{"items":[]}'); SELECT jtt.id, j.* FROM jtt, JSON_TABLE(jtt.doc, '$.items[*]' COLUMNS (n text PATH '$.n', q int PATH '$.q')) AS j ORDER BY 1, 2
+json.value_passing_column|CREATE TABLE jvt(id int, doc jsonb); INSERT INTO jvt VALUES (1, '{"a":[1,5,9]}'), (2, '{"a":[]}'); SELECT id, JSON_VALUE(doc, '$.a[$i]' PASSING 1 AS i), JSON_EXISTS(doc, '$.a[*] ? (@ > $x)' PASSING 6 AS x) FROM jvt ORDER BY id
+json.query_returning_text|SELECT JSON_QUERY('{"a":{"b":[1]}}', '$.a' RETURNING text), JSON_QUERY('[1,2]', '$[*]' ERROR ON ERROR)
+json.value_strict_error|SELECT JSON_VALUE('{"a":1}', 'strict $.b' DEFAULT 'none' ON ERROR), JSON_EXISTS('{"a":1}', 'strict $.b' UNKNOWN ON ERROR) IS NULL
+json.table_on_empty|SELECT * FROM JSON_TABLE('[{"a":1},{}]', '$[*]' COLUMNS (a int PATH '$.a' DEFAULT 0 ON EMPTY, j jsonb PATH '$'))
+srf.order_by_srf_alias|SELECT generate_series(1,3) * 2 AS x ORDER BY x DESC
+srf.with_where|CREATE TABLE srfw(id int); INSERT INTO srfw VALUES (1),(2),(3); CREATE FUNCTION srf7(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT generate_series(1, n)'; SELECT id, srf7(id) FROM srfw WHERE id > 1 ORDER BY 1, 2 LIMIT 4

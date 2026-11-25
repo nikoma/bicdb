@@ -491,7 +491,7 @@ impl<'db> SqlEngine<'db> {
             Expr::CompoundFieldAccess { root, access_chain } => eval_access_chain_expr(
                 root,
                 access_chain,
-                self.constant_expr_pg_type(root).as_deref() == Some("jsonb"),
+                self.constant_expr_pg_type(root).as_deref(),
                 |expr| self.eval_select_constant_expr(expr),
             ),
             Expr::Exists { subquery, negated } => {

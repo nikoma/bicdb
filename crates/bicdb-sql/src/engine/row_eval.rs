@@ -1277,7 +1277,7 @@ impl<'db> SqlEngine<'db> {
         eval_access_chain_expr(
             root,
             access_chain,
-            root_type.as_deref() == Some("jsonb"),
+            root_type.as_deref(),
             |expr| self.eval_slot_row_value(row, context, expr),
         )
     }
@@ -1303,7 +1303,7 @@ impl<'db> SqlEngine<'db> {
         eval_access_chain_expr(
             root,
             access_chain,
-            root_type.as_deref() == Some("jsonb"),
+            root_type.as_deref(),
             |expr| self.eval_row_value(row, expr),
         )
     }

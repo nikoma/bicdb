@@ -3665,6 +3665,10 @@ impl<'db> SqlEngine<'db> {
                 .collect::<Vec<_>>();
             if let Some(pg_type) =
                 crate::pg_functions_more::pg_function_more_result_type(bare_name, &arg_types)
+                    .or_else(|| crate::pg_number_input::pg_number_input_result_type(bare_name))
+                    .or_else(|| {
+                        crate::pg_float_text_functions::pg_float_text_result_type(bare_name)
+                    })
             {
                 return Some(pg_type);
             }

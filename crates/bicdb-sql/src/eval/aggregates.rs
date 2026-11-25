@@ -2401,6 +2401,14 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
                 .collect::<Vec<_>>();
             if let Some(pg_type) =
                 crate::pg_functions_more::pg_function_more_result_type(unqualified_name, &arg_types)
+                    .or_else(|| {
+                        crate::pg_number_input::pg_number_input_result_type(unqualified_name)
+                            .or_else(|| {
+                                crate::pg_float_text_functions::pg_float_text_result_type(
+                                    unqualified_name,
+                                )
+                            })
+                    })
             {
                 return Some(pg_type);
             }

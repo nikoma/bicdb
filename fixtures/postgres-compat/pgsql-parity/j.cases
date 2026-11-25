@@ -204,3 +204,86 @@ jin_e141|select '{[a,d), [d,e)}'::textmultirange;
 jin_e142|select '{[a,a)}'::textmultirange;
 jin_e143|select '{(a,a]}'::textmultirange;
 jin_e144|select '{(a,a)}'::textmultirange;
+f_to_number|SELECT to_number('-34,338,492', '99G999G999')
+f_min_scale|SELECT min_scale(1.4600), scale(1.4600), trim_scale(1.4600)
+f_encoding|SELECT getdatabaseencoding()
+f_to_bin|SELECT to_bin(-1234), to_oct(-1234), to_hex(-1234), to_bin(5::int8)
+f_isfinite|SELECT isfinite(date 'infinity'), isfinite(interval '1 day'), isfinite(timestamp '2000-01-01')
+f_hyper|SELECT sinh(1), cosh(1), tanh(1), asinh(1), acosh(2), atanh(0.5)
+f_size_bytes|SELECT pg_size_bytes('1kB'), pg_size_bytes('1.5 GB'), pg_size_bytes('-1 MB')
+f_hashfloat|SELECT hashfloat4(1.5), hashfloat8(1.5), hashfloat4('0'::float4) = hashfloat4('-0'::float4)
+f_unistr|SELECT unistr('d\0061t\+000061'), unistr('A')
+f_ascii|SELECT ascii('x'), ascii(''), chr(65)
+f_regexp_instr|SELECT regexp_instr('abcdefghi', 'd.f'), regexp_count('ABCABCAXYaxy', 'A.'), regexp_substr('abcdefghi', 'd.f'), regexp_like('Steven', '^Ste(v|ph)en$')
+f_parse_ident|SELECT parse_ident('foo.boo'), parse_ident('"SchemaX"."TableY"')
+f_array_sort|SELECT array_sort(ARRAY[3,1,2])
+f_width_bucket|SELECT width_bucket(5.35, 0.024, 10.06, 5)
+f_arrayrange|SELECT 1
+f_float4send|SELECT float4send('1.5'::float4)
+f_box|SELECT box(point(1,1), point(0,0))
+f_nextval|CREATE SEQUENCE fnv;SELECT nextval('fnv')
+f_brin|SELECT 1
+f_crc32|SELECT crc32('abc'), crc32c('abc')
+f_reverse_bytea|SELECT reverse('\xabcd'::bytea)
+f_uuid|SELECT uuid_extract_version('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'), uuid_extract_timestamp('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11')
+f_bit_count|SELECT bit_count('\x1234'::bytea), bit_count(B'1011')
+f_array_shuffle|SELECT array_length(array_shuffle(ARRAY[1,2,3]),1), trim_array(ARRAY[1,2,3], 1)
+f_stats|SELECT 1
+jin_e145|SELECT to_number('-34,338,492', '99G999G999');
+jin_e146|SELECT to_number('-34,338,492.654,878', '99G999G999D999G999');
+jin_e147|SELECT to_number('<564646.654564>', '999999.999999PR');
+jin_e148|SELECT to_number('0.00001-', '9.999999S');
+jin_e149|SELECT to_number('5.01-', 'FM9.999999S');
+jin_e150|SELECT to_number('5.01-', 'FM9.999999MI');
+jin_e151|SELECT to_number('5 4 4 4 4 8 . 7 8', '9 9 9 9 9 9 . 9 9');
+jin_e152|SELECT to_number('.01', 'FM9.99');
+jin_e153|SELECT to_number('.0', '99999999.99999999');
+jin_e154|SELECT to_number('0', '99.99');
+jin_e155|SELECT to_number('.-01', 'S99.99');
+jin_e156|SELECT to_number('.01-', '99.99S');
+jin_e157|SELECT to_number(' . 0 1-', ' 9 9 . 9 9 S');
+jin_e158|SELECT to_number('34,50','999,99');
+jin_e159|SELECT to_number('123,000','999G');
+jin_e160|SELECT to_number('123456','999G999');
+jin_e161|SELECT to_number('$1234.56','L9,999.99');
+jin_e162|SELECT to_number('$1234.56','L99,999.99');
+jin_e163|SELECT to_number('$1,234.56','L99,999.99');
+jin_e164|SELECT to_number('1234.56','L99,999.99');
+jin_e165|SELECT to_number('1,234.56','L99,999.99');
+jin_e166|SELECT to_number('42nd', '99th');
+jin_e167|SELECT to_number('123456', '99999V99');
+jin_e168|SELECT to_number('CvIiI', 'rn');
+jin_e169|SELECT to_number('MMXX  ', 'RN');
+jin_e170|SELECT to_number('  XIV', '  RN');
+jin_e171|SELECT to_number('  XIV  ', '  RN');
+jin_e172|SELECT to_number('M CC', 'RN');
+jin_e173|SELECT to_number('viv', 'RN');
+jin_e174|SELECT to_number('DCCCD', 'RN');
+jin_e175|SELECT to_number('XIXL', 'RN');
+jin_e176|SELECT to_number('MCCM', 'RN');
+jin_e177|SELECT to_number('MMMM', 'RN');
+jin_e178|SELECT to_number('VV', 'RN');
+jin_e179|SELECT to_number('IL', 'RN');
+jin_e180|SELECT to_number('VIX', 'RN');
+jin_e181|SELECT to_number('LXC', 'RN');
+jin_e182|SELECT to_number('DCM', 'RN');
+jin_e183|SELECT to_number('MMMDCM', 'RN');
+jin_e184|SELECT to_number('CLXC', 'RN');
+jin_e185|SELECT to_number('CM', 'MIRN');
+jin_e186|SELECT to_number('CM', 'RNRN');
+jin_e187|SELECT to_number('qiv', 'RN');
+jin_e188|SELECT to_number('', 'RN');
+jin_e189|SELECT to_number(' ', 'RN');
+jin_e190|SELECT parse_ident('foo.boo');
+jin_e191|SELECT parse_ident('foo.boo[]');
+jin_e193|SELECT parse_ident(' ');
+jin_e194|SELECT parse_ident(' .aaa');
+jin_e195|SELECT parse_ident(' aaa . ');
+jin_e196|SELECT parse_ident('aaa.a%b');
+jin_e197|SELECT parse_ident(E'X\rXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX');
+jin_e200|SELECT parse_ident(E'"c".X XXXX\002XXXXXX');
+jin_e201|SELECT parse_ident('1020');
+jin_e202|SELECT parse_ident('10.20');
+jin_e203|SELECT parse_ident('.');
+jin_e204|SELECT parse_ident('.1020');
+jin_e205|SELECT parse_ident('xxx.1020');

@@ -193,3 +193,29 @@ fn multirange_input_errors_carry_postgres_detail() {
         );
     }
 }
+
+#[test]
+fn to_number_and_parse_ident_match_postgres() {
+    let (_dir, mut db) = open();
+    let mut sql = SqlSession::new(&mut db);
+    assert_eq!(
+        cells(
+            &mut sql,
+            "SELECT to_number('-34,338,492.654,878', '99G999G999D999G999'), to_number('<564646.654564>', '999999.999999PR'), to_number('CvIiI', 'rn')"
+        ),
+        [["-34338492.654878", "-564646.654564", "108"]]
+    );
+    assert_eq!(
+        error(&mut sql, "SELECT to_number('viv', 'RN')"),
+        "invalid Roman numeral"
+    );
+    assert_eq!(
+        cells(&mut sql, "SELECT parse_ident('\"SchemaX\".TableY')"),
+        [["[\"SchemaX\",\"tabley\"]"]]
+    );
+    let (message, fields) = error_fields(&mut sql, "SELECT parse_ident(' .aaa')");
+    assert_eq!(message, "string is not a valid identifier: \" .aaa\"");
+    assert!(fields.contains(&SqlErrorField::Detail(
+        "No valid identifier before \".\".".into()
+    )));
+}

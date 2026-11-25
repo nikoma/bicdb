@@ -3736,6 +3736,12 @@ pub(crate) fn eval_compatibility_function_value(
     if let Some(value) = crate::pg_functions_more::eval_pg_function_more(name, args, arg_types)? {
         return Ok(Some(value));
     }
+    if let Some(value) = crate::pg_number_input::eval_pg_number_input(name, args)? {
+        return Ok(Some(value));
+    }
+    if let Some(value) = crate::pg_float_text_functions::eval_pg_float_text_function(name, args)? {
+        return Ok(Some(value));
+    }
     if name == "bicdb_variadic_call" {
         if args.len() < 2 {
             return Err(SqlError::InvalidSql(

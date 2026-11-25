@@ -110,6 +110,24 @@ Supported expression forms:
   `numeric` values, text, JSON/JSONB, date/time-like strings, `interval`
   strings, UUID, regclass, bytea, and vector values.
 
+Casts from a string type (`text`, `varchar`, `char(n)`, `name`, an unknown-typed literal, or a
+domain over one of them) to `int2`/`int4`/`int8` read the text with the integer type's input
+function in every evaluation path: select list, `WHERE`, joins, `ORDER BY`, views,
+`INSERT ... SELECT`, SQL and PL/pgSQL function bodies, and PL/pgSQL assignment (`i := t` for a
+text `t`). `'34.5'::text::int` is `22P02 invalid input syntax for type integer: "34.5"`, as in
+PostgreSQL; numeric sources still round half away from zero (`34.5::numeric::int` is 35) and
+float sources half to even. A numeric `jsonb` value casts to an integer through numeric; other
+`jsonb` values fail with `cannot cast jsonb <kind> to type integer` (`22023`).
+
+Input errors carry PostgreSQL's DETAIL (and, for JSON, CONTEXT) lines: `json`/`jsonb` text
+(`Expected JSON value, but found "]".`, `Token "01" is invalid.`, ... with
+`JSON data, line 1: ...`), multirange literals (`Missing left brace.`, `Expected range start.`,
+`Expected comma or end of multirange.`, `Junk after closing right brace.`), and `parse_ident`.
+
+`to_number(text, text)` reads the number picture of `to_char` (`9`, `0`, `.`, `D`, `,`, `G`, `S`,
+`MI`, `PL`, `SG`, `PR`, `L`, `TH`, `V`, `FM`, `RN`) in the C locale, with PostgreSQL's format
+errors; `parse_ident(text [, strict])` splits a qualified name as PostgreSQL does.
+
 `WHERE` filters treat unknown as not selected. `CHECK` constraints accept true
 or unknown and reject only false, matching PostgreSQL's common NULL behavior.
 

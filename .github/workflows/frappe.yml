@@ -1,0 +1,90 @@
+name: Frappe application
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'examples/frappe/**'
+      - '.github/workflows/frappe.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'examples/frappe/**'
+      - '.github/workflows/frappe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frappe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frappe:
+    name: Frappe v16.60.2 on PostgreSQL mode
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      # Frappe's cache and job queue; BicDB's RESP server lacks pub/sub,
+      # lists, sets and CLIENT TRACKING (see docs/frappe-compatibility.md).
+      redis:
+        image: redis:7.4
+        ports:
+          - 6379:6379
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      FRAPPE_REF: v16.60.2
+      FRAPPE_BENCH_VERSION: 5.31.1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.96.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: rails-demo
+          save-if: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: System packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libmariadb-dev pkg-config postgresql-client
+          npm install -g yarn
+          python3.14 -m pip install "frappe-bench==${FRAPPE_BENCH_VERSION}"
+      - name: Build BicDB from the tested source
+        run: cargo build --locked -p bicdb --bin bicdb
+      - name: bench new-site, HTTP smoke test and Frappe test slice
+        env:
+          BICDB_BIN: ${{ github.workspace }}/target/debug/bicdb
+          WORK_DIR: ${{ runner.temp }}/frappe
+          FRAPPE_PYTHON: python3.14
+          REDIS_URL: redis://127.0.0.1:6379
+          # verify.sh's full slice minus test_db_query (5 minutes on a debug build).
+          FRAPPE_TESTS: >-
+            frappe.tests.test_db frappe.tests.test_document frappe.tests.test_query_builder
+            frappe.tests.test_model_utils frappe.tests.test_permissions frappe.tests.test_naming
+            frappe.tests.test_child_table frappe.tests.test_defaults frappe.tests.test_sequence
+            frappe.tests.test_docstatus
+        run: examples/frappe/verify.sh
+      - name: Retain qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frappe-evidence
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/frappe/*.log
+            ${{ runner.temp }}/frappe/*.txt
+            ${{ runner.temp }}/frappe/junit/*.xml

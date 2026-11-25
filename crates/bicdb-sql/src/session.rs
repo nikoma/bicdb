@@ -2661,6 +2661,22 @@ impl<'db> SqlSession<'db> {
         Ok(unsafe { self.db.as_mut() })
     }
 
+    /// Exclusive database access for row-rewriting DDL, together with the
+    /// session's open transaction so rows it owns are rewritten through it.
+    pub(crate) fn ddl_rows(&mut self) -> Result<DdlRows<'_>> {
+        if !self.exclusive {
+            return Err(SqlError::Unsupported(
+                "operation requires exclusive database access".to_string(),
+            ));
+        }
+        // Safety: as in `db_mut`; the transaction is a disjoint field.
+        let db = unsafe { self.db.as_mut() };
+        Ok(DdlRows {
+            db,
+            tx: self.tx.as_mut(),
+        })
+    }
+
     pub fn in_transaction(&self) -> bool {
         self.tx.is_some()
     }
@@ -3319,6 +3335,7 @@ impl<'db> SqlSession<'db> {
             None => None,
         };
         let _path_scope = crate::search_path::PathScope::enter(path);
+        let _catalog_scope = crate::search_path::CatalogScope::enter(&self.session_gucs);
         let sql = bound.as_deref().unwrap_or(sql);
         // A per-row routine call reaches raw SQL only through dynamic EXECUTE
         // fallbacks for statements sqlparser cannot represent (DDL, grants).

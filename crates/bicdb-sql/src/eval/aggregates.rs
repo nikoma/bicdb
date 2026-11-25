@@ -1918,7 +1918,7 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             }
             "similarity" => return Some("float4".to_string()),
             "age" | "make_interval" => return Some("interval".to_string()),
-            "to_date" => return Some("date".to_string()),
+            "to_date" | "date" => return Some("date".to_string()),
             "trunc" if argument_nodes.len() == 2 => return Some("numeric".to_string()),
             "bicdb_oracle_nvl_number"
             | "bicdb_oracle_nvl2_number"

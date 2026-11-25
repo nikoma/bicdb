@@ -6666,7 +6666,7 @@ pub(crate) fn information_schema_tables(db: &BicDb) -> Result<Vec<BTreeMap<Strin
     let mut rows = Vec::new();
     for collection in user_collection_names(db) {
         rows.push(virtual_row([
-            ("table_catalog", SqlValue::String("bicdb".to_string())),
+            ("table_catalog", crate::search_path::current_catalog_value()),
             (
                 "table_schema",
                 SqlValue::String(relation_catalog_namespace(db, &collection)?),
@@ -6680,7 +6680,7 @@ pub(crate) fn information_schema_tables(db: &BicDb) -> Result<Vec<BTreeMap<Strin
     }
     for view in list_views(db)? {
         rows.push(virtual_row([
-            ("table_catalog", SqlValue::String("bicdb".to_string())),
+            ("table_catalog", crate::search_path::current_catalog_value()),
             (
                 "table_schema",
                 SqlValue::String(relation_catalog_namespace(db, &view.name)?),
@@ -6694,7 +6694,7 @@ pub(crate) fn information_schema_tables(db: &BicDb) -> Result<Vec<BTreeMap<Strin
     }
     for table in graph_virtual_table_names() {
         rows.push(virtual_row([
-            ("table_catalog", SqlValue::String("bicdb".to_string())),
+            ("table_catalog", crate::search_path::current_catalog_value()),
             ("table_schema", SqlValue::String("public".to_string())),
             ("table_name", SqlValue::String(table.to_string())),
             ("table_type", SqlValue::String("VIEW".to_string())),
@@ -6727,7 +6727,7 @@ pub(crate) fn information_schema_views(db: &BicDb) -> Result<Vec<BTreeMap<String
             SqlValue::String(if handled { "YES" } else { "NO" }.to_string())
         };
         rows.push(virtual_row([
-            ("table_catalog", SqlValue::String("bicdb".to_string())),
+            ("table_catalog", crate::search_path::current_catalog_value()),
             (
                 "table_schema",
                 SqlValue::String(relation_catalog_namespace(db, &view.name)?),
@@ -6900,7 +6900,10 @@ pub(crate) fn information_schema_triggers(db: &BicDb) -> Result<Vec<BTreeMap<Str
         };
         order = if same_partition { order + 1 } else { 1 };
         rows.push(virtual_row([
-            ("trigger_catalog", SqlValue::String("bicdb".to_string())),
+            (
+                "trigger_catalog",
+                crate::search_path::current_catalog_value(),
+            ),
             ("trigger_schema", SqlValue::String(entry.schema.clone())),
             ("trigger_name", SqlValue::String(entry.name.clone())),
             (
@@ -6909,7 +6912,7 @@ pub(crate) fn information_schema_triggers(db: &BicDb) -> Result<Vec<BTreeMap<Str
             ),
             (
                 "event_object_catalog",
-                SqlValue::String("bicdb".to_string()),
+                crate::search_path::current_catalog_value(),
             ),
             (
                 "event_object_schema",
@@ -7036,7 +7039,10 @@ pub(crate) fn information_schema_domains(db: &BicDb) -> Result<Vec<BTreeMap<Stri
         let (numeric_precision, numeric_precision_radix, numeric_scale) =
             information_schema_numeric_metadata(type_modifier.as_ref());
         rows.push(virtual_row([
-            ("domain_catalog", SqlValue::String("bicdb".to_string())),
+            (
+                "domain_catalog",
+                crate::search_path::current_catalog_value(),
+            ),
             ("domain_schema", SqlValue::String(user_type.schema_name)),
             ("domain_name", SqlValue::String(user_type.name)),
             ("data_type", SqlValue::String(data_type)),
@@ -7049,7 +7055,7 @@ pub(crate) fn information_schema_domains(db: &BicDb) -> Result<Vec<BTreeMap<Stri
                 "collation_catalog",
                 collation
                     .as_ref()
-                    .map(|_| SqlValue::String("bicdb".to_string()))
+                    .map(|_| crate::search_path::current_catalog_value())
                     .unwrap_or(SqlValue::Null),
             ),
             (
@@ -7079,7 +7085,7 @@ pub(crate) fn information_schema_domains(db: &BicDb) -> Result<Vec<BTreeMap<Stri
                     .map(SqlValue::String)
                     .unwrap_or(SqlValue::Null),
             ),
-            ("udt_catalog", SqlValue::String("bicdb".to_string())),
+            ("udt_catalog", crate::search_path::current_catalog_value()),
             ("udt_schema", SqlValue::String(udt_schema)),
             ("udt_name", SqlValue::String(udt_name)),
             ("scope_catalog", SqlValue::Null),
@@ -7126,7 +7132,10 @@ pub(crate) fn information_schema_element_types(
             };
             let identifier = (index + 1).to_string();
             rows.push(virtual_row([
-                ("object_catalog", SqlValue::String("bicdb".to_string())),
+                (
+                    "object_catalog",
+                    crate::search_path::current_catalog_value(),
+                ),
                 (
                     "object_schema",
                     SqlValue::String(schema.schema_name.clone()),
@@ -7138,7 +7147,7 @@ pub(crate) fn information_schema_element_types(
                     SqlValue::String(identifier.clone()),
                 ),
                 ("data_type", SqlValue::String(data_type)),
-                ("udt_catalog", SqlValue::String("bicdb".to_string())),
+                ("udt_catalog", crate::search_path::current_catalog_value()),
                 ("udt_schema", SqlValue::String(udt_schema)),
                 ("udt_name", SqlValue::String(udt_name)),
                 ("dtd_identifier", SqlValue::String(format!("a{identifier}"))),
@@ -7158,7 +7167,7 @@ pub(crate) fn information_schema_user_defined_types(
             virtual_row([
                 (
                     "user_defined_type_catalog",
-                    SqlValue::String("bicdb".to_string()),
+                    crate::search_path::current_catalog_value(),
                 ),
                 (
                     "user_defined_type_schema",
@@ -7221,10 +7230,16 @@ pub(crate) fn information_schema_routines(db: &BicDb) -> Result<Vec<BTreeMap<Str
             )
         };
         rows.push(virtual_row([
-            ("specific_catalog", SqlValue::String("bicdb".to_string())),
+            (
+                "specific_catalog",
+                crate::search_path::current_catalog_value(),
+            ),
             ("specific_schema", SqlValue::String(schema_name.clone())),
             ("specific_name", SqlValue::String(specific_name)),
-            ("routine_catalog", SqlValue::String("bicdb".to_string())),
+            (
+                "routine_catalog",
+                crate::search_path::current_catalog_value(),
+            ),
             ("routine_schema", SqlValue::String(schema_name)),
             ("routine_name", SqlValue::String(routine_name)),
             (
@@ -7237,7 +7252,7 @@ pub(crate) fn information_schema_routines(db: &BicDb) -> Result<Vec<BTreeMap<Str
                 if procedure {
                     SqlValue::Null
                 } else {
-                    SqlValue::String("bicdb".to_string())
+                    crate::search_path::current_catalog_value()
                 },
             ),
             ("type_udt_schema", udt_schema),
@@ -7299,7 +7314,10 @@ pub(crate) fn information_schema_parameters(db: &BicDb) -> Result<Vec<BTreeMap<S
             };
             let identifier = (index + 1).to_string();
             rows.push(virtual_row([
-                ("specific_catalog", SqlValue::String("bicdb".to_string())),
+                (
+                    "specific_catalog",
+                    crate::search_path::current_catalog_value(),
+                ),
                 ("specific_schema", SqlValue::String(schema_name.clone())),
                 ("specific_name", SqlValue::String(specific_name.clone())),
                 ("ordinal_position", SqlValue::Int((index + 1) as i64)),
@@ -7318,7 +7336,7 @@ pub(crate) fn information_schema_parameters(db: &BicDb) -> Result<Vec<BTreeMap<S
                         .unwrap_or(SqlValue::Null),
                 ),
                 ("data_type", SqlValue::String(data_type)),
-                ("udt_catalog", SqlValue::String("bicdb".to_string())),
+                ("udt_catalog", crate::search_path::current_catalog_value()),
                 ("udt_schema", SqlValue::String(udt_schema)),
                 ("udt_name", SqlValue::String(udt_name)),
                 ("parameter_default", SqlValue::Null),
@@ -7388,7 +7406,7 @@ pub(crate) fn information_schema_columns_filtered(
                 .unwrap_or(SqlValue::Null);
             let explicit_collation = column.collation.clone();
             rows.push(virtual_row([
-                ("table_catalog", SqlValue::String("bicdb".to_string())),
+                ("table_catalog", crate::search_path::current_catalog_value()),
                 ("table_schema", SqlValue::String(namespace.clone())),
                 (
                     "table_name",
@@ -7401,7 +7419,7 @@ pub(crate) fn information_schema_columns_filtered(
                     "domain_catalog",
                     domain
                         .as_ref()
-                        .map(|_| SqlValue::String("bicdb".to_string()))
+                        .map(|_| crate::search_path::current_catalog_value())
                         .unwrap_or(SqlValue::Null),
                 ),
                 (
@@ -7418,7 +7436,7 @@ pub(crate) fn information_schema_columns_filtered(
                         .map(|(_, name)| SqlValue::String(name.clone()))
                         .unwrap_or(SqlValue::Null),
                 ),
-                ("udt_catalog", SqlValue::String("bicdb".to_string())),
+                ("udt_catalog", crate::search_path::current_catalog_value()),
                 ("udt_schema", SqlValue::String(udt_schema)),
                 ("udt_name", SqlValue::String(udt_name)),
                 ("dtd_identifier", SqlValue::String((idx + 1).to_string())),
@@ -7454,7 +7472,7 @@ pub(crate) fn information_schema_columns_filtered(
                     "collation_catalog",
                     explicit_collation
                         .as_ref()
-                        .map(|_| SqlValue::String("bicdb".to_string()))
+                        .map(|_| crate::search_path::current_catalog_value())
                         .unwrap_or(SqlValue::Null),
                 ),
                 (
@@ -7582,7 +7600,7 @@ pub(crate) fn information_schema_columns_filtered(
                 .map(SqlValue::Int)
                 .unwrap_or(SqlValue::Null);
             rows.push(virtual_row([
-                ("table_catalog", SqlValue::String("bicdb".to_string())),
+                ("table_catalog", crate::search_path::current_catalog_value()),
                 ("table_schema", SqlValue::String(namespace.clone())),
                 (
                     "table_name",
@@ -7595,7 +7613,7 @@ pub(crate) fn information_schema_columns_filtered(
                     "domain_catalog",
                     domain
                         .as_ref()
-                        .map(|_| SqlValue::String("bicdb".to_string()))
+                        .map(|_| crate::search_path::current_catalog_value())
                         .unwrap_or(SqlValue::Null),
                 ),
                 (
@@ -7612,7 +7630,7 @@ pub(crate) fn information_schema_columns_filtered(
                         .map(|(_, name)| SqlValue::String(name.clone()))
                         .unwrap_or(SqlValue::Null),
                 ),
-                ("udt_catalog", SqlValue::String("bicdb".to_string())),
+                ("udt_catalog", crate::search_path::current_catalog_value()),
                 ("udt_schema", SqlValue::String(udt_schema)),
                 ("udt_name", SqlValue::String(udt_name)),
                 ("dtd_identifier", SqlValue::String((idx + 1).to_string())),
@@ -7664,7 +7682,7 @@ pub(crate) fn information_schema_columns_filtered(
                 .map(SqlValue::Int)
                 .unwrap_or(SqlValue::Null);
             rows.push(virtual_row([
-                ("table_catalog", SqlValue::String("bicdb".to_string())),
+                ("table_catalog", crate::search_path::current_catalog_value()),
                 ("table_schema", SqlValue::String("public".to_string())),
                 ("table_name", SqlValue::String(table.to_string())),
                 ("column_name", SqlValue::String(column.name)),
@@ -7673,7 +7691,7 @@ pub(crate) fn information_schema_columns_filtered(
                 ("domain_catalog", SqlValue::Null),
                 ("domain_schema", SqlValue::Null),
                 ("domain_name", SqlValue::Null),
-                ("udt_catalog", SqlValue::String("bicdb".to_string())),
+                ("udt_catalog", crate::search_path::current_catalog_value()),
                 ("udt_schema", SqlValue::String(udt_schema)),
                 ("udt_name", SqlValue::String(udt_name)),
                 ("dtd_identifier", SqlValue::String((idx + 1).to_string())),

@@ -3847,7 +3847,7 @@ pub(crate) fn information_schema_role_table_grants(
             Ok(virtual_row([
                 ("grantor", SqlValue::String(grantor)),
                 ("grantee", SqlValue::String(grantee)),
-                ("table_catalog", SqlValue::String("bicdb".to_string())),
+                ("table_catalog", crate::search_path::current_catalog_value()),
                 (
                     "table_schema",
                     SqlValue::String(relation_catalog_namespace(db, &relation)?),

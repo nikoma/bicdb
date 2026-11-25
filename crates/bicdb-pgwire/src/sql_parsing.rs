@@ -270,6 +270,55 @@ pub(crate) fn advisory_integer_expr(expr: &Expr) -> Result<Option<i64>> {
     }
 }
 
+/// The transaction modes of a normalized `BEGIN` / `START TRANSACTION`
+/// (`read only`, `isolation level ...`), or `None` when it names none.
+pub(crate) fn nested_begin_modes(normalized: &str) -> Option<&str> {
+    let statement = normalized.trim().trim_end_matches(';').trim_end();
+    let modes = if let Some(rest) = statement.strip_prefix("start transaction") {
+        rest
+    } else {
+        let rest = statement.strip_prefix("begin")?;
+        let rest = rest.trim_start();
+        rest.strip_prefix("transaction")
+            .or_else(|| rest.strip_prefix("work"))
+            .unwrap_or(rest)
+    };
+    let modes = modes.trim();
+    (!modes.is_empty()).then_some(modes)
+}
+
+/// The session's `statement_timeout` as a duration; `None` when unset or 0
+/// (disabled). A bare number is milliseconds, as in PostgreSQL; the units
+/// us, ms, s, min, h and d are accepted.
+pub(crate) fn session_statement_timeout(
+    gucs: &std::collections::HashMap<String, String>,
+) -> Option<Duration> {
+    parse_timeout_setting(gucs.get("statement_timeout")?)
+}
+
+pub(crate) fn parse_timeout_setting(value: &str) -> Option<Duration> {
+    let value = value.trim().trim_matches('\'').trim();
+    let split = value
+        .find(|ch: char| !(ch.is_ascii_digit() || ch == '.'))
+        .unwrap_or(value.len());
+    let (number, unit) = value.split_at(split);
+    let number = number.parse::<f64>().ok()?;
+    let millis_per_unit = match unit.trim().to_ascii_lowercase().as_str() {
+        "" | "ms" => 1.0,
+        "us" => 0.001,
+        "s" => 1_000.0,
+        "min" => 60_000.0,
+        "h" => 3_600_000.0,
+        "d" => 86_400_000.0,
+        _ => return None,
+    };
+    let millis = number * millis_per_unit;
+    if !millis.is_finite() || millis <= 0.0 {
+        return None;
+    }
+    Some(Duration::from_secs_f64(millis / 1_000.0))
+}
+
 pub(crate) fn parse_pg_sleep(sql: &str) -> Option<Duration> {
     parse_pg_sleep_normalized(&normalize_executable_sql(sql))
 }
@@ -534,6 +583,7 @@ pub(crate) fn clear_open_transaction_state(server: &PgWireServer, state: &mut Co
     state.tx_write_tables.clear();
     state.tx_notifications.clear();
     state.savepoints.clear();
+    crate::sql_cursors::close_transaction_cursors(state);
 }
 
 pub(crate) fn rollback_transaction_ddl_to_len(

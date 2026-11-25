@@ -26,7 +26,10 @@ pub(crate) fn information_schema_check_constraints(
                         return None;
                     };
                     Some(virtual_row([
-                        ("constraint_catalog", SqlValue::String("bicdb".to_string())),
+                        (
+                            "constraint_catalog",
+                            crate::search_path::current_catalog_value(),
+                        ),
                         (
                             "constraint_schema",
                             SqlValue::String(schema.schema_name.clone()),
@@ -45,14 +48,17 @@ pub(crate) fn constraint_column_usage_row(
     column: &str,
 ) -> BTreeMap<String, SqlValue> {
     virtual_row([
-        ("table_catalog", SqlValue::String("bicdb".to_string())),
+        ("table_catalog", crate::search_path::current_catalog_value()),
         ("table_schema", SqlValue::String(schema.schema_name.clone())),
         (
             "table_name",
             SqlValue::String(catalog_display_name(&schema.name)),
         ),
         ("column_name", SqlValue::String(column.to_string())),
-        ("constraint_catalog", SqlValue::String("bicdb".to_string())),
+        (
+            "constraint_catalog",
+            crate::search_path::current_catalog_value(),
+        ),
         (
             "constraint_schema",
             SqlValue::String(schema.schema_name.clone()),
@@ -357,13 +363,16 @@ pub(crate) fn table_constraint_row(
     }
     .unwrap_or((false, false));
     virtual_row([
-        ("constraint_catalog", SqlValue::String("bicdb".to_string())),
+        (
+            "constraint_catalog",
+            crate::search_path::current_catalog_value(),
+        ),
         (
             "constraint_schema",
             SqlValue::String(schema.schema_name.clone()),
         ),
         ("constraint_name", SqlValue::String(name.to_string())),
-        ("table_catalog", SqlValue::String("bicdb".into())),
+        ("table_catalog", crate::search_path::current_catalog_value()),
         ("table_schema", SqlValue::String(schema.schema_name.clone())),
         (
             "table_name",
@@ -424,13 +433,16 @@ pub(crate) fn key_column_usage_row(
     ordinal: i64,
 ) -> BTreeMap<String, SqlValue> {
     virtual_row([
-        ("constraint_catalog", SqlValue::String("bicdb".to_string())),
+        (
+            "constraint_catalog",
+            crate::search_path::current_catalog_value(),
+        ),
         (
             "constraint_schema",
             SqlValue::String(schema.schema_name.clone()),
         ),
         ("constraint_name", SqlValue::String(constraint.to_string())),
-        ("table_catalog", SqlValue::String("bicdb".to_string())),
+        ("table_catalog", crate::search_path::current_catalog_value()),
         ("table_schema", SqlValue::String(schema.schema_name.clone())),
         (
             "table_name",
@@ -456,7 +468,10 @@ pub(crate) fn information_schema_sequences(db: &BicDb) -> Result<Vec<BTreeMap<St
             continue;
         }
         rows.push(virtual_row([
-            ("sequence_catalog", SqlValue::String("bicdb".to_string())),
+            (
+                "sequence_catalog",
+                crate::search_path::current_catalog_value(),
+            ),
             (
                 "sequence_schema",
                 SqlValue::String(sequence_catalog_namespace(db, &sequence.name)?),
@@ -1126,9 +1141,18 @@ pub(crate) fn catalog_relkind_matches(kinds: Option<&BTreeSet<String>>, relkind:
     })
 }
 
+/// `pg_class.reltuples`: the ANALYZE row count, or, for a table never
+/// analyzed, the storage layer's cheap row-count estimate. PostgreSQL keeps
+/// this current through autovacuum, and applications read it as a fast
+/// estimate of a table's size (`frappe.db.estimate_count`).
 pub(crate) fn reltuples_for_relation(db: &BicDb, relation: &str, _exact: bool) -> f64 {
     db.table_statistics(relation)
         .map(|stats| stats.row_count as f64)
+        .or_else(|| {
+            db.estimated_record_count(relation)
+                .ok()
+                .map(|count| count as f64)
+        })
         .unwrap_or(0.0)
 }
 
@@ -7582,7 +7606,10 @@ pub(crate) fn primary_key_values_from_record_id(
                     table: schema.name.clone(),
                     column: column.clone(),
                 })?;
-            cast_value_to_pg_type(SqlValue::String(cell), &column_schema.pg_type)
+            cast_value_to_pg_type(
+                SqlValue::String(primary_key_cell_text(&cell).to_string()),
+                &column_schema.pg_type,
+            )
         })
         .collect::<Result<Vec<_>>>()?;
     Ok(Some(values))
@@ -8236,7 +8263,7 @@ pub(crate) fn information_schema_schemata(db: &BicDb) -> Result<Vec<BTreeMap<Str
         .into_iter()
         .map(|n| {
             virtual_row([
-                ("catalog_name", SqlValue::String("bicdb".into())),
+                ("catalog_name", crate::search_path::current_catalog_value()),
                 ("schema_name", SqlValue::String(n.name)),
                 ("schema_owner", SqlValue::String(n.owner)),
                 ("default_character_set_catalog", SqlValue::Null),

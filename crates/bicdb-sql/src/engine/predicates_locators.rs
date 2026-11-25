@@ -1767,7 +1767,52 @@ impl<'db> SqlEngine<'db> {
         if located.is_some() {
             return Ok(located);
         }
+        if let Some(pks) = self.secondary_in_list_record_ids(table, schema, selection)? {
+            return Ok(Some(RecordLocators::Pks(pks)));
+        }
         self.or_union_locators(table, alias, schema, selection)
+    }
+
+    /// A conjunct `col IN (a, b, ...)` of constants on the leading column of
+    /// a B-tree index: the union of one index lookup per value, instead of a
+    /// full scan re-evaluating the list on every row. The caller still applies
+    /// the whole WHERE to the rows found.
+    fn secondary_in_list_record_ids(
+        &self,
+        table: &str,
+        schema: Option<&TableSchema>,
+        selection: &Expr,
+    ) -> Result<Option<Vec<String>>> {
+        const MAX_IN_LIST_LOOKUPS: usize = 1024;
+        if self.tx.is_some_and(|tx| tx.has_pending_writes(table)) {
+            return Ok(None);
+        }
+        for index in sql_index_definitions_for_collection(self.db_ref(), table) {
+            if index.kind != IndexKind::BTree || is_unusable_typed_primary_key_index(schema, &index)
+            {
+                continue;
+            }
+            let Some(field @ IndexField::MetadataPath(_)) = index.fields.first() else {
+                continue;
+            };
+            let Some(values) = in_list_values(selection, field, MAX_IN_LIST_LOOKUPS)? else {
+                continue;
+            };
+            let mut ids = BTreeSet::new();
+            for value in values {
+                let value = match schema {
+                    Some(schema) => typed_index_predicate_value(schema, field, value)?,
+                    None => value,
+                };
+                ids.extend(
+                    self.lookup_index_cached(&index.name, std::slice::from_ref(&value))?
+                        .iter()
+                        .cloned(),
+                );
+            }
+            return Ok(Some(ids.into_iter().collect()));
+        }
+        Ok(None)
     }
 
     /// A conjunct `a OR b OR ..` whose every branch narrows the table by key

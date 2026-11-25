@@ -34,6 +34,17 @@ where
         return eval_bytea_function_value("substring", &args, Some(&arg_types))?
             .ok_or_else(|| SqlError::undefined_function("bytea substring overload is missing"));
     }
+    // `substring(text FROM pattern)` / `substring(text, pattern)` with a text
+    // pattern is the POSIX regular-expression form. Integer-looking text keeps
+    // the positional meaning for clients that send numbers as strings.
+    if let [source, SqlValue::String(pattern)] = args.as_slice() {
+        if pattern.trim().parse::<i64>().is_err() {
+            if matches!(source, SqlValue::Null) {
+                return Ok(SqlValue::Null);
+            }
+            return crate::pg_scalar_extra::regex_substring(&source.to_cell(), pattern);
+        }
+    }
     substr_value(&args)
 }
 

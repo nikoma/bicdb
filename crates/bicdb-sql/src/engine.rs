@@ -3381,6 +3381,12 @@ pub(crate) enum PlanKind {
         index_name: String,
         prefix: Vec<IndexValue>,
     },
+    /// `col IN (a, b, ...)` on an index's leading column: one single-key
+    /// prefix lookup per distinct value.
+    IndexInLookup {
+        index_name: String,
+        keys: Vec<IndexValue>,
+    },
     /// Runtime policy InitPlans stay unevaluated during EXPLAIN/costing.
     DeferredIndexLookup {
         index_name: String,
@@ -3566,6 +3572,10 @@ impl QueryPlan {
             PlanKind::IndexLookup { index_name, prefix } => vec![
                 format!("IndexScan {index_name}"),
                 format!("PrefixKeys {}", prefix.len()),
+            ],
+            PlanKind::IndexInLookup { index_name, keys } => vec![
+                format!("IndexScan {index_name}"),
+                format!("InListKeys {}", keys.len()),
             ],
             PlanKind::DeferredIndexLookup {
                 index_name,
@@ -4804,6 +4814,7 @@ impl<'db> SqlEngine<'db> {
         } else {
             None
         };
+        let _catalog_scope = crate::search_path::CatalogScope::enter(&self.session_gucs);
         let mut profile = SqlProfileScope::new(sql);
         let _schema_cache = SqlSchemaCacheScope::new();
         let result = self.execute_inner(sql);

@@ -231,6 +231,31 @@ pub(crate) fn eval_db_catalog_function_value_with_engine(
                 bicdb_core::unix_micros_to_scn(micros) as i64
             )));
         }
+        // Disk space of the connected database (its data directory). Each
+        // database is its own store, so another database's size is not
+        // visible from here.
+        "pg_database_size" => {
+            require_arg_count(bare_name, args, 1)?;
+            match &args[0] {
+                SqlValue::Null => return Ok(Some(SqlValue::Null)),
+                SqlValue::String(requested) => {
+                    let current = session_gucs
+                        .map(current_database_from_gucs)
+                        .unwrap_or_else(|| "bicdb".to_string());
+                    if *requested != current {
+                        return Err(SqlError::data_exception(
+                            "3D000",
+                            format!("database \"{requested}\" does not exist"),
+                            None,
+                        ));
+                    }
+                }
+                _ => {}
+            }
+            return Ok(Some(SqlValue::Int(
+                i64::try_from(directory_size_bytes(db.data_path())).unwrap_or(i64::MAX),
+            )));
+        }
         _ => {}
     }
     match name {
@@ -2449,6 +2474,29 @@ pub(crate) fn postgres_regex_replacement(value: &str) -> String {
         }
     }
     replacement
+}
+
+/// Bytes stored below `path` (files of nested directories included; symbolic
+/// links are not followed). Unreadable entries count as empty.
+pub(crate) fn directory_size_bytes(path: &std::path::Path) -> u64 {
+    let mut total = 0u64;
+    let mut pending = vec![path.to_path_buf()];
+    while let Some(directory) = pending.pop() {
+        let Ok(entries) = std::fs::read_dir(&directory) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let Ok(metadata) = entry.metadata() else {
+                continue;
+            };
+            if metadata.is_dir() {
+                pending.push(entry.path());
+            } else if metadata.is_file() {
+                total = total.saturating_add(metadata.len());
+            }
+        }
+    }
+    total
 }
 
 pub(crate) fn current_database_from_gucs(session_gucs: &HashMap<String, String>) -> String {

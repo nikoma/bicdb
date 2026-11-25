@@ -396,6 +396,25 @@ fn trim_chars(text: &str, set: &str, left: bool, right: bool) -> String {
     out.to_string()
 }
 
+/// PostgreSQL `substring(string FROM pattern)`: the text matched by the first
+/// parenthesized subexpression when the pattern has one, else the whole match;
+/// NULL when nothing matches.
+pub(crate) fn regex_substring(source: &str, pattern: &str) -> Result<SqlValue> {
+    crate::schema_meta::reject_oversized_regex(pattern)?;
+    let regex = pg_regex(pattern, "")?;
+    Ok(match regex.captures(source) {
+        None => SqlValue::Null,
+        Some(captures) => {
+            let group = if captures.len() > 1 {
+                captures.get(1)
+            } else {
+                captures.get(0)
+            };
+            group.map_or(SqlValue::Null, |m| SqlValue::String(m.as_str().to_string()))
+        }
+    })
+}
+
 fn pg_regex(pattern: &str, flags: &str) -> Result<regex::Regex> {
     let mut builder = RegexBuilder::new(pattern);
     for flag in flags.chars() {
@@ -666,6 +685,7 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             | "make_interval"
             | "date_bin"
             | "to_date"
+            | "date"
             | "bicdb_oracle_to_date"
             | "bicdb_oracle_trunc_date"
             | "bicdb_oracle_plsql_trunc_date"
@@ -1129,6 +1149,12 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
                     .map_err(|error| postgres_timestamp_input_error(&text(0), error))?
                     .to_iso_text(false),
             )
+        }
+        // `date(timestamp)` / `date(timestamptz)` / `date(text)`: the
+        // pg_catalog function spelling of `CAST(x AS date)`.
+        "date" => {
+            arity(name, args, 1..=1)?;
+            crate::eval::cast_value(args[0].clone(), &DataType::Date)?
         }
         "to_date" => {
             arity(name, args, 2..=2)?;

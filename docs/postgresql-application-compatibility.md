@@ -53,6 +53,15 @@ requests. The report lists the generic SQL/catalog/constraint defects exposed by
 the campaign and their regression tests. This is a tested application workload;
 it does not imply unrestricted compatibility with other Rails applications.
 
+## Frappe Framework v16 qualification (2026-11)
+
+The [Frappe Framework](frappe-compatibility.md) runs in its PostgreSQL mode
+(`bench new-site --db-type postgres`, psycopg2) against a BicDB cluster with
+SCRAM authentication: site creation, login, document CRUD, custom DocTypes
+created through the REST API, and a slice of Frappe's own test suite, checked
+by `.github/workflows/frappe.yml`. The page lists the engine fixes, the test
+results and the remaining gaps.
+
 ## Routine row-count expressions
 
 PL/pgSQL named variables and positional parameters in LIMIT/OFFSET are bound

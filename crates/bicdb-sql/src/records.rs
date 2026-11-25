@@ -1785,6 +1785,27 @@ fn record_id_from_primary_key_values(
         .map_err(SqlError::from)
 }
 
+/// Record-id cell of the empty text key. Record ids cannot be empty, and
+/// PostgreSQL text cannot contain NUL, so no other key maps to this cell; it
+/// also sorts before every other cell, as `''` sorts before every string.
+pub(crate) const EMPTY_TEXT_KEY_CELL: &str = "\u{0}";
+
+/// The key text a record-id cell stands for (the inverse of the empty-key
+/// mapping in [`primary_key_identity_cell`]).
+pub(crate) fn primary_key_cell_text(cell: &str) -> &str {
+    if cell == EMPTY_TEXT_KEY_CELL {
+        ""
+    } else {
+        cell
+    }
+}
+
+/// Whether a key value is the empty text key, whose record-id cell is not the
+/// value itself: such rows keep the key in their metadata as well.
+pub(crate) fn is_empty_text_key(value: &SqlValue) -> bool {
+    matches!(value, SqlValue::String(text) if text.is_empty())
+}
+
 pub(crate) fn primary_key_identity_cell(
     schema: &TableSchema,
     column: &str,
@@ -1797,6 +1818,9 @@ pub(crate) fn primary_key_identity_cell(
             column: column.to_string(),
         })?;
     if !pg_type_requires_typed_identity(&column_schema.pg_type) {
+        if is_empty_text_key(value) {
+            return Ok(EMPTY_TEXT_KEY_CELL.to_string());
+        }
         return Ok(value.to_cell());
     }
     column_typed_index_label(column_schema, value)
@@ -2998,8 +3022,8 @@ pub(crate) fn json_value_for_key_case_insensitive<'a>(
 }
 
 pub(crate) fn cast_primary_key_record_id(record: &Record, pg_type: &str) -> SqlValue {
-    cast_value_to_pg_type(SqlValue::String(record.id.clone()), pg_type)
-        .unwrap_or_else(|_| SqlValue::String(record.id.clone()))
+    let key = primary_key_cell_text(&record.id).to_string();
+    cast_value_to_pg_type(SqlValue::String(key.clone()), pg_type).unwrap_or(SqlValue::String(key))
 }
 
 pub(crate) fn rls_allows_record_with_schema(

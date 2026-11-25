@@ -343,14 +343,30 @@ impl<'db> SqlSession<'db> {
         };
         let intent_sequence = super::recycle_bin_journal::prepare(self.db_mut()?, &entry)?;
         super::recycle_bin_journal::stage("intent");
-        let renamed = self.rename_recycle_collection(table, &bin_name);
-        match renamed {
-            Ok(()) => {}
-            Err(SqlError::BicDb(BicDbError::Unsupported(_))) => {
+        if let Err(error) = self.rename_recycle_collection(table, &bin_name) {
+            // The rename did not happen: withdraw the intent, or startup
+            // recovery later finds an undecided move it cannot resolve.
+            let collections = self.db_ref().collections();
+            if collections.iter().any(|meta| meta.name == table)
+                && !collections.iter().any(|meta| meta.name == bin_name)
+            {
                 super::recycle_bin_journal::clear(self.db_mut()?, &bin_name)?;
-                return Ok(false);
             }
-            Err(error) => return Err(error),
+            // A pending transaction elsewhere (even one that never touched
+            // this table) blocks moving the storage; PostgreSQL's DROP TABLE
+            // does not wait for it, so drop permanently instead. Not when this
+            // transaction has written the table: its buffered rows must stay
+            // bound to the kept backing, and a permanent drop would make its
+            // COMMIT fail after the table is already gone.
+            let own_writes = self
+                .tx
+                .as_ref()
+                .is_some_and(|tx| tx.has_pending_writes(table));
+            return match error {
+                SqlError::BicDb(BicDbError::Unsupported(_)) => Ok(false),
+                SqlError::BicDb(BicDbError::TransactionConflict(_)) if !own_writes => Ok(false),
+                error => Err(error),
+            };
         }
         super::recycle_bin_journal::stage("collection");
         let mut indexes = Vec::with_capacity(index_names.len());

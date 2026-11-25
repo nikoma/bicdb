@@ -27,6 +27,7 @@ pub use distribution_controller::BalancedDistributionHostService;
 mod high_availability;
 pub use embedded_ha::{EmbeddedHaDatabase, HaWriterLease};
 mod live_queries;
+mod sql_cursors;
 pub use live_queries::EmbeddedSubscription;
 mod backups;
 mod log_archive;
@@ -3119,6 +3120,8 @@ struct ConnectionState {
     active_request_bytes: usize,
     prepared: FxHashMap<String, PreparedStatement>,
     portals: FxHashMap<String, Portal>,
+    /// SQL-level cursors (DECLARE/FETCH/CLOSE) open on this connection.
+    sql_cursors: FxHashMap<String, sql_cursors::SqlCursor>,
     session_state: SqlSessionGucState,
     reported_interval_style: String,
     reported_time_zone: String,
@@ -3245,6 +3248,7 @@ impl ConnectionState {
             active_request_bytes: 0,
             prepared: FxHashMap::default(),
             portals: FxHashMap::default(),
+            sql_cursors: FxHashMap::default(),
             session_state: SqlSessionGucState::from_session_gucs(session_gucs),
             reported_interval_style: "postgres".into(),
             reported_time_zone: "UTC".into(),
@@ -4822,6 +4826,9 @@ fn execute_server_sql_with_options_normalized(
     {
         delegation::validate_delegation(server, state)?;
     }
+    if let Some(result) = sql_cursors::execute(server, state, sql, normalized)? {
+        return Ok(result);
+    }
     let server_status_query = is_server_status_query_normalized(normalized);
     let pin_under_execution_admission =
         state.session_state.transaction_is_serializable() && !server_status_query;
@@ -4932,7 +4939,13 @@ fn execute_server_sql_with_options_normalized(
     state.last_query_at = Some(unix_timestamp());
 
     let started = Instant::now();
-    let deadline = (!role_permit.timeout.is_zero()).then(|| Instant::now() + role_permit.timeout);
+    // The session's statement_timeout (SET [LOCAL] statement_timeout) bounds
+    // the statement together with the server/role limit; the shorter wins.
+    let timeout = match session_statement_timeout(state.session_state.session_gucs()) {
+        Some(session) if role_permit.timeout.is_zero() || session < role_permit.timeout => session,
+        _ => role_permit.timeout,
+    };
+    let deadline = (!timeout.is_zero()).then(|| Instant::now() + timeout);
     let cancellation = CancellationToken::new(state.cancel_token.clone(), deadline)
         .with_wait_admission(_permit.observer());
     let transaction_control = if is_transaction_control_candidate(normalized) {
@@ -4957,7 +4970,35 @@ fn execute_server_sql_with_options_normalized(
                 bicdb_sql::postgres_execution_requires_snapshot(sql)
             })?;
         }
-        if transaction_control == Some(Some(TransactionControl::Begin)) {
+        if transaction_control == Some(Some(TransactionControl::Begin)) && state.in_transaction {
+            // PostgreSQL: BEGIN inside a transaction block warns and keeps the
+            // block, but still applies its modes as SET TRANSACTION would
+            // (`START TRANSACTION READ ONLY` makes the open block read-only).
+            if state.failed_transaction {
+                return Err(PgWireError::InFailedTransaction);
+            }
+            if let Some(modes) = nested_begin_modes(normalized) {
+                let set_sql = format!("set transaction {modes}");
+                let set_normalized = normalize_executable_sql(&set_sql);
+                execute_server_transaction_sql(
+                    server,
+                    state,
+                    &set_sql,
+                    &set_normalized,
+                    &cancellation,
+                )?;
+                state.tx_fixed_snapshot = state.tx.as_ref().is_some_and(|tx| {
+                    tx.isolation() != bicdb_core::TransactionIsolation::ReadCommitted
+                });
+            }
+            let mut result = SqlResult::command("BEGIN");
+            result.notices.push(bicdb_sql::SqlNotice {
+                sqlstate: "25001".to_string(),
+                message: "there is already a transaction in progress".to_string(),
+                fields: Vec::new(),
+            });
+            Ok(result)
+        } else if transaction_control == Some(Some(TransactionControl::Begin)) {
             let deferrable = if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile) {
                 None
             } else {

@@ -868,7 +868,7 @@ impl<'db> SqlSession<'db> {
             }
         }
         self.in_routine_expression = previous;
-        result
+        result.map(|result| with_cast_type_modifiers(result, query))
     }
 
     /// `SELECT f(..) FROM one_relation [WHERE ..]` where `f` modifies data:
@@ -2994,4 +2994,39 @@ fn is_native_extension_function(name: &str) -> bool {
             | "uuid_generate_v4"
             | "similarity"
     )
+}
+
+/// A cast with a type modifier keeps it on its result column, whichever
+/// execution path produced the result.
+fn with_cast_type_modifiers(mut result: SqlResult, query: &Query) -> SqlResult {
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        return result;
+    };
+    if select.projection.len() != result.columns.len() {
+        return result;
+    }
+    let modifiers: Vec<Option<SqlColumnMetadata>> = select
+        .projection
+        .iter()
+        .map(|item| match item {
+            SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => {
+                crate::materialize::cast_column_metadata(expr)
+            }
+            _ => None,
+        })
+        .collect();
+    if modifiers.iter().all(Option::is_none) {
+        return result;
+    }
+    let mut metadata = result.column_metadata.clone();
+    metadata.resize(result.columns.len(), SqlColumnMetadata::default());
+    for (slot, modifier) in metadata.iter_mut().zip(modifiers) {
+        if let Some(modifier) = modifier {
+            if slot.type_modifier < 0 {
+                slot.type_modifier = modifier.type_modifier;
+            }
+        }
+    }
+    result.column_metadata = metadata;
+    result
 }

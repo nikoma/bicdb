@@ -204,6 +204,8 @@ impl<'db> SqlSession<'db> {
         let result = self.execute_with_routine_security(&routine.schema, |session| {
             let mut frame =
                 RoutineFrame::new_with_symbols(&routine.ir.params, &[], &routine.ir.symbol_names)?;
+            frame.context_label = routine.ir.context_label.clone();
+            frame.lines = routine.ir.lines.0.clone();
             frame.oracle_statement_rollback = routine.ir.oracle_statement_rollback;
             frame.oracle_procedural_evaluation = routine.ir.oracle_procedural_evaluation;
             frame.oracle_error_diagnostics = routine.ir.oracle_error_diagnostics.clone();

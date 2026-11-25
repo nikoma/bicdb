@@ -3824,6 +3824,8 @@ impl<'db> SqlEngine<'db> {
         }
         let mut frame =
             RoutineFrame::new_with_symbols(&routine.ir.params, args, &routine.ir.symbol_names)?;
+        frame.context_label = routine.ir.context_label.clone();
+        frame.lines = routine.ir.lines.0.clone();
         let mut session_gucs = (*self.session_gucs).clone();
         if routine.schema.security_definer {
             // No recorded owner -> invoker semantics. Leaving the caller's

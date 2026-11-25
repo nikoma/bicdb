@@ -161,6 +161,20 @@ inside a transaction block both are delivered at commit and discarded on
 rollback, and identical channel/payload pairs of one transaction are delivered
 once. Empty or over-long channel names and payloads of 8000 bytes or more are
 `22023`.
+## Error context
+
+Errors and notices raised inside PL/pgSQL functions, procedures, trigger functions and DO blocks
+carry PostgreSQL's CONTEXT lines (psql prints them for errors): `PL/pgSQL function f(integer) line 4
+at RAISE`, `... at assignment`, `... at SQL statement` preceded by `SQL statement "insert into ..."`
+for an error inside an embedded statement (`SELECT ...` for PERFORM), `... at EXECUTE`, and one line
+per routine on the call chain, innermost first (`PL/pgSQL function inline_code_block line 1 at RAISE`
+for DO). Line numbers count from the first line of the function body; argument types use their SQL
+names (`character`, `integer`). Errors leaving a non-inlined SQL-language function carry
+`SQL function "f" statement N`; a `SELECT expr` function, which PostgreSQL inlines into the calling
+query, carries none. Not yet reported: PostgreSQL's `during inlining` context (an inlined function
+evaluated with constant arguments while planning), the `QUERY:` line and internal position of
+errors in PL/pgSQL expressions, `PL/pgSQL expression "..."`, the text of a failing dynamic `EXECUTE`
+command, and the contexts of errors during declaration initialization and return-value conversion.
 
 ## Migration control flow
 

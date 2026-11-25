@@ -204,6 +204,7 @@ fn bind_namespace_statements(
             | RoutineStmt::Rethrow
             | RoutineStmt::ExitLoop
             | RoutineStmt::Null
+            | RoutineStmt::Line(_)
             | RoutineStmt::FetchCursor { .. }
             | RoutineStmt::CloseCursor { .. }
             | RoutineStmt::ReturnNext
@@ -478,6 +479,7 @@ fn lower_statements(statements: &mut [RoutineStmt], types: &Types) {
             | RoutineStmt::Rethrow
             | RoutineStmt::ExitLoop
             | RoutineStmt::Null
+            | RoutineStmt::Line(_)
             | RoutineStmt::SelectInto { .. }
             | RoutineStmt::Perform { .. }
             | RoutineStmt::Sql(_)

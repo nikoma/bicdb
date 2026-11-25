@@ -527,6 +527,7 @@ impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
                 RoutineStmt::Return(Some(value)) => self.expr(&value.expr, &env, None),
                 RoutineStmt::ContinueLoop
                 | RoutineStmt::Null
+                | RoutineStmt::Line(_)
                 | RoutineStmt::ExitLoop
                 | RoutineStmt::FetchCursor { .. }
                 | RoutineStmt::CloseCursor { .. }

@@ -1879,6 +1879,7 @@ fn statements(
             | RoutineStmt::Rethrow
             | RoutineStmt::ExitLoop
             | RoutineStmt::Null
+            | RoutineStmt::Line(_)
             | RoutineStmt::FetchCursor { .. }
             | RoutineStmt::CloseCursor { .. }
             | RoutineStmt::ReturnNext

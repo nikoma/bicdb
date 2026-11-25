@@ -3329,6 +3329,7 @@ impl<'db> SqlSession<'db> {
             &mut exception_handlers,
             crate::routine_overloads::user_function_names(self.db_ref())?,
         );
+        let lines = routines::extract_routine_lines(&mut statements, &mut exception_handlers);
         let owns_transaction = self.tx.is_none()
             && (routine_declarations_may_write(&declarations)
                 || routine_block_may_write(&statements)
@@ -3344,6 +3345,10 @@ impl<'db> SqlSession<'db> {
         let previous_owned = std::mem::replace(&mut self.ir_owned_statement, false);
         let result = (|| {
             let mut frame = RoutineFrame::new_with_symbols(&[], &[], &symbols)?;
+            if !oracle_block {
+                frame.context_label = Some(Arc::from("PL/pgSQL function inline_code_block"));
+                frame.lines = lines.0.clone();
+            }
             frame.oracle_statement_rollback = oracle_block;
             frame.oracle_procedural_evaluation = oracle_block;
             frame.oracle_error_diagnostics = oracle_error_diagnostics;

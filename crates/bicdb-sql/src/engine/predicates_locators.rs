@@ -5906,6 +5906,8 @@ impl<'db> SqlEngine<'db> {
             &arguments,
             &routine.ir.symbol_names,
         )?;
+        frame.context_label = routine.ir.context_label.clone();
+        frame.lines = routine.ir.lines.0.clone();
         let mut session_gucs = (*self.session_gucs).clone();
         if routine.schema.security_definer {
             // No recorded owner -> invoker semantics, never a superuser.

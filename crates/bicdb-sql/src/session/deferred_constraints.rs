@@ -1,4 +1,5 @@
-//! Named foreign-key timing, transaction-local and validated before commit.
+//! Named foreign-key and unique-constraint timing, transaction-local and
+//! validated before commit.
 use super::*;
 
 #[derive(Clone, Debug)]
@@ -176,8 +177,120 @@ pub(crate) fn parse_constraint_command(sql: &str) -> Result<Option<ConstraintCom
 pub(crate) fn constraint_key(constraint: &ConstraintSchema) -> String {
     match constraint {
         ConstraintSchema::ForeignKey { constraint_id, .. } => constraint_id.clone(),
-        _ => unreachable!("only foreign keys carry deferred identities"),
+        _ => match constraint.unique_deferral() {
+            Some(deferral) => deferral.constraint_id.clone(),
+            None => unreachable!(
+                "only foreign keys and deferrable unique constraints carry deferred identities"
+            ),
+        },
     }
+}
+
+/// Whether the constraint is DEFERRABLE, and so may change timing.
+fn constraint_is_deferrable(constraint: &ConstraintSchema) -> bool {
+    match constraint {
+        ConstraintSchema::ForeignKey { deferrable, .. } => *deferrable,
+        _ => constraint.unique_deferral().is_some(),
+    }
+}
+
+/// Whether the constraint class has transaction-local timing at all.
+fn constraint_has_timing(constraint: &ConstraintSchema) -> bool {
+    matches!(
+        constraint,
+        ConstraintSchema::ForeignKey { .. }
+            | ConstraintSchema::Unique { .. }
+            | ConstraintSchema::UniqueWithNullPolicy { .. }
+    )
+}
+
+pub(crate) fn unique_is_deferred(tx: &Transaction, deferral: &UniqueDeferral) -> bool {
+    tx.constraint_deferred(&deferral.constraint_id)
+        .unwrap_or(deferral.initially_deferred)
+}
+
+pub(crate) fn queue_unique_check(
+    tx: &Transaction,
+    table: &str,
+    deferral: &UniqueDeferral,
+    record_id: &str,
+) {
+    tx.push_deferred_hook(serde_json::json!({"unique_check": {"table": table, "constraint_id": deferral.constraint_id, "record_id": record_id}}));
+}
+
+#[derive(Deserialize)]
+struct UniqueCheck {
+    table: String,
+    constraint_id: String,
+    record_id: String,
+}
+
+fn parse_unique_check(hook: &JsonValue) -> Result<Option<UniqueCheck>> {
+    let Some(check) = hook.get("unique_check") else {
+        return Ok(None);
+    };
+    serde_json::from_value(check.clone())
+        .map(Some)
+        .map_err(|error| SqlError::InvalidSql(format!("malformed deferred unique check: {error}")))
+}
+
+/// Checks the final state of every row queued by deferred unique constraints
+/// (all of them, or only those in `only`), one batch per constraint.
+pub(crate) fn validate_unique_hooks(
+    db: &BicDb,
+    tx: Option<&Transaction>,
+    hooks: &[JsonValue],
+    only: Option<&BTreeSet<String>>,
+) -> Result<()> {
+    let mut pending = BTreeMap::<String, (String, BTreeSet<String>)>::new();
+    for hook in hooks {
+        let Some(check) = parse_unique_check(hook)? else {
+            continue;
+        };
+        if only.is_some_and(|only| !only.contains(&check.constraint_id)) {
+            continue;
+        }
+        pending
+            .entry(check.constraint_id)
+            .or_insert_with(|| (check.table, BTreeSet::new()))
+            .1
+            .insert(check.record_id);
+    }
+    for (constraint_id, (table, record_ids)) in pending {
+        let matches = |schema: &TableSchema| {
+            schema.constraints.iter().any(|constraint| {
+                constraint
+                    .unique_deferral()
+                    .is_some_and(|deferral| deferral.constraint_id == constraint_id)
+            })
+        };
+        let mut schema = load_schema(db, &table)?.filter(|schema| matches(schema));
+        if schema.is_none() {
+            // DDL may rename the relation while checks are pending; a dropped
+            // constraint intentionally has no remaining match.
+            schema = list_schemas(db)?.into_iter().find(|schema| matches(schema));
+        }
+        let Some(schema) = schema else {
+            continue;
+        };
+        let arbiters = unique_arbiters_for_table(db, &schema.name, &schema);
+        let Some(arbiter) = arbiters.iter().find(|arbiter| {
+            arbiter
+                .deferral
+                .as_ref()
+                .is_some_and(|deferral| deferral.constraint_id == constraint_id)
+        }) else {
+            continue;
+        };
+        let mut records = Vec::with_capacity(record_ids.len());
+        for record_id in &record_ids {
+            if let Some(record) = current_integrity_record(db, tx, &schema.name, record_id)? {
+                records.push(record.as_ref().clone());
+            }
+        }
+        validate_unique_arbiter_records(db, tx, &schema.name, &schema, arbiter, &records, true)?;
+    }
+    Ok(())
 }
 
 pub(crate) fn foreign_key_is_deferred(
@@ -387,12 +500,10 @@ impl<'db> SqlSession<'db> {
                                     .filter(|constraint| constraint_name(constraint) == name)
                                 {
                                     matched = true;
-                                    let ConstraintSchema::ForeignKey { deferrable, .. } =
-                                        constraint
-                                    else {
-                                        return Err(SqlError::Unsupported("SET CONSTRAINTS timing is supported only for foreign keys".into()));
-                                    };
-                                    if !*deferrable {
+                                    if !constraint_has_timing(constraint) {
+                                        return Err(SqlError::Unsupported("SET CONSTRAINTS timing is supported only for foreign keys and unique constraints".into()));
+                                    }
+                                    if !constraint_is_deferrable(constraint) {
                                         // PostgreSQL permits an explicit no-op IMMEDIATE;
                                         // Oracle rejects either mode for a non-deferrable FK.
                                         if !deferred
@@ -432,9 +543,8 @@ impl<'db> SqlSession<'db> {
                     }
                     for schema in &schemas {
                         for constraint in &schema.constraints {
-                            if let ConstraintSchema::ForeignKey {
-                                deferrable: true, ..
-                            } = constraint
+                            if constraint_has_timing(constraint)
+                                && constraint_is_deferrable(constraint)
                             {
                                 selected.push(constraint_key(constraint));
                             }
@@ -444,7 +554,9 @@ impl<'db> SqlSession<'db> {
                 if let Some(tx) = self.tx.as_ref() {
                     if !deferred {
                         let selected: BTreeSet<_> = selected.iter().cloned().collect();
-                        for hook in tx.deferred_hooks_snapshot() {
+                        let hooks = tx.deferred_hooks_snapshot();
+                        validate_unique_hooks(self.db_ref(), Some(tx), &hooks, Some(&selected))?;
+                        for hook in hooks {
                             if let Some(check) = hook.get("foreign_key_check") {
                                 let check: ForeignKeyCheck = serde_json::from_value(check.clone())
                                     .map_err(|error| SqlError::InvalidSql(error.to_string()))?;

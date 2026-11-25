@@ -353,6 +353,7 @@ pub(crate) fn alter_table_add_constraint(
 ) -> Result<Option<(String, String)>> {
     if let TableConstraint::PrimaryKey(primary_key) = constraint {
         reject_unsupported_constraint_characteristics(primary_key.characteristics.as_ref())?;
+        reject_deferrable_primary_key(primary_key.characteristics.as_ref())?;
         let columns = simple_index_column_names(&primary_key.columns)?;
         let existing_columns = primary_key_columns_for_schema(schema);
         if !existing_columns.is_empty() {
@@ -392,6 +393,7 @@ pub(crate) fn alter_table_add_constraint(
 
     if let TableConstraint::PrimaryKeyUsingIndex(primary_key) = constraint {
         reject_unsupported_constraint_characteristics(primary_key.characteristics.as_ref())?;
+        reject_deferrable_primary_key(primary_key.characteristics.as_ref())?;
         if not_valid {
             return Err(SqlError::Unsupported(
                 "PRIMARY KEY USING INDEX cannot be marked NOT VALID".to_string(),
@@ -2134,7 +2136,7 @@ pub(crate) fn column_constraints_from_def(
         match &option.option {
             ColumnOption::Unique(unique) => {
                 reject_unsupported_constraint_characteristics(unique.characteristics.as_ref())?;
-                constraints.push(ConstraintSchema::unique(
+                constraints.push(ConstraintSchema::unique_with_deferral(
                     option
                         .name
                         .as_ref()
@@ -2143,7 +2145,11 @@ pub(crate) fn column_constraints_from_def(
                     vec![column_schema.name.clone()],
                     true,
                     UniqueNullPolicy::from_sql(unique.nulls_distinct, default_null_policy),
+                    UniqueDeferral::from_characteristics(unique.characteristics.as_ref()),
                 ));
+            }
+            ColumnOption::PrimaryKey(primary_key) => {
+                reject_deferrable_primary_key(primary_key.characteristics.as_ref())?;
             }
             ColumnOption::Check(check) => constraints.push(ConstraintSchema::Check {
                 name: option
@@ -2208,7 +2214,7 @@ pub(crate) fn table_constraint_schema(
     Ok(match constraint {
         TableConstraint::Unique(unique) => {
             reject_unsupported_constraint_characteristics(unique.characteristics.as_ref())?;
-            vec![ConstraintSchema::unique(
+            vec![ConstraintSchema::unique_with_deferral(
                 unique.name.as_ref().map(ident_value).unwrap_or_else(|| {
                     format!(
                         "{}_{}_key",
@@ -2221,6 +2227,7 @@ pub(crate) fn table_constraint_schema(
                 simple_index_column_names(&unique.columns)?,
                 true,
                 UniqueNullPolicy::from_sql(unique.nulls_distinct, default_null_policy),
+                UniqueDeferral::from_characteristics(unique.characteristics.as_ref()),
             )]
         }
         TableConstraint::Check(check) => vec![ConstraintSchema::Check {
@@ -2281,6 +2288,7 @@ pub(crate) fn table_constraint_schema(
         }
         TableConstraint::PrimaryKey(primary_key) => {
             reject_unsupported_constraint_characteristics(primary_key.characteristics.as_ref())?;
+            reject_deferrable_primary_key(primary_key.characteristics.as_ref())?;
             vec![ConstraintSchema::Unique {
                 name: primary_key
                     .name
@@ -2308,6 +2316,19 @@ pub(crate) fn reject_unsupported_constraint_characteristics(
     if characteristics.enforced == Some(false) {
         return Err(SqlError::Unsupported(
             "NOT ENFORCED constraints are not supported".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// A primary key is the row identity in storage, so two rows can never hold
+/// one key even transiently; deferring its check cannot be honoured.
+pub(crate) fn reject_deferrable_primary_key(
+    characteristics: Option<&ConstraintCharacteristics>,
+) -> Result<()> {
+    if characteristics.is_some_and(|characteristics| characteristics.deferrable == Some(true)) {
+        return Err(SqlError::Unsupported(
+            "DEFERRABLE primary keys are not supported".to_string(),
         ));
     }
     Ok(())

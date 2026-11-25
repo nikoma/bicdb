@@ -358,6 +358,13 @@ pub(crate) fn table_constraint_row(
                 } if actual == name => Some((*deferrable, *initially_deferred)),
                 _ => None,
             })
+    } else if constraint_type == "UNIQUE" {
+        schema
+            .constraints
+            .iter()
+            .filter(|constraint| constraint_name(constraint) == name)
+            .find_map(ConstraintSchema::unique_deferral)
+            .map(|deferral| (true, deferral.initially_deferred))
     } else {
         None
     }
@@ -4774,6 +4781,7 @@ pub(crate) fn pg_index_rows_filtered(
         ) {
             let definition = catalog_indexdef_string(&index);
             let executable = catalog_index_is_executable(&schemas, &index);
+            let deferrable = catalog_index_is_deferrable(&schemas, &index);
             let mut row = pg_index_row(
                 index_oid,
                 table_oid,
@@ -4793,11 +4801,26 @@ pub(crate) fn pg_index_rows_filtered(
             );
             row.insert("indisvalid".into(), SqlValue::Bool(executable));
             row.insert("indisready".into(), SqlValue::Bool(executable));
+            if deferrable {
+                row.insert("indimmediate".into(), SqlValue::Bool(false));
+            }
             rows.push(row);
         }
     }
 
     Ok(rows)
+}
+
+/// A DEFERRABLE unique constraint's index (`pg_index.indimmediate` false).
+fn catalog_index_is_deferrable(schemas: &[TableSchema], index: &CatalogIndex) -> bool {
+    schemas
+        .iter()
+        .find(|schema| schema.name == index.collection)
+        .is_some_and(|schema| {
+            schema.constraints.iter().any(|constraint| {
+                constraint_name(constraint) == index.name && constraint.unique_deferral().is_some()
+            })
+        })
 }
 
 fn catalog_index_is_executable(schemas: &[TableSchema], index: &CatalogIndex) -> bool {
@@ -5359,9 +5382,10 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                         types,
                         relation_oids,
                     ) {
+                        let deferral = constraint.unique_deferral();
                         rows.push(pg_constraint_row(PgConstraintRow {
-                            condeferrable: false,
-                            condeferred: false,
+                            condeferrable: deferral.is_some(),
+                            condeferred: deferral.is_some_and(|d| d.initially_deferred),
                             oid: pg_constraint_oid(table_oid, constraint_slot),
                             name: name.clone(),
                             contype: "u",
@@ -5370,7 +5394,7 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                             conindid: if index_definitions_shared(db).iter().any(|index| {
                                 index.name == *name
                                     && index.collection == schema.name
-                                    && index.unique
+                                    && (index.unique || deferral.is_some())
                             }) {
                                 secondary_index_oid(&schema.schema_name, name)
                             } else {
@@ -6334,6 +6358,19 @@ pub(crate) fn sql_string_array_value(values: &[String]) -> SqlValue {
     )
 }
 
+/// `pg_get_constraintdef`'s timing clause.
+fn constraint_timing_suffix(constraint: &BTreeMap<String, SqlValue>) -> &'static str {
+    if virtual_cell(constraint, "condeferrable") == SqlValue::Bool(true) {
+        if virtual_cell(constraint, "condeferred") == SqlValue::Bool(true) {
+            " DEFERRABLE INITIALLY DEFERRED"
+        } else {
+            " DEFERRABLE"
+        }
+    } else {
+        ""
+    }
+}
+
 pub(crate) fn constraint_definition_value(
     constraint: &BTreeMap<String, SqlValue>,
     column_names: &[String],
@@ -6363,12 +6400,13 @@ pub(crate) fn constraint_definition_value(
                         == (true, None)
                 });
             SqlValue::String(format!(
-                "UNIQUE{} ({columns})",
+                "UNIQUE{} ({columns}){}",
                 if nulls_not_distinct {
                     " NULLS NOT DISTINCT"
                 } else {
                     ""
-                }
+                },
+                constraint_timing_suffix(constraint)
             ))
         }
         "c" => match virtual_cell(constraint, "conbin") {
@@ -6396,15 +6434,7 @@ pub(crate) fn constraint_definition_value(
                 "FOREIGN KEY ({columns}) REFERENCES {}({}){}",
                 foreign_name,
                 referred_columns.join(", "),
-                if virtual_cell(constraint, "condeferrable") == SqlValue::Bool(true) {
-                    if virtual_cell(constraint, "condeferred") == SqlValue::Bool(true) {
-                        " DEFERRABLE INITIALLY DEFERRED"
-                    } else {
-                        " DEFERRABLE"
-                    }
-                } else {
-                    ""
-                }
+                constraint_timing_suffix(constraint)
             ))
         }
         "n" => column_names
@@ -7790,7 +7820,7 @@ pub(crate) fn catalog_indexes(schemas: &[TableSchema], db: &BicDb) -> Vec<Catalo
                 .get(&sql_index_storage_name(&schema.schema_name, name))
                 .filter(|index| {
                     index.collection == schema.name
-                        && index.unique
+                        && (index.unique || constraint.unique_deferral().is_some())
                         && index.kind == IndexKind::BTree
                 })
             else {

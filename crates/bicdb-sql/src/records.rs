@@ -893,10 +893,15 @@ pub(crate) fn validate_unique_constraints_for_update(
         if changed_records.is_empty() {
             continue;
         }
+        if defer_unique_checks(tx, table, &arbiter, &changed_records) {
+            continue;
+        }
         // Oracle checks unique constraints when the statement ends: a stored
         // key whose row this statement moves to another key is no conflict
-        // (the new keys are checked against each other).
-        let statement_end = oracle::preview_routine_language_enabled(db)?;
+        // (the new keys are checked against each other). PostgreSQL does the
+        // same for a DEFERRABLE constraint in IMMEDIATE mode.
+        let statement_end =
+            arbiter.deferral.is_some() || oracle::preview_routine_language_enabled(db)?;
         let vacated = if statement_end {
             changed_records
                 .iter()
@@ -929,6 +934,9 @@ pub(crate) fn validate_unique_constraints(
     allow_existing_same_id: bool,
 ) -> Result<()> {
     for arbiter in unique_arbiters_for_table(db, table, schema).iter() {
+        if defer_unique_checks(tx, table, arbiter, records) {
+            continue;
+        }
         validate_unique_arbiter_records(
             db,
             tx,
@@ -942,6 +950,48 @@ pub(crate) fn validate_unique_constraints(
     Ok(())
 }
 
+/// Queues the rows of a currently deferred unique constraint for checking at
+/// commit (or at `SET CONSTRAINTS ... IMMEDIATE`) and reports whether it did.
+fn defer_unique_checks(
+    tx: Option<&Transaction>,
+    table: &str,
+    arbiter: &UniqueConflictArbiter,
+    records: &[Record],
+) -> bool {
+    let (Some(tx), Some(deferral)) = (tx, arbiter.deferral.as_ref()) else {
+        return false;
+    };
+    if !crate::session::deferred_constraints::unique_is_deferred(tx, deferral) {
+        return false;
+    }
+    for record in records {
+        crate::session::deferred_constraints::queue_unique_check(tx, table, deferral, &record.id);
+    }
+    true
+}
+
+/// A deferrable constraint's lookup index is not unique, so storage takes no
+/// per-key claim for it. Reserve each key under the constraint's identity
+/// before reading current committed rows, so two transactions cannot both
+/// pass the check for one key.
+fn reserve_deferrable_unique_keys(
+    tx: Option<&Transaction>,
+    schema: &TableSchema,
+    arbiter: &UniqueConflictArbiter,
+    records: &[Record],
+) -> Result<()> {
+    let (Some(tx), Some(deferral)) = (tx, arbiter.deferral.as_ref()) else {
+        return Ok(());
+    };
+    let scope = format!("deferrable-unique:{}", deferral.constraint_id);
+    for record in records {
+        if let Some(key) = canonical_unique_reservation_key(schema, arbiter, record)? {
+            tx.reserve_integrity_key(&scope, &key)?;
+        }
+    }
+    Ok(())
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct UniqueConflictArbiter {
     pub(crate) null_policy: UniqueNullPolicy,
@@ -950,6 +1000,9 @@ pub(crate) struct UniqueConflictArbiter {
     pub(crate) index_name: Option<String>,
     /// A partial unique index's predicate: only rows it is true for take part in the check.
     pub(crate) predicate: Option<bicdb_core::IndexPredicate>,
+    /// Set for a `DEFERRABLE` constraint: checked at statement end, or at
+    /// commit while deferred, and backed by a non-unique lookup index.
+    pub(crate) deferral: Option<UniqueDeferral>,
 }
 
 impl UniqueConflictArbiter {
@@ -1004,6 +1057,7 @@ pub(crate) fn unique_arbiters_for_table_uncached(
             index_name: unique_index_name_for_key(table, schema, &key, &executable_indexes),
             key,
             predicate: None,
+            deferral: None,
         });
     }
     arbiters.extend(
@@ -1020,25 +1074,34 @@ pub(crate) fn unique_arbiters_for_table_uncached(
                     let (_, expected_predicate) = constraint
                         .unique_null_policy()
                         .index_options(schema, columns);
-                    let index_name = executable_indexes
+                    let deferral = constraint.unique_deferral().cloned();
+                    let own_index = executable_indexes
                         .iter()
                         .find(|index| {
                             index.name == sql_index_storage_name(&schema.schema_name, name)
                                 && index.collection.eq_ignore_ascii_case(table)
-                                && index.unique
+                                && index.unique == deferral.is_none()
                                 && index.predicate == expected_predicate
                                 && unique_key_matches_index(schema, &key, index)
                         })
-                        .map(|index| index.name.clone())
-                        .or_else(|| {
+                        .map(|index| index.name.clone());
+                    // A deferrable constraint looks keys up in its own
+                    // non-unique index only; its reservations come from the
+                    // constraint scope (see `reserve_deferrable_unique_keys`).
+                    let index_name = if deferral.is_some() {
+                        own_index
+                    } else {
+                        own_index.or_else(|| {
                             unique_index_name_for_key(table, schema, &key, &executable_indexes)
-                        });
+                        })
+                    };
                     Some(UniqueConflictArbiter {
                         null_policy: constraint.unique_null_policy(),
                         name: name.clone(),
                         index_name,
                         key,
                         predicate: None,
+                        deferral,
                     })
                 }
                 _ => None,
@@ -1083,6 +1146,7 @@ pub(crate) fn unique_arbiters_for_table_uncached(
                 index_name,
                 key,
                 predicate,
+                deferral: None,
             });
         }
     }
@@ -1348,6 +1412,7 @@ fn validate_unique_arbiter_records_vacating(
             tx.reserve_unique_index_record_for_integrity_check(index, record)?;
         }
     }
+    reserve_deferrable_unique_keys(tx, schema, arbiter, records)?;
 
     let contains_json = records.iter().any(|record| {
         unique_key_values(record, schema, &arbiter.key)

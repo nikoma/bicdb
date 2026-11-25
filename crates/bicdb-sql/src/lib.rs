@@ -3859,6 +3859,10 @@ enum ConstraintSchema {
         #[serde(default = "default_true")]
         validated: bool,
         null_policy: UniqueNullPolicy,
+        /// `DEFERRABLE` timing. Its backing index is then non-unique and the
+        /// SQL arbiter checks the key at statement end or at commit.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        deferral: Option<UniqueDeferral>,
     },
     Check {
         name: String,

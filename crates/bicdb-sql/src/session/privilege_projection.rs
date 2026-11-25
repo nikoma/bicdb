@@ -507,6 +507,7 @@ impl<'db> SqlSession<'db> {
                     reject_unsupported_constraint_characteristics(
                         primary_key.characteristics.as_ref(),
                     )?;
+                    reject_deferrable_primary_key(primary_key.characteristics.as_ref())?;
                     if let Some(name) = primary_key.name.as_ref().map(ident_value) {
                         primary_key_name = Some(name);
                     } else {

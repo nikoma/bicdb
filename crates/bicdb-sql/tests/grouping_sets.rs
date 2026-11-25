@@ -110,3 +110,34 @@ fn grouping_argument_must_be_a_grouping_expression() {
         assert_eq!(error.sqlstate(), "42803");
     });
 }
+
+#[test]
+fn grouping_sets_over_output_aliases_positions_and_constants() {
+    with_sales(|session| {
+        assert_eq!(
+            rows(session, "SELECT 1 AS one GROUP BY ROLLUP(one) ORDER BY 1"),
+            grid(&[&["1"], &[""]])
+        );
+        assert_eq!(
+            rows(
+                session,
+                "SELECT 'x' AS a, 2 AS b GROUP BY GROUPING SETS ((a),(b),()) ORDER BY 1,2"
+            ),
+            grid(&[&["x", ""], &["", "2"], &["", ""]])
+        );
+        assert_eq!(
+            rows(
+                session,
+                "SELECT region, sum(qty) FROM gs GROUP BY ROLLUP(1) ORDER BY 1"
+            ),
+            grid(&[&["east", "3"], &["west", "7"], &["", "10"]])
+        );
+        assert_eq!(
+            rows(
+                session,
+                "SELECT 1 AS one, count(*) FROM gs WHERE qty > 100 GROUP BY ROLLUP(one)"
+            ),
+            grid(&[&["", "0"]])
+        );
+    });
+}

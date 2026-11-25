@@ -276,6 +276,68 @@ fn substitute(expr: &Expr, in_set: &[Expr], all: &[Expr]) -> Result<Expr> {
     Ok(expr)
 }
 
+/// The input column names of `select`'s FROM list, or `None` when some
+/// relation's columns are unknown (aliases are then never substituted).
+fn input_column_names(
+    select: &Select,
+    input_columns: &dyn Fn(&TableFactor) -> Option<Vec<String>>,
+) -> Option<BTreeSet<String>> {
+    let mut names = BTreeSet::new();
+    for from in &select.from {
+        for relation in
+            std::iter::once(&from.relation).chain(from.joins.iter().map(|join| &join.relation))
+        {
+            let columns = match relation {
+                TableFactor::Derived {
+                    alias: Some(alias), ..
+                } if !alias.columns.is_empty() => alias
+                    .columns
+                    .iter()
+                    .map(|column| ident_value(&column.name))
+                    .collect(),
+                _ => input_columns(relation)?,
+            };
+            names.extend(columns.into_iter().map(|name| name.to_ascii_lowercase()));
+        }
+    }
+    Some(names)
+}
+
+fn output_column_expr(
+    expr: &Expr,
+    projection: &[SelectItem],
+    input_names: Option<&BTreeSet<String>>,
+) -> Option<Expr> {
+    let item_expr = |item: &SelectItem| match item {
+        SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => {
+            Some(expr.clone())
+        }
+        _ => None,
+    };
+    match strip_nested(expr) {
+        Expr::Value(value) => {
+            let Value::Number(number, _) = &value.value else {
+                return None;
+            };
+            let position = number.parse::<usize>().ok()?;
+            item_expr(projection.get(position.checked_sub(1)?)?)
+        }
+        Expr::Identifier(ident) => {
+            let name = ident_value(ident);
+            if input_names?.contains(&name.to_ascii_lowercase()) {
+                return None;
+            }
+            projection.iter().find_map(|item| match item {
+                SelectItem::ExprWithAlias { expr, alias } if ident_value(alias) == name => {
+                    Some(expr.clone())
+                }
+                _ => None,
+            })
+        }
+        _ => None,
+    }
+}
+
 fn quoted(name: &str) -> String {
     Ident::with_quote('"', name).to_string()
 }
@@ -293,7 +355,10 @@ pub(crate) fn has_grouping_sets(query: &Query) -> bool {
 /// `query` with its grouping sets expanded, or `None` when its GROUP BY has
 /// none. Forms whose combined result PostgreSQL computes differently from
 /// a union of grouped branches (window functions, `*`) fail with 0A000.
-pub(crate) fn rewrite_grouping_sets(query: &Query) -> Result<Option<Query>> {
+pub(crate) fn rewrite_grouping_sets(
+    query: &Query,
+    input_columns: &dyn Fn(&TableFactor) -> Option<Vec<String>>,
+) -> Result<Option<Query>> {
     let SetExpr::Select(select) = query.body.as_ref() else {
         return Ok(None);
     };
@@ -315,6 +380,19 @@ pub(crate) fn rewrite_grouping_sets(query: &Query) -> Result<Option<Query>> {
                     .map(move |right| [left.as_slice(), right.as_slice()].concat())
             })
             .collect();
+    }
+    // A grouping element naming an output column (by position, or by alias
+    // when no input column has that name) groups by that column's
+    // expression, as PostgreSQL resolves GROUP BY.
+    let input_names = input_column_names(select, input_columns);
+    for set in &mut sets {
+        for expr in set.iter_mut() {
+            if let Some(resolved) =
+                output_column_expr(expr, &select.projection, input_names.as_ref())
+            {
+                *expr = resolved;
+            }
+        }
     }
     let mut all = Vec::new();
     for expr in sets.iter().flatten() {
@@ -345,10 +423,32 @@ pub(crate) fn rewrite_grouping_sets(query: &Query) -> Result<Option<Query>> {
             ));
         };
         for order_expr in order_exprs.iter_mut() {
-            let position = items.iter().position(|(expr, name)| {
-                same_grouping_expr(expr, &order_expr.expr)
-                    || matches!(strip_nested(&order_expr.expr), Expr::Identifier(ident)
+            let ordinal = match strip_nested(&order_expr.expr) {
+                Expr::Value(value) => match &value.value {
+                    Value::Number(number, _) => number
+                        .parse::<usize>()
+                        .ok()
+                        .filter(|position| (1..=items.len()).contains(position))
+                        .map(|position| position - 1),
+                    _ => None,
+                },
+                _ => None,
+            };
+            // A position already resolved upstream to a constant item reads `+n`.
+            let resolved_constant = match strip_nested(&order_expr.expr) {
+                Expr::UnaryOp {
+                    op: sqlparser::ast::UnaryOperator::Plus,
+                    expr,
+                } if matches!(strip_nested(expr), Expr::Value(_)) => Some(strip_nested(expr)),
+                _ => None,
+            };
+            let position = ordinal.or_else(|| {
+                items.iter().position(|(expr, name)| {
+                    resolved_constant.is_some_and(|constant| strip_nested(expr) == constant)
+                        || same_grouping_expr(expr, &order_expr.expr)
+                        || matches!(strip_nested(&order_expr.expr), Expr::Identifier(ident)
                         if ident.value == *name || ident_value(ident) == *name)
+                })
             });
             let column = match position {
                 Some(position) => format!("{OUTPUT_PREFIX}{position}"),
@@ -386,6 +486,23 @@ pub(crate) fn rewrite_grouping_sets(query: &Query) -> Result<Option<Query>> {
     for set in &sets {
         let mut branch = select.as_ref().clone();
         branch.distinct = None;
+        if branch.from.is_empty() {
+            // A FROM-less query has one input row; give the branch that row
+            // explicitly so it is an ordinary grouped query.
+            let Some(Statement::Query(one_row)) = parse_statements(
+                "SELECT 1 FROM (VALUES (1)) AS \"bicdb grouping sets row\"(bicdb_grouping_set_row)",
+            )?
+            .pop() else {
+                return Err(SqlError::data_exception(
+                    "XX000",
+                    "grouping sets adapter",
+                    None,
+                ));
+            };
+            if let SetExpr::Select(one_row) = *one_row.body {
+                branch.from = one_row.from;
+            }
+        }
         let mut group_by = Vec::new();
         for expr in set {
             if !contains_expr(&group_by, expr) {
@@ -418,7 +535,29 @@ pub(crate) fn rewrite_grouping_sets(query: &Query) -> Result<Option<Query>> {
             .as_ref()
             .map(|having| substitute(having, &group_by, &all))
             .transpose()?;
-        branch.group_by = GroupByExpr::Expressions(group_by, Vec::new());
+        // A constant key groups every input row into one group: grouping by
+        // nothing, except that empty input yields no group. Dropping it keeps
+        // numeric constants from reading as GROUP BY positions.
+        let only_constants = !group_by.is_empty()
+            && group_by
+                .iter()
+                .all(|expr| matches!(strip_nested(expr), Expr::Value(_)));
+        let keys: Vec<Expr> = group_by
+            .into_iter()
+            .filter(|expr| !matches!(strip_nested(expr), Expr::Value(_)))
+            .collect();
+        if only_constants {
+            let nonempty = parse_grouping_expr("count(*) > 0")?;
+            branch.having = Some(match branch.having.take() {
+                Some(having) => Expr::BinaryOp {
+                    left: Box::new(Expr::Nested(Box::new(having))),
+                    op: sqlparser::ast::BinaryOperator::And,
+                    right: Box::new(nonempty),
+                },
+                None => nonempty,
+            });
+        }
+        branch.group_by = GroupByExpr::Expressions(keys, Vec::new());
         branches.push(SetExpr::Select(Box::new(branch)));
     }
     let mut branches = branches.into_iter();

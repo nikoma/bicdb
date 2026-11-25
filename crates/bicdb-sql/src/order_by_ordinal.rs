@@ -18,6 +18,20 @@ use std::ops::ControlFlow;
 /// Output column names of a FROM relation, for `SELECT *` (None when unknown).
 pub(crate) type RelationColumns<'a> = dyn Fn(&TableFactor) -> Option<Vec<String>> + 'a;
 
+/// A resolved key that is itself an integer literal (`SELECT 1 ... ORDER BY
+/// 1`) would read as a position again and be resolved forever; `+1` keeps
+/// the constant's value without being positional.
+fn not_positional(expr: Expr) -> Expr {
+    if ordinal(&expr).is_some() {
+        Expr::UnaryOp {
+            op: sqlparser::ast::UnaryOperator::Plus,
+            expr: Box::new(expr),
+        }
+    } else {
+        expr
+    }
+}
+
 fn ordinal(expr: &Expr) -> Option<usize> {
     match expr {
         Expr::Value(value) => match &value.value {
@@ -112,7 +126,7 @@ fn rewrite_group_ordinals(body: &mut SetExpr, columns: &RelationColumns<'_>) -> 
             if let GroupByExpr::Expressions(keys, _) = &mut select.group_by {
                 for (key, target) in keys.iter_mut().zip(targets) {
                     if let Some(target) = target {
-                        *key = target;
+                        *key = not_positional(target);
                         changed = true;
                     }
                 }
@@ -412,19 +426,12 @@ impl Rewriter<'_, '_> {
         if let Some(order_by) = query.order_by.as_mut() {
             if let OrderByKind::Expressions(keys) = &mut order_by.kind {
                 for (key, target) in keys.iter_mut().zip(targets) {
-                    match target {
-                        // The key names an output column that is an integer constant
-                        // (`SELECT 1 AS x ORDER BY x`, `SELECT 1 ORDER BY 1`). Writing the
-                        // constant back would read as a position again on the next pass: the
-                        // query was rewritten and re-executed until the stack overflowed and the
-                        // server aborted. Leave such a key as written; sorting by a constant is a
-                        // no-op, and grouping sets resolve the alias by name.
-                        Some(target) if ordinal(&target).is_some() => {}
-                        Some(target) => {
-                            key.expr = target;
-                            self.changed = true;
-                        }
-                        None => {}
+                    // An output column that is an integer constant (`SELECT 1 AS x
+                    // ORDER BY x`) is written back in a form that cannot be read as a
+                    // position again; re-reading it looped until the stack overflowed.
+                    if let Some(target) = target {
+                        key.expr = not_positional(target);
+                        self.changed = true;
                     }
                 }
             }

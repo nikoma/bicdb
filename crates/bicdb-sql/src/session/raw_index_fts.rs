@@ -1094,7 +1094,10 @@ impl<'db> SqlSession<'db> {
         let SetExpr::Select(select) = query.body.as_ref() else {
             return self.sql_engine().execute_query(query);
         };
-        if select.from.is_empty() && select_has_window_functions(select, query)? {
+        if select.from.is_empty()
+            && (select_has_window_functions(select, query)?
+                || crate::grouping_sets::has_grouping_sets(query))
+        {
             return self.sql_engine().execute_query(query);
         }
         if select.from.is_empty() {

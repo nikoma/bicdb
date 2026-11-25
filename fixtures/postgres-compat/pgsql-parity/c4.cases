@@ -1,0 +1,5 @@
+grouping_fromless_alias|SELECT 1 AS one GROUP BY ROLLUP(one) ORDER BY 1;SELECT 1 AS one, count(*) GROUP BY ROLLUP(one) ORDER BY 1
+grouping_fromless_sets|SELECT 'x' AS a, 2 AS b GROUP BY GROUPING SETS ((a),(b),()) ORDER BY 1,2;SELECT 5 AS v GROUP BY CUBE(v) ORDER BY 1
+grouping_position_and_alias|CREATE TABLE c4g(a int, v int);INSERT INTO c4g VALUES (1,10),(1,20),(2,30);SELECT a % 2 AS parity, sum(v) FROM c4g GROUP BY ROLLUP(parity) ORDER BY 1;SELECT a, sum(v) FROM c4g GROUP BY ROLLUP(1) ORDER BY 1;SELECT a AS v, sum(v) FROM c4g GROUP BY ROLLUP(v) ORDER BY 1, 2
+grouping_constant_empty_input|CREATE TABLE c4e(a int);SELECT 1 AS one, count(*) FROM c4e GROUP BY ROLLUP(one) ORDER BY 1
+ordinal_constant_loop|SELECT 1 AS one ORDER BY 1;SELECT 2 AS two GROUP BY 1;SELECT 1 ORDER BY 1

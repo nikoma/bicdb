@@ -584,6 +584,12 @@ pub(crate) fn pg_class_rows_filtered(
                 .as_ref()
                 .map(|partition_of| partition_of.parent_table.clone())
         })
+        .chain(
+            schemas
+                .iter()
+                .filter(|schema| !schema.inheritance_children.is_empty())
+                .map(|schema| schema.name.clone()),
+        )
         .collect::<BTreeSet<_>>();
     let mut rows = Vec::new();
     let exact_counts = names.is_some() || oids.is_some() || kinds.is_none();
@@ -7452,6 +7458,19 @@ pub(crate) fn pg_inherits_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlVal
     let table_oids = table_oids(db);
     let mut rows = Vec::new();
     for schema in list_schemas(db)? {
+        let Some(child_oid) = table_oids.get(&schema.name) else {
+            continue;
+        };
+        for (seqno, parent) in schema.inherits.iter().enumerate() {
+            if let Some(parent_oid) = table_oids.get(parent) {
+                rows.push(virtual_row([
+                    ("inhrelid", SqlValue::Int(*child_oid)),
+                    ("inhparent", SqlValue::Int(*parent_oid)),
+                    ("inhseqno", SqlValue::Int(seqno as i64 + 1)),
+                    ("inhdetachpending", SqlValue::Bool(false)),
+                ]));
+            }
+        }
         let Some(partition_of) = schema.partition_of.as_ref() else {
             continue;
         };
@@ -7811,6 +7830,8 @@ pub(crate) fn catalog_view_schema(db: &BicDb, view: ViewSchema) -> Result<TableS
         oracle_partitioning: None,
         unlogged: false,
         virtual_generated_columns: Vec::new(),
+        inherits: Vec::new(),
+        inheritance_children: Vec::new(),
     })
 }
 pub(crate) fn relation_schemas(db: &BicDb) -> Result<Vec<TableSchema>> {

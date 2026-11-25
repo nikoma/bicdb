@@ -802,6 +802,16 @@ impl<'db> SqlSession<'db> {
         match_policy: UpdateMatchPolicy,
         mut merge: Option<&mut super::merge::MergeActionRows>,
     ) -> Result<SqlResult> {
+        if merge.is_none() {
+            if let Some(result) = self.execute_inherited_update(update, &ctes, match_policy)? {
+                return Ok(result);
+            }
+        } else {
+            super::inheritance_dml::reject_merge_into_inheritance_parent(
+                self.db_ref(),
+                table_with_joins_name_and_alias(&update.table)?.0.as_str(),
+            )?;
+        }
         let (table, target_alias) = table_with_joins_name_and_alias(&update.table)?;
         let table = resolve_session_relation_name_if_exists(self.db_ref(), &table);
         let preauthorized = self.take_view_target_preauthorization(&table);
@@ -2215,6 +2225,16 @@ impl<'db> SqlSession<'db> {
         ctes: BTreeMap<String, CteResult>,
         mut merge: Option<&mut super::merge::MergeActionRows>,
     ) -> Result<SqlResult> {
+        if merge.is_none() {
+            if let Some(result) = self.execute_inherited_delete(delete, &ctes)? {
+                return Ok(result);
+            }
+        } else {
+            super::inheritance_dml::reject_merge_into_inheritance_parent(
+                self.db_ref(),
+                delete_from_table_and_alias(delete)?.0.as_str(),
+            )?;
+        }
         let (table, target_alias) = delete_from_table_and_alias(delete)?;
         let table = resolve_session_relation_name_if_exists(self.db_ref(), &table);
         let preauthorized = self.take_view_target_preauthorization(&table);

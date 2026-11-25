@@ -84,11 +84,34 @@ migration mutates the database.
 
 ## Table inheritance
 
-`CREATE TABLE child (...) INHERITS (parent)` is refused with 0A000. Table
-inheritance (the child taking the parent's columns, and reads of the parent
-including the child's rows unless `ONLY` is written) is not implemented, and
-earlier builds silently created the child without the parent's columns.
-Declarative partitioning (`PARTITION BY` / `PARTITION OF`) is supported.
+`CREATE TABLE child (...) INHERITS (parent [, ...])` creates a child that
+takes each parent's columns first (same-named columns are merged and must
+have the same type, 42804 otherwise), with their NOT NULL markings,
+defaults and CHECK constraints. Keys, unique constraints and foreign keys
+are not inherited, as in PostgreSQL. `pg_inherits` and
+`pg_class.relhassubclass` describe the hierarchy.
+
+- Reads of a parent include the rows of every descendant, with `tableoid`
+  naming the table each row is stored in (also in joins, aggregates and
+  subqueries).
+- `UPDATE` and `DELETE` of a parent run against the parent's own rows and
+  each descendant's, each row in its own table with that table's
+  constraints and triggers; `TRUNCATE` of a parent empties the descendants.
+  `INSERT` into a parent stores the row in the parent.
+- `ALTER TABLE parent` column changes (`ADD`/`DROP`/`RENAME COLUMN`, `ALTER
+  COLUMN TYPE`, `SET`/`DROP NOT NULL`, `SET`/`DROP DEFAULT`) and `ADD
+  CONSTRAINT ... CHECK` recurse to the descendants; a descendant that
+  already has an added column keeps it. On a child, dropping, renaming or
+  retyping an inherited column, or dropping an inherited constraint, fails
+  with 42P16.
+- `DROP TABLE` of a parent with children fails with 2BP01; drop the
+  children first.
+
+Limits: `ONLY` in `SELECT`, `UPDATE` and `DELETE` is not supported (the SQL
+parser does not accept it there); `ALTER TABLE ONLY parent` is.
+`NO INHERIT` constraints, `ALTER TABLE ... [NO] INHERIT`, `DROP TABLE ...
+CASCADE` of a parent, renaming a table in a hierarchy, and UPDATE/DELETE
+through a parent with row-level security fail with 0A000 or a parse error.
 
 ## UNLOGGED tables
 

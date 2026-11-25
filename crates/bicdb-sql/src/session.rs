@@ -10,6 +10,7 @@ pub(crate) mod deferred_constraints;
 mod domain_types;
 mod flashback;
 mod index_drop;
+mod inheritance_dml;
 mod instead_of_triggers;
 pub(crate) mod materialized_views;
 pub(crate) mod merge;

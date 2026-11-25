@@ -364,24 +364,28 @@ impl<'db> SqlSession<'db> {
             )));
         }
 
-        if create_table
-            .inherits
-            .as_ref()
-            .is_some_and(|parents| !parents.is_empty())
-        {
-            // The child would silently lack the parent's columns, and reads of
-            // the parent would miss the child's rows.
-            return Err(SqlError::Unsupported(
-                "CREATE TABLE ... INHERITS is not supported".to_string(),
-            ));
-        }
-
-        let mut columns = if let Some(like) = &create_table.like {
-            columns_from_create_table_like(self.db_ref(), like)?
-        } else {
-            Vec::new()
-        };
-        let mut constraints = Vec::new();
+        let parents = self.inheritance_parents(create_table)?;
+        let has_like_clause = create_table.like.is_some();
+        let (mut columns, mut constraints, inherited_virtual) =
+            if let Some(like) = &create_table.like {
+                if !parents.is_empty() {
+                    return Err(SqlError::Unsupported(
+                        "CREATE TABLE with both LIKE and INHERITS is not supported".to_string(),
+                    ));
+                }
+                (
+                    columns_from_create_table_like(self.db_ref(), like)?,
+                    Vec::new(),
+                    Vec::new(),
+                )
+            } else {
+                crate::inheritance::inherited_table_definition(&parents)?
+            };
+        let inherited_names = columns
+            .iter()
+            .map(|column| column.name.clone())
+            .collect::<BTreeSet<_>>();
+        let mut merged_names = BTreeSet::new();
         let mut primary_key_name = None;
         for column in &create_table.columns {
             let mut column_schema = column_schema_from_def(self.db_ref(), column)?;
@@ -394,9 +398,22 @@ impl<'db> SqlSession<'db> {
             }
             reject_postgres_system_column_name(&column_schema.name)?;
             self.ensure_user_type_usage(column_schema.user_type.as_ref())?;
-            if columns
-                .iter()
-                .any(|existing| existing.name == column_schema.name)
+            let merge_position = if inherited_names.contains(&column_schema.name)
+                && merged_names.insert(column_schema.name.clone())
+            {
+                let position = columns
+                    .iter()
+                    .position(|existing| existing.name == column_schema.name)
+                    .expect("inherited column is present");
+                crate::inheritance::merge_inherited_column(&columns[position], &mut column_schema)?;
+                Some(position)
+            } else {
+                None
+            };
+            if merge_position.is_none()
+                && columns
+                    .iter()
+                    .any(|existing| existing.name == column_schema.name)
             {
                 return Err(SqlError::InvalidSql(format!(
                     "column \"{}\" of relation \"{}\" already exists",
@@ -501,7 +518,10 @@ impl<'db> SqlSession<'db> {
                 &column_schema,
                 oracle::default_unique_null_policy(self.db_ref())?,
             )?);
-            columns.push(column_schema);
+            match merge_position {
+                Some(position) => columns[position] = column_schema,
+                None => columns.push(column_schema),
+            }
         }
         for requested in compression {
             if !columns.iter().any(|column| column.name == requested.column) {
@@ -657,7 +677,9 @@ impl<'db> SqlSession<'db> {
             partition_of: None,
             oracle_partitioning: None,
             unlogged: false,
-            virtual_generated_columns: Vec::new(),
+            virtual_generated_columns: inherited_virtual,
+            inherits: parents.iter().map(|parent| parent.name.clone()).collect(),
+            inheritance_children: Vec::new(),
         };
         partition::validate_new_key(self.db_ref(), &schema)?;
         partition::validate_definition(&schema)?;
@@ -673,7 +695,63 @@ impl<'db> SqlSession<'db> {
         for definition in unique_constraint_index_definitions_for_schema(&schema) {
             self.create_new_table_index(definition)?;
         }
+        for mut parent in parents {
+            parent.inheritance_children.push(table.clone());
+            self.save_session_schema(&parent)?;
+        }
         Ok(SqlResult::command("CREATE TABLE"))
+    }
+
+    /// The parents named by `INHERITS (...)`, checked as PostgreSQL does.
+    fn inheritance_parents(&mut self, create_table: &CreateTable) -> Result<Vec<TableSchema>> {
+        let Some(names) = create_table
+            .inherits
+            .as_ref()
+            .filter(|names| !names.is_empty())
+        else {
+            return Ok(Vec::new());
+        };
+        if create_table.partition_by.is_some() {
+            return Err(SqlError::Unsupported(
+                "partitioned tables cannot inherit from other tables".to_string(),
+            ));
+        }
+        let mut parents: Vec<TableSchema> = Vec::new();
+        for name in names {
+            let parent_name =
+                resolve_session_relation_name_if_exists(self.db_ref(), &relation_name(name)?);
+            let Some(parent) = load_schema(self.db_ref(), &parent_name)? else {
+                return Err(SqlError::data_exception(
+                    "42P01",
+                    format!("relation \"{}\" does not exist", relation_name(name)?),
+                    None,
+                ));
+            };
+            if parent.partitioning.is_some() {
+                return Err(SqlError::data_exception(
+                    "42809",
+                    format!("cannot inherit from partitioned table \"{parent_name}\""),
+                    None,
+                ));
+            }
+            if parent.partition_of.is_some() {
+                return Err(SqlError::data_exception(
+                    "42809",
+                    format!("cannot inherit from partition \"{parent_name}\""),
+                    None,
+                ));
+            }
+            if parents.iter().any(|existing| existing.name == parent.name) {
+                return Err(SqlError::data_exception(
+                    "42P07",
+                    format!("relation \"{parent_name}\" would be inherited from more than once"),
+                    None,
+                ));
+            }
+            self.require_table_ownership(&parent.name, "ALTER TABLE")?;
+            parents.push(parent);
+        }
+        Ok(parents)
     }
 
     /// PostgreSQL converts a quoted literal cast to an enum or composite type

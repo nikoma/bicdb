@@ -317,7 +317,7 @@ impl<'db> SqlEngine<'db> {
         let schema = load_schema(self.db_ref(), &table)?;
         if schema
             .as_ref()
-            .is_some_and(|schema| schema.partitioning.is_some())
+            .is_some_and(|schema| schema.has_descendant_tables())
         {
             return Ok(None);
         }

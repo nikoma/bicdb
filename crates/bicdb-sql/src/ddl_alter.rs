@@ -1677,6 +1677,13 @@ pub(crate) fn truncate_target_tables(
                 });
             }
         }
+        let descendants = crate::inheritance::inheritance_descendants(db, &targets[0].schema)?;
+        for schema in descendants {
+            targets.push(TruncateTarget {
+                name: schema.name.clone(),
+                schema,
+            });
+        }
     }
     Ok(targets)
 }

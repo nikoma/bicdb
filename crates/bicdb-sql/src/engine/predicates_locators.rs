@@ -1071,7 +1071,7 @@ impl<'db> SqlEngine<'db> {
             if alias_name != table {
                 crate::slot_types::register_table(&table, &schema);
             }
-            if schema.partitioning.is_some() {
+            if schema.has_descendant_tables() {
                 return self.partition_row_set(&table, &alias_name, &schema, needed_columns);
             }
         }
@@ -1528,7 +1528,7 @@ impl<'db> SqlEngine<'db> {
         schema: Option<&TableSchema>,
         selection: Option<&Expr>,
     ) -> Result<Option<Vec<Arc<Record>>>> {
-        if schema.is_some_and(|schema| schema.partitioning.is_some()) {
+        if schema.is_some_and(|schema| schema.has_descendant_tables()) {
             return Ok(None);
         }
         let policy_selection =
@@ -2729,7 +2729,7 @@ impl<'db> SqlEngine<'db> {
         schema: Option<&TableSchema>,
         selection: Option<&Expr>,
     ) -> Result<Option<RecordLocators>> {
-        if schema.is_some_and(|schema| schema.partitioning.is_some()) {
+        if schema.is_some_and(|schema| schema.has_descendant_tables()) {
             return Ok(None);
         }
         let Some(selection) = selection else {
@@ -2924,7 +2924,7 @@ impl<'db> SqlEngine<'db> {
         schema: Option<&TableSchema>,
         selection: Option<&Expr>,
     ) -> Result<Option<Vec<String>>> {
-        if schema.is_some_and(|schema| schema.partitioning.is_some()) {
+        if schema.is_some_and(|schema| schema.has_descendant_tables()) {
             return Ok(None);
         }
         let Some(selection) = selection else {

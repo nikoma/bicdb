@@ -536,6 +536,7 @@ impl<'db> SqlSession<'db> {
         }
         let schema = load_schema(self.db_ref(), table)?;
         if let Some(schema) = &schema {
+            self.detach_dropped_inheritance_table(schema, dropping, cascade)?;
             let views = self.views_depending_on_table(&schema.name, "table", dropping)?;
             self.drop_table_inbound_foreign_keys(schema, dropping, cascade, &views)?;
             if cascade {
@@ -1458,6 +1459,9 @@ impl<'db> SqlSession<'db> {
                 );
                 return Ok(SqlResult::command("ALTER TABLE"));
             }
+        }
+        if let Some(result) = self.execute_inherited_alter_table(alter_table)? {
+            return Ok(result);
         }
         // PostgreSQL accepts ALTER TABLE ... OWNER TO for a view (pg_dump
         // emits it for every view).

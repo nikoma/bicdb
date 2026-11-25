@@ -1311,6 +1311,16 @@ impl<'db> SqlSession<'db> {
                 Arc::make_mut(&mut self.session_gucs).insert(setting, normalized);
                 Ok(())
             }
+            "max_stack_depth" => {
+                if !self.current_user_is_superuser()? {
+                    return Err(SqlError::BicDb(BicDbError::Authorization(
+                        "permission denied to set parameter \"max_stack_depth\"".to_string(),
+                    )));
+                }
+                let kb = crate::max_stack_depth::parse_setting(&value.to_cell())?;
+                Arc::make_mut(&mut self.session_gucs).insert(setting, kb.to_string());
+                Ok(())
+            }
             "role" => self.apply_set_role(&value.to_cell()),
             "session_authorization" => self.apply_set_session_authorization(Some(&value.to_cell())),
             // Reserved identity plumbing; forging either would allow RLS or

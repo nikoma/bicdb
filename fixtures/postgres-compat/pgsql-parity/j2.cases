@@ -13,3 +13,8 @@ cx_handler|CREATE FUNCTION cx_handler() RETURNS text LANGUAGE plpgsql AS E'\nbeg
 cx_notice|CREATE FUNCTION cx_notice() RETURNS int LANGUAGE plpgsql AS E'\nbegin\n  raise notice ''hello'';\n  return 1;\nend';SELECT cx_notice()
 cx_chain|CREATE TABLE cx_ct(a int);CREATE FUNCTION cx_ctf() RETURNS trigger LANGUAGE plpgsql AS E'\nbegin\n  raise exception ''trigger says no'';\nend';CREATE TRIGGER cx_ctg BEFORE INSERT ON cx_ct FOR EACH ROW EXECUTE FUNCTION cx_ctf();CREATE FUNCTION cx_cins() RETURNS void LANGUAGE plpgsql AS E'\nbegin\n  insert into cx_ct values (1);\nend';SELECT cx_cins()
 cx_while|CREATE FUNCTION cx_while() RETURNS void LANGUAGE plpgsql AS E'\ndeclare i int := 0;\nbegin\n  while 10 / (2 - i) > 0 loop\n    i := i + 1;\n  end loop;\nend';SELECT cx_while()
+sd_show|SHOW max_stack_depth;SET max_stack_depth = '100kB';SHOW max_stack_depth;RESET max_stack_depth;SHOW max_stack_depth
+sd_bad|SET max_stack_depth = '50'
+sd_big|SET max_stack_depth = '100MB'
+sd_unit|SET max_stack_depth = '1 xyz'
+sd_json|SET max_stack_depth = '100kB';SELECT repeat('[', 10000)::json

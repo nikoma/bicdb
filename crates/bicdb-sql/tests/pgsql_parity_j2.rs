@@ -93,3 +93,21 @@ fn routine_errors_carry_postgres_context() {
     // A caught error leaves no context behind.
     assert_eq!(cells(&mut sql, "SELECT cx_handler()"), [["caught first"]]);
 }
+
+#[test]
+fn max_stack_depth_is_a_setting() {
+    let (_dir, mut db) = open();
+    let mut sql = SqlSession::new(&mut db);
+    assert_eq!(cells(&mut sql, "SHOW max_stack_depth"), [["2MB"]]);
+    sql.execute("SET max_stack_depth = '100kB'").unwrap();
+    assert_eq!(cells(&mut sql, "SHOW max_stack_depth"), [["100kB"]]);
+    let error = sql.execute("SELECT repeat('[', 10000)::json").unwrap_err();
+    assert_eq!(error.to_string(), "stack depth limit exceeded");
+    assert!(error.fields().contains(&SqlErrorField::Hint(
+        "Increase the configuration parameter \"max_stack_depth\" (currently 100kB), after ensuring the platform's stack depth limit is adequate."
+            .into()
+    )));
+    sql.execute("RESET max_stack_depth").unwrap();
+    assert_eq!(cells(&mut sql, "SHOW max_stack_depth"), [["2MB"]]);
+    assert!(sql.execute("SET max_stack_depth = '50'").is_err());
+}

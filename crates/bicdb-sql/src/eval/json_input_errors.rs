@@ -481,10 +481,7 @@ pub(crate) fn pg_json_input_error(text: &str, strings: bool) -> Option<SqlError>
         return Some(SqlError::with_detail_fields(
             SqlError::data_exception_public("54001", "stack depth limit exceeded", None),
             None,
-            Some(
-                "Increase the configuration parameter \"max_stack_depth\" (currently 2048kB), after ensuring the platform's stack depth limit is adequate."
-                    .to_string(),
-            ),
+            Some(crate::max_stack_depth::stack_depth_hint()),
             None,
         ));
     }

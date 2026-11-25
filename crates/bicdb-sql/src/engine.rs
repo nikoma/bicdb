@@ -5135,6 +5135,17 @@ impl<'db> SqlEngine<'db> {
                     vec![vec![SqlValue::String(value)]],
                 )))
             }
+            "show max_stack_depth" => {
+                let kb = self
+                    .session_gucs
+                    .get("max_stack_depth")
+                    .and_then(|value| value.parse::<i64>().ok())
+                    .unwrap_or(crate::max_stack_depth::DEFAULT_KB);
+                Ok(Some(SqlResult::new(
+                    vec!["max_stack_depth".to_string()],
+                    vec![vec![SqlValue::String(crate::max_stack_depth::display(kb))]],
+                )))
+            }
             "show statement_timeout" => {
                 let value = self
                     .session_gucs

@@ -3563,6 +3563,7 @@ impl<'db> SqlSession<'db> {
         };
         let _path_scope = crate::search_path::PathScope::enter(path);
         let _catalog_scope = crate::search_path::CatalogScope::enter(&self.session_gucs);
+        let _stack_depth = crate::max_stack_depth::Scope::enter(&self.session_gucs);
         let sql = bound.as_deref().unwrap_or(sql);
         // A per-row routine call reaches raw SQL only through dynamic EXECUTE
         // fallbacks for statements sqlparser cannot represent (DDL, grants).
@@ -6802,6 +6803,7 @@ impl<'db> SqlSession<'db> {
             | "synchronize_seqscans"
             | "default_text_search_config"
             | "escape_string_warning"
+            | "max_stack_depth"
             | "timezone" => {
                 // A setting given at connection start resets to that value.
                 let startup = self

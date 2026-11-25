@@ -284,6 +284,7 @@ mod identifier_truncation;
 mod inheritance;
 mod only_rewrite;
 mod persistence_ddl;
+mod max_stack_depth;
 mod pg_float_text_functions;
 mod pg_functions_more;
 mod pg_number_input;

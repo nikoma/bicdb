@@ -775,6 +775,17 @@ pub(crate) fn validate_attachment(
             return Err(invalid("relation is already a partition of this parent"));
         }
         let other = parse_bound(parent, &sibling.partition_of.as_ref().unwrap().bound)?;
+        if matches!((&bound, &other), (Bound::Default, Bound::Default)) {
+            return Err(SqlError::data_exception(
+                "42P17",
+                format!(
+                    "partition \"{}\" conflicts with existing default partition \"{}\"",
+                    catalog_display_name(&child.name),
+                    catalog_display_name(&sibling.name)
+                ),
+                None,
+            ));
+        }
         if bounds_overlap(parent, &bound, &other)? {
             return Err(SqlError::data_exception(
                 "42P17",

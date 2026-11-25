@@ -29,7 +29,9 @@ ALTER TABLE people ALTER COLUMN status SET DEFAULT 'active';
 Supported `ADD COLUMN` defaults are constant scalar and JSON expressions that
 can be evaluated without reading other columns. Existing rows are backfilled
 with the default value. Adding a `NOT NULL` column without a default fails when
-existing rows would contain nulls.
+existing rows would contain nulls. A constant default cast to an enum, domain
+or composite type (`ADD COLUMN s status DEFAULT 'new'::status`) also fills the
+existing rows, while new rows evaluate the default expression.
 
 `DROP COLUMN` removes the column from schema/catalog metadata and from stored
 record metadata. Dropping primary key columns is not supported.

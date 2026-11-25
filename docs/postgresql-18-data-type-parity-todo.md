@@ -496,6 +496,16 @@ support requires all applicable items below:
       across restart, backup, replication, and multi-database clusters.
 - [x] DT-0906 Complete type ownership, schema movement, privileges, comments,
       dependency tracking, DROP RESTRICT/CASCADE, and pg_dump round trips.
+- [x] DT-0907 Accept column defaults cast to enum, domain and composite types,
+      including the schema-qualified form a dump writes
+      (`s public.status DEFAULT 'new'::public.status`), in CREATE TABLE,
+      ADD COLUMN and ALTER COLUMN SET DEFAULT. The default stays an expression
+      evaluated on each insert (also `INSERT ... DEFAULT VALUES`); an invalid
+      enum label or composite literal fails the definition with 22P02, while a
+      domain CHECK runs when the default is used. `information_schema.columns`
+      and `pg_attrdef` show the default expression. Regression coverage:
+      `crates/bicdb-sql/tests/user_type_cast_defaults.rs` and
+      `fixtures/postgres-compat/pgsql-parity/defaults-constraints.cases`.
 
 ## P9 - Network address types
 

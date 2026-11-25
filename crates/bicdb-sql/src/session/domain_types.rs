@@ -1257,12 +1257,19 @@ impl<'db> SqlSession<'db> {
                         column_def,
                         *if_not_exists,
                     )? {
+                        let expression_default =
+                            if schema.column(&ident_value(&column_def.name)).is_none() {
+                                self.catalog_cast_default_backfill(&table, column_def)?
+                            } else {
+                                None
+                            };
                         alter_table_add_column(
                             self.ddl_rows()?,
                             &table,
                             &mut schema,
                             column_def,
                             *if_not_exists,
+                            expression_default,
                         )?;
                     }
                 }

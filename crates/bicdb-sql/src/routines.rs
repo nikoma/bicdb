@@ -3135,6 +3135,7 @@ pub(crate) fn alter_table_add_column(
     schema: &mut TableSchema,
     column_def: &ColumnDef,
     if_not_exists: bool,
+    expression_default: Option<SqlValue>,
 ) -> Result<()> {
     let db = &*rows.db;
     let mut column = column_schema_from_def(db, column_def)?;
@@ -3147,8 +3148,11 @@ pub(crate) fn alter_table_add_column(
             column.name, table
         )));
     }
-    let default = column_default_value(column_def)?;
-    column.default_value = default.clone();
+    let stored_default = column_default_value(column_def)?;
+    column.default_value = stored_default.clone();
+    // Existing rows take the default; an expression default the caller has
+    // already evaluated (a cast to a catalog type) fills them too.
+    let default = stored_default.or(expression_default);
     let column_name = column.name.clone();
     let column_nullable = column.nullable;
     let mut unique_definition = column_def.clone();

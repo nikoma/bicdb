@@ -7407,6 +7407,12 @@ pub(crate) fn information_schema_columns_filtered(
                 .map(SqlValue::Int)
                 .unwrap_or(SqlValue::Null);
             let explicit_collation = column.collation.clone();
+            // The same expression `pg_attrdef` shows for the column.
+            let column_default = if column.identity.is_none() && column.generated_expr.is_none() {
+                column_attrdef_expression(&column)?.unwrap_or(SqlValue::Null)
+            } else {
+                SqlValue::Null
+            };
             rows.push(virtual_row([
                 ("table_catalog", crate::search_path::current_catalog_value()),
                 ("table_schema", SqlValue::String(namespace.clone())),
@@ -7494,20 +7500,7 @@ pub(crate) fn information_schema_columns_filtered(
                     "is_nullable",
                     SqlValue::String(if column.nullable { "YES" } else { "NO" }.to_string()),
                 ),
-                (
-                    "column_default",
-                    if column.identity.is_none() && column.generated_expr.is_none() {
-                        column
-                            .default_sequence
-                            .as_ref()
-                            .map(|sequence| {
-                                SqlValue::String(format!("nextval('{sequence}'::regclass)"))
-                            })
-                            .unwrap_or(SqlValue::Null)
-                    } else {
-                        SqlValue::Null
-                    },
-                ),
+                ("column_default", column_default),
                 (
                     "is_identity",
                     SqlValue::String(

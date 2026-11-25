@@ -6616,14 +6616,34 @@ impl<'db> SqlEngine<'db> {
             })
             .transpose()?;
 
+        let hoisted = self.hoist_lateral_inner(&left.columns, subquery, &alias_name, constraint)?;
         let mut rows = Vec::new();
         let mut candidate_pairs = 0usize;
         for (left_idx, left_row) in left.rows.iter().enumerate() {
             if left_idx % 128 == 0 {
                 self.check_cancellation()?;
             }
-            let result =
-                self.run_query_with_outer_extension(&left.columns, left_row, None, subquery)?;
+            let result = match &hoisted {
+                Some(hoisted) => {
+                    let matches = hoisted.candidates(left_row.get(hoisted.left_key));
+                    let cte = CteResult::new(
+                        LATERAL_INNER_CTE.to_string(),
+                        hoisted.columns.clone(),
+                        matches,
+                    )
+                    .with_column_types(hoisted.column_types.clone());
+                    self.run_query_with_outer_extension_and_cte(
+                        &left.columns,
+                        left_row,
+                        None,
+                        &hoisted.query,
+                        Some(cte),
+                    )?
+                }
+                None => {
+                    self.run_query_with_outer_extension(&left.columns, left_row, None, subquery)?
+                }
+            };
             let source_columns =
                 table_alias_columns(&alias_name, &alias_name, alias_columns, &result.columns)?;
             let actual_right_columns = aliased_row_output_columns(&alias_name, &source_columns);
@@ -6676,6 +6696,258 @@ impl<'db> SqlEngine<'db> {
         let columns = merge_row_set_columns(left.columns, right_columns.unwrap_or_default());
         sql_profile_join_rows(&rows, candidate_pairs);
         Ok(RowSet { rows, columns })
+    }
+
+    /// A LATERAL derived table whose only outer references are in its select list, joined on
+    /// `outer_column = alias.inner_output` where that output is an inner-only expression:
+    /// PostgreSQL effectively joins the inner relation once. Read the inner rows (with their
+    /// filter) once, index them by the join key, and per outer row run the original select list
+    /// over just the matching inner rows. The single inner read runs as this statement's user, so
+    /// authorization is unchanged; any shape or error outside this narrow form keeps the
+    /// per-row execution.
+    fn hoist_lateral_inner(
+        &self,
+        left_columns: &[String],
+        subquery: &Query,
+        alias_name: &str,
+        constraint: &JoinConstraint,
+    ) -> Result<Option<HoistedLateral>> {
+        if subquery.with.is_some()
+            || subquery.limit_clause.is_some()
+            || subquery.fetch.is_some()
+            || subquery.order_by.is_some()
+            || !subquery.locks.is_empty()
+        {
+            return Ok(None);
+        }
+        let SetExpr::Select(select) = subquery.body.as_ref() else {
+            return Ok(None);
+        };
+        if select.from.len() != 1
+            || !select.from[0].joins.is_empty()
+            || select.distinct.is_some()
+            || select.having.is_some()
+            || select.qualify.is_some()
+            || !select.named_window.is_empty()
+            || !matches!(&select.group_by, GroupByExpr::Expressions(keys, modifiers) if keys.is_empty() && modifiers.is_empty())
+        {
+            return Ok(None);
+        }
+        // No aggregate, window, set-returning or volatile call and no subquery in the select
+        // list: each output row is a function of one inner row and the outer row.
+        let mut items = Vec::new();
+        for item in &select.projection {
+            let (expr, name) = match item {
+                SelectItem::ExprWithAlias { expr, alias } => (expr, ident_value(alias)),
+                SelectItem::UnnamedExpr(expr @ Expr::Identifier(ident)) => {
+                    (expr, ident_value(ident))
+                }
+                SelectItem::UnnamedExpr(expr @ Expr::CompoundIdentifier(parts)) => {
+                    (expr, parts.last().map(ident_value).unwrap_or_default())
+                }
+                _ => return Ok(None),
+            };
+            let mut plain = true;
+            let _ = sqlparser::ast::visit_expressions(expr, |inner| {
+                if matches!(
+                    inner,
+                    Expr::Function(_)
+                        | Expr::Subquery(_)
+                        | Expr::Exists { .. }
+                        | Expr::InSubquery { .. }
+                ) {
+                    plain = false;
+                    return std::ops::ControlFlow::Break(());
+                }
+                std::ops::ControlFlow::Continue(())
+            });
+            if !plain {
+                return Ok(None);
+            }
+            items.push((expr.clone(), name));
+        }
+        let TableFactor::Table {
+            name: table_name,
+            alias: table_alias,
+            args: None,
+            with_ordinality: false,
+            ..
+        } = &select.from[0].relation
+        else {
+            return Ok(None);
+        };
+        // The join key: `<outer column> = alias.<output>` (either side).
+        let JoinConstraint::On(on) = constraint else {
+            return Ok(None);
+        };
+        let Expr::BinaryOp {
+            left: a,
+            op: BinaryOperator::Eq,
+            right: b,
+        } = unwrap_nested_expr(on)
+        else {
+            return Ok(None);
+        };
+        let output_of = |expr: &Expr| -> Option<usize> {
+            let name = match unwrap_nested_expr(expr) {
+                Expr::CompoundIdentifier(parts) if parts.len() == 2 => (ident_value(&parts[0])
+                    == alias_name.to_ascii_lowercase()
+                    || parts[0].value == alias_name)
+                    .then(|| ident_value(&parts[1]))?,
+                _ => return None,
+            };
+            let mut found = items
+                .iter()
+                .enumerate()
+                .filter(|(_, (_, item))| *item == name);
+            let (index, _) = found.next()?;
+            found.next().is_none().then_some(index)
+        };
+        let (left_key, output) = match (
+            row_set_column_index(left_columns, unwrap_nested_expr(a)),
+            output_of(b),
+            row_set_column_index(left_columns, unwrap_nested_expr(b)),
+            output_of(a),
+        ) {
+            (Some(left_key), Some(output), _, _) | (_, _, Some(left_key), Some(output)) => {
+                (left_key, output)
+            }
+            _ => return Ok(None),
+        };
+        // One read of the inner side: its filter, the key expression, and every column. An
+        // outer reference in the filter or key makes this fail, and the per-row path stays.
+        let qualifier = table_alias
+            .as_ref()
+            .map(|alias| alias.name.clone())
+            .unwrap_or_else(|| {
+                Ident::new(
+                    object_name_parts(table_name)
+                        .last()
+                        .cloned()
+                        .unwrap_or_default(),
+                )
+            });
+        // The filter and the key must refer only to the inner relation: every column qualified
+        // by its name/alias or an unqualified column of its table, and no subquery. (Name
+        // resolution alone is not a safe test: an outer `l.ten` must never be read as an inner
+        // column.)
+        let resolved =
+            resolve_session_relation_name_if_exists(self.db_ref(), &relation_name(table_name)?);
+        let Some(inner_schema) = load_schema(self.db_ref(), &resolved)? else {
+            return Ok(None);
+        };
+        let inner_name = ident_value(&qualifier);
+        let inner_only = |expr: &Expr| {
+            let mut ok = true;
+            let _ = sqlparser::ast::visit_expressions(expr, |part| {
+                let good = match part {
+                    Expr::Identifier(ident) => inner_schema.column(&ident_value(ident)).is_some(),
+                    Expr::CompoundIdentifier(parts) => {
+                        parts.len() == 2
+                            && ident_value(&parts[0]) == inner_name
+                            && inner_schema.column(&ident_value(&parts[1])).is_some()
+                    }
+                    Expr::Subquery(_) | Expr::Exists { .. } | Expr::InSubquery { .. } => false,
+                    _ => true,
+                };
+                if !good {
+                    ok = false;
+                    return std::ops::ControlFlow::Break(());
+                }
+                std::ops::ControlFlow::Continue(())
+            });
+            ok
+        };
+        if !inner_only(&items[output].0)
+            || select
+                .selection
+                .as_ref()
+                .is_some_and(|filter| !inner_only(filter))
+        {
+            return Ok(None);
+        }
+        let mut base = subquery.clone();
+        if let SetExpr::Select(base_select) = base.body.as_mut() {
+            base_select.projection = vec![
+                SelectItem::ExprWithAlias {
+                    expr: items[output].0.clone(),
+                    alias: Ident::new(LATERAL_KEY_COLUMN),
+                },
+                SelectItem::QualifiedWildcard(
+                    sqlparser::ast::SelectItemQualifiedWildcardKind::ObjectName(ObjectName::from(
+                        vec![qualifier.clone()],
+                    )),
+                    sqlparser::ast::WildcardAdditionalOptions::default(),
+                ),
+            ];
+        }
+        let base_result = match self.execute_query(&base) {
+            Ok(result) => result,
+            Err(error) => {
+                if error.is_query_interruption() || error.is_resource_limit() {
+                    return Err(error);
+                }
+                return Ok(None);
+            }
+        };
+        if base_result.columns.len() < 2 || base_result.rows.len() > MAX_HOISTED_LATERAL_ROWS {
+            return Ok(None);
+        }
+        let mut by_key: std::collections::HashMap<i64, Vec<usize>> =
+            std::collections::HashMap::new();
+        for (index, row) in base_result.rows.iter().enumerate() {
+            match row.first() {
+                Some(SqlValue::Int(key)) => by_key.entry(*key).or_default().push(index),
+                Some(SqlValue::Null) => {}
+                // Only integer keys are indexed exactly; anything else stays per row.
+                _ => return Ok(None),
+            }
+        }
+        let columns = base_result.columns[1..].to_vec();
+        let column_types = base_result
+            .column_types
+            .get(1..)
+            .map(<[Option<String>]>::to_vec)
+            .unwrap_or_default();
+        let rows = base_result
+            .rows
+            .into_iter()
+            .map(|mut row| {
+                row.remove(0);
+                row
+            })
+            .collect();
+        // Per outer row: the original select list over the matching inner rows, which already
+        // passed the filter.
+        let mut query = subquery.clone();
+        if let SetExpr::Select(select) = query.body.as_mut() {
+            select.selection = None;
+            select.from[0].relation = TableFactor::Table {
+                name: ObjectName::from(vec![Ident::new(LATERAL_INNER_CTE)]),
+                alias: Some(TableAlias {
+                    explicit: true,
+                    name: qualifier,
+                    columns: Vec::new(),
+                    at: None,
+                }),
+                args: None,
+                with_hints: Vec::new(),
+                version: None,
+                with_ordinality: false,
+                partitions: Vec::new(),
+                json_path: None,
+                sample: None,
+                index_hints: Vec::new(),
+            };
+        }
+        Ok(Some(HoistedLateral {
+            left_key,
+            columns,
+            column_types,
+            rows,
+            by_key,
+            query,
+        }))
     }
 
     pub(crate) fn derive_where_join_constraint(
@@ -9159,6 +9431,40 @@ mod composite_timestamp_prefix_residual_tests {
                     }
                 }
             }
+        }
+    }
+}
+
+const LATERAL_INNER_CTE: &str = "__bicdb_lateral_inner";
+const LATERAL_KEY_COLUMN: &str = "__bicdb_lateral_key";
+const MAX_HOISTED_LATERAL_ROWS: usize = 2_000_000;
+
+pub(crate) struct HoistedLateral {
+    left_key: usize,
+    columns: Vec<String>,
+    column_types: Vec<Option<String>>,
+    rows: Vec<Vec<SqlValue>>,
+    by_key: std::collections::HashMap<i64, Vec<usize>>,
+    query: Query,
+}
+
+impl HoistedLateral {
+    /// Inner rows whose key may equal the outer value. Integer outer values use the index; any
+    /// other value gets every inner row and the join constraint decides, as before.
+    fn candidates(&self, outer: Option<&SqlValue>) -> Vec<Vec<SqlValue>> {
+        match outer {
+            Some(SqlValue::Int(key)) => self
+                .by_key
+                .get(key)
+                .map(|indexes| {
+                    indexes
+                        .iter()
+                        .map(|index| self.rows[*index].clone())
+                        .collect()
+                })
+                .unwrap_or_default(),
+            Some(SqlValue::Null) | None => Vec::new(),
+            Some(_) => self.rows.clone(),
         }
     }
 }

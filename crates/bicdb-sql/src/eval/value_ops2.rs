@@ -2587,7 +2587,10 @@ pub(crate) fn cast_value_to_domain_scalar(
         }));
         for constraint in constraints {
             let expression = parse_check_expression(&constraint.expression)?;
-            if matches!(eval_predicate_truth(&record, &expression)?, Some(false)) {
+            if matches!(
+                eval_predicate_truth(&record, &expression).map_err(hard_input_error)?,
+                Some(false)
+            ) {
                 return Err(SqlError::data_exception(
                     "23514",
                     format!(

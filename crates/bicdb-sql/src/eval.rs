@@ -27,6 +27,8 @@ pub(crate) mod rewrite_helpers;
 pub(crate) use rewrite_helpers::*;
 mod text_rewrite;
 pub(crate) use text_rewrite::*;
+mod soft_input;
+pub(crate) use soft_input::*;
 // Glue import: bring every crate-root item (including the root's private
 // imports and the other split modules' re-exports) into scope so the moved
 // code compiles unchanged.

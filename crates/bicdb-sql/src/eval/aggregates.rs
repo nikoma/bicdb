@@ -2353,6 +2353,17 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         ) {
             return Some("text[]".to_string());
         }
+        {
+            let arg_types = argument_nodes
+                .iter()
+                .map(|arg| projected_expr_pg_type(arg, schema))
+                .collect::<Vec<_>>();
+            if let Some(pg_type) =
+                crate::pg_functions_more::pg_function_more_result_type(unqualified_name, &arg_types)
+            {
+                return Some(pg_type);
+            }
+        }
         // Result types of the scalar functions in pg_scalar_extra.rs.
         match unqualified_name {
             "nextval" | "currval" | "setval" => return Some("int8".to_string()),

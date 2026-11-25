@@ -17,6 +17,7 @@ mod sql_parsing;
 pub(crate) use sql_parsing::*;
 mod binary_codec;
 pub(crate) use binary_codec::*;
+mod error_position;
 mod protocol_wire;
 pub(crate) use protocol_wire::*;
 mod checkpoint_driver;
@@ -2779,7 +2780,7 @@ fn handle_frontend_message(
                     server.failed_queries.fetch_add(1, Ordering::SeqCst);
                     state.record_query_error(&server.config.sql_profile);
                     log_failed_query(server, state, Some(query), &error);
-                    error_response_for_error(stream, &error)?;
+                    error_response_for_query_error(stream, &error, Some(query))?;
                     write_session_parameter_status(stream, state)?;
                     if error.closes_connection() {
                         return Ok(false);
@@ -2799,7 +2800,7 @@ fn handle_frontend_message(
                 state.record_query_error(&server.config.sql_profile);
                 state.discard_until_sync = true;
                 log_failed_query(server, state, parse_payload_sql(&payload), &error);
-                error_response_for_error(stream, &error)?;
+                error_response_for_query_error(stream, &error, parse_payload_sql(&payload))?;
                 if error.closes_connection() {
                     return Ok(false);
                 }
@@ -2861,7 +2862,7 @@ fn handle_frontend_message(
                             state.record_query_error(&server.config.sql_profile);
                             state.discard_until_sync = true;
                             log_failed_query(server, state, source_sql.as_deref(), &error);
-                            error_response_for_error(stream, &error)?;
+                            error_response_for_query_error(stream, &error, source_sql.as_deref())?;
                             if error.closes_connection() {
                                 return Ok(false);
                             }

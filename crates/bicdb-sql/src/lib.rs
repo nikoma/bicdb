@@ -286,6 +286,7 @@ mod persistence_ddl;
 mod pg_scalar_extra;
 mod pgcrypto;
 mod quantified_operators;
+mod pg_functions_more;
 mod records;
 mod routine_srf_projection;
 mod row_types;
@@ -2599,6 +2600,8 @@ pub enum SqlErrorField {
     Hint(String),
     /// Severity of a notice (`WARNING`); notices without it are `NOTICE`.
     Severity(String),
+    /// 1-based character position in the statement text (`P`).
+    Position(String),
 }
 
 fn bicdb_error_sqlstate(error: &BicDbError) -> &'static str {
@@ -2702,7 +2705,8 @@ impl SqlNotice {
                     | SqlErrorField::DataType(value)
                     | SqlErrorField::Constraint(value)
                     | SqlErrorField::Hint(value)
-                    | SqlErrorField::Severity(value) => value.len(),
+                    | SqlErrorField::Severity(value)
+                    | SqlErrorField::Position(value) => value.len(),
                 })
                 .sum::<usize>()
     }

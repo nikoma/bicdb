@@ -2013,15 +2013,20 @@ impl<'db> SqlEngine<'db> {
             Some(&self.session_gucs),
             Some(self),
         )
-        .ok()
-        .and_then(first_result_value)
-        .ok_or_else(|| {
-            undefined_function_error(self.db_ref(), function, &arg_types).unwrap_or_else(|| {
+        .and_then(|result| {
+            first_result_value(result).ok_or_else(|| {
                 SqlError::Unsupported(format!(
                     "function {} is not supported without FROM",
                     function.name
                 ))
             })
+        })
+        // A missing function is 42883, as PostgreSQL reports it.
+        .map_err(|error| match error {
+            SqlError::Unsupported(_) => {
+                undefined_function_error(self.db_ref(), function, &arg_types).unwrap_or(error)
+            }
+            other => other,
         })
     }
 
@@ -3637,15 +3642,20 @@ impl<'db> SqlEngine<'db> {
             Some(&self.session_gucs),
             Some(self),
         )
-        .ok()
-        .and_then(first_result_value)
-        .ok_or_else(|| {
-            undefined_function_error(self.db_ref(), function, &arg_types).unwrap_or_else(|| {
+        .and_then(|result| {
+            first_result_value(result).ok_or_else(|| {
                 SqlError::Unsupported(format!(
                     "function {} is not supported without FROM",
                     function.name
                 ))
             })
+        })
+        // A missing function is 42883, as PostgreSQL reports it.
+        .map_err(|error| match error {
+            SqlError::Unsupported(_) => {
+                undefined_function_error(self.db_ref(), function, &arg_types).unwrap_or(error)
+            }
+            other => other,
         })
     }
 

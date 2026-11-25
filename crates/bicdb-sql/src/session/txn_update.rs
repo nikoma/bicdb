@@ -3316,7 +3316,7 @@ impl<'db> SqlSession<'db> {
         if let Some(value) = stored {
             return Ok(value);
         }
-        match eval_builtin_function_value(function) {
+        match self.sql_engine().eval_engine_builtin_function_value(function) {
             // The context-free evaluator cannot see the catalog; the session
             // can tell a missing function (42883) from an unsupported one.
             Err(SqlError::Unsupported(message)) => {

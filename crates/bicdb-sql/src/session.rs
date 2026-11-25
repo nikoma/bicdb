@@ -71,6 +71,7 @@ mod set_functions;
 #[cfg(test)]
 mod subquery_scope_tests;
 mod transaction_defaults;
+mod vacuum_analyze;
 pub use read_only::parse_transaction_read_only;
 pub(crate) mod txn_update;
 pub(crate) mod updatable_views;
@@ -3847,6 +3848,10 @@ impl<'db> SqlSession<'db> {
         }
 
         if let Some(result) = self.execute_raw_catalog_compat(sql, true)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.execute_raw_vacuum_analyze(sql)? {
             return Ok(result);
         }
 

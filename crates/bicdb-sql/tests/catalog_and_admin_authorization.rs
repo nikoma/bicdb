@@ -152,10 +152,38 @@ fn the_owner_still_sees_its_own_catalog_rows() {
 fn analyze_requires_ownership() {
     let (_directory, mut db) = seeded();
     let mut mallory = as_mallory(&mut db);
-    let error = mallory
+    // PostgreSQL skips a relation the role may not maintain with a warning;
+    // nothing is analyzed.
+    let skipped = mallory
         .execute("ANALYZE secrets")
-        .expect_err("analyzing another tenant's table must be refused");
-    assert_refused(error);
+        .expect("ANALYZE of a foreign table is skipped, not executed");
+    assert!(
+        skipped
+            .notices
+            .iter()
+            .any(|notice| notice.message == "permission denied to analyze \"secrets\", skipping it"),
+        "{skipped:?}"
+    );
+    assert_hidden(
+        &mut mallory,
+        "SELECT most_common_vals::text FROM pg_stats WHERE tablename = 'secrets'",
+        CARD,
+    );
+    for sql in [
+        "VACUUM secrets",
+        "VACUUM (ANALYZE) secrets",
+        "VACUUM ANALYZE secrets",
+    ] {
+        let skipped = mallory.execute(sql).expect(sql);
+        assert!(
+            skipped
+                .notices
+                .iter()
+                .any(|notice| notice.message
+                    == "permission denied to vacuum \"secrets\", skipping it"),
+            "{sql}: {skipped:?}"
+        );
+    }
     // A bare ANALYZE is PostgreSQL-shaped: it succeeds but only touches the
     // tables the caller owns, so it must neither fail nor feed `secrets` into
     // the statistics catalog.

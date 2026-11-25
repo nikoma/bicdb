@@ -363,8 +363,13 @@ impl<'db> SqlEngine<'db> {
         }
 
         let mut ctes = self.ctes.clone();
+        let demand = recursive_cte_row_demand(query);
         for cte in &with.cte_tables {
-            let result = self.materialize_recursive_cte(cte, &ctes)?;
+            let row_demand = demand
+                .as_ref()
+                .filter(|(name, _)| cte_key(name) == cte_key(&cte.alias.name.value))
+                .map(|(_, rows)| *rows);
+            let result = self.materialize_recursive_cte_bounded(cte, &ctes, row_demand)?;
             ctes.insert(cte_key(&result.name), result);
         }
 
@@ -386,6 +391,20 @@ impl<'db> SqlEngine<'db> {
         &self,
         cte: &sqlparser::ast::Cte,
         outer_ctes: &BTreeMap<String, CteResult>,
+    ) -> Result<CteResult> {
+        self.materialize_recursive_cte_bounded(cte, outer_ctes, None)
+    }
+
+    /// `row_demand`: the consumer reads at most this many rows of the CTE, in production order
+    /// (`SELECT * FROM cte LIMIT n`), so the recursion may stop once it has produced them, as
+    /// PostgreSQL's incremental worktable does. Whatever the demand, the materialized rows are
+    /// bounded (BICDB_MAX_CTE_MATERIALIZED_BYTES): a recursion that never ends used to grow
+    /// until the server process was killed for memory.
+    pub(crate) fn materialize_recursive_cte_bounded(
+        &self,
+        cte: &sqlparser::ast::Cte,
+        outer_ctes: &BTreeMap<String, CteResult>,
+        row_demand: Option<usize>,
     ) -> Result<CteResult> {
         let name = cte.alias.name.value.clone();
         let key = cte_key(&name);
@@ -459,13 +478,15 @@ impl<'db> SqlEngine<'db> {
         let mut rows = anchor.rows;
         let mut working_rows = rows.clone();
         let distinct = !matches!(set_quantifier, SetQuantifier::All);
+        let mut materialized_bytes = sql_rows_memory_estimate(&rows);
+        charge_recursive_cte(&name, materialized_bytes)?;
         if distinct {
             reject_unhashable_recursive_union(&column_types)?;
         }
 
         for iteration in 0..MAX_RECURSIVE_CTE_ITERATIONS {
             self.check_cancellation()?;
-            if working_rows.is_empty() {
+            if working_rows.is_empty() || row_demand.is_some_and(|demand| rows.len() >= demand) {
                 break;
             }
             let mut ctes = outer_ctes.clone();
@@ -512,6 +533,10 @@ impl<'db> SqlEngine<'db> {
             if next_rows.is_empty() {
                 break;
             }
+            // Retained twice: the accumulated result and the next iteration's working table.
+            materialized_bytes =
+                materialized_bytes.saturating_add(2 * sql_rows_memory_estimate(&next_rows));
+            charge_recursive_cte(&name, materialized_bytes)?;
             rows.extend(next_rows.clone());
             working_rows = next_rows;
             if iteration + 1 == MAX_RECURSIVE_CTE_ITERATIONS {
@@ -521,6 +546,9 @@ impl<'db> SqlEngine<'db> {
             }
         }
 
+        if let Some(demand) = row_demand {
+            rows.truncate(demand);
+        }
         Ok(CteResult::new(name, columns, rows).with_column_types(column_types))
     }
 
@@ -3773,4 +3801,90 @@ fn reject_unhashable_recursive_union(column_types: &[Option<String>]) -> Result<
         });
     }
     Ok(())
+}
+
+fn max_cte_materialized_bytes() -> usize {
+    static LIMIT: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+    *LIMIT.get_or_init(|| {
+        match std::env::var("BICDB_MAX_CTE_MATERIALIZED_BYTES")
+            .ok()
+            .and_then(|value| value.trim().parse::<usize>().ok())
+        {
+            Some(0) => usize::MAX,
+            Some(limit) => limit,
+            None => 512 * 1024 * 1024,
+        }
+    })
+}
+
+/// Fails the statement with 53200 before a recursive CTE's rows outgrow their bound, and charges
+/// them to the statement's query memory budget.
+fn charge_recursive_cte(name: &str, bytes: usize) -> Result<()> {
+    let limit = bicdb_core::query_budget::limit(max_cte_materialized_bytes());
+    if bytes > limit {
+        return Err(SqlError::RaisedException {
+            sqlstate: "53200".to_string(),
+            message: "out of memory".to_string(),
+            detail: Some(format!(
+                "Recursive query \"{name}\" materialized more than {limit} bytes \
+                 (BICDB_MAX_CTE_MATERIALIZED_BYTES)."
+            )),
+        });
+    }
+    bicdb_core::query_budget::observe(bytes);
+    bicdb_core::query_budget::check().map_err(Into::into)
+}
+
+/// `SELECT * FROM cte [LIMIT n [OFFSET m]]` reads at most n + m rows of `cte` in production
+/// order: the only consumer shape for which stopping the recursion early cannot change a result.
+fn recursive_cte_row_demand(query: &Query) -> Option<(String, usize)> {
+    let constant = |expr: &Expr| match expr {
+        Expr::Value(value) => match &value.value {
+            Value::Number(text, _) => text.parse::<usize>().ok(),
+            _ => None,
+        },
+        _ => None,
+    };
+    let (limit, offset) = match query.limit_clause.as_ref()? {
+        sqlparser::ast::LimitClause::LimitOffset {
+            limit: Some(limit),
+            offset,
+            limit_by,
+        } if limit_by.is_empty() => (
+            constant(limit)?,
+            match offset {
+                Some(offset) => constant(&offset.value)?,
+                None => 0,
+            },
+        ),
+        _ => return None,
+    };
+    if query.order_by.is_some() || query.fetch.is_some() || !query.locks.is_empty() {
+        return None;
+    }
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        return None;
+    };
+    let plain = select.distinct.is_none()
+        && select.selection.is_none()
+        && select.having.is_none()
+        && select.qualify.is_none()
+        && select.named_window.is_empty()
+        && matches!(&select.group_by, GroupByExpr::Expressions(keys, modifiers) if keys.is_empty() && modifiers.is_empty())
+        && matches!(select.projection.as_slice(), [SelectItem::Wildcard(_)])
+        && select.from.len() == 1
+        && select.from[0].joins.is_empty();
+    if !plain {
+        return None;
+    }
+    let TableFactor::Table {
+        name, args: None, ..
+    } = &select.from[0].relation
+    else {
+        return None;
+    };
+    let [sqlparser::ast::ObjectNamePart::Identifier(ident)] = name.0.as_slice() else {
+        return None;
+    };
+    Some((ident.value.clone(), limit.saturating_add(offset)))
 }

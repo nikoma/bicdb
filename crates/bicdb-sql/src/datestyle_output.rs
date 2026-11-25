@@ -258,6 +258,18 @@ impl TemporalOutput {
                     return Some(Zone::Name(name));
                 }
             }
+            if let Some(zone) = crate::posix_tz::parse(&self.timezone) {
+                let (hour, minute, second) = parts.clock()?;
+                let year = if parts.bc { 1 - parts.year } else { parts.year };
+                let local = chrono::NaiveDate::from_ymd_opt(year as i32, parts.month, parts.day)?
+                    .and_hms_opt(hour, minute, second)?
+                    .and_utc()
+                    .timestamp();
+                let (zone_offset, name) = zone.at_utc(local - i64::from(offset));
+                if zone_offset == offset {
+                    return Some(Zone::Name(name.to_string()));
+                }
+            }
             if crate::eval::timezone_abbreviation_offset(&self.timezone) == Some(offset) {
                 return Some(Zone::Name(self.timezone.to_ascii_uppercase()));
             }

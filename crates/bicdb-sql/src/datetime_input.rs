@@ -81,6 +81,9 @@ pub(crate) struct Decoded {
     pub(crate) offset: Option<i32>,
     /// A full zone name or POSIX zone resolved at the local time.
     pub(crate) zone_name: Option<String>,
+    /// An abbreviation the session zone uses (`LMT`), resolved at the
+    /// local time: (zone, abbreviation).
+    pub(crate) zone_abbreviation: Option<(String, String)>,
     pub(crate) has_time: bool,
 }
 
@@ -540,6 +543,16 @@ impl State {
     }
 
     fn set_zone_name(&mut self, name: &str) -> Result<(), DecodeError> {
+        // An abbreviation the session zone uses takes precedence over the
+        // abbreviation table, with the meaning it has in that zone.
+        let session = crate::eval::current_timezone_name();
+        if name.bytes().all(|byte| byte.is_ascii_alphabetic())
+            && zone_uses_abbreviation(&session, name)
+        {
+            self.set(TZ)?;
+            self.tm.zone_abbreviation = Some((session, name.to_string()));
+            return Ok(());
+        }
         if let Some(offset) = crate::eval::posix_or_abbreviation_offset(name) {
             self.set(TZ)?;
             self.tm.offset = Some(offset);
@@ -552,6 +565,74 @@ impl State {
         self.tm.zone_name = Some(zone);
         Ok(())
     }
+}
+
+/// The periods of a zone: (first UTC second, offset east, abbreviation),
+/// sampled weekly from 1800 to 2100 after the zone's earliest (local mean
+/// time) period.
+fn zone_periods(zone: &str) -> Option<std::sync::Arc<Vec<(i64, i32, String)>>> {
+    use chrono::offset::{Offset, TimeZone};
+    use chrono_tz::OffsetName;
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex, OnceLock};
+    static CACHE: OnceLock<Mutex<HashMap<String, Arc<Vec<(i64, i32, String)>>>>> = OnceLock::new();
+    let tz = zone.parse::<chrono_tz::Tz>().ok()?;
+    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(periods) = cache.lock().ok()?.get(zone) {
+        return Some(periods.clone());
+    }
+    const YEAR_1000: i64 = -30_610_224_000;
+    const YEAR_1800: i64 = -5_364_662_400;
+    const YEAR_2100: i64 = 4_102_444_800;
+    let mut periods: Vec<(i64, i32, String)> = Vec::new();
+    let mut sample = |utc: i64| {
+        let Some(at) = chrono::DateTime::from_timestamp(utc, 0) else {
+            return;
+        };
+        let offset = tz.offset_from_utc_datetime(&at.naive_utc());
+        let east = offset.fix().local_minus_utc();
+        let name = offset.abbreviation().unwrap_or_default().to_string();
+        if periods
+            .last()
+            .is_none_or(|(_, last_east, last_name)| *last_east != east || *last_name != name)
+        {
+            periods.push((utc, east, name));
+        }
+    };
+    sample(YEAR_1000);
+    let mut utc = YEAR_1800;
+    while utc < YEAR_2100 {
+        sample(utc);
+        utc += 7 * 86_400;
+    }
+    let periods = Arc::new(periods);
+    cache.lock().ok()?.insert(zone.to_string(), periods.clone());
+    Some(periods)
+}
+
+/// Whether the zone ever uses the abbreviation (ignoring case).
+pub(crate) fn zone_uses_abbreviation(zone: &str, abbreviation: &str) -> bool {
+    zone_periods(zone).is_some_and(|periods| {
+        periods
+            .iter()
+            .any(|(_, _, name)| name.eq_ignore_ascii_case(abbreviation))
+    })
+}
+
+/// `pg_interpret_timezone_abbrev`: the abbreviation's offset in the zone's
+/// latest period using it at or before `utc`, else its earliest later one.
+pub(crate) fn zone_abbreviation_offset(zone: &str, abbreviation: &str, utc: i64) -> Option<i32> {
+    let periods = zone_periods(zone)?;
+    let matching = || {
+        periods
+            .iter()
+            .filter(|(_, _, name)| name.eq_ignore_ascii_case(abbreviation))
+    };
+    matching()
+        .filter(|(start, _, _)| *start <= utc)
+        .last()
+        .or_else(|| matching().next())
+        .map(|(_, east, _)| *east)
 }
 
 /// A zone name matched case-insensitively against the zone database.
@@ -646,7 +727,13 @@ pub(crate) fn decode(input: &str, order: DateOrder) -> Result<Decoded, DecodeErr
         match kind {
             FieldKind::Date => {
                 if state.fmask & DATE_M == DATE_M {
-                    state.set_zone_name(text)?;
+                    // An unknown plain word is a syntax error; only a zone
+                    // name (`Area/City`) reports an unrecognized time zone.
+                    let word = text.bytes().all(|byte| byte.is_ascii_alphabetic());
+                    state.set_zone_name(text).map_err(|error| match error {
+                        DecodeError::BadTimezone(_) if word => DecodeError::BadFormat,
+                        other => other,
+                    })?;
                 } else {
                     state.decode_date(text)?;
                 }
@@ -955,6 +1042,15 @@ pub(crate) fn decode_timestamp(
     }
     let offset = match (tm.offset, &tm.zone_name) {
         (Some(offset), _) => offset,
+        (None, _) if tm.zone_abbreviation.is_some() => {
+            let (zone, abbreviation) = tm.zone_abbreviation.as_ref().expect("checked");
+            zone_abbreviation_offset(
+                zone,
+                abbreviation,
+                local.div_euclid(1_000_000) + 946_684_800,
+            )
+            .unwrap_or(0)
+        }
         (None, Some(zone)) => {
             crate::eval::local_timestamp_offset_seconds(crate::PgTimestamp::Finite(local), zone)
                 .unwrap_or(0)

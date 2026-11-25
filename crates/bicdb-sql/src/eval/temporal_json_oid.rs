@@ -3071,6 +3071,7 @@ pub(crate) fn timezone_abbreviation_offset(name: &str) -> Option<i32> {
         "AEDT" => hours(11, 0),
         "NZST" => hours(12, 0),
         "NZDT" => hours(13, 0),
+        "MMT" => hours(6, 30),
         _ => None,
     }
 }
@@ -3210,6 +3211,7 @@ pub(crate) fn validate_timezone_name(timezone: &str) -> bool {
         || parse_fixed_timezone_offset(timezone).is_some()
         || timezone_abbreviation_offset(timezone).is_some()
         || posix_timezone(timezone).is_some()
+        || crate::posix_tz::parse(timezone).is_some()
 }
 
 pub(crate) fn parse_fixed_timezone_offset(timezone: &str) -> Option<i32> {
@@ -3312,6 +3314,8 @@ pub(crate) fn timezone_offset_at_timestamp(timezone: &str, timestamp: PgTimestam
                 .fix()
                 .local_minus_utc(),
         )
+    } else if let Some(zone) = crate::posix_tz::parse(timezone) {
+        Some(zone.at_utc(unix_micros.div_euclid(1_000_000)).0)
     } else {
         parse_fixed_timezone_offset(timezone)
     }
@@ -3368,7 +3372,17 @@ pub(crate) fn local_timestamp_offset_seconds(local: PgTimestamp, timezone: &str)
     if let Some(offset) = abbreviation_only_offset(timezone) {
         return Some(offset);
     }
-    let timezone = timezone.parse::<Tz>().ok()?;
+    let timezone = match timezone.parse::<Tz>() {
+        Ok(timezone) => timezone,
+        Err(_) => {
+            let zone = crate::posix_tz::parse(timezone)?;
+            let unix_seconds = local
+                .finite_micros()?
+                .div_euclid(1_000_000)
+                .checked_add(946_684_800)?;
+            return Some(zone.offset_for_local(unix_seconds));
+        }
+    };
     let (year, month, day, hour, minute, second, micros) = local.components()?;
     let naive = NaiveDate::from_ymd_opt(year, month, day)?
         .and_hms_micro_opt(hour, minute, second, micros)?;

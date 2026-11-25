@@ -279,6 +279,8 @@ struct Fields {
     tzm: i32,
     /// A zone abbreviation's offset (seconds east).
     gmtoffset: Option<i32>,
+    /// An abbreviation of the session zone, resolved at the parsed time.
+    zone_abbreviation: Option<String>,
 }
 
 struct Parser<'a> {
@@ -650,6 +652,21 @@ fn parse_fields(input: &str, nodes: &[Node], std: bool) -> Result<Fields> {
                         .bytes()
                         .take_while(u8::is_ascii_alphabetic)
                         .count();
+                    let session = current_timezone_name();
+                    let dynamic = (1..=letters).rev().find(|count| {
+                        crate::datetime_input::zone_uses_abbreviation(
+                            &session,
+                            &parser.rest()[..*count],
+                        )
+                    });
+                    if let Some(count) = dynamic {
+                        out.zone_abbreviation = Some(parser.rest()[..count].to_string());
+                        out.gmtoffset = None;
+                        out.tzsign = 0;
+                        parser.pos += count;
+                        skip_after_field(&mut parser, fx, &mut extra_skip);
+                        continue;
+                    }
                     let matched = (1..=letters).rev().find_map(|count| {
                         timezone_abbreviation_offset(&parser.rest()[..count])
                             .map(|offset| (count, offset))
@@ -1120,6 +1137,14 @@ fn broken_from_fields(input: &str, fields: &Fields) -> Result<Broken> {
             ));
         }
         Some(fields.tzsign * (fields.tzh * 3600 + fields.tzm * 60))
+    } else if let Some(abbreviation) = &fields.zone_abbreviation {
+        let days = days_from_civil(year, month, day);
+        let seconds = days * 86_400 + (hour * 60 + minute) * 60 + second;
+        crate::datetime_input::zone_abbreviation_offset(
+            &current_timezone_name(),
+            abbreviation,
+            seconds,
+        )
     } else {
         fields.gmtoffset
     };

@@ -89,10 +89,13 @@ Supported expression forms:
   `today`, `tomorrow`, `yesterday`, `epoch`, `±infinity` and `allballs`,
   PostgreSQL's default time zone abbreviations (`PST`, `PDT`, `EST`, `CET`,
   ... with `DST`), full zone names in any case, numeric offsets and POSIX
-  zones without daylight rules (`GMT+8`, `UTC-3`, `<+05>-5`), in input,
-  `AT TIME ZONE` and `SET TIME ZONE`; timestamp without time zone checks and
-  ignores a zone in its input. An untyped literal before `AT TIME ZONE` is
-  a timestamptz.
+  zones (`GMT+8`, `UTC-3`, `<+05>-5`, and with daylight rules such as
+  `CST7CDT,M4.1.0,M10.5.0`), in input, `AT TIME ZONE` and `SET TIME ZONE`;
+  timestamp without time zone checks and ignores a zone in its input. An
+  untyped literal before `AT TIME ZONE` is a timestamptz. As in PostgreSQL
+  18, an abbreviation the session time zone uses takes its meaning from that
+  zone (`LMT`, `MMT` in `America/Montevideo`), also in `to_timestamp`'s `TZ`
+  field.
 - Output follows the session's `DateStyle` (`ISO`, `Postgres`, `SQL`,
   `German`, with MDY/DMY order) and `IntervalStyle` for date, timestamp,
   timestamptz and interval results over the protocol; `DateStyle`,
@@ -115,7 +118,8 @@ Supported expression forms:
 - `ROWS FROM (f(...), g(...)) [WITH ORDINALITY]` over single-column
   functions, and multi-array `unnest(a, b, ...)` in FROM, zip the functions'
   rows and pad the shorter ones with NULL.
-- Literal `IN` lists, single-column `IN` subqueries, `BETWEEN`, and
+- Literal `IN` lists, single-column `IN` subqueries, `BETWEEN`,
+  `BETWEEN SYMMETRIC` / `BETWEEN ASYMMETRIC`, and
   comparison `ANY`/`ALL` over array literals.
 - JSON access with dotted metadata paths, `->`, and `->>`.
 - Common casts among booleans, integers, floats, exact textual/integer

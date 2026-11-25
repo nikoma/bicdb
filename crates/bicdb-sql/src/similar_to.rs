@@ -170,6 +170,10 @@ impl VisitorMut for SimilarToRewriter {
                 return ControlFlow::Continue(());
             }
         }
+        if let Some(expanded) = expand_between_symmetric(expr) {
+            *expr = expanded;
+            return ControlFlow::Continue(());
+        }
         if let Expr::SimilarTo {
             negated,
             expr: target,
@@ -199,6 +203,58 @@ impl VisitorMut for SimilarToRewriter {
         }
         ControlFlow::Continue(())
     }
+}
+
+/// PostgreSQL's `transformAExprBetween` for `x [NOT] BETWEEN SYMMETRIC a AND
+/// b`: `(x BETWEEN a AND b) OR (x BETWEEN b AND a)`, negated as a whole for
+/// NOT (the operand is evaluated twice, as in PostgreSQL).
+fn expand_between_symmetric(expr: &Expr) -> Option<Expr> {
+    let Expr::Between {
+        expr: target,
+        negated,
+        low,
+        high,
+    } = expr
+    else {
+        return None;
+    };
+    let Expr::Function(function) = low.as_ref() else {
+        return None;
+    };
+    if !function
+        .name
+        .to_string()
+        .eq_ignore_ascii_case(crate::parse_compat_postfix::BETWEEN_SYMMETRIC_MARKER)
+    {
+        return None;
+    }
+    let FunctionArguments::List(list) = &function.args else {
+        return None;
+    };
+    let [FunctionArg::Unnamed(FunctionArgExpr::Expr(low))] = list.args.as_slice() else {
+        return None;
+    };
+    let between = |low: &Expr, high: &Expr| {
+        Expr::Nested(Box::new(Expr::Between {
+            expr: target.clone(),
+            negated: false,
+            low: Box::new(low.clone()),
+            high: high.clone().into(),
+        }))
+    };
+    let either = Expr::Nested(Box::new(Expr::BinaryOp {
+        left: Box::new(between(low, high)),
+        op: BinaryOperator::Or,
+        right: Box::new(between(high, low)),
+    }));
+    Some(if *negated {
+        Expr::Nested(Box::new(Expr::UnaryOp {
+            op: sqlparser::ast::UnaryOperator::Not,
+            expr: Box::new(either),
+        }))
+    } else {
+        either
+    })
 }
 
 /// A string literal, or an expression cast to a character type.

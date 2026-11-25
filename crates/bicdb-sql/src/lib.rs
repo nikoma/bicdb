@@ -347,6 +347,7 @@ pub(crate) use jsonb::{
 };
 pub use jsonb::{postgres_jsonb_pretty_text, postgres_jsonb_text};
 mod jsonpath;
+mod posix_tz;
 pub(crate) use jsonpath::{
     eval_jsonpath_function_value, eval_jsonpath_operator_value, eval_jsonpath_query_values,
     jsonpath_function_pg_type, jsonpath_index_terms, normalize_jsonpath,

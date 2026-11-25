@@ -36,6 +36,9 @@ icu_collator.workspace = true
 icu_locale_core.workspace = true
 itoa.workspace = true
 md-5 = "0.10"
+# pgcrypto crypt(): bcrypt, md5-crypt, DES and extended-DES (BSDi) hashes.
+pwhash = "1.0"
+sha1.workspace = true
 num-bigint = "0.4"
 num-traits = "0.2"
 regex.workspace = true

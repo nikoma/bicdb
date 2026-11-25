@@ -273,6 +273,7 @@ mod partition;
 pub(crate) use const_fold::fold_statement_constants;
 mod error_detail;
 mod pg_scalar_extra;
+mod pgcrypto;
 mod records;
 mod row_types;
 pub(crate) use order_by_ordinal::{rewrite_dml_call_forms, rewrite_ordinal_order_by};

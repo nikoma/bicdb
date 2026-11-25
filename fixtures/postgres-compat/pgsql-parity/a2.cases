@@ -1,0 +1,19 @@
+pgcrypto.digest_hmac|CREATE EXTENSION IF NOT EXISTS pgcrypto; SELECT encode(digest('abc','sha256'),'hex'), encode(digest('abc'::bytea,'md5'),'hex'), encode(digest('abc','sha1'),'hex'), encode(digest('abc','sha512'),'hex'), encode(digest('abc','sha224'),'hex'), encode(digest('abc','sha384'),'hex'); SELECT encode(hmac('data','key','sha256'),'hex'), encode(hmac('data'::bytea,'key'::bytea,'md5'),'hex')
+pgcrypto.random|CREATE EXTENSION IF NOT EXISTS pgcrypto; SELECT length(gen_random_bytes(16)), length(gen_random_uuid()::text), pg_typeof(gen_random_bytes(4))
+pgcrypto.crypt_known_bf|CREATE EXTENSION IF NOT EXISTS pgcrypto; SELECT crypt('secret', '$2a$06$Q9a1mKpJ.ZZRYlG4RJ7PEOwVtWyg/eVpXYHdxXGxzqhr1Xh0GjU4q') = '$2a$06$Q9a1mKpJ.ZZRYlG4RJ7PEOwVtWyg/eVpXYHdxXGxzqhr1Xh0GjU4q'
+pgcrypto.crypt_md5_salt|CREATE EXTENSION IF NOT EXISTS pgcrypto; SELECT crypt('secret', '$1$saltsalt$'), crypt('secret', '$1$abc$'), crypt('', '$1$x$')
+pgcrypto.crypt_bf_salt|CREATE EXTENSION IF NOT EXISTS pgcrypto; SELECT crypt('secret', '$2a$06$abcdefghijklmnopqrstuu'), crypt('password', '$2a$10$1234567890123456789012')
+pgcrypto.crypt_des_xdes|CREATE EXTENSION IF NOT EXISTS pgcrypto; SELECT crypt('secret', 'ab'), crypt('password', '_J9..rsalt'), crypt('verylongpassword', '_J9..abcd')
+pgcrypto.gen_salt_shapes|CREATE EXTENSION IF NOT EXISTS pgcrypto; SELECT length(gen_salt('bf')), left(gen_salt('bf'),7), left(gen_salt('bf', 8),7), length(gen_salt('md5')), left(gen_salt('md5'),3), length(gen_salt('des')), length(gen_salt('xdes')), left(gen_salt('xdes'),5)
+pgcrypto.roundtrip|CREATE EXTENSION IF NOT EXISTS pgcrypto; CREATE TABLE pw(h text); INSERT INTO pw VALUES (crypt('s3cret', gen_salt('bf', 4))), (crypt('s3cret', gen_salt('md5'))), (crypt('s3cret', gen_salt('xdes'))), (crypt('s3cret', gen_salt('des'))); SELECT h = crypt('s3cret', h), h = crypt('wrong', h) FROM pw
+pgcrypto.gen_salt_bad|CREATE EXTENSION IF NOT EXISTS pgcrypto; SELECT gen_salt('nope')
+pgcrypto.bf_bad_rounds|CREATE EXTENSION IF NOT EXISTS pgcrypto; SELECT gen_salt('bf', 3)
+pgcrypto.encode_decode|CREATE EXTENSION IF NOT EXISTS pgcrypto; SELECT encode(digest('x','sha256'),'base64'), decode(encode(gen_random_bytes(0),'hex'),'hex')
+pgcrypto.crypt_variants|CREATE EXTENSION IF NOT EXISTS pgcrypto; SELECT crypt('U*U', '$2a$05$CCCCCCCCCCCCCCCCCCCCC.'), crypt('U*U', '$2y$05$CCCCCCCCCCCCCCCCCCCCC.'), crypt('', '$2a$05$CCCCCCCCCCCCCCCCCCCCC.'), crypt('password', '$1$saltsaltextra$'), crypt('pässwörd', '$1$abc$'), crypt('test', 'aZ'), crypt('test', 'aZextra')
+pgcrypto.crypt_bad_setting|CREATE EXTENSION IF NOT EXISTS pgcrypto; SELECT crypt('x', '$9$abc')
+pgcrypto.crypt_2b|CREATE EXTENSION IF NOT EXISTS pgcrypto; SELECT crypt('U*U', '$2b$05$CCCCCCCCCCCCCCCCCCCCC.')
+pgcrypto.crypt_2x|CREATE EXTENSION IF NOT EXISTS pgcrypto; SELECT crypt('U*U', '$2x$05$CCCCCCCCCCCCCCCCCCCCC.')
+pgcrypto.gen_salt_sha|CREATE EXTENSION IF NOT EXISTS pgcrypto; SELECT left(gen_salt('sha256crypt'), 3), length(gen_salt('sha512crypt'))
+pgcrypto.gen_salt_rounds_errors|CREATE EXTENSION IF NOT EXISTS pgcrypto; SELECT gen_salt('xdes', 2)
+pgcrypto.gen_salt_md5_rounds|CREATE EXTENSION IF NOT EXISTS pgcrypto; SELECT length(gen_salt('md5', 1000)), left(gen_salt('md5', 1000), 3)
+pgcrypto.null_args|CREATE EXTENSION IF NOT EXISTS pgcrypto; SELECT crypt(NULL, 'ab') IS NULL, crypt('a', NULL) IS NULL, gen_salt(NULL) IS NULL

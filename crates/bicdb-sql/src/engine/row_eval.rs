@@ -4060,6 +4060,7 @@ fn function_is_volatile(name: &str) -> bool {
             | "timeofday"
             | "gen_random_uuid"
             | "gen_random_bytes"
+            | "gen_salt"
             | "uuid_generate_v1"
             | "uuid_generate_v1mc"
             | "uuid_generate_v4"

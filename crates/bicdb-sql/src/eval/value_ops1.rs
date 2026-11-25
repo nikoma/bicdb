@@ -3406,6 +3406,7 @@ pub(crate) fn eval_bytea_function_value(
             let algorithm = args[1].to_cell().to_ascii_lowercase();
             let digest = match algorithm.as_str() {
                 "md5" => Md5::digest(bytes).to_vec(),
+                "sha1" => sha1::Sha1::digest(bytes).to_vec(),
                 "sha224" => Sha224::digest(bytes).to_vec(),
                 "sha256" => Sha256::digest(bytes).to_vec(),
                 "sha384" => Sha384::digest(bytes).to_vec(),
@@ -3423,14 +3424,22 @@ pub(crate) fn eval_bytea_function_value(
             let bytes = bytea_argument(&args[0])?.unwrap();
             let key = bytea_argument(&args[1])?.unwrap();
             let algorithm = args[2].to_cell().to_ascii_lowercase();
-            let digest = match algorithm.as_str() {
-                "sha256" => {
-                    let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(&key).map_err(|_| {
+            macro_rules! mac {
+                ($digest:ty) => {{
+                    let mut mac = <Hmac<$digest> as Mac>::new_from_slice(&key).map_err(|_| {
                         SqlError::invalid_parameter_value("invalid HMAC key length")
                     })?;
                     mac.update(&bytes);
                     mac.finalize().into_bytes().to_vec()
-                }
+                }};
+            }
+            let digest = match algorithm.as_str() {
+                "md5" => mac!(Md5),
+                "sha1" => mac!(sha1::Sha1),
+                "sha224" => mac!(Sha224),
+                "sha256" => mac!(Sha256),
+                "sha384" => mac!(Sha384),
+                "sha512" => mac!(Sha512),
                 _ => {
                     return Err(SqlError::invalid_parameter_value(format!(
                         "Cannot use \"{algorithm}\": No such hash algorithm"
@@ -3546,6 +3555,9 @@ pub(crate) fn eval_compatibility_function_value(
         return Ok(Some(value));
     }
     if let Some(value) = eval_polymorphic_array_function_value(name, args)? {
+        return Ok(Some(value));
+    }
+    if let Some(value) = crate::pgcrypto::eval_pgcrypto_function(name, args)? {
         return Ok(Some(value));
     }
     match name {

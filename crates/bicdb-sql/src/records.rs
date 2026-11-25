@@ -850,7 +850,8 @@ fn validate_prepared_checks(
                 "23514",
                 format!(
                     "new row for relation \"{}\" violates check constraint \"{}\"",
-                    table, name
+                    catalog_display_name(table),
+                    catalog_display_name(name)
                 ),
                 Some(table.to_string()),
                 None,
@@ -4363,7 +4364,8 @@ pub(crate) fn foreign_key_violation(table: &str, name: &str) -> SqlError {
         "23503",
         format!(
             "insert or update on table \"{}\" violates foreign key constraint \"{}\"",
-            table, name
+            catalog_display_name(table),
+            catalog_display_name(name)
         ),
         Some(table.to_string()),
         None,

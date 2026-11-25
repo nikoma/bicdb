@@ -700,6 +700,20 @@ impl<'db> SqlSession<'db> {
             &mut constraints,
         )?;
         reject_missing_default_operator_class(self.db_ref(), &columns, &primary_columns, "btree")?;
+        if temporary_schema {
+            // The temporary schema is searched first, so an unqualified
+            // reference to the new table's own name is a self-reference.
+            if let Some(bare) = create_table.name.0.last().and_then(|part| part.as_ident()) {
+                let bare = ident_value(bare);
+                for constraint in &mut constraints {
+                    if let ConstraintSchema::ForeignKey { foreign_table, .. } = constraint {
+                        if *foreign_table == bare {
+                            *foreign_table = table.clone();
+                        }
+                    }
+                }
+            }
+        }
         self.require_reference_privilege(&table, &constraints)?;
         for constraint in &constraints {
             if let ConstraintSchema::Unique {

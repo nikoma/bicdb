@@ -802,25 +802,29 @@ pub(crate) fn pg_class_rows_filtered(
         if oids.is_some_and(|oids| !oids.contains(&oid)) {
             continue;
         }
-        rows.push(pg_class_row(
-            oid,
-            &index_name,
-            namespace_oid(&schema_name_for_relation(&schemas, &table)),
-            None,
-            relkind,
-            primary_key_columns.len() as i64,
-            false,
-            false,
-            reltuples_for_relation(db, &table, exact_counts),
-            0,
-            false,
-            false,
-            false,
-            SqlValue::Null,
-            SqlValue::Null,
-            403,
-            false,
-            false,
+        let index_schema = schema_name_for_relation(&schemas, &table);
+        rows.push(temp_persistence(
+            &index_schema,
+            pg_class_row(
+                oid,
+                &index_name,
+                namespace_oid(&index_schema),
+                None,
+                relkind,
+                primary_key_columns.len() as i64,
+                false,
+                false,
+                reltuples_for_relation(db, &table, exact_counts),
+                0,
+                false,
+                false,
+                false,
+                SqlValue::Null,
+                SqlValue::Null,
+                403,
+                false,
+                false,
+            ),
         ));
     }
 
@@ -841,25 +845,28 @@ pub(crate) fn pg_class_rows_filtered(
         if oids.is_some_and(|oids| !oids.contains(&oid)) {
             continue;
         }
-        rows.push(pg_class_row(
-            oid,
-            &index.name,
-            namespace_oid(&index.schema_name),
-            None,
-            relkind,
-            index.relnatts,
-            false,
-            false,
-            reltuples_for_relation(db, &index.collection, exact_counts),
-            0,
-            false,
-            false,
-            false,
-            SqlValue::Null,
-            SqlValue::Null,
-            access_method_oid(&index.access_method),
-            false,
-            false,
+        rows.push(temp_persistence(
+            &index.schema_name,
+            pg_class_row(
+                oid,
+                &index.name,
+                namespace_oid(&index.schema_name),
+                None,
+                relkind,
+                index.relnatts,
+                false,
+                false,
+                reltuples_for_relation(db, &index.collection, exact_counts),
+                0,
+                false,
+                false,
+                false,
+                SqlValue::Null,
+                SqlValue::Null,
+                access_method_oid(&index.access_method),
+                false,
+                false,
+            ),
         ));
     }
 
@@ -9045,3 +9052,17 @@ thread_local! {
 #[cfg(test)]
 #[path = "catalog_rows/constraint_oid_tests.rs"]
 mod constraint_oid_tests;
+
+/// A relation in a temporary schema is `relpersistence = 't'`.
+fn temp_persistence(
+    schema_name: &str,
+    mut row: BTreeMap<String, SqlValue>,
+) -> BTreeMap<String, SqlValue> {
+    if crate::search_path::is_temp_schema(schema_name) {
+        row.insert(
+            "relpersistence".to_string(),
+            SqlValue::String("t".to_string()),
+        );
+    }
+    row
+}

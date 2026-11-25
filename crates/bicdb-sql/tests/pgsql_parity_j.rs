@@ -91,3 +91,29 @@ fn text_to_integer_casts_use_the_input_function_everywhere() {
         "invalid input syntax for type double precision: \"1.5x\""
     );
 }
+
+#[test]
+fn temporary_tables_take_triggers_and_self_references() {
+    let (_dir, mut db) = open();
+    let mut sql = SqlSession::new(&mut db);
+    for statement in [
+        "CREATE TEMP TABLE tt(a int, b int)",
+        "CREATE FUNCTION tf() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN new.b := 7; RETURN new; END$$",
+        "CREATE TRIGGER tt_t BEFORE INSERT ON tt FOR EACH ROW EXECUTE PROCEDURE tf()",
+        "INSERT INTO tt VALUES (1, 0)",
+        "CREATE TEMP TABLE tfk(id int primary key, parent int references tfk)",
+        "INSERT INTO tfk VALUES (1, NULL)",
+        "INSERT INTO tfk VALUES (2, 1)",
+        "CREATE TEMP TABLE tfp(id int primary key)",
+        "CREATE TEMP TABLE tfc(id int references tfp)",
+    ] {
+        sql.execute(statement)
+            .unwrap_or_else(|error| panic!("{statement}: {error}"));
+    }
+    assert_eq!(cells(&mut sql, "SELECT a, b FROM tt"), [["1", "7"]]);
+    assert!(error(&mut sql, "INSERT INTO tfk VALUES (3, 9)").contains("\"tfk_parent_fkey\""));
+    assert_eq!(
+        error(&mut sql, "INSERT INTO tfc VALUES (2)"),
+        "insert or update on table \"tfc\" violates foreign key constraint \"tfc_id_fkey\""
+    );
+}

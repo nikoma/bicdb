@@ -57,3 +57,5 @@ tc_jsonb2|SELECT ('{"a":"x"}'::jsonb->'a')::int
 tc_jsonb3|SELECT ('{"a":true}'::jsonb->'a')::int8
 tc_lit|SELECT '34.5'::int
 tc_concat|CREATE TABLE tc_concat(t text);INSERT INTO tc_concat VALUES ('34');SELECT concat(t, '.5')::int FROM tc_concat
+tt_idx|CREATE TEMP TABLE tt_idx(a int primary key);SELECT relname, relpersistence FROM pg_class WHERE relname LIKE 'tt_idx%' ORDER BY 1
+tt_fk3|CREATE TEMP TABLE tt_fk3(id int primary key, parent int references tt_fk3, data text);INSERT INTO tt_fk3 VALUES (1, NULL, 'a');INSERT INTO tt_fk3 VALUES (2,1,'b');SELECT * FROM tt_fk3 ORDER BY id

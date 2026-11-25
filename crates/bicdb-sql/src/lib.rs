@@ -88,6 +88,7 @@ pub fn requires_exact_decimal_units_feature(sql: &str) -> Result<bool> {
 mod aggregate_evaluation;
 mod boolean_parse;
 mod builtin_signatures;
+mod column_privileges;
 mod identity;
 pub mod oracle;
 pub mod sql_text;

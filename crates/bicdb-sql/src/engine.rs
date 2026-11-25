@@ -5277,6 +5277,7 @@ impl<'db> SqlEngine<'db> {
         let join_budget = crate::join_budget::QueryScope::enter();
         self.db_ref().check_recovery_state()?;
         crate::session::recycle_bin::ensure_replica_catalog_ready(self.db_ref())?;
+        let _column_allowances = crate::column_privileges::AllowanceScope::enter();
         self.require_from_relations_readable(query)?;
         validate_comparison_signatures(self, ComparisonStatement::Query(query))?;
         let bound_units = self.bind_exact_units_scales(query)?;

@@ -838,6 +838,7 @@ impl<'db> SqlSession<'db> {
             self.sql_engine().require_query_exact_decimal_units(query)?;
         }
         self.ensure_read_only_query(query)?;
+        let _column_allowances = crate::column_privileges::AllowanceScope::enter();
         // Every relation of the FROM tree needs SELECT before any row is read,
         // whether or not the executor ends up scanning it.
         self.sql_engine().require_from_relations_readable(query)?;
@@ -2854,19 +2855,31 @@ impl<'db> SqlSession<'db> {
             Privileges::Actions(actions) => {
                 let mut names = Vec::new();
                 for action in actions {
-                    if let Action::Update {
-                        columns: Some(columns),
-                    } = action
-                    {
+                    let column_action = match action {
+                        Action::Select {
+                            columns: Some(columns),
+                        } => Some(("SELECT", columns)),
+                        Action::Insert {
+                            columns: Some(columns),
+                        } => Some(("INSERT", columns)),
+                        Action::Update {
+                            columns: Some(columns),
+                        } => Some(("UPDATE", columns)),
+                        Action::References {
+                            columns: Some(columns),
+                        } => Some(("REFERENCES", columns)),
+                        _ => None,
+                    };
+                    if let Some((privilege, columns)) = column_action {
                         if !matches!(objects, GrantObjects::Tables(_)) || columns.is_empty() {
                             return Err(SqlError::Unsupported(
-                                "column UPDATE grants require named tables and columns".into(),
+                                "column privileges require named tables and columns".into(),
                             ));
                         }
                         names.extend(
                             columns
                                 .iter()
-                                .map(|column| ("UPDATE".to_owned(), Some(ident_value(column)))),
+                                .map(|column| (privilege.to_owned(), Some(ident_value(column)))),
                         );
                     } else {
                         names.push((privilege_action_name(action)?.to_owned(), None));
@@ -2896,13 +2909,13 @@ impl<'db> SqlSession<'db> {
             for (_, column) in &privileges {
                 if let Some(column) = column {
                     let schema = load_schema_shared(self.db_ref(), table)?;
-                    if !schema
-                        .as_ref()
-                        .is_some_and(|schema| schema.column(column).is_some())
-                    {
-                        return Err(SqlError::InvalidSql(format!(
-                            "column {column} does not exist on table {table}"
-                        )));
+                    if !schema.as_ref().is_some_and(|schema| {
+                        schema.column(column).is_some_and(|column| !column.hidden)
+                    }) {
+                        return Err(SqlError::UndefinedColumn {
+                            table: relation_name_for_message(table),
+                            column: column.clone(),
+                        });
                     }
                 }
             }

@@ -43,7 +43,7 @@ Release-specific differential SQL evidence has its own narrower scope in the
 | Plugins/extensions | Native extension ABI and ecosystem | Selected compatible SQL functions/extensions and BicDB's own WASM interfaces. PostgreSQL C extension binaries cannot be loaded as compatible plugins. |
 | Same-directory protection | Server instance/data-directory ownership controls | Native directory lock rejects concurrent writers, including a second process. This is not shared-disk/RAC or network-filesystem qualification. |
 | Backups and migration | Native physical backup/WAL plus logical exports | Native BicDB backup/restore; physical PostgreSQL backups and WAL are incompatible. Logical migration requires compatibility review and reconciliation. |
-| Client protocol | Native PostgreSQL protocol, COPY and catalogs | PostgreSQL drivers work within implemented SQL/protocol/catalog coverage. Text/CSV COPY is available; binary COPY is not supported. An unmodified arbitrary pg_dump restore is not guaranteed. |
+| Client protocol | Native PostgreSQL protocol, COPY and catalogs | PostgreSQL drivers work within implemented SQL/protocol/catalog coverage. Text, CSV and binary COPY are available (binary COPY covers built-in types). An unmodified arbitrary pg_dump restore is not guaranteed. |
 | Deployment | Native packages, containers and Kubernetes ecosystems | Native executable, container examples; Kubernetes packaging requires operator validation. No qualified first-party Kubernetes operator is claimed here. |
 
 ## Verification and qualification by area

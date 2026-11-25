@@ -661,10 +661,9 @@ pub(crate) fn aggregate_pg_type_for_sum(arg_type: String) -> Option<String> {
             "int8"
         } else if matches!(arg_type.as_str(), "int8" | "bigint") {
             "numeric"
-        } else if matches!(
-            arg_type.as_str(),
-            "float4" | "real" | "float8" | "double" | "double precision"
-        ) {
+        } else if matches!(arg_type.as_str(), "float4" | "real") {
+            "float4"
+        } else if matches!(arg_type.as_str(), "float8" | "double" | "double precision") {
             "float8"
         } else if matches!(arg_type.as_str(), "numeric" | "decimal" | "money") {
             if arg_type == "money" {
@@ -1622,7 +1621,9 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             return Some("float8".to_string());
         }
         if unqualified_name == "date_trunc" {
-            return projected_expr_pg_type(argument_nodes.get(1)?, schema);
+            return Some(date_trunc_result_type(
+                projected_expr_pg_type(argument_nodes.get(1)?, schema).as_deref(),
+            ));
         }
         if matches!(
             unqualified_name,
@@ -4285,5 +4286,25 @@ mod type_memo_ownership_tests {
                 );
             }
         });
+    }
+}
+
+/// date_trunc's result type for its argument type: timestamp and interval
+/// keep theirs; date and unknown input resolve to timestamptz.
+pub(crate) fn date_trunc_result_type(argument: Option<&str>) -> String {
+    match argument {
+        Some("timestamp") => "timestamp".to_string(),
+        Some("interval") => "interval".to_string(),
+        _ => "timestamptz".to_string(),
+    }
+}
+
+/// The result type of a math function with float8 and numeric forms: a
+/// numeric argument keeps numeric, every other numeric input resolves to
+/// float8 (PostgreSQL's preferred numeric type).
+pub(crate) fn float8_or_numeric_result_type(argument: Option<&str>) -> String {
+    match argument {
+        Some("numeric") => "numeric".to_string(),
+        _ => "float8".to_string(),
     }
 }

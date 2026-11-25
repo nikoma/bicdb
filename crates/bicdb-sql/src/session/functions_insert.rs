@@ -847,15 +847,34 @@ impl<'db> SqlSession<'db> {
             resolve_session_relation_name_if_exists(self.db_ref(), &relation_name(table_name)?);
         let preauthorized = self.take_view_target_preauthorization(&table);
         require_dml_target_exists(self.db_ref(), &table)?;
-        if !preauthorized {
-            self.require_table_privilege(&table, "INSERT")?;
+        // Without the table privilege, column INSERT grants are checked once
+        // the target columns are known.
+        let mut insert_columns_need_grants = false;
+        if !preauthorized && self.require_table_privilege(&table, "INSERT").is_err() {
+            if load_view(self.db_ref(), &table)?.is_some()
+                || insert.source.is_none()
+                || crate::column_privileges::role_column_grants(
+                    self.db_ref(),
+                    &current_user_from_gucs(&self.session_gucs),
+                    &table,
+                    "INSERT",
+                )?
+                .is_empty()
+            {
+                return Err(SqlError::BicDb(BicDbError::Authorization(
+                    relation_permission_denied_message(self.db_ref(), &table),
+                )));
+            }
+            insert_columns_need_grants = true;
         }
         validate_comparison_signatures(
             &self.sql_engine_with_ctes(ctes.clone()),
             ComparisonStatement::Insert(insert),
         )?;
-        if insert.returning.is_some() && !preauthorized {
-            self.require_table_privilege(&table, "SELECT")?;
+        if let (Some(returning), false) = (&insert.returning, preauthorized) {
+            let mut names = crate::column_privileges::ReferencedNames::default();
+            names.add_items(returning);
+            self.require_select_on_names(&table, &names, &[])?;
         }
         if let Some(view) = load_view(self.db_ref(), &table)? {
             let triggers = self.instead_of_triggers(&view.name, "insert")?;
@@ -915,6 +934,9 @@ impl<'db> SqlSession<'db> {
                     }
                     columns.truncate(width);
                 }
+            }
+            if insert_columns_need_grants {
+                self.require_column_privilege(&table, "INSERT", &columns)?;
             }
             if let Some(schema) = schema.as_deref() {
                 for column in &columns {
@@ -1310,6 +1332,43 @@ impl<'db> SqlSession<'db> {
     /// declines it and the generic path runs. The cast column values of every
     /// row come back with the records for the caller's local-constraint check.
     #[allow(clippy::type_complexity)]
+    /// `privilege` on each of `columns` of `table`, table-wide or by column
+    /// grants; PostgreSQL's 42501 otherwise.
+    pub(crate) fn require_column_privilege(
+        &self,
+        table: &str,
+        privilege: &str,
+        columns: &[String],
+    ) -> Result<()> {
+        let role = current_user_from_gucs(&self.session_gucs);
+        if crate::column_privileges::role_may_use_columns(
+            self.db_ref(),
+            &role,
+            table,
+            privilege,
+            columns,
+        )? {
+            return Ok(());
+        }
+        Err(SqlError::BicDb(BicDbError::Authorization(
+            relation_permission_denied_message(self.db_ref(), table),
+        )))
+    }
+
+    /// SELECT on the columns of `table` a statement's expressions name.
+    pub(crate) fn require_select_on_names(
+        &self,
+        table: &str,
+        names: &crate::column_privileges::ReferencedNames,
+        aliases: &[String],
+    ) -> Result<()> {
+        let mut aliases = aliases.to_vec();
+        aliases.push(table.rsplit('.').next().unwrap_or(table).to_string());
+        let columns = crate::column_privileges::relation_columns(self.db_ref(), table)?;
+        let required = names.required_columns(&columns, &aliases);
+        self.require_column_privilege(table, "SELECT", &required)
+    }
+
     /// The number of values each source row supplies, when evident before
     /// the source runs.
     fn insert_source_width(

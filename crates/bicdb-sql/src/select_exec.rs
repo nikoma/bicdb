@@ -3695,6 +3695,7 @@ pub(crate) fn is_virtual_table(table: &str) -> bool {
             | "information_schema.schemata"
             | "information_schema.role_table_grants"
             | "information_schema.table_privileges"
+            | "information_schema.column_privileges"
             | "information_schema.views"
             | "information_schema.triggers"
             | "pg_catalog.pg_database"
@@ -3891,6 +3892,9 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
         "information_schema.sequences" => information_schema_sequences(db),
         "information_schema.role_table_grants" | "information_schema.table_privileges" => {
             information_schema_role_table_grants(db)
+        }
+        "information_schema.column_privileges" => {
+            crate::column_privileges::information_schema_column_privileges(db)
         }
         "information_schema.views" => information_schema_views(db),
         "information_schema.triggers" => information_schema_triggers(db),
@@ -5257,6 +5261,16 @@ pub(crate) fn virtual_table_column_types(table: &str) -> Option<Vec<(String, Opt
             ("default_character_set_schema", "name"),
             ("default_character_set_name", "name"),
             ("sql_path", "varchar"),
+        ],
+        "information_schema.column_privileges" => &[
+            ("grantor", "name"),
+            ("grantee", "name"),
+            ("table_catalog", "name"),
+            ("table_schema", "name"),
+            ("table_name", "name"),
+            ("column_name", "name"),
+            ("privilege_type", "varchar"),
+            ("is_grantable", "varchar"),
         ],
         "information_schema.table_privileges" | "information_schema.role_table_grants" => &[
             ("grantor", "name"),

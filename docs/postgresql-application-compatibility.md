@@ -198,3 +198,25 @@ severity and SQLSTATE:
   - a referenced parent row: 23503 `update or delete on table "p" violates
     foreign key constraint "c_p_fkey" on table "c"`;
   - unsupported features lose the `unsupported SQL:` prefix (still 0A000).
+
+## Result types, statement-end foreign keys and COPY (2026-11)
+
+- Result descriptions carry PostgreSQL's types and type modifiers: casts keep
+  their modifier (`'x'::varchar(3)` describes as `character varying(3)`,
+  `numeric(5,2)`, `timestamp(0)`, `bit(3)`), `date_trunc` on a date returns
+  `timestamp with time zone` (its value too), math functions with float8 and
+  numeric forms (`ceil`, `floor`, `round`, `trunc`, `sqrt`, `power`, `exp`,
+  `ln`, `log`, `cbrt`) return numeric for a numeric argument and double
+  precision otherwise, `random()` is double precision, `generate_series` takes
+  its argument type, `to_number` is numeric, `to_timestamp` timestamptz,
+  `make_date` date, `localtimestamp` timestamp, `position` integer and
+  `sum(real)` real. A bare `VALUES ...` or `TABLE name` statement can be
+  described.
+- Non-deferred foreign keys that reference their own table are satisfied by
+  rows the same INSERT or UPDATE writes (`INSERT INTO tree VALUES (2, 1),
+  (1, NULL)`), as PostgreSQL checks them at statement end.
+- `COPY ... TO STDOUT (HEADER)` writes the header line (CSV and text); CSV
+  output quotes an empty string so it reads back as text. `COPY ... FROM STDIN
+  (HEADER MATCH)` checks the header names (22P04). `COPY ... (FORMAT binary)`
+  and the `BINARY` keyword read and write PostgreSQL's binary COPY format for
+  built-in types; HEADER with binary is refused (42601).

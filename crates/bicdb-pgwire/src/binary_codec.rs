@@ -461,7 +461,11 @@ pub(crate) fn decode_binary_range_bound(
 // Container fields need value text, whereas standalone bind parameters need
 // SQL expressions retaining their declared type. Do not embed a scalar cast
 // into an array element, range bound or composite field.
-fn decode_binary_nested_value_text(bytes: &[u8], oid: i32, db: Option<&BicDb>) -> Result<String> {
+pub(crate) fn decode_binary_nested_value_text(
+    bytes: &[u8],
+    oid: i32,
+    db: Option<&BicDb>,
+) -> Result<String> {
     if oid == 1700 {
         return decode_binary_numeric_parameter(bytes);
     }

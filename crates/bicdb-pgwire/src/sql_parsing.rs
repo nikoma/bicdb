@@ -1738,11 +1738,7 @@ pub(crate) fn parse_copy_statement(sql: &str) -> Result<Option<CopyStatement>> {
     {
         return Ok(None);
     }
-    if contains_word(trimmed, "binary") {
-        return Err(PgWireError::Server(
-            "COPY BINARY is not supported; use text or CSV COPY".to_string(),
-        ));
-    }
+    let binary = contains_word(trimmed, "binary");
     if contains_word(trimmed, "program") || contains_word(trimmed, "freeze") {
         return Err(PgWireError::Server(
             "this COPY variant is not supported by BicDB".to_string(),
@@ -1757,6 +1753,18 @@ pub(crate) fn parse_copy_statement(sql: &str) -> Result<Option<CopyStatement>> {
         CopyFormat::Text
     };
     let header = contains_word(after_direction, "header");
+    if binary && (header || format == CopyFormat::Csv) {
+        return Err(PgWireError::Sql(bicdb_sql::SqlError::RaisedException {
+            sqlstate: "42601".to_string(),
+            message: if header {
+                "cannot specify HEADER in BINARY mode".to_string()
+            } else {
+                "cannot specify more than one COPY format".to_string()
+            },
+            detail: None,
+        }));
+    }
+    let header_match = header && contains_word(after_direction, "match");
 
     match direction {
         CopyDirection::FromStdin => {
@@ -1778,6 +1786,10 @@ pub(crate) fn parse_copy_statement(sql: &str) -> Result<Option<CopyStatement>> {
                 format,
                 query: None,
                 header,
+                header_match,
+                header_expected: Vec::new(),
+                binary,
+                binary_column_oids: Vec::new(),
             }))
         }
         CopyDirection::ToStdout => {
@@ -1799,6 +1811,10 @@ pub(crate) fn parse_copy_statement(sql: &str) -> Result<Option<CopyStatement>> {
                     format,
                     query: Some(target[1..target.len() - 1].trim().to_string()),
                     header,
+                    header_match,
+                    header_expected: Vec::new(),
+                    binary,
+                    binary_column_oids: Vec::new(),
                 }))
             } else {
                 let (relation, columns, relation_sql) = parse_copy_table_target(target)?;
@@ -1810,6 +1826,10 @@ pub(crate) fn parse_copy_statement(sql: &str) -> Result<Option<CopyStatement>> {
                     format,
                     query: None,
                     header,
+                    header_match,
+                    header_expected: Vec::new(),
+                    binary,
+                    binary_column_oids: Vec::new(),
                 }))
             }
         }
@@ -1911,6 +1931,10 @@ pub(crate) fn copy_in_data(state: &mut ConnectionState, payload: &[u8]) -> Resul
         .copy_in
         .as_mut()
         .ok_or_else(|| PgWireError::Protocol("COPY FROM STDIN is not active".to_string()))?;
+    if copy.spec.binary {
+        copy.pending_bytes.extend_from_slice(payload);
+        return copy_in_binary_rows(copy);
+    }
     // Decode everything up to a character split by the message boundary;
     // keep its leading bytes for the next CopyData.
     copy.pending_bytes.extend_from_slice(payload);
@@ -2250,6 +2274,13 @@ pub(crate) fn copy_in_line(copy: &mut CopyInState, line: &str) -> Result<()> {
     }
     if copy.spec.header && !copy.header_seen {
         copy.header_seen = true;
+        if copy.spec.header_match {
+            let fields = match copy.spec.format {
+                CopyFormat::Text => parse_copy_text_row(line),
+                CopyFormat::Csv => parse_copy_csv_row(line),
+            }?;
+            check_copy_header(&fields, &copy.spec.header_expected)?;
+        }
         return Ok(());
     }
     let row = match copy.spec.format {
@@ -2258,6 +2289,189 @@ pub(crate) fn copy_in_line(copy: &mut CopyInState, line: &str) -> Result<()> {
     }?;
     copy.rows.push(row);
     Ok(())
+}
+
+pub(crate) const PGCOPY_SIGNATURE: &[u8; 11] = b"PGCOPY\n\xff\r\n\0";
+
+fn bad_copy_data(message: &str) -> PgWireError {
+    PgWireError::Sql(bicdb_sql::SqlError::RaisedException {
+        sqlstate: "22P04".to_string(),
+        message: message.to_string(),
+        detail: None,
+    })
+}
+
+/// Decodes complete binary COPY tuples from the pending bytes into text rows
+/// (the form every COPY row takes before insertion); a partial tuple waits
+/// for the next CopyData.
+pub(crate) fn copy_in_binary_rows(copy: &mut CopyInState) -> Result<()> {
+    let mut offset = 0usize;
+    let bytes = std::mem::take(&mut copy.pending_bytes);
+    let read_i16 = |at: usize| -> Option<i16> {
+        bytes
+            .get(at..at + 2)
+            .map(|b| i16::from_be_bytes([b[0], b[1]]))
+    };
+    let read_i32 = |at: usize| -> Option<i32> {
+        bytes
+            .get(at..at + 4)
+            .map(|b| i32::from_be_bytes([b[0], b[1], b[2], b[3]]))
+    };
+    if !copy.header_seen {
+        if bytes.len() < 19 {
+            copy.pending_bytes = bytes;
+            return Ok(());
+        }
+        if &bytes[..11] != PGCOPY_SIGNATURE {
+            return Err(bad_copy_data("COPY file signature not recognized"));
+        }
+        let flags = read_i32(11).unwrap_or(0);
+        if flags & 0x0001_0000 != 0 {
+            return Err(bad_copy_data("invalid COPY file header (WITH OIDS)"));
+        }
+        let extension = read_i32(15).unwrap_or(0);
+        if extension < 0 {
+            return Err(bad_copy_data("invalid COPY file header (missing length)"));
+        }
+        let start = 19 + extension as usize;
+        if bytes.len() < start {
+            copy.pending_bytes = bytes;
+            return Ok(());
+        }
+        copy.header_seen = true;
+        offset = start;
+    }
+    loop {
+        if copy.binary_trailer_seen {
+            return Ok(());
+        }
+        let Some(count) = read_i16(offset) else {
+            break;
+        };
+        if count == -1 {
+            copy.binary_trailer_seen = true;
+            return Ok(());
+        }
+        let expected = copy.spec.binary_column_oids.len();
+        if count < 0 || count as usize != expected {
+            return Err(bad_copy_data(&format!(
+                "row field count is {count}, expected {expected}"
+            )));
+        }
+        let mut cursor = offset + 2;
+        let mut fields = Vec::with_capacity(expected);
+        let mut complete = true;
+        for index in 0..expected {
+            let Some(length) = read_i32(cursor) else {
+                complete = false;
+                break;
+            };
+            cursor += 4;
+            if length == -1 {
+                fields.push(None);
+                continue;
+            }
+            if length < 0 {
+                return Err(bad_copy_data("invalid field size"));
+            }
+            let Some(field) = bytes.get(cursor..cursor + length as usize) else {
+                complete = false;
+                break;
+            };
+            cursor += length as usize;
+            let oid = copy.spec.binary_column_oids[index];
+            fields.push(Some(decode_binary_nested_value_text(field, oid, None)?));
+        }
+        if !complete {
+            break;
+        }
+        copy.rows.push(fields);
+        offset = cursor;
+        spill_copy_rows_if_needed(copy)?;
+    }
+    copy.pending_bytes = bytes[offset..].to_vec();
+    Ok(())
+}
+
+/// One binary COPY tuple: field count, then each field's length and bytes.
+pub(crate) fn render_copy_binary_row(
+    db: &BicDb,
+    row: &[SqlValue],
+    column_types: &[i32],
+) -> Result<Vec<u8>> {
+    let mut output = Vec::new();
+    output.extend_from_slice(&(row.len() as i16).to_be_bytes());
+    for (index, value) in row.iter().enumerate() {
+        if matches!(value, SqlValue::Null) {
+            output.extend_from_slice(&(-1i32).to_be_bytes());
+            continue;
+        }
+        let oid = column_types.get(index).copied().unwrap_or(25);
+        let encoded = encode_result_value_with_db(db, value, oid, 1)?;
+        output.extend_from_slice(&(encoded.len() as i32).to_be_bytes());
+        output.extend_from_slice(&encoded);
+    }
+    Ok(output)
+}
+
+/// The binary COPY file header: signature, flags and an empty extension.
+pub(crate) fn copy_binary_header() -> Vec<u8> {
+    let mut output = PGCOPY_SIGNATURE.to_vec();
+    output.extend_from_slice(&0i32.to_be_bytes());
+    output.extend_from_slice(&0i32.to_be_bytes());
+    output
+}
+
+/// PostgreSQL's `HEADER MATCH` check of a COPY FROM header line.
+fn check_copy_header(fields: &[Option<String>], expected: &[String]) -> Result<()> {
+    let bad = |message: String| {
+        PgWireError::Sql(bicdb_sql::SqlError::RaisedException {
+            sqlstate: "22P04".to_string(),
+            message,
+            detail: None,
+        })
+    };
+    if fields.len() != expected.len() {
+        return Err(bad(format!(
+            "wrong number of fields in header line: got {}, expected {}",
+            fields.len(),
+            expected.len()
+        )));
+    }
+    for (index, (field, name)) in fields.iter().zip(expected).enumerate() {
+        let Some(field) = field else {
+            return Err(bad(format!(
+                "column name mismatch in header line field {}: got null value (\"\\N\"), expected \"{name}\"",
+                index + 1
+            )));
+        };
+        if field != name {
+            return Err(bad(format!(
+                "column name mismatch in header line field {}: got \"{field}\", expected \"{name}\"",
+                index + 1
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// The header line of `COPY ... TO STDOUT (HEADER)`: the column names.
+pub(crate) fn render_copy_header(columns: &[String], format: CopyFormat) -> Vec<u8> {
+    let mut output = String::new();
+    for (idx, name) in columns.iter().enumerate() {
+        if idx > 0 {
+            output.push(match format {
+                CopyFormat::Text => '\t',
+                CopyFormat::Csv => ',',
+            });
+        }
+        match format {
+            CopyFormat::Text => output.push_str(&render_copy_text_value(Some(name))),
+            CopyFormat::Csv => output.push_str(&render_copy_csv_value(Some(name))),
+        }
+    }
+    output.push('\n');
+    output.into_bytes()
 }
 
 pub(crate) fn parse_copy_text_row(line: &str) -> Result<Vec<Option<String>>> {
@@ -2385,7 +2599,8 @@ pub(crate) fn render_copy_csv_value(value: Option<&str>) -> String {
     let Some(value) = value else {
         return String::new();
     };
-    if value.contains([',', '"', '\n', '\r']) {
+    // An empty string is quoted so it reads back as text, not NULL.
+    if value.is_empty() || value.contains([',', '"', '\n', '\r']) {
         format!("\"{}\"", value.replace('"', "\"\""))
     } else {
         value.to_string()
@@ -2411,24 +2626,34 @@ pub(crate) fn copy_in_column_count(
 
 pub(crate) fn copy_in_response(
     stream: &mut ClientStream,
-    _copy: &CopyStatement,
+    copy: &CopyStatement,
     column_count: usize,
 ) -> Result<()> {
+    let format = i16::from(copy.binary);
     let mut payload = Vec::new();
-    payload.push(0);
+    payload.push(format as u8);
     put_i16(&mut payload, column_count as i16);
     for _ in 0..column_count {
-        put_i16(&mut payload, 0);
+        put_i16(&mut payload, format);
     }
     write_message(stream, b'G', &payload)
 }
 
 pub(crate) fn copy_out_response(stream: &mut ClientStream, result: &SqlResult) -> Result<()> {
+    copy_out_response_with_format(stream, result, false)
+}
+
+pub(crate) fn copy_out_response_with_format(
+    stream: &mut ClientStream,
+    result: &SqlResult,
+    binary: bool,
+) -> Result<()> {
+    let format = i16::from(binary);
     let mut payload = Vec::new();
-    payload.push(0);
+    payload.push(format as u8);
     put_i16(&mut payload, result.columns.len() as i16);
     for _ in &result.columns {
-        put_i16(&mut payload, 0);
+        put_i16(&mut payload, format);
     }
     write_message(stream, b'H', &payload)
 }
@@ -3239,6 +3464,10 @@ pub(crate) fn is_describable_query(sql: &str) -> bool {
         || normalized.starts_with("show ")
         || normalized == "show"
         || (normalized.starts_with("with ") && !is_mutating_with_sql(normalized))
+        // A bare VALUES list and `TABLE name` return rows like a SELECT.
+        || normalized.starts_with("values ")
+        || normalized.starts_with("values(")
+        || normalized.starts_with("table ")
 }
 
 pub(crate) fn returning_describe_result(

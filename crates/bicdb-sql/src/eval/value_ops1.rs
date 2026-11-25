@@ -31,6 +31,17 @@ pub(crate) fn eval_privilege_function_value(
                 &current_user_from_gucs(session_gucs),
             )?)))
         }
+        "has_column_privilege"
+        | "pg_catalog.has_column_privilege"
+        | "has_any_column_privilege"
+        | "pg_catalog.has_any_column_privilege" => {
+            crate::column_privileges::has_column_privilege_value(
+                db,
+                name,
+                args,
+                &current_user_from_gucs(session_gucs),
+            )
+        }
         "has_function_privilege" | "pg_catalog.has_function_privilege" => {
             if args.iter().any(|value| matches!(value, SqlValue::Null)) {
                 return Ok(Some(SqlValue::Null));
@@ -3936,11 +3947,14 @@ pub(crate) fn eval_compatibility_function_value(
             }
             let field = args[0].to_cell();
             let timestamp_text = args[1].to_cell();
-            if arg_types
-                .and_then(|types| types.get(1))
-                .and_then(Option::as_deref)
-                == Some("timestamptz")
-            {
+            // date_trunc(text, date) resolves to the timestamptz form, as
+            // PostgreSQL casts the date to timestamptz.
+            if matches!(
+                arg_types
+                    .and_then(|types| types.get(1))
+                    .and_then(Option::as_deref),
+                Some("timestamptz" | "date")
+            ) {
                 let timestamp = parse_timestamptz(&timestamp_text)
                     .map_err(|error| postgres_timestamptz_input_error(&timestamp_text, error))?;
                 let Some(micros) = timestamp.finite_micros() else {

@@ -3790,6 +3790,20 @@ impl<'db> SqlEngine<'db> {
             }
         }
         let rows = if include_row { vec![row] } else { Vec::new() };
-        validate_integer_result_types(SqlResult::new(columns, rows).with_column_types(column_types))
+        let metadata = select
+            .projection
+            .iter()
+            .map(|item| match item {
+                SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => {
+                    crate::materialize::cast_column_metadata(expr).unwrap_or_default()
+                }
+                _ => SqlColumnMetadata::default(),
+            })
+            .collect();
+        validate_integer_result_types(
+            SqlResult::new(columns, rows)
+                .with_column_types(column_types)
+                .with_column_metadata(metadata),
+        )
     }
 }

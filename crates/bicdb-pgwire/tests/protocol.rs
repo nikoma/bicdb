@@ -3476,7 +3476,7 @@ fn assert_bytea_copy_csv_roundtrip(config: PgWireConfig) {
 }
 
 #[test]
-fn copy_binary_returns_clear_postgresql_shaped_error() {
+fn copy_binary_writes_postgresql_binary_copy_format() {
     let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
@@ -3497,11 +3497,24 @@ fn copy_binary_returns_clear_postgresql_shaped_error() {
     assert!(read_query_rows(&mut client).is_empty());
 
     send_query(&mut client, "COPY patients TO STDOUT BINARY;");
-    let (error, status) = read_error_response_with_status(&mut client);
-    assert_eq!(status, b'I');
-    assert!(error.contains("ERROR"));
-    assert!(error.contains("XX000"));
-    assert!(error.contains("COPY BINARY is not supported"));
+    let mut data = Vec::new();
+    let mut overall_format = None;
+    loop {
+        let (tag, payload) = read_message(&mut client);
+        match tag {
+            b'H' => overall_format = Some(payload[0]),
+            b'd' => data.extend_from_slice(&payload),
+            b'Z' => break,
+            b'E' => panic!("{}", String::from_utf8_lossy(&payload)),
+            _ => {}
+        }
+    }
+    assert_eq!(overall_format, Some(1));
+    // Signature, flags, header extension, then the end-of-data marker.
+    let mut expected = b"PGCOPY\n\xff\r\n\0".to_vec();
+    expected.extend_from_slice(&[0; 8]);
+    expected.extend_from_slice(&(-1i16).to_be_bytes());
+    assert_eq!(data, expected);
 
     client.write_all(b"X\0\0\0\x04").unwrap();
     server.join().unwrap();

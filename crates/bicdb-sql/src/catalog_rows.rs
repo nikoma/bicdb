@@ -3924,7 +3924,9 @@ pub(crate) fn filter_information_schema_rows_for_role(
 ) -> Result<Vec<BTreeMap<String, SqlValue>>> {
     if matches!(
         table,
-        "information_schema.role_table_grants" | "information_schema.table_privileges"
+        "information_schema.role_table_grants"
+            | "information_schema.table_privileges"
+            | "information_schema.column_privileges"
     ) {
         if normalize_role_name(role) == BOOTSTRAP_ROLE_NAME || pg_role_is_superuser(db, role)? {
             return Ok(rows);
@@ -3937,7 +3939,11 @@ pub(crate) fn filter_information_schema_rows_for_role(
                 let grantee = sql_value_text(&virtual_cell(row, "grantee")).unwrap_or_default();
                 roles.contains(&normalize_role_name(&grantor))
                     || roles.contains(&normalize_role_name(&grantee))
-                    || table == "information_schema.table_privileges" && grantee == "PUBLIC"
+                    || matches!(
+                        table,
+                        "information_schema.table_privileges"
+                            | "information_schema.column_privileges"
+                    ) && grantee == "PUBLIC"
             })
             .collect());
     }

@@ -6785,9 +6785,27 @@ pub(crate) fn undefined_function_error<'a>(
     arg_types: &[Option<String>],
 ) -> Option<SqlError> {
     let db = db.into();
+    if is_aggregate_function(function) || function.over.is_some() {
+        return None;
+    }
     let full = object_name(&function.name).ok()?.to_ascii_lowercase();
     let name = full.rsplit('.').next().unwrap_or(&full).to_string();
-    if crate::builtin_signatures::PG_CATALOG_FUNCTION_SIGNATURES
+    // SQL value functions are keywords, not pg_proc entries.
+    if matches!(
+        name.as_str(),
+        "localtimestamp"
+            | "localtime"
+            | "current_time"
+            | "current_timestamp"
+            | "current_date"
+            | "current_user"
+            | "current_role"
+            | "session_user"
+            | "user"
+            | "current_catalog"
+            | "current_schema"
+            | "system_user"
+    ) || crate::builtin_signatures::PG_CATALOG_FUNCTION_SIGNATURES
         .iter()
         .any(|(builtin, _)| builtin.eq_ignore_ascii_case(&name))
     {

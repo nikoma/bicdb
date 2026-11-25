@@ -29,8 +29,8 @@ prove application compatibility. The starting point is the
 4. Review and adapt schema SQL first. Preserve an explicit record of changes;
    never silently skip failed statements. Restore reviewed SQL through `psql`
    against the target, for example `psql "$TARGET_DSN" --set ON_ERROR_STOP=on
-   --file reviewed-schema.sql`. Load data using compatible SQL or text/CSV COPY;
-   binary COPY is unsupported. Large imports should use bounded batches with
+   --file reviewed-schema.sql`. Load data using compatible SQL or text, CSV or
+   binary COPY. Large imports should use bounded batches with
    reconciliation rather than one unbounded transaction.
 5. Reconcile row counts, primary/foreign keys, sequence positions and representative
    value hashes, including NULLs, precision, bytea, timestamps and text. Rebuild

@@ -1671,7 +1671,10 @@ pub(crate) fn postgres_figure_column_name(expr: &Expr) -> Option<(String, u8)> {
         Expr::Tuple(_) => Some(("row".to_string(), 2)),
         Expr::Interval(_) => Some(("interval".to_string(), 1)),
         Expr::Extract { .. } => Some(("extract".to_string(), 2)),
-        Expr::Substring { .. } => Some(("substring".to_string(), 2)),
+        Expr::Substring { shorthand, .. } => Some((
+            if *shorthand { "substr" } else { "substring" }.to_string(),
+            2,
+        )),
         Expr::Position { .. } => Some(("position".to_string(), 2)),
         Expr::Trim { .. } => Some(("btrim".to_string(), 2)),
         Expr::Ceil { .. } => Some(("ceil".to_string(), 2)),

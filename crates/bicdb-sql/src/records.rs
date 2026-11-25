@@ -395,7 +395,7 @@ pub(crate) fn validate_records_for_write(
         validate_record_columns(table, schema, record)?;
         validate_prepared_checks(table, schema, record, &checks, check_engine)?;
         partition::validate_record(db, schema, record)?;
-        validate_foreign_keys(db, tx, table, schema, record)?;
+        validate_foreign_keys_in_statement(db, tx, table, schema, record, records)?;
     }
     validate_unique_constraints(db, tx, table, schema, records, allow_existing_same_id)?;
     validate_exclusion_constraints(db, table, schema, records, allow_existing_same_id)
@@ -417,7 +417,7 @@ pub(crate) fn validate_records_for_write_prechecked(
     }
     for record in records {
         partition::validate_record(db, schema, record)?;
-        validate_foreign_keys(db, tx, table, schema, record)?;
+        validate_foreign_keys_in_statement(db, tx, table, schema, record, records)?;
     }
     validate_unique_constraints(db, tx, table, schema, records, allow_existing_same_id)?;
     validate_exclusion_constraints(db, table, schema, records, allow_existing_same_id)
@@ -468,7 +468,15 @@ pub(crate) fn validate_updated_records(
                     continue;
                 }
             }
-            validate_foreign_key_constraint(db, tx, table, schema, record, constraint)?;
+            validate_foreign_key_constraint_in_statement(
+                db,
+                tx,
+                table,
+                schema,
+                record,
+                constraint,
+                after_records,
+            )?;
         }
     }
     if !before_after_records.is_empty() {
@@ -2809,6 +2817,67 @@ pub(crate) fn validate_foreign_keys(
         validate_foreign_key_constraint(db, tx, table, schema, record, constraint)?;
     }
     Ok(())
+}
+
+/// `validate_foreign_keys` for one row of a statement that writes `rows`.
+/// PostgreSQL checks a non-deferred foreign key at the end of the statement,
+/// so a self-reference to a row the same statement writes is satisfied.
+pub(crate) fn validate_foreign_keys_in_statement(
+    db: &BicDb,
+    tx: Option<&Transaction>,
+    table: &str,
+    schema: &TableSchema,
+    record: &Record,
+    rows: &[Record],
+) -> Result<()> {
+    if schema.referential_checks_disabled {
+        return Ok(());
+    }
+    for constraint in &schema.constraints {
+        validate_foreign_key_constraint_in_statement(
+            db, tx, table, schema, record, constraint, rows,
+        )?;
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_foreign_key_constraint_in_statement(
+    db: &BicDb,
+    tx: Option<&Transaction>,
+    table: &str,
+    schema: &TableSchema,
+    record: &Record,
+    constraint: &ConstraintSchema,
+    rows: &[Record],
+) -> Result<()> {
+    let error = match validate_foreign_key_constraint(db, tx, table, schema, record, constraint) {
+        Ok(()) => return Ok(()),
+        Err(error) if error.sqlstate() == "23503" => error,
+        Err(error) => return Err(error),
+    };
+    let ConstraintSchema::ForeignKey {
+        columns,
+        foreign_table,
+        referred_columns,
+        ..
+    } = constraint
+    else {
+        return Err(error);
+    };
+    let self_reference = foreign_table == table
+        || resolve_session_relation_name_if_exists(db, foreign_table)
+            == resolve_session_relation_name_if_exists(db, table);
+    if !self_reference {
+        return Err(error);
+    }
+    let key = record_column_values(record, schema, columns);
+    for row in rows {
+        let candidate = record_column_values(row, schema, referred_columns);
+        if typed_column_values_not_distinct(schema, referred_columns, &candidate, &key)? {
+            return Ok(());
+        }
+    }
+    Err(error)
 }
 
 pub(crate) fn validate_foreign_key_constraint(

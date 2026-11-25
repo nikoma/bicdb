@@ -1492,6 +1492,12 @@ impl<'db> SqlEngine<'db> {
         if role_has_table_privilege(self.db_ref(), &role, table, privilege)? {
             return Ok(());
         }
+        // A query admitted through column grants reads its relation here.
+        if privilege.eq_ignore_ascii_case("SELECT")
+            && crate::column_privileges::allowed(&role, table)
+        {
+            return Ok(());
+        }
         // A relation that does not exist is reported as such, not as a
         // privilege failure.
         let exists = self

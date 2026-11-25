@@ -813,10 +813,20 @@ impl<'db> SqlSession<'db> {
             &self.sql_engine_with_ctes(ctes.clone()),
             ComparisonStatement::Update(update),
         )?;
-        // RETURNING projects the affected rows back to the caller, so it is a
-        // read. Without this, an UPDATE-only grant was a full table read.
-        if update.returning.is_some() && !preauthorized {
-            self.require_table_privilege(&table, "SELECT")?;
+        // Columns the statement reads (SET expressions, WHERE, RETURNING)
+        // need SELECT, as in PostgreSQL: an UPDATE-only grant is not a read.
+        if !preauthorized {
+            let mut names = crate::column_privileges::ReferencedNames::default();
+            for assignment in &update.assignments {
+                names.add_expr(&assignment.value);
+            }
+            if let Some(selection) = &update.selection {
+                names.add_expr(selection);
+            }
+            if let Some(returning) = &update.returning {
+                names.add_items(returning);
+            }
+            self.require_select_on_names(&table, &names, std::slice::from_ref(&target_alias))?;
         }
         if let Some(view) = load_view(self.db_ref(), &table)? {
             let triggers = self.instead_of_triggers(&view.name, "update")?;
@@ -2216,8 +2226,15 @@ impl<'db> SqlSession<'db> {
             &self.sql_engine_with_ctes(ctes.clone()),
             ComparisonStatement::Delete(delete),
         )?;
-        if delete.returning.is_some() && !preauthorized {
-            self.require_table_privilege(&table, "SELECT")?;
+        if !preauthorized {
+            let mut names = crate::column_privileges::ReferencedNames::default();
+            if let Some(selection) = &delete.selection {
+                names.add_expr(selection);
+            }
+            if let Some(returning) = &delete.returning {
+                names.add_items(returning);
+            }
+            self.require_select_on_names(&table, &names, std::slice::from_ref(&target_alias))?;
         }
         if let Some(view) = load_view(self.db_ref(), &table)? {
             let triggers = self.instead_of_triggers(&view.name, "delete")?;

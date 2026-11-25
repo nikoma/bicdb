@@ -13,3 +13,6 @@ window_groups_huge|CREATE TEMP TABLE s4g(a int);INSERT INTO s4g VALUES (1),(2),(
 copy_missing_relation|COPY s3_no_such_table FROM STDIN;
 to_timestamp_nan|SELECT to_timestamp('NaN'::float)
 to_timestamp_huge|SELECT to_timestamp(1e20)
+cte_limit_infinite|WITH RECURSIVE t(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM t) SELECT * FROM t LIMIT 5
+cte_limit_offset|WITH RECURSIVE t(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM t) SELECT * FROM t LIMIT 3 OFFSET 2
+exists_outer_gate|CREATE TEMP TABLE s6o(id int, y int);CREATE TEMP TABLE s6i(x int);INSERT INTO s6o VALUES (1,1),(2,10),(3,NULL);INSERT INTO s6i VALUES (1),(2),(3);SELECT id FROM s6o WHERE EXISTS (SELECT 1 FROM s6i WHERE s6i.x = s6o.id AND s6o.y > 5) ORDER BY id;SELECT id FROM s6o WHERE NOT EXISTS (SELECT 1 FROM s6i WHERE s6i.x = s6o.id AND s6o.y > 5) ORDER BY id;SELECT id FROM s6o WHERE EXISTS (SELECT count(*) FROM s6i WHERE s6o.y > 1000) ORDER BY id

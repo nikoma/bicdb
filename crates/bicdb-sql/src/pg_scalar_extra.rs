@@ -1273,19 +1273,7 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
         }
         "to_date" => {
             arity(name, args, 2..=2)?;
-            let parts = parse_timestamp_template(&text(0), &text(1))?;
-            let year = parts.year.ok_or_else(|| {
-                SqlError::invalid_parameter_value("to_date: format must include a year")
-            })?;
-            let date = chrono::NaiveDate::from_ymd_opt(
-                year,
-                parts.month.unwrap_or(1),
-                parts.day.unwrap_or(1),
-            )
-            .ok_or_else(|| {
-                SqlError::data_exception("22008", "date/time field value out of range", None)
-            })?;
-            SqlValue::String(date.format("%Y-%m-%d").to_string())
+            SqlValue::String(crate::datetime_template::to_date(&text(0), &text(1))?)
         }
         "timezone" => {
             arity(name, args, 2..=2)?;

@@ -550,12 +550,27 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
         changed = true;
     }
 
+    if let Some(next) = crate::json_table::rewrite_json_table_clauses(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
     if let Some(next) = crate::sql_json::rewrite_sql_json_functions(&rewritten) {
         rewritten = next;
         changed = true;
     }
 
     if let Some(next) = crate::routine_calls::rewrite_assignment_named_args(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
+    if let Some(next) = crate::parse_compat_postfix::rewrite(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
+    if let Some(next) = crate::parse_compat_postfix::rewrite_insert_element_targets(&rewritten) {
         rewritten = next;
         changed = true;
     }
@@ -1303,7 +1318,7 @@ pub(crate) fn sql_assignment_rhs_end(input: &str, start: usize) -> usize {
                 brackets -= 1;
                 index += 1;
             }
-            b',' if parens == 0 && brackets == 0 => return index,
+            b',' | b';' if parens == 0 && brackets == 0 => return index,
             byte if parens == 0
                 && brackets == 0
                 && (byte.is_ascii_alphabetic() || byte == b'_') =>

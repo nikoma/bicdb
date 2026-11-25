@@ -1145,6 +1145,14 @@ impl<'db> SqlSession<'db> {
         // arguments and INSERT assignments.
         let casts_bound = crate::user_casts::bind_statement_casts(&self.sql_engine(), statement)?;
         let statement = casts_bound.as_ref().unwrap_or(statement);
+        let fields_bound = crate::parse_compat_postfix::bind_composite_field_assignments(
+            self.db_ref(),
+            statement,
+        )?;
+        let statement = fields_bound.as_ref().unwrap_or(statement);
+        let targets_bound =
+            crate::parse_compat_postfix::bind_insert_element_targets(self.db_ref(), statement)?;
+        let statement = targets_bound.as_ref().unwrap_or(statement);
         // Set-returning functions of a select list that the executors do not
         // expand themselves run from the FROM clause (ProjectSet semantics).
         let srf_bound =

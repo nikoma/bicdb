@@ -68,6 +68,20 @@ fn opens_literal_position(prev: Option<u8>) -> bool {
 /// Lift plain literals out of `sql`. Returns `None` when the text has no
 /// liftable literal or contains constructs the lexer does not model.
 pub(crate) fn templatize(sql: &str) -> Option<(String, Vec<BoundLiteral>)> {
+    // `INSERT INTO t (a[1], ...)`: subscripts in the target list are names,
+    // not values, and must stay literal.
+    if sql
+        .trim_start()
+        .get(..6)
+        .is_some_and(|head| head.eq_ignore_ascii_case("insert"))
+    {
+        if let Some(bracket) = sql.find('[') {
+            let lower = sql[..bracket].to_ascii_lowercase();
+            if !lower.contains("values") && !lower.contains("select") {
+                return None;
+            }
+        }
+    }
     let bytes = sql.as_bytes();
     let mut template = String::with_capacity(sql.len());
     let mut literals = Vec::new();

@@ -94,6 +94,36 @@ USING <` / `USING >` order ascending / descending; other operators in `USING`
 and operator symbols the parser cannot tokenize as one operator (`@@@`, `===`,
 prefix `~~~`) are refused with a syntax error.
 
+## Routine DDL, extended statistics and REINDEX
+
+`ALTER ROUTINE` and `DROP ROUTINE` resolve each named signature to the
+function or procedure of that name; a missing one fails with `42883`
+(`function name(args) does not exist`), or is a notice under `IF EXISTS`.
+`ALTER FUNCTION`/`ALTER PROCEDURE` accept `RENAME TO` (refusing a duplicate
+signature with `42723`), `OWNER TO`, and the characteristics `IMMUTABLE`,
+`STABLE`, `VOLATILE`, `[NOT] LEAKPROOF`, `CALLED ON NULL INPUT`, `STRICT`,
+`SECURITY DEFINER|INVOKER`, `PARALLEL`, `COST` and `ROWS`, which are
+reflected in `pg_proc` (`provolatile`, `proisstrict`, `prosecdef`). `SET`
+configuration clauses are refused with `0A000`.
+
+`CREATE STATISTICS [IF NOT EXISTS] [name] [(kinds)] ON columns-or-expressions
+FROM table` is stored in `pg_statistic_ext` (default name
+`table_columns_stat`, default kinds `d`, `f`, `m` plus `e` for expressions)
+with PostgreSQL's errors (`42P16` for a single column, `42703`, `42P07`,
+`42P01`), table ownership required. `ALTER STATISTICS ... RENAME TO | SET
+STATISTICS | OWNER TO | SET SCHEMA` and `DROP STATISTICS [IF EXISTS]`
+complete the lifecycle; the planner does not use the objects.
+
+`REINDEX [(options)] INDEX | TABLE | SCHEMA | DATABASE | SYSTEM
+[CONCURRENTLY] name` validates its target as PostgreSQL does (`42P01`,
+`42809`, `3F000`, ownership) and is otherwise a no-op, because BicDB indexes
+are maintained transactionally and are never invalid. `REINDEX SCHEMA`,
+`DATABASE`, `SYSTEM` and any `CONCURRENTLY` form fail inside a transaction
+block with `25001`.
+
+Temporal keys (`PRIMARY KEY`/`UNIQUE` with `WITHOUT OVERLAPS`) are refused
+with `0A000`.
+
 ## Exported snapshots
 
 `pg_export_snapshot()` in a REPEATABLE READ transaction returns an identifier

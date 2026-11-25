@@ -2846,6 +2846,59 @@ pub(crate) fn transaction_timestamp_micros() -> i64 {
         .unwrap_or_else(unix_now_micros)
 }
 
+/// The transaction start time as local PostgreSQL-epoch microseconds in the
+/// session time zone: the base of the special inputs `now`, `today`,
+/// `tomorrow` and `yesterday`.
+pub(crate) fn special_local_now_micros() -> i64 {
+    let utc = transaction_timestamp_micros() - 946_684_800_000_000;
+    let offset = timezone_offset_at_timestamp(&current_timezone_name(), PgTimestamp::Finite(utc))
+        .unwrap_or(0);
+    utc + i64::from(offset) * 1_000_000
+}
+
+/// Seconds east of UTC of the PostgreSQL default time zone abbreviations.
+pub(crate) fn timezone_abbreviation_offset(name: &str) -> Option<i32> {
+    let hours = |hours: i32, minutes: i32| Some(hours * 3_600 + hours.signum() * minutes * 60);
+    match name.to_ascii_uppercase().as_str() {
+        "UTC" | "UT" | "GMT" | "Z" | "ZULU" | "WET" | "GMT0" => Some(0),
+        "EST" => hours(-5, 0),
+        "EDT" => hours(-4, 0),
+        "CST" => hours(-6, 0),
+        "CDT" => hours(-5, 0),
+        "MST" => hours(-7, 0),
+        "MDT" => hours(-6, 0),
+        "PST" => hours(-8, 0),
+        "PDT" => hours(-7, 0),
+        "AKST" => hours(-9, 0),
+        "AKDT" => hours(-8, 0),
+        "HST" => hours(-10, 0),
+        "AST" => hours(-4, 0),
+        "ADT" => hours(-3, 0),
+        "NST" => hours(-3, 30),
+        "NDT" => hours(-2, 30),
+        "WEST" | "BST" | "CET" | "MET" => hours(1, 0),
+        "CEST" | "MEST" | "EET" | "IST" => hours(2, 0),
+        "EEST" | "MSK" | "EAT" => hours(3, 0),
+        "AWST" | "SGT" | "HKT" | "WST" => hours(8, 0),
+        "JST" | "KST" => hours(9, 0),
+        "ACST" => hours(9, 30),
+        "AEST" => hours(10, 0),
+        "ACDT" => hours(10, 30),
+        "AEDT" => hours(11, 0),
+        "NZST" => hours(12, 0),
+        "NZDT" => hours(13, 0),
+        _ => None,
+    }
+}
+
+/// A time zone abbreviation that is not also a zone name.
+fn abbreviation_only_offset(name: &str) -> Option<i32> {
+    if name.parse::<Tz>().is_ok() {
+        return None;
+    }
+    timezone_abbreviation_offset(name)
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct SqlTemporalContext {
     transaction_timestamp_micros: i64,
@@ -2891,6 +2944,7 @@ pub(crate) fn validate_timezone_name(timezone: &str) -> bool {
         || timezone.eq_ignore_ascii_case("Etc/UTC")
         || timezone.parse::<Tz>().is_ok()
         || parse_fixed_timezone_offset(timezone).is_some()
+        || timezone_abbreviation_offset(timezone).is_some()
 }
 
 pub(crate) fn parse_fixed_timezone_offset(timezone: &str) -> Option<i32> {
@@ -2938,6 +2992,8 @@ pub(crate) fn current_timezone_offset_seconds() -> i32 {
         || timezone.eq_ignore_ascii_case("Etc/UTC")
     {
         0
+    } else if let Some(offset) = abbreviation_only_offset(&timezone) {
+        offset
     } else if let Ok(timezone) = timezone.parse::<Tz>() {
         timestamp
             .with_timezone(&timezone)
@@ -2982,6 +3038,8 @@ pub(crate) fn timezone_offset_at_timestamp(timezone: &str, timestamp: PgTimestam
         || timezone.eq_ignore_ascii_case("Etc/UTC")
     {
         Some(0)
+    } else if let Some(offset) = abbreviation_only_offset(timezone) {
+        Some(offset)
     } else if let Ok(timezone) = timezone.parse::<Tz>() {
         Some(
             timezone
@@ -3042,6 +3100,9 @@ pub(crate) fn local_timestamp_offset_seconds(local: PgTimestamp, timezone: &str)
     if let Some(offset) = parse_fixed_timezone_offset(timezone) {
         return Some(offset);
     }
+    if let Some(offset) = abbreviation_only_offset(timezone) {
+        return Some(offset);
+    }
     let timezone = timezone.parse::<Tz>().ok()?;
     let (year, month, day, hour, minute, second, micros) = local.components()?;
     let naive = NaiveDate::from_ymd_opt(year, month, day)?
@@ -3082,7 +3143,8 @@ pub(crate) fn split_named_timestamp_zone(value: &str) -> (&str, Option<&str>) {
     let named = zone.eq_ignore_ascii_case("UTC")
         || zone.eq_ignore_ascii_case("GMT")
         || zone.eq_ignore_ascii_case("Etc/UTC")
-        || zone.parse::<Tz>().is_ok();
+        || zone.parse::<Tz>().is_ok()
+        || timezone_abbreviation_offset(zone).is_some();
     if !named {
         return (trimmed, None);
     }
@@ -3123,10 +3185,12 @@ pub(crate) fn parse_timestamptz_in_zone(
     value: &str,
     default_timezone: &str,
 ) -> std::result::Result<PgTimestamp, PgCanonicalValueError> {
+    let normalized = crate::typed_value::normalize_postgres_datetime_words(value);
+    let value = normalized.as_deref().unwrap_or(value);
     let lower = value.trim().to_ascii_lowercase();
     if matches!(
         lower.as_str(),
-        "epoch" | "infinity" | "+infinity" | "-infinity"
+        "epoch" | "infinity" | "+infinity" | "-infinity" | "now"
     ) {
         return PgTimestamp::from_postgres_text(value, true);
     }

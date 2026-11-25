@@ -4011,7 +4011,7 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
             crate::pg_large_objects::functions::pg_largeobject_metadata_rows(db)
         }
         "pg_partitioned_table" => pg_partitioned_table_rows(db),
-        "pg_statistic_ext" | "pg_statistic_ext_data" => Ok(Vec::new()),
+        "pg_statistic_ext_data" => Ok(Vec::new()),
         "pg_enum" => pg_enum_rows(db),
         "pg_event_trigger" => Ok(Vec::new()),
         "pg_range" => pg_range_rows(db),
@@ -4042,6 +4042,7 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
         "pg_timezone_names" => Ok(pg_timezone_names_rows()),
         "pg_cursors" => Ok(crate::session::pg_cursors_rows()),
         "pg_aggregate" => crate::user_aggregates::pg_aggregate_rows(db),
+        "pg_statistic_ext" => crate::stats_ext::pg_statistic_ext_rows(db),
         "pg_settings" => Ok(pg_settings_rows()),
         "pg_stat_database" => pg_stat_database_rows(db),
         "pg_stat_all_tables" | "pg_stat_user_tables" => pg_stat_table_rows(db, None),
@@ -5715,6 +5716,7 @@ pub(crate) fn virtual_table_column_types(table: &str) -> Option<Vec<(String, Opt
         ],
         "pg_cursors" => &crate::session::PG_CURSORS_COLUMNS,
         "pg_aggregate" => &crate::user_aggregates::PG_AGGREGATE_COLUMNS,
+        "pg_statistic_ext" => &crate::stats_ext::PG_STATISTIC_EXT_COLUMNS,
         "pg_timezone_names" => &[
             ("name", "text"),
             ("abbrev", "text"),

@@ -1,0 +1,36 @@
+parse.isnull|CREATE TABLE isn(a int, b text); INSERT INTO isn VALUES (1, NULL), (2, 'x'); SELECT a FROM isn WHERE b isnull; SELECT a FROM isn WHERE b notnull; SELECT a, b isnull AS n FROM isn ORDER BY a
+parse.isnull_plpgsql|CREATE FUNCTION isn_f(x int) RETURNS text LANGUAGE plpgsql AS $$BEGIN IF x isnull THEN RETURN 'null'; END IF; RETURN 'set'; END$$; SELECT isn_f(NULL), isn_f(1)
+routine.alter_drop|CREATE FUNCTION rt_f(a int) RETURNS int LANGUAGE sql AS 'SELECT a'; CREATE PROCEDURE rt_p(a int) LANGUAGE sql AS 'SELECT 1'; ALTER ROUTINE rt_f(int) RENAME TO rt_f2; SELECT rt_f2(5); ALTER ROUTINE rt_p(int) RENAME TO rt_p2; CALL rt_p2(1); DROP ROUTINE rt_f2(int); DROP ROUTINE rt_p2(int); SELECT count(*) FROM pg_proc WHERE proname IN ('rt_f2','rt_p2')
+routine.alter_function_forms|CREATE FUNCTION af_f(a int) RETURNS int LANGUAGE sql AS 'SELECT a'; ALTER FUNCTION af_f(int) IMMUTABLE; ALTER FUNCTION af_f(int) STRICT; ALTER FUNCTION af_f(int) SECURITY DEFINER; ALTER FUNCTION af_f RENAME TO af_g; SELECT proname, provolatile, proisstrict, prosecdef FROM pg_proc WHERE proname = 'af_g'
+routine.drop_missing|DROP ROUTINE nosuch_routine(int)
+routine.drop_if_exists|DROP ROUTINE IF EXISTS nosuch_routine(int); DROP FUNCTION IF EXISTS nosuch_fn(int); DROP PROCEDURE IF EXISTS nosuch_proc(int)
+stats.create_drop|CREATE TABLE st1(a int, b int, c text); CREATE STATISTICS st1_s (ndistinct, dependencies) ON a, b FROM st1; CREATE STATISTICS ON a, c FROM st1; SELECT stxname, stxkind FROM pg_statistic_ext ORDER BY stxname; ALTER STATISTICS st1_s RENAME TO st1_r; ALTER STATISTICS st1_r SET STATISTICS 500; DROP STATISTICS st1_r; SELECT stxname FROM pg_statistic_ext ORDER BY stxname
+stats.expr_and_errors|CREATE TABLE st2(a int, b text); CREATE STATISTICS st2_e ON (a + 1), lower(b) FROM st2; CREATE STATISTICS st2_e ON a, b FROM st2
+stats.missing|CREATE TABLE st3(a int, b int); CREATE STATISTICS st3_s ON a, zz FROM st3
+stats.drop_missing|DROP STATISTICS nosuch_stat
+stats.single_column|CREATE TABLE st4(a int); CREATE STATISTICS st4_s ON a FROM st4
+reindex.forms|CREATE TABLE rx(a int PRIMARY KEY, b int); CREATE INDEX rx_b ON rx(b); INSERT INTO rx VALUES (1,2); REINDEX INDEX rx_b; REINDEX TABLE rx; REINDEX (VERBOSE false) TABLE rx; SELECT * FROM rx
+reindex.missing|REINDEX TABLE nosuch_rx
+reindex.missing_index|REINDEX INDEX nosuch_rx_idx
+reindex.in_tx|CREATE TABLE rx2(a int PRIMARY KEY); BEGIN; REINDEX TABLE rx2; COMMIT; BEGIN; REINDEX TABLE CONCURRENTLY rx2
+reindex.schema|CREATE SCHEMA rxs; CREATE TABLE rxs.t(a int PRIMARY KEY); REINDEX SCHEMA rxs; REINDEX SCHEMA nosuch_rxs
+temporal.without_overlaps|CREATE TABLE tmp_rng(id int, valid_at daterange, CONSTRAINT tmp_pk PRIMARY KEY (id, valid_at WITHOUT OVERLAPS))
+assign.array_update|CREATE TABLE aa(id int, e int[], t text[]); INSERT INTO aa VALUES (1, '{1,2,3}', '{a,b}'); UPDATE aa SET e[2] = 20, t[3] = 'c'; UPDATE aa SET e[1:2] = '{7,8}'; SELECT e, t FROM aa
+assign.array_insert|CREATE TABLE ai(id int, f int[]); INSERT INTO ai (id, f[1], f[3]) VALUES (1, 10, 30); SELECT * FROM ai
+assign.composite|CREATE TYPE cpx AS (r float8, i float8); CREATE TABLE ac(id int, c cpx); INSERT INTO ac VALUES (1, ROW(1,2)); UPDATE ac SET c.r = 9; INSERT INTO ac (id, c.i) VALUES (2, 5); SELECT id, c FROM ac ORDER BY id
+assign.jsonb_subscript|CREATE TABLE aj(j jsonb); INSERT INTO aj VALUES ('{"a":1}'); UPDATE aj SET j['b'] = '2'; SELECT j FROM aj
+window.interval_frame|CREATE TABLE wif(d date, v int); INSERT INTO wif VALUES ('2020-01-01',1),('2020-01-03',2),('2020-01-10',3); SELECT d, sum(v) OVER (ORDER BY d RANGE BETWEEN '3 days'::interval PRECEDING AND CURRENT ROW) FROM wif ORDER BY d
+window.interval_frame_following|SELECT x, count(*) OVER (ORDER BY x RANGE BETWEEN CURRENT ROW AND interval '1 hour' FOLLOWING) FROM (VALUES (timestamp '2020-01-01 00:00'), (timestamp '2020-01-01 00:30'), (timestamp '2020-01-01 02:00')) t(x) ORDER BY x
+index.collate_expr|CREATE TABLE ic(c text); CREATE INDEX ic_idx ON ic ((c COLLATE "C")); CREATE INDEX ic_idx2 ON ic (c COLLATE "C"); INSERT INTO ic VALUES ('b'),('a'); SELECT c FROM ic ORDER BY c COLLATE "C"
+expr.collate_after_cast|SELECT 'b'::text COLLATE "C" < 'a'::text COLLATE "C"
+op.triple_symbols|CREATE FUNCTION op3eq(a int, b int) RETURNS bool LANGUAGE sql AS 'SELECT a = b'; CREATE OPERATOR === (leftarg = int, rightarg = int, function = op3eq); CREATE OPERATOR !== (leftarg = int, rightarg = int, function = op3eq); SELECT 1 === 1, 2 === 3, 4 !== 4
+op.prefix_tilde3|CREATE FUNCTION optl(a text) RETURNS text LANGUAGE sql AS 'SELECT upper(a)'; CREATE OPERATOR ~~~ (rightarg = text, function = optl); SELECT ~~~ 'abc'
+op.at3|CREATE FUNCTION opat(a int, b int) RETURNS int LANGUAGE sql AS 'SELECT a + b'; CREATE OPERATOR @@@ (leftarg = int, rightarg = int, function = opat); SELECT 1 @@@ 2
+op.operator_syntax|CREATE FUNCTION op3e2(a int, b int) RETURNS bool LANGUAGE sql AS 'SELECT a = b'; CREATE OPERATOR ==! (leftarg = int, rightarg = int, function = op3e2); SELECT 3 OPERATOR(public.==!) 3, 3 ==! 4
+jt.passing|SELECT * FROM JSON_TABLE('[1,2,3,4]'::jsonb, '$[*] ? (@ > $lim)' PASSING 2 AS lim COLUMNS (v int PATH '$'))
+jt.on_error_table|SELECT * FROM JSON_TABLE('{"a":1}'::jsonb, '$.a[*]' COLUMNS (v int PATH '$') ERROR ON ERROR)
+jt.sibling_nested|SELECT * FROM JSON_TABLE('{"a":[1,2],"b":["x"]}'::jsonb, '$' COLUMNS (NESTED PATH '$.a[*]' COLUMNS (a int PATH '$'), NESTED PATH '$.b[*]' COLUMNS (b text PATH '$'))) ORDER BY a NULLS LAST, b
+dt.special_date|SELECT 'today'::date = current_date, 'tomorrow'::date - 'yesterday'::date, 'epoch'::date, 'infinity'::date, '-infinity'::date
+dt.special_timestamp|SELECT 'today'::timestamp = date_trunc('day', now()::timestamp), 'tomorrow'::timestamp - 'today'::timestamp, 'epoch'::timestamp, 'infinity'::timestamp, 'now'::timestamptz = now()
+dt.postgres_style_input|SET datestyle = 'ISO, MDY'; SET timezone = 'America/Los_Angeles'; SELECT 'Mon Feb 10 17:32:01 1997 PST'::timestamptz, 'Mon Feb 10 17:32:01 1997 PST'::timestamp, 'Feb 16 17:32:01 0097 BC'::timestamp, 'Sat Oct 11 09:00:00 2003'::timestamp
+dt.zone_abbrev|SET timezone = 'UTC'; SELECT '2000-03-15 08:14:01 EST'::timestamptz, '1997-06-10 18:32:01 PDT'::timestamptz, timestamptz '2020-01-01 12:00:00+00' AT TIME ZONE 'PST8PDT', timestamptz '2020-01-01 12:00:00+00' AT TIME ZONE 'EST', timestamptz '2020-07-01 12:00:00+00' AT TIME ZONE 'PDT'

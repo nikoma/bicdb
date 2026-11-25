@@ -41,6 +41,7 @@ pub(crate) fn is_internal_sql_collection(name: &str) -> bool {
         ROUTINE_COLLECTION,
         crate::pg_operators::OPERATOR_COLLECTION,
         crate::user_casts::CAST_COLLECTION,
+        crate::stats_ext::STATS_COLLECTION,
         crate::query_rules::RULE_COLLECTION,
         TRIGGER_COLLECTION,
         NOTIFICATION_COLLECTION,
@@ -1698,7 +1699,7 @@ pub(crate) fn execute_builtin_function_with_engine(
                 .collect::<Result<Vec<_>>>()?;
             Ok(SqlResult::new(
                 vec![name.replace("pg_catalog.", "")],
-                vec![vec![eval_to_timestamp(&args)?]],
+                vec![vec![eval_pg_to_timestamp(&args)?]],
             ))
         }
         "pg_backend_pid" | "pg_catalog.pg_backend_pid" => Ok(SqlResult::new(

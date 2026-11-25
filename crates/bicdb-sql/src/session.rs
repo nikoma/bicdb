@@ -2305,6 +2305,11 @@ pub(crate) enum DdlUndo {
         target: String,
         previous: Option<Box<crate::user_casts::UserCast>>,
     },
+    RestoreStatistics {
+        schema: String,
+        name: String,
+        previous: Option<Box<crate::stats_ext::StatsObject>>,
+    },
     DeleteNamespace {
         namespace: String,
     },
@@ -3786,6 +3791,19 @@ impl<'db> SqlSession<'db> {
             return Ok(result);
         }
 
+        if let Some(result) = self.execute_raw_routine_statement(sql)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.execute_raw_statistics(sql)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.execute_raw_reindex(sql)? {
+            return Ok(result);
+        }
+        self.refuse_temporal_keys(sql)?;
+
         if let Some(result) = self.execute_raw_drop_cast(sql)? {
             return Ok(result);
         }
@@ -3826,7 +3844,7 @@ impl<'db> SqlSession<'db> {
             return Ok(result);
         }
 
-        if let Some(function) = parse_raw_alter_procedure_owner(sql)? {
+        if let Some(function) = parse_raw_alter_procedure(sql)? {
             return self.execute_alter_routine(&function, RoutineKind::Procedure);
         }
 
@@ -4336,6 +4354,18 @@ impl<'db> SqlSession<'db> {
                 continue;
             }
             if let Some(result) = self.execute_raw_create_cast(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_routine_statement(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_statistics(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_reindex(&statement)? {
                 last_result = Some(result);
                 continue;
             }
@@ -5832,6 +5862,16 @@ impl<'db> SqlSession<'db> {
                 Some(previous) => crate::pg_operators::save_operator(self.db_mut()?, &previous)?,
                 None => crate::pg_operators::delete_operator(self.db_mut()?, &id)?,
             },
+            DdlUndo::RestoreStatistics {
+                schema,
+                name,
+                previous,
+            } => crate::stats_ext::restore_stats(
+                self.db_mut()?,
+                previous.as_deref(),
+                &schema,
+                &name,
+            )?,
             DdlUndo::RestoreUserCast {
                 source,
                 target,

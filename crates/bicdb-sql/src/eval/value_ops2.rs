@@ -745,8 +745,99 @@ pub(crate) fn array_set_slice_nd(
     Ok(())
 }
 
+/// `j[k1][k2] = v` on jsonb: `jsonb_set(j, ARRAY[k1, k2], v, true)`, with a
+/// NULL target starting from an empty object as PostgreSQL does.
+fn eval_jsonb_subscript_assign(args: &[SqlValue]) -> Result<SqlValue> {
+    let keys = nullable_array_values(&args[1], "jsonb subscript")?.unwrap_or_default();
+    let mut target = match &args[0] {
+        SqlValue::Null => JsonValue::Object(Default::default()),
+        SqlValue::Json(json) => (**json).clone(),
+        SqlValue::JsonText(text) => text.parsed().clone(),
+        other => serde_json::from_str(&other.to_cell()).map_err(|_| {
+            SqlError::InvalidSql("jsonb subscript assignment requires jsonb".to_string())
+        })?,
+    };
+    let value = match &args[4] {
+        SqlValue::Null => JsonValue::Null,
+        SqlValue::Json(json) => (**json).clone(),
+        SqlValue::JsonText(text) => text.parsed().clone(),
+        other => serde_json::from_str(&other.to_cell())
+            .map_err(|_| SqlError::invalid_text_representation("jsonb", other.to_cell()))?,
+    };
+    let mut cursor = &mut target;
+    for (position, key) in keys.iter().enumerate() {
+        let last = position + 1 == keys.len();
+        let key_text = key.to_cell();
+        cursor = match cursor {
+            JsonValue::Object(map) => {
+                if last {
+                    map.insert(key_text, value.clone());
+                    return Ok(SqlValue::Json(target.into()));
+                }
+                map.entry(key_text)
+                    .or_insert_with(|| JsonValue::Object(Default::default()))
+            }
+            JsonValue::Array(items) => {
+                let index = key_text.parse::<i64>().map_err(|_| {
+                    SqlError::data_exception(
+                        "22023",
+                        "jsonb subscript must be an integer for an array",
+                        None,
+                    )
+                })?;
+                let len = items.len() as i64;
+                let index = if index < 0 { index + len } else { index };
+                if index < 0 {
+                    return Err(SqlError::data_exception(
+                        "22023",
+                        "path element at position 1 is out of range",
+                        None,
+                    ));
+                }
+                let index = index as usize;
+                while items.len() <= index {
+                    items.push(JsonValue::Null);
+                }
+                if last {
+                    items[index] = value.clone();
+                    return Ok(SqlValue::Json(target.into()));
+                }
+                &mut items[index]
+            }
+            _ => {
+                return Err(SqlError::data_exception(
+                    "22023",
+                    "cannot replace existing key",
+                    None,
+                ))
+            }
+        };
+    }
+    Ok(SqlValue::Json(target.into()))
+}
+
 pub(crate) fn eval_array_assign(args: &[SqlValue]) -> Result<SqlValue> {
     require_arg_count("bicdb_array_assign", args, 5)?;
+    // `jsonb_col['key'] = value`: a jsonb subscript assignment.
+    if matches!(&args[0], SqlValue::Json(json) if !json.is_array())
+        || matches!(&args[0], SqlValue::JsonText(_))
+        || nullable_array_values(&args[1], "array assignment")?.is_some_and(|values| {
+            values.iter().any(
+                |value| matches!(value, SqlValue::String(text) if text.parse::<i64>().is_err()),
+            )
+        })
+    {
+        return eval_jsonb_subscript_assign(args);
+    }
+    // An untyped array literal on the right of a slice assignment.
+    let args = &match &args[4] {
+        SqlValue::String(text) if text.trim_start().starts_with('{') => {
+            let mut converted = args.to_vec();
+            converted[4] = SqlValue::Json(JsonValue::Array(parse_array_literal(text)?).into());
+            converted
+        }
+        _ => args.to_vec(),
+    };
     let lower = nullable_subscript_vector(&args[1], "array assignment")?;
     let upper = nullable_subscript_vector(&args[2], "array assignment")?;
     let slices = nullable_array_values(&args[3], "array assignment")?

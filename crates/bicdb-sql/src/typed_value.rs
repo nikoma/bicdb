@@ -832,7 +832,21 @@ impl PgDate {
             "infinity" | "+infinity" => return Ok(Self::PositiveInfinity),
             "-infinity" => return Ok(Self::NegativeInfinity),
             "epoch" => return Self::from_ymd(1970, 1, 1),
+            word @ ("now" | "today" | "tomorrow" | "yesterday") => {
+                let days = crate::eval::special_local_now_micros().div_euclid(MICROS_PER_DAY)
+                    + match word {
+                        "tomorrow" => 1,
+                        "yesterday" => -1,
+                        _ => 0,
+                    };
+                return i32::try_from(days)
+                    .map(Self::Finite)
+                    .map_err(|_| PgCanonicalValueError::TemporalOverflow("date"));
+            }
             _ => {}
+        }
+        if let Some(normalized) = normalize_postgres_datetime_words(value) {
+            return Self::from_postgres_text(&normalized);
         }
 
         if let Some(julian_day) = value
@@ -1131,9 +1145,48 @@ impl PgTimestamp {
             "+infinity" => return Ok(Self::PositiveInfinity),
             "-infinity" => return Ok(Self::NegativeInfinity),
             "epoch" => return Ok(Self::Finite(-POSTGRES_EPOCH_UNIX_DAYS * MICROS_PER_DAY)),
+            "now" if with_timezone => {
+                return Ok(Self::Finite(
+                    crate::eval::transaction_timestamp_micros() - 946_684_800_000_000,
+                ))
+            }
+            word @ ("now" | "today" | "tomorrow" | "yesterday") => {
+                let local = crate::eval::special_local_now_micros();
+                let local = if word == "now" {
+                    local
+                } else {
+                    local.div_euclid(MICROS_PER_DAY) * MICROS_PER_DAY
+                        + match word {
+                            "tomorrow" => MICROS_PER_DAY,
+                            "yesterday" => -MICROS_PER_DAY,
+                            _ => 0,
+                        }
+                };
+                if !with_timezone {
+                    return Ok(Self::Finite(local));
+                }
+                let offset = crate::eval::local_timestamp_offset_seconds(
+                    Self::Finite(local),
+                    &crate::eval::current_timezone_name(),
+                )
+                .unwrap_or(0);
+                return Ok(Self::Finite(local - i64::from(offset) * 1_000_000));
+            }
             _ => {}
         }
+        if let Some(normalized) = normalize_postgres_datetime_words(value) {
+            return Self::from_postgres_text(&normalized, with_timezone);
+        }
         let original = value.trim();
+        // A time zone on timestamp-without-time-zone input is ignored.
+        let original = if with_timezone {
+            original
+        } else {
+            match crate::eval::split_named_timestamp_zone(original) {
+                (timestamp, Some(_)) => timestamp,
+                _ => original,
+            }
+        };
         let (value, bc) = split_timestamp_era(original)?;
         let (date, clock) = split_timestamp_date_clock(value)?;
         let date_value = if bc {
@@ -1437,6 +1490,83 @@ fn split_timestamp_era(value: &str) -> Result<(&str, bool), PgCanonicalValueErro
         }
     }
     Ok((value, false))
+}
+
+/// PostgreSQL's textual datetime layout `[Dow] Mon DD HH:MM[:SS[.f]] YYYY
+/// [zone] [BC]` (the `Postgres` DateStyle output) rewritten as ISO text
+/// `YYYY-MM-DD HH:MM:SS [zone] [BC]`; `None` for other shapes.
+pub fn normalize_postgres_datetime_words(value: &str) -> Option<String> {
+    const DAYS: [&str; 14] = [
+        "mon",
+        "tue",
+        "wed",
+        "thu",
+        "fri",
+        "sat",
+        "sun",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+    ];
+    let tokens = value
+        .split_whitespace()
+        .filter(|token| !DAYS.contains(&token.trim_end_matches(',').to_ascii_lowercase().as_str()))
+        .collect::<Vec<_>>();
+    let month_at = tokens
+        .iter()
+        .position(|token| postgres_month_number(token).is_some())?;
+    if month_at != 0 {
+        return None;
+    }
+    let month = postgres_month_number(tokens[0])?;
+    let day = tokens.get(1)?;
+    if !(1..=2).contains(&day.len()) || !day.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    let mut time = None;
+    let mut year = None;
+    let mut rest = Vec::new();
+    for token in &tokens[2..] {
+        if time.is_none() && token.contains(':') && token.as_bytes()[0].is_ascii_digit() {
+            time = Some(*token);
+        } else if year.is_none()
+            && !token.is_empty()
+            && token.bytes().all(|byte| byte.is_ascii_digit())
+        {
+            year = Some(*token);
+        } else {
+            rest.push(*token);
+        }
+    }
+    let year = year?;
+    let year = if year.len() <= 2 {
+        let short = year.parse::<i32>().ok()?;
+        if short < 70 {
+            2000 + short
+        } else {
+            1900 + short
+        }
+    } else {
+        year.parse::<i32>().ok()?
+    };
+    let mut output = format!("{year:04}-{month:02}-{:02}", day.parse::<u32>().ok()?);
+    if let Some(time) = time {
+        output.push(' ');
+        output.push_str(time);
+    }
+    // Zone words first, the era last.
+    let (era, zone): (Vec<&str>, Vec<&str>) = rest
+        .into_iter()
+        .partition(|token| token.eq_ignore_ascii_case("bc") || token.eq_ignore_ascii_case("ad"));
+    for token in zone.into_iter().chain(era) {
+        output.push(' ');
+        output.push_str(token);
+    }
+    Some(output)
 }
 
 fn split_timestamp_date_clock(value: &str) -> Result<(&str, Option<&str>), PgCanonicalValueError> {

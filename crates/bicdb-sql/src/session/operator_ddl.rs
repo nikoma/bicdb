@@ -342,7 +342,7 @@ impl SqlSession<'_> {
         {
             return Err(SqlError::data_exception_public(
                 "42723",
-                format!("operator {schema}.{symbol} already exists"),
+                format!("operator {symbol} already exists"),
                 None,
             ));
         }

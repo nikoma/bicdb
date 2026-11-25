@@ -46,9 +46,34 @@ Supported expression forms:
 - `JSON_TABLE(context, path COLUMNS (...))` in FROM, including `FOR
   ORDINALITY`, typed `PATH` columns with ON EMPTY/ON ERROR, `EXISTS PATH`
   and one `NESTED PATH ... COLUMNS` per level, and joined laterally with
-  earlier FROM items (`FROM t, JSON_TABLE(t.doc, ...)`). Sibling NESTED PATH
-  clauses are refused with `0A000`; `PASSING` and a table-level `ON ERROR`
-  clause are not parsed (syntax error).
+  earlier FROM items (`FROM t, JSON_TABLE(t.doc, ...)`). `PASSING value AS
+  name` variables reach the row path and every column path, a table-level
+  `ERROR ON ERROR` / `EMPTY [ARRAY] ON ERROR` applies to the row path and to
+  columns without their own ON ERROR, and sibling `NESTED PATH` clauses
+  produce PostgreSQL's union of their rows (the other branches' columns
+  NULL). A NESTED PATH nested under sibling NESTED PATH clauses is refused
+  with `0A000`.
+- Postfix `x ISNULL` / `x NOTNULL`, `COLLATE` after a cast
+  (`'b'::text COLLATE "C"`, also in index expressions) and typed window frame
+  offsets (`RANGE BETWEEN '1 day'::interval PRECEDING AND CURRENT ROW`).
+- User operators whose names the tokenizer would split (`===`, `!==`, prefix
+  `~~~`), written infix, prefix or as `OPERATOR(schema.name)`.
+- Assignment to array elements and slices, composite fields and jsonb
+  subscripts: `UPDATE t SET a[2] = 5, a[1:2] = '{7,8}', c.f = 1, j['k'] =
+  '2'` and `INSERT INTO t (a[1], a[3], c.f) VALUES (...)` (VALUES sources).
+- Date/time input accepts `now`, `today`, `tomorrow`, `yesterday`, `epoch`
+  and `±infinity`, the `Postgres` DateStyle layout (`Mon Feb 10 17:32:01 1997
+  PST`), and PostgreSQL's default time zone abbreviations (`PST`, `PDT`,
+  `EST`, `CET`, ...) in input and `AT TIME ZONE`; timestamp without time
+  zone ignores a zone in its input.
+- `to_timestamp(text, text)` and `to_date(text, text)` follow PostgreSQL's
+  template parser: every field (`YYYY`..`Y`, `Y,YYY`, `IYYY`, `CC`, `MM`,
+  `MON`, `MONTH`, `RM`, `DD`, `DDD`, `D`, `DAY`, `DY`, `IW`, `ID`, `IDDD`,
+  `WW`, `W`, `J`, `Q`, `HH`/`HH12`/`HH24`, `MI`, `SS`, `SSSS`, `MS`, `US`,
+  `FF1`-`FF6`, `AM`/`PM`, `AD`/`BC`, `TZH`, `TZM`, `TZ`, `OF`), the `FM`,
+  `FX` and `TH` modifiers, separator and whitespace skipping, and its error
+  texts. `to_char` adds `CC`, `AD`/`BC`, `FF1`-`FF6`, the ISO week fields,
+  `RM`, `TZ`, `TZH`, `TZM` and `OF`, and returns NULL for infinite values.
 - `ROWS FROM (f(...), g(...)) [WITH ORDINALITY]` over single-column
   functions, and multi-array `unnest(a, b, ...)` in FROM, zip the functions'
   rows and pad the shorter ones with NULL.

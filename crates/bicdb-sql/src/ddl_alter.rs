@@ -4226,7 +4226,14 @@ pub fn parse_database_ddl(sql: &str) -> Result<Option<DatabaseDdl>> {
 /// The parser has an ALTER FUNCTION AST but no ALTER PROCEDURE AST. Reuse its
 /// signature/owner grammar for this single procedure operation; never accept
 /// a trailing statement or turn other procedure actions into function DDL.
+/// `ALTER PROCEDURE ... OWNER TO` only: the owner-administration boundary.
 pub(crate) fn parse_raw_alter_procedure_owner(sql: &str) -> Result<Option<AlterFunction>> {
+    Ok(parse_raw_alter_procedure(sql)?
+        .filter(|function| matches!(function.operation, AlterFunctionOperation::OwnerTo(_))))
+}
+
+/// `ALTER PROCEDURE` with OWNER TO, RENAME TO or characteristic changes.
+pub(crate) fn parse_raw_alter_procedure(sql: &str) -> Result<Option<AlterFunction>> {
     let statement = trim_sql_statement(sql);
     let Some(rest) = strip_prefix_ci(statement, "ALTER PROCEDURE ") else {
         return Ok(None);
@@ -4237,9 +4244,15 @@ pub(crate) fn parse_raw_alter_procedure_owner(sql: &str) -> Result<Option<AlterF
             "ALTER PROCEDURE requires one statement".into(),
         ));
     };
-    if !matches!(function.operation, AlterFunctionOperation::OwnerTo(_)) {
+    if !matches!(
+        function.operation,
+        AlterFunctionOperation::OwnerTo(_)
+            | AlterFunctionOperation::RenameTo { .. }
+            | AlterFunctionOperation::Actions { .. }
+    ) {
         return Err(SqlError::Unsupported(
-            "only ALTER PROCEDURE OWNER TO is supported".into(),
+            "only ALTER PROCEDURE OWNER TO, RENAME TO and characteristic changes are supported"
+                .into(),
         ));
     }
     Ok(Some(function.clone()))

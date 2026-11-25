@@ -3625,6 +3625,10 @@ fn pg_proc_rows_uncached(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> 
             SqlValue::String(routine.declared_volatility().to_string()),
         );
         row.insert(
+            "proisstrict".to_string(),
+            SqlValue::Bool(crate::user_aggregates::routine_is_strict(&routine)),
+        );
+        row.insert(
             "pronargdefaults".to_string(),
             SqlValue::Int(
                 parsed_params

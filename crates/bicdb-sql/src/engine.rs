@@ -5319,6 +5319,10 @@ impl<'db> SqlEngine<'db> {
             }
         }
 
+        if let Some(rewritten) = crate::grouping_sets::rewrite_grouping_sets(query)? {
+            return self.execute_query(&rewritten);
+        }
+
         if !query.locks.is_empty() {
             return self.execute_locking_query(query);
         }

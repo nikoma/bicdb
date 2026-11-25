@@ -3443,8 +3443,11 @@ impl<'db> SqlSession<'db> {
                 crate::string_constants::PlainStrings::Standard,
             )
         } else {
-            // Float text in this statement's results follows the session.
+            // Float text and text search defaults follow the session.
             crate::set_extra_float_digits(crate::extra_float_digits_setting(&self.session_gucs));
+            crate::set_default_text_search_config(&crate::default_text_search_config_setting(
+                &self.session_gucs,
+            ));
             crate::string_constants::normalize_client_string_constants(sql, &self.session_gucs)
         }?;
         let sql: &str = &constants;
@@ -6682,6 +6685,7 @@ impl<'db> SqlSession<'db> {
             | "row_security"
             | "search_path"
             | "synchronize_seqscans"
+            | "default_text_search_config"
             | "timezone" => {
                 // A setting given at connection start resets to that value.
                 let startup = self
@@ -6699,8 +6703,11 @@ impl<'db> SqlSession<'db> {
                         Arc::make_mut(&mut self.session_gucs).remove(&setting);
                     }
                 }
-                // Float output reads this per thread.
+                // Output and text search read these per thread.
                 crate::set_extra_float_digits(crate::extra_float_digits_setting(
+                    &self.session_gucs,
+                ));
+                crate::set_default_text_search_config(&crate::default_text_search_config_setting(
                     &self.session_gucs,
                 ));
                 Ok(())

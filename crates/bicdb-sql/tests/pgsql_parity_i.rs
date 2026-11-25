@@ -81,3 +81,53 @@ fn hstore_set_functions_and_populate_record() {
         vec!["5|z"]
     );
 }
+
+#[test]
+fn text_search_catalog_functions_and_default_configuration() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = open(root.path());
+    let mut session = SqlSession::new(&mut db);
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT count(*) FROM ts_token_type('default')"
+        ),
+        vec!["23"]
+    );
+    session
+        .execute("CREATE TABLE d(v tsvector); INSERT INTO d VALUES ('a:1A b:2'), ('a:3 c')")
+        .unwrap();
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT * FROM ts_stat('SELECT v FROM d') ORDER BY word"
+        ),
+        vec!["a|2|2", "b|1|1", "c|1|1"]
+    );
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT * FROM ts_stat('SELECT v FROM d', 'a')"
+        ),
+        vec!["a|1|1"]
+    );
+    session
+        .execute("SET default_text_search_config = 'pg_catalog.simple'")
+        .unwrap();
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT get_current_ts_config()::text, to_tsvector('The Rats')::text"
+        ),
+        vec!["simple|'rats':2 'the':1"]
+    );
+    session.execute("RESET default_text_search_config").unwrap();
+    assert_eq!(
+        rows(&mut session, "SELECT to_tsvector('The Rats')::text"),
+        vec!["'rat':2"]
+    );
+    let error = session
+        .execute("SET default_text_search_config = 'nosuch'")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "22023");
+}

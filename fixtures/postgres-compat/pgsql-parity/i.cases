@@ -127,3 +127,12 @@ ord.c|CREATE FUNCTION ord3(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FR
 ord.d|CREATE FUNCTION ord4(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT __bicdb_srf.__bicdb_srf_value AS v FROM ord4(3) AS __bicdb_srf(__bicdb_srf_value) ORDER BY v DESC
 ord.e|CREATE FUNCTION ord5(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT ord5(3) AS v ORDER BY v DESC LIMIT 2
 ord.f|CREATE TABLE ordt(k int); INSERT INTO ordt VALUES (1); CREATE FUNCTION ord6(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT ord6(3) AS v FROM ordt ORDER BY v DESC
+ts.token_type|SELECT * FROM ts_token_type('default') ORDER BY tokid LIMIT 5
+ts.stat|CREATE TABLE tss(v tsvector); INSERT INTO tss VALUES ('a:1 b:2'), ('a:3 c'); SELECT * FROM ts_stat('SELECT v FROM tss') ORDER BY word
+ts.rewrite|SELECT ts_rewrite('a & b'::tsquery, 'a'::tsquery, 'c|d'::tsquery)
+ts.default_config|SET default_text_search_config = 'pg_catalog.simple'; SELECT to_tsvector('The Fat Rats'), plainto_tsquery('The Rats'), get_current_ts_config()
+ts.rank_cd|SELECT ts_rank_cd(to_tsvector('english', 'a quick brown fox jumps over the lazy dog'), to_tsquery('english', 'fox & dog')), ts_rank_cd('a:1 b:3'::tsvector, 'a & b'::tsquery)
+ts.token_type_oid|SELECT count(*) FROM ts_token_type(3722); SELECT * FROM ts_token_type('nosuch')
+ts.stat_weights|CREATE TABLE tss2(v tsvector); INSERT INTO tss2 VALUES ('a:1A b:2'), ('a:3 c:4B'); SELECT * FROM ts_stat('SELECT v FROM tss2', 'ab') ORDER BY word
+ts.default_reset|SET default_text_search_config = simple; SHOW default_text_search_config; RESET default_text_search_config; SELECT get_current_ts_config(), to_tsvector('The rats')
+ts.default_bad|SET default_text_search_config = 'nosuch'

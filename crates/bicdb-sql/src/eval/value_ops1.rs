@@ -2951,6 +2951,7 @@ pub(crate) fn default_session_guc(name: &str) -> Option<&'static str> {
         "transaction_deferrable" => Some("off"),
         "standard_conforming_strings" => Some("on"),
         "extra_float_digits" => Some("1"),
+        "default_text_search_config" => Some("pg_catalog.english"),
         _ => crate::session::planner_gucs::planner_guc_default(name),
     }
 }

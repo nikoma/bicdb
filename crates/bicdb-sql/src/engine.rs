@@ -5183,6 +5183,12 @@ impl<'db> SqlEngine<'db> {
                     vec![vec![SqlValue::String(value)]],
                 )))
             }
+            "show default_text_search_config" => Ok(Some(SqlResult::new(
+                vec!["default_text_search_config".to_string()],
+                vec![vec![SqlValue::String(
+                    crate::default_text_search_config_setting(&self.session_gucs),
+                )]],
+            ))),
             "show synchronize_seqscans" => {
                 let value = self
                     .session_gucs

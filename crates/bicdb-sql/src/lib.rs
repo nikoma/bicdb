@@ -194,6 +194,9 @@ pub fn ts_rank_conjunctive_for_tests(terms: &[(&str, Option<&[u16]>)], weights: 
 }
 
 pub use fts::{
+    default_text_search_config_setting, set_default_text_search_config, TextSearchConfigScope,
+};
+pub use fts::{
     PgTsLexeme, PgTsPosition, PgTsQuery, PgTsQueryNode, PgTsQueryOperand, PgTsVector, PgTsWeight,
 };
 pub(crate) use geometric::*;

@@ -2564,6 +2564,9 @@ fn handle_frontend_message(
     let _float_digits = bicdb_sql::ExtraFloatDigitsScope::enter(
         bicdb_sql::extra_float_digits_setting(state.session_state.session_gucs()),
     );
+    let _text_search = bicdb_sql::TextSearchConfigScope::enter(
+        &bicdb_sql::default_text_search_config_setting(state.session_state.session_gucs()),
+    );
     if state.copy_in_discarding {
         match tag {
             // The error was already reported; drop the rest of the data.

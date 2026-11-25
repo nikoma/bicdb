@@ -1561,6 +1561,55 @@ fn snowball_config(algorithm: Algorithm, stopwords: &'static str) -> TextSearchC
     }
 }
 
+thread_local! {
+    static DEFAULT_TEXT_SEARCH_CONFIG: std::cell::RefCell<String> =
+        std::cell::RefCell::new("pg_catalog.english".to_string());
+}
+
+/// The session's `default_text_search_config` (PostgreSQL's initdb default,
+/// `pg_catalog.english`, when unset).
+pub fn default_text_search_config_setting(
+    gucs: &std::collections::HashMap<String, String>,
+) -> String {
+    gucs.get("default_text_search_config")
+        .cloned()
+        .unwrap_or_else(|| "pg_catalog.english".to_string())
+}
+
+/// Sets this thread's configuration for text search calls without one.
+pub fn set_default_text_search_config(name: &str) {
+    DEFAULT_TEXT_SEARCH_CONFIG.with(|cell| *cell.borrow_mut() = name.to_string());
+}
+
+/// Restores this thread's text search default when dropped.
+pub struct TextSearchConfigScope(String);
+
+impl TextSearchConfigScope {
+    pub fn enter(name: &str) -> Self {
+        let previous = DEFAULT_TEXT_SEARCH_CONFIG.with(|cell| cell.borrow().clone());
+        set_default_text_search_config(name);
+        Self(previous)
+    }
+}
+
+impl Drop for TextSearchConfigScope {
+    fn drop(&mut self) {
+        let previous = std::mem::take(&mut self.0);
+        DEFAULT_TEXT_SEARCH_CONFIG.with(|cell| *cell.borrow_mut() = previous);
+    }
+}
+
+/// Whether `name` names a text search configuration (for SET).
+pub(crate) fn is_text_search_config(name: &str) -> bool {
+    TextSearchConfig::parse(&SqlValue::String(name.to_string())).is_ok()
+}
+
+/// The configuration text search functions use when the call names none.
+fn session_default_config() -> Result<TextSearchConfig> {
+    let name = DEFAULT_TEXT_SEARCH_CONFIG.with(|cell| cell.borrow().clone());
+    TextSearchConfig::parse(&SqlValue::String(name))
+}
+
 fn english_config() -> TextSearchConfig {
     snowball_config(
         Algorithm::English,
@@ -1868,7 +1917,7 @@ fn plain_tsquery(config: TextSearchConfig, input: &str, phrase: bool) -> PgTsQue
 
 fn fts_config_and_text(args: &[SqlValue]) -> Result<(TextSearchConfig, &str)> {
     match args {
-        [text] => Ok((english_config(), sql_value_str(text)?)),
+        [text] => Ok((session_default_config()?, sql_value_str(text)?)),
         [config, text] => Ok((TextSearchConfig::parse(config)?, sql_value_str(text)?)),
         _ => Err(SqlError::InvalidSql(format!(
             "text search function expects 1 or 2 arguments, got {}",
@@ -2440,6 +2489,106 @@ fn sql_value_tsvector(value: &SqlValue) -> Result<PgTsVector> {
             "text search input must be tsvector",
         )),
     }
+}
+
+/// The default parser's token types, as `ts_token_type('default')` lists them.
+pub(crate) const DEFAULT_PARSER_TOKEN_TYPES: [(&str, &str); 23] = [
+    ("asciiword", "Word, all ASCII"),
+    ("word", "Word, all letters"),
+    ("numword", "Word, letters and digits"),
+    ("email", "Email address"),
+    ("url", "URL"),
+    ("host", "Host"),
+    ("sfloat", "Scientific notation"),
+    ("version", "Version number"),
+    ("hword_numpart", "Hyphenated word part, letters and digits"),
+    ("hword_part", "Hyphenated word part, all letters"),
+    ("hword_asciipart", "Hyphenated word part, all ASCII"),
+    ("blank", "Space symbols"),
+    ("tag", "XML tag"),
+    ("protocol", "Protocol head"),
+    ("numhword", "Hyphenated word, letters and digits"),
+    ("asciihword", "Hyphenated word, all ASCII"),
+    ("hword", "Hyphenated word, all letters"),
+    ("url_path", "URL path"),
+    ("file", "File or path name"),
+    ("float", "Decimal notation"),
+    ("int", "Signed integer"),
+    ("uint", "Unsigned integer"),
+    ("entity", "XML entity"),
+];
+
+/// Whether `parser` (a name or the oid 3722) names the default parser.
+pub(crate) fn is_default_text_search_parser(parser: &SqlValue) -> Result<bool> {
+    let text = parser.to_cell().to_ascii_lowercase();
+    let text = text.strip_prefix("pg_catalog.").unwrap_or(&text);
+    if text == "default" || text == "3722" {
+        return Ok(true);
+    }
+    Err(SqlError::undefined_object(format!(
+        "text search parser \"{}\" does not exist",
+        parser.to_cell()
+    )))
+}
+
+/// `ts_stat`'s rows from the tsvector values its query returned: each lexeme
+/// with the number of documents holding it and its number of occurrences,
+/// counting only positions of `weights` when given.
+pub(crate) fn ts_stat_rows(
+    vectors: &[SqlValue],
+    weights: Option<&str>,
+) -> Result<Vec<(String, i64, i64)>> {
+    let weights = match weights {
+        None => None,
+        Some(text) => {
+            let mut set = Vec::new();
+            for letter in text.chars() {
+                let weight = match letter.to_ascii_uppercase() {
+                    'A' => PgTsWeight::A,
+                    'B' => PgTsWeight::B,
+                    'C' => PgTsWeight::C,
+                    'D' => PgTsWeight::D,
+                    ' ' => continue,
+                    other => {
+                        return Err(SqlError::data_exception(
+                            "22023",
+                            format!("unrecognized weight: \"{other}\""),
+                            None,
+                        ))
+                    }
+                };
+                set.push(weight);
+            }
+            Some(set)
+        }
+    };
+    let mut stats = BTreeMap::<String, (i64, i64)>::new();
+    for value in vectors {
+        if matches!(value, SqlValue::Null) {
+            continue;
+        }
+        let vector = sql_value_tsvector(value)?;
+        for lexeme in vector.lexemes {
+            let entries = match &weights {
+                None => lexeme.positions.len().max(1) as i64,
+                Some(set) => lexeme
+                    .positions
+                    .iter()
+                    .filter(|position| set.contains(&position.weight))
+                    .count() as i64,
+            };
+            if entries == 0 {
+                continue;
+            }
+            let entry = stats.entry(lexeme.text).or_default();
+            entry.0 += 1;
+            entry.1 += entries;
+        }
+    }
+    Ok(stats
+        .into_iter()
+        .map(|(word, (ndoc, nentry))| (word, ndoc, nentry))
+        .collect())
 }
 
 pub(crate) fn fts_index_terms(value: &SqlValue) -> Result<Vec<String>> {
@@ -3123,7 +3272,12 @@ pub(crate) fn eval_fts_function_value(
                 args.len()
             )));
         }
-        return Ok(Some(SqlValue::String("english".to_string())));
+        let name = DEFAULT_TEXT_SEARCH_CONFIG.with(|cell| cell.borrow().clone());
+        let name = name
+            .strip_prefix("pg_catalog.")
+            .unwrap_or(&name)
+            .to_string();
+        return Ok(Some(SqlValue::String(name)));
     }
     if args
         .iter()
@@ -3134,7 +3288,7 @@ pub(crate) fn eval_fts_function_value(
     let value = match name {
         "to_tsvector" => {
             let (config, value) = match args {
-                [value] => (english_config(), value),
+                [value] => (session_default_config()?, value),
                 [config, value] => (TextSearchConfig::parse(config)?, value),
                 _ => {
                     return Err(SqlError::InvalidSql(format!(
@@ -3320,7 +3474,7 @@ pub(crate) fn eval_fts_function_value(
             let (config, value_index) = if has_config {
                 (TextSearchConfig::parse(&args[0])?, 1)
             } else {
-                (english_config(), 0)
+                (session_default_config()?, 0)
             };
             if !(2..=3).contains(&(args.len() - value_index)) {
                 return Err(SqlError::InvalidSql(

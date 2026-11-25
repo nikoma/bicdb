@@ -1824,7 +1824,7 @@ impl<'db> SqlSession<'db> {
                                 let child_name = child.name.clone();
                                 self.capture_table_state_undo(&child_name, &child)?;
                                 alter_table_alter_column(
-                                    self.db_mut()?,
+                                    self.ddl_rows()?,
                                     &child_name,
                                     &mut child,
                                     &column_name,
@@ -1845,7 +1845,7 @@ impl<'db> SqlSession<'db> {
                                 let child_name = child.name.clone();
                                 self.capture_table_state_undo(&child_name, &child)?;
                                 alter_table_alter_column(
-                                    self.db_mut()?,
+                                    self.ddl_rows()?,
                                     &child_name,
                                     &mut child,
                                     &column_name,

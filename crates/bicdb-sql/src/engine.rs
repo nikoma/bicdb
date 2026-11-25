@@ -2333,6 +2333,17 @@ pub(crate) fn json_record_function_rows(
                 })
                 .collect()
         }
+        // A typed row (`ROW(...)::t`, a table row) supplies its attributes.
+        Some(SqlValue::Composite(composite)) => alias
+            .columns
+            .iter()
+            .map(|column| {
+                composite
+                    .field(&column.name.value)
+                    .cloned()
+                    .unwrap_or(SqlValue::Null)
+            })
+            .collect(),
         Some(_) => {
             return Err(json_set_function_type_error(
                 call.function,
@@ -4214,6 +4225,15 @@ pub(crate) trait RoutineCallHost: std::fmt::Debug {
         args: &[SqlValue],
         arg_types: &[Option<String>],
     ) -> Result<SqlValue>;
+
+    /// Run the set-returning PL/pgSQL function `name` with already-evaluated
+    /// arguments: its rows, with its output column names.
+    fn call_set_function(
+        &self,
+        engine: &SqlEngine<'_>,
+        name: &str,
+        args: &[SqlValue],
+    ) -> Result<SqlResult>;
 }
 
 // Nested maps so a cache probe is two zero-allocation hash lookups
@@ -5183,6 +5203,15 @@ impl<'db> SqlEngine<'db> {
                     vec![vec![SqlValue::String(value)]],
                 )))
             }
+            "show escape_string_warning" => Ok(Some(SqlResult::new(
+                vec!["escape_string_warning".to_string()],
+                vec![vec![SqlValue::String(
+                    self.session_gucs
+                        .get("escape_string_warning")
+                        .cloned()
+                        .unwrap_or_else(|| "on".to_string()),
+                )]],
+            ))),
             "show default_text_search_config" => Ok(Some(SqlResult::new(
                 vec!["default_text_search_config".to_string()],
                 vec![vec![SqlValue::String(

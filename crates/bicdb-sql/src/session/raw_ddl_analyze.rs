@@ -1224,6 +1224,21 @@ impl<'db> SqlSession<'db> {
                     .insert("default_text_search_config".to_string(), name);
                 Ok(())
             }
+            "escape_string_warning" => {
+                let enabled = value.to_cell().to_ascii_lowercase();
+                let setting = match enabled.as_str() {
+                    "on" | "true" | "yes" | "1" => "on",
+                    "off" | "false" | "no" | "0" => "off",
+                    _ => {
+                        return Err(SqlError::invalid_parameter_value(
+                            "parameter \"escape_string_warning\" requires a Boolean value",
+                        ))
+                    }
+                };
+                Arc::make_mut(&mut self.session_gucs)
+                    .insert("escape_string_warning".to_string(), setting.to_string());
+                Ok(())
+            }
             "standard_conforming_strings" => {
                 let enabled = value.to_cell().to_ascii_lowercase();
                 let setting =

@@ -140,6 +140,9 @@ struct Decoded {
     changed: bool,
     /// Whether any escape produced a zero or non-ASCII byte.
     saw_non_ascii: bool,
+    /// The character after the first backslash escape, for the
+    /// nonstandard-escape warning.
+    first_escape: Option<u8>,
 }
 
 fn hex_digit(byte: u8) -> Option<u32> {
@@ -183,6 +186,7 @@ fn decode(sql: &str, quote: usize, kind: Kind) -> Result<Option<Decoded>> {
     let mut index = quote + 1;
     let mut changed = kind != Kind::Plain;
     let mut saw_non_ascii = false;
+    let mut first_escape: Option<u8> = None;
     let mut pending_first: Option<u32> = None;
     loop {
         let Some(&byte) = bytes.get(index) else {
@@ -233,6 +237,7 @@ fn decode(sql: &str, quote: usize, kind: Kind) -> Result<Option<Decoded>> {
                 end: index,
                 changed,
                 saw_non_ascii,
+                first_escape,
             }));
         }
         if byte != b'\\' || kind != Kind::Escape {
@@ -244,6 +249,7 @@ fn decode(sql: &str, quote: usize, kind: Kind) -> Result<Option<Decoded>> {
         let Some(&next) = bytes.get(index + 1) else {
             return Ok(None);
         };
+        first_escape.get_or_insert(next);
         match next {
             b'b' => value.push(0x08),
             b'f' => value.push(0x0c),
@@ -573,9 +579,72 @@ pub fn normalize_client_string_constants<'a>(
     normalize_string_constants(sql, plain_strings(gucs))
 }
 
+/// As [`normalize_client_string_constants`], also returning the warnings
+/// PostgreSQL's lexer gives (nonstandard escapes while
+/// standard_conforming_strings is off and escape_string_warning on).
+pub fn normalize_client_string_constants_with_warnings<'a>(
+    sql: &'a str,
+    gucs: &std::collections::HashMap<String, String>,
+) -> Result<(Cow<'a, str>, Vec<crate::SqlNotice>)> {
+    if gucs
+        .get("bicdb.sql_profile")
+        .is_some_and(|profile| crate::oracle::is_oracle_profile(profile))
+    {
+        return Ok((Cow::Borrowed(sql), Vec::new()));
+    }
+    let mut warnings = Vec::new();
+    let warn = gucs
+        .get("escape_string_warning")
+        .is_none_or(|value| value == "on");
+    let text = normalize_string_constants_reporting(
+        sql,
+        plain_strings(gucs),
+        warn.then_some(&mut warnings),
+    )?;
+    Ok((text, warnings))
+}
+
 /// `sql` with every string constant in PostgreSQL's standard spelling (see
 /// the module documentation), or PostgreSQL's error for a malformed one.
+/// PostgreSQL's WARNING for a backslash escape in a plain constant while
+/// standard_conforming_strings is off (escape_string_warning on). SQLSTATE
+/// 22P06 is reported at WARNING severity (its `Severity` field).
+fn nonstandard_escape_warning(escaped: u8) -> crate::SqlNotice {
+    let (message, hint) = match escaped {
+        b'\'' => (
+            "nonstandard use of \\' in a string literal",
+            "Use '' to write quotes in strings, or use the escape string syntax (E'...').",
+        ),
+        b'\\' => (
+            "nonstandard use of \\\\ in a string literal",
+            "Use the escape string syntax for backslashes, e.g., E'\\\\'.",
+        ),
+        _ => (
+            "nonstandard use of escape in a string literal",
+            "Use the escape string syntax for escapes, e.g., E'\\r\\n'.",
+        ),
+    };
+    crate::SqlNotice {
+        sqlstate: "22P06".to_string(),
+        message: message.to_string(),
+        fields: vec![
+            crate::SqlErrorField::Hint(hint.to_string()),
+            crate::SqlErrorField::Severity("WARNING".to_string()),
+        ],
+    }
+}
+
 pub(crate) fn normalize_string_constants(sql: &str, plain: PlainStrings) -> Result<Cow<'_, str>> {
+    normalize_string_constants_reporting(sql, plain, None)
+}
+
+/// As [`normalize_string_constants`], also collecting the lexer's
+/// nonstandard-escape warnings into `warnings` when given.
+pub(crate) fn normalize_string_constants_reporting<'a>(
+    sql: &'a str,
+    plain: PlainStrings,
+    mut warnings: Option<&mut Vec<crate::SqlNotice>>,
+) -> Result<Cow<'a, str>> {
     let bytes = sql.as_bytes();
     // Fast path: nothing to decode without a quote (or a `U&"..."` name).
     if !bytes.iter().any(|byte| matches!(byte, b'\'' | b'&')) {
@@ -642,6 +711,11 @@ pub(crate) fn normalize_string_constants(sql: &str, plain: PlainStrings) -> Resu
                 };
                 let end = decoded.end;
                 let changed = decoded.changed;
+                if let (Some(warnings), Some(escaped)) =
+                    (warnings.as_deref_mut(), decoded.first_escape)
+                {
+                    warnings.push(nonstandard_escape_warning(escaped));
+                }
                 let value = verify_utf8(decoded.value)?;
                 check_nul(&value)?;
                 let text = standard_constant(&value, plain);

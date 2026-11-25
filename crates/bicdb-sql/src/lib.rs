@@ -2676,17 +2676,6 @@ impl std::fmt::Debug for SqlNotice {
 }
 
 impl SqlNotice {
-    /// The severity clients are told. Notices are NOTICE except the lexer's
-    /// nonstandard-escape warning (22P06), which PostgreSQL reports at
-    /// WARNING; a notice-level field can replace this rule.
-    pub fn severity(&self) -> &'static str {
-        if self.sqlstate == "22P06" {
-            "WARNING"
-        } else {
-            "NOTICE"
-        }
-    }
-
     pub fn memory_estimate(&self) -> usize {
         self.sqlstate.len()
             + self.message.len()

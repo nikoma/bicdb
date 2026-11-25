@@ -3437,10 +3437,13 @@ impl<'db> SqlSession<'db> {
         // reads (PostgreSQL's decoding); see `string_constants`. A client
         // statement reads plain constants per standard_conforming_strings;
         // SQL that BicDB runs inside a statement is always standard.
-        let constants = if crate::statement_context::in_statement() {
-            crate::string_constants::normalize_string_constants(
-                sql,
-                crate::string_constants::PlainStrings::Standard,
+        let (constants, lexer_warnings) = if crate::statement_context::in_statement() {
+            (
+                crate::string_constants::normalize_string_constants(
+                    sql,
+                    crate::string_constants::PlainStrings::Standard,
+                )?,
+                Vec::new(),
             )
         } else {
             // Float text and text search defaults follow the session.
@@ -3448,8 +3451,11 @@ impl<'db> SqlSession<'db> {
             crate::set_default_text_search_config(&crate::default_text_search_config_setting(
                 &self.session_gucs,
             ));
-            crate::string_constants::normalize_client_string_constants(sql, &self.session_gucs)
-        }?;
+            crate::string_constants::normalize_client_string_constants_with_warnings(
+                sql,
+                &self.session_gucs,
+            )?
+        };
         let sql: &str = &constants;
         let _cursor_scope = sql_cursors::CursorScope::enter(&self.sql_cursors);
         let current_of = self.rewrite_where_current_of(sql)?;
@@ -3499,6 +3505,10 @@ impl<'db> SqlSession<'db> {
         }
         drop(preprocessing_reads);
         let effects = crate::statement_context::StatementScope::enter();
+        // The lexer's warnings belong to this statement's diagnostics.
+        for warning in lexer_warnings {
+            crate::statement_context::note_notice(warning)?;
+        }
         let atomic = self.tx.is_some() && oracle::preview_routine_language_enabled(self.db_ref())?;
         let execute = |session: &mut Self| {
             session.with_implicit_guc_statement(|session| {
@@ -6686,6 +6696,7 @@ impl<'db> SqlSession<'db> {
             | "search_path"
             | "synchronize_seqscans"
             | "default_text_search_config"
+            | "escape_string_warning"
             | "timezone" => {
                 // A setting given at connection start resets to that value.
                 let startup = self

@@ -2726,14 +2726,22 @@ fn handle_frontend_message(
             } else {
                 // String constants take PostgreSQL's decoding before any
                 // statement splitting or classification reads the text.
-                match bicdb_sql::normalize_client_string_constants(
+                match bicdb_sql::normalize_client_string_constants_with_warnings(
                     query,
                     state.session_state.session_gucs(),
                 ) {
-                    Ok(std::borrow::Cow::Borrowed(_)) => query,
-                    Ok(std::borrow::Cow::Owned(sql)) => {
-                        lowered = sql;
-                        lowered.as_str()
+                    Ok((text, warnings)) => {
+                        // The lexer's warnings come before any result.
+                        for warning in &warnings {
+                            notice_response(stream, warning)?;
+                        }
+                        match text {
+                            std::borrow::Cow::Borrowed(_) => query,
+                            std::borrow::Cow::Owned(sql) => {
+                                lowered = sql;
+                                lowered.as_str()
+                            }
+                        }
                     }
                     Err(error) => {
                         state.failed_queries += 1;

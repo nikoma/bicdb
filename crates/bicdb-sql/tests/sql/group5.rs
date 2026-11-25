@@ -1777,7 +1777,7 @@ fn alter_column_type_propagates_partition_rows_and_rejects_dependencies() {
             )
             .unwrap()
             .rows,
-        vec![vec![s("ALWAYS"), s("qty * 2")]]
+        vec![vec![s("ALWAYS"), s("(qty * 2)")]]
     );
     let error = session
         .execute("ALTER TABLE generated_measurements ALTER COLUMN qty TYPE BIGINT")

@@ -3428,6 +3428,7 @@ pub(crate) fn synthetic_primary_key_column() -> ColumnSchema {
         default_expr: None,
         generated_expr: None,
         identity: None,
+        comment: None,
     }
 }
 

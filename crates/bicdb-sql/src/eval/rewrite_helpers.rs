@@ -674,6 +674,11 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
         changed = true;
     }
 
+    if let Some(next) = crate::session::merge::rewrite_merge_parse_compat(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
     changed.then_some(rewritten)
 }
 

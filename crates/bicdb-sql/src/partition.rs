@@ -1530,6 +1530,27 @@ pub(crate) fn validate_attachment(
                 ));
             }
             validate_record(db, parent, &record)?;
+            // The parent's foreign keys hold for the attached rows too
+            // (PostgreSQL validates them while attaching).
+            if parent
+                .constraints
+                .iter()
+                .any(|constraint| matches!(constraint, ConstraintSchema::ForeignKey { .. }))
+            {
+                let mut keyed = parent.clone();
+                keyed.name = child.name.clone();
+                keyed
+                    .constraints
+                    .retain(|constraint| matches!(constraint, ConstraintSchema::ForeignKey { .. }));
+                crate::records::validate_foreign_keys_in_statement(
+                    db,
+                    tx,
+                    &child.name,
+                    &keyed,
+                    &record,
+                    &[],
+                )?;
+            }
         }
     }
     if !matches!(bound, Bound::Default) {

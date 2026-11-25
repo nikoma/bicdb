@@ -6517,6 +6517,43 @@ impl<'db> SqlSession<'db> {
         )))
     }
 
+    /// The relation and constraint PostgreSQL names when a referenced row is
+    /// still in use: for a key that references a partitioned table, the
+    /// partition holding the row and that partition's derived constraint
+    /// (`<name>_<n>`, n its position among the referenced table's
+    /// partitions); otherwise the table and the key's own name.
+    pub(crate) fn referenced_partition_constraint(
+        &self,
+        table: &str,
+        schema: &TableSchema,
+        referenced_table: &str,
+        name: &str,
+        row: Option<&Record>,
+    ) -> Result<(String, String)> {
+        let Some(row) = row else {
+            return Ok((table.to_string(), name.to_string()));
+        };
+        let holder = if schema.partitioning.is_some() {
+            partition::route_record(self.db_ref(), schema, row)?.name
+        } else {
+            table.to_string()
+        };
+        if holder.eq_ignore_ascii_case(referenced_table) {
+            return Ok((holder, name.to_string()));
+        }
+        let Some(referenced) = load_schema(self.db_ref(), referenced_table)? else {
+            return Ok((holder, name.to_string()));
+        };
+        let position = partition::physical_tables(self.db_ref(), &referenced)?
+            .iter()
+            .skip(1)
+            .position(|partition| partition.name.eq_ignore_ascii_case(&holder));
+        Ok(match position {
+            Some(index) => (holder, format!("{name}_{}", index + 1)),
+            None => (holder, name.to_string()),
+        })
+    }
+
     pub(crate) fn apply_foreign_key_parent_delete_batch(
         &mut self,
         table: &str,
@@ -6566,13 +6603,32 @@ impl<'db> SqlSession<'db> {
                     constraint.columns.clone(),
                     constraint.referred_columns.clone(),
                     constraint.on_delete,
+                    constraint.referenced_table.clone(),
                 )
             })
             .collect::<Vec<_>>();
+        // Rows of a partition may keep their key only in the Native id; the
+        // referenced values must be visible to compare them with children.
+        let materialized;
+        let records = if schema.partitioning.is_some() || schema.partition_of.is_some() {
+            materialized = records
+                .iter()
+                .cloned()
+                .map(|mut record| {
+                    let holder = partition::route_record(self.db_ref(), schema, &record)
+                        .unwrap_or_else(|_| schema.clone());
+                    partition::materialize_primary_key_fields(&holder, &mut record)?;
+                    Ok(record)
+                })
+                .collect::<Result<Vec<_>>>()?;
+            materialized.as_slice()
+        } else {
+            records
+        };
 
         // Child inserts and parent removal reserve the same referenced key.
         // A snapshot-only check lets them both commit, leaving an orphan.
-        for (_, _, _, referred_columns, _) in &inbound_constraints {
+        for (_, _, _, referred_columns, _, _) in &inbound_constraints {
             for record in records {
                 reserve_foreign_key_mutation(
                     self.tx.as_ref(),
@@ -6582,23 +6638,27 @@ impl<'db> SqlSession<'db> {
                 )?;
             }
         }
-        for (child_schema, name, columns, referred_columns, on_delete) in &inbound_constraints {
+        for (child_schema, name, columns, referred_columns, on_delete, referenced_table) in
+            &inbound_constraints
+        {
             if !matches!(
                 on_delete,
                 ForeignKeyAction::NoAction | ForeignKeyAction::Restrict
             ) {
                 continue;
             }
-            let parent_keys = records
-                .iter()
-                .map(|record| {
+            let mut parent_rows = BTreeMap::new();
+            for record in records {
+                parent_rows.insert(
                     typed_column_key_label(
                         schema,
                         referred_columns,
                         &record_column_values(record, schema, referred_columns),
-                    )
-                })
-                .collect::<Result<BTreeSet<_>>>()?;
+                    )?,
+                    record,
+                );
+            }
+            let parent_keys = parent_rows.keys().cloned().collect::<BTreeSet<_>>();
             if parent_keys.is_empty() {
                 continue;
             }
@@ -6621,11 +6681,18 @@ impl<'db> SqlSession<'db> {
                     {
                         continue;
                     }
-                    return Err(foreign_key_referenced_violation(
+                    let (relation, constraint) = self.referenced_partition_constraint(
                         table,
                         schema,
+                        referenced_table,
                         name,
-                        &child_schema.name,
+                        parent_rows.get(&child_key).copied(),
+                    )?;
+                    return Err(foreign_key_referenced_violation(
+                        &relation,
+                        schema,
+                        &constraint,
+                        &foreign_key_declaring_relation(self.db_ref(), child_schema, name)?,
                         referred_columns,
                         &values,
                     ));
@@ -6633,7 +6700,7 @@ impl<'db> SqlSession<'db> {
             }
         }
 
-        for (child_schema, name, columns, referred_columns, on_delete) in inbound_constraints {
+        for (child_schema, name, columns, referred_columns, on_delete, _) in inbound_constraints {
             if matches!(
                 on_delete,
                 ForeignKeyAction::NoAction | ForeignKeyAction::Restrict
@@ -8022,4 +8089,30 @@ fn rewrite_query_filters(query: &mut Query, rewrite: &mut dyn FnMut(&mut Expr)) 
         }
     }
     set_expr(query.body.as_mut(), rewrite);
+}
+
+/// The relation PostgreSQL names as declaring a foreign key: a partition's
+/// copy of its partitioned table's key is reported as the partitioned table's
+/// (the topmost ancestor carrying the same key).
+pub(crate) fn foreign_key_declaring_relation(
+    db: &BicDb,
+    schema: &TableSchema,
+    name: &str,
+) -> Result<String> {
+    let mut current = schema.clone();
+    for _ in 0..64 {
+        let Some(link) = &current.partition_of else {
+            break;
+        };
+        let Some(parent) = load_schema(db, &link.parent_table)? else {
+            break;
+        };
+        if !parent.constraints.iter().any(|constraint| {
+            matches!(constraint, ConstraintSchema::ForeignKey { name: other, .. } if other == name)
+        }) {
+            break;
+        }
+        current = parent;
+    }
+    Ok(current.name)
 }

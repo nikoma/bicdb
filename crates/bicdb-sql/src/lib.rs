@@ -4185,6 +4185,9 @@ struct InboundForeignKeyUpdate {
     columns: Vec<String>,
     referred_columns: Vec<String>,
     on_update: ForeignKeyAction,
+    /// The relation the key references: the updated table itself, or a
+    /// partitioned table the updated partition belongs to.
+    referenced_table: String,
 }
 
 /// A foreign key whose parent is the deleted table (the DELETE twin of
@@ -4196,6 +4199,8 @@ struct InboundForeignKeyDelete {
     columns: Vec<String>,
     referred_columns: Vec<String>,
     on_delete: ForeignKeyAction,
+    /// As `InboundForeignKeyUpdate::referenced_table`.
+    referenced_table: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -5577,10 +5577,12 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                             ),
                             None => 0,
                         };
-                        rows.push(pg_constraint_row(PgConstraintRow {
+                        let fk_oid = pg_constraint_oid(table_oid, constraint_slot);
+                        let conkey = constraint_attnums(schemas, &schema.name, columns);
+                        let mut row = pg_constraint_row(PgConstraintRow {
                             condeferrable: *deferrable,
                             condeferred: *initially_deferred,
-                            oid: pg_constraint_oid(table_oid, constraint_slot),
+                            oid: fk_oid,
                             name: name.clone(),
                             contype: "f",
                             conrelid: table_oid,
@@ -5589,11 +5591,61 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                             confrelid,
                             confupdtype: fk_action_code(*on_update),
                             confdeltype: fk_action_code(*on_delete),
-                            conkey: constraint_attnums(schemas, &schema.name, columns),
-                            confkey,
+                            conkey: conkey.clone(),
+                            confkey: confkey.clone(),
                             conbin: None,
                             convalidated: *validated,
-                        }));
+                        });
+                        // A partition's copy of its parent's key is a child
+                        // of the parent's constraint row.
+                        if let Some(parent_oid) =
+                            inherited_foreign_key_oid(db, schemas, table_oids, schema, name)?
+                        {
+                            row.insert("conparentid".into(), SqlValue::Int(parent_oid));
+                            row.insert("conislocal".into(), SqlValue::Bool(false));
+                            row.insert("coninhcount".into(), SqlValue::Int(1));
+                        }
+                        rows.push(row);
+                        // A key referencing a partitioned table has a row per
+                        // referenced partition, `<name>_<n>` (PostgreSQL's
+                        // addFkRecurseReferenced).
+                        if let Some(parent) = parent.filter(|parent| parent.partitioning.is_some())
+                        {
+                            for (index, partition) in partition::physical_tables(db, parent)?
+                                .iter()
+                                .skip(1)
+                                .enumerate()
+                            {
+                                let partition_oid = *table_oids.get(&partition.name).unwrap_or(&0);
+                                let mut derived = pg_constraint_row(PgConstraintRow {
+                                    condeferrable: *deferrable,
+                                    condeferred: *initially_deferred,
+                                    oid: stable_name_hash_wide(
+                                        2_000_000_000,
+                                        &format!(
+                                            "{table_oid}.{constraint_slot}.fk.{partition_oid}"
+                                        ),
+                                        1_000_000_000,
+                                    ),
+                                    name: format!("{name}_{}", index + 1),
+                                    contype: "f",
+                                    conrelid: table_oid,
+                                    connamespace: namespace_oid(&schema.schema_name),
+                                    conindid,
+                                    confrelid: partition_oid,
+                                    confupdtype: fk_action_code(*on_update),
+                                    confdeltype: fk_action_code(*on_delete),
+                                    conkey: conkey.clone(),
+                                    confkey: confkey.clone(),
+                                    conbin: None,
+                                    convalidated: *validated,
+                                });
+                                derived.insert("conparentid".into(), SqlValue::Int(fk_oid));
+                                derived.insert("conislocal".into(), SqlValue::Bool(false));
+                                derived.insert("coninhcount".into(), SqlValue::Int(1));
+                                rows.push(derived);
+                            }
+                        }
                     }
                     constraint_slot += 1;
                 }
@@ -5690,6 +5742,50 @@ fn foreign_key_referenced_index_oid(
         .get(&parent.name)
         .and_then(|indexes| indexes.iter().find(|(_, attnums)| same_key(attnums)))
         .map_or(0, |(oid, _)| *oid)
+}
+
+/// The pg_constraint OID of the foreign key `name` on `schema`'s partition
+/// parent, when `schema` is a partition carrying that key from its parent.
+/// Slots are counted as `pg_constraint_rows_from_schemas` assigns them.
+fn inherited_foreign_key_oid(
+    db: &BicDb,
+    schemas: &[TableSchema],
+    table_oids: &BTreeMap<String, i64>,
+    schema: &TableSchema,
+    name: &str,
+) -> Result<Option<i64>> {
+    let Some(link) = &schema.partition_of else {
+        return Ok(None);
+    };
+    let loaded;
+    let parent = match schemas
+        .iter()
+        .find(|parent| parent.name == link.parent_table)
+    {
+        Some(parent) => parent,
+        None => match load_schema_shared(db, &link.parent_table)? {
+            Some(parent) => {
+                loaded = parent;
+                &*loaded
+            }
+            None => return Ok(None),
+        },
+    };
+    let not_null = parent
+        .columns
+        .iter()
+        .filter(|column| !column.hidden && (!column.nullable || column.primary_key))
+        .count() as i64;
+    let Some(position) = parent.constraints.iter().position(|constraint| {
+        matches!(constraint, ConstraintSchema::ForeignKey { name: other, .. } if other == name)
+    }) else {
+        return Ok(None);
+    };
+    let parent_oid = *table_oids.get(&parent.name).unwrap_or(&0);
+    Ok(Some(pg_constraint_oid(
+        parent_oid,
+        1 + not_null + position as i64,
+    )))
 }
 
 pub(crate) fn pg_constraint_oid(table_oid: i64, local_slot: i64) -> i64 {

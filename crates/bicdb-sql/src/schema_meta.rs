@@ -12,12 +12,40 @@ use crate::*;
 /// Discover candidates internally, then admit only the actual parent and
 /// referencing descriptors before exposing them. An unrelated UPDATE must
 /// not observe every table merely to establish that it has no incoming FK.
+/// `table` and the partitioned tables it is a partition of: a foreign key
+/// that references a partitioned table protects the rows of its partitions.
+fn referenced_relation_names(schemas: &[TableSchema], table: &str) -> Vec<String> {
+    let mut names = vec![table.to_ascii_lowercase()];
+    let mut current = schemas
+        .iter()
+        .find(|schema| schema.name.eq_ignore_ascii_case(table));
+    let mut guard = 0;
+    while let Some(link) = current.and_then(|schema| schema.partition_of.as_ref()) {
+        guard += 1;
+        if guard > 64 {
+            break;
+        }
+        names.push(link.parent_table.to_ascii_lowercase());
+        current = schemas
+            .iter()
+            .find(|schema| schema.name.eq_ignore_ascii_case(&link.parent_table));
+    }
+    names
+}
+
+fn references_one_of(names: &[String], foreign_table: &str) -> bool {
+    names
+        .iter()
+        .any(|name| name.eq_ignore_ascii_case(foreign_table))
+}
+
 fn inbound_foreign_key_schemas(db: &BicDb, table: &str) -> Result<Vec<TableSchema>> {
     check_sql_catalog_read(db, SCHEMA_COLLECTION, Some(table))?;
     let schemas = schema_catalog_snapshot_shared(db)?;
+    let names = referenced_relation_names(&schemas, table);
     let mut matches = Vec::new();
     for schema in schemas.iter().filter(|schema| schema.constraints.iter().any(|constraint| {
-        matches!(constraint, ConstraintSchema::ForeignKey { foreign_table, .. } if foreign_table.eq_ignore_ascii_case(table))
+        matches!(constraint, ConstraintSchema::ForeignKey { foreign_table, .. } if references_one_of(&names, foreign_table))
     })) {
         check_sql_catalog_read(db, SCHEMA_COLLECTION, Some(&schema.name))?;
         matches.push(schema.clone());
@@ -30,6 +58,7 @@ pub(crate) fn inbound_foreign_key_update_constraints_uncached(
     table: &str,
 ) -> Result<Vec<InboundForeignKeyUpdate>> {
     let mut constraints = Vec::new();
+    let names = referenced_relation_names(&schema_catalog_snapshot_shared(db)?, table);
     for child_schema in inbound_foreign_key_schemas(db, table)?.iter() {
         for constraint in &child_schema.constraints {
             let ConstraintSchema::ForeignKey {
@@ -43,8 +72,9 @@ pub(crate) fn inbound_foreign_key_update_constraints_uncached(
             else {
                 continue;
             };
-            if foreign_table.eq_ignore_ascii_case(table) {
+            if references_one_of(&names, foreign_table) {
                 constraints.push(InboundForeignKeyUpdate {
+                    referenced_table: foreign_table.clone(),
                     child_schema: child_schema.clone(),
                     name: name.clone(),
                     columns: columns.clone(),
@@ -63,6 +93,7 @@ pub(crate) fn inbound_foreign_key_delete_constraints_uncached(
 ) -> Result<Vec<InboundForeignKeyDelete>> {
     sql_profile_foreign_key_parent_delete_schema_scan();
     let mut constraints = Vec::new();
+    let names = referenced_relation_names(&schema_catalog_snapshot_shared(db)?, table);
     for child_schema in inbound_foreign_key_schemas(db, table)?.iter() {
         for constraint in &child_schema.constraints {
             let ConstraintSchema::ForeignKey {
@@ -76,8 +107,9 @@ pub(crate) fn inbound_foreign_key_delete_constraints_uncached(
             else {
                 continue;
             };
-            if foreign_table.eq_ignore_ascii_case(table) {
+            if references_one_of(&names, foreign_table) {
                 constraints.push(InboundForeignKeyDelete {
+                    referenced_table: foreign_table.clone(),
                     child_schema: child_schema.clone(),
                     name: name.clone(),
                     columns: columns.clone(),

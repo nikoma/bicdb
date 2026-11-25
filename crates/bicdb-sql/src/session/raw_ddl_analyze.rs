@@ -715,6 +715,19 @@ impl<'db> SqlSession<'db> {
                     &partition,
                     false,
                 )?;
+                // The partition takes on the parent's foreign keys (validated
+                // above), so writes that name it directly are checked too.
+                for constraint in &parent.constraints {
+                    if let ConstraintSchema::ForeignKey { name, .. } = constraint {
+                        if !partition
+                            .constraints
+                            .iter()
+                            .any(|existing| constraint_name(existing) == name)
+                        {
+                            partition.constraints.push(constraint.clone());
+                        }
+                    }
+                }
                 self.save_partition_schema_and_triggers(&partition, Some(&parent))?;
                 self.inherit_partition_indexes(&partition.name, &parent)?;
             }

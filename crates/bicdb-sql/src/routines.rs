@@ -45,8 +45,19 @@ pub(crate) fn routine_record_value(columns: &[String], row: &[SqlValue]) -> SqlV
 
 pub(crate) fn routine_exception_matches(handler: &RoutineExceptionHandler, sqlstate: &str) -> bool {
     handler.conditions.iter().any(|condition| match condition {
-        RoutineExceptionCondition::Others => true,
-        RoutineExceptionCondition::SqlState(state) => state.eq_ignore_ascii_case(sqlstate),
+        // OTHERS never traps query_canceled or assert_failure (PL/pgSQL's
+        // exception_matches_conditions).
+        RoutineExceptionCondition::Others => {
+            !sqlstate.eq_ignore_ascii_case("57014") && !sqlstate.eq_ignore_ascii_case("P0004")
+        }
+        // A category condition (xx000) matches every SQLSTATE of its class.
+        RoutineExceptionCondition::SqlState(state) => {
+            state.eq_ignore_ascii_case(sqlstate)
+                || (state.len() == 5
+                    && state.ends_with("000")
+                    && sqlstate.len() == 5
+                    && state[..2].eq_ignore_ascii_case(&sqlstate[..2]))
+        }
     })
 }
 
@@ -1269,10 +1280,21 @@ pub(crate) fn parse_routine_exception_handlers(sql: &str) -> Result<Vec<RoutineE
 pub(crate) fn parse_routine_exception_conditions(
     sql: &str,
 ) -> Result<Vec<RoutineExceptionCondition>> {
-    split_top_level_keyword(sql, "OR")
-        .into_iter()
-        .map(|condition| routine_exception_condition(condition.trim()))
-        .collect()
+    let mut conditions = Vec::new();
+    for condition in split_top_level_keyword(sql, "OR") {
+        let condition = condition.trim();
+        conditions.push(routine_exception_condition(condition)?);
+        // A name PostgreSQL defines for several SQLSTATEs traps them all.
+        let name = normalize_object_name(condition);
+        for (_, state) in crate::pg_condition_names::PG_CONDITION_NAMES
+            .iter()
+            .filter(|(candidate, _)| *candidate == name)
+            .skip(1)
+        {
+            conditions.push(RoutineExceptionCondition::SqlState((*state).to_string()));
+        }
+    }
+    Ok(conditions)
 }
 
 pub(crate) fn routine_exception_condition(condition: &str) -> Result<RoutineExceptionCondition> {
@@ -1299,18 +1321,50 @@ pub(crate) fn routine_exception_condition(condition: &str) -> Result<RoutineExce
         "unique_violation" | "dup_val_on_index" => {
             Ok(RoutineExceptionCondition::SqlState("23505".into()))
         }
-        _ => {
+        name => {
             if let Some(value) = strip_prefix_ci(condition, "SQLSTATE") {
                 let value = value.trim();
                 if let Some(state) = parse_single_quoted_sql_string(value)? {
+                    // PostgreSQL: five digits or upper-case letters, not 00000.
+                    if state.len() != 5
+                        || !state
+                            .bytes()
+                            .all(|byte| byte.is_ascii_digit() || byte.is_ascii_uppercase())
+                        || state == "00000"
+                    {
+                        return Err(SqlError::data_exception(
+                            "42601",
+                            format!("invalid SQLSTATE code \"{state}\""),
+                            None,
+                        ));
+                    }
                     return Ok(RoutineExceptionCondition::SqlState(state));
                 }
+            }
+            if let Some((_, state)) = crate::pg_condition_names::PG_CONDITION_NAMES
+                .iter()
+                .find(|(candidate, _)| *candidate == name)
+            {
+                return Ok(RoutineExceptionCondition::SqlState((*state).to_string()));
+            }
+            if is_plain_condition_name(condition) {
+                return Err(SqlError::undefined_object(format!(
+                    "unrecognized exception condition \"{name}\""
+                )));
             }
             Err(SqlError::UnsupportedPlpgsqlFeature(format!(
                 "EXCEPTION condition {condition} is not implemented"
             )))
         }
     }
+}
+
+fn is_plain_condition_name(condition: &str) -> bool {
+    let condition = condition.trim();
+    !condition.is_empty()
+        && condition
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
 }
 
 pub(crate) fn parse_routine_decl(declaration: &str) -> Result<RoutineDecl> {
@@ -1876,6 +1930,26 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
     if let Some(rest) = strip_routine_keyword(statement, "RAISE") {
         return parse_routine_raise(rest.trim());
     }
+    // ASSERT condition [, message]: P0004 unless the condition is true
+    // (NULL fails, as in PostgreSQL).
+    if let Some(rest) = strip_routine_keyword(statement, "ASSERT") {
+        let parts = split_top_level_commas_nested(rest.trim());
+        let (condition, message) = match parts.as_slice() {
+            [condition] => (
+                condition.trim().to_string(),
+                "'assertion failed'".to_string(),
+            ),
+            [condition, message] => (condition.trim().to_string(), message.trim().to_string()),
+            _ => {
+                return Err(SqlError::InvalidSql(
+                    "ASSERT expects a condition and an optional message".into(),
+                ))
+            }
+        };
+        return parse_routine_if(&format!(
+            "IF NOT COALESCE(({condition}), false) THEN RAISE EXCEPTION USING ERRCODE = 'P0004', MESSAGE = {message}; END IF"
+        ));
+    }
     if let Some(rest) = strip_routine_keyword(statement, "PERFORM") {
         // PERFORM expr is SELECT expr with the rows thrown away. It still sets
         // FOUND, which is how a trigger body asks "did the check function run
@@ -2007,6 +2081,10 @@ pub(crate) fn parse_routine_raise(statement: &str) -> Result<RoutineStmt> {
     if statement.trim().is_empty() {
         return Ok(RoutineStmt::Rethrow);
     }
+    // `RAISE USING ...` and `RAISE 'format', ...` default to level EXCEPTION.
+    if starts_with_plpgsql_word(statement, "USING") || statement.trim_start().starts_with('\'') {
+        return parse_routine_raise(&format!("EXCEPTION {statement}"));
+    }
     // Non-error levels report a message and continue, as NOTICE does.
     const ALL_LEVELS: [&str; 5] = ["NOTICE", "WARNING", "INFO", "LOG", "DEBUG"];
     let levels: &[&str] = if postgres_dialect_forms() {
@@ -2015,6 +2093,28 @@ pub(crate) fn parse_routine_raise(statement: &str) -> Result<RoutineStmt> {
         &ALL_LEVELS[..1]
     };
     let message_levels = levels;
+    // `RAISE condition_name USING ...`: the condition is the ERRCODE and its
+    // name the default message, exactly as `RAISE EXCEPTION USING ERRCODE`.
+    if !starts_with_plpgsql_word(statement, "EXCEPTION")
+        && !message_levels
+            .iter()
+            .any(|level| starts_with_plpgsql_word(statement, level))
+    {
+        if let Some(using) = find_top_level_keyword(statement, "USING") {
+            let head = statement[..using].trim();
+            if is_plain_condition_name(head) {
+                if let Ok(RoutineExceptionCondition::SqlState(_)) =
+                    routine_exception_condition(head)
+                {
+                    let rest = statement[using + "USING".len()..].trim();
+                    return parse_routine_raise(&format!(
+                        "EXCEPTION USING errcode = '{}', {rest}",
+                        normalize_object_name(head)
+                    ));
+                }
+            }
+        }
+    }
     if !starts_with_plpgsql_word(statement, "EXCEPTION")
         && !message_levels
             .iter()
@@ -2135,9 +2235,9 @@ pub(crate) fn parse_routine_raise(statement: &str) -> Result<RoutineStmt> {
                 "constraint" => error_fields.constraint = Some(parsed),
                 "table" => error_fields.table = Some(parsed),
                 "column" => error_fields.column = Some(parsed),
-                // Reported by PostgreSQL only as diagnostic fields BicDB does
-                // not send; accepted so the routine compiles.
-                "schema" | "datatype" | "hint" => {}
+                "hint" => error_fields.hint = Some(parsed),
+                "schema" => error_fields.schema = Some(parsed),
+                "datatype" => error_fields.datatype = Some(parsed),
                 _ => {
                     return Err(SqlError::UnsupportedPlpgsqlFeature(format!(
                         "RAISE EXCEPTION USING {name} is not implemented"
@@ -2442,6 +2542,24 @@ pub(crate) fn parse_single_routine_identifier(value: &str, statement: &str) -> R
     Ok(normalize_object_name(&unquote_identifier_word(name)))
 }
 
+/// A PL/pgSQL condition is evaluated as `SELECT <condition>`, so it may
+/// carry its own FROM/WHERE (`IF count(*) = 0 FROM t WHERE ... THEN`); such a
+/// condition is the scalar subquery PostgreSQL runs.
+fn parse_routine_condition(text: &str) -> Result<Expr> {
+    let text = rewrite_postfix_null_tests(text);
+    match parse_check_expression(&text) {
+        Ok(expr) => Ok(expr),
+        Err(error) => {
+            if find_top_level_keyword(&text, "FROM").is_some() {
+                if let Ok(expr) = parse_check_expression(&format!("(SELECT {text})")) {
+                    return Ok(expr);
+                }
+            }
+            Err(error)
+        }
+    }
+}
+
 pub(crate) fn parse_routine_if(statement: &str) -> Result<RoutineStmt> {
     let inner = statement
         .trim()
@@ -2454,7 +2572,7 @@ pub(crate) fn parse_routine_if(statement: &str) -> Result<RoutineStmt> {
             "IF statement requires THEN".to_string(),
         ));
     };
-    let condition = parse_check_expression(strip_balanced_outer_parens(&inner[..then_idx]))?;
+    let condition = parse_routine_condition(strip_balanced_outer_parens(&inner[..then_idx]))?;
     let body = inner[then_idx + "THEN".len()..].trim();
     let body = body
         .strip_suffix("END IF")
@@ -2493,7 +2611,7 @@ pub(crate) fn parse_routine_elsif_clause(statement: &str) -> Result<RoutineStmt>
             "ELSIF statement requires THEN".to_string(),
         ));
     };
-    let condition = parse_check_expression(strip_balanced_outer_parens(&statement[..then_idx]))?;
+    let condition = parse_routine_condition(strip_balanced_outer_parens(&statement[..then_idx]))?;
     let body = statement[then_idx + "THEN".len()..].trim();
     routine_if_from_condition_and_body(condition, body)
 }
@@ -2616,7 +2734,81 @@ pub(crate) fn routine_target_names(targets: &str) -> Result<Vec<String>> {
     Ok(names)
 }
 
+/// PostgreSQL's postfix `x ISNULL` / `x NOTNULL` (the parser knows only the
+/// `IS [NOT] NULL` spelling). A word is rewritten only where it follows an
+/// operand and is not a function call, outside quoted text.
+fn rewrite_postfix_null_tests(expr: &str) -> std::borrow::Cow<'_, str> {
+    let lower = expr.to_ascii_lowercase();
+    if !lower.contains("isnull") && !lower.contains("notnull") {
+        return std::borrow::Cow::Borrowed(expr);
+    }
+    let bytes = expr.as_bytes();
+    let mut out = String::with_capacity(expr.len() + 8);
+    let mut index = 0;
+    let mut last_significant: Option<u8> = None;
+    let is_word = |byte: u8| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'$';
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if byte == b'\'' || byte == b'"' {
+            let quote = byte;
+            let start = index;
+            index += 1;
+            while index < bytes.len() {
+                if bytes[index] == quote {
+                    if bytes.get(index + 1) == Some(&quote) {
+                        index += 2;
+                        continue;
+                    }
+                    index += 1;
+                    break;
+                }
+                index += 1;
+            }
+            out.push_str(&expr[start..index]);
+            last_significant = Some(quote);
+            continue;
+        }
+        if is_word(byte) {
+            let start = index;
+            while index < bytes.len() && is_word(bytes[index]) {
+                index += 1;
+            }
+            let word = &expr[start..index];
+            let follows_operand = last_significant.is_some_and(|previous| {
+                is_word(previous) || matches!(previous, b')' | b'\'' | b'"' | b']')
+            });
+            let next = expr[index..].trim_start().as_bytes().first().copied();
+            let replacement = if follows_operand && next != Some(b'(') {
+                if word.eq_ignore_ascii_case("isnull") {
+                    Some("IS NULL")
+                } else if word.eq_ignore_ascii_case("notnull") {
+                    Some("IS NOT NULL")
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            match replacement {
+                Some(text) => out.push_str(text),
+                None => out.push_str(word),
+            }
+            last_significant = Some(bytes[index - 1]);
+            continue;
+        }
+        let ch = expr[index..].chars().next().unwrap();
+        out.push(ch);
+        if !ch.is_whitespace() {
+            last_significant = Some(byte);
+        }
+        index += ch.len_utf8();
+    }
+    std::borrow::Cow::Owned(out)
+}
+
 pub(crate) fn parse_routine_expr(expr: &str) -> Result<Expr> {
+    let expr = rewrite_postfix_null_tests(expr);
+    let expr = expr.as_ref();
     let sql = format!("SELECT {expr}");
     let statements = parse_statements(&sql)?
         .into_iter()

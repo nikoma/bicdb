@@ -5362,6 +5362,9 @@ impl<'db> SqlSession<'db> {
                     if let Some(constraint) = &error_fields.constraint {
                         fields.push(SqlErrorField::Constraint(constraint.clone()));
                     }
+                    if let Some(hint) = &error_fields.hint {
+                        fields.push(SqlErrorField::Hint(hint.clone()));
+                    }
                     let suppressed = self.raise_level_suppressed(error_fields.severity);
                     if let Some(severity) = error_fields.severity {
                         fields.push(SqlErrorField::Severity(severity.to_string()));
@@ -5388,16 +5391,43 @@ impl<'db> SqlSession<'db> {
                         ));
                     }
                 }
-                Err(SqlError::RaisedException {
+                let detail = detail
+                    .as_ref()
+                    .map(|expr| {
+                        self.eval_routine_expr(frame, expr)
+                            .map(|value| value.to_cell())
+                    })
+                    .transpose()?;
+                let mut fields = Vec::new();
+                for (value, field) in [
+                    (
+                        &error_fields.hint,
+                        SqlErrorField::Hint as fn(String) -> SqlErrorField,
+                    ),
+                    (&error_fields.column, SqlErrorField::Column),
+                    (&error_fields.constraint, SqlErrorField::Constraint),
+                    (&error_fields.datatype, SqlErrorField::DataType),
+                    (&error_fields.table, SqlErrorField::Table),
+                    (&error_fields.schema, SqlErrorField::Schema),
+                ] {
+                    if let Some(value) = value {
+                        fields.push(field(value.clone()));
+                    }
+                }
+                if fields.is_empty() {
+                    return Err(SqlError::RaisedException {
+                        sqlstate: sqlstate.clone(),
+                        message: format_routine_raise_message(message, &arguments),
+                        detail,
+                    });
+                }
+                if let Some(detail) = detail {
+                    fields.insert(0, SqlErrorField::Detail(detail));
+                }
+                Err(SqlError::RaisedDiagnostic {
                     sqlstate: sqlstate.clone(),
                     message: format_routine_raise_message(message, &arguments),
-                    detail: detail
-                        .as_ref()
-                        .map(|expr| {
-                            self.eval_routine_expr(frame, expr)
-                                .map(|value| value.to_cell())
-                        })
-                        .transpose()?,
+                    fields,
                 })
             }
             RoutineStmt::ReturnNext => {

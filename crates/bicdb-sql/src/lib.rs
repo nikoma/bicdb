@@ -92,6 +92,7 @@ mod column_privileges;
 mod identity;
 pub mod oracle;
 mod partition_info;
+mod pg_condition_names;
 pub mod sql_text;
 mod stack_depth;
 mod table_queries;
@@ -2123,6 +2124,15 @@ pub enum SqlError {
         detail: Option<String>,
     },
 
+    /// An error raised by PL/pgSQL RAISE ... USING with diagnostic fields
+    /// beyond DETAIL (HINT, COLUMN, CONSTRAINT, DATATYPE, TABLE, SCHEMA).
+    #[error("{message}")]
+    RaisedDiagnostic {
+        sqlstate: String,
+        message: String,
+        fields: Vec<SqlErrorField>,
+    },
+
     #[error("{message}")]
     OracleError {
         code: i32,
@@ -2437,6 +2447,7 @@ impl SqlError {
             Self::UndefinedRole { .. } => "42704",
             Self::InvalidTransactionState { .. } => "25P01",
             Self::RaisedException { sqlstate, .. } => sqlstate,
+            Self::RaisedDiagnostic { sqlstate, .. } => sqlstate,
             // A duplicate relation reaches here as plain SQL text from several
             // DDL paths; PostgreSQL reports it as duplicate_table.
             Self::InvalidSql(message)
@@ -2474,6 +2485,7 @@ impl SqlError {
                 detail: Some(detail),
                 ..
             } => vec![SqlErrorField::Detail(detail.clone())],
+            Self::RaisedDiagnostic { fields, .. } => fields.clone(),
             Self::InvalidCollection(table) => vec![SqlErrorField::Table(table.clone())],
             Self::UndefinedColumn { table, column } => vec![
                 SqlErrorField::Table(table.clone()),
@@ -5118,6 +5130,9 @@ pub(crate) struct RaiseErrorFields {
     /// The level of a non-error RAISE other than NOTICE (`WARNING`, `INFO`,
     /// `LOG`, `DEBUG`).
     pub(crate) severity: Option<&'static str>,
+    pub(crate) hint: Option<String>,
+    pub(crate) schema: Option<String>,
+    pub(crate) datatype: Option<String>,
 }
 
 #[derive(Clone, Debug)]

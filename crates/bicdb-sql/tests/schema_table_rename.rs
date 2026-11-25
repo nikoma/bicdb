@@ -329,7 +329,10 @@ fn postgres_reuses_renamed_table_name_without_reusing_the_old_primary_index() {
                 "SELECT indexname FROM pg_catalog.pg_indexes WHERE tablename = 'inferred_source'",
                 false,
             ),
-            vec![vec!["inferred_source_pkey1"]]
+            // Neither `inferred_source` table has a key of its own (a column
+            // named `id` is not made one), so the name is free, as in
+            // PostgreSQL.
+            vec![vec!["inferred_source_pkey"]]
         );
     }
 }

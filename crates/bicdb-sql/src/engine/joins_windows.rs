@@ -2996,10 +2996,21 @@ impl<'db> SqlEngine<'db> {
                         1
                     };
                     if let Some((frame_start, frame_end)) = frame {
+                        let exclusion = crate::window_exclusion::frame_exclusion(spec);
+                        let kept = move |target: &usize| {
+                            !exclusion.is_some_and(|exclusion| {
+                                exclusion.excludes(position, *target, |left, right| {
+                                    window_keys_are_peers(
+                                        &order_keys[partition[left]],
+                                        &order_keys[partition[right]],
+                                    )
+                                })
+                            })
+                        };
                         let positions: Box<dyn Iterator<Item = usize>> = if name == "last_value" {
-                            Box::new((frame_start..=frame_end).rev())
+                            Box::new((frame_start..=frame_end).rev().filter(kept))
                         } else {
-                            Box::new(frame_start..=frame_end)
+                            Box::new((frame_start..=frame_end).filter(kept))
                         };
                         let mut seen = 0usize;
                         let mut value = SqlValue::Null;
@@ -3024,9 +3035,19 @@ impl<'db> SqlEngine<'db> {
                     let frame = self
                         .window_frame_range(spec, rows, context, partition, order_keys, position)?;
                     if let Some((frame_start, frame_end)) = frame {
-                        let mut frame_rows = partition[frame_start..=frame_end]
-                            .iter()
-                            .map(|index| rows[*index].clone())
+                        let exclusion = crate::window_exclusion::frame_exclusion(spec);
+                        let mut frame_rows = (frame_start..=frame_end)
+                            .filter(|target| {
+                                !exclusion.is_some_and(|exclusion| {
+                                    exclusion.excludes(position, *target, |left, right| {
+                                        window_keys_are_peers(
+                                            &order_keys[partition[left]],
+                                            &order_keys[partition[right]],
+                                        )
+                                    })
+                                })
+                            })
+                            .map(|target| rows[partition[target]].clone())
                             .collect::<Vec<_>>();
                         if let Some(filter) = &function.filter {
                             frame_rows =

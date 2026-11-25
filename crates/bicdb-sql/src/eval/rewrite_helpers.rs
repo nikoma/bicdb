@@ -689,6 +689,16 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
         changed = true;
     }
 
+    if let Some(next) = crate::window_exclusion::rewrite_window_exclusion(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
+    if let Some(next) = crate::rows_from::rewrite_rows_from(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
     changed.then_some(rewritten)
 }
 

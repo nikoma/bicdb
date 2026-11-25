@@ -531,6 +531,8 @@ impl<'db> SqlSession<'db> {
             partitioning: definition.partitioning,
             partition_of: None,
             oracle_partitioning: None,
+            unlogged: false,
+            virtual_generated_columns: Vec::new(),
         };
         partition::validate_new_key(self.db_ref(), &schema)?;
         if schema.partitioning.is_some() {
@@ -626,6 +628,8 @@ impl<'db> SqlSession<'db> {
                 execution_version: None,
             }),
             oracle_partitioning: None,
+            unlogged: false,
+            virtual_generated_columns: Vec::new(),
         };
         partition::validate_new_key(self.db_ref(), &child)?;
         partition::validate_definition(&child)?;
@@ -767,6 +771,9 @@ impl<'db> SqlSession<'db> {
             return Ok(None);
         }
         if let [statement] = statements.as_slice() {
+            if let Some(ddl) = crate::persistence_ddl::parse_persistence_ddl(statement)? {
+                return self.execute_persistence_ddl(ddl).map(Some);
+            }
             if let Some((create, table, constraints)) =
                 raw_create_table_exclusion_constraints(statement)?
             {
@@ -800,6 +807,76 @@ impl<'db> SqlSession<'db> {
             self.save_session_schema(&schema)?;
         }
         Ok(Some(SqlResult::command("ALTER TABLE")))
+    }
+
+    /// UNLOGGED tables and VIRTUAL generated columns: the statement runs in
+    /// the parser-accepted form, then the table records what was declared.
+    fn execute_persistence_ddl(
+        &mut self,
+        ddl: crate::persistence_ddl::PersistenceDdl,
+    ) -> Result<SqlResult> {
+        use crate::persistence_ddl::PersistenceDdl;
+        match ddl {
+            PersistenceDdl::SetPersistence {
+                table,
+                if_exists,
+                unlogged,
+            } => {
+                let resolved = resolve_session_relation_name(self.db_ref(), &table)?;
+                let Some(mut schema) = load_schema(self.db_ref(), &resolved)? else {
+                    if if_exists {
+                        return Ok(SqlResult::command("ALTER TABLE"));
+                    }
+                    return Err(SqlError::InvalidCollection(table));
+                };
+                self.require_table_ownership(&resolved, "ALTER TABLE")?;
+                if schema.unlogged != unlogged {
+                    schema.unlogged = unlogged;
+                    self.save_session_schema(&schema)?;
+                }
+                Ok(SqlResult::command("ALTER TABLE"))
+            }
+            PersistenceDdl::Rewritten {
+                sql,
+                table,
+                create,
+                if_not_exists,
+                unlogged,
+                virtual_columns,
+            } => {
+                let before = load_schema(
+                    self.db_ref(),
+                    &resolve_session_relation_name_if_exists(self.db_ref(), &table),
+                )?;
+                // CREATE TABLE IF NOT EXISTS, or ADD COLUMN IF NOT EXISTS,
+                // that finds the object declares nothing.
+                let existed = match &before {
+                    Some(_) if create => true,
+                    Some(schema) => {
+                        if_not_exists
+                            && virtual_columns
+                                .iter()
+                                .any(|column| schema.column(column).is_some())
+                    }
+                    None => false,
+                };
+                let result = self.execute_inner(&sql)?;
+                if existed {
+                    return Ok(result);
+                }
+                let resolved = resolve_session_relation_name(self.db_ref(), &table)?;
+                let mut schema = load_schema(self.db_ref(), &resolved)?
+                    .ok_or_else(|| SqlError::InvalidCollection(resolved.clone()))?;
+                schema.unlogged |= unlogged;
+                for column in virtual_columns {
+                    if !schema.virtual_generated_columns.contains(&column) {
+                        schema.virtual_generated_columns.push(column);
+                    }
+                }
+                self.save_session_schema(&schema)?;
+                Ok(result)
+            }
+        }
     }
 
     /// `CREATE TABLE` with `EXCLUDE` table constraints: the table is created

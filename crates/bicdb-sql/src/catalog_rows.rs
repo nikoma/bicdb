@@ -681,6 +681,9 @@ pub(crate) fn pg_class_rows_filtered(
             .or_else(|| view_owners.get(&table_key).cloned())
             .unwrap_or_else(current_role_name);
         row.insert("relowner".to_string(), SqlValue::Int(role_oid(&owner)));
+        if table_schema.is_some_and(|schema| schema.unlogged) {
+            row.insert("relpersistence".to_string(), SqlValue::String("u".into()));
+        }
         rows.push(row);
     }
 
@@ -1369,6 +1372,17 @@ fn pg_attribute_rows_with_grants(
 ) -> Result<Vec<BTreeMap<String, SqlValue>>> {
     let grants = list_privileges(db)?;
     let mut rows = pg_attribute_rows_for_columns(attrelid, columns);
+    let virtual_columns = load_schema(db, table)?
+        .map(|schema| schema.virtual_generated_columns)
+        .unwrap_or_default();
+    if !virtual_columns.is_empty() {
+        for row in &mut rows {
+            if matches!(row.get("attname"), Some(SqlValue::String(column)) if virtual_columns.contains(column))
+            {
+                row.insert("attgenerated".into(), SqlValue::String("v".into()));
+            }
+        }
+    }
     for row in &mut rows {
         let Some(SqlValue::String(column)) = row.get("attname") else {
             continue;
@@ -7748,6 +7762,8 @@ pub(crate) fn catalog_view_schema(db: &BicDb, view: ViewSchema) -> Result<TableS
         partitioning: None,
         partition_of: None,
         oracle_partitioning: None,
+        unlogged: false,
+        virtual_generated_columns: Vec::new(),
     })
 }
 pub(crate) fn relation_schemas(db: &BicDb) -> Result<Vec<TableSchema>> {

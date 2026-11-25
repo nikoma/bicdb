@@ -25,3 +25,14 @@ excl.update_shift|CREATE TABLE ex5(id int PRIMARY KEY, r int4range, EXCLUDE USIN
 excl.where_predicate|CREATE TABLE ex6(r int4range, active boolean, EXCLUDE USING gist (r WITH &&) WHERE (active)); INSERT INTO ex6 VALUES ('[1,5)', true), ('[1,5)', false); SELECT count(*) FROM ex6; INSERT INTO ex6 VALUES ('[2,3)', true)
 excl.catalog_def|CREATE TABLE ex7(r int4range, CONSTRAINT ex7_r_excl EXCLUDE USING gist (r WITH &&)); SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid='ex7'::regclass
 excl.alter_add|CREATE TABLE ex9(r int4range); INSERT INTO ex9 VALUES ('[1,5)'),('[5,6)'); ALTER TABLE ex9 ADD CONSTRAINT ex9_x EXCLUDE USING gist (r WITH &&); INSERT INTO ex9 VALUES ('[0,2)')
+unlogged.create|CREATE UNLOGGED TABLE ul1(id int PRIMARY KEY, v text); INSERT INTO ul1 VALUES (1,'a'); SELECT relpersistence FROM pg_class WHERE relname='ul1'; SELECT v FROM ul1
+unlogged.set_logged|CREATE UNLOGGED TABLE ul2(id int); ALTER TABLE ul2 SET LOGGED; SELECT relpersistence FROM pg_class WHERE relname='ul2'; ALTER TABLE ul2 SET UNLOGGED; SELECT relpersistence FROM pg_class WHERE relname='ul2'
+unlogged.plain_is_permanent|CREATE TABLE ul3(id int); SELECT relpersistence FROM pg_class WHERE relname='ul3'
+unlogged.if_not_exists|CREATE TABLE ul4(id int); CREATE UNLOGGED TABLE IF NOT EXISTS ul4(id int); SELECT relpersistence FROM pg_class WHERE relname='ul4'
+virtual.explicit|CREATE TABLE vg1(a int, b int GENERATED ALWAYS AS (a * 2) VIRTUAL); INSERT INTO vg1(a) VALUES (3); UPDATE vg1 SET a = 5; SELECT a, b FROM vg1; SELECT attname, attgenerated FROM pg_attribute WHERE attrelid='vg1'::regclass AND attnum > 0 ORDER BY attnum; SELECT column_name, is_generated FROM information_schema.columns WHERE table_name='vg1' ORDER BY ordinal_position
+virtual.default_kind|CREATE TABLE vg2(a int, b text GENERATED ALWAYS AS ('x' || a)); INSERT INTO vg2(a) VALUES (1); SELECT b FROM vg2; SELECT attgenerated FROM pg_attribute WHERE attrelid='vg2'::regclass AND attname='b'
+virtual.insert_rejected|CREATE TABLE vg3(a int, b int GENERATED ALWAYS AS (a + 1) VIRTUAL); INSERT INTO vg3 VALUES (1, 2)
+virtual.add_column|CREATE TABLE vg4(a int); INSERT INTO vg4 VALUES (2); ALTER TABLE vg4 ADD COLUMN b int GENERATED ALWAYS AS (a * 10) VIRTUAL; SELECT a, b FROM vg4; SELECT attgenerated FROM pg_attribute WHERE attrelid='vg4'::regclass AND attname='b'
+virtual.index_refused|CREATE TABLE vg5(a int, b int GENERATED ALWAYS AS (a + 1) VIRTUAL); CREATE INDEX vg5_b ON vg5 (b)
+virtual.stored_still_stored|CREATE TABLE vg6(a int, b int GENERATED ALWAYS AS (a + 1) STORED); SELECT attgenerated FROM pg_attribute WHERE attrelid='vg6'::regclass AND attname='b'
+virtual.string_untouched|CREATE TABLE vg7(a text DEFAULT 'GENERATED ALWAYS AS (1) VIRTUAL', b int GENERATED ALWAYS AS (length(a)) VIRTUAL); INSERT INTO vg7 DEFAULT VALUES; SELECT a, b FROM vg7

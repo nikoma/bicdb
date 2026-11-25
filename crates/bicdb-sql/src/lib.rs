@@ -272,6 +272,7 @@ mod partial_index;
 mod partition;
 pub(crate) use const_fold::fold_statement_constants;
 mod error_detail;
+mod persistence_ddl;
 mod pg_scalar_extra;
 mod pgcrypto;
 mod records;
@@ -3401,6 +3402,16 @@ struct TableSchema {
     /// `COMMENT ON TABLE` (also views and sequences stored as relations).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     comment: Option<String>,
+    /// `CREATE UNLOGGED TABLE` (`pg_class.relpersistence` 'u'). The rows are
+    /// still written durably, which is strictly safer than PostgreSQL's
+    /// truncate-after-crash.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    unlogged: bool,
+    /// Generated columns declared VIRTUAL (the PostgreSQL 18 default). Their
+    /// value is kept with the row; as the expression must be immutable, reads
+    /// return what PostgreSQL computes on read.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    virtual_generated_columns: Vec<String>,
 }
 
 /// A logical SQL column projected over an existing BicDB collection for an
@@ -5890,6 +5901,8 @@ pub fn ensure_embedded_table_schema(
         partitioning: None,
         partition_of: None,
         oracle_partitioning: None,
+        unlogged: false,
+        virtual_generated_columns: Vec::new(),
     });
     let mut changed = previous.is_none();
     for requested in columns {

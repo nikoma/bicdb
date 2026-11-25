@@ -656,6 +656,8 @@ impl<'db> SqlSession<'db> {
             partitioning,
             partition_of: None,
             oracle_partitioning: None,
+            unlogged: false,
+            virtual_generated_columns: Vec::new(),
         };
         partition::validate_new_key(self.db_ref(), &schema)?;
         partition::validate_definition(&schema)?;

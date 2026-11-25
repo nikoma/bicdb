@@ -90,3 +90,21 @@ including the child's rows unless `ONLY` is written) is not implemented, and
 earlier builds silently created the child without the parent's columns.
 Declarative partitioning (`PARTITION BY` / `PARTITION OF`) is supported.
 
+## UNLOGGED tables
+
+`CREATE UNLOGGED TABLE` and `ALTER TABLE ... SET LOGGED | SET UNLOGGED` are
+accepted and reported as in PostgreSQL (`pg_class.relpersistence` is `u`).
+BicDB still writes the rows of an unlogged table durably, so they survive a
+crash, where PostgreSQL truncates such a table; that is strictly safer, and
+no write speed-up should be expected.
+
+## VIRTUAL generated columns
+
+Generated columns written `GENERATED ALWAYS AS (expr) VIRTUAL`, or without a
+storage keyword (PostgreSQL 18's default), are accepted in `CREATE TABLE` and
+`ALTER TABLE ... ADD COLUMN`. `pg_attribute.attgenerated` reports `v`. The
+value is kept with the row and recomputed when the row is written; since the
+generation expression must be immutable, every read returns the value
+PostgreSQL computes on read. As in PostgreSQL, a virtual column cannot be
+written directly, and indexes referencing one are refused with 0A000.
+

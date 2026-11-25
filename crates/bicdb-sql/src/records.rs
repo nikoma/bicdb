@@ -2606,6 +2606,7 @@ pub(crate) fn validate_exclusion_constraints(
         else {
             continue;
         };
+        crate::session::temporal_keys::reject_empty_temporal_periods(schema, constraint, records)?;
         let predicate = exclusion_predicate_expr(predicate)?;
         validate_exclusion_record_pairs(
             table,

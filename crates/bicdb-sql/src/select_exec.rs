@@ -7825,8 +7825,17 @@ pub(crate) fn information_schema_table_constraints(
                 ConstraintSchema::ForeignKey { name, .. } => {
                     rows.push(table_constraint_row(&schema, name, "FOREIGN KEY"));
                 }
-                ConstraintSchema::Exclusion { name, .. } => {
-                    rows.push(table_constraint_row(&schema, name, "EXCLUDE"));
+                ConstraintSchema::Exclusion {
+                    name,
+                    access_method,
+                    ..
+                } => {
+                    let kind = match access_method.as_str() {
+                        crate::session::temporal_keys::TEMPORAL_PRIMARY_KEY_METHOD => "PRIMARY KEY",
+                        crate::session::temporal_keys::TEMPORAL_UNIQUE_METHOD => "UNIQUE",
+                        _ => "EXCLUDE",
+                    };
+                    rows.push(table_constraint_row(&schema, name, kind));
                 }
             }
         }

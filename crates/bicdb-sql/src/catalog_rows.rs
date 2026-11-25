@@ -5888,14 +5888,22 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                 }
                 ConstraintSchema::Exclusion {
                     name,
+                    access_method,
                     equal_columns,
                     range,
                     validated,
                     ..
                 } => {
+                    // A temporal key (WITHOUT OVERLAPS) is the PRIMARY KEY / UNIQUE constraint it
+                    // was declared as, enforced like an exclusion constraint.
+                    let contype = match access_method.as_str() {
+                        crate::session::temporal_keys::TEMPORAL_PRIMARY_KEY_METHOD => "p",
+                        crate::session::temporal_keys::TEMPORAL_UNIQUE_METHOD => "u",
+                        _ => "x",
+                    };
                     if pg_constraint_filter_matches(
                         name,
-                        "x",
+                        contype,
                         table_oid,
                         names,
                         types,
@@ -5907,7 +5915,7 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                             condeferred: false,
                             oid: pg_constraint_oid(table_oid, constraint_slot),
                             name: name.clone(),
-                            contype: "x",
+                            contype,
                             conrelid: table_oid,
                             connamespace: namespace_oid(&schema.schema_name),
                             conindid: secondary_index_oid(&schema.schema_name, name),
@@ -6920,7 +6928,10 @@ pub(crate) fn pg_constraint_definition_for_oid(
     let Some(schema) = schema_by_oid.get(&table_oid) else {
         return Ok(None);
     };
-    if virtual_cell(&constraint, "contype").to_cell() == "x" {
+    if matches!(
+        virtual_cell(&constraint, "contype").to_cell().as_str(),
+        "x" | "p" | "u"
+    ) {
         let name = virtual_cell(&constraint, "conname").to_cell();
         if let Some(ConstraintSchema::Exclusion {
             access_method,
@@ -6933,6 +6944,15 @@ pub(crate) fn pg_constraint_definition_for_oid(
             .iter()
             .find(|candidate| constraint_name(candidate) == name)
         {
+            if crate::session::temporal_keys::is_temporal_key_method(access_method) {
+                return Ok(Some(
+                    crate::session::temporal_keys::temporal_key_definition(
+                        access_method,
+                        equal_columns,
+                        range,
+                    ),
+                ));
+            }
             return Ok(Some(exclusion_constraint_definition(
                 access_method,
                 equal_columns,

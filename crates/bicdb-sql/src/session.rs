@@ -73,6 +73,7 @@ mod set_functions;
 #[cfg(test)]
 mod subquery_scope_tests;
 mod temp_tables;
+pub(crate) mod temporal_keys;
 mod transaction_defaults;
 mod vacuum_analyze;
 pub use read_only::parse_transaction_read_only;
@@ -4037,6 +4038,10 @@ impl<'db> SqlSession<'db> {
             return Ok(result);
         }
 
+        if let Some(result) = self.execute_raw_temporal_key_ddl(sql)? {
+            return Ok(result);
+        }
+
         if let Some(result) = self.execute_raw_create_table_like(sql)? {
             return Ok(result);
         }
@@ -4540,6 +4545,10 @@ impl<'db> SqlSession<'db> {
                 continue;
             }
             if let Some(result) = self.execute_raw_function_privileges(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_temporal_key_ddl(&statement)? {
                 last_result = Some(result);
                 continue;
             }

@@ -142,3 +142,4 @@ inh.con_noinherit_nn|CREATE TABLE ihn(a int NOT NULL); CREATE TABLE ihn_c() INHE
 inh.con_multi|CREATE TABLE ihm(a int NOT NULL); CREATE TABLE ihm_c() INHERITS (ihm); ALTER TABLE ihm ALTER CONSTRAINT ihm_a_not_null NO INHERIT, ALTER CONSTRAINT ihm_a_not_null INHERIT; SELECT connoinherit FROM pg_constraint WHERE conname = 'ihm_a_not_null' AND conrelid = 'ihm'::regclass
 inh.con_pkey|CREATE TABLE ihk(a int PRIMARY KEY, b int NOT NULL); ALTER TABLE ihk ALTER CONSTRAINT ihk_pkey INHERIT
 inh.con_child|CREATE TABLE ihp(a int, b int NOT NULL); CREATE TABLE ihp_c() INHERITS (ihp); ALTER TABLE ihp_c ALTER CONSTRAINT ihp_b_not_null NO INHERIT
+ts.rank_cd_weights|SELECT ts_rank_cd(' a:1 s:2,3A d:2A g'::tsvector, 'a <2> s:A'), ts_rank_cd(' a:1 b:2 s:3A d:2A g'::tsvector, 'a <2> s:A')

@@ -193,8 +193,17 @@ cases protect the two front ends.
   arrays. `ts_filter` rejects NULL weights, and `array_to_tsvector`
   rejects NULL and empty lexemes, with PostgreSQL's messages.
 
+- `ts_token_type('default' | 3722)` lists the default parser's token
+  types; `ts_stat(query [, weights])` runs its query with the caller's
+  privileges and returns `word`, `ndoc`, `nentry`.
+- `SET`/`RESET`/`SHOW default_text_search_config` (default
+  `pg_catalog.english`) choose the configuration of the one-argument
+  `to_tsvector`, `to_tsquery`, `plainto_tsquery`, `phraseto_tsquery`,
+  `websearch_to_tsquery` and `ts_headline` forms and of
+  `get_current_ts_config()`.
+- `ts_rank_cd` leaves out positions whose weight the query operand
+  excludes (`s:A`), as PostgreSQL's cover density does.
+
 Limits: these fail instead of answering:
-- `ts_debug`, `ts_parse`, `ts_token_type`, `ts_stat`, `unnest(tsvector)`
-  and `x @@ ANY (array)`
-- `SET default_text_search_config`
+- `ts_debug`, `ts_parse`, `unnest(tsvector)` and `x @@ ANY (array)`
 - `CREATE TEXT SEARCH CONFIGURATION/DICTIONARY`

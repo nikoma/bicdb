@@ -3071,15 +3071,32 @@ pub(crate) fn ts_rank_cd_with_scalars(
     }
     let mut occurrences = Vec::<RankedOccurrence>::new();
     for lexeme in &vector.lexemes {
-        if operands.iter().any(|operand| {
-            (operand.prefix && lexeme.text.starts_with(&operand.text))
-                || (!operand.prefix && lexeme.text == operand.text)
-        }) {
-            occurrences.extend(lexeme.positions.iter().map(|position| RankedOccurrence {
-                text: lexeme.text.clone(),
-                position: *position,
-            }));
+        let matching = operands
+            .iter()
+            .filter(|operand| {
+                (operand.prefix && lexeme.text.starts_with(&operand.text))
+                    || (!operand.prefix && lexeme.text == operand.text)
+            })
+            .collect::<Vec<_>>();
+        if matching.is_empty() {
+            continue;
         }
+        // As PostgreSQL's document representation: a position takes part
+        // only if some matching operand accepts its weight (`s:A`).
+        occurrences.extend(
+            lexeme
+                .positions
+                .iter()
+                .filter(|position| {
+                    matching.iter().any(|operand| {
+                        operand.weights == 0 || operand.weights & position.weight.query_bit() != 0
+                    })
+                })
+                .map(|position| RankedOccurrence {
+                    text: lexeme.text.clone(),
+                    position: *position,
+                }),
+        );
     }
     occurrences.sort_by_key(|occurrence| {
         (
@@ -4221,6 +4238,15 @@ mod tests {
             assert_eq!(vector.to_postgres_text(), expected, "{input}");
         }
         assert!(PgTsVector::from_postgres_text("'a':1x").is_err());
+    }
+
+    #[test]
+    fn ts_rank_cd_skips_positions_of_excluded_weights() {
+        let vector = PgTsVector::from_postgres_text(" a:1 s:2,3A d:2A g").unwrap();
+        let query = PgTsQuery::from_postgres_text("a <2> s:A").unwrap();
+        let rank = ts_rank_cd(&vector, &query, [0.1, 0.2, 0.4, 1.0], 0);
+        // PostgreSQL: 0.0909091 (the s:2 position has weight D, not A).
+        assert!((rank - 1.0 / 11.0).abs() < 1e-6, "{rank}");
     }
 
     #[test]

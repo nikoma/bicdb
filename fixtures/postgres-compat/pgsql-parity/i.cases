@@ -77,3 +77,29 @@ uesc.empty_ident|SELECT 1 AS U&""
 uesc.uescape_bad_follow|SELECT U&'x' UESCAPE 1
 uesc.zero|SELECT U&'\0000'
 uesc.ident_uescape|SELECT 1 AS U&"!0041" UESCAPE '!'
+flt.f4_basic|SELECT 1.1::float4, 0.1::float4, 3.14159265358979::float4, 1e-45::float4, '1.4e-45'::float4, 3.4028235e38::float4
+flt.f8_basic|SELECT 1.1::float8, 0.1::float8, 1e20::float8, 1e15::float8, 1e14::float8, 123456789012345678::float8, 1e-5::float8, 0.0001::float8
+flt.specials|SELECT '-0'::float8, '-0'::float4, 'Infinity'::float8, '-inf'::float4, 'NaN'::float8, 'nan'::float4
+flt.f8_extremes|SELECT 1.7976931348623157e308::float8, 2.2250738585072014e-308::float8, 5e-324::float8, '4.9e-324'::float8
+flt.exponent_fmt|SELECT 1e100::float8, 1.5e-10::float8, 12345e10::float4, 1e6::float4, 123456::float4, 1234567::float4
+flt.efd0|SET extra_float_digits = 0; SELECT 1.1::float4, 0.1::float8, 1e20::float8, 3.14159265358979::float8, 1/3::float8, (1::float8/3), (1::float4/3)
+flt.efd3|SET extra_float_digits = 3; SELECT 1.1::float4, 0.1::float8, (1::float8/3), (1::float4/3)
+flt.efdneg|SET extra_float_digits = -15; SELECT 1.1::float4, 0.1::float8, (1::float8/3), 123.456::float8
+flt.efd_neg4|SET extra_float_digits = -4; SELECT (1::float8/3), 1e20::float8, 12345678::float4
+flt.efd_range|SET extra_float_digits = 4
+flt.casts|SELECT 1.1::float4::float8, 1.1::float8::float4, 1.1::float4::text, (0.1::float8)::text, 1.1::float4::numeric, 12345.678::float8::numeric
+flt.table|CREATE TABLE flt1(a float4, b float8, c real, d double precision); INSERT INTO flt1 VALUES (1.1, 1.1, 0.3, 0.3), ('-0', '-0', 'inf', '-inf'); SELECT * FROM flt1
+flt.input_errors|SELECT '1e400'::float8
+flt.input_errors4|SELECT '1e40'::float4
+flt.input_under|SELECT '1e-400'::float8
+flt.round_trip|SELECT '0.30000000000000004'::float8, '1.0000001'::float4, 1.0000001::float4 = '1.0000001'::float4
+flt.efd_show|SHOW extra_float_digits; SET extra_float_digits = 2; SHOW extra_float_digits; SELECT 1.1::float4
+flt.compare_literal|CREATE TABLE fltc(f1 float4); INSERT INTO fltc VALUES ('1004.3'), ('-34.84'); SELECT count(*) FROM fltc WHERE f1 = '1004.3'; SELECT count(*) FROM fltc WHERE f1 = 1004.3; SELECT count(*) FROM fltc WHERE f1 = 1004.3::float8; SELECT f1 FROM fltc WHERE f1 <> '1004.3'; SELECT count(*) FROM fltc WHERE '-34.84' = f1
+flt.input_msgs|SELECT '  xyz '::float8
+flt.input_msgs4|SELECT '5.0.0'::float4
+flt.nan_div|SELECT 'nan'::float4 / '0'::float4, 'nan'::float8 / 0::float8
+flt.f84_overflow|SELECT '10e70'::float8::float4
+flt.f84_underflow|SELECT '10e-70'::float8::float4
+flt.range_msg|SELECT '10e70'::float4
+flt.array_text|SELECT ARRAY[1.1::float4]::text, ARRAY['-0'::float8, 1e20]::text, (ARRAY[1.1::float4])[1]
+flt.numeric_cast|SELECT 1.1::float4::numeric, (0.1::float8 + 0.2::float8)::numeric, 1e20::float8::numeric, 1.1::float4::numeric(5,2)

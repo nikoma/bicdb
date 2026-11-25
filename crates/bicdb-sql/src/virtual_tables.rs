@@ -2368,7 +2368,8 @@ impl FieldRef {
                 if matches!(value, SqlValue::Null) {
                     return Ok(SqlValue::Null);
                 }
-                return postgres_array_cast_text_value(
+                return postgres_array_cast_text_value_of(
+                    element_type,
                     &value,
                     self.declared_array_delimiter()
                         .or_else(|| pg_type_delimiter(element_type))

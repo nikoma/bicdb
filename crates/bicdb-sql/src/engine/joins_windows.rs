@@ -1798,7 +1798,8 @@ impl<'db> SqlEngine<'db> {
                         if matches!(value, SqlValue::Null) {
                             return Ok(SqlValue::Null);
                         }
-                        return postgres_array_cast_text_value(
+                        return postgres_array_cast_text_value_of(
+                            element_type,
                             &value,
                             pg_type_delimiter_with_db(self.db_ref(), element_type)?,
                         )

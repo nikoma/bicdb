@@ -88,3 +88,27 @@ fn standard_conforming_strings_off_reads_backslash_escapes() {
         .unwrap();
     assert_eq!(text(&mut session, r"SELECT 'a\\b'"), vec![r"a\\b"]);
 }
+
+#[test]
+fn extra_float_digits_controls_float_text() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = open(root.path());
+    let mut session = SqlSession::new(&mut db);
+    assert_eq!(
+        text(
+            &mut session,
+            "SELECT (1.1::float4)::text, (1::float8 / 3)::text"
+        ),
+        vec!["1.1", "0.3333333333333333"]
+    );
+    session.execute("SET extra_float_digits = 0").unwrap();
+    assert_eq!(
+        text(
+            &mut session,
+            "SELECT (1::float8 / 3)::text, (1e20::float8)::text"
+        ),
+        vec!["0.333333333333333", "1e+20"]
+    );
+    let error = session.execute("SET extra_float_digits = 4").unwrap_err();
+    assert_eq!(error.sqlstate(), "22023");
+}

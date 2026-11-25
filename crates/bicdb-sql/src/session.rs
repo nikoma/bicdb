@@ -3443,6 +3443,8 @@ impl<'db> SqlSession<'db> {
                 crate::string_constants::PlainStrings::Standard,
             )
         } else {
+            // Float text in this statement's results follows the session.
+            crate::set_extra_float_digits(crate::extra_float_digits_setting(&self.session_gucs));
             crate::string_constants::normalize_client_string_constants(sql, &self.session_gucs)
         }?;
         let sql: &str = &constants;
@@ -6697,6 +6699,10 @@ impl<'db> SqlSession<'db> {
                         Arc::make_mut(&mut self.session_gucs).remove(&setting);
                     }
                 }
+                // Float output reads this per thread.
+                crate::set_extra_float_digits(crate::extra_float_digits_setting(
+                    &self.session_gucs,
+                ));
                 Ok(())
             }
             other if planner_gucs::is_planner_guc(other) => {

@@ -1280,6 +1280,20 @@ pub(crate) fn postgres_array_json_element(
     Ok(match value {
         JsonValue::Null => "NULL".to_string(),
         JsonValue::Bool(value) => value.to_string(),
+        // float4[]/float8[] elements print as float4out/float8out do.
+        JsonValue::Number(number) if matches!(element_oid, Some(700 | 701)) => {
+            match number.as_f64() {
+                Some(float) => bicdb_sql::postgres_float_text(
+                    float,
+                    if element_oid == Some(700) {
+                        "float4"
+                    } else {
+                        "float8"
+                    },
+                ),
+                None => number.to_string(),
+            }
+        }
         JsonValue::Number(value) => value.to_string(),
         JsonValue::String(value) => {
             postgres_array_text_element(&postgres_array_scalar_text(value, element_oid)?, delimiter)

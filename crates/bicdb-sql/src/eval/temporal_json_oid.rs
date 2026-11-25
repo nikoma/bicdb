@@ -1133,8 +1133,12 @@ pub(crate) fn cast_value_to_float(value: SqlValue, pg_type: &str) -> Result<SqlV
     };
     if pg_type == "float4" && value.is_finite() {
         let rounded = value as f32;
-        if rounded.is_infinite() || value != 0.0 && rounded == 0.0 {
-            return Err(float_input_out_of_range(pg_type, &value.to_string()));
+        // float8 to float4 (float84) reports the arithmetic range error.
+        if rounded.is_infinite() {
+            return Err(float_arithmetic_out_of_range("overflow"));
+        }
+        if value != 0.0 && rounded == 0.0 {
+            return Err(float_arithmetic_out_of_range("underflow"));
         }
         Ok(SqlValue::Float(f64::from(rounded)))
     } else {
@@ -1154,22 +1158,24 @@ pub(crate) fn parse_postgres_float_input(value: &str, pg_type: &str) -> Result<f
     if let Some(value) = special {
         return Ok(value);
     }
-    let parsed = trimmed.parse::<f64>().map_err(|_| {
-        SqlError::invalid_text_representation(
-            pg_type,
-            format!(
-                "invalid input syntax for type {}: \"{trimmed}\"",
+    // PostgreSQL's messages quote the input as given, spaces included.
+    let parsed = trimmed
+        .parse::<f64>()
+        .map_err(|_| SqlError::DataException {
+            sqlstate: "22P02",
+            message: format!(
+                "invalid input syntax for type {}: \"{value}\"",
                 float_type_name(pg_type)
             ),
-        )
-    })?;
+            data_type: Some(pg_type.to_string()),
+        })?;
     if parsed.is_infinite() || parsed == 0.0 && float_input_has_nonzero_digit(trimmed) {
-        return Err(float_input_out_of_range(pg_type, trimmed));
+        return Err(float_input_out_of_range(pg_type, value));
     }
     if pg_type == "float4" {
         let rounded = parsed as f32;
         if rounded.is_infinite() || parsed != 0.0 && rounded == 0.0 {
-            return Err(float_input_out_of_range(pg_type, trimmed));
+            return Err(float_input_out_of_range(pg_type, value));
         }
     }
     Ok(parsed)

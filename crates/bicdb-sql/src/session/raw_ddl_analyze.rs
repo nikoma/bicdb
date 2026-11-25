@@ -1164,16 +1164,32 @@ impl<'db> SqlSession<'db> {
                 Ok(())
             }
             "extra_float_digits" => {
-                let digits = value.to_cell().parse::<i64>().map_err(|_| {
-                    SqlError::InvalidSql("SET extra_float_digits expects an integer".to_string())
-                })?;
+                let text = value.to_cell();
+                // An integer setting also takes a number it rounds.
+                let digits = text
+                    .trim()
+                    .parse::<i64>()
+                    .ok()
+                    .or_else(|| {
+                        text.trim()
+                            .parse::<f64>()
+                            .ok()
+                            .filter(|value| value.is_finite())
+                            .map(|value| value.round() as i64)
+                    })
+                    .ok_or_else(|| {
+                        SqlError::invalid_parameter_value(format!(
+                            "invalid value for parameter \"extra_float_digits\": \"{text}\""
+                        ))
+                    })?;
                 if !(-15..=3).contains(&digits) {
-                    return Err(SqlError::InvalidSql(
-                        "SET extra_float_digits expects a value between -15 and 3".to_string(),
-                    ));
+                    return Err(SqlError::invalid_parameter_value(format!(
+                        "{digits} is outside the valid range for parameter \"extra_float_digits\" (-15 .. 3)"
+                    )));
                 }
                 Arc::make_mut(&mut self.session_gucs)
                     .insert("extra_float_digits".to_string(), digits.to_string());
+                crate::set_extra_float_digits(digits as i32);
                 Ok(())
             }
             "bytea_output" => {

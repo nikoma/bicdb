@@ -2559,6 +2559,11 @@ fn handle_frontend_message(
     tag: u8,
     payload: Vec<u8>,
 ) -> Result<bool> {
+    // Float results are written with the connection's extra_float_digits
+    // (a SET inside this message updates it for the rest of the message).
+    let _float_digits = bicdb_sql::ExtraFloatDigitsScope::enter(
+        bicdb_sql::extra_float_digits_setting(state.session_state.session_gucs()),
+    );
     if state.copy_in_discarding {
         match tag {
             // The error was already reported; drop the rest of the data.

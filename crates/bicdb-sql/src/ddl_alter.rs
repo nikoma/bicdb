@@ -977,7 +977,7 @@ pub(crate) fn validate_existing_constraint(
         } => {
             let predicate = exclusion_predicate_expr(predicate)?;
             let records = db.scan_collection(table)?;
-            validate_exclusion_record_pairs(
+            crate::records::validate_new_exclusion_constraint_rows(
                 table,
                 schema,
                 name,
@@ -985,7 +985,6 @@ pub(crate) fn validate_existing_constraint(
                 range,
                 predicate.as_ref(),
                 &records,
-                false,
             )
         }
     }
@@ -3989,6 +3988,7 @@ pub(crate) fn parse_exclusion_elements(
                 }
                 let mut parsed = parse_exclusion_range_expression(expression)?;
                 parsed.operator = operator.to_string();
+                parsed.position = Some(equal_columns.len());
                 range = Some(parsed);
             }
             "@>" | "<@" | "<<" | ">>" | "&<" | "&>" | "<>" => {
@@ -4642,6 +4642,7 @@ pub(crate) fn parse_exclusion_range_expression(expression: &str) -> Result<Exclu
             end_column: column.clone(),
             bounds: "[)".to_string(),
             range_column: Some(column),
+            position: None,
         });
     };
     let function = normalize_object_name(expression[..open].trim());
@@ -4676,6 +4677,7 @@ pub(crate) fn parse_exclusion_range_expression(expression: &str) -> Result<Exclu
             .and_then(|arg| sql_string_literal_prefix(arg))
             .unwrap_or_else(|| "[)".to_string()),
         range_column: None,
+        position: None,
     })
 }
 

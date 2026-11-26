@@ -4377,6 +4377,11 @@ struct ExclusionRangeSchema {
     bounds: String,
     #[serde(default)]
     range_column: Option<String>,
+    /// Where the range element stands among the constraint's elements, which
+    /// orders the key columns of a DETAIL and of `conkey`; `None` (older
+    /// catalogs) leaves the order unknown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    position: Option<usize>,
 }
 
 fn default_exclusion_access_method() -> String {

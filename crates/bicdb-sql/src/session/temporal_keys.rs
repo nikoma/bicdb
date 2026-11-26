@@ -35,6 +35,26 @@ pub(crate) fn temporal_key_definition(
     format!("{kind} ({})", columns.join(", "))
 }
 
+/// `pg_get_constraintdef` of a temporal foreign key.
+pub(crate) fn temporal_foreign_key_definition(foreign_key: &TemporalForeignKey) -> String {
+    let list = |columns: &[String], period: &str| {
+        let mut items = columns.to_vec();
+        items.push(format!("PERIOD {period}"));
+        items.join(", ")
+    };
+    let timing = match (foreign_key.deferrable, foreign_key.initially_deferred) {
+        (true, true) => " DEFERRABLE INITIALLY DEFERRED",
+        (true, false) => " DEFERRABLE",
+        _ => "",
+    };
+    format!(
+        "FOREIGN KEY ({}) REFERENCES {}({}){timing}",
+        list(&foreign_key.columns, &foreign_key.period),
+        foreign_key.foreign_table,
+        list(&foreign_key.referred_columns, &foreign_key.referred_period)
+    )
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct TemporalKeyDef {
     name: Option<String>,
@@ -56,6 +76,7 @@ pub(crate) struct TemporalForeignKeyDef {
     on_delete: Option<String>,
     on_update: Option<String>,
     deferrable: bool,
+    initially_deferred: bool,
 }
 
 /// A stored temporal foreign key. `columns` and `referred_columns` are the equality parts.
@@ -67,6 +88,91 @@ pub(crate) struct TemporalForeignKey {
     pub(crate) foreign_table: String,
     pub(crate) referred_columns: Vec<String>,
     pub(crate) referred_period: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) deferrable: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) initially_deferred: bool,
+    /// The identity SET CONSTRAINTS timing and queued deferred checks refer to.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub(crate) constraint_id: String,
+}
+
+impl TemporalForeignKey {
+    /// Whether this key's checks wait for the end of `tx` (or SET CONSTRAINTS IMMEDIATE).
+    pub(crate) fn is_deferred(&self, tx: Option<&Transaction>) -> bool {
+        self.deferrable
+            && !self.constraint_id.is_empty()
+            && tx.is_some_and(|tx| {
+                tx.constraint_deferred(&self.constraint_id)
+                    .unwrap_or(self.initially_deferred)
+            })
+    }
+}
+
+/// Queues the commit-time check of `record_id` in `table` against `foreign_key`.
+fn queue_temporal_foreign_key_check(
+    tx: &Transaction,
+    table: &str,
+    foreign_key: &TemporalForeignKey,
+    record_id: &str,
+) {
+    tx.push_deferred_hook(serde_json::json!({"temporal_foreign_key_check": {
+        "table": table,
+        "constraint_id": foreign_key.constraint_id,
+        "record_id": record_id,
+    }}));
+}
+
+#[derive(Deserialize)]
+struct TemporalForeignKeyCheck {
+    table: String,
+    constraint_id: String,
+    record_id: String,
+}
+
+/// The constraint identity of a queued temporal foreign key check, if `hook` is one.
+pub(crate) fn temporal_foreign_key_hook_id(hook: &JsonValue) -> Option<String> {
+    hook.get("temporal_foreign_key_check")?
+        .get("constraint_id")?
+        .as_str()
+        .map(str::to_string)
+}
+
+/// Runs a queued temporal foreign key check against the row's current state; Ok(false) when
+/// `hook` is not one. A dropped key or a deleted row has nothing left to check.
+pub(crate) fn validate_temporal_foreign_key_hook(
+    db: &BicDb,
+    tx: Option<&Transaction>,
+    hook: &JsonValue,
+) -> Result<bool> {
+    let Some(check) = hook.get("temporal_foreign_key_check") else {
+        return Ok(false);
+    };
+    let check: TemporalForeignKeyCheck =
+        serde_json::from_value(check.clone()).map_err(|error| {
+            SqlError::InvalidSql(format!("malformed deferred foreign-key check: {error}"))
+        })?;
+    let owns = |schema: &TableSchema| {
+        schema
+            .temporal_foreign_keys
+            .iter()
+            .any(|foreign_key| foreign_key.constraint_id == check.constraint_id)
+    };
+    let mut schema = load_schema(db, &check.table)?.filter(|schema| owns(schema));
+    if schema.is_none() {
+        // DDL may rename the relation while checks are pending.
+        schema = list_schemas(db)?.into_iter().find(|schema| owns(schema));
+    }
+    let Some(mut schema) = schema else {
+        return Ok(true);
+    };
+    schema
+        .temporal_foreign_keys
+        .retain(|foreign_key| foreign_key.constraint_id == check.constraint_id);
+    if let Some(record) = current_integrity_record(db, tx, &schema.name, &check.record_id)? {
+        validate_temporal_foreign_keys_timed(db, tx, &schema.name, &schema, &record, None, false)?;
+    }
+    Ok(true)
 }
 
 #[derive(Debug)]
@@ -274,6 +380,8 @@ fn parse_temporal_foreign_key(element: &str) -> Result<Option<TemporalForeignKey
     let mut on_delete = None;
     let mut on_update = None;
     let mut deferrable = false;
+    let mut not_deferrable = false;
+    let mut initially_deferred = false;
     let mut index = 0;
     let action = |words: &[String], index: &mut usize| -> Result<String> {
         let first = words.get(*index).cloned().unwrap_or_default();
@@ -301,13 +409,16 @@ fn parse_temporal_foreign_key(element: &str) -> Result<Option<TemporalForeignKey
                 index += 2;
                 on_update = Some(action(&words, &mut index)?);
             }
-            ("NOT", Some("DEFERRABLE")) => index += 2,
+            ("NOT", Some("DEFERRABLE")) => {
+                not_deferrable = true;
+                index += 2;
+            }
             ("DEFERRABLE", _) => {
                 deferrable = true;
                 index += 1;
             }
             ("INITIALLY", Some("DEFERRED")) => {
-                deferrable = true;
+                initially_deferred = true;
                 index += 2;
             }
             ("INITIALLY", Some("IMMEDIATE")) => index += 2,
@@ -320,6 +431,20 @@ fn parse_temporal_foreign_key(element: &str) -> Result<Option<TemporalForeignKey
             }
         }
     }
+    if deferrable && not_deferrable {
+        return Err(SqlError::data_exception_public(
+            "42601",
+            "conflicting constraint properties",
+            None,
+        ));
+    }
+    if initially_deferred && not_deferrable {
+        return Err(SqlError::data_exception_public(
+            "42601",
+            "constraint declared INITIALLY DEFERRED must be DEFERRABLE",
+            None,
+        ));
+    }
     Ok(Some(TemporalForeignKeyDef {
         name,
         columns,
@@ -328,7 +453,9 @@ fn parse_temporal_foreign_key(element: &str) -> Result<Option<TemporalForeignKey
         referred,
         on_delete,
         on_update,
-        deferrable,
+        // INITIALLY DEFERRED implies DEFERRABLE.
+        deferrable: deferrable || initially_deferred,
+        initially_deferred,
     }))
 }
 
@@ -559,6 +686,7 @@ impl SqlSession<'_> {
                 end_column: key.period.clone(),
                 bounds: "[)".to_string(),
                 range_column: Some(key.period.clone()),
+                position: Some(key.columns.len()),
             }),
             predicate: None,
             validated: true,
@@ -566,19 +694,7 @@ impl SqlSession<'_> {
         // Existing rows: empty periods and overlaps, as for any new constraint.
         let records = self.db_ref().scan_collection(table)?;
         reject_empty_temporal_periods(&schema, &constraint, &records)?;
-        validate_existing_constraint(self.db_ref(), table, &schema, &constraint).map_err(
-            |error| {
-                if error.sqlstate() == "23P01" {
-                    SqlError::data_exception_public(
-                        "23P01",
-                        format!("could not create exclusion constraint \"{name}\""),
-                        None,
-                    )
-                } else {
-                    error
-                }
-            },
-        )?;
+        validate_existing_constraint(self.db_ref(), table, &schema, &constraint)?;
         schema.constraints.push(constraint);
         self.save_session_schema(&schema)
     }
@@ -740,6 +856,20 @@ pub(crate) fn validate_temporal_foreign_keys(
     record: &Record,
     before: Option<&Record>,
 ) -> Result<()> {
+    validate_temporal_foreign_keys_timed(db, tx, table, schema, record, before, true)
+}
+
+/// [`validate_temporal_foreign_keys`]; with `may_defer`, a deferred key reserves the
+/// referenced key now and queues the coverage check for commit.
+fn validate_temporal_foreign_keys_timed(
+    db: &BicDb,
+    tx: Option<&Transaction>,
+    table: &str,
+    schema: &TableSchema,
+    record: &Record,
+    before: Option<&Record>,
+    may_defer: bool,
+) -> Result<()> {
     if schema.referential_checks_disabled {
         return Ok(());
     }
@@ -763,6 +893,18 @@ pub(crate) fn validate_temporal_foreign_keys(
             return Err(foreign_key_violation(table, &foreign_key.name));
         };
         let key = &values[..foreign_key.columns.len()];
+        if may_defer && foreign_key.is_deferred(tx) {
+            // Reserve the key now, as an immediate check would, so a concurrent parent
+            // removal cannot slip in before commit.
+            if let Err(error) = reserve_foreign_key(tx, &parent, &foreign_key.referred_columns, key)
+            {
+                if error.sqlstate() != "22003" {
+                    return Err(error);
+                }
+            }
+            queue_temporal_foreign_key_check(tx.unwrap(), table, foreign_key, &record.id);
+            continue;
+        }
         reserve_foreign_key(tx, &parent, &foreign_key.referred_columns, key)?;
         let mut periods = Vec::new();
         for candidate in current_integrity_records(db, tx, &foreign_key.foreign_table)? {
@@ -786,7 +928,14 @@ pub(crate) fn validate_temporal_foreign_keys(
             periods,
             &column_type(&parent, &foreign_key.referred_period),
         )? {
-            return Err(foreign_key_violation(table, &foreign_key.name));
+            return Err(crate::records::foreign_key_missing_violation(
+                table,
+                schema,
+                &foreign_key.name,
+                &columns,
+                &values,
+                &foreign_key.foreign_table,
+            ));
         }
     }
     Ok(())
@@ -928,11 +1077,6 @@ impl SqlSession<'_> {
                 });
             }
         }
-        if def.deferrable {
-            return Err(SqlError::Unsupported(
-                "DEFERRABLE foreign keys using PERIOD are not supported yet".to_string(),
-            ));
-        }
         if schema
             .constraints
             .iter()
@@ -951,6 +1095,9 @@ impl SqlSession<'_> {
             foreign_table: parent.name.clone(),
             referred_columns,
             referred_period,
+            deferrable: def.deferrable,
+            initially_deferred: def.initially_deferred,
+            constraint_id: uuid::Uuid::new_v4().to_string(),
         };
         schema.temporal_foreign_keys.push(foreign_key);
         // Existing rows must already satisfy it.
@@ -959,13 +1106,15 @@ impl SqlSession<'_> {
                 temporal_foreign_keys: vec![schema.temporal_foreign_keys.last().cloned().unwrap()],
                 ..schema.clone()
             };
-            validate_temporal_foreign_keys(
+            // Validated now whatever its timing, as PostgreSQL does.
+            validate_temporal_foreign_keys_timed(
                 self.db_ref(),
                 self.tx.as_ref(),
                 table,
                 &single,
                 &record,
                 None,
+                false,
             )?;
         }
         self.save_session_schema(&schema)
@@ -997,7 +1146,6 @@ impl SqlSession<'_> {
             .filter(|record| !removed_ids.contains(record.id.as_str()))
             .collect::<Vec<_>>();
         parents.extend(added.iter().cloned());
-        let parent_display = catalog_display_name(&schema.name);
         for child in &children {
             for foreign_key in child
                 .temporal_foreign_keys
@@ -1024,7 +1172,7 @@ impl SqlSession<'_> {
                     }
                     let key = &values[..foreign_key.columns.len()];
                     // Only rows that referenced a removed parent row can be affected.
-                    let affected = removed.iter().any(|record| {
+                    let affected = removed.iter().find(|record| {
                         let parent_key =
                             record_column_values(record, schema, &foreign_key.referred_columns);
                         typed_column_values_not_distinct(
@@ -1035,9 +1183,9 @@ impl SqlSession<'_> {
                         )
                         .unwrap_or(true)
                     });
-                    if !affected {
+                    let Some(affected) = affected else {
                         continue;
-                    }
+                    };
                     let mut periods = Vec::new();
                     for parent in &parents {
                         let parent_key =
@@ -1061,16 +1209,26 @@ impl SqlSession<'_> {
                         periods,
                         &column_type(schema, &foreign_key.referred_period),
                     )? {
-                        return Err(constraint_violation(
-                            "23503",
-                            format!(
-                                "update or delete on table \"{parent_display}\" violates foreign key constraint \"{}\" on table \"{}\"",
-                                foreign_key.name,
-                                catalog_display_name(&child.name)
-                            ),
-                            Some(catalog_display_name(&child.name)),
-                            None,
-                            Some(foreign_key.name.clone()),
+                        if foreign_key.is_deferred(self.tx.as_ref()) {
+                            // Rechecked against the final state at commit.
+                            queue_temporal_foreign_key_check(
+                                self.tx.as_ref().unwrap(),
+                                &child.name,
+                                foreign_key,
+                                &child_record.id,
+                            );
+                            continue;
+                        }
+                        // `Key (id, valid_at)=(...) is still referenced from table "c".`
+                        let mut referred = foreign_key.referred_columns.clone();
+                        referred.push(foreign_key.referred_period.clone());
+                        return Err(crate::records::foreign_key_referenced_violation(
+                            table,
+                            schema,
+                            &foreign_key.name,
+                            &child.name,
+                            &referred,
+                            &record_column_values(affected, schema, &referred),
                         ));
                     }
                 }

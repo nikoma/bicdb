@@ -2684,6 +2684,56 @@ pub(crate) fn validate_exclusion_record_pairs(
     records: &[Record],
     allow_same_id: bool,
 ) -> Result<()> {
+    exclusion_record_pairs(
+        table,
+        schema,
+        name,
+        equal_columns,
+        range,
+        predicate,
+        records,
+        allow_same_id,
+        false,
+    )
+}
+
+/// The existing rows of a constraint being added: PostgreSQL's `could not
+/// create exclusion constraint` with `Key (...)=(...) conflicts with key
+/// (...)=(...).`, the earlier row first.
+pub(crate) fn validate_new_exclusion_constraint_rows(
+    table: &str,
+    schema: &TableSchema,
+    name: &str,
+    equal_columns: &[String],
+    range: &Option<ExclusionRangeSchema>,
+    predicate: Option<&Expr>,
+    records: &[Record],
+) -> Result<()> {
+    exclusion_record_pairs(
+        table,
+        schema,
+        name,
+        equal_columns,
+        range,
+        predicate,
+        records,
+        false,
+        true,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn exclusion_record_pairs(
+    table: &str,
+    schema: &TableSchema,
+    name: &str,
+    equal_columns: &[String],
+    range: &Option<ExclusionRangeSchema>,
+    predicate: Option<&Expr>,
+    records: &[Record],
+    allow_same_id: bool,
+    creating: bool,
+) -> Result<()> {
     for (idx, record) in records.iter().enumerate() {
         for other in records.iter().skip(idx + 1) {
             if allow_same_id && other.id == record.id {
@@ -2697,6 +2747,17 @@ pub(crate) fn validate_exclusion_record_pairs(
                 record,
                 other,
             )? {
+                if creating {
+                    return Err(exclusion_create_violation(
+                        table,
+                        schema,
+                        name,
+                        equal_columns,
+                        range,
+                        record,
+                        other,
+                    ));
+                }
                 return Err(exclusion_conflict_violation(
                     table,
                     schema,
@@ -4318,12 +4379,20 @@ fn exclusion_conflict_violation(
     existing: &Record,
 ) -> SqlError {
     let error = exclusion_violation(table, name);
+    // The range element's place among the elements orders the key; an older
+    // catalog without it is printed only when that place cannot matter.
     let columns = match range {
         None => equal_columns.to_vec(),
         Some(ExclusionRangeSchema {
             range_column: Some(column),
+            position,
             ..
-        }) if equal_columns.is_empty() => vec![column.clone()],
+        }) if position.is_some() || equal_columns.is_empty() => {
+            let mut columns = equal_columns.to_vec();
+            let at = position.unwrap_or(0).min(columns.len());
+            columns.insert(at, column.clone());
+            columns
+        }
         Some(_) => return error,
     };
     let key = UniqueKey::Columns(columns);
@@ -4354,6 +4423,41 @@ fn exclusion_conflict_violation(
             error.with_error_detail(new)
         }
         _ => error,
+    }
+}
+
+/// [`exclusion_conflict_violation`] of two existing rows of a constraint being added.
+#[allow(clippy::too_many_arguments)]
+fn exclusion_create_violation(
+    table: &str,
+    schema: &TableSchema,
+    name: &str,
+    equal_columns: &[String],
+    range: &Option<ExclusionRangeSchema>,
+    record: &Record,
+    other: &Record,
+) -> SqlError {
+    let conflict =
+        exclusion_conflict_violation(table, schema, name, equal_columns, range, record, other);
+    let created = constraint_violation(
+        "23P01",
+        format!("could not create exclusion constraint \"{name}\""),
+        Some(table.to_string()),
+        None,
+        Some(name.to_string()),
+    );
+    match conflict {
+        SqlError::ConstraintViolation {
+            detail: Some(detail),
+            ..
+        } => {
+            let mut detail = *detail;
+            detail.text = detail
+                .text
+                .map(|text| text.replacen("conflicts with existing key", "conflicts with key", 1));
+            created.with_error_detail(detail)
+        }
+        _ => created,
     }
 }
 

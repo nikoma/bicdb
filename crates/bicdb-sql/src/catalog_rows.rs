@@ -5927,10 +5927,71 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                             conbin: None,
                             convalidated: *validated,
                         }));
+                        if contype != "x" {
+                            if let Some(row) = rows.last_mut() {
+                                row.insert("conperiod".into(), SqlValue::Bool(true));
+                            }
+                        }
                     }
                     constraint_slot += 1;
                 }
             }
+        }
+        // Temporal foreign keys (`FOREIGN KEY (a, PERIOD p)`), after the stored constraints.
+        for foreign_key in &schema.temporal_foreign_keys {
+            if pg_constraint_filter_matches(
+                &foreign_key.name,
+                "f",
+                table_oid,
+                names,
+                types,
+                relation_oids,
+            ) {
+                let mut columns = foreign_key.columns.clone();
+                columns.push(foreign_key.period.clone());
+                let mut referred = foreign_key.referred_columns.clone();
+                referred.push(foreign_key.referred_period.clone());
+                let confrelid = *table_oids.get(&foreign_key.foreign_table).unwrap_or(&0);
+                let loaded_parent;
+                let parent = match schemas
+                    .iter()
+                    .find(|parent| parent.name == foreign_key.foreign_table)
+                {
+                    Some(parent) => Some(parent),
+                    None => {
+                        loaded_parent = load_schema_shared(db, &foreign_key.foreign_table)?;
+                        loaded_parent.as_deref()
+                    }
+                };
+                let confkey = match parent {
+                    Some(parent) => constraint_attnums(
+                        std::slice::from_ref(parent),
+                        &foreign_key.foreign_table,
+                        &referred,
+                    ),
+                    None => vec![0; referred.len()],
+                };
+                let mut row = pg_constraint_row(PgConstraintRow {
+                    condeferrable: foreign_key.deferrable,
+                    condeferred: foreign_key.initially_deferred,
+                    oid: pg_constraint_oid(table_oid, constraint_slot),
+                    name: foreign_key.name.clone(),
+                    contype: "f",
+                    conrelid: table_oid,
+                    connamespace: namespace_oid(&schema.schema_name),
+                    conindid: 0,
+                    confrelid,
+                    confupdtype: "a",
+                    confdeltype: "a",
+                    conkey: constraint_attnums(schemas, &schema.name, &columns),
+                    confkey,
+                    conbin: None,
+                    convalidated: true,
+                });
+                row.insert("conperiod".into(), SqlValue::Bool(true));
+                rows.push(row);
+            }
+            constraint_slot += 1;
         }
     }
     Ok(rows)
@@ -6123,7 +6184,8 @@ fn table_constraint_oids<'a>(
                     | ConstraintSchema::ForeignKey { .. }
                     | ConstraintSchema::Exclusion { .. } => true,
                 })
-                .count();
+                .count()
+                + schema.temporal_foreign_keys.len();
             let oid = *relation_oids.get(&schema.name).unwrap_or(&0);
             (1..=not_null + stored).map(move |slot| pg_constraint_oid(oid, slot as i64))
         });
@@ -6290,7 +6352,8 @@ pub(crate) fn exclusion_constraint_columns(
             .iter()
             .any(|candidate| candidate.eq_ignore_ascii_case(&column))
         {
-            columns.push(column);
+            let at = range.position.unwrap_or(columns.len()).min(columns.len());
+            columns.insert(at, column);
         }
     }
     columns
@@ -6928,6 +6991,18 @@ pub(crate) fn pg_constraint_definition_for_oid(
     let Some(schema) = schema_by_oid.get(&table_oid) else {
         return Ok(None);
     };
+    if virtual_cell(&constraint, "contype").to_cell() == "f" {
+        let name = virtual_cell(&constraint, "conname").to_cell();
+        if let Some(foreign_key) = schema
+            .temporal_foreign_keys
+            .iter()
+            .find(|foreign_key| foreign_key.name == name)
+        {
+            return Ok(Some(
+                crate::session::temporal_keys::temporal_foreign_key_definition(foreign_key),
+            ));
+        }
+    }
     if matches!(
         virtual_cell(&constraint, "contype").to_cell().as_str(),
         "x" | "p" | "u"

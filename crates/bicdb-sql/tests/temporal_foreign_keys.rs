@@ -8,6 +8,16 @@ fn run(db: &mut BicDb, sql: &str) {
         .unwrap_or_else(|error| panic!("{sql}: {error}"));
 }
 
+fn cells(db: &mut BicDb, sql: &str) -> Vec<Vec<String>> {
+    SqlSession::new(db)
+        .execute(sql)
+        .unwrap_or_else(|error| panic!("{sql}: {error}"))
+        .rows
+        .iter()
+        .map(|row| row.iter().map(|value| value.to_cell()).collect())
+        .collect()
+}
+
 fn fails(db: &mut BicDb, sql: &str) -> (String, String) {
     let error = SqlSession::new(db).execute(sql).unwrap_err();
     (error.sqlstate().to_string(), error.to_string())
@@ -249,4 +259,137 @@ fn temporal_foreign_keys_on_partitioned_tables_are_refused() {
     );
     // Nothing was left behind.
     assert_eq!(fails(&mut db, "SELECT * FROM cc").0, "42P01");
+}
+
+#[test]
+fn temporal_foreign_keys_are_listed_in_the_catalogs() {
+    let (_dir, mut db) = setup("daterange", "'{}'");
+    assert_eq!(
+        cells(
+            &mut db,
+            "SELECT conname, contype, conperiod, confupdtype, confdeltype, \
+             pg_get_constraintdef(oid) FROM pg_constraint \
+             WHERE conrelid IN ('p'::regclass, 'c'::regclass) AND contype <> 'n' ORDER BY conname"
+        ),
+        [
+            [
+                "c_fk",
+                "f",
+                "true",
+                "a",
+                "a",
+                "FOREIGN KEY (parent_id, PERIOD valid_at) REFERENCES p(id, PERIOD valid_at)"
+            ],
+            [
+                "p_pk",
+                "p",
+                "true",
+                " ",
+                " ",
+                "PRIMARY KEY (id, valid_at WITHOUT OVERLAPS)"
+            ],
+        ]
+    );
+    assert_eq!(
+        cells(
+            &mut db,
+            "SELECT conkey::text, confkey::text, confrelid = 'p'::regclass \
+             FROM pg_constraint WHERE conname = 'c_fk'"
+        ),
+        [["{2,3}", "{1,2}", "true"]]
+    );
+    assert_eq!(
+        cells(
+            &mut db,
+            "SELECT constraint_type FROM information_schema.table_constraints \
+             WHERE table_name = 'c' AND constraint_name = 'c_fk'"
+        ),
+        [["FOREIGN KEY"]]
+    );
+    assert_eq!(
+        cells(
+            &mut db,
+            "SELECT column_name, ordinal_position FROM information_schema.key_column_usage \
+             WHERE constraint_name = 'c_fk' ORDER BY ordinal_position"
+        ),
+        [["parent_id", "1"], ["valid_at", "2"]]
+    );
+}
+
+#[test]
+fn deferrable_temporal_foreign_keys_are_checked_at_commit() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    run(
+        &mut db,
+        "CREATE TABLE p (id int4range, valid_at daterange, \
+         CONSTRAINT p_pk PRIMARY KEY (id, valid_at WITHOUT OVERLAPS))",
+    );
+    run(
+        &mut db,
+        "CREATE TABLE c (id int4range, parent_id int4range, valid_at daterange, \
+         CONSTRAINT c_fk FOREIGN KEY (parent_id, PERIOD valid_at) REFERENCES p (id, PERIOD valid_at) \
+         DEFERRABLE INITIALLY DEFERRED)",
+    );
+    assert_eq!(
+        cells(
+            &mut db,
+            "SELECT condeferrable, condeferred, pg_get_constraintdef(oid) FROM pg_constraint \
+             WHERE conname = 'c_fk'"
+        ),
+        [[
+            "true",
+            "true",
+            "FOREIGN KEY (parent_id, PERIOD valid_at) REFERENCES p(id, PERIOD valid_at) \
+             DEFERRABLE INITIALLY DEFERRED"
+        ]]
+    );
+    let mut sql = SqlSession::new(&mut db);
+    // The child may come first; the parent covers it by commit.
+    sql.execute(
+        "BEGIN; INSERT INTO c VALUES ('[1,2)', '[1,2)', '[2018-01-05,2018-01-10)'); \
+         INSERT INTO p VALUES ('[1,2)', '[2018-01-01,2018-02-01)'); COMMIT",
+    )
+    .unwrap();
+    // An uncovered child fails at COMMIT, and the transaction rolls back.
+    sql.execute("BEGIN; INSERT INTO c VALUES ('[2,3)', '[1,2)', '[2018-01-20,2018-03-01)')")
+        .unwrap();
+    let error = sql.execute("COMMIT").unwrap_err();
+    assert_eq!(error.sqlstate(), "23503");
+    assert_eq!(
+        error.to_string(),
+        "insert or update on table \"c\" violates foreign key constraint \"c_fk\""
+    );
+    drop(sql);
+    assert_eq!(cells(&mut db, "SELECT count(*) FROM c"), [["1"]]);
+    let mut sql = SqlSession::new(&mut db);
+    // Removing the parent period is deferred too: replacing it in time is fine.
+    sql.execute(
+        "BEGIN; DELETE FROM p; \
+         INSERT INTO p VALUES ('[1,2)', '[2018-01-01,2018-01-15)'); COMMIT",
+    )
+    .unwrap();
+    sql.execute("BEGIN; DELETE FROM p").unwrap();
+    let error = sql.execute("SET CONSTRAINTS c_fk IMMEDIATE").unwrap_err();
+    assert_eq!(error.sqlstate(), "23503");
+    sql.execute("ROLLBACK").unwrap();
+    // NOT DEFERRABLE again: checked at once.
+    sql.execute("ALTER TABLE c ALTER CONSTRAINT c_fk NOT DEFERRABLE")
+        .unwrap();
+    sql.execute("BEGIN").unwrap();
+    assert_eq!(
+        sql.execute("INSERT INTO c VALUES ('[3,4)', '[9,10)', '[2018-01-01,2018-01-02)')")
+            .unwrap_err()
+            .sqlstate(),
+        "23503"
+    );
+    sql.execute("ROLLBACK").unwrap();
+    drop(sql);
+    assert_eq!(
+        cells(
+            &mut db,
+            "SELECT condeferrable, condeferred FROM pg_constraint WHERE conname = 'c_fk'"
+        ),
+        [["false", "false"]]
+    );
 }

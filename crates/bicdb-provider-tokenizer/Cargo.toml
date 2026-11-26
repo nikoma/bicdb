@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-provider-tokenizer"
-version = "1.0.546"
+version = "1.0.547"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -15,7 +15,7 @@ categories = ["database-implementations"]
 include = ["/README.md", "/src/**", "/Cargo.toml", "/LICENSE", "/NOTICE", "/THIRD_PARTY_NOTICES.md"]
 
 [dependencies]
-bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "=1.0.546" }
+bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "=1.0.547" }
 tokenizers.workspace = true
 
 [dev-dependencies]

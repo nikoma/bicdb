@@ -169,7 +169,11 @@ fn exclusion_checks_see_the_transactions_own_writes() {
     .unwrap();
     drop(sql);
     assert_eq!(
-        failure(&mut db, "INSERT INTO p VALUES ('[1,2)', '[2018-02-01,2018-02-02)')").0,
+        failure(
+            &mut db,
+            "INSERT INTO p VALUES ('[1,2)', '[2018-02-01,2018-02-02)')"
+        )
+        .0,
         "23P01"
     );
 }

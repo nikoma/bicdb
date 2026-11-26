@@ -3895,9 +3895,13 @@ pub(crate) fn raw_create_table_exclusion_constraints(
             }
             None => (None, element.as_str()),
         };
-        if strip_prefix_ci(body, "EXCLUDE")
-            .is_some_and(|after| after.starts_with(|ch: char| ch.is_whitespace() || ch == '('))
-        {
+        // `EXCLUDE [USING method] (...)`; a column named `exclude` stays a column.
+        if strip_prefix_ci(body, "EXCLUDE").is_some_and(|after| {
+            after.starts_with(|ch: char| ch.is_whitespace() || ch == '(') && {
+                let after = after.trim_start();
+                after.starts_with('(') || strip_prefix_ci(after, "USING ").is_some()
+            }
+        }) {
             let name = match name {
                 Some(name) => quote_identifier_if_needed(&name),
                 None => {

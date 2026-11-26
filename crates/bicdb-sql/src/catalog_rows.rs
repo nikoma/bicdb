@@ -7177,11 +7177,16 @@ pub(crate) fn exclusion_constraint_definition(
         .map(|column| format!("{column} WITH ="))
         .collect::<Vec<_>>();
     if let Some(range) = range {
-        elements.push(format!(
-            "{} WITH {}",
-            exclusion_range_expression(range),
-            range.operator
-        ));
+        // In declared order when the range element's place is known.
+        let at = range.position.unwrap_or(elements.len()).min(elements.len());
+        elements.insert(
+            at,
+            format!(
+                "{} WITH {}",
+                exclusion_range_expression(range),
+                range.operator
+            ),
+        );
     }
     let mut definition = format!("EXCLUDE USING {access_method} ({})", elements.join(", "));
     if let Some(predicate) = predicate {

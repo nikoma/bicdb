@@ -5819,7 +5819,8 @@ pub fn run_postgres_compat_suite(
                 &mut client,
                 "SELECT nspname, nspowner FROM pg_catalog.pg_namespace WHERE nspname = 'public';",
             )?;
-            expect_rows(rows, &[&["public", "10"]])
+            // PostgreSQL 15+ gives the public schema to pg_database_owner (6171).
+            expect_rows(rows, &[&["public", "6171"]])
         },
     );
     record_pg_case(

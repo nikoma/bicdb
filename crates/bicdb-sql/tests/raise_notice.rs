@@ -30,9 +30,15 @@ fn notice_preserves_bound_values_nulls_percent_and_detail() {
     assert_eq!(result.notices[0].sqlstate, "01000");
     let debug = format!("{:?}", result.notices[0]);
     assert!(!debug.contains("測定") && !debug.contains("synthetic detail"));
+    // PostgreSQL adds the CONTEXT line of the raising statement.
     assert_eq!(
         result.notices[0].fields,
-        vec![bicdb_sql::SqlErrorField::Detail("synthetic detail".into())]
+        vec![
+            bicdb_sql::SqlErrorField::Detail("synthetic detail".into()),
+            bicdb_sql::SqlErrorField::Context(
+                "PL/pgSQL function inline_code_block line 1 at RAISE".into()
+            ),
+        ]
     );
     let mut stream = result.into_stream();
     assert!(stream.empty_result().notices.is_empty());

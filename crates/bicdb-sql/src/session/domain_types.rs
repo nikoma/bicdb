@@ -1677,6 +1677,19 @@ impl<'db> SqlSession<'db> {
                             }],
                         )?;
                     }
+                    if let (TableConstraint::ForeignKey(foreign_key), false) =
+                        (constraint, *not_valid)
+                    {
+                        let name = foreign_key
+                            .name
+                            .as_ref()
+                            .map(ident_value)
+                            .unwrap_or_else(|| table.clone());
+                        crate::schema_meta::guard_foreign_key_targets(
+                            self.db_ref(),
+                            &[(name, relation_name(&foreign_key.foreign_table)?)],
+                        )?;
+                    }
                     self.capture_table_state_undo(&table, &schema)?;
                     let constraints_before = schema.constraints.len();
                     if let Some((old_index_name, new_index_name)) = alter_table_add_constraint(
@@ -1746,6 +1759,21 @@ impl<'db> SqlSession<'db> {
                     schema_dirty = true;
                 }
                 AlterTableOperation::ValidateConstraint { name } => {
+                    let validating = ident_value(name);
+                    let targets = schema
+                        .constraints
+                        .iter()
+                        .filter_map(|constraint| match constraint {
+                            ConstraintSchema::ForeignKey {
+                                name,
+                                foreign_table,
+                                validated: false,
+                                ..
+                            } if *name == validating => Some((name.clone(), foreign_table.clone())),
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>();
+                    crate::schema_meta::guard_foreign_key_targets(self.db_ref(), &targets)?;
                     self.capture_table_state_undo(&table, &schema)?;
                     alter_table_validate_constraint(
                         self.db_ref(),

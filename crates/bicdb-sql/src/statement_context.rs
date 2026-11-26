@@ -5,6 +5,7 @@ use std::rc::Rc;
 
 thread_local! {
     static DESCRIBING: Cell<bool> = const { Cell::new(false) };
+    static STATEMENT_TRANSACTION: Cell<Option<u64>> = const { Cell::new(None) };
     static EFFECTS: RefCell<Option<Rc<Effects>>> = const { RefCell::new(None) };
 }
 
@@ -208,4 +209,25 @@ pub(crate) fn relation_exists_skipping(name: &str) {
             crate::relation_name_for_message(name)
         ),
     );
+}
+
+/// The transaction of the statement this thread is executing, so catalog
+/// code without a session handle can tell its own row locks from another
+/// transaction's (see `schema_meta::guard_new_foreign_keys`).
+pub(crate) struct StatementTransactionScope(Option<u64>);
+
+impl StatementTransactionScope {
+    pub(crate) fn enter(transaction: Option<u64>) -> Self {
+        Self(STATEMENT_TRANSACTION.with(|cell| cell.replace(transaction)))
+    }
+}
+
+impl Drop for StatementTransactionScope {
+    fn drop(&mut self) {
+        STATEMENT_TRANSACTION.with(|cell| cell.set(self.0));
+    }
+}
+
+pub(crate) fn statement_transaction() -> Option<u64> {
+    STATEMENT_TRANSACTION.with(Cell::get)
 }

@@ -43,7 +43,19 @@ pub(crate) fn similar_to_escape(pattern: &str, escape: Option<&str>) -> Result<S
     // count): a `]` in the first position is a literal member.
     let mut class_position = 0usize;
     let mut quotes = 0usize;
-    for ch in pattern.chars() {
+    // Inside a bracket expression, a `[:class:]`, `[.coll.]` or `[=equiv=]`
+    // element: its delimiter, so the `]` closing it does not end the
+    // bracket expression.
+    let mut element: Option<char> = None;
+    let chars = pattern.chars().collect::<Vec<_>>();
+    for (index, &ch) in chars.iter().enumerate() {
+        if let Some(delimiter) = element {
+            result.push(ch);
+            if ch == ']' && index > 0 && chars[index - 1] == delimiter {
+                element = None;
+            }
+            continue;
+        }
         if after_escape {
             if ch == '"' && !in_class {
                 match quotes {
@@ -70,6 +82,11 @@ pub(crate) fn similar_to_escape(pattern: &str, escape: Option<&str>) -> Result<S
                 result.push('\\');
             }
             result.push(ch);
+            if ch == '[' && matches!(chars.get(index + 1), Some(':' | '.' | '=')) {
+                element = chars.get(index + 1).copied();
+                class_position += 1;
+                continue;
+            }
             if ch == ']' && class_position > 0 {
                 in_class = false;
             } else if !(ch == '^' && class_position == 0) {
@@ -170,6 +187,10 @@ impl VisitorMut for SimilarToRewriter {
                 return ControlFlow::Continue(());
             }
         }
+        if let Some(expanded) = expand_between_symmetric(expr) {
+            *expr = expanded;
+            return ControlFlow::Continue(());
+        }
         if let Expr::SimilarTo {
             negated,
             expr: target,
@@ -199,6 +220,58 @@ impl VisitorMut for SimilarToRewriter {
         }
         ControlFlow::Continue(())
     }
+}
+
+/// PostgreSQL's `transformAExprBetween` for `x [NOT] BETWEEN SYMMETRIC a AND
+/// b`: `(x BETWEEN a AND b) OR (x BETWEEN b AND a)`, negated as a whole for
+/// NOT (the operand is evaluated twice, as in PostgreSQL).
+fn expand_between_symmetric(expr: &Expr) -> Option<Expr> {
+    let Expr::Between {
+        expr: target,
+        negated,
+        low,
+        high,
+    } = expr
+    else {
+        return None;
+    };
+    let Expr::Function(function) = low.as_ref() else {
+        return None;
+    };
+    if !function
+        .name
+        .to_string()
+        .eq_ignore_ascii_case(crate::parse_compat_postfix::BETWEEN_SYMMETRIC_MARKER)
+    {
+        return None;
+    }
+    let FunctionArguments::List(list) = &function.args else {
+        return None;
+    };
+    let [FunctionArg::Unnamed(FunctionArgExpr::Expr(low))] = list.args.as_slice() else {
+        return None;
+    };
+    let between = |low: &Expr, high: &Expr| {
+        Expr::Nested(Box::new(Expr::Between {
+            expr: target.clone(),
+            negated: false,
+            low: Box::new(low.clone()),
+            high: high.clone().into(),
+        }))
+    };
+    let either = Expr::Nested(Box::new(Expr::BinaryOp {
+        left: Box::new(between(low, high)),
+        op: BinaryOperator::Or,
+        right: Box::new(between(high, low)),
+    }));
+    Some(if *negated {
+        Expr::Nested(Box::new(Expr::UnaryOp {
+            op: sqlparser::ast::UnaryOperator::Not,
+            expr: Box::new(either),
+        }))
+    } else {
+        either
+    })
 }
 
 /// A string literal, or an expression cast to a character type.
@@ -438,6 +511,15 @@ mod tests {
         );
         assert_eq!(similar_to_escape("[%_]x", None).unwrap(), "^(?:[%_]x)$");
         assert_eq!(similar_to_escape("[]a]", None).unwrap(), "^(?:[]a])$");
+        // A `[:class:]` element does not end the bracket expression.
+        assert_eq!(
+            similar_to_escape("_[_[:alpha:]_]_", None).unwrap(),
+            "^(?:.[_[:alpha:]_].)$"
+        );
+        assert_eq!(
+            similar_to_escape("%[%[:alnum:]%]%", None).unwrap(),
+            "^(?:.*[%[:alnum:]%].*)$"
+        );
         assert_eq!(
             similar_to_escape("a", Some("ab")).unwrap_err().sqlstate(),
             "22025"

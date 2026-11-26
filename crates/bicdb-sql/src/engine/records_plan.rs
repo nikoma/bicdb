@@ -3579,7 +3579,7 @@ impl BoundedOrderedIndexPlan {
 /// The access path an execution route chose (value-free).
 pub(crate) struct ExecutedAccess {
     chooser: &'static str,
-    signature: crate::plan_diagnostics::PlanSignature,
+    pub(crate) signature: crate::plan_diagnostics::PlanSignature,
 }
 
 impl ExecutedAccess {

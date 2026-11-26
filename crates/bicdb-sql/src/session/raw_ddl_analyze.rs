@@ -1334,6 +1334,33 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn apply_timezone_setting(&mut self, value: &Expr) -> Result<()> {
+        // `SET TIME ZONE DEFAULT` / `LOCAL` is `RESET TimeZone`.
+        if let Expr::Identifier(ident) = value {
+            if ident.quote_style.is_none()
+                && matches!(
+                    ident.value.to_ascii_lowercase().as_str(),
+                    "default" | "local"
+                )
+            {
+                let startup = self
+                    .session_gucs
+                    .get(&format!(
+                        "{}timezone",
+                        crate::datestyle_output::STARTUP_DEFAULT_PREFIX
+                    ))
+                    .cloned();
+                let gucs = Arc::make_mut(&mut self.session_gucs);
+                match startup {
+                    Some(startup) => {
+                        gucs.insert("timezone".to_string(), startup);
+                    }
+                    None => {
+                        gucs.remove("timezone");
+                    }
+                }
+                return Ok(());
+            }
+        }
         let value = eval_setting_value(value)?;
         self.apply_timezone_value(value)
     }
@@ -1579,9 +1606,7 @@ impl<'db> SqlSession<'db> {
             Statement::CreatePolicy(create_policy) => self.execute_create_policy(create_policy),
             Statement::AlterPolicy(alter_policy) => self.execute_alter_policy(alter_policy),
             Statement::DropPolicy(drop_policy) => self.execute_drop_policy(drop_policy),
-            Statement::Explain {
-                analyze, statement, ..
-            } => self.sql_engine().execute_explain(statement, *analyze),
+            Statement::Explain { .. } => self.execute_explain_statement(statement),
             other => Err(SqlError::Unsupported(format!(
                 "unsupported SQL statement {other}"
             ))),

@@ -2314,15 +2314,21 @@ fn add_interval_day_fraction(
     micros: &mut i64,
 ) -> Result<(), PgCanonicalValueError> {
     let (numerator, denominator) = interval_decimal_ratio(amount)?;
-    let total = rounded_interval_ratio(
-        numerator * BigInt::from(multiplier) * BigInt::from(MICROS_PER_DAY),
-        &denominator,
-    )?;
+    // Whole days stay days (PostgreSQL's AdjustFractDays); only the fraction
+    // becomes time, so a day count beyond the i64 microsecond range of the
+    // time part (`'200000000 days'`) is still an interval.
+    let scaled = numerator * BigInt::from(multiplier);
+    let whole = &scaled / &denominator;
+    let remainder = scaled - &whole * &denominator;
+    let whole = whole
+        .to_i64()
+        .ok_or(PgCanonicalValueError::TemporalOverflow("interval"))?;
+    let fraction = rounded_interval_ratio(remainder * BigInt::from(MICROS_PER_DAY), &denominator)?;
     *days = days
-        .checked_add(total / MICROS_PER_DAY)
+        .checked_add(whole)
         .ok_or(PgCanonicalValueError::TemporalOverflow("interval"))?;
     *micros = micros
-        .checked_add(total % MICROS_PER_DAY)
+        .checked_add(fraction)
         .ok_or(PgCanonicalValueError::TemporalOverflow("interval"))?;
     Ok(())
 }

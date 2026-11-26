@@ -15,6 +15,8 @@ pub(crate) mod column_check;
 mod constant_predicates;
 mod eager_privileges;
 mod exists_probe;
+mod explain_pg;
+pub(crate) use explain_pg::ExplainBuilder;
 pub(crate) mod flashback;
 use exists_probe::{ExistsCandidate, ExistsProbeMemo};
 mod hierarchy;

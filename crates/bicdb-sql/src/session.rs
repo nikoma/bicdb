@@ -52,6 +52,7 @@ pub use partition_admission::{
     PartitionPolicyDecision, PartitionRowRelocation, PartitionUpgradeApplied,
     PartitionUpgradeInspection, PartitionUpgradePlan,
 };
+mod explain_statement;
 mod exported_snapshots;
 mod partition_triggers;
 pub(crate) mod planner_gucs;

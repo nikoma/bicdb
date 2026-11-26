@@ -1,0 +1,69 @@
+jp.dt_iso_types|SET timezone = 'UTC'; SELECT jsonb_path_query('"2017-03-10"', '$.datetime().type()'); SELECT jsonb_path_query('"2017-03-10 12:34:56"', '$.datetime()'); SELECT jsonb_path_query('"2017-03-10 12:34:56+3"', '$.datetime()'); SELECT jsonb_path_query('"2017-03-10T12:34:56.789+3:10"', '$.datetime()'); SELECT jsonb_path_query('"2017-03-10T12:34:56.789EST"', '$.datetime()'); SELECT jsonb_path_query('"12:34:56+3:10"', '$.datetime()'); SELECT jsonb_path_query('"12:34:56"', '$.datetime().type()')
+jp.dt_templates|SELECT jsonb_path_query('"10-03-2017"', '$.datetime("dd-mm-yyyy")'); SELECT jsonb_path_query('"10-03-2017 12:34 +05:20"', '$.datetime("dd-mm-yyyy HH24:MI TZH:TZM")'); SELECT jsonb_path_query('"12:34 -05"', '$.datetime("HH24:MI TZH")'); SELECT jsonb_path_query('"10-03-2017T12:34:56"', '$.datetime("dd-mm-yyyy\"T\"HH24:MI:SS")')
+jp.dt_template_errors|SELECT jsonb_path_query('"10-03-2017 12:34"', '$.datetime("dd-mm-yyyy")')
+jp.dt_unmatched_char|SELECT jsonb_path_query('"10-03-2017t12:34:56"', '$.datetime("dd-mm-yyyy\"T\"HH24:MI:SS")')
+jp.dt_bad_separator|SELECT jsonb_path_query('"12:34"', '$.datetime("aaa")')
+jp.dt_too_short|SELECT jsonb_path_query('"12:34"', '$.datetime("HH24:MI TZH")')
+jp.dt_bogus|SELECT jsonb_path_query('"bogus"', '$.datetime()')
+jp.dt_not_string|SELECT jsonb_path_query('1', '$.datetime()')
+jp.dt_lax_array|SELECT count(*) FROM jsonb_path_query('[]', '$.datetime()'); SELECT jsonb_path_query_array('["2017-03-10", "12:34:56"]', '$.datetime().type()'); SELECT jsonb_path_query_array('[1, "yes", false]', '$[*].string()')
+jp.date_methods|SELECT jsonb_path_query('"2023-08-15"', '$.date()'); SELECT jsonb_path_query('"2023-08-15 12:34:56"', '$.date()'); SELECT jsonb_path_query_tz('"2023-08-15 12:34:56 +05:30"', '$.date()'); SELECT jsonb_path_query('"2023-08-15"', '$.date().type()')
+jp.date_tz_error|SELECT jsonb_path_query('"2023-08-15 12:34:56 +05:30"', '$.date()')
+jp.date_tz_error_silent|SELECT jsonb_path_query('"2023-08-15 12:34:56 +05:30"', '$.date()', silent => true)
+jp.date_not_recognized|SELECT jsonb_path_query('"12:34:56"', '$.date()')
+jp.time_methods|SELECT jsonb_path_query('"12:34:56"', '$.time()'); SELECT jsonb_path_query_tz('"12:34:56 +05:30"', '$.time()'); SELECT jsonb_path_query('"2023-08-15 12:34:56"', '$.time()'); SELECT jsonb_path_query('"12:34:56.789"', '$.time(0)'); SELECT jsonb_path_query('"12:34:56.789"', '$.time(2)'); SELECT jsonb_path_query('"12:34:56.789"', '$.time(5)')
+jp.time_precision_warning|SELECT jsonb_path_query('"12:34:56.789012"', '$.time(8)'); SELECT jsonb_path_query('"12:34:56.789 +05:30"', '$.time_tz(10)')
+jp.time_precision_range|SELECT jsonb_path_query('"12:34:56.789"', '$.time(12345678901)')
+jp.time_negative_syntax|SELECT jsonb_path_query('"12:34:56.789"', '$.time(-1)')
+jp.time_fraction_syntax|SELECT jsonb_path_query('"12:34:56.789"', '$.time(2.0)')
+jp.date_arg_syntax|SELECT jsonb_path_query('"2023-08-15"', '$.date(2)')
+jp.timetz_methods|SELECT jsonb_path_query('"12:34:56 +05:30"', '$.time_tz()'); SELECT jsonb_path_query('"12:34:56 +05:30"', '$.time_tz().type()'); SELECT jsonb_path_query('"12:34:56.789 +05:30"', '$.time_tz(2)')
+jp.timetz_from_date|SELECT jsonb_path_query('"2023-08-15"', '$.time_tz()')
+jp.timestamp_methods|SELECT jsonb_path_query('"2023-08-15 12:34:56"', '$.timestamp()'); SELECT jsonb_path_query('"2023-08-15"', '$.timestamp()'); SELECT jsonb_path_query('"2023-08-15 12:34:56.789"', '$.timestamp(0)'); SELECT jsonb_path_query('"2023-08-15 12:34:56.789012"', '$.timestamp(8)'); SELECT jsonb_path_query_tz('"2023-08-15 12:34:56 +05:30"', '$.timestamp()')
+jp.timestamptz_methods|SET timezone = 'PST8PDT'; SELECT jsonb_path_query('"2023-08-15 12:34:56 +05:30"', '$.timestamp_tz()'); SELECT jsonb_path_query_tz('"2023-08-15"', '$.timestamp_tz()'); SELECT jsonb_path_query_tz('"2023-08-15 12:34:56"', '$.timestamp_tz()'); SELECT jsonb_path_query('"2023-08-15 12:34:56.789 +05:30"', '$.timestamp_tz(2)')
+jp.timestamptz_from_date_error|SELECT jsonb_path_query('"2023-08-15"', '$.timestamp_tz()')
+jp.string_of_datetimes|BEGIN; SET LOCAL timezone = 'UTC'; SET LOCAL datestyle = 'German'; SELECT jsonb_path_query('"2023-08-15 12:34:56 +5:30"', '$.timestamp_tz().string()'); SELECT jsonb_path_query('"2023-08-15 12:34:56"', '$.timestamp().string()'); SELECT jsonb_path_query('"12:34:56 +5:30"', '$.time_tz().string()'); SELECT jsonb_path_query('"2023-08-15"', '$.date().string()'); ROLLBACK
+jp.timetz_absorbs_zone|BEGIN; SET LOCAL timezone = 'UTC-10'; SELECT jsonb_path_query_tz('"12:34:56"', '$.time_tz().string()'); ROLLBACK
+jp.compare_dates|SET timezone = '+00'; SELECT jsonb_path_query('["2017-03-10", "2017-03-11", "2017-03-09", "12:34:56", "01:02:03+04", "2017-03-10 00:00:00", "2017-03-10 12:34:56", "2017-03-10 01:02:03+04", "2017-03-10 03:00:00+03"]', '$[*].datetime() ? (@ == "10.03.2017".datetime("dd.mm.yyyy"))')
+jp.compare_dates_tz|SET timezone = '+00'; SELECT jsonb_path_query_tz('["2017-03-10", "2017-03-11", "2017-03-09", "12:34:56", "01:02:03+04", "2017-03-10 00:00:00", "2017-03-10 12:34:56", "2017-03-10 01:02:03+04", "2017-03-10 03:00:00+03"]', '$[*].datetime() ? (@ >= "10.03.2017".datetime("dd.mm.yyyy"))')
+jp.compare_dates_error|SET timezone = '+00'; SELECT jsonb_path_query('["2017-03-10 01:02:03+04"]', '$[*].datetime() ? (@ >= "10.03.2017".datetime("dd.mm.yyyy"))')
+jp.compare_times_tz|SET timezone = '+00'; SELECT jsonb_path_query_tz('["12:34:00", "12:35:00", "12:36:00", "12:35:00 +00", "12:35:00 +01", "13:35:00 +01", "2017-03-10", "2017-03-10 12:35:00", "2017-03-10 12:35:00 +01"]', '$[*].time_tz() ? (@ >= "12:35:00 +1".time_tz())')
+jp.compare_timestamps|SET timezone = '+00'; SELECT jsonb_path_query_tz('["2017-03-10 12:34:00", "2017-03-10 12:35:00", "2017-03-10 12:36:00", "2017-03-10 12:35:00 +01", "2017-03-10 13:35:00 +01", "2017-03-10 12:35:00 -01", "2017-03-10", "2017-03-11", "12:34:56", "12:34:56 +01"]', '$[*].datetime() ? (@ < "10.03.2017 12:35".datetime("dd.mm.yyyy HH24:MI"))')
+jp.compare_big_year|SELECT jsonb_path_query('"1000000-01-01"', '$.datetime() > "2020-01-01 12:00:00".datetime()'::jsonpath)
+jp.exists_operator|SELECT jsonb '"10-03-2017"' @? '$.datetime("dd-mm-yyyy")', jsonb '"12:34:56 +05:30"' @? '$.time_tz()'
+jp.print_methods|SELECT '$.datetime("dd-mm-yyyy").time(3).timestamp_tz(2)'::jsonpath, '$.date().type()'::jsonpath
+dt.between_symmetric|SELECT 5 BETWEEN SYMMETRIC 10 AND 1, 5 BETWEEN 10 AND 1, 5 NOT BETWEEN SYMMETRIC 10 AND 1, 5 BETWEEN ASYMMETRIC 1 AND 10, 5 BETWEEN SYMMETRIC NULL AND 10, 50 BETWEEN SYMMETRIC (CASE WHEN true AND true THEN 100 END) AND 1
+dt.between_symmetric_dates|CREATE TABLE k_bs (d date); INSERT INTO k_bs VALUES ('1997-01-02'), ('1997-01-05'), ('1998-01-01'); SELECT d FROM k_bs WHERE d BETWEEN SYMMETRIC '1997-01-31' AND '1997-01-01' ORDER BY d; SELECT d FROM k_bs WHERE d NOT BETWEEN SYMMETRIC '1997-01-31' AND '1997-01-01' ORDER BY d
+dt.lmt_input|SET timezone = 'America/Los_Angeles'; SELECT 'Jan 01 00:00:00 1000 LMT'::timestamptz, 'Jan 01 00:00:00 2024 LMT'::timestamptz; SET timezone = 'Europe/London'; SELECT 'Jan 01 00:00:00 1000 LMT'::timestamptz, 'Jan 01 00:00:00 2024 LMT'::timestamptz
+dt.lmt_postgres_style|SET datestyle = 'Postgres, MDY'; SET timezone = 'America/Los_Angeles'; SELECT 'Jan 01 00:00:00 1000 LMT'::timestamptz, 'Jan 01 00:00:00 2024 LMT'::timestamptz
+dt.lmt_unknown_in_utc|SET timezone = 'UTC'; SELECT 'Jan 01 00:00:00 2024 LMT'::timestamptz
+dt.mmt|SET timezone = 'UTC'; SELECT '1912-01-01 00:00 MMT'::timestamptz; SET timezone = 'America/Montevideo'; SELECT '1912-01-01 00:00'::timestamptz, '1912-01-01 00:00 MMT'::timestamptz, '1912-01-01 00:00 MMT'::timestamptz AT TIME ZONE 'UTC'
+dt.to_timestamp_lmt|SET timezone = 'America/Los_Angeles'; SELECT to_timestamp('2011-12-18 00:00 LMT', 'YYYY-MM-DD HH24:MI TZ')
+dt.posix_dst_rules|SET datestyle = 'Postgres, MDY'; SET TIME ZONE 'CST7CDT,M4.1.0,M10.5.0'; SELECT timestamp with time zone '2005-04-02 12:00-07' + interval '1 day', timestamp with time zone '2005-04-02 12:00-07' + interval '24 hours', timestamp with time zone '2005-04-03 12:00-06' - interval '1 day', timestamp with time zone '2005-04-03 12:00-06' - interval '24 hours'
+dt.posix_dst_iso|SET TIME ZONE 'CST7CDT,M4.1.0,M10.5.0'; SELECT timestamptz '2005-07-01 12:00', timestamptz '2005-01-01 12:00', timestamptz '2005-10-30 01:30', timestamptz '2005-04-03 02:30'
+dt.date_bin_overflow|SELECT date_bin('15 minutes'::interval, timestamp '294276-12-30', timestamp '4000-12-20 BC')
+dt.date_bin_stride_overflow|SELECT date_bin('200000000 days'::interval, '2024-02-01'::timestamp, '2024-01-01'::timestamp)
+dt.date_bin_result_overflow|SELECT date_bin('365000 days'::interval, '4400-01-01 BC'::timestamp, '4000-01-01 BC'::timestamp)
+dt.date_bin_months|SELECT date_bin('5 months'::interval, timestamp '2020-02-01 01:01:01', timestamp '2001-01-01')
+dt.date_bin_ok|SELECT date_bin('15 minutes'::interval, timestamp '2020-02-11 15:44:17', timestamp '2001-01-01'), date_bin('15 minutes'::interval, timestamp '1990-02-11 15:44:17', timestamp '2001-01-01 00:02:30'), date_bin('1 day'::interval, 'infinity'::timestamp, timestamp '2001-01-01')
+dt.input_valid_big_date|SELECT pg_input_is_valid('6874898-01-01', 'date'), pg_input_is_valid('now', 'date'), pg_input_is_valid('garbage', 'date')
+ex.seq_filter|CREATE TABLE k_ex1 (a int, b text, c numeric); EXPLAIN (COSTS OFF) SELECT * FROM k_ex1 WHERE a = 1; EXPLAIN (COSTS OFF) SELECT * FROM k_ex1 WHERE a > 1 AND b = 'x'; EXPLAIN (COSTS OFF) SELECT a FROM k_ex1 WHERE c = 1
+ex.sort_limit|CREATE TABLE k_ex2 (a int, b text); EXPLAIN (COSTS OFF) SELECT * FROM k_ex2 ORDER BY a; EXPLAIN (COSTS OFF) SELECT * FROM k_ex2 ORDER BY b DESC, a LIMIT 3
+ex.aggregate|CREATE TABLE k_ex3 (a int, b int); EXPLAIN (COSTS OFF) SELECT count(*) FROM k_ex3; EXPLAIN (COSTS OFF) SELECT count(*) FROM k_ex3 WHERE b = 2
+ex.result|EXPLAIN (COSTS OFF) SELECT 1; EXPLAIN (COSTS OFF) SELECT 1 WHERE false
+ex.dml|CREATE TABLE k_ex4 (a int, b text); EXPLAIN (COSTS OFF) INSERT INTO k_ex4 VALUES (1, 'x'); EXPLAIN (COSTS OFF) INSERT INTO k_ex4 VALUES (1, 'x'), (2, 'y'); EXPLAIN (COSTS OFF) UPDATE k_ex4 SET b = 'z' WHERE a = 1; EXPLAIN (COSTS OFF) DELETE FROM k_ex4 WHERE a < 3; SELECT count(*) FROM k_ex4
+ex.union_all|CREATE TABLE k_ex5 (a int); EXPLAIN (COSTS OFF) SELECT a FROM k_ex5 UNION ALL SELECT a FROM k_ex5
+ex.between_like_in|CREATE TABLE k_ex6 (a int, b text, d date); SET datestyle = 'Postgres, MDY'; EXPLAIN (COSTS OFF) SELECT * FROM k_ex6 WHERE d BETWEEN '1997-01-01' AND '1998-01-01'; EXPLAIN (COSTS OFF) SELECT * FROM k_ex6 WHERE b LIKE 'foo%'; EXPLAIN (COSTS OFF) SELECT * FROM k_ex6 WHERE a IN (1, 2, 3); EXPLAIN (COSTS OFF) SELECT * FROM k_ex6 WHERE b IS NULL
+ex.alias|CREATE TABLE k_ex7 (a int); EXPLAIN (COSTS OFF) SELECT * FROM k_ex7 t WHERE t.a = 5
+ex.options_errors|EXPLAIN (BOGUS) SELECT 1
+ex.format_value_error|EXPLAIN (FORMAT CSV) SELECT 1
+ex.timing_requires_analyze|EXPLAIN (TIMING) SELECT 1
+ex.json|CREATE TABLE k_ex8 (a int); EXPLAIN (COSTS OFF, FORMAT JSON) SELECT * FROM k_ex8 WHERE a = 1
+ex.yaml|CREATE TABLE k_ex9 (a int); EXPLAIN (COSTS OFF, FORMAT YAML) SELECT * FROM k_ex9
+ex.xml|CREATE TABLE k_ex10 (a int); EXPLAIN (COSTS OFF, FORMAT XML) SELECT * FROM k_ex10
+ex.analyze_insert|CREATE TABLE k_ex11 (a int); EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF, BUFFERS OFF) INSERT INTO k_ex11 VALUES (1); SELECT count(*) FROM k_ex11
+ex.group|CREATE TABLE k_ex13 (a int, b int); EXPLAIN (COSTS OFF) SELECT a, count(*) FROM k_ex13 GROUP BY a
+ex.between_symmetric|CREATE TABLE k_ex16 (f1 date); SET datestyle = 'Postgres, MDY'; EXPLAIN (COSTS OFF) SELECT count(*) FROM k_ex16 WHERE f1 BETWEEN SYMMETRIC '1997-01-01' AND '1998-01-01'
+ex.similar_to|CREATE TABLE k_ex17 (f1 text); EXPLAIN (COSTS OFF) SELECT * FROM k_ex17 WHERE f1 SIMILAR TO '_[_[:alpha:]_]_'
+ex.function_scan|EXPLAIN (COSTS OFF) SELECT * FROM generate_series(1, 3) g
+ex.ctas|EXPLAIN (COSTS OFF) CREATE TABLE k_ex12 AS SELECT 1 AS a

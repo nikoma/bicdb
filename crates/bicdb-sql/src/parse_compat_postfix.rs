@@ -6,7 +6,10 @@
 //!   `x IS NOT NULL`);
 //! - `RANGE ... '1 day'::interval PRECEDING` and `interval '1 day' FOLLOWING`
 //!   frame offsets, parenthesized so the frame parser reads one expression;
-//! - `ALTER ROUTINE` / `DROP ROUTINE`, which name a function or a procedure.
+//! - `ALTER ROUTINE` / `DROP ROUTINE`, which name a function or a procedure;
+//! - `BETWEEN [A]SYMMETRIC`: the symmetric form marks its lower bound with
+//!   `BETWEEN_SYMMETRIC_MARKER(...)`, which the post-parse rewrite in
+//!   `crate::similar_to` expands as PostgreSQL does.
 
 /// One lexical item of SQL text.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -167,6 +170,62 @@ fn significant(tokens: &[Token]) -> Vec<usize> {
         .filter(|(_, token)| token.kind != Kind::Space)
         .map(|(index, _)| index)
         .collect()
+}
+
+/// The function name that marks the lower bound of `BETWEEN SYMMETRIC`.
+pub(crate) const BETWEEN_SYMMETRIC_MARKER: &str = "bicdb_between_symmetric_bound";
+
+/// `x BETWEEN SYMMETRIC a AND b` -> `x BETWEEN marker(a) AND b`;
+/// `BETWEEN ASYMMETRIC` is plain `BETWEEN`.
+fn rewrite_between_symmetric(sql: &str, tokens: &[Token], edits: &mut Vec<(usize, usize, String)>) {
+    let order = significant(tokens);
+    for (position, &index) in order.iter().enumerate() {
+        if !is_word(sql, &tokens[index], "between") {
+            continue;
+        }
+        let Some(&keyword) = order.get(position + 1) else {
+            continue;
+        };
+        if is_word(sql, &tokens[keyword], "asymmetric") {
+            edits.push((tokens[keyword].start, tokens[keyword].end, String::new()));
+            continue;
+        }
+        if !is_word(sql, &tokens[keyword], "symmetric") {
+            continue;
+        }
+        // The lower bound ends at the first AND outside brackets and CASE.
+        let mut depth = 0i64;
+        let mut end = None;
+        for &next in &order[position + 2..] {
+            let token = &tokens[next];
+            match text(sql, token) {
+                "(" | "[" => depth += 1,
+                ")" | "]" => {
+                    depth -= 1;
+                    if depth < 0 {
+                        break;
+                    }
+                }
+                ";" => break,
+                _ if is_word(sql, token, "case") => depth += 1,
+                _ if is_word(sql, token, "end") => depth -= 1,
+                _ if depth == 0 && is_word(sql, token, "and") => {
+                    end = Some(token.start);
+                    break;
+                }
+                _ => {}
+            }
+        }
+        let Some(end) = end else {
+            continue;
+        };
+        edits.push((
+            tokens[keyword].start,
+            tokens[keyword].end,
+            format!("{BETWEEN_SYMMETRIC_MARKER}("),
+        ));
+        edits.push((end, end, ") ".to_string()));
+    }
 }
 
 const NOT_EXPRESSION_END: [&str; 12] = [
@@ -603,6 +662,7 @@ pub(crate) fn rewrite(sql: &str) -> Option<String> {
     let lower = sql.to_ascii_lowercase();
     if !(lower.contains("isnull")
         || lower.contains("notnull")
+        || lower.contains("symmetric")
         || lower.contains("preceding")
         || lower.contains("following")
         || lower.contains("collate")
@@ -618,6 +678,9 @@ pub(crate) fn rewrite(sql: &str) -> Option<String> {
     let mut edits = Vec::new();
     rewrite_postfix_null_tests(sql, &tokens, &mut edits);
     rewrite_frame_offsets(sql, &tokens, &mut edits);
+    if lower.contains("symmetric") {
+        rewrite_between_symmetric(sql, &tokens, &mut edits);
+    }
     if lower.contains("collate") {
         rewrite_collate_after_cast(sql, &tokens, &mut edits);
     }

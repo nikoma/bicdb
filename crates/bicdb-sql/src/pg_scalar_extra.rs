@@ -1045,17 +1045,36 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             arity(name, args, 3..=3)?;
             let stride = PgInterval::from_postgres_text(&text(0))
                 .map_err(|_| SqlError::invalid_parameter_value("date_bin: invalid stride"))?;
+            // PostgreSQL's timestamp_bin: an infinite source bins to itself.
+            let source_text = text(1);
+            if matches!(
+                source_text.trim().to_ascii_lowercase().as_str(),
+                "infinity" | "+infinity" | "-infinity"
+            ) {
+                return Ok(Some(args[1].clone()));
+            }
+            if matches!(
+                text(2).trim().to_ascii_lowercase().as_str(),
+                "infinity" | "+infinity" | "-infinity"
+            ) {
+                return Err(SqlError::data_exception_public(
+                    "0A000",
+                    "origin out of range",
+                    None,
+                ));
+            }
             if stride.months != 0 {
-                return Err(SqlError::Unsupported(
-                    "timestamps cannot be binned into intervals containing months or years"
-                        .to_string(),
+                return Err(SqlError::data_exception_public(
+                    "0A000",
+                    "timestamps cannot be binned into intervals containing months or years",
+                    None,
                 ));
             }
             let interval_out_of_range =
-                || SqlError::data_exception("22008", "interval out of range", None);
+                || SqlError::data_exception_public("22008", "interval out of range", None);
             let stride = i64::from(stride.days)
                 .checked_mul(MICROS_PER_DAY)
-                .and_then(|days| days.checked_add(stride.micros))
+                .and_then(|micros| micros.checked_add(stride.micros))
                 .ok_or_else(interval_out_of_range)?;
             if stride <= 0 {
                 return Err(SqlError::invalid_parameter_value(
@@ -1063,14 +1082,24 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
                 ));
             }
             let (source, origin) = (timestamp_micros(&args[1])?, timestamp_micros(&args[2])?);
-            // PostgreSQL reports overflow of this arithmetic as "interval out of range"; plain
-            // operators panicked (a contained panic surfaced as an internal error).
-            let binned = source
+            let difference = source
                 .checked_sub(origin)
-                .and_then(|delta| delta.div_euclid(stride).checked_mul(stride))
-                .and_then(|offset| origin.checked_add(offset))
                 .ok_or_else(interval_out_of_range)?;
-            SqlValue::String(render_like_source(binned, has_offset(&text(1))))
+            let modulo = difference % stride;
+            // Checked: overflow is PostgreSQL's range error, never a panic.
+            let mut binned = origin
+                .checked_add(difference - modulo)
+                .ok_or_else(interval_out_of_range)?;
+            if modulo < 0 {
+                // Round toward -infinity; this can leave the timestamp range.
+                binned = binned
+                    .checked_sub(stride)
+                    .filter(|micros| *micros >= -211_813_488_000_000_000)
+                    .ok_or_else(|| {
+                        SqlError::data_exception_public("22008", "timestamp out of range", None)
+                    })?;
+            }
+            SqlValue::String(render_like_source(binned, has_offset(&source_text)))
         }
         // Oracle DATE includes whole-second time, unlike PostgreSQL date.
         // The explicit Oracle front end selects this separate function, also

@@ -25,6 +25,7 @@ fn explained(session: &mut SqlSession<'_>, sql: &str) -> (String, Option<String>
     let in_list = lines.iter().any(|line| line.starts_with("InListKeys"));
     let kind = match head {
         "IndexScan" if in_list => "IndexInLookup",
+        "IndexOnlyScan" => "IndexOnlyCount",
         "IndexScan" => "IndexLookup",
         "IndexRangeScan" => "IndexRange",
         "IndexPrefixOrderedScan" => "IndexPrefixOrderedScan",
@@ -290,6 +291,7 @@ fn pg_nodes_for(
         "IndexLookup" | "IndexRange" | "IndexPrefixOrderedScan" | "OrderedIndexScan" => {
             vec![("Index Scan".into(), signature.index.clone())]
         }
+        "IndexOnlyCount" => vec![("Index Only Scan".into(), signature.index.clone())],
         "JsonbIndexScan" | "ArrayIndexScan" | "GeometricIndexScan" | "SpatialIndexScan"
         | "FullTextIndexScan" | "TrigramIndexScan" => bitmap(signature.index.clone()),
         other => vec![(other.to_string(), signature.index.clone())],

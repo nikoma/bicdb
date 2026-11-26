@@ -1596,6 +1596,20 @@ impl<'db> SqlEngine<'db> {
                 "EXPLAIN supports table SELECT statements".to_string(),
             ));
         };
+        if !analyze {
+            if let Some(plan) = self.index_only_count_plan(&select.from[0], select, query)? {
+                return Ok(SqlResult::new(
+                    vec!["QUERY PLAN".to_string()],
+                    vec![
+                        vec![SqlValue::String(format!("IndexOnlyScan {}", plan.index))],
+                        vec![SqlValue::String(format!(
+                            "PrefixKeys {}",
+                            plan.prefix.len()
+                        ))],
+                    ],
+                ));
+            }
+        }
         let collection = relation_name(name)?;
         let alias_name = alias
             .as_ref()

@@ -340,7 +340,12 @@ impl<'db> SqlEngine<'db> {
         let Some(schema) = load_schema(self.db_ref(), &collection)? else {
             return Ok(None);
         };
-        if schema.rls_enabled || schema.has_descendant_tables() {
+        // A standby applies the primary's log underneath readers: its index
+        // and its rows are not one snapshot.
+        if schema.rls_enabled
+            || schema.has_descendant_tables()
+            || self.db_ref().is_replication_standby()
+        {
             return Ok(None);
         }
         let qualifier = alias
@@ -407,8 +412,18 @@ impl<'db> SqlEngine<'db> {
             equalities.push((column, value));
         }
         for index in sql_index_definitions_for_collection(self.db_ref(), &collection) {
+            // Primary-key indexes are keyed by the record identity, not the
+            // typed column values; only secondary B-trees qualify.
+            let primary_key_index = index
+                .fields
+                .iter()
+                .any(|field| matches!(field, IndexField::Id))
+                || schema.primary_key_name.as_deref() == Some(index.name.as_str())
+                || index.name == format!("{}_pkey", schema.name);
             if index.kind != IndexKind::BTree
                 || index.predicate.is_some()
+                || index.exclusion.is_some()
+                || primary_key_index
                 || index.fields.len() < equalities.len()
                 || is_unusable_typed_primary_key_index(Some(&schema), &index)
             {

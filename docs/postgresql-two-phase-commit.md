@@ -101,3 +101,17 @@ transactions with their locks, so failover neither loses nor commits them
 silently (subject to the configured replication durability, as for any commit).
 The internal collection is never mesh-synced; prepared writes reach mesh peers
 only when committed.
+
+## Known differences
+
+- `pg_prepared_xacts` lists the prepared transactions of the current database
+  only. Each database has its own store.
+- After a restart, `transaction` shows a new transaction id.
+- Inherited from BicDB's row locks: `FOR SHARE` takes an exclusive row lock,
+  so a second `FOR SHARE` of a row a prepared transaction holds waits for it.
+  `lock_timeout` is not applied to these waits; use `statement_timeout`.
+- Inherited from BicDB's SSI: a serialization failure is raised at PREPARE (or
+  COMMIT) instead of at the conflicting statement.
+- A server with prepared transactions in its store restores them even when it
+  starts with `max_prepared_transactions` set below their number; PostgreSQL
+  refuses to start.

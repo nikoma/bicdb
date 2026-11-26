@@ -1805,16 +1805,6 @@ impl<'db> SqlEngine<'db> {
             }
         }
         if let Some(ids) = self.composite_text_in_record_ids(table, alias, schema, selection)? {
-            crate::plan_diagnostics::record_route_decision(
-                table,
-                crate::plan_diagnostics::PlanSignature {
-                    kind: "CompositeKeyInLookup",
-                    index: None,
-                    prefix_len: ids.len(),
-                },
-                Vec::new(),
-                ids.len(),
-            );
             return Ok(Some(RecordLocators::Pks(ids)));
         }
         let strategy = self.locator_strategy_cached(table, alias, schema, selection)?;

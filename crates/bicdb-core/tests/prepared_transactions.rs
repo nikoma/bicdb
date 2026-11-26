@@ -378,3 +378,50 @@ fn a_killed_process_keeps_prepared_and_resolved_state() {
         assert_eq!(balance(&db, "c"), Some(7));
     }
 }
+
+#[test]
+fn a_backup_restores_prepared_transactions_and_lists_no_internal_collection() {
+    use bicdb_core::{create_backup, restore_backup, BackupCreateOptions, BackupRestoreOptions};
+    for mode in MODES {
+        let source = tempfile::tempdir().unwrap();
+        let restored = tempfile::tempdir().unwrap();
+        let archive = tempfile::tempdir().unwrap();
+        let archive = archive.path().join("prepared.bicbackup");
+        {
+            let db = fresh(source.path(), &mode);
+            prepare(&db, "kept");
+            db.close().unwrap();
+        }
+        create_backup(
+            source.path(),
+            &archive,
+            BackupCreateOptions {
+                passphrase: "prepared-backup-passphrase".to_string(),
+                base_backup: None,
+            },
+        )
+        .unwrap();
+        restore_backup(
+            &archive,
+            restored.path(),
+            BackupRestoreOptions {
+                passphrase: "prepared-backup-passphrase".to_string(),
+                force: true,
+            },
+        )
+        .unwrap();
+        let db = open(restored.path(), &mode);
+        let gids = db
+            .prepared_transactions()
+            .unwrap()
+            .into_iter()
+            .map(|prepared| prepared.gid)
+            .collect::<Vec<_>>();
+        assert_eq!(gids, ["kept"], "{mode:?}");
+        assert_eq!(balance(&db, "a"), Some(100));
+        other_writer_is_blocked(&db, "a");
+        db.commit_prepared("kept", owner()).unwrap();
+        assert_eq!(balance(&db, "a"), Some(50));
+        assert_eq!(balance(&db, "c"), Some(7));
+    }
+}

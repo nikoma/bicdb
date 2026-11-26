@@ -1,3 +1,4 @@
+#!env BICDB_MAX_PREPARED_TRANSACTIONS=5
 p.setting|SHOW max_prepared_transactions; SELECT current_setting('max_prepared_transactions')
 p.set_refused|\set VERBOSITY verbose \\ SET max_prepared_transactions = 3
 p.basic|CREATE TABLE p1(a int PRIMARY KEY, b text); INSERT INTO p1 VALUES (1, 'x'); BEGIN; UPDATE p1 SET b = 'y' WHERE a = 1; INSERT INTO p1 VALUES (2, 'z'); SELECT * FROM p1 ORDER BY a; PREPARE TRANSACTION 'p_basic'; SELECT * FROM p1 ORDER BY a; SELECT gid, owner = current_user, database = current_database(), prepared <= now(), pg_typeof(transaction), pg_typeof(gid), pg_typeof(prepared), pg_typeof(owner), pg_typeof(database) FROM pg_prepared_xacts WHERE gid = 'p_basic'; COMMIT PREPARED 'p_basic'; SELECT * FROM p1 ORDER BY a; SELECT count(*) FROM pg_prepared_xacts WHERE gid = 'p_basic'
@@ -40,3 +41,8 @@ p.unique_nowait|\set VERBOSITY verbose \\ SET statement_timeout = '500ms'; INSER
 p.unique_end|COMMIT PREPARED 'p_uq'; SELECT * FROM pu
 p.empty_tx|BEGIN; PREPARE TRANSACTION 'p_empty'; SELECT count(*) FROM pg_prepared_xacts WHERE gid = 'p_empty'; COMMIT PREPARED 'p_empty'; SELECT count(*) FROM pg_prepared_xacts WHERE gid = 'p_empty'
 p.syntax|\set VERBOSITY verbose \\ COMMIT PREPARED
+p.hidden_setup|CREATE TABLE ph(a int); BEGIN; INSERT INTO ph VALUES (1); PREPARE TRANSACTION 'p_hidden'
+p.hidden_catalog|SELECT count(*) FROM pg_class WHERE relname LIKE '%prepared%' AND relname NOT IN ('pg_prepared_xacts', 'pg_prepared_statements'); SELECT count(*) FROM information_schema.tables WHERE table_name LIKE '%prepared%' AND table_schema NOT IN ('pg_catalog', 'information_schema'); SELECT count(*) FROM pg_tables WHERE tablename LIKE '%prepared%'
+p.hidden_select|\set VERBOSITY verbose \\ SELECT * FROM __bicdb_prepared_xacts
+p.hidden_insert|\set VERBOSITY verbose \\ INSERT INTO __bicdb_prepared_xacts VALUES (1)
+p.hidden_end|ROLLBACK PREPARED 'p_hidden'; SELECT count(*) FROM ph

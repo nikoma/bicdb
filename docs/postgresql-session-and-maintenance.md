@@ -97,6 +97,13 @@ connection gets its own temporary schema on first use, dropped when the session 
 `pg_temp.f()`); `current_schema()` reports the temporary schema when `search_path` names `pg_temp`
 first.
 
+## max_stack_depth
+
+`SET max_stack_depth` accepts PostgreSQL's memory units (`kB` by default, `B`, `MB`, `GB`, `TB`),
+superusers only, from 100kB up to the platform limit (7680kB for the usual 8MB stack), with
+PostgreSQL's errors; `SHOW` prints it in the largest exact unit (`2MB` by default) and `RESET`
+restores the default. The "stack depth limit exceeded" HINT reports the session's value.
+
 ## Error positions
 
 ErrorResponse carries PostgreSQL's position field (`P`), so psql prints the `LINE n:` line and the

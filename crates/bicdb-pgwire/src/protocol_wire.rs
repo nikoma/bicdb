@@ -375,6 +375,18 @@ pub(crate) fn error_response_for_query_error(
     query: Option<&str>,
 ) -> Result<()> {
     let position = query.and_then(|query| match error {
+        // An error raised inside a function body has no location in the
+        // client's statement.
+        PgWireError::Sql(error)
+            if error.fields().iter().any(|field| {
+                matches!(field, SqlErrorField::Context(context)
+                    if context.starts_with("PL/pgSQL function")
+                        || context.starts_with("SQL function")
+                        || context.starts_with("SQL statement"))
+            }) =>
+        {
+            None
+        }
         // PostgreSQL's wording first; the raw text still carries the parser's location.
         PgWireError::Sql(error) => crate::error_position::error_position(
             query,

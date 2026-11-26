@@ -282,6 +282,7 @@ mod error_detail;
 mod hstore;
 mod identifier_truncation;
 mod inheritance;
+mod max_stack_depth;
 mod only_rewrite;
 mod persistence_ddl;
 mod pg_float_text_functions;
@@ -1197,6 +1198,7 @@ fn routine_statement_profile_kind(statement: &RoutineStmt) -> String {
         RoutineStmt::Block { .. } => "ROUTINE_BLOCK".into(),
         RoutineStmt::ContinueLoop => "ROUTINE_CONTINUE".to_string(),
         RoutineStmt::Null => "ROUTINE_NULL".to_string(),
+        RoutineStmt::Line(_) => "ROUTINE_LINE".to_string(),
         RoutineStmt::Assignment { .. } => "ROUTINE_ASSIGNMENT".to_string(),
         RoutineStmt::SelectInto { .. } => "ROUTINE_SELECT_INTO".to_string(),
         RoutineStmt::Perform { .. } => "ROUTINE_PERFORM".to_string(),
@@ -1236,6 +1238,7 @@ fn routine_statement_profile_signature(statement: &RoutineStmt) -> String {
         RoutineStmt::Block { .. } => "BEGIN BLOCK".into(),
         RoutineStmt::ContinueLoop => "CONTINUE".to_string(),
         RoutineStmt::Null => "NULL".to_string(),
+        RoutineStmt::Line(_) => "LINE".to_string(),
         RoutineStmt::Assignment { target, expr } => {
             format!(
                 "ASSIGN {} := {expr}",
@@ -1973,6 +1976,8 @@ pub struct ErrorDetail {
     pub(crate) values_of: Option<String>,
     pub(crate) authorized: bool,
     pub(crate) hint: Option<String>,
+    /// PostgreSQL's CONTEXT lines (a violation raised inside a routine).
+    pub(crate) context: Option<String>,
 }
 
 impl ErrorDetail {
@@ -1984,6 +1989,7 @@ impl ErrorDetail {
             values_of: None,
             authorized: true,
             hint,
+            context: None,
         }
     }
 
@@ -1995,6 +2001,7 @@ impl ErrorDetail {
             values_of: Some(relation.to_string()),
             authorized: false,
             hint: None,
+            context: None,
         }
     }
 
@@ -2312,6 +2319,67 @@ impl SqlError {
         }
     }
 
+    /// `self` with one more CONTEXT line, after the ones it has (PostgreSQL
+    /// lists the innermost context first).
+    pub(crate) fn with_context_line(self, line: String) -> Self {
+        match self {
+            Self::WithNotices { error, notices } => Self::WithNotices {
+                error: Box::new(error.with_context_line(line)),
+                notices,
+            },
+            Self::Detailed {
+                error,
+                detail,
+                hint,
+                context,
+            } => Self::Detailed {
+                error,
+                detail,
+                hint,
+                context: Some(match context {
+                    Some(context) => format!("{context}\n{line}"),
+                    None => line,
+                }),
+            },
+            // A constraint violation keeps its variant (embedders match it
+            // and its constraint name); the CONTEXT rides in its detail.
+            Self::ConstraintViolation {
+                sqlstate,
+                message,
+                schema,
+                table,
+                column,
+                constraint,
+                oracle_code,
+                unique_origin,
+                detail,
+            } => {
+                let mut detail = detail.unwrap_or_else(|| Box::new(ErrorDetail::plain(None, None)));
+                detail.context = Some(match detail.context.take() {
+                    Some(context) => format!("{context}\n{line}"),
+                    None => line,
+                });
+                Self::ConstraintViolation {
+                    sqlstate,
+                    message,
+                    schema,
+                    table,
+                    column,
+                    constraint,
+                    oracle_code,
+                    unique_origin,
+                    detail: Some(detail),
+                }
+            }
+            other => Self::Detailed {
+                error: Box::new(other),
+                detail: None,
+                hint: None,
+                context: Some(line),
+            },
+        }
+    }
+
     /// `error` with PostgreSQL's DETAIL, HINT and CONTEXT lines.
     pub fn with_detail_fields(
         error: SqlError,
@@ -2616,6 +2684,10 @@ impl SqlError {
                 }
                 if let Some(constraint) = constraint {
                     fields.push(SqlErrorField::Constraint(constraint.clone()));
+                }
+                if let Some(context) = detail.as_deref().and_then(|detail| detail.context.as_ref())
+                {
+                    fields.push(SqlErrorField::Context(context.clone()));
                 }
                 fields
             }
@@ -5286,6 +5358,10 @@ enum RoutineStmt {
     },
     ContinueLoop,
     Null,
+    /// The source line (and, for an SQL statement, the text) of the
+    /// statement that follows: PostgreSQL's error CONTEXT reports it. A
+    /// no-op when executed.
+    Line(Arc<RoutineLine>),
     Assignment {
         target: RoutineAssignmentTarget,
         expr: RoutineExpr,
@@ -5388,6 +5464,16 @@ enum RoutineStmt {
     Return(Option<RoutineExpr>),
 }
 
+/// Where a PL/pgSQL statement is in its function body, for error CONTEXT.
+#[derive(Debug)]
+pub(crate) struct RoutineLine {
+    /// 1-based line in the body; for an SQL-language function, the
+    /// statement's 1-based position.
+    pub(crate) line: u32,
+    /// The statement as written, for `SQL statement "..."`.
+    pub(crate) sql: Option<Arc<str>>,
+}
+
 #[derive(Clone, Debug)]
 enum RoutineControl {
     NextIteration,
@@ -5427,6 +5513,23 @@ struct RoutineIR {
     oracle_statement_rollback: bool,
     oracle_error_diagnostics: Option<oracle::errors::Diagnostics>,
     oracle_autonomous: bool,
+    /// `PL/pgSQL function f(integer)` / `SQL function "f"`: how error
+    /// CONTEXT names this routine; `None` for routines of other dialects.
+    context_label: Option<Arc<str>>,
+    /// Source lines of the statements, for error CONTEXT.
+    lines: RoutineLines,
+}
+
+/// Each statement's [`RoutineLine`], keyed by the statement's address in
+/// its compiled routine. A clone has different statement storage, so it
+/// starts without lines rather than with addresses that are not its own.
+#[derive(Debug, Default)]
+pub(crate) struct RoutineLines(pub(crate) Option<Arc<FxHashMap<usize, Arc<RoutineLine>>>>);
+
+impl Clone for RoutineLines {
+    fn clone(&self) -> Self {
+        Self(None)
+    }
 }
 
 /// Per-compilation identity and addresses whose lifetime is the routine's.
@@ -5542,6 +5645,7 @@ fn routine_statement_may_write(statement: &RoutineStmt) -> bool {
         RoutineStmt::ContinueLoop
         | RoutineStmt::ExitLoop
         | RoutineStmt::Null
+        | RoutineStmt::Line(_)
         | RoutineStmt::Assignment { .. }
         | RoutineStmt::OpenCursor { .. }
         | RoutineStmt::FetchCursor { .. }
@@ -5656,6 +5760,13 @@ struct RoutineFrame {
     output_names: Vec<String>,
     cursors: BTreeMap<String, RoutineCursor>,
     returned_set: Option<SqlResult>,
+    /// The routine's error CONTEXT name (see `RoutineIR::context_label`).
+    context_label: Option<Arc<str>>,
+    /// The routine's statement lines (see `RoutineIR::lines`).
+    lines: Option<Arc<FxHashMap<usize, Arc<RoutineLine>>>>,
+    /// Whether the error propagating through this frame already names its
+    /// statement (a nested statement attached it).
+    context_attached: bool,
 }
 
 /// The per-routine part of a `RoutineFrame`: slot layout, positional keys and

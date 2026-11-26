@@ -527,6 +527,7 @@ impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
                 RoutineStmt::Return(Some(value)) => self.expr(&value.expr, &env, None),
                 RoutineStmt::ContinueLoop
                 | RoutineStmt::Null
+                | RoutineStmt::Line(_)
                 | RoutineStmt::ExitLoop
                 | RoutineStmt::FetchCursor { .. }
                 | RoutineStmt::CloseCursor { .. }
@@ -5132,6 +5133,17 @@ impl<'db> SqlEngine<'db> {
                 Ok(Some(SqlResult::new(
                     vec!["intervalstyle".to_string()],
                     vec![vec![SqlValue::String(value)]],
+                )))
+            }
+            "show max_stack_depth" => {
+                let kb = self
+                    .session_gucs
+                    .get("max_stack_depth")
+                    .and_then(|value| value.parse::<i64>().ok())
+                    .unwrap_or(crate::max_stack_depth::DEFAULT_KB);
+                Ok(Some(SqlResult::new(
+                    vec!["max_stack_depth".to_string()],
+                    vec![vec![SqlValue::String(crate::max_stack_depth::display(kb))]],
                 )))
             }
             "show statement_timeout" => {

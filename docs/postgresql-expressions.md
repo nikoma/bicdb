@@ -142,7 +142,12 @@ Input errors carry PostgreSQL's DETAIL (and, for JSON, CONTEXT) lines: `json`/`j
 
 `to_number(text, text)` reads the number picture of `to_char` (`9`, `0`, `.`, `D`, `,`, `G`, `S`,
 `MI`, `PL`, `SG`, `PR`, `L`, `TH`, `V`, `FM`, `RN`) in the C locale, with PostgreSQL's format
-errors; `parse_ident(text [, strict])` splits a qualified name as PostgreSQL does.
+errors; `parse_ident(text [, strict])` splits a qualified name as PostgreSQL does. Also
+available: `float4send`/`float8send`, `hashfloat4`/`hashfloat8`, `ascii`, `unistr`,
+`pg_size_bytes`, `casefold`, `erf`, `erfc`, `gamma`, `lgamma` (PostgreSQL's overflow/underflow
+errors), numeric `gcd`/`lcm`, `range_adjacent`, `pg_trigger_depth`, `pg_current_xact_id`,
+`pg_current_xact_id_if_assigned`, `to_regrole`, `to_regcollation`, `to_regoper`,
+`to_regoperator` and `to_regtypemod`.
 
 `WHERE` filters treat unknown as not selected. `CHECK` constraints accept true
 or unknown and reject only false, matching PostgreSQL's common NULL behavior.

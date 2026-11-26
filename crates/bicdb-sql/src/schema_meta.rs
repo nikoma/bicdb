@@ -5632,6 +5632,9 @@ impl RoutineFrame {
             output_names: Vec::new(),
             cursors: BTreeMap::new(),
             returned_set: None,
+            context_label: None,
+            lines: None,
+            context_attached: false,
         };
 
         let mut input_idx = 0usize;

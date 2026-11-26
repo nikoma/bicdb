@@ -109,10 +109,19 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
     {
         let params = parse_routine_params(&routine.args)?;
         let body = plpgsql_body_from_definition(&routine.definition)?;
-        let mut statements = parse_statements(&body)?
-            .into_iter()
-            .map(RoutineStmt::Sql)
-            .collect::<Vec<_>>();
+        let parsed = parse_statements(&body)?;
+        let context_label = (!sql_function_is_inlinable(routine, &parsed))
+            .then(|| Arc::from(format!("SQL function \"{}\"", routine.name)));
+        let mut statements = Vec::with_capacity(parsed.len() * 2);
+        for (index, statement) in parsed.into_iter().enumerate() {
+            if context_label.is_some() {
+                statements.push(RoutineStmt::Line(Arc::new(RoutineLine {
+                    line: index as u32 + 1,
+                    sql: None,
+                })));
+            }
+            statements.push(RoutineStmt::Sql(statement));
+        }
         if let (Some(db), Some(path)) = (db, crate::search_path::active_path()) {
             crate::search_path::bind_routine_parts(
                 db,
@@ -123,6 +132,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
                 &path,
             );
         }
+        let lines = extract_routine_lines(&mut statements, &mut []);
         let symbol_names = routine_symbol_names(&params, &[], &statements, &[]);
         return Ok(RoutineIR {
             node_ownership: CompiledNodeOwnership::default(),
@@ -136,6 +146,8 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
             oracle_statement_rollback: false,
             oracle_error_diagnostics: None,
             oracle_autonomous: false,
+            context_label,
+            lines,
         });
     }
     if crate::user_aggregates::is_aggregate_routine(routine) {
@@ -304,6 +316,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
         &mut exception_handlers,
         user_functions,
     );
+    let lines = extract_routine_lines(&mut statements, &mut exception_handlers);
     Ok(RoutineIR {
         node_ownership: CompiledNodeOwnership::default(),
         params,
@@ -318,7 +331,71 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
             .is_some_and(|version| version >= 6),
         oracle_error_diagnostics,
         oracle_autonomous,
+        lines,
+        context_label: oracle::preview_routine_language_version(&routine.language)
+            .is_none()
+            .then(|| plpgsql_context_label(routine)),
     })
+}
+
+/// `PL/pgSQL function name(argtypes)`, as PostgreSQL's error CONTEXT names
+/// a function: input argument types by their SQL names.
+pub(crate) fn plpgsql_context_label(routine: &RoutineSchema) -> Arc<str> {
+    let types = parse_routine_params(&routine.args)
+        .unwrap_or_default()
+        .iter()
+        .filter(|param| matches!(param.mode, RoutineArgMode::In | RoutineArgMode::InOut))
+        .map(|param| {
+            param
+                .type_schema
+                .as_ref()
+                .map(|schema| {
+                    i32::try_from(pg_type_oid(&schema.pg_type))
+                        .ok()
+                        .filter(|_| pg_type_oid_by_name(&schema.pg_type).is_some())
+                        .and_then(|oid| pg_format_type(oid, -1))
+                        .unwrap_or_else(|| schema.pg_type.clone())
+                })
+                .unwrap_or_default()
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    Arc::from(format!("PL/pgSQL function {}({types})", routine.name))
+}
+
+/// Whether PostgreSQL would inline calls of this SQL function into the
+/// calling query (`SELECT expr`, nothing else), so its errors carry no
+/// `SQL function` context.
+fn sql_function_is_inlinable(routine: &RoutineSchema, statements: &[Statement]) -> bool {
+    let [Statement::Query(query)] = statements else {
+        return false;
+    };
+    if routine.returns_set || query.with.is_some() || query.order_by.is_some() {
+        return false;
+    }
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        return false;
+    };
+    // The select-list expression's own kind; nested subqueries are rare
+    // and walking the tree here would deepen cold compilation's stack.
+    let aggregate_or_subquery = select.projection.iter().any(|item| {
+        let (sqlparser::ast::SelectItem::UnnamedExpr(expr)
+        | sqlparser::ast::SelectItem::ExprWithAlias { expr, .. }) = item
+        else {
+            return true;
+        };
+        matches!(
+            expr,
+            Expr::Subquery(_) | Expr::Exists { .. } | Expr::InSubquery { .. }
+        ) || matches!(expr, Expr::Function(function) if is_aggregate_function(function))
+    });
+    select.from.is_empty()
+        && select.selection.is_none()
+        && select.having.is_none()
+        && select.projection.len() == 1
+        && select.distinct.is_none()
+        && !aggregate_or_subquery
+        && matches!(&select.group_by, GroupByExpr::Expressions(exprs, _) if exprs.is_empty())
 }
 
 pub(crate) fn compile_cached_routine_ir(routine: &RoutineSchema) -> Result<Arc<RoutineIR>> {
@@ -504,6 +581,7 @@ pub(crate) fn collect_routine_stmt_symbols(
             RoutineStmt::ContinueLoop
             | RoutineStmt::ExitLoop
             | RoutineStmt::Null
+            | RoutineStmt::Line(_)
             | RoutineStmt::OracleBuiltin { .. }
             | RoutineStmt::Rethrow
             | RoutineStmt::Sql(_)
@@ -745,6 +823,7 @@ pub(crate) fn bind_routine_statement_exprs(statements: &mut [RoutineStmt], scope
             | RoutineStmt::Rethrow
             | RoutineStmt::ExitLoop
             | RoutineStmt::Null
+            | RoutineStmt::Line(_)
             | RoutineStmt::SelectInto { .. }
             | RoutineStmt::Perform { .. }
             | RoutineStmt::Sql(_)
@@ -922,6 +1001,9 @@ fn aggregate_routine_ir(routine: &RoutineSchema) -> Result<RoutineIR> {
         oracle_statement_rollback: false,
         oracle_error_diagnostics: None,
         oracle_autonomous: false,
+        // No body: nothing raises inside an aggregate routine itself.
+        context_label: None,
+        lines: RoutineLines::default(),
     })
 }
 
@@ -1152,6 +1234,154 @@ pub(crate) fn parse_single_quoted_sql_string(sql: &str) -> Result<Option<String>
     ))
 }
 
+thread_local! {
+    /// The PL/pgSQL body being parsed: its address range and the offsets of
+    /// its newlines, so statement slices map back to source lines.
+    static BODY_LINES: std::cell::RefCell<Option<(usize, usize, Vec<usize>)>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+struct BodyLinesScope(Option<(usize, usize, Vec<usize>)>);
+
+impl BodyLinesScope {
+    fn enter(body: &str) -> Self {
+        let newlines = body.match_indices('\n').map(|(at, _)| at).collect();
+        let entry = Some((body.as_ptr() as usize, body.len(), newlines));
+        Self(BODY_LINES.with(|lines| lines.replace(entry)))
+    }
+}
+
+impl Drop for BodyLinesScope {
+    fn drop(&mut self) {
+        let previous = self.0.take();
+        BODY_LINES.with(|lines| *lines.borrow_mut() = previous);
+    }
+}
+
+/// The 1-based body line where `statement` (a slice of the body) starts.
+fn body_line_of(statement: &str) -> Option<u32> {
+    BODY_LINES.with(|lines| {
+        let lines = lines.borrow();
+        let (start, len, newlines) = lines.as_ref()?;
+        let offset = (statement.as_ptr() as usize).checked_sub(*start)?;
+        (offset < *len).then(|| newlines.partition_point(|&at| at < offset) as u32 + 1)
+    })
+}
+
+/// Puts the line marker of the statement just parsed (the last one) before
+/// it. Outlined so the recursive statement-list parser keeps its frame.
+#[inline(never)]
+fn insert_routine_line_marker(statements: &mut Vec<RoutineStmt>, line: u32, statement: &str) {
+    let Some(parsed) = statements.last() else {
+        return;
+    };
+    let marker = routine_line_marker(line, statement, parsed);
+    statements.insert(statements.len() - 1, marker);
+}
+
+/// The line marker for `statement`, with the text PostgreSQL quotes as
+/// `SQL statement "..."` for a statement it runs as a query.
+fn routine_line_marker(line: u32, source: &str, parsed: &RoutineStmt) -> RoutineStmt {
+    let sql = match parsed {
+        RoutineStmt::Sql(_) => Some(source.to_string()),
+        RoutineStmt::Perform { .. } => source
+            .get(7..)
+            .filter(|_| source[..7].eq_ignore_ascii_case("perform"))
+            .map(|rest| format!("SELECT {}", rest.trim_start())),
+        RoutineStmt::ReturnQuery(_) => {
+            let upper = source.to_ascii_uppercase();
+            upper
+                .find("QUERY")
+                .map(|at| source[at + 5..].trim_start().to_string())
+        }
+        _ => None,
+    };
+    RoutineStmt::Line(Arc::new(RoutineLine {
+        line,
+        sql: sql.map(Arc::from),
+    }))
+}
+
+/// Removes the parser's line markers from a compiled body and returns each
+/// statement's line keyed by the statement's final address. Call it once
+/// the statement lists will no longer change.
+pub(crate) fn extract_routine_lines(
+    statements: &mut Vec<RoutineStmt>,
+    handlers: &mut [RoutineExceptionHandler],
+) -> RoutineLines {
+    fn walk(statements: &mut Vec<RoutineStmt>, lines: &mut FxHashMap<usize, Arc<RoutineLine>>) {
+        if !statements
+            .iter()
+            .any(|statement| matches!(statement, RoutineStmt::Line(_)))
+        {
+            for statement in statements.iter_mut() {
+                walk_children(statement, lines);
+            }
+            return;
+        }
+        let mut pending = Vec::new();
+        let mut kept = Vec::with_capacity(statements.len());
+        let mut next = None;
+        for statement in statements.drain(..) {
+            match statement {
+                RoutineStmt::Line(line) => next = Some(line),
+                other => {
+                    pending.push(next.take());
+                    kept.push(other);
+                }
+            }
+        }
+        *statements = kept;
+        for (statement, line) in statements.iter_mut().zip(pending) {
+            if let Some(line) = line {
+                lines.insert(statement as *const RoutineStmt as usize, line);
+            }
+            walk_children(statement, lines);
+        }
+    }
+    fn walk_children(statement: &mut RoutineStmt, lines: &mut FxHashMap<usize, Arc<RoutineLine>>) {
+        match statement {
+            RoutineStmt::Block { body, handlers, .. } => {
+                walk(body, lines);
+                for handler in handlers {
+                    walk(&mut handler.statements, lines);
+                }
+            }
+            RoutineStmt::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                walk(then_body, lines);
+                walk(else_body, lines);
+            }
+            RoutineStmt::Case {
+                arms, else_body, ..
+            } => {
+                for arm in arms {
+                    walk(arm, lines);
+                }
+                if let Some(body) = else_body {
+                    walk(body, lines);
+                }
+            }
+            RoutineStmt::ForLoop { body, .. }
+            | RoutineStmt::ForeachLoop { body, .. }
+            | RoutineStmt::QueryForLoop { body, .. }
+            | RoutineStmt::CursorForLoop { body, .. }
+            | RoutineStmt::Loop { body }
+            | RoutineStmt::WhileLoop { body, .. } => walk(body, lines),
+            _ => {}
+        }
+    }
+    let mut lines = FxHashMap::default();
+    walk(statements, &mut lines);
+    for handler in handlers {
+        walk(&mut handler.statements, &mut lines);
+    }
+    RoutineLines((!lines.is_empty()).then(|| Arc::new(lines)))
+}
+
 pub(crate) fn parse_plpgsql_body(
     body: &str,
 ) -> Result<(
@@ -1159,6 +1389,7 @@ pub(crate) fn parse_plpgsql_body(
     Vec<RoutineStmt>,
     Vec<RoutineExceptionHandler>,
 )> {
+    let _lines = postgres_dialect_forms().then(|| BodyLinesScope::enter(body));
     let (declarations, statements, exception_handlers) = parse_plpgsql_block(body)?;
     validate_routine_continue(&statements, false)?;
     for handler in &exception_handlers {
@@ -1498,7 +1729,11 @@ pub(crate) fn parse_routine_statements(block: &str) -> Result<Vec<RoutineStmt>> 
         let (statement, consumed) = next_plpgsql_statement(rest)?;
         let statement = statement.trim().trim_end_matches(';').trim();
         if !statement.is_empty() {
+            let line = body_line_of(statement);
             statements.push(parse_routine_statement(statement)?);
+            if let Some(line) = line {
+                insert_routine_line_marker(&mut statements, line, statement);
+            }
         }
         rest = rest[consumed..].trim_start();
         rest = rest.strip_prefix(';').unwrap_or(rest).trim_start();

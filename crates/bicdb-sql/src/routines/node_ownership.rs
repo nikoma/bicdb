@@ -164,6 +164,7 @@ impl OwnedNodes {
                 | RoutineStmt::OracleDynamicExecute(_)
                 | RoutineStmt::ContinueLoop
                 | RoutineStmt::Null
+                | RoutineStmt::Line(_)
                 | RoutineStmt::ExitLoop
                 | RoutineStmt::FetchCursor { .. }
                 | RoutineStmt::CloseCursor { .. }

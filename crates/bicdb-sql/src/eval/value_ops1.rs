@@ -1277,6 +1277,18 @@ pub(crate) fn eval_db_catalog_function_value_with_engine(
                     .unwrap_or(SqlValue::Null),
             ))
         }
+        "to_regrole"
+        | "pg_catalog.to_regrole"
+        | "to_regcollation"
+        | "pg_catalog.to_regcollation"
+        | "to_regoper"
+        | "pg_catalog.to_regoper"
+        | "to_regoperator"
+        | "pg_catalog.to_regoperator"
+        | "to_regtypemod"
+        | "pg_catalog.to_regtypemod" => {
+            crate::pg_float_text_functions::eval_pg_to_reg_function(db, bare_name, args)
+        }
         "to_regtype" | "pg_catalog.to_regtype" => {
             require_arg_count("to_regtype", args, 1)?;
             if matches!(args.first(), Some(SqlValue::Null) | None) {

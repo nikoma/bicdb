@@ -3218,22 +3218,16 @@ impl<'db> SqlSession<'db> {
         if let Some(value) = self.eval_pg_large_object_function(&name, &args)? {
             return Ok(value);
         }
-        if matches!(name.as_ref(), "txid_current" | "pg_catalog.txid_current") {
-            require_arg_count("txid_current", &args, 0)?;
-            // Per-row routine hosts borrow the caller's transaction. Reading
-            // its identity does not start a new transaction or authorize writes.
-            let transaction_id = if let Some(tx) = self.read_tx() {
-                tx.id().0
-            } else {
-                // A standalone SELECT still has an implicit PostgreSQL
-                // transaction. Allocate its ID for this statement and
-                // release the read-only transaction immediately.
-                let tx = self.begin_session_transaction()?;
-                let transaction_id = tx.id().0;
-                tx.rollback()?;
-                transaction_id
-            };
-            return Ok(SqlValue::Int(transaction_id as i64));
+        if matches!(
+            name.as_ref(),
+            "txid_current"
+                | "pg_catalog.txid_current"
+                | "pg_current_xact_id"
+                | "pg_catalog.pg_current_xact_id"
+                | "pg_current_xact_id_if_assigned"
+                | "pg_catalog.pg_current_xact_id_if_assigned"
+        ) {
+            return self.eval_session_transaction_id(&name, &args);
         }
         if let Some(value) = eval_network_function_value(&name, &args, &arg_types)?
             .or(eval_user_range_function_value_for(
@@ -3864,6 +3858,59 @@ impl<'db> SqlSession<'db> {
             }
             _ => unreachable!("case expression required"),
         }
+    }
+
+    /// RAISE NOTICE/WARNING/...: the message as a notice. Outlined to keep
+    /// the leaf-statement frame small on the recursive routine stack.
+    #[inline(never)]
+    #[allow(clippy::too_many_arguments)]
+    fn raise_routine_notice(
+        &mut self,
+        frame: &mut RoutineFrame,
+        statement: &RoutineStmt,
+        message: &str,
+        arguments: &[SqlValue],
+        detail: Option<&RoutineExpr>,
+        sqlstate: &str,
+        error_fields: &RaiseErrorFields,
+    ) -> Result<()> {
+        let detail = detail
+            .map(|expr| {
+                self.eval_routine_expr(frame, expr)
+                    .map(|value| value.to_cell())
+            })
+            .transpose()?;
+        let mut fields = Vec::new();
+        if let Some(detail) = detail {
+            fields.push(SqlErrorField::Detail(detail));
+        }
+        if let Some(table) = &error_fields.table {
+            fields.push(SqlErrorField::Table(table.clone()));
+        }
+        if let Some(column) = &error_fields.column {
+            fields.push(SqlErrorField::Column(column.clone()));
+        }
+        if let Some(constraint) = &error_fields.constraint {
+            fields.push(SqlErrorField::Constraint(constraint.clone()));
+        }
+        if let Some(hint) = &error_fields.hint {
+            fields.push(SqlErrorField::Hint(hint.clone()));
+        }
+        let suppressed = self.raise_level_suppressed(error_fields.severity);
+        if let Some(severity) = error_fields.severity {
+            fields.push(SqlErrorField::Severity(severity.to_string()));
+        }
+        if let Some(context) = routine_notice_context(frame, statement) {
+            fields.push(SqlErrorField::Context(context));
+        }
+        if !suppressed {
+            crate::statement_context::note_notice(SqlNotice {
+                sqlstate: sqlstate.to_string(),
+                message: format_routine_raise_message(message, &arguments),
+                fields,
+            })?;
+        }
+        Ok(())
     }
 
     // Keep query/cast temporaries off the recursive operator evaluation stack.
@@ -4582,6 +4629,36 @@ impl<'db> SqlSession<'db> {
         executed
     }
 
+    /// `txid_current()`, `pg_current_xact_id()` and
+    /// `pg_current_xact_id_if_assigned()`. Outlined: the function dispatcher
+    /// is on the recursive expression stack.
+    #[inline(never)]
+    fn eval_session_transaction_id(&mut self, name: &str, args: &[SqlValue]) -> Result<SqlValue> {
+        let bare = name.strip_prefix("pg_catalog.").unwrap_or(name);
+        if bare == "pg_current_xact_id_if_assigned" {
+            require_arg_count("pg_current_xact_id_if_assigned", args, 0)?;
+            return Ok(self.read_tx().map_or(SqlValue::Null, |tx| {
+                crate::pg_float_text_functions::xact_id_if_assigned(tx.id().0)
+            }));
+        }
+        require_arg_count("txid_current", args, 0)?;
+        // Per-row routine hosts borrow the caller's transaction. Reading
+        // its identity does not start a new transaction or authorize writes.
+        let transaction_id = if let Some(tx) = self.read_tx() {
+            tx.id().0
+        } else {
+            // A standalone SELECT still has an implicit PostgreSQL
+            // transaction. Allocate its ID for this statement and
+            // release the read-only transaction immediately.
+            let tx = self.begin_session_transaction()?;
+            let transaction_id = tx.id().0;
+            tx.rollback()?;
+            transaction_id
+        };
+        crate::pg_float_text_functions::note_assigned_xact(transaction_id);
+        Ok(SqlValue::Int(transaction_id as i64))
+    }
+
     /// A call frame from the routine's cached template (built once per
     /// compiled routine, keyed like the expression-type memo).
     pub(crate) fn routine_frame_for_call(
@@ -4614,6 +4691,8 @@ impl<'db> SqlSession<'db> {
             built
         });
         let mut frame = RoutineFrame::from_template(&template, args)?;
+        frame.context_label = ir.context_label.clone();
+        frame.lines = ir.lines.0.clone();
         frame.oracle_statement_rollback = ir.oracle_statement_rollback;
         frame.oracle_procedural_evaluation = ir.oracle_procedural_evaluation;
         frame.oracle_error_diagnostics = ir.oracle_error_diagnostics.clone();
@@ -4823,13 +4902,17 @@ impl<'db> SqlSession<'db> {
         let mut frame = self.routine_frame_for_call(ir, args)?;
         let mut result = None;
         for statement in &ir.statements {
-            let RoutineStmt::Sql(statement) = statement else {
+            frame.context_attached = false;
+            let RoutineStmt::Sql(sql) = statement else {
                 return Err(SqlError::UnsupportedPlpgsqlFeature(format!(
                     "SQL function {} contains a non-SQL statement",
                     routine.name
                 )));
             };
-            result = Some(self.execute_routine_sql(&mut frame, statement)?);
+            result = Some(
+                self.execute_routine_sql(&mut frame, sql)
+                    .map_err(|error| routine_error_context(&mut frame, statement, error))?,
+            );
         }
         let outputs = crate::routine_calls::routine_output_params(&ir.params);
         if outputs.len() > 1 {
@@ -5048,6 +5131,7 @@ impl<'db> SqlSession<'db> {
         };
         let ddl_undo_len = self.ddl_undo.len();
         let savepoint_len = self.savepoints.len();
+        frame.context_attached = false;
         let result = self
             .execute_routine_statement_inner(frame, statement)
             .map_err(|error| {
@@ -5060,7 +5144,7 @@ impl<'db> SqlSession<'db> {
                         "deadlock detected while waiting for resource",
                     )
                 } else {
-                    error
+                    routine_error_context(frame, statement, error)
                 }
             });
         if atomic && result.is_err() {
@@ -5193,7 +5277,7 @@ impl<'db> SqlSession<'db> {
         match statement {
             RoutineStmt::ContinueLoop => Ok(RoutineControl::NextIteration),
             RoutineStmt::ExitLoop => Ok(RoutineControl::ExitLoop),
-            RoutineStmt::Null => Ok(RoutineControl::Continue),
+            RoutineStmt::Null | RoutineStmt::Line(_) => Ok(RoutineControl::Continue),
             RoutineStmt::Assignment { target, expr } => {
                 let value = self.eval_routine_expr(frame, expr)?;
                 let value = routine_string_source_assignment(frame, target, &expr.expr, value)?;
@@ -5391,40 +5475,15 @@ impl<'db> SqlSession<'db> {
                     .map(|argument| self.eval_routine_expr(frame, argument))
                     .collect::<Result<Vec<_>>>()?;
                 if *notice {
-                    let detail = detail
-                        .as_ref()
-                        .map(|expr| {
-                            self.eval_routine_expr(frame, expr)
-                                .map(|value| value.to_cell())
-                        })
-                        .transpose()?;
-                    let mut fields = Vec::new();
-                    if let Some(detail) = detail {
-                        fields.push(SqlErrorField::Detail(detail));
-                    }
-                    if let Some(table) = &error_fields.table {
-                        fields.push(SqlErrorField::Table(table.clone()));
-                    }
-                    if let Some(column) = &error_fields.column {
-                        fields.push(SqlErrorField::Column(column.clone()));
-                    }
-                    if let Some(constraint) = &error_fields.constraint {
-                        fields.push(SqlErrorField::Constraint(constraint.clone()));
-                    }
-                    if let Some(hint) = &error_fields.hint {
-                        fields.push(SqlErrorField::Hint(hint.clone()));
-                    }
-                    let suppressed = self.raise_level_suppressed(error_fields.severity);
-                    if let Some(severity) = error_fields.severity {
-                        fields.push(SqlErrorField::Severity(severity.to_string()));
-                    }
-                    if !suppressed {
-                        crate::statement_context::note_notice(SqlNotice {
-                            sqlstate: sqlstate.clone(),
-                            message: format_routine_raise_message(message, &arguments),
-                            fields,
-                        })?;
-                    }
+                    self.raise_routine_notice(
+                        frame,
+                        statement,
+                        message,
+                        &arguments,
+                        detail.as_ref(),
+                        sqlstate,
+                        error_fields,
+                    )?;
                     return Ok(RoutineControl::Continue);
                 }
                 // A raised integrity error naming its constraint is reported
@@ -8264,4 +8323,112 @@ fn validate_integer_text_assignments(
         }
     }
     Ok(())
+}
+
+/// PostgreSQL's name for a PL/pgSQL statement in error CONTEXT
+/// (`plpgsql_stmt_typename`).
+fn plpgsql_statement_kind(statement: &RoutineStmt) -> &'static str {
+    match statement {
+        RoutineStmt::Block { .. } => "statement block",
+        RoutineStmt::Assignment { .. } => "assignment",
+        RoutineStmt::If { .. } => "IF",
+        RoutineStmt::Case { .. } => "CASE",
+        RoutineStmt::Loop { .. } => "LOOP",
+        RoutineStmt::WhileLoop { .. } => "WHILE",
+        RoutineStmt::ForLoop { .. } => "FOR with integer loop variable",
+        RoutineStmt::QueryForLoop { .. } => "FOR over SELECT rows",
+        RoutineStmt::CursorForLoop { .. } => "FOR over cursor",
+        RoutineStmt::ForeachLoop { .. } => "FOREACH over array",
+        RoutineStmt::ExitLoop => "EXIT",
+        RoutineStmt::ContinueLoop => "CONTINUE",
+        RoutineStmt::Return(_) => "RETURN",
+        RoutineStmt::ReturnNext => "RETURN NEXT",
+        RoutineStmt::ReturnQuery(_) => "RETURN QUERY",
+        RoutineStmt::RaiseException { .. } | RoutineStmt::Rethrow => "RAISE",
+        RoutineStmt::Perform { .. } => "PERFORM",
+        RoutineStmt::DynamicExecute(_) | RoutineStmt::OracleDynamicExecute(_) => "EXECUTE",
+        RoutineStmt::PostgresControl(control) => match control.as_ref() {
+            crate::postgres_control::PostgresControl::Execute { .. } => "EXECUTE",
+            crate::postgres_control::PostgresControl::RowCount { .. } => "GET DIAGNOSTICS",
+            crate::postgres_control::PostgresControl::Stacked { .. } => "GET STACKED DIAGNOSTICS",
+        },
+        RoutineStmt::OpenCursor { .. } => "OPEN",
+        RoutineStmt::FetchCursor { .. } => "FETCH",
+        RoutineStmt::CloseCursor { .. } => "CLOSE",
+        RoutineStmt::Null => "NULL",
+        RoutineStmt::Sql(_)
+        | RoutineStmt::SqlInto { .. }
+        | RoutineStmt::SelectInto { .. }
+        | RoutineStmt::OracleBuiltin { .. }
+        | RoutineStmt::Line(_) => "SQL statement",
+    }
+}
+
+/// Adds the CONTEXT line(s) naming the statement an error left: the
+/// statement's SQL text when it ran as a query, then
+/// `PL/pgSQL function f(...) line N at KIND` (or `SQL function "f"
+/// statement N`). Each routine frame adds its lines once.
+#[cold]
+#[inline(never)]
+fn routine_error_context(
+    frame: &mut RoutineFrame,
+    statement: &RoutineStmt,
+    error: SqlError,
+) -> SqlError {
+    // Engine/feature limits are retry signals that callers match by
+    // variant (falling back to another evaluation path); they keep theirs.
+    // A bare RAISE in a handler rethrows the caught error with the context
+    // it already carries, as PostgreSQL's ReThrowError does.
+    if frame.context_attached
+        || matches!(statement, RoutineStmt::Rethrow)
+        || matches!(
+            error,
+            SqlError::Unsupported(_)
+                | SqlError::UnsupportedPlpgsqlFeature(_)
+                | SqlError::InvalidCollection(_)
+        )
+    {
+        return error;
+    }
+    let (Some(label), Some(line)) = (
+        frame.context_label.clone(),
+        statement_line(frame, statement).cloned(),
+    ) else {
+        return error;
+    };
+    frame.context_attached = true;
+    if label.starts_with("SQL function") {
+        return error.with_context_line(format!("{label} statement {}", line.line));
+    }
+    // PL/pgSQL raises the STRICT row-count errors itself, after the query.
+    let raised_by_plpgsql = matches!(error.sqlstate(), "P0002" | "P0003");
+    let error = match &line.sql {
+        Some(sql) if !raised_by_plpgsql => {
+            error.with_context_line(format!("SQL statement \"{sql}\""))
+        }
+        _ => error,
+    };
+    error.with_context_line(format!(
+        "{label} line {} at {}",
+        line.line,
+        plpgsql_statement_kind(statement)
+    ))
+}
+
+/// The CONTEXT of a NOTICE raised by the statement executing in `frame`.
+fn routine_notice_context(frame: &RoutineFrame, statement: &RoutineStmt) -> Option<String> {
+    let label = frame.context_label.as_deref()?;
+    let line = statement_line(frame, statement)?;
+    (!label.starts_with("SQL function")).then(|| format!("{label} line {} at RAISE", line.line))
+}
+
+/// The source line of `statement` in the routine `frame` runs.
+fn statement_line<'a>(
+    frame: &'a RoutineFrame,
+    statement: &RoutineStmt,
+) -> Option<&'a Arc<RoutineLine>> {
+    frame
+        .lines
+        .as_ref()?
+        .get(&(statement as *const RoutineStmt as usize))
 }

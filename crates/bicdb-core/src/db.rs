@@ -5595,11 +5595,35 @@ pub struct PlannerStatsCatalog {
 pub struct TableStatistics {
     pub collection: String,
     pub row_count: usize,
+    /// Mean stored size of a row's values in bytes, from the ANALYZE
+    /// sample (0 for statistics written before it was recorded).
+    #[serde(default)]
+    pub average_row_bytes: usize,
     #[serde(default)]
     pub columns: BTreeMap<String, ColumnStatistics>,
     #[serde(default)]
     pub indexes: BTreeMap<String, IndexStatistics>,
     pub analyzed_at_unix_ms: i64,
+}
+
+impl TableStatistics {
+    /// The table's size in PostgreSQL's 8 KB pages, estimated from the row
+    /// count and the sampled row width (at least one page for a non-empty
+    /// table). `None` when the width was not recorded.
+    pub fn estimated_pages(&self) -> Option<u64> {
+        const PAGE_BYTES: u64 = 8192;
+        // PostgreSQL's per-tuple overhead: the 24-byte header plus a 4-byte
+        // line pointer.
+        const TUPLE_OVERHEAD: u64 = 28;
+        if self.row_count == 0 {
+            return Some(0);
+        }
+        if self.average_row_bytes == 0 {
+            return None;
+        }
+        let bytes = self.row_count as u64 * (self.average_row_bytes as u64 + TUPLE_OVERHEAD);
+        Some(bytes.div_ceil(PAGE_BYTES).max(1))
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]

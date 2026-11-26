@@ -4090,6 +4090,16 @@ fn eval_atat_match_value(
     eval_text_search_match_value(left, right, left_type, right_type).and_then(sql_value_truth)
 }
 
+/// An index-only `count(*)`: the number of entries of `index` under the
+/// key `prefix` (one integer per leading column in `columns`).
+#[derive(Clone, Debug)]
+pub(crate) struct IndexOnlyCount {
+    pub(crate) collection: String,
+    pub(crate) index: String,
+    pub(crate) columns: Vec<String>,
+    pub(crate) prefix: Vec<IndexValue>,
+}
+
 pub(crate) enum RecordLocators {
     Pks(Vec<String>),
     Rowids(Vec<RowId>),
@@ -5565,6 +5575,9 @@ impl<'db> SqlEngine<'db> {
         let from = &select.from[0];
         if from.joins.is_empty() && !has_group_by(select)? {
             if let Some(result) = self.try_single_table_indexed_extreme_aggregate(from, select)? {
+                return Ok(result);
+            }
+            if let Some(result) = self.try_index_only_count(from, select, query)? {
                 return Ok(result);
             }
         }

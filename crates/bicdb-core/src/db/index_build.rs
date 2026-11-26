@@ -1959,6 +1959,55 @@ impl BicDb {
         Ok(rowids)
     }
 
+    /// The entries of a resident B-tree index whose key starts with
+    /// `prefix` (every entry for an empty prefix), in ascending key order,
+    /// each as its full decoded key and row id: what an index-only scan
+    /// reads instead of the rows. The resident store holds the committed
+    /// state, one entry per row and indexed key (rows whose indexed fields
+    /// are absent are keyed by NULLs), so callers must not use it under a
+    /// snapshot older than the latest commit or with uncommitted writes of
+    /// their own. `None` when the index is not a resident B-tree (a
+    /// read-through paged index) or when more than `limit` entries match.
+    pub fn index_prefix_entries(
+        &self,
+        name: &str,
+        prefix: &[IndexValue],
+        limit: usize,
+    ) -> Result<Option<Vec<(Vec<IndexValue>, RowId)>>> {
+        let state = self
+            .indexes
+            .get(name)
+            .ok_or_else(|| BicDbError::Index(format!("index `{name}` not found")))?
+            .read();
+        if state.definition.kind != IndexKind::BTree || state.paged_read_through {
+            return Ok(None);
+        }
+        if prefix.len() > state.definition.fields.len() {
+            return Err(BicDbError::Index(format!(
+                "invalid entry prefix for index `{name}`"
+            )));
+        }
+        let encoded_prefix = encode_index_key(prefix);
+        let mut entries = Vec::new();
+        let mut overflow = false;
+        state.store.scan_prefix(&encoded_prefix, &mut |key, ids| {
+            let decoded = decode_index_key(key);
+            for id in ids {
+                if entries.len() >= limit {
+                    overflow = true;
+                    return false;
+                }
+                entries.push((decoded.clone(), id));
+            }
+            true
+        });
+        if overflow {
+            return Ok(None);
+        }
+        index_trace::record_scan(&index_trace::PREFIX, entries.len());
+        Ok(Some(entries))
+    }
+
     pub fn lookup_index(&self, name: &str, prefix: &[IndexValue]) -> Result<Vec<String>> {
         let state = self
             .indexes

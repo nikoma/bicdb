@@ -4191,7 +4191,8 @@ pub(crate) struct SubqueryMemo {
 struct HashedExistsEntry {
     address: usize,
     query: Box<Query>,
-    plan: Rc<HashedExists>,
+    /// `None`: not eligible (remembered so the analysis runs once).
+    plan: Option<Rc<HashedExists>>,
     keys: Option<Option<Rc<HashedValues>>>,
 }
 
@@ -4422,7 +4423,7 @@ impl SubqueryMemo {
         let position = match position {
             Some(position) => position,
             None => {
-                let plan = hashed_exists_plan(db, query)?;
+                let plan = hashed_exists_plan(db, query).map(Rc::new);
                 let mut entries = self.exists.borrow_mut();
                 if entries.len() >= SUBQUERY_MEMO_MAX_ENTRIES {
                     return None;
@@ -4430,7 +4431,7 @@ impl SubqueryMemo {
                 entries.push(HashedExistsEntry {
                     address,
                     query: Box::new(query.clone()),
-                    plan: Rc::new(plan),
+                    plan,
                     keys: None,
                 });
                 entries.len() - 1
@@ -4439,7 +4440,7 @@ impl SubqueryMemo {
         let (plan, built) = {
             let entries = self.exists.borrow();
             let entry = &entries[position];
-            (entry.plan.clone(), entry.keys.clone())
+            (entry.plan.clone()?, entry.keys.clone())
         };
         let keys = match built {
             Some(keys) => keys,

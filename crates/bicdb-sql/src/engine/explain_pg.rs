@@ -2437,7 +2437,13 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
         }
         if !remaining.is_empty() {
             let rest = std::mem::take(&mut remaining);
-            let prefix = self.multi_relation || self.verbose;
+            // A scan's own qualification is shown unqualified (PostgreSQL
+            // qualifies scan quals only in VERBOSE); a join's is qualified.
+            let prefix = if joins.is_empty() {
+                self.verbose
+            } else {
+                self.multi_relation || self.verbose
+            };
             plan = self.with_filter(plan, &rest, prefix)?;
         }
         Ok(plan)

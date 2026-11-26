@@ -2254,6 +2254,80 @@ impl<'db> SqlEngine<'db> {
             .map(|truth| truth == Some(true)))
     }
 
+    /// The record-row twin of the slot path's hashed `IN (subquery)`: an
+    /// uncorrelated one-column subquery runs once per statement and is probed
+    /// through its hash table.
+    fn hashed_row_in_truth(
+        &self,
+        row: &SqlRow,
+        expr: &Expr,
+        value: &SqlValue,
+        query: &Query,
+        negated: bool,
+    ) -> Result<Option<Option<bool>>> {
+        let Some(column_type) = hashed_in_subquery_column_type(self.db_ref(), query) else {
+            return Ok(None);
+        };
+        let value_type =
+            row_columns_expr_pg_type(self.db_ref(), expr, row.keys().map(String::as_str));
+        if !typed_equality_uses_plain_values(value_type.as_deref(), Some(column_type.as_str())) {
+            return Ok(None);
+        }
+        let result = match self.subquery_memo.lookup(query, &[]) {
+            MemoLookup::Hit(result) => result,
+            MemoLookup::Miss => {
+                // Every column reference is the subquery's own table: it reads
+                // no outer row, so one run answers every row.
+                let result = Rc::new(self.execute_query(query)?);
+                self.subquery_memo.store(query, &[], Some(result.clone()));
+                result
+            }
+            MemoLookup::Inactive | MemoLookup::Correlated => return Ok(None),
+        };
+        if result.columns.len() != 1 {
+            return Ok(None);
+        }
+        Ok(self
+            .subquery_memo
+            .hashed_values(self.db_ref(), query, &[], &result)
+            .and_then(|hashed| hashed.in_truth(value, negated)))
+    }
+
+    /// The record-row twin of [`Self::hashed_exists_truth`].
+    fn hashed_row_exists_truth(&self, row: &SqlRow, query: &Query) -> Result<Option<bool>> {
+        if self.outer_row.is_some() {
+            return Ok(None);
+        }
+        let hashed = self
+            .subquery_memo
+            .hashed_exists(self.db_ref(), query, |plan| {
+                match self.execute_query(&plan.keys_query) {
+                    Ok(result) => HashedValues::build(&result),
+                    Err(_) => None,
+                }
+            });
+        let Some((plan, keys)) = hashed else {
+            self.check_cancellation()?;
+            return Ok(None);
+        };
+        let outer_type =
+            row_columns_expr_pg_type(self.db_ref(), &plan.outer, row.keys().map(String::as_str));
+        if !typed_equality_uses_plain_values(outer_type.as_deref(), Some(plan.inner_type.as_str()))
+        {
+            return Ok(None);
+        }
+        let Ok(value) = self.eval_row_value(row, &plan.outer) else {
+            self.check_cancellation()?;
+            return Ok(None);
+        };
+        if matches!(value, SqlValue::Null) {
+            return Ok(Some(false));
+        }
+        Ok(keys
+            .in_truth(&value, false)
+            .map(|truth| truth == Some(true)))
+    }
+
     fn run_slot_subquery(
         &self,
         row: &SlotRow,
@@ -3062,6 +3136,11 @@ impl<'db> SqlEngine<'db> {
                     return Ok(truth);
                 }
                 let value = self.eval_row_value(row, expr)?;
+                if let Some(truth) =
+                    self.hashed_row_in_truth(row, expr, &value, subquery, *negated)?
+                {
+                    return Ok(truth);
+                }
                 let result = self.execute_correlated_query(row, subquery)?;
                 let candidate_type = result.column_types.first().cloned().flatten();
                 let values = subquery_values(result)?;
@@ -3237,6 +3316,9 @@ impl<'db> SqlEngine<'db> {
             Expr::IsUnknown(expr) => Ok(Some(self.eval_row_truth(row, expr)?.is_none())),
             Expr::IsNotUnknown(expr) => Ok(Some(self.eval_row_truth(row, expr)?.is_some())),
             Expr::Exists { subquery, negated } => {
+                if let Some(exists) = self.hashed_row_exists_truth(row, subquery)? {
+                    return Ok(Some(exists != *negated));
+                }
                 let exists = !self
                     .execute_correlated_query(row, subquery)?
                     .rows

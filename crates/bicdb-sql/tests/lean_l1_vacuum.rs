@@ -67,12 +67,11 @@ fn sql_vacuum_reclaims_dead_versions_and_reports() {
         "second vacuum should be nearly idle, reclaimed {reclaimed_again}"
     );
 
-    // Guardrails: no options, no transactions.
-    assert!(sql
-        .execute("VACUUM FULL")
-        .unwrap_err()
-        .to_string()
-        .contains("store-wide"));
+    // Guardrails: no transactions. Option and table forms are PostgreSQL
+    // statements (validated, no store-wide reclaim report).
+    let full = sql.execute("VACUUM FULL").unwrap();
+    assert!(full.rows.is_empty());
+    assert_eq!(full.command_tag.as_deref(), Some("VACUUM"));
     sql.execute("BEGIN").unwrap();
     assert!(sql
         .execute("VACUUM")

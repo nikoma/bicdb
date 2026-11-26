@@ -820,6 +820,13 @@ impl PgWireServer {
             }
         }
         bicdb_sql::oracle::ensure_database_profile(&mut db.write(), &config.sql_profile)?;
+        {
+            // Temporary tables belong to connections of an earlier process.
+            let mut guard = db.write();
+            if !guard.is_read_only_standby() {
+                bicdb_sql::drop_orphan_temp_schemas(&mut guard)?;
+            }
+        }
         if config.automatic_paged_read_ahead {
             if let Some(snapshot) = db.read().paged_storage_snapshot()? {
                 config
@@ -2892,8 +2899,32 @@ impl ConnectionRegistration {
     }
 }
 
+/// A connection's temporary tables end with it, as in PostgreSQL.
+fn drop_connection_temp_objects(server: &Arc<PgWireServer>, connection_id: u64) {
+    let pid = i32::try_from(connection_id).unwrap_or(i32::MAX);
+    let exists = server
+        .read_db()
+        .ok()
+        .is_some_and(|db| bicdb_sql::temp_schema_exists(&db, pid));
+    if !exists {
+        return;
+    }
+    let outcome = server.try_admit_write().and_then(|admission| {
+        let mut db = server.write_db_with_admission(&admission)?;
+        bicdb_sql::drop_connection_temp_schema(&mut db, pid).map_err(PgWireError::from)
+    });
+    if let Err(error) = outcome {
+        log_operational_event(
+            "connection.temp_schema_drop_failed",
+            "warn",
+            json!({ "connection_id": connection_id, "error": error.to_string() }),
+        );
+    }
+}
+
 impl Drop for ConnectionRegistration {
     fn drop(&mut self) {
+        drop_connection_temp_objects(&self.server, self.connection_id);
         self.server
             .terminable_sessions
             .lock()

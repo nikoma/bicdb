@@ -2494,7 +2494,11 @@ fn integer_range_errors_are_consistent_across_query_bind_and_copy() {
     let (error, status) = read_error_response_with_status(&mut client);
     assert_eq!(status, b'I');
     assert!(error.contains("22003"), "{error}");
-    assert!(error.contains("smallint out of range"), "{error}");
+    // COPY reads text through int2's input function, which names the value.
+    assert!(
+        error.contains("value \"32768\" is out of range for type smallint"),
+        "{error}"
+    );
 
     send_query(&mut client, "SELECT COUNT(*) FROM integer_copy_limits;");
     assert_eq!(read_query_rows(&mut client), vec![vec!["0".to_string()]]);

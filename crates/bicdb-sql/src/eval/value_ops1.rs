@@ -128,6 +128,9 @@ pub(crate) fn eval_privilege_function_value(
             }
             let oid = sql_value_i64(value)
                 .ok_or_else(|| SqlError::InvalidSql("pg_get_userbyid requires an OID".into()))?;
+            if oid == crate::planner::PG_DATABASE_OWNER_OID {
+                return Ok(Some(SqlValue::String("pg_database_owner".into())));
+            }
             let name = list_roles(db)?
                 .into_iter()
                 .find(|role| role_oid(&role.name) == oid)
@@ -168,6 +171,46 @@ pub(crate) fn eval_db_catalog_function_value(
     )
 }
 
+/// `pg_table_is_visible(oid)` for a table: whether its unqualified name
+/// resolves to it through the search path (the temporary schema first). A
+/// table hidden by an earlier schema's relation of the same name, or in a
+/// schema off the path, is not visible. `None` when the OID is not a table.
+fn table_is_visible(db: &BicDb, oid: &SqlValue) -> Result<Option<SqlValue>> {
+    let Some(oid) = sql_value_i64(oid).or_else(|| oid.to_cell().trim().parse::<i64>().ok()) else {
+        return Ok(Some(SqlValue::Null));
+    };
+    let Some(schema) = list_schemas(db)?
+        .into_iter()
+        .find(|schema| table_relation_oid(schema) == oid)
+    else {
+        return Ok(None);
+    };
+    let logical = catalog_display_name(&schema.name);
+    let path = crate::search_path::active_path()
+        .map(|path| path.to_vec())
+        .unwrap_or_else(|| vec!["public".to_string()]);
+    for namespace in path {
+        let encoded = relation_name_from_parts(&[namespace.clone(), logical.clone()])?;
+        if resolve_relation_name_memoized(db, &encoded).is_some() {
+            return Ok(Some(SqlValue::Bool(namespace == schema.schema_name)));
+        }
+    }
+    Ok(Some(SqlValue::Bool(false)))
+}
+
+/// The regclass argument of `pg_partition_ancestors`: an OID or a relation
+/// name. Outlined: the catalog function evaluator's frame is large.
+#[inline(never)]
+fn partition_ancestor_oid_argument(db: &BicDb, value: &SqlValue) -> Result<Option<i64>> {
+    if matches!(value, SqlValue::Null) {
+        return Ok(None);
+    }
+    if let Some(oid) = sql_value_i64(value).or_else(|| value.to_cell().trim().parse::<i64>().ok()) {
+        return Ok(Some(oid));
+    }
+    resolve_regclass_oid(db, value.to_cell().trim())
+}
+
 pub(crate) fn eval_db_catalog_function_value_with_engine(
     db: &BicDb,
     name: &str,
@@ -177,6 +220,53 @@ pub(crate) fn eval_db_catalog_function_value_with_engine(
     query_engine: Option<&SqlEngine<'_>>,
 ) -> Result<Option<SqlValue>> {
     let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(name);
+    if bare_name == "pg_partition_ancestors" && args.len() == 1 {
+        if let Some(oid) =
+            sql_value_i64(&args[0]).or_else(|| args[0].to_cell().trim().parse::<i64>().ok())
+        {
+            if let Some(schema) = list_schemas(db)?
+                .into_iter()
+                .find(|schema| table_relation_oid(schema) == oid)
+            {
+                // A table outside a partition tree is its only ancestor; a
+                // partition's chain is a set (the SELECT-list form is
+                // rewritten through `bicdb_partition_ancestor_oids`).
+                if schema.partition_of.is_some() {
+                    return Err(SqlError::Unsupported(
+                        "pg_partition_ancestors of a partition is not supported here".to_string(),
+                    ));
+                }
+                return Ok(Some(SqlValue::Int(oid)));
+            }
+        }
+    }
+    if bare_name == "bicdb_partition_ancestor_oids" && args.len() == 1 {
+        let Some(oid) = partition_ancestor_oid_argument(db, &args[0])? else {
+            return Ok(Some(SqlValue::Null));
+        };
+        let schemas = list_schemas(db)?;
+        let mut chain = Vec::new();
+        let mut current = schemas
+            .iter()
+            .find(|schema| table_relation_oid(schema) == oid);
+        while let Some(schema) = current {
+            chain.push(SqlValue::Int(table_relation_oid(schema)));
+            current = schema.partition_of.as_ref().and_then(|link| {
+                schemas
+                    .iter()
+                    .find(|candidate| candidate.name == link.parent_table)
+            });
+            if chain.len() > schemas.len() {
+                break;
+            }
+        }
+        return Ok(Some(array_value(chain)));
+    }
+    if bare_name == "pg_table_is_visible" && args.len() == 1 {
+        if let Some(visible) = table_is_visible(db, &args[0])? {
+            return Ok(Some(visible));
+        }
+    }
     if oracle::current_time::pg_type(bare_name).is_some() {
         return oracle::current_time::evaluate(db, bare_name, args).map(Some);
     }
@@ -1565,12 +1655,162 @@ pub(crate) fn pg_get_viewdef(db: &BicDb, args: &[SqlValue]) -> Result<SqlValue> 
 }
 
 pub(crate) fn postgres_view_definition(definition: &str) -> String {
+    if let Some(pretty) = pretty_simple_view_definition(definition) {
+        return pretty;
+    }
     let definition = definition.trim_end();
     if definition.ends_with(';') {
         definition.to_string()
     } else {
         format!("{definition};")
     }
+}
+
+/// Whether `text` closes every parenthesis it opens, outside quotes.
+fn balanced_parentheses(text: &str) -> bool {
+    let mut depth = 0i64;
+    let mut quote: Option<char> = None;
+    for ch in text.chars() {
+        match (quote, ch) {
+            (Some(open), ch) if ch == open => quote = None,
+            (Some(_), _) => {}
+            (None, '\'' | '"') => quote = Some(ch),
+            (None, '(') => depth += 1,
+            (None, ')') => {
+                depth -= 1;
+                if depth < 0 {
+                    return false;
+                }
+            }
+            _ => {}
+        }
+    }
+    depth == 0 && quote.is_none()
+}
+
+/// PostgreSQL's layout of a view definition (`pg_get_viewdef`) for a plain
+/// single-table SELECT: ` SELECT a,\n    b\n   FROM t\n  WHERE ...;`. Other
+/// shapes keep their stored text.
+fn pretty_simple_view_definition(definition: &str) -> Option<String> {
+    use sqlparser::ast::Spanned;
+    let statements = Parser::parse_sql(&PostgreSqlDialect {}, definition).ok()?;
+    // Each part keeps the text it was written with (`x::text`, not the
+    // parser's rendering), sliced from the stored definition by its span.
+    let line_starts = std::iter::once(0)
+        .chain(definition.match_indices('\n').map(|(index, _)| index + 1))
+        .collect::<Vec<_>>();
+    let offset = |location: sqlparser::tokenizer::Location| -> Option<usize> {
+        let start = *line_starts.get(usize::try_from(location.line).ok()?.checked_sub(1)?)?;
+        let column = usize::try_from(location.column).ok()?.checked_sub(1)?;
+        definition[start..]
+            .char_indices()
+            .map(|(index, _)| start + index)
+            .chain(std::iter::once(definition.len()))
+            .nth(column)
+    };
+    let source = |span: sqlparser::tokenizer::Span| -> Option<String> {
+        if span.start.line == 0 {
+            return None;
+        }
+        let (start, end) = (offset(span.start)?, offset(span.end)?);
+        let text = (start < end).then(|| definition[start..end].trim().to_string())?;
+        // Some nodes' spans leave out their own parentheses (a nested join
+        // `(a CROSS JOIN b)`); such a slice is not valid SQL, so the stored
+        // text is kept instead.
+        balanced_parentheses(&text).then_some(text)
+    };
+    let [Statement::Query(query)] = statements.as_slice() else {
+        return None;
+    };
+    if query.with.is_some() || query.fetch.is_some() || !query.locks.is_empty() {
+        return None;
+    }
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        return None;
+    };
+    if select.distinct.is_some()
+        || select.having.is_some()
+        || select.top.is_some()
+        || select.into.is_some()
+        || !select.named_window.is_empty()
+        || select.qualify.is_some()
+        || select.from.len() > 1
+        || select.from.iter().any(|from| !from.joins.is_empty())
+    {
+        return None;
+    }
+    let mut text = String::from(" SELECT ");
+    text.push_str(
+        &select
+            .projection
+            .iter()
+            .map(|item| source(item.span()))
+            .collect::<Option<Vec<_>>>()?
+            .join(",\n    "),
+    );
+    if let Some(from) = select.from.first() {
+        text.push_str("\n   FROM ");
+        text.push_str(&source(from.relation.span())?);
+    }
+    if let Some(selection) = &select.selection {
+        text.push_str("\n  WHERE ");
+        text.push_str(&source(selection.span())?);
+    }
+    match &select.group_by {
+        GroupByExpr::Expressions(exprs, modifiers) if !exprs.is_empty() && modifiers.is_empty() => {
+            text.push_str("\n  GROUP BY ");
+            text.push_str(
+                &exprs
+                    .iter()
+                    .map(|expr| source(expr.span()))
+                    .collect::<Option<Vec<_>>>()?
+                    .join(", "),
+            );
+        }
+        GroupByExpr::Expressions(exprs, _) if exprs.is_empty() => {}
+        _ => return None,
+    }
+    if let Some(order_by) = &query.order_by {
+        let OrderByKind::Expressions(exprs) = &order_by.kind else {
+            return None;
+        };
+        text.push_str("\n  ORDER BY ");
+        text.push_str(
+            &exprs
+                .iter()
+                .map(|expr| {
+                    let rendered = source(expr.expr.span())?;
+                    Some(match expr.options.asc {
+                        Some(false) => format!("{rendered} DESC"),
+                        _ => rendered,
+                    })
+                })
+                .collect::<Option<Vec<_>>>()?
+                .join(", "),
+        );
+        if exprs.iter().any(|expr| expr.options.nulls_first.is_some()) {
+            return None;
+        }
+    }
+    if let Some(limit) = &query.limit_clause {
+        match limit {
+            LimitClause::LimitOffset {
+                limit,
+                offset,
+                limit_by,
+            } if limit_by.is_empty() => {
+                if let Some(offset) = offset {
+                    text.push_str(&format!("\n OFFSET {}", offset.value));
+                }
+                if let Some(limit) = limit {
+                    text.push_str(&format!("\n LIMIT {limit}"));
+                }
+            }
+            _ => return None,
+        }
+    }
+    text.push(';');
+    Some(text)
 }
 
 pub(crate) fn catalog_relation_name_for_table_oid(db: &BicDb, oid: i64) -> Result<Option<String>> {
@@ -2132,6 +2372,7 @@ pub(crate) fn eval_acldefault(args: &[SqlValue]) -> Option<SqlValue> {
 pub(crate) fn acl_owner_name(value: &SqlValue) -> String {
     match sql_value_i64(value) {
         Some(10) => "bicdb".to_string(),
+        Some(crate::planner::PG_DATABASE_OWNER_OID) => "pg_database_owner".to_string(),
         Some(oid) => oid.to_string(),
         None => value.to_cell(),
     }
@@ -3499,6 +3740,9 @@ pub(crate) fn eval_compatibility_function_value_with_db(
     args: &[SqlValue],
     arg_types: Option<&[Option<String>]>,
 ) -> Result<Option<SqlValue>> {
+    if matches!(name, "pg_input_is_valid" | "pg_catalog.pg_input_is_valid") {
+        return eval_pg_input_is_valid(Some(db), args).map(Some);
+    }
     if matches!(name, "format" | "pg_catalog.format") {
         let mut rendered = args.to_vec();
         if let Some(types) = arg_types {
@@ -3523,19 +3767,17 @@ pub(crate) fn eval_compatibility_function_value(
     if arg_types.is_some_and(|arg_types| geometric_function_pg_type(name, arg_types).is_some()) {
         return Ok(None);
     }
-    if matches!(name, "pg_input_is_valid" | "pg_catalog.pg_input_is_valid") && args.len() == 2 {
-        if args.iter().any(|arg| matches!(arg, SqlValue::Null)) {
-            return Ok(Some(SqlValue::Null));
-        }
-        let type_name = args[1].to_cell();
-        let data_type = sqlparser::parser::Parser::new(&sqlparser::dialect::PostgreSqlDialect {})
-            .try_with_sql(&type_name)
-            .and_then(|mut parser| parser.parse_data_type())
-            .map_err(|_| {
-                SqlError::undefined_object(format!("type \"{type_name}\" does not exist"))
-            })?;
-        let valid = cast_value(SqlValue::String(args[0].to_cell()), &data_type).is_ok();
-        return Ok(Some(SqlValue::Bool(valid)));
+    if matches!(name, "pg_input_is_valid" | "pg_catalog.pg_input_is_valid") {
+        return eval_pg_input_is_valid(None, args).map(Some);
+    }
+    if let Some(value) = crate::pg_functions_more::eval_pg_function_more(name, args, arg_types)? {
+        return Ok(Some(value));
+    }
+    if let Some(value) = crate::pg_number_input::eval_pg_number_input(name, args)? {
+        return Ok(Some(value));
+    }
+    if let Some(value) = crate::pg_float_text_functions::eval_pg_float_text_function(name, args)? {
+        return Ok(Some(value));
     }
     if name == "bicdb_variadic_call" {
         if args.len() < 2 {

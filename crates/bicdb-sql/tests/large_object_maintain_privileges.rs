@@ -140,7 +140,14 @@ fn maintain_privilege_allows_analyze_but_not_reads() {
     sql.execute("RESET ROLE").unwrap();
     sql.execute("REVOKE MAINTAIN ON mt_t FROM mt").unwrap();
     sql.execute("SET ROLE mt").unwrap();
-    assert_eq!(sql.execute("ANALYZE mt_t").unwrap_err().sqlstate(), "42501");
+    // As in PostgreSQL, ANALYZE without the privilege skips the table with a
+    // WARNING instead of failing (and gathers nothing).
+    let skipped = sql.execute("ANALYZE mt_t").unwrap();
+    assert_eq!(skipped.notices.len(), 1);
+    assert_eq!(skipped.notices[0].sqlstate, "01000");
+    assert!(skipped.notices[0]
+        .message
+        .contains("permission denied to analyze \"mt_t\", skipping it"));
     sql.execute("RESET ROLE").unwrap();
     // A column grant shows that column's statistics only.
     sql.execute("GRANT SELECT (a) ON mt_t TO mt").unwrap();

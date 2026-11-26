@@ -768,9 +768,10 @@ fn postgres_catalogs_expose_common_introspection_columns() {
             )
             .unwrap()
             .rows,
+        // `public` belongs to pg_database_owner, as in PostgreSQL 15+.
         vec![vec![
             SqlValue::String("public".to_string()),
-            SqlValue::Int(10)
+            SqlValue::Int(6171)
         ]]
     );
 

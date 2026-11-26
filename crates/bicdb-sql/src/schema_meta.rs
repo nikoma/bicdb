@@ -5038,7 +5038,9 @@ pub(crate) fn routine_creation_schema_and_name(name: &str) -> (String, String) {
     if name.contains('.') {
         return (schema, bare);
     }
-    match crate::search_path::active_path().and_then(|path| path.first().cloned()) {
+    match crate::search_path::active_path()
+        .and_then(|path| crate::search_path::first_creation_schema(&path).cloned())
+    {
         Some(first) => (first, bare),
         None => (schema, bare),
     }
@@ -5049,6 +5051,11 @@ pub(crate) fn routine_schema_and_name(name: &str) -> (String, String) {
     let schema = match name.rsplit_once('.') {
         Some((schema, _)) if !schema.is_empty() => normalize_object_name(schema),
         _ => "public".to_string(),
+    };
+    // `pg_temp.f` names a routine in the session's own temporary schema.
+    let schema = match schema.as_str() {
+        "pg_temp" => crate::search_path::active_temp_schema().unwrap_or(schema),
+        _ => schema,
     };
     (schema, bare)
 }
@@ -6136,6 +6143,52 @@ impl RoutineFrameTemplate {
             params: template_params,
             output_names,
         }
+    }
+}
+
+/// PL/pgSQL assigns a string-category value to an integer variable through
+/// the integer type's input function (an I/O conversion): text `'34.5'` is
+/// invalid input, while numeric `34.5` rounds.
+pub(crate) fn routine_string_source_assignment(
+    frame: &RoutineFrame,
+    target: &RoutineAssignmentTarget,
+    source: &Expr,
+    value: SqlValue,
+) -> Result<SqlValue> {
+    // Routines of the other dialect keep their own implicit conversions.
+    if frame.oracle_procedural_evaluation || frame.oracle_statement_rollback {
+        return Ok(value);
+    }
+    let RoutineAssignmentTarget::Variable(name) = target else {
+        return Ok(value);
+    };
+    let Some(target_type) = frame
+        .assignment_types
+        .get(normalized_object_name_ref(name).as_ref())
+        .map(|schema| schema.pg_type.as_str())
+        .filter(|pg_type| matches!(*pg_type, "int2" | "int4" | "int8"))
+    else {
+        return Ok(value);
+    };
+    let source_type = routine_expr_source_type(frame, source);
+    match string_source_cast_value(&value, source_type.as_deref(), target_type) {
+        Some(result) => result,
+        None => Ok(value),
+    }
+}
+
+/// The type of a routine expression: a variable's declared type, else the
+/// expression typer's answer.
+fn routine_expr_source_type(frame: &RoutineFrame, expr: &Expr) -> Option<String> {
+    match expr {
+        Expr::Nested(inner) => routine_expr_source_type(frame, inner),
+        Expr::Identifier(ident) => frame
+            .assignment_types
+            .get(normalized_object_name_ref(&ident.value).as_ref())
+            .map(|schema| schema.pg_type.clone())
+            .or_else(|| projected_expr_pg_type(expr, None)),
+        _ if is_string_literal_expr(expr) => Some("unknown".to_string()),
+        _ => projected_expr_pg_type(expr, None),
     }
 }
 

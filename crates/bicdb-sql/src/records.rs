@@ -337,6 +337,8 @@ fn set_record_column_inner(
         value = cast_value_to_column_type(value, column_schema).map_err(|error| match error {
             error @ (SqlError::ConstraintViolation { .. }
             | SqlError::DataException { .. }
+            | SqlError::Detailed { .. }
+            | SqlError::InvalidTextRepresentation(_)
             | SqlError::OracleError { .. }) => error,
             error => SqlError::TypeMismatch {
                 table: schema.map(|schema| schema.name.clone()).unwrap_or_default(),
@@ -848,7 +850,8 @@ fn validate_prepared_checks(
                 "23514",
                 format!(
                     "new row for relation \"{}\" violates check constraint \"{}\"",
-                    table, name
+                    catalog_display_name(table),
+                    catalog_display_name(name)
                 ),
                 Some(table.to_string()),
                 None,
@@ -4361,7 +4364,8 @@ pub(crate) fn foreign_key_violation(table: &str, name: &str) -> SqlError {
         "23503",
         format!(
             "insert or update on table \"{}\" violates foreign key constraint \"{}\"",
-            table, name
+            catalog_display_name(table),
+            catalog_display_name(name)
         ),
         Some(table.to_string()),
         None,
@@ -5564,9 +5568,13 @@ pub(crate) fn storage_envelope(value: SqlValue, pg_type: Option<&str>) -> Result
     if pg_type == Some("json") {
         let text = value.to_cell();
         PgJsonText::parse(text.clone()).map_err(|_| {
-            SqlError::invalid_text_representation(
-                "json",
-                format!("invalid input syntax for type json: \"{text}\""),
+            crate::eval::json_input_errors::json_input_error_or(
+                &text,
+                false,
+                SqlError::invalid_text_representation(
+                    "json",
+                    format!("invalid input syntax for type json: \"{text}\""),
+                ),
             )
         })?;
         let stored = StoredJsonTextValue {

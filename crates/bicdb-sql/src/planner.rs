@@ -1231,6 +1231,8 @@ impl InsertValuesTemplate {
             let value = cast_value_to_column_type(value, column).map_err(|error| match error {
                 error @ (SqlError::ConstraintViolation { .. }
                 | SqlError::DataException { .. }
+                | SqlError::Detailed { .. }
+                | SqlError::InvalidTextRepresentation(_)
                 | SqlError::OracleError { .. }) => error,
                 error => SqlError::TypeMismatch {
                     table: table.to_string(),
@@ -1375,6 +1377,8 @@ impl InsertValuesTemplate {
             let value = cast_value_to_column_type(value, column).map_err(|error| match error {
                 error @ (SqlError::ConstraintViolation { .. }
                 | SqlError::DataException { .. }
+                | SqlError::Detailed { .. }
+                | SqlError::InvalidTextRepresentation(_)
                 | SqlError::OracleError { .. }) => error,
                 error => SqlError::TypeMismatch {
                     table: table.to_string(),
@@ -2149,6 +2153,18 @@ impl BoundExprScope {
                     || pg_type_from_data_type(data_type).is_ok_and(|(pg_type, _)| {
                         matches!(pg_type.as_str(), "text" | "varchar" | "bpchar" | "name")
                     })
+                    // Text to an integer type is the type's input function,
+                    // which the typed evaluator applies.
+                    || (pg_type_from_data_type(data_type).is_ok_and(|(pg_type, _)| {
+                        matches!(pg_type.as_str(), "int2" | "int4" | "int8")
+                    }) && (is_string_literal_expr(inner)
+                        || !matches!(
+                            self.known_expr_type(inner).as_deref(),
+                            Some(
+                                "int2" | "int4" | "int8" | "numeric" | "float4" | "float8"
+                                    | "bool" | "oid" | "money"
+                            )
+                        )))
                 {
                     None
                 } else {
@@ -5013,7 +5029,10 @@ pub(crate) fn namespace_catalog_row(
     Ok(virtual_row([
         ("oid", SqlValue::Int(namespace_oid(namespace))),
         ("nspname", SqlValue::String(namespace.to_string())),
-        ("nspowner", SqlValue::Int(role_oid(&owner))),
+        (
+            "nspowner",
+            SqlValue::Int(namespace_owner_oid(namespace, &owner)),
+        ),
         ("nspacl", schema_acl_value(db, namespace)?),
     ]))
 }
@@ -5699,3 +5718,16 @@ pub(crate) fn cross_join_reorderable_table_factor(relation: &TableFactor) -> boo
         _ => false,
     })
 }
+
+/// OID of a schema's owner as the catalogs show it: `public`, while still
+/// owned by the bootstrap role, belongs to `pg_database_owner` as in
+/// PostgreSQL 15 and later.
+pub(crate) fn namespace_owner_oid(namespace: &str, owner: &str) -> i64 {
+    if namespace == "public" && owner == BOOTSTRAP_ROLE_NAME {
+        PG_DATABASE_OWNER_OID
+    } else {
+        role_oid(owner)
+    }
+}
+
+pub(crate) const PG_DATABASE_OWNER_OID: i64 = 6171;

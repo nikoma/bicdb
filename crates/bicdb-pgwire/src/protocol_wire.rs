@@ -364,17 +364,46 @@ pub(crate) fn error_response_for_error(
     stream: &mut ClientStream,
     error: &PgWireError,
 ) -> Result<()> {
+    error_response_for_query_error(stream, error, None)
+}
+
+/// An error raised by the client's statement `query`: carries PostgreSQL's
+/// error position (`P`) when PostgreSQL would report one.
+pub(crate) fn error_response_for_query_error(
+    stream: &mut ClientStream,
+    error: &PgWireError,
+    query: Option<&str>,
+) -> Result<()> {
+    let position = query.and_then(|query| match error {
+        // PostgreSQL's wording first; the raw text still carries the parser's location.
+        PgWireError::Sql(error) => crate::error_position::error_position(
+            query,
+            error.sqlstate(),
+            &error.postgres_message(),
+        )
+        .or_else(|| {
+            crate::error_position::error_position(query, error.sqlstate(), &error.to_string())
+        }),
+        PgWireError::BicDb(error) => crate::error_position::error_position(
+            query,
+            bicdb_error_sqlstate(error),
+            &error.to_string(),
+        ),
+        _ => None,
+    });
     match error {
         PgWireError::Sql(error) => {
             for notice in error.notices() {
                 notice_response(stream, notice)?;
             }
+            let mut fields = error.fields();
+            fields.extend(position.map(|position| SqlErrorField::Position(position.to_string())));
             error_response_with_fields(
                 stream,
                 "ERROR",
                 error.sqlstate(),
                 &error.postgres_message(),
-                &error.fields(),
+                &fields,
             )
         }
         PgWireError::Authentication => {
@@ -405,7 +434,8 @@ pub(crate) fn error_response_for_error(
             error_response_with_fields(stream, "ERROR", "25P02", &error.to_string(), &[])
         }
         PgWireError::BicDb(error) => {
-            let fields = bicdb_error_fields(error);
+            let mut fields = bicdb_error_fields(error);
+            fields.extend(position.map(|position| SqlErrorField::Position(position.to_string())));
             error_response_with_fields(
                 stream,
                 "ERROR",
@@ -557,6 +587,14 @@ fn diagnostic_response(
             }
             SqlErrorField::Hint(value) => {
                 payload.push(b'H');
+                diagnostic_cstr(&mut payload, value);
+            }
+            SqlErrorField::Position(value) => {
+                payload.push(b'P');
+                diagnostic_cstr(&mut payload, value);
+            }
+            SqlErrorField::Context(value) => {
+                payload.push(b'W');
                 diagnostic_cstr(&mut payload, value);
             }
             SqlErrorField::Severity(_) => {}

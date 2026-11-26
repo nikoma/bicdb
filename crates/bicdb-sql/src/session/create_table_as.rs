@@ -285,8 +285,14 @@ impl SqlSession<'_> {
 
     pub(crate) fn execute_create_table_as(&mut self, request: CreateTableAs) -> Result<SqlResult> {
         self.require_transaction_write()?;
-        let table = relation_name(&request.definition.name)?;
-        let schema_name = relation_schema_name(&request.definition.name);
+        // A temporary table lives in the session's temporary schema: check
+        // and fill the relation it is created as, not the name as written.
+        let placed = self.temporary_table_target(&request.definition)?;
+        let name = placed
+            .as_ref()
+            .map_or(&request.definition.name, |placed| &placed.name);
+        let table = relation_name(name)?;
+        let schema_name = relation_schema_name(name);
         let relation_exists = load_schema(self.db_ref(), &table)?.is_some()
             || load_sequence(self.db_ref(), &table)?.is_some()
             || load_view(self.db_ref(), &table)?.is_some()

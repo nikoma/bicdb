@@ -1559,6 +1559,19 @@ pub(crate) fn cast_expr_value(
     }
     let (target_type, _) = pg_type_from_data_type(data_type)?;
     let source_type = projected_arithmetic_operand_pg_type(expr, schema);
+    // Text (or an unknown-typed literal) becomes an integer through the
+    // type's input function; only numeric sources round.
+    if matches!(target_type.as_str(), "int2" | "int4" | "int8")
+        && (is_string_literal_expr(expr)
+            || matches!(
+                projected_expr_pg_type(expr, schema).as_deref(),
+                Some("text" | "varchar" | "bpchar" | "name" | "unknown")
+            ))
+    {
+        if let Some(input) = text_input_integer_value(&value, &target_type) {
+            return input;
+        }
+    }
     if matches!(target_type.as_str(), "text" | "varchar" | "bpchar" | "name") {
         let projected_source_type = projected_expr_pg_type(expr, schema);
         if source_type.as_deref().or(projected_source_type.as_deref()) == Some("bpchar")
@@ -2165,6 +2178,7 @@ pub(crate) fn cast_value_to_user_range(
         }
     };
     if multirange {
+        pg_multirange_literal_check(&user_type.formatted_name(), &text)?;
         let ranges = parse_pg_multirange_with_policy(
             &text,
             &user_type.formatted_name(),
@@ -2587,7 +2601,10 @@ pub(crate) fn cast_value_to_domain_scalar(
         }));
         for constraint in constraints {
             let expression = parse_check_expression(&constraint.expression)?;
-            if matches!(eval_predicate_truth(&record, &expression)?, Some(false)) {
+            if matches!(
+                eval_predicate_truth(&record, &expression).map_err(hard_input_error)?,
+                Some(false)
+            ) {
                 return Err(SqlError::data_exception(
                     "23514",
                     format!(
@@ -2886,7 +2903,28 @@ pub(crate) fn apply_pg_type_modifier_with_context(
     numeric
         .with_typmod(*precision, *scale)
         .map(|value| SqlValue::String(value.to_decimal_text()))
-        .map_err(|_| SqlError::numeric_value_out_of_range("numeric field overflow"))
+        .map_err(|_| numeric_field_overflow(i32::from(*precision), i32::from(*scale)))
+}
+
+/// `numeric field overflow` with PostgreSQL's DETAIL for a NUMERIC(p,s).
+pub(crate) fn numeric_field_overflow(precision: i32, scale: i32) -> SqlError {
+    let error = SqlError::numeric_value_out_of_range("numeric field overflow");
+    let detail = if precision > scale {
+        format!(
+            "A field with precision {precision}, scale {scale} must round to an absolute value less than 10^{}.",
+            precision - scale
+        )
+    } else if precision == scale {
+        format!(
+            "A field with precision {precision}, scale {scale} must round to an absolute value less than 1."
+        )
+    } else {
+        format!(
+            "A field with precision {precision}, scale {scale} must round to an absolute value less than 10^-{}.",
+            scale - precision
+        )
+    };
+    SqlError::with_detail(error, detail)
 }
 
 /// Apply the element modifier without changing dimensions or lower bounds.
@@ -2951,6 +2989,21 @@ pub(crate) fn cast_expr_value_with_db_and_source_type(
         .or_else(|| projected_expr_pg_type(expr, schema))
         .or_else(|| projected_expr_pg_type_with_db(db, expr))
         .or_else(|| catalog_oid_alias_expr_type(expr).map(str::to_string));
+    if let Some(target) = target_pg_type
+        .as_deref()
+        .filter(|target| matches!(*target, "int2" | "int4" | "int8"))
+    {
+        if is_string_literal_expr(expr)
+            || matches!(
+                source_pg_type.as_deref(),
+                Some("text" | "varchar" | "bpchar" | "name" | "unknown")
+            )
+        {
+            if let Some(input) = text_input_integer_value(&value, target) {
+                return input;
+            }
+        }
+    }
     let internal_array_input = target_pg_type
         .as_deref()
         .is_some_and(|target| target.ends_with("[]"))

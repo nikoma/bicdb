@@ -292,8 +292,84 @@ impl<'db> SqlSession<'db> {
         Ok(existed)
     }
 
+    /// A temporary table (`CREATE TEMP TABLE t`, or `CREATE TABLE pg_temp.t`)
+    /// lives in the session's temporary schema, which is created on first
+    /// use and dropped with the session. Returns the statement with its name
+    /// placed there, or `None` for a permanent table.
+    pub(super) fn temporary_table_target(
+        &mut self,
+        create_table: &CreateTable,
+    ) -> Result<Option<CreateTable>> {
+        let parts = object_name_parts(&create_table.name);
+        let explicit_temp_schema = matches!(parts.as_slice(), [schema, _] if schema == "pg_temp");
+        let temporary = create_table.temporary || explicit_temp_schema;
+        match &create_table.on_commit {
+            Some(sqlparser::ast::OnCommit::PreserveRows) | None => {}
+            Some(_) if !temporary => {
+                return Err(SqlError::data_exception_public(
+                    "42P16",
+                    "ON COMMIT can only be used on temporary tables",
+                    None,
+                ));
+            }
+            Some(_) => {}
+        }
+        if !temporary {
+            return Ok(None);
+        }
+        let temp_schema = self.temp_schema_for_creation();
+        let table = match parts.as_slice() {
+            [table] => table.clone(),
+            [schema, table] if schema == "pg_temp" || *schema == temp_schema => table.clone(),
+            _ => {
+                return Err(SqlError::data_exception_public(
+                    "42P16",
+                    "cannot create temporary relation in non-temporary schema",
+                    None,
+                ))
+            }
+        };
+        if load_namespace(self.db_ref(), &temp_schema)?.is_none() {
+            self.create_session_namespace_if_missing(
+                NamespaceSchema {
+                    dropped: false,
+                    name: temp_schema.clone(),
+                    owner: current_user_from_gucs(&self.session_gucs),
+                },
+                true,
+            )?;
+        }
+        let mut placed = create_table.clone();
+        placed.name = ObjectName::from(vec![
+            Ident::with_quote('"', temp_schema),
+            Ident::with_quote('"', table),
+        ]);
+        Ok(Some(placed))
+    }
+
     pub(crate) fn execute_create_table(&mut self, create_table: &CreateTable) -> Result<SqlResult> {
         self.execute_create_table_with_compression(create_table, &[])
+    }
+
+    /// Registers a temporary table's ON COMMIT action once it exists.
+    fn register_temp_on_commit(&mut self, create_table: &CreateTable, table: &str) {
+        let action = match create_table.on_commit {
+            Some(sqlparser::ast::OnCommit::DeleteRows) => temp_tables::OnCommitAction::DeleteRows,
+            Some(sqlparser::ast::OnCommit::Drop) => temp_tables::OnCommitAction::Drop,
+            _ => return,
+        };
+        if let Some(temp) = self.temp_schema_name() {
+            temp_tables::register_on_commit(&temp, table, action);
+        }
+    }
+
+    /// The ON COMMIT actions run at the end of a statement that is its own
+    /// transaction (no open transaction block).
+    pub(crate) fn apply_autocommit_temp_on_commit(&mut self) -> Result<()> {
+        if self.tx.is_none() && !self.in_transaction() {
+            self.apply_temp_on_commit_actions()?;
+        }
+        Ok(())
     }
 
     pub(crate) fn execute_create_table_with_compression(
@@ -329,15 +405,22 @@ impl<'db> SqlSession<'db> {
                 super::create_table_as::CreateTableAs::from_parsed(create_table)?,
             );
         }
+        let temporary_target = self.temporary_table_target(create_table)?;
+        let create_table = temporary_target.as_ref().unwrap_or(create_table);
 
         let table = relation_name(&create_table.name)?;
         require_user_relation_name(&table)?;
         let schema_name = relation_schema_name(&create_table.name);
-        self.require_schema_create_privilege(&schema_name)?;
-        if !matches!(
-            schema_name.as_str(),
-            "public" | "pg_catalog" | "information_schema"
-        ) {
+        let temporary_schema = crate::search_path::is_temp_schema(&schema_name);
+        if !temporary_schema {
+            self.require_schema_create_privilege(&schema_name)?;
+        }
+        if !temporary_schema
+            && !matches!(
+                schema_name.as_str(),
+                "public" | "pg_catalog" | "information_schema"
+            )
+        {
             self.create_session_namespace_if_missing(
                 NamespaceSchema {
                     dropped: false,
@@ -559,11 +642,42 @@ impl<'db> SqlSession<'db> {
                     }
                 }
                 other => {
-                    constraints.extend(table_constraint_schema(
+                    let generated_check_name =
+                        matches!(other, TableConstraint::Check(check) if check.name.is_none());
+                    let mut built = table_constraint_schema(
                         &table,
                         other,
                         oracle::default_unique_null_policy(self.db_ref())?,
-                    )?);
+                    )?;
+                    if generated_check_name {
+                        // PostgreSQL: `<table>_<column>_check` when the check
+                        // reads one column, `<table>_check` otherwise, with
+                        // a number appended until the name is unused.
+                        for constraint in &mut built {
+                            if let ConstraintSchema::Check {
+                                name, expression, ..
+                            } = constraint
+                            {
+                                let base = match check_expression_single_column(expression) {
+                                    Some(column) => format!("{table}_{column}_check"),
+                                    None => format!("{table}_check"),
+                                };
+                                let taken = |candidate: &str| {
+                                    constraints
+                                        .iter()
+                                        .any(|existing| constraint_name(existing) == candidate)
+                                };
+                                let mut candidate = base.clone();
+                                let mut suffix = 0;
+                                while taken(&candidate) {
+                                    suffix += 1;
+                                    candidate = format!("{base}{suffix}");
+                                }
+                                *name = candidate;
+                            }
+                        }
+                    }
+                    constraints.extend(built);
                 }
             }
         }
@@ -586,6 +700,20 @@ impl<'db> SqlSession<'db> {
             &mut constraints,
         )?;
         reject_missing_default_operator_class(self.db_ref(), &columns, &primary_columns, "btree")?;
+        if temporary_schema {
+            // The temporary schema is searched first, so an unqualified
+            // reference to the new table's own name is a self-reference.
+            if let Some(bare) = create_table.name.0.last().and_then(|part| part.as_ident()) {
+                let bare = ident_value(bare);
+                for constraint in &mut constraints {
+                    if let ConstraintSchema::ForeignKey { foreign_table, .. } = constraint {
+                        if *foreign_table == bare {
+                            *foreign_table = table.clone();
+                        }
+                    }
+                }
+            }
+        }
         self.require_reference_privilege(&table, &constraints)?;
         for constraint in &constraints {
             if let ConstraintSchema::Unique {
@@ -699,6 +827,10 @@ impl<'db> SqlSession<'db> {
         for mut parent in parents {
             parent.inheritance_children.push(table.clone());
             self.save_session_schema(&parent)?;
+        }
+        if temporary_schema {
+            self.register_temp_on_commit(create_table, &table);
+            self.apply_autocommit_temp_on_commit()?;
         }
         Ok(SqlResult::command("CREATE TABLE"))
     }
@@ -2540,4 +2672,25 @@ pub(super) fn composite_type_replacements(
     }
 
     Ok(replacements)
+}
+
+/// The one column a CHECK expression reads, if it reads exactly one.
+fn check_expression_single_column(expression: &str) -> Option<String> {
+    let expr = parse_check_expression(expression).ok()?;
+    let mut columns = BTreeSet::new();
+    let _ = sqlparser::ast::visit_expressions(&expr, |expr| {
+        match expr {
+            Expr::Identifier(ident) => {
+                columns.insert(ident_value(ident));
+            }
+            Expr::CompoundIdentifier(parts) => {
+                if let Some(last) = parts.last() {
+                    columns.insert(ident_value(last));
+                }
+            }
+            _ => {}
+        }
+        std::ops::ControlFlow::<()>::Continue(())
+    });
+    (columns.len() == 1).then(|| columns.into_iter().next().expect("one column"))
 }

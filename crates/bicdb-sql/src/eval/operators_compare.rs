@@ -1898,7 +1898,8 @@ pub(crate) fn float_to_i64_rounded(value: f64) -> Result<i64> {
     if !value.is_finite() {
         return Err(SqlError::InvalidSql("integer out of range".to_string()));
     }
-    let rounded = value.round();
+    // float-to-integer casts round half to even (`rint`), as PostgreSQL does.
+    let rounded = value.round_ties_even();
     if rounded < i64::MIN as f64 || rounded > i64::MAX as f64 {
         return Err(SqlError::InvalidSql("integer out of range".to_string()));
     }

@@ -871,6 +871,9 @@ impl<'db> SqlSession<'db> {
             }
         }
         self.validate_row_assignments(update, &table, schema.as_deref())?;
+        if let Some(schema) = schema.as_deref() {
+            validate_integer_text_assignments(schema, &update.assignments)?;
+        }
         if let Some(schema) = schema
             .as_deref()
             .filter(|schema| !schema.requires_row_move_plan())
@@ -3316,7 +3319,10 @@ impl<'db> SqlSession<'db> {
         if let Some(value) = stored {
             return Ok(value);
         }
-        match eval_builtin_function_value(function) {
+        match self
+            .sql_engine()
+            .eval_engine_builtin_function_value(function)
+        {
             // The context-free evaluator cannot see the catalog; the session
             // can tell a missing function (42883) from an unsupported one.
             Err(SqlError::Unsupported(message)) => {
@@ -3876,6 +3882,16 @@ impl<'db> SqlSession<'db> {
             return regclass_text_value(self.db_ref(), value);
         }
         let value = self.eval_session_expr(expr)?;
+        // A routine variable or parameter casts from its declared type.
+        if let Ok((target, _)) = pg_type_from_data_type(data_type) {
+            if let Some(result) = string_source_cast_value(
+                &value,
+                self.routine_unary_operand_type(expr).as_deref(),
+                &target,
+            ) {
+                return result;
+            }
+        }
         cast_expr_value_with_db(self.db_ref(), value, expr, data_type, None)
     }
 
@@ -5180,6 +5196,7 @@ impl<'db> SqlSession<'db> {
             RoutineStmt::Null => Ok(RoutineControl::Continue),
             RoutineStmt::Assignment { target, expr } => {
                 let value = self.eval_routine_expr(frame, expr)?;
+                let value = routine_string_source_assignment(frame, target, &expr.expr, value)?;
                 self.assign_routine_value(frame, target, value)?;
                 Ok(RoutineControl::Continue)
             }
@@ -7850,7 +7867,9 @@ impl<'db> SqlSession<'db> {
                     cast_value_to_column_type(value, column_schema).map_err(
                         |error| match error {
                             error @ (SqlError::ConstraintViolation { .. }
-                            | SqlError::DataException { .. }) => error,
+                            | SqlError::DataException { .. }
+                            | SqlError::Detailed { .. }
+                            | SqlError::InvalidTextRepresentation(_)) => error,
                             error => SqlError::TypeMismatch {
                                 table: schema.name.clone(),
                                 column: column_schema.name.clone(),
@@ -8214,6 +8233,35 @@ fn check_return_next_target(has_out_parameters: bool, query: &Query) -> Result<(
             "RETURN NEXT cannot have a parameter in function with OUT parameters",
             None,
         ));
+    }
+    Ok(())
+}
+
+/// `SET int_column = '34.5'` reads the literal with the column type's input
+/// function, as an INSERT does.
+fn validate_integer_text_assignments(
+    schema: &TableSchema,
+    assignments: &[sqlparser::ast::Assignment],
+) -> Result<()> {
+    for assignment in assignments {
+        let sqlparser::ast::AssignmentTarget::ColumnName(name) = &assignment.target else {
+            continue;
+        };
+        if !is_string_literal_expr(&assignment.value) {
+            continue;
+        }
+        let column = object_name_parts(name).pop().unwrap_or_default();
+        let Some(column) = schema
+            .column(&column)
+            .filter(|column| column.user_type.is_none())
+        else {
+            continue;
+        };
+        if matches!(column.pg_type.as_str(), "int2" | "int4" | "int8") {
+            if let SqlValue::String(text) = eval_constant_expr(&assignment.value)? {
+                pg_integer_input(&text, &column.pg_type)?;
+            }
+        }
     }
     Ok(())
 }

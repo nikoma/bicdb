@@ -70,8 +70,15 @@ pub(crate) use sql_cursors::{pg_cursors_rows, PG_CURSORS_COLUMNS};
 mod set_functions;
 #[cfg(test)]
 mod subquery_scope_tests;
+mod temp_tables;
 mod transaction_defaults;
+mod vacuum_analyze;
 pub use read_only::parse_transaction_read_only;
+pub use temp_tables::{
+    drop_connection_temp_schema, drop_orphan_temp_schemas, drop_temp_on_commit_tables,
+    temp_on_commit_delete_pending, temp_on_commit_drop_pending, temp_on_commit_pending,
+    temp_schema_exists,
+};
 pub(crate) mod txn_update;
 pub(crate) mod updatable_views;
 // Glue import: bring every crate-root item (including the root's private
@@ -137,6 +144,11 @@ pub(crate) fn is_trusted_postgres_extension(name: &str) -> bool {
             | "unaccent"
             | "uuid-ossp"
     )
+}
+
+/// The temporary-object schema of backend `pid`.
+pub fn temp_schema_for_backend(pid: i32) -> String {
+    format!("pg_temp_{pid}")
 }
 
 pub fn is_protected_security_setting(name: &str) -> bool {
@@ -1178,6 +1190,10 @@ pub struct SqlSession<'db> {
     /// decision supplied by the host, never a user-settable SQL setting.
     pub(crate) app_exact_decimal_units: Option<bool>,
     pub(crate) runtime: Option<Arc<dyn SqlSessionRuntime>>,
+    /// Temporary-schema backend number of a session without a connection
+    /// runtime, assigned when it first creates a temporary table; its
+    /// temporary objects are dropped when the session ends.
+    pub(crate) embedded_temp_backend: Option<i32>,
     pub(crate) cancellation: CancellationToken,
     pub(crate) fts_limits: bicdb_core::FtsQueryLimits,
     pub(crate) tx: Option<Transaction>,
@@ -1257,6 +1273,9 @@ pub struct SqlSession<'db> {
     /// Current trigger nesting depth, bounding trigger-writes-table-with-
     /// triggers recursion (see session/row_triggers.rs).
     pub(crate) trigger_depth: usize,
+    /// Last field: drops an embedded session's temporary schema after every
+    /// other field (the transaction included) is gone.
+    pub(crate) embedded_temp_guard: Option<temp_tables::EmbeddedTempGuard>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -2604,6 +2623,8 @@ impl<'db> SqlSession<'db> {
             security_context,
             app_exact_decimal_units: None,
             runtime: None,
+            embedded_temp_backend: None,
+            embedded_temp_guard: None,
             cancellation: CancellationToken::uncancelable(),
             fts_limits: bicdb_core::FtsQueryLimits::UNLIMITED,
             tx: None,
@@ -2726,6 +2747,30 @@ impl<'db> SqlSession<'db> {
     pub fn with_cancellation(mut self, cancellation: CancellationToken) -> Self {
         self.cancellation = cancellation;
         self
+    }
+
+    /// The session's temporary-object schema, `pg_temp_<backend pid>`, for a
+    /// session served by a connection. Embedded sessions have none.
+    pub(crate) fn temp_schema_name(&self) -> Option<String> {
+        match &self.runtime {
+            Some(runtime) => Some(temp_schema_for_backend(runtime.backend_pid())),
+            None => self.embedded_temp_backend.map(temp_schema_for_backend),
+        }
+    }
+
+    /// The temporary schema for a new temporary object: a session without a
+    /// connection takes a process-unique backend number on first use.
+    pub(crate) fn temp_schema_for_creation(&mut self) -> String {
+        if self.runtime.is_none() && self.embedded_temp_backend.is_none() {
+            let backend = temp_tables::next_embedded_temp_backend();
+            self.embedded_temp_backend = Some(backend);
+            if self.exclusive {
+                self.embedded_temp_guard =
+                    Some(temp_tables::EmbeddedTempGuard::new(self.db, backend));
+            }
+        }
+        self.temp_schema_name()
+            .expect("a temporary schema exists for a connection or an embedded session")
     }
 
     pub fn with_runtime(mut self, runtime: Arc<dyn SqlSessionRuntime>) -> Self {
@@ -3330,10 +3375,20 @@ impl<'db> SqlSession<'db> {
             }
             let mut fields = BTreeMap::new();
             for (column, value) in columns.iter().zip(row) {
-                fields.insert(
-                    column.clone(),
-                    value.map(SqlValue::String).unwrap_or(SqlValue::Null),
-                );
+                // COPY text goes through each column type's input function.
+                let value = match (
+                    value,
+                    schema.as_ref().and_then(|schema| schema.column(column)),
+                ) {
+                    (Some(text), Some(target))
+                        if target.user_type.is_none()
+                            && matches!(target.pg_type.as_str(), "int2" | "int4" | "int8") =>
+                    {
+                        SqlValue::Int(pg_integer_input(&text, &target.pg_type)?)
+                    }
+                    (value, _) => value.map(SqlValue::String).unwrap_or(SqlValue::Null),
+                };
+                fields.insert(column.clone(), value);
             }
             self.apply_bulk_insert_defaults(schema.as_ref(), &defaults, idx, &mut fields)?;
             records.push(record_from_insert_fields_with_db(
@@ -3480,7 +3535,13 @@ impl<'db> SqlSession<'db> {
         self.db_ref().check_recovery_state()?;
         // Unqualified relations resolve through the session's search_path;
         // routine bodies compiled during this statement bind the same way.
-        let path = crate::search_path::binding_path(self.db_ref(), &self.session_gucs)?;
+        let temp_schema = self.temp_schema_name();
+        let _temp_scope = crate::search_path::TempSchemaScope::enter(temp_schema.as_deref());
+        let path = crate::search_path::binding_path_with_temp(
+            self.db_ref(),
+            &self.session_gucs,
+            temp_schema.as_deref(),
+        )?;
         // A statement list binds each statement just before it runs, so a
         // statement sees the path and schemas earlier statements set up.
         let per_statement = crate::search_path::statements_bound_separately(sql, path.is_some());
@@ -3518,9 +3579,10 @@ impl<'db> SqlSession<'db> {
                         for statement in statements {
                             let preprocessing_reads =
                                 session.enter_statement_catalog_reads(statement)?;
-                            let path = crate::search_path::binding_path(
+                            let path = crate::search_path::binding_path_with_temp(
                                 session.db_ref(),
                                 &session.session_gucs,
+                                temp_schema.as_deref(),
                             )?;
                             let bound = match path.as_deref() {
                                 Some(path) => crate::search_path::bind_sql_text(
@@ -3546,11 +3608,26 @@ impl<'db> SqlSession<'db> {
                 Ok(result)
             })
         };
-        let (result, recovered) = if atomic {
+        let (mut result, recovered) = if atomic {
             self.with_oracle_statement_boundary(execute)
         } else {
             (execute(self), false)
         };
+        // A statement outside a transaction block committed on its own: its
+        // temporary tables' ON COMMIT DELETE ROWS applies now.
+        // ON COMMIT DROP tables go after their transaction committed (a
+        // table with buffered writes cannot be dropped inside it).
+        if result.is_ok() && self.tx.is_none() && !self.in_transaction() {
+            if let Some(temp) = self.temp_schema_name() {
+                if temp_tables::temp_on_commit_delete_pending(&temp)
+                    || temp_tables::temp_on_commit_drop_pending(&temp)
+                {
+                    if let Err(error) = self.apply_temp_on_commit_actions() {
+                        result = Err(error);
+                    }
+                }
+            }
+        }
         self.independent_commits_observed = effects.independently_committed();
         self.independent_execution_observed = effects.independent_execution();
         self.latest_independent_sequence = effects.latest_sequence();
@@ -3847,6 +3924,10 @@ impl<'db> SqlSession<'db> {
         }
 
         if let Some(result) = self.execute_raw_catalog_compat(sql, true)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.execute_raw_vacuum_analyze(sql)? {
             return Ok(result);
         }
 
@@ -4733,6 +4814,9 @@ impl<'db> SqlSession<'db> {
                 self.rollback_guc_transaction();
                 return Err(error);
             }
+        }
+        if self.tx.is_some() {
+            self.run_temp_on_commit_actions()?;
         }
         self.pg_large_objects.clear();
         let mut committed_sequence = 0;

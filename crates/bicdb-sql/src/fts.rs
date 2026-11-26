@@ -1365,7 +1365,7 @@ fn difference_positions(left: &[u16], right: &[u16]) -> Vec<u16> {
 
 fn tsquery_syntax_error(input: &str) -> SqlError {
     // PostgreSQL reports text search input errors as syntax errors (42601).
-    SqlError::data_exception(
+    SqlError::data_exception_public(
         "42601",
         format!("syntax error in tsquery: \"{input}\""),
         Some("tsquery".to_string()),
@@ -4144,7 +4144,7 @@ impl<'a> TsVectorParser<'a> {
 }
 
 fn tsvector_syntax_error(input: &str) -> SqlError {
-    SqlError::data_exception(
+    SqlError::data_exception_public(
         "42601",
         format!("syntax error in tsvector: \"{input}\""),
         Some("tsvector".to_string()),
@@ -4152,7 +4152,7 @@ fn tsvector_syntax_error(input: &str) -> SqlError {
 }
 
 fn tsvector_position_error(input: &str) -> SqlError {
-    SqlError::data_exception(
+    SqlError::data_exception_public(
         "42601",
         format!("wrong position info in tsvector: \"{input}\""),
         Some("tsvector".to_string()),

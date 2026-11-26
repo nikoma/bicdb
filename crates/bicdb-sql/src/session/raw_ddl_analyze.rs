@@ -1564,6 +1564,9 @@ impl<'db> SqlSession<'db> {
                 if matches!(object_type, DiscardObject::ALL) {
                     self.discard_all()?;
                 }
+                if matches!(object_type, DiscardObject::ALL | DiscardObject::TEMP) {
+                    self.drop_session_temp_schema()?;
+                }
                 Ok(SqlResult::command(match object_type {
                     DiscardObject::ALL => "DISCARD ALL",
                     DiscardObject::PLANS => "DISCARD PLANS",

@@ -178,6 +178,39 @@ impl<'db> SqlEngine<'db> {
         .or_else(|| projected_expr_pg_type_with_db(self.db_ref(), expr))
     }
 
+    /// The built-in function table with this engine's database, session and
+    /// transaction: the same table row evaluation ends in, so a FROM-less
+    /// SELECT resolves every function a SELECT with FROM does.
+    pub(crate) fn eval_engine_builtin_function_value(
+        &self,
+        function: &Function,
+    ) -> Result<SqlValue> {
+        let name = object_name(&function.name)?.to_ascii_lowercase();
+        let arg_exprs = function_arg_list(function);
+        let arg_types = arg_exprs
+            .iter()
+            .map(|arg| projected_expr_pg_type(arg, None))
+            .collect::<Vec<_>>();
+        if geometric_function_pg_type(&name, &arg_types).is_some() {
+            let args = arg_exprs
+                .iter()
+                .map(|arg| self.eval_select_constant_expr(arg))
+                .collect::<Result<Vec<_>>>()?;
+            if let Some(value) = eval_geometric_function_value(&name, &args, &arg_types)? {
+                return Ok(value);
+            }
+        }
+        let result = execute_builtin_function_with_engine(
+            function,
+            Some(self.db_ref()),
+            self.security_context.as_ref(),
+            self.tx,
+            Some(&self.session_gucs),
+            Some(self),
+        )?;
+        Ok(first_result_value(result).unwrap_or(SqlValue::Null))
+    }
+
     pub(crate) fn eval_select_constant_expr(&self, expr: &Expr) -> Result<SqlValue> {
         if let Expr::Identifier(ident) = expr {
             if ident.value.eq_ignore_ascii_case("current_date") {
@@ -407,7 +440,7 @@ impl<'db> SqlEngine<'db> {
                 {
                     return Ok(value);
                 }
-                eval_builtin_function_value(function)
+                self.eval_engine_builtin_function_value(function)
             }
             // Expressions without FROM still need database/session context,
             // including catalogue predicates in VALUES-based schema checks.
@@ -3624,6 +3657,21 @@ impl<'db> SqlEngine<'db> {
             "array_positions" => return Some("int4[]".to_string()),
             "array_dims" => return Some("text".to_string()),
             _ => {}
+        }
+        {
+            let arg_types = args
+                .iter()
+                .map(|arg| self.infer_env_expr_type(arg, env))
+                .collect::<Vec<_>>();
+            if let Some(pg_type) =
+                crate::pg_functions_more::pg_function_more_result_type(bare_name, &arg_types)
+                    .or_else(|| crate::pg_number_input::pg_number_input_result_type(bare_name))
+                    .or_else(|| {
+                        crate::pg_float_text_functions::pg_float_text_result_type(bare_name)
+                    })
+            {
+                return Some(pg_type);
+            }
         }
         match name.as_str() {
             "uuidv4"

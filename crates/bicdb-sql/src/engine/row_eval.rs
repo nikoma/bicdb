@@ -1516,13 +1516,21 @@ impl<'db> SqlEngine<'db> {
                     }
                 }
                 let (scope, _) = self.bound_row_context(context.column_keys());
+                let source_type = scope.known_expr_type(expr).or_else(|| {
+                    pg_type_from_data_type(data_type)
+                        .is_ok_and(|(pg_type, _)| {
+                            matches!(pg_type.as_str(), "int2" | "int4" | "int8")
+                        })
+                        .then(|| self.infer_slot_row_expr_type(context.row_lookup.columns(), expr))
+                        .flatten()
+                });
                 cast_expr_value_with_db_and_source_type(
                     self.db_ref(),
                     value,
                     expr,
                     data_type,
                     None,
-                    scope.known_expr_type(expr),
+                    source_type,
                 )
             }
             Expr::Position { expr, r#in } => eval_position_typed_value(
@@ -2013,15 +2021,20 @@ impl<'db> SqlEngine<'db> {
             Some(&self.session_gucs),
             Some(self),
         )
-        .ok()
-        .and_then(first_result_value)
-        .ok_or_else(|| {
-            undefined_function_error(self.db_ref(), function, &arg_types).unwrap_or_else(|| {
+        .and_then(|result| {
+            first_result_value(result).ok_or_else(|| {
                 SqlError::Unsupported(format!(
                     "function {} is not supported without FROM",
                     function.name
                 ))
             })
+        })
+        // A missing function is 42883, as PostgreSQL reports it.
+        .map_err(|error| match error {
+            SqlError::Unsupported(_) => {
+                undefined_function_error(self.db_ref(), function, &arg_types).unwrap_or(error)
+            }
+            other => other,
         })
     }
 
@@ -3263,13 +3276,21 @@ impl<'db> SqlEngine<'db> {
                 }
                 let columns = row.keys().cloned().collect::<Vec<_>>();
                 let (scope, _) = self.bound_row_context(&columns);
+                let source_type = scope.known_expr_type(expr).or_else(|| {
+                    pg_type_from_data_type(data_type)
+                        .is_ok_and(|(pg_type, _)| {
+                            matches!(pg_type.as_str(), "int2" | "int4" | "int8")
+                        })
+                        .then(|| self.infer_sql_row_expr_type(row, expr))
+                        .flatten()
+                });
                 cast_expr_value_with_db_and_source_type(
                     self.db_ref(),
                     value,
                     expr,
                     data_type,
                     None,
-                    scope.known_expr_type(expr),
+                    source_type,
                 )
             }
             Expr::Position { expr, r#in } => eval_position_typed_value(
@@ -3637,15 +3658,20 @@ impl<'db> SqlEngine<'db> {
             Some(&self.session_gucs),
             Some(self),
         )
-        .ok()
-        .and_then(first_result_value)
-        .ok_or_else(|| {
-            undefined_function_error(self.db_ref(), function, &arg_types).unwrap_or_else(|| {
+        .and_then(|result| {
+            first_result_value(result).ok_or_else(|| {
                 SqlError::Unsupported(format!(
                     "function {} is not supported without FROM",
                     function.name
                 ))
             })
+        })
+        // A missing function is 42883, as PostgreSQL reports it.
+        .map_err(|error| match error {
+            SqlError::Unsupported(_) => {
+                undefined_function_error(self.db_ref(), function, &arg_types).unwrap_or(error)
+            }
+            other => other,
         })
     }
 

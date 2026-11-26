@@ -1,0 +1,56 @@
+int_lit_cast|SELECT '34.5'::int2
+int_lit_cast4|SELECT '1.5'::int4
+int_lit_cast8|SELECT '1.5'::int8
+int_lit_exp|SELECT '1e3'::int4
+int_typed|SELECT int2 '34.5'
+int_ws|SELECT ' 12 '::int4, '  -7'::int2, '+5 '::int8
+int_hex|SELECT '0x1A'::int4, '0o17'::int4, '0b101'::int4, '1_000'::int4
+int_bad_underscore|SELECT '1__0'::int4
+int_text_cast|SELECT '34.5'::text::int4
+int_numeric_round|SELECT 34.5::int2, 34.5::numeric::int4, (-2.5)::int8, 2.5::int4
+int_float_round|SELECT 34.5::float8::int4, 2.5::float8::int4
+int_insert_lit|CREATE TABLE ilit_t(a int2);INSERT INTO ilit_t VALUES ('34.5')
+int_insert_lit_ok|CREATE TABLE ilit_t2(a int4, b int8);INSERT INTO ilit_t2 VALUES (' 12 ', '0x10');INSERT INTO ilit_t2 VALUES (34.5, 2.5);SELECT * FROM ilit_t2 ORDER BY a
+int_insert_bad|CREATE TABLE ilit_t3(a int4);INSERT INTO ilit_t3 VALUES ('1e3')
+int_update_lit|CREATE TABLE ilit_t4(a int4);INSERT INTO ilit_t4 VALUES (1);UPDATE ilit_t4 SET a = '2.5'
+int_update_ok|CREATE TABLE ilit_t5(a int4);INSERT INTO ilit_t5 VALUES (1);UPDATE ilit_t5 SET a = ' 7 ';UPDATE ilit_t5 SET a = a + 2.5;SELECT * FROM ilit_t5
+int_numcol|CREATE TABLE ilit_t7(n numeric);INSERT INTO ilit_t7 VALUES (34.5);SELECT n::int4, n::int2 FROM ilit_t7
+int_valid|SELECT pg_input_is_valid('34.5', 'int2'), pg_input_is_valid(' 12 ', 'int4'), pg_input_is_valid('0x1A', 'int8'), pg_input_is_valid('1e3', 'int4')
+int_errinfo|SELECT * FROM pg_input_error_info('34.5', 'int2')
+bool_text|SELECT ' true '::bool, 'yes'::bool, 'of'::bool
+bool_bad|SELECT 'tru e'::bool
+float_lit|SELECT '1e3'::float8, ' 1.5 '::float4, '34.5'::numeric
+oc_delete|CREATE TEMP TABLE oc_d(a int) ON COMMIT DELETE ROWS;BEGIN;INSERT INTO oc_d VALUES (1),(2);SELECT count(*) FROM oc_d;COMMIT;SELECT count(*) FROM oc_d;INSERT INTO oc_d VALUES (3);SELECT count(*) FROM oc_d
+oc_drop|BEGIN;CREATE TEMP TABLE oc_x(a int) ON COMMIT DROP;INSERT INTO oc_x VALUES (1);SELECT count(*) FROM oc_x;COMMIT;SELECT count(*) FROM pg_class WHERE relname = 'oc_x'
+oc_drop_autocommit|CREATE TEMP TABLE oc_y(a int) ON COMMIT DROP;SELECT count(*) FROM pg_class WHERE relname = 'oc_y'
+oc_rollback|CREATE TEMP TABLE oc_r(a int) ON COMMIT DELETE ROWS;BEGIN;INSERT INTO oc_r VALUES (1);ROLLBACK;SELECT count(*) FROM oc_r
+tmp_func|create function pg_temp.f2_whoami() returns text as $$select 'temp'::text$$ language sql;select pg_temp.f2_whoami()
+pub_owner|SELECT pg_get_userbyid(nspowner) FROM pg_namespace WHERE nspname = 'public'
+graph_hidden|SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relname LIKE 'bicdb_graph%'
+chk_def|CREATE TABLE chk_t(c numeric, d float8, e text, i int, CHECK (c > 0), CHECK (d < 10 AND i >= 0), CHECK (e <> ''));SELECT conname, pg_get_constraintdef(oid, true) FROM pg_constraint WHERE conrelid = 'chk_t'::regclass ORDER BY 1
+view_def|CREATE TABLE vd_t(a int, b text);CREATE VIEW vd_v AS SELECT a, b FROM vd_t WHERE a > 1 ORDER BY b;SELECT pg_get_viewdef('vd_v'::regclass, true)
+part_anc|CREATE TABLE pa_p(k int) PARTITION BY RANGE (k);CREATE TABLE pa_c PARTITION OF pa_p FOR VALUES FROM (0) TO (10);SELECT count(*) FROM (SELECT pg_partition_ancestors('pa_c'::regclass)) s
+fn_div|SELECT div(9, 4), div(-9, 4), div(9.5, 2.1), div(0, 3)
+fn_div0|SELECT div(1, 0)
+fn_factorial|SELECT factorial(5), factorial(0), factorial(20)
+fn_factorial_neg|SELECT factorial(-1)
+fn_wb_float|SELECT width_bucket(5.35::float8, 0.024, 10.06, 5), width_bucket(-1::float8, 0, 10, 5), width_bucket(11::float8, 0, 10, 5), width_bucket(5::float8, 10, 0, 4)
+fn_wb_num|SELECT width_bucket(5.35, 0.024, 10.06, 5), width_bucket(10.06, 0.024, 10.06, 5), width_bucket(3.5, 5.0, 1.0, 4)
+fn_wb_err|SELECT width_bucket(1::float8, 1, 1, 5)
+fn_wb_err2|SELECT width_bucket(1.0, 0.0, 10.0, 0)
+fn_array_reverse|SELECT array_reverse(ARRAY[1,2,3]), array_reverse('{}'::int[]), array_reverse(ARRAY['a','b'])
+fn_array_sort|SELECT array_sort(ARRAY[3,1,2]), array_sort(ARRAY[3,NULL,1], true), array_sort(ARRAY[3,NULL,1], false, true)
+fn_trig|SELECT sin(1.0::float8), cos(0::float8), tan(0.5::float8), atan2(1::float8, 1::float8), pi()
+fn_trigd|SELECT sind(30), cosd(60), tand(45), cotd(45), asind(0.5), acosd(0.5), atand(1), atan2d(1, 1), sind(-90), cosd(180)
+fn_deg|SELECT degrees(pi()), radians(180)
+fn_asin_err|SELECT asin(2)
+rng_detail|select * from pg_input_error_info('(1,4', 'int4range')
+rng_elem|select * from pg_input_error_info('(4,zed)', 'int4range')
+rng_ok|SELECT '[1,5)'::int4range, '(,3]'::int4range, 'empty'::int4range, pg_input_is_valid('[1,2', 'int4range')
+rng_commas|select * from pg_input_error_info('[1,2,3]', 'int4range')
+rng_junk|select * from pg_input_error_info('[1,2] x', 'int4range')
+cidr_detail|SELECT * FROM pg_input_error_info('192.168.198.200/24', 'cidr')
+xid_range|SELECT * FROM pg_input_error_info('0xffffffffff', 'xid')
+xid8_range|SELECT * FROM pg_input_error_info('0xffffffffffffffffffff', 'xid8')
+date_now|SELECT pg_input_is_valid('now', 'date'), pg_input_is_valid('today', 'timestamp'), pg_input_is_valid('now', 'timestamptz')
+bytea_cast|SELECT '\xDeAdBeE'::bytea

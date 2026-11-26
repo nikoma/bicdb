@@ -5330,6 +5330,8 @@ fn record_from_fields_inner(
             cast_value_to_column_type(value, column_schema).map_err(|error| match error {
                 error @ (SqlError::ConstraintViolation { .. }
                 | SqlError::DataException { .. }
+                | SqlError::Detailed { .. }
+                | SqlError::InvalidTextRepresentation(_)
                 | SqlError::OracleError { .. }) => error,
                 error => SqlError::TypeMismatch {
                     table: table.to_string(),

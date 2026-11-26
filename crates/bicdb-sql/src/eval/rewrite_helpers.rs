@@ -62,11 +62,45 @@ pub(crate) fn literal_to_value(value: &ValueWithSpan) -> Result<SqlValue> {
 }
 
 pub(crate) fn typed_string_to_value(value: &TypedString) -> Result<SqlValue> {
-    cast_value(literal_to_value(&value.value)?, &value.data_type)
+    let literal = literal_to_value(&value.value)?;
+    if let Some(input) = typed_string_integer_input(&literal, &value.data_type) {
+        return input;
+    }
+    cast_value(literal, &value.data_type)
 }
 
 pub(crate) fn typed_string_to_value_with_db(db: &BicDb, value: &TypedString) -> Result<SqlValue> {
-    cast_value_with_db(db, literal_to_value(&value.value)?, &value.data_type)
+    let literal = literal_to_value(&value.value)?;
+    if let Some(input) = typed_string_integer_input(&literal, &value.data_type) {
+        return input;
+    }
+    cast_value_with_db(db, literal, &value.data_type)
+}
+
+/// `int2 '34.5'` is the type's input function applied to the literal.
+fn typed_string_integer_input(
+    literal: &SqlValue,
+    data_type: &DataType,
+) -> Option<Result<SqlValue>> {
+    let (pg_type, _) = pg_type_from_data_type(data_type).ok()?;
+    text_input_integer_value(literal, &pg_type)
+}
+
+/// A string literal (an unknown-typed constant), looking through parentheses.
+pub(crate) fn is_string_literal_expr(expr: &Expr) -> bool {
+    match expr {
+        Expr::Nested(inner) => is_string_literal_expr(inner),
+        Expr::Value(value) => matches!(
+            value.value,
+            Value::SingleQuotedString(_)
+                | Value::DoubleQuotedString(_)
+                | Value::EscapedStringLiteral(_)
+                | Value::DollarQuotedString(_)
+                | Value::TripleSingleQuotedString(_)
+                | Value::TripleDoubleQuotedString(_)
+        ),
+        _ => false,
+    }
 }
 
 pub(crate) fn json_path<'a>(value: &'a JsonValue, path: &[String]) -> Option<&'a JsonValue> {
@@ -229,6 +263,11 @@ pub(crate) fn relation_name_from_parts(parts: &[String]) -> Result<String> {
         // encoded into a physical collection name.
         [schema, table] if schema == "bicdb_projection" => Ok(format!("bicdb_projection.{table}")),
         [schema, table] if schema == "public" && direct_name(table) => Ok(table.clone()),
+        // `pg_temp` names the session's own temporary schema.
+        [schema, table] if schema == "pg_temp" => match crate::search_path::active_temp_schema() {
+            Some(temp) => relation_name_from_parts(&[temp, table.clone()]),
+            None => relation_name_from_parts(&["pg_temp_".to_string(), table.clone()]),
+        },
         [schema, table] => {
             // Core collections have no schema dimension. Encode a
             // non-public SQL schema, or a quoted public name that cannot be
@@ -532,6 +571,255 @@ pub(crate) fn rewrite_select_top_identifiers(sql: &str) -> Option<String> {
     Some(rewritten)
 }
 
+/// `SELECT pg_partition_ancestors(x)` returns a set of OIDs; it runs as
+/// `SELECT unnest(bicdb_partition_ancestor_oids(x))`, the partition itself
+/// first and then each ancestor, as PostgreSQL returns them.
+pub(crate) fn rewrite_partition_ancestor_projection(sql: &str) -> Option<String> {
+    if !sql.to_ascii_lowercase().contains("pg_partition_ancestors") {
+        return None;
+    }
+    let tokens = tokens_with_source(&sqlparser::dialect::PostgreSqlDialect {}, sql)?;
+    let code = tokens
+        .iter()
+        .enumerate()
+        .filter(|(_, (token, _))| !matches!(token, Token::Whitespace(_)))
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+    let word = |index: usize, value: &str| matches!(&tokens[index].0, Token::Word(word) if word.quote_style.is_none() && word.value.eq_ignore_ascii_case(value));
+    // Replacement text for token ranges: (start, end exclusive, text).
+    let mut edits: Vec<(usize, usize, String)> = Vec::new();
+    let mut close_after: Vec<usize> = Vec::new();
+    // `FROM pg_partition_ancestors(x)` (and `FROM a, pg_partition_ancestors(x)`):
+    // the table form, column `relid`.
+    let in_from_list = |position: usize| -> bool {
+        let mut depth = 0i32;
+        for back in (0..position).rev() {
+            let token = &tokens[code[back]].0;
+            match token {
+                Token::RParen => depth += 1,
+                Token::LParen => {
+                    if depth == 0 {
+                        return false;
+                    }
+                    depth -= 1;
+                }
+                _ if depth > 0 => {}
+                Token::Word(word) if word.quote_style.is_none() => {
+                    let value = word.value.to_ascii_lowercase();
+                    if matches!(value.as_str(), "from" | "join") {
+                        return true;
+                    }
+                    if matches!(
+                        value.as_str(),
+                        "select" | "where" | "on" | "group" | "order" | "having" | "values"
+                    ) {
+                        return false;
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    };
+    let mut from_edits: Vec<(usize, usize, String)> = Vec::new();
+    let mut from_alias_after: Vec<usize> = Vec::new();
+    for position in 0..code.len() {
+        let index = code[position];
+        let (name_start, name_end) = if word(index, "pg_catalog")
+            && code
+                .get(position + 1)
+                .is_some_and(|&next| matches!(tokens[next].0, Token::Period))
+        {
+            (position, position + 2)
+        } else {
+            (position, position)
+        };
+        let Some(&function) = code.get(name_end) else {
+            continue;
+        };
+        if !word(function, "pg_partition_ancestors")
+            || !code
+                .get(name_end + 1)
+                .is_some_and(|&next| matches!(tokens[next].0, Token::LParen))
+            || name_start == 0
+        {
+            continue;
+        }
+        let previous = &tokens[code[name_start - 1]].0;
+        let from_form = matches!(previous, Token::Word(word) if word.value.eq_ignore_ascii_case("from") || word.value.eq_ignore_ascii_case("join"))
+            || (matches!(previous, Token::Comma) && in_from_list(name_start));
+        if !from_form {
+            continue;
+        }
+        let open = code[name_end + 1];
+        let mut depth = 0usize;
+        let mut close_position = None;
+        for (offset, &candidate) in code[name_end + 1..].iter().enumerate() {
+            match tokens[candidate].0 {
+                Token::LParen => depth += 1,
+                Token::RParen => {
+                    depth -= 1;
+                    if depth == 0 {
+                        close_position = Some(name_end + 1 + offset);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        let Some(close_position) = close_position else {
+            continue;
+        };
+        // A constant relation name (`FROM pg_partition_ancestors('t')`) is
+        // the table function's own form, which returns regclass values.
+        if close_position == name_end + 3
+            && matches!(tokens[code[name_end + 2]].0, Token::SingleQuotedString(_))
+        {
+            continue;
+        }
+        let aliased = code.get(close_position + 1).is_some_and(|&next| {
+            matches!(&tokens[next].0, Token::Word(word)
+            if word.value.eq_ignore_ascii_case("as")
+                || !matches!(
+                    word.value.to_ascii_lowercase().as_str(),
+                    "where" | "join" | "on" | "group" | "order" | "limit" | "union"
+                        | "inner" | "left" | "right" | "full" | "cross" | "having"
+                        | "offset" | "except" | "intersect" | "window"
+                ))
+        });
+        from_edits.push((
+            code[name_start],
+            open,
+            "unnest(pg_catalog.bicdb_partition_ancestor_oids".to_string(),
+        ));
+        from_alias_after.push(code[close_position]);
+        if aliased {
+            from_alias_after.pop();
+            from_alias_after.push(usize::MAX - code[close_position]);
+        }
+    }
+    for position in 0..code.len() {
+        let index = code[position];
+        if !word(index, "select") {
+            continue;
+        }
+        let mut name_start = position + 1;
+        let mut name_end = name_start;
+        if code
+            .get(name_start)
+            .is_some_and(|&next| word(next, "pg_catalog"))
+            && code
+                .get(name_start + 1)
+                .is_some_and(|&next| matches!(tokens[next].0, Token::Period))
+        {
+            name_end = name_start + 2;
+        }
+        let Some(&function) = code.get(name_end) else {
+            continue;
+        };
+        if !word(function, "pg_partition_ancestors")
+            || !code
+                .get(name_end + 1)
+                .is_some_and(|&next| matches!(tokens[next].0, Token::LParen))
+        {
+            continue;
+        }
+        let open = code[name_end + 1];
+        let mut depth = 0usize;
+        let mut close = None;
+        for &candidate in &code[name_end + 1..] {
+            match tokens[candidate].0 {
+                Token::LParen => depth += 1,
+                Token::RParen => {
+                    depth -= 1;
+                    if depth == 0 {
+                        close = Some(candidate);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        let Some(close) = close else {
+            continue;
+        };
+        name_start = code[name_start];
+        edits.push((
+            name_start,
+            open,
+            "unnest(pg_catalog.bicdb_partition_ancestor_oids".to_string(),
+        ));
+        close_after.push(close);
+    }
+    if edits.is_empty() && from_edits.is_empty() {
+        return None;
+    }
+    edits.extend(from_edits);
+    let mut out = String::with_capacity(sql.len() + 64);
+    let mut index = 0;
+    while index < tokens.len() {
+        if let Some((_, end, text)) = edits.iter().find(|(start, _, _)| *start == index) {
+            out.push_str(text);
+            index = *end;
+            continue;
+        }
+        out.push_str(tokens[index].1);
+        if close_after.contains(&index) {
+            out.push(')');
+        }
+        if from_alias_after.contains(&index) {
+            out.push_str(") AS pg_partition_ancestors(relid)");
+        } else if from_alias_after.contains(&(usize::MAX - index)) {
+            out.push(')');
+        }
+        index += 1;
+    }
+    Some(out)
+}
+
+/// `pg_catalog.unnest(...)` is the built-in `unnest`, which the parser only
+/// recognizes as a table function (`FROM unnest(...)`) unqualified; psql's
+/// describe queries qualify it.
+pub(crate) fn rewrite_qualified_unnest_calls(sql: &str) -> Option<String> {
+    if !sql.to_ascii_lowercase().contains("pg_catalog.unnest") {
+        return None;
+    }
+    let tokens = tokens_with_source(&sqlparser::dialect::PostgreSqlDialect {}, sql)?;
+    let significant = |index: usize| {
+        tokens[index..]
+            .iter()
+            .position(|(token, _)| !matches!(token, Token::Whitespace(_)))
+            .map(|offset| index + offset)
+    };
+    let mut out = String::with_capacity(sql.len());
+    let mut changed = false;
+    let mut index = 0;
+    while index < tokens.len() {
+        let (token, source) = &tokens[index];
+        if let Token::Word(word) = token {
+            if word.quote_style.is_none() && word.value.eq_ignore_ascii_case("pg_catalog") {
+                let dot = index + 1;
+                if matches!(tokens.get(dot), Some((Token::Period, _))) {
+                    if let Some((Token::Word(name), _)) = tokens.get(dot + 1) {
+                        let call = significant(dot + 2);
+                        if name.quote_style.is_none()
+                            && name.value.eq_ignore_ascii_case("unnest")
+                            && call.is_some_and(|call| matches!(tokens[call].0, Token::LParen))
+                        {
+                            index = dot + 1;
+                            changed = true;
+                            continue;
+                        }
+                    }
+                }
+            }
+        }
+        out.push_str(source);
+        index += 1;
+    }
+    changed.then_some(out)
+}
+
 pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
     let mut rewritten = sql.to_string();
     let mut changed = false;
@@ -542,6 +830,16 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
     }
 
     if let Some(next) = crate::engine::flashback::rewrite_flashback_clauses(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
+    if let Some(next) = rewrite_partition_ancestor_projection(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
+    if let Some(next) = rewrite_qualified_unnest_calls(&rewritten) {
         rewritten = next;
         changed = true;
     }

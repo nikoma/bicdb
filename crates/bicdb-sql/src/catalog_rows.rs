@@ -691,9 +691,15 @@ pub(crate) fn pg_class_rows_filtered(
         let mut row = pg_class_row(
             oid,
             &table,
-            table_schema
-                .map(|schema| namespace_oid(&schema.schema_name))
-                .unwrap_or(2200),
+            // BicDB's built-in graph views are system relations: listed under
+            // pg_catalog, so psql's user listings (`\d`, `\dv`) leave them out.
+            if is_graph_view {
+                11
+            } else {
+                table_schema
+                    .map(|schema| namespace_oid(&schema.schema_name))
+                    .unwrap_or(2200)
+            },
             table_schema.map(TableSchema::row_type_oid),
             relkind,
             columns.len() as i64,
@@ -726,6 +732,14 @@ pub(crate) fn pg_class_rows_filtered(
         row.insert("relowner".to_string(), SqlValue::Int(role_oid(&owner)));
         if table_schema.is_some_and(|schema| schema.unlogged) {
             row.insert("relpersistence".to_string(), SqlValue::String("u".into()));
+        }
+        if table_schema
+            .is_some_and(|schema| crate::search_path::is_temp_schema(&schema.schema_name))
+        {
+            row.insert(
+                "relpersistence".to_string(),
+                SqlValue::String("t".to_string()),
+            );
         }
         rows.push(row);
     }
@@ -788,25 +802,29 @@ pub(crate) fn pg_class_rows_filtered(
         if oids.is_some_and(|oids| !oids.contains(&oid)) {
             continue;
         }
-        rows.push(pg_class_row(
-            oid,
-            &index_name,
-            namespace_oid(&schema_name_for_relation(&schemas, &table)),
-            None,
-            relkind,
-            primary_key_columns.len() as i64,
-            false,
-            false,
-            reltuples_for_relation(db, &table, exact_counts),
-            0,
-            false,
-            false,
-            false,
-            SqlValue::Null,
-            SqlValue::Null,
-            403,
-            false,
-            false,
+        let index_schema = schema_name_for_relation(&schemas, &table);
+        rows.push(temp_persistence(
+            &index_schema,
+            pg_class_row(
+                oid,
+                &index_name,
+                namespace_oid(&index_schema),
+                None,
+                relkind,
+                primary_key_columns.len() as i64,
+                false,
+                false,
+                reltuples_for_relation(db, &table, exact_counts),
+                0,
+                false,
+                false,
+                false,
+                SqlValue::Null,
+                SqlValue::Null,
+                403,
+                false,
+                false,
+            ),
         ));
     }
 
@@ -827,25 +845,28 @@ pub(crate) fn pg_class_rows_filtered(
         if oids.is_some_and(|oids| !oids.contains(&oid)) {
             continue;
         }
-        rows.push(pg_class_row(
-            oid,
-            &index.name,
-            namespace_oid(&index.schema_name),
-            None,
-            relkind,
-            index.relnatts,
-            false,
-            false,
-            reltuples_for_relation(db, &index.collection, exact_counts),
-            0,
-            false,
-            false,
-            false,
-            SqlValue::Null,
-            SqlValue::Null,
-            access_method_oid(&index.access_method),
-            false,
-            false,
+        rows.push(temp_persistence(
+            &index.schema_name,
+            pg_class_row(
+                oid,
+                &index.name,
+                namespace_oid(&index.schema_name),
+                None,
+                relkind,
+                index.relnatts,
+                false,
+                false,
+                reltuples_for_relation(db, &index.collection, exact_counts),
+                0,
+                false,
+                false,
+                false,
+                SqlValue::Null,
+                SqlValue::Null,
+                access_method_oid(&index.access_method),
+                false,
+                false,
+            ),
         ));
     }
 
@@ -1341,8 +1362,75 @@ pub(crate) fn pg_attribute_rows_for_attrelid(
         Some(CatalogRelationTarget::Composite(columns)) => {
             Ok(pg_attribute_rows_for_columns(attrelid, columns))
         }
-        None => Ok(Vec::new()),
+        None => Ok(index_attribute_columns(db, attrelid)?
+            .map(|columns| pg_attribute_rows_for_columns(attrelid, columns))
+            .unwrap_or_default()),
     }
+}
+
+/// The attributes of an index relation, as PostgreSQL lists them in
+/// `pg_attribute`: one per index column, named after the table column or
+/// `expr`, `expr1`, ... for expressions. `None` when the OID is no index.
+fn index_attribute_columns(db: &BicDb, index_oid: i64) -> Result<Option<Vec<ColumnSchema>>> {
+    let rows = pg_index_rows_filtered(db, None, None, Some(&BTreeSet::from([index_oid])))?;
+    let Some(row) = rows.first() else {
+        return Ok(None);
+    };
+    let Some(table_oid) = row.get("indrelid").and_then(sql_value_i64) else {
+        return Ok(None);
+    };
+    let Some(table) = table_oids(db)
+        .iter()
+        .find_map(|(name, oid)| (*oid == table_oid).then(|| name.clone()))
+    else {
+        return Ok(None);
+    };
+    let table_columns = catalog_columns_for_relation(db, &table)?;
+    let keys = row
+        .get("indkey")
+        .map(SqlValue::to_cell)
+        .unwrap_or_default()
+        .split_whitespace()
+        .filter_map(|key| key.parse::<usize>().ok())
+        .collect::<Vec<_>>();
+    let mut expressions = 0usize;
+    let columns = keys
+        .into_iter()
+        .map(|key| {
+            match key
+                .checked_sub(1)
+                .and_then(|index| table_columns.get(index))
+            {
+                Some(column) => {
+                    let mut column = column.clone();
+                    column.default_value = None;
+                    column.default_expr = None;
+                    column.default_sequence = None;
+                    column.generated_expr = None;
+                    column.identity = None;
+                    column
+                }
+                None => {
+                    let name = if expressions == 0 {
+                        "expr".to_string()
+                    } else {
+                        format!("expr{expressions}")
+                    };
+                    expressions += 1;
+                    let mut column = default_record_columns()
+                        .into_iter()
+                        .next()
+                        .expect("record columns are not empty");
+                    column.name = name;
+                    column.pg_type = "text".to_string();
+                    column.primary_key = false;
+                    column.nullable = true;
+                    column
+                }
+            }
+        })
+        .collect();
+    Ok(Some(columns))
 }
 
 pub(crate) fn pg_attribute_rows_for_attrelids(
@@ -1402,6 +1490,8 @@ pub(crate) fn pg_attribute_rows_for_attrelids(
             rows.extend(pg_attribute_rows_for_sequence(*attrelid));
         } else if let Some(columns) = composite_columns.get(attrelid) {
             rows.extend(pg_attribute_rows_for_columns(*attrelid, columns.clone()));
+        } else if let Some(columns) = index_attribute_columns(db, *attrelid)? {
+            rows.extend(pg_attribute_rows_for_columns(*attrelid, columns));
         }
     }
     Ok(rows)
@@ -4561,7 +4651,28 @@ pub(crate) fn pg_roles_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>
                 ("rolconfig", SqlValue::Null),
             ])
         })
+        .chain(std::iter::once(pg_database_owner_role_row()))
         .collect())
+}
+
+/// PostgreSQL's predefined `pg_database_owner` role (the owner of `public`):
+/// a group role, never a login.
+fn pg_database_owner_role_row() -> BTreeMap<String, SqlValue> {
+    virtual_row([
+        ("oid", SqlValue::Int(crate::planner::PG_DATABASE_OWNER_OID)),
+        ("rolname", SqlValue::String("pg_database_owner".to_string())),
+        ("rolsuper", SqlValue::Bool(false)),
+        ("rolinherit", SqlValue::Bool(true)),
+        ("rolcreaterole", SqlValue::Bool(false)),
+        ("rolcreatedb", SqlValue::Bool(false)),
+        ("rolcanlogin", SqlValue::Bool(false)),
+        ("rolreplication", SqlValue::Bool(false)),
+        ("rolbypassrls", SqlValue::Bool(false)),
+        ("rolconnlimit", SqlValue::Int(-1)),
+        ("rolpassword", SqlValue::String("********".to_string())),
+        ("rolvaliduntil", SqlValue::Null),
+        ("rolconfig", SqlValue::Null),
+    ])
 }
 
 pub(crate) fn pg_user_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
@@ -6726,7 +6837,15 @@ pub(crate) fn constraint_definition_value(
             ))
         }
         "c" => match virtual_cell(constraint, "conbin") {
-            SqlValue::String(expr) => SqlValue::String(pg_check_constraint_definition(&expr)),
+            SqlValue::String(expr) => {
+                let schema = sql_value_i64(&virtual_cell(constraint, "conrelid"))
+                    .and_then(|oid| schema_by_oid.get(&oid));
+                SqlValue::String(
+                    schema
+                        .and_then(|schema| typed_check_comparison_definition(&expr, schema))
+                        .unwrap_or_else(|| pg_check_constraint_definition(&expr)),
+                )
+            }
             _ => SqlValue::Null,
         },
         "f" => {
@@ -6916,6 +7035,101 @@ pub(crate) fn pg_generation_expression_text(expression: &str) -> String {
         .ok()
         .and_then(|expr| render(&expr))
         .unwrap_or_else(|| expression.to_string())
+}
+
+/// A CHECK of comparisons `column op constant` (joined by AND), as
+/// PostgreSQL deparses it: a constant coerced to the column's type carries
+/// the cast (`c > 0::numeric`, `t <> ''::text`). `None` for any other shape.
+pub(crate) fn typed_check_comparison_definition(
+    expression: &str,
+    schema: &TableSchema,
+) -> Option<String> {
+    fn render(expr: &Expr, schema: &TableSchema) -> Option<String> {
+        match unwrap_nested_expr(expr) {
+            Expr::BinaryOp {
+                left,
+                op: BinaryOperator::And,
+                right,
+            } => Some(format!(
+                "{} AND {}",
+                render(left, schema)?,
+                render(right, schema)?
+            )),
+            Expr::BinaryOp { left, op, right }
+                if matches!(
+                    op,
+                    BinaryOperator::Gt
+                        | BinaryOperator::GtEq
+                        | BinaryOperator::Lt
+                        | BinaryOperator::LtEq
+                        | BinaryOperator::Eq
+                        | BinaryOperator::NotEq
+                ) =>
+            {
+                let Expr::Identifier(ident) = unwrap_nested_expr(left) else {
+                    return None;
+                };
+                let column = schema.column(&ident_value(ident))?;
+                if column.user_type.is_some() {
+                    return None;
+                }
+                // A negative integer constant is the quoted integer, then the
+                // coercion: `d > '-1'::integer::double precision`.
+                if let Expr::UnaryOp {
+                    op: UnaryOperator::Minus,
+                    expr: operand,
+                } = unwrap_nested_expr(right)
+                {
+                    let Expr::Value(value) = unwrap_nested_expr(operand) else {
+                        return None;
+                    };
+                    let Value::Number(number, _) = &value.value else {
+                        return None;
+                    };
+                    if number.contains(['.', 'e', 'E']) {
+                        return None;
+                    }
+                    let coercion = match column.pg_type.as_str() {
+                        "int4" => "",
+                        "numeric" => "::numeric",
+                        "float8" => "::double precision",
+                        "float4" => "::real",
+                        _ => return None,
+                    };
+                    return Some(format!(
+                        "{} {op} '-{number}'::integer{coercion}",
+                        pg_partition_key_identifier(&column.name)
+                    ));
+                }
+                let Expr::Value(value) = unwrap_nested_expr(right) else {
+                    return None;
+                };
+                let constant = match (&value.value, column.pg_type.as_str()) {
+                    (Value::Number(number, _), "int2" | "int4" | "int8")
+                        if !number.contains(['.', 'e', 'E']) =>
+                    {
+                        number.clone()
+                    }
+                    (Value::Number(number, _), "numeric") => format!("{number}::numeric"),
+                    (Value::Number(number, _), "float8") => {
+                        format!("{number}::double precision")
+                    }
+                    (Value::Number(number, _), "float4") => format!("{number}::real"),
+                    (Value::SingleQuotedString(text), "text") => {
+                        format!("'{}'::text", text.replace('\'', "''"))
+                    }
+                    _ => return None,
+                };
+                Some(format!(
+                    "{} {op} {constant}",
+                    pg_partition_key_identifier(&column.name)
+                ))
+            }
+            _ => None,
+        }
+    }
+    let expr = parse_check_expression(expression).ok()?;
+    render(&expr, schema).map(|body| format!("CHECK ({body})"))
 }
 
 pub(crate) fn pg_check_constraint_definition(expression: &str) -> String {
@@ -8838,3 +9052,17 @@ thread_local! {
 #[cfg(test)]
 #[path = "catalog_rows/constraint_oid_tests.rs"]
 mod constraint_oid_tests;
+
+/// A relation in a temporary schema is `relpersistence = 't'`.
+fn temp_persistence(
+    schema_name: &str,
+    mut row: BTreeMap<String, SqlValue>,
+) -> BTreeMap<String, SqlValue> {
+    if crate::search_path::is_temp_schema(schema_name) {
+        row.insert(
+            "relpersistence".to_string(),
+            SqlValue::String("t".to_string()),
+        );
+    }
+    row
+}

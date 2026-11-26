@@ -283,6 +283,9 @@ mod hstore;
 mod inheritance;
 mod only_rewrite;
 mod persistence_ddl;
+mod pg_float_text_functions;
+mod pg_functions_more;
+mod pg_number_input;
 mod pg_scalar_extra;
 mod pgcrypto;
 mod quantified_operators;
@@ -2178,6 +2181,16 @@ pub enum SqlError {
     #[error(transparent)]
     Rethrown(Arc<SqlError>),
 
+    /// An error with PostgreSQL's DETAIL and HINT lines.
+    #[error("{error}")]
+    Detailed {
+        error: Box<SqlError>,
+        detail: Option<String>,
+        hint: Option<String>,
+        /// PostgreSQL's CONTEXT line (e.g. `JSON data, line 1: ...`).
+        context: Option<String>,
+    },
+
     /// Diagnostics emitted before a failing statement still belong to its caller.
     #[error("{error}")]
     WithNotices {
@@ -2283,6 +2296,31 @@ impl SqlError {
             sqlstate: "22P02",
             message: format!("invalid input syntax for type {data_type}: {detail}"),
             data_type: Some(data_type),
+        }
+    }
+
+    /// `error` with PostgreSQL's DETAIL line.
+    pub fn with_detail(error: SqlError, detail: impl Into<String>) -> Self {
+        Self::Detailed {
+            error: Box::new(error),
+            detail: Some(detail.into()),
+            hint: None,
+            context: None,
+        }
+    }
+
+    /// `error` with PostgreSQL's DETAIL, HINT and CONTEXT lines.
+    pub fn with_detail_fields(
+        error: SqlError,
+        detail: Option<String>,
+        hint: Option<String>,
+        context: Option<String>,
+    ) -> Self {
+        Self::Detailed {
+            error: Box::new(error),
+            detail,
+            hint,
+            context,
         }
     }
 
@@ -2464,6 +2502,7 @@ impl SqlError {
     pub fn sqlstate(&self) -> &str {
         match self {
             Self::WithNotices { error, .. } => error.sqlstate(),
+            Self::Detailed { error, .. } => error.sqlstate(),
             Self::OracleError { sqlstate, .. } => sqlstate,
             Self::OracleContext { inner, .. } => inner.sqlstate(),
             Self::Rethrown(error) => error.sqlstate(),
@@ -2502,6 +2541,18 @@ impl SqlError {
     pub fn fields(&self) -> Vec<SqlErrorField> {
         match self {
             Self::WithNotices { error, .. } => error.fields(),
+            Self::Detailed {
+                error,
+                detail,
+                hint,
+                context,
+            } => {
+                let mut fields = error.fields();
+                fields.extend(detail.clone().map(SqlErrorField::Detail));
+                fields.extend(hint.clone().map(SqlErrorField::Hint));
+                fields.extend(context.clone().map(SqlErrorField::Context));
+                fields
+            }
             Self::OracleError { .. } => vec![SqlErrorField::Detail(
                 oracle::errors::transport_detail(self),
             )],
@@ -2599,6 +2650,10 @@ pub enum SqlErrorField {
     Hint(String),
     /// Severity of a notice (`WARNING`); notices without it are `NOTICE`.
     Severity(String),
+    /// 1-based character position in the statement text (`P`).
+    Position(String),
+    /// PostgreSQL's CONTEXT line (`W`).
+    Context(String),
 }
 
 fn bicdb_error_sqlstate(error: &BicDbError) -> &'static str {
@@ -2702,7 +2757,9 @@ impl SqlNotice {
                     | SqlErrorField::DataType(value)
                     | SqlErrorField::Constraint(value)
                     | SqlErrorField::Hint(value)
-                    | SqlErrorField::Severity(value) => value.len(),
+                    | SqlErrorField::Severity(value)
+                    | SqlErrorField::Position(value)
+                    | SqlErrorField::Context(value) => value.len(),
                 })
                 .sum::<usize>()
     }

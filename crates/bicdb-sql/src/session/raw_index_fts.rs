@@ -257,19 +257,15 @@ impl<'db> SqlSession<'db> {
             // global operation and takes the administrative gate.
             self.require_superuser_for_admin_operation("VACUUM")?;
         }
+        // Every other VACUUM form is handled by `execute_raw_vacuum_analyze`.
         if !trimmed.eq_ignore_ascii_case("VACUUM") {
-            if trimmed.len() >= 6 && trimmed[..6].eq_ignore_ascii_case("VACUUM") {
-                return Err(SqlError::Unsupported(
-                    "only plain `VACUUM` is supported: BicDB vacuum is store-wide (per-table \
-                     and FULL/ANALYZE options do not apply)"
-                        .to_string(),
-                ));
-            }
             return Ok(None);
         }
         if self.tx.is_some() {
-            return Err(SqlError::InvalidSql(
-                "VACUUM cannot run inside a transaction".to_string(),
+            return Err(SqlError::data_exception_public(
+                "25001",
+                "VACUUM cannot run inside a transaction block",
+                None,
             ));
         }
         let cancellation = self.cancellation.clone();
@@ -1340,6 +1336,12 @@ impl<'db> SqlSession<'db> {
         select: &Select,
         query: &Query,
     ) -> Result<SqlResult> {
+        if let Some(result) = self
+            .sql_engine()
+            .execute_grouped_select_without_from(select, query)?
+        {
+            return Ok(result);
+        }
         if let Some(mut result) = self
             .sql_engine()
             .execute_projection_array_set_functions(select)?

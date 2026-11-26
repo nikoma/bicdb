@@ -381,6 +381,67 @@ pub(crate) fn drain_deferred_trigger_hooks(
     }
 }
 
+/// ON COMMIT DROP temporary tables go once their transaction commits.
+pub(crate) fn drop_committed_temp_tables(
+    server: &Arc<PgWireServer>,
+    state: &ConnectionState,
+) -> Result<()> {
+    let pid = i32::try_from(state.connection_id).unwrap_or(i32::MAX);
+    if !bicdb_sql::temp_on_commit_drop_pending(&bicdb_sql::temp_schema_for_backend(pid)) {
+        return Ok(());
+    }
+    let admission = server.try_admit_write()?;
+    let mut db = server.write_db_with_admission(&admission)?;
+    bicdb_sql::drop_temp_on_commit_tables(&mut db, pid).map_err(PgWireError::from)
+}
+
+/// The ON COMMIT actions of the connection's temporary tables, inside the
+/// committing transaction (an exclusive session: dropping a table is DDL).
+pub(crate) fn apply_temp_on_commit_hooks(
+    server: &Arc<PgWireServer>,
+    state: &mut ConnectionState,
+    cancellation: &CancellationToken,
+    tx: Transaction,
+) -> Result<Transaction> {
+    let temp =
+        bicdb_sql::temp_schema_for_backend(i32::try_from(state.connection_id).unwrap_or(i32::MAX));
+    if !bicdb_sql::temp_on_commit_delete_pending(&temp) {
+        return Ok(tx);
+    }
+    let catalog_cache = std::mem::take(&mut state.catalog_cache);
+    let ddl_undo = std::mem::take(&mut state.tx_ddl_undo);
+    let (result, pending, ddl_undo, catalog_cache) = {
+        let admission = server.try_admit_write()?;
+        let mut db = server.write_db_with_admission(&admission)?;
+        let mut session =
+            with_connection_guc_state(sql_session_for_server(server, &mut db), server, state)
+                .with_catalog_cache(catalog_cache)
+                .with_ddl_undo_log(ddl_undo)
+                .with_cancellation(cancellation.clone())
+                .with_pending_transaction(tx)
+                .with_deferred_commit();
+        let result = session.run_temp_on_commit_actions();
+        let pending = session.take_pending_transaction();
+        let ddl_undo = session.take_ddl_undo_log();
+        let catalog_cache = session.into_catalog_cache();
+        (result, pending, ddl_undo, catalog_cache)
+    };
+    state.catalog_cache = catalog_cache;
+    state.tx_ddl_undo = ddl_undo;
+    match (result, pending) {
+        (Ok(()), Some(tx)) => Ok(tx),
+        (Ok(()), None) => Err(PgWireError::Server(
+            "temporary table commit actions lost the open transaction".to_string(),
+        )),
+        (Err(error), pending) => {
+            if let Some(tx) = pending {
+                let _ = tx.rollback();
+            }
+            Err(PgWireError::from(error))
+        }
+    }
+}
+
 pub(crate) fn commit_buffered_transaction(
     server: &Arc<PgWireServer>,
     state: &mut ConnectionState,
@@ -405,7 +466,9 @@ pub(crate) fn commit_buffered_transaction(
         // Deferred constraint triggers fire first, with the transaction still
         // open; a failure here fails the COMMIT and ends the transaction
         // block, exactly as a failed statement-time check would.
-        let mut tx = match drain_deferred_trigger_hooks(server, state, cancellation, tx) {
+        let mut tx = match drain_deferred_trigger_hooks(server, state, cancellation, tx)
+            .and_then(|tx| apply_temp_on_commit_hooks(server, state, cancellation, tx))
+        {
             Ok(tx) => tx,
             Err(error) => {
                 let _ = rollback_transaction_ddl_to_len(server, state, 0);
@@ -467,6 +530,7 @@ pub(crate) fn commit_buffered_transaction(
                     committed_catalog_scopes.finish_committed_catalog_scopes(&db)?;
                     bicdb_sql::finish_committed_recycle_bin_purges(&mut db)?;
                 }
+                drop_committed_temp_tables(server, state)?;
                 return Ok(SqlResult::command("COMMIT"));
             }
             Err(error) => {
@@ -2763,7 +2827,16 @@ pub(crate) fn parse_message(
     let db = server.read_db_for_transaction_progress()?;
     let _catalog_owner = db.enter_catalog_read_access(state.tx.as_ref())?;
     state.catalog_cache.with_schema_cache(&db, || {
-        parse_message_inner(payload, server, &db, &state.session_state, &state.user)
+        parse_message_inner(
+            payload,
+            server,
+            &db,
+            &state.session_state,
+            &state.user,
+            &bicdb_sql::temp_schema_for_backend(
+                i32::try_from(state.connection_id).unwrap_or(i32::MAX),
+            ),
+        )
     })
 }
 
@@ -2773,6 +2846,7 @@ fn parse_message_inner(
     db: &BicDb,
     session_state: &SqlSessionGucState,
     user: &str,
+    temp_schema: &str,
 ) -> Result<ParsedStatementMessage> {
     let mut idx = 0;
     let name = read_cstr(payload, &mut idx)?;
@@ -2804,8 +2878,13 @@ fn parse_message_inner(
             };
         // Bind unqualified relations through the session's search_path before
         // the statement is described, as execution will.
-        bicdb_sql::search_path::bind_session_sql(db, &sql, session_state.session_gucs())?
-            .unwrap_or(sql)
+        bicdb_sql::search_path::bind_session_sql_with_temp(
+            db,
+            &sql,
+            session_state.session_gucs(),
+            Some(temp_schema),
+        )?
+        .unwrap_or(sql)
     };
     // Parse describes one prepared statement. Apply this after profile lowering
     // so Oracle routine/block bodies have their protected dollar-quoted form;

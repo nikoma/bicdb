@@ -2358,7 +2358,11 @@ fn int2_and_int4_ranges_apply_to_casts_rows_defaults_arrays_and_arithmetic() {
             "SELECT 1 WHERE -((-32768)::int2) > 0",
             "smallint out of range",
         ),
-        ("SELECT '{1,32768}'::int2[]", "smallint out of range"),
+        // Array elements go through int2's input function, which names the value.
+        (
+            "SELECT '{1,32768}'::int2[]",
+            "value \"32768\" is out of range for type smallint",
+        ),
     ] {
         let error = match session.execute(sql) {
             Ok(result) => panic!("expected integer range error for {sql}, got {result:?}"),

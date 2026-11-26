@@ -3746,6 +3746,9 @@ impl<'db> SqlEngine<'db> {
         select: &Select,
         query: &Query,
     ) -> Result<SqlResult> {
+        if let Some(result) = self.execute_grouped_select_without_from(select, query)? {
+            return Ok(result);
+        }
         if let Some(mut result) = self.execute_projection_array_set_functions(select)? {
             apply_row_limit(&mut result.rows, query)?;
             return Ok(result);
@@ -3805,5 +3808,44 @@ impl<'db> SqlEngine<'db> {
                 .with_column_types(column_types)
                 .with_column_metadata(metadata),
         )
+    }
+
+    /// A FROM-less SELECT with aggregates, GROUP BY or HAVING reads one
+    /// implicit row, exactly like PostgreSQL (`SELECT count(*)` is 1,
+    /// `SELECT count(*) WHERE false` is 0). It runs through the ordinary
+    /// grouped row pipeline over that row.
+    pub(crate) fn execute_grouped_select_without_from(
+        &self,
+        select: &Select,
+        query: &Query,
+    ) -> Result<Option<SqlResult>> {
+        if !select.from.is_empty()
+            || !(has_aggregates(&select.projection)
+                || has_group_by(select)?
+                || select.having.is_some())
+        {
+            return Ok(None);
+        }
+        static IMPLICIT_ROW_FROM: std::sync::OnceLock<TableWithJoins> = std::sync::OnceLock::new();
+        let from = IMPLICIT_ROW_FROM.get_or_init(|| {
+            let statements = sqlparser::parser::Parser::parse_sql(
+                &sqlparser::dialect::PostgreSqlDialect {},
+                "SELECT 1 FROM pg_catalog.__bicdb_implicit_row",
+            )
+            .expect("static implicit-row query parses");
+            let Some(Statement::Query(query)) = statements.into_iter().next() else {
+                unreachable!("static implicit-row query is a SELECT")
+            };
+            let SetExpr::Select(select) = *query.body else {
+                unreachable!("static implicit-row query is a SELECT")
+            };
+            select.from[0].clone()
+        });
+        let row_set = RowSet {
+            rows: vec![SlotRow::new()],
+            columns: Vec::new(),
+        };
+        self.execute_materialized_row_query(select, query, from, row_set)
+            .map(Some)
     }
 }

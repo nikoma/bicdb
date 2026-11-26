@@ -554,9 +554,19 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_raw_create_trigger(&mut self, sql: &str) -> Result<Option<SqlResult>> {
-        let Some((trigger, or_replace)) = parse_raw_create_trigger(sql)? else {
+        let Some((mut trigger, or_replace)) = parse_raw_create_trigger(sql)? else {
             return Ok(None);
         };
+        // The trigger's table binds through search_path (a temporary table
+        // first); the statement text itself is left unbound.
+        // A schema-qualified table arrives as its storage key (schema
+        // isolated, `__bicdb_s_...`), which is already bound.
+        if !trigger.table_name.contains('.') && !trigger.table_name.starts_with("__bicdb_s_") {
+            let mut bound =
+                ObjectName::from(vec![Ident::with_quote('"', trigger.table_name.clone())]);
+            crate::search_path::bind_raw_relation(self.db_ref(), &mut bound);
+            trigger.table_name = relation_name(&bound)?;
+        }
         if load_schema(self.db_ref(), &trigger.table_name)?.is_none()
             && load_view(self.db_ref(), &trigger.table_name)?.is_none()
             && user_collection_names(self.db_ref())
@@ -604,7 +614,11 @@ impl<'db> SqlSession<'db> {
                 "CREATE OR ALTER TRIGGER is not supported".to_string(),
             ));
         }
-        let table_name = relation_name(&create_trigger.table_name)?;
+        // The statement text is not bound through search_path (its body binds
+        // when it fires); its table is, so a temporary table is found first.
+        let mut bound_table = create_trigger.table_name.clone();
+        crate::search_path::bind_raw_relation(self.db_ref(), &mut bound_table);
+        let table_name = relation_name(&bound_table)?;
         if load_schema(self.db_ref(), &table_name)?.is_none()
             && load_view(self.db_ref(), &table_name)?.is_none()
             && user_collection_names(self.db_ref())
@@ -1036,6 +1050,7 @@ impl<'db> SqlSession<'db> {
                 for column in &columns {
                     ensure_schema_column(&table, schema, column)?;
                 }
+                validate_integer_text_literals(schema, &columns, source)?;
                 validate_generated_always_insert(schema, &columns, source)?;
             }
             // Stored-form INSERT (typed resident rows phase 3): the template
@@ -3969,4 +3984,56 @@ fn returning_mentions_tableoid(returning: &[SelectItem]) -> bool {
         })
         .is_break()
     })
+}
+
+/// A string literal assigned to an integer column is read by the column
+/// type's input function: `'34.5'` is invalid input, not 35.
+pub(crate) fn validate_integer_text_literals(
+    schema: &TableSchema,
+    columns: &[String],
+    source: &Query,
+) -> Result<()> {
+    let SetExpr::Values(values) = source.body.as_ref() else {
+        return Ok(());
+    };
+    let targets = columns
+        .iter()
+        .map(|column| {
+            schema
+                .column(column)
+                .filter(|column| column.user_type.is_none())
+                .map(|column| column.pg_type.as_str())
+                .filter(|pg_type| matches!(*pg_type, "int2" | "int4" | "int8"))
+        })
+        .collect::<Vec<_>>();
+    if targets.iter().all(Option::is_none) {
+        return Ok(());
+    }
+    for row in &values.rows {
+        for ((expr, target), column) in row.iter().zip(&targets).zip(columns) {
+            let Some(pg_type) = target else {
+                continue;
+            };
+            if !is_string_literal_expr(expr) {
+                continue;
+            }
+            if let SqlValue::String(text) = eval_constant_expr(expr)? {
+                // PostgreSQL's message; the table and column ride along as
+                // the error's fields, as for other assignment errors.
+                pg_integer_input(&text, pg_type).map_err(|error| {
+                    if error.sqlstate() == "22P02" {
+                        SqlError::TypeMismatch {
+                            table: catalog_display_name(&schema.name),
+                            column: column.clone(),
+                            expected: (*pg_type).to_string(),
+                            message: error.to_string(),
+                        }
+                    } else {
+                        error
+                    }
+                })?;
+            }
+        }
+    }
+    Ok(())
 }

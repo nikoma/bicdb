@@ -54,6 +54,7 @@ pub(crate) fn is_internal_sql_collection(name: &str) -> bool {
         MIGRATION_VERSION_COLLECTION,
         MIGRATION_HISTORY_COLLECTION,
         crate::session::RECYCLE_BIN_COLLECTION,
+        crate::session::partition_admission::CERTIFICATE_COLLECTION,
     ]
     .contains(&name)
         || crate::session::is_catalog_journal_collection(name)
@@ -2174,10 +2175,25 @@ pub(crate) fn schema_projected_field(field: FieldRef, schema: Option<&TableSchem
         FieldRef::JsonPath(base, path) => {
             FieldRef::JsonPath(Box::new(schema_projected_field(*base, Some(schema))), path)
         }
-        FieldRef::Cast(base, data_type) => FieldRef::Cast(
-            Box::new(schema_projected_field(*base, Some(schema))),
-            data_type,
-        ),
+        FieldRef::Cast(base, data_type) => {
+            let base = schema_projected_field(*base, Some(schema));
+            // A domain over a string type casts as its base type: by the
+            // target's input function.
+            let domain_over_string = match &base {
+                FieldRef::TypedColumn { name, .. } | FieldRef::PrimaryKey { name, .. } => schema
+                    .column(name)
+                    .and_then(|column| column.user_type.as_ref())
+                    .and_then(|user_type| user_type.information_schema_domain_base())
+                    .is_some_and(|(base_type, _)| is_string_category_source(base_type)),
+                _ => false,
+            };
+            let base = if domain_over_string {
+                FieldRef::Cast(Box::new(base), DataType::Text)
+            } else {
+                base
+            };
+            FieldRef::Cast(Box::new(base), data_type)
+        }
         other => other,
     };
     let column = match field {
@@ -2346,6 +2362,13 @@ impl FieldRef {
         let target_type = pg_type_from_data_type(data_type)
             .ok()
             .map(|(pg_type, _)| pg_type);
+        if let Some(target) = target_type.as_deref() {
+            if let Some(result) =
+                string_source_cast_value(&value, self.declared_pg_type().as_deref(), target)
+            {
+                return result;
+            }
+        }
         if matches!(
             target_type.as_deref(),
             Some("text" | "varchar" | "bpchar" | "name")
@@ -2456,6 +2479,16 @@ impl FieldRef {
             } => {
                 let Some(inner) = Self::from_expr_inner(expr)? else {
                     return Ok(None);
+                };
+                // A string literal is of unknown type, read by the target's
+                // input function as text is.
+                let inner = if is_string_literal_expr(expr)
+                    && pg_type_from_data_type(data_type).is_ok_and(|(pg_type, _)| {
+                        matches!(pg_type.as_str(), "int2" | "int4" | "int8")
+                    }) {
+                    Self::Cast(Box::new(inner), DataType::Text)
+                } else {
+                    inner
                 };
                 Self::Cast(Box::new(inner), data_type.clone())
             }

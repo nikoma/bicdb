@@ -120,6 +120,10 @@ struct Cli {
     /// Print resolved, redacted startup options without starting the server.
     #[arg(long, global = true)]
     print_effective_config: bool,
+    /// PostgreSQL `max_prepared_transactions` (default 0: PREPARE TRANSACTION
+    /// is disabled). Fixed for the life of the server.
+    #[arg(long, global = true, value_name = "N")]
+    max_prepared_transactions: Option<usize>,
     #[arg(long, value_name = "PATH", num_args = 0..=1, default_missing_value = ".")]
     tui: Option<PathBuf>,
     #[arg(long = "tui-key")]
@@ -5932,6 +5936,9 @@ fn main() -> Result<()> {
                 host_services,
             } = prepare_server_command(command)?;
             config.database_options = engine_options;
+            if let Some(max) = cli.max_prepared_transactions {
+                config.database_options.max_prepared_transactions = Some(max);
+            }
             config.validate()?;
             let mut report =
                 effective_configuration.context("missing resolved server configuration")?;
@@ -9075,6 +9082,10 @@ fn prepare_server_command(command: Command) -> Result<PreparedServer> {
                 .as_deref()
                 .map(bicdb_pgwire::ConnectorsConfig::load)
                 .transpose()?;
+            config.server_copy = bicdb_pgwire::ServerCopyConfig::new(
+                &operator.copy_server_files_dir,
+                operator.allow_copy_program,
+            )?;
             config.high_availability = replication.into_config()?;
             let host_services = cli_host_services(&operator)?;
             Ok(PreparedServer {
@@ -9405,6 +9416,16 @@ struct OperatorArgs {
     /// queues into tables (see docs/connectors.md).
     #[arg(long)]
     connectors: Option<PathBuf>,
+    /// Allow server-side COPY to read and write files below DIR (repeatable).
+    /// Without it, `COPY ... FROM/TO 'file'` is refused. Roles still need
+    /// pg_read_server_files / pg_write_server_files (see docs/server-side-copy.md).
+    #[arg(long = "copy-server-files-dir", value_name = "DIR")]
+    copy_server_files_dir: Vec<PathBuf>,
+    /// Allow `COPY ... FROM/TO PROGRAM` to run shell commands as the server's
+    /// OS user. Independent of --copy-server-files-dir; roles still need
+    /// pg_execute_server_program.
+    #[arg(long)]
+    allow_copy_program: bool,
 }
 
 fn cli_host_services(operator: &OperatorArgs) -> Result<Vec<Arc<dyn PgWireHostService>>> {

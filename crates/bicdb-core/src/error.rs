@@ -249,6 +249,14 @@ pub enum BicDbError {
 
     #[error("invalid configuration: {0}")]
     InvalidConfig(String),
+
+    /// A two-phase commit error with PostgreSQL's SQLSTATE and hint.
+    #[error("{message}")]
+    PreparedTransaction {
+        sqlstate: &'static str,
+        message: String,
+        hint: Option<String>,
+    },
 }
 
 fn commit_outcome_identity_line(

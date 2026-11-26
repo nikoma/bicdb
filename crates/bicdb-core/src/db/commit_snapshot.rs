@@ -926,6 +926,11 @@ impl BicDb {
                 // them would record every tracked change twice.
                 continue;
             }
+            if prepared_transactions::is_prepared_xacts_collection(collection) {
+                // A prepare record restates a pending write set; its data is
+                // audited when COMMIT PREPARED commits it.
+                continue;
+            }
             let collection_mode = self.collection_state(collection)?.meta.mode.clone();
             for mutation in mutations {
                 match (mutation.old_record.record()?, mutation.new_record.record()?) {
@@ -983,6 +988,10 @@ impl BicDb {
         let timestamp = unix_timestamp();
         let mut ops = Vec::new();
         for (collection, mutations) in index_mutations_by_collection {
+            if prepared_transactions::is_prepared_xacts_collection(collection) {
+                // Prepare records are local transaction state, never data.
+                continue;
+            }
             for mutation in mutations {
                 match (mutation.old_record.record()?, mutation.new_record.record()?) {
                     (_, Some(record)) => {
@@ -2729,6 +2738,31 @@ impl BicDb {
             ),
             Err(error) => eprintln!("bicdb auto-checkpoint failed (will retry): {error}"),
         }
+    }
+
+    /// Transactions (open or prepared) holding a row lock on any row of
+    /// `collection`: every uncommitted UPDATE, DELETE or INSERT of a row
+    /// holds one. Foreign-key DDL uses it as PostgreSQL's lock on the
+    /// referenced table. O(locks held); never called by ordinary DML.
+    pub fn collection_row_lock_holders(&self, collection: &str) -> BTreeSet<TransactionId> {
+        let mut holders = BTreeSet::new();
+        for shard in self.write_locks.shards.iter() {
+            for ((locked, _), owner) in shard.lock().iter() {
+                if locked == collection {
+                    holders.insert(*owner);
+                }
+            }
+        }
+        holders
+    }
+
+    /// Every transaction (open or prepared) holding at least one row lock.
+    pub fn row_lock_holders(&self) -> BTreeSet<TransactionId> {
+        let mut holders = BTreeSet::new();
+        for shard in self.write_locks.shards.iter() {
+            holders.extend(shard.lock().values().copied());
+        }
+        holders
     }
 
     pub(crate) fn ensure_no_pending_transactions(&self) -> Result<()> {

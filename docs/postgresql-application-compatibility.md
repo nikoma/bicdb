@@ -220,6 +220,15 @@ severity and SQLSTATE:
   (HEADER MATCH)` checks the header names (22P04). `COPY ... (FORMAT binary)`
   and the `BINARY` keyword read and write PostgreSQL's binary COPY format for
   built-in types; HEADER with binary is refused (42601).
+- Server-side COPY: `COPY t FROM 'file'`, `COPY t|(query) TO 'file'` and
+  `COPY ... FROM/TO PROGRAM 'command'`, with every format and option COPY
+  STDIN/STDOUT takes, PostgreSQL's privilege checks (`pg_read_server_files`,
+  `pg_write_server_files`, `pg_execute_server_program`) and its file and
+  program errors (42602, 58P01, 42809, 38000 with the exit status). It is off
+  unless the server is started with `--copy-server-files-dir DIR` (files, only
+  below DIR, no symbolic links) and, separately, `--allow-copy-program`;
+  otherwise 0A000. Only top-level client statements can use it; COPY in a
+  routine is refused. See [server-side COPY](server-side-copy.md).
 
 ## Statistics aggregates, partitions and lock privileges (2026-11)
 

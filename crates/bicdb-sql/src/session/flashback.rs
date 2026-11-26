@@ -352,14 +352,17 @@ impl<'db> SqlSession<'db> {
                 "FLASHBACK TABLE is not supported for `{table}` because it has row-level security"
             )));
         }
-        let has_foreign_key = |schema: &TableSchema| {
-            schema
-                .constraints
-                .iter()
-                .any(|constraint| matches!(constraint, ConstraintSchema::ForeignKey { .. }))
-                || !schema.temporal_foreign_keys.is_empty()
-        };
-        if has_foreign_key(&schema) {
+        // Temporal foreign keys bind a partition through its ancestors too.
+        let has_foreign_key = schema
+            .constraints
+            .iter()
+            .any(|constraint| matches!(constraint, ConstraintSchema::ForeignKey { .. }))
+            || !crate::session::temporal_keys::effective_temporal_foreign_keys(
+                self.db_ref(),
+                &schema,
+            )?
+            .is_empty();
+        if has_foreign_key {
             return Err(SqlError::Unsupported(format!(
                 "FLASHBACK TABLE is not supported for `{table}` because it has foreign keys"
             )));

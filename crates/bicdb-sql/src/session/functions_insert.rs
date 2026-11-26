@@ -1807,6 +1807,67 @@ impl<'db> SqlSession<'db> {
         if let Some(schema) = schema.filter(|_| !records.is_empty()) {
             self.reject_deferrable_conflict_arbiters(table, schema, on_conflict)?;
         }
+        // ON CONFLICT ON CONSTRAINT naming an exclusion constraint or a temporal key.
+        let records = match (on_conflict.conflict_target.as_ref(), schema) {
+            (Some(ConflictTarget::OnConstraint(name)), Some(schema)) => {
+                let name = relation_name(name)?;
+                let exclusion = schema.constraints.iter().any(|constraint| {
+                    matches!(constraint, ConstraintSchema::Exclusion { .. })
+                        && constraint_name(constraint).eq_ignore_ascii_case(&name)
+                });
+                if exclusion {
+                    if matches!(on_conflict.action, OnConflictAction::DoUpdate(_)) {
+                        return Err(SqlError::data_exception(
+                            "42809",
+                            "ON CONFLICT DO UPDATE not supported with exclusion constraints",
+                            None,
+                        ));
+                    }
+                    // DO NOTHING arbitrates that constraint alone; any other unique or
+                    // exclusion violation must still fail. Only the case where nothing else
+                    // could conflict is handled; others are refused rather than skipped.
+                    let others = !unique_arbiters_for_table(self.db_ref(), table, schema)
+                        .is_empty()
+                        || schema
+                            .constraints
+                            .iter()
+                            .filter(|constraint| {
+                                matches!(constraint, ConstraintSchema::Exclusion { .. })
+                            })
+                            .count()
+                            > 1;
+                    if others || schema.partitioning.is_some() {
+                        return Err(SqlError::RaisedException {
+                            sqlstate: "0A000".to_string(),
+                            message: "ON CONFLICT ON CONSTRAINT with an exclusion constraint is \
+                                      supported only when no other unique or exclusion \
+                                      constraint applies"
+                                .to_string(),
+                            detail: None,
+                        });
+                    }
+                    let records = self.non_conflicting_exclusion_records(
+                        table,
+                        schema,
+                        Some(&name),
+                        records,
+                    )?;
+                    let no_target = sqlparser::ast::OnConflict {
+                        conflict_target: None,
+                        action: OnConflictAction::DoNothing,
+                    };
+                    return self.execute_insert_on_conflict(
+                        table,
+                        Some(schema),
+                        records,
+                        &OnInsert::OnConflict(no_target),
+                        returning,
+                    );
+                }
+                records
+            }
+            _ => records,
+        };
         let access_table = table;
         let access_schema = schema;
         let partition_parent = schema.filter(|schema| schema.partitioning.is_some());
@@ -2962,7 +3023,70 @@ impl<'db> SqlSession<'db> {
                 break;
             }
         }
-        Ok(records)
+        // ON CONFLICT DO NOTHING without a target arbitrates exclusion constraints (and
+        // temporal keys) too.
+        self.non_conflicting_exclusion_records(table, schema, None, records)
+    }
+
+    /// `records` without those that conflict, under the exclusion constraints of `schema`
+    /// (only `only`, when given), with a current row or an earlier kept one.
+    pub(crate) fn non_conflicting_exclusion_records(
+        &self,
+        table: &str,
+        schema: &TableSchema,
+        only: Option<&str>,
+        records: Vec<Record>,
+    ) -> Result<Vec<Record>> {
+        let constraints = schema
+            .constraints
+            .iter()
+            .filter_map(|constraint| match constraint {
+                ConstraintSchema::Exclusion {
+                    name,
+                    equal_columns,
+                    range,
+                    predicate,
+                    ..
+                } if only.is_none_or(|only| name.eq_ignore_ascii_case(only)) => {
+                    Some((equal_columns, range, predicate))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        if constraints.is_empty() || records.is_empty() {
+            return Ok(records);
+        }
+        let mut compiled = Vec::with_capacity(constraints.len());
+        for (equal_columns, range, predicate) in constraints {
+            compiled.push((
+                equal_columns,
+                range,
+                crate::records::exclusion_predicate_expr(predicate)?,
+            ));
+        }
+        let existing = current_integrity_records(self.db_ref(), self.tx.as_ref(), table)?;
+        let mut kept: Vec<Record> = Vec::with_capacity(records.len());
+        'records: for record in records {
+            for (equal_columns, range, predicate) in &compiled {
+                for other in existing.iter().chain(kept.iter()) {
+                    if other.id == record.id {
+                        continue;
+                    }
+                    if crate::records::exclusion_record_pair_conflicts(
+                        schema,
+                        equal_columns,
+                        range,
+                        predicate.as_ref(),
+                        &record,
+                        other,
+                    )? {
+                        continue 'records;
+                    }
+                }
+            }
+            kept.push(record);
+        }
+        Ok(kept)
     }
 
     pub(crate) fn find_conflict_record(

@@ -100,6 +100,7 @@ pub use string_constants::{
     normalize_client_string_constants, normalize_client_string_constants_with_warnings,
 };
 mod table_queries;
+pub mod two_phase;
 pub use identity::{
     bicdb_version_banner, postgres_version_banner, BICDB_VERSION, POSTGRES_COMPATIBILITY_VERSION,
     POSTGRES_COMPATIBILITY_VERSION_NUM,
@@ -2493,6 +2494,17 @@ impl SqlError {
         }
     }
 
+    /// [`Self::coded`] for other crates: an error with a SQLSTATE and
+    /// PostgreSQL's DETAIL and HINT lines.
+    pub fn coded_public(
+        sqlstate: &'static str,
+        message: impl Into<String>,
+        detail: Option<String>,
+        hint: Option<String>,
+    ) -> Self {
+        Self::coded(sqlstate, message, detail, hint)
+    }
+
     /// Attaches `detail` to a constraint violation; other errors are returned unchanged.
     pub(crate) fn with_error_detail(self, new: ErrorDetail) -> Self {
         match self {
@@ -2697,6 +2709,9 @@ impl SqlError {
             Self::BicDb(BicDbError::CollectionNotFound(collection)) => {
                 vec![SqlErrorField::Table(collection.clone())]
             }
+            Self::BicDb(BicDbError::PreparedTransaction { hint, .. }) => {
+                hint.iter().cloned().map(SqlErrorField::Hint).collect()
+            }
             Self::BicDb(BicDbError::ReadOnlyStandby(message)) => {
                 bicdb_core::read_only_standby_hint(message)
                     .map(SqlErrorField::Hint)
@@ -2753,6 +2768,7 @@ fn bicdb_error_sqlstate(error: &BicDbError) -> &'static str {
         BicDbError::ReadOnlyStandby(_) => "25006",
         BicDbError::QueryCanceled | BicDbError::QueryTimedOut => "57014",
         BicDbError::Flashback(message) => bicdb_core::flashback_error_sqlstate(message),
+        BicDbError::PreparedTransaction { sqlstate, .. } => sqlstate,
         BicDbError::EmptyRecordId
         | BicDbError::EmptyVector
         | BicDbError::NonFiniteVectorValue
@@ -4372,6 +4388,11 @@ struct ExclusionRangeSchema {
     bounds: String,
     #[serde(default)]
     range_column: Option<String>,
+    /// Where the range element stands among the constraint's elements, which
+    /// orders the key columns of a DETAIL and of `conkey`; `None` (older
+    /// catalogs) leaves the order unknown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    position: Option<usize>,
 }
 
 fn default_exclusion_access_method() -> String {

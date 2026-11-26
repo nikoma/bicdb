@@ -1830,6 +1830,76 @@ pub(crate) fn merge_inherited_constraints(
     constraints
 }
 
+/// (constraint name, referenced table) of each validated foreign key.
+pub(crate) fn validated_foreign_key_targets(schema: &TableSchema) -> Vec<(String, String)> {
+    schema
+        .constraints
+        .iter()
+        .filter_map(|constraint| match constraint {
+            ConstraintSchema::ForeignKey {
+                name,
+                foreign_table,
+                validated: true,
+                ..
+            } => Some((name.clone(), foreign_table.clone())),
+            _ => None,
+        })
+        .collect()
+}
+
+fn other_transactions_hold_row_locks(db: &BicDb) -> bool {
+    let own = crate::statement_context::statement_transaction();
+    db.row_lock_holders()
+        .into_iter()
+        .any(|holder| Some(holder.0) != own)
+}
+
+/// PostgreSQL takes SHARE ROW EXCLUSIVE on the referenced table when a
+/// foreign key is created or validated, so it waits for every transaction
+/// with uncommitted row changes there: validating the key against committed
+/// rows while such a removal is pending would let it commit an orphan. DDL
+/// here runs under the exclusive database guard and cannot wait for those
+/// writers (they need the guard to commit), so it refuses instead.
+///
+/// Refuse (40001) while another transaction has uncommitted row changes in
+/// any referenced table of `targets` (constraint name, referenced table):
+/// validating rows against committed data now could pass rows that the
+/// pending change orphans at its commit.
+pub(crate) fn guard_foreign_key_targets(db: &BicDb, targets: &[(String, String)]) -> Result<()> {
+    if targets.is_empty() || !other_transactions_hold_row_locks(db) {
+        return Ok(());
+    }
+    let own = crate::statement_context::statement_transaction();
+    for (name, parent) in targets {
+        let (name, parent) = (name.clone(), parent.clone());
+        let mut tables = vec![parent.clone()];
+        if let Some(parent_schema) = load_schema(db, &parent)? {
+            if parent_schema.partitioning.is_some() {
+                for partition in crate::partition::physical_tables(db, &parent_schema)? {
+                    if !tables.contains(&partition.name) {
+                        tables.push(partition.name);
+                    }
+                }
+            }
+        }
+        for table in &tables {
+            let others = db
+                .collection_row_lock_holders(table)
+                .into_iter()
+                .filter(|holder| Some(holder.0) != own)
+                .count();
+            if others > 0 {
+                return Err(SqlError::BicDb(BicDbError::TransactionConflict(format!(
+                    "could not add foreign key constraint \"{}\": referenced table \"{}\" has uncommitted row changes in another transaction",
+                    catalog_display_name(&name),
+                    catalog_display_name(&parent)
+                ))));
+            }
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn prepare_schema_record(db: &mut BicDb, schema: &TableSchema) -> Result<Record> {
     let mut schema = schema.clone();
     crate::session::partition_admission::prepare_partition_descriptor(db, &mut schema)?;
@@ -2558,6 +2628,23 @@ pub fn pg_role_is_superuser(db: &BicDb, role: &str) -> Result<bool> {
         return Ok(true);
     }
     Ok(load_role_schema(db, role)?.is_some_and(|schema| schema.superuser))
+}
+
+/// PostgreSQL's `has_privs_of_role(GetUserId(), role)` for a session: the
+/// EFFECTIVE role (after `SET ROLE`) is a superuser, is `role`, or inherits
+/// `role`'s privileges through memberships. The wire layer gates server-side
+/// COPY on it (`pg_read_server_files`, `pg_write_server_files`,
+/// `pg_execute_server_program`).
+pub fn pg_session_has_privileges_of_role(
+    db: &BicDb,
+    session_gucs: &HashMap<String, String>,
+    role: &str,
+) -> Result<bool> {
+    let current = current_user_from_gucs(session_gucs);
+    if pg_role_is_superuser(db, &current)? {
+        return Ok(true);
+    }
+    Ok(role_privilege_closure(db, &current)?.contains(&normalize_role_name(role)))
 }
 
 pub fn pg_is_user_type_oid(db: &BicDb, oid: i32) -> Result<bool> {

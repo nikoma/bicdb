@@ -13,6 +13,8 @@ mod function_call;
 mod query_exec;
 mod routine_outcome_trace;
 pub(crate) use query_exec::*;
+mod server_copy;
+pub use server_copy::ServerCopyConfig;
 mod sql_parsing;
 pub(crate) use sql_parsing::*;
 mod binary_codec;
@@ -28,6 +30,7 @@ pub use distribution_controller::BalancedDistributionHostService;
 mod high_availability;
 pub use embedded_ha::{EmbeddedHaDatabase, HaWriterLease};
 mod live_queries;
+mod two_phase;
 pub use live_queries::EmbeddedSubscription;
 mod backups;
 mod log_archive;
@@ -373,6 +376,9 @@ pub struct PgWireConfig {
     pub database_options: ServerDatabaseOptions,
     /// Immutable, already-redacted CLI startup snapshot for administrator inspection.
     pub startup_configuration: Option<Arc<serde_json::Value>>,
+    /// Server-side COPY (files, programs). Off unless the operator enables it
+    /// at server start; deliberately not a SQL setting (see `server_copy`).
+    pub server_copy: ServerCopyConfig,
 }
 
 impl Default for PgWireConfig {
@@ -454,6 +460,7 @@ impl Default for PgWireConfig {
             connectors: None,
             database_options: ServerDatabaseOptions::default(),
             startup_configuration: None,
+            server_copy: ServerCopyConfig::default(),
         }
     }
 }
@@ -3036,6 +3043,23 @@ struct CopyInState {
     started_guc_transaction: bool,
     owns_serializable_transaction: bool,
     extended: bool,
+    /// Input line number of each row in `rows` (PostgreSQL's COPY CONTEXT).
+    row_lines: Vec<u64>,
+    /// Lines read so far, counted as PostgreSQL does (a header and newlines
+    /// inside quoted CSV fields count).
+    line_number: u64,
+    /// CSV: how far `pending` was scanned for the end of the record, and
+    /// whether that point is inside a quoted field.
+    csv_scanned: usize,
+    csv_in_quote: bool,
+    /// CSV: line ends inside the quoted fields of the record being read, and
+    /// whether the input ends its lines with CRLF (unknown before the first).
+    csv_embedded_lines: u64,
+    csv_eol_crlf: Option<bool>,
+    /// The columns a row fills, for "missing data for column".
+    target_columns: Vec<String>,
+    /// The relation name CONTEXT lines show (without its schema).
+    display_relation: String,
 }
 
 impl CopyInState {
@@ -3122,7 +3146,10 @@ struct CopyStatement {
     // Preserve identifier quoting when constructing metadata/export SQL.
     relation_sql: Option<String>,
     columns: Vec<String>,
+    /// `FromStdin` / `ToStdout` name the direction; `endpoint` says where the
+    /// data comes from or goes to (the client, a server file, a program).
     direction: CopyDirection,
+    endpoint: CopyEndpoint,
     format: CopyFormat,
     query: Option<String>,
     header: bool,
@@ -3140,6 +3167,17 @@ struct CopyStatement {
 enum CopyDirection {
     FromStdin,
     ToStdout,
+}
+
+/// Where COPY data comes from or goes to.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum CopyEndpoint {
+    /// `STDIN` / `STDOUT`: the client, through the COPY sub-protocol.
+    Client,
+    /// A server-side file (`COPY ... FROM/TO 'path'`), see `server_copy`.
+    File(String),
+    /// A server-side shell command (`COPY ... FROM/TO PROGRAM 'cmd'`).
+    Program(String),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -3178,6 +3216,8 @@ struct ConnectionState {
     /// Trigger `pg_notify` notifications of the open transaction, delivered
     /// to listeners when it commits.
     tx_notifications: Vec<(String, String)>,
+    /// LISTEN/UNLISTEN ran inside the open transaction block.
+    tx_listen_changed: bool,
     tx_shared_role_ddl: Vec<String>,
     committed_shared_role_ddl: Vec<String>,
     savepoints: Vec<SavepointMark>,
@@ -3308,6 +3348,7 @@ impl ConnectionState {
             tx_write_tables: FxHashSet::default(),
             tx_fixed_snapshot: false,
             tx_notifications: Vec::new(),
+            tx_listen_changed: false,
             tx_shared_role_ddl: Vec::new(),
             committed_shared_role_ddl: Vec::new(),
             savepoints: Vec::new(),
@@ -3478,6 +3519,10 @@ fn execute_server_query(
                         )?
                         .is_some()
                         || delegation::transaction_end(statement, &normalized)?.is_some()
+                        // COPY is parsed by the wire layer one statement at a
+                        // time: in a batch, the text after it would otherwise be
+                        // read as COPY options and never run.
+                        || normalized.starts_with("copy ")
                     {
                         boundaries = true;
                         break;
@@ -3490,6 +3535,7 @@ fn execute_server_query(
                         parse_copy_statement(statement)?,
                         Some(CopyStatement {
                             direction: CopyDirection::FromStdin,
+                            endpoint: CopyEndpoint::Client,
                             ..
                         })
                     ) {
@@ -3554,6 +3600,9 @@ fn execute_server_query(
     if let Some(copy) = parse_copy_statement(sql)? {
         delegation::validate_delegation(server, state)?;
         acquire_postgres_statement_snapshot(server, state, None, || true)?;
+        if copy.endpoint != CopyEndpoint::Client {
+            return server_copy::execute_server_side_copy(stream, server, state, copy);
+        }
         if let (CopyDirection::ToStdout, Some(query)) = (
             copy.direction,
             copy.query
@@ -3579,101 +3628,7 @@ fn execute_server_query(
                 if state.failed_transaction {
                     return Err(PgWireError::InFailedTransaction);
                 }
-                let owns_serializable_transaction = !state.in_transaction
-                    && !bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile)
-                    && state
-                        .session_state
-                        .default_transaction_isolation(&server.config.sql_profile)?
-                        == "serializable";
-                if owns_serializable_transaction {
-                    begin_buffered_transaction(server, state)?;
-                    if let Err(error) =
-                        acquire_postgres_statement_snapshot(server, state, None, || true)
-                    {
-                        rollback_open_transaction(server, state)?;
-                        return Err(error);
-                    }
-                }
-                let started_guc_transaction = !state.session_state.transaction_active();
-                if started_guc_transaction {
-                    state.session_state.begin_transaction();
-                }
-                let mut copy = copy;
-                // Resolve the target before entering COPY mode, as PostgreSQL does and as the
-                // session would (search_path, role): a missing relation is reported instead of
-                // CopyInResponse. Resolving it after the session had entered COPY mode left the
-                // server waiting for CopyData while the client had already seen the error and
-                // went on sending queries, so the session hung.
-                let prepared = (|| -> Result<usize> {
-                    let relation = copy.relation_sql.clone().unwrap_or_default();
-                    let describe = |state: &mut ConnectionState, sql: String| {
-                        execute_server_sql_for_describe_with_session(
-                            server,
-                            &sql,
-                            &state.session_state,
-                            state.security_context.as_ref(),
-                            &mut state.catalog_cache,
-                        )
-                    };
-                    let all_columns = describe(state, format!("SELECT * FROM {relation} LIMIT 0"))?;
-                    if copy.binary {
-                        let target = if copy.columns.is_empty() {
-                            "*".to_string()
-                        } else {
-                            copy.columns
-                                .iter()
-                                .map(|column| format!("\"{}\"", column.replace('"', "\"\"")))
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        };
-                        let described =
-                            describe(state, format!("SELECT {target} FROM {relation} LIMIT 0"))?;
-                        let db = server.read_db_for_transaction_progress()?;
-                        copy.binary_column_oids =
-                            result_column_types_with_db(&db, &described, None)?;
-                    }
-                    if copy.header_match {
-                        copy.header_expected = if copy.columns.is_empty() {
-                            all_columns.columns.clone()
-                        } else {
-                            copy.columns.clone()
-                        };
-                    }
-                    Ok(if copy.columns.is_empty() {
-                        all_columns.columns.len()
-                    } else {
-                        copy.columns.len()
-                    })
-                })();
-                let column_count = match prepared {
-                    Ok(count) => count,
-                    Err(error) => {
-                        if owns_serializable_transaction {
-                            rollback_open_transaction(server, state)?;
-                        } else if started_guc_transaction {
-                            state.session_state.rollback_transaction();
-                        }
-                        return Err(error);
-                    }
-                };
-                state.copy_in = Some(CopyInState {
-                    spec: copy,
-                    rows: Vec::new(),
-                    pending: String::new(),
-                    pending_bytes: Vec::new(),
-                    header_seen: false,
-                    binary_trailer_seen: false,
-                    resolved_columns: None,
-                    inserted_rows: 0,
-                    spill: None,
-                    started_guc_transaction,
-                    owns_serializable_transaction,
-                    extended: false,
-                });
-                if let Err(error) = enforce_persistent_connection_memory(state, &server.config) {
-                    abort_copy_in(server, state)?;
-                    return Err(error);
-                }
+                let column_count = begin_copy_in(server, state, copy)?;
                 let copy = &state
                     .copy_in
                     .as_ref()
@@ -3691,35 +3646,9 @@ fn execute_server_query(
                 }
                 let result = execute_copy_query(server, state, &copy)?;
                 copy_out_response_with_format(stream, &result, copy.binary)?;
-                if copy.header {
-                    copy_data(stream, &render_copy_header(&result.columns, copy.format))?;
-                }
-                if copy.binary {
-                    copy_data(stream, &copy_binary_header())?;
-                }
-                let db = server.read_db_for_transaction_progress()?;
-                let column_types = result_column_types_with_db(&db, &result, None)?;
-                let deadline = (!server.config.query_timeout.is_zero())
-                    .then(|| Instant::now() + server.config.query_timeout);
-                let cancellation = CancellationToken::new(state.cancel_token.clone(), deadline);
-                let mut bytes_streamed = 0_u64;
-                for (idx, row) in result.rows.iter().enumerate() {
-                    if idx % 1024 == 0 {
-                        if let Err(error) = cancellation.check() {
-                            return Err(classify_bicdb_interrupt(server, state, error));
-                        }
-                    }
-                    let payload = if copy.binary {
-                        render_copy_binary_row(&db, row, &column_types)?
-                    } else {
-                        render_copy_row(&db, row, &column_types, copy.format)?
-                    };
-                    bytes_streamed = bytes_streamed.saturating_add(payload.len() as u64);
-                    copy_data(stream, &payload)?;
-                }
-                if copy.binary {
-                    copy_data(stream, &(-1i16).to_be_bytes())?;
-                }
+                let bytes_streamed = render_copy_out(server, state, &copy, &result, |payload| {
+                    copy_data(stream, payload)
+                })?;
                 server.record_streamed_rows(result.rows.len() as u64, bytes_streamed);
                 write_message(stream, b'c', &[])?;
                 command_complete(stream, &format!("COPY {}", result.rows.len()))?;
@@ -3762,6 +3691,169 @@ fn execute_server_query(
         }
         Ok(QueryFlow::Complete)
     }
+}
+
+/// Enter COPY FROM mode for `copy`: resolve its target (as the session would)
+/// and install `state.copy_in`, opening the transaction COPY runs in. Returns
+/// the number of target columns. Shared by COPY FROM STDIN and the
+/// server-side sources (a file, a program), which feed `copy_in_data`.
+fn begin_copy_in(
+    server: &Arc<PgWireServer>,
+    state: &mut ConnectionState,
+    mut copy: CopyStatement,
+) -> Result<usize> {
+    let owns_serializable_transaction = !state.in_transaction
+        && !bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile)
+        && state
+            .session_state
+            .default_transaction_isolation(&server.config.sql_profile)?
+            == "serializable";
+    if owns_serializable_transaction {
+        begin_buffered_transaction(server, state)?;
+        if let Err(error) = acquire_postgres_statement_snapshot(server, state, None, || true) {
+            rollback_open_transaction(server, state)?;
+            return Err(error);
+        }
+    }
+    let started_guc_transaction = !state.session_state.transaction_active();
+    if started_guc_transaction {
+        state.session_state.begin_transaction();
+    }
+    // Resolve the target before entering COPY mode, as PostgreSQL does and as the
+    // session would (search_path, role): a missing relation is reported instead of
+    // CopyInResponse. Resolving it after the session had entered COPY mode left the
+    // server waiting for CopyData while the client had already seen the error and
+    // went on sending queries, so the session hung.
+    let prepared = (|| -> Result<Vec<String>> {
+        let relation = copy.relation_sql.clone().unwrap_or_default();
+        let describe = |state: &mut ConnectionState, sql: String| {
+            execute_server_sql_for_describe_with_session(
+                server,
+                &sql,
+                &state.session_state,
+                state.security_context.as_ref(),
+                &mut state.catalog_cache,
+            )
+        };
+        let all_columns = describe(state, format!("SELECT * FROM {relation} LIMIT 0"))?;
+        if copy.binary {
+            let target = if copy.columns.is_empty() {
+                "*".to_string()
+            } else {
+                copy.columns
+                    .iter()
+                    .map(|column| format!("\"{}\"", column.replace('"', "\"\"")))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            };
+            let described = describe(state, format!("SELECT {target} FROM {relation} LIMIT 0"))?;
+            let db = server.read_db_for_transaction_progress()?;
+            copy.binary_column_oids = result_column_types_with_db(&db, &described, None)?;
+        }
+        if copy.header_match {
+            copy.header_expected = if copy.columns.is_empty() {
+                all_columns.columns.clone()
+            } else {
+                copy.columns.clone()
+            };
+        }
+        Ok(if copy.columns.is_empty() {
+            all_columns.columns.clone()
+        } else {
+            copy.columns.clone()
+        })
+    })();
+    let target_columns = match prepared {
+        Ok(columns) => columns,
+        Err(error) => {
+            if owns_serializable_transaction {
+                rollback_open_transaction(server, state)?;
+            } else if started_guc_transaction {
+                state.session_state.rollback_transaction();
+            }
+            return Err(error);
+        }
+    };
+    let column_count = target_columns.len();
+    // PostgreSQL's CONTEXT names the relation without its schema.
+    let display_relation = copy
+        .relation
+        .as_deref()
+        .unwrap_or_default()
+        .rsplit('.')
+        .next()
+        .unwrap_or_default()
+        .trim_matches('"')
+        .to_string();
+    state.copy_in = Some(CopyInState {
+        spec: copy,
+        rows: Vec::new(),
+        pending: String::new(),
+        pending_bytes: Vec::new(),
+        header_seen: false,
+        binary_trailer_seen: false,
+        resolved_columns: None,
+        inserted_rows: 0,
+        spill: None,
+        started_guc_transaction,
+        owns_serializable_transaction,
+        extended: false,
+        row_lines: Vec::new(),
+        line_number: 0,
+        csv_scanned: 0,
+        csv_in_quote: false,
+        csv_embedded_lines: 0,
+        csv_eol_crlf: None,
+        target_columns,
+        display_relation,
+    });
+    if let Err(error) = enforce_persistent_connection_memory(state, &server.config) {
+        abort_copy_in(server, state)?;
+        return Err(error);
+    }
+    Ok(column_count)
+}
+
+/// Render the rows of a COPY TO result (header, rows, binary trailer) and
+/// hand each chunk to `sink`. Shared by COPY TO STDOUT and the server-side
+/// sinks (a file, a program). Returns the bytes written.
+fn render_copy_out(
+    server: &Arc<PgWireServer>,
+    state: &mut ConnectionState,
+    copy: &CopyStatement,
+    result: &SqlResult,
+    mut sink: impl FnMut(&[u8]) -> Result<()>,
+) -> Result<u64> {
+    if copy.header {
+        sink(&render_copy_header(&result.columns, copy.format))?;
+    }
+    if copy.binary {
+        sink(&copy_binary_header())?;
+    }
+    let db = server.read_db_for_transaction_progress()?;
+    let column_types = result_column_types_with_db(&db, result, None)?;
+    let deadline = (!server.config.query_timeout.is_zero())
+        .then(|| Instant::now() + server.config.query_timeout);
+    let cancellation = CancellationToken::new(state.cancel_token.clone(), deadline);
+    let mut bytes_streamed = 0_u64;
+    for (idx, row) in result.rows.iter().enumerate() {
+        if idx % 1024 == 0 {
+            if let Err(error) = cancellation.check() {
+                return Err(classify_bicdb_interrupt(server, state, error));
+            }
+        }
+        let payload = if copy.binary {
+            render_copy_binary_row(&db, row, &column_types)?
+        } else {
+            render_copy_row(&db, row, &column_types, copy.format)?
+        };
+        bytes_streamed = bytes_streamed.saturating_add(payload.len() as u64);
+        sink(&payload)?;
+    }
+    if copy.binary {
+        sink(&(-1i16).to_be_bytes())?;
+    }
+    Ok(bytes_streamed)
 }
 
 struct SqlPreparedStatementResult {
@@ -3816,6 +3908,7 @@ fn execute_sql_prepared_statement_query(
     if !(normalized.starts_with("prepare ")
         || normalized.starts_with("execute ")
         || normalized.starts_with("deallocate "))
+        || normalized.starts_with("prepare transaction ")
     {
         return Ok(None);
     }
@@ -4980,6 +5073,8 @@ fn execute_server_sql_with_options_normalized(
     {
         check_sql_credential_changes(&server.auth_path, sql)?;
     }
+    let two_phase_command =
+        bicdb_sql::two_phase::parse_two_phase_command(sql).map_err(PgWireError::from)?;
     let transaction_end = delegation::transaction_end(sql, normalized)?;
     if !matches!(
         transaction_end,
@@ -5224,6 +5319,8 @@ fn execute_server_sql_with_options_normalized(
                     Ok(SqlResult::command("SET"))
                 }
             }
+        } else if let Some(command) = two_phase_command.clone() {
+            two_phase::execute(server, state, command, &cancellation)
         } else if let Some(ending) = transaction_end {
             if matches!(
                 ending,

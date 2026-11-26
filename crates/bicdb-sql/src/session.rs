@@ -1295,6 +1295,11 @@ pub struct SqlSessionGucState {
 }
 
 impl SqlSessionGucState {
+    /// A WITH HOLD cursor was declared in the open transaction block.
+    pub fn has_transaction_hold_cursor(&self) -> bool {
+        self.sql_cursors.has_uncommitted_holdable()
+    }
+
     pub fn from_session_gucs(session_gucs: HashMap<String, String>) -> Self {
         let mut session_gucs = session_gucs;
         strip_protected_security_settings(&mut session_gucs);
@@ -3138,13 +3143,13 @@ impl<'db> SqlSession<'db> {
             .with_datestyle(self.session_gucs.get("datestyle").map(String::as_str))
     }
 
-    fn commit_guc_transaction(&mut self) {
+    pub(crate) fn commit_guc_transaction(&mut self) {
         let mut state = self.take_session_guc_state();
         state.commit_transaction();
         self.install_session_guc_state(state);
     }
 
-    fn rollback_guc_transaction(&mut self) {
+    pub(crate) fn rollback_guc_transaction(&mut self) {
         let mut state = self.take_session_guc_state();
         state.rollback_transaction();
         self.install_session_guc_state(state);
@@ -3316,12 +3321,38 @@ impl<'db> SqlSession<'db> {
         columns: &[String],
         rows: Vec<Vec<Option<String>>>,
     ) -> Result<usize> {
+        self.copy_insert_rows_at_lines(table, columns, rows, None)
+    }
+
+    /// [`Self::copy_insert_rows_reporting`] for COPY FROM input whose rows
+    /// came from these input line numbers (one per row): a value its column
+    /// type refuses fails with PostgreSQL's CONTEXT line
+    /// `COPY t, line N, column c: "value"`.
+    pub fn copy_insert_rows_reporting_at_lines(
+        &mut self,
+        table: &str,
+        columns: &[String],
+        rows: Vec<Vec<Option<String>>>,
+        lines: &[u64],
+    ) -> Result<(usize, Vec<SqlNotice>)> {
+        let effects = crate::statement_context::StatementScope::enter();
+        let result = self.copy_insert_rows_at_lines(table, columns, rows, Some(lines));
+        self.finish_reporting(&effects, result)
+    }
+
+    fn copy_insert_rows_at_lines(
+        &mut self,
+        table: &str,
+        columns: &[String],
+        rows: Vec<Vec<Option<String>>>,
+        lines: Option<&[u64]>,
+    ) -> Result<usize> {
         self.admit_partition_execution()?;
         let _case = oracle::simple_case::Scope::for_db(self.db_ref())?;
         self.require_transaction_write()?;
         self.with_implicit_guc_statement(|session| {
             session.with_statement_transaction(|session| {
-                session.copy_insert_rows_inner(table, columns, rows)
+                session.copy_insert_rows_inner(table, columns, rows, lines)
             })
         })
     }
@@ -3331,7 +3362,15 @@ impl<'db> SqlSession<'db> {
         table: &str,
         columns: &[String],
         rows: Vec<Vec<Option<String>>>,
+        lines: Option<&[u64]>,
     ) -> Result<usize> {
+        // PostgreSQL's CONTEXT names the relation without its schema.
+        let display_relation = table
+            .rsplit('.')
+            .next()
+            .unwrap_or(table)
+            .trim_matches('"')
+            .to_string();
         // A COPY target keeps its schema qualifier (pgwire no longer
         // collapses it), so apply the SAME schema->physical encoding
         // INSERT/SELECT use before resolving. Without this the qualifier
@@ -3376,6 +3415,9 @@ impl<'db> SqlSession<'db> {
                     row.len()
                 )));
             }
+            let line = lines.and_then(|lines| lines.get(idx).copied());
+            // Kept only to name the refused value in the error's CONTEXT.
+            let original = line.map(|_| row.clone());
             let mut fields = BTreeMap::new();
             for (column, value) in columns.iter().zip(row) {
                 // COPY text goes through each column type's input function.
@@ -3387,19 +3429,38 @@ impl<'db> SqlSession<'db> {
                         if target.user_type.is_none()
                             && matches!(target.pg_type.as_str(), "int2" | "int4" | "int8") =>
                     {
-                        SqlValue::Int(pg_integer_input(&text, &target.pg_type)?)
+                        SqlValue::Int(pg_integer_input(&text, &target.pg_type).map_err(
+                            |error| match line {
+                                Some(line) => copy_value_error(
+                                    error,
+                                    &display_relation,
+                                    line,
+                                    &target.name,
+                                    &text,
+                                ),
+                                None => error,
+                            },
+                        )?)
                     }
                     (value, _) => value.map(SqlValue::String).unwrap_or(SqlValue::Null),
                 };
                 fields.insert(column.clone(), value);
             }
             self.apply_bulk_insert_defaults(schema.as_ref(), &defaults, idx, &mut fields)?;
-            records.push(record_from_insert_fields_with_db(
-                self.db_ref(),
-                &table,
-                schema.as_ref(),
-                fields,
-            )?);
+            records.push(
+                record_from_insert_fields_with_db(self.db_ref(), &table, schema.as_ref(), fields)
+                    .map_err(|error| match (line, original.as_deref()) {
+                    (Some(line), Some(original)) => copy_row_conversion_error(
+                        error,
+                        &display_relation,
+                        line,
+                        schema.as_ref(),
+                        &columns,
+                        original,
+                    ),
+                    _ => error,
+                })?,
+            );
         }
         if let Some(parent) = schema
             .as_ref()
@@ -3910,8 +3971,14 @@ impl<'db> SqlSession<'db> {
 
     pub(crate) fn execute_inner(&mut self, sql: &str) -> Result<SqlResult> {
         self.cancellation.check()?;
+        let _statement_transaction = crate::statement_context::StatementTransactionScope::enter(
+            self.tx.as_ref().or(self.parent_tx).map(|tx| tx.id().0),
+        );
         if sql_has_no_statements(sql) {
             return Ok(SqlResult::empty(Vec::new()));
+        }
+        if let Some(command) = crate::two_phase::parse_two_phase_command(sql)? {
+            return self.execute_two_phase(command);
         }
         if leading_keyword_bypasses_raw_probes(sql) {
             return self.execute_parsed_sql(sql);
@@ -6848,6 +6915,7 @@ impl<'db> SqlSession<'db> {
                 Ok(())
             }
             "role" => self.apply_set_role("none"),
+            "max_prepared_transactions" => Err(restart_only_setting(&setting)),
             "session_authorization" => self.apply_set_session_authorization(None),
             INITIAL_SESSION_AUTHORIZATION_GUC
             | RLS_CHECK_AS_GUC
@@ -7823,4 +7891,86 @@ pub(crate) fn statement_is_plain_query(statement: &Statement) -> bool {
         }
     }
     plain(query)
+}
+
+/// PostgreSQL's error for a postmaster-context setting such as
+/// `max_prepared_transactions`.
+pub(crate) fn restart_only_setting(setting: &str) -> SqlError {
+    SqlError::data_exception(
+        "55P02",
+        format!("parameter \"{setting}\" cannot be changed without restarting the server"),
+        None,
+    )
+}
+
+/// PostgreSQL's `limit_printout_length`: COPY CONTEXT shows at most 100
+/// bytes of a value or line, then `...`.
+pub fn copy_context_printout(value: &str) -> String {
+    const MAX: usize = 100;
+    if value.len() <= MAX {
+        return value.to_string();
+    }
+    let mut end = MAX;
+    while !value.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}...", &value[..end])
+}
+
+/// `error` (a column type refusing a COPY value) with PostgreSQL's CONTEXT.
+fn copy_value_error(
+    error: SqlError,
+    relation: &str,
+    line: u64,
+    column: &str,
+    value: &str,
+) -> SqlError {
+    SqlError::with_detail_fields(
+        error,
+        None,
+        None,
+        Some(format!(
+            "COPY {relation}, line {line}, column {column}: \"{}\"",
+            copy_context_printout(value)
+        )),
+    )
+}
+
+/// A COPY row whose conversion to a record failed: find the value its
+/// column's input function refuses and report that error as PostgreSQL
+/// does (its own message, with `COPY t, line N, column c: "value"`). Other
+/// failures are returned unchanged.
+fn copy_row_conversion_error(
+    error: SqlError,
+    relation: &str,
+    line: u64,
+    schema: Option<&TableSchema>,
+    columns: &[String],
+    row: &[Option<String>],
+) -> SqlError {
+    let Some(schema) = schema else {
+        return error;
+    };
+    for (column, value) in columns.iter().zip(row) {
+        let (Some(value), Some(target)) = (value, schema.column(column)) else {
+            continue;
+        };
+        if let Err(refused) = cast_value_to_column_type(SqlValue::String(value.clone()), target) {
+            // The record path wraps a bare input error in "column ... expects
+            // type ..."; PostgreSQL reports the input function's own error.
+            let base = match (&error, refused) {
+                (
+                    SqlError::TypeMismatch { .. },
+                    refused @ (SqlError::ConstraintViolation { .. }
+                    | SqlError::DataException { .. }),
+                ) => refused,
+                (SqlError::TypeMismatch { .. }, refused) => {
+                    SqlError::coded("22P02", refused.to_string(), None, None)
+                }
+                _ => error,
+            };
+            return copy_value_error(base, relation, line, &target.name, value);
+        }
+    }
+    error
 }

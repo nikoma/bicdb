@@ -759,6 +759,7 @@ impl<'db> SqlSession<'db> {
                         "relation is not a partition of this parent".into(),
                     ));
                 }
+                self.detach_temporal_foreign_keys(&mut partition)?;
                 partition.partition_of = None;
                 // Its indexes stay, detached from the parent's indexes.
                 for index in &mut partition.indexes {
@@ -1324,6 +1325,7 @@ impl<'db> SqlSession<'db> {
                 Ok(())
             }
             "role" => self.apply_set_role(&value.to_cell()),
+            "max_prepared_transactions" => Err(restart_only_setting(&setting)),
             "session_authorization" => self.apply_set_session_authorization(Some(&value.to_cell())),
             // Reserved identity plumbing; forging either would allow RLS or
             // SET SESSION AUTHORIZATION privilege escalation.

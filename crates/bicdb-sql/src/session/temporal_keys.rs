@@ -56,6 +56,7 @@ pub(crate) struct TemporalForeignKeyDef {
     on_delete: Option<String>,
     on_update: Option<String>,
     deferrable: bool,
+    initially_deferred: bool,
 }
 
 /// A stored temporal foreign key. `columns` and `referred_columns` are the equality parts.
@@ -67,6 +68,191 @@ pub(crate) struct TemporalForeignKey {
     pub(crate) foreign_table: String,
     pub(crate) referred_columns: Vec<String>,
     pub(crate) referred_period: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) deferrable: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) initially_deferred: bool,
+    /// The identity SET CONSTRAINTS timing and queued deferred checks refer to.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub(crate) constraint_id: String,
+}
+
+impl TemporalForeignKey {
+    /// Whether this key's checks wait for the end of `tx` (or SET CONSTRAINTS IMMEDIATE).
+    pub(crate) fn is_deferred(&self, tx: Option<&Transaction>) -> bool {
+        self.deferrable
+            && !self.constraint_id.is_empty()
+            && tx.is_some_and(|tx| {
+                tx.constraint_deferred(&self.constraint_id)
+                    .unwrap_or(self.initially_deferred)
+            })
+    }
+}
+
+/// `table` and its partition ancestors, nearest first.
+pub(crate) fn partition_lineage(db: &BicDb, table: &str) -> Result<Vec<String>> {
+    let mut lineage = vec![table.to_string()];
+    let mut link = load_schema_shared(db, table)?.and_then(|schema| schema.partition_of.clone());
+    while let Some(parent) = link {
+        if lineage.contains(&parent.parent_table) {
+            return Err(SqlError::InvalidSql("cyclic partition tree".into()));
+        }
+        lineage.push(parent.parent_table.clone());
+        link = load_schema_shared(db, &parent.parent_table)?
+            .and_then(|schema| schema.partition_of.clone());
+    }
+    Ok(lineage)
+}
+
+/// The tables whose rows include rows of `table`, or whose rows `table` includes: its
+/// partition ancestors and, when it is partitioned, its partitions. A key referencing any of
+/// them concerns writes to `table`.
+pub(crate) fn partition_relatives(db: &BicDb, table: &str) -> Result<Vec<String>> {
+    let mut relatives = partition_lineage(db, table)?;
+    if let Some(schema) = load_schema_shared(db, table)? {
+        if schema.partitioning.is_some() {
+            for partition in partition::physical_tables(db, &schema)?.into_iter().skip(1) {
+                if !relatives.contains(&partition.name) {
+                    relatives.push(partition.name);
+                }
+            }
+        }
+    }
+    Ok(relatives)
+}
+
+/// The temporal foreign keys a row of `schema` must satisfy: its own and those its
+/// partition ancestors declare (a partition holds the rows of its parents).
+pub(crate) fn effective_temporal_foreign_keys(
+    db: &BicDb,
+    schema: &TableSchema,
+) -> Result<Vec<TemporalForeignKey>> {
+    let mut keys = schema.temporal_foreign_keys.clone();
+    if schema.partition_of.is_some() {
+        for ancestor in partition_lineage(db, &schema.name)?.iter().skip(1) {
+            if let Some(ancestor) = load_schema_shared(db, ancestor)? {
+                keys.extend(ancestor.temporal_foreign_keys.iter().cloned());
+            }
+        }
+    }
+    Ok(keys)
+}
+
+/// The current rows of `schema` with the physical table holding each: those of every
+/// partition when it is partitioned.
+pub(crate) fn physical_records(
+    db: &BicDb,
+    tx: Option<&Transaction>,
+    schema: &TableSchema,
+) -> Result<Vec<(String, Record)>> {
+    if schema.partitioning.is_none() {
+        return Ok(current_integrity_records(db, tx, &schema.name)?
+            .into_iter()
+            .map(|record| (schema.name.clone(), record))
+            .collect());
+    }
+    let mut rows = Vec::new();
+    for leaf in partition::physical_tables(db, schema)? {
+        for mut record in current_integrity_records(db, tx, &leaf.name)? {
+            // A leaf may keep a key only in the record's native id.
+            partition::materialize_primary_key_fields(&leaf, &mut record)?;
+            rows.push((leaf.name.clone(), record));
+        }
+    }
+    Ok(rows)
+}
+
+/// Queues the commit-time check of `record_id` in `table` against `foreign_key`.
+fn queue_temporal_foreign_key_check(
+    tx: &Transaction,
+    table: &str,
+    foreign_key: &TemporalForeignKey,
+    record_id: &str,
+) {
+    tx.push_deferred_hook(serde_json::json!({"temporal_foreign_key_check": {
+        "table": table,
+        "constraint_id": foreign_key.constraint_id,
+        "record_id": record_id,
+    }}));
+}
+
+#[derive(Deserialize)]
+struct TemporalForeignKeyCheck {
+    table: String,
+    constraint_id: String,
+    record_id: String,
+}
+
+/// The constraint identity of a queued temporal foreign key check, if `hook` is one.
+pub(crate) fn temporal_foreign_key_hook_id(hook: &JsonValue) -> Option<String> {
+    hook.get("temporal_foreign_key_check")?
+        .get("constraint_id")?
+        .as_str()
+        .map(str::to_string)
+}
+
+/// Runs a queued temporal foreign key check against the row's current state; Ok(false) when
+/// `hook` is not one. A dropped key or a deleted row has nothing left to check.
+pub(crate) fn validate_temporal_foreign_key_hook(
+    db: &BicDb,
+    tx: Option<&Transaction>,
+    hook: &JsonValue,
+) -> Result<bool> {
+    let Some(check) = hook.get("temporal_foreign_key_check") else {
+        return Ok(false);
+    };
+    let check: TemporalForeignKeyCheck =
+        serde_json::from_value(check.clone()).map_err(|error| {
+            SqlError::InvalidSql(format!("malformed deferred foreign-key check: {error}"))
+        })?;
+    // The key may be declared by the row's table or by a partition ancestor of it.
+    let owned = |schema: &TableSchema| -> Result<Option<TemporalForeignKey>> {
+        Ok(effective_temporal_foreign_keys(db, schema)?
+            .into_iter()
+            .find(|foreign_key| foreign_key.constraint_id == check.constraint_id))
+    };
+    let mut found = None;
+    if let Some(schema) = load_schema(db, &check.table)? {
+        if let Some(key) = owned(&schema)? {
+            found = Some((schema, key));
+        }
+    }
+    if found.is_none() {
+        // DDL may rename the relation while checks are pending. Search the
+        // catalog without observing all of it: observe only the table found
+        // (and, through `owned`, a partition's ancestors).
+        for schema in schema_catalog_snapshot_shared(db)?.iter() {
+            let candidate = schema
+                .temporal_foreign_keys
+                .iter()
+                .any(|foreign_key| foreign_key.constraint_id == check.constraint_id)
+                || schema.partition_of.is_some();
+            if !candidate {
+                continue;
+            }
+            if let Some(key) = owned(schema)? {
+                check_sql_catalog_read(db, SCHEMA_COLLECTION, Some(&schema.name))?;
+                found = Some((schema.clone(), key));
+                break;
+            }
+        }
+    }
+    let Some((schema, foreign_key)) = found else {
+        return Ok(true);
+    };
+    if let Some(record) = current_integrity_record(db, tx, &schema.name, &check.record_id)? {
+        check_temporal_foreign_keys(
+            db,
+            tx,
+            &schema.name,
+            &schema,
+            std::slice::from_ref(&foreign_key),
+            &record,
+            None,
+            false,
+        )?;
+    }
+    Ok(true)
 }
 
 #[derive(Debug)]
@@ -274,6 +460,8 @@ fn parse_temporal_foreign_key(element: &str) -> Result<Option<TemporalForeignKey
     let mut on_delete = None;
     let mut on_update = None;
     let mut deferrable = false;
+    let mut not_deferrable = false;
+    let mut initially_deferred = false;
     let mut index = 0;
     let action = |words: &[String], index: &mut usize| -> Result<String> {
         let first = words.get(*index).cloned().unwrap_or_default();
@@ -301,13 +489,16 @@ fn parse_temporal_foreign_key(element: &str) -> Result<Option<TemporalForeignKey
                 index += 2;
                 on_update = Some(action(&words, &mut index)?);
             }
-            ("NOT", Some("DEFERRABLE")) => index += 2,
+            ("NOT", Some("DEFERRABLE")) => {
+                not_deferrable = true;
+                index += 2;
+            }
             ("DEFERRABLE", _) => {
                 deferrable = true;
                 index += 1;
             }
             ("INITIALLY", Some("DEFERRED")) => {
-                deferrable = true;
+                initially_deferred = true;
                 index += 2;
             }
             ("INITIALLY", Some("IMMEDIATE")) => index += 2,
@@ -320,6 +511,20 @@ fn parse_temporal_foreign_key(element: &str) -> Result<Option<TemporalForeignKey
             }
         }
     }
+    if deferrable && not_deferrable {
+        return Err(SqlError::data_exception_public(
+            "42601",
+            "conflicting constraint properties",
+            None,
+        ));
+    }
+    if initially_deferred && not_deferrable {
+        return Err(SqlError::data_exception_public(
+            "42601",
+            "constraint declared INITIALLY DEFERRED must be DEFERRABLE",
+            None,
+        ));
+    }
     Ok(Some(TemporalForeignKeyDef {
         name,
         columns,
@@ -328,7 +533,9 @@ fn parse_temporal_foreign_key(element: &str) -> Result<Option<TemporalForeignKey
         referred,
         on_delete,
         on_update,
-        deferrable,
+        // INITIALLY DEFERRED implies DEFERRABLE.
+        deferrable: deferrable || initially_deferred,
+        initially_deferred,
     }))
 }
 
@@ -559,6 +766,7 @@ impl SqlSession<'_> {
                 end_column: key.period.clone(),
                 bounds: "[)".to_string(),
                 range_column: Some(key.period.clone()),
+                position: Some(key.columns.len()),
             }),
             predicate: None,
             validated: true,
@@ -566,19 +774,7 @@ impl SqlSession<'_> {
         // Existing rows: empty periods and overlaps, as for any new constraint.
         let records = self.db_ref().scan_collection(table)?;
         reject_empty_temporal_periods(&schema, &constraint, &records)?;
-        validate_existing_constraint(self.db_ref(), table, &schema, &constraint).map_err(
-            |error| {
-                if error.sqlstate() == "23P01" {
-                    SqlError::data_exception_public(
-                        "23P01",
-                        format!("could not create exclusion constraint \"{name}\""),
-                        None,
-                    )
-                } else {
-                    error
-                }
-            },
-        )?;
+        validate_existing_constraint(self.db_ref(), table, &schema, &constraint)?;
         schema.constraints.push(constraint);
         self.save_session_schema(&schema)
     }
@@ -740,10 +936,55 @@ pub(crate) fn validate_temporal_foreign_keys(
     record: &Record,
     before: Option<&Record>,
 ) -> Result<()> {
+    validate_temporal_foreign_keys_timed(db, tx, table, schema, record, before, true)
+}
+
+/// A row of `table` becoming a partition's row under `parent` satisfies the temporal foreign
+/// keys `parent` and its ancestors declare (checked at once, as PostgreSQL does on ATTACH).
+pub(crate) fn validate_attached_temporal_foreign_keys(
+    db: &BicDb,
+    tx: Option<&Transaction>,
+    parent: &TableSchema,
+    table: &str,
+    record: &Record,
+) -> Result<()> {
+    let keys = effective_temporal_foreign_keys(db, parent)?;
+    if keys.is_empty() {
+        return Ok(());
+    }
+    check_temporal_foreign_keys(db, tx, table, parent, &keys, record, None, false)
+}
+
+/// [`validate_temporal_foreign_keys`]; with `may_defer`, a deferred key reserves the
+/// referenced key now and queues the coverage check for commit.
+fn validate_temporal_foreign_keys_timed(
+    db: &BicDb,
+    tx: Option<&Transaction>,
+    table: &str,
+    schema: &TableSchema,
+    record: &Record,
+    before: Option<&Record>,
+    may_defer: bool,
+) -> Result<()> {
     if schema.referential_checks_disabled {
         return Ok(());
     }
-    for foreign_key in &schema.temporal_foreign_keys {
+    let keys = effective_temporal_foreign_keys(db, schema)?;
+    check_temporal_foreign_keys(db, tx, table, schema, &keys, record, before, may_defer)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn check_temporal_foreign_keys(
+    db: &BicDb,
+    tx: Option<&Transaction>,
+    table: &str,
+    schema: &TableSchema,
+    keys: &[TemporalForeignKey],
+    record: &Record,
+    before: Option<&Record>,
+    may_defer: bool,
+) -> Result<()> {
+    for foreign_key in keys {
         let mut columns = foreign_key.columns.clone();
         columns.push(foreign_key.period.clone());
         let values = record_column_values(record, schema, &columns);
@@ -763,9 +1004,27 @@ pub(crate) fn validate_temporal_foreign_keys(
             return Err(foreign_key_violation(table, &foreign_key.name));
         };
         let key = &values[..foreign_key.columns.len()];
+        if may_defer && foreign_key.is_deferred(tx) {
+            // Reserve the key now, as an immediate check would, so a concurrent parent
+            // removal cannot slip in before commit.
+            if let Err(error) = reserve_foreign_key(tx, &parent, &foreign_key.referred_columns, key)
+            {
+                if error.sqlstate() != "22003" {
+                    return Err(error);
+                }
+            }
+            // Queued under the physical table that holds the row.
+            let holder = if schema.partitioning.is_some() {
+                partition::route_record(db, schema, record)?.name
+            } else {
+                table.to_string()
+            };
+            queue_temporal_foreign_key_check(tx.unwrap(), &holder, foreign_key, &record.id);
+            continue;
+        }
         reserve_foreign_key(tx, &parent, &foreign_key.referred_columns, key)?;
         let mut periods = Vec::new();
-        for candidate in current_integrity_records(db, tx, &foreign_key.foreign_table)? {
+        for (_, candidate) in physical_records(db, tx, &parent)? {
             let parent_key =
                 record_column_values(&candidate, &parent, &foreign_key.referred_columns);
             if typed_column_values_not_distinct(
@@ -786,7 +1045,14 @@ pub(crate) fn validate_temporal_foreign_keys(
             periods,
             &column_type(&parent, &foreign_key.referred_period),
         )? {
-            return Err(foreign_key_violation(table, &foreign_key.name));
+            return Err(crate::records::foreign_key_missing_violation(
+                table,
+                schema,
+                &foreign_key.name,
+                &columns,
+                &values,
+                &foreign_key.foreign_table,
+            ));
         }
     }
     Ok(())
@@ -810,19 +1076,13 @@ impl SqlSession<'_> {
             )
         })?;
         let parent_display = catalog_display_name(&parent.name);
-        // Rows of a partitioned table live in its partitions, which neither side's checks
-        // follow yet: refuse rather than enforce the key on only part of the data.
-        if [&schema, &parent]
-            .iter()
-            .any(|side| side.partitioning.is_some() || side.partition_of.is_some())
-        {
-            return Err(SqlError::RaisedException {
-                sqlstate: "0A000".to_string(),
-                message: "foreign keys using PERIOD on partitioned tables are not supported yet"
-                    .to_string(),
-                detail: None,
-            });
-        }
+        crate::schema_meta::guard_foreign_key_targets(
+            self.db_ref(),
+            &[(
+                def.name.clone().unwrap_or_else(|| schema.name.clone()),
+                parent.name.clone(),
+            )],
+        )?;
         let (referred_columns, referred_period) = match &def.referred {
             Some((columns, period)) => (columns.clone(), period.clone()),
             None => match temporal_keys_of(&parent)
@@ -928,11 +1188,6 @@ impl SqlSession<'_> {
                 });
             }
         }
-        if def.deferrable {
-            return Err(SqlError::Unsupported(
-                "DEFERRABLE foreign keys using PERIOD are not supported yet".to_string(),
-            ));
-        }
         if schema
             .constraints
             .iter()
@@ -951,21 +1206,24 @@ impl SqlSession<'_> {
             foreign_table: parent.name.clone(),
             referred_columns,
             referred_period,
+            deferrable: def.deferrable,
+            initially_deferred: def.initially_deferred,
+            constraint_id: uuid::Uuid::new_v4().to_string(),
         };
         schema.temporal_foreign_keys.push(foreign_key);
-        // Existing rows must already satisfy it.
-        for record in current_integrity_records(self.db_ref(), self.tx.as_ref(), table)? {
-            let single = TableSchema {
-                temporal_foreign_keys: vec![schema.temporal_foreign_keys.last().cloned().unwrap()],
-                ..schema.clone()
-            };
-            validate_temporal_foreign_keys(
+        // Existing rows (of every partition) must already satisfy it, whatever its timing,
+        // as PostgreSQL validates them.
+        let added = schema.temporal_foreign_keys.last().cloned().unwrap();
+        for (holder, record) in physical_records(self.db_ref(), self.tx.as_ref(), &schema)? {
+            check_temporal_foreign_keys(
                 self.db_ref(),
                 self.tx.as_ref(),
-                table,
-                &single,
+                &holder,
+                &schema,
+                std::slice::from_ref(&added),
                 &record,
                 None,
+                false,
             )?;
         }
         self.save_session_schema(&schema)
@@ -984,7 +1242,12 @@ impl SqlSession<'_> {
         if removed.is_empty() {
             return Ok(());
         }
-        let children = inbound_temporal_foreign_key_schemas(self.db_ref(), table)?;
+        // A key referencing a partitioned table covers the rows of all its partitions, so a
+        // write to a partition (or through any ancestor) concerns keys naming any ancestor.
+        let lineage = partition_relatives(self.db_ref(), table)?;
+        let children = admitted_temporal_foreign_key_children(self.db_ref(), &lineage, |fk| {
+            lineage.contains(&fk.foreign_table)
+        })?;
         if children.is_empty() {
             return Ok(());
         }
@@ -992,31 +1255,39 @@ impl SqlSession<'_> {
             .iter()
             .map(|record| record.id.as_str())
             .collect::<BTreeSet<_>>();
-        let mut parents = current_integrity_records(self.db_ref(), self.tx.as_ref(), table)?
-            .into_iter()
-            .filter(|record| !removed_ids.contains(record.id.as_str()))
-            .collect::<Vec<_>>();
-        parents.extend(added.iter().cloned());
-        let parent_display = catalog_display_name(&schema.name);
         for child in &children {
             for foreign_key in child
                 .temporal_foreign_keys
                 .iter()
-                .filter(|fk| fk.foreign_table == table)
+                .filter(|fk| lineage.contains(&fk.foreign_table))
             {
+                let referenced = load_schema(self.db_ref(), &foreign_key.foreign_table)?
+                    .ok_or_else(|| {
+                        SqlError::InvalidCollection(foreign_key.foreign_table.clone())
+                    })?;
+                // The referenced rows after this batch: every partition's, without the removed
+                // rows, with the added ones.
+                let mut parents = physical_records(self.db_ref(), self.tx.as_ref(), &referenced)?
+                    .into_iter()
+                    .map(|(_, record)| record)
+                    .filter(|record| !removed_ids.contains(record.id.as_str()))
+                    .collect::<Vec<_>>();
+                parents.extend(added.iter().cloned());
+                // Reserved on the referenced table the key names, as child checks reserve it.
                 for record in removed {
-                    let key = record_column_values(record, schema, &foreign_key.referred_columns);
+                    let key =
+                        record_column_values(record, &referenced, &foreign_key.referred_columns);
                     reserve_foreign_key_mutation(
                         self.tx.as_ref(),
-                        schema,
+                        &referenced,
                         &foreign_key.referred_columns,
                         &key,
                     )?;
                 }
                 let mut columns = foreign_key.columns.clone();
                 columns.push(foreign_key.period.clone());
-                for child_record in
-                    current_integrity_records(self.db_ref(), self.tx.as_ref(), &child.name)?
+                for (holder, child_record) in
+                    physical_records(self.db_ref(), self.tx.as_ref(), child)?
                 {
                     let values = record_column_values(&child_record, child, &columns);
                     if values.iter().any(|value| matches!(value, SqlValue::Null)) {
@@ -1024,32 +1295,41 @@ impl SqlSession<'_> {
                     }
                     let key = &values[..foreign_key.columns.len()];
                     // Only rows that referenced a removed parent row can be affected.
-                    let affected = removed.iter().any(|record| {
-                        let parent_key =
-                            record_column_values(record, schema, &foreign_key.referred_columns);
+                    let affected = removed.iter().find(|record| {
+                        let parent_key = record_column_values(
+                            record,
+                            &referenced,
+                            &foreign_key.referred_columns,
+                        );
                         typed_column_values_not_distinct(
-                            schema,
+                            &referenced,
                             &foreign_key.referred_columns,
                             &parent_key,
                             key,
                         )
                         .unwrap_or(true)
                     });
-                    if !affected {
+                    let Some(affected) = affected else {
                         continue;
-                    }
+                    };
                     let mut periods = Vec::new();
                     for parent in &parents {
-                        let parent_key =
-                            record_column_values(parent, schema, &foreign_key.referred_columns);
+                        let parent_key = record_column_values(
+                            parent,
+                            &referenced,
+                            &foreign_key.referred_columns,
+                        );
                         if typed_column_values_not_distinct(
-                            schema,
+                            &referenced,
                             &foreign_key.referred_columns,
                             &parent_key,
                             key,
                         )? {
-                            let period =
-                                record_column_value(parent, schema, &foreign_key.referred_period);
+                            let period = record_column_value(
+                                parent,
+                                &referenced,
+                                &foreign_key.referred_period,
+                            );
                             if !matches!(period, SqlValue::Null) {
                                 periods.push(period);
                             }
@@ -1059,22 +1339,97 @@ impl SqlSession<'_> {
                         values.last().expect("period value"),
                         &column_type(child, &foreign_key.period),
                         periods,
-                        &column_type(schema, &foreign_key.referred_period),
+                        &column_type(&referenced, &foreign_key.referred_period),
                     )? {
-                        return Err(constraint_violation(
-                            "23503",
-                            format!(
-                                "update or delete on table \"{parent_display}\" violates foreign key constraint \"{}\" on table \"{}\"",
-                                foreign_key.name,
-                                catalog_display_name(&child.name)
-                            ),
-                            Some(catalog_display_name(&child.name)),
-                            None,
-                            Some(foreign_key.name.clone()),
+                        if foreign_key.is_deferred(self.tx.as_ref()) {
+                            // Rechecked against the final state at commit.
+                            queue_temporal_foreign_key_check(
+                                self.tx.as_ref().unwrap(),
+                                &holder,
+                                foreign_key,
+                                &child_record.id,
+                            );
+                            continue;
+                        }
+                        // `Key (id, valid_at)=(...) is still referenced from table "c".`, naming
+                        // the partition holding the row and its derived constraint.
+                        let mut referred = foreign_key.referred_columns.clone();
+                        referred.push(foreign_key.referred_period.clone());
+                        let (holder_table, constraint) = self.referenced_partition_constraint(
+                            table,
+                            schema,
+                            &foreign_key.foreign_table,
+                            &foreign_key.name,
+                            Some(affected),
+                        )?;
+                        return Err(crate::records::foreign_key_referenced_violation(
+                            &holder_table,
+                            &referenced,
+                            &constraint,
+                            &child.name,
+                            &referred,
+                            &record_column_values(affected, &referenced, &referred),
                         ));
                     }
                 }
             }
+        }
+        Ok(())
+    }
+
+    /// DETACH PARTITION and temporal foreign keys. Rows leaving a referenced partitioned
+    /// table must not be referenced any more ("removing partition ... violates foreign key
+    /// constraint ..."); a detached partition of a referencing table keeps the keys it
+    /// inherited, as its own constraints.
+    pub(crate) fn detach_temporal_foreign_keys(
+        &mut self,
+        partition: &mut TableSchema,
+    ) -> Result<()> {
+        if has_inbound_temporal_foreign_keys(self.db_ref(), &partition.name)? {
+            let rows = physical_records(self.db_ref(), self.tx.as_ref(), partition)?
+                .into_iter()
+                .map(|(_, record)| record)
+                .collect::<Vec<_>>();
+            let display = catalog_display_name(&partition.name);
+            let schema = partition.clone();
+            self.check_temporal_foreign_key_parents(&schema.name, &schema, &rows, &[])
+                .map_err(|error| match error {
+                    SqlError::ConstraintViolation {
+                        sqlstate: "23503",
+                        table,
+                        constraint: Some(constraint),
+                        detail,
+                        ..
+                    } => {
+                        let removed = crate::records::constraint_violation(
+                            "23503",
+                            format!(
+                                "removing partition \"{display}\" violates foreign key constraint \"{constraint}\""
+                            ),
+                            table,
+                            None,
+                            Some(constraint),
+                        );
+                        match detail {
+                            Some(detail) => removed.with_error_detail(*detail),
+                            None => removed,
+                        }
+                    }
+                    other => other,
+                })?;
+        }
+        let own = partition.temporal_foreign_keys.len();
+        let inherited = effective_temporal_foreign_keys(self.db_ref(), partition)?;
+        for mut foreign_key in inherited.into_iter().skip(own) {
+            if partition
+                .temporal_foreign_keys
+                .iter()
+                .any(|existing| existing.name == foreign_key.name)
+            {
+                continue;
+            }
+            foreign_key.constraint_id = uuid::Uuid::new_v4().to_string();
+            partition.temporal_foreign_keys.push(foreign_key);
         }
         Ok(())
     }
@@ -1087,23 +1442,28 @@ impl SqlSession<'_> {
         dropping: &[String],
         cascade: bool,
     ) -> Result<()> {
-        for mut child in inbound_temporal_foreign_key_schemas(self.db_ref(), table)? {
+        // A key referencing a partitioned table depends on each of its partitions; when the
+        // referenced table itself is being dropped, its own call handles the key.
+        let lineage = partition_lineage(self.db_ref(), table)?;
+        let depends = |fk: &TemporalForeignKey| {
+            fk.foreign_table == table
+                || (lineage.contains(&fk.foreign_table)
+                    && !dropping.iter().any(|name| *name == fk.foreign_table))
+        };
+        for mut child in admitted_temporal_foreign_key_children(self.db_ref(), &lineage, &depends)?
+        {
             if dropping.iter().any(|name| *name == child.name) || child.name == table {
                 continue;
             }
             let before = child.temporal_foreign_keys.len();
-            if !child
-                .temporal_foreign_keys
-                .iter()
-                .any(|fk| fk.foreign_table == table)
-            {
+            if !child.temporal_foreign_keys.iter().any(&depends) {
                 continue;
             }
             if !cascade {
                 let fk = child
                     .temporal_foreign_keys
                     .iter()
-                    .find(|fk| fk.foreign_table == table)
+                    .find(|fk| depends(fk))
                     .unwrap();
                 return Err(SqlError::coded(
                     "2BP01",
@@ -1121,9 +1481,7 @@ impl SqlSession<'_> {
                 ));
             }
             let original = child.clone();
-            child
-                .temporal_foreign_keys
-                .retain(|fk| fk.foreign_table != table);
+            child.temporal_foreign_keys.retain(|fk| !depends(fk));
             if child.temporal_foreign_keys.len() != before {
                 self.capture_table_state_undo(&original.name, &original)?;
                 self.save_session_schema(&child)?;
@@ -1140,23 +1498,36 @@ impl SqlSession<'_> {
 /// the equality foreign-key lookup does: a whole-catalog read would make
 /// every ordinary writer conflict with concurrent DDL on unrelated tables.
 pub(crate) fn has_inbound_temporal_foreign_keys(db: &BicDb, table: &str) -> Result<bool> {
-    Ok(!inbound_temporal_foreign_key_schemas(db, table)?.is_empty())
+    // Fast path: most catalogs hold no temporal foreign key at all.
+    if !schema_catalog_snapshot_shared(db)?
+        .iter()
+        .any(|schema| !schema.temporal_foreign_keys.is_empty())
+    {
+        check_sql_catalog_read(db, SCHEMA_COLLECTION, Some(table))?;
+        return Ok(false);
+    }
+    // A key referencing a partitioned table covers its partitions.
+    let lineage = partition_relatives(db, table)?;
+    Ok(!admitted_temporal_foreign_key_children(db, &lineage, |fk| {
+        lineage.contains(&fk.foreign_table)
+    })?
+    .is_empty())
 }
 
-/// The tables whose temporal foreign keys reference `table`, observing only
-/// `table`'s catalog row and theirs (see `has_inbound_temporal_foreign_keys`).
-pub(crate) fn inbound_temporal_foreign_key_schemas(
+/// The tables with a temporal foreign key matching `references`, observing
+/// only the catalog rows of `admitted` (the referenced table and its
+/// partition relatives) and of those tables, never the whole catalog.
+pub(crate) fn admitted_temporal_foreign_key_children(
     db: &BicDb,
-    table: &str,
+    admitted: &[String],
+    references: impl Fn(&TemporalForeignKey) -> bool,
 ) -> Result<Vec<TableSchema>> {
-    check_sql_catalog_read(db, SCHEMA_COLLECTION, Some(table))?;
+    for table in admitted {
+        check_sql_catalog_read(db, SCHEMA_COLLECTION, Some(table))?;
+    }
     let mut children = Vec::new();
     for schema in schema_catalog_snapshot_shared(db)?.iter() {
-        if schema
-            .temporal_foreign_keys
-            .iter()
-            .any(|foreign_key| foreign_key.foreign_table == table)
-        {
+        if schema.temporal_foreign_keys.iter().any(&references) {
             check_sql_catalog_read(db, SCHEMA_COLLECTION, Some(&schema.name))?;
             children.push(schema.clone());
         }

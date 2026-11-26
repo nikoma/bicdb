@@ -5345,6 +5345,14 @@ impl<'db> SqlEngine<'db> {
                 vec![vec![SqlValue::String(value.clone())]],
             ));
         }
+        if key == "max_prepared_transactions" {
+            return Ok(SqlResult::new(
+                vec![name],
+                vec![vec![SqlValue::String(
+                    bicdb_core::configured_max_prepared_transactions().to_string(),
+                )]],
+            ));
+        }
         if let Some(value) = default_session_guc(&key) {
             return Ok(SqlResult::new(
                 vec![name],

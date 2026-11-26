@@ -7063,7 +7063,7 @@ pub(crate) fn constraint_definition_value(
         }
         "n" => column_names
             .first()
-            .map(|column| SqlValue::String(format!("{column} IS NOT NULL")))
+            .map(|column| SqlValue::String(format!("NOT NULL {column}")))
             .unwrap_or(SqlValue::Null),
         "x" => SqlValue::String(format!("EXCLUDE ({columns})")),
         _ => SqlValue::Null,

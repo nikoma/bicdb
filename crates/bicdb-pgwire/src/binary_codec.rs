@@ -2064,9 +2064,30 @@ pub(crate) fn startup(
                 )?;
                 parameter_status(stream, "server_encoding", "UTF8")?;
                 parameter_status(stream, "client_encoding", "UTF8")?;
-                parameter_status(stream, "DateStyle", "ISO, MDY")?;
-                parameter_status(stream, "TimeZone", "UTC")?;
-                parameter_status(stream, "IntervalStyle", "postgres")?;
+                parameter_status(
+                    stream,
+                    "DateStyle",
+                    session_gucs
+                        .get("datestyle")
+                        .map(String::as_str)
+                        .unwrap_or("ISO, MDY"),
+                )?;
+                parameter_status(
+                    stream,
+                    "TimeZone",
+                    session_gucs
+                        .get("timezone")
+                        .map(String::as_str)
+                        .unwrap_or("UTC"),
+                )?;
+                parameter_status(
+                    stream,
+                    "IntervalStyle",
+                    session_gucs
+                        .get("intervalstyle")
+                        .map(String::as_str)
+                        .unwrap_or("postgres"),
+                )?;
                 parameter_status(stream, "integer_datetimes", "on")?;
                 parameter_status(stream, "standard_conforming_strings", "on")?;
                 parameter_status(stream, "bicdb_sql_profile", configured_profile)?;
@@ -2093,6 +2114,25 @@ pub(crate) fn startup_session_gucs(params: &HashMap<String, String>) -> HashMap<
     let mut gucs = HashMap::new();
     if let Some(path) = params.get("search_path") {
         gucs.insert("search_path".to_string(), path.clone());
+    }
+    // libpq sends PGDATESTYLE / PGTZ as startup parameters.
+    for name in ["datestyle", "timezone", "intervalstyle"] {
+        if let Some((key, value)) = params
+            .iter()
+            .find(|(key, _)| key.eq_ignore_ascii_case(name))
+            .and_then(|(key, value)| {
+                bicdb_sql::datestyle_output::normalize_startup_temporal_setting(key, value)
+            })
+        {
+            gucs.insert(
+                format!(
+                    "{}{key}",
+                    bicdb_sql::datestyle_output::STARTUP_DEFAULT_PREFIX
+                ),
+                value.clone(),
+            );
+            gucs.insert(key, value);
+        }
     }
     let Some(options) = params.get("options") else {
         return gucs;
@@ -2131,6 +2171,19 @@ pub(crate) fn startup_session_gucs(params: &HashMap<String, String>) -> HashMap<
         let key = key.to_ascii_lowercase();
         if key == "search_path" {
             gucs.insert(key, value.replace("%2C", ","));
+            continue;
+        }
+        if let Some((key, value)) =
+            bicdb_sql::datestyle_output::normalize_startup_temporal_setting(&key, value)
+        {
+            gucs.insert(
+                format!(
+                    "{}{key}",
+                    bicdb_sql::datestyle_output::STARTUP_DEFAULT_PREFIX
+                ),
+                value.clone(),
+            );
+            gucs.insert(key, value);
             continue;
         }
         // Native/Carrier identity and host controls are never client options.
@@ -2345,6 +2398,7 @@ pub(crate) fn write_query_result(
     include_row_description: bool,
     include_command_complete: bool,
     catalog_cache: Option<&mut bicdb_sql::SqlSessionCatalogCache>,
+    temporal_output: &bicdb_sql::TemporalOutput,
 ) -> Result<StreamWriteStats> {
     // Synchronous replication: a statement that committed is acknowledged
     // only once its synchronous standbys have it (every commit path ends here).
@@ -2377,6 +2431,7 @@ pub(crate) fn write_query_result(
                     &column_types,
                     result_formats,
                     &mut element_oid_memo,
+                    temporal_output,
                 )
             })
             .collect::<Result<Vec<_>>>()?;
@@ -2483,6 +2538,7 @@ pub(crate) fn data_row_payload_with_memo(
     column_types: &[i32],
     result_formats: &[i16],
     element_oid_memo: &mut [Option<Option<i32>>],
+    temporal_output: &bicdb_sql::TemporalOutput,
 ) -> Result<Vec<u8>> {
     let mut payload = Vec::new();
     put_i16(&mut payload, row.len() as i16);
@@ -2495,6 +2551,14 @@ pub(crate) fn data_row_payload_with_memo(
         let format = format_for_column(result_formats, idx)?;
         let mut unmemoized = None;
         let memo_slot = element_oid_memo.get_mut(idx).unwrap_or(&mut unmemoized);
+        // Date/time text follows the connection's DateStyle.
+        if format == 0 && temporal_output.styles(oid) {
+            if let Some(styled) = temporal_output.render(oid, &value.to_cell()) {
+                put_i32(&mut payload, styled.len() as i32);
+                payload.extend_from_slice(styled.as_bytes());
+                continue;
+            }
+        }
         let rendered = encode_result_value_with_memo(db, value, oid, format, memo_slot)?;
         put_i32(&mut payload, rendered.len() as i32);
         payload.extend_from_slice(&rendered);

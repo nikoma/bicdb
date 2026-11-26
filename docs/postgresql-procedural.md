@@ -47,9 +47,114 @@ Calls of SQL and PL/pgSQL functions resolve as PostgreSQL resolves them:
 The call is rewritten to its positional form before execution (named
 arguments moved into place, defaults inserted, variadic arguments gathered),
 then overload resolution proceeds as for any positional call. Overloads that
-would place named arguments differently are refused with `0A000`. A
-set-returning function in a select list (`SELECT (f()).x` over a `RETURNS
-TABLE` function) is still not supported.
+would place named arguments differently are refused with `0A000`.
+
+Set-returning functions in a select list follow PostgreSQL 10+ (ProjectSet):
+`SELECT srf(3)`, `SELECT id, srf(id) FROM t`, `SELECT (rt(2)).sq` over a
+`RETURNS TABLE` function, `SELECT rt(2)` (one record per row) and nested
+uses such as `generate_series(1, 3) * 10` repeat the row once per returned
+value, several functions advance in lockstep with the shorter ones padded
+with NULL, and a row whose functions return nothing disappears. User
+functions and nested calls run from the FROM clause (`LATERAL`); in a
+grouped, DISTINCT or windowed query they are left as written, and several
+record-returning functions in one select list are refused with `0A000`.
+PL/pgSQL `RETURN NEXT expression` appends a row to a `SETOF` result; in a
+function with OUT parameters it is refused with `42804` as in PostgreSQL.
+
+## User-defined aggregates and casts
+
+`CREATE [OR REPLACE] AGGREGATE name (arg types) (SFUNC = f, STYPE = t
+[, FINALFUNC = f] [, INITCOND = 'v'] [, COMBINEFUNC = f] ...)` and `DROP
+AGGREGATE [IF EXISTS] name (arg types) [, ...]` define aggregates usable with
+GROUP BY, DISTINCT, ORDER BY inside the call, FILTER and as window aggregates
+(`OVER (...)`), with SQL or PL/pgSQL transition and final functions and
+PostgreSQL's strictness rules (a strict transition function skips NULL inputs
+and, without INITCOND, starts from the first non-NULL input). An aggregate is
+recorded as a routine (`prokind = 'a'`), so `regproc`, EXECUTE privileges,
+ownership, transactional DDL and restart persistence are those of functions,
+and `pg_aggregate` lists it. A call is collected with the built-in `array_agg`
+(which supplies grouping, ordering, filtering and window frames) and then
+folded through the transition function; COMBINEFUNC, the moving-aggregate
+options and SORTOP are recorded but not needed for that. Ordered-set and
+hypothetical-set aggregates, `FINALFUNC_EXTRA` and aggregates over `*` are
+refused with `0A000`.
+
+`CREATE CAST (source AS target) WITH FUNCTION f[(types)] | WITHOUT FUNCTION |
+WITH INOUT [AS ASSIGNMENT | AS IMPLICIT]` and `DROP CAST [IF EXISTS] (source AS
+target)` are catalogued in `pg_cast` and require ownership of one of the two
+types (or a superuser). Explicit casts (`CAST(x AS t)`, `x::t`) of a source
+type a user cast converts use it; `AS IMPLICIT` casts also convert arguments of
+a user function call whose only candidate of that arity needs them, and `AS
+ASSIGNMENT`/`AS IMPLICIT` casts convert `INSERT ... VALUES` items to the column
+type. Implicit user casts do not take part in operator or overload resolution
+among several candidates.
+
+User-defined operators (`CREATE OPERATOR`) also bind `<->`. `ORDER BY expr
+USING <` / `USING >` order ascending / descending; other operators in `USING`
+and operator symbols the parser cannot tokenize as one operator (`@@@`, `===`,
+prefix `~~~`) are refused with a syntax error.
+
+## Routine DDL, extended statistics and REINDEX
+
+`ALTER ROUTINE` and `DROP ROUTINE` resolve each named signature to the
+function or procedure of that name; a missing one fails with `42883`
+(`function name(args) does not exist`), or is a notice under `IF EXISTS`.
+`ALTER FUNCTION`/`ALTER PROCEDURE` accept `RENAME TO` (refusing a duplicate
+signature with `42723`), `OWNER TO`, and the characteristics `IMMUTABLE`,
+`STABLE`, `VOLATILE`, `[NOT] LEAKPROOF`, `CALLED ON NULL INPUT`, `STRICT`,
+`SECURITY DEFINER|INVOKER`, `PARALLEL`, `COST` and `ROWS`, which are
+reflected in `pg_proc` (`provolatile`, `proisstrict`, `prosecdef`). `SET`
+configuration clauses are refused with `0A000`.
+
+`CREATE STATISTICS [IF NOT EXISTS] [name] [(kinds)] ON columns-or-expressions
+FROM table` is stored in `pg_statistic_ext` (default name
+`table_columns_stat`, default kinds `d`, `f`, `m` plus `e` for expressions)
+with PostgreSQL's errors (`42P16` for a single column, `42703`, `42P07`,
+`42P01`), table ownership required. `ALTER STATISTICS ... RENAME TO | SET
+STATISTICS | OWNER TO | SET SCHEMA` and `DROP STATISTICS [IF EXISTS]`
+complete the lifecycle; the planner does not use the objects.
+
+`REINDEX [(options)] INDEX | TABLE | SCHEMA | DATABASE | SYSTEM
+[CONCURRENTLY] name` validates its target as PostgreSQL does (`42P01`,
+`42809`, `3F000`, ownership) and is otherwise a no-op, because BicDB indexes
+are maintained transactionally and are never invalid. `REINDEX SCHEMA`,
+`DATABASE`, `SYSTEM` and any `CONCURRENTLY` form fail inside a transaction
+block with `25001`.
+
+Temporal keys (`PRIMARY KEY`/`UNIQUE` with `WITHOUT OVERLAPS`) are refused
+with `0A000`.
+
+## Exported snapshots
+
+`pg_export_snapshot()` in a REPEATABLE READ transaction returns an identifier
+that another session's REPEATABLE READ transaction adopts with `SET
+TRANSACTION SNAPSHOT 'id'` before its first query; it then reads exactly the
+exporter's snapshot. Identifiers are valid while the exporting transaction is
+open; others are `22023` (invalid snapshot identifier). Importing into a READ
+COMMITTED or SERIALIZABLE transaction, and exporting from a READ COMMITTED
+one, are refused with `0A000`.
+
+## SQL cursors
+
+`DECLARE name [BINARY] [ASENSITIVE|INSENSITIVE] [[NO] SCROLL] CURSOR
+[WITH|WITHOUT HOLD] FOR query`, `FETCH` and `MOVE` with every direction
+(`NEXT`, `PRIOR`, `FIRST`, `LAST`, `ABSOLUTE n`, `RELATIVE n`, `n`, `ALL`,
+`FORWARD`/`BACKWARD [n|ALL]`), `CLOSE name|ALL`, the `pg_cursors` view and
+`UPDATE/DELETE ... WHERE CURRENT OF name` behave as in PostgreSQL:
+DECLARE without HOLD outside a transaction block is `25P01`, missing
+cursors `34000`, duplicates `42P03`, backward motion of a non-scrollable
+cursor `55000`, and a `WHERE CURRENT OF` on a cursor that is not on a row
+`24000`. A cursor reads with the declaring transaction's snapshot and the
+declaring role's privileges and row security: its query runs at DECLARE and
+its rows are kept, which is also what makes a `WITH HOLD` cursor survive
+COMMIT. COMMIT closes cursors without HOLD and ROLLBACK closes every cursor
+the transaction declared; `ROLLBACK TO SAVEPOINT` closes the cursors declared
+after the savepoint. A cursor declared without SCROLL or NO SCROLL
+can move backward when its query is a plain scan of one table or function
+(PostgreSQL decides this from the plan). `WHERE CURRENT OF` needs a cursor
+over one table with a primary key (others are refused with `0A000`), and a
+`FOR UPDATE` cursor locks its rows at DECLARE rather than as they are
+fetched.
 
 `pg_notify(channel, payload)` queues a notification exactly like `NOTIFY`:
 inside a transaction block both are delivered at commit and discarded on

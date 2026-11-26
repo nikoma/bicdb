@@ -1364,6 +1364,7 @@ pub(crate) fn run_subscription(
         result_column_types_with_db(&db, &first, None)?
     };
     let mut rows_streamed = 0u64;
+    let temporal_output = bicdb_sql::TemporalOutput::from_gucs(state.session_state.session_gucs());
     let mut write = |stream: &mut ClientStream, rows: &SqlResult, first: bool| -> Result<()> {
         match copy {
             Some(format) => {
@@ -1386,6 +1387,7 @@ pub(crate) fn run_subscription(
                     first && describe_rows,
                     false,
                     None,
+                    &temporal_output,
                 )?;
             }
         }

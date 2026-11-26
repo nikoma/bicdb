@@ -3585,6 +3585,7 @@ fn pg_proc_rows_uncached(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> 
     }
     for routine in list_routines(db)? {
         let prokind = match routine.kind {
+            _ if crate::user_aggregates::is_aggregate_routine(&routine) => "a",
             RoutineKind::Function => "f",
             RoutineKind::Procedure => "p",
         };
@@ -3622,6 +3623,10 @@ fn pg_proc_rows_uncached(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> 
         row.insert(
             "provolatile".to_string(),
             SqlValue::String(routine.declared_volatility().to_string()),
+        );
+        row.insert(
+            "proisstrict".to_string(),
+            SqlValue::Bool(crate::user_aggregates::routine_is_strict(&routine)),
         );
         row.insert(
             "pronargdefaults".to_string(),

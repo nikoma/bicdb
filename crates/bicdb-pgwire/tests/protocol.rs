@@ -13683,6 +13683,104 @@ fn notifications_in_transactions_wait_for_commit() {
     server_thread.join().unwrap().unwrap();
 }
 
+/// A repeatable-read transaction's exported snapshot is adopted exactly by
+/// another session: rows committed after the export stay invisible to it,
+/// and identifiers that were never exported are refused.
+#[test]
+fn exported_snapshots_are_adopted_by_another_session() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = PgWireServer::open(dir.path(), PgWireConfig::default()).unwrap();
+    let server_for_thread = server.clone();
+    let server_thread =
+        thread::spawn(move || bicdb_pgwire::serve_existing_listener(server_for_thread, listener));
+
+    let mut exporter = TcpStream::connect(address).unwrap();
+    startup(&mut exporter);
+    read_until_ready(&mut exporter);
+    for sql in [
+        "CREATE TABLE snap_rows(id int PRIMARY KEY);",
+        "INSERT INTO snap_rows VALUES (1);",
+        "BEGIN ISOLATION LEVEL REPEATABLE READ;",
+    ] {
+        send_query(&mut exporter, sql);
+        read_tags_until_ready(&mut exporter);
+    }
+    send_query(&mut exporter, "SELECT pg_export_snapshot();");
+    let snapshot = read_query_rows(&mut exporter)[0][0].clone();
+
+    let mut writer = TcpStream::connect(address).unwrap();
+    startup(&mut writer);
+    read_until_ready(&mut writer);
+    send_query(&mut writer, "INSERT INTO snap_rows VALUES (2);");
+    read_tags_until_ready(&mut writer);
+
+    let mut importer = TcpStream::connect(address).unwrap();
+    startup(&mut importer);
+    read_until_ready(&mut importer);
+    send_query(&mut importer, "BEGIN ISOLATION LEVEL REPEATABLE READ;");
+    read_tags_until_ready(&mut importer);
+    send_query(
+        &mut importer,
+        &format!("SET TRANSACTION SNAPSHOT '{snapshot}';"),
+    );
+    read_tags_until_ready(&mut importer);
+    send_query(&mut importer, "SELECT count(*) FROM snap_rows;");
+    assert_eq!(read_query_rows(&mut importer), vec![vec!["1".to_string()]]);
+    send_query(&mut importer, "COMMIT;");
+    read_tags_until_ready(&mut importer);
+
+    send_query(&mut importer, "BEGIN ISOLATION LEVEL REPEATABLE READ;");
+    read_tags_until_ready(&mut importer);
+    send_query(
+        &mut importer,
+        "SET TRANSACTION SNAPSHOT '00000001-00000001-9';",
+    );
+    let error = read_error_response(&mut importer);
+    assert!(error.contains("22023"), "{error}");
+    send_query(&mut importer, "ROLLBACK;");
+    read_tags_until_ready(&mut importer);
+
+    for stream in [&mut exporter, &mut writer, &mut importer] {
+        stream.write_all(b"X\0\0\0\x04").unwrap();
+    }
+    server.request_shutdown();
+    server_thread.join().unwrap().unwrap();
+}
+
+/// ROLLBACK TO SAVEPOINT closes the cursors declared after the savepoint.
+#[test]
+fn rollback_to_savepoint_closes_later_cursors() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = PgWireServer::open(dir.path(), PgWireConfig::default()).unwrap();
+    let server_for_thread = server.clone();
+    let server_thread =
+        thread::spawn(move || bicdb_pgwire::serve_existing_listener(server_for_thread, listener));
+    let mut conn = TcpStream::connect(address).unwrap();
+    startup(&mut conn);
+    read_until_ready(&mut conn);
+    for sql in [
+        "BEGIN;",
+        "DECLARE s1 CURSOR FOR SELECT 1;",
+        "SAVEPOINT sp;",
+        "DECLARE s2 CURSOR FOR SELECT 2;",
+        "ROLLBACK TO SAVEPOINT sp;",
+    ] {
+        send_query(&mut conn, sql);
+        read_tags_until_ready(&mut conn);
+    }
+    send_query(&mut conn, "SELECT name FROM pg_cursors ORDER BY name;");
+    assert_eq!(read_query_rows(&mut conn), vec![vec!["s1".to_string()]]);
+    send_query(&mut conn, "ROLLBACK;");
+    read_tags_until_ready(&mut conn);
+    conn.write_all(b"X\0\0\0\x04").unwrap();
+    server.request_shutdown();
+    server_thread.join().unwrap().unwrap();
+}
+
 #[test]
 fn broker_publish_wakes_queue_listeners() {
     let dir = tempfile::tempdir().unwrap();

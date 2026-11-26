@@ -962,7 +962,10 @@ impl<'db> SqlSession<'db> {
                 }
             }
             "datestyle" => {
-                let style = normalize_datestyle_setting(&value.to_cell())?;
+                let style = merge_datestyle_setting(
+                    self.session_gucs.get("datestyle").map(String::as_str),
+                    &value.to_cell(),
+                )?;
                 Arc::make_mut(&mut self.session_gucs).insert("datestyle".to_string(), style);
                 Ok(())
             }
@@ -1113,7 +1116,21 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn apply_timezone_value(&mut self, value: SqlValue) -> Result<()> {
-        let timezone = value.to_cell();
+        let mut timezone = value.to_cell();
+        // A numeric setting is hours east of UTC (ISO sign), named as
+        // PostgreSQL names it: `<+05>-05`.
+        if let Ok(hours) = timezone.trim().parse::<f64>() {
+            if hours.is_finite() && hours.abs() <= 15.0 + 59.0 / 60.0 {
+                let seconds = (hours * 3600.0).round() as i64;
+                let magnitude = seconds.abs();
+                let mut text = format!("{:02}", magnitude / 3600);
+                if magnitude % 3600 != 0 {
+                    text.push_str(&format!(":{:02}", magnitude % 3600 / 60));
+                }
+                let (east, west) = if seconds > 0 { ('+', '-') } else { ('-', '+') };
+                timezone = format!("<{east}{text}>{west}{text}");
+            }
+        }
         if !validate_timezone_name(&timezone) {
             return Err(SqlError::invalid_parameter_value(format!(
                 "invalid value for parameter \"TimeZone\": \"{timezone}\""
@@ -1133,14 +1150,32 @@ impl<'db> SqlSession<'db> {
                 &self.session_gucs,
                 &operators,
                 statement,
-            )?,
+            )?
+            .map(Box::new),
             None => None,
         };
-        let statement = bound.as_ref().unwrap_or(statement);
+        let statement = bound.as_deref().unwrap_or(statement);
         // Named, defaulted and variadic user-function calls bind to their
         // positional form before execution.
-        let calls_bound = crate::routine_calls::bind_statement_calls(self.db_ref(), statement)?;
-        let statement = calls_bound.as_ref().unwrap_or(statement);
+        let calls_bound =
+            crate::routine_calls::bind_statement_calls(self.db_ref(), statement)?.map(Box::new);
+        let statement = calls_bound.as_deref().unwrap_or(statement);
+        // User-defined casts convert explicit casts, implicit function
+        // arguments and INSERT assignments.
+        let casts_bound =
+            crate::user_casts::bind_statement_casts(&self.sql_engine(), statement)?.map(Box::new);
+        let statement = casts_bound.as_deref().unwrap_or(statement);
+        // Element/field assignment targets bind to whole-column forms; the
+        // rebound statement is boxed so this recursive frame stays small.
+        let assignments_bound =
+            crate::parse_compat_postfix::bind_assignment_targets(self.db_ref(), statement)?;
+        let statement = assignments_bound.as_deref().unwrap_or(statement);
+        // Set-returning functions of a select list that the executors do not
+        // expand themselves run from the FROM clause (ProjectSet semantics).
+        let srf_bound =
+            crate::srf_projection::bind_statement_set_returning_calls(self.db_ref(), statement)?
+                .map(Box::new);
+        let statement = srf_bound.as_deref().unwrap_or(statement);
         if let Some(result) = self.apply_instead_rule(statement)? {
             return Ok(result);
         }

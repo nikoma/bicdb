@@ -491,7 +491,7 @@ impl<'db> SqlEngine<'db> {
             Expr::CompoundFieldAccess { root, access_chain } => eval_access_chain_expr(
                 root,
                 access_chain,
-                self.constant_expr_pg_type(root).as_deref() == Some("jsonb"),
+                self.constant_expr_pg_type(root).as_deref(),
                 |expr| self.eval_select_constant_expr(expr),
             ),
             Expr::Exists { subquery, negated } => {
@@ -3114,8 +3114,13 @@ impl<'db> SqlEngine<'db> {
             ),
             Expr::Position { .. } => Some("int4".to_string()),
             Expr::AtTimeZone { timestamp, .. } => {
-                match self.infer_env_expr_type(timestamp, env).as_deref() {
-                    Some("timestamptz") => Some("timestamp".to_string()),
+                match crate::eval::at_time_zone_source_type(
+                    timestamp,
+                    self.infer_env_expr_type(timestamp, env),
+                )
+                .as_deref()
+                {
+                    Some("timestamptz" | "unknown") => Some("timestamp".to_string()),
                     Some("timestamp") => Some("timestamptz".to_string()),
                     _ => None,
                 }
@@ -3745,6 +3750,9 @@ impl<'db> SqlEngine<'db> {
             "similarity" => Some("float4".to_string()),
             "age" | "make_interval" => Some("interval".to_string()),
             "to_date" | "date" => Some("date".to_string()),
+            "timestamptz" if args.len() == 2 => Some("timestamptz".to_string()),
+            "timestamp" if args.len() == 2 => Some("timestamp".to_string()),
+            "isfinite" => Some("bool".to_string()),
             "bicdb_oracle_nvl_number"
             | "bicdb_oracle_nvl2_number"
             | "bicdb_oracle_decode_number"

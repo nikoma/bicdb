@@ -812,10 +812,19 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
         }
         "jsonpath" => {
             let text = value.to_cell();
-            let text = crate::normalize_jsonpath(&text).map_err(|_| {
-                SqlError::InvalidTextRepresentation(format!(
-                    "invalid input syntax for type jsonpath: \"{text}\""
-                ))
+            let text = crate::normalize_jsonpath(&text).map_err(|error| {
+                // PostgreSQL's scanner and grammar errors pass through.
+                let message = error.to_string();
+                if message.contains("of jsonpath input")
+                    || message.contains("invalid input syntax for type jsonpath\nDETAIL")
+                    || message.contains("unsupported Unicode escape sequence")
+                {
+                    error
+                } else {
+                    SqlError::InvalidTextRepresentation(format!(
+                        "invalid input syntax for type jsonpath: \"{text}\""
+                    ))
+                }
             })?;
             text_value_without_nul(text, pg_type)
         }
@@ -924,10 +933,33 @@ pub(crate) fn postgres_timetz_input_error(value: &str, error: PgCanonicalValueEr
     }
 }
 
+/// The input errors every date/time type shares: an unknown zone name, and
+/// a month/day overflow with PostgreSQL's DateStyle hint.
+fn shared_datetime_input_error(value: &str, error: &PgCanonicalValueError) -> Option<SqlError> {
+    match error {
+        PgCanonicalValueError::InvalidTemporal { kind: "timezone", value: zone } => Some(
+            SqlError::invalid_parameter_value(format!("time zone \"{zone}\" not recognized")),
+        ),
+        PgCanonicalValueError::TemporalFieldOverflow(kind) if kind.ends_with("/md") => {
+            Some(SqlError::data_exception(
+                "22008",
+                format!(
+                    "date/time field value out of range: \"{value}\"\nHINT:  Perhaps you need a different \"DateStyle\" setting."
+                ),
+                None,
+            ))
+        }
+        _ => None,
+    }
+}
+
 pub(crate) fn postgres_timestamp_input_error(
     value: &str,
     error: PgCanonicalValueError,
 ) -> SqlError {
+    if let Some(error) = shared_datetime_input_error(value, &error) {
+        return error;
+    }
     let message = match &error {
         PgCanonicalValueError::TemporalOverflow(_)
         | PgCanonicalValueError::TemporalFieldOverflow(_)
@@ -950,6 +982,9 @@ pub(crate) fn postgres_timestamptz_input_error(
     value: &str,
     error: PgCanonicalValueError,
 ) -> SqlError {
+    if let Some(error) = shared_datetime_input_error(value, &error) {
+        return error;
+    }
     if let Some(timezone) = unknown_timestamp_timezone(value) {
         return SqlError::invalid_parameter_value(format!(
             "time zone \"{timezone}\" not recognized"
@@ -1007,6 +1042,9 @@ pub(crate) fn unknown_timestamp_timezone(value: &str) -> Option<&str> {
 }
 
 pub(crate) fn postgres_date_input_error(value: &str, error: PgCanonicalValueError) -> SqlError {
+    if let Some(error) = shared_datetime_input_error(value, &error) {
+        return error;
+    }
     let message = match &error {
         PgCanonicalValueError::TemporalOverflow(_) => format!("date out of range: \"{value}\""),
         PgCanonicalValueError::TemporalFieldOverflow(_) => {
@@ -1606,6 +1644,13 @@ pub(crate) fn select_expr_column_name(expr: &Expr) -> String {
             .unwrap_or_else(|| "?column?".to_string()),
         Expr::TypedString(value) => typed_literal_column_name(&value.data_type),
         Expr::Array(_) => "array".to_string(),
+        // PostgreSQL names these by the function they call.
+        Expr::AtTimeZone { .. } => "timezone".to_string(),
+        Expr::Extract { .. } => "extract".to_string(),
+        Expr::BinaryOp {
+            op: sqlparser::ast::BinaryOperator::Overlaps,
+            ..
+        } => "overlaps".to_string(),
         Expr::Function(function)
             if object_name(&function.name).is_ok_and(|name| {
                 name.eq_ignore_ascii_case("bicdb_is_json")
@@ -1761,6 +1806,13 @@ pub(crate) fn row_expr_column_name(expr: &Expr) -> String {
         }
         Expr::TypedString(value) => typed_literal_column_name(&value.data_type),
         Expr::Array(_) => "array".to_string(),
+        // PostgreSQL names these by the function they call.
+        Expr::AtTimeZone { .. } => "timezone".to_string(),
+        Expr::Extract { .. } => "extract".to_string(),
+        Expr::BinaryOp {
+            op: sqlparser::ast::BinaryOperator::Overlaps,
+            ..
+        } => "overlaps".to_string(),
         Expr::Function(function) => object_name(&function.name)
             .map(|name| postgres_xml_function_column_name(&name))
             .unwrap_or_else(|_| "?column?".to_string()),
@@ -1820,6 +1872,9 @@ pub(crate) fn postgres_xml_function_column_name(name: &str) -> String {
         "bicdb_xmlelement" => "xmlelement".to_string(),
         "bicdb_xmlpi" => "xmlpi".to_string(),
         "bicdb_xmlroot" => "xmlroot".to_string(),
+        "bicdb_json_value" => "json_value".to_string(),
+        "bicdb_json_query" => "json_query".to_string(),
+        "bicdb_json_exists" => "json_exists".to_string(),
         other => other.to_string(),
     }
 }
@@ -2843,11 +2898,115 @@ pub(crate) fn transaction_timestamp_micros() -> i64 {
         .unwrap_or_else(unix_now_micros)
 }
 
+/// The transaction start time as local PostgreSQL-epoch microseconds in the
+/// session time zone: the base of the special inputs `now`, `today`,
+/// `tomorrow` and `yesterday`.
+pub(crate) fn special_local_now_micros() -> i64 {
+    let utc = transaction_timestamp_micros() - 946_684_800_000_000;
+    let offset = timezone_offset_at_timestamp(&current_timezone_name(), PgTimestamp::Finite(utc))
+        .unwrap_or(0);
+    utc + i64::from(offset) * 1_000_000
+}
+
+/// Seconds east of UTC of the PostgreSQL default time zone abbreviations.
+pub(crate) fn timezone_abbreviation_offset(name: &str) -> Option<i32> {
+    let hours = |hours: i32, minutes: i32| Some(hours * 3_600 + hours.signum() * minutes * 60);
+    match name.to_ascii_uppercase().as_str() {
+        "UTC" | "UT" | "GMT" | "Z" | "ZULU" | "WET" | "GMT0" => Some(0),
+        "EST" => hours(-5, 0),
+        "EDT" => hours(-4, 0),
+        "CST" => hours(-6, 0),
+        "CDT" => hours(-5, 0),
+        "MST" => hours(-7, 0),
+        "MDT" => hours(-6, 0),
+        "PST" => hours(-8, 0),
+        "PDT" => hours(-7, 0),
+        "AKST" => hours(-9, 0),
+        "AKDT" => hours(-8, 0),
+        "HST" => hours(-10, 0),
+        "AST" => hours(-4, 0),
+        "ADT" => hours(-3, 0),
+        "NST" => hours(-3, 30),
+        "NDT" => hours(-2, 30),
+        "WEST" | "BST" | "CET" | "MET" => hours(1, 0),
+        "CEST" | "MEST" | "EET" | "IST" => hours(2, 0),
+        "EEST" | "MSK" | "EAT" => hours(3, 0),
+        "AWST" | "SGT" | "HKT" | "WST" => hours(8, 0),
+        "JST" | "KST" => hours(9, 0),
+        "ACST" => hours(9, 30),
+        "AEST" => hours(10, 0),
+        "ACDT" => hours(10, 30),
+        "AEDT" => hours(11, 0),
+        "NZST" => hours(12, 0),
+        "NZDT" => hours(13, 0),
+        _ => None,
+    }
+}
+
+/// A time zone abbreviation that is not also a zone name, or a POSIX zone
+/// without daylight rules (`GMT+8`, `UTC-3`, `<+05>-5`).
+fn abbreviation_only_offset(name: &str) -> Option<i32> {
+    if name.parse::<Tz>().is_ok() {
+        return None;
+    }
+    timezone_abbreviation_offset(name).or_else(|| posix_timezone(name).map(|(_, offset)| offset))
+}
+
+/// A POSIX time zone without daylight rules: `STD offset`, where STD is
+/// three or more letters or `<...>`, and a positive offset is west of UTC.
+/// Returns the abbreviation and the offset in seconds east of UTC.
+pub(crate) fn posix_timezone(name: &str) -> Option<(String, i32)> {
+    let name = name.trim();
+    let (abbreviation, rest) = if let Some(quoted) = name.strip_prefix('<') {
+        let end = quoted.find('>')?;
+        (quoted[..end].to_string(), &quoted[end + 1..])
+    } else {
+        let letters = name.bytes().take_while(u8::is_ascii_alphabetic).count();
+        if letters < 3 {
+            return None;
+        }
+        (name[..letters].to_string(), &name[letters..])
+    };
+    if rest.is_empty() || abbreviation.is_empty() {
+        return None;
+    }
+    let (sign, digits) = match rest.as_bytes()[0] {
+        b'+' => (1, &rest[1..]),
+        b'-' => (-1, &rest[1..]),
+        _ => (1, rest),
+    };
+    let mut fields = digits.split(':');
+    let hours = fields.next()?;
+    if hours.is_empty() || hours.len() > 2 || !hours.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    let field = |value: Option<&str>| -> Option<i32> {
+        match value {
+            None => Some(0),
+            Some(text) if text.len() == 2 && text.bytes().all(|b| b.is_ascii_digit()) => {
+                text.parse().ok()
+            }
+            _ => None,
+        }
+    };
+    let hours = hours.parse::<i32>().ok()?;
+    let minutes = field(fields.next())?;
+    let seconds = field(fields.next())?;
+    if fields.next().is_some() || hours > 24 || minutes > 59 || seconds > 59 {
+        return None;
+    }
+    Some((
+        abbreviation,
+        -sign * (hours * 3_600 + minutes * 60 + seconds),
+    ))
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct SqlTemporalContext {
     transaction_timestamp_micros: i64,
     timezone: String,
     interval_style: String,
+    date_order: crate::datetime_input::DateOrder,
 }
 
 thread_local! {
@@ -2868,10 +3027,39 @@ impl SqlTemporalScope {
             transaction_timestamp_micros,
             timezone: timezone.into(),
             interval_style: interval_style.into(),
+            date_order: crate::datetime_input::DateOrder::Mdy,
         };
         let previous = SQL_TEMPORAL_CONTEXT.with(|slot| slot.replace(Some(context)));
         Self { previous }
     }
+
+    /// The DateStyle field order for ambiguous date input in this scope.
+    pub(crate) fn with_datestyle(self, datestyle: Option<&str>) -> Self {
+        let order = match datestyle.map(|value| crate::datestyle_output::parse_datestyle(value).1) {
+            Some(crate::datestyle_output::DateOrder::Dmy) => crate::datetime_input::DateOrder::Dmy,
+            Some(crate::datestyle_output::DateOrder::Ymd) => crate::datetime_input::DateOrder::Ymd,
+            _ => crate::datetime_input::DateOrder::Mdy,
+        };
+        SQL_TEMPORAL_CONTEXT.with(|slot| {
+            if let Some(context) = slot.borrow_mut().as_mut() {
+                context.date_order = order;
+            }
+        });
+        self
+    }
+}
+
+/// The DateStyle field order of the running statement (MDY outside one).
+pub(crate) fn current_date_order() -> crate::datetime_input::DateOrder {
+    SQL_TEMPORAL_CONTEXT
+        .with(|slot| slot.borrow().as_ref().map(|context| context.date_order))
+        .unwrap_or(crate::datetime_input::DateOrder::Mdy)
+}
+
+/// The offset (seconds east) of a time zone abbreviation or a POSIX zone
+/// without daylight rules, ignoring case.
+pub(crate) fn posix_or_abbreviation_offset(name: &str) -> Option<i32> {
+    timezone_abbreviation_offset(name).or_else(|| posix_timezone(name).map(|(_, offset)| offset))
 }
 
 impl Drop for SqlTemporalScope {
@@ -2888,6 +3076,8 @@ pub(crate) fn validate_timezone_name(timezone: &str) -> bool {
         || timezone.eq_ignore_ascii_case("Etc/UTC")
         || timezone.parse::<Tz>().is_ok()
         || parse_fixed_timezone_offset(timezone).is_some()
+        || timezone_abbreviation_offset(timezone).is_some()
+        || posix_timezone(timezone).is_some()
 }
 
 pub(crate) fn parse_fixed_timezone_offset(timezone: &str) -> Option<i32> {
@@ -2935,6 +3125,8 @@ pub(crate) fn current_timezone_offset_seconds() -> i32 {
         || timezone.eq_ignore_ascii_case("Etc/UTC")
     {
         0
+    } else if let Some(offset) = abbreviation_only_offset(&timezone) {
+        offset
     } else if let Ok(timezone) = timezone.parse::<Tz>() {
         timestamp
             .with_timezone(&timezone)
@@ -2979,6 +3171,8 @@ pub(crate) fn timezone_offset_at_timestamp(timezone: &str, timestamp: PgTimestam
         || timezone.eq_ignore_ascii_case("Etc/UTC")
     {
         Some(0)
+    } else if let Some(offset) = abbreviation_only_offset(timezone) {
+        Some(offset)
     } else if let Ok(timezone) = timezone.parse::<Tz>() {
         Some(
             timezone
@@ -3039,6 +3233,9 @@ pub(crate) fn local_timestamp_offset_seconds(local: PgTimestamp, timezone: &str)
     if let Some(offset) = parse_fixed_timezone_offset(timezone) {
         return Some(offset);
     }
+    if let Some(offset) = abbreviation_only_offset(timezone) {
+        return Some(offset);
+    }
     let timezone = timezone.parse::<Tz>().ok()?;
     let (year, month, day, hour, minute, second, micros) = local.components()?;
     let naive = NaiveDate::from_ymd_opt(year, month, day)?
@@ -3079,7 +3276,9 @@ pub(crate) fn split_named_timestamp_zone(value: &str) -> (&str, Option<&str>) {
     let named = zone.eq_ignore_ascii_case("UTC")
         || zone.eq_ignore_ascii_case("GMT")
         || zone.eq_ignore_ascii_case("Etc/UTC")
-        || zone.parse::<Tz>().is_ok();
+        || zone.parse::<Tz>().is_ok()
+        || timezone_abbreviation_offset(zone).is_some()
+        || posix_timezone(zone).is_some();
     if !named {
         return (trimmed, None);
     }
@@ -3123,9 +3322,14 @@ pub(crate) fn parse_timestamptz_in_zone(
     let lower = value.trim().to_ascii_lowercase();
     if matches!(
         lower.as_str(),
-        "epoch" | "infinity" | "+infinity" | "-infinity"
+        "epoch" | "infinity" | "+infinity" | "-infinity" | "now"
     ) {
         return PgTimestamp::from_postgres_text(value, true);
+    }
+    if !matches!(lower.as_str(), "today" | "tomorrow" | "yesterday")
+        && !crate::datetime_input::is_plain_iso_timestamp(value.trim())
+    {
+        return crate::datetime_input::decode_timestamp(value.trim(), true, default_timezone);
     }
     if timestamp_has_iso_offset(value) {
         return PgTimestamp::from_postgres_text(value, true);
@@ -3154,6 +3358,19 @@ pub(crate) fn parse_timestamptz(
     parse_timestamptz_in_zone(value, &current_timezone_name())
 }
 
+/// The source type of `timestamp AT TIME ZONE zone`: an untyped string
+/// literal is `unknown` (resolved as timestamptz, as PostgreSQL does).
+pub(crate) fn at_time_zone_source_type(timestamp: &Expr, typed: Option<String>) -> Option<String> {
+    match timestamp {
+        Expr::Value(value)
+            if matches!(value.value, sqlparser::ast::Value::SingleQuotedString(_)) =>
+        {
+            Some("unknown".to_string())
+        }
+        _ => typed,
+    }
+}
+
 pub(crate) fn eval_at_time_zone_value(
     value: SqlValue,
     zone: SqlValue,
@@ -3170,6 +3387,7 @@ pub(crate) fn eval_at_time_zone_value(
     }
     let value = value.to_cell();
     let source_is_timestamptz = source_type == Some("timestamptz")
+        || source_type == Some("unknown")
         || (source_type.is_none() && timestamp_has_iso_offset(&value));
     if source_is_timestamptz {
         let timestamp = parse_timestamptz(&value)

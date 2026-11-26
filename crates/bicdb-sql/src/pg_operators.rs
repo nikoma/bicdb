@@ -781,9 +781,17 @@ pub(crate) fn resolve_operator<'a>(
 pub(crate) fn binary_operator_name(op: &BinaryOperator) -> Option<(Option<String>, String)> {
     let name = match op {
         BinaryOperator::PGCustomBinaryOperator(parts) => {
+            // A quoted operator name (`OPERATOR("===")`) is how names the
+            // tokenizer would split reach the parser.
+            let unquote = |name: &String| {
+                name.strip_prefix('"')
+                    .and_then(|name| name.strip_suffix('"'))
+                    .unwrap_or(name)
+                    .to_string()
+            };
             return match parts.as_slice() {
-                [name] => Some((None, name.clone())),
-                [schema, name] => Some((Some(schema.to_ascii_lowercase()), name.clone())),
+                [name] => Some((None, unquote(name))),
+                [schema, name] => Some((Some(schema.to_ascii_lowercase()), unquote(name))),
                 _ => None,
             };
         }
@@ -827,6 +835,7 @@ pub(crate) fn binary_operator_name(op: &BinaryOperator) -> Option<(Option<String
         BinaryOperator::Question => "?",
         BinaryOperator::QuestionAnd => "?&",
         BinaryOperator::QuestionPipe => "?|",
+        BinaryOperator::LtDashGt => "<->",
         _ => return None,
     };
     Some((None, name.to_string()))
@@ -858,6 +867,7 @@ fn standard_binary_operator(name: &str) -> Option<BinaryOperator> {
         "~*" => BinaryOperator::PGRegexIMatch,
         "!~" => BinaryOperator::PGRegexNotMatch,
         "!~*" => BinaryOperator::PGRegexNotIMatch,
+        "<->" => BinaryOperator::LtDashGt,
         "~~" => BinaryOperator::PGLikeMatch,
         "~~*" => BinaryOperator::PGILikeMatch,
         "!~~" => BinaryOperator::PGNotLikeMatch,
@@ -1111,6 +1121,48 @@ impl Binder<'_, '_> {
                     Resolution::NotFound | Resolution::Ambiguous { user: false } => {}
                 }
             }
+            Expr::Function(function)
+                if function.name.to_string().eq_ignore_ascii_case(
+                    crate::parse_compat_postfix::PREFIX_OPERATOR_FUNCTION,
+                ) =>
+            {
+                let (name, operand) = {
+                    let args = crate::function_arg_list(function);
+                    let (Some(Expr::Value(name)), Some(operand), 2) =
+                        (args.first(), args.get(1), args.len())
+                    else {
+                        return Ok(());
+                    };
+                    let sqlparser::ast::Value::SingleQuotedString(name) = &name.value else {
+                        return Ok(());
+                    };
+                    (name.clone(), operand.clone())
+                };
+                let operand_type = self.operand_type(&operand).unwrap_or(None);
+                let candidates = operator_candidates(self.operators, &self.path, None, &name, true);
+                match resolve_operator(&self.facts, &candidates, None, &operand_type) {
+                    Resolution::User(operator) if !operator.is_shell() => {
+                        let operator = operator.clone();
+                        *expr = self.call(&operator, vec![operand])?;
+                    }
+                    Resolution::Ambiguous { user: true } => {
+                        return Err(SqlError::data_exception_public(
+                            "42725",
+                            format!(
+                                "operator is not unique: {name} {}",
+                                operand_display(&operand_type)
+                            ),
+                            None,
+                        ));
+                    }
+                    _ => {
+                        return Err(SqlError::undefined_function(format!(
+                            "operator does not exist: {name} {}",
+                            operand_display(&operand_type)
+                        )));
+                    }
+                }
+            }
             Expr::UnaryOp { op, expr: operand } => {
                 let Some(name) = unary_operator_name(op) else {
                     return Ok(());
@@ -1231,6 +1283,10 @@ fn mentions_bindable_operator(statement: &Statement, operators: &[OperatorSchema
             Expr::UnaryOp { op, .. } => {
                 unary_operator_name(op).is_some_and(|name| prefix.contains(name))
             }
+            Expr::Function(function) => function
+                .name
+                .to_string()
+                .eq_ignore_ascii_case(crate::parse_compat_postfix::PREFIX_OPERATOR_FUNCTION),
             _ => false,
         };
         if found {

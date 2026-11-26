@@ -1838,8 +1838,7 @@ impl<'db> SqlEngine<'db> {
                 root,
                 access_chain,
                 row_columns_expr_pg_type(self.db_ref(), root, columns.iter().map(String::as_str))
-                    .as_deref()
-                    == Some("jsonb"),
+                    .as_deref(),
                 |expr| self.eval_row_aggregate_expr(rows, columns, expr),
             ),
             Expr::Interval(interval) => interval_literal_value(interval, |expr| {
@@ -2849,7 +2848,15 @@ impl<'db> SqlEngine<'db> {
         let args = function_args(function);
         let aggregate = matches!(
             name,
-            "count" | "sum" | "avg" | "min" | "max" | "bool_and" | "bool_or" | "every"
+            "count"
+                | "sum"
+                | "avg"
+                | "min"
+                | "max"
+                | "bool_and"
+                | "bool_or"
+                | "every"
+                | "array_agg"
         )
         .then(|| RowAggregate::from_function(function))
         .transpose()?;
@@ -3037,7 +3044,8 @@ impl<'db> SqlEngine<'db> {
                         SqlValue::Null
                     }
                 }
-                "count" | "sum" | "avg" | "min" | "max" | "bool_and" | "bool_or" | "every" => {
+                "count" | "sum" | "avg" | "min" | "max" | "bool_and" | "bool_or" | "every"
+                | "array_agg" => {
                     let frame = self
                         .window_frame_range(spec, rows, context, partition, order_keys, position)?;
                     if let Some((frame_start, frame_end)) = frame {

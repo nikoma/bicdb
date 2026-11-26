@@ -188,6 +188,8 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>> {
     restore_postgres_whole_row_function_args(&mut statements);
     crate::similar_to::rewrite_similar_to(&mut statements);
     resolve_pg_typeof_unknown_literals(&mut statements);
+    crate::parse_compat_postfix::bind_jsonpath_named_args(&mut statements)?;
+    crate::json_table::rewrite_json_tables(&mut statements)?;
     Ok(statements)
 }
 
@@ -967,9 +969,9 @@ pub fn parse_transaction_control_for_session(
             session,
         }) => {
             if snapshot.is_some() {
-                return Err(SqlError::Unsupported(
-                    "transaction snapshots are not supported".to_string(),
-                ));
+                // SET TRANSACTION SNAPSHOT runs as an ordinary statement of
+                // the open transaction (see session/exported_snapshots.rs).
+                return Ok(None);
             }
             if *session || profile == oracle::ORACLE_PREVIEW_PROFILE {
                 validate_profile_transaction_modes(

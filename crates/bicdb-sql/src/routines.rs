@@ -138,6 +138,11 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
             oracle_autonomous: false,
         });
     }
+    if crate::user_aggregates::is_aggregate_routine(routine) {
+        // An aggregate has no body: its calls fold through the transition
+        // function (see user_aggregates).
+        return aggregate_routine_ir(routine);
+    }
     if !routine_language_is_plpgsql(routine) {
         return Err(SqlError::UnsupportedPlpgsqlFeature(format!(
             "stored routine {} uses unsupported language {}",
@@ -893,6 +898,42 @@ pub(crate) fn procedure_actual_arguments<'a>(
         }
     }
     Ok(actuals)
+}
+
+/// The column name marking a `RETURN NEXT expression` compiled as `RETURN
+/// QUERY SELECT expression`.
+pub(crate) const RETURN_NEXT_EXPRESSION_COLUMN: &str = "bicdb$return_next";
+
+/// The bodiless IR of an aggregate routine. Outlined so the compile path's
+/// frame does not hold a second IR.
+#[inline(never)]
+fn aggregate_routine_ir(routine: &RoutineSchema) -> Result<RoutineIR> {
+    let params = parse_routine_params(&routine.args)?;
+    let symbol_names = routine_symbol_names(&params, &[], &[], &[]);
+    Ok(RoutineIR {
+        node_ownership: CompiledNodeOwnership::default(),
+        params,
+        symbol_names,
+        declarations: Vec::new(),
+        statements: Vec::new(),
+        exception_handlers: Vec::new(),
+        oracle_date_return: false,
+        oracle_procedural_evaluation: false,
+        oracle_statement_rollback: false,
+        oracle_error_diagnostics: None,
+        oracle_autonomous: false,
+    })
+}
+
+/// `RETURN NEXT expression` as `RETURN QUERY SELECT expression`. Outlined:
+/// the routine statement parser recurses per nested block, and the parsed
+/// query must not sit in every one of its frames.
+#[inline(never)]
+fn return_next_expression(expression: &str) -> Result<RoutineStmt> {
+    Ok(RoutineStmt::ReturnQuery(parse_single_query(&format!(
+        "SELECT {} AS \"{RETURN_NEXT_EXPRESSION_COLUMN}\"",
+        expression.trim()
+    ))?))
 }
 
 pub(crate) fn parse_routine_param(arg: &str, index: usize) -> Result<RoutineParam> {
@@ -1908,6 +1949,14 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
     {
         return parse_routine_while_loop(statement);
     }
+    parse_simple_routine_statement(statement)
+}
+
+/// The non-compound routine statements. Outlined from
+/// `parse_routine_statement`: nested blocks recurse through the compound
+/// arms, and this function's large frame must not sit on every level.
+#[inline(never)]
+fn parse_simple_routine_statement(statement: &str) -> Result<RoutineStmt> {
     if keyword_matches_at(statement, "EXIT", 0) {
         let rest = statement["EXIT".len()..]
             .trim()
@@ -1990,9 +2039,9 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
             if expression.trim().is_empty() {
                 return Ok(RoutineStmt::ReturnNext);
             }
-            return Err(SqlError::UnsupportedPlpgsqlFeature(
-                "RETURN NEXT is not implemented".to_string(),
-            ));
+            // `RETURN NEXT expression` appends the expression's value as
+            // one row, as `RETURN QUERY SELECT expression` does.
+            return return_next_expression(expression);
         }
         return Ok(RoutineStmt::Return(
             (!rest.is_empty())
@@ -4241,7 +4290,7 @@ mod return_keyword_tests {
         ));
         assert!(matches!(
             parse_routine_statement("RETURN NEXT 1"),
-            Err(SqlError::UnsupportedPlpgsqlFeature(_))
+            Ok(RoutineStmt::ReturnQuery(_))
         ));
     }
 }

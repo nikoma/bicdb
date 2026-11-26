@@ -1918,8 +1918,13 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         return select_common_builtin_projected_type(&branch_types);
     }
     if let Expr::AtTimeZone { timestamp, .. } = expr {
-        return match projected_expr_pg_type(timestamp, schema).as_deref() {
-            Some("timestamptz") => Some("timestamp".to_string()),
+        return match crate::eval::at_time_zone_source_type(
+            timestamp,
+            projected_expr_pg_type(timestamp, schema),
+        )
+        .as_deref()
+        {
+            Some("timestamptz" | "unknown") => Some("timestamp".to_string()),
             Some("timestamp") => Some("timestamptz".to_string()),
             _ => None,
         };
@@ -2390,6 +2395,10 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             "make_time" => return Some("time".to_string()),
             "make_timestamp" => return Some("timestamp".to_string()),
             "pg_partition_root" => return Some("regclass".to_string()),
+            "make_timestamptz" => return Some("timestamptz".to_string()),
+            "timestamptz" if argument_nodes.len() == 2 => return Some("timestamptz".to_string()),
+            "timestamp" if argument_nodes.len() == 2 => return Some("timestamp".to_string()),
+            "isfinite" => return Some("bool".to_string()),
             "trunc" if argument_nodes.len() == 2 => return Some("numeric".to_string()),
             "bicdb_oracle_nvl_number"
             | "bicdb_oracle_nvl2_number"

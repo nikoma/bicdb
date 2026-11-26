@@ -27,7 +27,6 @@ pub use distribution_controller::BalancedDistributionHostService;
 mod high_availability;
 pub use embedded_ha::{EmbeddedHaDatabase, HaWriterLease};
 mod live_queries;
-mod sql_cursors;
 pub use live_queries::EmbeddedSubscription;
 mod backups;
 mod log_archive;
@@ -2884,6 +2883,7 @@ fn handle_frontend_message(
                     false,
                     !executed.suspended,
                     Some(&mut state.catalog_cache),
+                    &bicdb_sql::TemporalOutput::from_gucs(state.session_state.session_gucs()),
                 )?;
                 Ok((executed.suspended, stats))
             });
@@ -3148,8 +3148,6 @@ struct ConnectionState {
     active_request_bytes: usize,
     prepared: FxHashMap<String, PreparedStatement>,
     portals: FxHashMap<String, Portal>,
-    /// SQL-level cursors (DECLARE/FETCH/CLOSE) open on this connection.
-    sql_cursors: FxHashMap<String, sql_cursors::SqlCursor>,
     session_state: SqlSessionGucState,
     reported_interval_style: String,
     reported_time_zone: String,
@@ -3279,7 +3277,6 @@ impl ConnectionState {
             active_request_bytes: 0,
             prepared: FxHashMap::default(),
             portals: FxHashMap::default(),
-            sql_cursors: FxHashMap::default(),
             session_state: SqlSessionGucState::from_session_gucs(session_gucs),
             reported_interval_style: "postgres".into(),
             reported_time_zone: "UTC".into(),
@@ -3482,6 +3479,7 @@ fn execute_server_query(
             true,
             true,
             Some(&mut state.catalog_cache),
+            &bicdb_sql::TemporalOutput::from_gucs(state.session_state.session_gucs()),
         )?;
         return Ok(QueryFlow::Complete);
     }
@@ -3500,6 +3498,7 @@ fn execute_server_query(
                     true,
                     true,
                     Some(&mut state.catalog_cache),
+                    &bicdb_sql::TemporalOutput::from_gucs(state.session_state.session_gucs()),
                 )?;
             }
             None => live_queries::run_subscription(
@@ -3704,6 +3703,7 @@ fn execute_server_query(
                 true,
                 true,
                 Some(&mut state.catalog_cache),
+                &bicdb_sql::TemporalOutput::from_gucs(state.session_state.session_gucs()),
             )?;
         } else {
             let result =
@@ -3719,6 +3719,7 @@ fn execute_server_query(
                 true,
                 true,
                 Some(&mut state.catalog_cache),
+                &bicdb_sql::TemporalOutput::from_gucs(state.session_state.session_gucs()),
             )?;
         }
         Ok(QueryFlow::Complete)
@@ -4935,9 +4936,6 @@ fn execute_server_sql_with_options_normalized(
     ) && !(transaction_end.is_some() && state.failed_transaction)
     {
         delegation::validate_delegation(server, state)?;
-    }
-    if let Some(result) = sql_cursors::execute(server, state, sql, normalized)? {
-        return Ok(result);
     }
     let server_status_query = is_server_status_query_normalized(normalized);
     let pin_under_execution_admission =

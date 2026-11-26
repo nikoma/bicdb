@@ -163,6 +163,100 @@ impl<'db> SqlSession<'db> {
                     object.to_ascii_uppercase()
                 )))
             }
+            AlterFunctionOperation::RenameTo { new_name } => {
+                let new_name = normalize_object_name(&ident_value(new_name));
+                let signature = routine
+                    .arg_types
+                    .iter()
+                    .map(|kind| kind.pg_type.clone())
+                    .collect::<Vec<_>>();
+                if routines_named(self.db_ref(), kind, &new_name)?
+                    .iter()
+                    .any(|other| {
+                        other
+                            .arg_types
+                            .iter()
+                            .map(|kind| kind.pg_type.clone())
+                            .collect::<Vec<_>>()
+                            == signature
+                    })
+                {
+                    return Err(SqlError::data_exception_public(
+                        "42723",
+                        format!(
+                            "{object} {new_name}({}) already exists in schema \"{}\"",
+                            signature
+                                .iter()
+                                .map(|pg_type| common_type_display(pg_type))
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                            routine_schema_name(&routine)
+                        ),
+                        None,
+                    ));
+                }
+                let mut renamed = routine.clone();
+                renamed.name = new_name;
+                renamed.overload = None;
+                renamed.catalog_oid = routine.catalog_oid;
+                self.delete_session_routine(&routine)?;
+                self.save_session_routine(&renamed)?;
+                Ok(SqlResult::command(format!(
+                    "ALTER {}",
+                    object.to_ascii_uppercase()
+                )))
+            }
+            AlterFunctionOperation::Actions { actions, .. } => {
+                // Characteristics live in the stored CREATE statement, which
+                // volatility, strictness and the catalogs read back.
+                let Ok(mut statements) = crate::table_queries::parse(&routine.definition) else {
+                    return Err(SqlError::Unsupported(format!(
+                        "ALTER {object} actions are not supported for this {object}'s definition"
+                    )));
+                };
+                let Some(Statement::CreateFunction(create)) = statements.first_mut() else {
+                    return Err(SqlError::Unsupported(format!(
+                        "ALTER {object} actions are not supported for this {object}'s definition"
+                    )));
+                };
+                for action in actions {
+                    match action {
+                        AlterFunctionAction::CalledOnNull(value) => {
+                            create.called_on_null = Some(value.clone())
+                        }
+                        AlterFunctionAction::Behavior(value) => {
+                            create.behavior = Some(value.clone())
+                        }
+                        AlterFunctionAction::Security { security, .. } => {
+                            routine.security_definer =
+                                matches!(security, FunctionSecurity::Definer);
+                            create.security = Some(security.clone());
+                        }
+                        AlterFunctionAction::Parallel(value) => {
+                            create.parallel = Some(value.clone())
+                        }
+                        // Planner hints with no effect on results.
+                        AlterFunctionAction::Leakproof(_)
+                        | AlterFunctionAction::Cost(_)
+                        | AlterFunctionAction::Rows(_)
+                        | AlterFunctionAction::Support(_)
+                        | AlterFunctionAction::Reset(_) => {}
+                        // A SET clause changes settings while the function
+                        // runs; accepting it without that would be wrong.
+                        AlterFunctionAction::Set(_) => {
+                            return Err(SqlError::Unsupported(format!(
+                                "ALTER {object} SET configuration parameter is not supported"
+                            )));
+                        }
+                    }
+                }
+                routine.definition = statements[0].to_string();
+                self.save_session_routine(&routine)?;
+                Ok(SqlResult::command(format!(
+                    "ALTER {}",
+                    object.to_ascii_uppercase()
+                )))
+            }
             operation => Err(SqlError::Unsupported(format!(
                 "ALTER {object} {operation} is not supported"
             ))),
@@ -3512,7 +3606,7 @@ impl<'db> SqlSession<'db> {
             Expr::CompoundFieldAccess { root, access_chain } => eval_access_chain_expr(
                 root,
                 access_chain,
-                projected_expr_pg_type(root, Some(schema)).as_deref() == Some("jsonb"),
+                projected_expr_pg_type(root, Some(schema)).as_deref(),
                 |expr| {
                     self.eval_target_record_expr(table, alias, schema, record, expr)?
                         .ok_or_else(|| {

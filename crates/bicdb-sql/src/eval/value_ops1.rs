@@ -2336,6 +2336,9 @@ pub(crate) fn eval_session_function_value(
                 crate::similar_to::similar_to_escape(&args[0].to_cell(), escape.as_deref())?,
             )))
         }
+        "bicdb_json_value" | "bicdb_json_query" | "bicdb_json_exists" => {
+            crate::sql_json::eval_sql_json_function(name, args)
+        }
         crate::similar_to::SIMILAR_SUBSTRING_FUNCTION if args.len() == 3 => {
             if args.iter().any(|value| matches!(value, SqlValue::Null)) {
                 return Ok(Some(SqlValue::Null));
@@ -2531,7 +2534,7 @@ pub(crate) fn eval_session_function_value(
             };
             Ok(Some(SqlValue::String(value.into_owned())))
         }
-        "to_timestamp" | "pg_catalog.to_timestamp" => Ok(Some(eval_to_timestamp(args)?)),
+        "to_timestamp" | "pg_catalog.to_timestamp" => Ok(Some(eval_pg_to_timestamp(args)?)),
         "lastval" | "pg_catalog.lastval" => {
             if !args.is_empty() {
                 return Err(SqlError::InvalidSql(
@@ -2641,6 +2644,20 @@ fn pg_float8_text(value: f64) -> String {
         return text;
     }
     value.to_string()
+}
+
+/// PostgreSQL `to_timestamp`: the epoch form, or the template parser of
+/// the formatting functions for `to_timestamp(text, text)`.
+pub(crate) fn eval_pg_to_timestamp(args: &[SqlValue]) -> Result<SqlValue> {
+    if args.len() == 2 {
+        if args.iter().any(|value| matches!(value, SqlValue::Null)) {
+            return Ok(SqlValue::Null);
+        }
+        let input = sql_value_text(&args[0]).unwrap_or_else(|| args[0].to_cell());
+        let format = sql_value_text(&args[1]).unwrap_or_else(|| args[1].to_cell());
+        return crate::datetime_template::to_timestamp(&input, &format).map(SqlValue::String);
+    }
+    eval_to_timestamp(args)
 }
 
 pub(crate) fn eval_to_timestamp(args: &[SqlValue]) -> Result<SqlValue> {
@@ -3960,26 +3977,39 @@ pub(crate) fn eval_compatibility_function_value(
             Ok(Some(SqlValue::String(render_interval(interval))))
         }
         "date_trunc" | "pg_catalog.date_trunc" => {
-            require_arg_count("date_trunc", args, 2)?;
+            if args.len() != 2 && args.len() != 3 {
+                require_arg_count("date_trunc", args, 2)?;
+            }
             if args.iter().any(|value| matches!(value, SqlValue::Null)) {
                 return Ok(Some(SqlValue::Null));
             }
             let field = args[0].to_cell();
             let timestamp_text = args[1].to_cell();
+            // date_trunc(field, timestamptz, zone) truncates in that zone.
+            let explicit_zone = args.get(2).map(SqlValue::to_cell);
+            if let Some(zone) = &explicit_zone {
+                if !validate_timezone_name(zone) {
+                    return Err(SqlError::invalid_parameter_value(format!(
+                        "time zone \"{zone}\" not recognized"
+                    )));
+                }
+            }
             // date_trunc(text, date) resolves to the timestamptz form, as
             // PostgreSQL casts the date to timestamptz.
-            if matches!(
-                arg_types
-                    .and_then(|types| types.get(1))
-                    .and_then(Option::as_deref),
-                Some("timestamptz" | "date")
-            ) {
+            if explicit_zone.is_some()
+                || matches!(
+                    arg_types
+                        .and_then(|types| types.get(1))
+                        .and_then(Option::as_deref),
+                    Some("timestamptz" | "date")
+                )
+            {
                 let timestamp = parse_timestamptz(&timestamp_text)
                     .map_err(|error| postgres_timestamptz_input_error(&timestamp_text, error))?;
                 let Some(micros) = timestamp.finite_micros() else {
                     return Ok(Some(SqlValue::String(render_timestamptz(timestamp))));
                 };
-                let timezone = current_timezone_name();
+                let timezone = explicit_zone.unwrap_or_else(current_timezone_name);
                 let offset =
                     timezone_offset_at_timestamp(&timezone, timestamp).ok_or_else(|| {
                         SqlError::invalid_parameter_value(format!(
@@ -4269,6 +4299,10 @@ pub(crate) fn eval_to_char(args: &[SqlValue]) -> Result<SqlValue> {
     let format = sql_value_text(&args[1])
         .ok_or_else(|| SqlError::InvalidSql("to_char format must be text".to_string()))?;
     let input = args[0].to_cell();
+    // An infinite date or timestamp formats as NULL.
+    if matches!(input.as_str(), "infinity" | "-infinity") {
+        return Ok(SqlValue::Null);
+    }
     if parse_date_prefix(&input).is_some() {
         return format_timestamp_to_char(&input, &format).map(SqlValue::String);
     }
@@ -4287,7 +4321,17 @@ pub(crate) fn format_timestamp_to_char(value: &str, format: &str) -> Result<Stri
         .ok_or_else(|| SqlError::InvalidSql(format!("to_char cannot parse timestamp {}", value)))?;
     let (hour, minute, second) = parse_time_prefix(value).unwrap_or((0, 0, 0));
     let micros = to_char_fraction_micros(value);
-    let days = days_from_civil(year, month, day);
+    let bc = value.trim_end().ends_with(" BC");
+    let offset = to_char_utc_offset(value);
+    let days = days_from_civil(if bc { 1 - year } else { year }, month, day);
+    let iso = chrono::NaiveDate::from_ymd_opt(if bc { 1 - year } else { year }, month, day)
+        .map(|date| {
+            use chrono::Datelike;
+            let week = date.iso_week();
+            let weekday = date.weekday().number_from_monday();
+            (week.year(), week.week(), weekday)
+        })
+        .unwrap_or((year, 1, 1));
     // 0 = Sunday; 1970-01-01 was a Thursday.
     let weekday = (days + 4).rem_euclid(7) as usize;
     let day_of_year = (days - days_from_civil(year, 1, 1) + 1) as u32;
@@ -4433,6 +4477,100 @@ pub(crate) fn format_timestamp_to_char(value: &str, format: &str) -> Result<Stri
             } else if upper_rest.starts_with('J') {
                 let value = days + 2_440_588;
                 (value.to_string(), 1, Some(value))
+            } else if upper_rest.starts_with("CC") {
+                let century = (i64::from(year) + 99) / 100;
+                let value = if bc { -century } else { century };
+                (number(value, 2), 2, Some(value))
+            } else if upper_rest.starts_with("A.D.") || upper_rest.starts_with("B.C.") {
+                (
+                    cased(if bc { "B.C." } else { "A.D." }, &rest[..4], 0),
+                    4,
+                    None,
+                )
+            } else if upper_rest.starts_with("AD") || upper_rest.starts_with("BC") {
+                (cased(if bc { "BC" } else { "AD" }, &rest[..2], 0), 2, None)
+            } else if let Some(digits) = ["FF1", "FF2", "FF3", "FF4", "FF5", "FF6"]
+                .iter()
+                .position(|pattern| upper_rest.starts_with(pattern))
+            {
+                let digits = digits + 1;
+                let value = micros / 10_i64.pow(6 - digits as u32);
+                (format!("{value:0digits$}"), 3, None)
+            } else if upper_rest.starts_with("IDDD") {
+                let value = i64::from((iso.1 - 1) * 7 + iso.2);
+                (number(value, 3), 4, Some(value))
+            } else if upper_rest.starts_with("IYYY") {
+                (number(iso.0.into(), 4), 4, Some(iso.0.into()))
+            } else if upper_rest.starts_with("IYY") {
+                (number(iso.0.rem_euclid(1_000).into(), 3), 3, None)
+            } else if upper_rest.starts_with("IY") {
+                (number(iso.0.rem_euclid(100).into(), 2), 2, None)
+            } else if upper_rest.starts_with("IW") {
+                (number(iso.1.into(), 2), 2, Some(iso.1.into()))
+            } else if upper_rest.starts_with("ID") {
+                (iso.2.to_string(), 2, Some(iso.2.into()))
+            } else if upper_rest.starts_with('I') {
+                (iso.0.rem_euclid(10).to_string(), 1, None)
+            } else if upper_rest.starts_with("RM") {
+                const ROMAN: [&str; 12] = [
+                    "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII",
+                ];
+                let numeral = ROMAN[month as usize - 1];
+                let numeral = if rest.starts_with("rm") {
+                    numeral.to_ascii_lowercase()
+                } else {
+                    numeral.to_string()
+                };
+                let text = if fill_mode {
+                    numeral
+                } else {
+                    format!("{numeral:<4}")
+                };
+                (text, 2, None)
+            } else if upper_rest.starts_with("TZH") {
+                let offset = offset.unwrap_or(0);
+                let sign = if offset < 0 { '-' } else { '+' };
+                (
+                    format!("{sign}{:02}", offset.unsigned_abs() / 3_600),
+                    3,
+                    None,
+                )
+            } else if upper_rest.starts_with("TZM") {
+                let offset = offset.unwrap_or(0);
+                (
+                    format!("{:02}", offset.unsigned_abs() % 3_600 / 60),
+                    3,
+                    None,
+                )
+            } else if upper_rest.starts_with("TZ") {
+                let text = match offset {
+                    None => String::new(),
+                    Some(offset) => to_char_zone_abbreviation(value, offset),
+                };
+                let text = if rest.starts_with("tz") {
+                    text.to_ascii_lowercase()
+                } else {
+                    text
+                };
+                (text, 2, None)
+            } else if upper_rest.starts_with("OF") {
+                let text = match offset {
+                    None => String::new(),
+                    Some(offset) => {
+                        let sign = if offset < 0 { '-' } else { '+' };
+                        let magnitude = offset.unsigned_abs();
+                        if magnitude % 3_600 == 0 {
+                            format!("{sign}{:02}", magnitude / 3_600)
+                        } else {
+                            format!(
+                                "{sign}{:02}:{:02}",
+                                magnitude / 3_600,
+                                magnitude % 3_600 / 60
+                            )
+                        }
+                    }
+                };
+                (text, 2, None)
             } else if let Some(pattern) = TO_CHAR_UNSUPPORTED_PATTERNS
                 .iter()
                 .find(|pattern| upper_rest.starts_with(**pattern))
@@ -4503,6 +4641,58 @@ const TO_CHAR_UNSUPPORTED_PATTERNS: [&str; 22] = [
     "A.D.", "B.C.", "AD", "BC", "CC", "FF1", "FF2", "FF3", "FF4", "FF5", "FF6", "IDDD", "IYYY",
     "IYY", "IW", "ID", "IY", "OF", "RM", "TZH", "TZM", "TZ",
 ];
+
+/// The UTC offset (seconds east) a timestamptz text carries after its clock.
+fn to_char_utc_offset(value: &str) -> Option<i32> {
+    let value = value.trim_end().trim_end_matches(" BC");
+    let (_, time) = value.split_once(' ')?;
+    let at = time.find(['+', '-'])?;
+    let sign = if time.as_bytes()[at] == b'-' { -1 } else { 1 };
+    let mut fields = time[at + 1..].split(':');
+    let hours = fields.next()?.parse::<i32>().ok()?;
+    let minutes = fields
+        .next()
+        .map_or(Some(0), |field| field.parse::<i32>().ok())?;
+    let seconds = fields
+        .next()
+        .map_or(Some(0), |field| field.parse::<i32>().ok())?;
+    Some(sign * (hours * 3_600 + minutes * 60 + seconds))
+}
+
+/// The session zone's abbreviation for the instant `value` names, or the
+/// numeric offset when the zone has none.
+fn to_char_zone_abbreviation(value: &str, offset: i32) -> String {
+    use chrono::offset::{Offset, TimeZone};
+    use chrono_tz::OffsetName;
+    let numeric = || {
+        let text = format_timezone_offset(offset);
+        text
+    };
+    let Ok(zone) = current_timezone_name().parse::<chrono_tz::Tz>() else {
+        return numeric();
+    };
+    let Ok(parsed) = crate::eval::parse_timestamptz(value) else {
+        return numeric();
+    };
+    let Some(micros) = parsed.finite_micros() else {
+        return numeric();
+    };
+    let Some(utc) =
+        chrono::DateTime::<chrono::Utc>::from_timestamp_micros(micros + 946_684_800_000_000)
+    else {
+        return numeric();
+    };
+    let local = zone.offset_from_utc_datetime(&utc.naive_utc());
+    if local.fix().local_minus_utc() != offset {
+        return numeric();
+    }
+    let abbreviation = local.abbreviation().unwrap_or_default();
+    if abbreviation.is_empty() || abbreviation.starts_with(['+', '-']) {
+        numeric()
+    } else {
+        abbreviation.to_string()
+    }
+}
 
 fn to_char_fraction_micros(value: &str) -> i64 {
     let Some((_, time)) = value.split_once(' ') else {

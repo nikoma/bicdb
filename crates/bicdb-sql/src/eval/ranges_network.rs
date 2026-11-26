@@ -2640,6 +2640,7 @@ pub(crate) fn eval_binary_value(
         return eval_vector_distance_value(left, metric, right);
     }
     match op {
+        BinaryOperator::Overlaps => crate::overlaps::eval_overlaps(&left, &right),
         BinaryOperator::Minus if matches!(left, SqlValue::Json(_)) => {
             eval_json_delete_value(left, right)
         }
@@ -3022,6 +3023,15 @@ pub(crate) fn eval_binary_expr_value_typed(
     )? {
         return Ok(value);
     }
+    if let Some(value) = crate::overlaps::eval_date_timetz_addition(
+        &left,
+        op,
+        &right,
+        left_type.as_deref(),
+        right_type.as_deref(),
+    )? {
+        return Ok(value);
+    }
     if let Some(value) = eval_typed_date_arithmetic(
         &left,
         op,
@@ -3088,9 +3098,11 @@ pub(crate) fn eval_binary_expr_value_typed(
         left_type.as_deref() == Some("tsquery") || matches!(left, SqlValue::TsQuery(_));
     let right_is_query =
         right_type.as_deref() == Some("tsquery") || matches!(right, SqlValue::TsQuery(_));
+    // `jsonb @@ 'path'`: an unknown literal resolves as jsonpath.
     let value = if matches!(op, BinaryOperator::AtAt)
         && left_type.as_deref() == Some("jsonb")
-        && right_type.as_deref() == Some("jsonpath")
+        && (right_type.as_deref() == Some("jsonpath")
+            || (right_type.is_none() && matches!(right, SqlValue::String(_))))
     {
         eval_jsonpath_operator_value(left, right, true)?
     } else if matches!(op, BinaryOperator::AtAt)
@@ -3734,7 +3746,7 @@ pub(crate) fn eval_typed_timestamp_arithmetic(
         let interval = left.checked_difference(right).map_err(|_| {
             SqlError::data_exception(
                 "22008",
-                "cannot subtract infinite timestamps",
+                "interval out of range",
                 Some("timestamp".to_string()),
             )
         })?;
@@ -3801,7 +3813,7 @@ pub(crate) fn eval_typed_timestamptz_arithmetic(
         let interval = left.checked_difference(right).map_err(|_| {
             SqlError::data_exception(
                 "22008",
-                "cannot subtract infinite timestamps",
+                "interval out of range",
                 Some("timestamptz".to_string()),
             )
         })?;
@@ -3821,6 +3833,17 @@ pub(crate) fn eval_typed_timestamptz_arithmetic(
             "invalid input syntax for type interval: \"{interval_text}\""
         ))
     })?;
+    // Infinite intervals: like signs give an infinite timestamp, opposite
+    // ones overflow (PostgreSQL 18).
+    if !interval.is_finite() {
+        let shifted = if subtract {
+            timestamp.checked_sub_interval(interval)
+        } else {
+            timestamp.checked_add_interval(interval)
+        }
+        .map_err(|_| SqlError::data_exception("22008", "timestamp out of range", None))?;
+        return Ok(Some(SqlValue::String(render_timestamptz(shifted))));
+    }
     if subtract {
         interval = PgInterval {
             months: interval.months.checked_neg().ok_or_else(|| {

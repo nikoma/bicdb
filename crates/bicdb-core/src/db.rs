@@ -12059,6 +12059,12 @@ impl BicDb {
     /// Highest contiguous commit sequence visible to a newly started
     /// transaction. PostgreSQL snapshot compatibility maps this watermark to
     /// the `xmax` boundary rather than exposing BicDB's internal allocation ID.
+    /// Whether the transaction `id` is still pending (neither committed nor
+    /// rolled back nor abandoned).
+    pub fn transaction_is_pending(&self, id: TransactionId) -> bool {
+        self.tx_states.get_copied(&id.0) == Some(TxState::Pending)
+    }
+
     pub fn current_visibility_watermark(&self) -> u64 {
         self.last_committed_tx.load(AtomicOrdering::SeqCst)
     }
@@ -16348,6 +16354,57 @@ impl Transaction {
 
     pub fn isolation(&self) -> TransactionIsolation {
         self.isolation
+    }
+
+    /// Adopt the fixed snapshot `snapshot` that the still-pending
+    /// transaction `exporter` exported (SQL `SET TRANSACTION SNAPSHOT`).
+    ///
+    /// Only a repeatable-read transaction that has not yet read, locked or
+    /// written anything may adopt a snapshot. The exporter's registration
+    /// keeps every version visible at `snapshot` from garbage collection; it
+    /// is confirmed still pending after this transaction registers the same
+    /// snapshot, so the versions stay protected once the exporter ends.
+    pub fn adopt_exported_snapshot(
+        &mut self,
+        snapshot: u64,
+        exporter: TransactionId,
+    ) -> Result<()> {
+        if self.state != TxState::Pending {
+            return Err(BicDbError::TransactionNotPending);
+        }
+        if self.isolation != TransactionIsolation::RepeatableRead
+            || self.postgres_serializable.is_some()
+        {
+            return Err(BicDbError::TransactionConflict(
+                "only a repeatable-read transaction can adopt an exported snapshot".into(),
+            ));
+        }
+        if self.write_len() != 0
+            || self.lock_len() != 0
+            || !self.observed_record_versions.lock().is_empty()
+            || self
+                .collection_incarnations
+                .lock()
+                .values()
+                .any(|binding| binding.snapshot_observed)
+        {
+            return Err(BicDbError::TransactionConflict(
+                "a snapshot can only be adopted before transaction access".into(),
+            ));
+        }
+        self.active_snapshots.incr(snapshot);
+        if self.tx_states.get_copied(&exporter.0) != Some(TxState::Pending) {
+            self.active_snapshots.decr_remove(snapshot);
+            return Err(BicDbError::TransactionConflict(
+                "the exporting transaction is no longer active".into(),
+            ));
+        }
+        self.active_snapshots.decr_remove(self.snapshot_tx.0);
+        self.snapshot_tx = TransactionId(snapshot);
+        self.applied_snapshot = self.applied_snapshot.min(snapshot);
+        self.statement_snapshot_deferred = false;
+        self.statement_snapshot_acquired = true;
+        Ok(())
     }
 
     /// Whether the host has reached a statement that requires a snapshot.

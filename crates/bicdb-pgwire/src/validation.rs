@@ -557,6 +557,7 @@ mod tests {
                     true,
                     true,
                     Some(&mut state.catalog_cache),
+                    &bicdb_sql::TemporalOutput::default(),
                 )
                 .unwrap();
                 phase_tx.send("simple-commit").unwrap();
@@ -4019,6 +4020,7 @@ mod tests {
             true,
             false,
             Some(&mut state.catalog_cache),
+            &bicdb_sql::TemporalOutput::default(),
         )
         .unwrap();
         stream.flush().unwrap();

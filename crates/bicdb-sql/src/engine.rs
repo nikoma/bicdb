@@ -1275,6 +1275,7 @@ impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
                 Some("text")
             }
             "pg_notify" => Some("void"),
+            "pg_export_snapshot" => Some("text"),
             "coalesce" | "nullif" | "greatest" | "least" | "ifnull" => common.as_deref(),
             "abs" | "ceil" | "ceiling" | "floor" | "round" | "mod" | "power" | "sqrt" => {
                 common.as_deref().or(Some("numeric"))

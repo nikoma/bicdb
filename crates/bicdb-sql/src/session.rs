@@ -50,6 +50,7 @@ pub use partition_admission::{
     PartitionPolicyDecision, PartitionRowRelocation, PartitionUpgradeApplied,
     PartitionUpgradeInspection, PartitionUpgradePlan,
 };
+mod exported_snapshots;
 mod partition_triggers;
 pub(crate) mod planner_gucs;
 #[cfg(test)]
@@ -61,6 +62,9 @@ mod raw_index_fts;
 mod read_only;
 mod row_assignments;
 mod row_triggers;
+mod sql_cursors;
+pub use sql_cursors::SqlCursors;
+pub(crate) use sql_cursors::{pg_cursors_rows, PG_CURSORS_COLUMNS};
 mod set_functions;
 #[cfg(test)]
 mod subquery_scope_tests;
@@ -1233,6 +1237,7 @@ pub struct SqlSession<'db> {
     /// enable this mode.
     pub(crate) signed_application_security_guc_compatibility: bool,
     pub(crate) currvals: FxHashMap<String, i64>,
+    pub(crate) sql_cursors: sql_cursors::SqlCursors,
     pub(crate) oracle_output: oracle::output::State,
     pub(crate) oracle_lobs: oracle::lobs::State,
     pub(crate) pg_large_objects: crate::pg_large_objects::DescriptorState,
@@ -1261,6 +1266,7 @@ pub struct SqlSessionGucState {
     local_restore: HashMap<String, Option<String>>,
     local_settings_restore: SqlSettingsRestore,
     currvals: FxHashMap<String, i64>,
+    sql_cursors: sql_cursors::SqlCursors,
     oracle_output: oracle::output::State,
 }
 
@@ -1326,9 +1332,11 @@ impl SqlSessionGucState {
         }
         self.transaction_start = None;
         self.transaction_timestamp_micros = None;
+        self.sql_cursors.commit();
     }
 
     pub fn rollback_transaction(&mut self) {
+        self.sql_cursors.rollback();
         if let Some(start) = self.transaction_start.take() {
             let lastval = self.session_gucs.get(LASTVAL_SESSION_KEY).cloned();
             self.settings = start.settings;
@@ -1349,6 +1357,8 @@ impl SqlSessionGucState {
     }
 
     pub fn restore_savepoint(&mut self, savepoint: &Self) {
+        self.sql_cursors
+            .rollback_to(savepoint.sql_cursors.copy_mark());
         let lastval = self.session_gucs.get(LASTVAL_SESSION_KEY).cloned();
         self.settings = savepoint.settings;
         self.session_gucs = savepoint.session_gucs.clone();
@@ -2290,6 +2300,16 @@ pub(crate) enum DdlUndo {
         name: String,
         previous: Option<Box<crate::collations::CollationSchema>>,
     },
+    RestoreUserCast {
+        source: String,
+        target: String,
+        previous: Option<Box<crate::user_casts::UserCast>>,
+    },
+    RestoreStatistics {
+        schema: String,
+        name: String,
+        previous: Option<Box<crate::stats_ext::StatsObject>>,
+    },
     DeleteNamespace {
         namespace: String,
     },
@@ -2345,6 +2365,7 @@ pub(crate) struct SavepointMark {
     pub(crate) session_gucs: Arc<HashMap<String, String>>,
     pub(crate) guc_local_restore: HashMap<String, Option<String>>,
     pub(crate) guc_local_settings_restore: SqlSettingsRestore,
+    pub(crate) cursor_mark: u64,
 }
 
 pub(crate) fn user_type_identity(name: &ObjectName) -> Result<(String, String)> {
@@ -2614,6 +2635,7 @@ impl<'db> SqlSession<'db> {
             signed_mutation_grants: BTreeMap::new(),
             signed_application_security_guc_compatibility: false,
             currvals: FxHashMap::default(),
+            sql_cursors: sql_cursors::SqlCursors::default(),
             oracle_output: oracle::output::State::default(),
             oracle_lobs: oracle::lobs::State::default(),
             pg_large_objects: crate::pg_large_objects::DescriptorState::default(),
@@ -2745,6 +2767,7 @@ impl<'db> SqlSession<'db> {
         self.guc_local_restore = state.local_restore;
         self.guc_local_settings_restore = state.local_settings_restore;
         self.currvals = state.currvals;
+        self.sql_cursors = state.sql_cursors;
         self.oracle_output = state.oracle_output;
         self.rebind_trusted_security_settings();
         self.apply_database_setting_defaults();
@@ -2761,6 +2784,7 @@ impl<'db> SqlSession<'db> {
             local_restore: std::mem::take(&mut self.guc_local_restore),
             local_settings_restore: std::mem::take(&mut self.guc_local_settings_restore),
             currvals: std::mem::take(&mut self.currvals),
+            sql_cursors: self.sql_cursors.snapshot(),
             oracle_output: std::mem::take(&mut self.oracle_output),
         };
         if !preserve_postgres_compatibility_gucs {
@@ -3011,6 +3035,7 @@ impl<'db> SqlSession<'db> {
             local_restore: self.guc_local_restore.clone(),
             local_settings_restore: self.guc_local_settings_restore.clone(),
             currvals: self.currvals.clone(),
+            sql_cursors: self.sql_cursors.snapshot(),
             oracle_output: self.oracle_output.clone(),
         }
     }
@@ -3060,6 +3085,7 @@ impl<'db> SqlSession<'db> {
             .unwrap_or("postgres")
             .to_string();
         SqlTemporalScope::new(transaction_timestamp_micros, timezone, interval_style)
+            .with_datestyle(self.session_gucs.get("datestyle").map(String::as_str))
     }
 
     fn commit_guc_transaction(&mut self) {
@@ -3368,7 +3394,49 @@ impl<'db> SqlSession<'db> {
         Ok(count)
     }
 
+    /// CREATE/DROP AGGREGATE and CAST, ALTER/DROP ROUTINE, statistics
+    /// objects and REINDEX, and the temporal-key refusal (single-statement
+    /// path only). Outlined so the recursive `execute` frames stay small.
+    #[inline(never)]
+    fn execute_raw_catalog_compat(
+        &mut self,
+        sql: &str,
+        refuse_temporal_keys: bool,
+    ) -> Result<Option<SqlResult>> {
+        if let Some(result) = self.execute_raw_create_aggregate(sql)? {
+            return Ok(Some(result));
+        }
+        if let Some(result) = self.execute_raw_drop_aggregate(sql)? {
+            return Ok(Some(result));
+        }
+        if let Some(result) = self.execute_raw_create_cast(sql)? {
+            return Ok(Some(result));
+        }
+        if let Some(result) = self.execute_raw_routine_statement(sql)? {
+            return Ok(Some(result));
+        }
+        if let Some(result) = self.execute_raw_statistics(sql)? {
+            return Ok(Some(result));
+        }
+        if let Some(result) = self.execute_raw_reindex(sql)? {
+            return Ok(Some(result));
+        }
+        if refuse_temporal_keys {
+            self.refuse_temporal_keys(sql)?;
+        }
+        if let Some(result) = self.execute_raw_drop_cast(sql)? {
+            return Ok(Some(result));
+        }
+        Ok(None)
+    }
+
     pub fn execute(&mut self, sql: &str) -> Result<SqlResult> {
+        let _cursor_scope = sql_cursors::CursorScope::enter(&self.sql_cursors);
+        let current_of = self.rewrite_where_current_of(sql)?;
+        let sql = current_of.as_deref().unwrap_or(sql);
+        if let Some(result) = self.execute_raw_cursor_statement(sql)? {
+            return Ok(result);
+        }
         if !matches!(
             normalize_sql(sql).as_str(),
             "rollback" | "rollback work" | "rollback transaction"
@@ -3748,6 +3816,10 @@ impl<'db> SqlSession<'db> {
             return Ok(result);
         }
 
+        if let Some(result) = self.execute_raw_catalog_compat(sql, true)? {
+            return Ok(result);
+        }
+
         if let Some(result) = self.execute_raw_analyze(sql)? {
             return Ok(result);
         }
@@ -3784,7 +3856,7 @@ impl<'db> SqlSession<'db> {
             return Ok(result);
         }
 
-        if let Some(function) = parse_raw_alter_procedure_owner(sql)? {
+        if let Some(function) = parse_raw_alter_procedure(sql)? {
             return self.execute_alter_routine(&function, RoutineKind::Procedure);
         }
 
@@ -4277,7 +4349,15 @@ impl<'db> SqlSession<'db> {
                 last_result = Some(result);
                 continue;
             }
+            if let Some(result) = self.execute_raw_cursor_statement(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
             if let Some(result) = self.execute_raw_comment(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_catalog_compat(&statement, false)? {
                 last_result = Some(result);
                 continue;
             }
@@ -4682,6 +4762,7 @@ impl<'db> SqlSession<'db> {
             session_gucs: self.session_gucs.clone(),
             guc_local_restore: self.guc_local_restore.clone(),
             guc_local_settings_restore: self.guc_local_settings_restore.clone(),
+            cursor_mark: self.sql_cursors.mark(),
         });
         Ok(SqlResult::command("SAVEPOINT"))
     }
@@ -4703,6 +4784,8 @@ impl<'db> SqlSession<'db> {
         let guc_local_restore = self.savepoints[position].guc_local_restore.clone();
         let guc_local_settings_restore =
             self.savepoints[position].guc_local_settings_restore.clone();
+        self.sql_cursors
+            .rollback_to(self.savepoints[position].cursor_mark);
         let descriptor_rollback = self
             .pg_large_objects
             .restore(self.savepoints[position].pg_large_objects);
@@ -5767,6 +5850,24 @@ impl<'db> SqlSession<'db> {
                 Some(previous) => crate::pg_operators::save_operator(self.db_mut()?, &previous)?,
                 None => crate::pg_operators::delete_operator(self.db_mut()?, &id)?,
             },
+            DdlUndo::RestoreStatistics {
+                schema,
+                name,
+                previous,
+            } => crate::stats_ext::restore_stats(
+                self.db_mut()?,
+                previous.as_deref(),
+                &schema,
+                &name,
+            )?,
+            DdlUndo::RestoreUserCast {
+                source,
+                target,
+                previous,
+            } => match previous {
+                Some(previous) => crate::user_casts::save_user_cast(self.db_mut()?, &previous)?,
+                None => crate::user_casts::delete_user_cast(self.db_mut()?, &source, &target)?,
+            },
             DdlUndo::DeleteNamespace { namespace } => {
                 delete_namespace(self.db_mut()?, &namespace)?;
             }
@@ -5926,10 +6027,18 @@ impl<'db> SqlSession<'db> {
                 snapshot,
                 session,
             } => {
-                if snapshot.is_some() {
-                    return Err(SqlError::Unsupported(
-                        "transaction snapshots are not supported".to_string(),
-                    ));
+                if let Some(snapshot) = snapshot {
+                    if *session || !modes.is_empty() {
+                        return Err(SqlError::Unsupported(
+                            "SET TRANSACTION SNAPSHOT takes no other transaction modes".to_string(),
+                        ));
+                    }
+                    let id = match &snapshot.value {
+                        sqlparser::ast::Value::SingleQuotedString(text) => text.clone(),
+                        other => other.to_string(),
+                    };
+                    self.set_transaction_snapshot(&id)?;
+                    return Ok(SqlResult::command("SET"));
                 }
                 if *session {
                     self.set_session_transaction_modes(modes)?;
@@ -5951,7 +6060,22 @@ impl<'db> SqlSession<'db> {
                         session.apply_search_path_setting(values)
                     })?;
                 } else {
-                    let [value] = values.as_slice() else {
+                    // `SET datestyle = iso, ymd`: the list is one setting value.
+                    let joined;
+                    let values = if setting == "datestyle" && values.len() > 1 {
+                        let text = values
+                            .iter()
+                            .map(|value| value.to_string().trim_matches('\'').to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        joined = [Expr::Value(
+                            sqlparser::ast::Value::SingleQuotedString(text).into(),
+                        )];
+                        &joined[..]
+                    } else {
+                        values.as_slice()
+                    };
+                    let [value] = values else {
                         return Err(SqlError::Unsupported(
                             "SET supports one value per BicDB setting".to_string(),
                         ));
@@ -6455,11 +6579,30 @@ impl<'db> SqlSession<'db> {
             Arc::make_mut(&mut self.session_gucs).retain(|key, _| {
                 preserved.contains(&key.as_str())
                     || key == POSTGRES_VERSION_BANNER_GUC
+                    || key.starts_with(crate::datestyle_output::STARTUP_DEFAULT_PREFIX)
                     || is_protected_security_setting(key)
             });
+            // Settings given at connection start reset to those values.
+            let defaults = self
+                .session_gucs
+                .iter()
+                .filter_map(|(key, value)| {
+                    key.strip_prefix(crate::datestyle_output::STARTUP_DEFAULT_PREFIX)
+                        .map(|name| (name.to_string(), value.clone()))
+                })
+                .collect::<Vec<_>>();
+            for (name, value) in defaults {
+                Arc::make_mut(&mut self.session_gucs).insert(name, value);
+            }
             self.settings = SqlSettings::default();
             return Ok(targets);
         }
+        // `RESET TIME ZONE` is RESET timezone.
+        let setting = if setting.eq_ignore_ascii_case("time zone") {
+            "timezone"
+        } else {
+            setting
+        };
         let raw = setting.split_whitespace().next().unwrap_or(setting);
         // Keep dotted GUC names whole; normalize_object_name would strip the
         // qualifier ("app.tenant" -> "tenant").
@@ -6523,7 +6666,22 @@ impl<'db> SqlSession<'db> {
             | "search_path"
             | "synchronize_seqscans"
             | "timezone" => {
-                Arc::make_mut(&mut self.session_gucs).remove(&setting);
+                // A setting given at connection start resets to that value.
+                let startup = self
+                    .session_gucs
+                    .get(&format!(
+                        "{}{setting}",
+                        crate::datestyle_output::STARTUP_DEFAULT_PREFIX
+                    ))
+                    .cloned();
+                match startup {
+                    Some(value) => {
+                        Arc::make_mut(&mut self.session_gucs).insert(setting.clone(), value);
+                    }
+                    None => {
+                        Arc::make_mut(&mut self.session_gucs).remove(&setting);
+                    }
+                }
                 Ok(())
             }
             other if planner_gucs::is_planner_guc(other) => {
@@ -6618,6 +6776,7 @@ impl<'db> SqlSession<'db> {
         self.guc_local_restore.clear();
         self.guc_local_settings_restore = SqlSettingsRestore::default();
         self.currvals.clear();
+        self.sql_cursors.close_all();
         self.oracle_output.reset()?;
         self.rebind_trusted_security_settings();
         Ok(())

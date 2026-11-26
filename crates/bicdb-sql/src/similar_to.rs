@@ -328,6 +328,93 @@ pub(crate) fn rewrite_substring_similar(sql: &str) -> Option<String> {
     Some(output)
 }
 
+/// `ORDER BY expr USING <` / `USING >` is ascending / descending order by
+/// the type's ordering operator; sqlparser knows only ASC/DESC. Other
+/// operators are left for the parser to refuse.
+pub(crate) fn rewrite_order_by_using(sql: &str) -> Option<String> {
+    let lower = sql.to_ascii_lowercase();
+    if !lower.contains("using") || !lower.contains("order") {
+        return None;
+    }
+    let bytes = sql.as_bytes();
+    let mut output = String::with_capacity(sql.len());
+    let mut copied = 0usize;
+    let mut index = 0usize;
+    let mut in_order_by = false;
+    let mut changed = false;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'\'' | b'"' => {
+                let quote = bytes[index];
+                index += 1;
+                while index < bytes.len() && bytes[index] != quote {
+                    index += 1;
+                }
+                index += 1;
+                continue;
+            }
+            b'$' => {
+                if let Some(delimiter) = crate::dollar_quote_delimiter(&sql[index..]) {
+                    let body = index + delimiter.len();
+                    match sql[body..].find(&delimiter) {
+                        Some(end) => index = body + end + delimiter.len(),
+                        None => return None,
+                    }
+                    continue;
+                }
+            }
+            b'(' | b')' | b';' => in_order_by = false,
+            byte if is_word_byte(byte) && (index == 0 || !is_word_byte(bytes[index - 1])) => {
+                let start = index;
+                while index < bytes.len() && is_word_byte(bytes[index]) {
+                    index += 1;
+                }
+                let word = &lower[start..index];
+                match word {
+                    "order" => {
+                        let rest = lower[index..].trim_start();
+                        in_order_by = rest.starts_with("by")
+                            && !rest[2..].starts_with(|ch: char| ch.is_alphanumeric() || ch == '_');
+                    }
+                    "limit" | "offset" | "fetch" | "for" | "union" | "except" | "intersect" => {
+                        in_order_by = false
+                    }
+                    "using" if in_order_by => {
+                        let after = sql[index..].trim_start();
+                        let gap = sql[index..].len() - after.len();
+                        let (op_len, keyword) =
+                            if after.starts_with("<=") || after.starts_with(">=") {
+                                (0, "")
+                            } else if after.starts_with('<') {
+                                (1, "ASC")
+                            } else if after.starts_with('>') {
+                                (1, "DESC")
+                            } else {
+                                (0, "")
+                            };
+                        if op_len == 1 {
+                            output.push_str(&sql[copied..start]);
+                            output.push_str(keyword);
+                            index += gap + op_len;
+                            copied = index;
+                            changed = true;
+                        }
+                    }
+                    _ => {}
+                }
+                continue;
+            }
+            _ => {}
+        }
+        index += 1;
+    }
+    if !changed {
+        return None;
+    }
+    output.push_str(&sql[copied..]);
+    Some(output)
+}
+
 fn is_word_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'$' || byte >= 0x80
 }
@@ -389,6 +476,16 @@ mod tests {
         assert!(
             rewrite_substring_similar("SELECT substring(x, 1), x SIMILAR TO 'a' FROM t").is_none()
         );
+    }
+
+    #[test]
+    fn order_by_using_becomes_direction() {
+        assert_eq!(
+            rewrite_order_by_using("SELECT x FROM t ORDER BY x USING >, y USING < LIMIT 2")
+                .unwrap(),
+            "SELECT x FROM t ORDER BY x DESC, y ASC LIMIT 2"
+        );
+        assert!(rewrite_order_by_using("DELETE FROM t USING u WHERE t.a = u.a").is_none());
     }
 
     #[test]

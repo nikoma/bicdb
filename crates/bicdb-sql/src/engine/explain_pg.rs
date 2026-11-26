@@ -29,14 +29,39 @@ struct Rel {
 #[derive(Clone, Debug)]
 enum Access {
     Seq,
-    /// An index scan: index name, the equality-prefix columns used as
-    /// index conditions, and whether a range on the next column is used.
+    /// The executor proved the qualification can never be true and reads
+    /// nothing.
+    Empty,
+    /// An index scan: rows are fetched as the index yields them (in index
+    /// order, or at most one row). Index name, the equality-prefix columns
+    /// used as index conditions, and whether a range on the next column is
+    /// used.
     Index {
         index: String,
         columns: Vec<String>,
         range: bool,
         backward: bool,
     },
+    /// A bitmap heap scan: the executor first collects every matching row
+    /// id from the index, then fetches those rows in row-id order and
+    /// re-applies the qualification (the row-set locator's path).
+    Bitmap(BitmapSource),
+    /// The union of one index probe per OR branch, then one fetch in row-id
+    /// order (the locator's OR route).
+    BitmapOr(Vec<BitmapSource>),
+}
+
+/// One index probe that contributes row ids to a bitmap heap scan.
+#[derive(Clone, Debug)]
+struct BitmapSource {
+    index: String,
+    /// Index columns its conditions may bind (equality prefix, then the
+    /// range column when `range`).
+    columns: Vec<String>,
+    range: bool,
+    /// An operator-class probe of a non-B-tree index: every qual on the
+    /// indexed columns alone drives it.
+    leading_only: bool,
 }
 
 pub(crate) struct ExplainBuilder<'e, 'db> {
@@ -193,6 +218,22 @@ fn conjuncts(expr: &Expr, out: &mut Vec<Expr>) {
         {
             conjuncts(inner, out)
         }
+        other => out.push(other.clone()),
+    }
+}
+
+/// The branches of an OR, flattened.
+fn disjuncts(expr: &Expr, out: &mut Vec<Expr>) {
+    match expr {
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::Or,
+            right,
+        } => {
+            disjuncts(left, out);
+            disjuncts(right, out);
+        }
+        Expr::Nested(inner) => disjuncts(inner, out),
         other => out.push(other.clone()),
     }
 }
@@ -889,9 +930,13 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
             collection,
             alias,
         )?;
-        let signature = match executed {
-            Some(executed) => executed.signature,
-            None => crate::plan_diagnostics::signature_of(&plan.kind),
+        let (signature, executed_chooser, executed_parts) = match executed {
+            Some(executed) => (executed.signature, Some(executed.chooser), executed.parts),
+            None => (
+                crate::plan_diagnostics::signature_of(&plan.kind),
+                None,
+                Vec::new(),
+            ),
         };
         let schema = load_schema(self.engine.db_ref(), collection)?;
         let index_columns = |index: &str| -> Vec<String> {
@@ -922,7 +967,119 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
                 })
                 .unwrap_or_default()
         };
+        let unique_full_equality = |index: &str, used: usize| {
+            self.engine
+                .db_ref()
+                .index_definitions()
+                .into_iter()
+                .find(|definition| definition.collection == collection && definition.name == index)
+                .is_some_and(|definition| definition.unique && definition.fields.len() == used)
+        };
+        // Which chooser's path runs decides the node: the row-set locator
+        // (and the pending-writes chooser) collect row ids first and fetch
+        // afterwards in row-id order, a bitmap heap scan; the planner's own
+        // B-tree loads and the bounded ordered path fetch in index order.
+        let collects_ids =
+            executed_chooser.is_some_and(|chooser| matches!(chooser, "locator" | "pending-writes"));
+        let source = |signature: &crate::plan_diagnostics::PlanSignature| -> Option<BitmapSource> {
+            if matches!(signature.kind, "PrimaryKeyLocator" | "PrimaryKeyInLookup") {
+                let schema = schema.as_ref()?;
+                let columns = schema
+                    .columns
+                    .iter()
+                    .filter(|column| column.primary_key)
+                    .map(|column| column.name.clone())
+                    .collect::<Vec<_>>();
+                return Some(BitmapSource {
+                    index: schema
+                        .primary_key_name
+                        .clone()
+                        .unwrap_or_else(|| format!("{}_pkey", schema.name)),
+                    leading_only: false,
+                    columns,
+                    range: false,
+                });
+            }
+            let index = signature.index.clone()?;
+            let columns = index_columns(&index);
+            Some(match signature.kind {
+                "IndexLookup" => BitmapSource {
+                    columns: columns.into_iter().take(signature.prefix_len).collect(),
+                    index,
+                    range: false,
+                    leading_only: false,
+                },
+                "IndexRange" => BitmapSource {
+                    columns: columns
+                        .into_iter()
+                        .take(signature.prefix_len.max(1))
+                        .collect(),
+                    index,
+                    range: true,
+                    leading_only: false,
+                },
+                "IndexInLookup" => BitmapSource {
+                    columns: columns.into_iter().take(1).collect(),
+                    index,
+                    range: false,
+                    leading_only: false,
+                },
+                _ => return None,
+            })
+        };
+        let primary_key_index = || {
+            let schema = schema.as_ref()?;
+            Some(Access::Index {
+                index: schema
+                    .primary_key_name
+                    .clone()
+                    .unwrap_or_else(|| format!("{}_pkey", schema.name)),
+                columns: schema
+                    .columns
+                    .iter()
+                    .filter(|column| column.primary_key)
+                    .map(|column| column.name.clone())
+                    .collect(),
+                range: false,
+                backward: false,
+            })
+        };
         Ok(match signature.kind {
+            "Contradiction" => Access::Empty,
+            "IndexLookup" | "IndexRange" | "IndexInLookup" if collects_ids => {
+                let source = source(&signature).expect("index signature");
+                let used = source.columns.len();
+                if signature.kind == "IndexLookup" && unique_full_equality(&source.index, used) {
+                    // A full-key equality on a unique index yields at most
+                    // one row: collecting it first and fetching it is the
+                    // same work as fetching it from the index entry.
+                    Access::Index {
+                        index: source.index,
+                        columns: source.columns,
+                        range: false,
+                        backward: false,
+                    }
+                } else {
+                    Access::Bitmap(source)
+                }
+            }
+            "BitmapOr" if collects_ids => {
+                let mut sources = Vec::new();
+                for part in &executed_parts {
+                    match source(part) {
+                        Some(source) => sources.push(source),
+                        None => {
+                            return Err(SqlError::Unsupported(
+                                "EXPLAIN of this OR access path is not supported".to_string(),
+                            ))
+                        }
+                    }
+                }
+                Access::BitmapOr(sources)
+            }
+            // The planner's IN-list load unions one lookup per value and
+            // fetches the rows in row-id order.
+            "IndexInLookup" => Access::Bitmap(source(&signature).expect("index signature")),
             "IndexLookup" | "IndexPrefixOrderedScan" | "IndexRange" => {
                 let index = signature.index.clone().unwrap_or_default();
                 let columns = index_columns(&index);
@@ -939,25 +1096,25 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
                     backward: false,
                 }
             }
-            "PrimaryKeyLookup" | "PrimaryKeyPrefixLookup" | "PrimaryKeyInLookup" => {
-                let Some(schema) = schema.as_ref() else {
-                    return Ok(Access::Seq);
-                };
-                let index = schema
-                    .primary_key_name
-                    .clone()
-                    .unwrap_or_else(|| format!("{}_pkey", schema.name));
-                Access::Index {
+            "PrimaryKeyLookup"
+            | "PrimaryKeyPrefixLookup"
+            | "PrimaryKeyInLookup"
+            | "PrimaryKeyLocator" => match primary_key_index() {
+                Some(access) => access,
+                None => Access::Seq,
+            },
+            // The planner's non-B-tree loads collect candidate row ids from
+            // the index, then fetch and re-check them.
+            "JsonbIndexScan" | "ArrayIndexScan" | "TrigramIndexScan" | "GeometricIndexScan"
+            | "SpatialIndexScan" | "FullTextIndexScan" => {
+                let index = signature.index.clone().unwrap_or_default();
+                let columns = index_columns(&index);
+                Access::Bitmap(BitmapSource {
                     index,
-                    columns: schema
-                        .columns
-                        .iter()
-                        .filter(|column| column.primary_key)
-                        .map(|column| column.name.clone())
-                        .collect(),
+                    columns,
                     range: false,
-                    backward: false,
-                }
+                    leading_only: true,
+                })
             }
             _ => Access::Seq,
         })
@@ -1017,6 +1174,24 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
             .as_ref()
             .map(|alias| alias.name.value.clone())
             .unwrap_or_else(|| relation_default_alias(name));
+        // The route that executes decides: the bounded ordered path reads
+        // the index in ORDER BY order; any other executing chooser (the
+        // row-set locator, a streamed scan) fetches rows that are sorted
+        // afterwards. Only when no executing route decides does the
+        // planner's own ordered load run.
+        if let Some(bounded) = self
+            .engine
+            .bounded_ordered_index_plan(from, select, query)?
+        {
+            return Ok(Some(bounded.index_and_direction()));
+        }
+        if self
+            .engine
+            .predicted_executed_access(from, select, query, &collection, &alias)?
+            .is_some()
+        {
+            return Ok(None);
+        }
         let plan = self.engine.plan_query(&collection, &alias, select, query)?;
         Ok(match plan.kind {
             PlanKind::OrderedIndexScan {
@@ -1155,11 +1330,61 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
             String::new()
         };
         let mut node = match &access {
+            Access::Empty => {
+                return Ok(PlanNode::new("Result").prop("One-Time Filter", "false"));
+            }
             Access::Seq => {
                 let mut node = PlanNode::new("Seq Scan");
                 node.target = format!(" on {shown_relation}{alias_text}");
                 node = node.head("Relation Name", Prop::Text(relname.clone()));
                 node.head("Alias", Prop::Text(refname.clone()))
+            }
+            Access::Bitmap(source) => {
+                let (index_quals, filter) = self.bitmap_conditions(source, &quals);
+                return self.bitmap_heap_scan(
+                    &relname,
+                    &refname,
+                    format!(" on {shown_relation}{alias_text}"),
+                    index_quals.clone(),
+                    filter,
+                    vec![(source.clone(), index_quals)],
+                    prefix,
+                );
+            }
+            Access::BitmapOr(sources) => {
+                let mut rest = quals.clone();
+                let position = rest.iter().position(|qual| {
+                    let mut branches = Vec::new();
+                    disjuncts(qual, &mut branches);
+                    branches.len() == sources.len()
+                });
+                let Some(position) = position else {
+                    return Err(SqlError::Unsupported(
+                        "EXPLAIN of this OR access path is not supported".to_string(),
+                    ));
+                };
+                let or_qual = rest.remove(position);
+                let mut branches = Vec::new();
+                disjuncts(&or_qual, &mut branches);
+                let probes = sources
+                    .iter()
+                    .zip(branches)
+                    .map(|(source, branch)| {
+                        let mut branch_quals = Vec::new();
+                        conjuncts(&branch, &mut branch_quals);
+                        let (index_quals, _) = self.bitmap_conditions(source, &branch_quals);
+                        (source.clone(), index_quals)
+                    })
+                    .collect();
+                return self.bitmap_heap_scan(
+                    &relname,
+                    &refname,
+                    format!(" on {shown_relation}{alias_text}"),
+                    vec![or_qual],
+                    rest,
+                    probes,
+                    prefix,
+                );
             }
             Access::Index {
                 index, backward, ..
@@ -1184,8 +1409,8 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
             }
         };
         let (index_quals, filter) = match &access {
-            Access::Seq => (Vec::new(), quals),
             Access::Index { columns, range, .. } => self.index_conditions(columns, *range, &quals),
+            _ => (Vec::new(), quals),
         };
         if let Some((_, condition)) = probe {
             node = node.prop("Index Cond", condition);
@@ -1194,6 +1419,67 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
         }
         node = self.with_filter(node, &filter, prefix)?;
         Ok(node)
+    }
+
+    /// The quals a bitmap index probe applies as index conditions, and the
+    /// rest.
+    fn bitmap_conditions(&self, source: &BitmapSource, quals: &[Expr]) -> (Vec<Expr>, Vec<Expr>) {
+        if !source.leading_only {
+            return self.index_conditions(&source.columns, source.range, quals);
+        }
+        quals.iter().cloned().partition(|qual| {
+            let mut columns = Vec::new();
+            referenced_columns(qual, &mut columns);
+            !contains_subquery(qual)
+                && !columns.is_empty()
+                && columns
+                    .iter()
+                    .all(|(_, column)| source.columns.iter().any(|indexed| indexed == column))
+        })
+    }
+
+    /// A Bitmap Heap Scan over one Bitmap Index Scan per probe (under a
+    /// BitmapOr when there are several).
+    #[allow(clippy::too_many_arguments)]
+    fn bitmap_heap_scan(
+        &mut self,
+        relname: &str,
+        refname: &str,
+        target: String,
+        recheck: Vec<Expr>,
+        filter: Vec<Expr>,
+        probes: Vec<(BitmapSource, Vec<Expr>)>,
+        prefix: bool,
+    ) -> Result<PlanNode> {
+        let mut node = PlanNode::new("Bitmap Heap Scan");
+        node.target = target;
+        node = node
+            .head("Relation Name", Prop::Text(relname.to_string()))
+            .head("Alias", Prop::Text(refname.to_string()));
+        if let Some(text) = self.qual(&recheck, prefix) {
+            node = node.prop("Recheck Cond", text);
+        }
+        node = self.with_filter(node, &filter, prefix)?;
+        let mut children = Vec::new();
+        for (source, index_quals) in probes {
+            let mut child = PlanNode::new("Bitmap Index Scan");
+            child.target = format!(" on {}", quote_ident(&source.index));
+            child = child.head("Index Name", Prop::Text(source.index.clone()));
+            if let Some(text) = self.qual(&index_quals, prefix) {
+                child = child.prop("Index Cond", text);
+            }
+            children.push(child);
+        }
+        let child = if children.len() == 1 {
+            children.pop().expect("one probe")
+        } else {
+            children
+                .into_iter()
+                .fold(PlanNode::new("BitmapOr"), |or, child| {
+                    or.child("Member", child)
+                })
+        };
+        Ok(node.child("Outer", child))
     }
 
     /// A Filter with the subplans its subqueries run.

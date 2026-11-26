@@ -1791,10 +1791,30 @@ impl<'db> SqlEngine<'db> {
         }
         if let Some(schema) = schema {
             if let Some(ids) = self.primary_key_list_record_ids(table, alias, schema, selection)? {
+                crate::plan_diagnostics::record_route_decision(
+                    table,
+                    crate::plan_diagnostics::PlanSignature {
+                        kind: "PrimaryKeyInLookup",
+                        index: None,
+                        prefix_len: ids.len(),
+                    },
+                    Vec::new(),
+                    ids.len(),
+                );
                 return Ok(Some(RecordLocators::Pks(ids)));
             }
         }
         if let Some(ids) = self.composite_text_in_record_ids(table, alias, schema, selection)? {
+            crate::plan_diagnostics::record_route_decision(
+                table,
+                crate::plan_diagnostics::PlanSignature {
+                    kind: "CompositeKeyInLookup",
+                    index: None,
+                    prefix_len: ids.len(),
+                },
+                Vec::new(),
+                ids.len(),
+            );
             return Ok(Some(RecordLocators::Pks(ids)));
         }
         let strategy = self.locator_strategy_cached(table, alias, schema, selection)?;
@@ -1802,7 +1822,17 @@ impl<'db> SqlEngine<'db> {
         if located.is_some() {
             return Ok(located);
         }
-        if let Some(pks) = self.secondary_in_list_record_ids(table, schema, selection)? {
+        if let Some((index, pks)) = self.secondary_in_list_record_ids(table, schema, selection)? {
+            crate::plan_diagnostics::record_route_decision(
+                table,
+                crate::plan_diagnostics::PlanSignature {
+                    kind: "IndexInLookup",
+                    index: Some(index),
+                    prefix_len: 1,
+                },
+                Vec::new(),
+                pks.len(),
+            );
             return Ok(Some(RecordLocators::Pks(pks)));
         }
         self.or_union_locators(table, alias, schema, selection)
@@ -1817,7 +1847,7 @@ impl<'db> SqlEngine<'db> {
         table: &str,
         schema: Option<&TableSchema>,
         selection: &Expr,
-    ) -> Result<Option<Vec<String>>> {
+    ) -> Result<Option<(String, Vec<String>)>> {
         const MAX_IN_LIST_LOOKUPS: usize = 1024;
         if self.tx.is_some_and(|tx| tx.has_pending_writes(table)) {
             return Ok(None);
@@ -1845,7 +1875,7 @@ impl<'db> SqlEngine<'db> {
                         .cloned(),
                 );
             }
-            return Ok(Some(ids.into_iter().collect()));
+            return Ok(Some((index.name.clone(), ids.into_iter().collect())));
         }
         Ok(None)
     }
@@ -1926,6 +1956,16 @@ impl<'db> SqlEngine<'db> {
                         if usable {
                             rowids.sort_unstable();
                             rowids.dedup();
+                            crate::plan_diagnostics::record_route_decision(
+                                table,
+                                crate::plan_diagnostics::PlanSignature {
+                                    kind: "PrimaryKeyInLookup",
+                                    index: None,
+                                    prefix_len: rowids.len(),
+                                },
+                                Vec::new(),
+                                rowids.len(),
+                            );
                             return Ok(Some(RecordLocators::Rowids(rowids)));
                         }
                     }
@@ -1938,8 +1978,32 @@ impl<'db> SqlEngine<'db> {
             }
             let mut rowids = Vec::new();
             let mut covered = true;
+            let tracing = crate::plan_diagnostics::active();
+            let mut parts = Vec::new();
             for branch in branches {
-                match self.branch_rowids(table, alias, schema, branch)? {
+                // Under diagnostics each branch's own decisions are captured
+                // and summarized as one part of the union below.
+                let found = if tracing {
+                    let (found, decisions) = crate::plan_diagnostics::capture(|| {
+                        self.branch_rowids(table, alias, schema, branch)
+                    });
+                    // A key IN (subquery) branch decides nothing itself;
+                    // the decisions captured are the subquery's own.
+                    let subquery = matches!(branch, Expr::InSubquery { negated: false, .. });
+                    parts.push(
+                        crate::plan_diagnostics::executed_signature(&decisions)
+                            .filter(|_| !subquery)
+                            .unwrap_or(crate::plan_diagnostics::PlanSignature {
+                                kind: "PrimaryKeyInSubquery",
+                                index: None,
+                                prefix_len: 0,
+                            }),
+                    );
+                    found?
+                } else {
+                    self.branch_rowids(table, alias, schema, branch)?
+                };
+                match found {
                     Some(found) => rowids.extend(found),
                     None => {
                         covered = false;
@@ -1950,6 +2014,16 @@ impl<'db> SqlEngine<'db> {
             if covered {
                 rowids.sort_unstable();
                 rowids.dedup();
+                crate::plan_diagnostics::record_route_decision(
+                    table,
+                    crate::plan_diagnostics::PlanSignature {
+                        kind: "BitmapOr",
+                        index: None,
+                        prefix_len: parts.len(),
+                    },
+                    parts,
+                    rowids.len(),
+                );
                 return Ok(Some(RecordLocators::Rowids(rowids)));
             }
         }
@@ -2255,6 +2329,16 @@ impl<'db> SqlEngine<'db> {
                 )? {
                     Some((matched_columns, locators)) => {
                         if matched_columns == usize::MAX {
+                            crate::plan_diagnostics::record_route_decision(
+                                table,
+                                crate::plan_diagnostics::PlanSignature {
+                                    kind: "PrimaryKeyLocator",
+                                    index: None,
+                                    prefix_len: primary_key_columns_for_schema(schema).len(),
+                                },
+                                Vec::new(),
+                                locators.len(),
+                            );
                             return Ok(Some(locators));
                         }
                         // The pre-check disagreed with the full analysis:
@@ -2520,6 +2604,16 @@ impl<'db> SqlEngine<'db> {
                             )?
                         {
                             if matched_columns == usize::MAX {
+                                crate::plan_diagnostics::record_route_decision(
+                                    table,
+                                    crate::plan_diagnostics::PlanSignature {
+                                        kind: "PrimaryKeyLocator",
+                                        index: None,
+                                        prefix_len: primary_key_columns_for_schema(schema).len(),
+                                    },
+                                    Vec::new(),
+                                    locators.len(),
+                                );
                                 return Ok(Some(locators));
                             }
                             best = Some((matched_columns, locators));
@@ -2772,11 +2866,21 @@ impl<'db> SqlEngine<'db> {
                 self.trigram_index_candidate(table, alias, schema, selection)?
             {
                 if self.tx.is_none_or(|tx| !tx.has_pending_writes(table)) {
-                    return Ok(Some(RecordLocators::Pks(
-                        self.array_candidate_ids(&index_name, &candidate)?
-                            .into_iter()
-                            .collect(),
-                    )));
+                    let pks: Vec<String> = self
+                        .array_candidate_ids(&index_name, &candidate)?
+                        .into_iter()
+                        .collect();
+                    crate::plan_diagnostics::record_route_decision(
+                        table,
+                        crate::plan_diagnostics::PlanSignature {
+                            kind: "TrigramIndexScan",
+                            index: Some(index_name),
+                            prefix_len: 0,
+                        },
+                        Vec::new(),
+                        pks.len(),
+                    );
+                    return Ok(Some(RecordLocators::Pks(pks)));
                 }
             }
         }
@@ -2794,6 +2898,16 @@ impl<'db> SqlEngine<'db> {
                 .primary_key_record_locators_for_table_selection(table, alias, schema, selection)?
             {
                 if matched_columns == usize::MAX {
+                    crate::plan_diagnostics::record_route_decision(
+                        table,
+                        crate::plan_diagnostics::PlanSignature {
+                            kind: "PrimaryKeyLocator",
+                            index: None,
+                            prefix_len: primary_key_columns_for_schema(schema).len(),
+                        },
+                        Vec::new(),
+                        locators.len(),
+                    );
                     return Ok(Some(locators));
                 }
                 best = Some((matched_columns, locators));
@@ -2995,6 +3109,16 @@ impl<'db> SqlEngine<'db> {
                 self.primary_key_record_ids_for_table_selection(table, alias, schema, selection)?
             {
                 if matched_columns == usize::MAX {
+                    crate::plan_diagnostics::record_route_decision(
+                        table,
+                        crate::plan_diagnostics::PlanSignature {
+                            kind: "PrimaryKeyLocator",
+                            index: None,
+                            prefix_len: primary_key_columns_for_schema(schema).len(),
+                        },
+                        Vec::new(),
+                        ids.len(),
+                    );
                     return Ok(Some(ids));
                 }
                 best = Some((matched_columns, ids));
@@ -8647,6 +8771,16 @@ impl<'db> SqlEngine<'db> {
         // Mirror the fused `indexed_records_for_table_selection` profiling signal
         // so introspection/tests observe an index lookup, not a full scan.
         sql_profile_index_lookup();
+        crate::plan_diagnostics::record_route_decision(
+            &template.table,
+            crate::plan_diagnostics::PlanSignature {
+                kind: "PrimaryKeyLookup",
+                index: None,
+                prefix_len: template.pk_columns.len(),
+            },
+            Vec::new(),
+            ids.len(),
+        );
         let fields = &template.fields;
         if self.cell_rows_eligible(&template.table, &template.schema, PolicyAction::Select)? {
             // Cell path: the visible row without its JSON parsed, cells

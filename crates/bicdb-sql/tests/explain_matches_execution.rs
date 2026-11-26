@@ -22,7 +22,9 @@ fn explained(session: &mut SqlSession<'_>, sql: &str) -> (String, Option<String>
     let mut words = first.split_whitespace();
     let head = words.next().unwrap_or_default();
     let index = words.next().map(str::to_string);
+    let in_list = lines.iter().any(|line| line.starts_with("InListKeys"));
     let kind = match head {
+        "IndexScan" if in_list => "IndexInLookup",
         "IndexScan" => "IndexLookup",
         "IndexRangeScan" => "IndexRange",
         "IndexPrefixOrderedScan" => "IndexPrefixOrderedScan",
@@ -33,7 +35,7 @@ fn explained(session: &mut SqlSession<'_>, sql: &str) -> (String, Option<String>
         other => other,
     };
     let index = match kind {
-        "FullScan" | "Empty" | "PrimaryKeyInLookup" | "PrimaryKeyLookup" => None,
+        "FullScan" | "Empty" | "PrimaryKeyInLookup" | "PrimaryKeyLookup" | "BitmapOr" => None,
         _ => index,
     };
     (kind.to_string(), index, lines)
@@ -93,6 +95,11 @@ const SHAPES: &[&str] = &[
     "SELECT id FROM t WHERE p << point(3, 0)",
     "SELECT id FROM t WHERE j @> '{\"k\": 3}'::jsonb",
     "SELECT id FROM t WHERE arr @> ARRAY[3]",
+    "SELECT id FROM t WHERE a IN (8, 9)",
+    "SELECT id FROM t WHERE a = 8 OR id = 5",
+    "SELECT id FROM t WHERE a = 3 AND b = 2 AND d > 4",
+    "SELECT id FROM t WHERE id = 7",
+    "SELECT id FROM t WHERE id IN (7, 8)",
 ];
 
 fn setup(db: &mut BicDb) {
@@ -131,13 +138,25 @@ fn check_all(db: &mut BicDb, condition: &str, in_write_tx: bool) -> Vec<String> 
             session.execute("ROLLBACK").unwrap();
         }
         match executed(&decisions) {
-            Some(actual) if actual == (kind.clone(), index.clone()) => {}
+            Some(actual) if family(&actual) == family(&(kind.clone(), index.clone())) => {}
             actual => mismatches.push(format!(
                 "[{condition}] {sql}\n    EXPLAIN says {kind} {index:?} ({lines:?})\n    executed    {actual:?}\n    trace {decisions:?}"
             )),
         }
     }
     mismatches
+}
+
+/// Primary-key point, list and prefix reads are one access path (the
+/// primary key) reached by different routes; other kinds compare exactly.
+fn family(access: &(String, Option<String>)) -> (String, Option<String>) {
+    match access.0.as_str() {
+        "PrimaryKeyLookup"
+        | "PrimaryKeyInLookup"
+        | "PrimaryKeyLocator"
+        | "PrimaryKeyPrefixLookup" => ("PrimaryKey".to_string(), None),
+        _ => access.clone(),
+    }
 }
 
 #[test]
@@ -149,6 +168,169 @@ fn explain_reports_the_executed_access_path() {
     SqlSession::new(&mut db).execute("ANALYZE t").unwrap();
     mismatches.extend(check_all(&mut db, "after ANALYZE", false));
     mismatches.extend(check_all(&mut db, "pending writes", true));
+    assert!(
+        mismatches.is_empty(),
+        "{} EXPLAIN/execution mismatches:\n{}",
+        mismatches.len(),
+        mismatches.join("\n")
+    );
+}
+
+/// The scan nodes of a PostgreSQL-layout plan, as `(node, index)` pairs:
+/// `Bitmap Heap Scan`, `Bitmap Index Scan t_a`, `Index Scan t_a`, ...
+fn pg_layout_scans(session: &mut SqlSession<'_>, sql: &str) -> Vec<(String, Option<String>)> {
+    session
+        .execute(&format!("EXPLAIN (COSTS OFF) {sql}"))
+        .unwrap_or_else(|error| panic!("EXPLAIN (COSTS OFF) {sql}: {error}"))
+        .rows
+        .into_iter()
+        .filter_map(|row| {
+            let line = row[0].to_cell();
+            let line = line.trim().trim_start_matches("->").trim().to_string();
+            for node in [
+                "Bitmap Heap Scan",
+                "Bitmap Index Scan",
+                "BitmapOr",
+                "Index Only Scan",
+                "Index Scan Backward",
+                "Index Scan",
+                "Seq Scan",
+                "Result",
+            ] {
+                if let Some(rest) = line.strip_prefix(node) {
+                    let index = match node {
+                        "Bitmap Index Scan" => rest.strip_prefix(" on ").map(str::to_string),
+                        "Index Scan" | "Index Scan Backward" | "Index Only Scan" => rest
+                            .strip_prefix(" using ")
+                            .and_then(|rest| rest.split(' ').next())
+                            .map(str::to_string),
+                        _ => None,
+                    };
+                    return Some((node.to_string(), index));
+                }
+            }
+            None
+        })
+        .collect()
+}
+
+/// The PostgreSQL scan nodes that truthfully describe an executed access
+/// path. The row-set locator (and the pending-writes chooser) collect every
+/// matching row id from the index before fetching rows in row-id order: a
+/// Bitmap Heap Scan over a Bitmap Index Scan (a BitmapOr when it unions OR
+/// branches). A full-key equality on a unique index fetches at most one row,
+/// an Index Scan. The ordered routes read in index order: an Index Scan.
+fn pg_nodes_for(
+    decisions: &[DecisionTrace],
+    unique: &[&str],
+) -> Option<Vec<(String, Option<String>)>> {
+    if decisions.iter().any(|decision| decision.contradiction) {
+        return Some(vec![("Result".into(), None)]);
+    }
+    let decision = decisions
+        .iter()
+        .rev()
+        .find(|decision| decision.rows_fetched.is_some())
+        .or_else(|| {
+            decisions
+                .iter()
+                .rev()
+                .find(|decision| decision.chooser != "planner")
+        })?;
+    let signature = &decision.candidates[decision.chosen].signature;
+    let collects = matches!(decision.chooser, "locator" | "pending-writes");
+    let pkey = Some("t_pkey".to_string());
+    let bitmap = |index: Option<String>| {
+        vec![
+            ("Bitmap Heap Scan".to_string(), None),
+            ("Bitmap Index Scan".to_string(), index),
+        ]
+    };
+    Some(match signature.kind {
+        "FullScan" => vec![("Seq Scan".into(), None)],
+        "PrimaryKeyInLookup" if signature.prefix_len == 0 && !collects => {
+            vec![("Result".into(), None)]
+        }
+        "PrimaryKeyLookup"
+        | "PrimaryKeyInLookup"
+        | "PrimaryKeyLocator"
+        | "PrimaryKeyPrefixLookup" => {
+            vec![("Index Scan".into(), pkey)]
+        }
+        "IndexLookup"
+            if collects
+                && signature
+                    .index
+                    .as_deref()
+                    .is_some_and(|index| unique.contains(&index)) =>
+        {
+            vec![("Index Scan".into(), signature.index.clone())]
+        }
+        "IndexLookup" | "IndexRange" if collects => bitmap(signature.index.clone()),
+        "IndexInLookup" => bitmap(signature.index.clone()),
+        "BitmapOr" => {
+            let mut nodes = vec![
+                ("Bitmap Heap Scan".to_string(), None),
+                ("BitmapOr".to_string(), None),
+            ];
+            for part in &decision.parts {
+                nodes.push((
+                    "Bitmap Index Scan".to_string(),
+                    match part.kind {
+                        "PrimaryKeyLocator" | "PrimaryKeyInLookup" => pkey.clone(),
+                        _ => part.index.clone(),
+                    },
+                ));
+            }
+            nodes
+        }
+        "IndexLookup" | "IndexRange" | "IndexPrefixOrderedScan" | "OrderedIndexScan" => {
+            vec![("Index Scan".into(), signature.index.clone())]
+        }
+        "JsonbIndexScan" | "ArrayIndexScan" | "GeometricIndexScan" | "SpatialIndexScan"
+        | "FullTextIndexScan" | "TrigramIndexScan" => bitmap(signature.index.clone()),
+        other => vec![(other.to_string(), signature.index.clone())],
+    })
+}
+
+fn check_pg_layout(db: &mut BicDb, condition: &str, in_write_tx: bool) -> Vec<String> {
+    let mut mismatches = Vec::new();
+    for sql in SHAPES {
+        let mut session = SqlSession::new(db);
+        if in_write_tx {
+            session.execute("BEGIN").unwrap();
+            session
+                .execute("INSERT INTO t VALUES (100000, 3, 3, 'new', 100000, 5, point(1, 1), '{\"k\": 3}', ARRAY[3])")
+                .unwrap();
+        }
+        let shown = pg_layout_scans(&mut session, sql);
+        let (result, decisions) =
+            with_plan_diagnostics(DiagnosticsOptions::default(), || session.execute(sql));
+        result.unwrap_or_else(|error| panic!("{sql}: {error}"));
+        if in_write_tx {
+            session.execute("ROLLBACK").unwrap();
+        }
+        match pg_nodes_for(&decisions, &[]) {
+            Some(expected) if expected == shown => {}
+            expected => mismatches.push(format!(
+                "[{condition}] {sql}\n    EXPLAIN (COSTS OFF) shows {shown:?}\n    executed means   {expected:?}\n    trace {decisions:?}"
+            )),
+        }
+    }
+    mismatches
+}
+
+/// The PostgreSQL layout's scan nodes are the executed access path, named
+/// by what that path does (see [`pg_nodes_for`]).
+#[test]
+fn postgres_layout_names_the_executed_access_path() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    setup(&mut db);
+    let mut mismatches = check_pg_layout(&mut db, "no stats", false);
+    SqlSession::new(&mut db).execute("ANALYZE t").unwrap();
+    mismatches.extend(check_pg_layout(&mut db, "after ANALYZE", false));
+    mismatches.extend(check_pg_layout(&mut db, "pending writes", true));
     assert!(
         mismatches.is_empty(),
         "{} EXPLAIN/execution mismatches:\n{}",

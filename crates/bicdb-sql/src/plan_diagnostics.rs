@@ -105,6 +105,9 @@ pub struct DecisionTrace {
     pub hybrid_nominated: bool,
     /// Locator only: the nominee's probe won, replacing the rule's choice.
     pub hybrid_override: bool,
+    /// The access paths a combining decision (`BitmapOr`: the union of one
+    /// index probe per OR branch) combined, in branch order.
+    pub parts: Vec<PlanSignature>,
 }
 
 /// Options for one diagnostics scope.
@@ -298,6 +301,7 @@ pub(crate) fn choose_and_record(
             wasted_probe_micros: None,
             hybrid_nominated: false,
             hybrid_override: false,
+            parts: Vec::new(),
         });
         chosen
     })
@@ -384,8 +388,87 @@ fn record_decision_with(
             wasted_probe_micros: None,
             hybrid_nominated: false,
             hybrid_override: false,
+            parts: Vec::new(),
         });
     });
+}
+
+/// Record a decision of a locator route that answers without competing
+/// candidates (an IN list, a key list, the union of OR branches): `chosen`
+/// is the only candidate, `parts` the branch access paths it combines.
+pub(crate) fn record_route_decision(
+    collection: &str,
+    chosen: PlanSignature,
+    parts: Vec<PlanSignature>,
+    rows_fetched: usize,
+) {
+    if !active() {
+        return;
+    }
+    record_decision_with(
+        "locator",
+        collection,
+        vec![chosen.clone()],
+        &chosen,
+        false,
+        Some(rows_fetched),
+    );
+    annotate_last_decision(|decision| decision.parts = parts);
+}
+
+/// Record the method the row-set executor joined one FROM item with
+/// (`"IndexNestedLoop"`, `"HashJoin"`, `"NestedLoop"`, ...): chooser
+/// `"join"`, the joined relation's name as the collection.
+pub(crate) fn record_join_method(relation: impl FnOnce() -> String, method: &'static str) {
+    record_node_method("join", relation, method);
+}
+
+/// Record how the executor ran one plan node (`chooser` names the node
+/// family: `"join"`, `"subplan"`).
+pub(crate) fn record_node_method(
+    chooser: &'static str,
+    relation: impl FnOnce() -> String,
+    method: &'static str,
+) {
+    if !active() {
+        return;
+    }
+    let relation = relation();
+    let signature = PlanSignature {
+        kind: method,
+        index: None,
+        prefix_len: 0,
+    };
+    record_decision_with(
+        chooser,
+        &relation,
+        vec![signature.clone()],
+        &signature,
+        false,
+        None,
+    );
+}
+
+/// The access path a captured run of one locator route executed: the
+/// latest decision that fetched rows, else the latest rule-based decision.
+pub(crate) fn executed_signature(decisions: &[DecisionTrace]) -> Option<PlanSignature> {
+    let access = |decision: &&DecisionTrace| !matches!(decision.chooser, "join" | "subplan");
+    let decision = decisions
+        .iter()
+        .rev()
+        .filter(access)
+        .find(|decision| decision.rows_fetched.is_some())
+        .or_else(|| {
+            decisions
+                .iter()
+                .rev()
+                .filter(access)
+                .find(|decision| decision.chooser != "planner")
+        })?;
+    decision
+        .candidates
+        .get(decision.chosen)
+        .map(|candidate| candidate.signature.clone())
 }
 
 /// Annotate the most recent decision (timings, hybrid flag).

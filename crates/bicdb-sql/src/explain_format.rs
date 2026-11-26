@@ -205,6 +205,9 @@ pub(crate) struct PlanNode {
     /// Actual rows and loops (EXPLAIN ANALYZE).
     pub(crate) actual: Option<(f64, f64)>,
     pub(crate) props: Vec<(&'static str, Prop)>,
+    /// The session disabled this node's plan type (`SET enable_seqscan =
+    /// off`) and the node runs anyway: PostgreSQL's `Disabled: true`.
+    pub(crate) disabled: bool,
     /// Child plans with their parent relationship (`Outer`, `Inner`,
     /// `Member`, `Subquery`, `InitPlan`, `SubPlan`) and subplan name.
     pub(crate) children: Vec<(&'static str, Option<String>, PlanNode)>,
@@ -568,8 +571,11 @@ impl Writer<'_> {
         }
         if text {
             self.out.push('\n');
+            if node.disabled {
+                self.property("Disabled", &Prop::Bool(true));
+            }
         } else {
-            self.property("Disabled", &Prop::Bool(false));
+            self.property("Disabled", &Prop::Bool(node.disabled));
         }
         for (label, value) in &node.props {
             self.property(label, value);

@@ -1,10 +1,13 @@
 //! EXPLAIN in PostgreSQL's node vocabulary and layout: the plan tree is
-//! derived from the statement and the access paths BicDB's executor takes
-//! (the same predictions as the native EXPLAIN), never invented. Nodes
-//! BicDB does not have (Materialize, Bitmap scans, Gather, ...) never
-//! appear; where BicDB runs a statement differently from PostgreSQL the plan
-//! shows BicDB's way (a derived table is a Subquery Scan, a CTE is a CTE
-//! Scan over its materialized result).
+//! derived from the statement and the decisions BicDB's executor takes, made
+//! by the executor's own choosers (the row-set locator, the join order and
+//! join-method rules), never invented. A node name appears only where it is
+//! true of what runs: the locator collects row ids before fetching rows (a
+//! Bitmap Heap Scan), a nested loop over stored inner rows reads them once (a
+//! Materialize), an uncorrelated IN list is probed through a hash table (a
+//! hashed SubPlan). Where BicDB runs a statement differently from PostgreSQL
+//! the plan shows BicDB's way (a derived table is a Subquery Scan, a CTE is a
+//! CTE Scan over its materialized result).
 
 use super::*;
 use crate::explain_format::{ExplainOptions, PlanNode, Prop};
@@ -29,14 +32,39 @@ struct Rel {
 #[derive(Clone, Debug)]
 enum Access {
     Seq,
-    /// An index scan: index name, the equality-prefix columns used as
-    /// index conditions, and whether a range on the next column is used.
+    /// The executor proved the qualification can never be true and reads
+    /// nothing.
+    Empty,
+    /// An index scan: rows are fetched as the index yields them (in index
+    /// order, or at most one row). Index name, the equality-prefix columns
+    /// used as index conditions, and whether a range on the next column is
+    /// used.
     Index {
         index: String,
         columns: Vec<String>,
         range: bool,
         backward: bool,
     },
+    /// A bitmap heap scan: the executor first collects every matching row
+    /// id from the index, then fetches those rows in row-id order and
+    /// re-applies the qualification (the row-set locator's path).
+    Bitmap(BitmapSource),
+    /// The union of one index probe per OR branch, then one fetch in row-id
+    /// order (the locator's OR route).
+    BitmapOr(Vec<BitmapSource>),
+}
+
+/// One index probe that contributes row ids to a bitmap heap scan.
+#[derive(Clone, Debug)]
+struct BitmapSource {
+    index: String,
+    /// Index columns its conditions may bind (equality prefix, then the
+    /// range column when `range`).
+    columns: Vec<String>,
+    range: bool,
+    /// An operator-class probe of a non-B-tree index: every qual on the
+    /// indexed columns alone drives it.
+    leading_only: bool,
 }
 
 pub(crate) struct ExplainBuilder<'e, 'db> {
@@ -60,6 +88,18 @@ pub(crate) struct ExplainBuilder<'e, 'db> {
     /// The index and condition the next scan probes per outer row (the
     /// inner side of an indexed nested loop).
     probe_scan: Option<(String, String)>,
+    /// The per-outer-row lookup the executor runs for the next scan (the
+    /// inner side of an indexed nested loop, as the join predictor decided).
+    join_lookup: Option<JoinLookup>,
+}
+
+/// The inner side of an indexed nested loop: the index the executor looks
+/// rows up in per outer row and the rendered terms that bind it.
+#[derive(Clone, Debug)]
+struct JoinLookup {
+    index: String,
+    primary_key: bool,
+    probe: Vec<String>,
 }
 
 fn count_relations(statement: &Statement) -> usize {
@@ -73,6 +113,12 @@ fn count_relations(statement: &Statement) -> usize {
 }
 
 /// `quote_identifier`.
+/// An index's SQL name: storage encodes the indexes of tables outside
+/// `public` (including temporary tables) with their namespace.
+fn shown_index(name: &str) -> String {
+    logical_relation_name(name).unwrap_or_else(|| name.to_string())
+}
+
 fn quote_ident(name: &str) -> String {
     let plain = name
         .chars()
@@ -193,6 +239,22 @@ fn conjuncts(expr: &Expr, out: &mut Vec<Expr>) {
         {
             conjuncts(inner, out)
         }
+        other => out.push(other.clone()),
+    }
+}
+
+/// The branches of an OR, flattened.
+fn disjuncts(expr: &Expr, out: &mut Vec<Expr>) {
+    match expr {
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::Or,
+            right,
+        } => {
+            disjuncts(left, out);
+            disjuncts(right, out);
+        }
+        Expr::Nested(inner) => disjuncts(inner, out),
         other => out.push(other.clone()),
     }
 }
@@ -369,6 +431,7 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
             ctes: Vec::new(),
             ordered_scan: None,
             probe_scan: None,
+            join_lookup: None,
         }
     }
 
@@ -889,9 +952,13 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
             collection,
             alias,
         )?;
-        let signature = match executed {
-            Some(executed) => executed.signature,
-            None => crate::plan_diagnostics::signature_of(&plan.kind),
+        let (signature, executed_chooser, executed_parts) = match executed {
+            Some(executed) => (executed.signature, Some(executed.chooser), executed.parts),
+            None => (
+                crate::plan_diagnostics::signature_of(&plan.kind),
+                None,
+                Vec::new(),
+            ),
         };
         let schema = load_schema(self.engine.db_ref(), collection)?;
         let index_columns = |index: &str| -> Vec<String> {
@@ -922,7 +989,120 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
                 })
                 .unwrap_or_default()
         };
+        let unique_full_equality = |index: &str, used: usize| {
+            self.engine
+                .db_ref()
+                .index_definitions()
+                .into_iter()
+                .find(|definition| definition.collection == collection && definition.name == index)
+                .is_some_and(|definition| definition.unique && definition.fields.len() == used)
+        };
+        // Which chooser's path runs decides the node: the row-set locator
+        // (and the pending-writes chooser) collect row ids first and fetch
+        // afterwards in row-id order, a bitmap heap scan; the planner's own
+        // B-tree loads and the bounded ordered path fetch in index order.
+        let collects_ids = executed_chooser.is_some_and(|chooser| {
+            matches!(chooser, "locator" | "pending-writes" | "composite-text-in")
+        });
+        let source = |signature: &crate::plan_diagnostics::PlanSignature| -> Option<BitmapSource> {
+            if matches!(signature.kind, "PrimaryKeyLocator" | "PrimaryKeyInLookup") {
+                let schema = schema.as_ref()?;
+                let columns = schema
+                    .columns
+                    .iter()
+                    .filter(|column| column.primary_key)
+                    .map(|column| column.name.clone())
+                    .collect::<Vec<_>>();
+                return Some(BitmapSource {
+                    index: schema
+                        .primary_key_name
+                        .clone()
+                        .unwrap_or_else(|| format!("{}_pkey", schema.name)),
+                    leading_only: false,
+                    columns,
+                    range: false,
+                });
+            }
+            let index = signature.index.clone()?;
+            let columns = index_columns(&index);
+            Some(match signature.kind {
+                "IndexLookup" => BitmapSource {
+                    columns: columns.into_iter().take(signature.prefix_len).collect(),
+                    index,
+                    range: false,
+                    leading_only: false,
+                },
+                "IndexRange" => BitmapSource {
+                    columns: columns
+                        .into_iter()
+                        .take(signature.prefix_len.max(1))
+                        .collect(),
+                    index,
+                    range: true,
+                    leading_only: false,
+                },
+                "IndexInLookup" => BitmapSource {
+                    columns: columns.into_iter().take(1).collect(),
+                    index,
+                    range: false,
+                    leading_only: false,
+                },
+                _ => return None,
+            })
+        };
+        let primary_key_index = || {
+            let schema = schema.as_ref()?;
+            Some(Access::Index {
+                index: schema
+                    .primary_key_name
+                    .clone()
+                    .unwrap_or_else(|| format!("{}_pkey", schema.name)),
+                columns: schema
+                    .columns
+                    .iter()
+                    .filter(|column| column.primary_key)
+                    .map(|column| column.name.clone())
+                    .collect(),
+                range: false,
+                backward: false,
+            })
+        };
         Ok(match signature.kind {
+            "Contradiction" => Access::Empty,
+            "IndexLookup" | "IndexRange" | "IndexInLookup" if collects_ids => {
+                let source = source(&signature).expect("index signature");
+                let used = source.columns.len();
+                if signature.kind == "IndexLookup" && unique_full_equality(&source.index, used) {
+                    // A full-key equality on a unique index yields at most
+                    // one row: collecting it first and fetching it is the
+                    // same work as fetching it from the index entry.
+                    Access::Index {
+                        index: source.index,
+                        columns: source.columns,
+                        range: false,
+                        backward: false,
+                    }
+                } else {
+                    Access::Bitmap(source)
+                }
+            }
+            "BitmapOr" if collects_ids => {
+                let mut sources = Vec::new();
+                for part in &executed_parts {
+                    match source(part) {
+                        Some(source) => sources.push(source),
+                        None => {
+                            return Err(SqlError::Unsupported(
+                                "EXPLAIN of this OR access path is not supported".to_string(),
+                            ))
+                        }
+                    }
+                }
+                Access::BitmapOr(sources)
+            }
+            // The planner's IN-list load unions one lookup per value and
+            // fetches the rows in row-id order.
+            "IndexInLookup" => Access::Bitmap(source(&signature).expect("index signature")),
             "IndexLookup" | "IndexPrefixOrderedScan" | "IndexRange" => {
                 let index = signature.index.clone().unwrap_or_default();
                 let columns = index_columns(&index);
@@ -939,25 +1119,25 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
                     backward: false,
                 }
             }
-            "PrimaryKeyLookup" | "PrimaryKeyPrefixLookup" | "PrimaryKeyInLookup" => {
-                let Some(schema) = schema.as_ref() else {
-                    return Ok(Access::Seq);
-                };
-                let index = schema
-                    .primary_key_name
-                    .clone()
-                    .unwrap_or_else(|| format!("{}_pkey", schema.name));
-                Access::Index {
+            "PrimaryKeyLookup"
+            | "PrimaryKeyPrefixLookup"
+            | "PrimaryKeyInLookup"
+            | "PrimaryKeyLocator" => match primary_key_index() {
+                Some(access) => access,
+                None => Access::Seq,
+            },
+            // The planner's non-B-tree loads collect candidate row ids from
+            // the index, then fetch and re-check them.
+            "JsonbIndexScan" | "ArrayIndexScan" | "TrigramIndexScan" | "GeometricIndexScan"
+            | "SpatialIndexScan" | "FullTextIndexScan" => {
+                let index = signature.index.clone().unwrap_or_default();
+                let columns = index_columns(&index);
+                Access::Bitmap(BitmapSource {
                     index,
-                    columns: schema
-                        .columns
-                        .iter()
-                        .filter(|column| column.primary_key)
-                        .map(|column| column.name.clone())
-                        .collect(),
+                    columns,
                     range: false,
-                    backward: false,
-                }
+                    leading_only: true,
+                })
             }
             _ => Access::Seq,
         })
@@ -1017,6 +1197,24 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
             .as_ref()
             .map(|alias| alias.name.value.clone())
             .unwrap_or_else(|| relation_default_alias(name));
+        // The route that executes decides: the bounded ordered path reads
+        // the index in ORDER BY order; any other executing chooser (the
+        // row-set locator, a streamed scan) fetches rows that are sorted
+        // afterwards. Only when no executing route decides does the
+        // planner's own ordered load run.
+        if let Some(bounded) = self
+            .engine
+            .bounded_ordered_index_plan(from, select, query)?
+        {
+            return Ok(Some(bounded.index_and_direction()));
+        }
+        if self
+            .engine
+            .predicted_executed_access(from, select, query, &collection, &alias)?
+            .is_some()
+        {
+            return Ok(None);
+        }
         let plan = self.engine.plan_query(&collection, &alias, select, query)?;
         Ok(match plan.kind {
             PlanKind::OrderedIndexScan {
@@ -1121,6 +1319,16 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
             refname: refname.clone(),
             columns,
         });
+        if let Some(lookup) = self.join_lookup.take() {
+            return self.join_lookup_scan(
+                &collection,
+                &relname,
+                &refname,
+                alias.is_some(),
+                lookup,
+                quals,
+            );
+        }
         let probe = self.probe_scan.take();
         let access = match self.ordered_scan.take() {
             Some((index, backward)) => {
@@ -1155,11 +1363,61 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
             String::new()
         };
         let mut node = match &access {
+            Access::Empty => {
+                return Ok(PlanNode::new("Result").prop("One-Time Filter", "false"));
+            }
             Access::Seq => {
                 let mut node = PlanNode::new("Seq Scan");
                 node.target = format!(" on {shown_relation}{alias_text}");
                 node = node.head("Relation Name", Prop::Text(relname.clone()));
                 node.head("Alias", Prop::Text(refname.clone()))
+            }
+            Access::Bitmap(source) => {
+                let (index_quals, filter) = self.bitmap_conditions(source, &quals);
+                return self.bitmap_heap_scan(
+                    &relname,
+                    &refname,
+                    format!(" on {shown_relation}{alias_text}"),
+                    index_quals.clone(),
+                    filter,
+                    vec![(source.clone(), index_quals)],
+                    prefix,
+                );
+            }
+            Access::BitmapOr(sources) => {
+                let mut rest = quals.clone();
+                let position = rest.iter().position(|qual| {
+                    let mut branches = Vec::new();
+                    disjuncts(qual, &mut branches);
+                    branches.len() == sources.len()
+                });
+                let Some(position) = position else {
+                    return Err(SqlError::Unsupported(
+                        "EXPLAIN of this OR access path is not supported".to_string(),
+                    ));
+                };
+                let or_qual = rest.remove(position);
+                let mut branches = Vec::new();
+                disjuncts(&or_qual, &mut branches);
+                let probes = sources
+                    .iter()
+                    .zip(branches)
+                    .map(|(source, branch)| {
+                        let mut branch_quals = Vec::new();
+                        conjuncts(&branch, &mut branch_quals);
+                        let (index_quals, _) = self.bitmap_conditions(source, &branch_quals);
+                        (source.clone(), index_quals)
+                    })
+                    .collect();
+                return self.bitmap_heap_scan(
+                    &relname,
+                    &refname,
+                    format!(" on {shown_relation}{alias_text}"),
+                    vec![or_qual],
+                    rest,
+                    probes,
+                    prefix,
+                );
             }
             Access::Index {
                 index, backward, ..
@@ -1172,20 +1430,20 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
                 let mut node = PlanNode::new("Index Scan").text_name(name);
                 node.target = format!(
                     " using {} on {shown_relation}{alias_text}",
-                    quote_ident(index)
+                    quote_ident(&shown_index(index))
                 );
                 node.head(
                     "Scan Direction",
                     Prop::Text(if *backward { "Backward" } else { "Forward" }.to_string()),
                 )
-                .head("Index Name", Prop::Text(index.clone()))
+                .head("Index Name", Prop::Text(shown_index(index)))
                 .head("Relation Name", Prop::Text(relname.clone()))
                 .head("Alias", Prop::Text(refname.clone()))
             }
         };
         let (index_quals, filter) = match &access {
-            Access::Seq => (Vec::new(), quals),
             Access::Index { columns, range, .. } => self.index_conditions(columns, *range, &quals),
+            _ => (Vec::new(), quals),
         };
         if let Some((_, condition)) = probe {
             node = node.prop("Index Cond", condition);
@@ -1194,6 +1452,166 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
         }
         node = self.with_filter(node, &filter, prefix)?;
         Ok(node)
+    }
+
+    /// The inner scan of an indexed nested loop: per outer row the executor
+    /// looks the rows up in `lookup.index` and fetches them; a primary-key
+    /// lookup (or a full-key unique one) yields at most one row (an Index
+    /// Scan), any other collects row ids first (a Bitmap Heap Scan).
+    fn join_lookup_scan(
+        &mut self,
+        collection: &str,
+        relname: &str,
+        refname: &str,
+        _aliased: bool,
+        lookup: JoinLookup,
+        quals: Vec<Expr>,
+    ) -> Result<PlanNode> {
+        let prefix = self.verbose;
+        let shown_relation = if self.verbose {
+            format!("public.{}", quote_ident(relname))
+        } else {
+            quote_ident(relname)
+        };
+        let alias_text = if refname != relname {
+            format!(" {}", quote_ident(refname))
+        } else {
+            String::new()
+        };
+        let index_columns = if lookup.primary_key {
+            Vec::new()
+        } else {
+            self.index_columns(collection, &lookup.index)
+        };
+        let unique = !lookup.primary_key
+            && self
+                .engine
+                .db_ref()
+                .index_definitions()
+                .into_iter()
+                .find(|definition| {
+                    definition.collection == collection && definition.name == lookup.index
+                })
+                .is_some_and(|definition| {
+                    definition.unique
+                        && definition.fields.len() == lookup.probe.len()
+                        && lookup.probe.iter().all(|term| term.contains(" = "))
+                });
+        let cond = match lookup.probe.as_slice() {
+            [] => None,
+            [one] => Some(one.clone()),
+            many => Some(format!("({})", many.join(" AND "))),
+        };
+        let _ = index_columns;
+        if lookup.primary_key || unique {
+            let mut node = PlanNode::new("Index Scan");
+            node.target = format!(
+                " using {} on {shown_relation}{alias_text}",
+                quote_ident(&shown_index(&lookup.index))
+            );
+            node = node
+                .head("Scan Direction", Prop::Text("Forward".to_string()))
+                .head("Index Name", Prop::Text(shown_index(&lookup.index)))
+                .head("Relation Name", Prop::Text(relname.to_string()))
+                .head("Alias", Prop::Text(refname.to_string()));
+            if let Some(cond) = cond {
+                node = node.prop("Index Cond", cond);
+            }
+            return self.with_filter(node, &quals, prefix);
+        }
+        let mut node = PlanNode::new("Bitmap Heap Scan");
+        node.target = format!(" on {shown_relation}{alias_text}");
+        node = node
+            .head("Relation Name", Prop::Text(relname.to_string()))
+            .head("Alias", Prop::Text(refname.to_string()));
+        if let Some(cond) = &cond {
+            node = node.prop("Recheck Cond", cond.clone());
+        }
+        node = self.with_filter(node, &quals, prefix)?;
+        let mut child = PlanNode::new("Bitmap Index Scan");
+        child.target = format!(" on {}", quote_ident(&shown_index(&lookup.index)));
+        child = child.head("Index Name", Prop::Text(shown_index(&lookup.index)));
+        if let Some(cond) = cond {
+            child = child.prop("Index Cond", cond);
+        }
+        Ok(node.child("Outer", child))
+    }
+
+    /// The quals a bitmap index probe applies as index conditions, and the
+    /// rest.
+    fn bitmap_conditions(&self, source: &BitmapSource, quals: &[Expr]) -> (Vec<Expr>, Vec<Expr>) {
+        if !source.leading_only {
+            return self.index_conditions(&source.columns, source.range, quals);
+        }
+        if source.columns.is_empty() {
+            // An index whose columns the catalog names internally (the
+            // geometric operator-class indexes): its probe is the qual with
+            // an indexable operator.
+            return quals.iter().cloned().partition(|qual| {
+                matches!(qual, Expr::BinaryOp { op, .. } if matches!(
+                    op,
+                    BinaryOperator::PGOverlap
+                        | BinaryOperator::AtArrow
+                        | BinaryOperator::ArrowAt
+                        | BinaryOperator::PGBitwiseShiftLeft
+                        | BinaryOperator::PGBitwiseShiftRight
+                        | BinaryOperator::Custom(_)
+                ))
+            });
+        }
+        quals.iter().cloned().partition(|qual| {
+            let mut columns = Vec::new();
+            referenced_columns(qual, &mut columns);
+            !contains_subquery(qual)
+                && !columns.is_empty()
+                && columns
+                    .iter()
+                    .all(|(_, column)| source.columns.iter().any(|indexed| indexed == column))
+        })
+    }
+
+    /// A Bitmap Heap Scan over one Bitmap Index Scan per probe (under a
+    /// BitmapOr when there are several).
+    #[allow(clippy::too_many_arguments)]
+    fn bitmap_heap_scan(
+        &mut self,
+        relname: &str,
+        refname: &str,
+        target: String,
+        recheck: Vec<Expr>,
+        filter: Vec<Expr>,
+        probes: Vec<(BitmapSource, Vec<Expr>)>,
+        prefix: bool,
+    ) -> Result<PlanNode> {
+        let mut node = PlanNode::new("Bitmap Heap Scan");
+        node.target = target;
+        node = node
+            .head("Relation Name", Prop::Text(relname.to_string()))
+            .head("Alias", Prop::Text(refname.to_string()));
+        if let Some(text) = self.qual(&recheck, prefix) {
+            node = node.prop("Recheck Cond", text);
+        }
+        node = self.with_filter(node, &filter, prefix)?;
+        let mut children = Vec::new();
+        for (source, index_quals) in probes {
+            let mut child = PlanNode::new("Bitmap Index Scan");
+            child.target = format!(" on {}", quote_ident(&shown_index(&source.index)));
+            child = child.head("Index Name", Prop::Text(shown_index(&source.index)));
+            if let Some(text) = self.qual(&index_quals, prefix) {
+                child = child.prop("Index Cond", text);
+            }
+            children.push(child);
+        }
+        let child = if children.len() == 1 {
+            children.pop().expect("one probe")
+        } else {
+            children
+                .into_iter()
+                .fold(PlanNode::new("BitmapOr"), |or, child| {
+                    or.child("Member", child)
+                })
+        };
+        Ok(node.child("Outer", child))
     }
 
     /// A Filter with the subplans its subqueries run.
@@ -1240,6 +1658,21 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
     ) -> Result<(String, Vec<(String, PlanNode)>)> {
         let mut subplans = Vec::new();
         let text = match qual {
+            Expr::Exists { subquery, negated } if self.hashed_exists(subquery).is_some() => {
+                // The executor answers it from a hash table of the inner
+                // keys: PostgreSQL's hashed SubPlan over the inner scan.
+                let plan = self.hashed_exists(subquery).expect("checked");
+                self.init_plans += 1;
+                let name = format!("SubPlan {}", self.init_plans);
+                let outer = self.expr(&plan.outer, prefix);
+                let inner = self.nested_query(&plan.keys_query)?;
+                subplans.push((name.clone(), inner));
+                if *negated {
+                    format!("(NOT (ANY ({outer} = (hashed {name}).col1)))")
+                } else {
+                    format!("(ANY ({outer} = (hashed {name}).col1))")
+                }
+            }
             Expr::Exists { subquery, negated } => {
                 self.init_plans += 1;
                 let name = format!("SubPlan {}", self.init_plans);
@@ -1258,13 +1691,28 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
             } => {
                 self.init_plans += 1;
                 let name = format!("SubPlan {}", self.init_plans);
+                // The executor answers an uncorrelated one-column subquery
+                // of exactly hashable values from a hash table.
+                let hashed =
+                    super::row_eval::hashed_in_subquery_column_type(self.engine.db_ref(), subquery)
+                        .is_some_and(|column_type| {
+                            typed_equality_uses_plain_values(
+                                self.expr_type(expr).as_deref(),
+                                Some(column_type.as_str()),
+                            )
+                        });
+                let shown = if hashed {
+                    format!("hashed {name}")
+                } else {
+                    name.clone()
+                };
                 let left = self.expr(expr, prefix);
                 let plan = self.nested_query(subquery)?;
                 subplans.push((name.clone(), plan));
                 if *negated {
-                    format!("(NOT (ANY ({left} = ({name}).col1)))")
+                    format!("(NOT (ANY ({left} = ({shown}).col1)))")
                 } else {
-                    format!("(ANY ({left} = ({name}).col1))")
+                    format!("(ANY ({left} = ({shown}).col1))")
                 }
             }
             Expr::BinaryOp { left, op, right } if binary_operator_text(op).is_some() => {
@@ -1285,9 +1733,187 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
                 let right = side(right, self)?;
                 format!("({left} {op_text} {right})")
             }
+            // Boolean combinations: each branch renders its own subqueries.
+            Expr::BinaryOp {
+                op: op @ (BinaryOperator::Or | BinaryOperator::And),
+                ..
+            } => {
+                let mut branches = Vec::new();
+                fn flatten(expr: &Expr, op: &BinaryOperator, out: &mut Vec<Expr>) {
+                    match expr {
+                        Expr::BinaryOp {
+                            left,
+                            op: inner,
+                            right,
+                        } if inner == op => {
+                            flatten(left, op, out);
+                            flatten(right, op, out);
+                        }
+                        Expr::Nested(nested) if matches!(nested.as_ref(), Expr::BinaryOp { op: inner, .. } if inner == op) => {
+                            flatten(nested, op, out)
+                        }
+                        other => out.push(other.clone()),
+                    }
+                }
+                flatten(qual, op, &mut branches);
+                let mut texts = Vec::new();
+                for branch in &branches {
+                    let branch = match branch {
+                        Expr::Nested(inner) => inner.as_ref(),
+                        other => other,
+                    };
+                    if contains_subquery(branch) {
+                        let (text, mut nested) = self.subquery_qual(branch, prefix)?;
+                        texts.push(text);
+                        subplans.append(&mut nested);
+                    } else {
+                        texts.push(self.expr(branch, prefix));
+                    }
+                }
+                let word = if matches!(op, BinaryOperator::Or) {
+                    " OR "
+                } else {
+                    " AND "
+                };
+                format!("({})", texts.join(word))
+            }
+            Expr::UnaryOp {
+                op: UnaryOperator::Not,
+                expr,
+            } if contains_subquery(expr) => {
+                let (text, mut nested) = self.subquery_qual(expr, prefix)?;
+                subplans.append(&mut nested);
+                format!("(NOT {text})")
+            }
+            Expr::Nested(inner) if contains_subquery(inner) => {
+                let (text, mut nested) = self.subquery_qual(inner, prefix)?;
+                subplans.append(&mut nested);
+                text
+            }
             other => self.expr(other, prefix),
         };
         Ok((text, subplans))
+    }
+
+    /// The hash semi-join plan the executor runs for `EXISTS (query)` at
+    /// this level, when it runs one (see `hashed_exists_plan`).
+    fn hashed_exists(&self, query: &Query) -> Option<super::row_eval::HashedExists> {
+        // Inside a correlated subquery the executor keeps the per-row path.
+        if self.scopes.len() > 1 {
+            return None;
+        }
+        let plan = super::row_eval::hashed_exists_plan(self.engine.db_ref(), query)?;
+        typed_equality_uses_plain_values(
+            self.expr_type(&plan.outer).as_deref(),
+            Some(plan.inner_type.as_str()),
+        )
+        .then_some(plan)
+    }
+
+    /// Whether the executor probes `expr IN (query)` through a hash table.
+    fn hashed_in(&self, expr: &Expr, query: &Query) -> Option<String> {
+        let column_type =
+            super::row_eval::hashed_in_subquery_column_type(self.engine.db_ref(), query)?;
+        typed_equality_uses_plain_values(
+            self.expr_type(expr).as_deref(),
+            Some(column_type.as_str()),
+        )
+        .then(|| {
+            let SetExpr::Select(select) = query.body.as_ref() else {
+                return None;
+            };
+            match select.projection.first()? {
+                SelectItem::UnnamedExpr(item) | SelectItem::ExprWithAlias { expr: item, .. } => {
+                    match item {
+                        Expr::Identifier(ident) => Some(ident.value.clone()),
+                        Expr::CompoundIdentifier(parts) => {
+                            parts.last().map(|part| part.value.clone())
+                        }
+                        _ => None,
+                    }
+                }
+                _ => None,
+            }
+        })
+        .flatten()
+    }
+
+    /// The name the last relation `relation` (unaliased) was given.
+    fn last_refname(&self, relation: &str, alias: Option<&str>) -> String {
+        if let Some(alias) = alias {
+            return alias.to_string();
+        }
+        match self.refnames.get(relation).copied().unwrap_or(1) {
+            0 | 1 => relation.to_string(),
+            count => format!("{relation}_{}", count - 1),
+        }
+    }
+
+    /// The single base table a subquery reads, with its alias.
+    fn subquery_relation(query: &Query) -> Option<(String, Option<String>)> {
+        let SetExpr::Select(select) = query.body.as_ref() else {
+            return None;
+        };
+        let TableFactor::Table { name, alias, .. } = &select.from.first()?.relation else {
+            return None;
+        };
+        Some((
+            relation_default_alias(name),
+            alias.as_ref().map(|alias| alias.name.value.clone()),
+        ))
+    }
+
+    /// A top-level `EXISTS`, `NOT EXISTS` or `IN` term the executor answers
+    /// through a hash table of the subquery's keys: a Hash Semi Join (Hash
+    /// Anti Join for `NOT EXISTS`) over the rows of the FROM clause.
+    fn hash_semi_join(&mut self, outer: PlanNode, qual: &Expr) -> Result<PlanNode> {
+        let (anti, outer_expr, inner_query, inner_column) = match qual {
+            Expr::Exists { subquery, negated } => {
+                let plan = self.hashed_exists(subquery).expect("checked by caller");
+                (
+                    *negated,
+                    plan.outer.clone(),
+                    plan.keys_query.clone(),
+                    plan.inner_column,
+                )
+            }
+            Expr::InSubquery {
+                expr,
+                subquery,
+                negated: false,
+            } => {
+                let column = self.hashed_in(expr, subquery).expect("checked by caller");
+                (false, (**expr).clone(), (**subquery).clone(), column)
+            }
+            _ => unreachable!("hash semi-join of {qual}"),
+        };
+        let outer_text = self.expr(&outer_expr, true);
+        let inner = self.nested_query(&inner_query)?;
+        let (relation, alias) = Self::subquery_relation(&inner_query).unwrap_or_default();
+        let inner_ref = self.last_refname(&relation, alias.as_deref());
+        let name = if anti {
+            "Hash Anti Join"
+        } else {
+            "Hash Semi Join"
+        };
+        let node = PlanNode::new("Hash Join")
+            .text_name(name)
+            .head(
+                "Join Type",
+                Prop::Text(if anti { "Anti" } else { "Semi" }.to_string()),
+            )
+            .head("Inner Unique", Prop::Bool(false))
+            .prop(
+                "Hash Cond",
+                format!(
+                    "({outer_text} = {}.{})",
+                    quote_ident(&inner_ref),
+                    quote_ident(&inner_column)
+                ),
+            );
+        Ok(node
+            .child("Outer", outer)
+            .child("Inner", PlanNode::new("Hash").child("Outer", inner)))
     }
 
     fn nested_query(&mut self, query: &Query) -> Result<PlanNode> {
@@ -1545,8 +2171,25 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
     /// `FROM a JOIN b ON ... JOIN c ...`: a left-deep join tree. Conjuncts
     /// of the WHERE that reference one item are pushed into its scan.
     fn join_tree(&mut self, from: &TableWithJoins, quals: Vec<Expr>) -> Result<PlanNode> {
+        // The executor joins in the order its join planner chooses, judging
+        // the whole qualification; describe that order.
+        let selection = quals.iter().cloned().reduce(|left, right| Expr::BinaryOp {
+            left: Box::new(left),
+            op: BinaryOperator::And,
+            right: Box::new(right),
+        });
+        // Shapes the executor's planner cannot order without the
+        // statement's own context (CTE names, table functions) keep the
+        // written order, as the executor's fallback does.
+        let (relation, joins) = if from.joins.is_empty() {
+            (from.relation.clone(), Vec::new())
+        } else {
+            self.engine
+                .plan_row_join_order(from, selection.as_ref())
+                .unwrap_or_else(|_| (from.relation.clone(), from.joins.clone()))
+        };
         let mut remaining = quals;
-        let mut take_for = |factor: &TableFactor, this: &Self, remaining: &mut Vec<Expr>| {
+        let take_for = |factor: &TableFactor, this: &Self, remaining: &mut Vec<Expr>| {
             let names = Self::factor_names(factor);
             let columns = this.factor_columns(factor);
             let (mine, rest): (Vec<Expr>, Vec<Expr>) = std::mem::take(remaining)
@@ -1555,7 +2198,7 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
             *remaining = rest;
             mine
         };
-        let left_quals = if from.joins.iter().all(|join| {
+        let left_quals = if joins.iter().all(|join| {
             matches!(
                 join.join_operator,
                 JoinOperator::Join(_)
@@ -1565,12 +2208,21 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
                     | JoinOperator::LeftOuter(_)
             )
         }) {
-            take_for(&from.relation, self, &mut remaining)
+            take_for(&relation, self, &mut remaining)
         } else {
             Vec::new()
         };
-        let mut plan = self.from_factor(&from.relation, left_quals)?;
-        for (position, join) in from.joins.iter().enumerate() {
+        let mut left_names = Self::factor_names(&relation);
+        let mut left_factor_columns = self.factor_columns(&relation);
+        let mut left_columns = self
+            .engine
+            .row_set_columns_from_table_factor_without_rows(&relation)
+            .ok()
+            .flatten();
+        let all_inner = joins.iter().all(is_reorderable_inner_join);
+        let mut cumulative = if all_inner { selection.clone() } else { None };
+        let mut plan = self.from_factor(&relation, left_quals)?;
+        for join in &joins {
             let (kind, constraint) = match &join.join_operator {
                 JoinOperator::Join(constraint) | JoinOperator::Inner(constraint) => {
                     ("Inner", Some(constraint))
@@ -1589,12 +2241,10 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
                     )))
                 }
             };
-            let right_quals = if kind == "Inner" || kind == "Left" {
-                if kind == "Inner" {
-                    take_for(&join.relation, self, &mut remaining)
-                } else {
-                    Vec::new()
-                }
+            let names = Self::factor_names(&join.relation);
+            let columns = self.factor_columns(&join.relation);
+            let right_quals = if kind == "Inner" {
+                take_for(&join.relation, self, &mut remaining)
             } else {
                 Vec::new()
             };
@@ -1602,14 +2252,21 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
             if let Some(JoinConstraint::On(on)) = constraint {
                 conjuncts(on, &mut join_quals);
             }
-            if position + 1 == from.joins.len() && kind == "Inner" {
-                join_quals.append(&mut remaining);
+            if kind == "Inner" {
+                // WHERE terms over the tables joined so far join them here.
+                let mut joined_names = left_names.clone();
+                joined_names.extend(names.iter().cloned());
+                let mut joined_columns = left_factor_columns.clone();
+                joined_columns.extend(columns.iter().cloned());
+                let (mine, rest): (Vec<Expr>, Vec<Expr>) = std::mem::take(&mut remaining)
+                    .into_iter()
+                    .partition(|qual| self.qual_belongs(qual, &joined_names, &joined_columns));
+                remaining = rest;
+                join_quals.extend(mine);
             }
             // Join-constraint conjuncts on the inner side alone filter its scan.
             let (inner_only, join_quals): (Vec<Expr>, Vec<Expr>) =
                 if matches!(kind, "Inner" | "Left") {
-                    let names = Self::factor_names(&join.relation);
-                    let columns = self.factor_columns(&join.relation);
                     join_quals
                         .into_iter()
                         .partition(|qual| self.qual_belongs(qual, &names, &columns))
@@ -1618,84 +2275,321 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
                 };
             let mut inner_quals = right_quals;
             inner_quals.extend(inner_only);
+            let prediction = match &left_columns {
+                Some(left_columns) => self
+                    .engine
+                    .predict_row_join(left_columns, join, selection.as_ref(), cumulative.as_ref())
+                    .unwrap_or(crate::engine::RowJoinPrediction::Unknown),
+                None => crate::engine::RowJoinPrediction::Unknown,
+            };
+            let join_type = match kind {
+                "Inner" => "",
+                other => other,
+            };
+            let prefix = true;
             let equi = join_quals.iter().position(|qual| {
                 matches!(qual, Expr::BinaryOp { op: BinaryOperator::Eq, left, right }
                     if matches!(left.as_ref(), Expr::Identifier(_) | Expr::CompoundIdentifier(_))
                         && matches!(right.as_ref(), Expr::Identifier(_) | Expr::CompoundIdentifier(_)))
             });
-            // The executor probes an index of the inner table by the join
-            // key per outer row when the key leads one of its indexes.
-            let probe = match (equi, kind) {
-                (Some(index), "Inner" | "Left") => {
-                    self.join_probe(&join.relation, &join_quals[index])?
+            let hash_node = |this: &mut Self,
+                             mut join_quals: Vec<Expr>,
+                             index: usize,
+                             plan: PlanNode,
+                             inner: PlanNode|
+             -> PlanNode {
+                let cond = join_quals.remove(index);
+                let mut node = PlanNode::new("Hash Join").text_name(if join_type.is_empty() {
+                    "Hash Join".to_string()
+                } else {
+                    format!("Hash {join_type} Join")
+                });
+                node = node
+                    .head("Join Type", Prop::Text(kind.to_string()))
+                    .head("Inner Unique", Prop::Bool(false));
+                let cond_text = this.expr(&cond, prefix);
+                node = node.prop("Hash Cond", cond_text);
+                if let Some(text) = this.qual(&join_quals, prefix) {
+                    node = node.prop("Join Filter", text);
                 }
-                _ => None,
+                node.child("Outer", plan)
+                    .child("Inner", PlanNode::new("Hash").child("Outer", inner))
             };
-            let probe_cond = probe
-                .as_ref()
-                .map(|_| equi.expect("probe needs an equi key"));
-            self.probe_scan = probe;
-            let inner = self.from_factor(&join.relation, inner_quals);
-            self.probe_scan = None;
-            let inner = inner?;
-            let mut join_quals = join_quals;
-            if let Some(index) = probe_cond {
-                join_quals.remove(index);
-            }
-            let equi = if probe_cond.is_some() { None } else { equi };
-            let prefix = true;
-            let join_type = match kind {
-                "Inner" => "",
-                other => other,
+            let nested_node = |this: &mut Self,
+                               join_quals: Vec<Expr>,
+                               plan: PlanNode,
+                               inner: PlanNode|
+             -> PlanNode {
+                let mut node = PlanNode::new("Nested Loop").text_name(if join_type.is_empty() {
+                    "Nested Loop".to_string()
+                } else {
+                    format!("Nested Loop {join_type} Join")
+                });
+                node = node
+                    .head("Join Type", Prop::Text(kind.to_string()))
+                    .head("Inner Unique", Prop::Bool(false));
+                if let Some(text) = this.qual(&join_quals, prefix) {
+                    node = node.prop("Join Filter", text);
+                }
+                node.child("Outer", plan).child("Inner", inner)
             };
-            let mut node = match (equi, kind) {
-                (Some(index), "Inner" | "Left") => {
-                    let mut join_quals = join_quals;
-                    let cond = join_quals.remove(index);
-                    let mut node = PlanNode::new("Hash Join").text_name(if join_type.is_empty() {
-                        "Hash Join".to_string()
+            let mut node = match prediction {
+                crate::engine::RowJoinPrediction::IndexNestedLoop {
+                    index, primary_key, ..
+                } => {
+                    // The inner table is looked up per outer row by the join
+                    // terms that bind the index; the other join terms are
+                    // checked on each joined pair.
+                    let index_columns = if primary_key {
+                        self.primary_key_columns(&join.relation)
                     } else {
-                        format!("Hash {join_type} Join")
+                        self.factor_index_columns(&join.relation, &index)
+                    };
+                    let mut candidates = join_quals.clone();
+                    candidates.extend(inner_quals.iter().cloned());
+                    let (probe, rest) =
+                        self.probe_conditions(&index_columns, &candidates, &names, &columns);
+                    let join_rest = join_quals
+                        .into_iter()
+                        .filter(|qual| rest.contains(qual))
+                        .collect::<Vec<_>>();
+                    let inner_rest = inner_quals
+                        .into_iter()
+                        .filter(|qual| rest.contains(qual))
+                        .collect::<Vec<_>>();
+                    self.join_lookup = Some(JoinLookup {
+                        index,
+                        primary_key,
+                        probe,
                     });
-                    node = node
-                        .head("Join Type", Prop::Text(kind.to_string()))
-                        .head("Inner Unique", Prop::Bool(false));
-                    let cond_text = self.expr(&cond, prefix);
-                    node = node.prop("Hash Cond", cond_text);
-                    if let Some(text) = self.qual(&join_quals, prefix) {
-                        node = node.prop("Join Filter", text);
-                    }
-                    node.child("Outer", plan)
-                        .child("Inner", PlanNode::new("Hash").child("Outer", inner))
+                    let inner = self.from_factor(&join.relation, inner_rest);
+                    self.join_lookup = None;
+                    nested_node(self, join_rest, plan, inner?)
                 }
-                _ => {
-                    let mut node =
-                        PlanNode::new("Nested Loop").text_name(if join_type.is_empty() {
-                            "Nested Loop".to_string()
-                        } else {
-                            format!("Nested Loop {join_type} Join")
-                        });
-                    node = node
-                        .head("Join Type", Prop::Text(kind.to_string()))
-                        .head("Inner Unique", Prop::Bool(false));
-                    if let Some(text) = self.qual(&join_quals, prefix) {
-                        node = node.prop("Join Filter", text);
+                crate::engine::RowJoinPrediction::Hash { .. } if equi.is_some() => {
+                    let inner = self.from_factor(&join.relation, inner_quals)?;
+                    hash_node(self, join_quals, equi.expect("checked"), plan, inner)
+                }
+                crate::engine::RowJoinPrediction::Hash { .. }
+                | crate::engine::RowJoinPrediction::NestedLoop { .. } => {
+                    // The executor reads the inner side once and compares
+                    // every outer row with the stored rows.
+                    let inner = self.from_factor(&join.relation, inner_quals)?;
+                    let inner = PlanNode::new("Materialize").child("Outer", inner);
+                    nested_node(self, join_quals, plan, inner)
+                }
+                crate::engine::RowJoinPrediction::Unknown => {
+                    // Shapes the join predictor does not model keep the
+                    // description by join condition.
+                    let probe = match (equi, kind) {
+                        (Some(index), "Inner" | "Left") => {
+                            self.join_probe(&join.relation, &join_quals[index])?
+                        }
+                        _ => None,
+                    };
+                    let probe_cond = probe
+                        .as_ref()
+                        .map(|_| equi.expect("probe needs an equi key"));
+                    self.probe_scan = probe;
+                    let inner = self.from_factor(&join.relation, inner_quals);
+                    self.probe_scan = None;
+                    let inner = inner?;
+                    let mut join_quals = join_quals;
+                    if let Some(index) = probe_cond {
+                        join_quals.remove(index);
                     }
-                    node.child("Outer", plan).child("Inner", inner)
+                    let equi = if probe_cond.is_some() { None } else { equi };
+                    match (equi, kind) {
+                        (Some(index), "Inner" | "Left") => {
+                            hash_node(self, join_quals, index, plan, inner)
+                        }
+                        _ => nested_node(self, join_quals, plan, inner),
+                    }
                 }
             };
-            if !remaining.is_empty() && position + 1 == from.joins.len() {
-                let rest = std::mem::take(&mut remaining);
-                node = self.with_filter(node, &rest, prefix)?;
+            if let (Some(columns), Some(right)) = (
+                left_columns.as_mut(),
+                self.engine
+                    .row_set_columns_from_table_factor_without_rows(&join.relation)
+                    .ok()
+                    .flatten(),
+            ) {
+                for column in right {
+                    if !columns.contains(&column) {
+                        columns.push(column);
+                    }
+                }
+            } else {
+                left_columns = None;
+            }
+            if let (Some(cumulative), Some(JoinConstraint::On(on))) =
+                (cumulative.as_mut(), constraint)
+            {
+                *cumulative = Expr::BinaryOp {
+                    left: Box::new(cumulative.clone()),
+                    op: BinaryOperator::And,
+                    right: Box::new(on.clone()),
+                };
+            } else if let (None, true, Some(JoinConstraint::On(on))) =
+                (cumulative.as_ref(), all_inner, constraint)
+            {
+                cumulative = Some(on.clone());
+            }
+            left_names.extend(names);
+            left_factor_columns.extend(columns);
+            if !remaining.is_empty() && kind != "Inner" {
+                // Terms over an outer join's result filter above it.
+                let (mine, rest): (Vec<Expr>, Vec<Expr>) = std::mem::take(&mut remaining)
+                    .into_iter()
+                    .partition(|qual| self.qual_belongs(qual, &left_names, &left_factor_columns));
+                remaining = rest;
+                if !mine.is_empty() {
+                    node = self.with_filter(node, &mine, prefix)?;
+                }
             }
             plan = node;
         }
         if !remaining.is_empty() {
             let rest = std::mem::take(&mut remaining);
-            let prefix = self.multi_relation || self.verbose;
+            // A scan's own qualification is shown unqualified (PostgreSQL
+            // qualifies scan quals only in VERBOSE); a join's is qualified.
+            let prefix = if joins.is_empty() {
+                self.verbose
+            } else {
+                self.multi_relation || self.verbose
+            };
             plan = self.with_filter(plan, &rest, prefix)?;
         }
         Ok(plan)
+    }
+
+    /// The primary-key column names of a base table FROM item.
+    fn primary_key_columns(&self, factor: &TableFactor) -> Vec<String> {
+        let TableFactor::Table { name, .. } = factor else {
+            return Vec::new();
+        };
+        let Ok(collection) = relation_name(name) else {
+            return Vec::new();
+        };
+        load_schema(self.engine.db_ref(), &collection)
+            .ok()
+            .flatten()
+            .map(|schema| {
+                schema
+                    .columns
+                    .iter()
+                    .filter(|column| column.primary_key)
+                    .map(|column| column.name.clone())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// An index's column names for a base table FROM item.
+    fn factor_index_columns(&self, factor: &TableFactor, index: &str) -> Vec<String> {
+        let TableFactor::Table { name, .. } = factor else {
+            return Vec::new();
+        };
+        let Ok(collection) = relation_name(name) else {
+            return Vec::new();
+        };
+        self.index_columns(&collection, index)
+    }
+
+    /// The join terms that bind `columns` (an index's leading columns, in
+    /// order: equalities, then one range) to values of the outer side, and
+    /// the rest.
+    fn probe_conditions(
+        &mut self,
+        columns: &[String],
+        quals: &[Expr],
+        names: &[String],
+        factor_columns: &[String],
+    ) -> (Vec<String>, Vec<Expr>) {
+        let inner_column = |expr: &Expr| -> Option<String> {
+            let column = match expr {
+                Expr::Identifier(ident) => ident.value.clone(),
+                Expr::CompoundIdentifier(parts) if parts.len() == 2 => {
+                    if !names.iter().any(|name| name == &parts[0].value) {
+                        return None;
+                    }
+                    parts[1].value.clone()
+                }
+                _ => return None,
+            };
+            factor_columns.contains(&column).then_some(column)
+        };
+        let references_inner = |expr: &Expr| {
+            let mut references = Vec::new();
+            referenced_columns(expr, &mut references);
+            contains_subquery(expr)
+                || references
+                    .iter()
+                    .any(|(qualifier, column)| match qualifier {
+                        Some(qualifier) => names.contains(qualifier),
+                        None => factor_columns.contains(column),
+                    })
+        };
+        let mut used = vec![false; quals.len()];
+        let mut probe = Vec::new();
+        for column in columns {
+            let mut equality = None;
+            let mut ranges = Vec::new();
+            for (position, qual) in quals.iter().enumerate() {
+                if used[position] {
+                    continue;
+                }
+                let Expr::BinaryOp { left, op, right } = qual else {
+                    continue;
+                };
+                let (inner, outer, op) = match (inner_column(left), inner_column(right)) {
+                    (Some(inner), None) if !references_inner(right) => (inner, right, op.clone()),
+                    (None, Some(inner)) if !references_inner(left) => (
+                        inner,
+                        left,
+                        match op {
+                            BinaryOperator::Lt => BinaryOperator::Gt,
+                            BinaryOperator::LtEq => BinaryOperator::GtEq,
+                            BinaryOperator::Gt => BinaryOperator::Lt,
+                            BinaryOperator::GtEq => BinaryOperator::LtEq,
+                            other => other.clone(),
+                        },
+                    ),
+                    _ => continue,
+                };
+                if &inner != column {
+                    continue;
+                }
+                match op {
+                    BinaryOperator::Eq if equality.is_none() => equality = Some((position, outer)),
+                    BinaryOperator::Lt
+                    | BinaryOperator::LtEq
+                    | BinaryOperator::Gt
+                    | BinaryOperator::GtEq => ranges.push((position, op, outer)),
+                    _ => {}
+                }
+            }
+            if let Some((position, outer)) = equality {
+                used[position] = true;
+                let outer = self.expr(&outer.as_ref().clone(), true);
+                probe.push(format!("({} = {outer})", quote_ident(column)));
+                continue;
+            }
+            for (position, op, outer) in ranges {
+                used[position] = true;
+                let outer = self.expr(&outer.as_ref().clone(), true);
+                let op = binary_operator_text(&op).unwrap_or("=");
+                probe.push(format!("({} {op} {outer})", quote_ident(column)));
+            }
+            break;
+        }
+        let rest = quals
+            .iter()
+            .zip(used)
+            .filter(|(_, used)| !used)
+            .map(|(qual, _)| qual.clone())
+            .collect();
+        (probe, rest)
     }
 
     /// The index probe of an indexed nested loop: the inner table's index
@@ -1995,74 +2889,30 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
             }
             node
         } else {
-            // Comma-separated FROM items join as an inner nested loop.
-            let mut items = select.from.iter();
-            let first = items.next().expect("non-empty FROM");
-            let rest = items.collect::<Vec<_>>();
-            if rest.is_empty() {
-                self.join_tree(first, quals)?
+            // Comma-separated FROM items are cross joins the executor
+            // orders and joins like explicit ones.
+            let from = if select.from.len() == 1 {
+                select.from[0].clone()
             } else {
-                let mut remaining = quals;
-                let mut take_for =
-                    |from: &TableWithJoins, this: &Self, remaining: &mut Vec<Expr>| {
-                        let names = std::iter::once(&from.relation)
-                            .chain(from.joins.iter().map(|join| &join.relation))
-                            .flat_map(Self::factor_names)
-                            .collect::<Vec<_>>();
-                        let columns = std::iter::once(&from.relation)
-                            .chain(from.joins.iter().map(|join| &join.relation))
-                            .flat_map(|factor| this.factor_columns(factor))
-                            .collect::<Vec<_>>();
-                        let (mine, rest): (Vec<Expr>, Vec<Expr>) = std::mem::take(remaining)
-                            .into_iter()
-                            .partition(|qual| this.qual_belongs(qual, &names, &columns));
-                        *remaining = rest;
-                        mine
-                    };
-                let first_quals = take_for(first, self, &mut remaining);
-                let mut plan = self.join_tree(first, first_quals)?;
-                for (position, item) in rest.iter().enumerate() {
-                    let item_quals = take_for(item, self, &mut remaining);
-                    let inner = self.join_tree(item, item_quals)?;
-                    let last = position + 1 == rest.len();
-                    let join_quals = if last {
-                        std::mem::take(&mut remaining)
-                    } else {
-                        Vec::new()
-                    };
-                    let equi = join_quals.iter().position(|qual| {
-                        matches!(qual, Expr::BinaryOp { op: BinaryOperator::Eq, left, right }
-                            if matches!(left.as_ref(), Expr::Identifier(_) | Expr::CompoundIdentifier(_))
-                                && matches!(right.as_ref(), Expr::Identifier(_) | Expr::CompoundIdentifier(_)))
-                    });
-                    plan = match equi {
-                        Some(index) => {
-                            let mut join_quals = join_quals;
-                            let cond = join_quals.remove(index);
-                            let cond_text = self.expr(&cond, true);
-                            let mut node = PlanNode::new("Hash Join")
-                                .head("Join Type", Prop::Text("Inner".to_string()))
-                                .head("Inner Unique", Prop::Bool(false))
-                                .prop("Hash Cond", cond_text);
-                            if let Some(text) = self.qual(&join_quals, true) {
-                                node = node.prop("Join Filter", text);
-                            }
-                            node.child("Outer", plan)
-                                .child("Inner", PlanNode::new("Hash").child("Outer", inner))
-                        }
-                        None => {
-                            let mut node = PlanNode::new("Nested Loop")
-                                .head("Join Type", Prop::Text("Inner".to_string()))
-                                .head("Inner Unique", Prop::Bool(false));
-                            if let Some(text) = self.qual(&join_quals, true) {
-                                node = node.prop("Join Filter", text);
-                            }
-                            node.child("Outer", plan).child("Inner", inner)
-                        }
-                    };
-                }
-                plan
+                SqlEngine::comma_from_items_to_cross_join(&select.from)
+            };
+            // Top-level EXISTS / IN terms the executor answers from a hash
+            // table of the subquery's keys are hash semi-joins.
+            let (semi, quals): (Vec<Expr>, Vec<Expr>) =
+                quals.into_iter().partition(|qual| match qual {
+                    Expr::Exists { subquery, .. } => self.hashed_exists(subquery).is_some(),
+                    Expr::InSubquery {
+                        expr,
+                        subquery,
+                        negated: false,
+                    } => self.scopes.len() == 1 && self.hashed_in(expr, subquery).is_some(),
+                    _ => false,
+                });
+            let mut plan = self.join_tree(&from, quals)?;
+            for qual in &semi {
+                plan = self.hash_semi_join(plan, qual)?;
             }
+            plan
         };
         let group_by = match &select.group_by {
             GroupByExpr::Expressions(exprs, _) => exprs.clone(),

@@ -2755,12 +2755,14 @@ impl<'db> SqlEngine<'db> {
             return Ok(Some(ExecutedAccess {
                 chooser: "streaming",
                 signature: crate::plan_diagnostics::PlanSignature::full_scan(),
+                parts: Vec::new(),
             }));
         }
         if let Some(bounded) = self.bounded_ordered_index_plan(from, select, query)? {
             return Ok(Some(ExecutedAccess {
                 chooser: "bounded-ordered",
                 signature: bounded.signature(),
+                parts: Vec::new(),
             }));
         }
         let Some(selection) = select.selection.as_ref() else {
@@ -3567,6 +3569,11 @@ pub(crate) struct BoundedOrderedIndexPlan {
 }
 
 impl BoundedOrderedIndexPlan {
+    /// The index read and whether it is read backward.
+    pub(crate) fn index_and_direction(&self) -> (String, bool) {
+        (self.index_name.clone(), self.descending)
+    }
+
     fn signature(&self) -> crate::plan_diagnostics::PlanSignature {
         crate::plan_diagnostics::PlanSignature {
             kind: "IndexPrefixOrderedScan",
@@ -3578,8 +3585,10 @@ impl BoundedOrderedIndexPlan {
 
 /// The access path an execution route chose (value-free).
 pub(crate) struct ExecutedAccess {
-    chooser: &'static str,
+    pub(crate) chooser: &'static str,
     pub(crate) signature: crate::plan_diagnostics::PlanSignature,
+    /// The branch access paths of a combining route (`BitmapOr`).
+    pub(crate) parts: Vec<crate::plan_diagnostics::PlanSignature>,
 }
 
 impl ExecutedAccess {
@@ -3599,24 +3608,32 @@ impl ExecutedAccess {
                     index: None,
                     prefix_len: 0,
                 },
+                parts: Vec::new(),
             });
         }
         // The route that fetched rows executed. A rule-based chooser that
         // declined (no index matched) hands the statement to the next route,
         // so it only decides when nothing fetched rows: the scan.
+        // Join and subplan method records describe other plan nodes.
+        let access = |decision: &&crate::plan_diagnostics::DecisionTrace| {
+            !matches!(decision.chooser, "join" | "subplan")
+        };
         let decision = decisions
             .iter()
             .rev()
+            .filter(access)
             .find(|decision| decision.rows_fetched.is_some())
             .or_else(|| {
                 decisions
                     .iter()
                     .rev()
+                    .filter(access)
                     .find(|decision| decision.chooser != "planner")
             })?;
         Some(Self {
             chooser: decision.chooser,
             signature: decision.candidates.get(decision.chosen)?.signature.clone(),
+            parts: decision.parts.clone(),
         })
     }
 }
@@ -3673,6 +3690,20 @@ fn explain_access_lines(
         "PrimaryKeyLocator" => vec![format!(
             "PrimaryKeyLookup MatchedColumns {}",
             signature.prefix_len
+        )],
+        "IndexInLookup" | "TrigramIndexScan" => vec![format!(
+            "{} {}",
+            signature.kind,
+            signature.index.as_deref().unwrap_or("?")
+        )],
+        "BitmapOr" => vec![format!(
+            "BitmapOr {}",
+            executed
+                .parts
+                .iter()
+                .map(crate::plan_diagnostics::PlanSignature::label)
+                .collect::<Vec<_>>()
+                .join(" ")
         )],
         other => vec![other.to_string()],
     };

@@ -13869,6 +13869,12 @@ impl BicDb {
     ) -> Result<()> {
         self.ensure_writable("change collection mesh authorization")?;
         validate_collection_name(collection)?;
+        if enabled && prepared_transactions::is_prepared_xacts_collection(collection) {
+            // Prepare records are other transactions' pending write sets.
+            return Err(BicDbError::Authorization(format!(
+                "internal collection `{collection}` cannot be mesh-enabled"
+            )));
+        }
         let state = self.collection_state_mut(collection)?;
         if enabled && state.meta.policy.is_some() {
             return Err(BicDbError::Authorization(format!(

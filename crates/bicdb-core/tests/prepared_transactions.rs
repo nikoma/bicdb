@@ -425,3 +425,13 @@ fn a_backup_restores_prepared_transactions_and_lists_no_internal_collection() {
         assert_eq!(balance(&db, "c"), Some(7));
     }
 }
+
+#[test]
+fn the_prepare_record_collection_cannot_be_mesh_enabled() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = fresh(dir.path(), &StorageMode::EmbeddedMemory);
+    let error = db
+        .set_collection_mesh_sync_enabled(bicdb_core::PREPARED_XACTS_COLLECTION, true)
+        .unwrap_err();
+    assert!(matches!(error, BicDbError::Authorization(_)), "{error:?}");
+}

@@ -218,10 +218,21 @@ pub(crate) fn validate_temporal_foreign_key_hook(
         }
     }
     if found.is_none() {
-        // DDL may rename the relation while checks are pending.
-        for schema in list_schemas(db)? {
-            if let Some(key) = owned(&schema)? {
-                found = Some((schema, key));
+        // DDL may rename the relation while checks are pending. Search the
+        // catalog without observing all of it: observe only the table found
+        // (and, through `owned`, a partition's ancestors).
+        for schema in schema_catalog_snapshot_shared(db)?.iter() {
+            let candidate = schema
+                .temporal_foreign_keys
+                .iter()
+                .any(|foreign_key| foreign_key.constraint_id == check.constraint_id)
+                || schema.partition_of.is_some();
+            if !candidate {
+                continue;
+            }
+            if let Some(key) = owned(schema)? {
+                check_sql_catalog_read(db, SCHEMA_COLLECTION, Some(&schema.name))?;
+                found = Some((schema.clone(), key));
                 break;
             }
         }

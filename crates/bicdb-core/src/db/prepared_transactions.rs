@@ -725,10 +725,11 @@ impl BicDb {
     /// constraint reservations under a fresh id, pins its collections
     /// against catalog changes and, when SERIALIZABLE, rejoins the SSI graph.
     pub(super) fn restore_prepared_transactions(&mut self) -> Result<()> {
-        if let Some(max) = std::env::var("BICDB_MAX_PREPARED_TRANSACTIONS")
+        let max = std::env::var("BICDB_MAX_PREPARED_TRANSACTIONS")
             .ok()
             .and_then(|value| value.trim().parse::<usize>().ok())
-        {
+            .unwrap_or(self.config.max_prepared_transactions);
+        if max > 0 {
             self.set_max_prepared_transactions(max)?;
         }
         if !self.collections.contains_key(PREPARED_XACTS_COLLECTION) || self.is_read_only_standby()

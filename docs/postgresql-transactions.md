@@ -135,3 +135,14 @@ coverage, not a throughput claim for large work queues.
 An explicit `BEGIN; ...` simple-query message now retains connection transaction
 state across messages, including SET LOCAL. Subsequent batches in that transaction
 execute their boundaries through the same connection state.
+
+## Two-phase commit
+
+`PREPARE TRANSACTION`, `COMMIT PREPARED`, `ROLLBACK PREPARED` and the
+`pg_prepared_xacts` view follow PostgreSQL, including durability across
+restarts and failover. `max_prepared_transactions` defaults to `0` (disabled)
+and is set at server start (`--max-prepared-transactions N`, the
+`engine.max_prepared_transactions` configuration key, or
+`BICDB_MAX_PREPARED_TRANSACTIONS`). See
+[postgresql-two-phase-commit.md](postgresql-two-phase-commit.md) for the design
+and for the transactions that are refused with `0A000`.

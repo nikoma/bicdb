@@ -94,6 +94,16 @@ impl SqlCursors {
             .declared
     }
 
+    /// A WITH HOLD cursor declared in the still-open transaction
+    /// (PREPARE TRANSACTION refuses it, as PostgreSQL does).
+    pub(crate) fn has_uncommitted_holdable(&self) -> bool {
+        self.with(|cursors| {
+            cursors
+                .iter()
+                .any(|cursor| cursor.holdable && !cursor.committed)
+        })
+    }
+
     /// ROLLBACK TO SAVEPOINT: cursors declared after the savepoint close.
     pub(crate) fn rollback_to(&self, mark: u64) {
         self.with(|cursors| cursors.retain(|cursor| cursor.seq <= mark));

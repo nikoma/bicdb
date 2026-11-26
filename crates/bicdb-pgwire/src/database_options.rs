@@ -40,6 +40,7 @@ options! {
     query_temp_space_bytes: u64,
     query_server_temp_space_bytes: u64,
     query_merge_fan_in: usize,
+    max_prepared_transactions: usize,
 }
 
 impl ServerDatabaseOptions {

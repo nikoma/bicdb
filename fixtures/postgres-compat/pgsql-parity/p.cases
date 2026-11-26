@@ -1,0 +1,42 @@
+p.setting|SHOW max_prepared_transactions; SELECT current_setting('max_prepared_transactions')
+p.set_refused|\set VERBOSITY verbose \\ SET max_prepared_transactions = 3
+p.basic|CREATE TABLE p1(a int PRIMARY KEY, b text); INSERT INTO p1 VALUES (1, 'x'); BEGIN; UPDATE p1 SET b = 'y' WHERE a = 1; INSERT INTO p1 VALUES (2, 'z'); SELECT * FROM p1 ORDER BY a; PREPARE TRANSACTION 'p_basic'; SELECT * FROM p1 ORDER BY a; SELECT gid, owner = current_user, database = current_database(), prepared <= now(), pg_typeof(transaction), pg_typeof(gid), pg_typeof(prepared), pg_typeof(owner), pg_typeof(database) FROM pg_prepared_xacts WHERE gid = 'p_basic'; COMMIT PREPARED 'p_basic'; SELECT * FROM p1 ORDER BY a; SELECT count(*) FROM pg_prepared_xacts WHERE gid = 'p_basic'
+p.rollback|CREATE TABLE p2(a int); INSERT INTO p2 VALUES (1); BEGIN; DELETE FROM p2; INSERT INTO p2 VALUES (5); PREPARE TRANSACTION 'p_rb'; SELECT * FROM p2; ROLLBACK PREPARED 'p_rb'; SELECT * FROM p2; SELECT count(*) FROM pg_prepared_xacts WHERE gid = 'p_rb'
+p.savepoints|CREATE TABLE p3(a int); BEGIN; INSERT INTO p3 VALUES (1); SAVEPOINT a; INSERT INTO p3 VALUES (2); ROLLBACK TO a; SAVEPOINT b; INSERT INTO p3 VALUES (3); PREPARE TRANSACTION 'p_sp'; SELECT count(*) FROM p3; COMMIT PREPARED 'p_sp'; SELECT * FROM p3 ORDER BY a
+p.dup_gid|\set VERBOSITY verbose \\ CREATE TABLE p4(a int); BEGIN; INSERT INTO p4 VALUES (1); PREPARE TRANSACTION 'p_dup'; BEGIN; INSERT INTO p4 VALUES (2); PREPARE TRANSACTION 'p_dup'
+p.dup_gid_after|SELECT count(*) FROM p4; SELECT gid FROM pg_prepared_xacts WHERE gid = 'p_dup'; COMMIT PREPARED 'p_dup'; SELECT * FROM p4
+p.unknown_commit|\set VERBOSITY verbose \\ COMMIT PREPARED 'p_nope'
+p.unknown_rollback|\set VERBOSITY verbose \\ ROLLBACK PREPARED 'p_nope'
+p.in_block|\set VERBOSITY verbose \\ BEGIN; COMMIT PREPARED 'p_nope'
+p.in_block_rollback|\set VERBOSITY verbose \\ BEGIN; ROLLBACK PREPARED 'p_nope'
+p.no_block|PREPARE TRANSACTION 'p_none'; SELECT count(*) FROM pg_prepared_xacts WHERE gid = 'p_none'
+p.failed_block|\set ON_ERROR_STOP 0 \\ CREATE TABLE p5(a int); BEGIN; INSERT INTO p5 VALUES (1); SELECT 1/0; PREPARE TRANSACTION 'p_failed'; SELECT count(*) FROM pg_prepared_xacts WHERE gid = 'p_failed'; SELECT count(*) FROM p5
+p.long_gid|\set VERBOSITY verbose \\ BEGIN; PREPARE TRANSACTION 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+p.long_gid_after|SELECT count(*) FROM pg_prepared_xacts WHERE length(gid) > 150
+p.lock_prepare|CREATE TABLE p6(a int PRIMARY KEY, b int); INSERT INTO p6 VALUES (1, 0), (2, 0); BEGIN; UPDATE p6 SET b = 1 WHERE a = 1; PREPARE TRANSACTION 'p_lock'
+p.lock_nowait|\set VERBOSITY verbose \\ SELECT * FROM p6 WHERE a = 1 FOR UPDATE NOWAIT
+p.lock_other_row|SELECT * FROM p6 WHERE a = 2 FOR UPDATE NOWAIT; UPDATE p6 SET b = 7 WHERE a = 2; SELECT * FROM p6 ORDER BY a
+p.lock_end|COMMIT PREPARED 'p_lock'; SELECT * FROM p6 ORDER BY a; SELECT * FROM p6 WHERE a = 1 FOR UPDATE NOWAIT
+p.share_prepare|CREATE TABLE p7(id int PRIMARY KEY, d text); INSERT INTO p7 VALUES (1, 'test data'); BEGIN; SELECT * FROM p7 WHERE id = 1 FOR SHARE; PREPARE TRANSACTION 'p_share'
+p.share_nowait|\set VERBOSITY verbose \\ SELECT * FROM p7 WHERE id = 1 FOR UPDATE NOWAIT
+p.share_end|ROLLBACK PREPARED 'p_share'; SELECT * FROM p7 WHERE id = 1 FOR UPDATE NOWAIT
+p.notify|\set VERBOSITY verbose \\ BEGIN; NOTIFY p_chan; PREPARE TRANSACTION 'p_notify'
+p.listen|\set VERBOSITY verbose \\ BEGIN; LISTEN p_chan; PREPARE TRANSACTION 'p_listen'
+p.hold_cursor|\set VERBOSITY verbose \\ BEGIN; DECLARE p_c CURSOR WITH HOLD FOR SELECT 1; PREPARE TRANSACTION 'p_hold'
+p.advisory_mixed|\set VERBOSITY verbose \\ BEGIN; SELECT pg_advisory_lock(424242); SELECT pg_advisory_xact_lock_shared(424242); PREPARE TRANSACTION 'p_adv'
+p.refusals_left_nothing|SELECT count(*) FROM pg_prepared_xacts WHERE gid IN ('p_notify', 'p_listen', 'p_hold', 'p_adv', 'p_none', 'p_failed')
+p.permission_setup|CREATE ROLE p2pc_alice; CREATE ROLE p2pc_bob; CREATE TABLE p8(a int); GRANT ALL ON p8 TO p2pc_alice; SET ROLE p2pc_alice; BEGIN; INSERT INTO p8 VALUES (1); PREPARE TRANSACTION 'p_perm'; SELECT owner FROM pg_prepared_xacts WHERE gid = 'p_perm'
+p.permission_denied|\set VERBOSITY verbose \\ SET ROLE p2pc_bob; COMMIT PREPARED 'p_perm'
+p.permission_owner|SET ROLE p2pc_alice; COMMIT PREPARED 'p_perm'; RESET ROLE; SELECT * FROM p8
+p.superuser_finishes|CREATE TABLE p9(a int); GRANT ALL ON p9 TO p2pc_alice; SET ROLE p2pc_alice; BEGIN; INSERT INTO p9 VALUES (9); PREPARE TRANSACTION 'p_super'; RESET ROLE; ROLLBACK PREPARED 'p_super'; SELECT count(*) FROM p9; DROP TABLE p8; DROP TABLE p9; DROP ROLE p2pc_alice; DROP ROLE p2pc_bob
+p.deferred_fk|\set VERBOSITY verbose \\ CREATE TABLE pp(a int PRIMARY KEY); CREATE TABLE pc(a int REFERENCES pp DEFERRABLE INITIALLY DEFERRED); BEGIN; INSERT INTO pc VALUES (9); PREPARE TRANSACTION 'p_def'
+p.deferred_fk_after|SELECT count(*) FROM pg_prepared_xacts WHERE gid = 'p_def'; SELECT count(*) FROM pc
+p.ssi_setup|CREATE TABLE ps(foobar varchar(10)); INSERT INTO ps VALUES ('ddd'); BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE; UPDATE ps SET foobar = 'eee' WHERE foobar = 'ddd'; SELECT * FROM ps; PREPARE TRANSACTION 'p_ssi4'
+p.ssi_write_skew|\set VERBOSITY verbose \\ BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE; SELECT * FROM ps; INSERT INTO ps VALUES ('fff'); PREPARE TRANSACTION 'p_ssi5'
+p.ssi_end|SELECT gid FROM pg_prepared_xacts WHERE gid LIKE 'p_ssi%' ORDER BY gid; ROLLBACK PREPARED 'p_ssi4'; SELECT * FROM ps
+p.serializable_commit|CREATE TABLE pz(foobar varchar(10)); INSERT INTO pz VALUES ('aaa'); BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE; INSERT INTO pz VALUES ('ddd'); SELECT * FROM pz ORDER BY 1; PREPARE TRANSACTION 'p_ser'; SELECT * FROM pz ORDER BY 1; COMMIT PREPARED 'p_ser'; SELECT * FROM pz ORDER BY 1
+p.unique_prepare|CREATE TABLE pu(a int PRIMARY KEY, b text UNIQUE); BEGIN; INSERT INTO pu VALUES (1, 'k'); PREPARE TRANSACTION 'p_uq'
+p.unique_nowait|\set VERBOSITY verbose \\ SET statement_timeout = '500ms'; INSERT INTO pu VALUES (2, 'k')
+p.unique_end|COMMIT PREPARED 'p_uq'; SELECT * FROM pu
+p.empty_tx|BEGIN; PREPARE TRANSACTION 'p_empty'; SELECT count(*) FROM pg_prepared_xacts WHERE gid = 'p_empty'; COMMIT PREPARED 'p_empty'; SELECT count(*) FROM pg_prepared_xacts WHERE gid = 'p_empty'
+p.syntax|\set VERBOSITY verbose \\ COMMIT PREPARED

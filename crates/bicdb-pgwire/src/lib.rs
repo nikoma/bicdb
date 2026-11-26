@@ -28,6 +28,7 @@ pub use distribution_controller::BalancedDistributionHostService;
 mod high_availability;
 pub use embedded_ha::{EmbeddedHaDatabase, HaWriterLease};
 mod live_queries;
+mod two_phase;
 pub use live_queries::EmbeddedSubscription;
 mod backups;
 mod log_archive;
@@ -1938,6 +1939,12 @@ fn initialize_client_with_server_admitted(
         "server_version_num".to_string(),
         data_server.config.postgres_server_version_num.clone(),
     );
+    if let Ok(db) = data_server.read_db() {
+        state.session_state.insert_session_guc(
+            "max_prepared_transactions".to_string(),
+            db.max_prepared_transactions().to_string(),
+        );
+    }
     state.session_state.insert_session_guc(
         "bicdb.sql_profile".to_string(),
         data_server.config.sql_profile.clone(),
@@ -3178,6 +3185,8 @@ struct ConnectionState {
     /// Trigger `pg_notify` notifications of the open transaction, delivered
     /// to listeners when it commits.
     tx_notifications: Vec<(String, String)>,
+    /// LISTEN/UNLISTEN ran inside the open transaction block.
+    tx_listen_changed: bool,
     tx_shared_role_ddl: Vec<String>,
     committed_shared_role_ddl: Vec<String>,
     savepoints: Vec<SavepointMark>,
@@ -3308,6 +3317,7 @@ impl ConnectionState {
             tx_write_tables: FxHashSet::default(),
             tx_fixed_snapshot: false,
             tx_notifications: Vec::new(),
+            tx_listen_changed: false,
             tx_shared_role_ddl: Vec::new(),
             committed_shared_role_ddl: Vec::new(),
             savepoints: Vec::new(),
@@ -3816,6 +3826,7 @@ fn execute_sql_prepared_statement_query(
     if !(normalized.starts_with("prepare ")
         || normalized.starts_with("execute ")
         || normalized.starts_with("deallocate "))
+        || normalized.starts_with("prepare transaction ")
     {
         return Ok(None);
     }
@@ -4980,6 +4991,8 @@ fn execute_server_sql_with_options_normalized(
     {
         check_sql_credential_changes(&server.auth_path, sql)?;
     }
+    let two_phase_command =
+        bicdb_sql::two_phase::parse_two_phase_command(sql).map_err(PgWireError::from)?;
     let transaction_end = delegation::transaction_end(sql, normalized)?;
     if !matches!(
         transaction_end,
@@ -5224,6 +5237,8 @@ fn execute_server_sql_with_options_normalized(
                     Ok(SqlResult::command("SET"))
                 }
             }
+        } else if let Some(command) = two_phase_command.clone() {
+            two_phase::execute(server, state, command, &cancellation)
         } else if let Some(ending) = transaction_end {
             if matches!(
                 ending,

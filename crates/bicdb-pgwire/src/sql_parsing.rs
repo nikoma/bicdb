@@ -652,6 +652,7 @@ pub(crate) fn clear_open_transaction_state(server: &PgWireServer, state: &mut Co
     state.tx_collection_generations.clear();
     state.tx_write_tables.clear();
     state.tx_notifications.clear();
+    state.tx_listen_changed = false;
     state.savepoints.clear();
 }
 

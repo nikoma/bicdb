@@ -1324,6 +1324,7 @@ impl<'db> SqlSession<'db> {
                 Ok(())
             }
             "role" => self.apply_set_role(&value.to_cell()),
+            "max_prepared_transactions" => Err(restart_only_setting(&setting)),
             "session_authorization" => self.apply_set_session_authorization(Some(&value.to_cell())),
             // Reserved identity plumbing; forging either would allow RLS or
             // SET SESSION AUTHORIZATION privilege escalation.

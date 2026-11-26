@@ -3785,6 +3785,7 @@ pub(crate) fn is_virtual_table(table: &str) -> bool {
             | "pg_catalog.pg_stats"
             | "pg_catalog.pg_control_system"
             | "pg_catalog.pg_locks"
+            | "pg_catalog.pg_prepared_xacts"
             | "pg_catalog.bicdb_notifications"
             | "pg_database"
             | "pg_default_acl"
@@ -3861,6 +3862,7 @@ pub(crate) fn is_virtual_table(table: &str) -> bool {
             | "pg_stats"
             | "pg_control_system"
             | "pg_locks"
+            | "pg_prepared_xacts"
             | "bicdb_notifications"
             | "bicdb_replication_status"
             | "bicdb_replication_lag"
@@ -4061,6 +4063,7 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
             ),
         ])]),
         "pg_locks" => Ok(Vec::new()),
+        "pg_prepared_xacts" => pg_prepared_xacts_rows(db),
         "bicdb_notifications" => bicdb_notification_rows(db),
         "bicdb_replication_status" => bicdb_replication_status_rows(db),
         "bicdb_replication_lag" => bicdb_replication_lag_rows(db),
@@ -5031,6 +5034,12 @@ pub(crate) fn virtual_table_columns(table: &str) -> Option<Vec<String>> {
             .map(str::to_string)
             .collect(),
         ),
+        "pg_prepared_xacts" => Some(
+            ["transaction", "gid", "prepared", "owner", "database"]
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+        ),
         "pg_locks" => Some(
             [
                 "locktype",
@@ -5836,6 +5845,13 @@ pub(crate) fn virtual_table_column_types(table: &str) -> Option<Vec<(String, Opt
             ("confdelsetcols", "int2[]"),
             ("conexclop", "oid[]"),
             ("conbin", "pg_node_tree"),
+        ],
+        "pg_prepared_xacts" => &[
+            ("transaction", "xid"),
+            ("gid", "text"),
+            ("prepared", "timestamptz"),
+            ("owner", "name"),
+            ("database", "name"),
         ],
         "pg_locks" => &[
             ("locktype", "text"),
@@ -8358,4 +8374,26 @@ mod set_all_tests {
             vec![vec![text("1.00")], vec![text("0.50")]]
         );
     }
+}
+
+/// `pg_prepared_xacts`: the prepared transactions of this database's store.
+fn pg_prepared_xacts_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
+    Ok(db
+        .prepared_transactions()?
+        .into_iter()
+        .map(|prepared| {
+            virtual_row([
+                ("transaction", SqlValue::Int(prepared.transaction as i64)),
+                ("gid", SqlValue::String(prepared.gid)),
+                (
+                    "prepared",
+                    SqlValue::String(crate::engine::flashback::timestamp_text_from_unix_micros(
+                        prepared.prepared_at_micros,
+                    )),
+                ),
+                ("owner", SqlValue::String(prepared.owner)),
+                ("database", SqlValue::String(prepared.database)),
+            ])
+        })
+        .collect())
 }

@@ -615,6 +615,9 @@ pub struct DbConfig {
     /// bounded makes file descriptors and merge memory independent of input
     /// size.
     pub query_merge_fan_in: usize,
+    /// PostgreSQL's `max_prepared_transactions`; 0 (the default) disables
+    /// PREPARE TRANSACTION. `BICDB_MAX_PREPARED_TRANSACTIONS` overrides it.
+    pub max_prepared_transactions: usize,
     /// Fold the transaction log into segments automatically once it grows past
     /// this many bytes (0 disables). Every write appends to the log and every
     /// open replays it, so an embedded store that is never compacted grows its
@@ -1471,6 +1474,7 @@ impl Default for DbConfig {
             query_temp_space_bytes: query_temp_space_bytes_default(),
             query_server_temp_space_bytes: query_server_temp_space_bytes_default(),
             query_merge_fan_in: query_merge_fan_in_default(),
+            max_prepared_transactions: 0,
             auto_checkpoint_wal_bytes: auto_checkpoint_wal_bytes_default(),
         }
     }

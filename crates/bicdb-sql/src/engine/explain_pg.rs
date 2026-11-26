@@ -1001,8 +1001,9 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
         // (and the pending-writes chooser) collect row ids first and fetch
         // afterwards in row-id order, a bitmap heap scan; the planner's own
         // B-tree loads and the bounded ordered path fetch in index order.
-        let collects_ids =
-            executed_chooser.is_some_and(|chooser| matches!(chooser, "locator" | "pending-writes"));
+        let collects_ids = executed_chooser.is_some_and(|chooser| {
+            matches!(chooser, "locator" | "pending-writes" | "composite-text-in")
+        });
         let source = |signature: &crate::plan_diagnostics::PlanSignature| -> Option<BitmapSource> {
             if matches!(signature.kind, "PrimaryKeyLocator" | "PrimaryKeyInLookup") {
                 let schema = schema.as_ref()?;

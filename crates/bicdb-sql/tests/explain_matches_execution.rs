@@ -238,7 +238,10 @@ fn pg_nodes_for(
                 .find(|decision| decision.chooser != "planner")
         })?;
     let signature = &decision.candidates[decision.chosen].signature;
-    let collects = matches!(decision.chooser, "locator" | "pending-writes");
+    let collects = matches!(
+        decision.chooser,
+        "locator" | "pending-writes" | "composite-text-in"
+    );
     let pkey = Some("t_pkey".to_string());
     let bitmap = |index: Option<String>| {
         vec![

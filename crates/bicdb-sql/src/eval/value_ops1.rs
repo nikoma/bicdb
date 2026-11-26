@@ -2556,6 +2556,11 @@ pub(crate) fn eval_session_function_value(
                         .unwrap_or_else(|| "read committed".into()),
                 )));
             }
+            if key == "max_prepared_transactions" {
+                return Ok(Some(SqlValue::String(
+                    bicdb_core::configured_max_prepared_transactions().to_string(),
+                )));
+            }
             if let Some(value) = default_session_guc(&key) {
                 return Ok(Some(SqlValue::String(value.to_string())));
             }

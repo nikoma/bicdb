@@ -1939,12 +1939,6 @@ fn initialize_client_with_server_admitted(
         "server_version_num".to_string(),
         data_server.config.postgres_server_version_num.clone(),
     );
-    if let Ok(db) = data_server.read_db() {
-        state.session_state.insert_session_guc(
-            "max_prepared_transactions".to_string(),
-            db.max_prepared_transactions().to_string(),
-        );
-    }
     state.session_state.insert_session_guc(
         "bicdb.sql_profile".to_string(),
         data_server.config.sql_profile.clone(),

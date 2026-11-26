@@ -6720,7 +6720,6 @@ impl<'db> SqlSession<'db> {
                 SESSION_CLIENT_HOST_GUC,
                 "server_version",
                 "server_version_num",
-                "max_prepared_transactions",
                 "bicdb.sql_profile",
                 "transaction_isolation",
                 "transaction_read_only",

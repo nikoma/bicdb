@@ -243,7 +243,8 @@ mod wait_graph;
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use parking_lot::{Condvar, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 pub use prepared_transactions::{
-    PreparedTransaction, PreparedTransactionRequester, PREPARED_XACTS_COLLECTION,
+    configured_max_prepared_transactions, PreparedTransaction, PreparedTransactionRequester,
+    PREPARED_XACTS_COLLECTION,
 };
 use rust_decimal::Decimal;
 use rustc_hash::{FxHashMap, FxHashSet};

@@ -131,6 +131,15 @@ fn now_micros() -> i64 {
         .unwrap_or_default()
 }
 
+/// The server's `max_prepared_transactions`, as `SHOW` and
+/// `current_setting` report it. A postmaster-level setting: one value per
+/// process, the last one a store was configured with.
+static CONFIGURED_MAX: AtomicUsize = AtomicUsize::new(0);
+
+pub fn configured_max_prepared_transactions() -> usize {
+    CONFIGURED_MAX.load(AtomicOrdering::Acquire)
+}
+
 /// The deliberately-excluded internal collection: neither audited nor synced.
 pub(crate) fn is_prepared_xacts_collection(collection: &str) -> bool {
     collection == PREPARED_XACTS_COLLECTION
@@ -154,6 +163,7 @@ impl BicDb {
             self.create_collection(PREPARED_XACTS_COLLECTION)?;
         }
         self.prepared_xacts.max.store(max, AtomicOrdering::Release);
+        CONFIGURED_MAX.store(max, AtomicOrdering::Release);
         Ok(())
     }
 

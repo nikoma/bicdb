@@ -559,7 +559,9 @@ impl<'db> SqlSession<'db> {
         };
         // The trigger's table binds through search_path (a temporary table
         // first); the statement text itself is left unbound.
-        if !trigger.table_name.contains('.') {
+        // A schema-qualified table arrives as its storage key (schema
+        // isolated, `__bicdb_s_...`), which is already bound.
+        if !trigger.table_name.contains('.') && !trigger.table_name.starts_with("__bicdb_s_") {
             let mut bound =
                 ObjectName::from(vec![Ident::with_quote('"', trigger.table_name.clone())]);
             crate::search_path::bind_raw_relation(self.db_ref(), &mut bound);

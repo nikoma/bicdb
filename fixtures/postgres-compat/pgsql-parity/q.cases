@@ -26,3 +26,8 @@ q.role_granted_read_only|DROP ROLE IF EXISTS qr_reader; CREATE ROLE qr_reader; G
 q.role_granted_write_and_program|DROP ROLE IF EXISTS qr_writer; CREATE ROLE qr_writer; GRANT pg_write_server_files, pg_execute_server_program TO qr_writer; CREATE TABLE qr5(a int); INSERT INTO qr5 VALUES (6); GRANT ALL ON qr5 TO qr_writer; SET ROLE qr_writer; COPY qr5 TO '/tmp/bicdb-pgq/qr5.txt'; COPY qr5 FROM PROGRAM 'cat /tmp/bicdb-pgq/qr5.txt'; SELECT * FROM qr5 ORDER BY a; RESET ROLE; DROP TABLE qr5; DROP ROLE qr_writer
 q.role_privileges_visible|SELECT pg_has_role('pg_read_server_files', 'MEMBER') IS NOT NULL, has_table_privilege('pg_class', 'SELECT')
 q.legacy_binary_keyword|CREATE TABLE qb1(a int, b text, c float8); INSERT INTO qb1 VALUES (1, 'x', 2.5), (2, NULL, NULL); COPY BINARY qb1 TO '/tmp/bicdb-pgq/qb1.bin'; CREATE TABLE qb2(a int, b text, c float8); COPY BINARY qb2 FROM '/tmp/bicdb-pgq/qb1.bin'; SELECT * FROM qb2 ORDER BY a
+q.csv_embedded_newlines_round_trip|CREATE TABLE qn1(a int, b text); INSERT INTO qn1 VALUES (1, E'a\nb'), (2, 'x"y'), (3, E'c\r\nd'); COPY qn1 TO '/tmp/bicdb-pgq/qn1.csv' (FORMAT csv); CREATE TABLE qn2(a int, b text); COPY qn2 FROM '/tmp/bicdb-pgq/qn1.csv' (FORMAT csv); SELECT a, replace(replace(b, E'\n', '<nl>'), E'\r', '<cr>') FROM qn2 ORDER BY a
+q.csv_embedded_newline_program|CREATE TABLE qn3(a int, b text); COPY qn3 FROM PROGRAM 'printf "1,\"x\ny\"\n2,z\n"' (FORMAT csv); SELECT a, replace(b, E'\n', '<nl>') FROM qn3 ORDER BY a
+q.bad_value_context|CREATE TABLE qn4(a int, b text); COPY qn4 FROM PROGRAM 'printf "1\tx\nzz\ty\n"'
+q.missing_column_context|CREATE TABLE qn5(a int, b text); COPY qn5 FROM PROGRAM 'printf "1\n"'
+q.unterminated_csv|CREATE TABLE qn6(a int, b text); COPY qn6 FROM PROGRAM 'printf "1,\"abc\n"' (FORMAT csv)

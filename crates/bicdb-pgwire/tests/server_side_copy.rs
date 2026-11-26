@@ -594,3 +594,114 @@ fn routines_cannot_reach_server_side_copy() {
         vec![vec![Some("0".to_string())]]
     );
 }
+
+#[test]
+fn csv_quoted_fields_may_span_lines_from_files_and_stdin() {
+    let (_base, allowed, _) = tree();
+    fs::write(
+        allowed.join("nl.csv"),
+        "1,\"a\nb\"\n2,\"x\"\"y\r\nz\"\n3,plain\n",
+    )
+    .unwrap();
+    let served = Served::start(ServerCopyConfig::new(&[allowed.clone()], false).unwrap());
+    let (mut client, _) = served.connect();
+    query(&mut client, "CREATE TABLE t(a int, b text)").ok();
+    let outcome = query(
+        &mut client,
+        &format!(
+            "COPY t FROM {} (FORMAT csv)",
+            quoted(&allowed.join("nl.csv"))
+        ),
+    );
+    assert_eq!(outcome.ok().tags, vec!["COPY 3"]);
+    assert_eq!(
+        query(&mut client, "SELECT a, b FROM t ORDER BY a").rows,
+        vec![
+            vec![Some("1".into()), Some("a\nb".into())],
+            vec![Some("2".into()), Some("x\"y\r\nz".into())],
+            vec![Some("3".into()), Some("plain".into())],
+        ]
+    );
+    // STDIN, with the record split across CopyData messages inside the quotes.
+    query(&mut client, "TRUNCATE t").ok();
+    let mut payload = b"COPY t FROM STDIN (FORMAT csv)".to_vec();
+    payload.push(0);
+    send_message(&mut client, b'Q', &payload);
+    assert_eq!(read_message(&mut client).0, b'G');
+    send_message(&mut client, b'd', b"7,\"multi\nli");
+    send_message(&mut client, b'd', b"ne\"\n8,\"q\"\"");
+    send_message(&mut client, b'd', b"\"\n");
+    send_message(&mut client, b'c', &[]);
+    let messages = read_until_ready(&mut client);
+    assert!(messages.iter().all(|(tag, _)| *tag != b'E'), "{messages:?}");
+    assert_eq!(
+        query(&mut client, "SELECT a, b FROM t ORDER BY a").rows,
+        vec![
+            vec![Some("7".into()), Some("multi\nline".into())],
+            vec![Some("8".into()), Some("q\"".into())],
+        ]
+    );
+    // An unterminated quote is PostgreSQL's error, at the end of the input.
+    fs::write(allowed.join("unterm.csv"), "1,\"abc\n").unwrap();
+    let outcome = query(
+        &mut client,
+        &format!(
+            "COPY t FROM {} (FORMAT csv)",
+            quoted(&allowed.join("unterm.csv"))
+        ),
+    );
+    assert_eq!(outcome.sqlstate(), "22P04");
+    assert_eq!(outcome.field('M'), "unterminated CSV quoted field");
+    assert_eq!(outcome.field('W'), "COPY t, line 1: \"1,\"abc\n\"");
+}
+
+#[test]
+fn bad_copy_rows_report_postgresql_errors_and_context() {
+    let (_base, allowed, _) = tree();
+    let served = Served::start(ServerCopyConfig::new(&[allowed.clone()], false).unwrap());
+    let (mut client, _) = served.connect();
+    query(&mut client, "CREATE TABLE qq(a int, b text)").ok();
+    let mut copy_file = |name: &str, contents: &str, options: &str| {
+        fs::write(allowed.join(name), contents).unwrap();
+        query(
+            &mut client,
+            &format!("COPY qq FROM {}{options}", quoted(&allowed.join(name))),
+        )
+    };
+    let outcome = copy_file("bad.txt", "1\tx\nzz\ty\n", "");
+    assert_eq!(outcome.sqlstate(), "22P02");
+    assert_eq!(
+        outcome.field('M'),
+        "invalid input syntax for type integer: \"zz\""
+    );
+    assert_eq!(outcome.field('W'), "COPY qq, line 2, column a: \"zz\"");
+    let outcome = copy_file("badh.csv", "a,b\n1,x\nzz,y\n", " (FORMAT csv, HEADER)");
+    assert_eq!(outcome.field('W'), "COPY qq, line 3, column a: \"zz\"");
+    // A line end inside quotes counts once the input's line ends are known.
+    let outcome = copy_file("nl.csv", "1,\"a\nb\"\nzz,\"c\nd\"\n", " (FORMAT csv)");
+    assert_eq!(outcome.field('W'), "COPY qq, line 3, column a: \"zz\"");
+    let outcome = copy_file("range.txt", "99999999999\tx\n", "");
+    assert_eq!(outcome.sqlstate(), "22003");
+    assert_eq!(
+        outcome.field('W'),
+        "COPY qq, line 1, column a: \"99999999999\""
+    );
+    let outcome = copy_file("miss.txt", "1\n", "");
+    assert_eq!(outcome.sqlstate(), "22P04");
+    assert_eq!(outcome.field('M'), "missing data for column \"b\"");
+    assert_eq!(outcome.field('W'), "COPY qq, line 1: \"1\"");
+    let outcome = copy_file("extra.txt", "1\tx\ty\n", "");
+    assert_eq!(outcome.field('M'), "extra data after last expected column");
+    assert_eq!(outcome.field('W'), "COPY qq, line 1: \"1\tx\ty\"");
+    // A long value is cut at 100 bytes, as PostgreSQL prints it.
+    let long = "z".repeat(150);
+    let outcome = copy_file("long.txt", &format!("{long}\tx\n"), "");
+    assert_eq!(
+        outcome.field('W'),
+        format!("COPY qq, line 1, column a: \"{}...\"", "z".repeat(100))
+    );
+    assert_eq!(
+        query(&mut client, "SELECT count(*) FROM qq").rows,
+        vec![vec![Some("0".to_string())]]
+    );
+}

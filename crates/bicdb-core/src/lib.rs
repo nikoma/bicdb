@@ -287,6 +287,7 @@ pub use db::{
     NativeCommitAdmissionResult, NativeTransactionNoEffect, NativeWalApplyReceipt,
 };
 pub use db::{CommitResolution, INCARNATION_JOURNAL};
+pub use db::{PreparedTransaction, PreparedTransactionRequester, PREPARED_XACTS_COLLECTION};
 pub use db::{WalArchiveReport, WalArchiveStatus};
 pub use distribution::{
     build_failure_repair_plan, build_rebalance_plan, distribution_key_token,

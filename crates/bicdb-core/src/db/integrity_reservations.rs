@@ -189,6 +189,28 @@ impl Table {
         }
     }
 
+    /// Reinstate `transaction`'s reservation from its recorded event key (a
+    /// prepared transaction restored at open). Returns false for a key that
+    /// is not an integrity event.
+    pub(super) fn restore(&self, transaction: TransactionId, event: &RecordLockKey) -> bool {
+        let (constraint, shared) = if let Some(name) = event.0.strip_prefix(SHARED_PREFIX) {
+            (name, true)
+        } else if let Some(name) = event.0.strip_prefix(EXCLUSIVE_PREFIX) {
+            (name, false)
+        } else {
+            return false;
+        };
+        let key = (constraint.to_owned(), event.1.clone());
+        let mut shard = self.keys.shards[self.keys.shard_idx(&key)].lock();
+        let owners = shard.entry(key).or_default();
+        if shared {
+            owners.shared.insert(transaction);
+        } else {
+            owners.exclusive = Some(transaction);
+        }
+        true
+    }
+
     /// Returns true for an integrity event, even when its owner is absent.
     /// Never remove another transaction's reservation during rollback.
     pub(super) fn release(&self, transaction: TransactionId, event: &RecordLockKey) -> bool {

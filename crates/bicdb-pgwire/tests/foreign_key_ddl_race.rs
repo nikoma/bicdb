@@ -101,6 +101,52 @@ async fn key_first(port: u16, setup: &str, add_key: &str, parent_write: &str, vi
     );
 }
 
+/// Both open at once: the key's transaction commits first, then the
+/// transaction that removed a referenced row (planned before the key was
+/// visible) commits.
+async fn key_commits_before_parent_write(
+    port: u16,
+    setup: &str,
+    add_key: &str,
+    parent_write: &str,
+    violations: &str,
+) {
+    let ddl = connect(port).await;
+    run_each(&ddl, setup).await;
+    ddl.batch_execute("BEGIN").await.unwrap();
+    let added_statement = ddl.batch_execute(add_key).await;
+    let owner = connect(port).await;
+    owner.batch_execute("BEGIN").await.unwrap();
+    let written_statement = owner.batch_execute(parent_write).await;
+    let added = match added_statement {
+        Ok(()) => ddl.batch_execute("COMMIT").await,
+        Err(error) => {
+            let _ = ddl.batch_execute("ROLLBACK").await;
+            Err(error)
+        }
+    };
+    let written = match written_statement {
+        Ok(()) => owner.batch_execute("COMMIT").await,
+        Err(error) => {
+            let _ = owner.batch_execute("ROLLBACK").await;
+            Err(error)
+        }
+    };
+    for result in [&added, &written] {
+        if let Some(code) = code(result) {
+            assert!(
+                code == "40001" || code == "23503",
+                "{add_key}: refused with {code}: {result:?}"
+            );
+        }
+    }
+    let uncovered: i64 = owner.query_one(violations, &[]).await.unwrap().get(0);
+    assert!(
+        !(written.is_ok() && added.is_ok() && uncovered > 0),
+        "{add_key}: both committed and {uncovered} rows are uncovered: {added:?} {written:?}"
+    );
+}
+
 fn serve() -> (
     Arc<PgWireServer>,
     u16,
@@ -233,6 +279,29 @@ async fn a_parent_delete_after_an_uncommitted_new_key_sees_it_or_conflicts() {
         "ALTER TABLE rt_child ADD FOREIGN KEY (id, PERIOD valid_at) REFERENCES rt_parent (id, PERIOD valid_at)",
         "DELETE FROM rt_parent WHERE id = '[1,2)'",
         &temporal_violations("rt"),
+    )
+    .await;
+    server.request_shutdown();
+    let _ = task.join();
+}
+
+#[tokio::test]
+async fn a_key_committed_first_still_holds_over_an_earlier_planned_parent_delete() {
+    let (server, port, task, _root) = serve();
+    key_commits_before_parent_write(
+        port,
+        &equality_setup("ck"),
+        "ALTER TABLE ck_child ADD FOREIGN KEY (pid) REFERENCES ck_parent(id)",
+        "DELETE FROM ck_parent WHERE id = 1",
+        &equality_violations("ck"),
+    )
+    .await;
+    key_commits_before_parent_write(
+        port,
+        &temporal_setup("ct"),
+        "ALTER TABLE ct_child ADD FOREIGN KEY (id, PERIOD valid_at) REFERENCES ct_parent (id, PERIOD valid_at)",
+        "DELETE FROM ct_parent WHERE id = '[1,2)'",
+        &temporal_violations("ct"),
     )
     .await;
     server.request_shutdown();

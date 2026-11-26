@@ -7855,7 +7855,10 @@ pub(crate) fn information_schema_table_constraints(
                 }
             }
         }
-        for foreign_key in &schema.temporal_foreign_keys {
+        // A partition lists the keys it inherits too.
+        for foreign_key in
+            &crate::session::temporal_keys::effective_temporal_foreign_keys(db, &schema)?
+        {
             rows.push(table_constraint_row(
                 &schema,
                 &foreign_key.name,
@@ -7912,7 +7915,9 @@ pub(crate) fn information_schema_key_column_usage(
                 ConstraintSchema::Exclusion { .. } => {}
             }
         }
-        for foreign_key in &schema.temporal_foreign_keys {
+        for foreign_key in
+            &crate::session::temporal_keys::effective_temporal_foreign_keys(db, &schema)?
+        {
             let columns = foreign_key
                 .columns
                 .iter()

@@ -1686,7 +1686,11 @@ impl<'db> SqlSession<'db> {
             .constraints
             .iter()
             .any(|constraint| matches!(constraint, ConstraintSchema::ForeignKey { .. }))
-            || !schema.temporal_foreign_keys.is_empty()
+            || !crate::session::temporal_keys::effective_temporal_foreign_keys(
+                self.db_ref(),
+                schema,
+            )?
+            .is_empty()
         {
             return Ok(true);
         }
@@ -2771,6 +2775,17 @@ impl<'db> SqlSession<'db> {
                 .iter()
                 .map(|target| target.name.to_ascii_lowercase())
                 .collect::<BTreeSet<_>>();
+            // A temporal key referencing a partitioned table references its partitions too.
+            let mut target_lineages = Vec::with_capacity(tables.len());
+            for target in &tables {
+                target_lineages.push((
+                    target.name.clone(),
+                    crate::session::temporal_keys::partition_relatives(
+                        self.db_ref(),
+                        &target.name,
+                    )?,
+                ));
+            }
             let mut added = false;
             for child in &schemas {
                 if target_names.contains(&child.name.to_ascii_lowercase()) {
@@ -2788,14 +2803,12 @@ impl<'db> SqlSession<'db> {
                         _ => None,
                     })
                     .or_else(|| {
-                        child
-                            .temporal_foreign_keys
-                            .iter()
-                            .find(|foreign_key| {
-                                target_names
-                                    .contains(&foreign_key.foreign_table.to_ascii_lowercase())
-                            })
-                            .map(|foreign_key| foreign_key.foreign_table.clone())
+                        child.temporal_foreign_keys.iter().find_map(|foreign_key| {
+                            target_lineages
+                                .iter()
+                                .find(|(_, lineage)| lineage.contains(&foreign_key.foreign_table))
+                                .map(|(target, _)| target.clone())
+                        })
                     });
                 let Some(referenced) = referenced else {
                     continue;

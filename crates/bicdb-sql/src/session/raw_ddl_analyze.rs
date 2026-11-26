@@ -759,6 +759,7 @@ impl<'db> SqlSession<'db> {
                         "relation is not a partition of this parent".into(),
                     ));
                 }
+                self.detach_temporal_foreign_keys(&mut partition)?;
                 partition.partition_of = None;
                 // Its indexes stay, detached from the parent's indexes.
                 for index in &mut partition.indexes {

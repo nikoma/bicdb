@@ -1561,6 +1561,9 @@ pub(crate) fn validate_attachment(
                     &[],
                 )?;
             }
+            crate::session::temporal_keys::validate_attached_temporal_foreign_keys(
+                db, tx, parent, &table, &record,
+            )?;
         }
     }
     if !matches!(bound, Bound::Default) {

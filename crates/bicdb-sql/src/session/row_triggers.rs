@@ -582,7 +582,9 @@ impl<'db> SqlSession<'db> {
                 if hook.get("unique_check").is_some() {
                     continue;
                 }
-                if hook.get("foreign_key_check").is_some() {
+                if hook.get("foreign_key_check").is_some()
+                    || hook.get("temporal_foreign_key_check").is_some()
+                {
                     // A row can be updated repeatedly. Check its final state
                     // once per batch; triggers may enqueue a fresh later batch.
                     if checked_foreign_keys.insert(hook.to_string()) {

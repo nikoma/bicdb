@@ -8,6 +8,16 @@ fn run(db: &mut BicDb, sql: &str) {
         .unwrap_or_else(|error| panic!("{sql}: {error}"));
 }
 
+fn cells(db: &mut BicDb, sql: &str) -> Vec<Vec<String>> {
+    SqlSession::new(db)
+        .execute(sql)
+        .unwrap_or_else(|error| panic!("{sql}: {error}"))
+        .rows
+        .iter()
+        .map(|row| row.iter().map(|value| value.to_cell()).collect())
+        .collect()
+}
+
 fn fails(db: &mut BicDb, sql: &str) -> (String, String) {
     let error = SqlSession::new(db).execute(sql).unwrap_err();
     (error.sqlstate().to_string(), error.to_string())
@@ -224,29 +234,313 @@ fn temporal_foreign_key_definitions_follow_postgresql() {
 }
 
 #[test]
-fn temporal_foreign_keys_on_partitioned_tables_are_refused() {
+fn temporal_foreign_keys_cover_every_partition() {
     let dir = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(dir.path()).unwrap();
-    run(
+    for sql in [
+        "CREATE TABLE p (id int4range, valid_at daterange, name text, \
+         CONSTRAINT p_pk PRIMARY KEY (id, valid_at WITHOUT OVERLAPS)) PARTITION BY LIST (id)",
+        "CREATE TABLE p1 PARTITION OF p FOR VALUES IN ('[1,2)', '[3,4)')",
+        "CREATE TABLE p2 PARTITION OF p FOR VALUES IN ('[2,3)')",
+        "INSERT INTO p VALUES ('[1,2)', '[2018-01-01,2018-02-01)'), \
+         ('[2,3)', '[2018-01-01,2019-01-01)')",
+        "CREATE TABLE c (id int4range, valid_at daterange, parent_id int4range, \
+         CONSTRAINT c_fk FOREIGN KEY (parent_id, PERIOD valid_at) REFERENCES p) \
+         PARTITION BY LIST (id)",
+        "CREATE TABLE c1 PARTITION OF c FOR VALUES IN ('[1,2)')",
+        "CREATE TABLE c2 PARTITION OF c FOR VALUES IN ('[2,3)')",
+        "INSERT INTO c VALUES ('[1,2)', '[2018-01-05,2018-01-10)', '[1,2)'), \
+         ('[2,3)', '[2018-03-01,2018-04-01)', '[2,3)')",
+    ] {
+        run(&mut db, sql);
+    }
+    // Child rows are checked whether written through the parent or the partition.
+    let insert = fails(
         &mut db,
-        "CREATE TABLE pp (id int4range, valid_at daterange, \
-         CONSTRAINT pp_pk PRIMARY KEY (id, valid_at WITHOUT OVERLAPS)) PARTITION BY LIST (id)",
+        "INSERT INTO c2 VALUES ('[2,3)', '[2019-03-01,2019-04-01)', '[2,3)')",
     );
-    run(
+    assert_eq!(insert.0, "23503");
+    assert_eq!(
+        insert.1,
+        "insert or update on table \"c2\" violates foreign key constraint \"c_fk\""
+    );
+    let insert = fails(
         &mut db,
-        "CREATE TABLE pp1 PARTITION OF pp FOR VALUES IN ('[1,2)')",
+        "INSERT INTO c VALUES ('[1,2)', '[2018-03-01,2018-04-01)', '[1,2)')",
+    );
+    assert_eq!(
+        insert,
+        (
+            "23503".to_string(),
+            "insert or update on table \"c1\" violates foreign key constraint \"c_fk\"".to_string()
+        )
     );
     assert_eq!(
         fails(
             &mut db,
-            "CREATE TABLE cc (parent_id int4range, valid_at daterange, \
-             FOREIGN KEY (parent_id, PERIOD valid_at) REFERENCES pp (id, PERIOD valid_at))"
-        ),
+            "UPDATE c SET valid_at = '[2019-01-01,2019-02-01)' WHERE id = '[2,3)'"
+        )
+        .0,
+        "23503"
+    );
+    // Parent rows are protected in every partition, through either name.
+    for sql in [
+        "UPDATE p SET valid_at = '[2018-01-01,2018-01-07)' WHERE id = '[1,2)'",
+        "DELETE FROM p1",
+        "DELETE FROM p WHERE id = '[1,2)'",
+        "UPDATE p SET id = '[3,4)' WHERE id = '[1,2)'",
+    ] {
+        let error = fails(&mut db, sql);
+        assert_eq!(
+            error,
+            (
+                "23503".to_string(),
+                "update or delete on table \"p1\" violates foreign key constraint \"c_fk_1\" on table \"c\""
+                    .to_string()
+            ),
+            "{sql}"
+        );
+    }
+    for (sql, detail) in [("TRUNCATE p1", "p1"), ("TRUNCATE p", "p")] {
+        let (state, message) = fails(&mut db, sql);
+        assert_eq!(state, "0A000", "{sql}");
+        assert_eq!(
+            message, "cannot truncate a table referenced in a foreign key constraint",
+            "{sql} ({detail})"
+        );
+    }
+    assert_eq!(
+        fails(&mut db, "ALTER TABLE p DETACH PARTITION p2"),
         (
-            "0A000".to_string(),
-            "foreign keys using PERIOD on partitioned tables are not supported yet".to_string()
+            "23503".to_string(),
+            "removing partition \"p2\" violates foreign key constraint \"c_fk_2\"".to_string()
         )
     );
-    // Nothing was left behind.
-    assert_eq!(fails(&mut db, "SELECT * FROM cc").0, "42P01");
+    assert_eq!(fails(&mut db, "DROP TABLE p2").0, "2BP01");
+    assert_eq!(cells(&mut db, "SELECT count(*) FROM p"), [["2"]]);
+    // Uncovered rows refuse an ATTACH.
+    run(
+        &mut db,
+        "CREATE TABLE c3 (id int4range, valid_at daterange, parent_id int4range)",
+    );
+    run(
+        &mut db,
+        "INSERT INTO c3 VALUES ('[3,4)', '[2020-01-01,2020-02-01)', '[1,2)')",
+    );
+    assert_eq!(
+        fails(
+            &mut db,
+            "ALTER TABLE c ATTACH PARTITION c3 FOR VALUES IN ('[3,4)')"
+        )
+        .0,
+        "23503"
+    );
+    // The catalog: the declared key, its rows per referenced partition, and the copies the
+    // partitions inherit.
+    assert_eq!(
+        cells(
+            &mut db,
+            "SELECT conname, conrelid::regclass::text, confrelid::regclass::text, \
+             conparentid <> 0, conislocal, coninhcount, pg_get_constraintdef(oid) \
+             FROM pg_constraint WHERE contype = 'f' ORDER BY 2, 3, 1"
+        ),
+        [
+            [
+                "c_fk",
+                "c",
+                "p",
+                "false",
+                "true",
+                "0",
+                "FOREIGN KEY (parent_id, PERIOD valid_at) REFERENCES p(id, PERIOD valid_at)"
+            ],
+            [
+                "c_fk_1",
+                "c",
+                "p1",
+                "true",
+                "false",
+                "1",
+                "FOREIGN KEY (parent_id, PERIOD valid_at) REFERENCES p1(id, PERIOD valid_at)"
+            ],
+            [
+                "c_fk_2",
+                "c",
+                "p2",
+                "true",
+                "false",
+                "1",
+                "FOREIGN KEY (parent_id, PERIOD valid_at) REFERENCES p2(id, PERIOD valid_at)"
+            ],
+            [
+                "c_fk",
+                "c1",
+                "p",
+                "true",
+                "false",
+                "1",
+                "FOREIGN KEY (parent_id, PERIOD valid_at) REFERENCES p(id, PERIOD valid_at)"
+            ],
+            [
+                "c_fk",
+                "c2",
+                "p",
+                "true",
+                "false",
+                "1",
+                "FOREIGN KEY (parent_id, PERIOD valid_at) REFERENCES p(id, PERIOD valid_at)"
+            ],
+        ]
+    );
+    // A detached partition keeps the key as its own.
+    run(&mut db, "ALTER TABLE c DETACH PARTITION c1");
+    assert_eq!(
+        fails(
+            &mut db,
+            "INSERT INTO c1 VALUES ('[1,2)', '[2018-03-01,2018-04-01)', '[1,2)')"
+        )
+        .0,
+        "23503"
+    );
+    run(&mut db, "ALTER TABLE c1 DROP CONSTRAINT c_fk");
+    run(
+        &mut db,
+        "INSERT INTO c1 VALUES ('[1,2)', '[2018-03-01,2018-04-01)', '[1,2)')",
+    );
+    // With no references left, the parent partition can go.
+    run(&mut db, "DELETE FROM c2");
+    run(&mut db, "ALTER TABLE p DETACH PARTITION p2");
+}
+
+#[test]
+fn temporal_foreign_keys_are_listed_in_the_catalogs() {
+    let (_dir, mut db) = setup("daterange", "'{}'");
+    assert_eq!(
+        cells(
+            &mut db,
+            "SELECT conname, contype, conperiod, confupdtype, confdeltype, \
+             pg_get_constraintdef(oid) FROM pg_constraint \
+             WHERE conrelid IN ('p'::regclass, 'c'::regclass) AND contype <> 'n' ORDER BY conname"
+        ),
+        [
+            [
+                "c_fk",
+                "f",
+                "true",
+                "a",
+                "a",
+                "FOREIGN KEY (parent_id, PERIOD valid_at) REFERENCES p(id, PERIOD valid_at)"
+            ],
+            [
+                "p_pk",
+                "p",
+                "true",
+                " ",
+                " ",
+                "PRIMARY KEY (id, valid_at WITHOUT OVERLAPS)"
+            ],
+        ]
+    );
+    assert_eq!(
+        cells(
+            &mut db,
+            "SELECT conkey::text, confkey::text, confrelid::regclass::text = 'p' \
+             FROM pg_constraint WHERE conname = 'c_fk'"
+        ),
+        [["{2,3}", "{1,2}", "true"]]
+    );
+    assert_eq!(
+        cells(
+            &mut db,
+            "SELECT constraint_type FROM information_schema.table_constraints \
+             WHERE table_name = 'c' AND constraint_name = 'c_fk'"
+        ),
+        [["FOREIGN KEY"]]
+    );
+    assert_eq!(
+        cells(
+            &mut db,
+            "SELECT column_name, ordinal_position FROM information_schema.key_column_usage \
+             WHERE constraint_name = 'c_fk' ORDER BY ordinal_position"
+        ),
+        [["parent_id", "1"], ["valid_at", "2"]]
+    );
+}
+
+#[test]
+fn deferrable_temporal_foreign_keys_are_checked_at_commit() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    run(
+        &mut db,
+        "CREATE TABLE p (id int4range, valid_at daterange, \
+         CONSTRAINT p_pk PRIMARY KEY (id, valid_at WITHOUT OVERLAPS))",
+    );
+    run(
+        &mut db,
+        "CREATE TABLE c (id int4range, parent_id int4range, valid_at daterange, \
+         CONSTRAINT c_fk FOREIGN KEY (parent_id, PERIOD valid_at) REFERENCES p (id, PERIOD valid_at) \
+         DEFERRABLE INITIALLY DEFERRED)",
+    );
+    assert_eq!(
+        cells(
+            &mut db,
+            "SELECT condeferrable, condeferred, pg_get_constraintdef(oid) FROM pg_constraint \
+             WHERE conname = 'c_fk'"
+        ),
+        [[
+            "true",
+            "true",
+            "FOREIGN KEY (parent_id, PERIOD valid_at) REFERENCES p(id, PERIOD valid_at) \
+             DEFERRABLE INITIALLY DEFERRED"
+        ]]
+    );
+    let mut sql = SqlSession::new(&mut db);
+    // The child may come first; the parent covers it by commit.
+    sql.execute(
+        "BEGIN; INSERT INTO c VALUES ('[1,2)', '[1,2)', '[2018-01-05,2018-01-10)'); \
+         INSERT INTO p VALUES ('[1,2)', '[2018-01-01,2018-02-01)'); COMMIT",
+    )
+    .unwrap();
+    // An uncovered child fails at COMMIT, and the transaction rolls back.
+    sql.execute("BEGIN; INSERT INTO c VALUES ('[2,3)', '[1,2)', '[2018-01-20,2018-03-01)')")
+        .unwrap();
+    let error = sql.execute("COMMIT").unwrap_err();
+    assert_eq!(error.sqlstate(), "23503");
+    assert_eq!(
+        error.to_string(),
+        "insert or update on table \"c\" violates foreign key constraint \"c_fk\""
+    );
+    drop(sql);
+    assert_eq!(cells(&mut db, "SELECT count(*) FROM c"), [["1"]]);
+    let mut sql = SqlSession::new(&mut db);
+    // Uncovering the child through the parent is deferred too: covering it again in time is fine.
+    sql.execute(
+        "BEGIN; UPDATE p SET valid_at = '[2018-01-20,2018-02-01)'; \
+         UPDATE p SET valid_at = '[2018-01-01,2018-01-15)'; COMMIT",
+    )
+    .unwrap();
+    sql.execute("BEGIN; DELETE FROM p").unwrap();
+    let error = sql.execute("SET CONSTRAINTS c_fk IMMEDIATE").unwrap_err();
+    assert_eq!(error.sqlstate(), "23503");
+    sql.execute("ROLLBACK").unwrap();
+    // NOT DEFERRABLE again: checked at once.
+    sql.execute("ALTER TABLE c ALTER CONSTRAINT c_fk NOT DEFERRABLE")
+        .unwrap();
+    sql.execute("BEGIN").unwrap();
+    assert_eq!(
+        sql.execute("INSERT INTO c VALUES ('[3,4)', '[9,10)', '[2018-01-01,2018-01-02)')")
+            .unwrap_err()
+            .sqlstate(),
+        "23503"
+    );
+    sql.execute("ROLLBACK").unwrap();
+    drop(sql);
+    assert_eq!(
+        cells(
+            &mut db,
+            "SELECT condeferrable, condeferred FROM pg_constraint WHERE conname = 'c_fk'"
+        ),
+        [["false", "false"]]
+    );
 }

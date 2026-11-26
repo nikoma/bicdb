@@ -854,9 +854,12 @@ pub(crate) fn validate_constraint_columns(
             }
             for column in columns {
                 if schema.column(column).is_none() {
-                    return Err(SqlError::InvalidSql(format!(
-                        "column \"{column}\" referenced by constraint on relation \"{table}\" does not exist"
-                    )));
+                    // PostgreSQL's index-key error for an exclusion element.
+                    return Err(SqlError::data_exception_public(
+                        "42703",
+                        format!("column \"{column}\" named in key does not exist"),
+                        None,
+                    ));
                 }
             }
             if access_method == "spgist" && equal_columns.len() + usize::from(range.is_some()) > 1 {
@@ -977,7 +980,7 @@ pub(crate) fn validate_existing_constraint(
         } => {
             let predicate = exclusion_predicate_expr(predicate)?;
             let records = db.scan_collection(table)?;
-            validate_exclusion_record_pairs(
+            crate::records::validate_new_exclusion_constraint_rows(
                 table,
                 schema,
                 name,
@@ -985,7 +988,6 @@ pub(crate) fn validate_existing_constraint(
                 range,
                 predicate.as_ref(),
                 &records,
-                false,
             )
         }
     }
@@ -3896,9 +3898,13 @@ pub(crate) fn raw_create_table_exclusion_constraints(
             }
             None => (None, element.as_str()),
         };
-        if strip_prefix_ci(body, "EXCLUDE")
-            .is_some_and(|after| after.starts_with(|ch: char| ch.is_whitespace() || ch == '('))
-        {
+        // `EXCLUDE [USING method] (...)`; a column named `exclude` stays a column.
+        if strip_prefix_ci(body, "EXCLUDE").is_some_and(|after| {
+            after.starts_with(|ch: char| ch.is_whitespace() || ch == '(') && {
+                let after = after.trim_start();
+                after.starts_with('(') || strip_prefix_ci(after, "USING ").is_some()
+            }
+        }) {
             let name = match name {
                 Some(name) => quote_identifier_if_needed(&name),
                 None => {
@@ -3989,6 +3995,7 @@ pub(crate) fn parse_exclusion_elements(
                 }
                 let mut parsed = parse_exclusion_range_expression(expression)?;
                 parsed.operator = operator.to_string();
+                parsed.position = Some(equal_columns.len());
                 range = Some(parsed);
             }
             "@>" | "<@" | "<<" | ">>" | "&<" | "&>" | "<>" => {
@@ -4642,6 +4649,7 @@ pub(crate) fn parse_exclusion_range_expression(expression: &str) -> Result<Exclu
             end_column: column.clone(),
             bounds: "[)".to_string(),
             range_column: Some(column),
+            position: None,
         });
     };
     let function = normalize_object_name(expression[..open].trim());
@@ -4676,6 +4684,7 @@ pub(crate) fn parse_exclusion_range_expression(expression: &str) -> Result<Exclu
             .and_then(|arg| sql_string_literal_prefix(arg))
             .unwrap_or_else(|| "[)".to_string()),
         range_column: None,
+        position: None,
     })
 }
 

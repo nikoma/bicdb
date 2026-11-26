@@ -383,6 +383,9 @@ pub(crate) fn validate_foreign_key_hook(
     tx: Option<&Transaction>,
     hook: &JsonValue,
 ) -> Result<bool> {
+    if crate::session::temporal_keys::validate_temporal_foreign_key_hook(db, tx, hook)? {
+        return Ok(true);
+    }
     let Some(check) = hook.get("foreign_key_check") else {
         return Ok(false);
     };
@@ -574,6 +577,31 @@ impl<'db> SqlSession<'db> {
                     };
                 };
                 self.require_table_ownership(&table, "ALTER TABLE")?;
+                if let Some(foreign_key) = schema
+                    .temporal_foreign_keys
+                    .iter_mut()
+                    .find(|foreign_key| foreign_key.name == name)
+                {
+                    if foreign_key.constraint_id.is_empty() {
+                        foreign_key.constraint_id = uuid::Uuid::new_v4().to_string();
+                    }
+                    if let Some(value) = deferrable {
+                        foreign_key.deferrable = value;
+                        if !value {
+                            foreign_key.initially_deferred = false;
+                        }
+                    }
+                    if let Some(value) = initially_deferred {
+                        foreign_key.initially_deferred = value;
+                    }
+                    if foreign_key.initially_deferred && !foreign_key.deferrable {
+                        return Err(SqlError::InvalidSql(
+                            "INITIALLY DEFERRED requires DEFERRABLE".into(),
+                        ));
+                    }
+                    self.save_session_schema(&schema)?;
+                    return Ok(SqlResult::command("ALTER TABLE"));
+                }
                 let constraint = schema
                     .constraints
                     .iter_mut()
@@ -681,6 +709,26 @@ impl<'db> SqlSession<'db> {
                                     }
                                     selected.push(constraint_key(constraint));
                                 }
+                                for foreign_key in schema
+                                    .temporal_foreign_keys
+                                    .iter()
+                                    .filter(|foreign_key| foreign_key.name == *name)
+                                {
+                                    matched = true;
+                                    if !foreign_key.deferrable
+                                        || foreign_key.constraint_id.is_empty()
+                                    {
+                                        if !deferred {
+                                            continue;
+                                        }
+                                        return Err(SqlError::RaisedException {
+                                            sqlstate: "42809".into(),
+                                            message: format!("constraint {name} is not deferrable"),
+                                            detail: None,
+                                        });
+                                    }
+                                    selected.push(foreign_key.constraint_id.clone());
+                                }
                             }
                             if matched {
                                 break;
@@ -711,6 +759,11 @@ impl<'db> SqlSession<'db> {
                                 selected.push(constraint_key(constraint));
                             }
                         }
+                        for foreign_key in &schema.temporal_foreign_keys {
+                            if foreign_key.deferrable && !foreign_key.constraint_id.is_empty() {
+                                selected.push(foreign_key.constraint_id.clone());
+                            }
+                        }
                     }
                 }
                 if let Some(tx) = self.tx.as_ref() {
@@ -719,6 +772,14 @@ impl<'db> SqlSession<'db> {
                         let hooks = tx.deferred_hooks_snapshot();
                         validate_unique_hooks(self.db_ref(), Some(tx), &hooks, Some(&selected))?;
                         for hook in hooks {
+                            if let Some(id) =
+                                crate::session::temporal_keys::temporal_foreign_key_hook_id(&hook)
+                            {
+                                if selected.contains(&id) {
+                                    validate_foreign_key_hook(self.db_ref(), Some(tx), &hook)?;
+                                }
+                                continue;
+                            }
                             if let Some(check) = hook.get("foreign_key_check") {
                                 let check: ForeignKeyCheck = serde_json::from_value(check.clone())
                                     .map_err(|error| SqlError::InvalidSql(error.to_string()))?;

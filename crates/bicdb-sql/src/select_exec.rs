@@ -7855,6 +7855,16 @@ pub(crate) fn information_schema_table_constraints(
                 }
             }
         }
+        // A partition lists the keys it inherits too.
+        for foreign_key in
+            &crate::session::temporal_keys::effective_temporal_foreign_keys(db, &schema)?
+        {
+            rows.push(table_constraint_row(
+                &schema,
+                &foreign_key.name,
+                "FOREIGN KEY",
+            ));
+        }
     }
     Ok(rows)
 }
@@ -7890,7 +7900,35 @@ pub(crate) fn information_schema_key_column_usage(
                     }
                 }
                 ConstraintSchema::Check { .. } => {}
+                ConstraintSchema::Exclusion {
+                    name,
+                    access_method,
+                    equal_columns,
+                    range,
+                    ..
+                } if crate::session::temporal_keys::is_temporal_key_method(access_method) => {
+                    let period = range.as_ref().and_then(|range| range.range_column.as_ref());
+                    for (idx, column) in equal_columns.iter().chain(period).enumerate() {
+                        rows.push(key_column_usage_row(&schema, name, column, idx as i64 + 1));
+                    }
+                }
                 ConstraintSchema::Exclusion { .. } => {}
+            }
+        }
+        for foreign_key in
+            &crate::session::temporal_keys::effective_temporal_foreign_keys(db, &schema)?
+        {
+            let columns = foreign_key
+                .columns
+                .iter()
+                .chain(std::iter::once(&foreign_key.period));
+            for (idx, column) in columns.enumerate() {
+                rows.push(key_column_usage_row(
+                    &schema,
+                    &foreign_key.name,
+                    column,
+                    idx as i64 + 1,
+                ));
             }
         }
     }

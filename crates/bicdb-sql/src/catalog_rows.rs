@@ -5927,8 +5927,153 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                             conbin: None,
                             convalidated: *validated,
                         }));
+                        if contype != "x" {
+                            if let Some(row) = rows.last_mut() {
+                                row.insert("conperiod".into(), SqlValue::Bool(true));
+                            }
+                        }
                     }
                     constraint_slot += 1;
+                }
+            }
+        }
+        // Temporal foreign keys (`FOREIGN KEY (a, PERIOD p)`), after the stored constraints.
+        let _ = constraint_slot;
+        let mut temporal = schema
+            .temporal_foreign_keys
+            .iter()
+            .enumerate()
+            .map(|(position, foreign_key)| {
+                let oid = temporal_foreign_key_oid(schema, table_oid, position);
+                (foreign_key.clone(), oid, None)
+            })
+            .collect::<Vec<_>>();
+        // A partition's copies of the keys its ancestors declare, each a child of its
+        // parent's row (PostgreSQL's conparentid).
+        if schema.partition_of.is_some() {
+            let lineage = crate::session::temporal_keys::partition_lineage(db, &schema.name)?;
+            for (depth, ancestor_name) in lineage.iter().enumerate().skip(1) {
+                let Some(ancestor) = load_schema_shared(db, ancestor_name)? else {
+                    continue;
+                };
+                let ancestor_oid = *table_oids.get(&ancestor.name).unwrap_or(&0);
+                for (position, foreign_key) in ancestor.temporal_foreign_keys.iter().enumerate() {
+                    let declared = temporal_foreign_key_oid(&ancestor, ancestor_oid, position);
+                    let copy_oid = |relation_oid: i64| {
+                        stable_name_hash_wide(
+                            2_000_000_000,
+                            &format!("{relation_oid}.tfk.{declared}"),
+                            1_000_000_000,
+                        )
+                    };
+                    let parent_oid = if depth == 1 {
+                        declared
+                    } else {
+                        copy_oid(*table_oids.get(&lineage[1]).unwrap_or(&0))
+                    };
+                    temporal.push((foreign_key.clone(), copy_oid(table_oid), Some(parent_oid)));
+                }
+            }
+        }
+        for (foreign_key, oid, parent_oid) in temporal {
+            if !pg_constraint_filter_matches(
+                &foreign_key.name,
+                "f",
+                table_oid,
+                names,
+                types,
+                relation_oids,
+            ) {
+                continue;
+            }
+            let mut columns = foreign_key.columns.clone();
+            columns.push(foreign_key.period.clone());
+            let mut referred = foreign_key.referred_columns.clone();
+            referred.push(foreign_key.referred_period.clone());
+            let confrelid = *table_oids.get(&foreign_key.foreign_table).unwrap_or(&0);
+            let loaded_parent;
+            let parent = match schemas
+                .iter()
+                .find(|parent| parent.name == foreign_key.foreign_table)
+            {
+                Some(parent) => Some(parent),
+                None => {
+                    loaded_parent = load_schema_shared(db, &foreign_key.foreign_table)?;
+                    loaded_parent.as_deref()
+                }
+            };
+            let confkey = match parent {
+                Some(parent) => constraint_attnums(
+                    std::slice::from_ref(parent),
+                    &foreign_key.foreign_table,
+                    &referred,
+                ),
+                None => vec![0; referred.len()],
+            };
+            let conkey = constraint_attnums(schemas, &schema.name, &columns);
+            let base = PgConstraintRow {
+                condeferrable: foreign_key.deferrable,
+                condeferred: foreign_key.initially_deferred,
+                oid,
+                name: foreign_key.name.clone(),
+                contype: "f",
+                conrelid: table_oid,
+                connamespace: namespace_oid(&schema.schema_name),
+                conindid: 0,
+                confrelid,
+                confupdtype: "a",
+                confdeltype: "a",
+                conkey: conkey.clone(),
+                confkey: confkey.clone(),
+                conbin: None,
+                convalidated: true,
+            };
+            let mut row = pg_constraint_row(base);
+            row.insert("conperiod".into(), SqlValue::Bool(true));
+            if let Some(parent_oid) = parent_oid {
+                row.insert("conparentid".into(), SqlValue::Int(parent_oid));
+                row.insert("conislocal".into(), SqlValue::Bool(false));
+                row.insert("coninhcount".into(), SqlValue::Int(1));
+            }
+            rows.push(row);
+            // The declaring table has a row per partition of a partitioned referenced
+            // table, `<name>_<n>` (PostgreSQL's addFkRecurseReferenced).
+            if parent_oid.is_some() {
+                continue;
+            }
+            if let Some(parent) = parent.filter(|parent| parent.partitioning.is_some()) {
+                for (index, partition) in partition::physical_tables(db, parent)?
+                    .iter()
+                    .skip(1)
+                    .enumerate()
+                {
+                    let partition_oid = *table_oids.get(&partition.name).unwrap_or(&0);
+                    let mut derived = pg_constraint_row(PgConstraintRow {
+                        condeferrable: foreign_key.deferrable,
+                        condeferred: foreign_key.initially_deferred,
+                        oid: stable_name_hash_wide(
+                            2_000_000_000,
+                            &format!("{oid}.tfk.{partition_oid}"),
+                            1_000_000_000,
+                        ),
+                        name: format!("{}_{}", foreign_key.name, index + 1),
+                        contype: "f",
+                        conrelid: table_oid,
+                        connamespace: namespace_oid(&schema.schema_name),
+                        conindid: 0,
+                        confrelid: partition_oid,
+                        confupdtype: "a",
+                        confdeltype: "a",
+                        conkey: conkey.clone(),
+                        confkey: confkey.clone(),
+                        conbin: None,
+                        convalidated: true,
+                    });
+                    derived.insert("conperiod".into(), SqlValue::Bool(true));
+                    derived.insert("conparentid".into(), SqlValue::Int(oid));
+                    derived.insert("conislocal".into(), SqlValue::Bool(false));
+                    derived.insert("coninhcount".into(), SqlValue::Int(1));
+                    rows.push(derived);
                 }
             }
         }
@@ -6091,6 +6236,28 @@ pub(crate) fn validate_constraint_catalog_oids(db: &BicDb) -> Result<()> {
 
 /// Same slots and traversal order as the table catalog row builder: declared
 /// primary keys first, then visible NOT NULL and non-primary stored constraints.
+/// The `pg_constraint` OID of a table's `position`-th temporal foreign key: the slot after its
+/// NOT NULL and stored constraints, as [`table_constraint_oids`] counts them.
+fn temporal_foreign_key_oid(schema: &TableSchema, table_oid: i64, position: usize) -> i64 {
+    let not_null = schema
+        .columns
+        .iter()
+        .filter(|column| !column.hidden && (!column.nullable || column.primary_key))
+        .count();
+    let stored = schema
+        .constraints
+        .iter()
+        .filter(|constraint| match constraint {
+            ConstraintSchema::Unique { name, columns, .. }
+            | ConstraintSchema::UniqueWithNullPolicy { name, columns, .. } => {
+                !unique_constraint_is_primary_key(schema, name, columns)
+            }
+            _ => true,
+        })
+        .count();
+    pg_constraint_oid(table_oid, (not_null + stored + position + 1) as i64)
+}
+
 fn table_constraint_oids<'a>(
     schemas: &'a [TableSchema],
     relation_oids: &'a BTreeMap<String, i64>,
@@ -6123,7 +6290,8 @@ fn table_constraint_oids<'a>(
                     | ConstraintSchema::ForeignKey { .. }
                     | ConstraintSchema::Exclusion { .. } => true,
                 })
-                .count();
+                .count()
+                + schema.temporal_foreign_keys.len();
             let oid = *relation_oids.get(&schema.name).unwrap_or(&0);
             (1..=not_null + stored).map(move |slot| pg_constraint_oid(oid, slot as i64))
         });
@@ -6290,7 +6458,8 @@ pub(crate) fn exclusion_constraint_columns(
             .iter()
             .any(|candidate| candidate.eq_ignore_ascii_case(&column))
         {
-            columns.push(column);
+            let at = range.position.unwrap_or(columns.len()).min(columns.len());
+            columns.insert(at, column);
         }
     }
     columns
@@ -6863,11 +7032,23 @@ pub(crate) fn constraint_definition_value(
             let Some(foreign_schema) = schema_by_oid.get(&foreign_oid) else {
                 return SqlValue::Null;
             };
-            let referred_columns = constraint_column_names(
+            let mut referred_columns = constraint_column_names(
                 schemas,
                 &foreign_schema.name,
                 &virtual_cell(constraint, "confkey"),
             );
+            // A temporal key's last columns are its periods.
+            let mut columns = columns;
+            if virtual_cell(constraint, "conperiod") == SqlValue::Bool(true) {
+                let mut names = column_names.to_vec();
+                if let Some(period) = names.last_mut() {
+                    *period = format!("PERIOD {period}");
+                }
+                columns = names.join(", ");
+                if let Some(period) = referred_columns.last_mut() {
+                    *period = format!("PERIOD {period}");
+                }
+            }
             let foreign_name = if foreign_schema.schema_name.eq_ignore_ascii_case("public") {
                 foreign_schema.name.clone()
             } else {
@@ -6882,7 +7063,7 @@ pub(crate) fn constraint_definition_value(
         }
         "n" => column_names
             .first()
-            .map(|column| SqlValue::String(format!("{column} IS NOT NULL")))
+            .map(|column| SqlValue::String(format!("NOT NULL {column}")))
             .unwrap_or(SqlValue::Null),
         "x" => SqlValue::String(format!("EXCLUDE ({columns})")),
         _ => SqlValue::Null,
@@ -6996,11 +7177,16 @@ pub(crate) fn exclusion_constraint_definition(
         .map(|column| format!("{column} WITH ="))
         .collect::<Vec<_>>();
     if let Some(range) = range {
-        elements.push(format!(
-            "{} WITH {}",
-            exclusion_range_expression(range),
-            range.operator
-        ));
+        // In declared order when the range element's place is known.
+        let at = range.position.unwrap_or(elements.len()).min(elements.len());
+        elements.insert(
+            at,
+            format!(
+                "{} WITH {}",
+                exclusion_range_expression(range),
+                range.operator
+            ),
+        );
     }
     let mut definition = format!("EXCLUDE USING {access_method} ({})", elements.join(", "));
     if let Some(predicate) = predicate {

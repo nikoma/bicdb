@@ -27,6 +27,49 @@ fn single_leaf(plan: &PlanNode) -> bool {
     }
 }
 
+/// The `enable_*` setting that disables a node's plan type in PostgreSQL.
+fn disabling_settings(node: &PlanNode) -> &'static [&'static str] {
+    match node.node_type.as_str() {
+        "Seq Scan" => &["enable_seqscan"],
+        "Index Scan" => &["enable_indexscan"],
+        "Index Only Scan" => &["enable_indexscan", "enable_indexonlyscan"],
+        "Bitmap Heap Scan" => &["enable_bitmapscan"],
+        "Sort" => &["enable_sort"],
+        "Hash Join" => &["enable_hashjoin"],
+        "Nested Loop" => &["enable_nestloop"],
+        "Merge Join" => &["enable_mergejoin"],
+        "Material" => &["enable_material"],
+        "Memoize" => &["enable_memoize"],
+        "Aggregate"
+            if node.head.iter().any(|(label, value)| {
+                *label == "Strategy"
+                    && matches!(value, crate::explain_format::Prop::Text(text) if text == "Hashed")
+            }) =>
+        {
+            &["enable_hashagg"]
+        }
+        _ => &[],
+    }
+}
+
+/// BicDB's executor does not consult the `enable_*` planner settings, so a
+/// node whose plan type the session disabled still runs; PostgreSQL reports
+/// such a node as `Disabled: true`.
+fn mark_disabled_nodes(plan: &mut PlanNode, gucs: &std::collections::HashMap<String, String>) {
+    let off = |name: &str| {
+        gucs.get(name).is_some_and(|value| {
+            matches!(
+                value.to_ascii_lowercase().as_str(),
+                "off" | "false" | "0" | "no"
+            )
+        })
+    };
+    plan.disabled = disabling_settings(plan).iter().any(|name| off(name));
+    for (_, _, child) in &mut plan.children {
+        mark_disabled_nodes(child, gucs);
+    }
+}
+
 impl SqlSession<'_> {
     pub(crate) fn execute_explain_statement(&mut self, explain: &Statement) -> Result<SqlResult> {
         let Statement::Explain {
@@ -81,6 +124,7 @@ impl SqlSession<'_> {
             let mut builder = crate::engine::ExplainBuilder::new(&engine, &parsed, statement);
             builder.statement(statement)?
         };
+        mark_disabled_nodes(&mut plan, &self.session_gucs);
         if parsed.analyze {
             // Only plans whose every node's row count the execution itself
             // reports are shown with actual rows; deeper plans would need

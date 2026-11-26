@@ -6290,6 +6290,10 @@ impl<'db> SqlEngine<'db> {
                 right_seed_selection,
                 needed_columns,
             )? {
+                crate::plan_diagnostics::record_join_method(
+                    || join.relation.to_string(),
+                    "IndexNestedLoop",
+                );
                 return Ok(row_set);
             }
         }
@@ -6310,6 +6314,10 @@ impl<'db> SqlEngine<'db> {
         if let Some(row_set) =
             self.apply_spatial_tree_join(&left, &right, kind, effective_constraint)?
         {
+            crate::plan_diagnostics::record_join_method(
+                || join.relation.to_string(),
+                "SpatialJoin",
+            );
             return Ok(row_set);
         }
         if let (RowJoinKind::Inner | RowJoinKind::Left, Some((left_key, right_key))) = (
@@ -6351,6 +6359,10 @@ impl<'db> SqlEngine<'db> {
                     || (self.join_key_values_are_integers(left_key, &left)
                         && self.join_key_values_are_integers(right_key, &right))
             }) {
+                crate::plan_diagnostics::record_join_method(
+                    || join.relation.to_string(),
+                    "HashJoin",
+                );
                 return self.apply_inner_hash_join(
                     left,
                     right,
@@ -6366,6 +6378,7 @@ impl<'db> SqlEngine<'db> {
                 );
             }
         }
+        crate::plan_diagnostics::record_join_method(|| join.relation.to_string(), "NestedLoop");
         let candidate_pairs = left.rows.len().saturating_mul(right.rows.len());
         let pair_ceiling = max_nested_join_pairs();
         if pair_ceiling != 0 && candidate_pairs > pair_ceiling {
@@ -6446,7 +6459,11 @@ impl<'db> SqlEngine<'db> {
 
     /// Whether `selection` fixes every primary-key column of the plain table
     /// `relation` to a value (an exact single-row lookup).
-    fn selection_pins_primary_key(&self, relation: &TableFactor, selection: &Expr) -> Result<bool> {
+    pub(crate) fn selection_pins_primary_key(
+        &self,
+        relation: &TableFactor,
+        selection: &Expr,
+    ) -> Result<bool> {
         let TableFactor::Table {
             name,
             alias,
@@ -7138,7 +7155,7 @@ impl<'db> SqlEngine<'db> {
     /// pg_attribute and pg_constraint exceeded the nested-loop ceiling on
     /// any real catalog). Inner joins only: the conjunct still filters the
     /// final rows, so applying it early cannot change the result.
-    fn derive_where_join_constraint_from_columns(
+    pub(crate) fn derive_where_join_constraint_from_columns(
         &self,
         left: &RowSet,
         right_relation: &TableFactor,

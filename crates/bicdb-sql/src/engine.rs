@@ -21,6 +21,7 @@ pub(crate) mod flashback;
 use exists_probe::{ExistsCandidate, ExistsProbeMemo};
 mod hierarchy;
 mod joins_windows;
+pub(crate) use joins_windows::RowJoinPrediction;
 pub(crate) mod materialize;
 mod pg_catalog;
 mod predicates_locators;

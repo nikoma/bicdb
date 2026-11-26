@@ -491,6 +491,9 @@ impl<'db> SqlEngine<'db> {
                 .eval_slot_row_truth_typed(row, context, expr, env)?
                 .map(|v| !v)),
             Expr::Exists { subquery, negated } => {
+                if let Some(exists) = self.hashed_exists_truth(row, context, subquery)? {
+                    return Ok(Some(exists != *negated));
+                }
                 let mut split = self.split_exists_outer_filter(subquery)?;
                 if let Some((gate, _)) = &split {
                     // A gate this level cannot evaluate (e.g. it refers further out) leaves the
@@ -1022,6 +1025,27 @@ impl<'db> SqlEngine<'db> {
                     value_type.as_deref(),
                     candidate_type.as_deref(),
                 );
+                // An uncorrelated result is probed through its hash table
+                // (a hashed SubPlan) instead of scanned per row.
+                if plain {
+                    if let Some(truth) = self
+                        .subquery_memo
+                        .hashed_values(
+                            self.db_ref(),
+                            subquery,
+                            context.row_lookup.columns(),
+                            &result,
+                        )
+                        .and_then(|hashed| hashed.in_truth(&value, *negated))
+                    {
+                        return Ok(truth);
+                    }
+                }
+                if result.rows.is_empty() {
+                    // `x IN (empty)` is false and `x NOT IN (empty)` true,
+                    // even for a NULL `x`.
+                    return Ok(Some(*negated));
+                }
                 let mut matched =
                     plain && values().any(|candidate| values_equal(&value, candidate));
                 if !plain {
@@ -1186,6 +1210,9 @@ impl<'db> SqlEngine<'db> {
                 self.eval_slot_row_truth(row, context, expr)?.is_some(),
             )),
             Expr::Exists { subquery, negated } => {
+                if let Some(exists) = self.hashed_exists_truth(row, context, subquery)? {
+                    return Ok(Some(exists != *negated));
+                }
                 let mut split = self.split_exists_outer_filter(subquery)?;
                 if let Some((gate, _)) = &split {
                     // A gate this level cannot evaluate (e.g. it refers further out) leaves the
@@ -2180,6 +2207,53 @@ impl<'db> SqlEngine<'db> {
         Ok(result)
     }
 
+    /// `EXISTS (query)` for this row through the statement's hash semi-join
+    /// key table (see [`hashed_exists_plan`]), or `None` to evaluate the
+    /// subquery as written.
+    fn hashed_exists_truth(
+        &self,
+        row: &SlotRow,
+        context: &BoundRowContext,
+        query: &Query,
+    ) -> Result<Option<bool>> {
+        if self.outer_row.is_some() {
+            // Inside another correlated subquery the outer value may come
+            // from further out; keep the per-row path.
+            return Ok(None);
+        }
+        let hashed = self
+            .subquery_memo
+            .hashed_exists(self.db_ref(), query, |plan| {
+                // A keys query that fails (a privilege, an error in a term)
+                // leaves the subquery to the per-row path, which reports it as
+                // the original would.
+                match self.execute_query(&plan.keys_query) {
+                    Ok(result) => HashedValues::build(&result),
+                    Err(_) => None,
+                }
+            });
+        let Some((plan, keys)) = hashed else {
+            self.check_cancellation()?;
+            return Ok(None);
+        };
+        let outer_type = self.row_expr_pg_type(&plan.outer, context);
+        if !typed_equality_uses_plain_values(outer_type.as_deref(), Some(plan.inner_type.as_str()))
+        {
+            return Ok(None);
+        }
+        let Ok(value) = self.eval_slot_row_value(row, context, &plan.outer) else {
+            self.check_cancellation()?;
+            return Ok(None);
+        };
+        // `k = NULL` is never true: no inner row matches a NULL.
+        if matches!(value, SqlValue::Null) {
+            return Ok(Some(false));
+        }
+        Ok(keys
+            .in_truth(&value, false)
+            .map(|truth| truth == Some(true)))
+    }
+
     fn run_slot_subquery(
         &self,
         row: &SlotRow,
@@ -3003,6 +3077,11 @@ impl<'db> SqlEngine<'db> {
                     value_type.as_deref(),
                     candidate_type.as_deref(),
                 );
+                if values.is_empty() {
+                    // `x IN (empty)` is false and `x NOT IN (empty)` true,
+                    // even for a NULL `x`.
+                    return Ok(Some(*negated));
+                }
                 let mut matched = plain
                     && values
                         .iter()
@@ -4102,6 +4181,34 @@ fn eval_quantified_subquery_truth(
 pub(crate) struct SubqueryMemo {
     depth: std::cell::Cell<usize>,
     entries: RefCell<Vec<SubqueryMemoEntry>>,
+    /// Correlated `EXISTS` subqueries answered as a hash semi-join: the
+    /// inner keys of one statement, built on first use (`None` inside when
+    /// building declined).
+    exists: RefCell<Vec<HashedExistsEntry>>,
+}
+
+#[derive(Debug)]
+struct HashedExistsEntry {
+    address: usize,
+    query: Box<Query>,
+    plan: Rc<HashedExists>,
+    keys: Option<Option<Rc<HashedValues>>>,
+}
+
+/// `EXISTS (SELECT <constants> FROM t WHERE t.k = outer AND <terms on t>)`
+/// as a hash semi-join: the keys `t.k` of the rows that pass the terms on
+/// `t` are read once per statement into a hash table, and each outer row
+/// probes it with its value of `outer`. The same analysis drives execution
+/// and EXPLAIN.
+#[derive(Debug, Clone)]
+pub(crate) struct HashedExists {
+    /// The outer expression of the correlation equality.
+    pub(crate) outer: Expr,
+    /// The inner key column and its declared type.
+    pub(crate) inner_column: String,
+    pub(crate) inner_type: String,
+    /// `SELECT k FROM t [WHERE <terms on t>]`.
+    pub(crate) keys_query: Query,
 }
 
 #[derive(Debug)]
@@ -4110,6 +4217,107 @@ struct SubqueryMemoEntry {
     columns: Vec<String>,
     /// `None`: correlated or not memoizable; run the subquery for every row.
     cached: Option<(Box<Query>, Rc<SqlResult>)>,
+    /// The cached result's first column as a hash set, for `x IN (..)`
+    /// membership: built on first use; `Some(None)` when its values cannot
+    /// be hashed exactly (membership then scans the values).
+    hashed: Option<Option<Rc<HashedValues>>>,
+}
+
+/// One uncorrelated `IN (subquery)` result as a hash table: a hashed
+/// SubPlan. Only values whose equality is exactly structural are hashed
+/// (all integers, all text, or all booleans), so a lookup decides exactly
+/// what scanning the values with `values_equal` decides.
+#[derive(Debug)]
+pub(crate) struct HashedValues {
+    keys: std::collections::HashSet<HashedKey>,
+    has_null: bool,
+    rows: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum HashedKey {
+    Int(i64),
+    Text(String),
+    Bool(bool),
+}
+
+impl HashedKey {
+    fn of(value: &SqlValue) -> Option<Self> {
+        match value {
+            SqlValue::Int(value) => Some(Self::Int(*value)),
+            SqlValue::String(value) => Some(Self::Text(value.clone())),
+            SqlValue::Bool(value) => Some(Self::Bool(*value)),
+            _ => None,
+        }
+    }
+
+    fn same_family(&self, other: &Self) -> bool {
+        std::mem::discriminant(self) == std::mem::discriminant(other)
+    }
+}
+
+impl HashedValues {
+    /// The hash table of a one-column result, or `None` when a value is
+    /// not exactly hashable or the values mix families.
+    fn build(result: &SqlResult) -> Option<Self> {
+        const MAX_HASHED_ROWS: usize = 4_000_000;
+        if result.columns.len() != 1 || result.rows.len() > MAX_HASHED_ROWS {
+            return None;
+        }
+        let mut keys = std::collections::HashSet::with_capacity(result.rows.len());
+        let mut family: Option<HashedKey> = None;
+        let mut has_null = false;
+        for row in &result.rows {
+            let value = row.first().unwrap_or(&SqlValue::Null);
+            if matches!(value, SqlValue::Null) {
+                has_null = true;
+                continue;
+            }
+            let key = HashedKey::of(value)?;
+            if family
+                .as_ref()
+                .is_some_and(|family| !family.same_family(&key))
+            {
+                return None;
+            }
+            if family.is_none() {
+                family = Some(key.clone());
+            }
+            keys.insert(key);
+        }
+        Some(Self {
+            keys,
+            has_null,
+            rows: result.rows.len(),
+        })
+    }
+
+    /// `value [NOT] IN (values)` under SQL's three-valued logic, or `None`
+    /// when `value` is not of the hashed family (the caller scans).
+    pub(crate) fn in_truth(&self, value: &SqlValue, negated: bool) -> Option<Option<bool>> {
+        if self.rows == 0 {
+            return Some(Some(negated));
+        }
+        if matches!(value, SqlValue::Null) {
+            return Some(None);
+        }
+        let key = HashedKey::of(value)?;
+        if self
+            .keys
+            .iter()
+            .next()
+            .is_some_and(|family| !family.same_family(&key))
+        {
+            return None;
+        }
+        if self.keys.contains(&key) {
+            Some(Some(!negated))
+        } else if self.has_null {
+            Some(None)
+        } else {
+            Some(Some(negated))
+        }
+    }
 }
 
 enum MemoLookup {
@@ -4145,6 +4353,7 @@ impl SubqueryMemo {
         self.depth.set(depth);
         if depth == 0 {
             self.entries.borrow_mut().clear();
+            self.exists.borrow_mut().clear();
         }
     }
 
@@ -4186,7 +4395,113 @@ impl SubqueryMemo {
             address: query as *const Query as usize,
             columns: columns.to_vec(),
             cached: result.map(|result| (Box::new(query.clone()), result)),
+            hashed: None,
         });
+    }
+
+    /// The hash semi-join plan of a correlated `EXISTS` subquery and its
+    /// key table, built once per statement with `build` (which runs the
+    /// keys query). `None` when the subquery is not eligible, the memo is
+    /// inactive, or building declined.
+    pub(crate) fn hashed_exists(
+        &self,
+        db: &BicDb,
+        query: &Query,
+        build: impl FnOnce(&HashedExists) -> Option<HashedValues>,
+    ) -> Option<(Rc<HashedExists>, Rc<HashedValues>)> {
+        if self.depth.get() == 0 {
+            return None;
+        }
+        let address = query as *const Query as usize;
+        let position = {
+            let entries = self.exists.borrow();
+            entries
+                .iter()
+                .position(|entry| entry.address == address && entry.query.as_ref() == query)
+        };
+        let position = match position {
+            Some(position) => position,
+            None => {
+                let plan = hashed_exists_plan(db, query)?;
+                let mut entries = self.exists.borrow_mut();
+                if entries.len() >= SUBQUERY_MEMO_MAX_ENTRIES {
+                    return None;
+                }
+                entries.push(HashedExistsEntry {
+                    address,
+                    query: Box::new(query.clone()),
+                    plan: Rc::new(plan),
+                    keys: None,
+                });
+                entries.len() - 1
+            }
+        };
+        let (plan, built) = {
+            let entries = self.exists.borrow();
+            let entry = &entries[position];
+            (entry.plan.clone(), entry.keys.clone())
+        };
+        let keys = match built {
+            Some(keys) => keys,
+            None => {
+                // The keys query runs outside the borrow: it executes SQL.
+                let keys = build(&plan).map(Rc::new);
+                if keys.is_some() {
+                    crate::plan_diagnostics::record_node_method(
+                        "subplan",
+                        || "subquery".to_string(),
+                        "HashedExists",
+                    );
+                }
+                if let Some(entry) = self.exists.borrow_mut().get_mut(position) {
+                    entry.keys = Some(keys.clone());
+                }
+                keys
+            }
+        };
+        Some((plan, keys?))
+    }
+
+    /// The hash table of `result` when it is this statement's memoized
+    /// (uncorrelated) result of `query`; built once, on first use.
+    pub(crate) fn hashed_values(
+        &self,
+        db: &BicDb,
+        query: &Query,
+        columns: &[String],
+        result: &Rc<SqlResult>,
+    ) -> Option<Rc<HashedValues>> {
+        if self.depth.get() == 0 {
+            return None;
+        }
+        let address = query as *const Query as usize;
+        let mut entries = self.entries.borrow_mut();
+        let entry = entries.iter_mut().find(|entry| {
+            entry.address == address
+                && entry.columns == columns
+                && entry
+                    .cached
+                    .as_ref()
+                    .is_some_and(|(cached, cached_result)| {
+                        Rc::ptr_eq(cached_result, result) && cached.as_ref() == query
+                    })
+        })?;
+        entry
+            .hashed
+            .get_or_insert_with(|| {
+                let hashed = hashed_in_subquery_column_type(db, query)
+                    .and_then(|_| HashedValues::build(result))
+                    .map(Rc::new);
+                if hashed.is_some() {
+                    crate::plan_diagnostics::record_node_method(
+                        "subplan",
+                        || "subquery".to_string(),
+                        "HashedSubPlan",
+                    );
+                }
+                hashed
+            })
+            .clone()
     }
 }
 
@@ -4227,6 +4542,370 @@ fn function_is_volatile(name: &str) -> bool {
 /// Whether a subquery's result may be kept once it is shown not to read the
 /// outer row: it takes no row locks and calls no volatile builtin and no
 /// user-defined function (which may be volatile or write).
+/// The type of the one column an `IN (subquery)` returns, when that
+/// subquery is answered through a hash table (a hashed SubPlan): a
+/// memoizable `SELECT col FROM table [WHERE ...]` over one base table whose
+/// every column reference is that table's own (so it is uncorrelated and
+/// runs once per statement), returning an integer, text, boolean or uuid
+/// column. The same decision drives execution and EXPLAIN.
+pub(crate) fn hashed_in_subquery_column_type(db: &BicDb, query: &Query) -> Option<String> {
+    use sqlparser::ast::{Visit, Visitor};
+    use std::ops::ControlFlow;
+    if query.with.is_some()
+        || query.limit_clause.is_some()
+        || query.fetch.is_some()
+        || query.order_by.is_some()
+        || !query.locks.is_empty()
+    {
+        return None;
+    }
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        return None;
+    };
+    let [from] = select.from.as_slice() else {
+        return None;
+    };
+    if !from.joins.is_empty()
+        || select.having.is_some()
+        || select.qualify.is_some()
+        || select.distinct.is_some()
+        || !select.named_window.is_empty()
+        || !matches!(&select.group_by, GroupByExpr::Expressions(keys, modifiers) if keys.is_empty() && modifiers.is_empty())
+    {
+        return None;
+    }
+    let TableFactor::Table {
+        name,
+        alias,
+        args: None,
+        ..
+    } = &from.relation
+    else {
+        return None;
+    };
+    let relation = relation_name(name).ok()?;
+    if is_virtual_table(&relation) || load_view(db, &relation).ok()?.is_some() {
+        return None;
+    }
+    let schema =
+        load_schema(db, &resolve_session_relation_name_if_exists(db, &relation)).ok()??;
+    let qualifier = alias
+        .as_ref()
+        .map(|alias| ident_value(&alias.name))
+        .unwrap_or_else(|| relation_default_alias(name));
+    let [SelectItem::UnnamedExpr(item) | SelectItem::ExprWithAlias { expr: item, .. }] =
+        select.projection.as_slice()
+    else {
+        return None;
+    };
+    let column_of = |expr: &Expr| -> Option<String> {
+        match expr {
+            Expr::Identifier(ident) => Some(ident_value(ident)),
+            Expr::CompoundIdentifier(parts) if parts.len() == 2 => {
+                (ident_value(&parts[0]) == qualifier).then(|| ident_value(&parts[1]))
+            }
+            _ => None,
+        }
+    };
+    let column = column_of(item)?;
+    let pg_type = schema
+        .columns
+        .iter()
+        .find(|candidate| candidate.name == column && !candidate.hidden)
+        .filter(|candidate| candidate.user_type.is_none() && candidate.array_ndims == 0)
+        .map(|candidate| candidate.pg_type.to_ascii_lowercase())?;
+    if !matches!(
+        pg_type.as_str(),
+        "int2"
+            | "int4"
+            | "int8"
+            | "smallint"
+            | "integer"
+            | "int"
+            | "bigint"
+            | "text"
+            | "varchar"
+            | "bool"
+            | "boolean"
+            | "uuid"
+    ) {
+        return None;
+    }
+    // Every column reference must be this table's own: then the subquery
+    // reads no outer row. Nested subqueries are left to the per-row path.
+    struct Local<'a> {
+        qualifier: &'a str,
+        columns: Vec<&'a str>,
+    }
+    impl Visitor for Local<'_> {
+        type Break = ();
+        fn pre_visit_expr(&mut self, expr: &Expr) -> ControlFlow<()> {
+            match expr {
+                Expr::Identifier(ident) if !self.columns.contains(&ident_value(ident).as_str()) => {
+                    ControlFlow::Break(())
+                }
+                Expr::CompoundIdentifier(parts)
+                    if parts.len() != 2
+                        || ident_value(&parts[0]) != self.qualifier
+                        || !self.columns.contains(&ident_value(&parts[1]).as_str()) =>
+                {
+                    ControlFlow::Break(())
+                }
+                Expr::Subquery(_) | Expr::Exists { .. } | Expr::InSubquery { .. } => {
+                    ControlFlow::Break(())
+                }
+                _ => ControlFlow::Continue(()),
+            }
+        }
+    }
+    let mut local = Local {
+        qualifier: &qualifier,
+        columns: schema
+            .columns
+            .iter()
+            .filter(|column| !column.hidden)
+            .map(|column| column.name.as_str())
+            .collect(),
+    };
+    if select.projection.visit(&mut local).is_break()
+        || select
+            .selection
+            .as_ref()
+            .is_some_and(|selection| selection.visit(&mut local).is_break())
+        || !subquery_is_memoizable(db, query)
+    {
+        return None;
+    }
+    Some(pg_type)
+}
+
+/// The hash semi-join plan of `EXISTS (subquery)`, when the subquery is
+/// `SELECT <constants> FROM t WHERE t.k = <outer column> AND <terms on t>`:
+/// one base table, no grouping, aggregates, ordering, limits or locks, a
+/// constant select list (so no column privilege is skipped), and terms that
+/// read only `t` and call no volatile function. Its key column must hash
+/// exactly (integer, text, boolean or uuid).
+pub(crate) fn hashed_exists_plan(db: &BicDb, query: &Query) -> Option<HashedExists> {
+    use sqlparser::ast::{Visit, Visitor};
+    use std::ops::ControlFlow;
+    if query.with.is_some()
+        || query.limit_clause.is_some()
+        || query.fetch.is_some()
+        || query.order_by.is_some()
+        || !query.locks.is_empty()
+    {
+        return None;
+    }
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        return None;
+    };
+    let [from] = select.from.as_slice() else {
+        return None;
+    };
+    if !from.joins.is_empty()
+        || select.having.is_some()
+        || select.qualify.is_some()
+        || select.distinct.is_some()
+        || !select.named_window.is_empty()
+        || !matches!(&select.group_by, GroupByExpr::Expressions(keys, modifiers) if keys.is_empty() && modifiers.is_empty())
+        || select.projection.is_empty()
+        || !select.projection.iter().all(|item| {
+            matches!(
+                item,
+                SelectItem::UnnamedExpr(Expr::Value(_))
+                    | SelectItem::ExprWithAlias {
+                        expr: Expr::Value(_),
+                        ..
+                    }
+            )
+        })
+    {
+        return None;
+    }
+    let TableFactor::Table {
+        name,
+        alias,
+        args: None,
+        ..
+    } = &from.relation
+    else {
+        return None;
+    };
+    let relation = relation_name(name).ok()?;
+    if is_virtual_table(&relation) || load_view(db, &relation).ok()?.is_some() {
+        return None;
+    }
+    let schema =
+        load_schema(db, &resolve_session_relation_name_if_exists(db, &relation)).ok()??;
+    if schema.has_descendant_tables() {
+        return None;
+    }
+    let qualifier = alias
+        .as_ref()
+        .map(|alias| ident_value(&alias.name))
+        .unwrap_or_else(|| relation_default_alias(name));
+    let columns = schema
+        .columns
+        .iter()
+        .filter(|column| !column.hidden)
+        .map(|column| column.name.as_str())
+        .collect::<Vec<_>>();
+    let inner_column = |expr: &Expr| -> Option<String> {
+        match expr {
+            Expr::Identifier(ident) => {
+                let column = ident_value(ident);
+                columns.contains(&column.as_str()).then_some(column)
+            }
+            Expr::CompoundIdentifier(parts) if parts.len() == 2 => {
+                let column = ident_value(&parts[1]);
+                (ident_value(&parts[0]) == qualifier && columns.contains(&column.as_str()))
+                    .then_some(column)
+            }
+            _ => None,
+        }
+    };
+    // A column of an enclosing query: qualified by a name that is not the
+    // inner table's, or unqualified and not one of its columns.
+    let outer_column = |expr: &Expr| -> bool {
+        match expr {
+            Expr::Identifier(ident) => !columns.contains(&ident_value(ident).as_str()),
+            Expr::CompoundIdentifier(parts) if parts.len() == 2 => {
+                ident_value(&parts[0]) != qualifier
+            }
+            _ => false,
+        }
+    };
+    struct Local<'a> {
+        qualifier: &'a str,
+        columns: &'a [&'a str],
+    }
+    impl Visitor for Local<'_> {
+        type Break = ();
+        fn pre_visit_expr(&mut self, expr: &Expr) -> ControlFlow<()> {
+            match expr {
+                Expr::Identifier(ident) if !self.columns.contains(&ident_value(ident).as_str()) => {
+                    ControlFlow::Break(())
+                }
+                Expr::CompoundIdentifier(parts)
+                    if parts.len() != 2
+                        || ident_value(&parts[0]) != self.qualifier
+                        || !self.columns.contains(&ident_value(&parts[1]).as_str()) =>
+                {
+                    ControlFlow::Break(())
+                }
+                Expr::Subquery(_) | Expr::Exists { .. } | Expr::InSubquery { .. } => {
+                    ControlFlow::Break(())
+                }
+                _ => ControlFlow::Continue(()),
+            }
+        }
+    }
+    let selection = select.selection.as_ref()?;
+    let mut terms = Vec::new();
+    and_terms_owned(selection, &mut terms);
+    let mut correlation: Option<(String, Expr)> = None;
+    let mut rest = Vec::new();
+    for term in terms {
+        if let Expr::BinaryOp {
+            left,
+            op: BinaryOperator::Eq,
+            right,
+        } = unwrap_nested_expr(&term)
+        {
+            let pair = match (inner_column(left), inner_column(right)) {
+                (Some(column), None) if outer_column(right) => Some((column, (**right).clone())),
+                (None, Some(column)) if outer_column(left) => Some((column, (**left).clone())),
+                _ => None,
+            };
+            if let Some(pair) = pair {
+                if correlation.is_some() {
+                    return None;
+                }
+                correlation = Some(pair);
+                continue;
+            }
+        }
+        let mut local = Local {
+            qualifier: &qualifier,
+            columns: &columns,
+        };
+        if term.visit(&mut local).is_break() {
+            return None;
+        }
+        rest.push(term);
+    }
+    let (inner_column, outer) = correlation?;
+    let inner_type = schema
+        .columns
+        .iter()
+        .find(|column| column.name == inner_column)
+        .filter(|column| column.user_type.is_none() && column.array_ndims == 0)
+        .map(|column| column.pg_type.to_ascii_lowercase())?;
+    if !matches!(
+        inner_type.as_str(),
+        "int2"
+            | "int4"
+            | "int8"
+            | "smallint"
+            | "integer"
+            | "int"
+            | "bigint"
+            | "text"
+            | "varchar"
+            | "bool"
+            | "boolean"
+            | "uuid"
+    ) {
+        return None;
+    }
+    if !subquery_is_memoizable(db, query) {
+        return None;
+    }
+    let mut keys_query = query.clone();
+    if let SetExpr::Select(keys) = keys_query.body.as_mut() {
+        keys.projection = vec![SelectItem::UnnamedExpr(Expr::CompoundIdentifier(vec![
+            Ident::with_quote('"', qualifier.clone()),
+            Ident::with_quote('"', inner_column.clone()),
+        ]))];
+        keys.selection = rest.into_iter().reduce(|left, right| Expr::BinaryOp {
+            left: Box::new(Expr::Nested(Box::new(left))),
+            op: BinaryOperator::And,
+            right: Box::new(Expr::Nested(Box::new(right))),
+        });
+    }
+    Some(HashedExists {
+        outer,
+        inner_column,
+        inner_type,
+        keys_query,
+    })
+}
+
+fn and_terms_owned(expr: &Expr, out: &mut Vec<Expr>) {
+    match expr {
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::And,
+            right,
+        } => {
+            and_terms_owned(left, out);
+            and_terms_owned(right, out);
+        }
+        Expr::Nested(inner)
+            if matches!(
+                inner.as_ref(),
+                Expr::BinaryOp {
+                    op: BinaryOperator::And,
+                    ..
+                }
+            ) =>
+        {
+            and_terms_owned(inner, out)
+        }
+        other => out.push(other.clone()),
+    }
+}
+
 pub(super) fn subquery_is_memoizable(db: &BicDb, query: &Query) -> bool {
     use sqlparser::ast::{TableFactor, Visit, Visitor};
     use std::ops::ControlFlow;

@@ -3918,3 +3918,346 @@ mod join_envelope_path_tests {
         }
     }
 }
+
+/// How the row-set executor will join one FROM item onto the rows before
+/// it, decided by the same eligibility rules `apply_row_join` applies, from
+/// the statement and the catalogs alone (no rows). EXPLAIN describes joins
+/// from this, so a join node names the method that runs.
+#[derive(Clone, Debug)]
+pub(crate) enum RowJoinPrediction {
+    /// Per outer row, the inner table's rows are looked up through `index`
+    /// (the primary key when `primary_key`) by the bound terms of
+    /// `selection` (the join condition, plus the inner table's own WHERE
+    /// terms for an inner join).
+    IndexNestedLoop {
+        index: String,
+        primary_key: bool,
+        selection: Expr,
+    },
+    /// Both sides are materialized and joined through a hash table on
+    /// `left_key = right_key`; `constraint` is the whole join condition.
+    Hash { constraint: Option<Expr> },
+    /// Every pair is compared.
+    NestedLoop { constraint: Option<Expr> },
+    /// A shape the predictor does not model (lateral calls, table
+    /// functions, ...).
+    Unknown,
+}
+
+impl SqlEngine<'_> {
+    pub(crate) fn predict_row_join(
+        &self,
+        left_columns: &[String],
+        join: &Join,
+        selection: Option<&Expr>,
+        prior_inner_selection: Option<&Expr>,
+    ) -> Result<RowJoinPrediction> {
+        let (kind, constraint) = match &join.join_operator {
+            JoinOperator::Join(constraint)
+            | JoinOperator::Inner(constraint)
+            | JoinOperator::CrossJoin(constraint) => (RowJoinKind::Inner, constraint),
+            JoinOperator::Left(constraint) | JoinOperator::LeftOuter(constraint) => {
+                (RowJoinKind::Left, constraint)
+            }
+            JoinOperator::Right(constraint) | JoinOperator::RightOuter(constraint) => {
+                (RowJoinKind::Right, constraint)
+            }
+            JoinOperator::FullOuter(constraint) => (RowJoinKind::FullOuter, constraint),
+            _ => return Ok(RowJoinPrediction::Unknown),
+        };
+        if lateral_unnest_call(&join.relation)?.is_some()
+            || json_set_returning_call(&join.relation)?.is_some()
+            || !matches!(&join.relation, TableFactor::Table { args: None, .. })
+        {
+            return Ok(RowJoinPrediction::Unknown);
+        }
+        let left = RowSet {
+            rows: Vec::new(),
+            columns: left_columns.to_vec(),
+        };
+        let mut constraint_derived_by_name = false;
+        let derived_constraint =
+            if matches!(kind, RowJoinKind::Inner) && matches!(constraint, JoinConstraint::None) {
+                match self.derive_where_join_constraint(&left, &join.relation, selection)? {
+                    Some(derived) => Some(derived),
+                    None => {
+                        let derived = match selection {
+                            Some(selection) => self.derive_where_join_constraint_from_columns(
+                                &left,
+                                &join.relation,
+                                selection,
+                            )?,
+                            None => None,
+                        };
+                        constraint_derived_by_name = derived.is_some();
+                        derived
+                    }
+                }
+            } else {
+                None
+            };
+        let effective = derived_constraint.as_ref().unwrap_or(constraint);
+        let on = match effective {
+            JoinConstraint::On(expr) => Some(expr.clone()),
+            _ => None,
+        };
+        let right_seed_selection = if matches!(kind, RowJoinKind::Inner) {
+            prior_inner_selection.or(selection)
+        } else {
+            None
+        };
+        let selection_pins_right = matches!(kind, RowJoinKind::Inner)
+            && match right_seed_selection {
+                Some(selection) => self.selection_pins_primary_key(&join.relation, selection)?,
+                None => false,
+            };
+        if matches!(kind, RowJoinKind::Inner | RowJoinKind::Left) && !selection_pins_right {
+            if let Some(prediction) = self.predict_indexed_right_table_join(
+                &left,
+                &join.relation,
+                kind,
+                effective,
+                right_seed_selection,
+            )? {
+                return Ok(prediction);
+            }
+        }
+        let Some(right_columns) =
+            self.row_set_columns_from_table_factor_without_rows(&join.relation)?
+        else {
+            return Ok(RowJoinPrediction::Unknown);
+        };
+        if let (RowJoinKind::Inner | RowJoinKind::Left, Some((left_key, right_key))) = (
+            kind,
+            equi_join_key_exprs(effective, &left.columns, &right_columns),
+        ) {
+            let simple_equality = !constraint_derived_by_name
+                && matches!(
+                    effective,
+                    JoinConstraint::On(expr)
+                        if matches!(unwrap_nested_expr(expr), Expr::BinaryOp { op: BinaryOperator::Eq, .. })
+                );
+            let mut right_type_env = Vec::new();
+            let right_key_type = self
+                .collect_relation_columns(&join.relation, &mut right_type_env)
+                .and_then(|_| self.infer_env_expr_type(right_key, &right_type_env));
+            let left_key_type = self.infer_slot_row_expr_type(&left.columns, left_key);
+            let typed = match (left_key_type.as_deref(), right_key_type.as_deref()) {
+                (Some(left_type), Some(right_type)) if left_type != right_type => {
+                    super::predicates_locators::hash_join_common_key_type(left_type, right_type)
+                        .is_some()
+                }
+                _ => true,
+            };
+            // A condition derived from column names alone hashes only when
+            // both keys hold integers; predict that from the declared types.
+            let integer = |kind: Option<&str>| {
+                kind.is_some_and(|kind| {
+                    matches!(
+                        kind,
+                        "int2" | "int4" | "int8" | "smallint" | "integer" | "bigint"
+                    )
+                })
+            };
+            if typed
+                && (simple_equality
+                    || (integer(left_key_type.as_deref()) && integer(right_key_type.as_deref())))
+            {
+                return Ok(RowJoinPrediction::Hash { constraint: on });
+            }
+        }
+        Ok(RowJoinPrediction::NestedLoop { constraint: on })
+    }
+
+    /// The static part of [`Self::apply_indexed_right_table_join`]'s
+    /// eligibility, and the index its per-row lookup takes.
+    fn predict_indexed_right_table_join(
+        &self,
+        left: &RowSet,
+        right_relation: &TableFactor,
+        kind: RowJoinKind,
+        constraint: &JoinConstraint,
+        right_selection: Option<&Expr>,
+    ) -> Result<Option<RowJoinPrediction>> {
+        if self.heap_lock_identity {
+            return Ok(None);
+        }
+        let JoinConstraint::On(selection) = constraint else {
+            return Ok(None);
+        };
+        let TableFactor::Table {
+            name,
+            alias,
+            args: None,
+            ..
+        } = right_relation
+        else {
+            return Ok(None);
+        };
+        let table = relation_name(name)?;
+        if self.cte(&table).is_some()
+            || is_virtual_table(&table)
+            || load_view(self.db_ref(), &table)?.is_some()
+            || load_sequence(self.db_ref(), &table)?.is_some()
+        {
+            return Ok(None);
+        }
+        let alias_name = alias
+            .as_ref()
+            .map(|alias| alias.name.value.clone())
+            .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(&table).to_string());
+        let table = resolve_session_relation_name(self.db_ref(), &table)?;
+        let schema = load_schema(self.db_ref(), &table)?;
+        if schema
+            .as_ref()
+            .is_some_and(|schema| schema.has_descendant_tables())
+        {
+            return Ok(None);
+        }
+        let right_fields = FieldRef::wildcard(schema.as_ref());
+        let right_columns = row_output_columns_from_fields(&table, &alias_name, &right_fields);
+        let binding = alias
+            .as_ref()
+            .map(|alias| &alias.name)
+            .or_else(|| match name.0.last() {
+                Some(sqlparser::ast::ObjectNamePart::Identifier(ident)) => Some(ident),
+                _ => None,
+            });
+        let binding = binding.map(|ident| {
+            if ident.quote_style.is_some() {
+                ident.value.clone()
+            } else {
+                normalize_object_name(&ident.value)
+            }
+        });
+        let pushed_filter = if matches!(kind, RowJoinKind::Inner)
+            && alias.as_ref().is_none_or(|alias| alias.columns.is_empty())
+        {
+            let columns = right_columns.iter().cloned().collect::<BTreeSet<_>>();
+            right_selection.and_then(|selection| {
+                and_terms(selection)
+                    .into_iter()
+                    .filter(|term| {
+                        binding.as_ref().is_some_and(|binding| {
+                            super::pg_catalog::simple_qualified_filter(term, &columns, binding)
+                        })
+                    })
+                    .cloned()
+                    .reduce(and_expr)
+            })
+        } else {
+            None
+        };
+        let selection = match pushed_filter {
+            Some(filter) => and_expr(selection.clone(), filter),
+            None => selection.clone(),
+        };
+        let constraint = JoinConstraint::On(selection.clone());
+        let can_eval =
+            join_constraint_can_eval_with_outer_row(&constraint, &left.columns, &right_columns);
+        let prepared = if can_eval {
+            self.prepare_dynamic_record_lookup(
+                &table,
+                &alias_name,
+                schema.as_ref(),
+                &selection,
+                &left.columns,
+            )?
+        } else {
+            None
+        };
+        let primary_key_name = || {
+            schema
+                .as_ref()
+                .map(|schema| {
+                    schema
+                        .primary_key_name
+                        .clone()
+                        .unwrap_or_else(|| format!("{}_pkey", schema.name))
+                })
+                .unwrap_or_default()
+        };
+        if matches!(
+            prepared,
+            Some(PreparedDynamicRecordLookup::PrimaryKeyExact { .. })
+        ) {
+            return Ok(Some(RowJoinPrediction::IndexNestedLoop {
+                index: primary_key_name(),
+                primary_key: true,
+                selection,
+            }));
+        }
+        if prepared.is_none()
+            && self.join_selection_has_inexact_index_probe(
+                &selection,
+                &left.columns,
+                &table,
+                &alias_name,
+                schema.as_ref(),
+            )
+        {
+            return Ok(None);
+        }
+        // The per-row lookup is the row-set locator over `selection` with the
+        // outer row bound: the index with the most bound leading columns.
+        let strategy =
+            self.derive_locator_strategy(&table, &alias_name, schema.as_ref(), &selection)?;
+        let bound = |expr: &Expr| -> Result<bool> {
+            Ok(!self.expr_references_table(expr, &table, &alias_name, schema.as_ref())?)
+        };
+        let mut best: Option<(usize, String, bool)> = None;
+        if let Some(Some(expr)) = strategy.pk_exprs.first() {
+            if bound(expr)? {
+                let matched = strategy
+                    .pk_exprs
+                    .iter()
+                    .take_while(|expr| {
+                        expr.as_ref()
+                            .is_some_and(|expr| bound(expr).unwrap_or(false))
+                    })
+                    .count();
+                best = Some((matched, primary_key_name(), true));
+            }
+        }
+        for plan in &strategy.indexes {
+            let mut matched = 0;
+            for expr in &plan.prefix_exprs {
+                if !bound(expr)? {
+                    break;
+                }
+                matched += 1;
+            }
+            if matched < plan.prefix_exprs.len() {
+                // An unbound prefix term disqualifies the candidate at run
+                // time (`expr_is_bound_without_table_row`).
+                continue;
+            }
+            let mut range_bound = !plan.range_bounds.is_empty();
+            for (_, expr) in &plan.range_bounds {
+                if !bound(expr)? {
+                    range_bound = false;
+                }
+            }
+            if !plan.range_bounds.is_empty() && !range_bound {
+                continue;
+            }
+            let matched = matched + usize::from(range_bound);
+            if matched == 0 {
+                continue;
+            }
+            if best
+                .as_ref()
+                .is_none_or(|(best_matched, _, _)| matched > *best_matched)
+            {
+                best = Some((matched, plan.name.clone(), false));
+            }
+        }
+        Ok(best.map(
+            |(_, index, primary_key)| RowJoinPrediction::IndexNestedLoop {
+                index,
+                primary_key,
+                selection,
+            },
+        ))
+    }
+}

@@ -420,3 +420,201 @@ fn explain_reports_the_executed_access_path_in_paged_storage() {
         mismatches.join("\n")
     );
 }
+
+const JOIN_SHAPES: &[&str] = &[
+    "SELECT t.id, u.v FROM t JOIN u ON u.tid = t.id WHERE t.a = 3",
+    "SELECT t.id, u.v FROM t JOIN u ON u.id = t.d WHERE t.a = 3",
+    "SELECT t.id, u.v FROM t JOIN u ON u.x = t.b WHERE t.a = 9",
+    "SELECT t.id, u.v FROM t LEFT JOIN u ON u.x = t.b WHERE t.a = 8",
+    "SELECT t.id, u.v FROM t LEFT JOIN u ON u.tid = t.id WHERE t.a = 8",
+    "SELECT t.id, u.v FROM t, u WHERE u.tid = t.id AND t.a = 9",
+    "SELECT t.id, u.v FROM t, u WHERE u.x = t.b AND t.a = 9",
+    "SELECT t.id, u.v FROM t JOIN u ON u.x < t.b WHERE t.a = 9 AND u.id < 5",
+    "SELECT t.id, u.v, w.id FROM t JOIN u ON u.tid = t.id JOIN t w ON w.id = u.x WHERE t.a = 9",
+];
+
+/// The join methods a PostgreSQL-layout plan shows, innermost (first
+/// executed) join first.
+fn pg_layout_joins(session: &mut SqlSession<'_>, sql: &str) -> Vec<String> {
+    let lines = session
+        .execute(&format!("EXPLAIN (COSTS OFF) {sql}"))
+        .unwrap_or_else(|error| panic!("EXPLAIN (COSTS OFF) {sql}: {error}"))
+        .rows
+        .into_iter()
+        .map(|row| row[0].to_cell())
+        .collect::<Vec<_>>();
+    let mut joins = Vec::new();
+    for (position, line) in lines.iter().enumerate() {
+        let text = line.trim().trim_start_matches("->").trim();
+        let depth = line.len() - line.trim_start().len();
+        if text.starts_with("Hash") && text.contains("Join") {
+            joins.push("HashJoin".to_string());
+        } else if text.starts_with("Nested Loop") {
+            // An indexed nested loop's inner scan carries an Index Cond
+            // referencing the outer side; it is this node's second child.
+            let children = lines[position + 1..]
+                .iter()
+                .take_while(|child| child.len() - child.trim_start().len() > depth)
+                .collect::<Vec<_>>();
+            // A nested loop over stored inner rows shows them under a
+            // Materialize; one that looks the inner rows up per outer row
+            // has its index scan directly below.
+            let materialized = children
+                .iter()
+                .any(|child| child.trim().trim_start_matches("->").trim() == "Materialize");
+            joins.push(
+                if materialized {
+                    "NestedLoop"
+                } else {
+                    "IndexNestedLoop"
+                }
+                .to_string(),
+            );
+        }
+    }
+    joins.reverse();
+    joins
+}
+
+/// The join node EXPLAIN prints for each join is the method the executor
+/// used for it.
+#[test]
+fn postgres_layout_names_the_executed_join_method() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    setup(&mut db);
+    SqlSession::new(&mut db)
+        .execute(
+            "CREATE TABLE u (id int4 PRIMARY KEY, tid int4, x int4, v text);
+             INSERT INTO u SELECT g, g % 3000, g % 11, 'v' || g FROM generate_series(1, 4000) g;
+             CREATE INDEX u_tid ON u (tid);",
+        )
+        .unwrap();
+    let mut mismatches = Vec::new();
+    for condition in ["no stats", "after ANALYZE"] {
+        if condition == "after ANALYZE" {
+            SqlSession::new(&mut db)
+                .execute("ANALYZE t; ANALYZE u")
+                .unwrap();
+        }
+        for sql in JOIN_SHAPES {
+            let mut session = SqlSession::new(&mut db);
+            let shown = pg_layout_joins(&mut session, sql);
+            let (result, decisions) =
+                with_plan_diagnostics(DiagnosticsOptions::default(), || session.execute(sql));
+            result.unwrap_or_else(|error| panic!("{sql}: {error}"));
+            let executed = decisions
+                .iter()
+                .filter(|decision| decision.chooser == "join")
+                .map(|decision| {
+                    decision.candidates[decision.chosen]
+                        .signature
+                        .kind
+                        .to_string()
+                })
+                .collect::<Vec<_>>();
+            if shown != executed {
+                let trace = decisions
+                    .iter()
+                    .map(|decision| {
+                        format!(
+                            "{}:{}:{}",
+                            decision.chooser,
+                            decision.collection,
+                            decision.candidates[decision.chosen].signature.label()
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                mismatches.push(format!(
+                    "[{condition}] {sql}\n    EXPLAIN shows {shown:?}\n    executed      {executed:?}\n    trace {trace:?}"
+                ));
+            }
+        }
+    }
+    assert!(
+        mismatches.is_empty(),
+        "{} join mismatches:\n{}",
+        mismatches.len(),
+        mismatches.join("\n")
+    );
+}
+
+const SUBPLAN_SHAPES: &[&str] = &[
+    "SELECT id FROM t WHERE a IN (SELECT x FROM u WHERE id < 50)",
+    "SELECT id FROM t WHERE a NOT IN (SELECT x FROM u WHERE id < 50) AND d < 40",
+    "SELECT id FROM t WHERE c IN (SELECT v FROM u WHERE id < 10)",
+    "SELECT id FROM t WHERE id IN (SELECT tid FROM u WHERE x = 3) AND a = 9",
+    "SELECT id FROM t WHERE a IN (SELECT x FROM u WHERE u.tid = t.id) AND d < 40",
+    "SELECT id FROM t WHERE a IN (SELECT x FROM u WHERE id < 50 LIMIT 3)",
+    "SELECT id FROM t WHERE a IN (SELECT x + 1 FROM u WHERE id < 50)",
+    "SELECT count(*) FROM t WHERE b IN (SELECT x FROM u)",
+    "SELECT id FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.tid = t.id) AND a = 9",
+    "SELECT id FROM t WHERE NOT EXISTS (SELECT 1 FROM u WHERE u.tid = t.id AND u.x = 3) AND a = 9",
+    "SELECT count(*) FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.x = t.b) OR d < 3",
+    "SELECT id FROM t WHERE EXISTS (SELECT u.v FROM u WHERE u.tid = t.id) AND a = 9",
+    "SELECT id FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.tid = t.id LIMIT 1) AND a = 9",
+    "SELECT id FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.tid = t.id AND random() < 2) AND a = 9",
+];
+
+/// EXPLAIN names a SubPlan `hashed` exactly when execution probed the
+/// subquery's result through a hash table.
+#[test]
+fn postgres_layout_names_hashed_subplans_as_executed() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    setup(&mut db);
+    SqlSession::new(&mut db)
+        .execute(
+            "CREATE TABLE u (id int4 PRIMARY KEY, tid int4, x int4, v text);
+             INSERT INTO u SELECT g, g % 3000, g % 11, 'x' || g FROM generate_series(1, 4000) g;",
+        )
+        .unwrap();
+    let mut mismatches = Vec::new();
+    for sql in SUBPLAN_SHAPES {
+        let mut session = SqlSession::new(&mut db);
+        let plan = session
+            .execute(&format!("EXPLAIN (COSTS OFF) {sql}"))
+            .unwrap_or_else(|error| panic!("EXPLAIN {sql}: {error}"))
+            .rows
+            .into_iter()
+            .map(|row| row[0].to_cell())
+            .collect::<Vec<_>>();
+        let shown = plan.iter().any(|line| {
+            line.contains("hashed SubPlan")
+                || line.contains("Hash Semi Join")
+                || line.contains("Hash Anti Join")
+        });
+        let (result, decisions) =
+            with_plan_diagnostics(DiagnosticsOptions::default(), || session.execute(sql));
+        result.unwrap_or_else(|error| panic!("{sql}: {error}"));
+        let hashed = decisions.iter().any(|decision| {
+            decision.chooser == "subplan"
+                && matches!(
+                    decision.candidates[decision.chosen].signature.kind,
+                    "HashedSubPlan" | "HashedExists"
+                )
+        });
+        if shown != hashed {
+            let trace = decisions
+                .iter()
+                .map(|decision| {
+                    format!(
+                        "{}:{}:{}",
+                        decision.chooser,
+                        decision.collection,
+                        decision.candidates[decision.chosen].signature.label()
+                    )
+                })
+                .collect::<Vec<_>>();
+            mismatches.push(format!(
+                "{sql}\n    EXPLAIN {plan:?}\n    hashed at execution: {hashed}\n    trace {trace:?}"
+            ));
+        }
+    }
+    assert!(
+        mismatches.is_empty(),
+        "{} subplan mismatches:\n{}",
+        mismatches.len(),
+        mismatches.join("\n")
+    );
+}

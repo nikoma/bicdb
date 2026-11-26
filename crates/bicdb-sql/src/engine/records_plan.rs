@@ -3614,14 +3614,20 @@ impl ExecutedAccess {
         // The route that fetched rows executed. A rule-based chooser that
         // declined (no index matched) hands the statement to the next route,
         // so it only decides when nothing fetched rows: the scan.
+        // Join and subplan method records describe other plan nodes.
+        let access = |decision: &&crate::plan_diagnostics::DecisionTrace| {
+            !matches!(decision.chooser, "join" | "subplan")
+        };
         let decision = decisions
             .iter()
             .rev()
+            .filter(access)
             .find(|decision| decision.rows_fetched.is_some())
             .or_else(|| {
                 decisions
                     .iter()
                     .rev()
+                    .filter(access)
                     .find(|decision| decision.chooser != "planner")
             })?;
         Some(Self {

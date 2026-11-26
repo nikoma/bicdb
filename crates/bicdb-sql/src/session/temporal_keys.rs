@@ -1143,11 +1143,22 @@ impl SqlSession<'_> {
 
 /// Whether any table's temporal foreign key references `table` (fast write paths that skip
 /// parent-side foreign-key work must not skip these).
+///
+/// Observes only `table`'s catalog row and the referencing tables' rows, as
+/// the equality foreign-key lookup does: a whole-catalog read would make
+/// every ordinary writer conflict with concurrent DDL on unrelated tables.
 pub(crate) fn has_inbound_temporal_foreign_keys(db: &BicDb, table: &str) -> Result<bool> {
-    Ok(list_schemas_shared(db)?.iter().any(|schema| {
-        schema
+    check_sql_catalog_read(db, SCHEMA_COLLECTION, Some(table))?;
+    let mut found = false;
+    for schema in schema_catalog_snapshot_shared(db)?.iter() {
+        if schema
             .temporal_foreign_keys
             .iter()
             .any(|foreign_key| foreign_key.foreign_table == table)
-    }))
+        {
+            check_sql_catalog_read(db, SCHEMA_COLLECTION, Some(&schema.name))?;
+            found = true;
+        }
+    }
+    Ok(found)
 }

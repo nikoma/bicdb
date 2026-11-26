@@ -113,6 +113,12 @@ fn count_relations(statement: &Statement) -> usize {
 }
 
 /// `quote_identifier`.
+/// An index's SQL name: storage encodes the indexes of tables outside
+/// `public` (including temporary tables) with their namespace.
+fn shown_index(name: &str) -> String {
+    logical_relation_name(name).unwrap_or_else(|| name.to_string())
+}
+
 fn quote_ident(name: &str) -> String {
     let plain = name
         .chars()
@@ -1423,13 +1429,13 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
                 let mut node = PlanNode::new("Index Scan").text_name(name);
                 node.target = format!(
                     " using {} on {shown_relation}{alias_text}",
-                    quote_ident(index)
+                    quote_ident(&shown_index(index))
                 );
                 node.head(
                     "Scan Direction",
                     Prop::Text(if *backward { "Backward" } else { "Forward" }.to_string()),
                 )
-                .head("Index Name", Prop::Text(index.clone()))
+                .head("Index Name", Prop::Text(shown_index(index)))
                 .head("Relation Name", Prop::Text(relname.clone()))
                 .head("Alias", Prop::Text(refname.clone()))
             }
@@ -1500,11 +1506,11 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
             let mut node = PlanNode::new("Index Scan");
             node.target = format!(
                 " using {} on {shown_relation}{alias_text}",
-                quote_ident(&lookup.index)
+                quote_ident(&shown_index(&lookup.index))
             );
             node = node
                 .head("Scan Direction", Prop::Text("Forward".to_string()))
-                .head("Index Name", Prop::Text(lookup.index.clone()))
+                .head("Index Name", Prop::Text(shown_index(&lookup.index)))
                 .head("Relation Name", Prop::Text(relname.to_string()))
                 .head("Alias", Prop::Text(refname.to_string()));
             if let Some(cond) = cond {
@@ -1522,8 +1528,8 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
         }
         node = self.with_filter(node, &quals, prefix)?;
         let mut child = PlanNode::new("Bitmap Index Scan");
-        child.target = format!(" on {}", quote_ident(&lookup.index));
-        child = child.head("Index Name", Prop::Text(lookup.index.clone()));
+        child.target = format!(" on {}", quote_ident(&shown_index(&lookup.index)));
+        child = child.head("Index Name", Prop::Text(shown_index(&lookup.index)));
         if let Some(cond) = cond {
             child = child.prop("Index Cond", cond);
         }
@@ -1588,8 +1594,8 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
         let mut children = Vec::new();
         for (source, index_quals) in probes {
             let mut child = PlanNode::new("Bitmap Index Scan");
-            child.target = format!(" on {}", quote_ident(&source.index));
-            child = child.head("Index Name", Prop::Text(source.index.clone()));
+            child.target = format!(" on {}", quote_ident(&shown_index(&source.index)));
+            child = child.head("Index Name", Prop::Text(shown_index(&source.index)));
             if let Some(text) = self.qual(&index_quals, prefix) {
                 child = child.prop("Index Cond", text);
             }

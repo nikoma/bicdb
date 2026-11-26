@@ -913,6 +913,17 @@ mod tests {
         let copy = parse_copy_statement("COPY t FROM STDOUT").unwrap().unwrap();
         assert_eq!(copy.endpoint, CopyEndpoint::Client);
         assert!(parse_copy_statement("COPY t FROM nowhere").is_err());
+        // The pre-9.0 `COPY BINARY table` form; a table named `binary`.
+        let copy = parse_copy_statement("COPY BINARY stud TO '/x'")
+            .unwrap()
+            .unwrap();
+        assert!(copy.binary);
+        assert_eq!(copy.relation.as_deref(), Some("stud"));
+        let copy = parse_copy_statement("COPY binary FROM STDIN")
+            .unwrap()
+            .unwrap();
+        assert_eq!(copy.relation.as_deref(), Some("binary"));
+        assert!(!copy.binary);
         // A table named `program` is still a table.
         let copy = parse_copy_statement("COPY program FROM STDIN")
             .unwrap()

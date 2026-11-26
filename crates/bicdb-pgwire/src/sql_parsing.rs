@@ -1804,11 +1804,25 @@ pub(crate) fn parse_copy_statement(sql: &str) -> Result<Option<CopyStatement>> {
     }
 
     let body = trimmed[4..].trim();
-    let (target, direction, after_direction) = split_copy_direction(body)?;
+    let (full_target, direction, after_direction) = split_copy_direction(body)?;
+    // The pre-9.0 form `COPY BINARY table ...`: BINARY followed by a name
+    // (a table that is itself named `binary` is followed by `(` or nothing).
+    let target = match full_target.get(6..) {
+        Some(rest)
+            if word_at(full_target, 0, "binary")
+                && rest.starts_with(char::is_whitespace)
+                && rest
+                    .trim_start()
+                    .starts_with(|ch: char| ch == '"' || is_identifier_char(ch)) =>
+        {
+            rest.trim_start()
+        }
+        _ => full_target,
+    };
     // The options follow the endpoint; a file name or command is a string
     // literal whose words (`/tmp/binary.csv`) must not be read as options.
     let (endpoint, options) = parse_copy_endpoint(after_direction)?;
-    let binary = contains_word(target, "binary") || contains_word(options, "binary");
+    let binary = target.len() != full_target.len() || contains_word(options, "binary");
     if contains_word(target, "freeze") || contains_word(options, "freeze") {
         return Err(PgWireError::Server(
             "this COPY variant is not supported by BicDB".to_string(),

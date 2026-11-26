@@ -296,7 +296,7 @@ impl<'db> SqlSession<'db> {
     /// lives in the session's temporary schema, which is created on first
     /// use and dropped with the session. Returns the statement with its name
     /// placed there, or `None` for a permanent table.
-    fn temporary_table_target(
+    pub(super) fn temporary_table_target(
         &mut self,
         create_table: &CreateTable,
     ) -> Result<Option<CreateTable>> {

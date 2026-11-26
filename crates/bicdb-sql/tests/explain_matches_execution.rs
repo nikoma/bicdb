@@ -557,6 +557,8 @@ const SUBPLAN_SHAPES: &[&str] = &[
     "SELECT id FROM t WHERE EXISTS (SELECT u.v FROM u WHERE u.tid = t.id) AND a = 9",
     "SELECT id FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.tid = t.id LIMIT 1) AND a = 9",
     "SELECT id FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.tid = t.id AND random() < 2) AND a = 9",
+    "SELECT id FROM t WHERE j @> '{\"k\": 3}'::jsonb AND a IN (SELECT x FROM u WHERE id < 50)",
+    "SELECT id FROM t WHERE arr @> ARRAY[3] AND EXISTS (SELECT 1 FROM u WHERE u.tid = t.id)",
 ];
 
 /// EXPLAIN names a SubPlan `hashed` exactly when execution probed the

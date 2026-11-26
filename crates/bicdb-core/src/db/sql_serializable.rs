@@ -21,6 +21,10 @@ struct Participant<Collection> {
     snapshot: u64,
     read_only: bool,
     committed: Option<u64>,
+    /// Prepared by PREPARE TRANSACTION: it will commit later than anything
+    /// else, its writes stay invisible to every snapshot, and it can no
+    /// longer be chosen to abort. `committed_writes` holds its footprint.
+    prepared: bool,
     doomed: bool,
     readers: BTreeSet<ParticipantId>,
     writers: BTreeSet<ParticipantId>,
@@ -82,7 +86,7 @@ impl KeyRange {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct WriteFootprint<Collection> {
     collection: Collection,
     record_key: Vec<u8>,
@@ -141,6 +145,14 @@ impl<Collection: Ord> PendingCommit<'_, Collection> {
         self.graph
             .did_commit(decision, std::mem::take(&mut self.writes));
     }
+
+    /// PREPARE TRANSACTION took this decision: apply its victims and keep
+    /// the participant as prepared instead of committed.
+    fn prepared(mut self) {
+        let decision = self.decision.take().unwrap();
+        self.graph
+            .did_prepare(decision, std::mem::take(&mut self.writes));
+    }
 }
 
 impl<Collection: Ord> Drop for PendingCommit<'_, Collection> {
@@ -172,6 +184,7 @@ impl<Collection: Ord> Dependencies<Collection> {
                     snapshot: self.order,
                     read_only,
                     committed: None,
+                    prepared: false,
                     doomed: false,
                     readers: BTreeSet::new(),
                     writers: BTreeSet::new(),
@@ -234,7 +247,8 @@ impl<Collection: Ord> Dependencies<Collection> {
             .participants
             .iter()
             .filter(|(_, writer)| {
-                writer.committed.is_some_and(|end| end > reader.snapshot)
+                // A prepared writer's rows are invisible to every snapshot.
+                (writer.committed.is_some_and(|end| end > reader.snapshot) || writer.prepared)
                     && writer
                         .committed_writes
                         .iter()
@@ -383,11 +397,16 @@ impl<Collection: Ord> Dependencies<Collection> {
                     }
                     // Prefer a live pivot. A committed pivot leaves its
                     // still-live reader as the participant that can retry.
-                    let victim = if pivot.committed.is_none() {
+                    // A prepared participant can no longer abort: the other
+                    // live member, or else the committing transaction, does.
+                    let victim = if pivot.committed.is_none() && !pivot.prepared {
                         pivot_id
-                    } else {
-                        assert!(reader.committed.is_none());
+                    } else if reader.committed.is_none() && !reader.prepared {
                         in_id
+                    } else if pivot_id == id || in_id == id || out_id == id {
+                        return None;
+                    } else {
+                        continue;
                     };
                     if victim == id {
                         return None;
@@ -415,8 +434,64 @@ impl<Collection: Ord> Dependencies<Collection> {
         }
         let participant = self.participants.get_mut(&decision.transaction).unwrap();
         participant.committed = Some(self.order);
+        participant.prepared = false;
         participant.committed_writes = writes;
         self.prune_finished();
+    }
+
+    /// The decision of a prepared participant's COMMIT PREPARED: it was
+    /// taken at PREPARE, so only its commit order remains to be assigned.
+    fn prepare_prepared_commit(&mut self, id: ParticipantId) -> PendingCommit<'_, Collection>
+    where
+        Collection: Clone,
+    {
+        let participant = &self.participants[&id];
+        assert!(participant.prepared && participant.committed.is_none());
+        let writes = participant.committed_writes.clone();
+        let order = self.order + 1;
+        PendingCommit {
+            graph: self,
+            transaction: id,
+            added_readers: Vec::new(),
+            decision: Some(CommitDecision {
+                transaction: id,
+                order,
+                victims: BTreeSet::new(),
+            }),
+            writes,
+        }
+    }
+
+    fn did_prepare(&mut self, decision: CommitDecision, writes: Vec<WriteFootprint<Collection>>) {
+        assert_eq!(
+            decision.order,
+            self.order + 1,
+            "prepare decision was superseded"
+        );
+        self.order = decision.order;
+        for victim in decision.victims {
+            self.participants.get_mut(&victim).unwrap().doomed = true;
+        }
+        let participant = self.participants.get_mut(&decision.transaction).unwrap();
+        participant.prepared = true;
+        participant.committed_writes = writes;
+        self.prune_finished();
+    }
+
+    /// A prepared participant restored after a restart. Its read set was not
+    /// persisted, so the caller supplies a conservative one.
+    fn restore_prepared(
+        &mut self,
+        id: ParticipantId,
+        read_scopes: BTreeSet<ReadScope<Collection>>,
+        writes: Vec<WriteFootprint<Collection>>,
+    ) {
+        self.begin(id, false);
+        let participant = self.participants.get_mut(&id).unwrap();
+        participant.prepared = true;
+        participant.read_scopes = read_scopes;
+        participant.committed_writes = writes;
+        self.order += 1;
     }
 
     fn abort(&mut self, id: ParticipantId) {
@@ -733,4 +808,61 @@ fn a_deferrable_snapshot_retries_when_an_overlapping_writer_has_an_earlier_out_c
             assert_eq!(graph.snapshot_safety(&snapshot), SnapshotSafety::Safe);
         }
     }
+}
+
+#[test]
+fn a_prepared_pivot_is_never_the_victim() {
+    // 2 reads what 1 writes (2 -> 1), and 1 is prepared after reading what 3
+    // writes (1 -> 3). When 3 commits first, the structure 2 -> 1 -> 3 must
+    // abort 2 (the live reader), never the prepared 1.
+    let mut graph = Dependencies::<u64>::default();
+    graph.begin(1, false);
+    graph.begin(2, false);
+    graph.begin(3, false);
+    graph.observe(1, 3);
+    graph
+        .prepare_write_commit(1, Vec::new())
+        .unwrap()
+        .prepared();
+    graph.observe(2, 1);
+    let decision = graph.prepare_commit(3).unwrap();
+    assert_eq!(decision.victims, BTreeSet::from([2]));
+    graph.did_commit(decision, Vec::new());
+    assert!(!graph.participants[&1].doomed);
+    graph.prepare_prepared_commit(1).committed();
+    assert!(graph.participants[&2].doomed);
+}
+
+#[test]
+fn a_prepared_write_is_invisible_to_a_later_snapshot() {
+    let mut graph = Dependencies::default();
+    graph.begin(1, false);
+    graph
+        .prepare_write_commit(1, vec![write_footprint(1, "42")])
+        .unwrap()
+        .prepared();
+    graph.begin(2, false);
+    graph.observe_read(2, record_scope(1, "42"));
+    assert_eq!(graph.participants[&2].writers, BTreeSet::from([1]));
+}
+
+#[test]
+fn a_committer_aborts_when_only_prepared_members_could() {
+    // 1 (prepared) reads what 2 writes; 2 reads what 3 writes; 2 is
+    // prepared too. 3 committing closes 1 -> 2 -> 3: 3 itself must abort.
+    let mut graph = Dependencies::<u64>::default();
+    graph.begin(1, false);
+    graph.begin(2, false);
+    graph.begin(3, false);
+    graph.observe(1, 2);
+    graph.observe(2, 3);
+    graph
+        .prepare_write_commit(1, Vec::new())
+        .unwrap()
+        .prepared();
+    graph
+        .prepare_write_commit(2, Vec::new())
+        .unwrap()
+        .prepared();
+    assert!(graph.prepare_commit(3).is_none());
 }

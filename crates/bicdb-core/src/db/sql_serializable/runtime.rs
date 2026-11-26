@@ -100,6 +100,13 @@ impl SerializableCommit<'_> {
         tx.postgres_serializable.as_mut().unwrap().active = false;
         self.changed.notify_all();
     }
+
+    /// PREPARE TRANSACTION: the participant stays registered (and active)
+    /// as prepared until COMMIT/ROLLBACK PREPARED.
+    pub(in crate::db) fn prepared(self) {
+        self.pending.prepared();
+        self.changed.notify_all();
+    }
 }
 
 impl CommitRegistry<'_> {
@@ -109,6 +116,18 @@ impl CommitRegistry<'_> {
         tx: &Transaction,
         mutations: &BTreeMap<String, Vec<IndexRecordMutation>>,
     ) -> Result<SerializableCommit<'_>> {
+        if self
+            .guard
+            .participants
+            .get(&tx.id.0)
+            .is_some_and(|participant| participant.prepared)
+        {
+            // COMMIT PREPARED: decided at PREPARE TRANSACTION.
+            return Ok(SerializableCommit {
+                pending: self.guard.prepare_prepared_commit(tx.id.0),
+                changed: &self.registry.changed,
+            });
+        }
         let writes = db.postgres_write_footprints(mutations)?;
         let pending = self
             .guard
@@ -127,6 +146,45 @@ impl CommitRegistry<'_> {
 }
 
 impl BicDb {
+    /// Re-register a prepared PostgreSQL Serializable transaction restored at
+    /// open. Its read set was not persisted: it is taken to have read every
+    /// collection, and to have written each of its rows under any index key.
+    pub(in crate::db) fn restore_prepared_serializable(
+        &self,
+        id: u64,
+        written: &[(String, String)],
+    ) -> Result<Registration> {
+        let mut read_scopes = BTreeSet::new();
+        for state in self.collections.values() {
+            read_scopes.insert(ReadScope {
+                collection: CollectionIdentity(Arc::clone(&state.read().incarnation)),
+                keys: ReadKeys::Relation,
+            });
+        }
+        let mut writes = Vec::new();
+        for (collection, record) in written {
+            writes.push(WriteFootprint {
+                collection: CollectionIdentity(Arc::clone(
+                    &self.collection_state(collection)?.incarnation,
+                )),
+                record_key: record.as_bytes().to_vec(),
+                // Absent index entries intersect every index read.
+                index_keys: BTreeMap::new(),
+            });
+        }
+        let registry = Arc::clone(&self.postgres_serializable);
+        registry
+            .dependencies
+            .lock()
+            .restore_prepared(id, read_scopes, writes);
+        Ok(Registration {
+            registry,
+            id,
+            read_only: false,
+            active: true,
+        })
+    }
+
     pub(in crate::db) fn postgres_commit_registry(
         &self,
         tx: &Transaction,

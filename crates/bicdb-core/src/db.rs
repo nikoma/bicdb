@@ -231,6 +231,7 @@ pub(crate) use range_image_native::ClosedImageOriginalWriter;
 mod read_committed_reservation;
 mod record_read_snapshot;
 pub use record_read_snapshot::RecordReadSnapshot;
+mod prepared_transactions;
 mod row_lock_waiters;
 mod spatial_paged;
 mod sql_serializable;
@@ -241,6 +242,10 @@ pub use read_committed_reservation::ReadCommittedRowReservation;
 mod wait_graph;
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use parking_lot::{Condvar, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
+pub use prepared_transactions::{
+    configured_max_prepared_transactions, PreparedTransaction, PreparedTransactionRequester,
+    PREPARED_XACTS_COLLECTION,
+};
 use rust_decimal::Decimal;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::cmp::Ordering;
@@ -611,6 +616,9 @@ pub struct DbConfig {
     /// bounded makes file descriptors and merge memory independent of input
     /// size.
     pub query_merge_fan_in: usize,
+    /// PostgreSQL's `max_prepared_transactions`; 0 (the default) disables
+    /// PREPARE TRANSACTION. `BICDB_MAX_PREPARED_TRANSACTIONS` overrides it.
+    pub max_prepared_transactions: usize,
     /// Fold the transaction log into segments automatically once it grows past
     /// this many bytes (0 disables). Every write appends to the log and every
     /// open replays it, so an embedded store that is never compacted grows its
@@ -1467,6 +1475,7 @@ impl Default for DbConfig {
             query_temp_space_bytes: query_temp_space_bytes_default(),
             query_server_temp_space_bytes: query_server_temp_space_bytes_default(),
             query_merge_fan_in: query_merge_fan_in_default(),
+            max_prepared_transactions: 0,
             auto_checkpoint_wal_bytes: auto_checkpoint_wal_bytes_default(),
         }
     }
@@ -4266,6 +4275,8 @@ pub struct BicDb {
     // serializable validator observes a stable database through its apply.
     serializable_commit_admission: RwLock<()>,
     postgres_serializable: Arc<sql_serializable::SerializableTransactions>,
+    /// PREPARE TRANSACTION state (db/prepared_transactions.rs).
+    prepared_xacts: Arc<prepared_transactions::Registry>,
     /// Set while an automatic checkpoint runs, so concurrent committers that
     /// also see a large log do not start a second one.
     auto_checkpoint_running: AtomicBool,
@@ -9835,6 +9846,10 @@ pub struct Transaction {
         crate::distribution_range_consensus::NativePrepareOnlyRejection,
     )>,
     committed_seq: Option<u64>,
+    // PREPARE TRANSACTION moved this transaction's locks, reservations,
+    // catalog observations and serializable participant into the prepared
+    // registry: drop must release none of them.
+    prepared_detached: bool,
     // Paged mode: the page-store snapshot captured when this transaction began,
     // used to read rows a lazy collection has never touched this session (they
     // have no shard entry to consult). Capturing at begin rather than at each
@@ -11909,6 +11924,7 @@ impl BicDb {
             unique_reservation_indexes: RwLock::new(None),
             serializable_commit_admission: RwLock::new(()),
             postgres_serializable: Arc::default(),
+            prepared_xacts: Arc::default(),
             auto_checkpoint_running: AtomicBool::new(false),
             commit_lock: Mutex::new(()),
             flashback_clock: Mutex::new(flashback::FlashbackClock::default()),
@@ -11942,6 +11958,7 @@ impl BicDb {
         db.flashback_after_open()?;
         db.verify_after_durability_failure()?;
         db.finish_decimal_predicate_upgrade()?;
+        db.restore_prepared_transactions()?;
         db.auto_checkpoint_if_due();
         Ok(db)
     }
@@ -13852,6 +13869,12 @@ impl BicDb {
     ) -> Result<()> {
         self.ensure_writable("change collection mesh authorization")?;
         validate_collection_name(collection)?;
+        if enabled && prepared_transactions::is_prepared_xacts_collection(collection) {
+            // Prepare records are other transactions' pending write sets.
+            return Err(BicDbError::Authorization(format!(
+                "internal collection `{collection}` cannot be mesh-enabled"
+            )));
+        }
         let state = self.collection_state_mut(collection)?;
         if enabled && state.meta.policy.is_some() {
             return Err(BicDbError::Authorization(format!(
@@ -20855,6 +20878,12 @@ fn release_owned_write_locks(
 
 impl Drop for Transaction {
     fn drop(&mut self) {
+        if self.prepared_detached {
+            // Everything but the read snapshot belongs to the prepared
+            // registry now (see db/prepared_transactions.rs).
+            self.active_snapshots.decr_remove(self.snapshot_tx.0);
+            return;
+        }
         if self.state == TxState::Pending {
             // An admitted native command is irrevocable even if local WAL
             // never started. Do not publish a false aborted receipt on drop.

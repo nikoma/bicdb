@@ -926,6 +926,11 @@ impl BicDb {
                 // them would record every tracked change twice.
                 continue;
             }
+            if prepared_transactions::is_prepared_xacts_collection(collection) {
+                // A prepare record restates a pending write set; its data is
+                // audited when COMMIT PREPARED commits it.
+                continue;
+            }
             let collection_mode = self.collection_state(collection)?.meta.mode.clone();
             for mutation in mutations {
                 match (mutation.old_record.record()?, mutation.new_record.record()?) {
@@ -983,6 +988,10 @@ impl BicDb {
         let timestamp = unix_timestamp();
         let mut ops = Vec::new();
         for (collection, mutations) in index_mutations_by_collection {
+            if prepared_transactions::is_prepared_xacts_collection(collection) {
+                // Prepare records are local transaction state, never data.
+                continue;
+            }
             for mutation in mutations {
                 match (mutation.old_record.record()?, mutation.new_record.record()?) {
                     (_, Some(record)) => {

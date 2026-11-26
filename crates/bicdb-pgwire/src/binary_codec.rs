@@ -2639,12 +2639,14 @@ pub(crate) fn try_listen_notify_statement(
         if let Ok(mut bus) = server.notifications.lock() {
             bus.listen(state.connection_id, &channel);
         }
+        state.tx_listen_changed |= state.in_transaction;
         return Ok(Some("LISTEN"));
     }
     if upper == "UNLISTEN *" {
         if let Ok(mut bus) = server.notifications.lock() {
             bus.unlisten(state.connection_id, None);
         }
+        state.tx_listen_changed |= state.in_transaction;
         return Ok(Some("UNLISTEN"));
     }
     if let Some(rest) = upper
@@ -2655,6 +2657,7 @@ pub(crate) fn try_listen_notify_statement(
         if let Ok(mut bus) = server.notifications.lock() {
             bus.unlisten(state.connection_id, Some(&channel));
         }
+        state.tx_listen_changed |= state.in_transaction;
         return Ok(Some("UNLISTEN"));
     }
     if upper.starts_with("NOTIFY ") {

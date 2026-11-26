@@ -100,6 +100,7 @@ pub use string_constants::{
     normalize_client_string_constants, normalize_client_string_constants_with_warnings,
 };
 mod table_queries;
+pub mod two_phase;
 pub use identity::{
     bicdb_version_banner, postgres_version_banner, BICDB_VERSION, POSTGRES_COMPATIBILITY_VERSION,
     POSTGRES_COMPATIBILITY_VERSION_NUM,
@@ -2697,6 +2698,9 @@ impl SqlError {
             Self::BicDb(BicDbError::CollectionNotFound(collection)) => {
                 vec![SqlErrorField::Table(collection.clone())]
             }
+            Self::BicDb(BicDbError::PreparedTransaction { hint, .. }) => {
+                hint.iter().cloned().map(SqlErrorField::Hint).collect()
+            }
             Self::BicDb(BicDbError::ReadOnlyStandby(message)) => {
                 bicdb_core::read_only_standby_hint(message)
                     .map(SqlErrorField::Hint)
@@ -2753,6 +2757,7 @@ fn bicdb_error_sqlstate(error: &BicDbError) -> &'static str {
         BicDbError::ReadOnlyStandby(_) => "25006",
         BicDbError::QueryCanceled | BicDbError::QueryTimedOut => "57014",
         BicDbError::Flashback(message) => bicdb_core::flashback_error_sqlstate(message),
+        BicDbError::PreparedTransaction { sqlstate, .. } => sqlstate,
         BicDbError::EmptyRecordId
         | BicDbError::EmptyVector
         | BicDbError::NonFiniteVectorValue

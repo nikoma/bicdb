@@ -933,7 +933,26 @@ impl BicDb {
             self.active_snapshots.decr_remove(snapshot_tx.0);
             return Err(error);
         }
-        Ok(Transaction {
+        Ok(self.new_transaction_value(
+            tx_id,
+            snapshot_tx,
+            applied_watermark,
+            collection_incarnations,
+            catalog_actor_scope,
+        ))
+    }
+
+    /// The value of a registered, pending transaction. Also used to resume a
+    /// prepared transaction under its original id (db/prepared_transactions.rs).
+    pub(super) fn new_transaction_value(
+        &self,
+        tx_id: TransactionId,
+        snapshot_tx: TransactionId,
+        applied_watermark: u64,
+        collection_incarnations: Arc<catalog_admission::Bindings>,
+        catalog_actor_scope: Option<u64>,
+    ) -> Transaction {
+        Transaction {
             db: NonNull::from(self),
             id: tx_id,
             snapshot_tx,
@@ -998,12 +1017,13 @@ impl BicDb {
             native_prepare_only_rejection: None,
             native_uncertain_admission: None,
             committed_seq: None,
+            prepared_detached: false,
             paged_snapshot: self
                 .paged_records
                 .as_ref()
                 .map(|paged| paged.latest_snapshot()),
             _not_send: PhantomData,
-        })
+        }
     }
 
     pub fn snapshot(&self) -> Result<DbSnapshot> {

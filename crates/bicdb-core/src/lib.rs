@@ -216,6 +216,10 @@ pub use db::{
     TransactionSuspension,
 };
 pub use db::{
+    configured_max_prepared_transactions, PreparedTransaction, PreparedTransactionRequester,
+    PREPARED_XACTS_COLLECTION,
+};
+pub use db::{
     decode_fts_posting_payload, decode_fts_posting_payload_into, fts_impact_bucket,
     fts_impact_bucket_upper_edge, fts_rank_conjunctive, fts_rank_single_term,
     full_text_oversized_terms_skipped, full_text_term_is_indexable, paged_tid_hint_stats,

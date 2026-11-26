@@ -60,6 +60,8 @@ pub(crate) fn is_internal_sql_collection(name: &str) -> bool {
         || crate::session::is_catalog_journal_collection(name)
         || bicdb_core::is_flashback_history_collection(name)
         || crate::session::is_recycle_bin_name(name)
+        // Durable prepare records hold other transactions' pending writes.
+        || name == bicdb_core::PREPARED_XACTS_COLLECTION
 }
 
 pub(crate) fn require_user_relation_name(name: &str) -> Result<()> {

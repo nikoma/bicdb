@@ -485,6 +485,7 @@ pub(crate) fn bicdb_error_sqlstate(error: &BicDbError) -> &'static str {
         BicDbError::QueryMemoryLimit(_) => "53200",
         BicDbError::QueryCanceled | BicDbError::QueryTimedOut => "57014",
         BicDbError::Flashback(message) => bicdb_core::flashback_error_sqlstate(message),
+        BicDbError::PreparedTransaction { sqlstate, .. } => sqlstate,
         BicDbError::EmptyRecordId
         | BicDbError::EmptyVector
         | BicDbError::NonFiniteVectorValue
@@ -502,6 +503,9 @@ pub(crate) fn bicdb_error_fields(error: &BicDbError) -> Vec<SqlErrorField> {
         }
         BicDbError::UniqueIndexConflict { index } => {
             vec![SqlErrorField::Constraint(index.clone())]
+        }
+        BicDbError::PreparedTransaction { hint, .. } => {
+            hint.iter().cloned().map(SqlErrorField::Hint).collect()
         }
         BicDbError::ReadOnlyStandby(message) => bicdb_core::read_only_standby_hint(message)
             .map(SqlErrorField::Hint)

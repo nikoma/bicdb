@@ -120,6 +120,10 @@ struct Cli {
     /// Print resolved, redacted startup options without starting the server.
     #[arg(long, global = true)]
     print_effective_config: bool,
+    /// PostgreSQL `max_prepared_transactions` (default 0: PREPARE TRANSACTION
+    /// is disabled). Fixed for the life of the server.
+    #[arg(long, global = true, value_name = "N")]
+    max_prepared_transactions: Option<usize>,
     #[arg(long, value_name = "PATH", num_args = 0..=1, default_missing_value = ".")]
     tui: Option<PathBuf>,
     #[arg(long = "tui-key")]
@@ -5932,6 +5936,9 @@ fn main() -> Result<()> {
                 host_services,
             } = prepare_server_command(command)?;
             config.database_options = engine_options;
+            if let Some(max) = cli.max_prepared_transactions {
+                config.database_options.max_prepared_transactions = Some(max);
+            }
             config.validate()?;
             let mut report =
                 effective_configuration.context("missing resolved server configuration")?;

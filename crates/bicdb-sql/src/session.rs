@@ -1295,6 +1295,11 @@ pub struct SqlSessionGucState {
 }
 
 impl SqlSessionGucState {
+    /// A WITH HOLD cursor was declared in the open transaction block.
+    pub fn has_transaction_hold_cursor(&self) -> bool {
+        self.sql_cursors.has_uncommitted_holdable()
+    }
+
     pub fn from_session_gucs(session_gucs: HashMap<String, String>) -> Self {
         let mut session_gucs = session_gucs;
         strip_protected_security_settings(&mut session_gucs);
@@ -3138,13 +3143,13 @@ impl<'db> SqlSession<'db> {
             .with_datestyle(self.session_gucs.get("datestyle").map(String::as_str))
     }
 
-    fn commit_guc_transaction(&mut self) {
+    pub(crate) fn commit_guc_transaction(&mut self) {
         let mut state = self.take_session_guc_state();
         state.commit_transaction();
         self.install_session_guc_state(state);
     }
 
-    fn rollback_guc_transaction(&mut self) {
+    pub(crate) fn rollback_guc_transaction(&mut self) {
         let mut state = self.take_session_guc_state();
         state.rollback_transaction();
         self.install_session_guc_state(state);
@@ -3912,6 +3917,9 @@ impl<'db> SqlSession<'db> {
         self.cancellation.check()?;
         if sql_has_no_statements(sql) {
             return Ok(SqlResult::empty(Vec::new()));
+        }
+        if let Some(command) = crate::two_phase::parse_two_phase_command(sql)? {
+            return self.execute_two_phase(command);
         }
         if leading_keyword_bypasses_raw_probes(sql) {
             return self.execute_parsed_sql(sql);
@@ -6848,6 +6856,7 @@ impl<'db> SqlSession<'db> {
                 Ok(())
             }
             "role" => self.apply_set_role("none"),
+            "max_prepared_transactions" => Err(restart_only_setting(&setting)),
             "session_authorization" => self.apply_set_session_authorization(None),
             INITIAL_SESSION_AUTHORIZATION_GUC
             | RLS_CHECK_AS_GUC
@@ -7823,4 +7832,14 @@ pub(crate) fn statement_is_plain_query(statement: &Statement) -> bool {
         }
     }
     plain(query)
+}
+
+/// PostgreSQL's error for a postmaster-context setting such as
+/// `max_prepared_transactions`.
+pub(crate) fn restart_only_setting(setting: &str) -> SqlError {
+    SqlError::data_exception(
+        "55P02",
+        format!("parameter \"{setting}\" cannot be changed without restarting the server"),
+        None,
+    )
 }

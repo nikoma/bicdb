@@ -291,6 +291,16 @@ pub(super) struct CatalogAdmission {
 }
 
 impl CatalogAdmission {
+    /// Pin `collection` for a prepared transaction restored at open, exactly
+    /// as its own write had pinned it before the restart.
+    pub(super) fn bind_restored(
+        bindings: &Bindings,
+        collection: &str,
+        incarnation: Arc<()>,
+    ) -> Result<()> {
+        Self::remember(bindings, collection, incarnation)
+    }
+
     fn has_overlapping_children(&self, state: &State, serial: u64) -> bool {
         let Some(target) = state.scopes.get(&serial) else {
             return false;

@@ -1056,7 +1056,9 @@ pub(crate) fn transaction_end(sql: &str, normalized: &str) -> Result<Option<Tran
     if !matches!(
         normalized.split_whitespace().next(),
         Some("commit" | "end" | "rollback" | "abort")
-    ) {
+    ) || normalized.split_whitespace().nth(1) == Some("prepared")
+    {
+        // COMMIT/ROLLBACK PREPARED finish another transaction (two_phase.rs).
         return Ok(None);
     }
     let rewritten;

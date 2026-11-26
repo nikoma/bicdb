@@ -97,15 +97,15 @@ fn temporal_key_and_foreign_key_violations_show_the_keys() {
 fn exclusion_violations_show_the_keys_in_declared_order() {
     let dir = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(dir.path()).unwrap();
+    run(&mut db, "CREATE TABLE r (room int, during int4range)");
     run(
         &mut db,
-        "CREATE TABLE r (room int, during int4range, \
-         CONSTRAINT r_excl EXCLUDE USING gist (room WITH =, during WITH &&))",
+        "ALTER TABLE r ADD CONSTRAINT r_excl EXCLUDE USING gist (room WITH =, during WITH &&)",
     );
+    run(&mut db, "CREATE TABLE r2 (room int, during int4range)");
     run(
         &mut db,
-        "CREATE TABLE r2 (room int, during int4range, \
-         CONSTRAINT r2_excl EXCLUDE USING gist (during WITH &&, room WITH =))",
+        "ALTER TABLE r2 ADD CONSTRAINT r2_excl EXCLUDE USING gist (during WITH &&, room WITH =)",
     );
     run(&mut db, "INSERT INTO r VALUES (1, '[1,5)')");
     run(&mut db, "INSERT INTO r2 VALUES (1, '[1,5)')");
@@ -134,5 +134,42 @@ fn exclusion_violations_show_the_keys_in_declared_order() {
         "23P01",
         "could not create exclusion constraint \"r3_excl\"",
         "Key (room, during)=(1, [1,5)) conflicts with key (room, during)=(1, [3,8)).",
+    );
+}
+
+#[test]
+fn exclusion_checks_see_the_transactions_own_writes() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    run(
+        &mut db,
+        "CREATE TABLE p (id int4range, valid_at daterange, \
+         CONSTRAINT p_pk PRIMARY KEY (id, valid_at WITHOUT OVERLAPS))",
+    );
+    run(
+        &mut db,
+        "INSERT INTO p VALUES ('[1,2)', '[2018-01-01,2018-02-01)')",
+    );
+    let mut sql = SqlSession::new(&mut db);
+    // A row inserted earlier in the transaction conflicts with a later one.
+    sql.execute("BEGIN; INSERT INTO p VALUES ('[2,3)', '[2018-01-01,2018-02-01)')")
+        .unwrap();
+    assert_eq!(
+        sql.execute("INSERT INTO p VALUES ('[2,3)', '[2018-01-15,2018-03-01)')")
+            .unwrap_err()
+            .sqlstate(),
+        "23P01"
+    );
+    sql.execute("ROLLBACK").unwrap();
+    // A row deleted earlier in the transaction no longer conflicts.
+    sql.execute(
+        "BEGIN; DELETE FROM p; \
+         INSERT INTO p VALUES ('[1,2)', '[2018-01-15,2018-03-01)'); COMMIT",
+    )
+    .unwrap();
+    drop(sql);
+    assert_eq!(
+        failure(&mut db, "INSERT INTO p VALUES ('[1,2)', '[2018-02-01,2018-02-02)')").0,
+        "23P01"
     );
 }

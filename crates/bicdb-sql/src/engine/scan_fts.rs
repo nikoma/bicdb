@@ -473,6 +473,16 @@ impl<'db> SqlEngine<'db> {
         // The same SELECT privilege (or column grants) every read path takes.
         self.require_relation_privilege(&plan.collection, "SELECT")?;
         self.check_cancellation()?;
+        // One read of one index, under that index's read lock. A commit
+        // applies all of its mutations to an index under one write-lock
+        // acquisition (`commit_snapshot.rs`, the per-index guard around its
+        // mutation loop), so this read sees every change of a commit or none:
+        // the index's committed state at one instant between commits. Under
+        // read committed with no writes of its own (checked by the plan),
+        // that is a state the statement may see, so a commit landing between
+        // the statement's start and this read only moves the answer to a
+        // later valid instant, as it would for the row path's own reads.
+        // (Argued from the code; no test injects a commit between the two.)
         let count = self
             .db_ref()
             .lookup_index_rowids(&plan.index, &plan.prefix)?

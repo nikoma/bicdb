@@ -1655,6 +1655,28 @@ pub(crate) fn postgres_view_definition(definition: &str) -> String {
     }
 }
 
+/// Whether `text` closes every parenthesis it opens, outside quotes.
+fn balanced_parentheses(text: &str) -> bool {
+    let mut depth = 0i64;
+    let mut quote: Option<char> = None;
+    for ch in text.chars() {
+        match (quote, ch) {
+            (Some(open), ch) if ch == open => quote = None,
+            (Some(_), _) => {}
+            (None, '\'' | '"') => quote = Some(ch),
+            (None, '(') => depth += 1,
+            (None, ')') => {
+                depth -= 1;
+                if depth < 0 {
+                    return false;
+                }
+            }
+            _ => {}
+        }
+    }
+    depth == 0 && quote.is_none()
+}
+
 /// PostgreSQL's layout of a view definition (`pg_get_viewdef`) for a plain
 /// single-table SELECT: ` SELECT a,\n    b\n   FROM t\n  WHERE ...;`. Other
 /// shapes keep their stored text.
@@ -1680,7 +1702,11 @@ fn pretty_simple_view_definition(definition: &str) -> Option<String> {
             return None;
         }
         let (start, end) = (offset(span.start)?, offset(span.end)?);
-        (start < end).then(|| definition[start..end].trim().to_string())
+        let text = (start < end).then(|| definition[start..end].trim().to_string())?;
+        // Some nodes' spans leave out their own parentheses (a nested join
+        // `(a CROSS JOIN b)`); such a slice is not valid SQL, so the stored
+        // text is kept instead.
+        balanced_parentheses(&text).then_some(text)
     };
     let [Statement::Query(query)] = statements.as_slice() else {
         return None;

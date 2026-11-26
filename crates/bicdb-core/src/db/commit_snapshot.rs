@@ -2046,9 +2046,19 @@ impl BicDb {
             );
         }
 
+        let average_row_bytes = if sampled.is_empty() {
+            0
+        } else {
+            let bytes: usize = sampled
+                .iter()
+                .map(|record| serde_json::to_vec(&record.metadata).map_or(0, |bytes| bytes.len()))
+                .sum();
+            (bytes / sampled.len()).max(1)
+        };
         Ok(TableStatistics {
             collection: collection.to_string(),
             row_count: total_rows,
+            average_row_bytes,
             columns,
             indexes,
             analyzed_at_unix_ms: unix_timestamp_millis(),

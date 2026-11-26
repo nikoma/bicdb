@@ -25,6 +25,7 @@ fn explained(session: &mut SqlSession<'_>, sql: &str) -> (String, Option<String>
     let in_list = lines.iter().any(|line| line.starts_with("InListKeys"));
     let kind = match head {
         "IndexScan" if in_list => "IndexInLookup",
+        "IndexOnlyScan" => "IndexOnlyCount",
         "IndexScan" => "IndexLookup",
         "IndexRangeScan" => "IndexRange",
         "IndexPrefixOrderedScan" => "IndexPrefixOrderedScan",
@@ -290,6 +291,7 @@ fn pg_nodes_for(
         "IndexLookup" | "IndexRange" | "IndexPrefixOrderedScan" | "OrderedIndexScan" => {
             vec![("Index Scan".into(), signature.index.clone())]
         }
+        "IndexOnlyCount" => vec![("Index Only Scan".into(), signature.index.clone())],
         "JsonbIndexScan" | "ArrayIndexScan" | "GeometricIndexScan" | "SpatialIndexScan"
         | "FullTextIndexScan" | "TrigramIndexScan" => bitmap(signature.index.clone()),
         other => vec![(other.to_string(), signature.index.clone())],
@@ -622,4 +624,74 @@ fn postgres_layout_names_hashed_subplans_as_executed() {
         mismatches.len(),
         mismatches.join("\n")
     );
+}
+
+/// An index-only `count(*)` (index entries counted, no row read) shows as an
+/// Index Only Scan exactly when it runs, and counts what the row path counts.
+#[test]
+fn postgres_layout_names_index_only_counts_as_executed() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    setup(&mut db);
+    let shapes: &[(&str, &str)] = &[
+        ("SELECT count(*) FROM t WHERE a = 3", "a + 0 = 3"),
+        (
+            "SELECT count(*) FROM t WHERE a = 0 AND b = 2",
+            "a + 0 = 0 AND b + 0 = 2",
+        ),
+        (
+            "SELECT count(*) FROM t WHERE b = 2 AND a = 9",
+            "a + 0 = 9 AND b + 0 = 2",
+        ),
+        ("SELECT count(*) AS n FROM t WHERE d = 17", "d + 0 = 17"),
+        (
+            "SELECT count(*) FROM t WHERE a = 3 AND d = 2",
+            "a + 0 = 3 AND d + 0 = 2",
+        ),
+        ("SELECT count(*) FROM t WHERE c = 'x5'", "c || '' = 'x5'"),
+        (
+            "SELECT count(*) FROM t WHERE a = 3000000000",
+            "a + 0 = 3000000000",
+        ),
+        ("SELECT count(*) FROM t WHERE id = 7", "id + 0 = 7"),
+    ];
+    let mut mismatches = Vec::new();
+    for condition in ["no stats", "pending writes"] {
+        for (sql, unindexed) in shapes {
+            let mut session = SqlSession::new(&mut db);
+            if condition == "pending writes" {
+                session.execute("BEGIN").unwrap();
+                session
+                    .execute("INSERT INTO t VALUES (100000, 3, 2, 'new', 17, 5, point(1, 1), '{\"k\": 3}', ARRAY[3])")
+                    .unwrap();
+            }
+            let plan = session
+                .execute(&format!("EXPLAIN (COSTS OFF) {sql}"))
+                .unwrap()
+                .rows
+                .into_iter()
+                .map(|row| row[0].to_cell())
+                .collect::<Vec<_>>();
+            let shown = plan.iter().any(|line| line.contains("Index Only Scan"));
+            let (result, decisions) =
+                with_plan_diagnostics(DiagnosticsOptions::default(), || session.execute(sql));
+            let got = result.unwrap().rows;
+            let executed = decisions.iter().any(|decision| {
+                decision.candidates[decision.chosen].signature.kind == "IndexOnlyCount"
+            });
+            let expected = session
+                .execute(&format!("SELECT count(*) FROM t WHERE {unindexed}"))
+                .unwrap()
+                .rows;
+            if condition == "pending writes" {
+                session.execute("ROLLBACK").unwrap();
+            }
+            if shown != executed || got != expected {
+                mismatches.push(format!(
+                    "[{condition}] {sql}: EXPLAIN index-only {shown}, executed {executed}, rows {got:?} vs {expected:?}\n    {plan:?}"
+                ));
+            }
+        }
+    }
+    assert!(mismatches.is_empty(), "{}", mismatches.join("\n"));
 }

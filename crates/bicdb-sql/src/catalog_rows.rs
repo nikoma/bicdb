@@ -730,6 +730,21 @@ pub(crate) fn pg_class_rows_filtered(
             .or_else(|| view_owners.get(&table_key).cloned())
             .unwrap_or_else(current_role_name);
         row.insert("relowner".to_string(), SqlValue::Int(role_oid(&owner)));
+        // ANALYZE's size estimate in 8 KB pages, as PostgreSQL's ANALYZE
+        // records it.
+        if let Some(pages) = db
+            .table_statistics(&table)
+            .and_then(|stats| stats.estimated_pages())
+        {
+            row.insert(
+                "relpages".to_string(),
+                SqlValue::Int(
+                    i64::try_from(pages)
+                        .unwrap_or(i64::from(i32::MAX))
+                        .min(i64::from(i32::MAX)),
+                ),
+            );
+        }
         if table_schema.is_some_and(|schema| schema.unlogged) {
             row.insert("relpersistence".to_string(), SqlValue::String("u".into()));
         }

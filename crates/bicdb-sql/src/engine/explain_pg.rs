@@ -1537,6 +1537,65 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
         Ok(node.child("Outer", child))
     }
 
+    /// `Aggregate` over the `Index Only Scan` of an index-only `count(*)`:
+    /// every qualification is an index condition.
+    fn index_only_count_scan(
+        &mut self,
+        name: &ObjectName,
+        alias: Option<&TableAlias>,
+        plan: &crate::engine::IndexOnlyCount,
+        quals: Vec<Expr>,
+        select: &Select,
+    ) -> Result<PlanNode> {
+        let relname = relation_default_alias(name);
+        let refname = self.refname(&relname, alias.map(|alias| alias.name.value.as_str()));
+        let columns = self.table_columns(&plan.collection)?;
+        self.scopes.last_mut().expect("scope").push(Rel {
+            refname: refname.clone(),
+            columns,
+        });
+        let prefix = self.verbose;
+        let shown_relation = if self.verbose {
+            format!("public.{}", quote_ident(&relname))
+        } else {
+            quote_ident(&relname)
+        };
+        let alias_text = if refname != relname {
+            format!(" {}", quote_ident(&refname))
+        } else {
+            String::new()
+        };
+        // Index conditions in index column order.
+        let mut ordered = Vec::new();
+        for column in &plan.columns {
+            for qual in &quals {
+                let mut references = Vec::new();
+                referenced_columns(qual, &mut references);
+                if references.iter().any(|(_, name)| name == column) && !ordered.contains(qual) {
+                    ordered.push(qual.clone());
+                }
+            }
+        }
+        let mut scan = PlanNode::new("Index Only Scan");
+        scan.target = format!(
+            " using {} on {shown_relation}{alias_text}",
+            quote_ident(&shown_index(&plan.index))
+        );
+        scan = scan
+            .head("Scan Direction", Prop::Text("Forward".to_string()))
+            .head("Index Name", Prop::Text(shown_index(&plan.index)))
+            .head("Relation Name", Prop::Text(relname.clone()))
+            .head("Alias", Prop::Text(refname.clone()));
+        if let Some(text) = self.qual(&ordered, prefix) {
+            scan = scan.prop("Index Cond", text);
+        }
+        let _ = select;
+        Ok(PlanNode::new("Aggregate")
+            .head("Strategy", Prop::Text("Plain".to_string()))
+            .head("Partial Mode", Prop::Text("Simple".to_string()))
+            .child("Outer", scan))
+    }
+
     /// The quals a bitmap index probe applies as index conditions, and the
     /// rest.
     fn bitmap_conditions(&self, source: &BitmapSource, quals: &[Expr]) -> (Vec<Expr>, Vec<Expr>) {
@@ -2896,6 +2955,17 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
             } else {
                 SqlEngine::comma_from_items_to_cross_join(&select.from)
             };
+            // `count(*)` answered from index entries alone.
+            if let Some(plan) = self
+                .engine
+                .index_only_count_plan(&from, select, query)
+                .ok()
+                .flatten()
+            {
+                if let TableFactor::Table { name, alias, .. } = &from.relation {
+                    return self.index_only_count_scan(name, alias.as_ref(), &plan, quals, select);
+                }
+            }
             // Top-level EXISTS / IN terms the executor answers from a hash
             // table of the subquery's keys are hash semi-joins.
             let (semi, quals): (Vec<Expr>, Vec<Expr>) =

@@ -276,6 +276,246 @@ impl<'db> SqlEngine<'db> {
         ))
     }
 
+    /// The index-only plan of `SELECT count(*) FROM t WHERE c1 = k1 AND ...`:
+    /// the conjuncts are exactly integer equalities on the leading columns of
+    /// one complete B-tree index, so the count is the number of index entries
+    /// under that key prefix and no row is read. Declined under row
+    /// security, a security context, pending writes or a non-read-committed
+    /// snapshot (index entries are the committed state), and for partial
+    /// indexes. The same decision drives execution and EXPLAIN.
+    pub(crate) fn index_only_count_plan(
+        &self,
+        from: &TableWithJoins,
+        select: &Select,
+        query: &Query,
+    ) -> Result<Option<IndexOnlyCount>> {
+        if !from.joins.is_empty()
+            || select.having.is_some()
+            || select.distinct.is_some()
+            || has_group_by(select)?
+            || query.order_by.is_some()
+            || query.limit_clause.is_some()
+            || query.fetch.is_some()
+            || select_has_window_functions(select, query)?
+            || self.security_context.is_some()
+            || self.tx.is_some_and(|tx| {
+                tx.write_len() > 0
+                    || tx.isolation() != bicdb_core::TransactionIsolation::ReadCommitted
+            })
+        {
+            return Ok(None);
+        }
+        let [SelectItem::UnnamedExpr(Expr::Function(function))
+        | SelectItem::ExprWithAlias {
+            expr: Expr::Function(function),
+            ..
+        }] = select.projection.as_slice()
+        else {
+            return Ok(None);
+        };
+        if function.filter.is_some()
+            || function.over.is_some()
+            || !object_name(&function.name)?.eq_ignore_ascii_case("count")
+            || !is_count_star(function)
+        {
+            return Ok(None);
+        }
+        let TableFactor::Table {
+            name,
+            alias,
+            args: None,
+            ..
+        } = &from.relation
+        else {
+            return Ok(None);
+        };
+        let collection = relation_name(name)?;
+        if is_virtual_table(&collection)
+            || self.cte(&collection).is_some()
+            || load_view(self.db_ref(), &collection)?.is_some()
+        {
+            return Ok(None);
+        }
+        let collection = resolve_session_relation_name(self.db_ref(), &collection)?;
+        let Some(schema) = load_schema(self.db_ref(), &collection)? else {
+            return Ok(None);
+        };
+        // A standby applies the primary's log underneath readers: its index
+        // and its rows are not one snapshot.
+        if schema.rls_enabled
+            || schema.has_descendant_tables()
+            || self.db_ref().is_replication_standby()
+        {
+            return Ok(None);
+        }
+        let qualifier = alias
+            .as_ref()
+            .map(|alias| alias.name.value.clone())
+            .unwrap_or_else(|| relation_default_alias(name));
+        let Some(selection) = select.selection.as_ref() else {
+            return Ok(None);
+        };
+        // Every conjunct: `column = integer literal`, on distinct columns.
+        let mut equalities: Vec<(String, i64)> = Vec::new();
+        for term in and_terms(selection) {
+            let Expr::BinaryOp {
+                left,
+                op: BinaryOperator::Eq,
+                right,
+            } = unwrap_nested_expr(term)
+            else {
+                return Ok(None);
+            };
+            let column = |expr: &Expr| match unwrap_nested_expr(expr) {
+                Expr::Identifier(ident) => Some(ident.value.clone()),
+                Expr::CompoundIdentifier(parts)
+                    if parts.len() == 2 && parts[0].value == qualifier =>
+                {
+                    Some(parts[1].value.clone())
+                }
+                _ => None,
+            };
+            let literal = |expr: &Expr| match unwrap_nested_expr(expr) {
+                Expr::Value(value) => match &value.value {
+                    Value::Number(text, false) => text.parse::<i64>().ok(),
+                    _ => None,
+                },
+                _ => None,
+            };
+            let (column, value) = match (column(left), literal(right), column(right), literal(left))
+            {
+                (Some(column), Some(value), _, _) | (_, _, Some(column), Some(value)) => {
+                    (column, value)
+                }
+                _ => return Ok(None),
+            };
+            let Some(declared) = schema
+                .columns
+                .iter()
+                .find(|candidate| candidate.name == column && !candidate.hidden)
+            else {
+                return Ok(None);
+            };
+            let range = match declared.pg_type.to_ascii_lowercase().as_str() {
+                "int2" | "smallint" => i64::from(i16::MIN)..=i64::from(i16::MAX),
+                "int4" | "int" | "integer" => i64::from(i32::MIN)..=i64::from(i32::MAX),
+                "int8" | "bigint" => i64::MIN..=i64::MAX,
+                _ => return Ok(None),
+            };
+            if declared.user_type.is_some()
+                || declared.array_ndims != 0
+                || !range.contains(&value)
+                || equalities.iter().any(|(seen, _)| seen == &column)
+            {
+                return Ok(None);
+            }
+            equalities.push((column, value));
+        }
+        for index in sql_index_definitions_for_collection(self.db_ref(), &collection) {
+            // Primary-key indexes are keyed by the record identity, not the
+            // typed column values; only secondary B-trees qualify.
+            let primary_key_index = index
+                .fields
+                .iter()
+                .any(|field| matches!(field, IndexField::Id))
+                || schema.primary_key_name.as_deref() == Some(index.name.as_str())
+                || index.name == format!("{}_pkey", schema.name);
+            if index.kind != IndexKind::BTree
+                || index.predicate.is_some()
+                || index.exclusion.is_some()
+                || primary_key_index
+                || index.fields.len() < equalities.len()
+                || is_unusable_typed_primary_key_index(Some(&schema), &index)
+            {
+                continue;
+            }
+            let mut prefix = Vec::with_capacity(equalities.len());
+            let mut columns = Vec::with_capacity(equalities.len());
+            for field in &index.fields[..equalities.len()] {
+                let IndexField::MetadataPath(path) = field else {
+                    break;
+                };
+                let [column] = path.as_slice() else {
+                    break;
+                };
+                let Some((_, value)) = equalities.iter().find(|(name, _)| name == column) else {
+                    break;
+                };
+                prefix.push(typed_index_predicate_value(
+                    &schema,
+                    field,
+                    IndexValue::Int(*value),
+                )?);
+                columns.push(column.clone());
+            }
+            if prefix.len() == equalities.len() {
+                return Ok(Some(IndexOnlyCount {
+                    collection,
+                    index: index.name.clone(),
+                    columns,
+                    prefix,
+                }));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Answers `SELECT count(*)` through [`Self::index_only_count_plan`].
+    pub(crate) fn try_index_only_count(
+        &self,
+        from: &TableWithJoins,
+        select: &Select,
+        query: &Query,
+    ) -> Result<Option<SqlResult>> {
+        let Some(plan) = self.index_only_count_plan(from, select, query)? else {
+            return Ok(None);
+        };
+        // The same SELECT privilege (or column grants) every read path takes.
+        self.require_relation_privilege(&plan.collection, "SELECT")?;
+        self.check_cancellation()?;
+        // One read of one index, under that index's read lock. A commit
+        // applies all of its mutations to an index under one write-lock
+        // acquisition (`commit_snapshot.rs`, the per-index guard around its
+        // mutation loop), so this read sees every change of a commit or none:
+        // the index's committed state at one instant between commits. Under
+        // read committed with no writes of its own (checked by the plan),
+        // that is a state the statement may see, so a commit landing between
+        // the statement's start and this read only moves the answer to a
+        // later valid instant, as it would for the row path's own reads.
+        // (Argued from the code; no test injects a commit between the two.)
+        let count = self
+            .db_ref()
+            .lookup_index_rowids(&plan.index, &plan.prefix)?
+            .len();
+        crate::plan_diagnostics::record_route_decision(
+            &plan.collection,
+            crate::plan_diagnostics::PlanSignature {
+                kind: "IndexOnlyCount",
+                index: Some(plan.index.clone()),
+                prefix_len: plan.prefix.len(),
+            },
+            Vec::new(),
+            count,
+        );
+        sql_profile_index_lookup();
+        let schema = load_schema(self.db_ref(), &plan.collection)?;
+        let [item] = select.projection.as_slice() else {
+            return Ok(None);
+        };
+        let column = match item {
+            SelectItem::ExprWithAlias { alias, .. } => alias.value.clone(),
+            SelectItem::UnnamedExpr(expr) => aggregate_column_name(expr, schema.as_ref()),
+            _ => return Ok(None),
+        };
+        Ok(Some(
+            SqlResult::new(vec![column], vec![vec![SqlValue::Int(count as i64)]])
+                .with_column_types(aggregate_projection_column_types(
+                    &select.projection,
+                    schema.as_ref(),
+                )),
+        ))
+    }
+
     /// `SELECT count(*) FROM t WHERE tsv @@ q` answered by intersecting the
     /// dense document-id posting blocks of the matching full-text index. The
     /// tsquery must be a constant conjunction of plain lexemes (no prefix,

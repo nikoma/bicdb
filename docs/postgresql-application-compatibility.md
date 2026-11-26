@@ -379,10 +379,25 @@ with `Join Filter:`, `Subquery Scan`, `CTE Scan`, `Function Scan`,
 arbiter indexes). Qualifications are printed as PostgreSQL deparses them
 (`(a = 1)`, `(b = 'x'::text)`, `(c = '1'::numeric)`, `(a = ANY
 ('{1,2}'::integer[]))`, `~~` for LIKE, dates in the session's DateStyle).
-The plan describes what BicDB executes, using the same access-path
-predictions as the native report, so it differs from PostgreSQL's where the
-planners differ (no Bitmap, Materialize, Memoize or parallel nodes; derived
-tables are Subquery Scans over their materialized rows). INSERT, UPDATE,
+The plan describes what BicDB executes, from the decisions of the executor's
+own choosers, so it differs from PostgreSQL's where the planners differ. Node
+names follow what runs: the row-set index locator collects matching row ids
+and then fetches the rows in row-id order, a `Bitmap Heap Scan` over a
+`Bitmap Index Scan` (a `BitmapOr` when it unions OR branches, `Recheck Cond:`
+with the indexed terms); an `Index Scan` is a read in index order or of at
+most one row (primary key, full-key unique equality); joins appear in the
+executor's join order with its join method (a `Nested Loop` whose inner
+side is looked up per outer row, a `Nested Loop` over a `Materialize`d inner
+side read once, or a `Hash Join`); an uncorrelated one-column `IN
+(subquery)` is a `hashed SubPlan`, and a top-level `EXISTS (SELECT ... WHERE
+inner.k = outer.c ...)`, `NOT EXISTS` or `IN` answered from a hash table of
+the subquery's keys is a `Hash Semi Join` / `Hash Anti Join`. A node type the
+session turned off with an `enable_*` setting is marked `Disabled: true`
+(BicDB's executor does not read those settings). There are no Index Only,
+Memoize, Merge Join or parallel nodes; derived tables are Subquery Scans
+over their materialized rows. `tests/explain_matches_execution.rs` checks
+every scan, join and subplan node against the path recorded while the
+statement executes. INSERT, UPDATE,
 DELETE, CREATE TABLE AS and set operations are explainable, and EXPLAIN
 requires the explained statement's privileges. The option list is parsed as
 PostgreSQL parses it, with its errors (`unrecognized EXPLAIN option`,

@@ -2076,16 +2076,76 @@ pub(crate) fn copy_in_data(state: &mut ConnectionState, payload: &[u8]) -> Resul
     copy.pending.push_str(
         std::str::from_utf8(&decoded).map_err(|error| PgWireError::Protocol(error.to_string()))?,
     );
-    while let Some(newline) = copy.pending.find('\n') {
+    while let Some(newline) = next_copy_record_end(copy) {
         let mut line = copy.pending[..newline].to_string();
+        note_csv_embedded_lines(copy, &line, true);
         if line.ends_with('\r') {
             line.pop();
         }
         copy.pending.drain(..=newline);
+        copy.csv_scanned = 0;
         copy_in_line(copy, &line)?;
         spill_copy_rows_if_needed(copy)?;
     }
     Ok(())
+}
+
+/// PostgreSQL's line count for a CSV record: a line end inside a quoted
+/// field counts as a line, where "line end" is the input's end-of-line
+/// character once the first record has shown it (`\n`, or `\r` for CRLF
+/// input) and `\r` before that. `terminated`: the record ended at a newline
+/// (which then fixes the end-of-line style).
+pub(crate) fn note_csv_embedded_lines(copy: &mut CopyInState, record: &str, terminated: bool) {
+    if copy.spec.format != CopyFormat::Csv {
+        return;
+    }
+    let body = if terminated {
+        record.strip_suffix('\r').unwrap_or(record)
+    } else {
+        record
+    };
+    let target = match copy.csv_eol_crlf {
+        Some(false) => '\n',
+        Some(true) | None => '\r',
+    };
+    let mut quoted = false;
+    let mut count = 0_u64;
+    for ch in body.chars() {
+        if ch == '"' {
+            quoted = !quoted;
+        } else if quoted && ch == target {
+            count += 1;
+        }
+    }
+    copy.csv_embedded_lines = count;
+    if terminated && copy.csv_eol_crlf.is_none() {
+        copy.csv_eol_crlf = Some(record.ends_with('\r'));
+    }
+}
+
+/// The newline ending the next record in `pending`. In CSV a newline inside
+/// a quoted field belongs to the field, as PostgreSQL reads it: every quote
+/// character toggles the quoted state (a doubled quote toggles twice). The
+/// scan resumes where the previous call stopped.
+fn next_copy_record_end(copy: &mut CopyInState) -> Option<usize> {
+    if copy.spec.format != CopyFormat::Csv {
+        return copy.pending.find('\n');
+    }
+    let bytes = copy.pending.as_bytes();
+    let mut idx = copy.csv_scanned;
+    while idx < bytes.len() {
+        match bytes[idx] {
+            b'"' => copy.csv_in_quote = !copy.csv_in_quote,
+            b'\n' if !copy.csv_in_quote => {
+                copy.csv_scanned = idx;
+                return Some(idx);
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+    copy.csv_scanned = bytes.len();
+    None
 }
 
 pub(crate) fn finish_copy_in(
@@ -2174,6 +2234,7 @@ pub(crate) fn finish_copy_in_inner(
     }
     if !copy.pending.is_empty() {
         let line = std::mem::take(&mut copy.pending);
+        note_csv_embedded_lines(&mut copy, &line, false);
         copy_in_line(&mut copy, line.trim_end_matches('\r'))?;
         spill_copy_rows_if_needed(&mut copy)?;
     }
@@ -2251,8 +2312,11 @@ pub(crate) fn spill_copy_rows(copy: &mut CopyInState) -> Result<()> {
         .spill
         .as_mut()
         .ok_or_else(|| PgWireError::Server("COPY spill was not initialized".to_string()))?;
-    for row in copy.rows.drain(..) {
-        serde_json::to_writer(&mut spill.writer, &row)
+    let lines = std::mem::take(&mut copy.row_lines);
+    for (idx, row) in copy.rows.drain(..).enumerate() {
+        // Each row keeps its input line number for the error CONTEXT.
+        let line = lines.get(idx).copied().unwrap_or_default();
+        serde_json::to_writer(&mut spill.writer, &(line, row))
             .map_err(|error| PgWireError::Server(error.to_string()))?;
         spill.writer.write_all(b"\n")?;
         spill.rows += 1;
@@ -2294,13 +2358,31 @@ pub(crate) fn finish_transactional_copy_in(
     copied_rows += replay_spilled_copy_rows(
         copy,
         COPY_IN_TRANSACTION_BATCH_ROWS,
-        |rows| append_copy_insert_statements(server, state, relation, columns, rows, cancellation),
+        |rows, lines| {
+            append_copy_insert_statements(
+                server,
+                state,
+                relation,
+                columns,
+                rows,
+                Some(lines),
+                cancellation,
+            )
+        },
         cancellation,
     )?;
     if !copy.rows.is_empty() {
         let rows = std::mem::take(&mut copy.rows);
-        copied_rows +=
-            append_copy_insert_statements(server, state, relation, columns, rows, cancellation)?;
+        let lines = std::mem::take(&mut copy.row_lines);
+        copied_rows += append_copy_insert_statements(
+            server,
+            state,
+            relation,
+            columns,
+            rows,
+            Some(lines),
+            cancellation,
+        )?;
     }
     Ok(copied_rows)
 }
@@ -2312,7 +2394,7 @@ pub(crate) fn replay_spilled_copy_rows<F>(
     cancellation: &CancellationToken,
 ) -> Result<usize>
 where
-    F: FnMut(Vec<Vec<Option<String>>>) -> Result<usize>,
+    F: FnMut(Vec<Vec<Option<String>>>, Vec<u64>) -> Result<usize>,
 {
     let Some(spill) = copy.spill.as_mut() else {
         return Ok(0);
@@ -2321,19 +2403,22 @@ where
     let file = File::open(&spill.path)?;
     let reader = BufReader::new(file);
     let mut batch = Vec::with_capacity(batch_rows);
+    let mut batch_lines = Vec::with_capacity(batch_rows);
     let mut copied_rows = 0;
     for line in reader.lines() {
         cancellation.check().map_err(PgWireError::from)?;
         let line = line?;
-        let row = serde_json::from_str::<Vec<Option<String>>>(&line)
+        let (input_line, row) = serde_json::from_str::<(u64, Vec<Option<String>>)>(&line)
             .map_err(|error| PgWireError::Server(error.to_string()))?;
         batch.push(row);
+        batch_lines.push(input_line);
         if batch.len() >= batch_rows {
-            copied_rows += consume_batch(std::mem::take(&mut batch))?;
+            copied_rows +=
+                consume_batch(std::mem::take(&mut batch), std::mem::take(&mut batch_lines))?;
         }
     }
     if !batch.is_empty() {
-        copied_rows += consume_batch(batch)?;
+        copied_rows += consume_batch(batch, batch_lines)?;
     }
     Ok(copied_rows)
 }
@@ -2344,6 +2429,7 @@ pub(crate) fn append_copy_insert_statements(
     relation: &str,
     columns: &[String],
     rows: Vec<Vec<Option<String>>>,
+    lines: Option<Vec<u64>>,
     cancellation: &CancellationToken,
 ) -> Result<usize> {
     for (idx, row) in rows.iter().enumerate() {
@@ -2384,9 +2470,13 @@ pub(crate) fn append_copy_insert_statements(
             .with_cancellation(cancellation.clone())
             .with_pending_transaction(tx);
     let started = Instant::now();
-    let result = session
-        .copy_insert_rows_reporting(relation, columns, rows)
-        .map(|(_, notices)| notices);
+    let result = match lines.as_deref() {
+        Some(lines) if lines.len() == rows.len() => {
+            session.copy_insert_rows_reporting_at_lines(relation, columns, rows, lines)
+        }
+        _ => session.copy_insert_rows_reporting(relation, columns, rows),
+    }
+    .map(|(_, notices)| notices);
     capture_connection_guc_state(state, &session);
     state.tx = session.take_pending_transaction();
     state.tx_ddl_undo = session.take_ddl_undo_log();
@@ -2405,23 +2495,57 @@ pub(crate) fn copy_in_line(copy: &mut CopyInState, line: &str) -> Result<()> {
     if copy.spec.format == CopyFormat::Text && line == "\\." {
         return Ok(());
     }
+    // PostgreSQL counts line ends inside a quoted CSV field as lines.
+    copy.line_number += 1 + std::mem::take(&mut copy.csv_embedded_lines);
+    let parse = |copy: &CopyInState| {
+        match copy.spec.format {
+            CopyFormat::Text => parse_copy_text_row(line),
+            CopyFormat::Csv => parse_copy_csv_row(line),
+        }
+        .map_err(|error| with_copy_line_context(error, copy, line))
+    };
     if copy.spec.header && !copy.header_seen {
         copy.header_seen = true;
         if copy.spec.header_match {
-            let fields = match copy.spec.format {
-                CopyFormat::Text => parse_copy_text_row(line),
-                CopyFormat::Csv => parse_copy_csv_row(line),
-            }?;
+            let fields = parse(copy)?;
             check_copy_header(&fields, &copy.spec.header_expected)?;
         }
         return Ok(());
     }
-    let row = match copy.spec.format {
-        CopyFormat::Text => parse_copy_text_row(line),
-        CopyFormat::Csv => parse_copy_csv_row(line),
-    }?;
+    let row = parse(copy)?;
+    let expected = copy.target_columns.len();
+    if expected > 0 && row.len() != expected {
+        let message = match copy.target_columns.get(row.len()) {
+            Some(column) if row.len() < expected => {
+                format!("missing data for column \"{column}\"")
+            }
+            _ => "extra data after last expected column".to_string(),
+        };
+        return Err(with_copy_line_context(bad_copy_data(&message), copy, line));
+    }
     copy.rows.push(row);
+    copy.row_lines.push(copy.line_number);
     Ok(())
+}
+
+/// PostgreSQL's CONTEXT for an error in a COPY FROM line:
+/// `COPY t, line N: "<line>"`.
+fn with_copy_line_context(error: PgWireError, copy: &CopyInState, line: &str) -> PgWireError {
+    let context = format!(
+        "COPY {}, line {}: \"{}\"",
+        copy.display_relation,
+        copy.line_number,
+        bicdb_sql::copy_context_printout(line)
+    );
+    match error {
+        PgWireError::Sql(error) => PgWireError::Sql(bicdb_sql::SqlError::with_detail_fields(
+            error,
+            None,
+            None,
+            Some(context),
+        )),
+        other => other,
+    }
 }
 
 pub(crate) const PGCOPY_SIGNATURE: &[u8; 11] = b"PGCOPY\n\xff\r\n\0";
@@ -2518,7 +2642,9 @@ pub(crate) fn copy_in_binary_rows(copy: &mut CopyInState) -> Result<()> {
         if !complete {
             break;
         }
+        copy.line_number += 1;
         copy.rows.push(fields);
+        copy.row_lines.push(copy.line_number);
         offset = cursor;
         spill_copy_rows_if_needed(copy)?;
     }
@@ -2669,9 +2795,7 @@ pub(crate) fn parse_copy_csv_row(line: &str) -> Result<Vec<Option<String>>> {
         }
     }
     if quoted {
-        return Err(PgWireError::Server(
-            "unterminated quoted CSV field in COPY data".to_string(),
-        ));
+        return Err(bad_copy_data("unterminated CSV quoted field"));
     }
     fields.push(csv_field_value(&field, field_was_quoted));
     Ok(fields)

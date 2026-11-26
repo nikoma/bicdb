@@ -3043,6 +3043,23 @@ struct CopyInState {
     started_guc_transaction: bool,
     owns_serializable_transaction: bool,
     extended: bool,
+    /// Input line number of each row in `rows` (PostgreSQL's COPY CONTEXT).
+    row_lines: Vec<u64>,
+    /// Lines read so far, counted as PostgreSQL does (a header and newlines
+    /// inside quoted CSV fields count).
+    line_number: u64,
+    /// CSV: how far `pending` was scanned for the end of the record, and
+    /// whether that point is inside a quoted field.
+    csv_scanned: usize,
+    csv_in_quote: bool,
+    /// CSV: line ends inside the quoted fields of the record being read, and
+    /// whether the input ends its lines with CRLF (unknown before the first).
+    csv_embedded_lines: u64,
+    csv_eol_crlf: Option<bool>,
+    /// The columns a row fills, for "missing data for column".
+    target_columns: Vec<String>,
+    /// The relation name CONTEXT lines show (without its schema).
+    display_relation: String,
 }
 
 impl CopyInState {
@@ -3707,7 +3724,7 @@ fn begin_copy_in(
     // CopyInResponse. Resolving it after the session had entered COPY mode left the
     // server waiting for CopyData while the client had already seen the error and
     // went on sending queries, so the session hung.
-    let prepared = (|| -> Result<usize> {
+    let prepared = (|| -> Result<Vec<String>> {
         let relation = copy.relation_sql.clone().unwrap_or_default();
         let describe = |state: &mut ConnectionState, sql: String| {
             execute_server_sql_for_describe_with_session(
@@ -3741,13 +3758,13 @@ fn begin_copy_in(
             };
         }
         Ok(if copy.columns.is_empty() {
-            all_columns.columns.len()
+            all_columns.columns.clone()
         } else {
-            copy.columns.len()
+            copy.columns.clone()
         })
     })();
-    let column_count = match prepared {
-        Ok(count) => count,
+    let target_columns = match prepared {
+        Ok(columns) => columns,
         Err(error) => {
             if owns_serializable_transaction {
                 rollback_open_transaction(server, state)?;
@@ -3757,6 +3774,17 @@ fn begin_copy_in(
             return Err(error);
         }
     };
+    let column_count = target_columns.len();
+    // PostgreSQL's CONTEXT names the relation without its schema.
+    let display_relation = copy
+        .relation
+        .as_deref()
+        .unwrap_or_default()
+        .rsplit('.')
+        .next()
+        .unwrap_or_default()
+        .trim_matches('"')
+        .to_string();
     state.copy_in = Some(CopyInState {
         spec: copy,
         rows: Vec::new(),
@@ -3770,6 +3798,14 @@ fn begin_copy_in(
         started_guc_transaction,
         owns_serializable_transaction,
         extended: false,
+        row_lines: Vec::new(),
+        line_number: 0,
+        csv_scanned: 0,
+        csv_in_quote: false,
+        csv_embedded_lines: 0,
+        csv_eol_crlf: None,
+        target_columns,
+        display_relation,
     });
     if let Err(error) = enforce_persistent_connection_memory(state, &server.config) {
         abort_copy_in(server, state)?;

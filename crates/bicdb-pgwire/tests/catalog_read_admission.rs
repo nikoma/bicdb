@@ -105,6 +105,14 @@ fn concurrent_sql_rename(ending: &str) {
 }
 
 fn concurrent_sql_rename_with_isolation(ending: &str, isolation: &str) {
+    concurrent_sql_rename_with_writer(
+        ending,
+        isolation,
+        "BEGIN; UPDATE unrelated SET payload=99 WHERE id=2",
+    );
+}
+
+fn concurrent_sql_rename_with_writer(ending: &str, isolation: &str, writer_sql: &str) {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let root = tempfile::tempdir().unwrap();
         let mut db = BicDb::open_with_config(
@@ -112,7 +120,7 @@ fn concurrent_sql_rename_with_isolation(ending: &str, isolation: &str) {
             DbConfig::default().with_fsync(true).with_storage_mode(mode),
         )
         .unwrap();
-        SqlSession::new(&mut db).execute("CREATE TABLE source(id INT PRIMARY KEY,payload INT); INSERT INTO source VALUES(1,10); CREATE TABLE unrelated(id INT PRIMARY KEY,payload INT); INSERT INTO unrelated VALUES(2,2); CREATE VIEW dependent AS SELECT source AS item FROM source").unwrap();
+        SqlSession::new(&mut db).execute("CREATE TABLE source(id INT PRIMARY KEY,payload INT); INSERT INTO source VALUES(1,10); CREATE TABLE unrelated(id INT PRIMARY KEY,payload INT); INSERT INTO unrelated VALUES(2,2),(3,3); CREATE VIEW dependent AS SELECT source AS item FROM source").unwrap();
         bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
         let shared = Arc::new(RwLock::new(db));
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -139,10 +147,7 @@ fn concurrent_sql_rename_with_isolation(ending: &str, isolation: &str) {
                 &format!("SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL {isolation}"),
             );
             assert!(codes(&response).is_empty(), "{response:?}");
-            let response = query(
-                &mut writer,
-                "BEGIN; UPDATE unrelated SET payload=99 WHERE id=2",
-            );
+            let response = query(&mut writer, writer_sql);
             assert!(codes(&response).is_empty(), "{response:?}");
             if ending != "autocommit" {
                 let response = query(
@@ -237,6 +242,19 @@ fn concurrent_sql_rename_with_isolation(ending: &str, isolation: &str) {
 #[test]
 fn concurrent_wire_rename_commits_without_blocking_an_unrelated_sql_writer() {
     concurrent_sql_rename("commit");
+}
+
+/// A parent-side removal (DELETE) runs the inbound foreign-key checks; they
+/// must observe only the affected tables, not the whole schema catalog.
+#[test]
+fn concurrent_wire_rename_commits_without_blocking_an_unrelated_sql_delete() {
+    for ending in ["commit", "autocommit"] {
+        concurrent_sql_rename_with_writer(
+            ending,
+            "READ COMMITTED",
+            "BEGIN; UPDATE unrelated SET payload=99 WHERE id=2; DELETE FROM unrelated WHERE id=3",
+        );
+    }
 }
 
 #[test]

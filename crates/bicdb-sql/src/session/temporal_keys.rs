@@ -984,15 +984,7 @@ impl SqlSession<'_> {
         if removed.is_empty() {
             return Ok(());
         }
-        let children = list_schemas(self.db_ref())?
-            .into_iter()
-            .filter(|child| {
-                child
-                    .temporal_foreign_keys
-                    .iter()
-                    .any(|foreign_key| foreign_key.foreign_table == table)
-            })
-            .collect::<Vec<_>>();
+        let children = inbound_temporal_foreign_key_schemas(self.db_ref(), table)?;
         if children.is_empty() {
             return Ok(());
         }
@@ -1095,7 +1087,7 @@ impl SqlSession<'_> {
         dropping: &[String],
         cascade: bool,
     ) -> Result<()> {
-        for mut child in list_schemas(self.db_ref())? {
+        for mut child in inbound_temporal_foreign_key_schemas(self.db_ref(), table)? {
             if dropping.iter().any(|name| *name == child.name) || child.name == table {
                 continue;
             }
@@ -1148,8 +1140,17 @@ impl SqlSession<'_> {
 /// the equality foreign-key lookup does: a whole-catalog read would make
 /// every ordinary writer conflict with concurrent DDL on unrelated tables.
 pub(crate) fn has_inbound_temporal_foreign_keys(db: &BicDb, table: &str) -> Result<bool> {
+    Ok(!inbound_temporal_foreign_key_schemas(db, table)?.is_empty())
+}
+
+/// The tables whose temporal foreign keys reference `table`, observing only
+/// `table`'s catalog row and theirs (see `has_inbound_temporal_foreign_keys`).
+pub(crate) fn inbound_temporal_foreign_key_schemas(
+    db: &BicDb,
+    table: &str,
+) -> Result<Vec<TableSchema>> {
     check_sql_catalog_read(db, SCHEMA_COLLECTION, Some(table))?;
-    let mut found = false;
+    let mut children = Vec::new();
     for schema in schema_catalog_snapshot_shared(db)?.iter() {
         if schema
             .temporal_foreign_keys
@@ -1157,8 +1158,8 @@ pub(crate) fn has_inbound_temporal_foreign_keys(db: &BicDb, table: &str) -> Resu
             .any(|foreign_key| foreign_key.foreign_table == table)
         {
             check_sql_catalog_read(db, SCHEMA_COLLECTION, Some(&schema.name))?;
-            found = true;
+            children.push(schema.clone());
         }
     }
-    Ok(found)
+    Ok(children)
 }

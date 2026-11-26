@@ -2178,10 +2178,15 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
             op: BinaryOperator::And,
             right: Box::new(right),
         });
+        // Shapes the executor's planner cannot order without the
+        // statement's own context (CTE names, table functions) keep the
+        // written order, as the executor's fallback does.
         let (relation, joins) = if from.joins.is_empty() {
             (from.relation.clone(), Vec::new())
         } else {
-            self.engine.plan_row_join_order(from, selection.as_ref())?
+            self.engine
+                .plan_row_join_order(from, selection.as_ref())
+                .unwrap_or_else(|_| (from.relation.clone(), from.joins.clone()))
         };
         let mut remaining = quals;
         let take_for = |factor: &TableFactor, this: &Self, remaining: &mut Vec<Expr>| {
@@ -2211,7 +2216,9 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
         let mut left_factor_columns = self.factor_columns(&relation);
         let mut left_columns = self
             .engine
-            .row_set_columns_from_table_factor_without_rows(&relation)?;
+            .row_set_columns_from_table_factor_without_rows(&relation)
+            .ok()
+            .flatten();
         let all_inner = joins.iter().all(is_reorderable_inner_join);
         let mut cumulative = if all_inner { selection.clone() } else { None };
         let mut plan = self.from_factor(&relation, left_quals)?;
@@ -2269,12 +2276,10 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
             let mut inner_quals = right_quals;
             inner_quals.extend(inner_only);
             let prediction = match &left_columns {
-                Some(left_columns) => self.engine.predict_row_join(
-                    left_columns,
-                    join,
-                    selection.as_ref(),
-                    cumulative.as_ref(),
-                )?,
+                Some(left_columns) => self
+                    .engine
+                    .predict_row_join(left_columns, join, selection.as_ref(), cumulative.as_ref())
+                    .unwrap_or(crate::engine::RowJoinPrediction::Unknown),
                 None => crate::engine::RowJoinPrediction::Unknown,
             };
             let join_type = match kind {
@@ -2405,7 +2410,9 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
             if let (Some(columns), Some(right)) = (
                 left_columns.as_mut(),
                 self.engine
-                    .row_set_columns_from_table_factor_without_rows(&join.relation)?,
+                    .row_set_columns_from_table_factor_without_rows(&join.relation)
+                    .ok()
+                    .flatten(),
             ) {
                 for column in right {
                     if !columns.contains(&column) {

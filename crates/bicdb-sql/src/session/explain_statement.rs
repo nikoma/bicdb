@@ -22,8 +22,27 @@ fn command_rows(result: &SqlResult) -> u64 {
 fn single_leaf(plan: &PlanNode) -> bool {
     match plan.children.as_slice() {
         [] => true,
-        [(_, None, child)] if plan.node_type == "ModifyTable" => child.children.is_empty(),
+        [(_, None, child)] if plan.node_type == "Bitmap Heap Scan" => {
+            child.node_type == "Bitmap Index Scan" && child.children.is_empty()
+        }
+        [(_, None, child)] if plan.node_type == "ModifyTable" => single_leaf(child),
         _ => false,
+    }
+}
+
+/// Actual rows of a bitmap heap scan's index probe: the row ids the
+/// executed access path collected (recorded while the statement ran).
+fn set_bitmap_index_rows(plan: &mut PlanNode, collected: Option<u64>) {
+    if plan.node_type == "Bitmap Heap Scan" {
+        if let Some((_, _, child)) = plan.children.first_mut() {
+            if child.node_type == "Bitmap Index Scan" {
+                child.actual = collected.map(|rows| (rows as f64, 1.0));
+            }
+        }
+        return;
+    }
+    for (_, _, child) in &mut plan.children {
+        set_bitmap_index_rows(child, collected);
     }
 }
 
@@ -136,7 +155,16 @@ impl SqlSession<'_> {
                     None,
                 ));
             }
-            let result = self.execute_statement(statement)?;
+            let (result, decisions) =
+                crate::plan_diagnostics::capture(|| self.execute_statement(statement));
+            let result = result?;
+            let collected = decisions
+                .iter()
+                .rev()
+                .filter(|decision| !matches!(decision.chooser, "join" | "subplan"))
+                .find_map(|decision| decision.rows_fetched)
+                .map(|rows| rows as u64);
+            set_bitmap_index_rows(&mut plan, collected);
             let rows = command_rows(&result);
             if plan.node_type == "ModifyTable" {
                 let returned = result.rows.len() as u64;

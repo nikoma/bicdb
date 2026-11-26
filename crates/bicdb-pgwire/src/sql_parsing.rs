@@ -1802,21 +1802,24 @@ pub(crate) fn parse_copy_statement(sql: &str) -> Result<Option<CopyStatement>> {
     {
         return Ok(None);
     }
-    let binary = contains_word(trimmed, "binary");
-    if contains_word(trimmed, "program") || contains_word(trimmed, "freeze") {
+
+    let body = trimmed[4..].trim();
+    let (target, direction, after_direction) = split_copy_direction(body)?;
+    // The options follow the endpoint; a file name or command is a string
+    // literal whose words (`/tmp/binary.csv`) must not be read as options.
+    let (endpoint, options) = parse_copy_endpoint(after_direction)?;
+    let binary = contains_word(target, "binary") || contains_word(options, "binary");
+    if contains_word(target, "freeze") || contains_word(options, "freeze") {
         return Err(PgWireError::Server(
             "this COPY variant is not supported by BicDB".to_string(),
         ));
     }
-
-    let body = trimmed[4..].trim();
-    let (target, direction, after_direction) = split_copy_direction(body)?;
-    let format = if contains_word(after_direction, "csv") {
+    let format = if contains_word(options, "csv") {
         CopyFormat::Csv
     } else {
         CopyFormat::Text
     };
-    let header = contains_word(after_direction, "header");
+    let header = contains_word(options, "header");
     if binary && (header || format == CopyFormat::Csv) {
         return Err(PgWireError::Sql(bicdb_sql::SqlError::RaisedException {
             sqlstate: "42601".to_string(),
@@ -1828,76 +1831,124 @@ pub(crate) fn parse_copy_statement(sql: &str) -> Result<Option<CopyStatement>> {
             detail: None,
         }));
     }
-    let header_match = header && contains_word(after_direction, "match");
+    let header_match = header && contains_word(options, "match");
 
-    match direction {
-        CopyDirection::FromStdin => {
-            if !after_direction
-                .trim_start()
-                .to_ascii_lowercase()
-                .starts_with("stdin")
-            {
-                return Err(PgWireError::Server(
-                    "COPY FROM supports only STDIN".to_string(),
-                ));
-            }
-            let (relation, columns, relation_sql) = parse_copy_table_target(target)?;
-            Ok(Some(CopyStatement {
-                relation: Some(relation),
-                relation_sql: Some(relation_sql),
-                columns,
-                direction,
-                format,
-                query: None,
-                header,
-                header_match,
-                header_expected: Vec::new(),
-                binary,
-                binary_column_oids: Vec::new(),
-            }))
-        }
-        CopyDirection::ToStdout => {
-            if !after_direction
-                .trim_start()
-                .to_ascii_lowercase()
-                .starts_with("stdout")
-            {
-                return Err(PgWireError::Server(
-                    "COPY TO supports only STDOUT".to_string(),
-                ));
-            }
-            if target.starts_with('(') && target.ends_with(')') {
-                Ok(Some(CopyStatement {
-                    relation: None,
-                    relation_sql: None,
-                    columns: Vec::new(),
-                    direction,
-                    format,
-                    query: Some(target[1..target.len() - 1].trim().to_string()),
-                    header,
-                    header_match,
-                    header_expected: Vec::new(),
-                    binary,
-                    binary_column_oids: Vec::new(),
-                }))
-            } else {
-                let (relation, columns, relation_sql) = parse_copy_table_target(target)?;
-                Ok(Some(CopyStatement {
-                    relation: Some(relation),
-                    relation_sql: Some(relation_sql),
-                    columns,
-                    direction,
-                    format,
-                    query: None,
-                    header,
-                    header_match,
-                    header_expected: Vec::new(),
-                    binary,
-                    binary_column_oids: Vec::new(),
-                }))
-            }
+    let query =
+        if direction == CopyDirection::ToStdout && target.starts_with('(') && target.ends_with(')')
+        {
+            Some(target[1..target.len() - 1].trim().to_string())
+        } else {
+            None
+        };
+    let (relation, columns, relation_sql) = if query.is_some() {
+        (None, Vec::new(), None)
+    } else {
+        let (relation, columns, relation_sql) = parse_copy_table_target(target)?;
+        (Some(relation), columns, Some(relation_sql))
+    };
+    Ok(Some(CopyStatement {
+        relation,
+        relation_sql,
+        columns,
+        direction,
+        endpoint,
+        format,
+        query,
+        header,
+        header_match,
+        header_expected: Vec::new(),
+        binary,
+        binary_column_oids: Vec::new(),
+    }))
+}
+
+/// The endpoint after `FROM`/`TO` and the option text that follows it.
+/// PostgreSQL's grammar (`copy_file_name`) takes `STDIN` or `STDOUT` for
+/// either direction, a string constant naming a server file, or `PROGRAM`
+/// followed by a string constant.
+pub(crate) fn parse_copy_endpoint(after_direction: &str) -> Result<(CopyEndpoint, &str)> {
+    let text = after_direction.trim_start();
+    for word in ["stdin", "stdout"] {
+        if word_at(text, 0, word) {
+            return Ok((CopyEndpoint::Client, &text[word.len()..]));
         }
     }
+    if word_at(text, 0, "program") {
+        let rest = text["program".len()..].trim_start();
+        return match parse_copy_string_literal(rest) {
+            Some((command, options)) => Ok((CopyEndpoint::Program(command), options)),
+            None => Err(copy_syntax_error(rest)),
+        };
+    }
+    match parse_copy_string_literal(text) {
+        Some((path, options)) => Ok((CopyEndpoint::File(path), options)),
+        None => Err(copy_syntax_error(text)),
+    }
+}
+
+fn copy_syntax_error(at: &str) -> PgWireError {
+    let token = at
+        .split(|ch: char| ch.is_whitespace() || ch == '(' || ch == ';')
+        .find(|token| !token.is_empty());
+    PgWireError::Sql(bicdb_sql::SqlError::RaisedException {
+        sqlstate: "42601".to_string(),
+        message: match token {
+            Some(token) => format!("syntax error at or near \"{token}\""),
+            None => "syntax error at end of input".to_string(),
+        },
+        detail: None,
+    })
+}
+
+/// A leading SQL string constant (`'...'` with `''` doubling, `E'...'` with
+/// backslash escapes, or a dollar-quoted string) and the text after it.
+pub(crate) fn parse_copy_string_literal(text: &str) -> Option<(String, &str)> {
+    let bytes = text.as_bytes();
+    if bytes.first() == Some(&b'$') {
+        let close = text[1..].find('$')? + 1;
+        let tag = &text[..=close];
+        if !tag[1..tag.len() - 1]
+            .chars()
+            .all(|ch| ch.is_alphanumeric() || ch == '_')
+        {
+            return None;
+        }
+        let body_start = close + 1;
+        let end = text[body_start..].find(tag)? + body_start;
+        return Some((text[body_start..end].to_string(), &text[end + tag.len()..]));
+    }
+    let (escapes, start) = match bytes {
+        [b'e' | b'E', b'\'', ..] => (true, 2),
+        [b'\'', ..] => (false, 1),
+        _ => return None,
+    };
+    let mut value = String::new();
+    let mut chars = text[start..].char_indices();
+    while let Some((idx, ch)) = chars.next() {
+        match ch {
+            '\'' => {
+                if text[start + idx + 1..].starts_with('\'') {
+                    chars.next();
+                    value.push('\'');
+                } else {
+                    return Some((value, &text[start + idx + 1..]));
+                }
+            }
+            '\\' if escapes => {
+                let (_, escaped) = chars.next()?;
+                value.push(match escaped {
+                    'n' => '\n',
+                    't' => '\t',
+                    'r' => '\r',
+                    'b' => '\u{8}',
+                    'f' => '\u{c}',
+                    other => other,
+                });
+            }
+            other => value.push(other),
+        }
+    }
+    None
 }
 
 pub(crate) fn split_copy_direction(body: &str) -> Result<(&str, CopyDirection, &str)> {
@@ -1925,9 +1976,7 @@ pub(crate) fn split_copy_direction(body: &str) -> Result<(&str, CopyDirection, &
             }
         }
     }
-    Err(PgWireError::Server(
-        "COPY requires FROM STDIN or TO STDOUT".to_string(),
-    ))
+    Err(PgWireError::Server("COPY requires FROM or TO".to_string()))
 }
 
 pub(crate) fn parse_copy_table_target(target: &str) -> Result<(String, Vec<String>, String)> {

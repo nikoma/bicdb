@@ -2560,6 +2560,23 @@ pub fn pg_role_is_superuser(db: &BicDb, role: &str) -> Result<bool> {
     Ok(load_role_schema(db, role)?.is_some_and(|schema| schema.superuser))
 }
 
+/// PostgreSQL's `has_privs_of_role(GetUserId(), role)` for a session: the
+/// EFFECTIVE role (after `SET ROLE`) is a superuser, is `role`, or inherits
+/// `role`'s privileges through memberships. The wire layer gates server-side
+/// COPY on it (`pg_read_server_files`, `pg_write_server_files`,
+/// `pg_execute_server_program`).
+pub fn pg_session_has_privileges_of_role(
+    db: &BicDb,
+    session_gucs: &HashMap<String, String>,
+    role: &str,
+) -> Result<bool> {
+    let current = current_user_from_gucs(session_gucs);
+    if pg_role_is_superuser(db, &current)? {
+        return Ok(true);
+    }
+    Ok(role_privilege_closure(db, &current)?.contains(&normalize_role_name(role)))
+}
+
 pub fn pg_is_user_type_oid(db: &BicDb, oid: i32) -> Result<bool> {
     Ok(load_user_type_by_oid(db, i64::from(oid))?.is_some())
 }

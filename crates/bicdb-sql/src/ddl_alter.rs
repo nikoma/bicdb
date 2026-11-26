@@ -854,9 +854,12 @@ pub(crate) fn validate_constraint_columns(
             }
             for column in columns {
                 if schema.column(column).is_none() {
-                    return Err(SqlError::InvalidSql(format!(
-                        "column \"{column}\" referenced by constraint on relation \"{table}\" does not exist"
-                    )));
+                    // PostgreSQL's index-key error for an exclusion element.
+                    return Err(SqlError::data_exception_public(
+                        "42703",
+                        format!("column \"{column}\" named in key does not exist"),
+                        None,
+                    ));
                 }
             }
             if access_method == "spgist" && equal_columns.len() + usize::from(range.is_some()) > 1 {

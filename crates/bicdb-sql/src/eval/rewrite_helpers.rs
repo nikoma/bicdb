@@ -670,6 +670,13 @@ pub(crate) fn rewrite_partition_ancestor_projection(sql: &str) -> Option<String>
         let Some(close_position) = close_position else {
             continue;
         };
+        // A constant relation name (`FROM pg_partition_ancestors('t')`) is
+        // the table function's own form, which returns regclass values.
+        if close_position == name_end + 3
+            && matches!(tokens[code[name_end + 2]].0, Token::SingleQuotedString(_))
+        {
+            continue;
+        }
         let aliased = code.get(close_position + 1).is_some_and(|&next| {
             matches!(&tokens[next].0, Token::Word(word)
             if word.value.eq_ignore_ascii_case("as")

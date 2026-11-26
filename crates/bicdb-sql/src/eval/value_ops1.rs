@@ -198,6 +198,19 @@ fn table_is_visible(db: &BicDb, oid: &SqlValue) -> Result<Option<SqlValue>> {
     Ok(Some(SqlValue::Bool(false)))
 }
 
+/// The regclass argument of `pg_partition_ancestors`: an OID or a relation
+/// name. Outlined: the catalog function evaluator's frame is large.
+#[inline(never)]
+fn partition_ancestor_oid_argument(db: &BicDb, value: &SqlValue) -> Result<Option<i64>> {
+    if matches!(value, SqlValue::Null) {
+        return Ok(None);
+    }
+    if let Some(oid) = sql_value_i64(value).or_else(|| value.to_cell().trim().parse::<i64>().ok()) {
+        return Ok(Some(oid));
+    }
+    resolve_regclass_oid(db, value.to_cell().trim())
+}
+
 pub(crate) fn eval_db_catalog_function_value_with_engine(
     db: &BicDb,
     name: &str,
@@ -228,9 +241,7 @@ pub(crate) fn eval_db_catalog_function_value_with_engine(
         }
     }
     if bare_name == "bicdb_partition_ancestor_oids" && args.len() == 1 {
-        let Some(oid) =
-            sql_value_i64(&args[0]).or_else(|| args[0].to_cell().trim().parse::<i64>().ok())
-        else {
+        let Some(oid) = partition_ancestor_oid_argument(db, &args[0])? else {
             return Ok(Some(SqlValue::Null));
         };
         let schemas = list_schemas(db)?;

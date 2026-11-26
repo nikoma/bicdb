@@ -1214,6 +1214,9 @@ pub(crate) fn postgres_range_input_error(
             format!("date out of range: \"{value}\""),
             Some(pg_type.to_string()),
         ),
+        PgCanonicalValueError::InvalidLineSpecification(_) => {
+            SqlError::data_exception("22P02", error.to_string(), Some(pg_type.to_string()))
+        }
         _ => SqlError::invalid_text_representation(pg_type, format!("\"{value}\"")),
     }
 }

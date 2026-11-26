@@ -83,11 +83,33 @@ impl<'db> SqlSession<'db> {
                 }
             }
         }
-        if let Some((table, column)) = columns.first().filter(|_| !cascade) {
-            return Err(SqlError::dependent_objects_still_exist(format!(
-                "cannot drop type {}.{} because column {column} of table {table} depends on it",
-                user_type.schema_name, user_type.name
-            )));
+        let type_name = if user_type.schema_name == "public" {
+            user_type.name.clone()
+        } else {
+            format!("{}.{}", user_type.schema_name, user_type.name)
+        };
+        let column_objects = columns
+            .iter()
+            .map(|(table, column)| {
+                format!("column {column} of table {}", catalog_display_name(table))
+            })
+            .collect::<Vec<_>>();
+        if !columns.is_empty() && !cascade {
+            return Err(SqlError::coded(
+                "2BP01",
+                format!("cannot drop type {type_name} because other objects depend on it"),
+                Some(
+                    column_objects
+                        .iter()
+                        .map(|object| format!("{object} depends on type {type_name}"))
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                ),
+                Some("Use DROP ... CASCADE to drop the dependent objects too.".to_string()),
+            ));
+        }
+        if cascade && !columns.is_empty() {
+            crate::statement_context::notice_drop_cascades(&column_objects);
         }
         for (table, column) in columns {
             let mut schema = load_schema(self.db_ref(), &table)?

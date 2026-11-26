@@ -359,3 +359,9 @@ severity and SQLSTATE:
   enough). REFRESH MATERIALIZED VIEW still needs ownership.
 - `GRANTED BY` accepts only the current role (0A000 `grantor must be current
   user` otherwise), as PostgreSQL does for object privileges.
+- `DROP TYPE ... CASCADE` reports the columns it drops (`drop cascades to column c of
+  table t`); without CASCADE it fails with PostgreSQL's DETAIL and HINT.
+- An identifier longer than 63 bytes in statement text is cut to 63 bytes, as
+  PostgreSQL's lexer does, with `NOTICE: identifier "..." will be truncated to "..."`
+  (not inside string literals, comments or dollar-quoted bodies). Statements built
+  through the embedding API's parsed-statement entry point are not cut.

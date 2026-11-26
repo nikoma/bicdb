@@ -974,6 +974,7 @@ impl<'db> SqlEngine<'db> {
                 row_set.rows.clear();
             }
         }
+        register_geometric_relation_types(self.from_relation_columns(&select.from).as_deref());
         let projection_json_srf = json_projection_set_returning_call(&select.projection)?;
         let projection_array_srfs = array_projection_set_returning_calls(&select.projection)?;
         if let Some(selection) = &select.selection {
@@ -4632,4 +4633,25 @@ pub(crate) fn cast_column_metadata(expr: &Expr) -> Option<SqlColumnMetadata> {
         type_modifier: i32::try_from(modifier.catalog_value()).ok()?,
         ..SqlColumnMetadata::default()
     })
+}
+
+/// Records the column types of FROM relations that hold geometric columns,
+/// so their operators, subscripts and casts are typed over the joined row
+/// (`a.p * b.p`, `WHERE b.p[1] > 3`) as they are over a single table. A
+/// relation another stage already registered keeps that registration.
+fn register_geometric_relation_types(env: Option<&[RelationColumns]>) {
+    for relation in env.unwrap_or_default() {
+        let geometric = relation
+            .columns
+            .iter()
+            .any(|(_, pg_type)| is_geometric_type(pg_type.as_deref()));
+        let Some((first, _)) = relation.columns.first() else {
+            continue;
+        };
+        if !geometric || crate::slot_types::lookup(&relation.alias, first).is_some() {
+            continue;
+        }
+        let (names, types): (Vec<_>, Vec<_>) = relation.columns.iter().cloned().unzip();
+        crate::slot_types::register_columns(&relation.alias, &names, &types);
+    }
 }

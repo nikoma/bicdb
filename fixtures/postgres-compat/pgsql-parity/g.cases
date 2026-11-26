@@ -61,3 +61,14 @@ geo_casts_update|CREATE TABLE g55(id int primary key, p point, c circle);INSERT 
 geo_input_grammar|SELECT box '(0,0)(1,1)', box ' ( 1 , 2 ) , ( 3 , 4 ) ', point ' ( 1 , 2 ) ', lseg '1,2,3,4', path '(1,2),(3,4)', path '((1,2),(3,4))', polygon '1,2,3,4,5,6', circle '1,2,3', circle '<1,2,3>', line '[(0,0),(1,1)]'
 geo_unknown_literal|CREATE TABLE g57(b box);INSERT INTO g57 VALUES ('(2,2),(1,1)'),('(10,10),(8,8)');SELECT b FROM g57 WHERE b << '(5,5),(6,6)';SELECT b FROM g57 WHERE b && '(1.5,1.5),(9,9)' ORDER BY b <-> point '(0,0)'
 geo_index_infinite|CREATE TABLE g58(id int, b box);INSERT INTO g58 VALUES (1,'(0,0),(1,1)'),(2,'(0,infinity),(-infinity,0)'),(3,'(5,5),(6,6)');CREATE INDEX g58_b ON g58 USING gist (b);SELECT id FROM g58 WHERE b && box '(0.5,0.5),(0.6,0.6)' ORDER BY id;SELECT id FROM g58 WHERE b && box '(100,-100),(200,-200)' ORDER BY id
+geo_join_ops|CREATE TABLE g56(id int, p point);INSERT INTO g56 VALUES (1,'(1,2)'),(2,'(3,4)');SELECT a.id, b.id, a.p + b.p, a.p * b.p, a.p - b.p, a.p[0] FROM g56 a, g56 b WHERE b.p[1] > 3 ORDER BY 1,2
+geo_join_box_point|CREATE TABLE g59b(b box);CREATE TABLE g59p(p point);INSERT INTO g59b VALUES ('(2,2),(0,0)');INSERT INTO g59p VALUES ('(1,2)'),('(10,0)');SELECT g59b.b + g59p.p, g59b.b * g59p.p, g59b.b::point, g59p.p::box FROM g59b, g59p WHERE g59p.p[0] < 2
+geo_prefix_ops|CREATE TABLE g60(s lseg, b box, pa path);INSERT INTO g60 VALUES ('[(0,0),(0,3)]','(2,2),(0,0)','[(0,0),(3,4)]'),('[(0,0),(3,0)]','(4,4),(1,1)','((0,0),(1,1),(2,0))');SELECT @@ s, @-@ s, @@ b, @-@ pa, # pa FROM g60;SELECT s FROM g60 WHERE ?| s;SELECT s FROM g60 WHERE ?- s
+geo_casts|SELECT lseg '[(1,2),(3,4)]'::point, box '(2,2),(0,0)'::polygon, polygon '((0,0),(2,0),(1,3))'::box, circle '<(1,1),2>'::box, polygon '((0,0),(2,0),(1,3))'::circle, path '((0,0),(1,1),(2,0))'::polygon, point '(1,2)'::box
+geo_cast_errors|SELECT path '[(1,2),(3,4)]'::polygon
+geo_zero_circle|SELECT polygon(circle '<(1,1),0>')
+geo_line_errors|SELECT line '{0,0,1}'
+geo_line_points|SELECT line '[(1,2),(1,2)]'
+notice_drop_type_cascade|CREATE TYPE g61t AS (a int);CREATE TABLE g61(c g61t);DROP TYPE g61t CASCADE;SELECT 1
+notice_drop_type_restrict|CREATE TYPE g62t AS (a int);CREATE TABLE g62(c g62t);DROP TYPE g62t
+notice_long_identifier|CREATE TABLE g63_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(a int);SELECT count(*) FROM g63_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa

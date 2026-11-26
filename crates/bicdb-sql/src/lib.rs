@@ -280,6 +280,7 @@ mod partition;
 pub(crate) use const_fold::fold_statement_constants;
 mod error_detail;
 mod hstore;
+mod identifier_truncation;
 mod inheritance;
 mod only_rewrite;
 mod persistence_ddl;

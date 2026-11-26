@@ -9082,6 +9082,10 @@ fn prepare_server_command(command: Command) -> Result<PreparedServer> {
                 .as_deref()
                 .map(bicdb_pgwire::ConnectorsConfig::load)
                 .transpose()?;
+            config.server_copy = bicdb_pgwire::ServerCopyConfig::new(
+                &operator.copy_server_files_dir,
+                operator.allow_copy_program,
+            )?;
             config.high_availability = replication.into_config()?;
             let host_services = cli_host_services(&operator)?;
             Ok(PreparedServer {
@@ -9412,6 +9416,16 @@ struct OperatorArgs {
     /// queues into tables (see docs/connectors.md).
     #[arg(long)]
     connectors: Option<PathBuf>,
+    /// Allow server-side COPY to read and write files below DIR (repeatable).
+    /// Without it, `COPY ... FROM/TO 'file'` is refused. Roles still need
+    /// pg_read_server_files / pg_write_server_files (see docs/server-side-copy.md).
+    #[arg(long = "copy-server-files-dir", value_name = "DIR")]
+    copy_server_files_dir: Vec<PathBuf>,
+    /// Allow `COPY ... FROM/TO PROGRAM` to run shell commands as the server's
+    /// OS user. Independent of --copy-server-files-dir; roles still need
+    /// pg_execute_server_program.
+    #[arg(long)]
+    allow_copy_program: bool,
 }
 
 fn cli_host_services(operator: &OperatorArgs) -> Result<Vec<Arc<dyn PgWireHostService>>> {

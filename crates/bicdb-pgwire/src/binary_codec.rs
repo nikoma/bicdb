@@ -478,6 +478,19 @@ pub(crate) fn decode_binary_nested_value_text(
         Some(db) => decode_binary_parameter_with_db(db, bytes, oid)?,
         None => decode_binary_parameter(bytes, oid)?,
     };
+    // Floats decode to `CAST('1.5' AS float8)` for use as a parameter; the
+    // text of the value is the quoted literal inside it. Returning the whole
+    // expression made binary COPY FROM of a float column fail with 22P02.
+    if let Some(inner) = literal
+        .strip_prefix("CAST(")
+        .and_then(|inner| inner.strip_suffix(')'))
+    {
+        if let Some((value, _)) = inner.rsplit_once(" AS ") {
+            if value.len() >= 2 && value.starts_with('\'') && value.ends_with('\'') {
+                return Ok(unquote_binary_sql_literal(value));
+            }
+        }
+    }
     Ok(unquote_binary_sql_literal(&literal))
 }
 

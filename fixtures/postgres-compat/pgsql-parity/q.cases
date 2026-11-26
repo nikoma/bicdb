@@ -1,0 +1,28 @@
+q.file_text_round_trip|CREATE TABLE qt1(a int, b text, c float8); INSERT INTO qt1 VALUES (1, 'one', 1.5), (2, NULL, -2), (3, E'tab\there', 0); COPY qt1 TO '/tmp/bicdb-pgq/qt1.txt'; CREATE TABLE qt1b(a int, b text, c float8); COPY qt1b FROM '/tmp/bicdb-pgq/qt1.txt'; SELECT * FROM qt1b ORDER BY a
+q.file_csv_header_round_trip|CREATE TABLE qt2(a int, b text); INSERT INTO qt2 VALUES (1, 'a,b'), (2, NULL), (3, ''), (4, 'say "hi"'); COPY qt2 TO '/tmp/bicdb-pgq/qt2.csv' WITH (FORMAT csv, HEADER); CREATE TABLE qt2b(a int, b text); COPY qt2b FROM '/tmp/bicdb-pgq/qt2.csv' WITH (FORMAT csv, HEADER); SELECT a, b, b IS NULL FROM qt2b ORDER BY a
+q.file_csv_header_match|CREATE TABLE qt3(a int, b text); INSERT INTO qt3 VALUES (1, 'x'); COPY qt3 TO '/tmp/bicdb-pgq/qt3.csv' (FORMAT csv, HEADER); COPY qt3 FROM '/tmp/bicdb-pgq/qt3.csv' (FORMAT csv, HEADER MATCH); SELECT * FROM qt3 ORDER BY a
+q.file_binary_round_trip|CREATE TABLE qt4(a int, b text, c boolean, d numeric); INSERT INTO qt4 VALUES (1, 'x', true, 1.25), (2, NULL, false, NULL); COPY qt4 TO '/tmp/bicdb-pgq/qt4.bin' WITH (FORMAT binary); CREATE TABLE qt4b(a int, b text, c boolean, d numeric); COPY qt4b FROM '/tmp/bicdb-pgq/qt4.bin' WITH (FORMAT binary); SELECT * FROM qt4b ORDER BY a
+q.file_query_and_columns|CREATE TABLE qt5(a int, b text); INSERT INTO qt5 SELECT g, 'v' || g FROM generate_series(1, 5) g; COPY (SELECT b, a FROM qt5 WHERE a % 2 = 1 ORDER BY a) TO '/tmp/bicdb-pgq/qt5.txt'; CREATE TABLE qt5b(b text, a int); COPY qt5b (b, a) FROM '/tmp/bicdb-pgq/qt5.txt'; SELECT * FROM qt5b ORDER BY a
+q.file_copy_in_transaction_rollback|CREATE TABLE qt6(a int); INSERT INTO qt6 VALUES (1), (2); COPY qt6 TO '/tmp/bicdb-pgq/qt6.txt'; BEGIN; COPY qt6 FROM '/tmp/bicdb-pgq/qt6.txt'; SELECT count(*) FROM qt6; ROLLBACK; SELECT count(*) FROM qt6
+q.file_bad_row_loads_nothing|CREATE TABLE qt7(a int); COPY (SELECT 'x' UNION ALL SELECT '1') TO '/tmp/bicdb-pgq/qt7.txt'; SELECT 'before'; COPY qt7 FROM '/tmp/bicdb-pgq/qt7.txt'
+q.file_bad_row_count|CREATE TABLE qt7b(a int); COPY (SELECT '1' UNION ALL SELECT 'x') TO '/tmp/bicdb-pgq/qt7b.txt'; COPY qt7b FROM '/tmp/bicdb-pgq/qt7b.txt'; SELECT count(*) FROM qt7b
+q.file_relative_to|CREATE TABLE qt8(a int); COPY qt8 TO 'relative.txt'
+q.file_missing_from|CREATE TABLE qt9(a int); COPY qt9 FROM '/tmp/bicdb-pgq/no-such-file.txt'
+q.file_directory_from|CREATE TABLE qt10(a int); COPY qt10 FROM '/tmp/bicdb-pgq'
+q.file_directory_to|CREATE TABLE qt11(a int); COPY qt11 TO '/tmp/bicdb-pgq'
+q.file_missing_directory_to|CREATE TABLE qt12(a int); COPY qt12 TO '/tmp/bicdb-pgq/no-such-dir/x.txt'
+q.file_missing_table|COPY qt_no_such_table FROM '/tmp/bicdb-pgq/qt1.txt'
+q.program_from|CREATE TABLE qp1(a int, b text); COPY qp1 FROM PROGRAM 'printf "1\tone\n2\ttwo\n"'; SELECT * FROM qp1 ORDER BY a
+q.program_from_csv|CREATE TABLE qp2(a int, b text); COPY qp2 FROM PROGRAM 'printf "a,b\n1,x\n2,\"y,z\"\n"' WITH (FORMAT csv, HEADER); SELECT * FROM qp2 ORDER BY a
+q.program_to_then_file_from|CREATE TABLE qp3(a int, b text); INSERT INTO qp3 VALUES (1, 'x'), (2, 'y'); COPY qp3 TO PROGRAM 'cat > /tmp/bicdb-pgq/qp3.csv' (FORMAT csv); CREATE TABLE qp3b(a int, b text); COPY qp3b FROM '/tmp/bicdb-pgq/qp3.csv' (FORMAT csv); SELECT * FROM qp3b ORDER BY a
+q.program_exit_code_from|CREATE TABLE qp4(a int); COPY qp4 FROM PROGRAM 'exit 3'
+q.program_exit_code_to|CREATE TABLE qp5(a int); INSERT INTO qp5 VALUES (1); COPY qp5 TO PROGRAM 'cat > /dev/null; exit 4'
+q.program_not_found|CREATE TABLE qp6(a int); COPY qp6 FROM PROGRAM 'bicdb-no-such-command-q'
+q.program_failure_keeps_nothing|CREATE TABLE qp7(a int); COPY qp7 FROM PROGRAM 'echo 1; exit 1'; SELECT count(*) FROM qp7
+q.role_missing_read|DROP ROLE IF EXISTS qr_nopriv1; CREATE ROLE qr_nopriv1; CREATE TABLE qr1(a int); GRANT ALL ON qr1 TO qr_nopriv1; SET ROLE qr_nopriv1; COPY qr1 FROM '/tmp/bicdb-pgq/qt1.txt'; COPY qr1 TO '/tmp/bicdb-pgq/qr1.txt'; COPY qr1 FROM PROGRAM 'echo 1'; COPY qr1 TO PROGRAM 'cat'; SELECT count(*) FROM qr1; RESET ROLE; DROP TABLE qr1; DROP ROLE qr_nopriv1
+q.role_missing_read_error|DROP ROLE IF EXISTS qr_nopriv2; CREATE ROLE qr_nopriv2; CREATE TABLE qr2(a int); GRANT ALL ON qr2 TO qr_nopriv2; SET ROLE qr_nopriv2; COPY qr2 FROM '/tmp/bicdb-pgq/qt1.txt'
+q.role_missing_program_error|DROP ROLE IF EXISTS qr_nopriv3; CREATE ROLE qr_nopriv3; CREATE TABLE qr3(a int); GRANT ALL ON qr3 TO qr_nopriv3; SET ROLE qr_nopriv3; COPY qr3 FROM PROGRAM 'echo 1'
+q.role_granted_read_only|DROP ROLE IF EXISTS qr_reader; CREATE ROLE qr_reader; GRANT pg_read_server_files TO qr_reader; CREATE TABLE qr4(a int); INSERT INTO qr4 VALUES (5); COPY qr4 TO '/tmp/bicdb-pgq/qr4.txt'; GRANT ALL ON qr4 TO qr_reader; SET ROLE qr_reader; COPY qr4 FROM '/tmp/bicdb-pgq/qr4.txt'; SELECT * FROM qr4 ORDER BY a; COPY qr4 TO '/tmp/bicdb-pgq/qr4b.txt'; COPY qr4 FROM PROGRAM 'echo 1'; RESET ROLE; DROP TABLE qr4; DROP ROLE qr_reader
+q.role_granted_write_and_program|DROP ROLE IF EXISTS qr_writer; CREATE ROLE qr_writer; GRANT pg_write_server_files, pg_execute_server_program TO qr_writer; CREATE TABLE qr5(a int); INSERT INTO qr5 VALUES (6); GRANT ALL ON qr5 TO qr_writer; SET ROLE qr_writer; COPY qr5 TO '/tmp/bicdb-pgq/qr5.txt'; COPY qr5 FROM PROGRAM 'cat /tmp/bicdb-pgq/qr5.txt'; SELECT * FROM qr5 ORDER BY a; RESET ROLE; DROP TABLE qr5; DROP ROLE qr_writer
+q.role_privileges_visible|SELECT pg_has_role('pg_read_server_files', 'MEMBER') IS NOT NULL, has_table_privilege('pg_class', 'SELECT')
+q.legacy_binary_keyword|CREATE TABLE qb1(a int, b text, c float8); INSERT INTO qb1 VALUES (1, 'x', 2.5), (2, NULL, NULL); COPY BINARY qb1 TO '/tmp/bicdb-pgq/qb1.bin'; CREATE TABLE qb2(a int, b text, c float8); COPY BINARY qb2 FROM '/tmp/bicdb-pgq/qb1.bin'; SELECT * FROM qb2 ORDER BY a

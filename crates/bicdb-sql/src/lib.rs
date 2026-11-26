@@ -2494,6 +2494,17 @@ impl SqlError {
         }
     }
 
+    /// [`Self::coded`] for other crates: an error with a SQLSTATE and
+    /// PostgreSQL's DETAIL and HINT lines.
+    pub fn coded_public(
+        sqlstate: &'static str,
+        message: impl Into<String>,
+        detail: Option<String>,
+        hint: Option<String>,
+    ) -> Self {
+        Self::coded(sqlstate, message, detail, hint)
+    }
+
     /// Attaches `detail` to a constraint violation; other errors are returned unchanged.
     pub(crate) fn with_error_detail(self, new: ErrorDetail) -> Self {
         match self {

@@ -2105,6 +2105,23 @@ impl<'db> SqlEngine<'db> {
         probe: Option<Rc<std::cell::Cell<bool>>>,
         query: &Query,
     ) -> Result<SqlResult> {
+        self.run_query_with_outer_extension_and_cte(columns, row, probe, query, None)
+    }
+
+    /// As [`Self::run_query_with_outer_extension`], with one extra statement-local CTE visible
+    /// to `query` (a hoisted LATERAL inner side).
+    pub(crate) fn run_query_with_outer_extension_and_cte(
+        &self,
+        columns: &[String],
+        row: &[SqlValue],
+        probe: Option<Rc<std::cell::Cell<bool>>>,
+        query: &Query,
+        extra_cte: Option<CteResult>,
+    ) -> Result<SqlResult> {
+        let mut ctes = self.ctes.clone();
+        if let Some(cte) = extra_cte {
+            ctes.insert(cte_key(&cte.name), cte);
+        }
         let (mut outer_row, novel) = self.take_outer_extension(columns, row);
         let base_probes = outer_row.probe_count();
         if let Some(probe) = probe {
@@ -2118,7 +2135,7 @@ impl<'db> SqlEngine<'db> {
                 SqlEngine::with_ctes_and_context(
                     self.db_ref(),
                     self.settings,
-                    self.ctes.clone(),
+                    ctes,
                     self.security_context.clone(),
                     self.session_gucs.clone(),
                 )

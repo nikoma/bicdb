@@ -1,0 +1,236 @@
+# PostgreSQL 18.4 regression tests (parallel_schedule): scope for the SQL-parity campaign.
+# Columns: test <TAB> in|out <TAB> reason (required for "out"; optional note for "in").
+# Rule: SQL language behaviour is in scope; tools, monitoring, replication, maintenance internals,
+# physical storage and C-extension loading are out. When in doubt: in.
+# Tests not listed here default to "in".
+test_setup	in	creates the shared fixture tables; also loads regress.so C functions (those parts fail on BicDB by design)
+boolean	in
+char	in
+name	in
+varchar	in
+text	in
+int2	in
+int4	in
+int8	in
+oid	in
+float4	in
+float8	in
+bit	in
+numeric	in
+txid	in	txid_* / pg_snapshot SQL functions
+uuid	in
+enum	in
+money	in
+rangetypes	in
+pg_lsn	in
+regproc	in
+strings	in
+md5	in
+numerology	in
+point	in
+lseg	in
+line	in
+box	in
+path	in
+polygon	in
+circle	in
+date	in
+time	in
+timetz	in
+timestamp	in
+timestamptz	in
+interval	in
+inet	in
+macaddr	in
+macaddr8	in
+multirangetypes	in
+geometry	in
+horology	in
+tstypes	in
+regex	in
+type_sanity	out	system-catalog consistency checks of pg_type/pg_class internals (catalog contents, not SQL behaviour)
+opr_sanity	out	system-catalog consistency checks of pg_proc/pg_operator/pg_amop internals
+misc_sanity	out	system-catalog consistency checks (pg_depend, toast tables, catalog columns)
+comments	in	SQL comment syntax
+expressions	in
+unicode	in
+xid	in	xid/xid8 types and functions
+mvcc	out	MVCC storage internals (index bloat after aborted inserts measured via relation size)
+database	in	ALTER DATABASE / CREATE DATABASE DDL
+stats_import	out	pg_restore_*_stats statistics import (dump/restore tool support)
+encoding	out	server-encoding conversion internals tested through regress.so C functions
+euc_kr	in	EUC_KR conversion via convert_from (runs in UTF8 databases too)
+copy	in
+copyselect	in
+copydml	in
+copyencoding	in
+insert	in
+insert_conflict	in
+create_function_c	out	LANGUAGE C function loading from regress.so / shared libraries
+create_misc	in
+create_operator	in
+create_procedure	in
+create_table	in
+create_type	in	(I/O functions in C from regress.so fail by design)
+create_schema	in
+create_index	in
+create_index_spgist	in
+create_view	in
+index_including	in
+index_including_gist	in
+create_aggregate	in
+create_function_sql	in
+create_cast	in
+constraints	in
+triggers	in
+select	in
+inherit	in
+typed_table	in
+vacuum	out	VACUUM/ANALYZE maintenance internals
+drop_if_exists	in
+updatable_views	in
+roleattributes	in	role attributes as visible in pg_authid/pg_roles
+create_am	out	table/index access methods (CREATE ACCESS METHOD with C handlers, heap2)
+hash_func	in	SQL-callable hash functions
+errors	in
+infinite_recurse	in
+sanity_check	out	catalog check that every table has the expected relhasindex (catalog internals)
+select_into	in
+select_distinct	in
+select_distinct_on	in
+select_implicit	in
+select_having	in
+subselect	in
+union	in
+case	in
+join	in
+aggregates	in
+transactions	in
+random	in
+portals	in
+arrays	in
+btree_index	in
+hash_index	in
+update	in
+delete	in
+namespace	in
+prepared_xacts	in
+brin	in
+gin	in
+gist	in
+spgist	in
+privileges	in
+init_privs	out	pg_init_privs catalog (extension privilege tracking for dump tools)
+security_label	out	SECURITY LABEL needs a loadable label provider module (dummy_seclabel)
+collate	in
+matview	in
+lock	in
+replica_identity	out	REPLICA IDENTITY for logical replication
+rowsecurity	in
+object_address	out	pg_get_object_address / pg_identify_object catalog-address internals
+tablesample	in
+groupingsets	in
+drop_operator	in
+password	out	password hashing / authentication (pg_authid rolpassword)
+identity	in
+generated_stored	in
+join_hash	out	parallel hash join executor internals (plan shapes, batch counts)
+brin_bloom	in
+brin_multi	in
+create_table_like	in
+alter_generic	in
+alter_operator	in
+misc	in	(regress.so C functions fail by design)
+async	in	LISTEN/NOTIFY
+dbsize	in	pg_size_pretty and friends
+merge	in
+misc_functions	in
+sysviews	out	pg_stat/system monitoring views
+tsrf	in	set-returning functions in the target list
+tid	out	ctid / tid physical tuple identifiers
+tidscan	out	ctid physical tuple scans
+tidrangescan	out	ctid physical tuple range scans
+collate.utf8	in
+collate.icu.utf8	in
+incremental_sort	out	planner internals (Incremental Sort plan nodes)
+create_role	in
+without_overlaps	in
+generated_virtual	in
+rules	in
+psql	out	psql meta-commands (client tool)
+psql_crosstab	out	psql \crosstabview (client tool)
+psql_pipeline	out	psql pipeline meta-commands (client tool)
+amutils	out	index access-method property introspection (pg_indexam_has_property)
+stats_ext	in	CREATE STATISTICS DDL (estimate checks are planner-specific)
+collate.linux.utf8	in
+collate.windows.win1252	out	runs only on Windows (skips elsewhere)
+select_parallel	out	parallel query executor/planner internals (Gather plans, workers)
+write_parallel	out	parallel query executor internals
+vacuum_parallel	out	parallel VACUUM maintenance internals
+maintain_every	out	database-wide ANALYZE/VACUUM maintenance internals
+publication	out	logical replication publications
+subscription	out	logical replication subscriptions
+select_views	in
+portals_p2	in
+foreign_key	in
+cluster	out	CLUSTER physical reordering (maintenance)
+dependency	in
+guc	in	SET/SHOW/RESET semantics
+bitmapops	in
+combocid	out	cmin/cmax tuple-header internals
+tsearch	in
+tsdicts	in
+foreign_data	in	FDW / SERVER / USER MAPPING DDL
+window	in
+xmlmap	in
+functional_deps	in
+advisory_lock	in
+indirect_toast	out	TOAST storage internals via regress.so
+equivclass	out	planner equivalence-class plan shapes
+json	in
+jsonb	in
+json_encoding	in
+jsonpath	in
+jsonpath_encoding	in
+jsonb_jsonpath	in
+sqljson	in
+sqljson_queryfuncs	in
+sqljson_jsontable	in
+plancache	in
+limit	in
+plpgsql	in
+copy2	in
+temp	in
+domain	in
+rangefuncs	in
+prepare	in
+conversion	out	CREATE CONVERSION / encoding conversion procs in C (regress.so)
+truncate	in
+alter_table	in
+sequence	in
+polymorphism	in
+rowtypes	in
+returning	in
+largeobject	in
+with	in
+xml	in
+partition_join	in
+partition_prune	out	planner partition-pruning plan shapes (EXPLAIN)
+reloptions	out	physical storage parameters (fillfactor, autovacuum, toast options)
+hash_part	in
+indexing	in
+partition_aggregate	in
+partition_info	in
+tuplesort	in
+explain	out	EXPLAIN plan format/shape (planner output)
+memoize	out	planner Memoize node internals
+stats	out	cumulative statistics (pg_stat_*) monitoring
+predicate	out	planner predicate-simplification plan shapes
+numa	out	pg_numa monitoring functions
+compression	out	TOAST compression methods (physical storage)
+compression_pglz	out	TOAST compression methods (physical storage)
+oidjoins	out	catalog foreign-key consistency checks
+event_trigger	in
+event_trigger_login	in
+fast_default	in
+tablespace	out	tablespaces on disk

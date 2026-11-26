@@ -433,7 +433,17 @@ impl<'db> SqlEngine<'db> {
                 ))
                 .with_shared_routine_vars(self.routine_vars.clone())
                 .with_cancellation(self.cancellation.clone());
-            let result = engine.execute_query(&cte.query)?;
+            // A consumer that reads only `row_demand` rows lets a plain CTE body stop early too
+            // (its body may hold a recursion of its own).
+            let limited = row_demand.and_then(|demand| {
+                limit_recursive_term(&SetExpr::Query(cte.query.clone()), demand).and_then(
+                    |limited| match limited {
+                        SetExpr::Query(query) => Some(query),
+                        _ => None,
+                    },
+                )
+            });
+            let result = engine.execute_query(limited.as_deref().unwrap_or(&cte.query))?;
             let columns = cte_columns(&name, &cte.alias.columns, &result.columns)?;
             return Ok(
                 CteResult::new(name, columns, result.rows).with_column_types(result.column_types)
@@ -450,7 +460,17 @@ impl<'db> SqlEngine<'db> {
                 ))
                 .with_shared_routine_vars(self.routine_vars.clone())
                 .with_cancellation(self.cancellation.clone());
-            let result = engine.execute_query(&cte.query)?;
+            // A consumer that reads only `row_demand` rows lets a plain CTE body stop early too
+            // (its body may hold a recursion of its own).
+            let limited = row_demand.and_then(|demand| {
+                limit_recursive_term(&SetExpr::Query(cte.query.clone()), demand).and_then(
+                    |limited| match limited {
+                        SetExpr::Query(query) => Some(query),
+                        _ => None,
+                    },
+                )
+            });
+            let result = engine.execute_query(limited.as_deref().unwrap_or(&cte.query))?;
             let columns = cte_columns(&name, &cte.alias.columns, &result.columns)?;
             return Ok(
                 CteResult::new(name, columns, result.rows).with_column_types(result.column_types)
@@ -508,7 +528,15 @@ impl<'db> SqlEngine<'db> {
                 ))
                 .with_shared_routine_vars(self.routine_vars.clone())
                 .with_cancellation(self.cancellation.clone());
-            let recursive = recursive_engine.execute_set_expr(right)?;
+            // Under a row demand, a recursive term that is itself a query (e.g. one with its own
+            // WITH RECURSIVE) needs only the rows still missing: pass the demand down as a LIMIT
+            // so a nested recursion stops too. Only for UNION ALL, whose rows are kept in
+            // production order without deduplication.
+            let limited_right = row_demand
+                .filter(|_| !distinct)
+                .and_then(|demand| limit_recursive_term(right, demand.saturating_sub(rows.len())));
+            let recursive =
+                recursive_engine.execute_set_expr(limited_right.as_ref().unwrap_or(right))?;
             if recursive.columns.len() != columns.len() {
                 return Err(SqlError::InvalidSql(format!(
                     "recursive CTE \"{name}\" returned {} columns, expected {}",
@@ -3890,4 +3918,50 @@ fn recursive_cte_row_demand(query: &Query) -> Option<(String, usize)> {
         return None;
     };
     Some((ident.value.clone(), limit.saturating_add(offset)))
+}
+
+/// `(query)` as the recursive term, with `LIMIT remaining` added when it has no ORDER BY, LIMIT,
+/// OFFSET or FETCH of its own.
+fn limit_recursive_term(term: &SetExpr, remaining: usize) -> Option<SetExpr> {
+    let SetExpr::Query(query) = term else {
+        return None;
+    };
+    if query.order_by.is_some() || query.limit_clause.is_some() || query.fetch.is_some() {
+        return None;
+    }
+    let mut limited = query.as_ref().clone();
+    // `a UNION ALL (b)` under LIMIT n needs at most n rows of each branch, in order; pass the
+    // limit into parenthesized branches so a recursion inside one stops as well.
+    limit_union_all_branches(limited.body.as_mut(), remaining);
+    limited.limit_clause = Some(sqlparser::ast::LimitClause::LimitOffset {
+        limit: Some(Expr::Value(
+            Value::Number(remaining.to_string(), false).into(),
+        )),
+        offset: None,
+        limit_by: Vec::new(),
+    });
+    Some(SetExpr::Query(Box::new(limited)))
+}
+
+fn limit_union_all_branches(body: &mut SetExpr, remaining: usize) {
+    let SetExpr::SetOperation {
+        op: SetOperator::Union,
+        set_quantifier: SetQuantifier::All,
+        left,
+        right,
+    } = body
+    else {
+        return;
+    };
+    for side in [left.as_mut(), right.as_mut()] {
+        match side {
+            SetExpr::Query(_) => {
+                if let Some(limited) = limit_recursive_term(side, remaining) {
+                    *side = limited;
+                }
+            }
+            SetExpr::SetOperation { .. } => limit_union_all_branches(side, remaining),
+            _ => {}
+        }
+    }
 }

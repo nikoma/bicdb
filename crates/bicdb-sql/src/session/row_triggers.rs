@@ -80,6 +80,15 @@ impl<'db> SqlSession<'db> {
                 match crate::catalog_memo::inbound_foreign_key_deletes_shared(self.db_ref(), &table)
                 {
                     Ok(inbound) if !inbound.is_empty() => return ControlFlow::Break(Ok(true)),
+                    Ok(_)
+                        if crate::session::temporal_keys::has_inbound_temporal_foreign_keys(
+                            self.db_ref(),
+                            &table,
+                        )
+                        .unwrap_or(true) =>
+                    {
+                        return ControlFlow::Break(Ok(true))
+                    }
                     Err(error) => return ControlFlow::Break(Err(error)),
                     _ => {}
                 }

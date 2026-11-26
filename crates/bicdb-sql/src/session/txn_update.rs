@@ -1686,6 +1686,7 @@ impl<'db> SqlSession<'db> {
             .constraints
             .iter()
             .any(|constraint| matches!(constraint, ConstraintSchema::ForeignKey { .. }))
+            || !schema.temporal_foreign_keys.is_empty()
         {
             return Ok(true);
         }
@@ -1736,6 +1737,10 @@ impl<'db> SqlSession<'db> {
         }
         if !crate::catalog_memo::inbound_foreign_key_updates_shared(self.db_ref(), table)?
             .is_empty()
+            || crate::session::temporal_keys::has_inbound_temporal_foreign_keys(
+                self.db_ref(),
+                table,
+            )?
         {
             return Ok(true);
         }
@@ -2781,6 +2786,16 @@ impl<'db> SqlSession<'db> {
                             Some(foreign_table.clone())
                         }
                         _ => None,
+                    })
+                    .or_else(|| {
+                        child
+                            .temporal_foreign_keys
+                            .iter()
+                            .find(|foreign_key| {
+                                target_names
+                                    .contains(&foreign_key.foreign_table.to_ascii_lowercase())
+                            })
+                            .map(|foreign_key| foreign_key.foreign_table.clone())
                     });
                 let Some(referenced) = referenced else {
                     continue;
@@ -6673,6 +6688,7 @@ impl<'db> SqlSession<'db> {
         schema: &TableSchema,
         records: &[Record],
     ) -> Result<()> {
+        self.check_temporal_foreign_key_parents(table, schema, records, &[])?;
         self.apply_foreign_key_parent_delete_inner(table, schema, records, &mut BTreeSet::new(), 0)
     }
 
@@ -7010,6 +7026,9 @@ impl<'db> SqlSession<'db> {
         schema: &TableSchema,
         before_after_records: &[(Record, Record)],
     ) -> Result<()> {
+        let (removed, added): (Vec<Record>, Vec<Record>) =
+            before_after_records.iter().cloned().unzip();
+        self.check_temporal_foreign_key_parents(table, schema, &removed, &added)?;
         self.apply_foreign_key_parent_update_inner(table, schema, before_after_records, 0)
     }
 
@@ -7327,6 +7346,10 @@ impl<'db> SqlSession<'db> {
             || self.has_row_triggers(table, "before", "delete")?
             || self.has_row_triggers(table, "after", "delete")?
             || !catalog_memo::inbound_foreign_key_deletes_shared(self.db_ref(), table)?.is_empty()
+            || crate::session::temporal_keys::has_inbound_temporal_foreign_keys(
+                self.db_ref(),
+                table,
+            )?
             || !self
                 .extension_database_event_bindings(
                     &Self::extension_event_relation(table),

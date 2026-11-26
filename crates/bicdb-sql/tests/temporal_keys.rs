@@ -189,7 +189,7 @@ fn temporal_key_definitions_are_validated_like_postgresql() {
 }
 
 #[test]
-fn temporal_foreign_keys_are_refused_explicitly_and_a_period_column_is_not_one() {
+fn temporal_foreign_keys_parse_and_a_period_column_is_not_one() {
     let dir = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(dir.path()).unwrap();
     run(
@@ -197,14 +197,11 @@ fn temporal_foreign_keys_are_refused_explicitly_and_a_period_column_is_not_one()
         "CREATE TABLE p (id int4range, valid_at daterange, \
          CONSTRAINT p_pk PRIMARY KEY (id, valid_at WITHOUT OVERLAPS))",
     );
-    assert_eq!(
-        fails(
-            &mut db,
-            "CREATE TABLE c (id int4range, parent_id int4range, valid_at daterange, \
-             CONSTRAINT c_fk FOREIGN KEY (parent_id, PERIOD valid_at) REFERENCES p (id, PERIOD valid_at))"
-        )
-        .0,
-        "0A000"
+    // Supported now (see temporal_foreign_keys.rs).
+    run(
+        &mut db,
+        "CREATE TABLE c (id int4range, parent_id int4range, valid_at daterange, \
+         CONSTRAINT c_fk FOREIGN KEY (parent_id, PERIOD valid_at) REFERENCES p (id, PERIOD valid_at))",
     );
     // A column named "period" in an ordinary foreign key is fine.
     run(
@@ -226,14 +223,28 @@ fn temporal_keys_hold_inside_the_partitions_of_a_partitioned_table() {
         "CREATE TABLE tp (id int4range, valid_at daterange, \
          CONSTRAINT tp_pk PRIMARY KEY (id, valid_at WITHOUT OVERLAPS)) PARTITION BY LIST (id)",
     );
-    run(&mut db, "CREATE TABLE tp1 PARTITION OF tp FOR VALUES IN ('[1,2)')");
-    run(&mut db, "INSERT INTO tp VALUES ('[1,2)', '[2018-01-01,2018-02-01)')");
+    run(
+        &mut db,
+        "CREATE TABLE tp1 PARTITION OF tp FOR VALUES IN ('[1,2)')",
+    );
+    run(
+        &mut db,
+        "INSERT INTO tp VALUES ('[1,2)', '[2018-01-01,2018-02-01)')",
+    );
     assert_eq!(
-        fails(&mut db, "INSERT INTO tp VALUES ('[1,2)', '[2018-01-15,2018-03-01)')").0,
+        fails(
+            &mut db,
+            "INSERT INTO tp VALUES ('[1,2)', '[2018-01-15,2018-03-01)')"
+        )
+        .0,
         "23P01"
     );
     assert_eq!(
-        fails(&mut db, "INSERT INTO tp1 VALUES ('[1,2)', '[2018-01-20,2018-03-01)')").0,
+        fails(
+            &mut db,
+            "INSERT INTO tp1 VALUES ('[1,2)', '[2018-01-20,2018-03-01)')"
+        )
+        .0,
         "23P01"
     );
 }

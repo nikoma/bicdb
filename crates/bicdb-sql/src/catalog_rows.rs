@@ -8160,6 +8160,7 @@ pub(crate) fn catalog_view_schema(db: &BicDb, view: ViewSchema) -> Result<TableS
         inherits: Vec::new(),
         inheritance_children: Vec::new(),
         no_inherit_constraints: Vec::new(),
+        temporal_foreign_keys: Vec::new(),
     })
 }
 pub(crate) fn relation_schemas(db: &BicDb) -> Result<Vec<TableSchema>> {

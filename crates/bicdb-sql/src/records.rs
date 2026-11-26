@@ -480,6 +480,9 @@ pub(crate) fn validate_updated_records(
                 after_records,
             )?;
         }
+        crate::session::temporal_keys::validate_temporal_foreign_keys(
+            db, tx, table, schema, record, before,
+        )?;
     }
     if !before_after_records.is_empty() {
         validate_unique_constraints_for_update(db, tx, table, schema, before_after_records)?;
@@ -2843,7 +2846,9 @@ pub(crate) fn validate_foreign_keys(
     for constraint in &schema.constraints {
         validate_foreign_key_constraint(db, tx, table, schema, record, constraint)?;
     }
-    Ok(())
+    crate::session::temporal_keys::validate_temporal_foreign_keys(
+        db, tx, table, schema, record, None,
+    )
 }
 
 /// `validate_foreign_keys` for one row of a statement that writes `rows`.
@@ -2865,7 +2870,9 @@ pub(crate) fn validate_foreign_keys_in_statement(
             db, tx, table, schema, record, constraint, rows,
         )?;
     }
-    Ok(())
+    crate::session::temporal_keys::validate_temporal_foreign_keys(
+        db, tx, table, schema, record, None,
+    )
 }
 
 pub(crate) fn validate_foreign_key_constraint_in_statement(

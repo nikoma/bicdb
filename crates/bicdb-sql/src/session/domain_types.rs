@@ -559,6 +559,7 @@ impl<'db> SqlSession<'db> {
         let schema = load_schema(self.db_ref(), table)?;
         if let Some(schema) = &schema {
             self.detach_dropped_inheritance_table(schema, dropping, cascade)?;
+            self.drop_temporal_foreign_keys_referencing(table, dropping, cascade)?;
             let views = self.views_depending_on_table(&schema.name, "table", dropping)?;
             self.drop_table_inbound_foreign_keys(schema, dropping, cascade, &views)?;
             if cascade {
@@ -1697,6 +1698,21 @@ impl<'db> SqlSession<'db> {
                             .to_vec();
                         self.propagate_partition_checks(&schema, &added, *not_valid)?;
                     }
+                    schema_dirty = true;
+                }
+                AlterTableOperation::DropConstraint {
+                    if_exists, name, ..
+                } if schema
+                    .temporal_foreign_keys
+                    .iter()
+                    .any(|foreign_key| foreign_key.name == ident_value(name)) =>
+                {
+                    let _ = if_exists;
+                    self.capture_table_state_undo(&table, &schema)?;
+                    let dropped = ident_value(name);
+                    schema
+                        .temporal_foreign_keys
+                        .retain(|foreign_key| foreign_key.name != dropped);
                     schema_dirty = true;
                 }
                 AlterTableOperation::DropConstraint {

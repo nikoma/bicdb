@@ -357,6 +357,7 @@ impl<'db> SqlSession<'db> {
                 .constraints
                 .iter()
                 .any(|constraint| matches!(constraint, ConstraintSchema::ForeignKey { .. }))
+                || !schema.temporal_foreign_keys.is_empty()
         };
         if has_foreign_key(&schema) {
             return Err(SqlError::Unsupported(format!(

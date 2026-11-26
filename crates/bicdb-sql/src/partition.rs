@@ -1518,6 +1518,32 @@ pub(crate) fn validate_attachment(
     }
     let mut relations = Vec::new();
     physical_relations(db, child, &mut BTreeSet::new(), &mut relations)?;
+    // The attached rows are validated against the parent's foreign keys: as
+    // when a foreign key is added, no referenced row may have an
+    // uncommitted change pending meanwhile.
+    let mut targets = parent
+        .constraints
+        .iter()
+        .filter_map(|constraint| match constraint {
+            ConstraintSchema::ForeignKey {
+                name,
+                foreign_table,
+                ..
+            } => Some((name.clone(), foreign_table.clone())),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    for ancestor in crate::session::temporal_keys::partition_lineage(db, &parent.name)? {
+        if let Some(ancestor) = load_schema(db, &ancestor)? {
+            targets.extend(
+                ancestor
+                    .temporal_foreign_keys
+                    .iter()
+                    .map(|key| (key.name.clone(), key.foreign_table.clone())),
+            );
+        }
+    }
+    let mut guarded = targets.is_empty();
     // CREATE PARTITION preflights a not-yet-created empty relation.
     for table in relations {
         let records = match scan(db, tx, &table) {
@@ -1529,6 +1555,10 @@ pub(crate) fn validate_attachment(
             }
             Err(error) => return Err(error),
         };
+        if !guarded && !records.is_empty() {
+            crate::schema_meta::guard_foreign_key_targets(db, &targets)?;
+            guarded = true;
+        }
         for record in records {
             if !matches_partition(db, parent, child, &record)? {
                 return Err(violation(

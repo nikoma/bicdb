@@ -2740,6 +2740,31 @@ impl BicDb {
         }
     }
 
+    /// Transactions (open or prepared) holding a row lock on any row of
+    /// `collection`: every uncommitted UPDATE, DELETE or INSERT of a row
+    /// holds one. Foreign-key DDL uses it as PostgreSQL's lock on the
+    /// referenced table. O(locks held); never called by ordinary DML.
+    pub fn collection_row_lock_holders(&self, collection: &str) -> BTreeSet<TransactionId> {
+        let mut holders = BTreeSet::new();
+        for shard in self.write_locks.shards.iter() {
+            for ((locked, _), owner) in shard.lock().iter() {
+                if locked == collection {
+                    holders.insert(*owner);
+                }
+            }
+        }
+        holders
+    }
+
+    /// Every transaction (open or prepared) holding at least one row lock.
+    pub fn row_lock_holders(&self) -> BTreeSet<TransactionId> {
+        let mut holders = BTreeSet::new();
+        for shard in self.write_locks.shards.iter() {
+            holders.extend(shard.lock().values().copied());
+        }
+        holders
+    }
+
     pub(crate) fn ensure_no_pending_transactions(&self) -> Result<()> {
         self.check_recovery_state()?;
         let has_write_locks = !self.write_locks.is_empty();

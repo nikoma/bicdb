@@ -1076,6 +1076,13 @@ impl SqlSession<'_> {
             )
         })?;
         let parent_display = catalog_display_name(&parent.name);
+        crate::schema_meta::guard_foreign_key_targets(
+            self.db_ref(),
+            &[(
+                def.name.clone().unwrap_or_else(|| schema.name.clone()),
+                parent.name.clone(),
+            )],
+        )?;
         let (referred_columns, referred_period) = match &def.referred {
             Some((columns, period)) => (columns.clone(), period.clone()),
             None => match temporal_keys_of(&parent)

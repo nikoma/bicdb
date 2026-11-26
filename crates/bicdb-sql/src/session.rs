@@ -3971,6 +3971,9 @@ impl<'db> SqlSession<'db> {
 
     pub(crate) fn execute_inner(&mut self, sql: &str) -> Result<SqlResult> {
         self.cancellation.check()?;
+        let _statement_transaction = crate::statement_context::StatementTransactionScope::enter(
+            self.tx.as_ref().or(self.parent_tx).map(|tx| tx.id().0),
+        );
         if sql_has_no_statements(sql) {
             return Ok(SqlResult::empty(Vec::new()));
         }

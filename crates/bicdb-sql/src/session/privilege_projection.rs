@@ -818,6 +818,12 @@ impl<'db> SqlSession<'db> {
             reserve_relation_type_oids(self.db_mut()?, &schema_name, &table)?;
         schema.row_type_oid = Some(row_type_oid);
         schema.row_array_type_oid = Some(row_array_type_oid);
+        // Rows this transaction inserts later are checked against committed
+        // parents: no referenced row may have a pending change meanwhile.
+        crate::schema_meta::guard_foreign_key_targets(
+            self.db_ref(),
+            &crate::schema_meta::validated_foreign_key_targets(&schema),
+        )?;
         self.save_session_schema(&schema)?;
         if let Some(definition) = primary_key_index_definition_for_schema(&schema) {
             self.create_new_table_index(definition)?;

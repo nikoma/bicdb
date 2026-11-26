@@ -1693,7 +1693,11 @@ impl<'db> SqlEngine<'db> {
                     );
                 }
                 SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => {
-                    metadata.push(direct_column(expr).unwrap_or_default());
+                    metadata.push(
+                        direct_column(expr)
+                            .or_else(|| cast_column_metadata(expr))
+                            .unwrap_or_default(),
+                    );
                 }
                 _ => return None,
             }
@@ -3105,6 +3109,10 @@ impl<'db> SqlEngine<'db> {
                     })
             }
             Expr::Extract { .. } => Some("numeric".to_string()),
+            Expr::Ceil { expr, .. } | Expr::Floor { expr, .. } => Some(
+                float8_or_numeric_result_type(self.infer_env_expr_type(expr, env).as_deref()),
+            ),
+            Expr::Position { .. } => Some("int4".to_string()),
             Expr::AtTimeZone { timestamp, .. } => {
                 match self.infer_env_expr_type(timestamp, env).as_deref() {
                     Some("timestamptz") => Some("timestamp".to_string()),
@@ -3117,6 +3125,29 @@ impl<'db> SqlEngine<'db> {
                     && ident.value.eq_ignore_ascii_case("current_date") =>
             {
                 Some("date".into())
+            }
+            Expr::Identifier(ident)
+                if ident.quote_style.is_none()
+                    && matches!(
+                        ident.value.to_ascii_lowercase().as_str(),
+                        "localtimestamp" | "localtime" | "current_time" | "current_timestamp"
+                    )
+                    && !env.iter().any(|relation| {
+                        relation
+                            .columns
+                            .iter()
+                            .any(|(name, _)| name.eq_ignore_ascii_case(&ident.value))
+                    }) =>
+            {
+                Some(
+                    match ident.value.to_ascii_lowercase().as_str() {
+                        "localtimestamp" => "timestamp",
+                        "localtime" => "time",
+                        "current_time" => "timetz",
+                        _ => "timestamptz",
+                    }
+                    .to_string(),
+                )
             }
             Expr::Identifier(ident)
                 if ident.quote_style.is_none()
@@ -3366,6 +3397,7 @@ impl<'db> SqlEngine<'db> {
                 | "has_table_privilege"
                 | "has_function_privilege"
                 | "has_type_privilege"
+                | "has_largeobject_privilege"
                 | "has_column_privilege"
                 | "has_any_column_privilege"
                 | "has_sequence_privilege"
@@ -3598,7 +3630,9 @@ impl<'db> SqlEngine<'db> {
                 Some("timestamptz".to_string())
             }
             "date_part" | "pg_catalog.date_part" => Some("float8".to_string()),
-            "date_trunc" | "pg_catalog.date_trunc" => self.infer_env_expr_type(args.get(1)?, env),
+            "date_trunc" | "pg_catalog.date_trunc" => Some(date_trunc_result_type(
+                self.infer_env_expr_type(args.get(1)?, env).as_deref(),
+            )),
             "justify_hours"
             | "pg_catalog.justify_hours"
             | "justify_days"
@@ -3606,6 +3640,15 @@ impl<'db> SqlEngine<'db> {
             | "justify_interval"
             | "pg_catalog.justify_interval" => Some("interval".to_string()),
             "count" => Some("int8".to_string()),
+            "stddev" | "stddev_samp" | "stddev_pop" | "variance" | "var_samp" | "var_pop"
+            | "corr" | "covar_pop" | "covar_samp" | "regr_avgx" | "regr_avgy" | "regr_count"
+            | "regr_intercept" | "regr_r2" | "regr_slope" | "regr_sxx" | "regr_sxy"
+            | "regr_syy" | "bit_and" | "bit_or" | "bit_xor" => stat_aggregate_result_type(
+                &name,
+                args.first()
+                    .and_then(|arg| self.infer_env_expr_type(arg, env))
+                    .as_deref(),
+            ),
             "row_number" | "rank" | "dense_rank" | "ntile" => Some("int8".to_string()),
             "percent_rank" | "cume_dist" => Some("float8".to_string()),
             "min" | "max" => self.infer_env_expr_type(args.first()?, env),
@@ -3668,11 +3711,40 @@ impl<'db> SqlEngine<'db> {
             "bicdb_oracle_current_sqlcode" => Some("int4".into()),
             "nextval" | "currval" | "setval" => Some("int8".to_string()),
             "starts_with" => Some("bool".to_string()),
-            "pow" | "cbrt" | "exp" | "ln" | "log" => Some("float8".to_string()),
+            "pow" | "power" | "cbrt" | "exp" | "ln" | "log" | "sqrt" | "ceil" | "ceiling"
+            | "floor" | "degrees" | "radians" => Some(float8_or_numeric_result_type(
+                args.first()
+                    .and_then(|arg| self.infer_env_expr_type(arg, env))
+                    .as_deref(),
+            )),
+            "round" | "trunc" if args.len() >= 2 => Some("numeric".to_string()),
+            "round" | "trunc" => Some(float8_or_numeric_result_type(
+                args.first()
+                    .and_then(|arg| self.infer_env_expr_type(arg, env))
+                    .as_deref(),
+            )),
+            "random" | "pi" | "sin" | "cos" | "tan" | "asin" | "acos" | "atan" | "atan2"
+            | "cot" | "random_normal" => Some("float8".to_string()),
+            "generate_series" => args
+                .first()
+                .and_then(|arg| self.infer_env_expr_type(arg, env)),
+            "to_number" => Some("numeric".to_string()),
+            "to_timestamp"
+            | "clock_timestamp"
+            | "statement_timestamp"
+            | "transaction_timestamp"
+            | "make_timestamptz" => Some("timestamptz".to_string()),
+            "make_date" => Some("date".to_string()),
+            "pg_partition_root" => Some("regclass".to_string()),
+            "localtimestamp" => Some("timestamp".to_string()),
+            "localtime" => Some("time".to_string()),
+            "current_time" => Some("timetz".to_string()),
+            "make_time" => Some("time".to_string()),
+            "make_timestamp" => Some("timestamp".to_string()),
+            "timeofday" => Some("text".to_string()),
             "similarity" => Some("float4".to_string()),
             "age" | "make_interval" => Some("interval".to_string()),
             "to_date" | "date" => Some("date".to_string()),
-            "trunc" if args.len() == 2 => Some("numeric".to_string()),
             "bicdb_oracle_nvl_number"
             | "bicdb_oracle_nvl2_number"
             | "bicdb_oracle_decode_number"
@@ -3741,9 +3813,7 @@ impl<'db> SqlEngine<'db> {
             | "pg_catalog.pg_get_expr"
             | "pg_get_indexdef"
             | "pg_catalog.pg_get_indexdef" => Some("text".to_string()),
-            "abs" | "ceil" | "ceiling" | "floor" | "round" | "mod" | "power" | "sqrt" => {
-                self.infer_env_expr_type(args.first()?, env)
-            }
+            "abs" | "mod" | "sign" => self.infer_env_expr_type(args.first()?, env),
             _ => {
                 let static_types = args
                     .iter()
@@ -4483,4 +4553,23 @@ pub(crate) fn declared_table_function_columns(
             Some((column.name.value.to_ascii_lowercase(), Some(pg_type)))
         })
         .collect()
+}
+
+/// A cast with a type modifier (`x::varchar(3)`, `n::numeric(5,2)`) keeps
+/// the modifier on its result column, as PostgreSQL describes it.
+pub(crate) fn cast_column_metadata(expr: &Expr) -> Option<SqlColumnMetadata> {
+    let mut expr = expr;
+    while let Expr::Nested(inner) = expr {
+        expr = inner;
+    }
+    let data_type = match expr {
+        Expr::Cast { data_type, .. } => data_type,
+        Expr::TypedString(value) => &value.data_type,
+        _ => return None,
+    };
+    let modifier = pg_type_modifier_from_data_type(data_type).ok()??;
+    Some(SqlColumnMetadata {
+        type_modifier: i32::try_from(modifier.catalog_value()).ok()?,
+        ..SqlColumnMetadata::default()
+    })
 }

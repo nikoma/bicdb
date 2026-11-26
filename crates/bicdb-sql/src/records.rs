@@ -395,7 +395,7 @@ pub(crate) fn validate_records_for_write(
         validate_record_columns(table, schema, record)?;
         validate_prepared_checks(table, schema, record, &checks, check_engine)?;
         partition::validate_record(db, schema, record)?;
-        validate_foreign_keys(db, tx, table, schema, record)?;
+        validate_foreign_keys_in_statement(db, tx, table, schema, record, records)?;
     }
     validate_unique_constraints(db, tx, table, schema, records, allow_existing_same_id)?;
     validate_exclusion_constraints(db, table, schema, records, allow_existing_same_id)
@@ -417,7 +417,7 @@ pub(crate) fn validate_records_for_write_prechecked(
     }
     for record in records {
         partition::validate_record(db, schema, record)?;
-        validate_foreign_keys(db, tx, table, schema, record)?;
+        validate_foreign_keys_in_statement(db, tx, table, schema, record, records)?;
     }
     validate_unique_constraints(db, tx, table, schema, records, allow_existing_same_id)?;
     validate_exclusion_constraints(db, table, schema, records, allow_existing_same_id)
@@ -468,7 +468,15 @@ pub(crate) fn validate_updated_records(
                     continue;
                 }
             }
-            validate_foreign_key_constraint(db, tx, table, schema, record, constraint)?;
+            validate_foreign_key_constraint_in_statement(
+                db,
+                tx,
+                table,
+                schema,
+                record,
+                constraint,
+                after_records,
+            )?;
         }
     }
     if !before_after_records.is_empty() {
@@ -2811,6 +2819,67 @@ pub(crate) fn validate_foreign_keys(
     Ok(())
 }
 
+/// `validate_foreign_keys` for one row of a statement that writes `rows`.
+/// PostgreSQL checks a non-deferred foreign key at the end of the statement,
+/// so a self-reference to a row the same statement writes is satisfied.
+pub(crate) fn validate_foreign_keys_in_statement(
+    db: &BicDb,
+    tx: Option<&Transaction>,
+    table: &str,
+    schema: &TableSchema,
+    record: &Record,
+    rows: &[Record],
+) -> Result<()> {
+    if schema.referential_checks_disabled {
+        return Ok(());
+    }
+    for constraint in &schema.constraints {
+        validate_foreign_key_constraint_in_statement(
+            db, tx, table, schema, record, constraint, rows,
+        )?;
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_foreign_key_constraint_in_statement(
+    db: &BicDb,
+    tx: Option<&Transaction>,
+    table: &str,
+    schema: &TableSchema,
+    record: &Record,
+    constraint: &ConstraintSchema,
+    rows: &[Record],
+) -> Result<()> {
+    let error = match validate_foreign_key_constraint(db, tx, table, schema, record, constraint) {
+        Ok(()) => return Ok(()),
+        Err(error) if error.sqlstate() == "23503" => error,
+        Err(error) => return Err(error),
+    };
+    let ConstraintSchema::ForeignKey {
+        columns,
+        foreign_table,
+        referred_columns,
+        ..
+    } = constraint
+    else {
+        return Err(error);
+    };
+    let self_reference = foreign_table == table
+        || resolve_session_relation_name_if_exists(db, foreign_table)
+            == resolve_session_relation_name_if_exists(db, table);
+    if !self_reference {
+        return Err(error);
+    }
+    let key = record_column_values(record, schema, columns);
+    for row in rows {
+        let candidate = record_column_values(row, schema, referred_columns);
+        if typed_column_values_not_distinct(schema, referred_columns, &candidate, &key)? {
+            return Ok(());
+        }
+    }
+    Err(error)
+}
+
 pub(crate) fn validate_foreign_key_constraint(
     db: &BicDb,
     tx: Option<&Transaction>,
@@ -2886,6 +2955,59 @@ pub(crate) fn validate_foreign_key_constraint_immediate(
         }
     };
     reserve_foreign_key(tx, &foreign_schema, referred_columns, &key).map_err(domain_error)?;
+    // A partitioned parent holds no rows itself: the referenced row lives in
+    // one of its partitions (each may key its Native ids differently).
+    if foreign_schema.partitioning.is_some() {
+        for partition in crate::partition::physical_tables(db, &foreign_schema)? {
+            let primary = !partition.has_hidden_primary_key()
+                && primary_key_columns_for_schema(&partition) == *referred_columns;
+            if primary {
+                if let Ok(id) = record_id_from_column_values(
+                    &partition.name,
+                    &partition,
+                    referred_columns,
+                    &key,
+                ) {
+                    let committed = db.get_unchecked(&partition.name, &id)?;
+                    let parent = match tx {
+                        Some(tx) => tx.overlay_pending_write(&partition.name, &id, committed),
+                        None => committed,
+                    };
+                    if let Some(parent) = parent {
+                        let mut parent = (*parent).clone();
+                        crate::partition::materialize_primary_key_fields(&partition, &mut parent)?;
+                        let parent_key =
+                            record_column_values(&parent, &foreign_schema, referred_columns);
+                        if typed_column_values_not_distinct(
+                            &foreign_schema,
+                            referred_columns,
+                            &parent_key,
+                            &key,
+                        )
+                        .map_err(domain_error)?
+                        {
+                            return Ok(());
+                        }
+                    }
+                }
+            }
+            for mut record in current_integrity_records(db, tx, &partition.name)? {
+                crate::partition::materialize_primary_key_fields(&partition, &mut record)?;
+                let parent_key = record_column_values(&record, &foreign_schema, referred_columns);
+                if typed_column_values_not_distinct(
+                    &foreign_schema,
+                    referred_columns,
+                    &parent_key,
+                    &key,
+                )
+                .map_err(domain_error)?
+                {
+                    return Ok(());
+                }
+            }
+        }
+        return Err(foreign_key_violation(table, name));
+    }
     // This is an integrity read, not a transaction-snapshot read: match the
     // existing scan's latest committed state with this transaction overlaid.
     // Recheck typed equality even after deriving a physical primary-key id.

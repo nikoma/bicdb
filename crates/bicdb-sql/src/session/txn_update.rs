@@ -805,6 +805,7 @@ impl<'db> SqlSession<'db> {
         let (table, target_alias) = table_with_joins_name_and_alias(&update.table)?;
         let table = resolve_session_relation_name_if_exists(self.db_ref(), &table);
         let preauthorized = self.take_view_target_preauthorization(&table);
+        super::functions_insert::require_dml_target_exists(self.db_ref(), &table)?;
         if !preauthorized {
             self.require_update_privileges(&table, &update.assignments)?;
         }
@@ -812,10 +813,20 @@ impl<'db> SqlSession<'db> {
             &self.sql_engine_with_ctes(ctes.clone()),
             ComparisonStatement::Update(update),
         )?;
-        // RETURNING projects the affected rows back to the caller, so it is a
-        // read. Without this, an UPDATE-only grant was a full table read.
-        if update.returning.is_some() && !preauthorized {
-            self.require_table_privilege(&table, "SELECT")?;
+        // Columns the statement reads (SET expressions, WHERE, RETURNING)
+        // need SELECT, as in PostgreSQL: an UPDATE-only grant is not a read.
+        if !preauthorized {
+            let mut names = crate::column_privileges::ReferencedNames::default();
+            for assignment in &update.assignments {
+                names.add_expr(&assignment.value);
+            }
+            if let Some(selection) = &update.selection {
+                names.add_expr(selection);
+            }
+            if let Some(returning) = &update.returning {
+                names.add_items(returning);
+            }
+            self.require_select_on_names(&table, &names, std::slice::from_ref(&target_alias))?;
         }
         if let Some(view) = load_view(self.db_ref(), &table)? {
             let triggers = self.instead_of_triggers(&view.name, "update")?;
@@ -825,6 +836,30 @@ impl<'db> SqlSession<'db> {
             return self.execute_update_of_view(update, view, ctes, match_policy);
         }
         let schema = load_schema_shared(self.db_ref(), &table)?;
+        if let Some(schema) = schema.as_deref() {
+            // PostgreSQL resolves every SET target, even when no row matches.
+            for assignment in &update.assignments {
+                let names: Vec<&ObjectName> = match &assignment.target {
+                    AssignmentTarget::ColumnName(name) => vec![name],
+                    AssignmentTarget::Tuple(names) => names.iter().collect(),
+                };
+                for name in names {
+                    let parts = object_name_parts(name);
+                    let Some(column) = parts.first() else {
+                        continue;
+                    };
+                    let known = schema.columns.iter().any(|candidate| {
+                        !candidate.hidden && candidate.name.eq_ignore_ascii_case(column)
+                    });
+                    if !known {
+                        return Err(SqlError::UndefinedColumn {
+                            table: relation_name_for_message(&table),
+                            column: column.clone(),
+                        });
+                    }
+                }
+            }
+        }
         self.validate_row_assignments(update, &table, schema.as_deref())?;
         if let Some(schema) = schema
             .as_deref()
@@ -2183,6 +2218,7 @@ impl<'db> SqlSession<'db> {
         let (table, target_alias) = delete_from_table_and_alias(delete)?;
         let table = resolve_session_relation_name_if_exists(self.db_ref(), &table);
         let preauthorized = self.take_view_target_preauthorization(&table);
+        super::functions_insert::require_dml_target_exists(self.db_ref(), &table)?;
         if !preauthorized {
             self.require_table_privilege(&table, "DELETE")?;
         }
@@ -2190,8 +2226,15 @@ impl<'db> SqlSession<'db> {
             &self.sql_engine_with_ctes(ctes.clone()),
             ComparisonStatement::Delete(delete),
         )?;
-        if delete.returning.is_some() && !preauthorized {
-            self.require_table_privilege(&table, "SELECT")?;
+        if !preauthorized {
+            let mut names = crate::column_privileges::ReferencedNames::default();
+            if let Some(selection) = &delete.selection {
+                names.add_expr(selection);
+            }
+            if let Some(returning) = &delete.returning {
+                names.add_items(returning);
+            }
+            self.require_select_on_names(&table, &names, std::slice::from_ref(&target_alias))?;
         }
         if let Some(view) = load_view(self.db_ref(), &table)? {
             let triggers = self.instead_of_triggers(&view.name, "delete")?;
@@ -2690,7 +2733,8 @@ impl<'db> SqlSession<'db> {
         // tenant's tables. PostgreSQL requires ownership or the TRUNCATE
         // privilege.
         for target in &tables {
-            self.require_table_ownership(&target.name, "truncate it")?;
+            // Ownership (including through a role) or the TRUNCATE privilege.
+            self.require_table_privilege(&target.name, "TRUNCATE")?;
         }
         let cascade = matches!(truncate.cascade, Some(CascadeOption::Cascade));
         let schemas = list_schemas(self.db_ref())?;
@@ -2753,7 +2797,8 @@ impl<'db> SqlSession<'db> {
         // whoever owned those. The children are truncated, so the children
         // must be authorized.
         for target in &tables {
-            self.require_table_ownership(&target.name, "truncate it")?;
+            // Ownership (including through a role) or the TRUNCATE privilege.
+            self.require_table_privilege(&target.name, "TRUNCATE")?;
         }
 
         tables.sort_by(|left, right| {
@@ -3251,7 +3296,17 @@ impl<'db> SqlSession<'db> {
         if let Some(value) = stored {
             return Ok(value);
         }
-        eval_builtin_function_value(function)
+        match eval_builtin_function_value(function) {
+            // The context-free evaluator cannot see the catalog; the session
+            // can tell a missing function (42883) from an unsupported one.
+            Err(SqlError::Unsupported(message)) => {
+                Err(
+                    undefined_function_error(self.db_ref(), function, &arg_types)
+                        .unwrap_or(SqlError::Unsupported(message)),
+                )
+            }
+            other => other,
+        }
     }
 
     pub(crate) fn eval_session_expr(&mut self, expr: &Expr) -> Result<SqlValue> {
@@ -3273,6 +3328,10 @@ impl<'db> SqlSession<'db> {
                 // that use the generic evaluator instead of bound slots.
                 if let Some(value) = routine_var_from_name(&self.routine_vars, &ident.value) {
                     return Ok(value);
+                }
+                // `current_role` is an SQL value function, like current_user.
+                if ident.quote_style.is_none() && ident.value.eq_ignore_ascii_case("current_role") {
+                    return Ok(SqlValue::String(current_user_from_gucs(&self.session_gucs)));
                 }
                 eval_constant_expr(expr)
             }
@@ -5303,6 +5362,9 @@ impl<'db> SqlSession<'db> {
                     if let Some(constraint) = &error_fields.constraint {
                         fields.push(SqlErrorField::Constraint(constraint.clone()));
                     }
+                    if let Some(hint) = &error_fields.hint {
+                        fields.push(SqlErrorField::Hint(hint.clone()));
+                    }
                     let suppressed = self.raise_level_suppressed(error_fields.severity);
                     if let Some(severity) = error_fields.severity {
                         fields.push(SqlErrorField::Severity(severity.to_string()));
@@ -5329,16 +5391,43 @@ impl<'db> SqlSession<'db> {
                         ));
                     }
                 }
-                Err(SqlError::RaisedException {
+                let detail = detail
+                    .as_ref()
+                    .map(|expr| {
+                        self.eval_routine_expr(frame, expr)
+                            .map(|value| value.to_cell())
+                    })
+                    .transpose()?;
+                let mut fields = Vec::new();
+                for (value, field) in [
+                    (
+                        &error_fields.hint,
+                        SqlErrorField::Hint as fn(String) -> SqlErrorField,
+                    ),
+                    (&error_fields.column, SqlErrorField::Column),
+                    (&error_fields.constraint, SqlErrorField::Constraint),
+                    (&error_fields.datatype, SqlErrorField::DataType),
+                    (&error_fields.table, SqlErrorField::Table),
+                    (&error_fields.schema, SqlErrorField::Schema),
+                ] {
+                    if let Some(value) = value {
+                        fields.push(field(value.clone()));
+                    }
+                }
+                if fields.is_empty() {
+                    return Err(SqlError::RaisedException {
+                        sqlstate: sqlstate.clone(),
+                        message: format_routine_raise_message(message, &arguments),
+                        detail,
+                    });
+                }
+                if let Some(detail) = detail {
+                    fields.insert(0, SqlErrorField::Detail(detail));
+                }
+                Err(SqlError::RaisedDiagnostic {
                     sqlstate: sqlstate.clone(),
                     message: format_routine_raise_message(message, &arguments),
-                    detail: detail
-                        .as_ref()
-                        .map(|expr| {
-                            self.eval_routine_expr(frame, expr)
-                                .map(|value| value.to_cell())
-                        })
-                        .transpose()?,
+                    fields,
                 })
             }
             RoutineStmt::ReturnNext => {
@@ -6423,10 +6512,46 @@ impl<'db> SqlSession<'db> {
         if role_has_table_privilege(self.db_ref(), &role, table, privilege)? {
             return Ok(());
         }
-        Err(SqlError::BicDb(BicDbError::Authorization(format!(
-            "permission denied for table {}",
-            relation_name_for_message(table)
-        ))))
+        Err(SqlError::BicDb(BicDbError::Authorization(
+            relation_permission_denied_message(self.db_ref(), table),
+        )))
+    }
+
+    /// The relation and constraint PostgreSQL names when a referenced row is
+    /// still in use: for a key that references a partitioned table, the
+    /// partition holding the row and that partition's derived constraint
+    /// (`<name>_<n>`, n its position among the referenced table's
+    /// partitions); otherwise the table and the key's own name.
+    pub(crate) fn referenced_partition_constraint(
+        &self,
+        table: &str,
+        schema: &TableSchema,
+        referenced_table: &str,
+        name: &str,
+        row: Option<&Record>,
+    ) -> Result<(String, String)> {
+        let Some(row) = row else {
+            return Ok((table.to_string(), name.to_string()));
+        };
+        let holder = if schema.partitioning.is_some() {
+            partition::route_record(self.db_ref(), schema, row)?.name
+        } else {
+            table.to_string()
+        };
+        if holder.eq_ignore_ascii_case(referenced_table) {
+            return Ok((holder, name.to_string()));
+        }
+        let Some(referenced) = load_schema(self.db_ref(), referenced_table)? else {
+            return Ok((holder, name.to_string()));
+        };
+        let position = partition::physical_tables(self.db_ref(), &referenced)?
+            .iter()
+            .skip(1)
+            .position(|partition| partition.name.eq_ignore_ascii_case(&holder));
+        Ok(match position {
+            Some(index) => (holder, format!("{name}_{}", index + 1)),
+            None => (holder, name.to_string()),
+        })
     }
 
     pub(crate) fn apply_foreign_key_parent_delete_batch(
@@ -6478,13 +6603,32 @@ impl<'db> SqlSession<'db> {
                     constraint.columns.clone(),
                     constraint.referred_columns.clone(),
                     constraint.on_delete,
+                    constraint.referenced_table.clone(),
                 )
             })
             .collect::<Vec<_>>();
+        // Rows of a partition may keep their key only in the Native id; the
+        // referenced values must be visible to compare them with children.
+        let materialized;
+        let records = if schema.partitioning.is_some() || schema.partition_of.is_some() {
+            materialized = records
+                .iter()
+                .cloned()
+                .map(|mut record| {
+                    let holder = partition::route_record(self.db_ref(), schema, &record)
+                        .unwrap_or_else(|_| schema.clone());
+                    partition::materialize_primary_key_fields(&holder, &mut record)?;
+                    Ok(record)
+                })
+                .collect::<Result<Vec<_>>>()?;
+            materialized.as_slice()
+        } else {
+            records
+        };
 
         // Child inserts and parent removal reserve the same referenced key.
         // A snapshot-only check lets them both commit, leaving an orphan.
-        for (_, _, _, referred_columns, _) in &inbound_constraints {
+        for (_, _, _, referred_columns, _, _) in &inbound_constraints {
             for record in records {
                 reserve_foreign_key_mutation(
                     self.tx.as_ref(),
@@ -6494,23 +6638,27 @@ impl<'db> SqlSession<'db> {
                 )?;
             }
         }
-        for (child_schema, name, columns, referred_columns, on_delete) in &inbound_constraints {
+        for (child_schema, name, columns, referred_columns, on_delete, referenced_table) in
+            &inbound_constraints
+        {
             if !matches!(
                 on_delete,
                 ForeignKeyAction::NoAction | ForeignKeyAction::Restrict
             ) {
                 continue;
             }
-            let parent_keys = records
-                .iter()
-                .map(|record| {
+            let mut parent_rows = BTreeMap::new();
+            for record in records {
+                parent_rows.insert(
                     typed_column_key_label(
                         schema,
                         referred_columns,
                         &record_column_values(record, schema, referred_columns),
-                    )
-                })
-                .collect::<Result<BTreeSet<_>>>()?;
+                    )?,
+                    record,
+                );
+            }
+            let parent_keys = parent_rows.keys().cloned().collect::<BTreeSet<_>>();
             if parent_keys.is_empty() {
                 continue;
             }
@@ -6533,11 +6681,18 @@ impl<'db> SqlSession<'db> {
                     {
                         continue;
                     }
-                    return Err(foreign_key_referenced_violation(
+                    let (relation, constraint) = self.referenced_partition_constraint(
                         table,
                         schema,
+                        referenced_table,
                         name,
-                        &child_schema.name,
+                        parent_rows.get(&child_key).copied(),
+                    )?;
+                    return Err(foreign_key_referenced_violation(
+                        &relation,
+                        schema,
+                        &constraint,
+                        &foreign_key_declaring_relation(self.db_ref(), child_schema, name)?,
                         referred_columns,
                         &values,
                     ));
@@ -6545,7 +6700,7 @@ impl<'db> SqlSession<'db> {
             }
         }
 
-        for (child_schema, name, columns, referred_columns, on_delete) in inbound_constraints {
+        for (child_schema, name, columns, referred_columns, on_delete, _) in inbound_constraints {
             if matches!(
                 on_delete,
                 ForeignKeyAction::NoAction | ForeignKeyAction::Restrict
@@ -7934,4 +8089,30 @@ fn rewrite_query_filters(query: &mut Query, rewrite: &mut dyn FnMut(&mut Expr)) 
         }
     }
     set_expr(query.body.as_mut(), rewrite);
+}
+
+/// The relation PostgreSQL names as declaring a foreign key: a partition's
+/// copy of its partitioned table's key is reported as the partitioned table's
+/// (the topmost ancestor carrying the same key).
+pub(crate) fn foreign_key_declaring_relation(
+    db: &BicDb,
+    schema: &TableSchema,
+    name: &str,
+) -> Result<String> {
+    let mut current = schema.clone();
+    for _ in 0..64 {
+        let Some(link) = &current.partition_of else {
+            break;
+        };
+        let Some(parent) = load_schema(db, &link.parent_table)? else {
+            break;
+        };
+        if !parent.constraints.iter().any(|constraint| {
+            matches!(constraint, ConstraintSchema::ForeignKey { name: other, .. } if other == name)
+        }) {
+            break;
+        }
+        current = parent;
+    }
+    Ok(current.name)
 }

@@ -2117,7 +2117,7 @@ impl RowAggregate {
     pub(crate) fn column_name(&self) -> String {
         match self {
             Self::OrderedSet(aggregate) => aggregate.column_name(),
-            Self::RegressionSlope(_) => "regr_slope".to_string(),
+            Self::RegressionSlope(aggregate) => aggregate.column_name(),
             Self::CountAll | Self::CountExpr(_, _) => "count".to_string(),
             Self::Sum(_, _) => "sum".to_string(),
             Self::ExactSumUnits(_) => "bicdb_exact_sum_units".to_string(),
@@ -3695,6 +3695,7 @@ pub(crate) fn is_virtual_table(table: &str) -> bool {
             | "information_schema.schemata"
             | "information_schema.role_table_grants"
             | "information_schema.table_privileges"
+            | "information_schema.column_privileges"
             | "information_schema.views"
             | "information_schema.triggers"
             | "pg_catalog.pg_database"
@@ -3892,6 +3893,9 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
         "information_schema.role_table_grants" | "information_schema.table_privileges" => {
             information_schema_role_table_grants(db)
         }
+        "information_schema.column_privileges" => {
+            crate::column_privileges::information_schema_column_privileges(db)
+        }
         "information_schema.views" => information_schema_views(db),
         "information_schema.triggers" => information_schema_triggers(db),
         GRAPH_NODES_TABLE => Ok(graph_node_rows(db)),
@@ -3988,7 +3992,9 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
         "pg_depend" => pg_depend_rows(db),
         "pg_db_role_setting" => Ok(Vec::new()),
         "pg_inherits" => pg_inherits_rows(db),
-        "pg_largeobject_metadata" => Ok(Vec::new()),
+        "pg_largeobject_metadata" => {
+            crate::pg_large_objects::functions::pg_largeobject_metadata_rows(db)
+        }
         "pg_partitioned_table" => pg_partitioned_table_rows(db),
         "pg_statistic_ext" | "pg_statistic_ext_data" => Ok(Vec::new()),
         "pg_enum" => pg_enum_rows(db),
@@ -5257,6 +5263,16 @@ pub(crate) fn virtual_table_column_types(table: &str) -> Option<Vec<(String, Opt
             ("default_character_set_schema", "name"),
             ("default_character_set_name", "name"),
             ("sql_path", "varchar"),
+        ],
+        "information_schema.column_privileges" => &[
+            ("grantor", "name"),
+            ("grantee", "name"),
+            ("table_catalog", "name"),
+            ("table_schema", "name"),
+            ("table_name", "name"),
+            ("column_name", "name"),
+            ("privilege_type", "varchar"),
+            ("is_grantable", "varchar"),
         ],
         "information_schema.table_privileges" | "information_schema.role_table_grants" => &[
             ("grantor", "name"),

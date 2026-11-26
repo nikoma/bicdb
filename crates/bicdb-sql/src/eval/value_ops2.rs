@@ -1755,6 +1755,12 @@ pub(crate) fn cast_expr_value(
 // SQL casts must retain array subscripts, just like the wire codec. The
 // lower-level body renderer stays prefix-free for the codec's typed header.
 pub(crate) fn postgres_array_cast_text_value(value: &SqlValue, delimiter: char) -> Result<String> {
+    // Catalog arrays such as aclitem[] are produced in their text form.
+    if let SqlValue::String(text) = value {
+        if text.starts_with('{') && text.ends_with('}') {
+            return Ok(text.clone());
+        }
+    }
     let text = postgres_array_text_value(value, delimiter)?;
     let (array, bounds) =
         array_json_parts(value, "array text cast")?.ok_or_else(|| invalid_array_text("NULL"))?;

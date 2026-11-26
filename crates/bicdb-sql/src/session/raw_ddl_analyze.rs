@@ -18,7 +18,7 @@ impl<'db> SqlSession<'db> {
         for target in targets {
             match target {
                 Some(table) => {
-                    self.require_table_ownership(&table, "analyze it")?;
+                    self.require_maintain_privilege(&table, "analyze it")?;
                     self.analyze_collection_with_type_statistics(&table)?
                 }
                 None => self.analyze_all_permitted_with_type_statistics()?,
@@ -508,12 +508,11 @@ impl<'db> SqlSession<'db> {
             });
         }
 
-        self.create_session_collection(&definition.table)?;
         let row_type_oid =
             table_row_type_oid(namespace_oid(&definition.schema_name), &definition.table);
         let row_array_type_oid =
             table_row_array_type_oid(namespace_oid(&definition.schema_name), &definition.table);
-        self.save_session_schema(&TableSchema {
+        let schema = TableSchema {
             comment: None,
             name: definition.table,
             schema_name: definition.schema_name,
@@ -532,7 +531,13 @@ impl<'db> SqlSession<'db> {
             partitioning: definition.partitioning,
             partition_of: None,
             oracle_partitioning: None,
-        })?;
+        };
+        partition::validate_new_key(self.db_ref(), &schema)?;
+        if schema.partitioning.is_some() {
+            partition::validate_definition(&schema)?;
+        }
+        self.create_session_collection(&schema.name)?;
+        self.save_session_schema(&schema)?;
         Ok(())
     }
 
@@ -609,7 +614,7 @@ impl<'db> SqlSession<'db> {
             referential_checks_disabled: false,
             policies: Vec::new(),
             owner: Some(current_user_from_gucs(&self.session_gucs)),
-            partitioning: None,
+            partitioning: partition.partitioning,
             partition_of: Some(PartitionOfSchema {
                 parent_table: partition.parent_table,
                 parent_schema: if parent.schema_name.is_empty() {
@@ -622,10 +627,13 @@ impl<'db> SqlSession<'db> {
             }),
             oracle_partitioning: None,
         };
+        partition::validate_new_key(self.db_ref(), &child)?;
+        partition::validate_definition(&child)?;
         partition::validate_attachment(self.db_ref(), self.read_tx(), &parent, &child, true)?;
         self.validate_partition_trigger_attachment(&child, &parent)?;
         self.create_session_collection(&child.name)?;
         self.save_partition_schema_and_triggers(&child, Some(&parent))?;
+        self.inherit_partition_indexes(&child.name, &parent)?;
         Ok(())
     }
 
@@ -707,7 +715,21 @@ impl<'db> SqlSession<'db> {
                     &partition,
                     false,
                 )?;
+                // The partition takes on the parent's foreign keys (validated
+                // above), so writes that name it directly are checked too.
+                for constraint in &parent.constraints {
+                    if let ConstraintSchema::ForeignKey { name, .. } = constraint {
+                        if !partition
+                            .constraints
+                            .iter()
+                            .any(|existing| constraint_name(existing) == name)
+                        {
+                            partition.constraints.push(constraint.clone());
+                        }
+                    }
+                }
                 self.save_partition_schema_and_triggers(&partition, Some(&parent))?;
+                self.inherit_partition_indexes(&partition.name, &parent)?;
             }
             RawAlterTablePartition::Detach {
                 parent_table,
@@ -726,6 +748,10 @@ impl<'db> SqlSession<'db> {
                     ));
                 }
                 partition.partition_of = None;
+                // Its indexes stay, detached from the parent's indexes.
+                for index in &mut partition.indexes {
+                    index.partition_parent = None;
+                }
                 self.save_partition_schema_and_triggers(&partition, None)?;
             }
         }
@@ -1301,7 +1327,7 @@ impl<'db> SqlSession<'db> {
             // is a read of the table's contents. Ungated, it turned the
             // statistics catalog into an on-demand exfiltration primitive:
             // analyze someone else's table, then read their values back out.
-            self.require_table_ownership(&collection, "analyze it")?;
+            self.require_maintain_privilege(&collection, "analyze it")?;
             self.analyze_collection_with_type_statistics(&collection)?;
         } else {
             self.analyze_all_permitted_with_type_statistics()?;
@@ -1323,12 +1349,30 @@ impl<'db> SqlSession<'db> {
         let owned = list_schemas(self.db_ref())?
             .into_iter()
             .map(|schema| schema.name)
-            .filter(|table| self.require_table_ownership(table, "analyze it").is_ok())
+            .filter(|table| self.require_maintain_privilege(table, "analyze it").is_ok())
             .collect::<Vec<_>>();
         for collection in owned {
             self.analyze_collection_with_type_statistics(&collection)?;
         }
         Ok(())
+    }
+
+    /// PostgreSQL 17's MAINTAIN rule (ANALYZE, REFRESH MATERIALIZED VIEW,
+    /// ...): the owner, a role granted MAINTAIN, or a pg_maintain member.
+    /// Statistics stay behind pg_stats' own SELECT filter, so this never
+    /// discloses sampled values to a role that cannot read the table.
+    pub(crate) fn require_maintain_privilege(&self, table: &str, action: &str) -> Result<()> {
+        match self.require_table_ownership(table, action) {
+            Ok(()) => Ok(()),
+            Err(error) => {
+                let role = current_user_from_gucs(&self.session_gucs);
+                if role_has_table_privilege(self.db_ref(), &role, table, "MAINTAIN")? {
+                    Ok(())
+                } else {
+                    Err(error)
+                }
+            }
+        }
     }
 
     pub(crate) fn analyze_collection_with_type_statistics(

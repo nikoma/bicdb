@@ -1886,7 +1886,18 @@ pub(crate) fn execute_builtin_function_with_engine(
                     SqlResult::new(vec![name.replace("pg_catalog.", "")], vec![vec![value]])
                 })
                 .ok_or_else(|| {
-                    SqlError::Unsupported(format!("function {other} is not supported without FROM"))
+                    // The engine's catalog sees user routines when `db` is
+                    // not passed (constant folding, EXPLAIN).
+                    undefined_function_error(
+                        db.or_else(|| query_engine.map(|engine| engine.db_ref())),
+                        function,
+                        &arg_types,
+                    )
+                    .unwrap_or_else(|| {
+                        SqlError::Unsupported(format!(
+                            "function {other} is not supported without FROM"
+                        ))
+                    })
                 })
         }
     }
@@ -4748,6 +4759,8 @@ pub(crate) enum RawAlterUserTypeDdl {
 #[derive(Clone, Debug)]
 pub(crate) struct RawTypePrivilegeDdl {
     pub(crate) grant: bool,
+    /// `ON DOMAIN`: every target must be a domain (PostgreSQL 42809).
+    pub(crate) domain: bool,
     pub(crate) types: Vec<RawTypeIdentity>,
     pub(crate) grantees: Vec<String>,
 }
@@ -4807,14 +4820,30 @@ pub(crate) fn parse_raw_alter_user_type(sql: &str) -> Result<Option<RawAlterUser
 
 pub(crate) fn parse_raw_type_privilege_ddl(sql: &str) -> Result<Option<RawTypePrivilegeDdl>> {
     let statement = trim_sql_statement(sql);
-    let (grant, mut rest, role_keyword) =
-        if let Some(rest) = strip_prefix_ci(statement, "GRANT USAGE ON TYPE ") {
-            (true, rest, "TO")
-        } else if let Some(rest) = strip_prefix_ci(statement, "REVOKE USAGE ON TYPE ") {
-            (false, rest, "FROM")
-        } else {
-            return Ok(None);
-        };
+    // USAGE is the only privilege of a type or domain, so ALL [PRIVILEGES]
+    // names exactly it, as in PostgreSQL.
+    let (grant, after_verb, role_keyword) = if let Some(rest) = strip_prefix_ci(statement, "GRANT ")
+    {
+        (true, rest.trim_start(), "TO")
+    } else if let Some(rest) = strip_prefix_ci(statement, "REVOKE ") {
+        (false, rest.trim_start(), "FROM")
+    } else {
+        return Ok(None);
+    };
+    let Some(after_privilege) = strip_prefix_ci(after_verb, "USAGE ON ")
+        .or_else(|| strip_prefix_ci(after_verb, "ALL PRIVILEGES ON "))
+        .or_else(|| strip_prefix_ci(after_verb, "ALL ON "))
+    else {
+        return Ok(None);
+    };
+    let after_privilege = after_privilege.trim_start();
+    let (domain, mut rest) = if let Some(rest) = strip_prefix_ci(after_privilege, "TYPE ") {
+        (false, rest)
+    } else if let Some(rest) = strip_prefix_ci(after_privilege, "DOMAIN ") {
+        (true, rest)
+    } else {
+        return Ok(None);
+    };
     let role_index = find_top_level_keyword(rest, role_keyword).ok_or_else(|| {
         SqlError::InvalidSql(format!(
             "{} USAGE ON TYPE requires {role_keyword}",
@@ -4862,6 +4891,7 @@ pub(crate) fn parse_raw_type_privilege_ddl(sql: &str) -> Result<Option<RawTypePr
     }
     Ok(Some(RawTypePrivilegeDdl {
         grant,
+        domain,
         types,
         grantees,
     }))
@@ -6770,4 +6800,78 @@ fn first_non_null_index_field(schema: &TableSchema, function: &Function) -> Opti
         fields.push(field);
     }
     Some(IndexField::FirstNonNull(fields))
+}
+
+/// PostgreSQL's 42883 for a call that names no built-in and no user
+/// function: `function f(integer, unknown) does not exist`. `None` when the
+/// name exists (the failure is something else).
+pub(crate) fn undefined_function_error<'a>(
+    db: impl Into<Option<&'a BicDb>>,
+    function: &Function,
+    arg_types: &[Option<String>],
+) -> Option<SqlError> {
+    let db = db.into();
+    if is_aggregate_function(function) || function.over.is_some() {
+        return None;
+    }
+    let full = object_name(&function.name).ok()?.to_ascii_lowercase();
+    let name = full.rsplit('.').next().unwrap_or(&full).to_string();
+    // SQL value functions are keywords, not pg_proc entries.
+    if matches!(
+        name.as_str(),
+        "localtimestamp"
+            | "localtime"
+            | "current_time"
+            | "current_timestamp"
+            | "current_date"
+            | "current_user"
+            | "current_role"
+            | "session_user"
+            | "user"
+            | "current_catalog"
+            | "current_schema"
+            | "system_user"
+    ) || crate::builtin_signatures::PG_CATALOG_FUNCTION_SIGNATURES
+        .iter()
+        .any(|(builtin, _)| builtin.eq_ignore_ascii_case(&name))
+    {
+        return None;
+    }
+    // Without the catalog a user-defined routine cannot be ruled out, so
+    // this is not known to be a missing function (constant folding).
+    let db = db?;
+    let defined = |kind| routines_named(db, kind, &name).is_ok_and(|routines| !routines.is_empty());
+    if defined(RoutineKind::Function) || defined(RoutineKind::Procedure) {
+        return None;
+    }
+    let args = function_arg_list(function);
+    let types = args
+        .iter()
+        .enumerate()
+        .map(|(index, arg)| {
+            if matches!(
+                arg,
+                Expr::Value(ValueWithSpan {
+                    value: Value::SingleQuotedString(_),
+                    ..
+                })
+            ) {
+                return "unknown".to_string();
+            }
+            arg_types
+                .get(index)
+                .cloned()
+                .flatten()
+                .and_then(|pg_type| {
+                    pg_type_oid_by_name(&pg_type).and_then(|oid| pg_format_type(oid, -1))
+                })
+                .unwrap_or_else(|| "unknown".to_string())
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    Some(SqlError::RaisedException {
+        sqlstate: "42883".to_string(),
+        message: format!("function {name}({types}) does not exist"),
+        detail: None,
+    })
 }

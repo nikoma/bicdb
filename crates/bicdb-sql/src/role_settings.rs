@@ -91,6 +91,11 @@ impl SqlSession<'_> {
             return Ok(None);
         };
         let role_name = normalize_role_name(&name);
+        if is_predefined_role(&role_name) {
+            return Err(SqlError::Unsupported(format!(
+                "ALTER ROLE of predefined role \"{role_name}\" is not supported"
+            )));
+        }
         // A role may set its own defaults; other roles need role management.
         if role_name != current_user_from_gucs(&self.session_gucs) {
             self.require_role_management_privilege("alter roles")?;

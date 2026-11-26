@@ -12,6 +12,10 @@ pub(crate) enum PostgresControl {
     RowCount {
         targets: Vec<String>,
     },
+    /// `GET STACKED DIAGNOSTICS target = item, ...` inside a handler.
+    Stacked {
+        items: Vec<(String, String)>,
+    },
 }
 
 impl PostgresControl {
@@ -19,6 +23,7 @@ impl PostgresControl {
         match self {
             Self::Execute { targets, .. } => targets.as_deref().unwrap_or(&[]),
             Self::RowCount { targets } => targets,
+            Self::Stacked { .. } => &[],
         }
     }
     pub(crate) fn for_each_expr_mut(&mut self, mut apply: impl FnMut(&mut RoutineExpr)) {
@@ -113,11 +118,50 @@ pub(crate) fn parse(statement: &str) -> Result<Option<PostgresControl>> {
         .collect::<Vec<_>>();
     if first.is_some_and(|s| s.eq_ignore_ascii_case("GET")) {
         let mut at = 1;
+        let mut stacked = false;
         if tokens.get(at).is_some_and(|t| keyword(t, "CURRENT")) {
+            at += 1;
+        } else if tokens.get(at).is_some_and(|t| keyword(t, "STACKED")) {
+            stacked = true;
             at += 1;
         }
         if !tokens.get(at).is_some_and(|t| keyword(t, "DIAGNOSTICS")) {
             return Ok(None);
+        }
+        if stacked {
+            const ITEMS: [&str; 10] = [
+                "returned_sqlstate",
+                "message_text",
+                "pg_exception_detail",
+                "pg_exception_hint",
+                "pg_exception_context",
+                "column_name",
+                "constraint_name",
+                "pg_datatype_name",
+                "table_name",
+                "schema_name",
+            ];
+            let mut items = Vec::new();
+            for part in comma_parts(&tokens[at + 1..]) {
+                let item = match &part[..] {
+                    [_, Token::Eq | Token::Assignment, Token::Word(word)] => {
+                        word.value.to_ascii_lowercase()
+                    }
+                    _ => {
+                        return Err(SqlError::InvalidSql(
+                            "syntax error in GET STACKED DIAGNOSTICS".into(),
+                        ))
+                    }
+                };
+                if !ITEMS.contains(&item.as_str()) {
+                    return Err(SqlError::InvalidSql(format!(
+                        "diagnostics item {} is not allowed in GET STACKED DIAGNOSTICS",
+                        item.to_ascii_uppercase()
+                    )));
+                }
+                items.push((target(&part[..1])?, item));
+            }
+            return Ok(Some(PostgresControl::Stacked { items }));
         }
         let mut targets = Vec::new();
         for part in comma_parts(&tokens[at + 1..]) {
@@ -229,6 +273,65 @@ impl SqlSession<'_> {
                         frame,
                         &RoutineAssignmentTarget::Variable(target.clone()),
                         SqlValue::Int(frame.last_sql_row_count),
+                    )?;
+                }
+                Ok(RoutineControl::Continue)
+            }
+            PostgresControl::Stacked { items } => {
+                let Some(error) = frame.active_exception.clone() else {
+                    return Err(SqlError::data_exception(
+                        "0Z002",
+                        "GET STACKED DIAGNOSTICS cannot be used outside an exception handler",
+                        None,
+                    ));
+                };
+                let fields = error.fields();
+                let field = |pick: fn(&SqlErrorField) -> Option<&String>| {
+                    fields.iter().find_map(pick).cloned().unwrap_or_default()
+                };
+                for (target, item) in items {
+                    let value = match item.as_str() {
+                        "returned_sqlstate" => error.sqlstate().to_string(),
+                        "message_text" => error.postgres_message(),
+                        "pg_exception_detail" => field(|f| match f {
+                            SqlErrorField::Detail(v) => Some(v),
+                            _ => None,
+                        }),
+                        "pg_exception_hint" => field(|f| match f {
+                            SqlErrorField::Hint(v) => Some(v),
+                            _ => None,
+                        }),
+                        "column_name" => field(|f| match f {
+                            SqlErrorField::Column(v) => Some(v),
+                            _ => None,
+                        }),
+                        "constraint_name" => field(|f| match f {
+                            SqlErrorField::Constraint(v) => Some(v),
+                            _ => None,
+                        }),
+                        "pg_datatype_name" => field(|f| match f {
+                            SqlErrorField::DataType(v) => Some(v),
+                            _ => None,
+                        }),
+                        "table_name" => field(|f| match f {
+                            SqlErrorField::Table(v) => Some(v),
+                            _ => None,
+                        })
+                        .rsplit('.')
+                        .next()
+                        .unwrap_or_default()
+                        .to_string(),
+                        "schema_name" => field(|f| match f {
+                            SqlErrorField::Schema(v) => Some(v),
+                            _ => None,
+                        }),
+                        // The call-stack text is not reproduced.
+                        _ => String::new(),
+                    };
+                    self.assign_routine_value(
+                        frame,
+                        &RoutineAssignmentTarget::Variable(target.clone()),
+                        SqlValue::String(value),
                     )?;
                 }
                 Ok(RoutineControl::Continue)

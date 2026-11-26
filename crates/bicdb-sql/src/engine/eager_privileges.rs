@@ -21,6 +21,8 @@ struct Walk<'q> {
     // Expansion path, independent of CTE scopes. Valid deep view chains must
     // be checked completely; a cycle is refused instead of skipping checks.
     views: Vec<String>,
+    /// The statement (or view body) being checked, for column privileges.
+    scope: Option<&'q Query>,
 }
 
 impl SqlEngine<'_> {
@@ -30,6 +32,7 @@ impl SqlEngine<'_> {
             ctes: Vec::new(),
             walked: BTreeSet::new(),
             views: Vec::new(),
+            scope: Some(query),
         };
         self.eager_query(query, &role, &mut walk)
     }
@@ -101,7 +104,7 @@ impl SqlEngine<'_> {
                     return Ok(());
                 }
                 if let Some(view) = load_view(self.db_ref(), &name)? {
-                    self.require_select_as(role, &name)?;
+                    self.require_select_as(role, &name, walk.scope)?;
                     if walk.views.iter().any(|view| view == &name) {
                         return Err(SqlError::Unsupported(format!(
                             "recursive view expansion for {name}"
@@ -118,6 +121,7 @@ impl SqlEngine<'_> {
                         ctes: Vec::new(),
                         walked: BTreeSet::new(),
                         views: walk.views.clone(),
+                        scope: Some(&query),
                     };
                     inner.views.push(name);
                     return self.eager_query(&query, &executor, &mut inner);
@@ -130,7 +134,7 @@ impl SqlEngine<'_> {
                     return Ok(());
                 }
                 let table = resolve_session_relation_name(self.db_ref(), &name)?;
-                self.require_select_as(role, &table)
+                self.require_select_as(role, &table, walk.scope)
             }
             TableFactor::Derived { subquery, .. } => self.eager_query(subquery, role, walk),
             TableFactor::NestedJoin {
@@ -146,13 +150,24 @@ impl SqlEngine<'_> {
         }
     }
 
-    fn require_select_as(&self, role: &str, table: &str) -> Result<()> {
+    fn require_select_as(&self, role: &str, table: &str, scope: Option<&Query>) -> Result<()> {
         if role_has_table_privilege(self.db_ref(), role, table, "SELECT")? {
             return Ok(());
         }
-        Err(SqlError::BicDb(BicDbError::Authorization(format!(
-            "permission denied for table {}",
-            relation_name_for_message(table)
-        ))))
+        // Column grants admit a statement that reads only granted columns.
+        if let Some(query) = scope {
+            if crate::column_privileges::select_allowed_by_columns(
+                self.db_ref(),
+                role,
+                table,
+                query,
+            )? {
+                crate::column_privileges::allow(role, table);
+                return Ok(());
+            }
+        }
+        Err(SqlError::BicDb(BicDbError::Authorization(
+            relation_permission_denied_message(self.db_ref(), table),
+        )))
     }
 }

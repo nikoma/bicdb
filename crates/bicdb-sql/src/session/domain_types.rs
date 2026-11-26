@@ -429,10 +429,37 @@ impl<'db> SqlSession<'db> {
             if !relation_names.contains(&table.to_ascii_lowercase()) {
                 return Err(SqlError::InvalidCollection(table));
             }
-            // PostgreSQL requires a privilege on the relation to lock it; this
-            // validated existence only, so any role could lock any tenant's
-            // table. SELECT is the weakest right any LOCK mode accepts.
-            self.require_table_privilege(&table, "SELECT")?;
+            // PostgreSQL's LockTableAclCheck: UPDATE, DELETE, TRUNCATE or
+            // MAINTAIN permit any mode; SELECT also permits ACCESS SHARE and
+            // INSERT also permits modes up to ROW EXCLUSIVE.
+            use sqlparser::ast::LockTableMode;
+            let mode = lock
+                .lock_mode
+                .clone()
+                .unwrap_or(LockTableMode::AccessExclusive);
+            let mut privileges = vec!["UPDATE", "DELETE", "TRUNCATE", "MAINTAIN"];
+            if matches!(mode, LockTableMode::AccessShare) {
+                privileges.push("SELECT");
+            }
+            if matches!(
+                mode,
+                LockTableMode::AccessShare | LockTableMode::RowShare | LockTableMode::RowExclusive
+            ) {
+                privileges.push("INSERT");
+            }
+            let role = current_user_from_gucs(&self.session_gucs);
+            let mut allowed = false;
+            for privilege in privileges {
+                if role_has_table_privilege(self.db_ref(), &role, &table, privilege)? {
+                    allowed = true;
+                    break;
+                }
+            }
+            if !allowed {
+                return Err(SqlError::BicDb(BicDbError::Authorization(
+                    relation_permission_denied_message(self.db_ref(), &table),
+                )));
+            }
         }
         Ok(SqlResult::command("LOCK TABLE"))
     }
@@ -566,7 +593,14 @@ impl<'db> SqlSession<'db> {
                     self.require_table_ownership(&table, "drop it")?;
                     if !self.drop_table_and_partitions(&table, &dropping, cascade, purge)? {
                         if !if_exists {
-                            return Err(SqlError::InvalidCollection(table));
+                            return Err(SqlError::RaisedException {
+                                sqlstate: "42P01".to_string(),
+                                message: format!(
+                                    "table \"{}\" does not exist",
+                                    relation_name_for_message(&table)
+                                ),
+                                detail: None,
+                            });
                         }
                         crate::statement_context::notice_skipping_missing(
                             "table",
@@ -777,6 +811,11 @@ impl<'db> SqlSession<'db> {
                             continue;
                         }
                         return Err(SqlError::UndefinedRole { name: role });
+                    }
+                    if is_predefined_role(&role) {
+                        return Err(SqlError::dependent_objects_still_exist(format!(
+                            "cannot drop role {role} because it is required by the database system"
+                        )));
                     }
                     let target = load_role_schema(self.db_ref(), &role)?
                         .ok_or_else(|| SqlError::UndefinedRole { name: role.clone() })?;
@@ -1500,6 +1539,12 @@ impl<'db> SqlSession<'db> {
                         continue;
                     }
                     partition_columns_published = false;
+                    // A column of a user type needs USAGE on it (PostgreSQL's
+                    // aclcheck in ATExecAddColumn), as CREATE TABLE does.
+                    if !*if_not_exists || schema.column(&ident_value(&column_def.name)).is_none() {
+                        let column = column_schema_from_def(self.db_ref(), column_def)?;
+                        self.ensure_user_type_usage(column.user_type.as_ref())?;
+                    }
                     self.capture_table_state_undo(&table, &schema)?;
                     if !self.alter_table_add_generated_column(
                         &table,
@@ -1549,6 +1594,7 @@ impl<'db> SqlSession<'db> {
                         )?;
                     }
                     self.capture_table_state_undo(&table, &schema)?;
+                    let constraints_before = schema.constraints.len();
                     if let Some((old_index_name, new_index_name)) = alter_table_add_constraint(
                         self.db_mut()?,
                         &table,
@@ -1561,6 +1607,12 @@ impl<'db> SqlSession<'db> {
                                 "index \"{old_index_name}\" does not exist"
                             )));
                         }
+                    }
+                    if schema.partitioning.is_some() {
+                        let added = schema.constraints
+                            [constraints_before.min(schema.constraints.len())..]
+                            .to_vec();
+                        self.propagate_partition_checks(&schema, &added, *not_valid)?;
                     }
                     schema_dirty = true;
                 }
@@ -1611,6 +1663,18 @@ impl<'db> SqlSession<'db> {
                 } => {
                     for column in column_names {
                         let column_name = ident_value(column);
+                        if schema.column(&column_name).is_some()
+                            && partition::key_references_column(&schema, &column_name)
+                        {
+                            return Err(SqlError::data_exception(
+                                "42P16",
+                                format!(
+                                    "cannot drop column \"{column_name}\" because it is part of the partition key of relation \"{}\"",
+                                    catalog_display_name(&table)
+                                ),
+                                Some(column_name.clone()),
+                            ));
+                        }
                         if !*if_exists || schema.column(&column_name).is_some() {
                             self.ensure_table_row_type_change_allowed(&schema)?;
                         }
@@ -1738,6 +1802,36 @@ impl<'db> SqlSession<'db> {
                             self.alter_partition_column_default(&mut schema, &column_name, op)?;
                             continue;
                         }
+                        let not_null_change = schema.partitioning.is_some()
+                            && matches!(
+                                op,
+                                AlterColumnOperation::SetNotNull
+                                    | AlterColumnOperation::DropNotNull
+                            );
+                        // SET NOT NULL reaches every partition (deepest
+                        // first, so no partition is ever nullable under a
+                        // NOT NULL parent); DROP NOT NULL follows the parent.
+                        let descendants = if not_null_change {
+                            partition::physical_tables(self.db_ref(), &schema)?
+                                .into_iter()
+                                .skip(1)
+                                .collect::<Vec<_>>()
+                        } else {
+                            Vec::new()
+                        };
+                        if matches!(op, AlterColumnOperation::SetNotNull) {
+                            for mut child in descendants.iter().rev().cloned() {
+                                let child_name = child.name.clone();
+                                self.capture_table_state_undo(&child_name, &child)?;
+                                alter_table_alter_column(
+                                    self.ddl_rows()?,
+                                    &child_name,
+                                    &mut child,
+                                    &column_name,
+                                    op,
+                                )?;
+                            }
+                        }
                         self.capture_table_state_undo(&table, &schema)?;
                         alter_table_alter_column(
                             self.ddl_rows()?,
@@ -1746,6 +1840,19 @@ impl<'db> SqlSession<'db> {
                             &column_name,
                             op,
                         )?;
+                        if matches!(op, AlterColumnOperation::DropNotNull) {
+                            for mut child in descendants {
+                                let child_name = child.name.clone();
+                                self.capture_table_state_undo(&child_name, &child)?;
+                                alter_table_alter_column(
+                                    self.ddl_rows()?,
+                                    &child_name,
+                                    &mut child,
+                                    &column_name,
+                                    op,
+                                )?;
+                            }
+                        }
                     }
                 }
                 AlterTableOperation::EnableRowLevelSecurity => {
@@ -1894,12 +2001,7 @@ impl<'db> SqlSession<'db> {
                 Some(column_name.to_string()),
             ));
         }
-        if schema.partitioning.as_ref().is_some_and(|partitioning| {
-            partitioning
-                .key_columns
-                .iter()
-                .any(|column| column.eq_ignore_ascii_case(column_name))
-        }) {
+        if partition::key_references_column(schema, column_name) {
             return Err(SqlError::data_exception(
                 "42P16",
                 format!(
@@ -3192,7 +3294,10 @@ impl<'db> SqlSession<'db> {
         Ok(Some(SqlResult::command("DO")))
     }
 
-    pub(crate) fn execute_create_index(&mut self, create_index: &CreateIndex) -> Result<SqlResult> {
+    pub(crate) fn execute_create_index_on_relation(
+        &mut self,
+        create_index: &CreateIndex,
+    ) -> Result<SqlResult> {
         if create_index.concurrently {
             // Refused rather than silently stripped: BicDB's index build
             // holds the database's exclusive write lock for its whole
@@ -3276,6 +3381,7 @@ impl<'db> SqlSession<'db> {
                         .to_string(),
                     metadata_only: true,
                     predicate: None,
+                    partition_parent: None,
                 });
                 save_view(self.db_mut()?, &view)?;
                 return Ok(SqlResult::command("CREATE INDEX"));
@@ -3287,7 +3393,19 @@ impl<'db> SqlSession<'db> {
             .as_ref()
             .map(index_relation_name)
             .transpose()?
-            .unwrap_or_else(|| format!("idx_{}_{}", table, schema.indexes.len() + 1));
+            .map_or_else(
+                || {
+                    // PostgreSQL's ChooseIndexName: <table>_<columns>_idx.
+                    let expression = create_index
+                        .columns
+                        .iter()
+                        .map(crate::sql_text::sql_text)
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    self.choose_default_index_name(&schema, &expression)
+                },
+                Ok,
+            )?;
         if !self
             .db_ref()
             .index_definitions()
@@ -3544,6 +3662,7 @@ impl<'db> SqlSession<'db> {
                 access_method,
                 metadata_only: false,
                 predicate: None,
+                partition_parent: None,
             });
             self.save_session_schema(&schema)?;
             return Ok(SqlResult::command("CREATE INDEX"));
@@ -3590,6 +3709,7 @@ impl<'db> SqlSession<'db> {
                 access_method,
                 metadata_only: false,
                 predicate: None,
+                partition_parent: None,
             });
             self.save_session_schema(&schema)?;
             return Ok(SqlResult::command("CREATE INDEX"));
@@ -3644,6 +3764,7 @@ impl<'db> SqlSession<'db> {
                 access_method,
                 metadata_only: false,
                 predicate: None,
+                partition_parent: None,
             });
             self.save_session_schema(&schema)?;
             return Ok(SqlResult::command("CREATE INDEX"));
@@ -3762,6 +3883,7 @@ impl<'db> SqlSession<'db> {
                 access_method,
                 metadata_only: false,
                 predicate: None,
+                partition_parent: None,
             });
             self.save_session_schema(&schema)?;
             return Ok(SqlResult::command("CREATE INDEX"));
@@ -3787,6 +3909,7 @@ impl<'db> SqlSession<'db> {
                     access_method,
                     metadata_only: true,
                     predicate: None,
+                    partition_parent: None,
                 });
                 self.save_session_schema(&schema)?;
                 return Ok(SqlResult::command("CREATE INDEX"));
@@ -3860,9 +3983,33 @@ impl<'db> SqlSession<'db> {
             access_method,
             metadata_only: false,
             predicate: predicate_text,
+            partition_parent: None,
         });
         self.save_session_schema(&schema)?;
         Ok(SqlResult::command("CREATE INDEX"))
+    }
+
+    /// USAGE on a user type named by a routine signature (`name`,
+    /// `schema.name`, or either with `[]`). Built-in types need nothing.
+    pub(crate) fn ensure_type_name_usage(&self, pg_type: &str) -> Result<()> {
+        let base = pg_type.trim().trim_end_matches("[]").trim();
+        let parts = sql_identifier_parts(base).unwrap_or_default();
+        let (schema_name, name) = match parts.as_slice() {
+            [name] => ("public".to_string(), name.clone()),
+            [schema_name, name] => (schema_name.clone(), name.clone()),
+            _ => return Ok(()),
+        };
+        let Some(user_type) = load_user_type(self.db_ref(), &schema_name, &name)? else {
+            return Ok(());
+        };
+        if self.current_user_is_superuser()? {
+            return Ok(());
+        }
+        let role = current_user_from_gucs(&self.session_gucs);
+        if role_can_use_user_type(self.db_ref(), &role, &user_type)? {
+            return Ok(());
+        }
+        Err(type_usage_denied(&user_type))
     }
 
     pub(crate) fn execute_create_function(
@@ -3941,6 +4088,11 @@ impl<'db> SqlSession<'db> {
                 "void".to_string(),
             ));
         let arg_types = routine_argument_type_schemas(create_function.args.as_ref())?;
+        // Argument and result types need USAGE (PostgreSQL's
+        // aclcheck_error_type in ProcedureCreate's callers).
+        for routine_type in arg_types.iter().chain(std::iter::once(&return_type_schema)) {
+            self.ensure_type_name_usage(&routine_type.pg_type)?;
+        }
         let (input_types, mut output_types) =
             routine_argument_directions(create_function.args.as_ref(), &arg_types);
         output_types.extend(explicit_return_type_schemas(

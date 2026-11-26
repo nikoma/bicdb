@@ -6164,21 +6164,13 @@ pub fn run_postgres_compat_suite(
     );
     record_pg_case(
         &mut cases,
-        "guardrails.unsupported_copy_binary_error",
+        "guardrails.copy_binary",
         "guardrails",
-        "Unsupported COPY BINARY returns a clear PostgreSQL-shaped error",
-        PostgresCompatExpectation::ClearUnsupportedError,
+        "COPY BINARY writes PostgreSQL's binary COPY format",
+        PostgresCompatExpectation::Works,
         || {
-            let error =
-                bench_pg_simple_query_error(&mut client, "COPY patients TO STDOUT BINARY;")?;
-            if error.contains("ERROR")
-                && error.contains("XX000")
-                && error.contains("COPY BINARY is not supported")
-            {
-                Ok(format!("clear error: {}", compact_error(&error)))
-            } else {
-                anyhow::bail!("expected clear COPY BINARY error, got {error:?}")
-            }
+            bench_pg_simple_query(&mut client, "COPY patients TO STDOUT BINARY;")?;
+            Ok("COPY TO STDOUT BINARY completed".to_string())
         },
     );
     record_pg_case(
@@ -6585,10 +6577,10 @@ pub fn run_postgres_compat_suite(
         &mut cases,
         "copy.unsupported.binary_and_advanced_options",
         "copy",
-        "Binary COPY and advanced COPY options are unsupported",
+        "Advanced COPY options are unsupported",
         PostgresCompatExpectation::ClearUnsupportedError,
         PostgresCompatCoverageState::Unsupported,
-        "basic text/CSV COPY is executable in this scorecard; binary COPY is explicitly rejected and broader COPY option parity is not implemented",
+        "text, CSV and binary COPY are executable in this scorecard; broader COPY option parity is not implemented",
     );
     add_pg_documented_case(
         &mut cases,

@@ -50,6 +50,22 @@ impl SqlSession<'_> {
                     reads_target,
                     std::slice::from_ref(&record),
                 )?;
+                // The leaf's constraints first, so violations name the
+                // partition the row is routed to (as PostgreSQL reports),
+                // then the named parent's. Each next BEFORE trigger sees the
+                // writes of earlier input rows; the outer statement
+                // transaction makes the whole statement atomic if a later
+                // check or row fails.
+                let target = partition::route_record(self.db_ref(), parent, &record)?;
+                validate_records_for_write(
+                    self.db_ref(),
+                    self.read_tx(),
+                    &target.name,
+                    &target,
+                    std::slice::from_ref(&record),
+                    false,
+                    Some(&self.sql_engine()),
+                )?;
                 validate_records_for_write(
                     self.db_ref(),
                     self.read_tx(),
@@ -59,9 +75,6 @@ impl SqlSession<'_> {
                     false,
                     Some(&self.sql_engine()),
                 )?;
-                // Each next BEFORE trigger sees the writes of earlier input
-                // rows. The outer statement transaction still makes the
-                // whole statement atomic if any later row fails.
                 self.insert_partition_records(parent, std::slice::from_ref(&record))?;
                 inserted.push(record);
             }
@@ -188,16 +201,9 @@ impl SqlSession<'_> {
                 reads_existing,
                 std::slice::from_ref(&record),
             )?;
-            validate_updated_records(
-                self.db_ref(),
-                self.read_tx(),
-                &parent.name,
-                parent,
-                std::slice::from_ref(&record),
-                &[(before.clone(), record.clone())],
-                Some(&self.sql_engine()),
-                assigned_columns,
-            )?;
+            // PostgreSQL checks the moved row as an insert into the leaf it
+            // lands in, so violations name that leaf; the parent's own
+            // constraints (a legacy store may hold some only there) follow.
             if self
                 .sql_engine()
                 .get_raw_record_cached(&target.name, &record.id)?
@@ -214,9 +220,26 @@ impl SqlSession<'_> {
                 false,
                 Some(&self.sql_engine()),
             )?;
+            validate_updated_records(
+                self.db_ref(),
+                self.read_tx(),
+                &parent.name,
+                parent,
+                std::slice::from_ref(&record),
+                &[(before.clone(), record.clone())],
+                Some(&self.sql_engine()),
+                assigned_columns,
+            )?;
             self.insert_session_new_records(&target.name, Some(&target), vec![record.clone()])?;
             after_events.push((target, None, Some(record.clone())));
         } else {
+            // Constraint violations name the partition holding the row.
+            validate_record_local_constraints(
+                &source_schema.name,
+                &source_schema,
+                &record,
+                Some(&self.sql_engine()),
+            )?;
             validate_updated_records(
                 self.db_ref(),
                 self.read_tx(),

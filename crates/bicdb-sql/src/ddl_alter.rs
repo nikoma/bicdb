@@ -2172,9 +2172,8 @@ pub(crate) fn view_column_from_select_item(item: &SelectItem, idx: usize) -> Res
             .map(|alias| alias.value.clone())
             .or_else(|| view_column_name_from_expr(expr))
             .unwrap_or_else(|| format!("column{}", idx + 1)),
-        SelectItem::UnnamedExpr(expr) => {
-            view_column_name_from_expr(expr).unwrap_or_else(|| format!("column{}", idx + 1))
-        }
+        SelectItem::UnnamedExpr(expr) => view_column_name_from_expr(expr)
+            .unwrap_or_else(|| crate::eval::postgres_other_column_name(expr)),
         SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(_, _) => {
             return Err(SqlError::Unsupported(
                 "metadata-only CREATE VIEW cannot infer wildcard columns".to_string(),
@@ -2188,8 +2187,10 @@ pub(crate) fn view_column_name_from_expr(expr: &Expr) -> Option<String> {
     match expr {
         Expr::Identifier(ident) => Some(ident.value.clone()),
         Expr::CompoundIdentifier(idents) => idents.last().map(|ident| ident.value.clone()),
-        Expr::Nested(expr) | Expr::Cast { expr, .. } => view_column_name_from_expr(expr),
-        Expr::Function(function) => function.name.0.last().map(|part| part.to_string()),
+        Expr::Nested(expr) => view_column_name_from_expr(expr),
+        Expr::Cast { .. } | Expr::Function(_) => {
+            Some(crate::eval::postgres_other_column_name(expr))
+        }
         _ => None,
     }
 }
@@ -3330,6 +3331,8 @@ pub(crate) struct RawCreatePartitionTable {
     pub(crate) parent_schema: String,
     pub(crate) bound: String,
     pub(crate) if_not_exists: bool,
+    /// `PARTITION OF parent ... PARTITION BY ...`: a sub-partitioned child.
+    pub(crate) partitioning: Option<PartitioningSchema>,
 }
 
 pub(crate) struct RawCreateTableLike {
@@ -3490,9 +3493,11 @@ pub(crate) fn raw_partition_by_clause(sql: &str) -> Result<Option<PartitioningSc
         .unwrap_or(rest.len());
     let strategy = rest[..strategy_end].to_ascii_lowercase();
     if !matches!(strategy.as_str(), "range" | "list" | "hash") {
-        return Err(SqlError::Unsupported(format!(
-            "unsupported PARTITION BY strategy {strategy}"
-        )));
+        return Err(SqlError::data_exception(
+            "22023",
+            format!("unrecognized partitioning strategy \"{strategy}\""),
+            None,
+        ));
     }
     let rest = rest[strategy_end..].trim_start();
     let Some(after_open) = rest.strip_prefix('(') else {
@@ -3508,21 +3513,27 @@ pub(crate) fn raw_partition_by_clause(sql: &str) -> Result<Option<PartitioningSc
             "unsupported trailing PARTITION BY clause `{trailing}`"
         )));
     }
-    let key_columns = after_open[..close]
-        .split(',')
-        .map(|part| part.trim().trim_matches('"').to_string())
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>();
-    if key_columns.is_empty() {
+    // Parse the key list as expressions so `(a, abs(b), (c + 0))` keeps its
+    // nesting; the element rules are shared with CREATE TABLE.
+    let keys = &after_open[..close];
+    if keys.trim().is_empty() {
         return Err(SqlError::InvalidSql(
             "PARTITION BY expects at least one key column".to_string(),
         ));
     }
-    Ok(Some(PartitioningSchema {
-        strategy,
-        key_columns,
-        execution_version: None,
-    }))
+    let dialect = PostgreSqlDialect {};
+    let mut parser = Parser::new(&dialect)
+        .try_with_sql(&format!("{strategy}({keys})"))
+        .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+    let expr = parser
+        .parse_expr()
+        .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+    if parser.peek_token().token != Token::EOF {
+        return Err(SqlError::Unsupported(format!(
+            "unsupported PARTITION BY key list `{keys}`"
+        )));
+    }
+    partitioning_schema_from_expr(&expr).map(Some)
 }
 
 pub(crate) fn trim_sql_trailing_comments(mut sql: &str) -> &str {
@@ -3572,7 +3583,13 @@ pub(crate) fn raw_create_partition_table(sql: &str) -> Result<Option<RawCreatePa
         return Ok(None);
     };
     let (parent, after_parent) = parse_leading_qualified_sql_identifier(rest)?;
-    let bound = after_parent.trim();
+    let (bound, partitioning) = match top_level_partition_by(after_parent) {
+        Some(index) => (
+            after_parent[..index].trim(),
+            raw_partition_by_clause(&after_parent[index..])?,
+        ),
+        None => (after_parent.trim(), None),
+    };
     if !bound.eq_ignore_ascii_case("DEFAULT")
         && !bound
             .get(.."FOR VALUES".len())
@@ -3600,7 +3617,55 @@ pub(crate) fn raw_create_partition_table(sql: &str) -> Result<Option<RawCreatePa
         parent_schema,
         bound: bound.to_string(),
         if_not_exists,
+        partitioning,
     }))
+}
+
+/// Byte offset of a `PARTITION BY` outside parentheses and quotes.
+fn top_level_partition_by(sql: &str) -> Option<usize> {
+    let bytes = sql.as_bytes();
+    let mut depth = 0_i32;
+    let mut index = 0;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'\'' | b'"' => {
+                let quote = bytes[index];
+                index += 1;
+                while index < bytes.len() {
+                    if bytes[index] == quote {
+                        if bytes.get(index + 1) == Some(&quote) {
+                            index += 2;
+                            continue;
+                        }
+                        break;
+                    }
+                    index += 1;
+                }
+            }
+            b'(' => depth += 1,
+            b')' => depth -= 1,
+            _ if depth == 0
+                && (index == 0 || !is_ident_char(bytes[index - 1] as char))
+                && sql[index..]
+                    .get(.."PARTITION".len())
+                    .is_some_and(|word| word.eq_ignore_ascii_case("PARTITION")) =>
+            {
+                let after = &sql[index + "PARTITION".len()..];
+                let trimmed = after.trim_start();
+                if trimmed.len() < after.len()
+                    && trimmed
+                        .get(..2)
+                        .is_some_and(|word| word.eq_ignore_ascii_case("BY"))
+                    && !trimmed[2..].starts_with(|ch: char| is_ident_char(ch))
+                {
+                    return Some(index);
+                }
+            }
+            _ => {}
+        }
+        index += 1;
+    }
+    None
 }
 
 pub(crate) fn raw_alter_table_partition_action(

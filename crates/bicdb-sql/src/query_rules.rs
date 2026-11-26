@@ -1,7 +1,9 @@
-//! Query rewrite rules (`CREATE RULE`), for the unconditional `DO INSTEAD`
-//! form: `DO INSTEAD NOTHING`, or `DO INSTEAD` one or more statements that run
-//! once per affected row with `NEW` (INSERT) bound to the row's values.
-//! Conditional (`WHERE`) and `DO ALSO` rules are rejected at creation.
+//! Query rewrite rules (`CREATE RULE`), unconditional `DO INSTEAD` and
+//! `DO ALSO` forms: `NOTHING`, or one or more statements that run once per
+//! affected row with `NEW` (INSERT, UPDATE) and `OLD` (UPDATE, DELETE) bound
+//! to the row's values. As in PostgreSQL, an INSERT runs before its rules'
+//! actions and an UPDATE or DELETE after them; an INSTEAD rule suppresses
+//! the original statement. Conditional (`WHERE`) rules are rejected.
 use crate::*;
 use std::sync::Arc;
 
@@ -12,8 +14,11 @@ pub(crate) struct RuleSchema {
     pub(crate) name: String,
     pub(crate) table: String,
     pub(crate) event: String,
-    /// Empty for `DO INSTEAD NOTHING`.
+    /// Empty for `DO [INSTEAD | ALSO] NOTHING`.
     pub(crate) actions: Vec<String>,
+    /// `DO ALSO`: the original statement still runs.
+    #[serde(default)]
+    pub(crate) also: bool,
     pub(crate) definition: String,
 }
 
@@ -125,10 +130,13 @@ fn parse_create(sql: &str, db: Option<&BicDb>) -> Result<Option<(RuleSchema, boo
     }
     let table = relation_name(&object)?;
     let action = rest[do_index + 2..].trim_start();
-    let Some(action) = keyword(action, "INSTEAD") else {
-        return Err(SqlError::Unsupported(
-            "only DO INSTEAD rules are supported".into(),
-        ));
+    let (action, also) = if let Some(action) = keyword(action, "INSTEAD") {
+        (action, false)
+    } else if let Some(action) = keyword(action, "ALSO") {
+        (action, true)
+    } else {
+        // PostgreSQL's default is ALSO.
+        (action, true)
     };
     let action = action.trim();
     let actions = if action.eq_ignore_ascii_case("NOTHING") {
@@ -138,9 +146,17 @@ fn parse_create(sql: &str, db: Option<&BicDb>) -> Result<Option<(RuleSchema, boo
             .strip_prefix('(')
             .and_then(|inner| inner.strip_suffix(')'))
             .unwrap_or(action);
-        let statements = parse_statements(body)?;
-        if statements.is_empty() {
-            return Err(invalid());
+        match parse_statements(body) {
+            Ok(statements) if statements.is_empty() => return Err(invalid()),
+            Ok(_) => {}
+            // Utility actions such as NOTIFY run as text; they cannot use
+            // NEW or OLD.
+            Err(error) => {
+                let lower = body.to_ascii_lowercase();
+                if lower.contains("new.") || lower.contains("old.") {
+                    return Err(error);
+                }
+            }
         }
         // Keep the action as written: re-rendering parsed SQL is not a
         // faithful round trip for every literal.
@@ -152,6 +168,7 @@ fn parse_create(sql: &str, db: Option<&BicDb>) -> Result<Option<(RuleSchema, boo
             table,
             event,
             actions,
+            also,
             definition: trimmed.to_string(),
         },
         or_replace,
@@ -172,24 +189,39 @@ fn value_expr(value: &SqlValue) -> Expr {
     })
 }
 
-/// Binds `NEW.column` references of a rule action to one row's values.
-fn bind_new_row(statement: &mut Statement, columns: &[String], row: &[SqlValue]) {
+/// Binds `NEW.column` / `OLD.column` references of a rule action to one
+/// row's values.
+fn bind_rule_row(
+    statement: &mut Statement,
+    columns: &[String],
+    new: Option<&[SqlValue]>,
+    old: Option<&[SqlValue]>,
+) {
     let _ = sqlparser::ast::visit_expressions_mut(statement, |expr| {
         if let Expr::CompoundIdentifier(parts) = expr {
             if let [qualifier, column] = parts.as_slice() {
-                if qualifier.value.eq_ignore_ascii_case("new") {
-                    let column = ident_value(column);
-                    let value = columns
-                        .iter()
-                        .position(|name| name.eq_ignore_ascii_case(&column))
-                        .and_then(|index| row.get(index))
-                        .unwrap_or(&SqlValue::Null);
-                    *expr = value_expr(value);
-                }
+                let row = if qualifier.value.eq_ignore_ascii_case("new") {
+                    new
+                } else if qualifier.value.eq_ignore_ascii_case("old") {
+                    old
+                } else {
+                    return ControlFlow::Continue(());
+                };
+                let column = ident_value(column);
+                let value = columns
+                    .iter()
+                    .position(|name| name.eq_ignore_ascii_case(&column))
+                    .and_then(|index| row.and_then(|row| row.get(index)))
+                    .unwrap_or(&SqlValue::Null);
+                *expr = value_expr(value);
             }
         }
         ControlFlow::<()>::Continue(())
     });
+}
+
+thread_local! {
+    static RULE_DEPTH: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 impl SqlSession<'_> {
@@ -209,7 +241,9 @@ impl SqlSession<'_> {
         let Some((rule, or_replace)) = parse_create(sql, Some(self.db_ref()))? else {
             return Ok(None);
         };
-        if load_schema(self.db_ref(), &rule.table)?.is_none() {
+        if load_schema(self.db_ref(), &rule.table)?.is_none()
+            && load_view(self.db_ref(), &rule.table)?.is_none()
+        {
             return Err(SqlError::InvalidCollection(rule.table));
         }
         self.require_table_ownership(&rule.table, "create a rule on it")?;
@@ -278,27 +312,32 @@ impl SqlSession<'_> {
         Ok(Some(SqlResult::command("DROP RULE")))
     }
 
-    /// Runs a DO INSTEAD rule of the statement's target in place of it.
+    /// Applies the rules of the statement's target: `Some` when an INSTEAD
+    /// rule replaced the statement or the statement ran here with its ALSO
+    /// rules' actions.
     pub(crate) fn apply_instead_rule(
         &mut self,
         statement: &Statement,
     ) -> Result<Option<SqlResult>> {
-        let (table, event) = match statement {
+        if take_rule_skip() {
+            return Ok(None);
+        }
+        let (table, alias, event) = match statement {
             Statement::Insert(insert) => match &insert.table {
-                TableObject::TableName(name) => (name, "insert"),
+                TableObject::TableName(name) => (name, None, "insert"),
                 _ => return Ok(None),
             },
             Statement::Update(update) => match &update.table.relation {
-                TableFactor::Table { name, .. } => (name, "update"),
+                TableFactor::Table { name, alias, .. } => (name, alias.as_ref(), "update"),
                 _ => return Ok(None),
             },
             Statement::Delete(delete) => match &delete.from {
                 FromTable::WithFromKeyword(tables) | FromTable::WithoutKeyword(tables) => {
                     match tables.as_slice() {
                         [TableWithJoins {
-                            relation: TableFactor::Table { name, .. },
+                            relation: TableFactor::Table { name, alias, .. },
                             ..
-                        }] => (name, "delete"),
+                        }] => (name, alias.as_ref(), "delete"),
                         _ => return Ok(None),
                     }
                 }
@@ -309,84 +348,312 @@ impl SqlSession<'_> {
         if rules.is_empty() {
             return Ok(None);
         }
-        let table = relation_name(table)?;
-        let Some(rule) = rules
+        let table_key = relation_name(table)?;
+        let mut matching: Vec<RuleSchema> = rules
             .iter()
-            .find(|rule| rule.table == table && rule.event == event)
+            .filter(|rule| rule.table == table_key && rule.event == event)
             .cloned()
-        else {
+            .collect();
+        if matching.is_empty() {
             return Ok(None);
-        };
-        let tag = |count: usize| match event {
+        }
+        // PostgreSQL applies a relation's rules in name order.
+        matching.sort_by(|left, right| left.name.cmp(&right.name));
+        let depth = RULE_DEPTH.with(|depth| depth.get());
+        if depth >= 16 {
+            return Err(SqlError::RaisedException {
+                sqlstate: "42P17".to_string(),
+                message: format!(
+                    "infinite recursion detected in rules for relation \"{}\"",
+                    table_key.rsplit('.').next().unwrap_or(&table_key)
+                ),
+                detail: None,
+            });
+        }
+        let table_name = table.clone();
+        let alias = alias.map(|alias| ident_value(&alias.name));
+        RULE_DEPTH.with(|cell| cell.set(depth + 1));
+        let result = self.with_statement_transaction(|session| {
+            session.execute_with_rules(statement, &table_key, &table_name, alias, event, &matching)
+        });
+        RULE_DEPTH.with(|cell| cell.set(depth));
+        result.map(Some)
+    }
+
+    fn execute_with_rules(
+        &mut self,
+        statement: &Statement,
+        table: &str,
+        table_name: &ObjectName,
+        alias: Option<String>,
+        event: &str,
+        rules: &[RuleSchema],
+    ) -> Result<SqlResult> {
+        let instead = rules.iter().any(|rule| !rule.also);
+        let (columns, new_rows, old_rows) =
+            self.rule_rows(statement, table, table_name, alias, event)?;
+        let mut original = None;
+        // An INSERT runs before its rules' actions; UPDATE and DELETE after.
+        if !instead && event == "insert" {
+            original = Some(self.execute_statement_without_rules(statement)?);
+        }
+        let mut last_same_kind = None;
+        // Rows an INSTEAD rule's SELECT actions return are the statement's
+        // result rows, under the original command's tag.
+        let mut returned: Option<SqlResult> = None;
+        for index in 0..new_rows.len().max(old_rows.len()) {
+            let new = new_rows.get(index).map(Vec::as_slice);
+            let old = old_rows.get(index).map(Vec::as_slice);
+            for rule in rules {
+                for action in &rule.actions {
+                    if let Some((channel, payload)) = rule_notify(action) {
+                        // Delivered on commit like a NOTIFY statement.
+                        self.pending_notifications.push((channel, payload));
+                        continue;
+                    }
+                    match parse_statements(action) {
+                        Ok(mut parsed) => {
+                            for statement in &mut parsed {
+                                bind_rule_row(statement, &columns, new, old);
+                                let produced = self.execute_statement(statement)?;
+                                if !rule.also && statement_event(statement) == Some(event) {
+                                    let count = crate::postgres_control::row_count(&produced).max(0)
+                                        as usize;
+                                    *last_same_kind.get_or_insert(0) += count;
+                                }
+                                if instead
+                                    && matches!(statement, Statement::Query(_))
+                                    && !produced.columns.is_empty()
+                                {
+                                    let result = returned.get_or_insert_with(|| {
+                                        let mut result = SqlResult::empty(produced.columns.clone());
+                                        result.column_types = produced.column_types.clone();
+                                        result.column_metadata = produced.column_metadata.clone();
+                                        result
+                                    });
+                                    result.rows.extend(produced.rows);
+                                }
+                            }
+                        }
+                        Err(_) => {
+                            if let Some((channel, payload)) = rule_notify(action) {
+                                // Delivered on commit like a NOTIFY statement.
+                                self.pending_notifications.push((channel, payload));
+                            } else {
+                                self.execute(action)?;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if !instead && event != "insert" {
+            original = Some(self.execute_statement_without_rules(statement)?);
+        }
+        if let Some(original) = original {
+            return Ok(original);
+        }
+        let count = last_same_kind.unwrap_or(0);
+        let tag = match event {
             "insert" => format!("INSERT 0 {count}"),
             "update" => format!("UPDATE {count}"),
             _ => format!("DELETE {count}"),
         };
-        if rule.actions.is_empty() {
-            return Ok(Some(SqlResult::command(tag(0))));
+        if let Some(mut result) = returned {
+            result.command_tag = Some(tag);
+            return Ok(result);
         }
-        let Statement::Insert(insert) = statement else {
-            return Err(SqlError::Unsupported(format!(
-                "DO INSTEAD rule actions for {event} are not supported"
-            )));
-        };
-        self.with_statement_transaction(|session| session.execute_insert_rule(insert, &rule))
-            .map(Some)
+        Ok(SqlResult::command(tag))
     }
 
-    fn execute_insert_rule(
+    /// Runs the statement itself, past its target's rules.
+    fn execute_statement_without_rules(&mut self, statement: &Statement) -> Result<SqlResult> {
+        let depth = RULE_DEPTH.with(|depth| depth.get());
+        SKIP_RULES.with(|skip| skip.set(Some(depth)));
+        let result = self.execute_statement(statement);
+        SKIP_RULES.with(|skip| skip.set(None));
+        result
+    }
+
+    /// The target's visible columns and the NEW / OLD rows the statement
+    /// affects.
+    #[allow(clippy::type_complexity)]
+    fn rule_rows(
         &mut self,
-        insert: &sqlparser::ast::Insert,
-        rule: &RuleSchema,
-    ) -> Result<SqlResult> {
-        let table = &rule.table;
-        let source = insert
-            .source
-            .as_ref()
-            .ok_or_else(|| SqlError::Unsupported("INSERT without rows under a rule".into()))?;
-        let schema = load_schema(self.db_ref(), table)?
-            .ok_or_else(|| SqlError::InvalidCollection(table.to_string()))?;
-        let columns = if insert.columns.is_empty() {
-            schema
+        statement: &Statement,
+        table: &str,
+        table_name: &ObjectName,
+        alias: Option<String>,
+        event: &str,
+    ) -> Result<(Vec<String>, Vec<Vec<SqlValue>>, Vec<Vec<SqlValue>>)> {
+        let schema = load_schema(self.db_ref(), table)?;
+        let columns: Vec<String> = match &schema {
+            Some(schema) => schema
                 .columns
                 .iter()
+                .filter(|column| !column.hidden)
                 .map(|column| column.name.clone())
-                .collect()
-        } else {
-            insert
-                .columns
-                .iter()
-                .map(|column| object_name(column).unwrap_or_default())
-                .collect::<Vec<_>>()
+                .collect(),
+            None => load_view(self.db_ref(), table)?
+                .map(|view| {
+                    view.columns
+                        .iter()
+                        .map(|column| column.name.clone())
+                        .collect()
+                })
+                .unwrap_or_default(),
         };
-        let rows = self.execute_query(source)?.rows;
-        let mut result = SqlResult::command("INSERT 0 0");
-        let mut affected = 0usize;
-        for row in &rows {
-            let mut row_affected = 0usize;
-            for action in &rule.actions {
-                let mut parsed = parse_statements(action)?;
-                for statement in &mut parsed {
-                    bind_new_row(statement, &columns, row);
-                    let produced = self.execute_statement(statement)?;
-                    if matches!(statement, Statement::Insert(_)) {
-                        row_affected =
-                            crate::postgres_control::row_count(&produced).max(0) as usize;
-                    }
-                    if !produced.columns.is_empty() {
-                        if result.columns.is_empty() {
-                            result.columns = produced.columns.clone();
-                            result.column_types = produced.column_types.clone();
-                            result.column_metadata = produced.column_metadata.clone();
-                        }
-                        result.rows.extend(produced.rows);
-                    }
-                }
+        // Without an alias the rows are qualified by the name the statement
+        // wrote: `table` is the storage key, which for a table outside public
+        // is the reserved schema-isolated name.
+        let alias = alias.unwrap_or_else(|| {
+            object_name_parts(table_name)
+                .last()
+                .cloned()
+                .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(table).to_string())
+        });
+        let target_rows = |session: &mut Self, extra: Vec<Expr>, selection: Option<&Expr>| {
+            let mut query = parse_query(&format!(
+                "SELECT \"{0}\".* FROM {1} AS \"{0}\"",
+                alias.replace('"', "\"\""),
+                table_name
+            ))?;
+            if let SetExpr::Select(select) = query.body.as_mut() {
+                select
+                    .projection
+                    .extend(extra.into_iter().map(SelectItem::UnnamedExpr));
+                select.selection = selection.cloned();
             }
-            affected = affected.saturating_add(row_affected);
+            session.execute_query(&query).map(|result| result.rows)
+        };
+        match statement {
+            Statement::Insert(insert) => {
+                let Some(source) = insert.source.as_ref() else {
+                    return Ok((columns, Vec::new(), Vec::new()));
+                };
+                let targets: Vec<String> = if insert.columns.is_empty() {
+                    columns.clone()
+                } else {
+                    insert
+                        .columns
+                        .iter()
+                        .map(|column| {
+                            object_name_parts(column)
+                                .last()
+                                .cloned()
+                                .unwrap_or_default()
+                        })
+                        .collect()
+                };
+                let rows = self.execute_query(source)?.rows;
+                let mut new_rows = Vec::with_capacity(rows.len());
+                for row in rows {
+                    let mut values = Vec::with_capacity(columns.len());
+                    for column in &columns {
+                        match targets.iter().position(|target| target == column) {
+                            Some(index) if index < row.len() => values.push(row[index].clone()),
+                            _ => values.push(
+                                self.default_value_for_column(schema.as_ref(), column)?
+                                    .unwrap_or(SqlValue::Null),
+                            ),
+                        }
+                    }
+                    new_rows.push(values);
+                }
+                Ok((columns, new_rows, Vec::new()))
+            }
+            Statement::Update(update) => {
+                if update.from.is_some() {
+                    return Err(SqlError::Unsupported(
+                        "UPDATE ... FROM on a relation with rules is not supported".into(),
+                    ));
+                }
+                let mut targets = Vec::new();
+                let mut values = Vec::new();
+                for assignment in &update.assignments {
+                    let AssignmentTarget::ColumnName(name) = &assignment.target else {
+                        return Err(SqlError::Unsupported(
+                            "row assignments on a relation with rules are not supported".into(),
+                        ));
+                    };
+                    let column = object_name_parts(name).last().cloned().unwrap_or_default();
+                    let index = columns
+                        .iter()
+                        .position(|candidate| candidate == &column)
+                        .ok_or_else(|| SqlError::UndefinedColumn {
+                            table: table.to_string(),
+                            column: column.clone(),
+                        })?;
+                    targets.push(index);
+                    values.push(assignment.value.clone());
+                }
+                let width = columns.len();
+                let rows = target_rows(self, values, update.selection.as_ref())?;
+                let mut old_rows = Vec::with_capacity(rows.len());
+                let mut new_rows = Vec::with_capacity(rows.len());
+                for row in rows {
+                    let old = row[..width.min(row.len())].to_vec();
+                    let mut new = old.clone();
+                    for (index, value) in targets.iter().zip(row[width.min(row.len())..].iter()) {
+                        new[*index] = value.clone();
+                    }
+                    old_rows.push(old);
+                    new_rows.push(new);
+                }
+                Ok((columns, new_rows, old_rows))
+            }
+            Statement::Delete(delete) => {
+                if delete.using.is_some() {
+                    return Err(SqlError::Unsupported(
+                        "DELETE ... USING on a relation with rules is not supported".into(),
+                    ));
+                }
+                let rows = target_rows(self, Vec::new(), delete.selection.as_ref())?;
+                Ok((columns, Vec::new(), rows))
+            }
+            _ => Ok((columns, Vec::new(), Vec::new())),
         }
-        result.command_tag = Some(format!("INSERT 0 {affected}"));
-        Ok(result)
+    }
+}
+
+thread_local! {
+    /// Set while a statement runs past its own rules (at this rule depth).
+    static SKIP_RULES: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
+}
+
+/// Whether the statement now executing is the original of a rule
+/// application, which must not apply its rules again.
+pub(crate) fn take_rule_skip() -> bool {
+    SKIP_RULES.with(|skip| skip.take().is_some())
+}
+
+/// `NOTIFY channel [, 'payload']` as a rule action.
+fn rule_notify(action: &str) -> Option<(String, String)> {
+    let rest = keyword(action.trim(), "NOTIFY")?
+        .trim()
+        .trim_end_matches(';')
+        .trim();
+    let (channel, payload) = match rest.split_once(',') {
+        Some((channel, payload)) => {
+            let payload = payload.trim();
+            let inner = payload.strip_prefix('\'')?.strip_suffix('\'')?;
+            (channel.trim(), inner.replace("''", "'"))
+        }
+        None => (rest, String::new()),
+    };
+    let channel = match channel.strip_prefix('"').and_then(|c| c.strip_suffix('"')) {
+        Some(quoted) => quoted.to_string(),
+        None => channel.to_ascii_lowercase(),
+    };
+    (!channel.is_empty() && !channel.contains(char::is_whitespace)).then_some((channel, payload))
+}
+
+fn statement_event(statement: &Statement) -> Option<&'static str> {
+    match statement {
+        Statement::Insert(_) => Some("insert"),
+        Statement::Update(_) => Some("update"),
+        Statement::Delete(_) => Some("delete"),
+        _ => None,
     }
 }
 

@@ -461,7 +461,11 @@ pub(crate) fn decode_binary_range_bound(
 // Container fields need value text, whereas standalone bind parameters need
 // SQL expressions retaining their declared type. Do not embed a scalar cast
 // into an array element, range bound or composite field.
-fn decode_binary_nested_value_text(bytes: &[u8], oid: i32, db: Option<&BicDb>) -> Result<String> {
+pub(crate) fn decode_binary_nested_value_text(
+    bytes: &[u8],
+    oid: i32,
+    db: Option<&BicDb>,
+) -> Result<String> {
     if oid == 1700 {
         return decode_binary_numeric_parameter(bytes);
     }
@@ -1950,6 +1954,14 @@ pub(crate) fn startup(
                     .get("user")
                     .cloned()
                     .unwrap_or_else(|| "bicdb".to_string());
+                // Predefined roles are NOLOGIN; connecting as one would hand
+                // out their data access (pg_read_all_data, ...).
+                if bicdb_sql::is_postgres_predefined_role(&user) {
+                    let message = format!("role \"{user}\" is not permitted to log in");
+                    let _ = error_response_with_fields(stream, "FATAL", "28000", &message, &[]);
+                    let _ = stream.flush();
+                    return Err(PgWireError::Authentication);
+                }
                 let database =
                     if let Some(cluster) = server.cluster.as_ref().and_then(Weak::upgrade) {
                         params

@@ -129,6 +129,9 @@ impl<'db> SqlSession<'db> {
                     return Err(SqlError::dependent_objects_still_exist(format!("cannot drop index {index} because constraint {index} on table {} requires it", catalog_display_name(&table))));
                 }
             }
+            for descendant in self.partition_index_drop_plan(&table, &index)? {
+                planned.insert(descendant);
+            }
             planned.insert((table, index));
         }
         for (table, index) in planned {

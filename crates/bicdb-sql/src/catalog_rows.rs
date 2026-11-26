@@ -730,7 +730,12 @@ pub(crate) fn pg_class_rows_filtered(
             continue;
         }
         let index_name = table_schema.primary_key_constraint_name();
-        if !catalog_name_matches(names, &index_name) || !catalog_relkind_matches(kinds, "i") {
+        let relkind = if table_schema.partitioning.is_some() {
+            "I"
+        } else {
+            "i"
+        };
+        if !catalog_name_matches(names, &index_name) || !catalog_relkind_matches(kinds, relkind) {
             continue;
         }
         let oid = primary_index_oid(*table_oids.get(&table).unwrap_or(&0));
@@ -742,7 +747,7 @@ pub(crate) fn pg_class_rows_filtered(
             &index_name,
             namespace_oid(&schema_name_for_relation(&schemas, &table)),
             None,
-            "i",
+            relkind,
             primary_key_columns.len() as i64,
             false,
             false,
@@ -760,7 +765,16 @@ pub(crate) fn pg_class_rows_filtered(
     }
 
     for index in &catalog_indexes {
-        if !catalog_name_matches(names, &index.name) || !catalog_relkind_matches(kinds, "i") {
+        // An index on a partitioned table has no storage of its own.
+        let relkind = if schema_by_name
+            .get(&index.collection)
+            .is_some_and(|schema| schema.partitioning.is_some())
+        {
+            "I"
+        } else {
+            "i"
+        };
+        if !catalog_name_matches(names, &index.name) || !catalog_relkind_matches(kinds, relkind) {
             continue;
         }
         let oid = secondary_index_oid(&index.schema_name, &index.name);
@@ -772,7 +786,7 @@ pub(crate) fn pg_class_rows_filtered(
             &index.name,
             namespace_oid(&index.schema_name),
             None,
-            "i",
+            relkind,
             index.relnatts,
             false,
             false,
@@ -3904,8 +3918,25 @@ pub(crate) fn filter_catalog_rows_for_role(
                 .and_then(|oid| names_by_oid.get(&oid).cloned())
                 .unwrap_or_default(),
         };
-        if !table.is_empty() && role_has_table_privilege(db, role, &table, "SELECT")? {
+        if table.is_empty() {
+            continue;
+        }
+        if role_has_table_privilege(db, role, &table, "SELECT")? {
             kept.push(row);
+            continue;
+        }
+        // pg_stats rows are per column: PostgreSQL shows a column's
+        // statistics to a role holding SELECT on that column alone.
+        if let Some(column) = row.get("attname").and_then(sql_value_text) {
+            if crate::column_privileges::role_may_use_columns(
+                db,
+                role,
+                &table,
+                "SELECT",
+                std::slice::from_ref(&column),
+            )? {
+                kept.push(row);
+            }
         }
     }
     Ok(kept)
@@ -3924,7 +3955,9 @@ pub(crate) fn filter_information_schema_rows_for_role(
 ) -> Result<Vec<BTreeMap<String, SqlValue>>> {
     if matches!(
         table,
-        "information_schema.role_table_grants" | "information_schema.table_privileges"
+        "information_schema.role_table_grants"
+            | "information_schema.table_privileges"
+            | "information_schema.column_privileges"
     ) {
         if normalize_role_name(role) == BOOTSTRAP_ROLE_NAME || pg_role_is_superuser(db, role)? {
             return Ok(rows);
@@ -3937,7 +3970,11 @@ pub(crate) fn filter_information_schema_rows_for_role(
                 let grantee = sql_value_text(&virtual_cell(row, "grantee")).unwrap_or_default();
                 roles.contains(&normalize_role_name(&grantor))
                     || roles.contains(&normalize_role_name(&grantee))
-                    || table == "information_schema.table_privileges" && grantee == "PUBLIC"
+                    || matches!(
+                        table,
+                        "information_schema.table_privileges"
+                            | "information_schema.column_privileges"
+                    ) && grantee == "PUBLIC"
             })
             .collect());
     }
@@ -5557,10 +5594,12 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                             ),
                             None => 0,
                         };
-                        rows.push(pg_constraint_row(PgConstraintRow {
+                        let fk_oid = pg_constraint_oid(table_oid, constraint_slot);
+                        let conkey = constraint_attnums(schemas, &schema.name, columns);
+                        let mut row = pg_constraint_row(PgConstraintRow {
                             condeferrable: *deferrable,
                             condeferred: *initially_deferred,
-                            oid: pg_constraint_oid(table_oid, constraint_slot),
+                            oid: fk_oid,
                             name: name.clone(),
                             contype: "f",
                             conrelid: table_oid,
@@ -5569,11 +5608,61 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                             confrelid,
                             confupdtype: fk_action_code(*on_update),
                             confdeltype: fk_action_code(*on_delete),
-                            conkey: constraint_attnums(schemas, &schema.name, columns),
-                            confkey,
+                            conkey: conkey.clone(),
+                            confkey: confkey.clone(),
                             conbin: None,
                             convalidated: *validated,
-                        }));
+                        });
+                        // A partition's copy of its parent's key is a child
+                        // of the parent's constraint row.
+                        if let Some(parent_oid) =
+                            inherited_foreign_key_oid(db, schemas, table_oids, schema, name)?
+                        {
+                            row.insert("conparentid".into(), SqlValue::Int(parent_oid));
+                            row.insert("conislocal".into(), SqlValue::Bool(false));
+                            row.insert("coninhcount".into(), SqlValue::Int(1));
+                        }
+                        rows.push(row);
+                        // A key referencing a partitioned table has a row per
+                        // referenced partition, `<name>_<n>` (PostgreSQL's
+                        // addFkRecurseReferenced).
+                        if let Some(parent) = parent.filter(|parent| parent.partitioning.is_some())
+                        {
+                            for (index, partition) in partition::physical_tables(db, parent)?
+                                .iter()
+                                .skip(1)
+                                .enumerate()
+                            {
+                                let partition_oid = *table_oids.get(&partition.name).unwrap_or(&0);
+                                let mut derived = pg_constraint_row(PgConstraintRow {
+                                    condeferrable: *deferrable,
+                                    condeferred: *initially_deferred,
+                                    oid: stable_name_hash_wide(
+                                        2_000_000_000,
+                                        &format!(
+                                            "{table_oid}.{constraint_slot}.fk.{partition_oid}"
+                                        ),
+                                        1_000_000_000,
+                                    ),
+                                    name: format!("{name}_{}", index + 1),
+                                    contype: "f",
+                                    conrelid: table_oid,
+                                    connamespace: namespace_oid(&schema.schema_name),
+                                    conindid,
+                                    confrelid: partition_oid,
+                                    confupdtype: fk_action_code(*on_update),
+                                    confdeltype: fk_action_code(*on_delete),
+                                    conkey: conkey.clone(),
+                                    confkey: confkey.clone(),
+                                    conbin: None,
+                                    convalidated: *validated,
+                                });
+                                derived.insert("conparentid".into(), SqlValue::Int(fk_oid));
+                                derived.insert("conislocal".into(), SqlValue::Bool(false));
+                                derived.insert("coninhcount".into(), SqlValue::Int(1));
+                                rows.push(derived);
+                            }
+                        }
                     }
                     constraint_slot += 1;
                 }
@@ -5672,6 +5761,50 @@ fn foreign_key_referenced_index_oid(
         .map_or(0, |(oid, _)| *oid)
 }
 
+/// The pg_constraint OID of the foreign key `name` on `schema`'s partition
+/// parent, when `schema` is a partition carrying that key from its parent.
+/// Slots are counted as `pg_constraint_rows_from_schemas` assigns them.
+fn inherited_foreign_key_oid(
+    db: &BicDb,
+    schemas: &[TableSchema],
+    table_oids: &BTreeMap<String, i64>,
+    schema: &TableSchema,
+    name: &str,
+) -> Result<Option<i64>> {
+    let Some(link) = &schema.partition_of else {
+        return Ok(None);
+    };
+    let loaded;
+    let parent = match schemas
+        .iter()
+        .find(|parent| parent.name == link.parent_table)
+    {
+        Some(parent) => parent,
+        None => match load_schema_shared(db, &link.parent_table)? {
+            Some(parent) => {
+                loaded = parent;
+                &*loaded
+            }
+            None => return Ok(None),
+        },
+    };
+    let not_null = parent
+        .columns
+        .iter()
+        .filter(|column| !column.hidden && (!column.nullable || column.primary_key))
+        .count() as i64;
+    let Some(position) = parent.constraints.iter().position(|constraint| {
+        matches!(constraint, ConstraintSchema::ForeignKey { name: other, .. } if other == name)
+    }) else {
+        return Ok(None);
+    };
+    let parent_oid = *table_oids.get(&parent.name).unwrap_or(&0);
+    Ok(Some(pg_constraint_oid(
+        parent_oid,
+        1 + not_null + position as i64,
+    )))
+}
+
 pub(crate) fn pg_constraint_oid(table_oid: i64, local_slot: i64) -> i64 {
     // Catalog OIDs are unsigned 32-bit values. Multiplication by 10,000
     // overflowed that contract as soon as relation OIDs became wider.
@@ -5697,8 +5830,15 @@ pub(crate) fn validate_constraint_catalog_oids(db: &BicDb) -> Result<()> {
     if CONSTRAINT_OID_VALIDATION.with(|memo| memo.borrow().get(&db.instance_id()) == Some(&stamp)) {
         return Ok(());
     }
-    let schemas = list_schemas(db)?;
     let relation_oids = table_oids(db);
+    // pg_constraint lists the constraints of relations. A table descriptor
+    // without a relation (left behind by an interrupted DDL) has no OID; its
+    // constraints all hashed to relation OID 0 and "collided", which failed
+    // every later pg_constraint query in the database.
+    let schemas = list_schemas(db)?
+        .into_iter()
+        .filter(|schema| relation_oids.contains_key(&schema.name))
+        .collect::<Vec<_>>();
     // Only identifiers are needed here. Constructing table rows also resolves
     // attributes and parses CHECK expressions for every catalog generation.
     let domain_oids = pg_domain_constraint_rows(db, None, None)?
@@ -7249,6 +7389,26 @@ pub(crate) fn pg_inherits_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlVal
         let Some(partition_of) = schema.partition_of.as_ref() else {
             continue;
         };
+        // An attached partition index inherits from the parent's index.
+        for index in &schema.indexes {
+            if let Some(parent_index) = &index.partition_parent {
+                rows.push(virtual_row([
+                    (
+                        "inhrelid",
+                        SqlValue::Int(secondary_index_oid(&schema.schema_name, &index.name)),
+                    ),
+                    (
+                        "inhparent",
+                        SqlValue::Int(secondary_index_oid(
+                            &partition_of.parent_schema,
+                            parent_index,
+                        )),
+                    ),
+                    ("inhseqno", SqlValue::Int(1)),
+                    ("inhdetachpending", SqlValue::Bool(false)),
+                ]));
+            }
+        }
         let Some(child_oid) = table_oids.get(&schema.name) else {
             continue;
         };
@@ -7276,11 +7436,29 @@ pub(crate) fn pg_partitioned_table_rows(db: &BicDb) -> Result<Vec<BTreeMap<Strin
         let Some(partrelid) = table_oids.get(&schema.name) else {
             continue;
         };
+        // PostgreSQL stores 0 for an expression key position and lists the
+        // expressions in partexprs (a node tree there, the SQL text here).
         let partattrs = partitioning
             .key_columns
             .iter()
-            .filter_map(|column| attnum_for_column(&schemas, &schema.name, column))
+            .enumerate()
+            .filter_map(|(index, column)| match partitioning.key_expression(index) {
+                Some(_) => Some(0),
+                None => attnum_for_column(&schemas, &schema.name, column),
+            })
             .collect::<Vec<_>>();
+        let partexprs = partitioning
+            .has_key_expressions()
+            .then(|| {
+                partitioning
+                    .key_expressions
+                    .iter()
+                    .flatten()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            })
+            .map_or(SqlValue::Null, SqlValue::String);
         rows.push(virtual_row([
             ("partrelid", SqlValue::Int(*partrelid)),
             (
@@ -7292,7 +7470,7 @@ pub(crate) fn pg_partitioned_table_rows(db: &BicDb) -> Result<Vec<BTreeMap<Strin
             ("partattrs", constraint_key_value(&partattrs)),
             ("partclass", SqlValue::Null),
             ("partcollation", SqlValue::Null),
-            ("partexprs", SqlValue::Null),
+            ("partexprs", partexprs),
         ]));
     }
     Ok(rows)

@@ -2992,6 +2992,8 @@ struct CopyInState {
     /// chunk COPY data by size (psql uses 8 KiB), not by character.
     pending_bytes: Vec<u8>,
     header_seen: bool,
+    /// Binary COPY FROM: the end-of-data marker arrived.
+    binary_trailer_seen: bool,
     resolved_columns: Option<Vec<String>>,
     inserted_rows: usize,
     spill: Option<CopySpillState>,
@@ -3088,6 +3090,14 @@ struct CopyStatement {
     format: CopyFormat,
     query: Option<String>,
     header: bool,
+    /// `HEADER MATCH`: the header line must name the target columns.
+    header_match: bool,
+    /// The target column names a `HEADER MATCH` line is checked against.
+    header_expected: Vec<String>,
+    /// `FORMAT binary` (or the `BINARY` keyword): PostgreSQL's binary COPY.
+    binary: bool,
+    /// COPY FROM binary: the type of each target column, to decode fields.
+    binary_column_oids: Vec<i32>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -3532,11 +3542,6 @@ fn execute_server_query(
                 if state.failed_transaction {
                     return Err(PgWireError::InFailedTransaction);
                 }
-                // Resolve the target before entering COPY mode, as PostgreSQL does: a missing
-                // relation is reported instead of CopyInResponse. Resolving it after the session
-                // had entered COPY mode left the server waiting for CopyData while the client had
-                // already seen the error and went on sending queries, so the session hung.
-                let column_count = copy_in_column_count(server, &copy)?;
                 let owns_serializable_transaction = !state.in_transaction
                     && !bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile)
                     && state
@@ -3556,12 +3561,71 @@ fn execute_server_query(
                 if started_guc_transaction {
                     state.session_state.begin_transaction();
                 }
+                let mut copy = copy;
+                // Resolve the target before entering COPY mode, as PostgreSQL does and as the
+                // session would (search_path, role): a missing relation is reported instead of
+                // CopyInResponse. Resolving it after the session had entered COPY mode left the
+                // server waiting for CopyData while the client had already seen the error and
+                // went on sending queries, so the session hung.
+                let prepared = (|| -> Result<usize> {
+                    let relation = copy.relation_sql.clone().unwrap_or_default();
+                    let describe = |state: &mut ConnectionState, sql: String| {
+                        execute_server_sql_for_describe_with_session(
+                            server,
+                            &sql,
+                            &state.session_state,
+                            state.security_context.as_ref(),
+                            &mut state.catalog_cache,
+                        )
+                    };
+                    let all_columns = describe(state, format!("SELECT * FROM {relation} LIMIT 0"))?;
+                    if copy.binary {
+                        let target = if copy.columns.is_empty() {
+                            "*".to_string()
+                        } else {
+                            copy.columns
+                                .iter()
+                                .map(|column| format!("\"{}\"", column.replace('"', "\"\"")))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        };
+                        let described =
+                            describe(state, format!("SELECT {target} FROM {relation} LIMIT 0"))?;
+                        let db = server.read_db_for_transaction_progress()?;
+                        copy.binary_column_oids =
+                            result_column_types_with_db(&db, &described, None)?;
+                    }
+                    if copy.header_match {
+                        copy.header_expected = if copy.columns.is_empty() {
+                            all_columns.columns.clone()
+                        } else {
+                            copy.columns.clone()
+                        };
+                    }
+                    Ok(if copy.columns.is_empty() {
+                        all_columns.columns.len()
+                    } else {
+                        copy.columns.len()
+                    })
+                })();
+                let column_count = match prepared {
+                    Ok(count) => count,
+                    Err(error) => {
+                        if owns_serializable_transaction {
+                            rollback_open_transaction(server, state)?;
+                        } else if started_guc_transaction {
+                            state.session_state.rollback_transaction();
+                        }
+                        return Err(error);
+                    }
+                };
                 state.copy_in = Some(CopyInState {
                     spec: copy,
                     rows: Vec::new(),
                     pending: String::new(),
                     pending_bytes: Vec::new(),
                     header_seen: false,
+                    binary_trailer_seen: false,
                     resolved_columns: None,
                     inserted_rows: 0,
                     spill: None,
@@ -3589,7 +3653,13 @@ fn execute_server_query(
                     return Err(PgWireError::InFailedTransaction);
                 }
                 let result = execute_copy_query(server, state, &copy)?;
-                copy_out_response(stream, &result)?;
+                copy_out_response_with_format(stream, &result, copy.binary)?;
+                if copy.header {
+                    copy_data(stream, &render_copy_header(&result.columns, copy.format))?;
+                }
+                if copy.binary {
+                    copy_data(stream, &copy_binary_header())?;
+                }
                 let db = server.read_db_for_transaction_progress()?;
                 let column_types = result_column_types_with_db(&db, &result, None)?;
                 let deadline = (!server.config.query_timeout.is_zero())
@@ -3602,9 +3672,16 @@ fn execute_server_query(
                             return Err(classify_bicdb_interrupt(server, state, error));
                         }
                     }
-                    let payload = render_copy_row(&db, row, &column_types, copy.format)?;
+                    let payload = if copy.binary {
+                        render_copy_binary_row(&db, row, &column_types)?
+                    } else {
+                        render_copy_row(&db, row, &column_types, copy.format)?
+                    };
                     bytes_streamed = bytes_streamed.saturating_add(payload.len() as u64);
                     copy_data(stream, &payload)?;
+                }
+                if copy.binary {
+                    copy_data(stream, &(-1i16).to_be_bytes())?;
                 }
                 server.record_streamed_rows(result.rows.len() as u64, bytes_streamed);
                 write_message(stream, b'c', &[])?;

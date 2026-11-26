@@ -137,6 +137,9 @@ fn bound_literal(tokens: &[Token], column: &ColumnSchema) -> Result<SqlValue> {
         }
     }
     if !immutable(&expr) {
+        if let Some(error) = forbidden_bound_expression(&expr) {
+            return Err(error);
+        }
         return Err(SqlError::Unsupported(
             "partition bounds require immutable literal expressions".into(),
         ));
@@ -144,7 +147,85 @@ fn bound_literal(tokens: &[Token], column: &ColumnSchema) -> Result<SqlValue> {
     cast_value_to_column_type(eval_constant_expr(&expr)?, column)
 }
 
-pub(crate) fn key_columns(parent: &TableSchema) -> Result<Vec<&ColumnSchema>> {
+/// PostgreSQL's EXPR_KIND_PARTITION_BOUND diagnostics, in its order: column
+/// references are rejected while the arguments are transformed, then
+/// subqueries, aggregates, window functions and set-returning functions.
+fn forbidden_bound_expression(expr: &Expr) -> Option<SqlError> {
+    use sqlparser::ast::visit_expressions;
+    use std::ops::ControlFlow;
+    let mut column = false;
+    let mut subquery = false;
+    let mut aggregate = false;
+    let mut window = false;
+    let mut set_returning = false;
+    let _ = visit_expressions(expr, |expr| {
+        match expr {
+            Expr::Identifier(_) | Expr::CompoundIdentifier(_) => column = true,
+            Expr::Subquery(_) | Expr::Exists { .. } | Expr::InSubquery { .. } => subquery = true,
+            Expr::Function(function) => {
+                if function.over.is_some() {
+                    window = true;
+                } else if is_aggregate_function(function) {
+                    aggregate = true;
+                } else if object_name(&function.name).is_ok_and(|name| {
+                    matches!(
+                        name.to_ascii_lowercase().as_str(),
+                        "generate_series"
+                            | "generate_subscripts"
+                            | "unnest"
+                            | "regexp_matches"
+                            | "regexp_split_to_table"
+                            | "json_array_elements"
+                            | "jsonb_array_elements"
+                            | "json_each"
+                            | "jsonb_each"
+                    )
+                }) {
+                    set_returning = true;
+                }
+            }
+            _ => {}
+        }
+        ControlFlow::<()>::Continue(())
+    });
+    if column {
+        Some(SqlError::Unsupported(
+            "cannot use column reference in partition bound expression".into(),
+        ))
+    } else if subquery {
+        Some(SqlError::Unsupported(
+            "cannot use subquery in partition bound".into(),
+        ))
+    } else if aggregate {
+        Some(SqlError::data_exception(
+            "42803",
+            "aggregate functions are not allowed in partition bound",
+            None,
+        ))
+    } else if window {
+        Some(SqlError::data_exception(
+            "42P20",
+            "window functions are not allowed in partition bound",
+            None,
+        ))
+    } else if set_returning {
+        Some(SqlError::Unsupported(
+            "set-returning functions are not allowed in partition bound".into(),
+        ))
+    } else {
+        None
+    }
+}
+
+/// One partition key position: the column it reads, or for an expression key
+/// a descriptor typed as the expression's result (bounds are coerced to it and
+/// compared, hashed and NULL-checked with its type) plus the parsed expression.
+pub(crate) struct KeyPart {
+    pub(crate) column: ColumnSchema,
+    pub(crate) expr: Option<Expr>,
+}
+
+pub(crate) fn key_parts(parent: &TableSchema) -> Result<Vec<KeyPart>> {
     let partitioning = parent
         .partitioning
         .as_ref()
@@ -152,22 +233,658 @@ pub(crate) fn key_columns(parent: &TableSchema) -> Result<Vec<&ColumnSchema>> {
     partitioning
         .key_columns
         .iter()
-        .map(|name| {
-            parent
+        .enumerate()
+        .map(|(index, name)| match partitioning.key_expression(index) {
+            None => parent
                 .columns
                 .iter()
                 .find(|column| column.name == *name && !column.hidden)
-                .ok_or_else(|| invalid(format!("partition key column {name} does not exist")))
+                .map(|column| KeyPart {
+                    column: column.clone(),
+                    expr: None,
+                })
+                .ok_or_else(|| invalid(format!("partition key column {name} does not exist"))),
+            Some(sql) => {
+                let expr = parse_check_expression(sql)?;
+                let (column, _) = key_expression_column(parent, sql, &expr)?;
+                Ok(KeyPart {
+                    column,
+                    expr: Some(expr),
+                })
+            }
         })
         .collect()
 }
+
+/// The typed descriptor of an expression key and the table columns it reads.
+fn key_expression_column(
+    parent: &TableSchema,
+    sql: &str,
+    expr: &Expr,
+) -> Result<(ColumnSchema, Vec<String>)> {
+    let referenced = expression_columns(parent, expr)?;
+    let template = referenced
+        .first()
+        .and_then(|name| parent.columns.iter().find(|column| column.name == *name))
+        .ok_or_else(|| invalid("partition key expression reads no column"))?;
+    let pg_type = projected_expr_pg_type(expr, Some(parent))
+        .or_else(|| key_expression_type(parent, expr))
+        .ok_or_else(|| {
+            SqlError::Unsupported(format!(
+                "could not determine the type of partition key expression {sql}"
+            ))
+        })?;
+    if pg_type.ends_with("[]") || pg_type == "unknown" || pg_type == "record" {
+        return Err(SqlError::Unsupported(format!(
+            "partition key expression of type {pg_type} is not supported"
+        )));
+    }
+    let mut column = template.clone();
+    column.name = sql.to_string();
+    column.pg_type = pg_type;
+    column.user_type = None;
+    column.type_modifier = None;
+    column.array_ndims = 0;
+    column.primary_key = false;
+    column.hidden = false;
+    column.nullable = true;
+    column.default_sequence = None;
+    column.default_value = None;
+    column.default_expr = None;
+    column.generated_expr = None;
+    column.identity = None;
+    // A text result keeps the collation of the text column it is computed
+    // from (PostgreSQL's collation derivation for lower(a), a || b, ...).
+    if !matches!(
+        column.pg_type.as_str(),
+        "text" | "varchar" | "bpchar" | "name"
+    ) {
+        column.collation = None;
+    }
+    Ok((column, referenced))
+}
+
+/// Result types of the admitted key functions where the general projector
+/// has no answer (PostgreSQL's pg_proc result types for these signatures).
+fn key_expression_type(parent: &TableSchema, expr: &Expr) -> Option<String> {
+    let argument_type = |expr: &Expr| {
+        projected_expr_pg_type(expr, Some(parent)).or_else(|| key_expression_type(parent, expr))
+    };
+    match expr {
+        Expr::Nested(inner) => argument_type(inner),
+        Expr::Substring { expr, .. } => argument_type(expr)
+            .filter(|pg_type| matches!(pg_type.as_str(), "text" | "varchar" | "bpchar" | "name"))
+            .map(|_| "text".to_string()),
+        Expr::Identifier(ident) => parent
+            .columns
+            .iter()
+            .find(|column| column.name.eq_ignore_ascii_case(&ident.value))
+            .filter(|column| column.user_type.is_none() && column.array_ndims == 0)
+            .map(|column| column.pg_type.clone()),
+        Expr::Function(function) => {
+            let name = object_name(&function.name).ok()?.to_ascii_lowercase();
+            let name = name
+                .strip_prefix("pg_catalog.")
+                .unwrap_or(&name)
+                .to_string();
+            let args = function_args(function);
+            let first = args.first().and_then(argument_type);
+            let text_arg = first
+                .as_deref()
+                .is_some_and(|pg_type| matches!(pg_type, "text" | "varchar" | "bpchar" | "name"));
+            match name.as_str() {
+                "lower" | "upper" | "btrim" | "ltrim" | "rtrim" | "trim" | "substr"
+                | "substring" | "left" | "right" | "replace" | "reverse" | "initcap" | "md5"
+                    if text_arg =>
+                {
+                    Some("text".into())
+                }
+                "length" | "char_length" | "character_length" | "octet_length" if text_arg => {
+                    Some("int4".into())
+                }
+                "abs" | "mod" | "div" | "coalesce" | "nullif" | "greatest" | "least" => first
+                    .filter(|pg_type| {
+                        matches!(
+                            pg_type.as_str(),
+                            "int2" | "int4" | "int8" | "numeric" | "float4" | "float8"
+                        ) || (text_arg && !matches!(name.as_str(), "abs" | "mod" | "div"))
+                    }),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+/// The table columns an expression references, in first-use order. Unknown
+/// columns are PostgreSQL's 42703 `column "x" does not exist`.
+fn expression_columns(parent: &TableSchema, expr: &Expr) -> Result<Vec<String>> {
+    use sqlparser::ast::visit_expressions;
+    use std::ops::ControlFlow;
+    let mut names = Vec::new();
+    let mut missing = None;
+    let _ = visit_expressions(expr, |expr| {
+        let ident = match expr {
+            Expr::Identifier(ident) => Some(ident),
+            Expr::CompoundIdentifier(idents) => idents.last(),
+            _ => None,
+        };
+        if let Some(ident) = ident {
+            let name = if ident.quote_style.is_some() {
+                ident.value.clone()
+            } else {
+                ident.value.to_ascii_lowercase()
+            };
+            match parent
+                .columns
+                .iter()
+                .find(|column| !column.hidden && column.name == name)
+            {
+                Some(column) => {
+                    if !names.contains(&column.name) {
+                        names.push(column.name.clone());
+                    }
+                }
+                None => {
+                    missing.get_or_insert(name);
+                }
+            }
+        }
+        ControlFlow::<()>::Continue(())
+    });
+    if let Some(name) = missing {
+        return Err(SqlError::data_exception(
+            "42703",
+            format!("column \"{name}\" does not exist"),
+            None,
+        ));
+    }
+    Ok(names)
+}
+
+/// An expression key as PostgreSQL's ruleutils prints it: every operator
+/// parenthesized, `(x)::type` casts, function calls bare.
+pub(crate) fn deparse_key_expression(sql: &str) -> String {
+    fn render(expr: &Expr) -> String {
+        match expr {
+            Expr::Identifier(ident) => {
+                pg_partition_key_identifier(&if ident.quote_style.is_some() {
+                    ident.value.clone()
+                } else {
+                    ident.value.to_ascii_lowercase()
+                })
+            }
+            Expr::Nested(inner) => render(inner),
+            Expr::Substring {
+                expr,
+                substring_from,
+                substring_for,
+                ..
+            } => {
+                let mut args = vec![render(expr)];
+                args.extend(substring_from.iter().map(|from| render(from)));
+                args.extend(substring_for.iter().map(|count| render(count)));
+                format!("substr({})", args.join(", "))
+            }
+            Expr::BinaryOp { left, op, right } => {
+                format!("({} {op} {})", render(left), render(right))
+            }
+            Expr::Cast {
+                expr, data_type, ..
+            } => {
+                let inner = render(expr);
+                let inner = if inner.starts_with('(') {
+                    inner
+                } else {
+                    format!("({inner})")
+                };
+                format!("{inner}::{}", data_type.to_string().to_ascii_lowercase())
+            }
+            Expr::Function(function) => {
+                let name = object_name(&function.name)
+                    .map(|name| name.to_ascii_lowercase())
+                    .unwrap_or_else(|_| function.name.to_string());
+                let args = function_args(function)
+                    .iter()
+                    .map(render)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{name}({args})")
+            }
+            other => other.to_string(),
+        }
+    }
+    match parse_check_expression(sql) {
+        Ok(expr) => render(&expr),
+        Err(_) => sql.to_string(),
+    }
+}
+
+/// `pg_get_partkeydef`'s form of an expression key: parenthesized unless it
+/// is a bare function call.
+pub(crate) fn deparse_key_definition(sql: &str) -> String {
+    let text = deparse_key_expression(sql);
+    if matches!(
+        parse_check_expression(sql),
+        Ok(Expr::Function(_) | Expr::Substring { .. })
+    ) {
+        text
+    } else {
+        format!("({text})")
+    }
+}
+
+/// Whether `column` is a key column of `schema` or is read by one of its key
+/// expressions (PostgreSQL's has_partition_attrs).
+pub(crate) fn key_references_column(schema: &TableSchema, column: &str) -> bool {
+    let Some(partitioning) = &schema.partitioning else {
+        return false;
+    };
+    partitioning
+        .key_columns
+        .iter()
+        .enumerate()
+        .any(|(index, key)| match partitioning.key_expression(index) {
+            None => key.eq_ignore_ascii_case(column),
+            Some(sql) => parse_check_expression(sql)
+                .ok()
+                .and_then(|expr| expression_columns(schema, &expr).ok())
+                .is_none_or(|names| names.iter().any(|name| name.eq_ignore_ascii_case(column))),
+        })
+}
+
+pub(crate) fn key_columns(parent: &TableSchema) -> Result<Vec<ColumnSchema>> {
+    Ok(key_parts(parent)?
+        .into_iter()
+        .map(|part| part.column)
+        .collect())
+}
+
+/// The partition key of `record` under `parent`'s key: column values as
+/// stored, expression keys evaluated on the row and coerced to their type.
+pub(crate) fn key_values(
+    db: &BicDb,
+    parent: &TableSchema,
+    record: &Record,
+) -> Result<Vec<SqlValue>> {
+    key_values_of(db, parent, &key_parts(parent)?, record)
+}
+
+fn key_values_of(
+    db: &BicDb,
+    parent: &TableSchema,
+    parts: &[KeyPart],
+    record: &Record,
+) -> Result<Vec<SqlValue>> {
+    let mut row = None;
+    let mut values = Vec::with_capacity(parts.len());
+    for part in parts {
+        let value = match &part.expr {
+            None => record_column_value(record, parent, &part.column.name),
+            Some(expr) => {
+                if row.is_none() {
+                    row = Some(row_from_record(
+                        &parent.name,
+                        &parent.name,
+                        Some(parent),
+                        record,
+                    )?);
+                }
+                let value = SqlEngine::new(db).eval_row_value(row.as_ref().unwrap(), expr)?;
+                cast_value_to_column_type(value, &part.column)?
+            }
+        };
+        values.push(value);
+    }
+    Ok(values)
+}
+
+/// CREATE-time checks of a partition key, PostgreSQL's ComputePartitionAttrs
+/// and EXPR_KIND_PARTITION_EXPRESSION rules in its order. Only creation paths
+/// call this; reopening a store never re-judges an accepted definition.
+pub(crate) fn validate_new_key(db: &BicDb, schema: &TableSchema) -> Result<()> {
+    let Some(partitioning) = &schema.partitioning else {
+        return Ok(());
+    };
+    if partitioning.strategy == "list" && partitioning.key_columns.len() > 1 {
+        return Err(SqlError::data_exception(
+            "42P17",
+            "cannot use \"list\" partition strategy with more than one column",
+            None,
+        ));
+    }
+    for (index, name) in partitioning.key_columns.iter().enumerate() {
+        let Some(sql) = partitioning.key_expression(index) else {
+            let column = schema
+                .columns
+                .iter()
+                .find(|column| !column.hidden && column.name == *name);
+            let Some(column) = column else {
+                if is_system_column_name(name) {
+                    return Err(SqlError::data_exception(
+                        "42P17",
+                        format!("cannot use system column \"{name}\" in partition key"),
+                        None,
+                    ));
+                }
+                return Err(SqlError::data_exception(
+                    "42703",
+                    format!("column \"{name}\" named in partition key does not exist"),
+                    None,
+                ));
+            };
+            if column.generated_expr.is_some() {
+                return Err(SqlError::RaisedException {
+                    sqlstate: "42P17".into(),
+                    message: "cannot use generated column in partition key".into(),
+                    detail: Some(format!("Column \"{}\" is a generated column.", column.name)),
+                });
+            }
+            continue;
+        };
+        let expr = parse_check_expression(sql)?;
+        if let Some(error) = forbidden_key_expression(db, &expr) {
+            return Err(error);
+        }
+        let referenced = expression_columns(schema, &expr)?;
+        // CheckAttributeType: a row or an untyped literal is a pseudo-type.
+        let pseudo_type = match &expr {
+            Expr::Tuple(_) => Some("record"),
+            Expr::Value(value) if matches!(value.value, Value::SingleQuotedString(_)) => {
+                Some("unknown")
+            }
+            _ => None,
+        };
+        if let Some(pseudo_type) = pseudo_type {
+            return Err(SqlError::data_exception(
+                "42P16",
+                format!(
+                    "partition key column {} has pseudo-type {pseudo_type}",
+                    index + 1
+                ),
+                None,
+            ));
+        }
+        if let Some(generated) = referenced.iter().find(|name| {
+            schema
+                .columns
+                .iter()
+                .any(|column| column.name == **name && column.generated_expr.is_some())
+        }) {
+            return Err(SqlError::RaisedException {
+                sqlstate: "42P17".into(),
+                message: "cannot use generated column in partition key".into(),
+                detail: Some(format!("Column \"{generated}\" is a generated column.")),
+            });
+        }
+        let routine_used = match mutable_key_expression(db, &expr) {
+            Err(error) => return Err(error),
+            Ok(routine_used) => routine_used,
+        };
+        if referenced.is_empty() {
+            return Err(SqlError::data_exception(
+                "42P17",
+                "cannot use constant expression as partition key",
+                None,
+            ));
+        }
+        if routine_used {
+            return Err(SqlError::Unsupported(
+                "user-defined functions in partition key expressions are not supported".into(),
+            ));
+        }
+        key_expression_column(schema, sql, &expr)?;
+    }
+    Ok(())
+}
+
+fn is_system_column_name(name: &str) -> bool {
+    matches!(
+        name,
+        "tableoid" | "ctid" | "xmin" | "xmax" | "cmin" | "cmax" | "oid"
+    )
+}
+
+/// Subqueries, aggregates, window functions and set-returning functions in a
+/// key expression, with PostgreSQL's texts for EXPR_KIND_PARTITION_EXPRESSION.
+fn forbidden_key_expression(db: &BicDb, expr: &Expr) -> Option<SqlError> {
+    use sqlparser::ast::visit_expressions;
+    use std::ops::ControlFlow;
+    let mut error = None;
+    let _ = visit_expressions(expr, |expr| {
+        let found = match expr {
+            Expr::Subquery(_) | Expr::Exists { .. } | Expr::InSubquery { .. } => Some(
+                SqlError::Unsupported("cannot use subquery in partition key expression".into()),
+            ),
+            Expr::Function(function) if function.over.is_some() => Some(SqlError::data_exception(
+                "42P20",
+                "window functions are not allowed in partition key expressions",
+                None,
+            )),
+            Expr::Function(function) if is_aggregate_function(function) => {
+                Some(SqlError::data_exception(
+                    "42803",
+                    "aggregate functions are not allowed in partition key expressions",
+                    None,
+                ))
+            }
+            Expr::Function(function)
+                if object_name(&function.name).is_ok_and(|name| {
+                    is_set_returning_function_name(&name)
+                        || load_routine(db, RoutineKind::Function, &name)
+                            .ok()
+                            .flatten()
+                            .is_some_and(|routine| routine.returns_set)
+                }) =>
+            {
+                Some(SqlError::Unsupported(
+                    "set-returning functions are not allowed in partition key expressions".into(),
+                ))
+            }
+            _ => None,
+        };
+        if let Some(found) = found {
+            error = Some(found);
+            return ControlFlow::Break(());
+        }
+        ControlFlow::Continue(())
+    });
+    error
+}
+
+fn is_set_returning_function_name(name: &str) -> bool {
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "generate_series"
+            | "generate_subscripts"
+            | "unnest"
+            | "regexp_matches"
+            | "regexp_split_to_table"
+            | "json_array_elements"
+            | "jsonb_array_elements"
+            | "json_each"
+            | "jsonb_each"
+    )
+}
+
+/// Key expressions are evaluated at every routing decision, so they must be
+/// IMMUTABLE as in PostgreSQL. Functions known to be volatile or stable get
+/// PostgreSQL's error; a function or operator whose immutability BicDB cannot
+/// vouch for (user-defined routines included) is refused as unsupported
+/// rather than admitted with possibly different routing.
+fn mutable_key_expression(db: &BicDb, expr: &Expr) -> Result<bool> {
+    use sqlparser::ast::visit_expressions;
+    use std::ops::ControlFlow;
+    let mut routine_used = false;
+    let immutable_error = || {
+        SqlError::data_exception(
+            "42P17",
+            "functions in partition key expression must be marked IMMUTABLE",
+            None,
+        )
+    };
+    let mut error = None;
+    let _ = visit_expressions(expr, |expr| {
+        let found = match expr {
+            Expr::Function(function) => {
+                let name = object_name(&function.name)
+                    .map(|name| name.to_ascii_lowercase())
+                    .unwrap_or_default();
+                let name = name.strip_prefix("pg_catalog.").unwrap_or(&name);
+                if expr_contains_volatile_function(expr)
+                    || matches!(
+                        name,
+                        "now"
+                            | "current_date"
+                            | "current_time"
+                            | "current_timestamp"
+                            | "localtime"
+                            | "localtimestamp"
+                            | "timeofday"
+                            | "transaction_timestamp"
+                            | "current_user"
+                            | "session_user"
+                            | "current_setting"
+                            | "to_char"
+                            | "to_date"
+                            | "to_timestamp"
+                            | "age"
+                            | "date_trunc"
+                            | "nextval"
+                            | "currval"
+                            | "setseed"
+                    )
+                {
+                    Some(immutable_error())
+                } else if let Some(routine) = (!IMMUTABLE_KEY_FUNCTIONS.contains(&name))
+                    .then(|| load_routine(db, RoutineKind::Function, name).ok().flatten())
+                    .flatten()
+                {
+                    // A user-defined function: PostgreSQL's volatility rule
+                    // decides the error; an IMMUTABLE one is still refused
+                    // later (after the constant-key rule) as unsupported.
+                    if routine.declared_volatility() == "i" {
+                        routine_used = true;
+                        None
+                    } else {
+                        Some(immutable_error())
+                    }
+                } else if !IMMUTABLE_KEY_FUNCTIONS.contains(&name) {
+                    Some(SqlError::Unsupported(format!(
+                        "function {name} in a partition key expression is not supported"
+                    )))
+                } else {
+                    None
+                }
+            }
+            Expr::Cast { data_type, .. } => {
+                let target = data_type.to_string().to_ascii_lowercase();
+                if [
+                    "date",
+                    "time",
+                    "timestamp",
+                    "interval",
+                    "reg",
+                    "json",
+                    "xml",
+                    "money",
+                ]
+                .iter()
+                .any(|prefix| target.starts_with(prefix))
+                {
+                    Some(SqlError::Unsupported(format!(
+                        "cast to {target} in a partition key expression is not supported"
+                    )))
+                } else {
+                    None
+                }
+            }
+            Expr::Value(_)
+            | Expr::Identifier(_)
+            | Expr::CompoundIdentifier(_)
+            | Expr::Substring { .. }
+            | Expr::Nested(_)
+            | Expr::UnaryOp { .. }
+            | Expr::IsNull(_)
+            | Expr::IsNotNull(_)
+            | Expr::Case { .. } => None,
+            Expr::BinaryOp { op, .. } => match op {
+                BinaryOperator::Plus
+                | BinaryOperator::Minus
+                | BinaryOperator::Multiply
+                | BinaryOperator::Divide
+                | BinaryOperator::Modulo
+                | BinaryOperator::Eq
+                | BinaryOperator::NotEq
+                | BinaryOperator::Lt
+                | BinaryOperator::LtEq
+                | BinaryOperator::Gt
+                | BinaryOperator::GtEq
+                | BinaryOperator::And
+                | BinaryOperator::Or => None,
+                other => Some(SqlError::Unsupported(format!(
+                    "operator {other} in a partition key expression is not supported"
+                ))),
+            },
+            other => Some(SqlError::Unsupported(format!(
+                "partition key expression {other} is not supported"
+            ))),
+        };
+        if let Some(found) = found {
+            error = Some(found);
+            return ControlFlow::Break(());
+        }
+        ControlFlow::Continue(())
+    });
+    match error {
+        Some(error) => Err(error),
+        None => Ok(routine_used),
+    }
+}
+
+/// Built-in functions PostgreSQL marks IMMUTABLE that BicDB evaluates with
+/// PostgreSQL's results, admitted in key expressions.
+const IMMUTABLE_KEY_FUNCTIONS: &[&str] = &[
+    "abs",
+    "lower",
+    "upper",
+    "length",
+    "char_length",
+    "character_length",
+    "octet_length",
+    "substr",
+    "substring",
+    "left",
+    "right",
+    "trim",
+    "btrim",
+    "ltrim",
+    "rtrim",
+    "md5",
+    "mod",
+    "div",
+    "floor",
+    "ceil",
+    "ceiling",
+    "round",
+    "trunc",
+    "sign",
+    "coalesce",
+    "nullif",
+    "greatest",
+    "least",
+    "replace",
+    "reverse",
+    "initcap",
+];
 
 fn is_keyword(tokens: &[Token], keyword: &str) -> bool {
     matches!(tokens, [Token::Word(word)] if word.quote_style.is_none() && word.value.eq_ignore_ascii_case(keyword))
 }
 
 pub(crate) fn parse_bound(parent: &TableSchema, sql: &str) -> Result<Bound> {
-    let columns = key_columns(parent)?;
+    let owned = key_columns(parent)?;
+    let columns = owned.iter().collect::<Vec<_>>();
     let strategy = &parent.partitioning.as_ref().unwrap().strategy;
     let mut tokens = Tokens::new(sql)?;
     if tokens.keyword("DEFAULT") {
@@ -215,8 +932,14 @@ pub(crate) fn parse_bound(parent: &TableSchema, sql: &str) -> Result<Bound> {
                             _ => None,
                         };
                         if tail.is_some() && tail != sentinel {
-                            return Err(invalid(
-                                "values after MINVALUE/MAXVALUE must use the same sentinel",
+                            return Err(SqlError::data_exception(
+                                "42804",
+                                if tail == Some(true) {
+                                    "every bound following MAXVALUE must also be MAXVALUE"
+                                } else {
+                                    "every bound following MINVALUE must also be MINVALUE"
+                                },
+                                None,
                             ));
                         }
                         tail = sentinel;
@@ -347,7 +1070,8 @@ fn compare_bound_keys(
 }
 
 pub(crate) fn bounds_overlap(parent: &TableSchema, left: &Bound, right: &Bound) -> Result<bool> {
-    let columns = key_columns(parent)?;
+    let owned = key_columns(parent)?;
+    let columns = owned.iter().collect::<Vec<_>>();
     Ok(match (left, right) {
         (Bound::Default, Bound::Default) => true,
         (Bound::Default, _) | (_, Bound::Default) => false,
@@ -481,13 +1205,15 @@ pub(crate) fn from_reads_parent(db: &BicDb, from: &TableWithJoins) -> Result<boo
     Ok(false)
 }
 
-pub(crate) fn matches_bound(parent: &TableSchema, bound: &Bound, record: &Record) -> Result<bool> {
-    let columns = key_columns(parent)?;
-    let values = record_column_values(
-        record,
-        parent,
-        &parent.partitioning.as_ref().unwrap().key_columns,
-    );
+pub(crate) fn matches_bound(
+    db: &BicDb,
+    parent: &TableSchema,
+    bound: &Bound,
+    record: &Record,
+) -> Result<bool> {
+    let parts = key_parts(parent)?;
+    let columns = parts.iter().map(|part| &part.column).collect::<Vec<_>>();
+    let values = key_values_of(db, parent, &parts, record)?;
     match bound {
         Bound::Range(lower, upper) => {
             if values.iter().any(|value| matches!(value, SqlValue::Null)) {
@@ -527,11 +1253,11 @@ pub(crate) fn matches_partition(
         .ok_or_else(|| invalid("relation is not a partition"))?;
     let bound = parse_bound(parent, &link.bound)?;
     if !matches!(bound, Bound::Default) {
-        return matches_bound(parent, &bound, record);
+        return matches_bound(db, parent, &bound, record);
     }
     for sibling in children(db, parent)? {
         let bound = parse_bound(parent, &sibling.partition_of.as_ref().unwrap().bound)?;
-        if !matches!(bound, Bound::Default) && matches_bound(parent, &bound, record)? {
+        if !matches!(bound, Bound::Default) && matches_bound(db, parent, &bound, record)? {
             return Ok(false);
         }
     }
@@ -628,16 +1354,98 @@ pub(crate) fn validate_attachment(
         .iter()
         .filter(|column| !column.hidden)
         .collect::<Vec<_>>();
-    if parent_columns.len() != child_columns.len()
-        || parent_columns.iter().zip(&child_columns).any(|(a, b)| {
-            a.name != b.name
-                || a.pg_type != b.pg_type
-                || a.type_modifier != b.type_modifier
-                || a.collation != b.collation
-                || (!a.nullable && b.nullable)
-        })
-    {
-        return Err(invalid("partition columns must match the parent table"));
+    // Rows are stored by column name, so a partition may order its columns
+    // differently (PostgreSQL maps attributes by name); every column must
+    // still match the parent's name, type, typmod, collation and NOT NULL.
+    let mismatch = |message: String| SqlError::data_exception("42804", message, None);
+    let child_name = catalog_display_name(&child.name);
+    let child_name = child_name.rsplit('.').next().unwrap_or(&child_name);
+    let parent_name = catalog_display_name(&parent.name);
+    let parent_name = parent_name.rsplit('.').next().unwrap_or(&parent_name);
+    for column in &child_columns {
+        if !parent_columns
+            .iter()
+            .any(|parent| parent.name == column.name)
+        {
+            return Err(SqlError::RaisedException {
+                sqlstate: "42804".to_string(),
+                message: format!(
+                    "table \"{child_name}\" contains column \"{}\" not found in parent \"{parent_name}\"",
+                    column.name
+                ),
+                detail: Some(
+                    "The new partition may contain only the columns present in parent.".into(),
+                ),
+            });
+        }
+    }
+    for column in &parent_columns {
+        let Some(other) = child_columns.iter().find(|child| child.name == column.name) else {
+            return Err(mismatch(format!(
+                "child table is missing column \"{}\"",
+                column.name
+            )));
+        };
+        if column.pg_type != other.pg_type || column.type_modifier != other.type_modifier {
+            return Err(mismatch(format!(
+                "child table \"{child_name}\" has different type for column \"{}\"",
+                column.name
+            )));
+        }
+        if column.collation != other.collation {
+            return Err(SqlError::data_exception(
+                "42P21",
+                format!(
+                    "child table \"{child_name}\" has different collation for column \"{}\"",
+                    column.name
+                ),
+                None,
+            ));
+        }
+        if !column.nullable && other.nullable {
+            return Err(mismatch(format!(
+                "column \"{}\" in child table \"{child_name}\" must be marked NOT NULL",
+                column.name
+            )));
+        }
+    }
+    // MergeConstraintsIntoExisting: every CHECK of the parent must already
+    // be on the partition, under its name and with the same definition.
+    for constraint in &parent.constraints {
+        let ConstraintSchema::Check {
+            name, expression, ..
+        } = constraint
+        else {
+            continue;
+        };
+        let found = child
+            .constraints
+            .iter()
+            .find_map(|candidate| match candidate {
+                ConstraintSchema::Check {
+                    name: other,
+                    expression,
+                    ..
+                } if other == name => Some(expression),
+                _ => None,
+            });
+        let Some(other) = found else {
+            return Err(mismatch(format!(
+                "child table is missing constraint \"{name}\""
+            )));
+        };
+        let same = match (
+            parse_check_expression(expression),
+            parse_check_expression(other),
+        ) {
+            (Ok(left), Ok(right)) => left.to_string() == right.to_string(),
+            _ => expression == other,
+        };
+        if !same {
+            return Err(mismatch(format!(
+                "child table \"{child_name}\" has different definition for check constraint \"{name}\""
+            )));
+        }
     }
     let mut ancestor = Some(parent.clone());
     let mut visited = BTreeSet::new();
@@ -658,12 +1466,27 @@ pub(crate) fn validate_attachment(
             return Err(invalid("relation is already a partition of this parent"));
         }
         let other = parse_bound(parent, &sibling.partition_of.as_ref().unwrap().bound)?;
+        if matches!((&bound, &other), (Bound::Default, Bound::Default)) {
+            return Err(SqlError::data_exception(
+                "42P17",
+                format!(
+                    "partition \"{}\" conflicts with existing default partition \"{}\"",
+                    catalog_display_name(&child.name),
+                    catalog_display_name(&sibling.name)
+                ),
+                None,
+            ));
+        }
         if bounds_overlap(parent, &bound, &other)? {
-            return Err(invalid(format!(
-                "partition \"{}\" would overlap partition \"{}\"",
-                catalog_display_name(&child.name),
-                catalog_display_name(&sibling.name)
-            )));
+            return Err(SqlError::data_exception(
+                "42P17",
+                format!(
+                    "partition \"{}\" would overlap partition \"{}\"",
+                    catalog_display_name(&child.name),
+                    catalog_display_name(&sibling.name)
+                ),
+                None,
+            ));
         }
     }
     fn physical_relations(
@@ -700,10 +1523,34 @@ pub(crate) fn validate_attachment(
             if !matches_partition(db, parent, child, &record)? {
                 return Err(violation(
                     &child.name,
-                    "partition constraint is violated by an existing row",
+                    format!(
+                        "partition constraint of relation \"{}\" is violated by some row",
+                        catalog_display_name(&table)
+                    ),
                 ));
             }
             validate_record(db, parent, &record)?;
+            // The parent's foreign keys hold for the attached rows too
+            // (PostgreSQL validates them while attaching).
+            if parent
+                .constraints
+                .iter()
+                .any(|constraint| matches!(constraint, ConstraintSchema::ForeignKey { .. }))
+            {
+                let mut keyed = parent.clone();
+                keyed.name = child.name.clone();
+                keyed
+                    .constraints
+                    .retain(|constraint| matches!(constraint, ConstraintSchema::ForeignKey { .. }));
+                crate::records::validate_foreign_keys_in_statement(
+                    db,
+                    tx,
+                    &child.name,
+                    &keyed,
+                    &record,
+                    &[],
+                )?;
+            }
         }
     }
     if !matches!(bound, Bound::Default) {
@@ -718,8 +1565,14 @@ pub(crate) fn validate_attachment(
             physical_relations(db, &sibling, &mut BTreeSet::new(), &mut relations)?;
             for table in relations {
                 for record in scan(db, tx, &table)? {
-                    if matches_bound(parent, &bound, &record)? {
-                        return Err(violation(&sibling.name, "updated default partition constraint would be violated by an existing row"));
+                    if matches_bound(db, parent, &bound, &record)? {
+                        return Err(violation(
+                            &sibling.name,
+                            format!(
+                                "updated partition constraint for default partition \"{}\" would be violated by some row",
+                                catalog_display_name(&sibling.name)
+                            ),
+                        ));
                     }
                 }
             }
@@ -731,35 +1584,65 @@ pub(crate) fn validate_attachment(
 /// Validate an already attached forest without treating each child as a new
 /// attachment. Exact identities and every sibling bound are preflighted.
 pub(crate) fn validate_definition(schema: &TableSchema) -> Result<()> {
-    let Some(partitioning) = &schema.partitioning else {
+    if schema.partitioning.is_none() {
         return Ok(());
-    };
-    let covers = |columns: &[String]| {
-        partitioning
-            .key_columns
-            .iter()
-            .all(|key| columns.contains(key))
-    };
-    if !schema.has_hidden_primary_key() && !covers(&primary_key_columns_for_schema(schema)) {
-        return Err(SqlError::Unsupported(
-            "unique constraint on partitioned table must include all partitioning columns".into(),
-        ));
+    }
+    if !schema.has_hidden_primary_key() {
+        unique_covers_key(
+            schema,
+            "PRIMARY KEY",
+            &primary_key_columns_for_schema(schema),
+        )?;
     }
     for constraint in &schema.constraints {
         if let ConstraintSchema::Unique { columns, .. }
         | ConstraintSchema::UniqueWithNullPolicy { columns, .. } = constraint
         {
-            if !covers(columns) {
-                return Err(SqlError::Unsupported(
-                    "unique constraint on partitioned table must include all partitioning columns"
-                        .into(),
-                ));
-            }
+            unique_covers_key(schema, "UNIQUE", columns)?;
             if constraint.unique_deferral().is_some() {
                 return Err(SqlError::Unsupported(
                     "DEFERRABLE unique constraints on partitioned tables are not supported".into(),
                 ));
             }
+        }
+    }
+    Ok(())
+}
+
+/// PostgreSQL's DefineIndex rule for a unique index on a partitioned table:
+/// every key position, in order, must be a plain column the index includes.
+pub(crate) fn unique_covers_key(
+    schema: &TableSchema,
+    constraint_type: &str,
+    columns: &[String],
+) -> Result<()> {
+    let Some(partitioning) = &schema.partitioning else {
+        return Ok(());
+    };
+    for (index, key) in partitioning.key_columns.iter().enumerate() {
+        if partitioning.key_expression(index).is_some() {
+            return Err(SqlError::RaisedException {
+                sqlstate: "0A000".into(),
+                message: format!(
+                    "unsupported {constraint_type} constraint with partition key definition"
+                ),
+                detail: Some(format!(
+                    "{constraint_type} constraints cannot be used when partition keys include expressions."
+                )),
+            });
+        }
+        if !columns.contains(key) {
+            let table = catalog_display_name(&schema.name);
+            let table = table.rsplit('.').next().unwrap_or(&table).to_string();
+            return Err(SqlError::RaisedException {
+                sqlstate: "0A000".into(),
+                message:
+                    "unique constraint on partitioned table must include all partitioning columns"
+                        .into(),
+                detail: Some(format!(
+                    "{constraint_type} constraint on table \"{table}\" lacks column \"{key}\" which is part of the partition key."
+                )),
+            });
         }
     }
     Ok(())
@@ -795,13 +1678,15 @@ pub(crate) fn validate_existing_tree(db: &BicDb, schemas: &[TableSchema]) -> Res
                 .iter()
                 .filter(|column| !column.hidden)
                 .collect::<Vec<_>>();
+            // Matched by name, as ATTACH admits them (rows are stored by name).
             if a.len() != b.len()
-                || a.iter().zip(&b).any(|(a, b)| {
-                    a.name != b.name
-                        || a.pg_type != b.pg_type
-                        || a.type_modifier != b.type_modifier
-                        || a.collation != b.collation
-                        || (!a.nullable && b.nullable)
+                || a.iter().any(|a| {
+                    b.iter().find(|b| b.name == a.name).is_none_or(|b| {
+                        a.pg_type != b.pg_type
+                            || a.type_modifier != b.type_modifier
+                            || a.collation != b.collation
+                            || (!a.nullable && b.nullable)
+                    })
                 })
             {
                 return Err(invalid("legacy partition columns do not match parent"));

@@ -97,8 +97,8 @@ restrictions apply: INSTEAD OF triggers only on views (`42809` on a table),
 FOR EACH ROW only, no WHEN condition or column list, and views take no
 row-level BEFORE/AFTER triggers (`42809`). Statement-level triggers on views,
 and `ON CONFLICT`, `UPDATE ... FROM` and `DELETE ... USING` on a view with an
-INSTEAD OF trigger, are not supported (`0A000`). `DO ALSO` rules are not
-supported.
+INSTEAD OF trigger, are not supported (`0A000`). Rules (`CREATE RULE ... DO
+ALSO | INSTEAD`) are described in `postgresql-application-compatibility.md`.
 
 ## Materialized views
 

@@ -3476,7 +3476,7 @@ fn assert_bytea_copy_csv_roundtrip(config: PgWireConfig) {
 }
 
 #[test]
-fn copy_binary_returns_clear_postgresql_shaped_error() {
+fn copy_binary_writes_postgresql_binary_copy_format() {
     let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
@@ -3497,11 +3497,24 @@ fn copy_binary_returns_clear_postgresql_shaped_error() {
     assert!(read_query_rows(&mut client).is_empty());
 
     send_query(&mut client, "COPY patients TO STDOUT BINARY;");
-    let (error, status) = read_error_response_with_status(&mut client);
-    assert_eq!(status, b'I');
-    assert!(error.contains("ERROR"));
-    assert!(error.contains("XX000"));
-    assert!(error.contains("COPY BINARY is not supported"));
+    let mut data = Vec::new();
+    let mut overall_format = None;
+    loop {
+        let (tag, payload) = read_message(&mut client);
+        match tag {
+            b'H' => overall_format = Some(payload[0]),
+            b'd' => data.extend_from_slice(&payload),
+            b'Z' => break,
+            b'E' => panic!("{}", String::from_utf8_lossy(&payload)),
+            _ => {}
+        }
+    }
+    assert_eq!(overall_format, Some(1));
+    // Signature, flags, header extension, then the end-of-data marker.
+    let mut expected = b"PGCOPY\n\xff\r\n\0".to_vec();
+    expected.extend_from_slice(&[0; 8]);
+    expected.extend_from_slice(&(-1i16).to_be_bytes());
+    assert_eq!(data, expected);
 
     client.write_all(b"X\0\0\0\x04").unwrap();
     server.join().unwrap();
@@ -11114,7 +11127,7 @@ fn failed_transaction_reports_error_status_and_recovers_on_rollback() {
     assert_eq!(status, b'E');
     assert!(error.contains("ERROR"));
     assert!(error.contains("42P01"));
-    assert!(error.contains("collection not found"));
+    assert!(error.contains("relation \"missing_table\" does not exist"));
 
     send_query(&mut client, "SELECT 1;");
     let (error, status) = read_error_response_with_status(&mut client);
@@ -11206,7 +11219,7 @@ fn pgwire_savepoints_recover_failed_transaction_status() {
     send_query(&mut client, "SELECT * FROM missing_table;");
     let (error, status) = read_error_response_with_status(&mut client);
     assert_eq!(status, b'E');
-    assert!(error.contains("collection not found"));
+    assert!(error.contains("relation \"missing_table\" does not exist"));
 
     send_query(&mut client, "ROLLBACK TO SAVEPOINT s1;");
     assert_eq!(read_query_rows_with_status(&mut client).1, b'T');
@@ -12015,7 +12028,7 @@ fn server_query_timeout_and_unsupported_sql_return_errors() {
     assert_eq!(read_query_rows(&mut client), vec![vec![String::new()]]);
     send_query(&mut client, "SELECT * FROM missing_table;");
     let error = read_error_response(&mut client);
-    assert!(error.contains("collection not found"));
+    assert!(error.contains("relation \"missing_table\" does not exist"));
     assert!(error.contains("C42P01"));
     send_query(
         &mut client,
@@ -12226,8 +12239,8 @@ fn error_response_fields_cover_common_sql_failures() {
     send_query(&mut client, "SELECT missing_column FROM error_fields;");
     let error = read_error_response(&mut client);
     assert!(error.contains("C42703"));
-    assert!(error.contains("terror_fields"));
-    assert!(error.contains("cmissing_column"));
+    // PostgreSQL names only the column, without table/column fields.
+    assert!(error.contains("column \"missing_column\" does not exist"));
 
     send_query(
         &mut client,

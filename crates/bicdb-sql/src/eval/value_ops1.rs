@@ -31,12 +31,38 @@ pub(crate) fn eval_privilege_function_value(
                 &current_user_from_gucs(session_gucs),
             )?)))
         }
+        "pg_partition_root" | "pg_catalog.pg_partition_root" => {
+            if args.len() != 1 {
+                return Err(SqlError::undefined_function(
+                    "function pg_partition_root expects one argument",
+                ));
+            }
+            Ok(Some(crate::partition_info::partition_root(db, &args[0])?))
+        }
+        "has_column_privilege"
+        | "pg_catalog.has_column_privilege"
+        | "has_any_column_privilege"
+        | "pg_catalog.has_any_column_privilege" => {
+            crate::column_privileges::has_column_privilege_value(
+                db,
+                name,
+                args,
+                &current_user_from_gucs(session_gucs),
+            )
+        }
         "has_function_privilege" | "pg_catalog.has_function_privilege" => {
             if args.iter().any(|value| matches!(value, SqlValue::Null)) {
                 return Ok(Some(SqlValue::Null));
             }
             Ok(Some(SqlValue::Bool(has_function_privilege(db, args)?)))
         }
+        "has_largeobject_privilege" | "pg_catalog.has_largeobject_privilege" => Ok(Some(
+            crate::pg_large_objects::functions::has_largeobject_privilege(
+                db,
+                args,
+                &current_user_from_gucs(session_gucs),
+            )?,
+        )),
         "has_type_privilege" | "pg_catalog.has_type_privilege" => {
             if args.iter().any(|value| matches!(value, SqlValue::Null)) {
                 return Ok(Some(SqlValue::Null));
@@ -1499,7 +1525,11 @@ pub(crate) fn pg_get_partkeydef(db: &BicDb, args: &[SqlValue]) -> Result<SqlValu
     let keys = partitioning
         .key_columns
         .iter()
-        .map(|column| pg_partition_key_identifier(column))
+        .enumerate()
+        .map(|(index, column)| match partitioning.key_expression(index) {
+            Some(sql) => partition::deparse_key_definition(sql),
+            None => pg_partition_key_identifier(column),
+        })
         .collect::<Vec<_>>()
         .join(", ");
     Ok(SqlValue::String(format!(
@@ -2078,7 +2108,7 @@ pub(crate) fn eval_acldefault(args: &[SqlValue]) -> Option<SqlValue> {
         'f' => ("X", Some("X")),
         'n' => ("UC", None),
         'F' | 'S' => ("U", None),
-        'r' | 'p' | 'v' | 'm' => ("arwdDxt", None),
+        'r' | 'p' | 'v' | 'm' => ("arwdDxtm", None),
         's' => ("rwU", None),
         'T' | 'l' => ("U", Some("U")),
         _ => return Some(SqlValue::Null),
@@ -3936,11 +3966,14 @@ pub(crate) fn eval_compatibility_function_value(
             }
             let field = args[0].to_cell();
             let timestamp_text = args[1].to_cell();
-            if arg_types
-                .and_then(|types| types.get(1))
-                .and_then(Option::as_deref)
-                == Some("timestamptz")
-            {
+            // date_trunc(text, date) resolves to the timestamptz form, as
+            // PostgreSQL casts the date to timestamptz.
+            if matches!(
+                arg_types
+                    .and_then(|types| types.get(1))
+                    .and_then(Option::as_deref),
+                Some("timestamptz" | "date")
+            ) {
                 let timestamp = parse_timestamptz(&timestamp_text)
                     .map_err(|error| postgres_timestamptz_input_error(&timestamp_text, error))?;
                 let Some(micros) = timestamp.finite_micros() else {

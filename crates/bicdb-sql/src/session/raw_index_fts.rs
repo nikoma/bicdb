@@ -231,6 +231,7 @@ impl<'db> SqlSession<'db> {
             access_method: "gist".to_string(),
             metadata_only: false,
             predicate: None,
+            partition_parent: None,
         });
         self.save_session_schema(&schema)?;
         Ok(Some(SqlResult::command("CREATE INDEX")))
@@ -828,6 +829,7 @@ impl<'db> SqlSession<'db> {
             access_method: index.access_method,
             metadata_only: true,
             predicate: None,
+            partition_parent: None,
         });
         self.save_session_schema(&schema)?;
         Ok(Some(SqlResult::command("CREATE INDEX")))
@@ -838,6 +840,7 @@ impl<'db> SqlSession<'db> {
             self.sql_engine().require_query_exact_decimal_units(query)?;
         }
         self.ensure_read_only_query(query)?;
+        let _column_allowances = crate::column_privileges::AllowanceScope::enter();
         // Every relation of the FROM tree needs SELECT before any row is read,
         // whether or not the executor ends up scanning it.
         self.sql_engine().require_from_relations_readable(query)?;
@@ -867,7 +870,7 @@ impl<'db> SqlSession<'db> {
             }
         }
         self.in_routine_expression = previous;
-        result
+        result.map(|result| with_cast_type_modifiers(result, query))
     }
 
     /// `SELECT f(..) FROM one_relation [WHERE ..]` where `f` modifies data:
@@ -1101,6 +1104,11 @@ impl<'db> SqlSession<'db> {
             return self.sql_engine().execute_query(query);
         }
         if select.from.is_empty() {
+            // Aggregates over the implicit single row run as a query over
+            // a one-row relation, like PostgreSQL's Result node.
+            if let Some(rewritten) = crate::engine::one_row_aggregate_query(query, select) {
+                return self.execute_query(&rewritten);
+            }
             return self.execute_session_select_without_from(select, query);
         }
         if let Some(result) = self.try_execute_scalar_derived_command(query)? {
@@ -1386,6 +1394,7 @@ impl<'db> SqlSession<'db> {
             ));
         };
         let name = normalize_role_name(first.trim_matches('"'));
+        ensure_unreserved_role_name(&name)?;
         let mut role = default_role_schema(&name);
         role.can_login = true;
         let options = rest[first.len()..].trim().to_ascii_uppercase();
@@ -1512,7 +1521,7 @@ impl<'db> SqlSession<'db> {
         let Some(mut command) = parse_raw_role_membership_ddl(sql)? else {
             return Ok(None);
         };
-        self.require_role_management_privilege("manage role memberships")?;
+        let is_grant = matches!(command, RawRoleMembershipDdl::Grant { .. });
         let (roles, members) = match &mut command {
             RawRoleMembershipDdl::Grant { roles, members, .. }
             | RawRoleMembershipDdl::Revoke { roles, members } => (roles, members),
@@ -1525,6 +1534,43 @@ impl<'db> SqlSession<'db> {
             };
         }
         let existing_memberships = list_role_memberships(self.db_ref())?;
+        // Predefined roles confer data access (pg_read_all_data, ...). Only a
+        // superuser or a holder of their ADMIN OPTION may grant or revoke
+        // them; CREATEROLE alone never may (as in PostgreSQL 16+).
+        if !self.current_user_is_superuser()? {
+            let current = current_user_from_gucs(&self.session_gucs);
+            for role in roles.iter() {
+                if is_predefined_role(role) && !role_admin_of(&existing_memberships, &current, role)
+                {
+                    let verb = if is_grant { "grant" } else { "revoke" };
+                    return Err(SqlError::RaisedException {
+                        sqlstate: "42501".to_string(),
+                        message: format!("permission denied to {verb} role \"{role}\""),
+                        detail: Some(format!(
+                            "Only roles with the ADMIN option on role \"{role}\" may {verb} this role."
+                        )),
+                    });
+                }
+            }
+        }
+        if !self.current_user_can_manage_roles()? {
+            // PostgreSQL: a role holding ADMIN OPTION on a role (directly or
+            // through any role it is a member of) may grant and revoke it;
+            // no role holds ADMIN OPTION on itself.
+            let current = current_user_from_gucs(&self.session_gucs);
+            for role in roles.iter() {
+                if !role_admin_of(&existing_memberships, &current, role) {
+                    let verb = if is_grant { "grant" } else { "revoke" };
+                    return Err(SqlError::RaisedException {
+                        sqlstate: "42501".to_string(),
+                        message: format!("permission denied to {verb} role \"{role}\""),
+                        detail: Some(format!(
+                            "Only roles with the ADMIN option on role \"{role}\" may {verb} this role."
+                        )),
+                    });
+                }
+            }
+        }
         let grantor = if self.current_user_is_superuser()? {
             current_role_name()
         } else {
@@ -2611,6 +2657,7 @@ impl<'db> SqlSession<'db> {
         }
         for name in &create_role.names {
             let name = normalize_role_name(&object_name(name)?);
+            ensure_unreserved_role_name(&name)?;
             let mut role = default_role_schema(&name);
             role.can_login = create_role.login.unwrap_or(false);
             role.inherit = create_role.inherit.unwrap_or(true);
@@ -2645,10 +2692,19 @@ impl<'db> SqlSession<'db> {
             }
         })?;
         self.ensure_role_target_manageable(&role, "alter")?;
+        if is_predefined_role(&role_name) {
+            if matches!(operation, AlterRoleOperation::RenameRole { .. }) {
+                ensure_unreserved_role_name(&role_name)?;
+            }
+            return Err(SqlError::Unsupported(format!(
+                "ALTER ROLE of predefined role \"{role_name}\" is not supported"
+            )));
+        }
         self.capture_role_undo(&role_name)?;
         match operation {
             AlterRoleOperation::RenameRole { role_name: new } => {
                 let new_name = normalize_role_name(&ident_value(new));
+                ensure_unreserved_role_name(&new_name)?;
                 if role_exists(self.db_ref(), &new_name)? {
                     return Err(SqlError::DuplicateRole { name: new_name });
                 }
@@ -2706,47 +2762,160 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_grant(&mut self, grant: &Grant) -> Result<SqlResult> {
+        self.execute_grant_with(grant, false)
+    }
+
+    /// `maintain_alias`: the statement was rewritten from PostgreSQL's
+    /// MAINTAIN privilege (which the SQL parser does not know) to the AUDIT
+    /// keyword; only then does AUDIT stand for MAINTAIN.
+    pub(crate) fn execute_grant_with(
+        &mut self,
+        grant: &Grant,
+        maintain_alias: bool,
+    ) -> Result<SqlResult> {
         if let Some(result) =
             self.execute_raw_function_privileges(&crate::sql_text::sql_text(grant))?
         {
             return Ok(result);
         }
-        if grant.with_grant_option
-            || grant.as_grantor.is_some()
-            || grant.granted_by.is_some()
-            || grant.current_grants.is_some()
-        {
+        if grant.with_grant_option || grant.as_grantor.is_some() || grant.current_grants.is_some() {
             return Err(SqlError::Unsupported(
                 "grant options, grantors, and current grants are not supported".to_string(),
             ));
         }
+        self.require_grantor_is_current_user(grant.granted_by.as_ref())?;
         let Some(objects) = grant.objects.as_ref() else {
             return Err(SqlError::Unsupported(
                 "role membership grants are not supported".to_string(),
             ));
         };
-        self.apply_privileges(&grant.privileges, objects, &grant.grantees, true)?;
+        self.apply_privileges(
+            &grant.privileges,
+            objects,
+            &grant.grantees,
+            true,
+            maintain_alias,
+        )?;
         Ok(SqlResult::command("GRANT"))
     }
 
     pub(crate) fn execute_revoke(&mut self, revoke: &Revoke) -> Result<SqlResult> {
+        self.execute_revoke_with(revoke, false)
+    }
+
+    pub(crate) fn execute_revoke_with(
+        &mut self,
+        revoke: &Revoke,
+        maintain_alias: bool,
+    ) -> Result<SqlResult> {
         if let Some(result) =
             self.execute_raw_function_privileges(&crate::sql_text::sql_text(revoke))?
         {
             return Ok(result);
         }
-        if revoke.granted_by.is_some() || matches!(revoke.cascade, Some(CascadeOption::Cascade)) {
+        if matches!(revoke.cascade, Some(CascadeOption::Cascade)) {
             return Err(SqlError::Unsupported(
-                "GRANTED BY and CASCADE revokes are not supported".to_string(),
+                "CASCADE revokes are not supported".to_string(),
             ));
         }
+        self.require_grantor_is_current_user(revoke.granted_by.as_ref())?;
         let Some(objects) = revoke.objects.as_ref() else {
             return Err(SqlError::Unsupported(
                 "role membership revokes are not supported".to_string(),
             ));
         };
-        self.apply_privileges(&revoke.privileges, objects, &revoke.grantees, false)?;
+        self.apply_privileges(
+            &revoke.privileges,
+            objects,
+            &revoke.grantees,
+            false,
+            maintain_alias,
+        )?;
         Ok(SqlResult::command("REVOKE"))
+    }
+
+    /// GRANTED BY on an object privilege: PostgreSQL accepts only the current
+    /// role as grantor (0A000 "grantor must be current user" otherwise).
+    fn require_grantor_is_current_user(&self, granted_by: Option<&Ident>) -> Result<()> {
+        let Some(grantor) = granted_by else {
+            return Ok(());
+        };
+        let current = current_user_from_gucs(&self.session_gucs);
+        let name = if grantor.quote_style.is_none()
+            && (grantor.value.eq_ignore_ascii_case("current_user")
+                || grantor.value.eq_ignore_ascii_case("current_role"))
+        {
+            current.clone()
+        } else if grantor.quote_style.is_none()
+            && grantor.value.eq_ignore_ascii_case("session_user")
+        {
+            session_user_from_gucs(&self.session_gucs)
+        } else {
+            normalize_role_name(&ident_value(grantor))
+        };
+        if !role_exists(self.db_ref(), &name)? {
+            return Err(SqlError::UndefinedRole { name });
+        }
+        if name != current {
+            return Err(SqlError::Unsupported("grantor must be current user".into()));
+        }
+        Ok(())
+    }
+
+    /// PostgreSQL 17's MAINTAIN table privilege, which the SQL parser lacks:
+    /// a GRANT/REVOKE naming it is re-parsed with AUDIT in its place and run
+    /// with AUDIT read as MAINTAIN.
+    pub(crate) fn execute_raw_maintain_privileges(
+        &mut self,
+        sql: &str,
+    ) -> Result<Option<SqlResult>> {
+        let statement = trim_sql_statement(sql);
+        let grant = if strip_prefix_ci(statement, "GRANT ").is_some() {
+            true
+        } else if strip_prefix_ci(statement, "REVOKE ").is_some() {
+            false
+        } else {
+            return Ok(None);
+        };
+        let Some(on) = find_top_level_keyword(statement, "ON") else {
+            return Ok(None);
+        };
+        let privileges = &statement[..on];
+        let words = privileges
+            .split(|c: char| c.is_whitespace() || c == ',')
+            .filter(|word| !word.is_empty())
+            .collect::<Vec<_>>();
+        if !words
+            .iter()
+            .any(|word| word.eq_ignore_ascii_case("MAINTAIN"))
+        {
+            return Ok(None);
+        }
+        if words.iter().any(|word| word.eq_ignore_ascii_case("AUDIT")) {
+            return Err(SqlError::InvalidSql(
+                "unrecognized privilege type \"audit\"".into(),
+            ));
+        }
+        let maintain = regex::RegexBuilder::new(r"\bMAINTAIN\b")
+            .case_insensitive(true)
+            .build()
+            .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+        let rewritten = format!(
+            "{}{}",
+            maintain.replace_all(privileges, "AUDIT"),
+            &statement[on..]
+        );
+        let parsed = Parser::parse_sql(&PostgreSqlDialect {}, &rewritten)
+            .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+        match parsed.as_slice() {
+            [Statement::Grant(statement)] if grant => {
+                self.execute_grant_with(statement, true).map(Some)
+            }
+            [Statement::Revoke(statement)] if !grant => {
+                self.execute_revoke_with(statement, true).map(Some)
+            }
+            _ => Ok(None),
+        }
     }
 
     /// CR-2: GRANT/REVOKE had no grantor check at all — any authenticated
@@ -2849,24 +3018,49 @@ impl<'db> SqlSession<'db> {
         objects: &GrantObjects,
         grantees: &[Grantee],
         grant: bool,
+        maintain_alias: bool,
     ) -> Result<()> {
         let privileges = match privileges {
             Privileges::Actions(actions) => {
                 let mut names = Vec::new();
                 for action in actions {
-                    if let Action::Update {
-                        columns: Some(columns),
-                    } = action
-                    {
+                    if maintain_alias && matches!(action, Action::Audit) {
+                        if !matches!(
+                            objects,
+                            GrantObjects::Tables(_) | GrantObjects::AllTablesInSchema { .. }
+                        ) {
+                            return Err(SqlError::InvalidSql(
+                                "invalid privilege type MAINTAIN for this object".into(),
+                            ));
+                        }
+                        names.push(("MAINTAIN".to_owned(), None));
+                        continue;
+                    }
+                    let column_action = match action {
+                        Action::Select {
+                            columns: Some(columns),
+                        } => Some(("SELECT", columns)),
+                        Action::Insert {
+                            columns: Some(columns),
+                        } => Some(("INSERT", columns)),
+                        Action::Update {
+                            columns: Some(columns),
+                        } => Some(("UPDATE", columns)),
+                        Action::References {
+                            columns: Some(columns),
+                        } => Some(("REFERENCES", columns)),
+                        _ => None,
+                    };
+                    if let Some((privilege, columns)) = column_action {
                         if !matches!(objects, GrantObjects::Tables(_)) || columns.is_empty() {
                             return Err(SqlError::Unsupported(
-                                "column UPDATE grants require named tables and columns".into(),
+                                "column privileges require named tables and columns".into(),
                             ));
                         }
                         names.extend(
                             columns
                                 .iter()
-                                .map(|column| ("UPDATE".to_owned(), Some(ident_value(column)))),
+                                .map(|column| (privilege.to_owned(), Some(ident_value(column)))),
                         );
                     } else {
                         names.push((privilege_action_name(action)?.to_owned(), None));
@@ -2896,13 +3090,13 @@ impl<'db> SqlSession<'db> {
             for (_, column) in &privileges {
                 if let Some(column) = column {
                     let schema = load_schema_shared(self.db_ref(), table)?;
-                    if !schema
-                        .as_ref()
-                        .is_some_and(|schema| schema.column(column).is_some())
-                    {
-                        return Err(SqlError::InvalidSql(format!(
-                            "column {column} does not exist on table {table}"
-                        )));
+                    if !schema.as_ref().is_some_and(|schema| {
+                        schema.column(column).is_some_and(|column| !column.hidden)
+                    }) {
+                        return Err(SqlError::UndefinedColumn {
+                            table: relation_name_for_message(table),
+                            column: column.clone(),
+                        });
                     }
                 }
             }
@@ -2981,4 +3175,86 @@ fn is_native_extension_function(name: &str) -> bool {
             | "uuid_generate_v4"
             | "similarity"
     )
+}
+
+/// A cast with a type modifier keeps it on its result column, whichever
+/// execution path produced the result.
+fn with_cast_type_modifiers(mut result: SqlResult, query: &Query) -> SqlResult {
+    let modifiers: Vec<Option<SqlColumnMetadata>> = match query.body.as_ref() {
+        SetExpr::Select(select) => {
+            if select.projection.len() != result.columns.len() {
+                return result;
+            }
+            select
+                .projection
+                .iter()
+                .map(|item| match item {
+                    SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => {
+                        crate::materialize::cast_column_metadata(expr)
+                    }
+                    _ => None,
+                })
+                .collect()
+        }
+        // A VALUES column keeps a modifier every row agrees on.
+        SetExpr::Values(values) => (0..result.columns.len())
+            .map(|index| {
+                let mut shared: Option<SqlColumnMetadata> = None;
+                for row in &values.rows {
+                    let modifier = crate::materialize::cast_column_metadata(row.get(index)?)?;
+                    match &shared {
+                        Some(existing) if existing.type_modifier != modifier.type_modifier => {
+                            return None;
+                        }
+                        _ => shared = Some(modifier),
+                    }
+                }
+                shared
+            })
+            .collect(),
+        _ => return result,
+    };
+    if modifiers.iter().all(Option::is_none) {
+        return result;
+    }
+    let mut metadata = result.column_metadata.clone();
+    metadata.resize(result.columns.len(), SqlColumnMetadata::default());
+    for (slot, modifier) in metadata.iter_mut().zip(modifiers) {
+        if let Some(modifier) = modifier {
+            if slot.type_modifier < 0 {
+                slot.type_modifier = modifier.type_modifier;
+            }
+        }
+    }
+    result.column_metadata = metadata;
+    result
+}
+
+/// Whether `member` holds ADMIN OPTION on `role` through any chain of
+/// memberships (PostgreSQL's `is_admin_of_role`, superusers aside).
+fn role_admin_of(memberships: &[RoleMembership], member: &str, role: &str) -> bool {
+    let member = normalize_role_name(member);
+    let role = normalize_role_name(role);
+    if member == role {
+        return false;
+    }
+    let mut closure = vec![member];
+    let mut index = 0;
+    while index < closure.len() && closure.len() <= 10_000 {
+        let current = closure[index].clone();
+        index += 1;
+        for membership in memberships {
+            if normalize_role_name(&membership.member) != current {
+                continue;
+            }
+            let granted = normalize_role_name(&membership.role);
+            if granted == role && membership.admin_option {
+                return true;
+            }
+            if !closure.contains(&granted) {
+                closure.push(granted);
+            }
+        }
+    }
+    false
 }

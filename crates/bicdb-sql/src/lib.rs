@@ -88,8 +88,11 @@ pub fn requires_exact_decimal_units_feature(sql: &str) -> Result<bool> {
 mod aggregate_evaluation;
 mod boolean_parse;
 mod builtin_signatures;
+mod column_privileges;
 mod identity;
 pub mod oracle;
+mod partition_info;
+mod pg_condition_names;
 pub mod sql_text;
 mod stack_depth;
 mod table_queries;
@@ -1979,6 +1982,37 @@ pub enum UniqueViolationOrigin {
     IndexBuild,
 }
 
+/// A core error's primary message as PostgreSQL clients see it.
+pub fn postgres_bicdb_error_message(error: &BicDbError) -> String {
+    match error {
+        BicDbError::Authorization(message) => message.clone(),
+        BicDbError::CollectionNotFound(name) => {
+            format!("relation \"{}\" does not exist", catalog_display_name(name))
+        }
+        error => display_bicdb_error(error),
+    }
+}
+
+/// A parser diagnostic in PostgreSQL's words: `syntax error at or near "X"`
+/// or `syntax error at end of input`. Other messages pass through.
+fn postgres_syntax_message(message: &str) -> String {
+    let Some(detail) = message.strip_prefix("sql parser error: ") else {
+        return message.to_string();
+    };
+    let Some(found) = detail.split(", found: ").nth(1) else {
+        return message.to_string();
+    };
+    let token = found
+        .rsplit_once(" at Line: ")
+        .map(|(token, _)| token)
+        .unwrap_or(found)
+        .trim();
+    if token.is_empty() || token == "EOF" {
+        return "syntax error at end of input".to_string();
+    }
+    format!("syntax error at or near \"{token}\"")
+}
+
 /// Core errors as SQL clients see them: a missing schema-qualified relation is
 /// named by its logical name rather than its physical storage name.
 fn display_bicdb_error(error: &BicDbError) -> String {
@@ -2088,6 +2122,15 @@ pub enum SqlError {
         sqlstate: String,
         message: String,
         detail: Option<String>,
+    },
+
+    /// An error raised by PL/pgSQL RAISE ... USING with diagnostic fields
+    /// beyond DETAIL (HINT, COLUMN, CONSTRAINT, DATATYPE, TABLE, SCHEMA).
+    #[error("{message}")]
+    RaisedDiagnostic {
+        sqlstate: String,
+        message: String,
+        fields: Vec<SqlErrorField>,
     },
 
     #[error("{message}")]
@@ -2373,6 +2416,25 @@ impl SqlError {
         }
     }
 
+    /// The primary message PostgreSQL sends for this error. `Display` keeps
+    /// BicDB's diagnostic prefixes for embedded callers and logs; clients on
+    /// the PostgreSQL protocol see PostgreSQL's wording.
+    pub fn postgres_message(&self) -> String {
+        match self {
+            Self::WithNotices { error, .. } => error.postgres_message(),
+            Self::Rethrown(error) => error.postgres_message(),
+            Self::BicDb(error) => postgres_bicdb_error_message(error),
+            Self::InvalidCollection(name) => {
+                format!("relation \"{}\" does not exist", catalog_display_name(name))
+            }
+            Self::InvalidSql(message) => postgres_syntax_message(message),
+            Self::Unsupported(message) | Self::UnsupportedPlpgsqlFeature(message) => {
+                message.clone()
+            }
+            other => other.to_string(),
+        }
+    }
+
     pub fn sqlstate(&self) -> &str {
         match self {
             Self::WithNotices { error, .. } => error.sqlstate(),
@@ -2385,6 +2447,14 @@ impl SqlError {
             Self::UndefinedRole { .. } => "42704",
             Self::InvalidTransactionState { .. } => "25P01",
             Self::RaisedException { sqlstate, .. } => sqlstate,
+            Self::RaisedDiagnostic { sqlstate, .. } => sqlstate,
+            // A duplicate relation reaches here as plain SQL text from several
+            // DDL paths; PostgreSQL reports it as duplicate_table.
+            Self::InvalidSql(message)
+                if message.starts_with("relation \"") && message.ends_with("\" already exists") =>
+            {
+                "42P07"
+            }
             Self::InvalidSql(_) => "42601",
             Self::ExactUnitsCapabilityDenied => "42501",
             Self::ApplicationTransactionControlDenied => "2D000",
@@ -2415,6 +2485,7 @@ impl SqlError {
                 detail: Some(detail),
                 ..
             } => vec![SqlErrorField::Detail(detail.clone())],
+            Self::RaisedDiagnostic { fields, .. } => fields.clone(),
             Self::InvalidCollection(table) => vec![SqlErrorField::Table(table.clone())],
             Self::UndefinedColumn { table, column } => vec![
                 SqlErrorField::Table(table.clone()),
@@ -3372,9 +3443,38 @@ struct TableCatalogSummary {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct PartitioningSchema {
     strategy: String,
+    /// One entry per key position: the column name, or the expression's SQL
+    /// text when `key_expressions` marks the position as an expression.
     key_columns: Vec<String>,
+    /// PostgreSQL `partexprs`: per key position, the SQL of an expression key
+    /// (`PARTITION BY RANGE ((b + 0))`), `None` for a plain column. Empty for
+    /// tables whose keys are all columns.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    key_expressions: Vec<Option<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     execution_version: Option<u32>,
+}
+
+impl PartitioningSchema {
+    /// The expression SQL of key position `index`, `None` for a column key.
+    fn key_expression(&self, index: usize) -> Option<&str> {
+        self.key_expressions
+            .get(index)
+            .and_then(|expression| expression.as_deref())
+    }
+
+    /// The plain column names of the key (expression positions excluded).
+    fn key_column_names(&self) -> impl Iterator<Item = &String> {
+        self.key_columns
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| self.key_expression(*index).is_none())
+            .map(|(_, name)| name)
+    }
+
+    fn has_key_expressions(&self) -> bool {
+        self.key_expressions.iter().any(Option::is_some)
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -3895,6 +3995,11 @@ struct IndexSchema {
     /// `CREATE INDEX ... WHERE predicate` text of a partial index (PostgreSQL rendering for the catalog).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     predicate: Option<String>,
+    /// For an index on a partition: the name of the partitioned table's
+    /// index it is attached to (PostgreSQL's pg_inherits row for indexes).
+    /// Such an index cannot be dropped on its own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    partition_parent: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -4080,6 +4185,9 @@ struct InboundForeignKeyUpdate {
     columns: Vec<String>,
     referred_columns: Vec<String>,
     on_update: ForeignKeyAction,
+    /// The relation the key references: the updated table itself, or a
+    /// partitioned table the updated partition belongs to.
+    referenced_table: String,
 }
 
 /// A foreign key whose parent is the deleted table (the DELETE twin of
@@ -4091,6 +4199,8 @@ struct InboundForeignKeyDelete {
     columns: Vec<String>,
     referred_columns: Vec<String>,
     on_delete: ForeignKeyAction,
+    /// As `InboundForeignKeyUpdate::referenced_table`.
+    referenced_table: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -5025,6 +5135,9 @@ pub(crate) struct RaiseErrorFields {
     /// The level of a non-error RAISE other than NOTICE (`WARNING`, `INFO`,
     /// `LOG`, `DEBUG`).
     pub(crate) severity: Option<&'static str>,
+    pub(crate) hint: Option<String>,
+    pub(crate) schema: Option<String>,
+    pub(crate) datatype: Option<String>,
 }
 
 #[derive(Clone, Debug)]

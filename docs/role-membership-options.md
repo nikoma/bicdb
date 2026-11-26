@@ -45,8 +45,22 @@ them. Grant and revoke changes participate in transaction rollback.
 Revoking table-level UPDATE also removes that recipient's column UPDATE grants,
 matching PostgreSQL's [REVOKE semantics](https://www.postgresql.org/docs/16/sql-revoke.html).
 Revoking a column grant does not remove an independently held table grant.
-Column-level SELECT, INSERT and REFERENCES, and column grant options, remain
-unsupported and are rejected explicitly.
+Column grants of SELECT, INSERT and REFERENCES are stored the same way.
+A role without table-level SELECT may run a query that reads only columns it
+holds SELECT on; the referenced columns are taken from the statement's syntax
+as an over-approximation (every identifier naming a column of the relation,
+every wildcard, whole-row reference and NATURAL join counting as all columns),
+so a query PostgreSQL would refuse is always refused, and an occasional query
+whose column name belongs to a different relation is refused too. `count(*)`
+needs only some column grant. INSERT needs INSERT on each target column (the
+leading columns a VALUES list fills when no column list is given); UPDATE and
+DELETE need SELECT on the columns their SET expressions, WHERE and RETURNING
+read, as in PostgreSQL; RETURNING needs SELECT on the columns it returns.
+Failures are 42501 `permission denied for table t`. `has_column_privilege`,
+`has_any_column_privilege` and `information_schema.column_privileges` report
+both table-level and column grants. Column REFERENCES grants do not yet satisfy
+FOREIGN KEY creation (the table-level privilege is still required), and column
+grant options remain unsupported.
 
 `DROP ROLE` and `DROP USER` reject a referenced role with SQLSTATE `2BP01`.
 Dependencies include table/view/sequence/routine/type/schema/database ownership,

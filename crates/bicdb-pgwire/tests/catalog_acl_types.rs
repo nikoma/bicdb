@@ -72,11 +72,10 @@ async fn real_catalog_acl_describe_and_text_output_preserve_oid_and_permissions(
                         let error = client.simple_query(ddl).await.unwrap_err();
                         assert_eq!(error.as_db_error().unwrap().code().code(), "0A000");
                     }
-                    // Table grants and column grants are distinct. This engine
-                    // currently refuses column GRANT; retain that honest limit
-                    // while describing the null attacl using its actual type.
-                    let column_grant = client.simple_query("GRANT SELECT(id) ON acl_items TO acl_reader").await.unwrap_err();
-                    assert_eq!(column_grant.as_db_error().unwrap().code().code(), "0A000");
+                    // Table grants and column grants are distinct. A column
+                    // grant that is revoked again leaves attacl null.
+                    client.simple_query("GRANT SELECT(id) ON acl_items TO acl_reader").await.unwrap();
+                    client.simple_query("REVOKE SELECT(id) ON acl_items FROM acl_reader").await.unwrap();
                     for (query, has_explicit_acl) in [
                         ("SELECT relacl FROM pg_catalog.pg_class WHERE relname IN ('acl_items','ACL_ITEMS')", true),
                         ("SELECT attacl FROM pg_catalog.pg_attribute WHERE attname IN ('id','ID') AND attrelid IN (SELECT oid FROM pg_catalog.pg_class WHERE relname IN ('acl_items','ACL_ITEMS'))", false),

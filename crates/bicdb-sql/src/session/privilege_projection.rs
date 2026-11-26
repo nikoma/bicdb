@@ -657,6 +657,7 @@ impl<'db> SqlSession<'db> {
             partition_of: None,
             oracle_partitioning: None,
         };
+        partition::validate_new_key(self.db_ref(), &schema)?;
         partition::validate_definition(&schema)?;
         self.create_session_collection(&table)?;
         let (row_type_oid, row_array_type_oid) =

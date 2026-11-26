@@ -5277,6 +5277,7 @@ impl<'db> SqlEngine<'db> {
         let join_budget = crate::join_budget::QueryScope::enter();
         self.db_ref().check_recovery_state()?;
         crate::session::recycle_bin::ensure_replica_catalog_ready(self.db_ref())?;
+        let _column_allowances = crate::column_privileges::AllowanceScope::enter();
         self.require_from_relations_readable(query)?;
         validate_comparison_signatures(self, ComparisonStatement::Query(query))?;
         let bound_units = self.bind_exact_units_scales(query)?;
@@ -5387,6 +5388,11 @@ impl<'db> SqlEngine<'db> {
         if select.from.is_empty() {
             if has_windows {
                 return self.execute_window_query_without_from(select, query);
+            }
+            // A FROM-less SELECT reads one row; aggregates and GROUP BY
+            // over it run through the ordinary aggregate path.
+            if let Some(rewritten) = one_row_aggregate_query(query, select) {
+                return self.execute_query(&rewritten);
             }
             return self.execute_select_without_from(select, query);
         }
@@ -5745,6 +5751,52 @@ pub(crate) fn scalar_subquery_value(result: SqlResult) -> Result<SqlValue> {
             "scalar subquery returned more than one row".to_string(),
         )),
     }
+}
+
+/// `SELECT agg(...)` without FROM, as a query over a one-row relation.
+pub(crate) fn one_row_aggregate_query(query: &Query, select: &Select) -> Option<Query> {
+    let grouped = select.having.is_some()
+        || !matches!(&select.group_by, GroupByExpr::Expressions(exprs, _) if exprs.is_empty());
+    let aggregated = select.projection.iter().any(|item| match item {
+        SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => {
+            expr_contains_aggregate(expr)
+        }
+        _ => false,
+    });
+    if !grouped && !aggregated {
+        return None;
+    }
+    // Only self-contained aggregates. An aggregate over an outer reference
+    // (`SELECT max(o.x)` inside a correlated subquery) belongs to the outer
+    // query in PostgreSQL and keeps its existing evaluation path.
+    let mut references = false;
+    let _ = sqlparser::ast::visit_expressions(query, |expr| {
+        if matches!(
+            expr,
+            Expr::Identifier(_)
+                | Expr::CompoundIdentifier(_)
+                | Expr::Subquery(_)
+                | Expr::Exists { .. }
+                | Expr::InSubquery { .. }
+        ) {
+            references = true;
+            return std::ops::ControlFlow::Break(());
+        }
+        std::ops::ControlFlow::Continue(())
+    });
+    if references || query.with.is_some() {
+        return None;
+    }
+    let mut rewritten = query.clone();
+    let SetExpr::Select(target) = rewritten.body.as_mut() else {
+        return None;
+    };
+    let from = parse_query("SELECT 1 FROM (VALUES (1)) AS __bicdb_one_row(__bicdb_one)").ok()?;
+    let SetExpr::Select(source) = *from.body else {
+        return None;
+    };
+    target.from = source.from;
+    Some(rewritten)
 }
 
 pub(crate) fn subquery_values(result: SqlResult) -> Result<Vec<SqlValue>> {

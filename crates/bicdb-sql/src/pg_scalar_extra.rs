@@ -683,6 +683,9 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             | "regexp_split_to_array"
             | "age"
             | "make_interval"
+            | "make_date"
+            | "make_time"
+            | "make_timestamp"
             | "date_bin"
             | "to_date"
             | "date"
@@ -945,6 +948,107 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
                 age(now, timestamp_micros(&args[0])?)?
             };
             SqlValue::String(render_interval(interval))
+        }
+        "make_date" | "make_time" | "make_timestamp" => {
+            let expected = match name {
+                "make_date" | "make_time" => 3,
+                _ => 6,
+            };
+            arity(name, args, expected..=expected)?;
+            if any_null(args) {
+                return Ok(Some(SqlValue::Null));
+            }
+            let (date, time_at) = match name {
+                "make_time" => (None, 0),
+                _ => {
+                    let (year, month, day) = (
+                        int_arg(name, &args[0])?,
+                        int_arg(name, &args[1])?,
+                        int_arg(name, &args[2])?,
+                    );
+                    // Negative years are BC; there is no year 0.
+                    let calendar_year = if year < 0 { year + 1 } else { year };
+                    let date = (year != 0)
+                        .then(|| {
+                            chrono::NaiveDate::from_ymd_opt(
+                                i32::try_from(calendar_year).ok()?,
+                                u32::try_from(month).ok()?,
+                                u32::try_from(day).ok()?,
+                            )
+                        })
+                        .flatten()
+                        .ok_or_else(|| {
+                            SqlError::data_exception(
+                                "22008",
+                                format!(
+                                    "date field value out of range: {year}-{month:02}-{day:02}"
+                                ),
+                                None,
+                            )
+                        })?;
+                    (Some((date, year < 0)), 3)
+                }
+            };
+            let time = if name == "make_date" {
+                None
+            } else {
+                let (hour, minute, second) = (
+                    int_arg(name, &args[time_at])?,
+                    int_arg(name, &args[time_at + 1])?,
+                    float_arg(name, &args[time_at + 2])?,
+                );
+                let micros = (second * 1_000_000.0).round() as i64;
+                if !(0..=24).contains(&hour)
+                    || !(0..=59).contains(&minute)
+                    || !(0.0..60.0).contains(&second)
+                    || (hour == 24 && (minute != 0 || micros != 0))
+                {
+                    return Err(SqlError::data_exception(
+                        "22008",
+                        format!("time field value out of range: {hour}:{minute:02}:{second:02}"),
+                        None,
+                    ));
+                }
+                let whole = micros / 1_000_000;
+                let fraction = micros % 1_000_000;
+                let mut rendered = format!("{hour:02}:{minute:02}:{whole:02}");
+                if fraction != 0 {
+                    let digits = format!("{fraction:06}");
+                    rendered.push('.');
+                    rendered.push_str(digits.trim_end_matches('0'));
+                }
+                Some(rendered)
+            };
+            let render_date = |date: chrono::NaiveDate, bc: bool| {
+                use chrono::Datelike;
+                // PostgreSQL shows a BC year as its positive number.
+                let year = if bc {
+                    1 - i64::from(date.year())
+                } else {
+                    i64::from(date.year())
+                };
+                format!("{year:04}-{:02}-{:02}", date.month(), date.day())
+            };
+            SqlValue::String(match (date, time) {
+                (Some((date, bc)), None) => {
+                    let text = render_date(date, bc);
+                    if bc {
+                        format!("{text} BC")
+                    } else {
+                        text
+                    }
+                }
+                (Some((date, bc)), Some(time)) => {
+                    let text = format!("{} {time}", render_date(date, bc));
+                    if bc {
+                        format!("{text} BC")
+                    } else {
+                        text
+                    }
+                }
+                (None, Some(time)) => time,
+                (None, None) => unreachable!(),
+            })
         }
         "make_interval" => {
             arity(name, args, 0..=7)?;

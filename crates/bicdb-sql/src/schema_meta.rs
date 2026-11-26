@@ -12,12 +12,40 @@ use crate::*;
 /// Discover candidates internally, then admit only the actual parent and
 /// referencing descriptors before exposing them. An unrelated UPDATE must
 /// not observe every table merely to establish that it has no incoming FK.
+/// `table` and the partitioned tables it is a partition of: a foreign key
+/// that references a partitioned table protects the rows of its partitions.
+fn referenced_relation_names(schemas: &[TableSchema], table: &str) -> Vec<String> {
+    let mut names = vec![table.to_ascii_lowercase()];
+    let mut current = schemas
+        .iter()
+        .find(|schema| schema.name.eq_ignore_ascii_case(table));
+    let mut guard = 0;
+    while let Some(link) = current.and_then(|schema| schema.partition_of.as_ref()) {
+        guard += 1;
+        if guard > 64 {
+            break;
+        }
+        names.push(link.parent_table.to_ascii_lowercase());
+        current = schemas
+            .iter()
+            .find(|schema| schema.name.eq_ignore_ascii_case(&link.parent_table));
+    }
+    names
+}
+
+fn references_one_of(names: &[String], foreign_table: &str) -> bool {
+    names
+        .iter()
+        .any(|name| name.eq_ignore_ascii_case(foreign_table))
+}
+
 fn inbound_foreign_key_schemas(db: &BicDb, table: &str) -> Result<Vec<TableSchema>> {
     check_sql_catalog_read(db, SCHEMA_COLLECTION, Some(table))?;
     let schemas = schema_catalog_snapshot_shared(db)?;
+    let names = referenced_relation_names(&schemas, table);
     let mut matches = Vec::new();
     for schema in schemas.iter().filter(|schema| schema.constraints.iter().any(|constraint| {
-        matches!(constraint, ConstraintSchema::ForeignKey { foreign_table, .. } if foreign_table.eq_ignore_ascii_case(table))
+        matches!(constraint, ConstraintSchema::ForeignKey { foreign_table, .. } if references_one_of(&names, foreign_table))
     })) {
         check_sql_catalog_read(db, SCHEMA_COLLECTION, Some(&schema.name))?;
         matches.push(schema.clone());
@@ -30,6 +58,7 @@ pub(crate) fn inbound_foreign_key_update_constraints_uncached(
     table: &str,
 ) -> Result<Vec<InboundForeignKeyUpdate>> {
     let mut constraints = Vec::new();
+    let names = referenced_relation_names(&schema_catalog_snapshot_shared(db)?, table);
     for child_schema in inbound_foreign_key_schemas(db, table)?.iter() {
         for constraint in &child_schema.constraints {
             let ConstraintSchema::ForeignKey {
@@ -43,8 +72,9 @@ pub(crate) fn inbound_foreign_key_update_constraints_uncached(
             else {
                 continue;
             };
-            if foreign_table.eq_ignore_ascii_case(table) {
+            if references_one_of(&names, foreign_table) {
                 constraints.push(InboundForeignKeyUpdate {
+                    referenced_table: foreign_table.clone(),
                     child_schema: child_schema.clone(),
                     name: name.clone(),
                     columns: columns.clone(),
@@ -63,6 +93,7 @@ pub(crate) fn inbound_foreign_key_delete_constraints_uncached(
 ) -> Result<Vec<InboundForeignKeyDelete>> {
     sql_profile_foreign_key_parent_delete_schema_scan();
     let mut constraints = Vec::new();
+    let names = referenced_relation_names(&schema_catalog_snapshot_shared(db)?, table);
     for child_schema in inbound_foreign_key_schemas(db, table)?.iter() {
         for constraint in &child_schema.constraints {
             let ConstraintSchema::ForeignKey {
@@ -76,8 +107,9 @@ pub(crate) fn inbound_foreign_key_delete_constraints_uncached(
             else {
                 continue;
             };
-            if foreign_table.eq_ignore_ascii_case(table) {
+            if references_one_of(&names, foreign_table) {
                 constraints.push(InboundForeignKeyDelete {
+                    referenced_table: foreign_table.clone(),
                     child_schema: child_schema.clone(),
                     name: name.clone(),
                     columns: columns.clone(),
@@ -155,7 +187,46 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>> {
     restore_postgres_distinct_boolean_precedence(&mut statements);
     restore_postgres_whole_row_function_args(&mut statements);
     crate::similar_to::rewrite_similar_to(&mut statements);
+    resolve_pg_typeof_unknown_literals(&mut statements);
     Ok(statements)
+}
+
+/// `pg_typeof('literal')` is `unknown` in PostgreSQL: the untyped literal
+/// is never resolved to text when nothing asks for a type.
+fn resolve_pg_typeof_unknown_literals(statements: &mut Vec<Statement>) {
+    let _ = visit_expressions_mut(statements, |expr| {
+        if let Expr::Function(function) = expr {
+            let is_typeof = object_name(&function.name).is_ok_and(|name| {
+                name.eq_ignore_ascii_case("pg_typeof")
+                    || name.eq_ignore_ascii_case("pg_catalog.pg_typeof")
+            });
+            if is_typeof {
+                if let FunctionArguments::List(list) = &function.args {
+                    if let [FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        ValueWithSpan {
+                            value: Value::SingleQuotedString(_),
+                            ..
+                        },
+                    )))] = list.args.as_slice()
+                    {
+                        *expr = Expr::Cast {
+                            kind: sqlparser::ast::CastKind::DoubleColon,
+                            expr: Box::new(Expr::Value(
+                                Value::SingleQuotedString("unknown".to_string()).into(),
+                            )),
+                            data_type: DataType::Custom(
+                                ObjectName::from(vec![Ident::new("regtype")]),
+                                Vec::new(),
+                            ),
+                            array: false,
+                            format: None,
+                        };
+                    }
+                }
+            }
+        }
+        std::ops::ControlFlow::<()>::Continue(())
+    });
 }
 
 fn ensure_parser_stack_margin() {
@@ -2846,9 +2917,71 @@ pub(crate) fn create_role_record(
     Ok(())
 }
 
+/// PostgreSQL's predefined roles (pg_authid.dat). They always exist, cannot
+/// log in and hold nothing by themselves; granting one confers exactly what
+/// PostgreSQL's privilege checks give its members (see
+/// `predefined_role_grants_table_privilege`). A role BicDB attaches no
+/// behaviour to grants nothing, which never exceeds PostgreSQL's access.
+pub(crate) const PREDEFINED_ROLES: &[&str] = &[
+    "pg_checkpoint",
+    "pg_create_subscription",
+    "pg_database_owner",
+    "pg_execute_server_program",
+    "pg_maintain",
+    "pg_monitor",
+    "pg_read_all_data",
+    "pg_read_all_settings",
+    "pg_read_all_stats",
+    "pg_read_server_files",
+    "pg_signal_autovacuum_worker",
+    "pg_signal_backend",
+    "pg_stat_scan_tables",
+    "pg_use_reserved_connections",
+    "pg_write_all_data",
+    "pg_write_server_files",
+];
+
+pub(crate) fn is_predefined_role(name: &str) -> bool {
+    PREDEFINED_ROLES.contains(&normalize_role_name(name).as_str())
+}
+
+/// Whether `name` is a PostgreSQL predefined role (`pg_read_all_data`, ...).
+/// They cannot log in, so a connection naming one must be refused.
+pub fn is_postgres_predefined_role(name: &str) -> bool {
+    is_predefined_role(name)
+}
+
+/// PostgreSQL reserves the `pg_` prefix for predefined roles (42939).
+pub(crate) fn ensure_unreserved_role_name(name: &str) -> Result<()> {
+    if normalize_role_name(name).starts_with("pg_") {
+        return Err(SqlError::RaisedException {
+            sqlstate: "42939".into(),
+            message: format!("role name \"{name}\" is reserved"),
+            detail: Some("Role names starting with \"pg_\" are reserved.".into()),
+        });
+    }
+    Ok(())
+}
+
+/// Table privileges PostgreSQL's pg_class_aclmask adds for predefined-role
+/// members: SELECT for pg_read_all_data, INSERT/UPDATE/DELETE for
+/// pg_write_all_data, MAINTAIN for pg_maintain. Nothing else (no TRUNCATE,
+/// REFERENCES or TRIGGER, no row-security bypass).
+pub(crate) fn predefined_role_grants_table_privilege(
+    inherited: &BTreeSet<String>,
+    privilege: &str,
+) -> bool {
+    match privilege.to_ascii_uppercase().as_str() {
+        "SELECT" => inherited.contains("pg_read_all_data"),
+        "INSERT" | "UPDATE" | "DELETE" => inherited.contains("pg_write_all_data"),
+        "MAINTAIN" => inherited.contains("pg_maintain"),
+        _ => false,
+    }
+}
+
 pub(crate) fn role_exists(db: &BicDb, name: &str) -> Result<bool> {
     let name = normalize_role_name(name);
-    if name == current_role_name() {
+    if name == current_role_name() || is_predefined_role(&name) {
         return Ok(true);
     }
     match db.get(ROLE_COLLECTION, &name) {
@@ -2873,6 +3006,11 @@ pub(crate) fn list_roles(db: &BicDb) -> Result<Vec<RoleSchema>> {
             .any(|candidate| candidate.name.eq_ignore_ascii_case(&role.name))
         {
             roles.push(role);
+        }
+    }
+    for name in PREDEFINED_ROLES {
+        if !roles.iter().any(|candidate| candidate.name == *name) {
+            roles.push(default_role_schema(name));
         }
     }
     roles.sort_by(|left, right| left.name.cmp(&right.name));
@@ -2929,7 +3067,8 @@ pub fn copy_cluster_role_catalog(source: &BicDb, target: &mut BicDb) -> Result<(
     ensure_role_collection(target)?;
     ensure_role_membership_collection(target)?;
     for role in list_roles(source)? {
-        if role.name != current_role_name() {
+        // Predefined roles exist in every database without a stored record.
+        if role.name != current_role_name() && !is_predefined_role(&role.name) {
             if role_exists(target, &role.name)? {
                 delete_role_record(target, &role.name)?;
             }
@@ -3311,6 +3450,9 @@ pub(crate) fn role_schema_shared(
     if name == current_role_name() {
         return Ok(Some(std::sync::Arc::new(current_role_schema())));
     }
+    if is_predefined_role(&name) {
+        return Ok(Some(std::sync::Arc::new(default_role_schema(&name))));
+    }
     let generation = db.collection_generation(ROLE_COLLECTION);
     let key = (db.instance_id(), name);
     let hit = ROLE_SCHEMA_MEMO.with(|memo| {
@@ -3368,6 +3510,16 @@ pub(crate) fn role_privilege_closure(db: &BicDb, user: &str) -> Result<BTreeSet<
             }
         }
     }
+    // pg_monitor is a member of these predefined roles in PostgreSQL.
+    if closure.contains("pg_monitor") {
+        for implied in [
+            "pg_read_all_settings",
+            "pg_read_all_stats",
+            "pg_stat_scan_tables",
+        ] {
+            closure.insert(implied.to_string());
+        }
+    }
     Ok(closure)
 }
 
@@ -3409,6 +3561,7 @@ pub(crate) fn privilege_names(
             GrantObjects::Tables(_) | GrantObjects::AllTablesInSchema { .. } => vec![
                 "DELETE",
                 "INSERT",
+                "MAINTAIN",
                 "REFERENCES",
                 "SELECT",
                 "TRIGGER",
@@ -3819,7 +3972,7 @@ pub(crate) fn acl_value_with_grantor(
             .or_default()
             .insert(privilege_acl_code(&grant.privilege).to_string());
     }
-    let privilege_order = "arwdDxtXUCTc";
+    let privilege_order = "arwdDxtmXUCTc";
     let grantor = pg_quote_ident(grantor);
     let entries = by_grantee
         .into_iter()
@@ -3856,6 +4009,7 @@ pub(crate) fn privilege_acl_code(privilege: &str) -> &str {
         "CREATE" => "C",
         "TEMPORARY" => "T",
         "CONNECT" => "c",
+        "MAINTAIN" => "m",
         _ => privilege,
     }
 }
@@ -4346,6 +4500,9 @@ fn role_has_table_privilege_uncached(
     }
     let inherited = role_privilege_closure(db, &role)?;
     if inherited.contains(&normalize_role_name(&owner)) {
+        return Ok(true);
+    }
+    if predefined_role_grants_table_privilege(&inherited, privilege) {
         return Ok(true);
     }
     Ok(list_privileges(db)?.into_iter().any(|grant| {
@@ -4962,6 +5119,22 @@ pub(crate) fn sql_value_text(value: &SqlValue) -> Option<String> {
 
 /// [`unqualified_relation`] for error messages: they name the SQL relation,
 /// never its schema-isolated storage name (`__bicdb_s_<digest>_<hex>`).
+/// PostgreSQL's `permission denied for <kind> <name>` message.
+pub(crate) fn relation_permission_denied_message(db: &BicDb, name: &str) -> String {
+    let kind = match load_view(db, name) {
+        Ok(Some(view)) if view.materialized => "materialized view",
+        Ok(Some(_)) => "view",
+        _ => match load_sequence(db, name) {
+            Ok(Some(_)) => "sequence",
+            _ => "table",
+        },
+    };
+    format!(
+        "permission denied for {kind} {}",
+        relation_name_for_message(name)
+    )
+}
+
 pub(crate) fn relation_name_for_message(name: &str) -> String {
     match crate::eval::rewrite_helpers::logical_relation_name(name) {
         Some(logical) => unqualified_relation(&logical),

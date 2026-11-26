@@ -897,6 +897,11 @@ impl<'db> SqlEngine<'db> {
                     *with_ordinality,
                 );
             }
+            if let Some(row_set) =
+                self.partition_info_row_set(&table, table_alias, args, *with_ordinality)?
+            {
+                return Ok(row_set);
+            }
             if let Some(row_set) = self.stored_routine_table_function_row_set(
                 &table,
                 table_alias,
@@ -1492,6 +1497,12 @@ impl<'db> SqlEngine<'db> {
         if role_has_table_privilege(self.db_ref(), &role, table, privilege)? {
             return Ok(());
         }
+        // A query admitted through column grants reads its relation here.
+        if privilege.eq_ignore_ascii_case("SELECT")
+            && crate::column_privileges::allowed(&role, table)
+        {
+            return Ok(());
+        }
         // A relation that does not exist is reported as such, not as a
         // privilege failure.
         let exists = self
@@ -1505,10 +1516,9 @@ impl<'db> SqlEngine<'db> {
                 relation_name_for_message(table),
             )));
         }
-        Err(SqlError::BicDb(BicDbError::Authorization(format!(
-            "permission denied for table {}",
-            relation_name_for_message(table)
-        ))))
+        Err(SqlError::BicDb(BicDbError::Authorization(
+            relation_permission_denied_message(self.db_ref(), table),
+        )))
     }
 
     pub(crate) fn indexed_records_for_table_selection(
@@ -5194,6 +5204,60 @@ impl<'db> SqlEngine<'db> {
         })
     }
 
+    /// `pg_partition_tree(rel)` and `pg_partition_ancestors(rel)`.
+    pub(crate) fn partition_info_row_set(
+        &self,
+        table: &str,
+        table_alias: Option<&TableAlias>,
+        args: &TableFunctionArgs,
+        with_ordinality: bool,
+    ) -> Result<Option<RowSet>> {
+        let name = table.to_ascii_lowercase();
+        let name = name.strip_prefix("pg_catalog.").unwrap_or(&name);
+        if !matches!(name, "pg_partition_tree" | "pg_partition_ancestors") {
+            return Ok(None);
+        }
+        let values = table_function_expr_args(args)?
+            .iter()
+            .map(|expr| self.eval_select_constant_expr(expr))
+            .collect::<Result<Vec<_>>>()?;
+        let Some((function_columns, values)) =
+            crate::partition_info::table_function(self.db_ref(), name, &values)?
+        else {
+            return Ok(None);
+        };
+        let alias_name = table_alias
+            .map(|alias| alias.name.value.clone())
+            .unwrap_or_else(|| name.to_string());
+        let mut source_columns =
+            table_function_source_columns_for_alias(table_alias, &alias_name, function_columns);
+        if with_ordinality {
+            source_columns.push("ordinality".to_string());
+        }
+        let columns = table_alias_columns(
+            table,
+            &alias_name,
+            table_alias
+                .map(|alias| alias.columns.as_slice())
+                .unwrap_or(&[]),
+            &source_columns,
+        )?;
+        let rows = values
+            .into_iter()
+            .enumerate()
+            .map(|(index, mut source)| {
+                if with_ordinality {
+                    source.push(SqlValue::Int(index as i64 + 1));
+                }
+                slot_row_from_values(&columns, &source)
+            })
+            .collect::<Vec<_>>();
+        Ok(Some(RowSet {
+            rows,
+            columns: aliased_row_output_columns(&alias_name, &columns),
+        }))
+    }
+
     pub(crate) fn regexp_split_to_table_row_set(
         &self,
         table: &str,
@@ -6698,6 +6762,33 @@ impl<'db> SqlEngine<'db> {
                 } else {
                     vec![table.rsplit('.').next().unwrap_or(&table).to_string()]
                 };
+                let columns = table_alias_columns(
+                    &table,
+                    &alias_name,
+                    table_alias
+                        .map(|alias| alias.columns.as_slice())
+                        .unwrap_or(&[]),
+                    &source_columns,
+                )?;
+                return Ok(Some(aliased_row_output_columns(&alias_name, &columns)));
+            }
+            let lower = table.to_ascii_lowercase();
+            let partition_columns = match lower.strip_prefix("pg_catalog.").unwrap_or(&lower) {
+                "pg_partition_tree" => Some(vec![
+                    "relid".to_string(),
+                    "parentrelid".to_string(),
+                    "isleaf".to_string(),
+                    "level".to_string(),
+                ]),
+                "pg_partition_ancestors" => Some(vec!["relid".to_string()]),
+                _ => None,
+            };
+            if let Some(function_columns) = partition_columns {
+                let source_columns = table_function_source_columns_for_alias(
+                    table_alias,
+                    &alias_name,
+                    function_columns,
+                );
                 let columns = table_alias_columns(
                     &table,
                     &alias_name,

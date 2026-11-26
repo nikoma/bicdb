@@ -563,9 +563,13 @@ mod tests {
         let error = session.execute("SELECT native_again()").unwrap_err();
         assert_eq!(error.sqlstate(), "22012");
         assert_eq!(error.to_string(), "native original");
+        // The rethrown error keeps the one CONTEXT line it was raised with.
         assert_eq!(
             error.fields(),
-            vec![SqlErrorField::Detail("native detail".into())]
+            vec![
+                SqlErrorField::Detail("native detail".into()),
+                SqlErrorField::Context("PL/pgSQL function native_again() line 1 at RAISE".into()),
+            ]
         );
         session.execute("CREATE FUNCTION native_outside() RETURNS INTEGER LANGUAGE plpgsql AS $$BEGIN RAISE;END$$").unwrap();
         assert_eq!(

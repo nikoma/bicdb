@@ -7246,9 +7246,13 @@ fn raise_using_preserves_dynamic_message_and_detail() {
     let error = session.execute("DO $$ DECLARE dependency TEXT := 'missing_provider'; BEGIN RAISE EXCEPTION USING ERRCODE = '42883', MESSAGE = '100% missing ' || dependency, DETAIL = dependency; END $$").unwrap_err();
     assert_eq!(error.sqlstate(), "42883");
     assert_eq!(error.to_string(), "100% missing missing_provider");
+    // PostgreSQL adds the CONTEXT line of the raising statement.
     assert_eq!(
         error.fields(),
-        vec![SqlErrorField::Detail("missing_provider".into())]
+        vec![
+            SqlErrorField::Detail("missing_provider".into()),
+            SqlErrorField::Context("PL/pgSQL function inline_code_block line 1 at RAISE".into()),
+        ]
     );
 }
 

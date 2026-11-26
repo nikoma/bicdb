@@ -8377,7 +8377,10 @@ fn routine_error_context(
 ) -> SqlError {
     // Engine/feature limits are retry signals that callers match by
     // variant (falling back to another evaluation path); they keep theirs.
+    // A bare RAISE in a handler rethrows the caught error with the context
+    // it already carries, as PostgreSQL's ReThrowError does.
     if frame.context_attached
+        || matches!(statement, RoutineStmt::Rethrow)
         || matches!(
             error,
             SqlError::Unsupported(_)

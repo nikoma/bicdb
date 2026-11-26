@@ -1976,6 +1976,8 @@ pub struct ErrorDetail {
     pub(crate) values_of: Option<String>,
     pub(crate) authorized: bool,
     pub(crate) hint: Option<String>,
+    /// PostgreSQL's CONTEXT lines (a violation raised inside a routine).
+    pub(crate) context: Option<String>,
 }
 
 impl ErrorDetail {
@@ -1987,6 +1989,7 @@ impl ErrorDetail {
             values_of: None,
             authorized: true,
             hint,
+            context: None,
         }
     }
 
@@ -1998,6 +2001,7 @@ impl ErrorDetail {
             values_of: Some(relation.to_string()),
             authorized: false,
             hint: None,
+            context: None,
         }
     }
 
@@ -2337,6 +2341,36 @@ impl SqlError {
                     None => line,
                 }),
             },
+            // A constraint violation keeps its variant (embedders match it
+            // and its constraint name); the CONTEXT rides in its detail.
+            Self::ConstraintViolation {
+                sqlstate,
+                message,
+                schema,
+                table,
+                column,
+                constraint,
+                oracle_code,
+                unique_origin,
+                detail,
+            } => {
+                let mut detail = detail.unwrap_or_else(|| Box::new(ErrorDetail::plain(None, None)));
+                detail.context = Some(match detail.context.take() {
+                    Some(context) => format!("{context}\n{line}"),
+                    None => line,
+                });
+                Self::ConstraintViolation {
+                    sqlstate,
+                    message,
+                    schema,
+                    table,
+                    column,
+                    constraint,
+                    oracle_code,
+                    unique_origin,
+                    detail: Some(detail),
+                }
+            }
             other => Self::Detailed {
                 error: Box::new(other),
                 detail: None,
@@ -2650,6 +2684,10 @@ impl SqlError {
                 }
                 if let Some(constraint) = constraint {
                     fields.push(SqlErrorField::Constraint(constraint.clone()));
+                }
+                if let Some(context) = detail.as_deref().and_then(|detail| detail.context.as_ref())
+                {
+                    fields.push(SqlErrorField::Context(context.clone()));
                 }
                 fields
             }

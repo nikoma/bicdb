@@ -1323,7 +1323,9 @@ pub(crate) fn list_schemas_shared(db: &BicDb) -> Result<std::sync::Arc<Vec<Table
     schema_catalog_snapshot_shared(db)
 }
 
-fn schema_catalog_snapshot_shared(db: &BicDb) -> Result<std::sync::Arc<Vec<TableSchema>>> {
+pub(crate) fn schema_catalog_snapshot_shared(
+    db: &BicDb,
+) -> Result<std::sync::Arc<Vec<TableSchema>>> {
     db.check_recovery_state()?;
     if let Some(schemas) = sql_schema_list_cache_get(db) {
         return Ok(schemas);

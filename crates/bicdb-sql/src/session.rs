@@ -73,6 +73,7 @@ mod set_functions;
 #[cfg(test)]
 mod subquery_scope_tests;
 mod temp_tables;
+pub(crate) mod temporal_keys;
 mod transaction_defaults;
 mod vacuum_analyze;
 pub use read_only::parse_transaction_read_only;
@@ -3454,14 +3455,10 @@ impl<'db> SqlSession<'db> {
     }
 
     /// CREATE/DROP AGGREGATE and CAST, ALTER/DROP ROUTINE, statistics
-    /// objects and REINDEX, and the temporal-key refusal (single-statement
-    /// path only). Outlined so the recursive `execute` frames stay small.
+    /// objects and REINDEX. Outlined so the recursive `execute` frames stay
+    /// small.
     #[inline(never)]
-    fn execute_raw_catalog_compat(
-        &mut self,
-        sql: &str,
-        refuse_temporal_keys: bool,
-    ) -> Result<Option<SqlResult>> {
+    fn execute_raw_catalog_compat(&mut self, sql: &str) -> Result<Option<SqlResult>> {
         if let Some(result) = self.execute_raw_create_aggregate(sql)? {
             return Ok(Some(result));
         }
@@ -3479,9 +3476,6 @@ impl<'db> SqlSession<'db> {
         }
         if let Some(result) = self.execute_raw_reindex(sql)? {
             return Ok(Some(result));
-        }
-        if refuse_temporal_keys {
-            self.refuse_temporal_keys(sql)?;
         }
         if let Some(result) = self.execute_raw_drop_cast(sql)? {
             return Ok(Some(result));
@@ -3946,7 +3940,7 @@ impl<'db> SqlSession<'db> {
             return Ok(result);
         }
 
-        if let Some(result) = self.execute_raw_catalog_compat(sql, true)? {
+        if let Some(result) = self.execute_raw_catalog_compat(sql)? {
             return Ok(result);
         }
 
@@ -4036,6 +4030,12 @@ impl<'db> SqlSession<'db> {
         if let Some(result) = self.execute_raw_relation_forms(sql)? {
             return Ok(result);
         }
+
+        if let Some(result) = self.execute_raw_temporal_key_ddl(sql)? {
+            return Ok(result);
+        }
+        // Temporal-key forms the DDL above does not take stay refused.
+        self.refuse_temporal_keys(sql)?;
 
         if let Some(result) = self.execute_raw_create_table_like(sql)? {
             return Ok(result);
@@ -4491,7 +4491,7 @@ impl<'db> SqlSession<'db> {
                 last_result = Some(result);
                 continue;
             }
-            if let Some(result) = self.execute_raw_catalog_compat(&statement, false)? {
+            if let Some(result) = self.execute_raw_catalog_compat(&statement)? {
                 last_result = Some(result);
                 continue;
             }
@@ -4540,6 +4540,10 @@ impl<'db> SqlSession<'db> {
                 continue;
             }
             if let Some(result) = self.execute_raw_function_privileges(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_temporal_key_ddl(&statement)? {
                 last_result = Some(result);
                 continue;
             }

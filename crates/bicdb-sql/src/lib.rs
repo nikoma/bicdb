@@ -3597,6 +3597,11 @@ struct TableSchema {
     /// CHECK constraints declared `NO INHERIT`: children do not take them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     no_inherit_constraints: Vec<String>,
+    /// PostgreSQL 18 temporal foreign keys (`FOREIGN KEY (a, PERIOD p) REFERENCES ...`),
+    /// enforced by `session::temporal_keys`. Kept beside `constraints` so the ordinary
+    /// foreign-key machinery never mistakes one for an equality foreign key.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    temporal_foreign_keys: Vec<crate::session::temporal_keys::TemporalForeignKey>,
 }
 
 /// A logical SQL column projected over an existing BicDB collection for an
@@ -6130,6 +6135,7 @@ pub fn ensure_embedded_table_schema(
         inherits: Vec::new(),
         inheritance_children: Vec::new(),
         no_inherit_constraints: Vec::new(),
+        temporal_foreign_keys: Vec::new(),
     });
     let mut changed = previous.is_none();
     for requested in columns {

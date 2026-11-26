@@ -136,7 +136,8 @@ fn jsonpath_input_is_validated() {
     let (_dir, mut db) = session_db();
     let mut session = SqlSession::new(&mut db);
     let error = session.execute("SELECT '$.a['::jsonpath").unwrap_err();
-    assert_eq!(error.sqlstate(), "22P02");
+    // PostgreSQL reports jsonpath grammar errors as syntax errors.
+    assert_eq!(error.sqlstate(), "42601");
 }
 
 #[test]
@@ -259,7 +260,7 @@ fn jsonpath_storage_copy_arrays_and_restart_preserve_canonical_values() {
             &["id".into(), "path".into()],
             vec![vec![Some("invalid".into()), Some("$.broken[".into())]],
         );
-        assert_eq!(invalid.unwrap_err().sqlstate(), "22P02");
+        assert_eq!(invalid.unwrap_err().sqlstate(), "42601");
     }
 
     let mut reopened = BicDb::open(dir.path()).unwrap();

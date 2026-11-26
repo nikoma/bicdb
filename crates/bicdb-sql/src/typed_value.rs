@@ -202,7 +202,98 @@ impl PgFloat8 {
     }
 }
 
+thread_local! {
+    static EXTRA_FLOAT_DIGITS: std::cell::Cell<i32> = const { std::cell::Cell::new(1) };
+}
+
+/// The session's `extra_float_digits` for float output on this thread.
+pub fn set_extra_float_digits(digits: i32) {
+    EXTRA_FLOAT_DIGITS.with(|cell| cell.set(digits.clamp(-15, 3)));
+}
+
+/// The setting in `gucs` (PostgreSQL's default, 1, when unset).
+pub fn extra_float_digits_setting(gucs: &std::collections::HashMap<String, String>) -> i32 {
+    gucs.get("extra_float_digits")
+        .and_then(|digits| digits.parse().ok())
+        .unwrap_or(1)
+}
+
+/// Restores this thread's float output setting when dropped.
+pub struct ExtraFloatDigitsScope(i32);
+
+impl ExtraFloatDigitsScope {
+    pub fn enter(digits: i32) -> Self {
+        let previous = EXTRA_FLOAT_DIGITS.with(std::cell::Cell::get);
+        set_extra_float_digits(digits);
+        Self(previous)
+    }
+}
+
+impl Drop for ExtraFloatDigitsScope {
+    fn drop(&mut self) {
+        EXTRA_FLOAT_DIGITS.with(|cell| cell.set(self.0));
+    }
+}
+
+/// PostgreSQL's float4out/float8out: the shortest text that reads back as
+/// the same value when `extra_float_digits` > 0, else `%.{N}g` with
+/// N = FLT_DIG/DBL_DIG + extra_float_digits.
 pub fn postgres_float_text(value: f64, pg_type: &str) -> String {
+    let digits = EXTRA_FLOAT_DIGITS.with(std::cell::Cell::get);
+    if digits > 0 || !value.is_finite() || value == 0.0 {
+        return postgres_shortest_float_text(value, pg_type);
+    }
+    let base = if pg_type == "float4" { 6 } else { 15 };
+    let precision = (base + digits).max(1) as usize;
+    let value = if pg_type == "float4" {
+        f64::from(value as f32)
+    } else {
+        value
+    };
+    format_c_general(value, precision)
+}
+
+/// PostgreSQL's float-to-numeric text: `%.{FLT_DIG|DBL_DIG}g` (6 or 15
+/// significant digits), whatever extra_float_digits is.
+pub fn postgres_float_numeric_text(value: f64, pg_type: &str) -> String {
+    if !value.is_finite() || value == 0.0 {
+        return postgres_shortest_float_text(value, pg_type).replace("-0", "0");
+    }
+    if pg_type == "float4" {
+        format_c_general(f64::from(value as f32), 6)
+    } else {
+        format_c_general(value, 15)
+    }
+}
+
+/// C's `%.{precision}g` for a finite non-zero value.
+fn format_c_general(value: f64, precision: usize) -> String {
+    let scientific = format!("{:.*e}", precision - 1, value);
+    let (mantissa, exponent) = scientific
+        .split_once('e')
+        .expect("exponent format has an exponent");
+    let exponent: i32 = exponent.parse().expect("exponent is an integer");
+    let strip = |text: &str| -> String {
+        if text.contains('.') {
+            text.trim_end_matches('0').trim_end_matches('.').to_string()
+        } else {
+            text.to_string()
+        }
+    };
+    if exponent < -4 || exponent >= precision as i32 {
+        format!(
+            "{}e{}{:02}",
+            strip(mantissa),
+            if exponent < 0 { '-' } else { '+' },
+            exponent.unsigned_abs()
+        )
+    } else {
+        let decimals = (precision as i32 - 1 - exponent).max(0) as usize;
+        strip(&format!("{value:.decimals$}"))
+    }
+}
+
+fn postgres_shortest_float_text(value: f64, pg_type: &str) -> String {
     let (value, rendered, scientific_threshold) = if pg_type == "float4" {
         let value = value as f32;
         (f64::from(value), value.to_string(), 6_i32)
@@ -4884,6 +4975,25 @@ mod tests {
     #[test]
     fn floating_point_text_matches_postgresql_thresholds_and_special_values() {
         assert_eq!(postgres_float_text(f64::from(0.1_f32), "float4"), "0.1");
+        {
+            let _digits = ExtraFloatDigitsScope::enter(0);
+            assert_eq!(postgres_float_text(f64::from(1.1_f32), "float4"), "1.1");
+            assert_eq!(
+                postgres_float_text(1.0 / 3.0, "float8"),
+                "0.333333333333333"
+            );
+            assert_eq!(postgres_float_text(1e20, "float8"), "1e+20");
+            assert_eq!(postgres_float_text(123456.0, "float4"), "123456");
+            assert_eq!(postgres_float_text(1234567.0, "float4"), "1.23457e+06");
+            assert_eq!(postgres_float_text(1e-5, "float8"), "1e-05");
+            let _digits = ExtraFloatDigitsScope::enter(-15);
+            assert_eq!(postgres_float_text(123.456, "float8"), "1e+02");
+            assert_eq!(postgres_float_text(0.1, "float8"), "0.1");
+        }
+        assert_eq!(
+            postgres_float_text(1.0 / 3.0, "float8"),
+            "0.3333333333333333"
+        );
         assert_eq!(postgres_float_text(0.1, "float8"), "0.1");
         assert_eq!(postgres_float_text(1e-5, "float8"), "1e-05");
         assert_eq!(postgres_float_text(1e-4, "float8"), "0.0001");

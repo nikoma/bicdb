@@ -536,6 +536,7 @@ impl<'db> SqlSession<'db> {
         }
         let schema = load_schema(self.db_ref(), table)?;
         if let Some(schema) = &schema {
+            self.detach_dropped_inheritance_table(schema, dropping, cascade)?;
             let views = self.views_depending_on_table(&schema.name, "table", dropping)?;
             self.drop_table_inbound_foreign_keys(schema, dropping, cascade, &views)?;
             if cascade {
@@ -1459,6 +1460,9 @@ impl<'db> SqlSession<'db> {
                 return Ok(SqlResult::command("ALTER TABLE"));
             }
         }
+        if let Some(result) = self.execute_inherited_alter_table(alter_table)? {
+            return Ok(result);
+        }
         // PostgreSQL accepts ALTER TABLE ... OWNER TO for a view (pg_dump
         // emits it for every view).
         if let [AlterTableOperation::OwnerTo { new_owner }] = alter_table.operations.as_slice() {
@@ -1558,6 +1562,17 @@ impl<'db> SqlSession<'db> {
                             } else {
                                 None
                             };
+                        let adds_generated =
+                            schema.column(&ident_value(&column_def.name)).is_none()
+                                && column_def.options.iter().any(|option| {
+                                    matches!(
+                                        option.option,
+                                        ColumnOption::Generated {
+                                            generation_expr: Some(_),
+                                            ..
+                                        }
+                                    )
+                                });
                         alter_table_add_column(
                             self.ddl_rows()?,
                             &table,
@@ -1566,6 +1581,15 @@ impl<'db> SqlSession<'db> {
                             *if_not_exists,
                             expression_default,
                         )?;
+                        if adds_generated {
+                            // Existing rows take the generated value, as in
+                            // PostgreSQL's table rewrite.
+                            let mut records = self.db_ref().scan_collection(&table)?;
+                            self.materialize_generated_columns(&table, &schema, &mut records)?;
+                            for record in records {
+                                self.db_mut()?.insert(&table, record)?;
+                            }
+                        }
                     }
                 }
                 AlterTableOperation::AddConstraint {
@@ -3388,6 +3412,27 @@ impl<'db> SqlSession<'db> {
             }
             return Err(SqlError::InvalidCollection(table.clone()));
         };
+        if !schema.virtual_generated_columns.is_empty() {
+            // PostgreSQL 18 computes virtual columns on read and cannot
+            // index them, in a key or an expression alike.
+            let mut references_virtual = false;
+            let _ = sqlparser::ast::visit_expressions(create_index, |expr| {
+                let name = match expr {
+                    Expr::Identifier(ident) => Some(ident_value(ident)),
+                    Expr::CompoundIdentifier(parts) => parts.last().map(ident_value),
+                    _ => None,
+                };
+                if name.is_some_and(|name| schema.virtual_generated_columns.contains(&name)) {
+                    references_virtual = true;
+                }
+                std::ops::ControlFlow::<()>::Continue(())
+            });
+            if references_virtual {
+                return Err(SqlError::Unsupported(
+                    "indexes on virtual generated columns are not supported".to_string(),
+                ));
+            }
+        }
         let index_name = create_index
             .name
             .as_ref()

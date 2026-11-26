@@ -32,9 +32,10 @@ pub(crate) fn literal_to_value(value: &ValueWithSpan) -> Result<SqlValue> {
                     format!("invalid hexadecimal digit in bit string: \"{value}\""),
                 )
             }),
-        // PostgreSQL escape strings (psql's \l projects array_to_string(.., E'\n')).
-        Value::EscapedStringLiteral(value) => {
-            text_value_without_nul(unescape_pg_string(value), "text")
+        // Escape (E'...') and Unicode-escape (U&'...') strings: the tokenizer
+        // already decoded the value; decoding it again lost backslashes.
+        Value::EscapedStringLiteral(value) | Value::UnicodeStringLiteral(value) => {
+            text_value_without_nul(value.clone(), "text")
         }
         Value::Number(value, _) => {
             if value.contains(['.', 'e', 'E']) {
@@ -704,6 +705,11 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
         changed = true;
     }
 
+    if let Some(next) = crate::quantified_operators::rewrite_operator_quantifiers(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
     if let Some(next) = rewrite_locking_clause_before_limit(&rewritten) {
         rewritten = next;
         changed = true;
@@ -720,6 +726,11 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
     }
 
     if let Some(next) = crate::rows_from::rewrite_rows_from(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
+    if let Some(next) = crate::only_rewrite::rewrite_only_relations(&rewritten) {
         rewritten = next;
         changed = true;
     }

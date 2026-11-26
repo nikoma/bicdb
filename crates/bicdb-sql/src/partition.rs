@@ -1145,6 +1145,16 @@ pub(crate) fn physical_tables(db: &BicDb, parent: &TableSchema) -> Result<Vec<Ta
                 visit(db, &child, seen, out)?;
             }
         }
+        // Inheritance children (and their own children) are read too; a
+        // table reached through two parents is read once.
+        for child in &table.inheritance_children {
+            if seen.contains(child) {
+                continue;
+            }
+            if let Some(child) = load_schema(db, child)? {
+                visit(db, &child, seen, out)?;
+            }
+        }
         Ok(())
     }
     let mut out = Vec::new();
@@ -1183,7 +1193,7 @@ pub(crate) fn factor_reads_parent(db: &BicDb, factor: &TableFactor) -> Result<bo
             name, args: None, ..
         } => {
             let table = resolve_session_relation_name_if_exists(db, &relation_name(name)?);
-            Ok(load_schema(db, &table)?.is_some_and(|schema| schema.partitioning.is_some()))
+            Ok(load_schema(db, &table)?.is_some_and(|schema| schema.has_descendant_tables()))
         }
         TableFactor::NestedJoin {
             table_with_joins, ..

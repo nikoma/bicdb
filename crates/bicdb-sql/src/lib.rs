@@ -95,6 +95,10 @@ mod partition_info;
 mod pg_condition_names;
 pub mod sql_text;
 mod stack_depth;
+mod string_constants;
+pub use string_constants::{
+    normalize_client_string_constants, normalize_client_string_constants_with_warnings,
+};
 mod table_queries;
 pub use identity::{
     bicdb_version_banner, postgres_version_banner, BICDB_VERSION, POSTGRES_COMPATIBILITY_VERSION,
@@ -192,6 +196,9 @@ pub fn ts_rank_conjunctive_for_tests(terms: &[(&str, Option<&[u16]>)], weights: 
 }
 
 pub use fts::{
+    default_text_search_config_setting, set_default_text_search_config, TextSearchConfigScope,
+};
+pub use fts::{
     PgTsLexeme, PgTsPosition, PgTsQuery, PgTsQueryNode, PgTsQueryOperand, PgTsVector, PgTsWeight,
 };
 pub(crate) use geometric::*;
@@ -272,8 +279,15 @@ mod partial_index;
 mod partition;
 pub(crate) use const_fold::fold_statement_constants;
 mod error_detail;
+mod hstore;
+mod inheritance;
+mod only_rewrite;
+mod persistence_ddl;
 mod pg_scalar_extra;
+mod pgcrypto;
+mod quantified_operators;
 mod records;
+mod routine_srf_projection;
 mod row_types;
 pub(crate) use order_by_ordinal::{rewrite_dml_call_forms, rewrite_ordinal_order_by};
 pub(crate) use partial_index::partial_index_predicate;
@@ -2662,6 +2676,18 @@ impl std::fmt::Debug for SqlNotice {
 }
 
 impl SqlNotice {
+    /// The severity clients are told: the notice's `Severity` field, or
+    /// NOTICE when it has none.
+    pub fn severity(&self) -> &str {
+        self.fields
+            .iter()
+            .find_map(|field| match field {
+                SqlErrorField::Severity(severity) => Some(severity.as_str()),
+                _ => None,
+            })
+            .unwrap_or("NOTICE")
+    }
+
     pub fn memory_estimate(&self) -> usize {
         self.sqlstate.len()
             + self.message.len()
@@ -2988,10 +3014,29 @@ fn composite_field_text(field: &SqlCompositeField) -> String {
     if matches!(field.value, SqlValue::Null) {
         return String::new();
     }
-    let text = if field.pg_type.ends_with("[]") {
-        composite_array_text(&field.value).unwrap_or_else(|| field.value.to_cell())
+    let float_type = |pg_type: &str| match pg_type {
+        "float4" | "real" => Some("float4"),
+        "float8" | "double precision" => Some("float8"),
+        _ => None,
+    };
+    let text = if let Some(element) = field.pg_type.strip_suffix("[]") {
+        match float_type(element) {
+            // float4[]/float8[] fields print their elements as float4out/float8out.
+            Some(element) => {
+                crate::eval::postgres_array_cast_text_value_of(element, &field.value, ',').ok()
+            }
+            None => None,
+        }
+        .or_else(|| composite_array_text(&field.value))
+        .unwrap_or_else(|| field.value.to_cell())
     } else {
-        field.value.to_cell()
+        match (&field.value, float_type(&field.pg_type)) {
+            // A float4 field prints as float4out, not as the widened double.
+            (SqlValue::Float(value), Some(float_type)) => postgres_float_text(*value, float_type),
+            // boolout: a record shows t/f.
+            (SqlValue::Bool(value), _) => if *value { "t" } else { "f" }.to_string(),
+            _ => field.value.to_cell(),
+        }
     };
     let quoted = text.is_empty()
         || text.chars().any(|character| {
@@ -3400,6 +3445,26 @@ struct TableSchema {
     /// `COMMENT ON TABLE` (also views and sequences stored as relations).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     comment: Option<String>,
+    /// `CREATE UNLOGGED TABLE` (`pg_class.relpersistence` 'u'). The rows are
+    /// still written durably, which is strictly safer than PostgreSQL's
+    /// truncate-after-crash.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    unlogged: bool,
+    /// Generated columns declared VIRTUAL (the PostgreSQL 18 default). Their
+    /// value is kept with the row; as the expression must be immutable, reads
+    /// return what PostgreSQL computes on read.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    virtual_generated_columns: Vec<String>,
+    /// `INHERITS (...)`: the parent tables, in declaration order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    inherits: Vec<String>,
+    /// Tables that inherit from this one; reads and writes of this table
+    /// reach their rows too unless `ONLY` is written.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    inheritance_children: Vec<String>,
+    /// CHECK constraints declared `NO INHERIT`: children do not take them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    no_inherit_constraints: Vec<String>,
 }
 
 /// A logical SQL column projected over an existing BicDB collection for an
@@ -5889,6 +5954,11 @@ pub fn ensure_embedded_table_schema(
         partitioning: None,
         partition_of: None,
         oracle_partitioning: None,
+        unlogged: false,
+        virtual_generated_columns: Vec::new(),
+        inherits: Vec::new(),
+        inheritance_children: Vec::new(),
+        no_inherit_constraints: Vec::new(),
     });
     let mut changed = previous.is_none();
     for requested in columns {

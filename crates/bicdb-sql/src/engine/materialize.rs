@@ -3613,7 +3613,11 @@ impl<'db> SqlEngine<'db> {
                     format!("{element_type}[]")
                 });
             }
-            "string_to_array" => return Some("text[]".to_string()),
+            "string_to_array" | "akeys" | "avals" | "hstore_to_array" => {
+                return Some("text[]".to_string())
+            }
+            "hstore_to_json" => return Some("json".to_string()),
+            "hstore_to_jsonb" => return Some("jsonb".to_string()),
             "array_to_string" => return Some("text".to_string()),
             "array_position" | "cardinality" | "array_ndims" | "array_length" | "array_lower"
             | "array_upper" => return Some("int4".to_string()),

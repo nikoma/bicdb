@@ -223,7 +223,7 @@ impl SqlEngine<'_> {
         let physical_sources = targets
             .iter()
             .map(|(_, alias, schema, _, _)| {
-                if schema.partitioning.is_none() {
+                if !schema.has_descendant_tables() {
                     return Ok(None);
                 }
                 let slot = slot_row_column_index(columns, &format!("{alias}.tableoid"))

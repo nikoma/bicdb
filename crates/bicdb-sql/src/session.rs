@@ -8,8 +8,10 @@ mod collation_ddl;
 mod create_table_as;
 pub(crate) mod deferred_constraints;
 mod domain_types;
+pub(crate) mod extension_objects;
 mod flashback;
 mod index_drop;
+mod inheritance_dml;
 mod instead_of_triggers;
 pub(crate) mod materialized_views;
 pub(crate) mod merge;
@@ -3431,6 +3433,30 @@ impl<'db> SqlSession<'db> {
     }
 
     pub fn execute(&mut self, sql: &str) -> Result<SqlResult> {
+        // String constants first take the one spelling every later stage
+        // reads (PostgreSQL's decoding); see `string_constants`. A client
+        // statement reads plain constants per standard_conforming_strings;
+        // SQL that BicDB runs inside a statement is always standard.
+        let (constants, lexer_warnings) = if crate::statement_context::in_statement() {
+            (
+                crate::string_constants::normalize_string_constants(
+                    sql,
+                    crate::string_constants::PlainStrings::Standard,
+                )?,
+                Vec::new(),
+            )
+        } else {
+            // Float text and text search defaults follow the session.
+            crate::set_extra_float_digits(crate::extra_float_digits_setting(&self.session_gucs));
+            crate::set_default_text_search_config(&crate::default_text_search_config_setting(
+                &self.session_gucs,
+            ));
+            crate::string_constants::normalize_client_string_constants_with_warnings(
+                sql,
+                &self.session_gucs,
+            )?
+        };
+        let sql: &str = &constants;
         let _cursor_scope = sql_cursors::CursorScope::enter(&self.sql_cursors);
         let current_of = self.rewrite_where_current_of(sql)?;
         let sql = current_of.as_deref().unwrap_or(sql);
@@ -3479,6 +3505,10 @@ impl<'db> SqlSession<'db> {
         }
         drop(preprocessing_reads);
         let effects = crate::statement_context::StatementScope::enter();
+        // The lexer's warnings belong to this statement's diagnostics.
+        for warning in lexer_warnings {
+            crate::statement_context::note_notice(warning)?;
+        }
         let atomic = self.tx.is_some() && oracle::preview_routine_language_enabled(self.db_ref())?;
         let execute = |session: &mut Self| {
             session.with_implicit_guc_statement(|session| {
@@ -6665,6 +6695,8 @@ impl<'db> SqlSession<'db> {
             | "row_security"
             | "search_path"
             | "synchronize_seqscans"
+            | "default_text_search_config"
+            | "escape_string_warning"
             | "timezone" => {
                 // A setting given at connection start resets to that value.
                 let startup = self
@@ -6682,6 +6714,13 @@ impl<'db> SqlSession<'db> {
                         Arc::make_mut(&mut self.session_gucs).remove(&setting);
                     }
                 }
+                // Output and text search read these per thread.
+                crate::set_extra_float_digits(crate::extra_float_digits_setting(
+                    &self.session_gucs,
+                ));
+                crate::set_default_text_search_config(&crate::default_text_search_config_setting(
+                    &self.session_gucs,
+                ));
                 Ok(())
             }
             other if planner_gucs::is_planner_guc(other) => {

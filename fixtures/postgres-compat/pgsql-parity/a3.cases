@@ -1,0 +1,39 @@
+only.select|CREATE TABLE o1p(a int); CREATE TABLE o1c(b int) INHERITS (o1p); INSERT INTO o1p VALUES (1); INSERT INTO o1c VALUES (2, 2); SELECT a FROM ONLY o1p; SELECT count(*) FROM o1p; SELECT x.a FROM ONLY o1p x; SELECT t.a FROM o1c t JOIN ONLY o1p p ON true ORDER BY 1
+only.update_delete|CREATE TABLE o2p(a int); CREATE TABLE o2c(b int) INHERITS (o2p); INSERT INTO o2p VALUES (1); INSERT INTO o2c VALUES (2, 2); UPDATE ONLY o2p SET a = a + 10; SELECT a FROM o2p ORDER BY a; DELETE FROM ONLY o2p WHERE a > 0; SELECT a FROM o2p ORDER BY a; UPDATE ONLY o2p SET a = 0 RETURNING a
+only.partitioned_parent|CREATE TABLE o3(a int) PARTITION BY RANGE (a); CREATE TABLE o3a PARTITION OF o3 FOR VALUES FROM (0) TO (10); INSERT INTO o3 VALUES (1); SELECT count(*) FROM ONLY o3; SELECT count(*) FROM o3
+noinherit.create|CREATE TABLE ni1p(a int, CONSTRAINT ni1_pos CHECK (a > 0) NO INHERIT, CHECK (a < 100)); CREATE TABLE ni1c() INHERITS (ni1p); INSERT INTO ni1c VALUES (-5); SELECT conname, connoinherit FROM pg_constraint WHERE conrelid='ni1p'::regclass ORDER BY 1; SELECT count(*) FROM pg_constraint WHERE conrelid='ni1c'::regclass AND contype='c'; INSERT INTO ni1p VALUES (-5)
+noinherit.alter_add|CREATE TABLE ni2p(a int); CREATE TABLE ni2c() INHERITS (ni2p); ALTER TABLE ni2p ADD CONSTRAINT ni2_pos CHECK (a > 0) NO INHERIT; INSERT INTO ni2c VALUES (-1); INSERT INTO ni2p VALUES (-1)
+alter_inherit.attach_detach|CREATE TABLE ai1p(a int, b text); CREATE TABLE ai1c(a int, b text, c int); INSERT INTO ai1c VALUES (1, 'x', 2); ALTER TABLE ai1c INHERIT ai1p; SELECT a FROM ai1p; ALTER TABLE ai1c NO INHERIT ai1p; SELECT count(*) FROM ai1p
+alter_inherit.missing_column|CREATE TABLE ai2p(a int, b text); CREATE TABLE ai2c(a int); ALTER TABLE ai2c INHERIT ai2p
+alter_inherit.circular|CREATE TABLE ai3p(a int); CREATE TABLE ai3c() INHERITS (ai3p); ALTER TABLE ai3p INHERIT ai3c
+alter_inherit.not_parent|CREATE TABLE ai4p(a int); CREATE TABLE ai4c(a int); ALTER TABLE ai4c NO INHERIT ai4p
+drop_cascade.parent|CREATE TABLE dc1p(a int); CREATE TABLE dc1c(b int) INHERITS (dc1p); CREATE TABLE dc1g(c int) INHERITS (dc1c); DROP TABLE dc1p CASCADE; SELECT count(*) FROM pg_class WHERE relname IN ('dc1p','dc1c','dc1g')
+rename.hierarchy|CREATE TABLE rn1p(a int); CREATE TABLE rn1c(b int) INHERITS (rn1p); INSERT INTO rn1c VALUES (1, 2); ALTER TABLE rn1p RENAME TO rn1pp; ALTER TABLE rn1c RENAME TO rn1cc; SELECT a FROM rn1pp; SELECT c.relname, p.relname FROM pg_inherits i JOIN pg_class c ON c.oid=i.inhrelid JOIN pg_class p ON p.oid=i.inhparent WHERE p.relname='rn1pp'
+inherit.empty_column_list|CREATE TABLE ec1p(a int); CREATE TABLE ec1c () INHERITS (ec1p); INSERT INTO ec1c VALUES (3); SELECT a FROM ec1p
+unlogged.quoted_default|CREATE UNLOGGED TABLE uq1(a text DEFAULT 'it''s', b int GENERATED ALWAYS AS (1)); INSERT INTO uq1 DEFAULT VALUES; SELECT a, b FROM uq1
+hstore.each_skeys_svals|CREATE EXTENSION IF NOT EXISTS hstore; SELECT * FROM each('b=>2, a=>1, c=>NULL'::hstore) ORDER BY key; SELECT skeys('b=>2, aa=>1'); SELECT svals('b=>2, aa=>1'); SELECT key FROM each('x=>1'::hstore)
+hstore.named_functions|CREATE EXTENSION IF NOT EXISTS hstore; SELECT exist('a=>1'::hstore, 'a'), defined('a=>NULL'::hstore, 'a'), delete('a=>1,b=>2'::hstore, 'a'), delete('a=>1,b=>2,c=>3'::hstore, ARRAY['a','c']), slice('a=>1,b=>2,c=>3'::hstore, ARRAY['b','c','z'])
+hstore.error_wording|CREATE EXTENSION IF NOT EXISTS hstore; SELECT 'a=>'::hstore
+hstore.error_wording2|CREATE EXTENSION IF NOT EXISTS hstore; SELECT 'a=1'::hstore
+hstore.error_wording3|CREATE EXTENSION IF NOT EXISTS hstore; SELECT 'a=>1,'::hstore
+hstore.drop_in_batch|CREATE EXTENSION IF NOT EXISTS hstore; CREATE TABLE hb1(h hstore); DROP TABLE hb1; SELECT 1
+ts.vector_at_unknown|SELECT to_tsvector('simple', '1 2 3 1') @@ '1 <-> 2', to_tsvector('simple', '1 2 3 1') @@ '2 & 7', 'a:1 b:2'::tsvector @@ 'a & b', 'a & b' @@ 'a:1 b:2'::tsvector
+ts.column_at_unknown|CREATE TABLE tsu1(v tsvector); INSERT INTO tsu1 VALUES ('a b c'), ('d e'); SELECT count(*) FROM tsu1 WHERE v @@ 'a | d'; SELECT count(*) FROM tsu1 WHERE v @@ 'a & d'
+ts.lexize|SELECT ts_lexize('english_stem', 'identity'), ts_lexize('english_stem', 'the'), ts_lexize('simple', 'Hello'), ts_lexize('russian_stem', 'приветствие')
+ts.weights_lowercase|SELECT 'a b:89  ca:23A,64b d:34c'::tsvector, 'a:1a,2b,3c,4d'::tsvector
+noinherit.not_null|CREATE TABLE nn1p(a int NOT NULL NO INHERIT, b int NOT NULL); CREATE TABLE nn1c() INHERITS (nn1p); SELECT column_name, is_nullable FROM information_schema.columns WHERE table_name='nn1c' ORDER BY ordinal_position
+only.with_tableoid|CREATE TABLE ot1p(a int); CREATE TABLE ot1c(b int) INHERITS (ot1p); INSERT INTO ot1p VALUES (1); INSERT INTO ot1c VALUES (2, 2); SELECT relname, x.* FROM ONLY ot1p x, pg_class WHERE x.tableoid = pg_class.oid; SELECT count(*) FROM ot1c c LEFT JOIN ONLY ot1p p ON p.a = c.a
+ts.tsquery_ops_untyped|SELECT 'foo & bar'::tsquery && 'asd', 'foo & bar'::tsquery || 'asd | fg', 'a' <-> 'b & d'::tsquery, 'a & g' <-> 'b | d'::tsquery, 'x'::tsquery <-> 'y'::tsquery
+ts.setweight_filter_literal_arrays|SELECT setweight('a:1,3A asd:1C w:5,6,12B,13A zxc:81,222A,567'::tsvector, 'c', '{a}'), ts_filter('base:7A empir:17 evil:15 first:11 hidden:6A'::tsvector, '{a}')
+ts.scalar_function_in_from|SELECT query, numnode(query) FROM to_tsquery('english', 'moscow & hotels') AS query; SELECT * FROM plainto_tsquery('english', 'The fat rats') q; SELECT v FROM to_tsvector('simple', 'a b a') AS v
+ts.tsvector_concat_untyped|SELECT 'a:3A b:2a'::tsvector || 'ba:1234 a:1B'
+ts.tsvector_input_weights|SELECT strip('w:12B w:13* w:12,5,6 a:1,3* a:3 w asd:1dc asd'::tsvector), 'a:1*,2b3 b:4dc'::tsvector
+ts.tsvector_input_double_weight|SELECT 'a:1cd'::tsvector
+ts.tsvector_syntax_error_state|SELECT $$'' '1' '2'$$::tsvector
+ts.tsquery_syntax_error_state|SELECT 'foo!'::tsquery
+ts.array_nulls|SELECT ts_delete('base hidden rebel spaceship strike'::tsvector, ARRAY['spaceship','leya','rebel', '', NULL]), setweight('a asd w:5,6,12B,13A zxc'::tsvector, 'c', ARRAY['a', 'zxc', '', NULL])
+ts.array_to_tsvector_null|SELECT array_to_tsvector(ARRAY['base', NULL])
+ts.array_to_tsvector_empty|SELECT array_to_tsvector(ARRAY['base', ''])
+ts.filter_null_weight|SELECT ts_filter('base hidden'::tsvector, '{a,b,NULL}')
+ts.position_errors|SELECT '''a'':0'::tsvector; SELECT '''a'':1Z'::tsvector
+ts.tsquery_weight_error|SELECT 'a:Z'::tsquery

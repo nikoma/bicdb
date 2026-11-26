@@ -33,6 +33,11 @@ impl Drop for SqlDescriptionScope {
         DESCRIBING.with(|c| c.set(self.0));
     }
 }
+/// Whether a statement is already executing on this thread (SQL run now is
+/// part of it, not a client statement).
+pub(crate) fn in_statement() -> bool {
+    EFFECTS.with(|current| current.borrow().is_some())
+}
 pub(crate) fn describing() -> bool {
     DESCRIBING.with(Cell::get)
 }

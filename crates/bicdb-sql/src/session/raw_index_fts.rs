@@ -3170,6 +3170,8 @@ fn is_native_extension_function(name: &str) -> bool {
         bare.to_ascii_lowercase().as_str(),
         "digest"
             | "hmac"
+            | "crypt"
+            | "gen_salt"
             | "gen_random_bytes"
             | "gen_random_uuid"
             | "uuid_generate_v4"

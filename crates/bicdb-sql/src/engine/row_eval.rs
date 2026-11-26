@@ -1507,7 +1507,8 @@ impl<'db> SqlEngine<'db> {
                         if matches!(value, SqlValue::Null) {
                             return Ok(SqlValue::Null);
                         }
-                        return postgres_array_cast_text_value(
+                        return postgres_array_cast_text_value_of(
+                            element_type,
                             &value,
                             pg_type_delimiter_with_db(self.db_ref(), element_type)?,
                         )
@@ -3252,7 +3253,8 @@ impl<'db> SqlEngine<'db> {
                         if matches!(value, SqlValue::Null) {
                             return Ok(SqlValue::Null);
                         }
-                        return postgres_array_cast_text_value(
+                        return postgres_array_cast_text_value_of(
+                            element_type,
                             &value,
                             pg_type_delimiter_with_db(self.db_ref(), element_type)?,
                         )
@@ -4060,6 +4062,7 @@ fn function_is_volatile(name: &str) -> bool {
             | "timeofday"
             | "gen_random_uuid"
             | "gen_random_bytes"
+            | "gen_salt"
             | "uuid_generate_v1"
             | "uuid_generate_v1mc"
             | "uuid_generate_v4"

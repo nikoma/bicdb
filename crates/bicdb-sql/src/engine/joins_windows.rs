@@ -317,7 +317,7 @@ impl<'db> SqlEngine<'db> {
         let schema = load_schema(self.db_ref(), &table)?;
         if schema
             .as_ref()
-            .is_some_and(|schema| schema.partitioning.is_some())
+            .is_some_and(|schema| schema.has_descendant_tables())
         {
             return Ok(None);
         }
@@ -1798,7 +1798,8 @@ impl<'db> SqlEngine<'db> {
                         if matches!(value, SqlValue::Null) {
                             return Ok(SqlValue::Null);
                         }
-                        return postgres_array_cast_text_value(
+                        return postgres_array_cast_text_value_of(
+                            element_type,
                             &value,
                             pg_type_delimiter_with_db(self.db_ref(), element_type)?,
                         )

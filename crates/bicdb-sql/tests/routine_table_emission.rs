@@ -76,4 +76,9 @@ fn return_next_expressions_are_refused_with_out_parameters() {
         .execute("SELECT * FROM unsupported_rows()")
         .unwrap_err();
     assert_eq!(error.sqlstate(), "42804");
+    session.execute("CREATE FUNCTION scalar_rows() RETURNS SETOF int LANGUAGE plpgsql AS $$ BEGIN RETURN NEXT 7; RETURN NEXT 8; END $$").unwrap();
+    assert_eq!(
+        session.execute("SELECT * FROM scalar_rows()").unwrap().rows,
+        vec![vec![SqlValue::Int(7)], vec![SqlValue::Int(8)]]
+    );
 }

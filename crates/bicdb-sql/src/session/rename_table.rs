@@ -201,6 +201,17 @@ pub(super) fn apply(
                     changed = true;
                 }
             }
+            // Inheritance links are stored by name on both sides.
+            for link in dependent
+                .inherits
+                .iter_mut()
+                .chain(dependent.inheritance_children.iter_mut())
+            {
+                if link == old {
+                    *link = new.into();
+                    changed = true;
+                }
+            }
             if changed {
                 session.save_session_schema(&dependent)?;
                 if dependent.name == new {

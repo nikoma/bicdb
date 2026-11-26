@@ -904,7 +904,16 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
         }
         "exp" => {
             arity(name, args, 1..=1)?;
-            SqlValue::Float(float_arg(name, &args[0])?.exp())
+            let argument = float_arg(name, &args[0])?;
+            let result = argument.exp();
+            // dexp: a finite argument must give a finite, non-zero result.
+            if argument.is_finite() && result.is_infinite() {
+                return Err(crate::eval::float_arithmetic_out_of_range("overflow"));
+            }
+            if argument.is_finite() && result == 0.0 {
+                return Err(crate::eval::float_arithmetic_out_of_range("underflow"));
+            }
+            SqlValue::Float(result)
         }
         "ln" | "log" => {
             arity(name, args, 1..=2)?;
@@ -920,12 +929,25 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
                     float_arg(name, &args[0])?,
                 )
             };
-            if value <= 0.0 || base <= 0.0 || base == 1.0 {
-                return Err(SqlError::data_exception(
-                    "2201E",
-                    "cannot take logarithm of zero or a negative number",
-                    None,
-                ));
+            // PostgreSQL's dlog1/dlog10/log_var messages.
+            for operand in [base, value] {
+                if operand == 0.0 {
+                    return Err(SqlError::data_exception(
+                        "2201E",
+                        "cannot take logarithm of zero",
+                        None,
+                    ));
+                }
+                if operand < 0.0 {
+                    return Err(SqlError::data_exception(
+                        "2201E",
+                        "cannot take logarithm of a negative number",
+                        None,
+                    ));
+                }
+            }
+            if base == 1.0 {
+                return Err(crate::eval::division_by_zero());
             }
             SqlValue::Float(value.ln() / base.ln())
         }

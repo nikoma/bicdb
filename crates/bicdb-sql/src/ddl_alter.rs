@@ -1677,6 +1677,13 @@ pub(crate) fn truncate_target_tables(
                 });
             }
         }
+        let descendants = crate::inheritance::inheritance_descendants(db, &targets[0].schema)?;
+        for schema in descendants {
+            targets.push(TruncateTarget {
+                name: schema.name.clone(),
+                schema,
+            });
+        }
     }
     Ok(targets)
 }
@@ -2354,11 +2361,14 @@ pub(crate) fn table_constraint_schema(
             )]
         }
         TableConstraint::Check(check) => vec![ConstraintSchema::Check {
-            name: check
-                .name
-                .as_ref()
-                .map(ident_value)
-                .unwrap_or_else(|| format!("{}_check", table)),
+            // PostgreSQL names an unnamed table CHECK after the first column
+            // its expression references (`t_a_check`), else `t_check`.
+            name: check.name.as_ref().map(ident_value).unwrap_or_else(|| {
+                match first_referenced_column(&check.expr) {
+                    Some(column) => format!("{table}_{column}_check"),
+                    None => format!("{table}_check"),
+                }
+            }),
             expression: crate::sql_text::sql_text(&*check.expr),
             validated: true,
         }],
@@ -2428,6 +2438,27 @@ pub(crate) fn table_constraint_schema(
             )))
         }
     })
+}
+
+/// The first column an expression references, as PostgreSQL's constraint
+/// naming finds it.
+fn first_referenced_column(expr: &Expr) -> Option<String> {
+    let mut found = None;
+    let _ = sqlparser::ast::visit_expressions(expr, |expr| {
+        let name = match expr {
+            Expr::Identifier(ident) => Some(ident_value(ident)),
+            Expr::CompoundIdentifier(parts) => parts.last().map(ident_value),
+            _ => None,
+        };
+        match name {
+            Some(name) => {
+                found = Some(name);
+                std::ops::ControlFlow::Break(())
+            }
+            None => std::ops::ControlFlow::Continue(()),
+        }
+    });
+    found
 }
 
 pub(crate) fn reject_unsupported_constraint_characteristics(
@@ -3083,6 +3114,10 @@ pub(crate) fn raw_create_table_compression(sql: &str) -> Result<Option<RawCreate
         return Ok(None);
     };
     let body = &statement[open + 1..close];
+    if body.trim().is_empty() {
+        // `CREATE TABLE child () INHERITS (parent)`: nothing to compress.
+        return Ok(None);
+    }
     let mut rewritten_columns = Vec::new();
     let mut columns = Vec::new();
     for item in split_top_level_commas_nested(body) {
@@ -3804,7 +3839,15 @@ pub(crate) fn raw_alter_table_exclusion_constraint(
         SqlError::InvalidSql("unterminated exclusion constraint element list".to_string())
     })?;
     let (equal_columns, range) = parse_exclusion_elements(&rest[1..close])?;
-    let predicate = exclusion_constraint_predicate(&rest[close + 1..]);
+    let tail = &rest[close + 1..];
+    if find_top_level_keyword(tail, "DEFERRABLE").is_some()
+        && find_top_level_keyword(tail, "NOT").is_none()
+    {
+        return Err(SqlError::Unsupported(
+            "DEFERRABLE exclusion constraints are not supported".to_string(),
+        ));
+    }
+    let predicate = exclusion_constraint_predicate(tail);
     Ok(Some((
         table,
         ConstraintSchema::Exclusion {
@@ -3816,6 +3859,103 @@ pub(crate) fn raw_alter_table_exclusion_constraint(
             validated: true,
         },
     )))
+}
+
+/// Splits `CREATE TABLE ... (..., [CONSTRAINT name] EXCLUDE ...)` into the
+/// table definition without its exclusion constraints, the table name as
+/// written, and each constraint as `CONSTRAINT name EXCLUDE ...` (unnamed
+/// ones get PostgreSQL's `<table>_<columns>_excl` name).
+pub(crate) fn raw_create_table_exclusion_constraints(
+    sql: &str,
+) -> Result<Option<(String, String, Vec<String>)>> {
+    let statement = trim_sql_statement(sql);
+    let Some(rest) = strip_prefix_ci(statement, "CREATE TABLE ") else {
+        return Ok(None);
+    };
+    let Some(open) = rest.find('(') else {
+        return Ok(None);
+    };
+    let head = rest[..open].trim();
+    let table = strip_prefix_ci(head, "IF NOT EXISTS ")
+        .map(str::trim)
+        .unwrap_or(head)
+        .to_string();
+    if table.is_empty() || table.contains(char::is_whitespace) && !table.starts_with('"') {
+        return Ok(None);
+    }
+    let Some(close) = find_matching_paren_nested(rest, open) else {
+        return Ok(None);
+    };
+    let mut kept = Vec::new();
+    let mut constraints = Vec::new();
+    for element in split_top_level_commas_nested(&rest[open + 1..close]) {
+        let (name, body) = match strip_prefix_ci(&element, "CONSTRAINT ") {
+            Some(after) => {
+                let (name, after_name) = parse_leading_policy_identifier(after)?;
+                (Some(name), after_name.trim_start())
+            }
+            None => (None, element.as_str()),
+        };
+        if strip_prefix_ci(body, "EXCLUDE")
+            .is_some_and(|after| after.starts_with(|ch: char| ch.is_whitespace() || ch == '('))
+        {
+            let name = match name {
+                Some(name) => quote_identifier_if_needed(&name),
+                None => {
+                    let elements = body
+                        .find('(')
+                        .and_then(|open| {
+                            find_matching_paren_nested(body, open)
+                                .map(|close| body[open + 1..close].to_string())
+                        })
+                        .unwrap_or_default();
+                    let mut columns = Vec::new();
+                    for element in split_top_level_commas_nested(&elements) {
+                        let expression = find_top_level_keyword(&element, "WITH")
+                            .map(|idx| element[..idx].to_string())
+                            .unwrap_or(element);
+                        let expression = strip_balanced_outer_parens(expression.trim());
+                        let column = match expression.find('(') {
+                            // A range built from columns: PostgreSQL names
+                            // an expression column after its function.
+                            Some(open) => normalize_object_name(expression[..open].trim()),
+                            None => simple_exclusion_column(expression)?,
+                        };
+                        columns.push(column);
+                    }
+                    let relation = normalize_object_name(&table);
+                    let relation = relation.rsplit('.').next().unwrap_or(&relation).to_string();
+                    quote_identifier_if_needed(&format!("{relation}_{}_excl", columns.join("_")))
+                }
+            };
+            constraints.push(format!("CONSTRAINT {name} {body}"));
+        } else {
+            kept.push(element);
+        }
+    }
+    if constraints.is_empty() {
+        return Ok(None);
+    }
+    let create = format!(
+        "{}({}){}",
+        &statement[..statement.len() - rest.len() + open],
+        kept.join(", "),
+        &rest[close + 1..]
+    );
+    Ok(Some((create, table, constraints)))
+}
+
+fn quote_identifier_if_needed(name: &str) -> String {
+    if !name.is_empty()
+        && name
+            .chars()
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_')
+        && !name.starts_with(|ch: char| ch.is_ascii_digit())
+    {
+        name.to_string()
+    } else {
+        format!("\"{}\"", name.replace('"', "\"\""))
+    }
 }
 
 pub(crate) fn parse_exclusion_elements(

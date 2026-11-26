@@ -1,0 +1,178 @@
+str.esc.backslash|SELECT E'a\\b', length(E'a\\b')
+str.esc.quote|SELECT E'a\'b', E'a''b', length(E'\'')
+str.esc.tsvector|SELECT E'''1 \\''2'''::tsvector
+str.esc.tsvector2|SELECT $$'1 \''2'$$::tsvector
+str.esc.ctrl|SELECT E'a\nb\tc\rd\be\ff' = 'a' || chr(10) || 'b' || chr(9) || 'c' || chr(13) || 'd' || chr(8) || 'e' || chr(12) || 'f'
+str.esc.octal|SELECT E'\101\102\7', length(E'\101\102\7'), E'\0618'
+str.esc.hex|SELECT E'\x41\x4a\x4G', E'\x7', length(E'\xe')
+str.esc.unicode4|SELECT E'Aé', E'\U0001F600', length(E'\U0001F600')
+str.esc.unicode_surrogate|SELECT E'😀'
+str.esc.unicode_bad_surrogate|SELECT E'\uD83D'
+str.esc.unicode_short|SELECT E'\u12'
+str.esc.unknown|SELECT E'\q\z\%', E'\\%'
+str.esc.nul|SELECT E'\0'
+str.esc.nul_u|SELECT E'\u0000'
+str.esc.nul_x|SELECT E'\x00'
+str.esc.trailing|SELECT E'abc\\'
+str.esc.lower_e|SELECT e'x\ty' = 'x' || chr(9) || 'y'
+str.scs.on|SHOW standard_conforming_strings; SELECT 'a\b', length('a\\b'), 'a\''
+str.scs.off|SET standard_conforming_strings = off; SELECT 'a\\b', length('a\\b'), 'x\ny' = E'x\ny'
+str.scs.off_quote|SET standard_conforming_strings = off; SELECT 'a\'b'
+str.uesc.basic|SELECT U&'d\0061t\+000061', U&'\0441\043B\043E\043D'
+str.uesc.uescape|SELECT U&'d!0061t!+000061' UESCAPE '!', U&'a\\b'
+str.uesc.bad|SELECT U&'\zz'
+str.uesc.surr|SELECT U&'\D83D\DE00'
+str.uesc.ident|SELECT 1 AS U&"d\0061t"
+str.uesc.bad_uescape|SELECT U&'x' UESCAPE '+'
+str.dollar.basic|SELECT $$a\nb$$, $tag$x$$y$tag$, length($$a\b$$)
+str.dollar.nested|SELECT $a$ $b$ inner $b$ $a$
+str.esc.in_where|CREATE TABLE ei1(t text); INSERT INTO ei1 VALUES (E'x\\y'), ('x\y'), (E'q\'r'); SELECT t, length(t) FROM ei1 ORDER BY t; SELECT count(*) FROM ei1 WHERE t = E'x\\y'
+str.esc.in_like|SELECT E'a\\b' LIKE E'a\\\\b', 'a\b' LIKE 'a\\b', 'a_b' LIKE E'a\\_b'
+str.esc.cast_types|SELECT E'\\x41'::bytea, E'{"a\\\\b"}'::text[], E'{"k": "v\\\\n"}'::json
+str.esc.array_lit|SELECT ARRAY[E'a\\b', E'c\'d']
+str.esc.func_arg|SELECT upper(E'a\\b'), replace(E'a\\b', E'\\', '/')
+str.esc.jsonb|SELECT E'{"a": "x\\"y"}'::jsonb
+str.adjacent_no_newline|SELECT 'a' 'b'
+str.esc_v|SELECT E'\v' = chr(11), E'\a', E'\x' 
+str.esc_highbit_bytes|SELECT E'\303\251', E'\xc3\xa9', length(E'\xe2\x82\xac')
+str.esc_invalid_utf8|SELECT E'\xc3'
+str.esc_octal_overflow|SELECT E'\777'
+str.esc_U_big|SELECT E'\U00110000'
+str.esc_surrogate_U|SELECT E'\uD83D\U0000DE00'
+str.esc_surrogate_then_char|SELECT E'\uD83Dx'
+str.esc_semicolon|SELECT E'a\';b', length(E'a\';b')
+str.esc_comment_like|SELECT E'--x\'', E'/*', E'*/\''
+str.esc_dollar|SELECT E'$$x\'$$', $q$E'\n'$q$
+str.ident_e|CREATE TABLE stre1(e text); INSERT INTO stre1 VALUES ('x'); SELECT e FROM stre1; SELECT e||'y' FROM stre1
+str.tsv_quoted_follow|SELECT $$'a'b$$::tsvector, $$a'b$$::tsvector, $$'a':1b$$::tsvector
+str.tsv_bad_pos|SELECT $$'a':1x$$::tsvector
+rt.insert_values|CREATE TABLE rti1(t text); INSERT INTO rti1 VALUES ('a''''b'), (E'x\\''y'), ('c\'), (E'\\\\'), (E'q\'\''); SELECT t, length(t) FROM rti1 ORDER BY t
+rt.update_where|CREATE TABLE rtu1(id int, t text); INSERT INTO rtu1 VALUES (1, 'x'); UPDATE rtu1 SET t = E'u\\''v' WHERE t = 'x'; SELECT t FROM rtu1 WHERE t = E'u\\''v'
+rt.default|CREATE TABLE rtd1(id int, t text DEFAULT E'd\\''x'); INSERT INTO rtd1(id) VALUES (1); SELECT t FROM rtd1
+rt.check|CREATE TABLE rtc1(t text CHECK (t <> E'bad\\''')); INSERT INTO rtc1 VALUES ('ok'); SELECT t FROM rtc1; INSERT INTO rtc1 VALUES (E'bad\\''')
+rt.view|CREATE VIEW rtv1 AS SELECT E'v\\''w' AS c, 'p''''q' AS d; SELECT c, d FROM rtv1
+rt.sql_function|CREATE FUNCTION rtf1() RETURNS text LANGUAGE sql AS $$ SELECT E'f\\''g' || 'h''''i' $$; SELECT rtf1()
+rt.sql_function_quoted|CREATE FUNCTION rtf2() RETURNS text LANGUAGE sql AS E'SELECT E''a\\\\b'''; SELECT rtf2()
+rt.plpgsql|CREATE FUNCTION rtp1() RETURNS text LANGUAGE plpgsql AS $$ DECLARE v text := E'p\\''q'; BEGIN RETURN v || E'\t|'; END $$; SELECT rtp1()
+rt.prepare|PREPARE rtpr1(text) AS SELECT E'p\\''q' || $1; EXECUTE rtpr1(E'\\x')
+rt.on_conflict|CREATE TABLE rto1(id int PRIMARY KEY, t text); INSERT INTO rto1 VALUES (1, 'a'); INSERT INTO rto1 VALUES (1, 'b') ON CONFLICT (id) DO UPDATE SET t = E'c\\''d'; SELECT t FROM rto1
+rt.like_escape|SELECT 'a%b' LIKE E'a\\%b', 'a%b' LIKE 'a#%b' ESCAPE '#', 'a_b' LIKE E'a\\_b' ESCAPE E'\\'
+rt.regex|SELECT 'a1' ~ E'a\\d', 'a1' ~ 'a\d', regexp_replace('a.b', E'\\.', '-')
+rt.json|SELECT E'{"a": "x\\"y"}'::jsonb ->> 'a', E'{"a": "\\u00e9"}'::json ->> 'a'
+rt.array|SELECT '{"a\\\\b"}'::text[], E'{"a\\\\b"}'::text[], ARRAY[E'a\\b', E'c\'d']
+rt.bytea|SELECT E'\\x41'::bytea, '\x41'::bytea, E'\\\\'::bytea
+rt.format|SELECT format('%L|%I', E'a\'b\\c', E'x"y'), quote_literal(E'a\\b'), quote_ident(E'q\'')
+rt.search_path|CREATE SCHEMA rts; SET search_path = rts, public; CREATE TABLE rts1(t text); INSERT INTO rts1 VALUES (E'x\\''y'); SELECT t FROM rts1 WHERE t = E'x\\''y'
+rt.cte|WITH c AS (SELECT E'c\\''d' AS v) SELECT v, 'it''s' FROM c
+rt.case|SELECT CASE WHEN E'a\'' = 'a''' THEN E'yes\\' ELSE 'no' END
+rt.in_list|SELECT E'b\\' IN ('a', E'b\\', 'c\')
+scs.show_default|SHOW standard_conforming_strings; SELECT current_setting('standard_conforming_strings')
+scs.off_show|SET standard_conforming_strings = off; SHOW standard_conforming_strings; SELECT 'a\\b'
+scs.off_table|SET standard_conforming_strings = off; CREATE TABLE scso1(t text); INSERT INTO scso1 VALUES ('x\\y'), ('q\'r'), (E'e\\f'), ('t\tu'); SELECT t, length(t) FROM scso1 ORDER BY 1
+scs.off_uescape|SET standard_conforming_strings = off; SELECT U&'x'
+scs.off_then_on|SET standard_conforming_strings = off; SELECT 'a\\b'; SET standard_conforming_strings = on; SELECT 'a\\b'
+scs.bad_value|SET standard_conforming_strings = maybe
+uesc.plus|SELECT U&'\+01F600', U&'a''b', length(U&'\00e9')
+uesc.empty_ident|SELECT 1 AS U&""
+uesc.uescape_bad_follow|SELECT U&'x' UESCAPE 1
+uesc.zero|SELECT U&'\0000'
+uesc.ident_uescape|SELECT 1 AS U&"!0041" UESCAPE '!'
+flt.f4_basic|SELECT 1.1::float4, 0.1::float4, 3.14159265358979::float4, 1e-45::float4, '1.4e-45'::float4, 3.4028235e38::float4
+flt.f8_basic|SELECT 1.1::float8, 0.1::float8, 1e20::float8, 1e15::float8, 1e14::float8, 123456789012345678::float8, 1e-5::float8, 0.0001::float8
+flt.specials|SELECT '-0'::float8, '-0'::float4, 'Infinity'::float8, '-inf'::float4, 'NaN'::float8, 'nan'::float4
+flt.f8_extremes|SELECT 1.7976931348623157e308::float8, 2.2250738585072014e-308::float8, 5e-324::float8, '4.9e-324'::float8
+flt.exponent_fmt|SELECT 1e100::float8, 1.5e-10::float8, 12345e10::float4, 1e6::float4, 123456::float4, 1234567::float4
+flt.efd0|SET extra_float_digits = 0; SELECT 1.1::float4, 0.1::float8, 1e20::float8, 3.14159265358979::float8, 1/3::float8, (1::float8/3), (1::float4/3)
+flt.efd3|SET extra_float_digits = 3; SELECT 1.1::float4, 0.1::float8, (1::float8/3), (1::float4/3)
+flt.efdneg|SET extra_float_digits = -15; SELECT 1.1::float4, 0.1::float8, (1::float8/3), 123.456::float8
+flt.efd_neg4|SET extra_float_digits = -4; SELECT (1::float8/3), 1e20::float8, 12345678::float4
+flt.efd_range|SET extra_float_digits = 4
+flt.casts|SELECT 1.1::float4::float8, 1.1::float8::float4, 1.1::float4::text, (0.1::float8)::text, 1.1::float4::numeric, 12345.678::float8::numeric
+flt.table|CREATE TABLE flt1(a float4, b float8, c real, d double precision); INSERT INTO flt1 VALUES (1.1, 1.1, 0.3, 0.3), ('-0', '-0', 'inf', '-inf'); SELECT * FROM flt1
+flt.input_errors|SELECT '1e400'::float8
+flt.input_errors4|SELECT '1e40'::float4
+flt.input_under|SELECT '1e-400'::float8
+flt.round_trip|SELECT '0.30000000000000004'::float8, '1.0000001'::float4, 1.0000001::float4 = '1.0000001'::float4
+flt.efd_show|SHOW extra_float_digits; SET extra_float_digits = 2; SHOW extra_float_digits; SELECT 1.1::float4
+flt.compare_literal|CREATE TABLE fltc(f1 float4); INSERT INTO fltc VALUES ('1004.3'), ('-34.84'); SELECT count(*) FROM fltc WHERE f1 = '1004.3'; SELECT count(*) FROM fltc WHERE f1 = 1004.3; SELECT count(*) FROM fltc WHERE f1 = 1004.3::float8; SELECT f1 FROM fltc WHERE f1 <> '1004.3'; SELECT count(*) FROM fltc WHERE '-34.84' = f1
+flt.input_msgs|SELECT '  xyz '::float8
+flt.input_msgs4|SELECT '5.0.0'::float4
+flt.nan_div|SELECT 'nan'::float4 / '0'::float4, 'nan'::float8 / 0::float8
+flt.f84_overflow|SELECT '10e70'::float8::float4
+flt.f84_underflow|SELECT '10e-70'::float8::float4
+flt.range_msg|SELECT '10e70'::float4
+flt.array_text|SELECT ARRAY[1.1::float4]::text, ARRAY['-0'::float8, 1e20]::text, (ARRAY[1.1::float4])[1]
+flt.numeric_cast|SELECT 1.1::float4::numeric, (0.1::float8 + 0.2::float8)::numeric, 1e20::float8::numeric, 1.1::float4::numeric(5,2)
+srf.setof_int|CREATE FUNCTION srf1() RETURNS SETOF int LANGUAGE sql AS 'SELECT 1 UNION ALL SELECT 2'; SELECT * FROM srf1(); SELECT srf1(); SELECT x FROM srf1() AS x
+srf.setof_args|CREATE FUNCTION srf2(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT * FROM srf2(3); SELECT srf2(2), 'x'
+srf.setof_table_type|CREATE TABLE srft(a int, b text); INSERT INTO srft VALUES (1, 'x'), (2, 'y'); CREATE FUNCTION srf4() RETURNS SETOF srft LANGUAGE sql AS 'SELECT * FROM srft ORDER BY a'; SELECT * FROM srf4(); SELECT (srf4()).b; SELECT a FROM srf4() WHERE b = 'y'
+srf.lateral|CREATE FUNCTION srf5(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT t.x, s FROM (VALUES (1), (2)) t(x), LATERAL srf5(t.x) s ORDER BY 1, 2
+srf.out_params|CREATE FUNCTION srf6(n int, OUT a int, OUT b int) RETURNS SETOF record LANGUAGE sql AS 'SELECT g, g * 10 FROM generate_series(1, n) g'; SELECT * FROM srf6(2)
+srf.empty|CREATE FUNCTION srf7() RETURNS SETOF text LANGUAGE sql AS 'SELECT ''a'' WHERE false'; SELECT count(*) FROM srf7(); SELECT srf7()
+srf.ordinality|CREATE FUNCTION srf8() RETURNS SETOF text LANGUAGE sql AS $$ VALUES ('a'), ('b') $$; SELECT * FROM srf8() WITH ORDINALITY
+hs.each|CREATE EXTENSION IF NOT EXISTS hstore; SELECT * FROM each('a=>1,b=>2'::hstore) ORDER BY 1
+hs.skeys_svals|CREATE EXTENSION IF NOT EXISTS hstore; SELECT skeys('a=>1,b=>2'::hstore) ORDER BY 1; SELECT svals('a=>1,b=>2'::hstore) ORDER BY 1; SELECT * FROM skeys('x=>1') k
+hs.each_select|CREATE EXTENSION IF NOT EXISTS hstore; SELECT (each(h)).key FROM (SELECT 'a=>1,b=>2'::hstore AS h) s ORDER BY 1
+hs.populate|CREATE EXTENSION IF NOT EXISTS hstore; CREATE TABLE hsp(a int, b text, c date); SELECT * FROM populate_record(NULL::hsp, 'a=>1,b=>x'::hstore); SELECT (populate_record(ROW(1, 'q', '2020-01-01')::hsp, 'b=>z'::hstore)).*
+poly.sql|CREATE FUNCTION polyf(anyelement) RETURNS anyelement LANGUAGE sql AS 'SELECT $1'; SELECT polyf(1), polyf('x'::text)
+srf.select_from_table|CREATE TABLE srfs(n int); INSERT INTO srfs VALUES (1), (2); CREATE FUNCTION srf10(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT n, srf10(n) FROM srfs ORDER BY 1, 2; SELECT srf10(2) AS v ORDER BY v DESC
+srf.alias_scalar|CREATE FUNCTION srf11() RETURNS SETOF int LANGUAGE sql AS 'SELECT 7'; SELECT x FROM srf11() AS x; SELECT s.x FROM srf11() AS s(x)
+srf.field_select|CREATE FUNCTION srf12(n int) RETURNS TABLE(a int, b text) LANGUAGE sql AS $$ SELECT g, 'v' || g FROM generate_series(1, n) g $$; SELECT (srf12(2)).b; SELECT (srf12(2)).a + 0
+srf.order_from|CREATE FUNCTION srf13(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT s.v AS w FROM srf13(3) AS s(v) ORDER BY w DESC; SELECT v FROM srf13(3) AS s(v) ORDER BY 1 DESC; SELECT x FROM srf13(3) x ORDER BY x DESC
+srf.nested_expr|CREATE FUNCTION srf14(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT srf14(2) * 10, 'k'; SELECT upper('a') || srf14(2)
+srf.subquery|CREATE FUNCTION srf15() RETURNS SETOF text LANGUAGE sql AS $$ VALUES ('a'), ('b') $$; SELECT (SELECT count(*) FROM srf15()), 1
+ord.a|CREATE FUNCTION ord1(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT ord1(3) AS v ORDER BY 1 DESC
+ord.b|CREATE FUNCTION ord2(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT ord2(3) ORDER BY 1 DESC
+ord.c|CREATE FUNCTION ord3(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT * FROM (SELECT ord3(3) AS v) q ORDER BY v DESC
+ord.d|CREATE FUNCTION ord4(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT __bicdb_srf.__bicdb_srf_value AS v FROM ord4(3) AS __bicdb_srf(__bicdb_srf_value) ORDER BY v DESC
+ord.e|CREATE FUNCTION ord5(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT ord5(3) AS v ORDER BY v DESC LIMIT 2
+ord.f|CREATE TABLE ordt(k int); INSERT INTO ordt VALUES (1); CREATE FUNCTION ord6(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT ord6(3) AS v FROM ordt ORDER BY v DESC
+ts.token_type|SELECT * FROM ts_token_type('default') ORDER BY tokid LIMIT 5
+ts.stat|CREATE TABLE tss(v tsvector); INSERT INTO tss VALUES ('a:1 b:2'), ('a:3 c'); SELECT * FROM ts_stat('SELECT v FROM tss') ORDER BY word
+ts.rewrite|SELECT ts_rewrite('a & b'::tsquery, 'a'::tsquery, 'c|d'::tsquery)
+ts.default_config|SET default_text_search_config = 'pg_catalog.simple'; SELECT to_tsvector('The Fat Rats'), plainto_tsquery('The Rats'), get_current_ts_config()
+ts.rank_cd|SELECT ts_rank_cd(to_tsvector('english', 'a quick brown fox jumps over the lazy dog'), to_tsquery('english', 'fox & dog')), ts_rank_cd('a:1 b:3'::tsvector, 'a & b'::tsquery)
+ts.token_type_oid|SELECT count(*) FROM ts_token_type(3722); SELECT * FROM ts_token_type('nosuch')
+ts.stat_weights|CREATE TABLE tss2(v tsvector); INSERT INTO tss2 VALUES ('a:1A b:2'), ('a:3 c:4B'); SELECT * FROM ts_stat('SELECT v FROM tss2', 'ab') ORDER BY word
+ts.default_reset|SET default_text_search_config = simple; SHOW default_text_search_config; RESET default_text_search_config; SELECT get_current_ts_config(), to_tsvector('The rats')
+ts.default_bad|SET default_text_search_config = 'nosuch'
+inh.multi|CREATE TABLE ihp1(a int); CREATE TABLE ihp2(b int); CREATE TABLE ihc(a int, b int); ALTER TABLE ihc INHERIT ihp1, INHERIT ihp2; INSERT INTO ihc VALUES (1, 2); SELECT count(*) FROM ihp1; SELECT count(*) FROM ihp2; ALTER TABLE ihc NO INHERIT ihp1, NO INHERIT ihp2; SELECT count(*) FROM ihp1
+inh.con_noinherit|CREATE TABLE ihq(a int, CONSTRAINT ihq_c CHECK (a > 0)); ALTER TABLE ihq ALTER CONSTRAINT ihq_c NO INHERIT; SELECT conname, connoinherit FROM pg_constraint WHERE conname = 'ihq_c'; ALTER TABLE ihq ALTER CONSTRAINT ihq_c INHERIT; SELECT connoinherit FROM pg_constraint WHERE conname = 'ihq_c'
+inh.con_noinherit_nn|CREATE TABLE ihn(a int NOT NULL); CREATE TABLE ihn_c() INHERITS (ihn); SELECT conname FROM pg_constraint WHERE conrelid = 'ihn'::regclass AND contype = 'n'; ALTER TABLE ihn ALTER CONSTRAINT ihn_a_not_null NO INHERIT; SELECT connoinherit FROM pg_constraint WHERE conname = 'ihn_a_not_null' AND conrelid = 'ihn'::regclass
+inh.con_multi|CREATE TABLE ihm(a int NOT NULL); CREATE TABLE ihm_c() INHERITS (ihm); ALTER TABLE ihm ALTER CONSTRAINT ihm_a_not_null NO INHERIT, ALTER CONSTRAINT ihm_a_not_null INHERIT; SELECT connoinherit FROM pg_constraint WHERE conname = 'ihm_a_not_null' AND conrelid = 'ihm'::regclass
+inh.con_pkey|CREATE TABLE ihk(a int PRIMARY KEY, b int NOT NULL); ALTER TABLE ihk ALTER CONSTRAINT ihk_pkey INHERIT
+inh.con_child|CREATE TABLE ihp(a int, b int NOT NULL); CREATE TABLE ihp_c() INHERITS (ihp); ALTER TABLE ihp_c ALTER CONSTRAINT ihp_b_not_null NO INHERIT
+ts.rank_cd_weights|SELECT ts_rank_cd(' a:1 s:2,3A d:2A g'::tsvector, 'a <2> s:A'), ts_rank_cd(' a:1 b:2 s:3A d:2A g'::tsvector, 'a <2> s:A')
+flt2.json|SELECT to_json(1.1::float4), to_jsonb(1.1::float4), json_build_object('a', 1.1::float4), row_to_json(ROW(1.1::float4, 0.1::float8)), json_build_array(1.1::float4)
+flt2.to_char|SELECT to_char(1.1::float4, '9.99999999'), to_char(123456.789::float4, '999999.999'), to_char(1.1::float8, '9.99999999999999999'), to_char(0.1::float8, '0.99')
+flt2.mul_overflow|CREATE TABLE flm(f float8); INSERT INTO flm VALUES (1e300); SELECT f * '1e200' FROM flm
+flt2.mul_ok|CREATE TABLE flm2(f float8); INSERT INTO flm2 VALUES (2); SELECT f * '1e200', f + '0.5', f / '4' FROM flm2
+flt2.div_under|CREATE TABLE flm3(f float8); INSERT INTO flm3 VALUES (1e-300); SELECT f / '1e300' FROM flm3
+flt2.exp|SELECT exp(1::float8), exp(-1000::float8)
+flt2.exp_over|SELECT exp(1000::float8)
+flt2.ln_zero|SELECT ln(0::float8)
+flt2.ln_neg|SELECT ln(-1::float8)
+warn.backslash|SET standard_conforming_strings = off; SELECT 'a\\b'
+warn.quote|SET standard_conforming_strings = off; SELECT 'a\'b'
+warn.off|SET standard_conforming_strings = off; SET escape_string_warning = off; SELECT 'x\\y'; SHOW escape_string_warning
+srf2.two_calls|CREATE FUNCTION s2a() RETURNS SETOF int LANGUAGE sql AS 'SELECT 1 UNION ALL SELECT 2'; CREATE FUNCTION s2b() RETURNS SETOF int LANGUAGE sql AS 'SELECT 10 UNION ALL SELECT 20 UNION ALL SELECT 30'; SELECT s2a(), s2b(); SELECT s2a() + s2b()
+srf2.composite|CREATE FUNCTION s2c(n int) RETURNS TABLE(a int, b text) LANGUAGE sql AS $$ SELECT g, 'v' || g FROM generate_series(1, n) g $$; SELECT s2c(2); SELECT s2c(1), 'x'
+srf2.setof_table|CREATE TABLE s2t(a int, b text); INSERT INTO s2t VALUES (1, 'x'); CREATE FUNCTION s2d() RETURNS SETOF s2t LANGUAGE sql AS 'SELECT * FROM s2t'; SELECT s2d()
+srf2.with_table|CREATE TABLE s2u(n int); INSERT INTO s2u VALUES (1), (2); CREATE FUNCTION s2e(k int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, k) g'; CREATE FUNCTION s2f(k int) RETURNS SETOF int LANGUAGE sql AS 'SELECT k * 100'; SELECT n, s2e(n), s2f(n) FROM s2u ORDER BY 1, 2
+srf2.return_next|CREATE FUNCTION s2g(n int) RETURNS SETOF int LANGUAGE plpgsql AS $$ BEGIN FOR i IN 1..n LOOP RETURN NEXT i * 2; END LOOP; END $$; SELECT * FROM s2g(3)
+hs2.hash_eq|CREATE EXTENSION IF NOT EXISTS hstore; CREATE TABLE hsq2(a int, b text); SELECT (ROW(1, 'q')::hsq2 #= 'b=>z'::hstore).*
+hs2.populate_from|CREATE EXTENSION IF NOT EXISTS hstore; CREATE TABLE hsp3(a int, b text); SELECT * FROM populate_record(ROW(5, 'q')::hsp3, 'a=>7'::hstore)
+hs2.jsonb_from|CREATE TABLE jpr(a int, b text); SELECT * FROM jsonb_populate_record(ROW(5, 'q')::jpr, '{"a": 7}')
+hs2.gin|CREATE EXTENSION IF NOT EXISTS hstore; CREATE TABLE hsg2(h hstore); INSERT INTO hsg2 VALUES ('a=>1'), ('b=>2'); CREATE INDEX hsg2_i ON hsg2 USING gin (h); SELECT count(*) FROM hsg2 WHERE h ? 'a'; SELECT count(*) FROM hsg2 WHERE h @> 'b=>2'
+hs2.gist|CREATE EXTENSION IF NOT EXISTS hstore; CREATE TABLE hst2(h hstore); INSERT INTO hst2 VALUES ('a=>1'), ('b=>2'); CREATE INDEX hst2_i ON hst2 USING gist (h); SELECT count(*) FROM hst2 WHERE h ?| ARRAY['a', 'b']
+any.ts|SELECT to_tsvector('english', 'fat cats') @@ ANY(ARRAY[to_tsquery('english', 'cat'), to_tsquery('english', 'dog')]), 'a b'::tsvector @@ ALL(ARRAY['a'::tsquery, 'b'::tsquery]), 'a b'::tsvector @@ ALL(ARRAY['a'::tsquery, 'c'::tsquery])
+any.null|SELECT 'a'::tsvector @@ ANY(NULL::tsquery[]), 'a'::tsvector @@ ANY(ARRAY[]::tsquery[]), 'a'::tsvector @@ ALL(ARRAY[]::tsquery[]), 'a'::tsvector @@ ANY(ARRAY[NULL, 'b']::tsquery[])
+any.table|CREATE TABLE anyt(v tsvector); INSERT INTO anyt VALUES ('a b'), ('c'), (NULL); SELECT count(*) FROM anyt WHERE v @@ ANY(ARRAY['a'::tsquery, 'c'::tsquery]); SELECT count(*) FROM anyt WHERE NOT v @@ ANY(ARRAY['a'::tsquery])
+any.jsonb|SELECT '{"a":1}'::jsonb @> ANY(ARRAY['{"a":1}'::jsonb, '{"b":2}'::jsonb]), '{"a":1}'::jsonb ? ANY(ARRAY['b', 'a'])
+any.subquery|CREATE TABLE anys(q tsquery); INSERT INTO anys VALUES ('a'), ('z'); SELECT 'a b'::tsvector @@ ANY(SELECT q FROM anys), 'a b'::tsvector @@ ALL(SELECT q FROM anys)
+inh2.nn_name|CREATE TABLE inn1(a int NOT NULL); CREATE TABLE inn2() INHERITS (inn1); SELECT conrelid::regclass::text, conname, coninhcount, conislocal FROM pg_constraint WHERE contype = 'n' AND conrelid::regclass::text IN ('inn1', 'inn2') ORDER BY 1
+inh2.con_multi_all|CREATE TABLE ihm2(a int NOT NULL); CREATE TABLE ihm2_c() INHERITS (ihm2); ALTER TABLE ihm2 ALTER CONSTRAINT ihm2_a_not_null NO INHERIT, ALTER CONSTRAINT ihm2_a_not_null INHERIT; SELECT conrelid::regclass::text, connoinherit FROM pg_constraint WHERE conname = 'ihm2_a_not_null' ORDER BY 1
+any.untyped|CREATE TABLE anyu(v tsvector); INSERT INTO anyu VALUES ('a b'), ('c'), ('d'); SELECT count(*) FROM anyu WHERE v @@ ANY('{a,c}'); SELECT count(*) FROM anyu WHERE v @@ ALL('{a,b}')
+flt2.row_text2|SELECT ROW(1.1::float4, 'NaN'::float8, 1e20::float8, '-0'::float4)
+srf2.plpgsql_select|CREATE FUNCTION s2h(n int) RETURNS SETOF int LANGUAGE plpgsql AS $$ BEGIN FOR i IN 1..n LOOP RETURN NEXT i; END LOOP; END $$; SELECT s2h(2); SELECT s2h(2), 'x'
+srf2.order|CREATE FUNCTION s2i(n int) RETURNS SETOF int LANGUAGE sql AS 'SELECT g FROM generate_series(1, n) g'; SELECT s2i(3) AS v ORDER BY v DESC; SELECT s2i(3) ORDER BY 1 DESC

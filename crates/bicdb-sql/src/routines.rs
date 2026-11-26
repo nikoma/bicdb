@@ -3526,6 +3526,9 @@ pub(crate) fn alter_table_drop_column(
     };
     let actual = schema.columns[idx].name.clone();
     let drops_primary_key = schema.columns[idx].primary_key;
+    schema
+        .virtual_generated_columns
+        .retain(|candidate| candidate != &actual);
     if drops_primary_key {
         ensure_primary_key_unreferenced(rows.db, table, schema, &actual)?;
     }
@@ -3711,6 +3714,11 @@ pub(crate) fn alter_table_rename_column(
         ));
     }
     let old_actual = schema.columns[idx].name.clone();
+    for column in &mut schema.virtual_generated_columns {
+        if *column == schema.columns[idx].name {
+            *column = new_column.to_string();
+        }
+    }
     schema.columns[idx].name = new_column.to_string();
     rename_column_references(schema, &old_actual, new_column);
     for mut record in db.scan_collection(table)? {

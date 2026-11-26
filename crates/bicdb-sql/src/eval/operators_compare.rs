@@ -580,7 +580,11 @@ pub(crate) fn eval_float_arithmetic_value(
     let right = sql_value_f64(&right).ok_or_else(|| {
         SqlError::InvalidSql("floating-point arithmetic requires numeric operands".to_string())
     })?;
-    if matches!(op, BinaryOperator::Divide | BinaryOperator::Modulo) && right == 0.0 {
+    // As float8div: NaN divided by zero is NaN, not an error.
+    if matches!(op, BinaryOperator::Divide | BinaryOperator::Modulo)
+        && right == 0.0
+        && !left.is_nan()
+    {
         return Err(division_by_zero());
     }
     if pg_type == "float4" {
@@ -832,26 +836,28 @@ pub(crate) fn eval_arithmetic_value_ref(
         .ok_or_else(|| SqlError::InvalidSql("arithmetic operands must be numeric".to_string()))?;
     let right = sql_value_f64(&right)
         .ok_or_else(|| SqlError::InvalidSql("arithmetic operands must be numeric".to_string()))?;
-    match op {
-        BinaryOperator::Plus => Ok(SqlValue::Float(left + right)),
-        BinaryOperator::Minus => Ok(SqlValue::Float(left - right)),
-        BinaryOperator::Multiply => Ok(SqlValue::Float(left * right)),
+    let result = match op {
+        BinaryOperator::Plus => left + right,
+        BinaryOperator::Minus => left - right,
+        BinaryOperator::Multiply => left * right,
         BinaryOperator::Divide => {
-            if right == 0.0 {
-                Err(division_by_zero())
-            } else {
-                Ok(SqlValue::Float(left / right))
+            if right == 0.0 && !left.is_nan() {
+                return Err(division_by_zero());
             }
+            left / right
         }
         BinaryOperator::Modulo => {
             if right == 0.0 {
-                Err(division_by_zero())
-            } else {
-                Ok(SqlValue::Float(left % right))
+                return Err(division_by_zero());
             }
+            left % right
         }
         _ => unreachable!(),
-    }
+    };
+    // Float arithmetic (an untyped literal operand resolves to float8)
+    // checks overflow and underflow as float8_mul and friends do.
+    validate_float_arithmetic_result(left, op, right, result)?;
+    Ok(SqlValue::Float(result))
 }
 
 pub(crate) fn eval_interval_scale(
@@ -4029,10 +4035,19 @@ pub(crate) fn compare_values_by_kind(
             _ => pg_typed_compare("numeric", left, right)?,
         },
         Kind::Numeric => pg_typed_compare("numeric", left, right)?,
-        Kind::Float => float8_ordering(
-            comparison_float_value(left)?,
-            comparison_float_value(right)?,
-        ),
+        Kind::Float => {
+            // A float4 operand (an untyped literal resolved to float4
+            // included) holds its float4 value; float48 comparisons widen it.
+            let value = |value: &SqlValue, pg_type: &str| -> Result<f64> {
+                let number = comparison_float_value(value)?;
+                Ok(if matches!(pg_type, "float4" | "real") {
+                    f64::from(number as f32)
+                } else {
+                    number
+                })
+            };
+            float8_ordering(value(left, left_type)?, value(right, right_type)?)
+        }
         Kind::Temporal => {
             return compare_temporal_values(Some(left_type), Some(right_type), left, op, right)
                 .map(|truth| truth.flatten());

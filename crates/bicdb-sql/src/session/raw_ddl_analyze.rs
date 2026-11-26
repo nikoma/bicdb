@@ -531,6 +531,11 @@ impl<'db> SqlSession<'db> {
             partitioning: definition.partitioning,
             partition_of: None,
             oracle_partitioning: None,
+            unlogged: false,
+            virtual_generated_columns: Vec::new(),
+            inherits: Vec::new(),
+            inheritance_children: Vec::new(),
+            no_inherit_constraints: Vec::new(),
         };
         partition::validate_new_key(self.db_ref(), &schema)?;
         if schema.partitioning.is_some() {
@@ -626,6 +631,11 @@ impl<'db> SqlSession<'db> {
                 execution_version: None,
             }),
             oracle_partitioning: None,
+            unlogged: false,
+            virtual_generated_columns: Vec::new(),
+            inherits: Vec::new(),
+            inheritance_children: Vec::new(),
+            no_inherit_constraints: Vec::new(),
         };
         partition::validate_new_key(self.db_ref(), &child)?;
         partition::validate_definition(&child)?;
@@ -766,6 +776,18 @@ impl<'db> SqlSession<'db> {
         if statements.is_empty() {
             return Ok(None);
         }
+        if let [statement] = statements.as_slice() {
+            if let Some(ddl) = crate::persistence_ddl::parse_persistence_ddl(statement)? {
+                return self.execute_persistence_ddl(ddl).map(Some);
+            }
+            if let Some((create, table, constraints)) =
+                raw_create_table_exclusion_constraints(statement)?
+            {
+                return self
+                    .execute_create_table_with_exclusions(&create, &table, constraints)
+                    .map(Some);
+            }
+        }
         let mut parsed = Vec::new();
         for statement in &statements {
             let Some((table, constraint)) = raw_alter_table_exclusion_constraint(statement)? else {
@@ -791,6 +813,155 @@ impl<'db> SqlSession<'db> {
             self.save_session_schema(&schema)?;
         }
         Ok(Some(SqlResult::command("ALTER TABLE")))
+    }
+
+    /// UNLOGGED tables and VIRTUAL generated columns: the statement runs in
+    /// the parser-accepted form, then the table records what was declared.
+    fn execute_persistence_ddl(
+        &mut self,
+        ddl: crate::persistence_ddl::PersistenceDdl,
+    ) -> Result<SqlResult> {
+        use crate::persistence_ddl::PersistenceDdl;
+        match ddl {
+            PersistenceDdl::Inherit {
+                table,
+                if_exists,
+                parents,
+            } => {
+                let mut result = SqlResult::command("ALTER TABLE");
+                for (parent, inherit) in parents {
+                    result = self.alter_table_inheritance(&table, if_exists, &parent, inherit)?;
+                }
+                Ok(result)
+            }
+            PersistenceDdl::SetPersistence {
+                table,
+                if_exists,
+                unlogged,
+            } => {
+                let resolved = resolve_session_relation_name(self.db_ref(), &table)?;
+                let Some(mut schema) = load_schema(self.db_ref(), &resolved)? else {
+                    if if_exists {
+                        return Ok(SqlResult::command("ALTER TABLE"));
+                    }
+                    return Err(SqlError::InvalidCollection(table));
+                };
+                self.require_table_ownership(&resolved, "ALTER TABLE")?;
+                if schema.unlogged != unlogged {
+                    schema.unlogged = unlogged;
+                    self.save_session_schema(&schema)?;
+                }
+                Ok(SqlResult::command("ALTER TABLE"))
+            }
+            PersistenceDdl::Rewritten {
+                sql,
+                table,
+                create,
+                if_not_exists,
+                unlogged,
+                virtual_columns,
+                no_inherit_checks,
+                no_inherit_not_null,
+            } => {
+                let before = load_schema(
+                    self.db_ref(),
+                    &resolve_session_relation_name_if_exists(self.db_ref(), &table),
+                )?;
+                // CREATE TABLE IF NOT EXISTS, or ADD COLUMN IF NOT EXISTS,
+                // that finds the object declares nothing.
+                let existed = match &before {
+                    Some(_) if create => true,
+                    Some(schema) => {
+                        if_not_exists
+                            && virtual_columns
+                                .iter()
+                                .any(|column| schema.column(column).is_some())
+                    }
+                    None => false,
+                };
+                let result = self.execute_inner(&sql)?;
+                if existed {
+                    return Ok(result);
+                }
+                let resolved = resolve_session_relation_name(self.db_ref(), &table)?;
+                let mut schema = load_schema(self.db_ref(), &resolved)?
+                    .ok_or_else(|| SqlError::InvalidCollection(resolved.clone()))?;
+                schema.unlogged |= unlogged;
+                for column in virtual_columns {
+                    if !schema.virtual_generated_columns.contains(&column) {
+                        schema.virtual_generated_columns.push(column);
+                    }
+                }
+                for column in no_inherit_not_null {
+                    let name = not_null_constraint_name(&schema.name, &column);
+                    if !schema.no_inherit_constraints.contains(&name) {
+                        schema.no_inherit_constraints.push(name);
+                    }
+                }
+                for expression in no_inherit_checks {
+                    let expected = crate::sql_text::sql_text(&parse_check_expression(&expression)?);
+                    for constraint in &schema.constraints {
+                        if let ConstraintSchema::Check {
+                            name,
+                            expression: stored,
+                            ..
+                        } = constraint
+                        {
+                            if *stored == expected && !schema.no_inherit_constraints.contains(name)
+                            {
+                                schema.no_inherit_constraints.push(name.clone());
+                            }
+                        }
+                    }
+                }
+                self.save_session_schema(&schema)?;
+                Ok(result)
+            }
+        }
+    }
+
+    /// `CREATE TABLE` with `EXCLUDE` table constraints: the table is created
+    /// from the remaining definition and the constraints are added to it in
+    /// the same statement; if adding one fails the table is dropped again.
+    fn execute_create_table_with_exclusions(
+        &mut self,
+        create: &str,
+        table: &str,
+        constraints: Vec<String>,
+    ) -> Result<SqlResult> {
+        let result = self.execute_inner(create)?;
+        let resolved = resolve_session_relation_name(self.db_ref(), table)?;
+        let added = (|| -> Result<()> {
+            for constraint in constraints {
+                let alter = format!("ALTER TABLE {table} ADD {constraint}");
+                let Some((_, constraint)) = raw_alter_table_exclusion_constraint(&alter)? else {
+                    return Err(SqlError::InvalidSql(format!(
+                        "invalid exclusion constraint {constraint}"
+                    )));
+                };
+                let mut schema = load_schema(self.db_ref(), &resolved)?
+                    .ok_or_else(|| SqlError::InvalidCollection(resolved.clone()))?;
+                validate_constraint_columns(self.db_ref(), &resolved, &schema, &constraint)?;
+                let name = constraint_name(&constraint);
+                if schema
+                    .constraints
+                    .iter()
+                    .any(|candidate| constraint_name(candidate) == name)
+                {
+                    return Err(SqlError::duplicate_constraint(&resolved, name));
+                }
+                schema.constraints.push(constraint);
+                self.save_session_schema(&schema)?;
+            }
+            Ok(())
+        })();
+        if let Err(error) = added {
+            if self.tx.is_none() {
+                let _ = self.execute_inner(&format!("DROP TABLE {table}"));
+            }
+            return Err(error);
+        }
+        Ok(result)
     }
 
     pub(crate) fn apply_search_path_setting(&mut self, values: &[Expr]) -> Result<()> {
@@ -998,16 +1169,32 @@ impl<'db> SqlSession<'db> {
                 Ok(())
             }
             "extra_float_digits" => {
-                let digits = value.to_cell().parse::<i64>().map_err(|_| {
-                    SqlError::InvalidSql("SET extra_float_digits expects an integer".to_string())
-                })?;
+                let text = value.to_cell();
+                // An integer setting also takes a number it rounds.
+                let digits = text
+                    .trim()
+                    .parse::<i64>()
+                    .ok()
+                    .or_else(|| {
+                        text.trim()
+                            .parse::<f64>()
+                            .ok()
+                            .filter(|value| value.is_finite())
+                            .map(|value| value.round() as i64)
+                    })
+                    .ok_or_else(|| {
+                        SqlError::invalid_parameter_value(format!(
+                            "invalid value for parameter \"extra_float_digits\": \"{text}\""
+                        ))
+                    })?;
                 if !(-15..=3).contains(&digits) {
-                    return Err(SqlError::InvalidSql(
-                        "SET extra_float_digits expects a value between -15 and 3".to_string(),
-                    ));
+                    return Err(SqlError::invalid_parameter_value(format!(
+                        "{digits} is outside the valid range for parameter \"extra_float_digits\" (-15 .. 3)"
+                    )));
                 }
                 Arc::make_mut(&mut self.session_gucs)
                     .insert("extra_float_digits".to_string(), digits.to_string());
+                crate::set_extra_float_digits(digits as i32);
                 Ok(())
             }
             "bytea_output" => {
@@ -1020,17 +1207,53 @@ impl<'db> SqlSession<'db> {
                 Arc::make_mut(&mut self.session_gucs).insert("bytea_output".to_string(), output);
                 Ok(())
             }
+            "default_text_search_config" => {
+                let name = value.to_cell();
+                if !crate::fts::is_text_search_config(&name) {
+                    return Err(SqlError::invalid_parameter_value(format!(
+                        "invalid value for parameter \"default_text_search_config\": \"{name}\""
+                    )));
+                }
+                let name = if name.contains('.') {
+                    name.to_ascii_lowercase()
+                } else {
+                    format!("pg_catalog.{}", name.to_ascii_lowercase())
+                };
+                crate::set_default_text_search_config(&name);
+                Arc::make_mut(&mut self.session_gucs)
+                    .insert("default_text_search_config".to_string(), name);
+                Ok(())
+            }
+            "escape_string_warning" => {
+                let enabled = value.to_cell().to_ascii_lowercase();
+                let setting = match enabled.as_str() {
+                    "on" | "true" | "yes" | "1" => "on",
+                    "off" | "false" | "no" | "0" => "off",
+                    _ => {
+                        return Err(SqlError::invalid_parameter_value(
+                            "parameter \"escape_string_warning\" requires a Boolean value",
+                        ))
+                    }
+                };
+                Arc::make_mut(&mut self.session_gucs)
+                    .insert("escape_string_warning".to_string(), setting.to_string());
+                Ok(())
+            }
             "standard_conforming_strings" => {
                 let enabled = value.to_cell().to_ascii_lowercase();
-                if enabled == "on" || enabled == "true" {
-                    Arc::make_mut(&mut self.session_gucs)
-                        .insert("standard_conforming_strings".to_string(), "on".to_string());
-                    Ok(())
-                } else {
-                    Err(SqlError::Unsupported(format!(
-                        "SET standard_conforming_strings supports only on, got {enabled}"
-                    )))
-                }
+                let setting =
+                    match enabled.as_str() {
+                        "on" | "true" | "yes" | "1" => "on",
+                        "off" | "false" | "no" | "0" => "off",
+                        _ => return Err(SqlError::invalid_parameter_value(
+                            "parameter \"standard_conforming_strings\" requires a Boolean value",
+                        )),
+                    };
+                Arc::make_mut(&mut self.session_gucs).insert(
+                    "standard_conforming_strings".to_string(),
+                    setting.to_string(),
+                );
+                Ok(())
             }
             "intervalstyle" => {
                 let style = value.to_cell().to_ascii_lowercase();
@@ -1276,6 +1499,13 @@ impl<'db> SqlSession<'db> {
             Statement::CreateExtension(create_extension) => {
                 self.execute_create_extension(create_extension)
             }
+            // A DROP EXTENSION inside a statement batch: the extension
+            // catalog command parser owns its semantics.
+            Statement::DropExtension(_) => self
+                .execute_raw_extension_catalog(&statement.to_string())?
+                .ok_or_else(|| {
+                    SqlError::Unsupported(format!("unsupported SQL statement {statement}"))
+                }),
             Statement::Drop {
                 object_type,
                 if_exists,
@@ -1863,7 +2093,9 @@ impl<'db> SqlSession<'db> {
             version: create_extension.version.as_ref().map(ident_value),
         };
         reject_postgis_extension(&extension.name)?;
+        let (name, schema) = (extension.name.clone(), extension.schema.clone());
         save_extension_if_missing(self.db_mut()?, extension, create_extension.if_not_exists)?;
+        self.install_extension_objects(&name, &schema)?;
         Ok(SqlResult::command("CREATE EXTENSION"))
     }
 
@@ -1873,7 +2105,9 @@ impl<'db> SqlSession<'db> {
         };
         self.require_extension_creation_authority(&extension.name)?;
         reject_postgis_extension(&extension.name)?;
+        let (name, schema) = (extension.name.clone(), extension.schema.clone());
         save_extension_if_missing(self.db_mut()?, extension, if_not_exists)?;
+        self.install_extension_objects(&name, &schema)?;
         Ok(Some(SqlResult::command("CREATE EXTENSION")))
     }
 
@@ -2015,6 +2249,7 @@ impl<'db> SqlSession<'db> {
                     }
                     return Ok(Some(SqlResult::command("DROP EXTENSION")));
                 }
+                self.remove_extension_objects(&name, cascade)?;
                 let resources = if installation.is_some() {
                     list_rest_resources(self.db_ref())?
                         .into_iter()

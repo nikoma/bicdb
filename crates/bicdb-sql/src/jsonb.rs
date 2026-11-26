@@ -301,7 +301,7 @@ pub(crate) fn eval_json_function_value(name: &str, args: &[SqlValue]) -> Result<
                 let fields = composite
                     .fields
                     .iter()
-                    .map(|field| (field.name.clone(), field.value.clone()))
+                    .map(|field| (field.name.clone(), composite_field_json_value(field)))
                     .collect::<Vec<_>>();
                 composite_to_json(&fields, false, pretty)?
             }
@@ -485,6 +485,20 @@ fn numeric_arguments_as_json_numbers(
     let expressions = crate::function_arg_list(function);
     let mut normalized = None::<Vec<SqlValue>>;
     for (index, value) in args.iter().enumerate() {
+        if let (SqlValue::Float(float), Some(expr)) = (value, expressions.get(index)) {
+            // A float4 value is the number float4out prints, not the widened
+            // double.
+            if value_positions(index)
+                && matches!(
+                    crate::projected_expr_pg_type(expr, None).as_deref(),
+                    Some("float4" | "real")
+                )
+            {
+                normalized.get_or_insert_with(|| args.to_vec())[index] =
+                    SqlValue::Float(float4_json_number(*float));
+            }
+            continue;
+        }
         let SqlValue::String(text) = value else {
             continue;
         };
@@ -1868,6 +1882,22 @@ fn jsonb_compare_function(name: &str, args: &[SqlValue]) -> Result<SqlValue> {
     })
 }
 
+/// The double whose shortest text is float4out's text of `value`: what a
+/// float4 becomes in JSON.
+pub(crate) fn float4_json_number(value: f64) -> f64 {
+    crate::postgres_float_text(value, "float4")
+        .parse()
+        .unwrap_or(value)
+}
+
+/// A composite field's value as JSON reads it (float4 fields as float4out).
+fn composite_field_json_value(field: &crate::SqlCompositeField) -> SqlValue {
+    match (&field.value, field.pg_type.as_str()) {
+        (SqlValue::Float(value), "float4" | "real") => SqlValue::Float(float4_json_number(*value)),
+        (value, _) => value.clone(),
+    }
+}
+
 pub(crate) fn sql_value_to_json(value: &SqlValue) -> JsonValue {
     match value {
         SqlValue::OracleLob(value) => JsonValue::String(value.to_cell()),
@@ -1886,7 +1916,12 @@ pub(crate) fn sql_value_to_json(value: &SqlValue) -> JsonValue {
             value
                 .fields
                 .iter()
-                .map(|field| (field.name.clone(), sql_value_to_json(&field.value)))
+                .map(|field| {
+                    (
+                        field.name.clone(),
+                        sql_value_to_json(&composite_field_json_value(field)),
+                    )
+                })
                 .collect(),
         ),
     }

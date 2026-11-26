@@ -1584,7 +1584,8 @@ pub(crate) fn cast_expr_value(
                 .map(|user_type| user_type.scalar_delimiter())
                 .or_else(|| pg_type_delimiter(element_type))
                 .unwrap_or(',');
-            return postgres_array_cast_text_value(&value, delimiter).map(SqlValue::String);
+            return postgres_array_cast_text_value_of(element_type, &value, delimiter)
+                .map(SqlValue::String);
         }
     }
     if target_type == "oid" {
@@ -1817,6 +1818,19 @@ pub(crate) fn cast_expr_value(
             };
         }
     }
+    if matches!(target_type.as_str(), "numeric" | "decimal") {
+        if let Some(source_type) = projected_expr_pg_type(expr, schema)
+            .filter(|pg_type| matches!(pg_type.as_str(), "float4" | "float8"))
+        {
+            // float4_numeric/float8_numeric read FLT_DIG/DBL_DIG digits.
+            if let SqlValue::Float(number) = value {
+                return cast_value(
+                    SqlValue::String(postgres_float_numeric_text(number, &source_type)),
+                    data_type,
+                );
+            }
+        }
+    }
     if source_type.as_deref() == Some("macaddr8") && target_type == "macaddr" {
         if matches!(value, SqlValue::Null) {
             return Ok(SqlValue::Null);
@@ -1848,14 +1862,30 @@ pub(crate) fn cast_expr_value(
 
 // SQL casts must retain array subscripts, just like the wire codec. The
 // lower-level body renderer stays prefix-free for the codec's typed header.
-pub(crate) fn postgres_array_cast_text_value(value: &SqlValue, delimiter: char) -> Result<String> {
+/// The array text of `value` whose elements are `element_type`: float4 and
+/// float8 elements print as float4out/float8out do.
+pub(crate) fn postgres_array_cast_text_value_of(
+    element_type: &str,
+    value: &SqlValue,
+    delimiter: char,
+) -> Result<String> {
     // Catalog arrays such as aclitem[] are produced in their text form.
     if let SqlValue::String(text) = value {
         if text.starts_with('{') && text.ends_with('}') {
             return Ok(text.clone());
         }
     }
-    let text = postgres_array_text_value(value, delimiter)?;
+    let text = match element_type {
+        "float4" | "real" | "float8" | "double precision" => {
+            let float_type = if matches!(element_type, "float4" | "real") {
+                "float4"
+            } else {
+                "float8"
+            };
+            postgres_array_text_value_with(value, delimiter, Some(float_type))?
+        }
+        _ => postgres_array_text_value(value, delimiter)?,
+    };
     let (array, bounds) =
         array_json_parts(value, "array text cast")?.ok_or_else(|| invalid_array_text("NULL"))?;
     if bounds.iter().all(|lower| *lower == 1) {
@@ -1870,6 +1900,14 @@ pub(crate) fn postgres_array_cast_text_value(value: &SqlValue, delimiter: char) 
 }
 
 pub(crate) fn postgres_array_text_value(value: &SqlValue, delimiter: char) -> Result<String> {
+    postgres_array_text_value_with(value, delimiter, None)
+}
+
+fn postgres_array_text_value_with(
+    value: &SqlValue,
+    delimiter: char,
+    float_type: Option<&str>,
+) -> Result<String> {
     pub(crate) fn quote_scalar(value: &str, delimiter: char, force: bool) -> String {
         let quote = force
             || value.is_empty()
@@ -1886,20 +1924,34 @@ pub(crate) fn postgres_array_text_value(value: &SqlValue, delimiter: char) -> Re
         }
     }
 
-    pub(crate) fn scalar(value: &JsonValue, delimiter: char) -> Result<String> {
+    pub(crate) fn scalar(
+        value: &JsonValue,
+        delimiter: char,
+        float_type: Option<&str>,
+    ) -> Result<String> {
         match value {
             JsonValue::Null => Ok("NULL".to_string()),
             JsonValue::Array(values) => Ok(format!(
                 "{{{}}}",
                 values
                     .iter()
-                    .map(|value| scalar(value, delimiter))
+                    .map(|value| scalar(value, delimiter, float_type))
                     .collect::<Result<Vec<_>>>()?
                     .join(&delimiter.to_string())
             )),
+            JsonValue::String(text) if float_type.is_some() => {
+                // A float element held as its literal text (`1e20`).
+                Ok(match text.trim().parse::<f64>() {
+                    Ok(float) => postgres_float_text(float, float_type.unwrap_or("float8")),
+                    _ => quote_scalar(text, delimiter, false),
+                })
+            }
             JsonValue::String(value) => Ok(quote_scalar(value, delimiter, false)),
             JsonValue::Bool(value) => Ok(value.to_string()),
-            JsonValue::Number(value) => Ok(value.to_string()),
+            JsonValue::Number(number) => Ok(match (float_type, number.as_f64()) {
+                (Some(float_type), Some(float)) => postgres_float_text(float, float_type),
+                _ => number.to_string(),
+            }),
             JsonValue::Object(_) => crate::pg_composite_from_array_json(value)
                 .map(|composite| quote_scalar(&composite.to_postgres_text(), delimiter, true))
                 .ok_or_else(|| invalid_array_text("internal array value")),
@@ -1915,7 +1967,7 @@ pub(crate) fn postgres_array_text_value(value: &SqlValue, delimiter: char) -> Re
         SqlValue::Json(value) => &**value,
         _ => return Err(invalid_array_text(&value.to_cell())),
     };
-    scalar(value, delimiter)
+    scalar(value, delimiter, float_type)
 }
 
 pub(crate) fn explicit_oid_cast(
@@ -2035,6 +2087,11 @@ pub(crate) fn cast_value_to_user_type(
             delimiter,
             ..
         } if user_type.array => cast_value_to_array_with_delimiter(value, codec_type, *delimiter),
+        UserTypeKind::Base { input, .. }
+            if input == crate::session::extension_objects::HSTORE_INPUT =>
+        {
+            crate::hstore::canonical_value(value)
+        }
         UserTypeKind::Base { codec_type, .. } => cast_value_to_pg_type(value, codec_type),
         UserTypeKind::Enum { labels } => {
             if matches!(value, SqlValue::Null) {
@@ -2948,7 +3005,8 @@ pub(crate) fn cast_expr_value_with_db_and_source_type(
                 .map(|user_type| user_type.scalar_delimiter())
                 .map(Ok)
                 .unwrap_or_else(|| pg_type_delimiter_with_db(db, element_type))?;
-            return postgres_array_cast_text_value(&value, delimiter).map(SqlValue::String);
+            return postgres_array_cast_text_value_of(element_type, &value, delimiter)
+                .map(SqlValue::String);
         }
     }
     if matches!(target_pg_type.as_deref(), Some("text" | "varchar"))

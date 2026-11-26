@@ -2368,7 +2368,8 @@ impl FieldRef {
                 if matches!(value, SqlValue::Null) {
                     return Ok(SqlValue::Null);
                 }
-                return postgres_array_cast_text_value(
+                return postgres_array_cast_text_value_of(
+                    element_type,
                     &value,
                     self.declared_array_delimiter()
                         .or_else(|| pg_type_delimiter(element_type))
@@ -3742,6 +3743,18 @@ pub(crate) fn parse_pg_int_vector(value: &str) -> Option<Vec<SqlValue>> {
 pub(crate) fn is_one_row_catalog_table_function(table: &str) -> bool {
     let table = table.strip_prefix("pg_catalog.").unwrap_or(table);
     matches!(table.to_ascii_lowercase().as_str(), "pg_control_system")
+}
+
+pub(crate) fn is_scalar_text_search_table_function(table: &str) -> bool {
+    let table = table.strip_prefix("pg_catalog.").unwrap_or(table);
+    matches!(
+        table.to_ascii_lowercase().as_str(),
+        "to_tsquery"
+            | "plainto_tsquery"
+            | "phraseto_tsquery"
+            | "websearch_to_tsquery"
+            | "to_tsvector"
+    )
 }
 
 pub(crate) fn validate_zero_arg_table_function(

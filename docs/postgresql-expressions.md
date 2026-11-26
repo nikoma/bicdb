@@ -130,6 +130,45 @@ Differential coverage lives in:
 - `fixtures/postgres-compat/028-expected-difference-domain-types.json`
 
 
+## String constants
+
+String constants are decoded exactly as PostgreSQL's lexer decodes them, before
+any other processing, so every statement form sees the same value:
+
+- `'...'` with `''` for a quote; with `SET standard_conforming_strings = off`
+  plain constants take backslash escapes as in `E'...'` (the setting is
+  reported to clients with ParameterStatus, and `SHOW`/`current_setting`
+  return it).
+- Escape strings `E'...'`: `\b \f \n \r \t \v`, octal `\ooo`, hex `\xhh`
+  (byte escapes may form multi-byte UTF-8 characters), `\uXXXX` and
+  `\UXXXXXXXX` with UTF-16 surrogate pairs, `\'`, `\\`, any other escaped
+  character standing for itself. Invalid escapes report PostgreSQL's errors
+  and SQLSTATEs (`invalid Unicode escape` 22025, `invalid Unicode surrogate
+  pair` / `invalid Unicode escape value` 42601, `invalid byte sequence for
+  encoding "UTF8"` 22021).
+- Unicode-escape strings and identifiers `U&'...'`, `U&"..."` with
+  `\XXXX`, `\+XXXXXX` and `UESCAPE 'c'`; rejected (0A000) while
+  standard_conforming_strings is off, as in PostgreSQL.
+- Constants continued across lines (`'a'` newline `'b'` is `'ab'`); two
+  constants without a newline between them are a syntax error.
+- Dollar quoting `$$...$$`, `$tag$...$tag$` is taken verbatim.
+- `quote_literal` and `format('%L')` write a value holding a backslash as
+  `E'...'` with doubled backslashes, as PostgreSQL does.
+- With standard_conforming_strings off, a backslash escape in a plain
+  constant gives PostgreSQL's WARNING (`nonstandard use of \\ in a string
+  literal`, SQLSTATE 22P06) unless `escape_string_warning` is off. Statements
+  sent with the extended protocol's Parse do not report it yet.
+
+## Quantified operators
+
+`x OP ANY (array)` and `x OP ALL (array)` also work for `@@`, `@>`, `<@`,
+`&&`, `?`, `?|`, `?&` and custom operators, with PostgreSQL's result for
+NULL elements, a NULL array and an empty array, and for a subquery in place
+of the array. An array written out (`ARRAY[...]`, `'{a,b}'`) compares each
+element with its own type; an array from a column is read with `unnest`,
+whose elements carry no type, so an operator that needs typed operands
+fails there.
+
 ## Predicate values in projections and ordering
 
 NULL and truth predicates can produce boolean values in a SELECT list and in
@@ -149,3 +188,36 @@ The Oracle preview regression uses its NULL predicate for unknown boolean values
 matching the Oracle 23.26.3 reference observations. That reference rejects
 PostgreSQL's `IS UNKNOWN` spelling. Separate regression
 cases protect the two front ends.
+
+## Text search operators and functions
+
+- An untyped literal next to a text search value takes that value's
+  type, as in PostgreSQL: `tsvector @@ 'a & b'`, `tsquery && 'c'`,
+  `tsquery || 'c'`, `'a' <-> 'b'::tsquery` (the phrase operator) and
+  `tsvector || 'b:2'`.
+- `ts_lexize(dictionary, token)` works for `simple` and each built-in
+  `<language>_stem` dictionary.
+- The scalar functions `to_tsvector`, `to_tsquery`, `plainto_tsquery`,
+  `phraseto_tsquery` and `websearch_to_tsquery` can be used in FROM
+  (`FROM to_tsquery('english', 'x') AS q`).
+- tsvector input follows PostgreSQL's parser: weight letters are
+  case-insensitive, `*` means A, and a second weight on one position is
+  an error. Syntax errors report SQLSTATE 42601.
+- `ts_delete` and `setweight` ignore NULL elements of their lexeme
+  arrays. `ts_filter` rejects NULL weights, and `array_to_tsvector`
+  rejects NULL and empty lexemes, with PostgreSQL's messages.
+
+- `ts_token_type('default' | 3722)` lists the default parser's token
+  types; `ts_stat(query [, weights])` runs its query with the caller's
+  privileges and returns `word`, `ndoc`, `nentry`.
+- `SET`/`RESET`/`SHOW default_text_search_config` (default
+  `pg_catalog.english`) choose the configuration of the one-argument
+  `to_tsvector`, `to_tsquery`, `plainto_tsquery`, `phraseto_tsquery`,
+  `websearch_to_tsquery` and `ts_headline` forms and of
+  `get_current_ts_config()`.
+- `ts_rank_cd` leaves out positions whose weight the query operand
+  excludes (`s:A`), as PostgreSQL's cover density does.
+
+Limits: these fail instead of answering:
+- `ts_debug`, `ts_parse` and `unnest(tsvector)`
+- `CREATE TEXT SEARCH CONFIGURATION/DICTIONARY`

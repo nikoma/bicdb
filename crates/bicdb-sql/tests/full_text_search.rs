@@ -83,9 +83,10 @@ fn tsvector_storage_functions_and_comparison_match_postgres() {
         );
 
         let invalid = session.execute("SELECT '''a'':0'::tsvector").unwrap_err();
-        assert_eq!(invalid.sqlstate(), "22P02");
+        // PostgreSQL reports tsvector input errors as syntax errors.
+        assert_eq!(invalid.sqlstate(), "42601");
         let invalid_weight = session.execute("SELECT '''a'':1Z'::tsvector").unwrap_err();
-        assert_eq!(invalid_weight.sqlstate(), "22P02");
+        assert_eq!(invalid_weight.sqlstate(), "42601");
     }
 
     let mut db = BicDb::open(dir.path()).unwrap();
@@ -194,7 +195,7 @@ fn tsquery_storage_operators_and_matching_match_postgres() {
                 .execute("SELECT 'a:Z'::tsquery")
                 .unwrap_err()
                 .sqlstate(),
-            "22P02"
+            "42601"
         );
         assert_eq!(
             session
@@ -617,4 +618,76 @@ fn table_driven_query_rewrite_matches_postgres() {
         )
         .unwrap();
     assert_eq!(result.rows, vec![vec![tsquery("z & (y | x)")]]);
+}
+
+#[test]
+fn untyped_literals_lexize_and_input_rules_match_postgres() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let one = |session: &mut SqlSession<'_>, sql: &str| {
+        session.execute(sql).unwrap().rows[0][0].to_cell()
+    };
+    assert_eq!(
+        one(&mut session, "SELECT 'a:1 b:2'::tsvector @@ 'a & b'"),
+        "true"
+    );
+    assert_eq!(
+        one(&mut session, "SELECT 'foo & bar'::tsquery && 'asd'"),
+        "'foo' & 'bar' & 'asd'"
+    );
+    assert_eq!(
+        one(&mut session, "SELECT 'a & g' <-> 'b | d'::tsquery"),
+        "( 'a' & 'g' ) <-> ( 'b' | 'd' )"
+    );
+    assert_eq!(
+        one(
+            &mut session,
+            "SELECT 'a:3A b:2a'::tsvector || 'ba:1234 a:1B'"
+        ),
+        "'a':3A,4B 'b':2A 'ba':1237"
+    );
+    assert_eq!(
+        one(
+            &mut session,
+            "SELECT array_to_string(ts_lexize('english_stem', 'identity'), ',')"
+        ),
+        "ident"
+    );
+    assert_eq!(
+        one(
+            &mut session,
+            "SELECT cardinality(ts_lexize('english_stem', 'the'))"
+        ),
+        "0"
+    );
+    assert_eq!(
+        one(&mut session, "SELECT 'a:1*,2b3 b:4dc'::tsvector"),
+        "'a':1A,2B 'b':4C"
+    );
+    assert_eq!(
+        one(
+            &mut session,
+            "SELECT q FROM to_tsquery('english', 'hotels') AS q"
+        ),
+        "'hotel'"
+    );
+    assert_eq!(
+        one(
+            &mut session,
+            "SELECT ts_delete('a b c'::tsvector, ARRAY['b', NULL])"
+        ),
+        "'a' 'c'"
+    );
+    let error = session.execute("SELECT 'a:1cd'::tsvector").unwrap_err();
+    assert_eq!(error.sqlstate(), "42601");
+    assert_eq!(error.to_string(), "syntax error in tsvector: \"a:1cd\"");
+    let error = session
+        .execute("SELECT array_to_tsvector(ARRAY['a', NULL])")
+        .unwrap_err();
+    assert_eq!(error.to_string(), "lexeme array may not contain nulls");
+    let error = session
+        .execute("SELECT ts_filter('a b'::tsvector, '{a,NULL}')")
+        .unwrap_err();
+    assert_eq!(error.to_string(), "weight array may not contain nulls");
 }

@@ -676,6 +676,9 @@ impl<'db> SqlEngine<'db> {
                 validate_zero_arg_table_function(&table, args)?;
                 return Ok(1);
             }
+            if is_scalar_text_search_table_function(&table) {
+                return Ok(1);
+            }
             return Ok(usize::MAX / 2);
         }
         let table = resolve_session_relation_name_if_exists(self.db_ref(), &table);
@@ -752,6 +755,9 @@ impl<'db> SqlEngine<'db> {
                 args: args.clone(),
                 settings: None,
             };
+            if table == crate::routine_srf_projection::ZIP_FUNCTION && !*with_ordinality {
+                return self.set_returning_zip_row_set(&table, alias.as_ref(), &arguments);
+            }
             if let Some(rows) = self.stored_routine_table_function_row_set(
                 &table,
                 alias.as_ref(),
@@ -901,6 +907,17 @@ impl<'db> SqlEngine<'db> {
                 self.partition_info_row_set(&table, table_alias, args, *with_ordinality)?
             {
                 return Ok(row_set);
+            }
+            if is_scalar_text_search_table_function(&table) && !*with_ordinality {
+                return self.scalar_text_search_row_set(&table, table_alias, args);
+            }
+            if let Some(row_set) =
+                self.text_search_catalog_row_set(&table, table_alias, args, *with_ordinality)?
+            {
+                return Ok(row_set);
+            }
+            if table == crate::routine_srf_projection::ZIP_FUNCTION && !*with_ordinality {
+                return self.set_returning_zip_row_set(&table, table_alias, args);
             }
             if let Some(row_set) = self.stored_routine_table_function_row_set(
                 &table,
@@ -1071,7 +1088,7 @@ impl<'db> SqlEngine<'db> {
             if alias_name != table {
                 crate::slot_types::register_table(&table, &schema);
             }
-            if schema.partitioning.is_some() {
+            if schema.has_descendant_tables() {
                 return self.partition_row_set(&table, &alias_name, &schema, needed_columns);
             }
         }
@@ -1528,7 +1545,7 @@ impl<'db> SqlEngine<'db> {
         schema: Option<&TableSchema>,
         selection: Option<&Expr>,
     ) -> Result<Option<Vec<Arc<Record>>>> {
-        if schema.is_some_and(|schema| schema.partitioning.is_some()) {
+        if schema.is_some_and(|schema| schema.has_descendant_tables()) {
             return Ok(None);
         }
         let policy_selection =
@@ -2729,7 +2746,7 @@ impl<'db> SqlEngine<'db> {
         schema: Option<&TableSchema>,
         selection: Option<&Expr>,
     ) -> Result<Option<RecordLocators>> {
-        if schema.is_some_and(|schema| schema.partitioning.is_some()) {
+        if schema.is_some_and(|schema| schema.has_descendant_tables()) {
             return Ok(None);
         }
         let Some(selection) = selection else {
@@ -2924,7 +2941,7 @@ impl<'db> SqlEngine<'db> {
         schema: Option<&TableSchema>,
         selection: Option<&Expr>,
     ) -> Result<Option<Vec<String>>> {
-        if schema.is_some_and(|schema| schema.partitioning.is_some()) {
+        if schema.is_some_and(|schema| schema.has_descendant_tables()) {
             return Ok(None);
         }
         let Some(selection) = selection else {
@@ -5258,6 +5275,155 @@ impl<'db> SqlEngine<'db> {
         }))
     }
 
+    /// `ts_token_type(parser)` and `ts_stat(query [, weights])` in FROM.
+    pub(crate) fn text_search_catalog_row_set(
+        &self,
+        table: &str,
+        table_alias: Option<&TableAlias>,
+        args: &TableFunctionArgs,
+        with_ordinality: bool,
+    ) -> Result<Option<RowSet>> {
+        let function = table.strip_prefix("pg_catalog.").unwrap_or(table);
+        let function = function.to_ascii_lowercase();
+        let (mut source_columns, mut rows): (Vec<String>, Vec<Vec<SqlValue>>) =
+            match function.as_str() {
+                "ts_token_type" | "ts_stat" => {
+                    let values = table_function_expr_args(args)?
+                        .iter()
+                        .map(|expr| self.eval_select_constant_expr(expr))
+                        .collect::<Result<Vec<_>>>()?;
+                    if function == "ts_token_type" {
+                        let [parser] = values.as_slice() else {
+                            return Err(SqlError::undefined_function(
+                                "function ts_token_type expects one argument",
+                            ));
+                        };
+                        crate::fts::is_default_text_search_parser(parser)?;
+                        let rows = crate::fts::DEFAULT_PARSER_TOKEN_TYPES
+                            .iter()
+                            .enumerate()
+                            .map(|(index, (alias, description))| {
+                                vec![
+                                    SqlValue::Int(index as i64 + 1),
+                                    SqlValue::String((*alias).to_string()),
+                                    SqlValue::String((*description).to_string()),
+                                ]
+                            })
+                            .collect();
+                        (
+                            vec!["tokid".into(), "alias".into(), "description".into()],
+                            rows,
+                        )
+                    } else {
+                        let (query, weights) = match values.as_slice() {
+                            [query] => (query, None),
+                            [query, weights] => (query, Some(weights.to_cell())),
+                            _ => {
+                                return Err(SqlError::undefined_function(
+                                    "function ts_stat expects one or two arguments",
+                                ))
+                            }
+                        };
+                        // The query runs with the caller's privileges.
+                        let result = self.execute(&query.to_cell())?;
+                        if result.columns.len() != 1 {
+                            return Err(SqlError::data_exception_public(
+                                "42804",
+                                "ts_stat query must return one tsvector column",
+                                None,
+                            ));
+                        }
+                        let vectors = result
+                            .rows
+                            .into_iter()
+                            .filter_map(|row| row.into_iter().next())
+                            .collect::<Vec<_>>();
+                        let rows = crate::fts::ts_stat_rows(&vectors, weights.as_deref())?
+                            .into_iter()
+                            .map(|(word, ndoc, nentry)| {
+                                vec![
+                                    SqlValue::String(word),
+                                    SqlValue::Int(ndoc),
+                                    SqlValue::Int(nentry),
+                                ]
+                            })
+                            .collect();
+                        (vec!["word".into(), "ndoc".into(), "nentry".into()], rows)
+                    }
+                }
+                _ => return Ok(None),
+            };
+        if with_ordinality {
+            for (index, row) in rows.iter_mut().enumerate() {
+                row.push(SqlValue::Int(index as i64 + 1));
+            }
+            source_columns.push("ordinality".into());
+        }
+        let alias_name = table_alias
+            .map(|alias| alias.name.value.clone())
+            .unwrap_or_else(|| function.clone());
+        let columns = table_alias_columns(
+            table,
+            &alias_name,
+            table_alias
+                .map(|alias| alias.columns.as_slice())
+                .unwrap_or(&[]),
+            &source_columns,
+        )?;
+        let rows = rows
+            .iter()
+            .map(|row| slot_row_from_values(&columns, row))
+            .collect::<Vec<_>>();
+        Ok(Some(RowSet {
+            rows,
+            columns: aliased_row_output_columns(&alias_name, &columns),
+        }))
+    }
+
+    /// A scalar text search function in FROM (`FROM to_tsquery('x') AS q`)
+    /// is a one-row relation whose single column is named after the alias.
+    pub(crate) fn scalar_text_search_row_set(
+        &self,
+        table: &str,
+        table_alias: Option<&TableAlias>,
+        args: &TableFunctionArgs,
+    ) -> Result<RowSet> {
+        let function = table
+            .rsplit('.')
+            .next()
+            .unwrap_or(table)
+            .to_ascii_lowercase();
+        let alias_name = table_alias
+            .map(|alias| alias.name.value.clone())
+            .unwrap_or_else(|| function.clone());
+        let source_columns = table_function_source_columns_for_alias(
+            table_alias,
+            &alias_name,
+            vec![function.clone()],
+        );
+        let columns = table_alias_columns(
+            table,
+            &alias_name,
+            table_alias
+                .map(|alias| alias.columns.as_slice())
+                .unwrap_or(&[]),
+            &source_columns,
+        )?;
+        let values = table_function_expr_args(args)?
+            .iter()
+            .map(|expr| self.eval_select_constant_expr(expr))
+            .collect::<Result<Vec<_>>>()?;
+        let value =
+            crate::fts::eval_fts_function_value(&function, &values, None)?.ok_or_else(|| {
+                SqlError::Unsupported(format!("table function {table} is not supported"))
+            })?;
+        let rows = vec![slot_row_from_values(&columns, &[value])];
+        Ok(RowSet {
+            rows,
+            columns: aliased_row_output_columns(&alias_name, &columns),
+        })
+    }
+
     pub(crate) fn regexp_split_to_table_row_set(
         &self,
         table: &str,
@@ -5453,11 +5619,160 @@ impl<'db> SqlEngine<'db> {
         args: &TableFunctionArgs,
         with_ordinality: bool,
     ) -> Result<Option<RowSet>> {
+        let call_args = table_function_expr_args(args)?;
+        let Some(mut result) = self.stored_routine_table_function_result(table, &call_args)? else {
+            return Ok(None);
+        };
         if with_ordinality {
-            return Err(SqlError::Unsupported(format!(
-                "{table} WITH ORDINALITY is not supported"
-            )));
+            // WITH ORDINALITY numbers the function's rows from 1 in a last
+            // bigint column named `ordinality`.
+            for (index, row) in result.rows.iter_mut().enumerate() {
+                row.push(SqlValue::Int(index as i64 + 1));
+            }
+            result.columns.push("ordinality".to_string());
         }
+        let alias_name = table_alias
+            .map(|alias| alias.name.value.clone())
+            .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(table).to_string());
+        self.routine_result_row_set(table, table_alias, alias_name, result)
+            .map(Some)
+    }
+
+    /// The select-list form of several set-returning calls (see
+    /// `routine_srf_projection`): the calls advance in lockstep, a call that
+    /// has run out gives NULL, until every call has run out. Column `i` is
+    /// call `i`'s value: its one column, the selected field, or the whole row.
+    pub(crate) fn set_returning_zip_row_set(
+        &self,
+        table: &str,
+        table_alias: Option<&TableAlias>,
+        args: &TableFunctionArgs,
+    ) -> Result<RowSet> {
+        let mut columns = Vec::new();
+        for argument in table_function_expr_args(args)? {
+            let (function, field) =
+                crate::routine_srf_projection::zip_call(&argument).ok_or_else(|| {
+                    SqlError::Unsupported("set-returning select-list call".to_string())
+                })?;
+            let name = object_name(&function.name)?;
+            let call_args = crate::routine_srf_projection::zip_call_args(function);
+            let plpgsql = resolve_routine_cached(self.db_ref(), RoutineKind::Function, &name)?
+                .is_some_and(|routine| !routine.schema.language.eq_ignore_ascii_case("sql"));
+            let result = match (plpgsql, self.routine_host) {
+                // PL/pgSQL runs in the owning session (privileges, security
+                // definer and transaction are the session's).
+                (true, Some(host)) => {
+                    let values = call_args
+                        .iter()
+                        .map(|argument| self.eval_select_constant_expr(argument))
+                        .collect::<Result<Vec<_>>>()?;
+                    host.call_set_function(self, &name, &values)?
+                }
+                _ => self
+                    .stored_routine_table_function_result(&name, &call_args)?
+                    .ok_or_else(|| {
+                        SqlError::undefined_function(format!("function {name} does not exist"))
+                    })?,
+            };
+            let values = match field {
+                Some(field) => {
+                    let index = result
+                        .columns
+                        .iter()
+                        .position(|column| column.eq_ignore_ascii_case(&field.value))
+                        .ok_or_else(|| SqlError::UndefinedColumn {
+                            table: name.clone(),
+                            column: field.value.clone(),
+                        })?;
+                    result
+                        .rows
+                        .into_iter()
+                        .map(|mut row| row.swap_remove(index))
+                        .collect::<Vec<_>>()
+                }
+                None if result.columns.len() == 1
+                    && !crate::routine_srf_projection::returns_row(self.db_ref(), &name)? =>
+                {
+                    result
+                        .rows
+                        .into_iter()
+                        .map(|mut row| row.swap_remove(0))
+                        .collect()
+                }
+                None => {
+                    let types = crate::routine_srf_projection::row_field_types(
+                        self.db_ref(),
+                        &name,
+                        result.columns.len(),
+                    )?;
+                    result
+                        .rows
+                        .into_iter()
+                        .map(|row| crate::eval::anonymous_record_value(row, types.clone()))
+                        .collect()
+                }
+            };
+            columns.push(values);
+        }
+        let count = columns.iter().map(Vec::len).max().unwrap_or(0);
+        let rows = (0..count)
+            .map(|index| {
+                columns
+                    .iter()
+                    .map(|values| values.get(index).cloned().unwrap_or(SqlValue::Null))
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        let names = (0..columns.len())
+            .map(crate::routine_srf_projection::zip_column)
+            .collect::<Vec<_>>();
+        let result = SqlResult::new(names, rows);
+        let alias_name = table_alias
+            .map(|alias| alias.name.value.clone())
+            .unwrap_or_else(|| table.to_string());
+        self.routine_result_row_set(table, table_alias, alias_name, result)
+    }
+
+    fn routine_result_row_set(
+        &self,
+        table: &str,
+        table_alias: Option<&TableAlias>,
+        alias_name: String,
+        result: SqlResult,
+    ) -> Result<RowSet> {
+        let columns = table_alias_columns(
+            table,
+            &alias_name,
+            table_alias
+                .map(|alias| alias.columns.as_slice())
+                .unwrap_or(&[]),
+            &result.columns,
+        )?;
+        let rows = result
+            .rows
+            .iter()
+            .enumerate()
+            .map(|(index, row)| {
+                if index % 1024 == 0 {
+                    self.check_cancellation()?;
+                }
+                Ok(slot_row_from_values(&columns, row))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        sql_profile_sql_rows_materialized(&rows);
+        Ok(RowSet {
+            rows,
+            columns: aliased_row_output_columns(&alias_name, &columns),
+        })
+    }
+
+    /// Runs a set-returning SQL function for a FROM item: its rows, with the
+    /// declared output column names.
+    fn stored_routine_table_function_result(
+        &self,
+        table: &str,
+        call_args: &[Expr],
+    ) -> Result<Option<SqlResult>> {
         let Some(routine) = resolve_routine_cached(self.db_ref(), RoutineKind::Function, table)?
         else {
             return Ok(None);
@@ -5479,7 +5794,7 @@ impl<'db> SqlEngine<'db> {
             // as a scalar call (the session interpreter applies EXECUTE and
             // SECURITY DEFINER) and expand its record.
             if let (false, Some(host)) = (routine.schema.returns_set, self.routine_host) {
-                let arguments = table_function_expr_args(args)?
+                let arguments = call_args
                     .iter()
                     .map(|argument| self.eval_select_constant_expr(argument))
                     .collect::<Result<Vec<_>>>()?;
@@ -5517,22 +5832,9 @@ impl<'db> SqlEngine<'db> {
                         vec![scalar],
                     ),
                 };
-                let alias_name = table_alias
-                    .map(|alias| alias.name.value.clone())
-                    .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(table).to_string());
-                let columns = table_alias_columns(
-                    table,
-                    &alias_name,
-                    table_alias
-                        .map(|alias| alias.columns.as_slice())
-                        .unwrap_or(&[]),
-                    &names,
-                )?;
-                let rows = vec![slot_row_from_values(&columns, &values)];
-                return Ok(Some(RowSet {
-                    rows,
-                    columns: aliased_row_output_columns(&alias_name, &columns),
-                }));
+                let mut result = SqlResult::empty(names);
+                result.rows.push(values);
+                return Ok(Some(result));
             }
             return Err(SqlError::UnsupportedPlpgsqlFeature(format!(
                 "set-returning {} routine {} is not implemented",
@@ -5546,7 +5848,7 @@ impl<'db> SqlEngine<'db> {
                 normalize_object_name(table)
             ))));
         }
-        let arguments = table_function_expr_args(args)?
+        let arguments = call_args
             .iter()
             .map(|argument| self.eval_select_constant_expr(argument))
             .collect::<Result<Vec<_>>>()?;
@@ -5602,33 +5904,7 @@ impl<'db> SqlEngine<'db> {
                 result.rows.push(vec![SqlValue::Null; result.columns.len()]);
             }
         }
-        let alias_name = table_alias
-            .map(|alias| alias.name.value.clone())
-            .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(table).to_string());
-        let columns = table_alias_columns(
-            table,
-            &alias_name,
-            table_alias
-                .map(|alias| alias.columns.as_slice())
-                .unwrap_or(&[]),
-            &result.columns,
-        )?;
-        let rows = result
-            .rows
-            .iter()
-            .enumerate()
-            .map(|(index, row)| {
-                if index % 1024 == 0 {
-                    self.check_cancellation()?;
-                }
-                Ok(slot_row_from_values(&columns, row))
-            })
-            .collect::<Result<Vec<_>>>()?;
-        sql_profile_sql_rows_materialized(&rows);
-        Ok(Some(RowSet {
-            rows,
-            columns: aliased_row_output_columns(&alias_name, &columns),
-        }))
+        Ok(Some(result))
     }
 
     pub(crate) fn apply_row_join(
@@ -5715,7 +5991,12 @@ impl<'db> SqlEngine<'db> {
             };
             if let Some((name, alias, args, with_ordinality)) = stored_call {
                 let table = normalize_object_name(&object_name(name)?);
-                if resolve_routine_cached(self.db_ref(), RoutineKind::Function, &table)?.is_some() {
+                // The select-list SRF source checks EXECUTE per call it runs.
+                let zip = table == crate::routine_srf_projection::ZIP_FUNCTION;
+                if zip
+                    || resolve_routine_cached(self.db_ref(), RoutineKind::Function, &table)?
+                        .is_some()
+                {
                     if with_ordinality {
                         return Err(SqlError::Unsupported(format!(
                             "{table} WITH ORDINALITY is not supported"
@@ -5724,7 +6005,26 @@ impl<'db> SqlEngine<'db> {
                     let role = current_user_from_gucs(&self.session_gucs);
                     // Check even an empty left input; Describe must not execute
                     // the body, and an empty relation cannot bypass EXECUTE.
-                    if !role_can_execute_routine(self.db_ref(), &role, &table)? {
+                    if zip {
+                        // Like PostgreSQL, check every call's EXECUTE before any row.
+                        for argument in args {
+                            let FunctionArg::Unnamed(FunctionArgExpr::Expr(argument)) = argument
+                            else {
+                                continue;
+                            };
+                            if let Some((function, _)) =
+                                crate::routine_srf_projection::zip_call(argument)
+                            {
+                                let called = normalize_object_name(&object_name(&function.name)?);
+                                if !role_can_execute_routine(self.db_ref(), &role, &called)? {
+                                    return Err(SqlError::BicDb(BicDbError::Authorization(
+                                        format!("permission denied for function {called}"),
+                                    )));
+                                }
+                            }
+                        }
+                    }
+                    if !zip && !role_can_execute_routine(self.db_ref(), &role, &table)? {
                         return Err(SqlError::BicDb(BicDbError::Authorization(format!(
                             "permission denied for function {table}"
                         ))));
@@ -6680,6 +6980,7 @@ impl<'db> SqlEngine<'db> {
             if is_regexp_split_to_table_function(&table)
                 || is_regexp_matches_table_function(&table)
                 || is_generate_subscripts_table_function(&table)
+                || is_scalar_text_search_table_function(&table)
             {
                 let mut source_columns = table_function_source_columns_for_alias(
                     table_alias,
@@ -6690,6 +6991,48 @@ impl<'db> SqlEngine<'db> {
                         .unwrap_or(&table)
                         .to_ascii_lowercase()],
                 );
+                if *with_ordinality {
+                    source_columns.push("ordinality".to_string());
+                }
+                let columns = table_alias_columns(
+                    &table,
+                    &alias_name,
+                    table_alias
+                        .map(|alias| alias.columns.as_slice())
+                        .unwrap_or(&[]),
+                    &source_columns,
+                )?;
+                return Ok(Some(aliased_row_output_columns(&alias_name, &columns)));
+            }
+            if table == crate::routine_srf_projection::ZIP_FUNCTION {
+                let source_columns = (0..table_function_expr_args(args)?.len())
+                    .map(crate::routine_srf_projection::zip_column)
+                    .collect::<Vec<_>>();
+                let columns = table_alias_columns(
+                    &table,
+                    &alias_name,
+                    table_alias
+                        .map(|alias| alias.columns.as_slice())
+                        .unwrap_or(&[]),
+                    &source_columns,
+                )?;
+                return Ok(Some(aliased_row_output_columns(&alias_name, &columns)));
+            }
+            let text_search_columns: Option<&[&str]> = match table
+                .strip_prefix("pg_catalog.")
+                .unwrap_or(&table)
+                .to_ascii_lowercase()
+                .as_str()
+            {
+                "ts_token_type" => Some(&["tokid", "alias", "description"]),
+                "ts_stat" => Some(&["word", "ndoc", "nentry"]),
+                _ => None,
+            };
+            if let Some(names) = text_search_columns {
+                let mut source_columns = names
+                    .iter()
+                    .map(|name| name.to_string())
+                    .collect::<Vec<_>>();
                 if *with_ordinality {
                     source_columns.push("ordinality".to_string());
                 }

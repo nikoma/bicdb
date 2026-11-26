@@ -84,9 +84,61 @@ migration mutates the database.
 
 ## Table inheritance
 
-`CREATE TABLE child (...) INHERITS (parent)` is refused with 0A000. Table
-inheritance (the child taking the parent's columns, and reads of the parent
-including the child's rows unless `ONLY` is written) is not implemented, and
-earlier builds silently created the child without the parent's columns.
-Declarative partitioning (`PARTITION BY` / `PARTITION OF`) is supported.
+`CREATE TABLE child (...) INHERITS (parent [, ...])` creates a child that
+takes each parent's columns first (same-named columns are merged and must
+have the same type, 42804 otherwise), with their NOT NULL markings,
+defaults and CHECK constraints. Keys, unique constraints and foreign keys
+are not inherited, as in PostgreSQL. `pg_inherits` and
+`pg_class.relhassubclass` describe the hierarchy.
+
+- Reads of a parent include the rows of every descendant, with `tableoid`
+  naming the table each row is stored in (also in joins, aggregates and
+  subqueries).
+- `UPDATE` and `DELETE` of a parent run against the parent's own rows and
+  each descendant's, each row in its own table with that table's
+  constraints and triggers; `TRUNCATE` of a parent empties the descendants.
+  `INSERT` into a parent stores the row in the parent.
+- `ALTER TABLE parent` column changes (`ADD`/`DROP`/`RENAME COLUMN`, `ALTER
+  COLUMN TYPE`, `SET`/`DROP NOT NULL`, `SET`/`DROP DEFAULT`) and `ADD
+  CONSTRAINT ... CHECK` recurse to the descendants; a descendant that
+  already has an added column keeps it. On a child, dropping, renaming or
+  retyping an inherited column, or dropping an inherited constraint, fails
+  with 42P16.
+- `DROP TABLE` of a parent with children fails with 2BP01; drop the
+  children first.
+
+- `ONLY parent` in `SELECT`/`JOIN`, `UPDATE` and `DELETE` reads or writes
+  the parent's own rows only (`ALTER TABLE ONLY` and `TRUNCATE ONLY` too).
+- `CHECK (...) NO INHERIT` and `NOT NULL NO INHERIT` constraints stay on the
+  table that declares them (`pg_constraint.connoinherit`); `ALTER TABLE ...
+  ADD CONSTRAINT ... CHECK (...) NO INHERIT` does not reach the children.
+- `ALTER TABLE child INHERIT parent` attaches an existing table whose
+  columns (with the same types and NOT NULL markings) and CHECK constraints
+  cover the parent's; `NO INHERIT parent` detaches it. Circular inheritance
+  fails with 42P07.
+- `DROP TABLE parent CASCADE` drops the descendants; renaming a parent or a
+  child keeps the hierarchy.
+
+Limits: several `[NO] INHERIT` actions in one `ALTER TABLE`, `ALTER
+CONSTRAINT ... [NO] INHERIT`, and UPDATE/DELETE through a parent with
+row-level security fail (0A000 or a parse error). Inheritance tracks
+whether an inherited CHECK was also declared locally only by name.
+
+## UNLOGGED tables
+
+`CREATE UNLOGGED TABLE` and `ALTER TABLE ... SET LOGGED | SET UNLOGGED` are
+accepted and reported as in PostgreSQL (`pg_class.relpersistence` is `u`).
+BicDB still writes the rows of an unlogged table durably, so they survive a
+crash, where PostgreSQL truncates such a table; that is strictly safer, and
+no write speed-up should be expected.
+
+## VIRTUAL generated columns
+
+Generated columns written `GENERATED ALWAYS AS (expr) VIRTUAL`, or without a
+storage keyword (PostgreSQL 18's default), are accepted in `CREATE TABLE` and
+`ALTER TABLE ... ADD COLUMN`. `pg_attribute.attgenerated` reports `v`. The
+value is kept with the row and recomputed when the row is written; since the
+generation expression must be immutable, every read returns the value
+PostgreSQL computes on read. As in PostgreSQL, a virtual column cannot be
+written directly, and indexes referencing one are refused with 0A000.
 

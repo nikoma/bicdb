@@ -1807,6 +1807,8 @@ pub(crate) fn expr_contains_volatile_function(expr: &Expr) -> bool {
                     | "pg_catalog.gen_random_uuid"
                     | "gen_random_bytes"
                     | "public.gen_random_bytes"
+                    | "gen_salt"
+                    | "public.gen_salt"
                     | "uuid_generate_v4"
                     | "public.uuid_generate_v4"
                     | "uuidv4"
@@ -7534,8 +7536,10 @@ pub(crate) fn information_schema_columns_filtered(
                     "generation_expression",
                     column
                         .generated_expr
-                        .clone()
-                        .map(SqlValue::String)
+                        .as_deref()
+                        .map(|expression| {
+                            SqlValue::String(pg_generation_expression_text(expression))
+                        })
                         .unwrap_or(SqlValue::Null),
                 ),
                 ("is_updatable", SqlValue::String("YES".to_string())),

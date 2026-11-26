@@ -869,7 +869,7 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
 name = "bicdb"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -918,7 +918,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-analytics"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "arrow",
  "bicdb-core",
@@ -934,7 +934,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-app-host"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "anyhow",
  "axum",
@@ -962,7 +962,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-app-runtime"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -1019,7 +1019,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-bench"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "allocation-counter",
  "anyhow",
@@ -1042,7 +1042,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-blob-s3"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "base64 0.22.1",
  "bicdb-app-runtime",
@@ -1060,7 +1060,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-cell"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -1095,7 +1095,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-cell-admission"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "ciborium",
  "ed25519-dalek",
@@ -1108,7 +1108,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-cell-device"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "bicdb-core",
  "chacha20poly1305 0.10.1",
@@ -1130,7 +1130,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-cell-grant"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "bicdb-core",
  "chacha20poly1305 0.10.1",
@@ -1150,7 +1150,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-cell-ha"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "bicdb-core",
  "ciborium",
@@ -1167,7 +1167,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-core"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "argon2",
  "bicdb-lua",
@@ -1213,7 +1213,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-extension"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "axum",
  "semver",
@@ -1237,7 +1237,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-fleet"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "ciborium",
  "ed25519-dalek",
@@ -1253,7 +1253,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-lua"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "mlua",
  "serde_json",
@@ -1262,7 +1262,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-page"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "crc32fast",
  "flate2",
@@ -1280,7 +1280,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-pgwire"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "argon2",
  "axum",
@@ -1320,7 +1320,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-provider-email"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "bicdb-app-runtime",
  "lettre",
@@ -1330,7 +1330,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-provider-embeddings"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "bicdb-app-runtime",
  "bicdb-core",
@@ -1338,7 +1338,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-provider-grpc"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "bicdb-app-runtime",
  "bicdb-extension",
@@ -1355,7 +1355,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-provider-llm"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "bicdb-app-runtime",
  "bicdb-extension",
@@ -1366,7 +1366,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-provider-redis"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "base64 0.22.1",
  "bicdb-app-runtime",
@@ -1378,7 +1378,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-provider-tokenizer"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "bicdb-app-runtime",
  "tempfile",
@@ -1387,7 +1387,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-resp"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "base64 0.22.1",
  "bicdb-core",
@@ -1407,7 +1407,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-script"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "oxc_allocator",
  "oxc_codegen",
@@ -1424,7 +1424,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-sql"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "base64 0.22.1",
  "bicdb-core",
@@ -1445,6 +1445,7 @@ dependencies = [
  "md-5 0.10.6",
  "num-bigint 0.4.6",
  "num-traits",
+ "pwhash",
  "recursive",
  "regex",
  "rstar 0.12.2",
@@ -1452,6 +1453,7 @@ dependencies = [
  "rustc-hash",
  "serde",
  "serde_json",
+ "sha1",
  "sha2 0.10.9",
  "smallvec",
  "sqlparser",
@@ -1471,7 +1473,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-sync"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "bicdb-core",
  "hex",
@@ -1484,7 +1486,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-wasm"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "bicdb-core",
  "bicdb-sql",
@@ -1516,7 +1518,7 @@ dependencies = [
 
 [[package]]
 name = "bicdb-workflow"
-version = "1.0.539"
+version = "1.0.540"
 dependencies = [
  "bicdb-core",
  "bicdb-lua",
@@ -1595,6 +1597,15 @@ dependencies = [
 
 [[package]]
 name = "block-buffer"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4152116fd6e9dadb291ae18fc1ec3575ed6d84c29642d97890f4b4a3417297e4"
+dependencies = [
+ "generic-array 0.14.7",
+]
+
+[[package]]
+name = "block-buffer"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3078c7629b62d3f0439517fa394996acacc5cbc91c5a20d8c658e77abd503a71"
@@ -1640,6 +1651,17 @@ dependencies = [
  "futures-io",
  "futures-lite",
  "piper",
+]
+
+[[package]]
+name = "blowfish"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32fa6a061124e37baba002e496d203e23ba3d7b73750be82dbfbc92913048a5b"
+dependencies = [
+ "byteorder",
+ "cipher 0.2.5",
+ "opaque-debug",
 ]
 
 [[package]]
@@ -1860,6 +1882,15 @@ checksum = "57663b653d948a338bfb3eeba9bb2fd5fcfaecb9e199e87e1eda4d9e8b240fd9"
 dependencies = [
  "ciborium-io",
  "half",
+]
+
+[[package]]
+name = "cipher"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12f8e7987cbd042a63249497f41aed09f8e65add917ea6566effbc56578d6801"
+dependencies = [
+ "generic-array 0.14.7",
 ]
 
 [[package]]
@@ -2442,6 +2473,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce6e4c961d6cd6c9a86db418387425e8bdeaf05b3c8bc1411e6dca4c252f1453"
 dependencies = [
  "hybrid-array",
+]
+
+[[package]]
+name = "crypto-mac"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4857fd85a0c34b3c3297875b747c1e02e06b6a0ea32dd892d8192b9ce0813ea6"
+dependencies = [
+ "generic-array 0.14.7",
+ "subtle",
 ]
 
 [[package]]
@@ -3371,6 +3412,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ffdd80ce8ce993de27e9f063a444a4d53ce8e8db4c1f00cc03af5ad5a9867a1e"
 dependencies = [
  "cipher 0.4.4",
+]
+
+[[package]]
+name = "digest"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3dd60d1080a57a05ab032377049e0591415d2b31afd7028356dbf3cc6dcb066"
+dependencies = [
+ "generic-array 0.14.7",
 ]
 
 [[package]]
@@ -4485,6 +4535,16 @@ dependencies = [
 
 [[package]]
 name = "hmac"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1441c6b1e930e2817404b5046f1f989899143a12bf92de603b69f4e0aee1e15"
+dependencies = [
+ "crypto-mac",
+ "digest 0.9.0",
+]
+
+[[package]]
+name = "hmac"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
@@ -5498,6 +5558,17 @@ checksum = "a06de3016e9fae57a36fd14dba131fccf49f74b40b7fbdb472f96e361ec71a08"
 dependencies = [
  "autocfg",
  "rawpointer",
+]
+
+[[package]]
+name = "md-5"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b5a279bb9607f9f53c22d496eade00d138d1bdcccd07d74650387cf94942a15"
+dependencies = [
+ "block-buffer 0.9.0",
+ "digest 0.9.0",
+ "opaque-debug",
 ]
 
 [[package]]
@@ -7394,6 +7465,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "pwhash"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "419a3ad8fa9f9d445e69d9b185a24878ae6e6f55c96e4512f4a0e28cd3bc5c56"
+dependencies = [
+ "blowfish",
+ "byteorder",
+ "hmac 0.10.1",
+ "md-5 0.9.1",
+ "rand 0.8.6",
+ "sha-1",
+ "sha2 0.9.9",
+]
+
+[[package]]
 name = "quick-xml"
 version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8437,6 +8523,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha-1"
+version = "0.9.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99cd6713db3cf16b6c84e06321e049a9b9f699826e16096d23bbcc44d15d51a6"
+dependencies = [
+ "block-buffer 0.9.0",
+ "cfg-if",
+ "cpufeatures 0.2.17",
+ "digest 0.9.0",
+ "opaque-debug",
+]
+
+[[package]]
 name = "sha1"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8445,6 +8544,19 @@ dependencies = [
  "cfg-if",
  "cpufeatures 0.2.17",
  "digest 0.10.7",
+]
+
+[[package]]
+name = "sha2"
+version = "0.9.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d58a1e1bf39749807d89cf2d98ac2dfa0ff1cb3faa38fbb64dd88ac8013d800"
+dependencies = [
+ "block-buffer 0.9.0",
+ "cfg-if",
+ "cpufeatures 0.2.17",
+ "digest 0.9.0",
+ "opaque-debug",
 ]
 
 [[package]]

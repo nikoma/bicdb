@@ -433,6 +433,43 @@ pub(crate) fn not_null_constraint_name(table: &str, column: &str) -> String {
     format!("{table}_{column}_not_null")
 }
 
+/// The direct parents whose not-null constraint on `column` `schema`
+/// inherits (constraints declared NO INHERIT are not passed on).
+pub(crate) fn inherited_not_null_parents<'a>(
+    schemas: &'a [TableSchema],
+    schema: &TableSchema,
+    column: &str,
+) -> Vec<&'a TableSchema> {
+    schema
+        .inherits
+        .iter()
+        .filter_map(|parent| schemas.iter().find(|candidate| candidate.name == *parent))
+        .filter(|parent| {
+            parent.columns.iter().any(|candidate| {
+                candidate.name == column
+                    && !candidate.hidden
+                    && (!candidate.nullable || candidate.primary_key)
+            }) && !parent
+                .no_inherit_constraints
+                .contains(&not_null_constraint_name(&parent.name, column))
+        })
+        .collect()
+}
+
+/// The name of the not-null constraint on `column` of `schema`, which is
+/// that of the ancestor it was first declared on.
+pub(crate) fn inherited_not_null_name(
+    schemas: &[TableSchema],
+    schema: &TableSchema,
+    column: &str,
+    depth: usize,
+) -> String {
+    match inherited_not_null_parents(schemas, schema, column).first() {
+        Some(parent) if depth < 64 => inherited_not_null_name(schemas, parent, column, depth + 1),
+        _ => not_null_constraint_name(&schema.name, column),
+    }
+}
+
 pub(crate) fn key_column_usage_row(
     schema: &TableSchema,
     constraint: &str,
@@ -584,6 +621,12 @@ pub(crate) fn pg_class_rows_filtered(
                 .as_ref()
                 .map(|partition_of| partition_of.parent_table.clone())
         })
+        .chain(
+            schemas
+                .iter()
+                .filter(|schema| !schema.inheritance_children.is_empty())
+                .map(|schema| schema.name.clone()),
+        )
         .collect::<BTreeSet<_>>();
     let mut rows = Vec::new();
     let exact_counts = names.is_some() || oids.is_some() || kinds.is_none();
@@ -681,6 +724,9 @@ pub(crate) fn pg_class_rows_filtered(
             .or_else(|| view_owners.get(&table_key).cloned())
             .unwrap_or_else(current_role_name);
         row.insert("relowner".to_string(), SqlValue::Int(role_oid(&owner)));
+        if table_schema.is_some_and(|schema| schema.unlogged) {
+            row.insert("relpersistence".to_string(), SqlValue::String("u".into()));
+        }
         rows.push(row);
     }
 
@@ -1369,6 +1415,17 @@ fn pg_attribute_rows_with_grants(
 ) -> Result<Vec<BTreeMap<String, SqlValue>>> {
     let grants = list_privileges(db)?;
     let mut rows = pg_attribute_rows_for_columns(attrelid, columns);
+    let virtual_columns = load_schema(db, table)?
+        .map(|schema| schema.virtual_generated_columns)
+        .unwrap_or_default();
+    if !virtual_columns.is_empty() {
+        for row in &mut rows {
+            if matches!(row.get("attname"), Some(SqlValue::String(column)) if virtual_columns.contains(column))
+            {
+                row.insert("attgenerated".into(), SqlValue::String("v".into()));
+            }
+        }
+    }
     for row in &mut rows {
         let Some(SqlValue::String(column)) = row.get("attname") else {
             continue;
@@ -4231,7 +4288,9 @@ pub(crate) fn pg_attrdef_rows_for_adrelids(
 
 pub(crate) fn column_attrdef_expression(column: &ColumnSchema) -> Result<Option<SqlValue>> {
     if let Some(expression) = column.generated_expr.as_ref() {
-        return Ok(Some(SqlValue::String(expression.clone())));
+        return Ok(Some(SqlValue::String(pg_generation_expression_text(
+            expression,
+        ))));
     }
     if let Some(sequence) = column
         .default_sequence
@@ -5430,7 +5489,12 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                 continue;
             }
             if !column.nullable || column.primary_key {
-                let name = not_null_constraint_name(&schema.name, &column.name);
+                // An inherited not-null constraint keeps its parent's name.
+                let parents = inherited_not_null_parents(schemas, schema, &column.name);
+                let name = match parents.first() {
+                    Some(parent) => inherited_not_null_name(schemas, parent, &column.name, 0),
+                    None => not_null_constraint_name(&schema.name, &column.name),
+                };
                 if pg_constraint_filter_matches(&name, "n", table_oid, names, types, relation_oids)
                 {
                     rows.push(pg_constraint_row(PgConstraintRow {
@@ -5452,6 +5516,18 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                         conbin: None,
                         convalidated: true,
                     }));
+                    let no_inherit = schema
+                        .no_inherit_constraints
+                        .contains(&not_null_constraint_name(&schema.name, &column.name));
+                    if let Some(row) = rows.last_mut() {
+                        if no_inherit {
+                            row.insert("connoinherit".into(), SqlValue::Bool(true));
+                        }
+                        if !parents.is_empty() {
+                            row.insert("conislocal".into(), SqlValue::Bool(false));
+                            row.insert("coninhcount".into(), SqlValue::Int(parents.len() as i64));
+                        }
+                    }
                 }
                 constraint_slot += 1;
             }
@@ -5522,6 +5598,7 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                         types,
                         relation_oids,
                     ) {
+                        let no_inherit = schema.no_inherit_constraints.contains(name);
                         rows.push(pg_constraint_row(PgConstraintRow {
                             condeferrable: false,
                             condeferred: false,
@@ -5543,6 +5620,33 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                             conbin: Some(expression.clone()),
                             convalidated: *validated,
                         }));
+                        // A CHECK the table took from its parents.
+                        let inherited_from = schema
+                            .inherits
+                            .iter()
+                            .filter(|parent| {
+                                schemas.iter().any(|candidate| {
+                                    candidate.name == **parent
+                                        && !candidate.no_inherit_constraints.contains(name)
+                                        && candidate.constraints.iter().any(|constraint| {
+                                            matches!(constraint, ConstraintSchema::Check { .. })
+                                                && constraint_name(constraint) == name
+                                        })
+                                })
+                            })
+                            .count();
+                        if let Some(row) = rows.last_mut() {
+                            if no_inherit {
+                                row.insert("connoinherit".into(), SqlValue::Bool(true));
+                            }
+                            if inherited_from > 0 {
+                                row.insert("conislocal".into(), SqlValue::Bool(false));
+                                row.insert(
+                                    "coninhcount".into(),
+                                    SqlValue::Int(inherited_from as i64),
+                                );
+                            }
+                        }
                     }
                     constraint_slot += 1;
                 }
@@ -5872,32 +5976,38 @@ fn table_constraint_oids<'a>(
     schemas: &'a [TableSchema],
     relation_oids: &'a BTreeMap<String, i64>,
 ) -> impl Iterator<Item = i64> + 'a {
+    // A schema without a relation OID has no catalog rows to collide with;
+    // treating them all as OID 0 made their slots collide with each other.
     let primary = schemas
         .iter()
+        .filter(|schema| relation_oids.contains_key(&schema.name))
         .filter(|schema| !primary_key_columns_for_schema(schema).is_empty())
         .map(|schema| pg_constraint_oid(*relation_oids.get(&schema.name).unwrap_or(&0), 0));
-    let ordinary = schemas.iter().flat_map(move |schema| {
-        let not_null = schema
-            .columns
-            .iter()
-            .filter(|column| !column.hidden && (!column.nullable || column.primary_key))
-            .count();
-        let stored = schema
-            .constraints
-            .iter()
-            .filter(|constraint| match constraint {
-                ConstraintSchema::Unique { name, columns, .. }
-                | ConstraintSchema::UniqueWithNullPolicy { name, columns, .. } => {
-                    !unique_constraint_is_primary_key(schema, name, columns)
-                }
-                ConstraintSchema::Check { .. }
-                | ConstraintSchema::ForeignKey { .. }
-                | ConstraintSchema::Exclusion { .. } => true,
-            })
-            .count();
-        let oid = *relation_oids.get(&schema.name).unwrap_or(&0);
-        (1..=not_null + stored).map(move |slot| pg_constraint_oid(oid, slot as i64))
-    });
+    let ordinary = schemas
+        .iter()
+        .filter(|schema| relation_oids.contains_key(&schema.name))
+        .flat_map(move |schema| {
+            let not_null = schema
+                .columns
+                .iter()
+                .filter(|column| !column.hidden && (!column.nullable || column.primary_key))
+                .count();
+            let stored = schema
+                .constraints
+                .iter()
+                .filter(|constraint| match constraint {
+                    ConstraintSchema::Unique { name, columns, .. }
+                    | ConstraintSchema::UniqueWithNullPolicy { name, columns, .. } => {
+                        !unique_constraint_is_primary_key(schema, name, columns)
+                    }
+                    ConstraintSchema::Check { .. }
+                    | ConstraintSchema::ForeignKey { .. }
+                    | ConstraintSchema::Exclusion { .. } => true,
+                })
+                .count();
+            let oid = *relation_oids.get(&schema.name).unwrap_or(&0);
+            (1..=not_null + stored).map(move |slot| pg_constraint_oid(oid, slot as i64))
+        });
     primary.chain(ordinary)
 }
 
@@ -5970,7 +6080,12 @@ pub(crate) fn pg_constraint_row(row: PgConstraintRow) -> BTreeMap<String, SqlVal
         ("confmatchtype", SqlValue::String("s".to_string())),
         ("conislocal", SqlValue::Bool(true)),
         ("coninhcount", SqlValue::Int(0)),
-        ("connoinherit", SqlValue::Bool(true)),
+        // CHECK and NOT NULL constraints are inherited unless declared NO
+        // INHERIT; index-backed and foreign-key constraints never are.
+        (
+            "connoinherit",
+            SqlValue::Bool(!matches!(row.contype, "c" | "n")),
+        ),
         ("conperiod", SqlValue::Bool(false)),
         ("conkey", constraint_array_value(&row.conkey)),
         ("confkey", constraint_array_value(&row.confkey)),
@@ -6758,6 +6873,51 @@ pub(crate) fn exclusion_constraint_definition(
     definition
 }
 
+/// A generation expression as PostgreSQL deparses it (`pg_get_expr`,
+/// `information_schema.columns.generation_expression`): every operator
+/// expression in parentheses. Forms whose deparse would need type
+/// information keep their own text.
+pub(crate) fn pg_generation_expression_text(expression: &str) -> String {
+    fn render(expr: &Expr) -> Option<String> {
+        match expr {
+            Expr::Nested(inner) => render(inner),
+            Expr::Identifier(ident) => Some(ident.to_string()),
+            Expr::CompoundIdentifier(parts) => Some(
+                parts
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join("."),
+            ),
+            Expr::Value(value) => match &value.value {
+                sqlparser::ast::Value::Number(number, _)
+                    if number.parse::<i32>().is_ok_and(|number| number >= 0) =>
+                {
+                    Some(number.clone())
+                }
+                _ => None,
+            },
+            Expr::BinaryOp { left, op, right }
+                if matches!(
+                    op,
+                    BinaryOperator::Plus
+                        | BinaryOperator::Minus
+                        | BinaryOperator::Multiply
+                        | BinaryOperator::Divide
+                        | BinaryOperator::Modulo
+                ) =>
+            {
+                Some(format!("({} {op} {})", render(left)?, render(right)?))
+            }
+            _ => None,
+        }
+    }
+    parse_check_expression(expression)
+        .ok()
+        .and_then(|expr| render(&expr))
+        .unwrap_or_else(|| expression.to_string())
+}
+
 pub(crate) fn pg_check_constraint_definition(expression: &str) -> String {
     let trimmed = expression.trim();
     if !check_expression_may_use_in_list_definition(trimmed) {
@@ -7391,6 +7551,19 @@ pub(crate) fn pg_inherits_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlVal
     let table_oids = table_oids(db);
     let mut rows = Vec::new();
     for schema in list_schemas(db)? {
+        let Some(child_oid) = table_oids.get(&schema.name) else {
+            continue;
+        };
+        for (seqno, parent) in schema.inherits.iter().enumerate() {
+            if let Some(parent_oid) = table_oids.get(parent) {
+                rows.push(virtual_row([
+                    ("inhrelid", SqlValue::Int(*child_oid)),
+                    ("inhparent", SqlValue::Int(*parent_oid)),
+                    ("inhseqno", SqlValue::Int(seqno as i64 + 1)),
+                    ("inhdetachpending", SqlValue::Bool(false)),
+                ]));
+            }
+        }
         let Some(partition_of) = schema.partition_of.as_ref() else {
             continue;
         };
@@ -7748,6 +7921,11 @@ pub(crate) fn catalog_view_schema(db: &BicDb, view: ViewSchema) -> Result<TableS
         partitioning: None,
         partition_of: None,
         oracle_partitioning: None,
+        unlogged: false,
+        virtual_generated_columns: Vec::new(),
+        inherits: Vec::new(),
+        inheritance_children: Vec::new(),
+        no_inherit_constraints: Vec::new(),
     })
 }
 pub(crate) fn relation_schemas(db: &BicDb) -> Result<Vec<TableSchema>> {

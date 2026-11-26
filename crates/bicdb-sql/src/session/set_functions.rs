@@ -245,7 +245,11 @@ impl<'db> SqlSession<'db> {
         ))
     }
 
-    fn execute_plpgsql_set_function(&mut self, name: &str, args: &[SqlValue]) -> Result<SqlResult> {
+    pub(crate) fn execute_plpgsql_set_function(
+        &mut self,
+        name: &str,
+        args: &[SqlValue],
+    ) -> Result<SqlResult> {
         self.ensure_routine_execute_privilege(name)?;
         let routine = resolve_routine_cached(self.db_ref(), RoutineKind::Function, name)?
             .ok_or_else(|| SqlError::InvalidSql(format!("function {name} does not exist")))?;

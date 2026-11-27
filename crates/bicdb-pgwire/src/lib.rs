@@ -51,7 +51,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 mod database_options;
 pub use database_options::ServerDatabaseOptions;
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::fs::{self, File};
 use std::hash::{Hash, Hasher};
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
@@ -3045,7 +3045,7 @@ struct Portal {
 
 #[derive(Debug)]
 struct SimpleQueryBatch {
-    statements: std::vec::IntoIter<String>,
+    statements: VecDeque<String>,
     owns_transaction: bool,
 }
 
@@ -3129,12 +3129,8 @@ impl CopyInState {
             .map(CopySpillState::memory_estimate)
             .unwrap_or_default();
         let batch = self.simple_batch.as_ref().map_or(0, |batch| {
-            batch
-                .statements
-                .as_slice()
-                .iter()
-                .map(|sql| sql.capacity() + std::mem::size_of::<String>())
-                .sum::<usize>()
+            batch.statements.capacity() * std::mem::size_of::<String>()
+                + batch.statements.iter().map(String::capacity).sum::<usize>()
         });
         spec + resolved_columns + self.pending.len() + rows + spill + batch
     }
@@ -3578,7 +3574,7 @@ fn execute_server_query(
                     server,
                     state,
                     SimpleQueryBatch {
-                        statements: statements.into_iter(),
+                        statements: statements.into(),
                         owns_transaction,
                     },
                 );
@@ -3755,7 +3751,7 @@ fn execute_simple_query_batch(
 ) -> Result<QueryFlow> {
     let owns_transaction = batch.owns_transaction;
     let result = (|| {
-        while let Some(statement) = batch.statements.next() {
+        while let Some(statement) = batch.statements.pop_front() {
             if matches!(
                 execute_server_query(stream, server, state, &statement)?,
                 QueryFlow::CopyInStarted

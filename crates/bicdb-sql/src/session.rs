@@ -3315,6 +3315,54 @@ impl<'db> SqlSession<'db> {
         }
     }
 
+    /// The columns a COPY of `table` reads or writes, as PostgreSQL's
+    /// `CopyGetAttnums` decides them, and the table's generated columns in
+    /// column order. Without a column list: every column that is not
+    /// generated (stored or virtual), which are computed on COPY FROM and
+    /// left out of COPY TO. A generated column named in the list is refused
+    /// with 42P10. `None` when the relation has no table schema.
+    pub fn copy_target_columns(
+        &self,
+        table: &str,
+        columns: &[String],
+    ) -> Result<Option<(Vec<String>, Vec<String>)>> {
+        let qualified: Vec<String> = table.split('.').map(str::to_string).collect();
+        let table = relation_name_from_parts(&qualified)?;
+        let table = resolve_session_relation_name(self.db_ref(), &table)?;
+        let Some(schema) = load_schema(self.db_ref(), &table)? else {
+            return Ok(None);
+        };
+        let generated = schema
+            .columns
+            .iter()
+            .filter(|column| !column.hidden && column.generated_expr.is_some())
+            .map(|column| column.name.clone())
+            .collect::<Vec<_>>();
+        if columns.is_empty() {
+            let targets = schema
+                .columns
+                .iter()
+                .filter(|column| !column.hidden && column.generated_expr.is_none())
+                .map(|column| column.name.clone())
+                .collect();
+            return Ok(Some((targets, generated)));
+        }
+        for column in columns {
+            if let Some(target) = schema
+                .column(column)
+                .filter(|target| !target.hidden && target.generated_expr.is_some())
+            {
+                return Err(SqlError::coded(
+                    "42P10",
+                    format!("column \"{}\" is a generated column", target.name),
+                    Some("Generated columns cannot be used in COPY.".to_string()),
+                    None,
+                ));
+            }
+        }
+        Ok(Some((columns.to_vec(), generated)))
+    }
+
     pub fn copy_insert_rows(
         &mut self,
         table: &str,

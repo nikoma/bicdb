@@ -954,6 +954,8 @@ impl<'db> SqlSession<'db> {
         let table =
             resolve_session_relation_name_if_exists(self.db_ref(), &relation_name(table_name)?);
         let preauthorized = self.take_view_target_preauthorization(&table);
+        // Consumed here, before the source or any trigger can run another INSERT.
+        let overriding_system_value = super::insert_overriding::take_system_value(&table);
         require_dml_target_exists(self.db_ref(), &table)?;
         // Without the table privilege, column INSERT grants are checked once
         // the target columns are known.
@@ -1051,7 +1053,12 @@ impl<'db> SqlSession<'db> {
                     ensure_schema_column(&table, schema, column)?;
                 }
                 validate_integer_text_literals(schema, &columns, source)?;
-                validate_generated_always_insert(schema, &columns, source)?;
+                validate_generated_always_insert(
+                    schema,
+                    &columns,
+                    source,
+                    overriding_system_value,
+                )?;
             }
             // Stored-form INSERT (typed resident rows phase 3): the template
             // renders the row's JSON text directly and the row is buffered in

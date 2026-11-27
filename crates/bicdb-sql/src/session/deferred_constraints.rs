@@ -487,9 +487,12 @@ impl<'db> SqlSession<'db> {
             .columns
             .iter()
             .filter(|column| !column.hidden && (!column.nullable || column.primary_key))
-            .find(|column| {
-                not_null_constraint_name(&schema.name, &column.name) == name
-                    || not_null_constraint_name(&display, &column.name) == name
+            .find(|column| match &column.attributes.not_null_name {
+                Some(declared) => declared == name,
+                None => {
+                    not_null_constraint_name(&schema.name, &column.name) == name
+                        || not_null_constraint_name(&display, &column.name) == name
+                }
             })
             .map(|column| column.name.clone());
         let Some(column) = column else {

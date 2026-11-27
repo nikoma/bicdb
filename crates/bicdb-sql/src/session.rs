@@ -4,7 +4,9 @@
 //! Moved items were bumped to `pub(crate)` so existing call sites keep
 //! resolving; `lib.rs` re-exports this module via `pub use session::*;`.
 
+mod alter_column_identity;
 mod collation_ddl;
+mod create_schema_elements;
 mod create_table_as;
 pub(crate) mod deferred_constraints;
 mod domain_types;
@@ -13,12 +15,18 @@ mod flashback;
 mod foreign_data_ddl;
 mod index_drop;
 mod inheritance_dml;
+pub(crate) mod insert_overriding;
 mod instead_of_triggers;
 pub(crate) mod materialized_views;
 pub(crate) mod merge;
+pub(crate) mod not_null_constraints;
+mod owned_objects;
 mod partition_indexes;
+mod table_access_method;
 #[cfg(test)]
 mod timestamp_day_indexes;
+mod typed_tables;
+pub(crate) mod view_options;
 pub(crate) use merge::UpdateMatchPolicy;
 pub(crate) mod recycle_bin;
 mod recycle_bin_journal;
@@ -4302,6 +4310,12 @@ impl<'db> SqlSession<'db> {
         if let Some(command) = crate::two_phase::parse_two_phase_command(sql)? {
             return self.execute_two_phase(command);
         }
+        if let Some(result) = self.execute_raw_insert_overriding(sql)? {
+            return Ok(result);
+        }
+        if let Some(result) = self.execute_raw_create_schema_elements(sql)? {
+            return Ok(result);
+        }
         if leading_keyword_bypasses_raw_probes(sql) {
             return self.execute_parsed_sql(sql);
         }
@@ -4390,6 +4404,30 @@ impl<'db> SqlSession<'db> {
         }
 
         if let Some(result) = self.execute_raw_alter_sequence(sql)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.execute_raw_not_null_constraints(sql)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.execute_raw_alter_column_identity(sql)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.execute_raw_table_access_method(sql)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.execute_raw_typed_table(sql)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.execute_raw_view_options(sql)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.execute_raw_owned_objects(sql)? {
             return Ok(result);
         }
 
@@ -4860,6 +4898,38 @@ impl<'db> SqlSession<'db> {
         let mut last_result = None;
         for statement in statements {
             self.cancellation.check()?;
+            if let Some(result) = self.execute_raw_insert_overriding(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_create_schema_elements(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_not_null_constraints(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_alter_column_identity(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_table_access_method(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_typed_table(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_view_options(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_owned_objects(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
             if let Some(result) = self.execute_raw_oracle_collection(&statement)? {
                 last_result = Some(result);
                 continue;

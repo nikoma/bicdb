@@ -4497,6 +4497,7 @@ fn schema_bound_row_materialization_preserves_record_fields() {
             default_expr: None,
             generated_expr: None,
             identity: None,
+            attributes: Default::default(),
         }
     }
 
@@ -4532,6 +4533,7 @@ fn schema_bound_row_materialization_preserves_record_fields() {
         inheritance_children: Vec::new(),
         no_inherit_constraints: Vec::new(),
         temporal_foreign_keys: Vec::new(),
+        of_type: None,
     };
     let record = Record::new("42")
         .with_metadata(json!({
@@ -4586,6 +4588,7 @@ fn select_projection_binds_schema_columns_to_direct_record_slots() {
             default_expr: None,
             generated_expr: None,
             identity: None,
+            attributes: Default::default(),
         }
     }
 
@@ -4617,6 +4620,7 @@ fn select_projection_binds_schema_columns_to_direct_record_slots() {
         inheritance_children: Vec::new(),
         no_inherit_constraints: Vec::new(),
         temporal_foreign_keys: Vec::new(),
+        of_type: None,
     };
     let query = parse_single_query(
         "SELECT row_key AS projected_key, payload_value

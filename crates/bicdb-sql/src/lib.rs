@@ -3619,6 +3619,10 @@ struct TableSchema {
     /// foreign-key machinery never mistakes one for an equality foreign key.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     temporal_foreign_keys: Vec<crate::session::temporal_keys::TemporalForeignKey>,
+    /// `CREATE TABLE ... OF type`: the composite type (`schema`, `name`)
+    /// whose attributes are the table's columns (`pg_class.reloftype`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    of_type: Option<(String, String)>,
 }
 
 /// A logical SQL column projected over an existing BicDB collection for an
@@ -3752,6 +3756,35 @@ struct ColumnSchema {
     generated_expr: Option<String>,
     #[serde(default)]
     identity: Option<String>,
+    /// PostgreSQL column attributes with no effect on how values are stored
+    /// or read (named and NOT VALID not-null constraints, ...).
+    #[serde(default, skip_serializing_if = "ColumnAttributes::is_default")]
+    attributes: ColumnAttributes,
+}
+
+/// Catalog-level attributes of a column (see [`ColumnSchema::attributes`]).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+struct ColumnAttributes {
+    /// The name given to the column's not-null constraint
+    /// (`CONSTRAINT name NOT NULL`); `None` uses the generated
+    /// `<table>_<column>_not_null` (or the inherited parent's name).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    not_null_name: Option<String>,
+    /// The not-null constraint was added `NOT VALID`: new and updated rows
+    /// are checked (`nullable` is false) but existing rows may still hold
+    /// NULL, so nothing may assume the column has no NULLs.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    not_null_not_valid: bool,
+    /// `ALTER COLUMN ... SET STORAGE` (`pg_attribute.attstorage`); `None`
+    /// is the type's default. Catalog-only: values are always stored whole.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    storage: Option<char>,
+}
+
+impl ColumnAttributes {
+    fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -3862,6 +3895,22 @@ fn interval_field_mask(fields: &str) -> u32 {
 }
 
 impl ColumnSchema {
+    /// The column is known to hold no NULL, in existing rows too: a NOT
+    /// VALID not-null constraint checks only new rows, so it does not count.
+    /// Optimizations must use this, not `nullable`.
+    /// The name of this column's not-null constraint in `table` (its
+    /// declared name, else the generated one).
+    pub(crate) fn not_null_name_in(&self, table: &str) -> String {
+        self.attributes
+            .not_null_name
+            .clone()
+            .unwrap_or_else(|| not_null_constraint_name(table, &self.name))
+    }
+
+    pub(crate) fn proven_not_null(&self) -> bool {
+        self.primary_key || (!self.nullable && !self.attributes.not_null_not_valid)
+    }
+
     fn effective_default_expr(&self) -> Option<String> {
         self.default_expr.clone().or_else(|| {
             self.user_type.as_ref().and_then(|user_type| {
@@ -3929,6 +3978,13 @@ impl ColumnSchema {
                 }
             })
             .unwrap_or_else(|| pg_type_align(&self.pg_type))
+    }
+
+    /// `pg_attribute.attstorage`: the column's storage setting.
+    fn attribute_storage(&self) -> char {
+        self.attributes
+            .storage
+            .unwrap_or_else(|| self.type_storage())
     }
 
     fn type_storage(&self) -> char {
@@ -5023,6 +5079,10 @@ struct ViewSchema {
     // `WITH [LOCAL | CASCADED] CHECK OPTION`: "local" or "cascaded".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     check_option: Option<String>,
+    // `pg_class.reloptions` as written (`security_barrier=true`, ...), in
+    // order. The flags above carry their meaning.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    reloptions: Vec<String>,
     // A materialized view's stored rows; `None` on descriptors written
     // before snapshots existed, which keep expanding their query.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -6158,6 +6218,7 @@ pub fn ensure_embedded_table_schema(
         inheritance_children: Vec::new(),
         no_inherit_constraints: Vec::new(),
         temporal_foreign_keys: Vec::new(),
+        of_type: None,
     });
     let mut changed = previous.is_none();
     for requested in columns {
@@ -6212,6 +6273,7 @@ pub fn ensure_embedded_table_schema(
             default_expr: None,
             generated_expr: None,
             identity: None,
+            attributes: Default::default(),
         });
         changed = true;
     }

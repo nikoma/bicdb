@@ -36,8 +36,11 @@ impl UniqueNullPolicy {
             Self::Distinct => (false, None),
             Self::NotDistinct => (true, None),
             Self::AllNullsDistinct => {
-                let nullable =
-                    |name: &String| schema.column(name).is_none_or(|column| column.nullable);
+                let nullable = |name: &String| {
+                    schema
+                        .column(name)
+                        .is_none_or(|column| !column.proven_not_null())
+                };
                 if columns.len() <= 1 || !columns.iter().any(nullable) {
                     return (false, None);
                 }

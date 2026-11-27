@@ -2863,6 +2863,19 @@ impl BicDb {
         self.create_index_online(definition).map(|_| ())
     }
 
+    /// Build a B-tree as part of SQL DDL before the transaction acquires
+    /// row locks. The caller is responsible for undoing catalog publication
+    /// if its transaction rolls back. Snapshot and overlap checks remain in
+    /// the resumable builder.
+    pub fn create_index_for_sql_transaction(
+        &mut self,
+        definition: IndexDefinition,
+        owner: TransactionId,
+    ) -> Result<()> {
+        self.create_index_online_inner(definition, false, Some(owner))
+            .map(|_| ())
+    }
+
     /// Initialize a B-tree for a newly created, empty paged collection. There is
     /// no corpus to rebuild; subsequent transaction commits maintain its entries.
     /// SQL uses this only before the new table has any pending data writes.
@@ -2907,7 +2920,9 @@ impl BicDb {
             None
         };
         let name = definition.name.clone();
-        let result = self.create_index_online_inner(definition, true).map(|_| ());
+        let result = self
+            .create_index_online_inner(definition, true, None)
+            .map(|_| ());
         if decimal && result.is_err() {
             let mut bindings = self.btree_bindings.lock();
             match old_binding {
@@ -2926,13 +2941,14 @@ impl BicDb {
         &mut self,
         definition: IndexDefinition,
     ) -> Result<IndexMaintenanceReport> {
-        self.create_index_online_inner(definition, false)
+        self.create_index_online_inner(definition, false, None)
     }
 
     fn create_index_online_inner(
         &mut self,
         definition: IndexDefinition,
         initialize_empty: bool,
+        owner: Option<TransactionId>,
     ) -> Result<IndexMaintenanceReport> {
         self.ensure_writable("create index online")?;
         validate_index_definition(&definition)?;
@@ -3005,7 +3021,8 @@ impl BicDb {
                 cpu_slots: 1,
                 io_charge_bytes: limits.max_batch_bytes as u64,
             };
-            let initial = self.begin_paged_btree_build(definition.clone(), limits, now)?;
+            let initial =
+                self.begin_paged_btree_build_with_owner(definition.clone(), limits, now, owner)?;
             // The synchronous wrapper advances a logical refill clock while
             // building. A quick reopen can precede that persisted clock even
             // though wall time never went backwards. Resume at the verified
@@ -3017,12 +3034,13 @@ impl BicDb {
                 // The compatibility wrapper runs synchronously; advance the
                 // governor's logical clock by a refill interval between ticks.
                 now = now.saturating_add(1_000);
-                match self.advance_paged_btree_build_governed(
+                match self.advance_paged_btree_build_with_owner(
                     &definition.name,
                     limits,
                     &governor,
                     demand,
                     now,
+                    owner,
                 )? {
                     PagedBTreeBuildAdvance::Progress(_) => {}
                     PagedBTreeBuildAdvance::Complete(state) => break state,

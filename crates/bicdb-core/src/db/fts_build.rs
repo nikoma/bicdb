@@ -137,6 +137,16 @@ impl BicDb {
         limits: PagedBTreeBuildLimits,
         now_ms: u64,
     ) -> Result<PagedBTreeBuildState> {
+        self.begin_paged_btree_build_with_owner(definition, limits, now_ms, None)
+    }
+
+    pub(super) fn begin_paged_btree_build_with_owner(
+        &mut self,
+        definition: IndexDefinition,
+        limits: PagedBTreeBuildLimits,
+        now_ms: u64,
+        owner: Option<TransactionId>,
+    ) -> Result<PagedBTreeBuildState> {
         self.ensure_writable("begin paged B-tree build")?;
         limits.validate()?;
         validate_index_definition(&definition)?;
@@ -160,7 +170,7 @@ impl BicDb {
                 definition.name
             )));
         }
-        self.ensure_no_pending_transactions()?;
+        self.ensure_no_other_pending_transactions(owner)?;
         let root = self.path.join(DEFAULT_PAGED_BTREE_BUILD_DIR);
         if let Ok(metadata) = fs::symlink_metadata(&root) {
             if metadata.file_type().is_symlink() || !metadata.is_dir() {
@@ -308,6 +318,18 @@ impl BicDb {
         demand: ResourceDemand,
         now_ms: u64,
     ) -> Result<PagedBTreeBuildAdvance> {
+        self.advance_paged_btree_build_with_owner(index, limits, governor, demand, now_ms, None)
+    }
+
+    pub(super) fn advance_paged_btree_build_with_owner(
+        &mut self,
+        index: &str,
+        limits: PagedBTreeBuildLimits,
+        governor: &ResourceGovernor,
+        demand: ResourceDemand,
+        now_ms: u64,
+        owner: Option<TransactionId>,
+    ) -> Result<PagedBTreeBuildAdvance> {
         let mut state = self.load_paged_btree_build(index, limits)?;
         if state.phase == PagedBTreeBuildPhase::Complete {
             return Ok(PagedBTreeBuildAdvance::Complete(state));
@@ -323,7 +345,7 @@ impl BicDb {
                 limits.max_batch_bytes, demand.memory_bytes
             )));
         }
-        self.ensure_no_pending_transactions()?;
+        self.ensure_no_other_pending_transactions(owner)?;
         if self.last_commit_seq() != state.starting_commit_seq {
             return Err(BicDbError::Index(
                 "database changed during paged B-tree build; discard and restart the run"

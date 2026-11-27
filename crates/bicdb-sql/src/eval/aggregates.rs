@@ -2757,6 +2757,15 @@ fn projected_expr_pg_type_with_db_uncached(db: &BicDb, expr: &Expr) -> Option<St
     if let Expr::Subquery(query) = expr {
         return scalar_subquery_pg_type(db, query, &|_| false);
     }
+    if let Expr::Function(function) = expr {
+        if let Some(data_type) =
+            crate::user_aggregates::folded_result_type(db, function, &mut |input| {
+                projected_expr_pg_type_with_db(db, input)
+            })
+        {
+            return Some(data_type);
+        }
+    }
     if let Expr::Cast { data_type, .. } | Expr::TypedString(TypedString { data_type, .. }) = expr {
         if let Ok(Some(user_type)) = user_type_column_from_data_type(db, data_type) {
             return Some(user_type.formatted_name());

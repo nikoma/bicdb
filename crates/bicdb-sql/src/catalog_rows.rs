@@ -3485,6 +3485,22 @@ pub(crate) const PG_BUILTIN_PROC_ROWS: &[(i64, &str, i64, i64)] = &[
     (6428, "uuidv4", 2950, 0),
     (6429, "uuidv7", 2950, 0),
     (6430, "uuidv7", 2950, 1),
+    // Text search parser and template methods (pg_ts_parser, pg_ts_template).
+    (3717, "prsd_start", 2281, 2),
+    (3718, "prsd_nexttoken", 2281, 3),
+    (3719, "prsd_end", 2278, 1),
+    (3720, "prsd_headline", 2281, 3),
+    (3721, "prsd_lextype", 2281, 1),
+    (3725, "dsimple_init", 2281, 1),
+    (3726, "dsimple_lexize", 2281, 4),
+    (3728, "dsynonym_init", 2281, 1),
+    (3729, "dsynonym_lexize", 2281, 4),
+    (3731, "dispell_init", 2281, 1),
+    (3732, "dispell_lexize", 2281, 4),
+    (3740, "thesaurus_init", 2281, 1),
+    (3741, "thesaurus_lexize", 2281, 4),
+    (13232, "dsnowball_init", 2281, 1),
+    (13233, "dsnowball_lexize", 2281, 4),
 ];
 
 pub(crate) const PG_PLPGSQL_PROC_ROWS: &[(i64, &str, i64, &str, &str, i64)] = &[

@@ -234,8 +234,27 @@ cases protect the two front ends.
   type, as in PostgreSQL: `tsvector @@ 'a & b'`, `tsquery && 'c'`,
   `tsquery || 'c'`, `'a' <-> 'b'::tsquery` (the phrase operator) and
   `tsvector || 'b:2'`.
-- `ts_lexize(dictionary, token)` works for `simple` and each built-in
-  `<language>_stem` dictionary.
+- `ts_lexize(dictionary, token)` works for every dictionary: the built-in
+  `simple` and `<language>_stem` ones and user dictionaries.
+- Text search objects are catalog objects: `CREATE`/`ALTER`/`DROP TEXT
+  SEARCH PARSER | TEMPLATE | DICTIONARY | CONFIGURATION` (`RENAME TO`,
+  `OWNER TO`, `SET SCHEMA`, dictionary options, `ADD`/`ALTER`/`DROP
+  MAPPING`, `ALTER MAPPING [FOR ...] REPLACE`, `DROP ... CASCADE`), listed
+  in `pg_ts_parser`, `pg_ts_template`, `pg_ts_dict`, `pg_ts_config` and
+  `pg_ts_config_map` with PostgreSQL's built-in objects and oids, resolved
+  by `regconfig`/`regdictionary` and the search path, and transactional.
+  `to_tsvector`, `to_tsquery`, `plainto_tsquery`, `phraseto_tsquery`,
+  `websearch_to_tsquery`, `ts_headline` and `default_text_search_config`
+  use a configuration's mapping per token type: tokens of an unmapped type,
+  or that no mapped dictionary recognizes, are dropped without taking a
+  position, as in PostgreSQL.
+- Dictionaries of the `simple` (`StopWords`, `Accept`), `snowball`
+  (`Language`, `StopWords`) and `synonym` (`Synonyms`, `CaseSensitive`)
+  templates run; option errors are PostgreSQL's. The `tsearch_data` files
+  available are PostgreSQL's stop-word files and `synonym_sample`.
+  Dictionaries of the `ispell` and `thesaurus` templates, and of templates
+  or parsers made of other support functions, fail with 0A000 at CREATE.
+  Built-in objects cannot be dropped (2BP01).
 - The scalar functions `to_tsvector`, `to_tsquery`, `plainto_tsquery`,
   `phraseto_tsquery` and `websearch_to_tsquery` can be used in FROM
   (`FROM to_tsquery('english', 'x') AS q`).
@@ -259,4 +278,4 @@ cases protect the two front ends.
 
 Limits: these fail instead of answering:
 - `ts_debug`, `ts_parse` and `unnest(tsvector)`
-- `CREATE TEXT SEARCH CONFIGURATION/DICTIONARY`
+- Ispell and thesaurus dictionaries (0A000 at CREATE TEXT SEARCH DICTIONARY)

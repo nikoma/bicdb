@@ -16,6 +16,7 @@ mod instead_of_triggers;
 pub(crate) mod materialized_views;
 pub(crate) mod merge;
 mod partition_indexes;
+mod text_search_ddl;
 #[cfg(test)]
 mod timestamp_day_indexes;
 pub(crate) use merge::UpdateMatchPolicy;
@@ -2329,6 +2330,10 @@ pub(crate) enum DdlUndo {
         name: String,
         previous: Option<Box<crate::collations::CollationSchema>>,
     },
+    RestoreTextSearchObject {
+        key: String,
+        previous: Option<Box<crate::text_search_catalog::TsObject>>,
+    },
     RestoreUserCast {
         source: String,
         target: String,
@@ -3642,6 +3647,9 @@ impl<'db> SqlSession<'db> {
     /// small.
     #[inline(never)]
     fn execute_raw_catalog_compat(&mut self, sql: &str) -> Result<Option<SqlResult>> {
+        if let Some(result) = self.execute_raw_text_search_ddl(sql)? {
+            return Ok(Some(result));
+        }
         if let Some(result) = self.execute_raw_create_aggregate(sql)? {
             return Ok(Some(result));
         }
@@ -6194,6 +6202,12 @@ impl<'db> SqlSession<'db> {
             } => match previous {
                 Some(previous) => crate::collations::save_collation(self.db_mut()?, &previous)?,
                 None => crate::collations::delete_collation(self.db_mut()?, &schema_name, &name)?,
+            },
+            DdlUndo::RestoreTextSearchObject { key, previous } => match previous {
+                Some(previous) => {
+                    crate::text_search_catalog::save_ts_object(self.db_mut()?, &previous)?
+                }
+                None => crate::text_search_catalog::delete_ts_object(self.db_mut()?, &key)?,
             },
             DdlUndo::RestoreOperator { id, previous } => match previous {
                 Some(previous) => crate::pg_operators::save_operator(self.db_mut()?, &previous)?,

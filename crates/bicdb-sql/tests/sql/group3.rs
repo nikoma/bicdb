@@ -1835,12 +1835,22 @@ fn postgres_pg_dump_operator_class_family_queries_expose_builtin_entries() {
 fn postgres_pg_dump_text_search_queries_are_supported_without_user_defined_entries() {
     let (_dir, db) = empty_test_db();
     let engine = SqlEngine::new(&db);
+    // The built-in parser, templates, dictionaries and configurations live
+    // in pg_catalog (namespace 11); a fresh database has no others.
+    assert_eq!(
+        engine
+            .execute("SELECT count(*) FROM pg_ts_config WHERE cfgnamespace = 11")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(30)]]
+    );
 
     assert!(engine
         .execute(
             "SELECT tableoid, oid, prsname, prsnamespace, prsstart::oid,
                     prstoken::oid, prsend::oid, prsheadline::oid, prslextype::oid
-             FROM pg_ts_parser",
+             FROM pg_ts_parser
+             WHERE prsnamespace <> 11",
         )
         .unwrap()
         .rows
@@ -1849,7 +1859,8 @@ fn postgres_pg_dump_text_search_queries_are_supported_without_user_defined_entri
         .execute(
             "SELECT tableoid, oid, dictname, dictnamespace, dictowner,
                     dicttemplate, dictinitoption
-             FROM pg_ts_dict",
+             FROM pg_ts_dict
+             WHERE dictnamespace <> 11",
         )
         .unwrap()
         .rows
@@ -1858,7 +1869,8 @@ fn postgres_pg_dump_text_search_queries_are_supported_without_user_defined_entri
         .execute(
             "SELECT tableoid, oid, tmplname, tmplnamespace,
                     tmplinit::oid, tmpllexize::oid
-             FROM pg_ts_template",
+             FROM pg_ts_template
+             WHERE tmplnamespace <> 11",
         )
         .unwrap()
         .rows
@@ -1866,7 +1878,8 @@ fn postgres_pg_dump_text_search_queries_are_supported_without_user_defined_entri
     assert!(engine
         .execute(
             "SELECT tableoid, oid, cfgname, cfgnamespace, cfgowner, cfgparser
-             FROM pg_ts_config",
+             FROM pg_ts_config
+             WHERE cfgnamespace <> 11",
         )
         .unwrap()
         .rows

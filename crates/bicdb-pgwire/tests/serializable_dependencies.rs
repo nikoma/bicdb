@@ -223,6 +223,23 @@ async fn serializable_tracks_row_and_predicate_dependencies() {
         );
         a.batch_execute("ROLLBACK").await.unwrap();
 
+        assert_eq!(
+            outcome(
+                &peer,
+                "CREATE INDEX ssi_scope_value ON ssi_scope(v); SELECT missing FROM ssi_scope",
+            )
+            .await
+            .as_deref(),
+            Some("42703"),
+            "{mode:?}: failed index-creating batch",
+        );
+        let index_absent: bool = peer
+            .query_one("SELECT to_regclass('ssi_scope_value') IS NULL", &[])
+            .await
+            .unwrap()
+            .get(0);
+        assert!(index_absent, "{mode:?}: failed batch left its index behind");
+
         peer.batch_execute(
             "CREATE INDEX ssi_scope_value ON ssi_scope(v); UPDATE ssi_scope SET v=10 WHERE id=1",
         )

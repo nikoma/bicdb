@@ -206,7 +206,7 @@ fn postgres_explain_execute_plans_a_bound_prepared_statement() {
     }
     send_query(
         &mut client,
-        r#"EXPLAIN (COSTS OFF) EXECUTE "Find Value"(2)"#,
+        r#"EXPLAIN (COSTS OFF) /* execute the plan */ EXECUTE "Find Value"(2)"#,
     );
     let plan = read_query_rows(&mut client);
     assert!(

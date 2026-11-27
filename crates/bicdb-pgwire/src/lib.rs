@@ -4294,8 +4294,8 @@ fn execute_sql_prepared_statement_query(
     sql: &str,
     normalized: &str,
 ) -> Result<Option<SqlPreparedStatementResult>> {
-    let explain =
-        normalized.starts_with("explain ") && find_top_level_keyword(sql, "execute").is_some();
+    let explain = normalized.starts_with("explain ")
+        && find_top_level_keyword(normalized, "execute").is_some();
     if !(explain
         || normalized.starts_with("prepare ")
         || normalized.starts_with("execute ")
@@ -4305,6 +4305,8 @@ fn execute_sql_prepared_statement_query(
         return Ok(None);
     }
 
+    let without_comments = explain.then(|| strip_sql_comments(sql));
+    let sql = without_comments.as_deref().unwrap_or(sql);
     let dialect = PostgreSqlDialect {};
     let statements = match Parser::parse_sql(&dialect, sql) {
         Ok(statements) => statements,

@@ -169,3 +169,19 @@ generation expression must be immutable, every read returns the value
 PostgreSQL computes on read. As in PostgreSQL, a virtual column cannot be
 written directly, and indexes referencing one are refused with 0A000.
 
+
+## Typed tables and table access methods
+
+`CREATE TABLE name OF composite_type [( column WITH OPTIONS ..., table_constraint, ... )]`
+creates a table whose columns are the type's attributes (`pg_class.reloftype`
+names the type; using the type needs USAGE on it). As in PostgreSQL the
+columns follow the type: `ADD`, `DROP`, `RENAME COLUMN`, `ALTER COLUMN ...
+TYPE` and `INHERIT` fail with 42809, `ALTER TYPE` on a type that has typed
+tables fails with 2BP01 (propagating the change with `CASCADE` is not
+supported), and `DROP TYPE` needs `CASCADE`, which drops the typed tables.
+
+`CREATE TABLE ... USING heap` (also `CREATE TABLE ... AS` and `CREATE
+MATERIALIZED VIEW`) and `ALTER TABLE ... SET ACCESS METHOD {heap | DEFAULT}`
+are accepted: BicDB has one table storage, reported as `heap` in
+`pg_class.relam`. An index access method fails with 42809 and any other name
+with 42704.

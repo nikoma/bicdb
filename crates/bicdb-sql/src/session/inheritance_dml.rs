@@ -463,6 +463,13 @@ impl<'db> SqlSession<'db> {
         }
         self.require_table_ownership(&parent.name, "ALTER TABLE")?;
         let wrong = |message: String| SqlError::data_exception("42804", message, None);
+        if child.of_type.is_some() {
+            return Err(SqlError::data_exception(
+                "42809",
+                "cannot change inheritance of typed table",
+                None,
+            ));
+        }
         if parent.partitioning.is_some() || child.partitioning.is_some() {
             return Err(SqlError::Unsupported(
                 "ALTER TABLE ... INHERIT with a partitioned table is not supported".to_string(),

@@ -72,6 +72,17 @@ part of deletion. BicDB checks the entire requested role list before deleting
 its first role, so a dependency failure does not partially apply a multi-role
 DROP. Reusing a deleted role name does not restore revoked privileges.
 
+`DROP OWNED BY role [, ...] [CASCADE | RESTRICT]` drops the views, tables,
+sequences, routines, types and schemas the roles own, revokes every privilege
+granted to them, removes default privileges they granted or receive, and
+takes them out of row-security policy role lists (a policy left without a
+role is dropped). `REASSIGN OWNED BY role [, ...] TO new_role` gives the same
+objects to `new_role` (a role that owns a database is refused with 0A000).
+As in PostgreSQL the caller needs the privileges of every role named, and for
+`REASSIGN OWNED` of the new owner too (42501 otherwise); under `RESTRICT` an
+object of another role that depends on a dropped one fails the statement with
+2BP01. Each statement is atomic.
+
 `CREATE SCHEMA ... AUTHORIZATION role` stores the requested owner, including
 the unnamed-schema form. The owner must exist and the caller must be allowed
 to set that role; an authorization clause is not permission to assign arbitrary

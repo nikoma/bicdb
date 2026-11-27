@@ -538,6 +538,7 @@ impl<'db> SqlSession<'db> {
             inheritance_children: Vec::new(),
             no_inherit_constraints: Vec::new(),
             temporal_foreign_keys: Vec::new(),
+            of_type: None,
         };
         partition::validate_new_key(self.db_ref(), &schema)?;
         if schema.partitioning.is_some() {
@@ -639,6 +640,7 @@ impl<'db> SqlSession<'db> {
             inheritance_children: Vec::new(),
             no_inherit_constraints: Vec::new(),
             temporal_foreign_keys: Vec::new(),
+            of_type: None,
         };
         partition::validate_new_key(self.db_ref(), &child)?;
         partition::validate_definition(&child)?;

@@ -787,6 +787,13 @@ pub(crate) fn pg_class_rows_filtered(
         if table_schema.is_some_and(|schema| schema.unlogged) {
             row.insert("relpersistence".to_string(), SqlValue::String("u".into()));
         }
+        if let Some((type_schema, type_name)) =
+            table_schema.and_then(|schema| schema.of_type.as_ref())
+        {
+            if let Some(user_type) = load_user_type(db, type_schema, type_name)? {
+                row.insert("reloftype".to_string(), SqlValue::Int(user_type.oid));
+            }
+        }
         if table_schema
             .is_some_and(|schema| crate::search_path::is_temp_schema(&schema.schema_name))
         {
@@ -8425,6 +8432,7 @@ pub(crate) fn catalog_view_schema(db: &BicDb, view: ViewSchema) -> Result<TableS
         inheritance_children: Vec::new(),
         no_inherit_constraints: Vec::new(),
         temporal_foreign_keys: Vec::new(),
+        of_type: None,
     })
 }
 pub(crate) fn relation_schemas(db: &BicDb) -> Result<Vec<TableSchema>> {

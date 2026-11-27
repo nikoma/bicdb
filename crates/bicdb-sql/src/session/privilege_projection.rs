@@ -811,6 +811,7 @@ impl<'db> SqlSession<'db> {
             inheritance_children: Vec::new(),
             no_inherit_constraints: Vec::new(),
             temporal_foreign_keys: Vec::new(),
+            of_type: None,
         };
         super::not_null_constraints::validate_declared_not_null_names(&schema)?;
         partition::validate_new_key(self.db_ref(), &schema)?;
@@ -1991,6 +1992,16 @@ impl<'db> SqlSession<'db> {
         let (schema_name, name) = user_type_identity(&alter_table.name)?;
         let previous = load_user_type(self.db_ref(), &schema_name, &name)?
             .ok_or_else(|| SqlError::undefined_type(format!("{schema_name}.{name}")))?;
+        // Typed tables follow their type; changing it under them is refused
+        // (propagating with CASCADE is not supported).
+        if !self.typed_tables_of(&previous)?.is_empty() {
+            return Err(SqlError::coded(
+                "2BP01",
+                format!("cannot alter type \"{name}\" because it is the type of a typed table"),
+                None,
+                Some("Use ALTER ... CASCADE to alter the typed tables too.".to_string()),
+            ));
+        }
         let mut updated = previous.clone();
         let UserTypeKind::Composite { attributes, .. } = &mut updated.kind else {
             return Err(SqlError::data_exception(

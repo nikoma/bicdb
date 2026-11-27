@@ -3618,6 +3618,10 @@ struct TableSchema {
     /// foreign-key machinery never mistakes one for an equality foreign key.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     temporal_foreign_keys: Vec<crate::session::temporal_keys::TemporalForeignKey>,
+    /// `CREATE TABLE ... OF type`: the composite type (`schema`, `name`)
+    /// whose attributes are the table's columns (`pg_class.reloftype`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    of_type: Option<(String, String)>,
 }
 
 /// A logical SQL column projected over an existing BicDB collection for an
@@ -6213,6 +6217,7 @@ pub fn ensure_embedded_table_schema(
         inheritance_children: Vec::new(),
         no_inherit_constraints: Vec::new(),
         temporal_foreign_keys: Vec::new(),
+        of_type: None,
     });
     let mut changed = previous.is_none();
     for requested in columns {

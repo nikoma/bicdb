@@ -57,6 +57,35 @@ impl<'db> SqlSession<'db> {
             self.drop_user_type_definition(&dependent, true, dropped)?;
         }
 
+        let typed_tables = self.typed_tables_of(user_type)?;
+        if let Some(table) = typed_tables.first().filter(|_| !cascade) {
+            return Err(SqlError::coded(
+                "2BP01",
+                format!(
+                    "cannot drop type {} because other objects depend on it",
+                    user_type.name
+                ),
+                Some(format!(
+                    "table {} depends on type {}",
+                    relation_name_for_message(&table.name),
+                    user_type.name
+                )),
+                Some("Use DROP ... CASCADE to drop the dependent objects too.".to_string()),
+            ));
+        }
+        for table in typed_tables {
+            crate::statement_context::notice_drop_cascades(&[format!(
+                "table {}",
+                relation_name_for_message(&table.name)
+            )]);
+            let target = catalog_display_name(&table.name)
+                .split('.')
+                .map(super::not_null_constraints::quote)
+                .collect::<Vec<_>>()
+                .join(".");
+            self.execute_inner(&format!("DROP TABLE {target} CASCADE"))?;
+        }
+
         let routines = list_routines(self.db_ref())?
             .into_iter()
             .filter(|routine| routine_depends_on_user_type(routine, user_type))
@@ -1534,6 +1563,7 @@ impl<'db> SqlSession<'db> {
         let mut table = relation_name(&alter_table.name)?;
         let mut schema = load_schema(self.db_ref(), &table)?
             .ok_or_else(|| SqlError::InvalidCollection(table.clone()))?;
+        Self::reject_typed_table_change(&schema, &alter_table.operations)?;
         if schema.row_type_oid.is_none() {
             schema.row_type_oid = Some(schema.row_type_oid());
         }

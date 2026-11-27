@@ -2612,9 +2612,14 @@ pub(crate) fn validate_generated_always_insert(
     schema: &TableSchema,
     columns: &[String],
     source: &Query,
+    overriding_system_value: bool,
 ) -> Result<()> {
     for column in &schema.columns {
         if column.identity.as_deref() != Some("a") && column.generated_expr.is_none() {
+            continue;
+        }
+        // OVERRIDING SYSTEM VALUE admits identity values, not generated ones.
+        if overriding_system_value && column.generated_expr.is_none() {
             continue;
         }
         let Some(position) = columns

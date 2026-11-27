@@ -38,3 +38,4 @@ tmp.ctas_on_commit_delete|BEGIN; CREATE TEMP TABLE tcd(col) ON COMMIT DELETE ROW
 tmp.ctas_on_commit_drop|BEGIN; CREATE TEMP TABLE tcdr(col) ON COMMIT DROP AS SELECT 1; SELECT * FROM tcdr; COMMIT; SELECT count(*) FROM pg_class WHERE relname = 'tcdr'
 tmp.ctas_on_commit_permanent|CREATE TABLE tcp(col) ON COMMIT DELETE ROWS AS SELECT 1
 tmp.rule_on_temp_view|CREATE TEMP TABLE trt(a int); CREATE TEMP VIEW trv AS SELECT * FROM trt; CREATE RULE trv_ins AS ON INSERT TO trv DO INSTEAD INSERT INTO trt VALUES (NEW.a); INSERT INTO trv VALUES (3); SELECT * FROM trt; SELECT count(*) FROM pg_rules WHERE rulename = 'trv_ins'
+tmp.inherited_update|CREATE TEMP TABLE tiu(a int PRIMARY KEY); CREATE TEMP TABLE tiu_1 (CHECK (a >= 0 AND a < 10)) INHERITS (tiu); INSERT INTO tiu_1 VALUES (5); UPDATE tiu SET a = 4 WHERE a = 5; SELECT * FROM tiu_1; DELETE FROM tiu WHERE a = 4; SELECT count(*) FROM tiu

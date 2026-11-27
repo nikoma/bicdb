@@ -240,6 +240,21 @@ fn on_error_ignore_skips_rows_with_bad_values() {
         BAD_ROWS,
     );
     assert!(error_field(&messages, 'M').is_none(), "{messages:?}");
+    // Errors come in input order: a bad value on line 2 is reported, not
+    // the short line 5 after it.
+    let messages = copy_in(
+        &mut client,
+        "COPY e FROM STDIN WITH (on_error stop)",
+        b"1\t{1}\t1\na\t{2}\t2\n3\t{3}\t3\n4\t{4}\t4\n\n",
+    );
+    assert_eq!(
+        error_field(&messages, 'M').as_deref(),
+        Some("invalid input syntax for type integer: \"a\"")
+    );
+    assert_eq!(
+        error_field(&messages, 'W').as_deref(),
+        Some("COPY e, line 2, column n: \"a\"")
+    );
     // Missing data and constraint violations are not data type errors.
     let messages = copy_in(
         &mut client,

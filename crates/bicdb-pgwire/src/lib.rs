@@ -3051,6 +3051,10 @@ struct CopyInState {
     row_marks: Vec<Vec<usize>>,
     /// Rows ON_ERROR IGNORE skipped so far.
     skipped_rows: u64,
+    /// A line that could not be read (missing or extra fields, a bad
+    /// quote, a DEFAULT marker without a default): reported once the rows
+    /// before it are converted, as PostgreSQL reports errors in input order.
+    deferred_error: Option<PgWireError>,
     /// Lines read so far, counted as PostgreSQL does (a header and newlines
     /// inside quoted CSV fields count).
     line_number: u64,
@@ -4111,6 +4115,7 @@ fn begin_copy_in(
         row_lines: Vec::new(),
         row_marks: Vec::new(),
         skipped_rows: 0,
+        deferred_error: None,
         line_number: 0,
         csv_scanned: 0,
         csv_in_quote: false,

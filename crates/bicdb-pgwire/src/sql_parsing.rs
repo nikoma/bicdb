@@ -2527,6 +2527,9 @@ pub(crate) fn finish_transactional_copy_in(
         )?;
     }
     copy.skipped_rows = skipped.get();
+    if let Some(error) = copy.deferred_error.take() {
+        return Err(error);
+    }
     Ok(copied_rows)
 }
 
@@ -2664,6 +2667,24 @@ pub(crate) fn append_copy_insert_statements(
 }
 
 pub(crate) fn copy_in_line(copy: &mut CopyInState, line: &str) -> Result<()> {
+    if copy.deferred_error.is_some() {
+        // The input already failed at an earlier line; the rest is read and
+        // dropped, as PostgreSQL drops it after its error.
+        return Ok(());
+    }
+    match copy_in_line_inner(copy, line) {
+        // A row that cannot be read fails COPY where PostgreSQL reaches it:
+        // after the rows before it were converted, so an earlier row's bad
+        // value is the error reported (see `finish_transactional_copy_in`).
+        Err(error) if !copy.spec.header || copy.header_seen => {
+            copy.deferred_error = Some(error);
+            Ok(())
+        }
+        other => other,
+    }
+}
+
+fn copy_in_line_inner(copy: &mut CopyInState, line: &str) -> Result<()> {
     // A blank record is one field: empty text, or CSV NULL. It is also a
     // real header record when HEADER is set. No input is handled by the
     // pending-buffer boundary, not by discarding a parsed record here.

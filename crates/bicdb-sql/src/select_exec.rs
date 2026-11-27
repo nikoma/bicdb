@@ -3648,6 +3648,33 @@ pub(crate) fn row_extreme_value(
     Ok(best)
 }
 
+/// An aggregate's result under the cast written around it. An array_agg
+/// result cast to text prints as array text: the value alone cannot tell an
+/// array from a JSON array, so the aggregate supplies its element type.
+pub(crate) fn cast_row_aggregate_result(
+    aggregate: &RowAggregate,
+    value: SqlValue,
+    data_type: &DataType,
+) -> Result<SqlValue> {
+    if let RowAggregate::ArrayAgg { expr, .. } = aggregate {
+        let target = pg_type_from_data_type(data_type)
+            .ok()
+            .map(|(pg_type, _)| pg_type);
+        if matches!(
+            target.as_deref(),
+            Some("text" | "varchar" | "bpchar" | "name")
+        ) && matches!(value, SqlValue::Json(_))
+        {
+            let element = projected_expr_pg_type(expr, None)
+                .map(|pg_type| pg_type.trim_end_matches("[]").to_string())
+                .unwrap_or_else(|| "text".to_string());
+            let text = postgres_array_cast_text_value_of(&element, &value, ',')?;
+            return cast_value(SqlValue::String(text), data_type);
+        }
+    }
+    cast_value(value, data_type)
+}
+
 pub(crate) fn row_aggregate_from_expr(expr: &Expr) -> Result<(RowAggregate, Option<&DataType>)> {
     match expr {
         Expr::Function(function) => Ok((RowAggregate::from_function(function)?, None)),

@@ -1636,7 +1636,7 @@ impl<'db> SqlEngine<'db> {
             };
             let value = aggregate.evaluate_bound(self, rows, scope, context)?;
             return match cast {
-                Some(data_type) => cast_value(value, data_type),
+                Some(data_type) => cast_row_aggregate_result(&aggregate, value, data_type),
                 None => Ok(value),
             };
         }
@@ -2446,7 +2446,7 @@ impl<'db> SqlEngine<'db> {
             };
             let value = aggregate.evaluate(self, group, row_columns)?;
             return match cast {
-                Some(data_type) => cast_value(value, data_type),
+                Some(data_type) => cast_row_aggregate_result(&aggregate, value, data_type),
                 None => Ok(value),
             };
         }

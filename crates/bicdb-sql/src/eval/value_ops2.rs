@@ -1889,6 +1889,30 @@ pub(crate) fn postgres_array_cast_text_value_of(
         }
     }
     let text = match element_type {
+        // Elements that are JSON documents: each prints as its own text, an
+        // object or array included, never as a composite or a dimension.
+        "json" | "jsonb" => match value {
+            SqlValue::Json(json) if json.is_array() => format!(
+                "{{{}}}",
+                json.as_array()
+                    .into_iter()
+                    .flatten()
+                    .map(|element| match element {
+                        JsonValue::Null => "NULL".to_string(),
+                        element => {
+                            let text = if element_type == "jsonb" {
+                                crate::jsonb::postgres_jsonb_text(element)
+                            } else {
+                                element.to_string()
+                            };
+                            quote_array_element(&text, delimiter)
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(&delimiter.to_string())
+            ),
+            _ => postgres_array_text_value(value, delimiter)?,
+        },
         "float4" | "real" | "float8" | "double precision" => {
             let float_type = if matches!(element_type, "float4" | "real") {
                 "float4"
@@ -1910,6 +1934,23 @@ pub(crate) fn postgres_array_cast_text_value_of(
         .map(|(lower, length)| format!("[{}:{}]", lower, i64::from(*lower) + length as i64 - 1))
         .collect::<String>();
     Ok(format!("{prefix}={text}"))
+}
+
+/// One array element as array text: quoted when PostgreSQL's array_out
+/// quotes it.
+fn quote_array_element(value: &str, delimiter: char) -> String {
+    let quote = value.is_empty()
+        || value.eq_ignore_ascii_case("null")
+        || value.chars().any(|character| {
+            character == delimiter
+                || matches!(character, '{' | '}' | '"' | '\\')
+                || character.is_whitespace()
+        });
+    if quote {
+        format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
+    } else {
+        value.to_string()
+    }
 }
 
 pub(crate) fn postgres_array_text_value(value: &SqlValue, delimiter: char) -> Result<String> {

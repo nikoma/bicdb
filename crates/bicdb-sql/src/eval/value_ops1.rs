@@ -3769,6 +3769,16 @@ pub(crate) fn eval_compatibility_function_value_with_db(
                         *value = SqlValue::String(render_oid_alias_value(db, pg_type, value)?);
                     }
                 }
+                // An array argument formats as its text, not its storage form.
+                if let Some(element) = pg_type.as_deref().and_then(|name| name.strip_suffix("[]")) {
+                    if !matches!(value, SqlValue::Null | SqlValue::String(_)) {
+                        *value = SqlValue::String(postgres_array_cast_text_value_of(
+                            element,
+                            value,
+                            pg_type_delimiter_with_db(db, element)?,
+                        )?);
+                    }
+                }
             }
         }
         return Ok(Some(eval_pg_format(&rendered)?));

@@ -4,20 +4,29 @@
 //! Moved items were bumped to `pub(crate)` so existing call sites keep
 //! resolving; `lib.rs` re-exports this module via `pub use session::*;`.
 
+mod alter_column_identity;
 mod collation_ddl;
+mod create_schema_elements;
 mod create_table_as;
 pub(crate) mod deferred_constraints;
 mod domain_types;
 pub(crate) mod extension_objects;
 mod flashback;
+mod foreign_data_ddl;
 mod index_drop;
 mod inheritance_dml;
+pub(crate) mod insert_overriding;
 mod instead_of_triggers;
 pub(crate) mod materialized_views;
 pub(crate) mod merge;
+pub(crate) mod not_null_constraints;
+mod owned_objects;
 mod partition_indexes;
+mod table_access_method;
 #[cfg(test)]
 mod timestamp_day_indexes;
+mod typed_tables;
+pub(crate) mod view_options;
 pub(crate) use merge::UpdateMatchPolicy;
 pub(crate) mod recycle_bin;
 mod recycle_bin_journal;
@@ -1232,6 +1241,9 @@ pub struct SqlSession<'db> {
     pub(crate) parent_tx: Option<&'db Transaction>,
     pub(crate) savepoints: Vec<SavepointMark>,
     pub(crate) ddl_undo: Vec<DdlUndo>,
+    /// Relations this transaction created or truncated, in order (COPY
+    /// FREEZE's condition). Carried with the DDL undo log.
+    pub(crate) fresh_relations: Vec<String>,
     pub(crate) settings: SqlSettings,
     pub(crate) session_gucs: Arc<HashMap<String, String>>,
     pub(crate) guc_transaction_start: Option<SqlSessionGucSnapshot>,
@@ -2176,9 +2188,30 @@ fn normalize_select_column_identifier(value: &str) -> String {
 #[derive(Clone, Debug, Default)]
 pub struct SqlSessionDdlUndoLog {
     entries: Vec<DdlUndo>,
+    fresh_relations: Vec<String>,
 }
 
 impl SqlSessionDdlUndoLog {
+    /// How many relations the transaction has created or truncated so far:
+    /// a savepoint remembers it, and rolling back to the savepoint forgets
+    /// the later ones with [`Self::truncate_fresh_relations`].
+    pub fn fresh_relation_count(&self) -> usize {
+        self.fresh_relations.len()
+    }
+
+    pub fn truncate_fresh_relations(&mut self, len: usize) {
+        self.fresh_relations.truncate(len);
+    }
+
+    /// Whether `relation` (a physical name) was created or truncated after
+    /// the first `from` such events: in the current subtransaction when
+    /// `from` is the count the innermost savepoint remembered.
+    pub fn relation_fresh_since(&self, relation: &str, from: usize) -> bool {
+        self.fresh_relations
+            .get(from..)
+            .is_some_and(|fresh| fresh.iter().any(|name| name.eq_ignore_ascii_case(relation)))
+    }
+
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
@@ -2328,6 +2361,9 @@ pub(crate) enum DdlUndo {
         schema_name: String,
         name: String,
         previous: Option<Box<crate::collations::CollationSchema>>,
+    },
+    RestoreForeignCatalog {
+        previous: Box<crate::foreign_data::ForeignCatalog>,
     },
     RestoreUserCast {
         source: String,
@@ -2653,6 +2689,7 @@ impl<'db> SqlSession<'db> {
             parent_tx: None,
             savepoints: Vec::new(),
             ddl_undo: Vec::new(),
+            fresh_relations: Vec::new(),
             settings: SqlSettings::default(),
             session_gucs: Arc::new(HashMap::new()),
             guc_transaction_start: None,
@@ -3053,12 +3090,14 @@ impl<'db> SqlSession<'db> {
 
     pub fn with_ddl_undo_log(mut self, log: SqlSessionDdlUndoLog) -> Self {
         self.ddl_undo = log.entries;
+        self.fresh_relations = log.fresh_relations;
         self
     }
 
     pub fn take_ddl_undo_log(&mut self) -> SqlSessionDdlUndoLog {
         SqlSessionDdlUndoLog {
             entries: std::mem::take(&mut self.ddl_undo),
+            fresh_relations: std::mem::take(&mut self.fresh_relations),
         }
     }
 
@@ -3329,6 +3368,40 @@ impl<'db> SqlSession<'db> {
         self.with_relation_name_scopes(|| self.copy_target_columns_inner(table, columns))
     }
 
+    /// What COPY FROM needs to know about its table beyond the columns: the
+    /// physical name (COPY FREEZE's created-or-truncated check), whether it
+    /// is partitioned, and which of `targets` have a default (the DEFAULT
+    /// marker). `None` when the relation has no table schema.
+    pub fn copy_relation_info(
+        &self,
+        table: &str,
+        targets: &[String],
+    ) -> Result<Option<CopyRelationInfo>> {
+        self.with_relation_name_scopes(|| {
+            let qualified = self.bind_copy_relation(table);
+            let table = relation_name_from_parts(&qualified)?;
+            let table = resolve_session_relation_name(self.db_ref(), &table)?;
+            let Some(schema) = load_schema(self.db_ref(), &table)? else {
+                return Ok(None);
+            };
+            let has_default = targets
+                .iter()
+                .map(|name| {
+                    schema.column(name).is_some_and(|column| {
+                        column.default_sequence.is_some()
+                            || column.default_value.is_some()
+                            || column.effective_default_expr().is_some()
+                    })
+                })
+                .collect();
+            Ok(Some(CopyRelationInfo {
+                partitioned: schema.partitioning.is_some(),
+                physical_name: table,
+                has_default,
+            }))
+        })
+    }
+
     /// Resolve relation names as a statement of this session does: its
     /// search_path and its temporary schema. `execute` enters these scopes
     /// itself; entry points that resolve names without it (COPY) need them
@@ -3433,7 +3506,8 @@ impl<'db> SqlSession<'db> {
         columns: &[String],
         rows: Vec<Vec<Option<String>>>,
     ) -> Result<usize> {
-        self.copy_insert_rows_at_lines(table, columns, rows, None)
+        self.copy_insert_rows_at_lines(table, columns, rows, None, &[], None)
+            .map(|outcome| outcome.inserted)
     }
 
     /// [`Self::copy_insert_rows_reporting`] for COPY FROM input whose rows
@@ -3448,7 +3522,34 @@ impl<'db> SqlSession<'db> {
         lines: &[u64],
     ) -> Result<(usize, Vec<SqlNotice>)> {
         let effects = crate::statement_context::StatementScope::enter();
-        let result = self.copy_insert_rows_at_lines(table, columns, rows, Some(lines));
+        let result = self
+            .copy_insert_rows_at_lines(table, columns, rows, Some(lines), &[], None)
+            .map(|outcome| outcome.inserted);
+        self.finish_reporting(&effects, result)
+    }
+
+    /// COPY FROM rows with the statement's rules: ON_ERROR IGNORE (with
+    /// REJECT_LIMIT and LOG_VERBOSITY), DEFAULT markers (`default_marks`:
+    /// per row, the indexes of the fields that were the marker) and a WHERE
+    /// condition. Returns what was inserted and skipped, and the notices.
+    pub fn copy_insert_rows_with_rules(
+        &mut self,
+        table: &str,
+        columns: &[String],
+        rows: Vec<Vec<Option<String>>>,
+        lines: &[u64],
+        default_marks: &[Vec<usize>],
+        rules: &CopyFromRules,
+    ) -> Result<(CopyFromOutcome, Vec<SqlNotice>)> {
+        let effects = crate::statement_context::StatementScope::enter();
+        let result = self.copy_insert_rows_at_lines(
+            table,
+            columns,
+            rows,
+            Some(lines),
+            default_marks,
+            Some(rules),
+        );
         self.finish_reporting(&effects, result)
     }
 
@@ -3458,7 +3559,9 @@ impl<'db> SqlSession<'db> {
         columns: &[String],
         rows: Vec<Vec<Option<String>>>,
         lines: Option<&[u64]>,
-    ) -> Result<usize> {
+        default_marks: &[Vec<usize>],
+        rules: Option<&CopyFromRules>,
+    ) -> Result<CopyFromOutcome> {
         self.admit_partition_execution()?;
         let _case = oracle::simple_case::Scope::for_db(self.db_ref())?;
         self.require_transaction_write()?;
@@ -3474,7 +3577,7 @@ impl<'db> SqlSession<'db> {
                 )?;
                 let _path_scope = crate::search_path::PathScope::enter(path);
                 let _catalog_scope = crate::search_path::CatalogScope::enter(&session.session_gucs);
-                session.copy_insert_rows_inner(table, columns, rows, lines)
+                session.copy_insert_rows_inner(table, columns, rows, lines, default_marks, rules)
             })
         })
     }
@@ -3485,7 +3588,9 @@ impl<'db> SqlSession<'db> {
         columns: &[String],
         rows: Vec<Vec<Option<String>>>,
         lines: Option<&[u64]>,
-    ) -> Result<usize> {
+        default_marks: &[Vec<usize>],
+        rules: Option<&CopyFromRules>,
+    ) -> Result<CopyFromOutcome> {
         // PostgreSQL's CONTEXT names the relation without its schema.
         let display_relation = table
             .rsplit('.')
@@ -3526,7 +3631,23 @@ impl<'db> SqlSession<'db> {
                 ensure_schema_column(&table, schema, column)?;
             }
         }
-        let defaults = self.bulk_missing_insert_defaults(schema.as_ref(), &columns, rows.len())?;
+        let on_error_ignore = rules.is_some_and(|rules| rules.on_error_ignore);
+        let condition = rules
+            .and_then(|rules| rules.where_clause.as_deref())
+            .map(crate::records::parse_check_expression)
+            .transpose()?;
+        // A skipped or filtered row must not consume sequence values that a
+        // bulk allocation would have taken for it: evaluate defaults row by
+        // row then, as PostgreSQL does.
+        let per_row_defaults = on_error_ignore
+            || condition.is_some()
+            || default_marks.iter().any(|marks| !marks.is_empty());
+        let defaults = if per_row_defaults {
+            Vec::new()
+        } else {
+            self.bulk_missing_insert_defaults(schema.as_ref(), &columns, rows.len())?
+        };
+        let mut skipped = 0_u64;
         let mut records = Vec::with_capacity(rows.len());
         for (idx, row) in rows.into_iter().enumerate() {
             self.cancellation.check()?;
@@ -3539,56 +3660,137 @@ impl<'db> SqlSession<'db> {
             }
             let line = lines.and_then(|lines| lines.get(idx).copied());
             // Kept only to name the refused value in the error's CONTEXT.
-            let original = line.map(|_| row.clone());
-            let mut fields = BTreeMap::new();
-            for (column, value) in columns.iter().zip(row) {
-                // COPY text goes through each column type's input function.
-                let value = match (
-                    value,
-                    schema.as_ref().and_then(|schema| schema.column(column)),
-                ) {
-                    (Some(text), Some(target))
-                        if target.user_type.is_none()
-                            && matches!(target.pg_type.as_str(), "int2" | "int4" | "int8") =>
-                    {
-                        SqlValue::Int(pg_integer_input(&text, &target.pg_type).map_err(
-                            |error| match line {
-                                Some(line) => copy_value_error(
+            let original = (line.is_some() || on_error_ignore).then(|| row.clone());
+            let marks = default_marks.get(idx).map(Vec::as_slice).unwrap_or(&[]);
+            let converted = (|| -> Result<Record> {
+                let mut fields = BTreeMap::new();
+                for (field_index, (column, value)) in columns.iter().zip(row).enumerate() {
+                    if marks.contains(&field_index) {
+                        // The DEFAULT marker: the column default fills it below.
+                        continue;
+                    }
+                    // COPY text goes through each column type's input function.
+                    let value = match (
+                        value,
+                        schema.as_ref().and_then(|schema| schema.column(column)),
+                    ) {
+                        (Some(text), Some(target))
+                            if target.user_type.is_none()
+                                && matches!(target.pg_type.as_str(), "int2" | "int4" | "int8") =>
+                        {
+                            SqlValue::Int(pg_integer_input(&text, &target.pg_type).map_err(
+                                |error| match line {
+                                    Some(line) => copy_value_error(
+                                        error,
+                                        &display_relation,
+                                        line,
+                                        &target.name,
+                                        &text,
+                                    ),
+                                    None => error,
+                                },
+                            )?)
+                        }
+                        (value, _) => value.map(SqlValue::String).unwrap_or(SqlValue::Null),
+                    };
+                    fields.insert(column.clone(), value);
+                }
+                self.apply_bulk_insert_defaults(schema.as_ref(), &defaults, idx, &mut fields)?;
+                record_from_insert_fields_with_db(self.db_ref(), &table, schema.as_ref(), fields)
+                    .map_err(|error| match (line, original.as_deref()) {
+                        (Some(line), Some(original)) => copy_row_conversion_error(
+                            error,
+                            &display_relation,
+                            line,
+                            schema.as_ref(),
+                            &columns,
+                            original,
+                        ),
+                        _ => error,
+                    })
+            })();
+            let record = match converted {
+                Ok(record) => record,
+                Err(error) if on_error_ignore && is_soft_copy_input_error(&error) => {
+                    // ON_ERROR IGNORE: a value its type's input refuses skips
+                    // the row. Anything else still fails the COPY.
+                    skipped += 1;
+                    let rules = rules.expect("ON_ERROR IGNORE comes with rules");
+                    if rules.verbose {
+                        let (column, value) = copy_refused_field(
+                            schema.as_ref(),
+                            &columns,
+                            original.as_deref().unwrap_or(&[]),
+                        );
+                        let line = line.unwrap_or_default();
+                        let message = match value {
+                            Some(value) => format!(
+                                "skipping row due to data type incompatibility at line {line} for column \"{column}\": \"{}\"",
+                                copy_context_printout(&value)
+                            ),
+                            None => format!(
+                                "skipping row due to data type incompatibility at line {line} for column \"{column}\": null input"
+                            ),
+                        };
+                        let _ = crate::statement_context::note_notice(SqlNotice {
+                            sqlstate: "00000".to_string(),
+                            message,
+                            fields: vec![SqlErrorField::Context(format!(
+                                "COPY {display_relation}"
+                            ))],
+                        });
+                    }
+                    if let Some(limit) = rules.reject_limit {
+                        if rules.skipped_before + skipped > limit {
+                            let error = SqlError::coded(
+                                "22P02",
+                                format!(
+                                    "skipped more than REJECT_LIMIT ({limit}) rows due to data type incompatibility"
+                                ),
+                                None,
+                                None,
+                            );
+                            // PostgreSQL's CONTEXT names the row and value.
+                            let (column, value) = copy_refused_field(
+                                schema.as_ref(),
+                                &columns,
+                                original.as_deref().unwrap_or(&[]),
+                            );
+                            return Err(match (line, value) {
+                                (Some(line), Some(value)) => copy_value_error(
                                     error,
                                     &display_relation,
                                     line,
-                                    &target.name,
-                                    &text,
+                                    &column,
+                                    &value,
                                 ),
-                                None => error,
-                            },
-                        )?)
+                                _ => error,
+                            });
+                        }
                     }
-                    (value, _) => value.map(SqlValue::String).unwrap_or(SqlValue::Null),
-                };
-                fields.insert(column.clone(), value);
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            if let Some(condition) = &condition {
+                let row = row_from_record(&table, &display_relation, schema.as_ref(), &record)?;
+                if !matches!(
+                    self.sql_engine().eval_row_truth(&row, condition)?,
+                    Some(true)
+                ) {
+                    continue;
+                }
             }
-            self.apply_bulk_insert_defaults(schema.as_ref(), &defaults, idx, &mut fields)?;
-            records.push(
-                record_from_insert_fields_with_db(self.db_ref(), &table, schema.as_ref(), fields)
-                    .map_err(|error| match (line, original.as_deref()) {
-                    (Some(line), Some(original)) => copy_row_conversion_error(
-                        error,
-                        &display_relation,
-                        line,
-                        schema.as_ref(),
-                        &columns,
-                        original,
-                    ),
-                    _ => error,
-                })?,
-            );
+            records.push(record);
         }
         if let Some(parent) = schema
             .as_ref()
             .filter(|schema| schema.partitioning.is_some())
         {
-            return Ok(self.insert_partition_rows(parent, records, false)?.len());
+            return Ok(CopyFromOutcome {
+                inserted: self.insert_partition_rows(parent, records, false)?.len(),
+                skipped,
+            });
         }
         // BEFORE triggers can replace or suppress rows. Validate the rows
         // actually being stored, just as INSERT does, rather than allowing
@@ -3634,7 +3836,10 @@ impl<'db> SqlSession<'db> {
         let count = records.len();
         self.insert_session_records(&table, records.clone())?;
         self.fire_after_insert_triggers(&table, schema.as_ref(), &records)?;
-        Ok(count)
+        Ok(CopyFromOutcome {
+            inserted: count,
+            skipped,
+        })
     }
 
     /// CREATE/DROP AGGREGATE and CAST, ALTER/DROP ROUTINE, statistics
@@ -3661,6 +3866,9 @@ impl<'db> SqlSession<'db> {
             return Ok(Some(result));
         }
         if let Some(result) = self.execute_raw_drop_cast(sql)? {
+            return Ok(Some(result));
+        }
+        if let Some(result) = self.execute_raw_foreign_data(sql)? {
             return Ok(Some(result));
         }
         Ok(None)
@@ -4102,6 +4310,12 @@ impl<'db> SqlSession<'db> {
         if let Some(command) = crate::two_phase::parse_two_phase_command(sql)? {
             return self.execute_two_phase(command);
         }
+        if let Some(result) = self.execute_raw_insert_overriding(sql)? {
+            return Ok(result);
+        }
+        if let Some(result) = self.execute_raw_create_schema_elements(sql)? {
+            return Ok(result);
+        }
         if leading_keyword_bypasses_raw_probes(sql) {
             return self.execute_parsed_sql(sql);
         }
@@ -4190,6 +4404,30 @@ impl<'db> SqlSession<'db> {
         }
 
         if let Some(result) = self.execute_raw_alter_sequence(sql)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.execute_raw_not_null_constraints(sql)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.execute_raw_alter_column_identity(sql)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.execute_raw_table_access_method(sql)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.execute_raw_typed_table(sql)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.execute_raw_view_options(sql)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.execute_raw_owned_objects(sql)? {
             return Ok(result);
         }
 
@@ -4660,6 +4898,38 @@ impl<'db> SqlSession<'db> {
         let mut last_result = None;
         for statement in statements {
             self.cancellation.check()?;
+            if let Some(result) = self.execute_raw_insert_overriding(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_create_schema_elements(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_not_null_constraints(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_alter_column_identity(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_table_access_method(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_typed_table(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_view_options(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_owned_objects(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
             if let Some(result) = self.execute_raw_oracle_collection(&statement)? {
                 last_result = Some(result);
                 continue;
@@ -5168,6 +5438,7 @@ impl<'db> SqlSession<'db> {
         }
         self.db_mut()?.create_collection(name)?;
         if self.tx.is_some() && !existed {
+            self.fresh_relations.push(name.to_string());
             self.ddl_undo.push(DdlUndo::DropCollection {
                 name: name.to_string(),
                 creation_intent: None,
@@ -6212,6 +6483,9 @@ impl<'db> SqlSession<'db> {
                 Some(previous) => crate::collations::save_collation(self.db_mut()?, &previous)?,
                 None => crate::collations::delete_collation(self.db_mut()?, &schema_name, &name)?,
             },
+            DdlUndo::RestoreForeignCatalog { previous } => {
+                crate::foreign_data::save_foreign_catalog(self.db_mut()?, &previous)?;
+            }
             DdlUndo::RestoreOperator { id, previous } => match previous {
                 Some(previous) => crate::pg_operators::save_operator(self.db_mut()?, &previous)?,
                 None => crate::pg_operators::delete_operator(self.db_mut()?, &id)?,
@@ -7178,6 +7452,9 @@ impl<'db> SqlSession<'db> {
                 self.execute_relation_comment(&statement)?;
                 continue;
             }
+            if self.execute_foreign_data_comment(&statement)?.is_some() {
+                continue;
+            }
             if !normalized.starts_with("comment on type ")
                 && !normalized.starts_with("comment on domain ")
             {
@@ -8135,4 +8412,79 @@ fn copy_row_conversion_error(
         }
     }
     error
+}
+
+/// COPY FROM's statement rules (see `SqlSession::copy_insert_rows_with_rules`).
+#[derive(Clone, Debug, Default)]
+pub struct CopyFromRules {
+    /// ON_ERROR IGNORE: skip rows a column type's input refuses.
+    pub on_error_ignore: bool,
+    /// LOG_VERBOSITY VERBOSE: one NOTICE per skipped row.
+    pub verbose: bool,
+    /// REJECT_LIMIT, counted over the whole COPY.
+    pub reject_limit: Option<u64>,
+    /// Rows earlier batches of the same COPY skipped.
+    pub skipped_before: u64,
+    /// `WHERE <condition>` over the input row.
+    pub where_clause: Option<String>,
+}
+
+/// What one batch of COPY FROM rows did.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CopyFromOutcome {
+    pub inserted: usize,
+    pub skipped: u64,
+}
+
+/// See `SqlSession::copy_relation_info`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CopyRelationInfo {
+    pub physical_name: String,
+    pub partitioned: bool,
+    pub has_default: Vec<bool>,
+}
+
+/// An error ON_ERROR IGNORE skips: a type's input function refusing a value
+/// (PostgreSQL's soft errors), including a domain's constraints. Others
+/// (missing defaults, internal failures) still fail the COPY.
+fn is_soft_copy_input_error(error: &SqlError) -> bool {
+    let sqlstate = error.sqlstate();
+    sqlstate.starts_with("22") || matches!(sqlstate, "23502" | "23514")
+}
+
+/// The first field of a skipped row its column's input refuses, for the
+/// verbose NOTICE: (column, the value or `None` for NULL input).
+fn copy_refused_field(
+    schema: Option<&TableSchema>,
+    columns: &[String],
+    row: &[Option<String>],
+) -> (String, Option<String>) {
+    if let Some(schema) = schema {
+        for (column, value) in columns.iter().zip(row) {
+            let Some(target) = schema.column(column) else {
+                continue;
+            };
+            let input = match value {
+                Some(text)
+                    if target.user_type.is_none()
+                        && matches!(target.pg_type.as_str(), "int2" | "int4" | "int8") =>
+                {
+                    pg_integer_input(text, &target.pg_type).map(SqlValue::Int)
+                }
+                Some(text) => Ok(SqlValue::String(text.clone())),
+                None => Ok(SqlValue::Null),
+            };
+            let refused = match input {
+                Err(_) => true,
+                Ok(value) => cast_value_to_column_type(value, target).is_err(),
+            };
+            if refused {
+                return (target.name.clone(), value.clone());
+            }
+        }
+    }
+    (
+        columns.first().cloned().unwrap_or_default(),
+        row.first().cloned().flatten(),
+    )
 }

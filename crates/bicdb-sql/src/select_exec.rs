@@ -3712,6 +3712,7 @@ pub(crate) fn is_virtual_table(table: &str) -> bool {
     if oracle::storage_catalog::is_relation(table)
         || oracle::partitioning::is_relation(table)
         || oracle::invalid_routines::is_relation(table)
+        || crate::foreign_data::is_catalog_relation(table)
     {
         return true;
     }
@@ -3919,6 +3920,18 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
     if oracle::partitioning::is_relation(table) {
         return oracle::partitioning::rows(db, table);
     }
+    if crate::foreign_data::is_catalog_relation(table) {
+        // Without a session identity: as a role that holds nothing. Session
+        // reads pass the reader (`session_virtual_rows_with_selection`).
+        let mut rows = crate::foreign_data::catalog_rows(db, table, None)?;
+        if let Some(tableoid) = virtual_catalog_table_oid(table) {
+            for row in &mut rows {
+                row.entry("tableoid".to_string())
+                    .or_insert(SqlValue::Int(tableoid));
+            }
+        }
+        return Ok(rows);
+    }
     let table = table.strip_prefix("pg_catalog.").unwrap_or(table);
     let mut rows = match table {
         "information_schema.schemata" => information_schema_schemata(db),
@@ -4030,6 +4043,9 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
                     }
                 }
             }
+            for (objoid, classoid, description) in crate::foreign_data::description_rows(db)? {
+                rows.push(description_row(objoid, classoid, 0, description));
+            }
             Ok(rows)
         }
         "pg_seclabel" | "pg_shseclabel" | "pg_seclabels" => Ok(Vec::new()),
@@ -4060,10 +4076,6 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
         "pg_ts_config" | "pg_ts_config_map" | "pg_ts_dict" | "pg_ts_parser" | "pg_ts_template" => {
             Ok(Vec::new())
         }
-        "pg_foreign_data_wrapper"
-        | "pg_foreign_server"
-        | "pg_foreign_table"
-        | "pg_user_mappings" => Ok(Vec::new()),
         "pg_default_acl" => pg_default_acl_rows(db),
         "pg_tablespace" => Ok(pg_tablespace_rows()),
         "pg_auth_members" => pg_auth_members_rows(db),
@@ -4165,6 +4177,9 @@ fn pg_default_acl_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
 }
 
 pub(crate) fn virtual_table_columns(table: &str) -> Option<Vec<String>> {
+    if let Some(columns) = crate::foreign_data::catalog_columns(table) {
+        return Some(columns);
+    }
     if let Some(columns) = oracle::invalid_routines::columns(table) {
         return Some(columns.iter().map(|(name, _)| name.to_string()).collect());
     }
@@ -5215,6 +5230,9 @@ pub(crate) fn virtual_table_columns(table: &str) -> Option<Vec<String>> {
 }
 
 pub(crate) fn virtual_table_column_types(table: &str) -> Option<Vec<(String, Option<String>)>> {
+    if let Some(columns) = crate::foreign_data::catalog_column_types(table) {
+        return Some(columns);
+    }
     if let Some(columns) = oracle::invalid_routines::columns(table) {
         return Some(
             columns
@@ -7841,7 +7859,7 @@ pub(crate) fn information_schema_table_constraints(
             if !column.nullable || column.primary_key {
                 rows.push(table_constraint_row(
                     &schema,
-                    &not_null_constraint_name(&schema.name, &column.name),
+                    &column.not_null_name_in(&schema.name),
                     "CHECK",
                 ));
             }
@@ -7975,7 +7993,7 @@ pub(crate) fn information_schema_constraint_column_usage(
             if !column.nullable || column.primary_key {
                 rows.push(constraint_column_usage_row(
                     &schema,
-                    &not_null_constraint_name(&schema.name, &column.name),
+                    &column.not_null_name_in(&schema.name),
                     &column.name,
                 ));
             }

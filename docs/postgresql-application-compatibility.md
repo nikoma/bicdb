@@ -239,18 +239,34 @@ severity and SQLSTATE:
   routine is refused. See [server-side COPY](server-side-copy.md).
 - COPY leaves generated columns (stored and virtual) out of its default column
   list: COPY FROM computes them and COPY TO does not write them. Naming one in
-  the column list is refused before COPY starts (42P10), as is `COPY ... FROM
-  ... WHERE` (42P10 when the condition reads a generated column, otherwise
-  0A000: the filter is not implemented).
+  the column list is refused before COPY starts (42P10), and so is a
+  `COPY ... FROM ... WHERE` condition that reads one.
 - COPY options are read in both PostgreSQL syntaxes (the legacy list after
   `WITH`, `USING DELIMITERS`, and the parenthesized list) and checked as
   PostgreSQL checks them, with its errors and option positions. DELIMITER,
   NULL, QUOTE, ESCAPE, FORCE_QUOTE, FORCE_NOT_NULL, FORCE_NULL and HEADER
   [MATCH] work for text and CSV in both directions, with PostgreSQL's
   backslash escapes in text. ENCODING takes UTF8 and its aliases, SQL_ASCII,
-  and LATIN1 (converted both ways). FREEZE (true), DEFAULT, ON_ERROR IGNORE
-  (and REJECT_LIMIT) and other encodings are refused with 0A000 before COPY
-  starts; no option is accepted and ignored.
+  and LATIN1 (converted both ways); other encodings are refused with 0A000
+  before COPY starts. No option is accepted and ignored.
+- COPY FROM rules, as in PostgreSQL:
+  - `ON_ERROR IGNORE` skips rows a column type's input refuses (domain
+    constraints included) and reports `N rows were skipped due to data type
+    incompatibility`; `LOG_VERBOSITY VERBOSE` adds one NOTICE per skipped
+    row, `SILENT` none; `REJECT_LIMIT n` fails the COPY once more than n rows
+    were skipped. Missing or extra fields and table constraint violations
+    still fail the COPY.
+  - `DEFAULT 'marker'`: a field equal to the marker takes the column default
+    (22P04 "unexpected default marker in COPY data" for a column without
+    one).
+  - `COPY ... FROM ... WHERE condition` loads only the rows for which the
+    condition is true. Subqueries, aggregates, window and set-returning
+    functions are refused as in PostgreSQL.
+  - `FREEZE` is accepted only where PostgreSQL accepts it: in a transaction
+    block, on a table the current subtransaction created or truncated (55000
+    otherwise; 0A000 for a partitioned table). BicDB has no separate frozen
+    row visibility, so where it is accepted it changes nothing: the rows are
+    visible exactly as other rows the transaction wrote.
 
 ## Statistics aggregates, partitions and lock privileges (2026-11)
 
@@ -462,3 +478,27 @@ PostgreSQL layout.
 - Not yet: domains, types and operators in `pg_temp` (refused: "schema
   pg_temp does not exist"), and a temporary function named like an existing
   permanent one (refused as already existing).
+
+## Foreign-data wrappers, servers and user mappings (2026-11)
+
+`CREATE / ALTER / DROP FOREIGN DATA WRAPPER`, `SERVER` and `USER MAPPING`,
+`GRANT / REVOKE USAGE ON FOREIGN DATA WRAPPER | FOREIGN SERVER` (with
+`WITH GRANT OPTION`, `GRANT OPTION FOR` and `CASCADE`), `COMMENT ON` both and
+`IMPORT FOREIGN SCHEMA` follow PostgreSQL 18.4: generic `OPTIONS` lists with
+`ADD` / `SET` / `DROP`, the built-in `postgresql_fdw_validator` and its
+`invalid option` hints, superuser-only wrappers, owner and USAGE checks for
+servers and mappings, `DROP ... CASCADE` dependencies and their notices, and
+transactional rollback. The catalogs `pg_foreign_data_wrapper`,
+`pg_foreign_server`, `pg_user_mapping` (superusers only), `pg_user_mappings`
+(options shown only to the roles PostgreSQL shows them to),
+`pg_options_to_table()`, `has_foreign_data_wrapper_privilege()`,
+`has_server_privilege()` and the information schema views
+`foreign_data_wrappers`, `foreign_data_wrapper_options`, `foreign_servers`,
+`foreign_server_options`, `user_mappings` and `user_mapping_options` report
+them. A role named by any of these objects cannot be dropped.
+
+BicDB has no wrapper handlers: `HANDLER` naming a function is refused
+(`0A000`, or PostgreSQL's errors for a missing or wrongly typed function),
+user-defined validators are refused with `0A000`, and `IMPORT FOREIGN SCHEMA`
+fails with `foreign-data wrapper "..." has no handler`. Foreign tables are
+not supported yet.

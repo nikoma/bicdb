@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-cell-grant"
-version = "1.0.559"
+version = "1.0.563"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -15,7 +15,7 @@ categories = ["database-implementations"]
 include = ["/README.md", "/src/**", "/Cargo.toml", "/LICENSE", "/NOTICE", "/THIRD_PARTY_NOTICES.md"]
 
 [dependencies]
-bicdb-core = { path = "../bicdb-core", version = "=1.0.559", default-features = false, features = ["compression"] }
+bicdb-core = { path = "../bicdb-core", version = "=1.0.563", default-features = false, features = ["compression"] }
 chacha20poly1305.workspace = true
 ciborium.workspace = true
 ed25519-dalek.workspace = true

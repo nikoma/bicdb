@@ -232,6 +232,8 @@ pub(crate) fn alter_table_alter_column(
                 }
             }
             schema.columns[idx].nullable = false;
+            // Every row was checked: a NOT VALID constraint is now valid.
+            schema.columns[idx].attributes.not_null_not_valid = false;
             save_schema(rows.db, schema)
         }
         AlterColumnOperation::DropNotNull => {
@@ -242,6 +244,10 @@ pub(crate) fn alter_table_alter_column(
                 ));
             }
             schema.columns[idx].nullable = true;
+            schema.columns[idx].attributes.not_null_name = None;
+            schema.columns[idx].attributes.not_null_not_valid = false;
+            let key = not_null_constraint_name(&schema.name, &schema.columns[idx].name);
+            schema.no_inherit_constraints.retain(|name| *name != key);
             save_schema(rows.db, schema)
         }
         AlterColumnOperation::SetDefault { .. } | AlterColumnOperation::DropDefault => {
@@ -647,6 +653,29 @@ pub(crate) fn apply_primary_key_constraint(
         validated: !not_valid,
     };
     validate_constraint_columns(db, table, schema, &primary_constraint)?;
+    // A NOT VALID not-null constraint leaves rows unchecked; PostgreSQL
+    // refuses to build a primary key over it.
+    if let Some(column) = schema
+        .columns
+        .iter()
+        .find(|column| columns.contains(&column.name) && column.attributes.not_null_not_valid)
+    {
+        let display = relation_name_for_message(table);
+        return Err(SqlError::with_detail_fields(
+            SqlError::data_exception_public(
+                "55000",
+                format!("cannot create primary key on column \"{}\"", column.name),
+                None,
+            ),
+            Some(format!(
+                "The constraint \"{}\" on column \"{}\" of table \"{display}\", marked NOT VALID, is incompatible with a primary key.",
+                column.not_null_name_in(table),
+                column.name
+            )),
+            Some("You might need to validate it using ALTER TABLE ... VALIDATE CONSTRAINT.".to_string()),
+            None,
+        ));
+    }
     if !not_valid {
         validate_existing_primary_key(db, table, schema, &name, &columns)?;
     }
@@ -1846,6 +1875,24 @@ pub(crate) fn column_schema_from_def(db: &BicDb, column: &ColumnDef) -> Result<C
             .options
             .iter()
             .any(|option| matches!(option.option, ColumnOption::NotNull));
+    // `CONSTRAINT name NOT NULL` names the column's not-null constraint;
+    // two different names for it conflict.
+    let mut not_null_name: Option<String> = None;
+    for option in &column.options {
+        if let (ColumnOption::NotNull, Some(name)) = (&option.option, &option.name) {
+            let name = ident_value(name);
+            match &not_null_name {
+                Some(first) if *first != name => {
+                    return Err(SqlError::data_exception_public(
+                        "42601",
+                        format!("conflicting not-null constraint names \"{first}\" and \"{name}\""),
+                        None,
+                    ));
+                }
+                _ => not_null_name = Some(name),
+            }
+        }
+    }
     let collation = column
         .options
         .iter()
@@ -1921,6 +1968,10 @@ pub(crate) fn column_schema_from_def(db: &BicDb, column: &ColumnDef) -> Result<C
         default_expr,
         generated_expr,
         identity: None,
+        attributes: ColumnAttributes {
+            not_null_name,
+            ..ColumnAttributes::default()
+        },
     })
 }
 
@@ -2033,6 +2084,7 @@ pub(crate) fn text_column_schema(name: String) -> ColumnSchema {
         default_expr: None,
         generated_expr: None,
         identity: None,
+        attributes: Default::default(),
     }
 }
 
@@ -2560,9 +2612,14 @@ pub(crate) fn validate_generated_always_insert(
     schema: &TableSchema,
     columns: &[String],
     source: &Query,
+    overriding_system_value: bool,
 ) -> Result<()> {
     for column in &schema.columns {
         if column.identity.as_deref() != Some("a") && column.generated_expr.is_none() {
+            continue;
+        }
+        // OVERRIDING SYSTEM VALUE admits identity values, not generated ones.
+        if overriding_system_value && column.generated_expr.is_none() {
             continue;
         }
         let Some(position) = columns

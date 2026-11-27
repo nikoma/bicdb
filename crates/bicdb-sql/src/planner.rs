@@ -1444,7 +1444,7 @@ impl InsertValuesTemplate {
                     ),
                     Some(table.to_string()),
                     Some(column.name.clone()),
-                    Some(not_null_constraint_name(table, &column.name)),
+                    Some(column.not_null_name_in(table)),
                 )
                 .with_error_detail(self.failing_row_detail(table, cells)));
             }
@@ -1490,7 +1490,7 @@ impl InsertValuesTemplate {
                     ),
                     Some(table.to_string()),
                     Some(column.name.clone()),
-                    Some(not_null_constraint_name(table, &column.name)),
+                    Some(column.not_null_name_in(table)),
                 )
                 .with_error_detail(self.failing_row_detail(table, cells)));
             }

@@ -113,7 +113,7 @@ fn a_batch_reports_every_statements_notices() {
     let notices = result
         .notices
         .iter()
-        .map(|notice| format!("{notice:?}"))
+        .map(|notice| notice.message.as_str())
         .collect::<Vec<_>>()
         .join("\n");
     assert!(notices.contains("gone1"), "{notices}");

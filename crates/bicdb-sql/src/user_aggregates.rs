@@ -568,13 +568,21 @@ pub(crate) fn rewrite_aggregate_call(db: &BicDb, function: &Function) -> Result<
                 "aggregate {name} takes positional arguments"
             )));
         }
+        // One marker per input row supplies the cardinality for a star fold.
+        let arg = if star {
+            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::value(
+                sqlparser::ast::Value::Boolean(true),
+            )))
+        } else {
+            arg.clone()
+        };
         let collected = Function {
-            name: ObjectName::from(vec![Ident::new(if star { "count" } else { "array_agg" })]),
+            name: ObjectName::from(vec![Ident::new("array_agg")]),
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(sqlparser::ast::FunctionArgumentList {
                 duplicate_treatment: list.duplicate_treatment,
-                args: vec![arg.clone()],
+                args: vec![arg],
                 clauses: list.clauses.clone(),
             }),
             filter: function.filter.clone(),
@@ -702,21 +710,11 @@ pub(crate) fn run_fold(
     call: &mut dyn FnMut(&str, &[SqlValue], &[Option<String>]) -> Result<Option<SqlValue>>,
 ) -> Result<SqlValue> {
     let def = &plan.def;
-    let (inputs, rows) = if def.args.is_empty() {
-        let rows = args
-            .get(1)
-            .and_then(sql_value_i64)
-            .and_then(|rows| usize::try_from(rows).ok())
-            .ok_or_else(|| SqlError::InvalidSql("invalid aggregate row count".into()))?;
-        (Vec::new(), rows)
-    } else {
-        let inputs = args[1..]
-            .iter()
-            .map(collected_values)
-            .collect::<Result<Vec<_>>>()?;
-        let rows = inputs.first().map_or(0, Vec::len);
-        (inputs, rows)
-    };
+    let inputs = args[1..]
+        .iter()
+        .map(collected_values)
+        .collect::<Result<Vec<_>>>()?;
+    let rows = inputs.first().map_or(0, Vec::len);
     let stype = def.stype.pg_type.clone();
     let mut state = match &def.initcond {
         Some(text) => cast_value_to_pg_type(SqlValue::String(text.clone()), &stype)?,
@@ -781,7 +779,7 @@ fn invoke(
         "int2mul" | "int4mul" | "int8mul" | "float4mul" | "float8mul" | "numeric_mul" => {
             BinaryOperator::Multiply
         }
-        "int8inc" | "int8inc_any" => {
+        "int8inc" | "int8inc_any" if !args.is_empty() => {
             return eval_arithmetic_value(args[0].clone(), &BinaryOperator::Plus, SqlValue::Int(1));
         }
         "textcat" => BinaryOperator::StringConcat,
@@ -961,6 +959,7 @@ mod tests {
     fn create_and_drop_aggregate_parse() {
         let (replace, def) = parse_create_aggregate(
             "CREATE AGGREGATE sumsq(int) (sfunc = add_sq, stype = int, initcond = '0', finalfunc = fin)",
+            false,
         )
         .unwrap()
         .unwrap();
@@ -974,6 +973,7 @@ mod tests {
         assert_eq!(def.finalfunc.as_deref(), Some("fin"));
         let (_, def) = parse_create_aggregate(
             "create or replace aggregate a2(x float8, y text) (SFUNC = f, STYPE = float8[], INITCOND = '{0,0}')",
+            false,
         )
         .unwrap()
         .unwrap();
@@ -987,7 +987,7 @@ mod tests {
         assert!(if_exists);
         assert_eq!(targets.len(), 2);
         assert!(
-            parse_create_aggregate("CREATE AGGREGATE x(int) (stype = int)")
+            parse_create_aggregate("CREATE AGGREGATE x(int) (stype = int)", false)
                 .unwrap_err()
                 .sqlstate()
                 .eq("42P13")

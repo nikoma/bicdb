@@ -2161,6 +2161,8 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
                 | "has_database_privilege"
                 | "has_language_privilege"
                 | "has_tablespace_privilege"
+                | "has_foreign_data_wrapper_privilege"
+                | "has_server_privilege"
                 | "has_parameter_privilege"
         ) {
             return Some("bool".to_string());

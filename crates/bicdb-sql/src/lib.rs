@@ -229,6 +229,7 @@ pub use type_codec::{
 // from this file. `pub use` glob re-exports keep every existing path resolving.
 mod collations;
 mod fetch_ties;
+mod foreign_data;
 mod grouping_sets;
 mod join_budget;
 mod rows_from;

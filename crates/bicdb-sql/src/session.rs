@@ -10,6 +10,7 @@ pub(crate) mod deferred_constraints;
 mod domain_types;
 pub(crate) mod extension_objects;
 mod flashback;
+mod foreign_data_ddl;
 mod index_drop;
 mod inheritance_dml;
 mod instead_of_triggers;
@@ -2353,6 +2354,9 @@ pub(crate) enum DdlUndo {
         name: String,
         previous: Option<Box<crate::collations::CollationSchema>>,
     },
+    RestoreForeignCatalog {
+        previous: Box<crate::foreign_data::ForeignCatalog>,
+    },
     RestoreUserCast {
         source: String,
         target: String,
@@ -3854,6 +3858,9 @@ impl<'db> SqlSession<'db> {
             return Ok(Some(result));
         }
         if let Some(result) = self.execute_raw_drop_cast(sql)? {
+            return Ok(Some(result));
+        }
+        if let Some(result) = self.execute_raw_foreign_data(sql)? {
             return Ok(Some(result));
         }
         Ok(None)
@@ -6406,6 +6413,9 @@ impl<'db> SqlSession<'db> {
                 Some(previous) => crate::collations::save_collation(self.db_mut()?, &previous)?,
                 None => crate::collations::delete_collation(self.db_mut()?, &schema_name, &name)?,
             },
+            DdlUndo::RestoreForeignCatalog { previous } => {
+                crate::foreign_data::save_foreign_catalog(self.db_mut()?, &previous)?;
+            }
             DdlUndo::RestoreOperator { id, previous } => match previous {
                 Some(previous) => crate::pg_operators::save_operator(self.db_mut()?, &previous)?,
                 None => crate::pg_operators::delete_operator(self.db_mut()?, &id)?,
@@ -7370,6 +7380,9 @@ impl<'db> SqlSession<'db> {
                 || normalized.starts_with("comment on column ")
             {
                 self.execute_relation_comment(&statement)?;
+                continue;
+            }
+            if self.execute_foreign_data_comment(&statement)?.is_some() {
                 continue;
             }
             if !normalized.starts_with("comment on type ")

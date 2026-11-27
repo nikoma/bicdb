@@ -5863,9 +5863,10 @@ struct RoutineFrame {
     dirty_slots: Vec<bool>,
     full_resync: bool,
     positional: Vec<SqlValue>,
+    template_parameters: Arc<Vec<RoutineFrameTemplateParam>>,
     trigger_record_variables: bool,
-    record_alias_ids: FxHashMap<String, usize>,
-    record_alias_values: Vec<SqlValue>,
+    alias_ids: FxHashMap<String, usize>,
+    alias_values: Vec<SqlValue>,
     output_names: Vec<String>,
     cursors: BTreeMap<String, RoutineCursor>,
     returned_set: Option<SqlResult>,
@@ -5888,7 +5889,7 @@ pub(crate) struct RoutineFrameTemplate {
     oracle_dates: Option<Arc<FxHashSet<String>>>,
     slot_names: Arc<Vec<String>>,
     slot_ids: Arc<FxHashMap<String, VarId>>,
-    params: Vec<RoutineFrameTemplateParam>,
+    params: Arc<Vec<RoutineFrameTemplateParam>>,
     output_names: Vec<String>,
 }
 

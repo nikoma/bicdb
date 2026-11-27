@@ -4985,6 +4985,9 @@ impl<'db> SqlSession<'db> {
         // PostgreSQL initializes FOUND to false on entry to every plpgsql
         // block; each SELECT INTO / PERFORM / DML statement then overwrites it.
         frame.set(ROUTINE_FOUND_VAR, SqlValue::Bool(false));
+        if !frame.oracle_procedural_evaluation {
+            frame.link_named_parameters();
+        }
         self.initialize_routine_declarations(frame, declarations)
     }
 
@@ -4996,6 +4999,9 @@ impl<'db> SqlSession<'db> {
         frame.bind_registered_assignment_types(self.db_ref())?;
         for declaration in declarations {
             match declaration {
+                RoutineDecl::Alias { name, position } if !frame.oracle_procedural_evaluation => {
+                    frame.bind_parameter_alias(name, *position)?;
+                }
                 RoutineDecl::Alias { name, position } => {
                     let value = frame
                         .positional
@@ -5010,6 +5016,7 @@ impl<'db> SqlSession<'db> {
                 RoutineDecl::Variable {
                     name, default_expr, ..
                 } => {
+                    frame.alias_ids.remove(name);
                     let value = default_expr
                         .as_ref()
                         .map(|expr| self.eval_routine_expr(frame, expr))

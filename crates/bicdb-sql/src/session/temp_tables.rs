@@ -191,6 +191,7 @@ pub fn drop_connection_temp_schema(db: &mut BicDb, backend_pid: i32) -> Result<b
 /// Drops every temporary schema left behind by connections of an earlier
 /// server process. Returns how many there were.
 pub fn drop_orphan_temp_schemas(db: &mut BicDb) -> Result<usize> {
+    repair_orphan_views(db)?;
     let schemas = list_namespaces(db)?
         .into_iter()
         .map(|namespace| namespace.name)
@@ -233,4 +234,30 @@ impl Drop for EmbeddedTempGuard {
         let db = unsafe { self.db.as_mut() };
         let _ = drop_connection_temp_schema(db, self.backend);
     }
+}
+
+/// Removes views (and rules) left without a schema by earlier builds: a
+/// view created as `pg_temp.v` was stored under a schema that never
+/// existed, and a permanent view over a temporary table outlived it. Either
+/// made every catalog read fail with "relation ... has no matching
+/// namespace". A view holds no rows, so dropping one loses no data; tables
+/// and sequences are left alone. Returns how many views were removed.
+pub fn repair_orphan_views(db: &mut BicDb) -> Result<usize> {
+    let orphans = list_views(db)?
+        .into_iter()
+        .map(|view| view.name)
+        .filter(|name| {
+            name.starts_with("__bicdb_s_") && relation_catalog_namespace(db, name).is_err()
+        })
+        .collect::<Vec<_>>();
+    for view in &orphans {
+        delete_view(db, view)?;
+    }
+    let orphan_rules = crate::query_rules::list_rules(db)?
+        .iter()
+        .filter(|rule| !relation_exists(db, &rule.table))
+        .map(|rule| rule.table.clone())
+        .collect::<Vec<_>>();
+    crate::query_rules::drop_rules_of_relations(db, &orphan_rules)?;
+    Ok(orphans.len())
 }

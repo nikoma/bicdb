@@ -1945,14 +1945,30 @@ impl<'db> SqlEngine<'db> {
                         && schema
                             .as_ref()
                             .is_none_or(|schema| index_supports_ordering(schema, &index.name))
+                        && (index_order_keeps_null_placement(
+                            schema.as_ref(),
+                            index,
+                            0,
+                            descending,
+                            query,
+                        ) || index.kind == IndexKind::BTree)
                 }) {
                     let limit = limit_for_plan(query)?;
                     let estimated_rows = limit.unwrap_or(total_rows).min(total_rows);
+                    let nulls_first = (!index_order_keeps_null_placement(
+                        schema.as_ref(),
+                        index,
+                        0,
+                        descending,
+                        query,
+                    ))
+                    .then(|| requested_nulls_first(query, descending));
                     candidates.push(QueryPlan {
                         kind: PlanKind::OrderedIndexScan {
                             index_name: index.name.clone(),
                             descending,
                             limit,
+                            nulls_first,
                         },
                         estimated_rows,
                         estimated_cost: 1.0 + estimated_rows as f64 * 0.25,
@@ -2589,6 +2605,22 @@ impl<'db> SqlEngine<'db> {
         if let Some((index_name, prefix, descending, limit)) =
             match_prefix_ordered_index(selection, query, indexes)?
         {
+            let keeps_nulls = indexes
+                .iter()
+                .find(|index| index.name == index_name)
+                .is_some_and(|index| {
+                    let schema = load_schema(self.db_ref(), &index.collection).ok().flatten();
+                    index_order_keeps_null_placement(
+                        schema.as_ref(),
+                        index,
+                        prefix.len(),
+                        descending,
+                        query,
+                    )
+                });
+            if !keeps_nulls {
+                return Ok(());
+            }
             candidates.push(QueryPlan {
                 kind: PlanKind::IndexPrefixOrderedScan {
                     index_name,
@@ -2634,12 +2666,35 @@ impl<'db> SqlEngine<'db> {
             // displaced by a key that the snapshot cannot see.
             self.lookup_index_cached(&bounded.index_name, &bounded.prefix)?
         } else {
-            Rc::from(self.db_ref().prefix_ordered_index_records(
-                &bounded.index_name,
-                bounded.prefix.as_slice(),
-                bounded.descending,
-                bounded.limit,
-            )?)
+            match bounded.nulls_first {
+                None => Rc::from(self.db_ref().prefix_ordered_index_records(
+                    &bounded.index_name,
+                    bounded.prefix.as_slice(),
+                    bounded.descending,
+                    bounded.limit,
+                )?),
+                Some(nulls_first) => {
+                    // ORDER BY's NULL placement, each key range read with a
+                    // seek and bounded by the limit (resident and paged
+                    // B-trees alike).
+                    match self.db_ref().prefix_ordered_index_records_nulls(
+                        &bounded.index_name,
+                        bounded.prefix.as_slice(),
+                        bounded.descending,
+                        nulls_first,
+                        bounded.limit,
+                    )? {
+                        Some(ids) => Rc::from(ids),
+                        // Only B-trees reach this path and every B-tree
+                        // answers; anything else declines to the ordinary
+                        // sort path rather than failing the statement.
+                        None => {
+                            debug_assert!(false, "bounded ordered read on a non-B-tree index");
+                            return Ok(None);
+                        }
+                    }
+                }
+            }
         };
         let records =
             self.records_for_ids_with_schema(&bounded.collection, &ids, bounded.schema.as_ref())?;
@@ -2727,6 +2782,23 @@ impl<'db> SqlEngine<'db> {
         else {
             return Ok(None);
         };
+        // Where the index's NULL placement is not the statement's, the read
+        // takes the NULL-keyed rows separately and puts them where ORDER BY
+        // asks (see `try_bounded_ordered_index_row_set`).
+        let ordered_index = indexes.iter().find(|index| index.name == index_name);
+        let nulls_first = if ordered_index.is_some_and(|index| {
+            index_order_keeps_null_placement(
+                schema.as_ref(),
+                index,
+                prefix.len(),
+                descending,
+                query,
+            )
+        }) {
+            None
+        } else {
+            Some(requested_nulls_first(query, descending))
+        };
         let alias = alias
             .as_ref()
             .map(|alias| alias.name.value.clone())
@@ -2745,6 +2817,7 @@ impl<'db> SqlEngine<'db> {
             prefix,
             descending,
             limit,
+            nulls_first,
         }))
     }
 
@@ -3580,6 +3653,10 @@ pub(crate) struct BoundedOrderedIndexPlan {
     prefix: Vec<IndexValue>,
     descending: bool,
     limit: usize,
+    /// `Some(nulls_first)` when the index orders NULLs where the statement
+    /// does not: the NULL-keyed rows are read separately and placed first
+    /// or last.
+    nulls_first: Option<bool>,
 }
 
 impl BoundedOrderedIndexPlan {
@@ -4008,5 +4085,56 @@ fn limit_union_all_branches(body: &mut SetExpr, remaining: usize) {
             SetExpr::SetOperation { .. } => limit_union_all_branches(side, remaining),
             _ => {}
         }
+    }
+}
+
+/// Whether reading `index` in key order (backward when `descending`)
+/// yields the NULL placement the statement's first ORDER BY key asks for.
+/// Index keys order NULL below every value, so an index read gives NULLS
+/// FIRST ascending and NULLS LAST descending: the opposite of ORDER BY's
+/// defaults. Without an explicit matching `NULLS FIRST`/`NULLS LAST`, the
+/// ordering column (the index field at `position`) must be NOT NULL.
+pub(crate) fn index_order_keeps_null_placement(
+    schema: Option<&TableSchema>,
+    index: &IndexDefinition,
+    position: usize,
+    descending: bool,
+    query: &Query,
+) -> bool {
+    let index_nulls_first = !descending;
+    let requested_nulls_first = match query.order_by.as_ref().map(|order_by| &order_by.kind) {
+        Some(OrderByKind::Expressions(items)) => items
+            .first()
+            .and_then(|item| item.options.nulls_first)
+            .unwrap_or(descending),
+        _ => descending,
+    };
+    if requested_nulls_first == index_nulls_first {
+        return true;
+    }
+    let Some(IndexField::MetadataPath(path)) = index.fields.get(position) else {
+        return false;
+    };
+    let [column] = path.as_slice() else {
+        return false;
+    };
+    schema.is_some_and(|schema| {
+        schema
+            .columns
+            .iter()
+            .find(|candidate| &candidate.name == column)
+            .is_some_and(|candidate| !candidate.nullable || candidate.primary_key)
+    })
+}
+
+/// The NULL placement the first ORDER BY key asks for: explicit `NULLS
+/// FIRST`/`NULLS LAST`, else PostgreSQL's default (first when descending).
+pub(crate) fn requested_nulls_first(query: &Query, descending: bool) -> bool {
+    match query.order_by.as_ref().map(|order_by| &order_by.kind) {
+        Some(OrderByKind::Expressions(items)) => items
+            .first()
+            .and_then(|item| item.options.nulls_first)
+            .unwrap_or(descending),
+        _ => descending,
     }
 }

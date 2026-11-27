@@ -3421,6 +3421,9 @@ pub(crate) enum PlanKind {
         index_name: String,
         descending: bool,
         limit: Option<usize>,
+        /// `Some(nulls_first)` when the index orders NULLs where ORDER BY
+        /// does not: the load takes the NULL-keyed rows separately.
+        nulls_first: Option<bool>,
     },
     /// Equality prefix on an index's leading fields, then ORDER BY the NEXT index
     /// field with a LIMIT: returns only the first `limit` ids in key order from the
@@ -3627,6 +3630,7 @@ impl QueryPlan {
                 index_name,
                 descending,
                 limit,
+                ..
             } => vec![
                 format!("OrderedIndexScan {index_name}"),
                 format!("Direction {}", if *descending { "DESC" } else { "ASC" }),

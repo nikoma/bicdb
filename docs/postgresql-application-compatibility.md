@@ -450,3 +450,23 @@ over one scan report their actual rows), and `EXPLAIN EXECUTE`. A bare
 (`FullScan`, `IndexScan ...`, `EstimatedRows`, `ActualRows`), which tools and
 tests read; statement shapes that report does not cover fall back to the
 PostgreSQL layout.
+
+## Temporary objects (2026-11)
+
+- `CREATE TEMP VIEW`, `CREATE OR REPLACE TEMP VIEW`, `CREATE VIEW pg_temp.v`
+  and `CREATE TEMP SEQUENCE` create session objects in the session's
+  temporary schema (`pg_temp_N`), dropped with the session. A view over a
+  temporary relation becomes temporary with PostgreSQL's NOTICE; in an
+  explicit permanent schema it is 42P16, and a materialized view over one is
+  0A000. Rules of temporary relations go with them.
+- Temporary tables are found, the temporary schema first, by `CREATE TABLE
+  ... (LIKE t)`, `INHERITS`, `COMMENT ON`, `has_table_privilege`, rule
+  actions, `nextval`/`currval`/`setval` and regclass (which prints a visible
+  temporary relation unqualified), as well as by queries and DML. A permanent
+  table cannot inherit from (42809) or reference (42P16) a temporary one.
+- `CREATE TEMP TABLE ... PARTITION OF` and `CREATE TEMP TABLE t(cols) ON
+  COMMIT ... AS query` work; ON COMMIT DROP / DELETE ROWS / PRESERVE ROWS
+  apply as before.
+- Not yet: domains, types and operators in `pg_temp` (refused: "schema
+  pg_temp does not exist"), and a temporary function named like an existing
+  permanent one (refused as already existing).

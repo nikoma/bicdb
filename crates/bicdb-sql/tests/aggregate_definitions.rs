@@ -60,6 +60,7 @@ fn polymorphic_aggregates_bind_types_without_repeating_their_inputs() {
         "CREATE FUNCTION poly_append(anyarray, anyelement) RETURNS anyarray AS 'SELECT $1 || $2' LANGUAGE SQL",
         "CREATE AGGREGATE poly_collect(anyelement) (SFUNC = poly_append, STYPE = anyarray, INITCOND = '{}')",
         "CREATE SEQUENCE aggregate_volatile_seq",
+        "CREATE FUNCTION aggregate_step() RETURNS bigint LANGUAGE plpgsql VOLATILE AS $$ BEGIN RETURN nextval('aggregate_volatile_seq'); END $$",
     ] {
         session.execute(statement).unwrap();
     }
@@ -86,11 +87,14 @@ fn polymorphic_aggregates_bind_types_without_repeating_their_inputs() {
         "{}",
     );
     assert_eq!(
-        cell(&mut session, "SELECT poly_collect(nextval('aggregate_volatile_seq'))::text FROM generate_series(1, 3)"),
+        cell(
+            &mut session,
+            "SELECT poly_collect(aggregate_step())::text FROM generate_series(1, 3)"
+        ),
         "{1,2,3}",
     );
     assert_eq!(
-        cell(&mut session, "SELECT currval('aggregate_volatile_seq')"),
-        "3",
+        cell(&mut session, "SELECT nextval('aggregate_volatile_seq')"),
+        "4",
     );
 }

@@ -4389,9 +4389,10 @@ fn execute_sql_prepared_statement_query(
             };
             let name = sql_prepared_name_from_object(name)?;
             let prepared = state.prepared.get(&name).cloned().ok_or_else(|| {
-                PgWireError::Sql(SqlError::data_exception_public(
+                PgWireError::Sql(SqlError::coded_public(
                     "26000",
                     format!("prepared statement {name:?} does not exist"),
+                    None,
                     None,
                 ))
             })?;

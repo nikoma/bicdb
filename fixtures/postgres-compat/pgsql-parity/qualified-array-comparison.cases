@@ -1,0 +1,15 @@
+u1_unqual|create table u1a(a text[]);insert into u1a values ('{x,"y z",NULL}'),('{x}');select count(*) from u1a where a = '{x,"y z",NULL}'
+u1_qual|create table u1b(a text[]);insert into u1b values ('{x,"y z",NULL}'),('{x}');select count(*) from u1b t where t.a = '{x,"y z",NULL}'
+u1_qual_text|create table u1c(a text[]);insert into u1c values ('{x,"y z",NULL}'),('{x}');select count(*) from u1c t where t.a::text = '{x,"y z",NULL}'
+u1_tabqual|create table atc(a text[]);insert into atc values ('{x,"y z",NULL}'),('{x}');select count(*) from atc where atc.a = '{x,"y z",NULL}';select atc.a::text collate "C" from atc order by 1
+u1_concat|create table u1d(a text[]);insert into u1d values ('{x,"y z",NULL}');select count(*) from u1d t where t.a::text || '' = '{x,"y z",NULL}';select t.a::text || '' from u1d t;select count(*) from u1d where a::text || '' = '{x,"y z",NULL}'
+u1_varchar|create table u1e(a text[]);insert into u1e values ('{x,"y z",NULL}');select count(*) from u1e t where t.a::varchar = '{x,"y z",NULL}';select t.a::varchar, a::varchar, t.a::text, a::text from u1e t
+u1_int|create table u1f(a int[]);insert into u1f values ('{1,NULL,3}');select count(*) from u1f t where t.a = '{1,NULL,3}';select count(*) from u1f t where t.a::text = '{1,NULL,3}';select count(*) from u1f where a = '{1,NULL,3}'
+u1_ne|create table u1g(a text[]);insert into u1g values ('{x,"y z",NULL}'),('{x}');select count(*) from u1g t where t.a <> '{x,"y z",NULL}';select count(*) from u1g t where t.a is distinct from '{x,"y z",NULL}';select t.a = '{x,"y z",NULL}' from u1g t order by 1
+u1_join|create table u1h(a text[]);create table u1i(b text[]);insert into u1h values ('{x,NULL}');insert into u1i values ('{x,NULL}');select count(*) from u1h h join u1i i on h.a = i.b;select count(*) from u1h h where h.a in ('{x,NULL}')
+u1_text_vs_text|select '{x}'::text = '{"x"}'::text, '{1,2}' = '{1, 2}', '{x,NULL}'::text = '{x,NULL}'::text
+u1_order|create table u1j(a text[]);insert into u1j values ('{x,NULL}'),('{x,y}'),('{x}');select count(*) from u1j t where t.a > '{x,y}';select count(*) from u1j t where t.a >= '{x,NULL}';select count(*) from u1j t where t.a < '{x,y}'
+u1_distinct|create table u1k(a int[]);insert into u1k values ('{1,NULL}'),(NULL),('{1,2}');select count(*) from u1k t where t.a is not distinct from '{1,NULL}';select count(*) from u1k t where t.a in ('{1,NULL}','{1,2}');select t.a = '{1,NULL}' from u1k t order by 1
+u1_cte|create table u1l(a text[]);insert into u1l values ('{x,NULL}');with c as (select a from u1l) select count(*) from c where c.a = '{x,NULL}';select count(*) from (select a from u1l) s where s.a = '{x,NULL}'
+u1_bounds|create table u1m(a int[]); insert into u1m values ('[2:3]={1,NULL}'), ('{1,NULL}'); select count(*) from u1m t where t.a = '[2:3]={1,NULL}'; select count(*) from u1m t where t.a = '{1,NULL}'
+u1_dimension|create table u1n(a text[]); insert into u1n values ('{{a,b},{c,d}}'), ('{a,b,c,d}'); select count(*) from u1n t where t.a = '{{a,b},{c,d}}'

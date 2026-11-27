@@ -985,7 +985,7 @@ impl<'db> SqlEngine<'db> {
                 row_set.rows.clear();
             }
         }
-        register_geometric_relation_types(self.from_relation_columns(&select.from).as_deref());
+        register_expression_relation_types(self.from_relation_columns(&select.from).as_deref());
         let projection_json_srf = json_projection_set_returning_call(&select.projection)?;
         let projection_array_srfs = array_projection_set_returning_calls(&select.projection)?;
         if let Some(selection) = &select.selection {
@@ -4651,20 +4651,20 @@ pub(crate) fn cast_column_metadata(expr: &Expr) -> Option<SqlColumnMetadata> {
     })
 }
 
-/// Records the column types of FROM relations that hold geometric columns,
-/// so their operators, subscripts and casts are typed over the joined row
-/// (`a.p * b.p`, `WHERE b.p[1] > 3`) as they are over a single table. A
-/// relation another stage already registered keeps that registration.
-fn register_geometric_relation_types(env: Option<&[RelationColumns]>) {
+/// Make declared geometric and array types available to expression evaluation
+/// over qualified rows. A relation another stage registered keeps its types.
+pub(super) fn register_expression_relation_types(env: Option<&[RelationColumns]>) {
     for relation in env.unwrap_or_default() {
-        let geometric = relation
-            .columns
-            .iter()
-            .any(|(_, pg_type)| is_geometric_type(pg_type.as_deref()));
+        let needs_types = relation.columns.iter().any(|(_, pg_type)| {
+            is_geometric_type(pg_type.as_deref())
+                || pg_type
+                    .as_deref()
+                    .is_some_and(|pg_type| pg_type.ends_with("[]"))
+        });
         let Some((first, _)) = relation.columns.first() else {
             continue;
         };
-        if !geometric || crate::slot_types::lookup(&relation.alias, first).is_some() {
+        if !needs_types || crate::slot_types::lookup(&relation.alias, first).is_some() {
             continue;
         }
         let (names, types): (Vec<_>, Vec<_>) = relation.columns.iter().cloned().unzip();

@@ -5821,12 +5821,13 @@ impl<'db> SqlEngine<'db> {
         let mut records = self.load_records_for_plan(&collection, &plan)?;
         if let Some(selection) = &select.selection {
             let predicate_env = self.from_relation_columns(&select.from).unwrap_or_default();
+            materialize::register_expression_relation_types(Some(&predicate_env));
             let mut filtered = Vec::new();
             for (idx, record) in records.into_iter().enumerate() {
                 if idx % 1024 == 0 {
                     self.check_cancellation()?;
                 }
-                let row = row_from_record(&collection, &collection, schema.as_ref(), &record)?;
+                let row = row_from_record(&collection, &alias_name, schema.as_ref(), &record)?;
                 if self
                     .eval_row_truth_typed(&row, selection, &predicate_env)?
                     .unwrap_or(false)

@@ -2988,6 +2988,20 @@ pub(crate) fn eval_binary_expr_value_typed(
     )? {
         return Ok(value);
     }
+    if *op == BinaryOperator::StringConcat {
+        // With one known array and one unknown literal PostgreSQL selects
+        // array concatenation. A scalar append/prepend needs a typed value.
+        if let Some(kind) = left_type.as_deref().filter(|kind| kind.ends_with("[]")) {
+            if crate::planner::is_unknown_literal(right_expr) {
+                return concat_array_values(&left, &cast_array_concat_literal(right, kind)?);
+            }
+        }
+        if let Some(kind) = right_type.as_deref().filter(|kind| kind.ends_with("[]")) {
+            if crate::planner::is_unknown_literal(left_expr) {
+                return concat_array_values(&cast_array_concat_literal(left, kind)?, &right);
+            }
+        }
+    }
     if let Some(value) = eval_array_binary_value(
         &left,
         op,
@@ -3365,6 +3379,20 @@ pub(crate) fn array_elements_not_distinct(left: &JsonValue, right: &JsonValue) -
     values_not_distinct(&json_to_sql_value(left), &json_to_sql_value(right))
 }
 
+fn cast_array_concat_literal(value: SqlValue, array_type: &str) -> Result<SqlValue> {
+    if let SqlValue::String(text) = &value {
+        let input = text.trim_start();
+        if !input.starts_with(['{', '[']) {
+            return Err(SqlError::data_exception_public(
+                "22P02",
+                format!("malformed array literal: \"{text}\""),
+                Some("Array value must start with \"{\" or dimension information.".to_string()),
+            ));
+        }
+    }
+    cast_value_to_pg_type(value, array_type)
+}
+
 pub(crate) fn eval_array_binary_value(
     left: &SqlValue,
     op: &BinaryOperator,
@@ -3433,6 +3461,17 @@ pub(crate) fn eval_array_binary_value(
     }
     if left_array && right_array {
         return concat_array_values(left, right).map(Some);
+    }
+    if let (Some(left_type), Some(right_type)) = (left_type, right_type) {
+        let elements = [left_type, right_type]
+            .map(|kind| Some(kind.strip_suffix("[]").unwrap_or(kind).to_string()));
+        if select_common_builtin_projected_type(&elements).is_none() {
+            return Err(SqlError::undefined_function(format!(
+                "operator does not exist: {} || {}",
+                common_type_display(left_type),
+                common_type_display(right_type),
+            )));
+        }
     }
     if left_array {
         require_one_dimensional_array(

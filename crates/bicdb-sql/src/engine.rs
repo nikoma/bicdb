@@ -5445,6 +5445,7 @@ impl<'db> SqlEngine<'db> {
 
     #[inline(never)]
     fn execute_query_guarded(&self, query: &Query) -> Result<SqlResult> {
+        let _xml_binary = crate::xml::XmlBinaryScope::enter(&self.session_gucs);
         let _collations = crate::collations::ActiveCollations::install(self.db_ref())?;
         self.require_query_exact_decimal_units(query)?;
         let named_join = self.rewrite_named_join_query(query)?;

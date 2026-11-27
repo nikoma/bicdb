@@ -4147,6 +4147,7 @@ impl<'db> SqlSession<'db> {
     /// Statement text through the profiled executor; a read-only transaction
     /// checks a single statement before it runs.
     fn execute_text_statements(&mut self, sql: &str) -> Result<SqlResult> {
+        let _xml_binary = crate::xml::XmlBinaryScope::enter(&self.session_gucs);
         let _preflight = self.prepare_catalog_preflight_text(sql)?;
         let _catalog_reads = if !sql.contains(';') || split_sql_statements(sql).len() == 1 {
             self.enter_statement_catalog_reads(sql)?
@@ -4317,6 +4318,7 @@ impl<'db> SqlSession<'db> {
         self.db_ref().check_recovery_state()?;
         let effects = crate::statement_context::StatementScope::enter();
         let result = self.with_implicit_guc_statement(|session| {
+            let _xml_binary = crate::xml::XmlBinaryScope::enter(&session.session_gucs);
             let mut result = session.execute_statement(statement)?;
             session.apply_bytea_output(&mut result);
             Ok(result)
@@ -7391,6 +7393,7 @@ impl<'db> SqlSession<'db> {
             | "standard_conforming_strings"
             | "intervalstyle"
             | "xmloption"
+            | "xmlbinary"
             | "jit"
             | "statement_timeout"
             | "lock_timeout"

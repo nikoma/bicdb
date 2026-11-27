@@ -313,13 +313,45 @@ fn xml_name(value: &str) -> Result<&str> {
 
 const XML_ATTRIBUTES_MARKER: &str = "\0bicdb:xmlattributes:";
 
-fn xml_content(value: &SqlValue, pg_type: Option<&str>) -> String {
-    let text = xml_text(value);
-    if pg_type.is_some_and(|pg_type| pg_type == "xml") {
+thread_local! {
+    static XML_BINARY_HEX: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+pub(crate) struct XmlBinaryScope(bool);
+
+impl XmlBinaryScope {
+    pub(crate) fn enter(gucs: &std::collections::HashMap<String, String>) -> Self {
+        let hex = gucs.get("xmlbinary").is_some_and(|mode| mode == "hex");
+        Self(XML_BINARY_HEX.with(|setting| setting.replace(hex)))
+    }
+}
+
+impl Drop for XmlBinaryScope {
+    fn drop(&mut self) {
+        XML_BINARY_HEX.with(|setting| setting.set(self.0));
+    }
+}
+
+fn xml_scalar_text(value: &SqlValue, pg_type: Option<&str>) -> Result<String> {
+    if pg_type != Some("bytea") {
+        return Ok(xml_text(value));
+    }
+    use base64::Engine;
+    let bytes = crate::bytea_argument(value)?.unwrap_or_default();
+    Ok(if XML_BINARY_HEX.with(std::cell::Cell::get) {
+        hex::encode_upper(bytes)
+    } else {
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    })
+}
+
+fn xml_content(value: &SqlValue, pg_type: Option<&str>) -> Result<String> {
+    let text = xml_scalar_text(value, pg_type)?;
+    Ok(if pg_type == Some("xml") {
         text
     } else {
         escape_text(&text)
-    }
+    })
 }
 
 /// Nesting cap for XML documents and XPath expressions.
@@ -622,14 +654,17 @@ pub(crate) fn eval_xml_function_value(
         ),
         "bicdb_xmlattributes" => {
             let mut attributes = Vec::new();
-            for pair in args.chunks(2) {
+            for (pair_index, pair) in args.chunks(2).enumerate() {
                 if let [name, value] = pair {
                     if matches!(value, SqlValue::Null) {
                         continue;
                     }
+                    let value_type = arg_types
+                        .and_then(|types| types.get(pair_index * 2 + 1))
+                        .and_then(Option::as_deref);
                     attributes.push(JsonValue::Array(vec![
                         JsonValue::String(xml_name(&xml_text(name))?.to_string()),
-                        JsonValue::String(xml_text(value)),
+                        JsonValue::String(xml_scalar_text(value, value_type)?),
                     ]));
                 }
             }
@@ -652,7 +687,7 @@ pub(crate) fn eval_xml_function_value(
                         .and_then(Option::as_deref);
                     output.push_str(&format!(
                         "<{name}>{}</{name}>",
-                        xml_content(value, value_type)
+                        xml_content(value, value_type)?
                     ));
                 }
             }
@@ -692,7 +727,7 @@ pub(crate) fn eval_xml_function_value(
                     let value_type = arg_types
                         .and_then(|types| types.get(index + 1))
                         .and_then(Option::as_deref);
-                    content.push_str(&xml_content(value, value_type));
+                    content.push_str(&xml_content(value, value_type)?);
                 }
             }
             SqlValue::String(if content.is_empty() {

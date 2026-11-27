@@ -2828,7 +2828,24 @@ pub(crate) fn equi_join_key_exprs<'a>(
     constraint: &'a JoinConstraint,
     left_columns: &[String],
     right_columns: &[String],
-) -> Option<(&'a Expr, &'a Expr)> {
+) -> Option<(std::borrow::Cow<'a, Expr>, std::borrow::Cow<'a, Expr>)> {
+    use std::borrow::Cow;
+
+    if let JoinConstraint::Using(columns) = constraint {
+        // A USING column is an equality key on both sides. Keep the full
+        // USING clause as the residual check for multiple named columns.
+        for column in columns {
+            let name = object_name(column).ok()?;
+            let name = name.rsplit('.').next()?;
+            if let (Some(left), Some(right)) = (
+                unique_join_column_expr(left_columns, name),
+                unique_join_column_expr(right_columns, name),
+            ) {
+                return Some((Cow::Owned(left), Cow::Owned(right)));
+            }
+        }
+        return None;
+    }
     let JoinConstraint::On(expr) = constraint else {
         return None;
     };
@@ -2871,6 +2888,22 @@ pub(crate) fn equi_join_key_exprs<'a>(
         }
     }
     find_key(expr, &left_column_set, &right_column_set)
+        .map(|(left, right)| (Cow::Borrowed(left), Cow::Borrowed(right)))
+}
+
+fn unique_join_column_expr(columns: &[String], name: &str) -> Option<Expr> {
+    let mut matches = columns
+        .iter()
+        .filter_map(|key| key.rsplit_once('.'))
+        .filter(|(_, column)| *column == name);
+    let (relation, column) = matches.next()?;
+    if matches.next().is_some() {
+        return None;
+    }
+    Some(Expr::CompoundIdentifier(vec![
+        Ident::with_quote('"', relation),
+        Ident::with_quote('"', column),
+    ]))
 }
 
 /// Whether a join key reads only `columns`. Beyond the predicate column

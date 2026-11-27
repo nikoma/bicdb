@@ -4040,8 +4040,8 @@ impl SqlEngine<'_> {
             let mut right_type_env = Vec::new();
             let right_key_type = self
                 .collect_relation_columns(&join.relation, &mut right_type_env)
-                .and_then(|_| self.infer_env_expr_type(right_key, &right_type_env));
-            let left_key_type = self.infer_slot_row_expr_type(&left.columns, left_key);
+                .and_then(|_| self.infer_env_expr_type(right_key.as_ref(), &right_type_env));
+            let left_key_type = self.infer_slot_row_expr_type(&left.columns, left_key.as_ref());
             let typed = match (left_key_type.as_deref(), right_key_type.as_deref()) {
                 (Some(left_type), Some(right_type)) if left_type != right_type => {
                     super::predicates_locators::hash_join_common_key_type(left_type, right_type)
@@ -4063,7 +4063,14 @@ impl SqlEngine<'_> {
                 && (simple_equality
                     || (integer(left_key_type.as_deref()) && integer(right_key_type.as_deref())))
             {
-                return Ok(RowJoinPrediction::Hash { constraint: on });
+                let constraint = on.or_else(|| {
+                    Some(Expr::BinaryOp {
+                        left: Box::new(left_key.into_owned()),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(right_key.into_owned()),
+                    })
+                });
+                return Ok(RowJoinPrediction::Hash { constraint });
             }
         }
         Ok(RowJoinPrediction::NestedLoop { constraint: on })

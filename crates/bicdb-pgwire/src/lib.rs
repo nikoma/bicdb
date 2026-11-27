@@ -3710,11 +3710,11 @@ pub(crate) fn copy_target_columns(
     };
     let db = server.read_db_for_transaction_progress()?;
     let tx = db.begin_transaction()?;
-    let mut session = sql_session_shared_for_server(server, &db)
-        .with_security_context(state.security_context.clone())
-        .with_session_guc_state(state.session_state.clone())
-        .with_pending_transaction(tx)
-        .with_deferred_commit();
+    // The connection's runtime too: it names the session's temporary schema.
+    let mut session =
+        with_connection_guc_state(sql_session_shared_for_server(server, &db), server, state)
+            .with_pending_transaction(tx)
+            .with_deferred_commit();
     let result = session.copy_target_columns(relation, columns);
     if let Some(tx) = session.take_pending_transaction() {
         tx.rollback()?;
@@ -3802,7 +3802,23 @@ fn begin_copy_in(
     // went on sending queries, so the session hung.
     let prepared = (|| -> Result<Vec<String>> {
         let relation = copy.relation_sql.clone().unwrap_or_default();
+        // Bind the relation through the session's search_path and its
+        // temporary schema first, as a statement of the session would: the
+        // description alone does not see the session's temporary tables.
         let describe = |state: &mut ConnectionState, sql: String| {
+            let temp = bicdb_sql::temp_schema_for_backend(
+                i32::try_from(state.connection_id).unwrap_or(i32::MAX),
+            );
+            let bound = {
+                let db = server.read_db_for_transaction_progress()?;
+                bicdb_sql::search_path::bind_session_sql_with_temp(
+                    &db,
+                    &sql,
+                    state.session_state.session_gucs(),
+                    Some(&temp),
+                )?
+            };
+            let sql = bound.unwrap_or(sql);
             execute_server_sql_for_describe_with_session(
                 server,
                 &sql,

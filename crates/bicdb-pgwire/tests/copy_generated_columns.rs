@@ -355,3 +355,32 @@ fn the_session_keeps_working_after_copy_data_fails() {
     );
     finish(client, server);
 }
+
+#[test]
+fn copy_finds_temporary_tables() {
+    let (mut client, server, _dir) = serve();
+    simple(
+        &mut client,
+        "CREATE TEMP TABLE tt(a int, b int GENERATED ALWAYS AS (a * 2) STORED, c text)",
+    );
+    send_query(&mut client, "COPY tt FROM STDIN");
+    let (tag, payload) = read_message(&mut client);
+    assert_eq!(tag, b'G', "{}", String::from_utf8_lossy(&payload));
+    send_message(
+        &mut client,
+        b'd',
+        b"1	x
+",
+    );
+    send_message(&mut client, b'c', &[]);
+    let messages = read_until_ready(&mut client);
+    assert!(error_field(&messages, 'M').is_none(), "{messages:?}");
+    assert_eq!(
+        copy_out(&simple(&mut client, "COPY tt TO STDOUT")),
+        "1\tx\n"
+    );
+    let messages = simple(&mut client, "COPY tt (a, b) FROM STDIN");
+    assert_eq!(error_field(&messages, 'C').as_deref(), Some("42P10"));
+    assert_alive(&mut client);
+    finish(client, server);
+}

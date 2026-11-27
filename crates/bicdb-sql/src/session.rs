@@ -3326,7 +3326,46 @@ impl<'db> SqlSession<'db> {
         table: &str,
         columns: &[String],
     ) -> Result<Option<(Vec<String>, Vec<String>)>> {
-        let qualified: Vec<String> = table.split('.').map(str::to_string).collect();
+        self.with_relation_name_scopes(|| self.copy_target_columns_inner(table, columns))
+    }
+
+    /// Resolve relation names as a statement of this session does: its
+    /// search_path and its temporary schema. `execute` enters these scopes
+    /// itself; entry points that resolve names without it (COPY) need them
+    /// too, or a temporary table is not found.
+    fn with_relation_name_scopes<T>(&self, run: impl FnOnce() -> Result<T>) -> Result<T> {
+        let temp_schema = self.temp_schema_name();
+        let _temp_scope = crate::search_path::TempSchemaScope::enter(temp_schema.as_deref());
+        let path = crate::search_path::binding_path_with_temp(
+            self.db_ref(),
+            &self.session_gucs,
+            temp_schema.as_deref(),
+        )?;
+        let _path_scope = crate::search_path::PathScope::enter(path);
+        let _catalog_scope = crate::search_path::CatalogScope::enter(&self.session_gucs);
+        run()
+    }
+
+    /// The parts of a COPY target, an unqualified name bound through the
+    /// active search_path (and so to the session's temporary schema) as a
+    /// statement binds it. Each part is taken exactly as written.
+    fn bind_copy_relation(&self, table: &str) -> Vec<String> {
+        let mut name = ObjectName::from(
+            table
+                .split('.')
+                .map(|part| Ident::with_quote('"', part))
+                .collect::<Vec<_>>(),
+        );
+        crate::search_path::bind_raw_relation(self.db_ref(), &mut name);
+        crate::eval::rewrite_helpers::object_name_parts(&name)
+    }
+
+    fn copy_target_columns_inner(
+        &self,
+        table: &str,
+        columns: &[String],
+    ) -> Result<Option<(Vec<String>, Vec<String>)>> {
+        let qualified = self.bind_copy_relation(table);
         let table = relation_name_from_parts(&qualified)?;
         let table = resolve_session_relation_name(self.db_ref(), &table)?;
         let Some(schema) = load_schema(self.db_ref(), &table)? else {
@@ -3400,6 +3439,16 @@ impl<'db> SqlSession<'db> {
         self.require_transaction_write()?;
         self.with_implicit_guc_statement(|session| {
             session.with_statement_transaction(|session| {
+                let temp_schema = session.temp_schema_name();
+                let _temp_scope =
+                    crate::search_path::TempSchemaScope::enter(temp_schema.as_deref());
+                let path = crate::search_path::binding_path_with_temp(
+                    session.db_ref(),
+                    &session.session_gucs,
+                    temp_schema.as_deref(),
+                )?;
+                let _path_scope = crate::search_path::PathScope::enter(path);
+                let _catalog_scope = crate::search_path::CatalogScope::enter(&session.session_gucs);
                 session.copy_insert_rows_inner(table, columns, rows, lines)
             })
         })
@@ -3424,7 +3473,7 @@ impl<'db> SqlSession<'db> {
         // INSERT/SELECT use before resolving. Without this the qualifier
         // was dropped and `COPY carrier_private.context_nonces` loaded into
         // `public.context_nonces`.
-        let qualified: Vec<String> = table.split('.').map(str::to_string).collect();
+        let qualified = self.bind_copy_relation(table);
         let table = relation_name_from_parts(&qualified)?;
         let table = resolve_session_relation_name(self.db_ref(), &table)?;
         // COPY FROM is an INSERT with a different wire shape. It enforced RLS

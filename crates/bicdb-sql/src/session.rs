@@ -3365,6 +3365,12 @@ impl<'db> SqlSession<'db> {
         table: &str,
         columns: &[String],
     ) -> Result<Option<(Vec<String>, Vec<String>)>> {
+        let display = table
+            .rsplit('.')
+            .next()
+            .unwrap_or(table)
+            .trim_matches('"')
+            .to_string();
         let qualified = self.bind_copy_relation(table);
         let table = relation_name_from_parts(&qualified)?;
         let table = resolve_session_relation_name(self.db_ref(), &table)?;
@@ -3385,6 +3391,25 @@ impl<'db> SqlSession<'db> {
                 .map(|column| column.name.clone())
                 .collect();
             return Ok(Some((targets, generated)));
+        }
+        // PostgreSQL's CopyGetAttnums: every named column must exist, once.
+        for (index, column) in columns.iter().enumerate() {
+            if !schema.column(column).is_some_and(|target| !target.hidden) {
+                return Err(SqlError::coded(
+                    "42703",
+                    format!("column \"{column}\" of relation \"{display}\" does not exist"),
+                    None,
+                    None,
+                ));
+            }
+            if columns[..index].contains(column) {
+                return Err(SqlError::coded(
+                    "42701",
+                    format!("column \"{column}\" specified more than once"),
+                    None,
+                    None,
+                ));
+            }
         }
         for column in columns {
             if let Some(target) = schema

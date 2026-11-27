@@ -381,6 +381,19 @@ fn copy_finds_temporary_tables() {
     );
     let messages = simple(&mut client, "COPY tt (a, b) FROM STDIN");
     assert_eq!(error_field(&messages, 'C').as_deref(), Some("42P10"));
+    // The column list is checked before COPY mode too.
+    let messages = simple(&mut client, "COPY tt (xyz) FROM STDIN");
+    assert!(messages.iter().all(|(tag, _)| *tag != b'G'));
+    assert_eq!(
+        error_field(&messages, 'M').as_deref(),
+        Some("column \"xyz\" of relation \"tt\" does not exist")
+    );
+    let messages = simple(&mut client, "COPY tt (a, c, a) FROM STDIN");
+    assert!(messages.iter().all(|(tag, _)| *tag != b'G'));
+    assert_eq!(
+        error_field(&messages, 'M').as_deref(),
+        Some("column \"a\" specified more than once")
+    );
     assert_alive(&mut client);
     finish(client, server);
 }

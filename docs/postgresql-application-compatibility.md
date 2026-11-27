@@ -66,6 +66,14 @@ created through the REST API, and a slice of Frappe's own test suite, checked
 by `.github/workflows/frappe.yml`. The page lists the engine fixes, the test
 results and the remaining gaps.
 
+## SQL string formatting
+
+`format()` accepts positional and sequential arguments, fixed widths and
+widths supplied as arguments, and left or right alignment. `%I`, `%L`, and
+`%s` use PostgreSQL identifier quoting, literal quoting, and string output.
+Mixing positional and sequential references advances from the most recently
+consumed argument. An explicit NULL variadic array supplies zero arguments.
+
 ## Routine row-count expressions
 
 PL/pgSQL named variables and positional parameters in LIMIT/OFFSET are bound

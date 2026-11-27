@@ -1,0 +1,19 @@
+setup|CREATE TABLE atc(id int, a text[], n int[], j jsonb[]);INSERT INTO atc VALUES (1, ARRAY['x','y z',NULL], ARRAY[1,2], ARRAY['{"k":1}'::jsonb, '{"b": [1, 2]}'::jsonb, NULL]), (2, '{}', NULL, NULL)
+unqualified|SELECT a::text, n::text FROM atc ORDER BY id
+unqualified_jsonb|SELECT j::text FROM atc ORDER BY id
+qualified|SELECT t.a::text, t.n::text FROM atc t ORDER BY t.id
+qualified_jsonb|SELECT t.j::text, CAST(t.j AS varchar) FROM atc t ORDER BY t.id
+qualified_table|SELECT atc.a::text, atc.n::text FROM atc ORDER BY atc.id
+cast_function|SELECT CAST(t.a AS text), CAST(t.n AS varchar) FROM atc t ORDER BY t.id
+concat|SELECT 'v=' || t.a::text, t.n::text || '!' FROM atc t ORDER BY t.id
+expression|SELECT (t.a || 'w'::text)::text, array_append(t.n, 3)::text, (ARRAY[t.id, 5])::text FROM atc t ORDER BY t.id
+function_result|SELECT string_to_array('a,b', ',')::text, array_agg(t.id ORDER BY t.id)::text FROM atc t
+aggregate_result|SELECT array_agg(id ORDER BY id)::text, 'x' || array_agg(id ORDER BY id)::text, array_agg(n ORDER BY id) FILTER (WHERE n IS NOT NULL)::text FROM atc
+aggregate_grouped|SELECT id % 2, array_agg(id)::text FROM atc GROUP BY 1 ORDER BY 1
+join|SELECT t.a::text, u.n::text FROM atc t JOIN atc u ON u.id = t.id ORDER BY t.id
+subquery|SELECT s.a::text FROM (SELECT id, a FROM atc) s ORDER BY s.id
+cte|WITH c AS (SELECT id, n FROM atc) SELECT c.n::text FROM c ORDER BY c.id
+where_unqualified|SELECT id FROM atc WHERE a::text = '{x,"y z",NULL}'
+where_qualified_like|SELECT t.id FROM atc t WHERE t.a::text LIKE '{x%' AND t.n::text = '{1,2}'
+format|SELECT format('%s', t.a), format('%s|%s', a, j) FROM atc t ORDER BY t.id
+catalog_alias|SELECT c.relname, (c.reloptions)::text FROM pg_class c WHERE c.relname = 'atc'

@@ -2379,6 +2379,17 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         if unqualified_name == "array_prepend" {
             return projected_expr_pg_type(argument_nodes.get(1)?, schema);
         }
+        // array_agg collects its argument into an array of that type; an
+        // array argument stays that array type (one more dimension).
+        if unqualified_name == "array_agg" && argument_nodes.len() == 1 {
+            return projected_expr_pg_type(argument_nodes.first()?, schema).map(|pg_type| {
+                if pg_type.ends_with("[]") {
+                    pg_type
+                } else {
+                    format!("{pg_type}[]")
+                }
+            });
+        }
         if matches!(
             unqualified_name,
             "trim_array" | "array_sample" | "array_shuffle"

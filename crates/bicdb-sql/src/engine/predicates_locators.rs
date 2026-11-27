@@ -935,6 +935,11 @@ impl<'db> SqlEngine<'db> {
             )? {
                 return Ok(row_set);
             }
+            if let Some(error) = crate::session::event_trigger_function_error(
+                table.strip_prefix("pg_catalog.").unwrap_or(&table),
+            ) {
+                return Err(error);
+            }
             return Err(SqlError::Unsupported(format!(
                 "table function {table} is not supported"
             )));
@@ -7613,6 +7618,11 @@ impl<'db> SqlEngine<'db> {
                     &source_columns,
                 )?;
                 return Ok(Some(aliased_row_output_columns(&alias_name, &columns)));
+            }
+            if let Some(error) = crate::session::event_trigger_function_error(
+                table.strip_prefix("pg_catalog.").unwrap_or(&table),
+            ) {
+                return Err(error);
             }
             return Err(SqlError::Unsupported(format!(
                 "table function {table} is not supported"

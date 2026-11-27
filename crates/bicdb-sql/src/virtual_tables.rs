@@ -40,6 +40,7 @@ pub(crate) fn is_internal_sql_collection(name: &str) -> bool {
         VIEW_COLLECTION,
         ROUTINE_COLLECTION,
         crate::pg_operators::OPERATOR_COLLECTION,
+        crate::session::EVENT_TRIGGER_COLLECTION,
         crate::user_casts::CAST_COLLECTION,
         crate::stats_ext::STATS_COLLECTION,
         crate::query_rules::RULE_COLLECTION,
@@ -1452,6 +1453,9 @@ pub(crate) fn execute_builtin_function_with_engine(
     let _temporary_types = suspend_expr_type_scope();
     let name = object_name(&function.name)?.to_ascii_lowercase();
     let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(&name);
+    if let Some(error) = crate::session::event_trigger_function_error(bare_name) {
+        return Err(error);
+    }
     if matches!(name.as_str(), "coalesce" | "pg_catalog.coalesce") {
         let expr = Expr::Function(function.clone());
         if let Some(db) = db {

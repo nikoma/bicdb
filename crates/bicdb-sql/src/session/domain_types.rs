@@ -879,6 +879,7 @@ impl<'db> SqlSession<'db> {
                     let owns_database = list_databases(self.db_ref())?
                         .into_iter()
                         .any(|object| object.owner.eq_ignore_ascii_case(&role));
+                    let owns_event_trigger = self.role_owns_event_trigger(&role)?;
                     let has_privileges = list_privileges(self.db_ref())?
                         .into_iter()
                         .any(|grant| grant.grantee.eq_ignore_ascii_case(&role));
@@ -902,6 +903,7 @@ impl<'db> SqlSession<'db> {
                         || owns_routine
                         || owns_namespace
                         || owns_database
+                        || owns_event_trigger
                         || has_privileges
                         || has_default_privileges
                         || has_granted_membership

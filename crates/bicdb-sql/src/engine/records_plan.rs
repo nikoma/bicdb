@@ -1945,21 +1945,30 @@ impl<'db> SqlEngine<'db> {
                         && schema
                             .as_ref()
                             .is_none_or(|schema| index_supports_ordering(schema, &index.name))
-                        && index_order_keeps_null_placement(
+                        && (index_order_keeps_null_placement(
                             schema.as_ref(),
                             index,
                             0,
                             descending,
                             query,
-                        )
+                        ) || self.db_ref().index_entries_listable(&index.name))
                 }) {
                     let limit = limit_for_plan(query)?;
                     let estimated_rows = limit.unwrap_or(total_rows).min(total_rows);
+                    let nulls_first = (!index_order_keeps_null_placement(
+                        schema.as_ref(),
+                        index,
+                        0,
+                        descending,
+                        query,
+                    ))
+                    .then(|| requested_nulls_first(query, descending));
                     candidates.push(QueryPlan {
                         kind: PlanKind::OrderedIndexScan {
                             index_name: index.name.clone(),
                             descending,
                             limit,
+                            nulls_first,
                         },
                         estimated_rows,
                         estimated_cost: 1.0 + estimated_rows as f64 * 0.25,
@@ -2665,33 +2674,19 @@ impl<'db> SqlEngine<'db> {
                     bounded.limit,
                 )?),
                 Some(nulls_first) => {
-                    // The NULL-keyed rows under the prefix, then the first
-                    // non-NULL rows in index order: enough candidates for the
-                    // caller's sort and limit to pick the ORDER BY's top rows.
-                    let mut null_prefix = bounded.prefix.clone();
-                    null_prefix.push(IndexValue::Null);
-                    let nulls = self
-                        .db_ref()
-                        .lookup_index(&bounded.index_name, &null_prefix)?;
-                    let null_set = nulls.iter().collect::<std::collections::HashSet<_>>();
-                    let ordered = self.db_ref().prefix_ordered_index_records(
+                    // ORDER BY's NULL placement, each key range read with a
+                    // seek and bounded by the limit; a read-through paged
+                    // index reads the whole prefix and the caller sorts.
+                    match self.db_ref().prefix_ordered_index_records_nulls(
                         &bounded.index_name,
                         bounded.prefix.as_slice(),
                         bounded.descending,
-                        bounded.limit.saturating_add(nulls.len()),
-                    )?;
-                    let values = ordered
-                        .iter()
-                        .filter(|id| !null_set.contains(id))
-                        .take(bounded.limit)
-                        .cloned();
-                    let nulls_taken = nulls.iter().take(bounded.limit).cloned();
-                    let ids: Vec<String> = if nulls_first {
-                        nulls_taken.chain(values).collect()
-                    } else {
-                        values.chain(nulls_taken).collect()
-                    };
-                    Rc::from(ids)
+                        nulls_first,
+                        bounded.limit,
+                    )? {
+                        Some(ids) => Rc::from(ids),
+                        None => self.lookup_index_cached(&bounded.index_name, &bounded.prefix)?,
+                    }
                 }
             }
         };

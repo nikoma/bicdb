@@ -75,3 +75,49 @@ fn bounded_ordered_reads_keep_order_by_null_placement() {
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
+
+#[test]
+fn read_through_paged_indexes_keep_order_by_null_placement() {
+    use bicdb_core::{DbConfig, StorageMode};
+    let root = tempfile::tempdir().unwrap();
+    let config = || {
+        DbConfig::default()
+            .with_fsync(false)
+            .with_storage_mode(StorageMode::ServerPaged)
+    };
+    {
+        let mut db = BicDb::open_with_config(root.path(), config()).unwrap();
+        SqlSession::new(&mut db)
+            .execute(
+                "CREATE TABLE p (id int4 PRIMARY KEY, k int4, j int4);
+                 INSERT INTO p SELECT g, g % 2, CASE WHEN g % 5 = 0 THEN NULL ELSE g END
+                   FROM generate_series(1, 200) g;
+                 CREATE INDEX p_kj ON p (k, j);
+                 CREATE INDEX p_j ON p (j);",
+            )
+            .unwrap();
+        db.close().unwrap();
+    }
+    let mut db = BicDb::open_with_config(root.path(), config()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for (sql, twin) in [
+        (
+            "SELECT j FROM p WHERE k = 0 ORDER BY j DESC LIMIT 5",
+            "SELECT j + 0 AS j FROM p WHERE k + 0 = 0 ORDER BY j DESC LIMIT 5",
+        ),
+        (
+            "SELECT j FROM p WHERE k = 0 ORDER BY j LIMIT 5",
+            "SELECT j + 0 AS j FROM p WHERE k + 0 = 0 ORDER BY j LIMIT 5",
+        ),
+        (
+            "SELECT j FROM p ORDER BY j DESC LIMIT 5",
+            "SELECT j + 0 AS j FROM p ORDER BY j DESC LIMIT 5",
+        ),
+        (
+            "SELECT j FROM p ORDER BY j LIMIT 5",
+            "SELECT j + 0 AS j FROM p ORDER BY j LIMIT 5",
+        ),
+    ] {
+        assert_eq!(cells(&mut session, sql), cells(&mut session, twin), "{sql}");
+    }
+}

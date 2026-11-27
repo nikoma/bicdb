@@ -3830,6 +3830,7 @@ impl<'db> SqlEngine<'db> {
                 index_name,
                 descending,
                 limit,
+                nulls_first,
             } => {
                 sql_profile_index_lookup();
                 if self.tx.is_some_and(|tx| {
@@ -3839,9 +3840,28 @@ impl<'db> SqlEngine<'db> {
                     sql_profile_full_scan();
                     return self.scan_records(collection);
                 }
-                let ids = self
-                    .db_ref()
-                    .ordered_index_records(index_name, *descending, *limit)?;
+                let ids = match nulls_first {
+                    None => self
+                        .db_ref()
+                        .ordered_index_records(index_name, *descending, *limit)?,
+                    // ORDER BY's NULL placement, both key ranges bounded by
+                    // the limit; the planner only emits this for indexes
+                    // that can list their entries.
+                    Some(nulls_first) => self
+                        .db_ref()
+                        .prefix_ordered_index_records_nulls(
+                            index_name,
+                            &[],
+                            *descending,
+                            *nulls_first,
+                            limit.unwrap_or(usize::MAX),
+                        )?
+                        .ok_or_else(|| {
+                            SqlError::InvalidSql(format!(
+                                "index {index_name} cannot list its entries"
+                            ))
+                        })?,
+                };
                 self.records_for_ids(collection, &ids)
             }
             PlanKind::IndexPrefixOrderedScan {

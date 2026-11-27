@@ -2537,11 +2537,12 @@ fn column_type_change_requires_rewrite(source: &ColumnSchema, target: &ColumnSch
     if source.type_modifier == target.type_modifier && source.vector_dim == target.vector_dim {
         return false;
     }
+    let source_column_is_variable_length = source.pg_type == "varchar";
     let metadata_only = match (&source.type_modifier, &target.type_modifier) {
         (
             Some(PgTypeModifier::Character { length: source }),
             Some(PgTypeModifier::Character { length: target }),
-        ) => target >= source,
+        ) => target >= source && source_column_is_variable_length,
         (
             Some(PgTypeModifier::Numeric {
                 precision: source_precision,

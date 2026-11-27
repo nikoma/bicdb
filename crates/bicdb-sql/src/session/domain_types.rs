@@ -2485,11 +2485,37 @@ impl<'db> SqlSession<'db> {
                 &previous_column,
                 &updated_parent.columns[column_index],
             );
+        // TEXT and VARCHAR share one stored representation. Cast and validate
+        // every current value against the requested length, but only stage
+        // a physical rewrite if at least one value changes. An indexed
+        // expression may depend on the declared type, so leave it to the
+        // ordinary rewrite path.
+        let same_string_storage = using.is_none()
+            && !blob_rewrite
+            && !oracle::is_oracle_database(self.db_ref())?
+            && schema.partitioning.is_none()
+            && previous_column.user_type.is_none()
+            && updated_parent.columns[column_index].user_type.is_none()
+            && matches!(previous_column.pg_type.as_str(), "text" | "varchar")
+            && matches!(
+                updated_parent.columns[column_index].pg_type.as_str(),
+                "text" | "varchar"
+            )
+            && !previous_column.primary_key
+            && schema.indexes.is_empty()
+            && self
+                .db_ref()
+                .index_definitions()
+                .iter()
+                .all(|index| index.collection != table)
+            && self.db_ref().collection_policy(table)?.is_none()
+            && self.db_ref().mutation_policy(table)?.is_none();
+        let retain_unchanged_rows = source_metadata_only || same_string_storage;
         let mut planned = Vec::with_capacity(changes.len());
         let mut unchanged_source_tables = BTreeSet::new();
         for (previous, updated) in changes {
             let mut records = self.ddl_rows()?.visible(&previous.name)?;
-            let mut unchanged_source = source_metadata_only;
+            let mut unchanged_source = retain_unchanged_rows;
             if rewrite {
                 for record in &mut records {
                     let current = if oracle::lob_storage::is_column(&previous.columns[column_index])
@@ -2498,7 +2524,7 @@ impl<'db> SqlSession<'db> {
                     } else {
                         record_column_value(record, &previous, column_name)
                     };
-                    let original = source_metadata_only.then(|| current.clone());
+                    let original = retain_unchanged_rows.then(|| current.clone());
                     let value = if let Some(expr) = using {
                         self.eval_target_record_expr(
                             &previous.name,
@@ -2556,8 +2582,8 @@ impl<'db> SqlSession<'db> {
 
         for (previous, _, _) in &planned {
             if unchanged_source_tables.contains(&previous.name) {
-                // Provenance attachment does not change records. Keeping a full
-                // table copy per column makes a wide-table transaction unbounded.
+                // Validated metadata-only changes need a catalog undo entry,
+                // not a copy of the table's rows.
                 if self.tx.is_some() {
                     self.ddl_undo.push(DdlUndo::RestoreSchema {
                         schema: previous.clone(),

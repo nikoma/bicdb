@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-core"
-version = "1.0.557"
+version = "1.0.558"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -28,8 +28,8 @@ osm-import = ["dep:osmpbfreader"]
 compression = ["dep:zstd"]
 
 [dependencies]
-bicdb-lua = { path = "../bicdb-lua", version = "=1.0.557", optional = true }
-bicdb-page = { path = "../bicdb-page", version = "=1.0.557" }
+bicdb-lua = { path = "../bicdb-lua", version = "=1.0.558", optional = true }
+bicdb-page = { path = "../bicdb-page", version = "=1.0.558" }
 argon2.workspace = true
 bigdecimal = "=0.4.10"
 chacha20poly1305.workspace = true

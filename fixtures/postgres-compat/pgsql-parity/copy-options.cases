@@ -1,0 +1,51 @@
+co.text_delimiter_null_out|CREATE TABLE co1(a int, b text, c text); INSERT INTO co1 VALUES (1, 'x|y', NULL), (2, E'tab\there', 'back\slash'); COPY co1 TO STDOUT (DELIMITER '|', NULL 'nil'); COPY co1 TO STDOUT WITH DELIMITER AS ';' NULL AS ''
+co.text_delimiter_null_in|CREATE TABLE co2(a int, b text, c text); COPY co2 FROM PROGRAM 'printf "1|x\\\\|y|nil\n2|\\\\x41\\\\101|\n"' (DELIMITER '|', NULL 'nil'); SELECT a, b, c IS NULL, c FROM co2 ORDER BY a
+co.text_escapes_out|CREATE TABLE co3(t text); INSERT INTO co3 VALUES (E'a\bb\fc\nd\re\tf\vg\\h'); COPY co3 TO STDOUT
+co.csv_quote_escape_out|CREATE TABLE co4(a int, b text, c text); INSERT INTO co4 VALUES (1, 'it''s', 'a,b'), (2, 'say "hi"', NULL), (3, '', 'plain'); COPY co4 TO STDOUT (FORMAT csv, QUOTE '''', ESCAPE '\'); COPY co4 TO STDOUT WITH CSV QUOTE AS '''' DELIMITER ';' NULL 'N/A' HEADER
+co.csv_force_quote|CREATE TABLE co5(a int, b text, c text); INSERT INTO co5 VALUES (1, 'x', NULL), (2, 'y', 'z'); COPY co5 TO STDOUT (FORMAT csv, FORCE_QUOTE (b, c)); COPY co5 TO STDOUT (FORMAT csv, FORCE_QUOTE *); COPY co5 TO STDOUT CSV FORCE QUOTE a
+co.csv_quote_escape_in|CREATE TABLE co6(a int, b text); COPY (SELECT 1, $$it's$$ UNION ALL SELECT 2, 'x;y' UNION ALL SELECT 3, $$back\slash$$) TO '/tmp/bicdb-pgq/co6.csv' (FORMAT csv, DELIMITER ';', QUOTE '''', ESCAPE '\'); COPY co6 FROM PROGRAM 'cat /tmp/bicdb-pgq/co6.csv' (FORMAT csv, DELIMITER ';', QUOTE '''', ESCAPE '\'); SELECT * FROM co6 ORDER BY a; COPY co6 TO STDOUT (FORMAT csv, DELIMITER ';', QUOTE '''', ESCAPE '\')
+co.csv_force_not_null_and_null|CREATE TABLE co7(a int, b text, c text); COPY co7 FROM PROGRAM 'printf "1,,\"\"\n2,x,\"\"\n"' (FORMAT csv, FORCE_NOT_NULL (b), FORCE_NULL (c)); SELECT a, b IS NULL, b, c IS NULL FROM co7 ORDER BY a
+co.csv_force_null_star|CREATE TABLE co8(a int, b text); COPY co8 FROM PROGRAM 'printf "1,\"\"\n"' CSV FORCE NULL *; SELECT a, b IS NULL FROM co8
+co.encoding_utf8_aliases|CREATE TABLE co9(t text); INSERT INTO co9 VALUES ('é'); COPY co9 TO STDOUT (ENCODING 'UTF8'); COPY co9 TO STDOUT (ENCODING 'utf-8'); COPY co9 TO STDOUT (ENCODING 'unicode'); COPY co9 TO STDOUT (ENCODING 'SQL_ASCII')
+co.encoding_latin1_round_trip|CREATE TABLE co10(t text); INSERT INTO co10 VALUES ('café'); COPY co10 TO PROGRAM 'cat > /tmp/bicdb-pgq/co10.txt' (ENCODING 'LATIN1'); COPY co10 FROM PROGRAM 'od -An -tx1 /tmp/bicdb-pgq/co10.txt | tr -d " \n"; echo'; COPY co10 FROM '/tmp/bicdb-pgq/co10.txt' (ENCODING 'latin1'); SELECT t FROM co10 ORDER BY t
+co.encoding_latin1_unmappable|CREATE TABLE co11(t text); INSERT INTO co11 VALUES ('€'); COPY co11 TO STDOUT (ENCODING 'LATIN1')
+co.encoding_invalid|CREATE TABLE co12(t text); COPY co12 TO STDOUT (ENCODING 'no-such-encoding')
+co.err_format|CREATE TABLE ce1(a int); COPY ce1 TO STDOUT (FORMAT xml)
+co.err_format_twice|CREATE TABLE ce2(a int); COPY ce2 TO STDOUT (FORMAT csv, FORMAT text)
+co.err_delimiter_multichar|CREATE TABLE ce3(a int); COPY ce3 TO STDOUT (DELIMITER '||')
+co.err_delimiter_letter|CREATE TABLE ce4(a int); COPY ce4 TO STDOUT (DELIMITER 'a')
+co.err_delimiter_newline|CREATE TABLE ce5(a int); COPY ce5 TO STDOUT (DELIMITER E'\n')
+co.err_null_newline|CREATE TABLE ce6(a int); COPY ce6 TO STDOUT (NULL E'\r')
+co.err_quote_text|CREATE TABLE ce7(a int); COPY ce7 TO STDOUT (QUOTE '"')
+co.err_quote_multichar|CREATE TABLE ce8(a int); COPY ce8 TO STDOUT (FORMAT csv, QUOTE 'ab')
+co.err_delimiter_is_quote|CREATE TABLE ce9(a int); COPY ce9 TO STDOUT (FORMAT csv, DELIMITER '"')
+co.err_escape_text|CREATE TABLE ce10(a int); COPY ce10 TO STDOUT (ESCAPE '\')
+co.err_binary_delimiter|CREATE TABLE ce11(a int); COPY ce11 TO STDOUT (FORMAT binary, DELIMITER ',')
+co.err_binary_null|CREATE TABLE ce12(a int); COPY ce12 TO STDOUT (FORMAT binary, NULL 'x')
+co.err_binary_header|CREATE TABLE ce13(a int); COPY ce13 TO STDOUT (FORMAT binary, HEADER)
+co.err_header_match_to|CREATE TABLE ce14(a int); COPY ce14 TO STDOUT (HEADER match)
+co.err_header_value|CREATE TABLE ce15(a int); COPY ce15 TO STDOUT (HEADER maybe)
+co.err_force_quote_from|CREATE TABLE ce16(a int); COPY ce16 FROM PROGRAM 'true' (FORMAT csv, FORCE_QUOTE *)
+co.err_force_quote_text|CREATE TABLE ce17(a int); COPY ce17 TO STDOUT (FORCE_QUOTE *)
+co.err_force_not_null_to|CREATE TABLE ce18(a int); COPY ce18 TO STDOUT (FORMAT csv, FORCE_NOT_NULL *)
+co.err_force_null_to|CREATE TABLE ce19(a int); COPY ce19 TO STDOUT (FORMAT csv, FORCE_NULL (a))
+co.err_force_not_referenced|CREATE TABLE ce20(a int, b int); COPY ce20 (a) TO STDOUT (FORMAT csv, FORCE_QUOTE (b))
+co.err_force_no_column|CREATE TABLE ce21(a int); COPY ce21 TO STDOUT (FORMAT csv, FORCE_QUOTE (zz))
+co.err_force_list_arg|CREATE TABLE ce22(a int); COPY ce22 TO STDOUT (FORMAT csv, FORCE_QUOTE 'a')
+co.err_null_contains_delimiter|CREATE TABLE ce23(a int); COPY ce23 TO STDOUT (NULL 'a	b')
+co.err_null_contains_quote|CREATE TABLE ce24(a int); COPY ce24 TO STDOUT (FORMAT csv, NULL 'x"y')
+co.err_freeze_to|CREATE TABLE ce25(a int); COPY ce25 TO STDOUT (FREEZE)
+co.err_default_to|CREATE TABLE ce26(a int); COPY ce26 TO STDOUT (DEFAULT 'd')
+co.err_on_error_to|CREATE TABLE ce27(a int); COPY ce27 TO STDOUT (ON_ERROR stop)
+co.err_on_error_value|CREATE TABLE ce28(a int); COPY ce28 FROM PROGRAM 'true' (ON_ERROR maybe)
+co.err_binary_on_error|CREATE TABLE ce29(a int); COPY ce29 FROM PROGRAM 'true' (FORMAT binary, ON_ERROR ignore)
+co.err_reject_limit_alone|CREATE TABLE ce30(a int); COPY ce30 FROM PROGRAM 'true' (REJECT_LIMIT 3)
+co.err_reject_limit_zero|CREATE TABLE ce31(a int); COPY ce31 FROM PROGRAM 'true' (ON_ERROR ignore, REJECT_LIMIT 0)
+co.err_log_verbosity|CREATE TABLE ce32(a int); COPY ce32 FROM PROGRAM 'true' (LOG_VERBOSITY loud)
+co.err_unknown_option|CREATE TABLE ce33(a int); COPY ce33 TO STDOUT (bogus 1)
+co.err_delimiter_no_arg|CREATE TABLE ce34(a int); COPY ce34 TO STDOUT (DELIMITER)
+co.err_default_null_same|CREATE TABLE ce35(a int); COPY ce35 FROM PROGRAM 'true' (NULL 'x', DEFAULT 'x')
+co.accepted_noops|CREATE TABLE ce36(a int); COPY ce36 FROM PROGRAM 'printf "1\n"' (FREEZE false, ON_ERROR stop, LOG_VERBOSITY verbose); SELECT * FROM ce36
+co.header_text_custom_null|CREATE TABLE co13(a int, "b c" text); INSERT INTO co13 VALUES (1, NULL); COPY co13 TO STDOUT (HEADER, NULL 'NULL', DELIMITER ',')
+co.legacy_binary_with|CREATE TABLE co14(a int); INSERT INTO co14 VALUES (7); COPY co14 TO PROGRAM 'cat > /tmp/bicdb-pgq/co14.bin' WITH BINARY; TRUNCATE co14; COPY BINARY co14 FROM '/tmp/bicdb-pgq/co14.bin'; SELECT * FROM co14
+co.using_delimiters|CREATE TABLE co15(a int, b text); INSERT INTO co15 VALUES (1, 'x'); COPY co15 TO STDOUT USING DELIMITERS '|'

@@ -13,6 +13,8 @@ mod function_call;
 mod query_exec;
 mod routine_outcome_trace;
 pub(crate) use query_exec::*;
+mod copy_options;
+pub(crate) use copy_options::*;
 mod server_copy;
 pub use server_copy::ServerCopyConfig;
 mod sql_parsing;
@@ -3052,6 +3054,7 @@ struct CopyInState {
     /// whether that point is inside a quoted field.
     csv_scanned: usize,
     csv_in_quote: bool,
+    csv_last_was_escape: bool,
     /// CSV: line ends inside the quoted fields of the record being read, and
     /// whether the input ends its lines with CRLF (unknown before the first).
     csv_embedded_lines: u64,
@@ -3163,6 +3166,8 @@ struct CopyStatement {
     binary_column_oids: Vec<i32>,
     /// `COPY ... FROM ... WHERE <condition>`.
     where_clause: Option<String>,
+    /// DELIMITER, NULL, QUOTE, ESCAPE, FORCE_*, ENCODING, ... as processed.
+    options: CopyOptions,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -3599,7 +3604,7 @@ fn execute_server_query(
         }
         return Ok(QueryFlow::Complete);
     }
-    if let Some(copy) = parse_copy_statement(sql)? {
+    if let Some(mut copy) = parse_copy_statement(sql)? {
         delegation::validate_delegation(server, state)?;
         acquire_postgres_statement_snapshot(server, state, None, || true)?;
         if copy.endpoint != CopyEndpoint::Client {
@@ -3646,7 +3651,7 @@ fn execute_server_query(
                 if state.failed_transaction {
                     return Err(PgWireError::InFailedTransaction);
                 }
-                let result = execute_copy_query(server, state, &copy)?;
+                let result = execute_copy_query(server, state, &mut copy)?;
                 copy_out_response_with_format(stream, &result, copy.binary)?;
                 let bytes_streamed = render_copy_out(server, state, &copy, &result, |payload| {
                     copy_data(stream, payload)
@@ -3860,6 +3865,12 @@ fn begin_copy_in(
         if copy.header_match {
             copy.header_expected = targets.clone();
         }
+        let defaults = match copy_target_columns(server, state, &copy, &[])? {
+            Some((defaults, _)) => defaults,
+            None => all_columns.columns.clone(),
+        };
+        copy.options
+            .resolve_columns(&targets, &defaults, copy.relation.as_deref())?;
         Ok(targets)
     })();
     let target_columns = match prepared {
@@ -3901,6 +3912,7 @@ fn begin_copy_in(
         line_number: 0,
         csv_scanned: 0,
         csv_in_quote: false,
+        csv_last_was_escape: false,
         csv_embedded_lines: 0,
         csv_eol_crlf: None,
         target_columns,
@@ -3924,7 +3936,7 @@ fn render_copy_out(
     mut sink: impl FnMut(&[u8]) -> Result<()>,
 ) -> Result<u64> {
     if copy.header {
-        sink(&render_copy_header(&result.columns, copy.format))?;
+        sink(&render_copy_header(&result.columns, &copy.options)?)?;
     }
     if copy.binary {
         sink(&copy_binary_header())?;
@@ -3944,7 +3956,7 @@ fn render_copy_out(
         let payload = if copy.binary {
             render_copy_binary_row(&db, row, &column_types)?
         } else {
-            render_copy_row(&db, row, &column_types, copy.format)?
+            render_copy_row(&db, row, &column_types, &copy.options)?
         };
         bytes_streamed = bytes_streamed.saturating_add(payload.len() as u64);
         sink(&payload)?;

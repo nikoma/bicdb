@@ -5564,8 +5564,9 @@ impl<'db> SqlSession<'db> {
             )
         });
         // A fresh CREATE TABLE has no corpus to rebuild, in autocommit as well
-        // as an explicit transaction. Existing-table builds retain the normal
-        // pending-transaction fence, and core also rejects pending target rows.
+        // as an explicit transaction. For existing tables, the paged build
+        // checks that the SQL transaction is the sole active transaction and
+        // has acquired no write locks.
         let new_empty_table = self.db_ref().is_server_paged()
             && definition.kind == IndexKind::BTree
             && definition.exclusion.is_none()
@@ -5580,6 +5581,9 @@ impl<'db> SqlSession<'db> {
                 }));
         let created = if new_empty_table {
             self.db_mut()?.create_empty_btree_index(definition)
+        } else if let Some(owner) = self.tx.as_ref().map(|tx| tx.id()) {
+            self.db_mut()?
+                .create_index_for_sql_transaction(definition, owner)
         } else {
             self.db_mut()?.create_index(definition)
         };

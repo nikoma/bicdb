@@ -3161,6 +3161,8 @@ struct CopyStatement {
     binary: bool,
     /// COPY FROM binary: the type of each target column, to decode fields.
     binary_column_oids: Vec<i32>,
+    /// `COPY ... FROM ... WHERE <condition>`.
+    where_clause: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -3693,6 +3695,80 @@ fn execute_server_query(
     }
 }
 
+/// The columns a COPY of a table reads or writes and the table's generated
+/// columns (see `SqlSession::copy_target_columns`), resolved as the session
+/// would (search_path, role). `None` for a query or a relation without a
+/// table schema.
+pub(crate) fn copy_target_columns(
+    server: &Arc<PgWireServer>,
+    state: &ConnectionState,
+    copy: &CopyStatement,
+    columns: &[String],
+) -> Result<Option<(Vec<String>, Vec<String>)>> {
+    let Some(relation) = copy.relation.as_deref() else {
+        return Ok(None);
+    };
+    let db = server.read_db_for_transaction_progress()?;
+    let tx = db.begin_transaction()?;
+    // The connection's runtime too: it names the session's temporary schema.
+    let mut session =
+        with_connection_guc_state(sql_session_shared_for_server(server, &db), server, state)
+            .with_pending_transaction(tx)
+            .with_deferred_commit();
+    let result = session.copy_target_columns(relation, columns);
+    if let Some(tx) = session.take_pending_transaction() {
+        tx.rollback()?;
+    }
+    Ok(result?)
+}
+
+/// `COPY ... FROM ... WHERE`: PostgreSQL's error when the condition reads a
+/// generated column (a whole-row reference reads them all); otherwise the
+/// filter is not implemented, so the statement is refused before COPY mode
+/// rather than loading rows the condition would have skipped.
+fn copy_where_error(copy: &CopyStatement, condition: &str, generated: &[String]) -> PgWireError {
+    let relation = copy
+        .relation
+        .as_deref()
+        .unwrap_or_default()
+        .rsplit('.')
+        .next()
+        .unwrap_or_default()
+        .to_string();
+    let mut referenced = BTreeSet::new();
+    if let Ok(tokens) =
+        sqlparser::tokenizer::Tokenizer::new(&PostgreSqlDialect {}, condition).tokenize()
+    {
+        for token in tokens {
+            if let sqlparser::tokenizer::Token::Word(word) = token {
+                referenced.insert(if word.quote_style.is_some() {
+                    word.value
+                } else {
+                    word.value.to_ascii_lowercase()
+                });
+            }
+        }
+    }
+    let whole_row = referenced.contains(&relation);
+    if let Some(column) = generated
+        .iter()
+        .find(|column| whole_row || referenced.contains(column.as_str()))
+    {
+        return PgWireError::Sql(SqlError::coded_public(
+            "42P10",
+            "generated columns are not supported in COPY FROM WHERE conditions",
+            Some(format!("Column \"{column}\" is a generated column.")),
+            None,
+        ));
+    }
+    PgWireError::Sql(SqlError::coded_public(
+        "0A000",
+        "COPY FROM with a WHERE condition is not supported",
+        None,
+        None,
+    ))
+}
+
 /// Enter COPY FROM mode for `copy`: resolve its target (as the session would)
 /// and install `state.copy_in`, opening the transaction COPY runs in. Returns
 /// the number of target columns. Shared by COPY FROM STDIN and the
@@ -3726,7 +3802,23 @@ fn begin_copy_in(
     // went on sending queries, so the session hung.
     let prepared = (|| -> Result<Vec<String>> {
         let relation = copy.relation_sql.clone().unwrap_or_default();
+        // Bind the relation through the session's search_path and its
+        // temporary schema first, as a statement of the session would: the
+        // description alone does not see the session's temporary tables.
         let describe = |state: &mut ConnectionState, sql: String| {
+            let temp = bicdb_sql::temp_schema_for_backend(
+                i32::try_from(state.connection_id).unwrap_or(i32::MAX),
+            );
+            let bound = {
+                let db = server.read_db_for_transaction_progress()?;
+                bicdb_sql::search_path::bind_session_sql_with_temp(
+                    &db,
+                    &sql,
+                    state.session_state.session_gucs(),
+                    Some(&temp),
+                )?
+            };
+            let sql = bound.unwrap_or(sql);
             execute_server_sql_for_describe_with_session(
                 server,
                 &sql,
@@ -3736,32 +3828,39 @@ fn begin_copy_in(
             )
         };
         let all_columns = describe(state, format!("SELECT * FROM {relation} LIMIT 0"))?;
+        // PostgreSQL's column list: generated columns are left out by
+        // default and refused when named, before any data is read.
+        // The WHERE check comes first, as in PostgreSQL's DoCopy.
+        if let Some(condition) = &copy.where_clause {
+            let generated = copy_target_columns(server, state, &copy, &[])?
+                .map(|(_, generated)| generated)
+                .unwrap_or_default();
+            return Err(copy_where_error(&copy, condition, &generated));
+        }
+        let targets = match copy_target_columns(server, state, &copy, &copy.columns)? {
+            Some((targets, _)) => targets,
+            None if copy.columns.is_empty() => all_columns.columns.clone(),
+            None => copy.columns.clone(),
+        };
         if copy.binary {
-            let target = if copy.columns.is_empty() {
+            let target = targets
+                .iter()
+                .map(|column| format!("\"{}\"", column.replace('"', "\"\"")))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let target = if target.is_empty() {
                 "*".to_string()
             } else {
-                copy.columns
-                    .iter()
-                    .map(|column| format!("\"{}\"", column.replace('"', "\"\"")))
-                    .collect::<Vec<_>>()
-                    .join(", ")
+                target
             };
             let described = describe(state, format!("SELECT {target} FROM {relation} LIMIT 0"))?;
             let db = server.read_db_for_transaction_progress()?;
             copy.binary_column_oids = result_column_types_with_db(&db, &described, None)?;
         }
         if copy.header_match {
-            copy.header_expected = if copy.columns.is_empty() {
-                all_columns.columns.clone()
-            } else {
-                copy.columns.clone()
-            };
+            copy.header_expected = targets.clone();
         }
-        Ok(if copy.columns.is_empty() {
-            all_columns.columns.clone()
-        } else {
-            copy.columns.clone()
-        })
+        Ok(targets)
     })();
     let target_columns = match prepared {
         Ok(columns) => columns,

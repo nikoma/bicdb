@@ -1822,6 +1822,14 @@ pub(crate) fn parse_copy_statement(sql: &str) -> Result<Option<CopyStatement>> {
     // The options follow the endpoint; a file name or command is a string
     // literal whose words (`/tmp/binary.csv`) must not be read as options.
     let (endpoint, options) = parse_copy_endpoint(after_direction)?;
+    let (options, where_clause) = split_copy_where(options);
+    if where_clause.is_some() && direction == CopyDirection::ToStdout {
+        return Err(PgWireError::Sql(bicdb_sql::SqlError::RaisedException {
+            sqlstate: "42601".to_string(),
+            message: "WHERE clause not allowed with COPY TO".to_string(),
+            detail: None,
+        }));
+    }
     let binary = target.len() != full_target.len() || contains_word(options, "binary");
     if contains_word(target, "freeze") || contains_word(options, "freeze") {
         return Err(PgWireError::Server(
@@ -1873,7 +1881,30 @@ pub(crate) fn parse_copy_statement(sql: &str) -> Result<Option<CopyStatement>> {
         header_expected: Vec::new(),
         binary,
         binary_column_oids: Vec::new(),
+        where_clause,
     }))
+}
+
+/// COPY options and a trailing `WHERE <condition>` (outside parentheses and
+/// string literals), which the options must not be read from.
+pub(crate) fn split_copy_where(options: &str) -> (&str, Option<String>) {
+    let mut depth = 0_i32;
+    let mut quoted = false;
+    for (idx, ch) in options.char_indices() {
+        match ch {
+            '\'' => quoted = !quoted,
+            '(' if !quoted => depth += 1,
+            ')' if !quoted => depth -= 1,
+            _ if !quoted && depth == 0 && word_at(options, idx, "where") => {
+                return (
+                    &options[..idx],
+                    Some(options[idx + "where".len()..].trim().to_string()),
+                );
+            }
+            _ => {}
+        }
+    }
+    (options, None)
 }
 
 /// The endpoint after `FROM`/`TO` and the option text that follows it.
@@ -2037,12 +2068,18 @@ pub(crate) fn execute_copy_query(
             .relation_sql
             .as_ref()
             .ok_or_else(|| PgWireError::Server("COPY TO missing relation".to_string()))?;
-        if copy.columns.is_empty() {
+        // PostgreSQL leaves generated columns (stored and virtual) out of
+        // the default list and refuses them when named.
+        let columns = match copy_target_columns(server, state, copy, &copy.columns)? {
+            Some((targets, _)) => targets,
+            None => copy.columns.clone(),
+        };
+        if columns.is_empty() {
             format!("SELECT * FROM {relation}")
         } else {
             format!(
                 "SELECT {} FROM {relation}",
-                copy.columns
+                columns
                     .iter()
                     .map(|column| quote_sql_identifier(column))
                     .collect::<Vec<_>>()
@@ -2246,7 +2283,11 @@ pub(crate) fn finish_copy_in_inner(
         .relation
         .clone()
         .ok_or_else(|| PgWireError::Server("COPY FROM STDIN missing relation".to_string()))?;
-    let columns = if copy.spec.columns.is_empty() {
+    let columns = if !copy.target_columns.is_empty() {
+        // Resolved when COPY began: the named columns, or every column
+        // that is not generated.
+        copy.target_columns.clone()
+    } else if copy.spec.columns.is_empty() {
         let relation_sql = copy.spec.relation_sql.as_ref().ok_or_else(|| {
             PgWireError::Server("COPY FROM STDIN missing SQL relation".to_string())
         })?;

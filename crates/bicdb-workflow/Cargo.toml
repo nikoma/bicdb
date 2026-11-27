@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-workflow"
-version = "1.0.560"
+version = "1.0.561"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -15,9 +15,9 @@ categories = ["database-implementations"]
 include = ["/README.md", "/src/**", "/Cargo.toml", "/LICENSE", "/NOTICE", "/THIRD_PARTY_NOTICES.md"]
 
 [dependencies]
-bicdb-core = { path = "../bicdb-core", version = "=1.0.560", default-features = false }
-bicdb-lua = { path = "../bicdb-lua", version = "=1.0.560" }
-bicdb-script = { path = "../bicdb-script", version = "=1.0.560" }
+bicdb-core = { path = "../bicdb-core", version = "=1.0.561", default-features = false }
+bicdb-lua = { path = "../bicdb-lua", version = "=1.0.561" }
+bicdb-script = { path = "../bicdb-script", version = "=1.0.561" }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

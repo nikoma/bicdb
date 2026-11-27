@@ -323,11 +323,13 @@ fn resolve_regclass_physical_oid(
     {
         return Ok(Some(named_relation_oid(physical)));
     }
-    // Index catalogs carry the logical name and owning namespace separately.
-    // Splitting a schema-encoded storage name would incorrectly select public.
+    // Indexes and generated sequences can carry a storage name different
+    // from the SQL name shown in pg_class.
     Ok(pg_class_rows(db)?.into_iter().find_map(|row| {
-        (matches!(virtual_cell(&row, "relkind").to_cell().as_str(), "i" | "I")
-            && virtual_cell(&row, "relname").to_cell() == logical_name
+        (matches!(
+            virtual_cell(&row, "relkind").to_cell().as_str(),
+            "i" | "I" | "S"
+        ) && virtual_cell(&row, "relname").to_cell() == logical_name
             && sql_value_i64(&virtual_cell(&row, "relnamespace")) == Some(namespace_oid(namespace)))
         .then(|| sql_value_i64(&virtual_cell(&row, "oid")))
         .flatten()

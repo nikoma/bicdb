@@ -2,6 +2,56 @@
 //! unchanged — a separate `impl` block on the same type.
 use super::*;
 
+fn validate_index_columns(index: &CreateIndex, columns: &[ColumnSchema]) -> Result<()> {
+    let check = |ident: &Ident| {
+        let name = ident_value(ident);
+        if columns
+            .iter()
+            .any(|column| !column.hidden && column.name == name)
+            || POSTGRES_SYSTEM_COLUMN_NAMES.contains(&name.as_str())
+            || [
+                "id",
+                "metadata",
+                "timestamp",
+                "payload",
+                "vector",
+                "geometry",
+            ]
+            .contains(&name.as_str())
+        {
+            Ok(())
+        } else {
+            Err(SqlError::data_exception_public(
+                "42703",
+                format!("column \"{name}\" does not exist"),
+                None,
+            ))
+        }
+    };
+    let expressions = index
+        .columns
+        .iter()
+        .map(|column| &column.column.expr)
+        .chain(index.predicate.iter());
+    for expression in expressions {
+        let result = sqlparser::ast::visit_expressions(expression, |expr| {
+            let name = match expr {
+                Expr::Identifier(name) => Some(name),
+                Expr::CompoundIdentifier(parts) => parts.last(),
+                _ => None,
+            };
+            match name.map(check).transpose() {
+                Ok(_) => ControlFlow::Continue(()),
+                Err(error) => ControlFlow::Break(error),
+            }
+        });
+        if let ControlFlow::Break(error) = result {
+            return Err(error);
+        }
+    }
+    index.include.iter().try_for_each(check)
+}
+
 impl<'db> SqlSession<'db> {
     pub(crate) fn drop_user_type_definition(
         &mut self,
@@ -352,6 +402,22 @@ impl<'db> SqlSession<'db> {
             return Err(SqlError::Unsupported(
                 "CREATE OR ALTER VIEW is not supported".to_string(),
             ));
+        }
+
+        if self.column_references_checkable() && !oracle::is_oracle_database(self.db_ref())? {
+            for relation in
+                super::view_dependencies::relations(&crate::sql_text::sql_text(&create_view.query))?
+            {
+                let resolved = resolve_session_relation_name_if_exists(self.db_ref(), &relation);
+                if load_sequence(self.db_ref(), &resolved)?.is_none() {
+                    crate::session::functions_insert::require_dml_target_exists(
+                        self.db_ref(),
+                        &resolved,
+                    )?;
+                }
+            }
+            self.sql_engine()
+                .check_statement_column_references(&Statement::Query(create_view.query.clone()))?;
         }
 
         let requested = relation_name(&create_view.name)?;
@@ -3586,6 +3652,9 @@ impl<'db> SqlSession<'db> {
                         "indexes on logical views are not supported".to_string(),
                     ));
                 }
+                if !oracle::is_oracle_database(self.db_ref())? {
+                    validate_index_columns(create_index, &view.columns)?;
+                }
                 let index_name = create_index
                     .name
                     .as_ref()
@@ -3650,6 +3719,9 @@ impl<'db> SqlSession<'db> {
             }
             return Err(SqlError::InvalidCollection(table.clone()));
         };
+        if !oracle::is_oracle_database(self.db_ref())? {
+            validate_index_columns(create_index, &schema.columns)?;
+        }
         if !schema.virtual_generated_columns.is_empty() {
             // PostgreSQL 18 computes virtual columns on read and cannot
             // index them, in a key or an expression alike.

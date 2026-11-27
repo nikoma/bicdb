@@ -2699,7 +2699,7 @@ fn serial_and_identity_columns_insert_defaults_and_catalogs() {
             )
             .unwrap()
             .rows,
-        vec![vec![SqlValue::String("public.events_id_seq".to_string())]]
+        vec![vec![SqlValue::String("events_id_seq".to_string())]]
     );
 }
 

@@ -118,6 +118,68 @@ fn postgres_simple_query_batches_report_each_result_and_roll_back_on_error() {
 }
 
 #[test]
+fn postgres_simple_query_resumes_after_copy_and_keeps_the_implicit_transaction() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        bicdb_pgwire::handle_client(stream, path).unwrap();
+    });
+    let mut client = TcpStream::connect(address).unwrap();
+    client
+        .set_read_timeout(Some(Duration::from_secs(30)))
+        .unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+    send_query(&mut client, "CREATE TABLE batch_copy (id int PRIMARY KEY)");
+    read_query_rows(&mut client);
+
+    send_query(
+        &mut client,
+        "INSERT INTO batch_copy VALUES (1); COPY batch_copy FROM STDIN; SELECT id FROM batch_copy ORDER BY id",
+    );
+    assert_eq!(read_message(&mut client).0, b'C');
+    assert_eq!(read_message(&mut client).0, b'G');
+    send_message(&mut client, b'd', b"2\n");
+    send_message(&mut client, b'c', &[]);
+    assert_eq!(
+        read_query_rows_with_status(&mut client),
+        (vec![vec!["1".to_string()], vec!["2".to_string()]], b'I'),
+    );
+
+    send_query(
+        &mut client,
+        "INSERT INTO batch_copy VALUES (3); COPY batch_copy FROM STDIN; SELECT missing FROM batch_copy",
+    );
+    assert_eq!(read_message(&mut client).0, b'C');
+    assert_eq!(read_message(&mut client).0, b'G');
+    send_message(&mut client, b'd', b"4\n");
+    send_message(&mut client, b'c', &[]);
+    let (error, status) = read_error_response_with_status(&mut client);
+    assert!(error.contains("42703"), "{error}");
+    assert_eq!(status, b'I');
+
+    send_query(
+        &mut client,
+        "INSERT INTO batch_copy VALUES (5); COPY batch_copy FROM STDIN; SELECT id FROM batch_copy",
+    );
+    assert_eq!(read_message(&mut client).0, b'C');
+    assert_eq!(read_message(&mut client).0, b'G');
+    send_message(&mut client, b'f', b"client ended COPY\0");
+    assert_eq!(read_error_response_with_status(&mut client).1, b'I');
+
+    send_query(&mut client, "SELECT id FROM batch_copy ORDER BY id");
+    assert_eq!(
+        read_query_rows(&mut client),
+        vec![vec!["1".to_string()], vec!["2".to_string()]]
+    );
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
+}
+
+#[test]
 fn cte_mutations_describe_no_data_and_keep_update_counts() {
     let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

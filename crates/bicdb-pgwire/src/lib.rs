@@ -2612,24 +2612,38 @@ fn handle_frontend_message(
                 }
             }
             b'c' => {
+                let batch = state
+                    .copy_in
+                    .as_mut()
+                    .and_then(|copy| copy.simple_batch.take());
+                let owns_transaction = batch.as_ref().is_some_and(|batch| batch.owns_transaction);
                 let result = finish_copy_in(server, state).and_then(|count| {
                     if let Some(seq) = bicdb_core::take_thread_commit_seq() {
                         server.sync_quorum.wait_for(seq)?;
                     }
                     Ok(count)
                 });
-                // Notices the copied rows' triggers reported come first.
                 for notice in std::mem::take(&mut state.pending_notices) {
                     notice_response(stream, &notice)?;
                 }
-                match result {
-                    Ok(count) => {
-                        command_complete(stream, &format!("COPY {count}"))?;
-                        if !extended {
-                            ready_for_query_status(stream, state.transaction_status())?;
-                        }
+                let result = result.and_then(|count| {
+                    command_complete(stream, &format!("COPY {count}"))?;
+                    match batch {
+                        Some(batch) => execute_simple_query_batch(stream, server, state, batch),
+                        None => Ok(QueryFlow::Complete),
                     }
+                });
+                match result {
+                    Ok(QueryFlow::Complete) if !extended => {
+                        write_session_parameter_status(stream, state)?;
+                        flush_notifications(stream, server, state.connection_id)?;
+                        ready_for_query_status(stream, state.transaction_status())?;
+                    }
+                    Ok(_) => {}
                     Err(error) => {
+                        if owns_transaction && state.in_transaction {
+                            rollback_open_transaction(server, state)?;
+                        }
                         state.failed_queries += 1;
                         server.failed_queries.fetch_add(1, Ordering::SeqCst);
                         state.record_query_error(&server.config.sql_profile);
@@ -2640,6 +2654,7 @@ fn handle_frontend_message(
                         if extended {
                             state.discard_until_sync = true;
                         } else {
+                            write_session_parameter_status(stream, state)?;
                             ready_for_query_status(stream, state.transaction_status())?;
                         }
                     }
@@ -3029,6 +3044,12 @@ struct Portal {
 }
 
 #[derive(Debug)]
+struct SimpleQueryBatch {
+    statements: std::vec::IntoIter<String>,
+    owns_transaction: bool,
+}
+
+#[derive(Debug)]
 struct CopyInState {
     spec: CopyStatement,
     rows: Vec<Vec<Option<String>>>,
@@ -3045,6 +3066,8 @@ struct CopyInState {
     started_guc_transaction: bool,
     owns_serializable_transaction: bool,
     extended: bool,
+    /// A simple-query message suspended while the client supplies COPY data.
+    simple_batch: Option<SimpleQueryBatch>,
     /// Input line number of each row in `rows` (PostgreSQL's COPY CONTEXT).
     row_lines: Vec<u64>,
     /// Per row in `rows`: the fields that were the DEFAULT marker.
@@ -3105,7 +3128,15 @@ impl CopyInState {
             .as_ref()
             .map(CopySpillState::memory_estimate)
             .unwrap_or_default();
-        spec + resolved_columns + self.pending.len() + rows + spill
+        let batch = self.simple_batch.as_ref().map_or(0, |batch| {
+            batch
+                .statements
+                .as_slice()
+                .iter()
+                .map(|sql| sql.capacity() + std::mem::size_of::<String>())
+                .sum::<usize>()
+        });
+        spec + resolved_columns + self.pending.len() + rows + spill + batch
     }
 }
 
@@ -3518,35 +3549,41 @@ fn execute_server_query(
     state: &mut ConnectionState,
     sql: &str,
 ) -> Result<QueryFlow> {
-    // Keep explicit transaction boundaries in the connection state, including
-    // when a client sends BEGIN and subsequent statements in one Simple Query.
-    // Running that batch inside a temporary SQL session committed its pending
-    // transaction and discarded SET LOCAL before the next protocol message.
     if sql.contains(';') {
         let statements = split_sql_statements(sql);
         if statements.len() > 1 {
             let mut boundaries = state.in_transaction;
-            if !boundaries {
-                for statement in &statements {
-                    let normalized = normalize_executable_sql(statement);
-                    if is_transaction_control_candidate(&normalized)
-                        && parse_transaction_control_for_profile(
-                            statement,
-                            &server.config.sql_profile,
-                        )?
-                        .is_some()
-                        || delegation::transaction_end(statement, &normalized)?.is_some()
-                        // COPY is parsed by the wire layer one statement at a
-                        // time: in a batch, the text after it would otherwise be
-                        // read as COPY options and never run.
-                        || normalized.starts_with("copy ")
-                    {
-                        boundaries = true;
-                        break;
-                    }
-                }
+            let mut copy = false;
+            for statement in &statements {
+                let normalized = normalize_executable_sql(statement);
+                boundaries |= is_transaction_control_candidate(&normalized)
+                    && parse_transaction_control_for_profile(
+                        statement,
+                        &server.config.sql_profile,
+                    )?
+                    .is_some()
+                    || delegation::transaction_end(statement, &normalized)?.is_some();
+                copy |= normalized.starts_with("copy ");
             }
-            if boundaries {
+            let oracle = bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile);
+            let standby = server.config.standby_read_only
+                && server.read_db_for_transaction_progress()?.ha_role() == HaRole::Standby;
+            if !oracle && !standby {
+                let owns_transaction = !boundaries;
+                if owns_transaction {
+                    begin_buffered_transaction(server, state)?;
+                }
+                return execute_simple_query_batch(
+                    stream,
+                    server,
+                    state,
+                    SimpleQueryBatch {
+                        statements: statements.into_iter(),
+                        owns_transaction,
+                    },
+                );
+            }
+            if boundaries || copy {
                 for statement in &statements[..statements.len() - 1] {
                     if matches!(
                         parse_copy_statement(statement)?,
@@ -3566,16 +3603,6 @@ fn execute_server_query(
                     flow = execute_server_query(stream, server, state, &statement)?;
                 }
                 return Ok(flow);
-            }
-            if !bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile) {
-                // An ordinary multi-statement Simple Query has one implicit
-                // transaction and one result per statement. The final COMMIT
-                // ends the transaction but has no CommandComplete of its own.
-                let standby = server.config.standby_read_only
-                    && server.read_db_for_transaction_progress()?.ha_role() == HaRole::Standby;
-                if !standby {
-                    return execute_implicit_simple_query_batch(stream, server, state, statements);
-                }
             }
         }
     }
@@ -3720,25 +3747,38 @@ fn execute_server_query(
     }
 }
 
-fn execute_implicit_simple_query_batch(
+fn execute_simple_query_batch(
     stream: &mut ClientStream,
     server: &Arc<PgWireServer>,
     state: &mut ConnectionState,
-    statements: Vec<String>,
+    mut batch: SimpleQueryBatch,
 ) -> Result<QueryFlow> {
+    let owns_transaction = batch.owns_transaction;
     let result = (|| {
-        begin_buffered_transaction(server, state)?;
-        for statement in statements {
-            execute_server_query(stream, server, state, &statement)?;
+        while let Some(statement) = batch.statements.next() {
+            if matches!(
+                execute_server_query(stream, server, state, &statement)?,
+                QueryFlow::CopyInStarted
+            ) {
+                let copy = state.copy_in.as_mut().ok_or_else(|| {
+                    PgWireError::Server("COPY FROM STDIN state is missing".to_string())
+                })?;
+                copy.simple_batch = Some(batch);
+                return Ok(QueryFlow::CopyInStarted);
+            }
         }
-        let commit =
-            execute_server_sql_with_options_normalized(server, state, "COMMIT", "commit", false)?;
-        for notice in &commit.notices {
-            notice_response(stream, notice)?;
+        if owns_transaction {
+            // The implicit COMMIT can issue notices but has no result frame.
+            let result = execute_server_sql_with_options_normalized(
+                server, state, "COMMIT", "commit", false,
+            )?;
+            for notice in &result.notices {
+                notice_response(stream, notice)?;
+            }
         }
         Ok(QueryFlow::Complete)
     })();
-    if result.is_err() && state.in_transaction {
+    if result.is_err() && owns_transaction && state.in_transaction {
         rollback_open_transaction(server, state)?;
     }
     result
@@ -4146,6 +4186,7 @@ fn begin_copy_in(
         started_guc_transaction,
         owns_serializable_transaction,
         extended: false,
+        simple_batch: None,
         row_lines: Vec::new(),
         row_marks: Vec::new(),
         skipped_rows: 0,

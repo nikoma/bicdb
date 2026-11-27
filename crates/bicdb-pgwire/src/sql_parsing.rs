@@ -2294,7 +2294,11 @@ pub(crate) fn finish_copy_in(
 
 pub(crate) fn abort_copy_in(server: &Arc<PgWireServer>, state: &mut ConnectionState) -> Result<()> {
     if let Some(copy) = state.copy_in.take() {
-        if copy.owns_serializable_transaction {
+        if copy.owns_serializable_transaction
+            || copy
+                .simple_batch
+                .is_some_and(|batch| batch.owns_transaction)
+        {
             rollback_open_transaction(server, state)?;
         } else if copy.started_guc_transaction {
             state.session_state.rollback_transaction();

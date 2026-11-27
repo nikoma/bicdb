@@ -472,6 +472,18 @@ impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
                     self.expr(&array.expr, &env, None);
                     self.routine_statements(body, locals);
                 }
+                RoutineStmt::DynamicQueryForLoop {
+                    query,
+                    parameters,
+                    body,
+                    ..
+                } => {
+                    self.expr(&query.expr, &env, Some("text"));
+                    for parameter in parameters {
+                        self.expr(&parameter.expr, &env, None);
+                    }
+                    self.routine_statements(body, locals);
+                }
                 RoutineStmt::WhileLoop { condition, body } => {
                     self.expr(&condition.expr, &env, Some("boolean"));
                     self.routine_statements(body, locals);

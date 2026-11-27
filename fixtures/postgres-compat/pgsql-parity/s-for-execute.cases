@@ -1,0 +1,13 @@
+fx.select|DO $$ DECLARE r record; BEGIN FOR r IN EXECUTE 'SELECT g AS v FROM generate_series(1, 3) g' LOOP RAISE NOTICE 'v=%', r.v; END LOOP; END $$
+fx.explain_text|CREATE FUNCTION s_ef(text) RETURNS SETOF text LANGUAGE plpgsql AS $$ DECLARE ln text; BEGIN FOR ln IN EXECUTE $1 LOOP RETURN NEXT ln; END LOOP; END $$; SELECT count(*) > 0 FROM s_ef('EXPLAIN (COSTS OFF) SELECT 1')
+fx.format_expr|CREATE TABLE s_fx1 (a int); INSERT INTO s_fx1 VALUES (1), (2); CREATE FUNCTION s_cnt(text) RETURNS int LANGUAGE plpgsql AS $$ DECLARE r record; n int := 0; BEGIN FOR r IN EXECUTE format('SELECT * FROM %I', $1) LOOP n := n + r.a; END LOOP; RETURN n; END $$; SELECT s_cnt('s_fx1')
+fx.returning|CREATE TABLE s_fx2 (a int); DO $$ DECLARE r record; BEGIN FOR r IN EXECUTE 'INSERT INTO s_fx2 VALUES (5), (6) RETURNING a' LOOP RAISE NOTICE 'a=%', r.a; END LOOP; END $$; SELECT count(*) FROM s_fx2
+fx.show|DO $$ DECLARE r text; BEGIN FOR r IN EXECUTE 'SHOW DateStyle' LOOP RAISE NOTICE '%', r; END LOOP; END $$
+fx.insert_no_returning|CREATE TABLE s_fx3 (a int); DO $$ DECLARE r record; BEGIN FOR r IN EXECUTE 'INSERT INTO s_fx3 VALUES (1)' LOOP END LOOP; END $$
+fx.insert_not_run|CREATE TABLE s_fx4 (a int); DO $$ DECLARE r record; BEGIN BEGIN FOR r IN EXECUTE 'INSERT INTO s_fx4 VALUES (1)' LOOP END LOOP; EXCEPTION WHEN OTHERS THEN RAISE NOTICE '%', SQLSTATE; END; END $$; SELECT count(*) FROM s_fx4
+fx.ddl|DO $$ DECLARE r record; BEGIN FOR r IN EXECUTE 'CREATE TABLE s_fx5 (a int)' LOOP END LOOP; END $$
+fx.null|DO $$ DECLARE r record; BEGIN FOR r IN EXECUTE NULL LOOP END LOOP; END $$
+fx.exit|DO $$ DECLARE r record; n int := 0; BEGIN FOR r IN EXECUTE 'SELECT g FROM generate_series(1, 10) g' LOOP n := n + 1; EXIT WHEN n = 3; END LOOP; RAISE NOTICE 'n=%', n; END $$
+fx.using|DO $$ DECLARE r record; BEGIN FOR r IN EXECUTE 'SELECT $1::int AS a, $2::text AS b' USING 2, 'x' LOOP RAISE NOTICE '%,%', r.a, r.b; END LOOP; END $$
+fx.unbound|DO $$ DECLARE r record; BEGIN FOR r IN EXECUTE 'SELECT $1' LOOP END LOOP; END $$
+fx.multiple|DO $$ DECLARE r record; BEGIN FOR r IN EXECUTE 'SELECT 1; SELECT 2' LOOP END LOOP; END $$

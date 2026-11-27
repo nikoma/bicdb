@@ -566,7 +566,8 @@ pub(crate) fn collect_routine_stmt_symbols(
                 collect_routine_stmt_symbols(body, names, seen);
             }
             RoutineStmt::QueryForLoop { target, body, .. }
-            | RoutineStmt::CursorForLoop { target, body, .. } => {
+            | RoutineStmt::CursorForLoop { target, body, .. }
+            | RoutineStmt::DynamicQueryForLoop { target, body, .. } => {
                 add_routine_symbol(target, names, seen);
                 collect_routine_stmt_symbols(body, names, seen);
             }
@@ -781,6 +782,18 @@ pub(crate) fn bind_routine_statement_exprs(statements: &mut [RoutineStmt], scope
             }
             RoutineStmt::ForeachLoop { array, body, .. } => {
                 array.bind(scope);
+                bind_routine_statement_exprs(body, scope);
+            }
+            RoutineStmt::DynamicQueryForLoop {
+                query,
+                parameters,
+                body,
+                ..
+            } => {
+                query.bind(scope);
+                for parameter in parameters {
+                    parameter.bind(scope);
+                }
                 bind_routine_statement_exprs(body, scope);
             }
             RoutineStmt::CursorForLoop {
@@ -1369,6 +1382,7 @@ pub(crate) fn extract_routine_lines(
             | RoutineStmt::ForeachLoop { body, .. }
             | RoutineStmt::QueryForLoop { body, .. }
             | RoutineStmt::CursorForLoop { body, .. }
+            | RoutineStmt::DynamicQueryForLoop { body, .. }
             | RoutineStmt::Loop { body }
             | RoutineStmt::WhileLoop { body, .. } => walk(body, lines),
             _ => {}
@@ -2630,6 +2644,16 @@ pub(crate) fn parse_routine_for_loop(statement: &str) -> Result<RoutineStmt> {
             lower: RoutineExpr::unbound(lower),
             upper: RoutineExpr::unbound(upper),
             reverse,
+            body,
+        })
+    } else if let Some(dynamic) =
+        strip_routine_keyword(range_sql, "EXECUTE").filter(|_| postgres_dialect_forms())
+    {
+        let (query, parameters) = crate::postgres_control::parse_for_execute(dynamic)?;
+        Ok(RoutineStmt::DynamicQueryForLoop {
+            target: iterator,
+            query,
+            parameters,
             body,
         })
     } else {
@@ -4132,6 +4156,7 @@ fn validate_routine_continue(statements: &[RoutineStmt], in_loop: bool) -> Resul
             | RoutineStmt::ForeachLoop { body, .. }
             | RoutineStmt::QueryForLoop { body, .. }
             | RoutineStmt::CursorForLoop { body, .. }
+            | RoutineStmt::DynamicQueryForLoop { body, .. }
             | RoutineStmt::Loop { body }
             | RoutineStmt::WhileLoop { body, .. } => validate_routine_continue(body, true)?,
             _ => {}

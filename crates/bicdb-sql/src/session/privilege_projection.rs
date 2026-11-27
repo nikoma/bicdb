@@ -776,6 +776,7 @@ impl<'db> SqlSession<'db> {
                 default_expr: None,
                 generated_expr: None,
                 identity: None,
+                attributes: Default::default(),
             });
         }
 
@@ -811,6 +812,7 @@ impl<'db> SqlSession<'db> {
             no_inherit_constraints: Vec::new(),
             temporal_foreign_keys: Vec::new(),
         };
+        super::not_null_constraints::validate_declared_not_null_names(&schema)?;
         partition::validate_new_key(self.db_ref(), &schema)?;
         partition::validate_definition(&schema)?;
         self.create_session_collection(&table)?;

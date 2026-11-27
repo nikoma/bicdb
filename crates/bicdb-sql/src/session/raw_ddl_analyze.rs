@@ -505,6 +505,7 @@ impl<'db> SqlSession<'db> {
                 default_expr: None,
                 generated_expr: None,
                 identity: None,
+                attributes: Default::default(),
             });
         }
 

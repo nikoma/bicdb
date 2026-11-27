@@ -76,3 +76,13 @@ DROP. Reusing a deleted role name does not restore revoked privileges.
 the unnamed-schema form. The owner must exist and the caller must be allowed
 to set that role; an authorization clause is not permission to assign arbitrary
 ownership.
+
+`CREATE SCHEMA name [AUTHORIZATION role] schema_element ...` (also
+`AUTHORIZATION CURRENT_ROLE | CURRENT_USER | SESSION_USER`) creates the
+schema and its `CREATE TABLE`, `CREATE VIEW`, `CREATE SEQUENCE`, `CREATE
+INDEX`, `CREATE TRIGGER` and `GRANT` elements in one atomic statement. As in
+PostgreSQL the elements run as the schema's owner, inside the new schema (it
+is first in `search_path` while they run), in the order sequences, tables,
+views, indexes, triggers, grants. An element naming another schema fails with
+42P15, a temporary element with 42P16, and `CREATE SCHEMA IF NOT EXISTS` with
+elements with 0A000.

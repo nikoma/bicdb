@@ -1,0 +1,47 @@
+t.nn_table_named|CREATE TABLE tnn1(a int, b int, CONSTRAINT tnn1_custom NOT NULL a); SELECT conname, contype, convalidated, connoinherit FROM pg_constraint WHERE conrelid = 'tnn1'::regclass ORDER BY conname; INSERT INTO tnn1 VALUES (NULL, 1)
+t.nn_table_unnamed|CREATE TABLE tnn2(a int, NOT NULL a); SELECT conname, contype FROM pg_constraint WHERE conrelid = 'tnn2'::regclass; SELECT attnotnull FROM pg_attribute WHERE attrelid = 'tnn2'::regclass AND attname = 'a'
+t.nn_column_named|CREATE TABLE tnn3(a int CONSTRAINT tnn3_foo NOT NULL); SELECT conname, contype FROM pg_constraint WHERE conrelid = 'tnn3'::regclass
+t.nn_no_inherit|CREATE TABLE tnn4(a int, NOT NULL a NO INHERIT); CREATE TABLE tnn4c() INHERITS (tnn4); SELECT conrelid::regclass, conname, connoinherit FROM pg_constraint WHERE conname LIKE 'tnn4%' ORDER BY 1; INSERT INTO tnn4c VALUES (NULL); SELECT count(*) FROM tnn4c
+t.nn_alter_add|CREATE TABLE tnn5(a int, b int); ALTER TABLE tnn5 ADD CONSTRAINT tnn5_nn NOT NULL a; SELECT conname, contype FROM pg_constraint WHERE conrelid = 'tnn5'::regclass; ALTER TABLE tnn5 ADD NOT NULL b; SELECT conname FROM pg_constraint WHERE conrelid = 'tnn5'::regclass ORDER BY conname
+t.nn_alter_add_existing_null|CREATE TABLE tnn6(a int); INSERT INTO tnn6 VALUES (NULL); ALTER TABLE tnn6 ADD CONSTRAINT tnn6_nn NOT NULL a
+t.nn_not_valid|CREATE TABLE tnn7(a int); INSERT INTO tnn7 VALUES (NULL); ALTER TABLE tnn7 ADD CONSTRAINT tnn7_nn NOT NULL a NOT VALID; SELECT conname, convalidated FROM pg_constraint WHERE conrelid = 'tnn7'::regclass; SELECT attnotnull FROM pg_attribute WHERE attrelid = 'tnn7'::regclass AND attname = 'a'; SELECT count(*) FROM tnn7 WHERE a IS NULL; INSERT INTO tnn7 VALUES (NULL)
+t.nn_validate|CREATE TABLE tnn8(a int); INSERT INTO tnn8 VALUES (NULL); ALTER TABLE tnn8 ADD CONSTRAINT tnn8_nn NOT NULL a NOT VALID; ALTER TABLE tnn8 VALIDATE CONSTRAINT tnn8_nn
+t.nn_validate_ok|CREATE TABLE tnn9(a int); INSERT INTO tnn9 VALUES (1); ALTER TABLE tnn9 ADD CONSTRAINT tnn9_nn NOT NULL a NOT VALID; ALTER TABLE tnn9 VALIDATE CONSTRAINT tnn9_nn; SELECT convalidated FROM pg_constraint WHERE conname = 'tnn9_nn'
+t.nn_set_not_null_validates|CREATE TABLE tnn9b(a int); INSERT INTO tnn9b VALUES (1); ALTER TABLE tnn9b ADD CONSTRAINT tnn9b_nn NOT NULL a NOT VALID; ALTER TABLE tnn9b ALTER a SET NOT NULL; SELECT conname, convalidated FROM pg_constraint WHERE conrelid = 'tnn9b'::regclass
+t.nn_dup_name|CREATE TABLE tnn10(a int, CONSTRAINT foo NOT NULL a, CONSTRAINT bar NOT NULL a)
+t.nn_dup_name_serial|CREATE TABLE tnn10b(a serial CONSTRAINT foo NOT NULL, CONSTRAINT bar NOT NULL a)
+t.nn_dup_name_column|CREATE TABLE tnn10c(a serial CONSTRAINT foo NOT NULL CONSTRAINT bar NOT NULL)
+t.nn_conflict_no_inherit|CREATE TABLE tnn10d(a int primary key, NOT NULL a NO INHERIT)
+t.nn_same_name_twice|CREATE TABLE tnn10e(a INTEGER CONSTRAINT blah NOT NULL, b INTEGER CONSTRAINT blah NOT NULL)
+t.nn_missing_column|CREATE TABLE tnn10f(a int, NOT NULL nosuch)
+t.nn_partitioned_no_inherit|CREATE TABLE tnn10g(a int, NOT NULL a NO INHERIT) PARTITION BY LIST (a)
+t.nn_drop_named|CREATE TABLE tnn11(a int, CONSTRAINT tnn11_x NOT NULL a); ALTER TABLE tnn11 DROP CONSTRAINT tnn11_x; INSERT INTO tnn11 VALUES (NULL); SELECT count(*) FROM pg_constraint WHERE conrelid = 'tnn11'::regclass
+t.nn_drop_default_named|CREATE TABLE tnn11b(a int NOT NULL); ALTER TABLE tnn11b DROP CONSTRAINT tnn11b_a_not_null; INSERT INTO tnn11b VALUES (NULL); SELECT count(*) FROM tnn11b
+t.nn_inherit_child|CREATE TABLE tnn12(a int, CONSTRAINT tnn12_x NOT NULL a); CREATE TABLE tnn12c(b int) INHERITS (tnn12); SELECT conrelid::regclass, conname, conislocal, coninhcount FROM pg_constraint WHERE conrelid IN ('tnn12'::regclass, 'tnn12c'::regclass) ORDER BY conrelid::regclass::text; INSERT INTO tnn12c VALUES (NULL, 1)
+t.nn_add_recurses|CREATE TABLE tnn15(a int); CREATE TABLE tnn15c() INHERITS (tnn15); ALTER TABLE tnn15 ADD CONSTRAINT tnn15_nn NOT NULL a; SELECT conrelid::regclass, conname, conislocal, coninhcount FROM pg_constraint WHERE conrelid IN ('tnn15'::regclass, 'tnn15c'::regclass) ORDER BY conrelid::regclass::text; INSERT INTO tnn15c VALUES (NULL)
+t.nn_add_recurse_null_child|CREATE TABLE tnn16(a int); CREATE TABLE tnn16c() INHERITS (tnn16); INSERT INTO tnn16c VALUES (NULL); ALTER TABLE tnn16 ADD CONSTRAINT tnn16_nn NOT NULL a
+t.nn_add_no_inherit_skips_child|CREATE TABLE tnn17(a int); CREATE TABLE tnn17c() INHERITS (tnn17); INSERT INTO tnn17c VALUES (NULL); ALTER TABLE tnn17 ADD CONSTRAINT tnn17_nn NOT NULL a NO INHERIT; SELECT conrelid::regclass, conname, connoinherit FROM pg_constraint WHERE conrelid IN ('tnn17'::regclass, 'tnn17c'::regclass) ORDER BY conrelid::regclass::text
+t.nn_not_valid_child|CREATE TABLE tnn18(a int); CREATE TABLE tnn18c() INHERITS (tnn18); INSERT INTO tnn18c VALUES (NULL); ALTER TABLE tnn18 ADD CONSTRAINT tnn18_nn NOT NULL a NOT VALID; SELECT conrelid::regclass, conname, convalidated, conislocal, coninhcount FROM pg_constraint WHERE conrelid IN ('tnn18'::regclass, 'tnn18c'::regclass) ORDER BY conrelid::regclass::text
+t.nn_incompatible_not_valid|CREATE TABLE tnn19(a int); ALTER TABLE tnn19 ADD CONSTRAINT nn NOT NULL a NOT VALID; ALTER TABLE tnn19 ADD CONSTRAINT nn NOT NULL a
+t.nn_change_no_inherit|CREATE TABLE tnn20(a int); ALTER TABLE tnn20 ADD CONSTRAINT nn NOT NULL a NOT VALID; ALTER TABLE tnn20 ADD CONSTRAINT nn1 NOT NULL a NOT VALID NO INHERIT
+t.nn_pk_over_not_valid|CREATE TABLE tnn21(a int); ALTER TABLE tnn21 ADD CONSTRAINT nn NOT NULL a NOT VALID; ALTER TABLE tnn21 ADD PRIMARY KEY (a)
+t.nn_rename|CREATE TABLE tnn22(a int NOT NULL); ALTER TABLE tnn22 RENAME CONSTRAINT tnn22_a_not_null TO tnn22_renamed; SELECT conname FROM pg_constraint WHERE conrelid = 'tnn22'::regclass
+t.nn_two_not_valid|CREATE TABLE tnn23(a int, b int); ALTER TABLE tnn23 ADD NOT NULL a NOT VALID, ADD NOT NULL b NOT VALID; SELECT conname, convalidated FROM pg_constraint WHERE conrelid = 'tnn23'::regclass ORDER BY 1; ALTER TABLE tnn23 ALTER a DROP NOT NULL; ALTER TABLE tnn23 DROP CONSTRAINT tnn23_b_not_null; SELECT count(*) FROM pg_constraint WHERE conrelid = 'tnn23'::regclass
+t.nn_order_nulls_not_valid|CREATE TABLE tnn24(a int, b int); INSERT INTO tnn24 VALUES (NULL, 1), (5, 2); CREATE INDEX ON tnn24(a); ALTER TABLE tnn24 ADD CONSTRAINT nn NOT NULL a NOT VALID; SELECT b FROM tnn24 ORDER BY a NULLS FIRST; SELECT b FROM tnn24 WHERE a IS NULL
+t.check_no_inherit_not_valid|CREATE TABLE tck1(a int); INSERT INTO tck1 VALUES (-1); ALTER TABLE tck1 ADD CONSTRAINT tck1_c CHECK (a > 0) NO INHERIT NOT VALID; SELECT conname, convalidated, connoinherit FROM pg_constraint WHERE conrelid = 'tck1'::regclass
+t.nn_serial_named|CREATE TABLE tnn13(a serial, CONSTRAINT tnn13_foo NOT NULL a); SELECT conname FROM pg_constraint WHERE conrelid = 'tnn13'::regclass AND contype = 'n'
+t.nn_identity_named|CREATE TABLE tnn13b(CONSTRAINT foo NOT NULL a, a int GENERATED BY DEFAULT AS IDENTITY); SELECT conname FROM pg_constraint WHERE conrelid = 'tnn13b'::regclass AND contype = 'n'
+t.nn_alter_add_already|CREATE TABLE tnn14(a int NOT NULL); ALTER TABLE tnn14 ADD CONSTRAINT tnn14_a_not_null NOT NULL a; ALTER TABLE tnn14 ADD CONSTRAINT tnn14_other NOT NULL a
+t.schema_elems|CREATE SCHEMA tsch1 CREATE TABLE t1 (a int) CREATE VIEW v1 AS SELECT a FROM t1 CREATE SEQUENCE s1 CREATE INDEX t1_i ON t1 (a); SELECT relname, relkind FROM pg_class WHERE relnamespace = 'tsch1'::regnamespace ORDER BY relname
+t.schema_elems_order|CREATE SCHEMA tsch2 CREATE VIEW v2 AS SELECT a FROM t2 CREATE TABLE t2 (a int); SELECT count(*) FROM tsch2.v2
+t.schema_elems_qualified_wrong|CREATE SCHEMA tsch3 CREATE TABLE other.t3 (a int)
+t.schema_elems_qualified_right|CREATE SCHEMA tsch3b CREATE TABLE tsch3b.t3 (a int) CREATE INDEX ON tsch3b.t3 (a); SELECT relname FROM pg_class WHERE relnamespace = 'tsch3b'::regnamespace ORDER BY relname
+t.schema_elems_rollback_check|CREATE SCHEMA tsch3d CREATE TABLE t3 (a int) GRANT SELECT ON t3 TO tsch3d_nosuch_role
+t.schema_elems_rollback_after|SELECT count(*) FROM pg_namespace WHERE nspname = 'tsch3d'
+t.schema_elems_grant|CREATE ROLE tsch4_r3; CREATE SCHEMA tsch4 CREATE TABLE t4 (a int) GRANT SELECT ON t4 TO tsch4_r3; SELECT has_table_privilege('tsch4_r3', 'tsch4.t4', 'SELECT')
+t.schema_elems_trigger|CREATE FUNCTION tsch5_f() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN RETURN NEW; END$$; CREATE SCHEMA tsch5 CREATE TABLE t5 (a int) CREATE TRIGGER t5_tr BEFORE INSERT ON t5 FOR EACH ROW EXECUTE FUNCTION public.tsch5_f(); SELECT tgname FROM pg_trigger WHERE tgrelid = 'tsch5.t5'::regclass
+t.schema_authorization_elems|CREATE ROLE tsch6_r3; CREATE SCHEMA AUTHORIZATION tsch6_r3 CREATE TABLE t6 (a int); SELECT nspname FROM pg_namespace WHERE nspname = 'tsch6_r3'; SELECT tableowner FROM pg_tables WHERE tablename = 't6'
+t.schema_current_role|CREATE ROLE tsch7_r3 SUPERUSER; SET ROLE tsch7_r3; CREATE SCHEMA AUTHORIZATION CURRENT_ROLE CREATE TABLE t7 (a int); RESET ROLE; SELECT schemaname, tableowner FROM pg_tables WHERE tablename = 't7'
+t.schema_if_not_exists_elems|CREATE SCHEMA IF NOT EXISTS tsch8 CREATE TABLE t8 (a int)
+t.schema_elems_search_path_restored|CREATE SCHEMA tsch9 CREATE TABLE t9 (a int); SHOW search_path
+t.schema_elems_temp|CREATE SCHEMA tsch10 CREATE TEMP VIEW testview AS SELECT 1

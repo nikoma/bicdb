@@ -33,8 +33,11 @@ pub(crate) fn inherited_table_definition(
         for column in parent.columns.iter().filter(|column| !column.hidden) {
             let mut inherited = column.clone();
             // Keys and identity are not inherited; NOT NULL, defaults and
-            // generation expressions are.
+            // generation expressions are. An inherited not-null constraint
+            // takes its name from the parent and is valid on the new child.
             inherited.primary_key = false;
+            inherited.attributes.not_null_name = None;
+            inherited.attributes.not_null_not_valid = false;
             if parent
                 .no_inherit_constraints
                 .contains(&not_null_constraint_name(&parent.name, &column.name))

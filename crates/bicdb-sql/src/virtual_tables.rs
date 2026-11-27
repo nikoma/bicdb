@@ -140,6 +140,7 @@ pub(crate) fn graph_virtual_table_columns(table: &str) -> Vec<ColumnSchema> {
             default_expr: None,
             generated_expr: None,
             identity: None,
+            attributes: Default::default(),
         })
         .collect()
 }
@@ -164,6 +165,7 @@ pub(crate) fn default_record_columns() -> Vec<ColumnSchema> {
             default_expr: None,
             generated_expr: None,
             identity: None,
+            attributes: Default::default(),
         },
         ColumnSchema {
             comment: None,
@@ -183,6 +185,7 @@ pub(crate) fn default_record_columns() -> Vec<ColumnSchema> {
             default_expr: None,
             generated_expr: None,
             identity: None,
+            attributes: Default::default(),
         },
         ColumnSchema {
             comment: None,
@@ -202,6 +205,7 @@ pub(crate) fn default_record_columns() -> Vec<ColumnSchema> {
             default_expr: None,
             generated_expr: None,
             identity: None,
+            attributes: Default::default(),
         },
         ColumnSchema {
             comment: None,
@@ -221,6 +225,7 @@ pub(crate) fn default_record_columns() -> Vec<ColumnSchema> {
             default_expr: None,
             generated_expr: None,
             identity: None,
+            attributes: Default::default(),
         },
         ColumnSchema {
             comment: None,
@@ -240,6 +245,7 @@ pub(crate) fn default_record_columns() -> Vec<ColumnSchema> {
             default_expr: None,
             generated_expr: None,
             identity: None,
+            attributes: Default::default(),
         },
     ]
 }

@@ -4123,7 +4123,7 @@ pub(crate) fn index_order_keeps_null_placement(
             .columns
             .iter()
             .find(|candidate| &candidate.name == column)
-            .is_some_and(|candidate| !candidate.nullable || candidate.primary_key)
+            .is_some_and(|candidate| candidate.proven_not_null())
     })
 }
 

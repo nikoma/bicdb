@@ -5,6 +5,7 @@
 //! resolving; `lib.rs` re-exports this module via `pub use session::*;`.
 
 mod collation_ddl;
+mod create_schema_elements;
 mod create_table_as;
 pub(crate) mod deferred_constraints;
 mod domain_types;
@@ -15,6 +16,7 @@ mod inheritance_dml;
 mod instead_of_triggers;
 pub(crate) mod materialized_views;
 pub(crate) mod merge;
+pub(crate) mod not_null_constraints;
 mod partition_indexes;
 #[cfg(test)]
 mod timestamp_day_indexes;
@@ -4102,6 +4104,9 @@ impl<'db> SqlSession<'db> {
         if let Some(command) = crate::two_phase::parse_two_phase_command(sql)? {
             return self.execute_two_phase(command);
         }
+        if let Some(result) = self.execute_raw_create_schema_elements(sql)? {
+            return Ok(result);
+        }
         if leading_keyword_bypasses_raw_probes(sql) {
             return self.execute_parsed_sql(sql);
         }
@@ -4190,6 +4195,10 @@ impl<'db> SqlSession<'db> {
         }
 
         if let Some(result) = self.execute_raw_alter_sequence(sql)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.execute_raw_not_null_constraints(sql)? {
             return Ok(result);
         }
 
@@ -4660,6 +4669,14 @@ impl<'db> SqlSession<'db> {
         let mut last_result = None;
         for statement in statements {
             self.cancellation.check()?;
+            if let Some(result) = self.execute_raw_create_schema_elements(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_not_null_constraints(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
             if let Some(result) = self.execute_raw_oracle_collection(&statement)? {
                 last_result = Some(result);
                 continue;

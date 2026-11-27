@@ -7814,7 +7814,7 @@ pub(crate) fn information_schema_table_constraints(
             if !column.nullable || column.primary_key {
                 rows.push(table_constraint_row(
                     &schema,
-                    &not_null_constraint_name(&schema.name, &column.name),
+                    &column.not_null_name_in(&schema.name),
                     "CHECK",
                 ));
             }
@@ -7948,7 +7948,7 @@ pub(crate) fn information_schema_constraint_column_usage(
             if !column.nullable || column.primary_key {
                 rows.push(constraint_column_usage_row(
                     &schema,
-                    &not_null_constraint_name(&schema.name, &column.name),
+                    &column.not_null_name_in(&schema.name),
                     &column.name,
                 ));
             }

@@ -4497,6 +4497,7 @@ fn schema_bound_row_materialization_preserves_record_fields() {
             default_expr: None,
             generated_expr: None,
             identity: None,
+            attributes: Default::default(),
         }
     }
 
@@ -4586,6 +4587,7 @@ fn select_projection_binds_schema_columns_to_direct_record_slots() {
             default_expr: None,
             generated_expr: None,
             identity: None,
+            attributes: Default::default(),
         }
     }
 

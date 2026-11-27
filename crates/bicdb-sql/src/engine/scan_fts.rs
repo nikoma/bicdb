@@ -3845,8 +3845,7 @@ impl<'db> SqlEngine<'db> {
                         .db_ref()
                         .ordered_index_records(index_name, *descending, *limit)?,
                     // ORDER BY's NULL placement, both key ranges bounded by
-                    // the limit; the planner only emits this for indexes
-                    // that can list their entries.
+                    // the limit (resident and paged B-trees).
                     Some(nulls_first) => self
                         .db_ref()
                         .prefix_ordered_index_records_nulls(

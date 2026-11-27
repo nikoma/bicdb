@@ -1951,7 +1951,7 @@ impl<'db> SqlEngine<'db> {
                             0,
                             descending,
                             query,
-                        ) || self.db_ref().index_entries_listable(&index.name))
+                        ) || index.kind == IndexKind::BTree)
                 }) {
                     let limit = limit_for_plan(query)?;
                     let estimated_rows = limit.unwrap_or(total_rows).min(total_rows);
@@ -2675,8 +2675,8 @@ impl<'db> SqlEngine<'db> {
                 )?),
                 Some(nulls_first) => {
                     // ORDER BY's NULL placement, each key range read with a
-                    // seek and bounded by the limit; a read-through paged
-                    // index reads the whole prefix and the caller sorts.
+                    // seek and bounded by the limit (resident and paged
+                    // B-trees alike).
                     match self.db_ref().prefix_ordered_index_records_nulls(
                         &bounded.index_name,
                         bounded.prefix.as_slice(),
@@ -2685,7 +2685,14 @@ impl<'db> SqlEngine<'db> {
                         bounded.limit,
                     )? {
                         Some(ids) => Rc::from(ids),
-                        None => self.lookup_index_cached(&bounded.index_name, &bounded.prefix)?,
+                        // Only B-trees reach this path, and every B-tree
+                        // answers the bounded read.
+                        None => {
+                            return Err(SqlError::InvalidSql(format!(
+                                "index {} cannot serve an ordered read",
+                                bounded.index_name
+                            )))
+                        }
                     }
                 }
             }

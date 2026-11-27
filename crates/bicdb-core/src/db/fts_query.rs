@@ -2798,23 +2798,14 @@ impl BicDb {
         Ok(self.rowids_to_pks(&collection, &rowids))
     }
 
-    /// Whether this index can list its entries from resident state: a
-    /// B-tree that is not read through from pages.
-    pub fn index_entries_listable(&self, name: &str) -> bool {
-        self.indexes.get(name).is_some_and(|state| {
-            let state = state.read();
-            state.definition.kind == IndexKind::BTree && !state.paged_read_through
-        })
-    }
-
     /// `prefix_ordered_index_records` with ORDER BY's NULL placement instead
     /// of the index's: at most `limit` primary keys of the rows under `prefix`
     /// (empty for the whole index), the rows whose next key field is NULL
     /// placed first or last as `nulls_first` says, the others in key order
     /// (`descending` reverses it). Both ranges are read with a seek and stop
     /// after `limit` entries, so a mostly-NULL key costs no more than its
-    /// limit. `None` for a read-through paged index (the caller reads the
-    /// whole prefix instead).
+    /// limit. Resident and read-through paged B-trees alike; `None` for
+    /// other index kinds.
     pub fn prefix_ordered_index_records_nulls(
         &self,
         name: &str,
@@ -2828,7 +2819,7 @@ impl BicDb {
             .get(name)
             .ok_or_else(|| BicDbError::Index(format!("index `{name}` not found")))?
             .read();
-        if state.definition.kind != IndexKind::BTree || state.paged_read_through {
+        if state.definition.kind != IndexKind::BTree {
             return Ok(None);
         }
         if prefix.len() >= state.definition.fields.len() {
@@ -2842,6 +2833,105 @@ impl BicDb {
         // `IndexValue::Null` encodes as the single tag byte 0, below every
         // other value's tag.
         null_prefix.push(0);
+        // The first key after the NULL range: the next field's smallest
+        // non-NULL tag.
+        let mut values_start = encoded_prefix.clone();
+        values_start.push(1);
+        if state.paged_read_through {
+            if limit == 0 {
+                return Ok(Some(Vec::new()));
+            }
+            let paged = self
+                .paged_records
+                .as_ref()
+                .ok_or_else(|| BicDbError::Index(format!("index `{name}` lost its page store")))?;
+            let snapshot = paged.latest_snapshot();
+            let hints_on = paged_tid_hints_enabled();
+            type Cursor<'a> = Box<
+                dyn Iterator<
+                        Item = Result<(Vec<u8>, crate::paged_collection::IndexEntryRef, Vec<u8>)>,
+                    > + 'a,
+            >;
+            // Takes at most `limit` entries whose key starts with `range`.
+            let take = |cursor: Cursor<'_>, range: &[u8]| -> Result<Vec<String>> {
+                let mut pks = Vec::new();
+                for entry in cursor {
+                    let (encoded, entry_ref, entry_value) = entry?;
+                    if !encoded.starts_with(range) {
+                        break;
+                    }
+                    pks.push(resolve_paged_entry_pk(
+                        paged,
+                        &snapshot,
+                        &collection,
+                        name,
+                        entry_ref,
+                        &entry_value,
+                        hints_on,
+                    )?);
+                    if pks.len() >= limit {
+                        break;
+                    }
+                }
+                Ok(pks)
+            };
+            let prefix_bound = Self::encoded_prefix_successor(&encoded_prefix);
+            let (nulls, values) = if descending {
+                // NULL range, read from its top down; then the values from the
+                // top of the prefix down to the NULL range.
+                let nulls = take(
+                    Box::new(paged.scan_index_rev_below_refs(&snapshot, name, &values_start)?),
+                    &null_prefix,
+                )?;
+                let cursor: Cursor<'_> = match prefix_bound.as_deref() {
+                    Some(bound) => {
+                        Box::new(paged.scan_index_rev_below_refs(&snapshot, name, bound)?)
+                    }
+                    None => Box::new(paged.scan_index_rev_refs(&snapshot, name)?),
+                };
+                let mut values = Vec::new();
+                for entry in cursor {
+                    let (encoded, entry_ref, entry_value) = entry?;
+                    if !encoded.starts_with(&encoded_prefix) || encoded.starts_with(&null_prefix) {
+                        break;
+                    }
+                    values.push(resolve_paged_entry_pk(
+                        paged,
+                        &snapshot,
+                        &collection,
+                        name,
+                        entry_ref,
+                        &entry_value,
+                        hints_on,
+                    )?);
+                    if values.len() >= limit {
+                        break;
+                    }
+                }
+                (nulls, values)
+            } else {
+                let nulls = take(
+                    Box::new(paged.scan_index_encoded_prefix_refs(
+                        &snapshot,
+                        name,
+                        &null_prefix,
+                    )?),
+                    &null_prefix,
+                )?;
+                let values = take(
+                    Box::new(paged.scan_index_from_refs(&snapshot, name, &values_start)?),
+                    &encoded_prefix,
+                )?;
+                (nulls, values)
+            };
+            let pks: Vec<String> = if nulls_first {
+                nulls.into_iter().chain(values).take(limit).collect()
+            } else {
+                values.into_iter().chain(nulls).take(limit).collect()
+            };
+            index_trace::record_scan(&index_trace::ORDERED, pks.len());
+            return Ok(Some(pks));
+        }
         fn take(
             rowids: &mut Vec<RowId>,
             ids: &mut dyn Iterator<Item = RowId>,
@@ -2881,9 +2971,7 @@ impl BicDb {
                     take(&mut nulls, ids, descending, limit)
                 });
                 // Ascending, seek past the NULL keys to the first value.
-                let mut start = encoded_prefix.clone();
-                start.push(1);
-                state.store.scan_from(&start, &mut |key, ids| {
+                state.store.scan_from(&values_start, &mut |key, ids| {
                     if !key.starts_with(&encoded_prefix) {
                         return false;
                     }

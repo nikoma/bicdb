@@ -214,7 +214,7 @@ impl SqlEngine<'_> {
             && relation
                 .columns
                 .iter()
-                .all(|(name, _)| name != UNKNOWN_CTE_COLUMN))
+                .all(|(name, _)| name != column_check::UNKNOWN_CTE_COLUMN))
         .then_some(relation)
     }
 
@@ -286,8 +286,9 @@ fn cast_join_column(column: Expr, input: Option<&str>, common: &str) -> Result<E
         return Ok(column);
     }
     let data_type = Parser::new(&PostgreSqlDialect {})
-        .try_with_sql(common)?
-        .parse_data_type()?;
+        .try_with_sql(common)
+        .and_then(|mut parser| parser.parse_data_type())
+        .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
     Ok(Expr::Cast {
         kind: sqlparser::ast::CastKind::DoubleColon,
         expr: Box::new(column),

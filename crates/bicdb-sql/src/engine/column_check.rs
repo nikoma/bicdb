@@ -358,7 +358,7 @@ impl Visitor for ReferenceCollector {
 
 /// Column name a CTE carries when its output columns cannot be inferred;
 /// relations that expose it are treated as having unknown columns.
-const UNKNOWN_CTE_COLUMN: &str = "\u{0}bicdb_unknown_cte_columns";
+pub(super) const UNKNOWN_CTE_COLUMN: &str = "\u{0}bicdb_unknown_cte_columns";
 
 impl SqlEngine<'_> {
     /// Reject column references no relation in scope provides (42703/42P01).

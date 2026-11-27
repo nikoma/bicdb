@@ -20,7 +20,8 @@ use sqlparser::ast::{Expr, FunctionArg, FunctionArgExpr, FunctionArguments};
 pub(crate) const AGGREGATE_SYMBOL: &str = "aggregate_dummy";
 
 /// First argument of the rewritten call that folds collected inputs.
-pub(crate) const FOLD_MARKER: &str = "bicdb$aggregate$fold";
+const FOLD_MARKER: &str = "bicdb$aggregate$fold";
+const STAR_FOLD_MARKER: &str = "bicdb$aggregate$star";
 
 #[derive(Clone, Debug)]
 pub(crate) struct AggregateDef {
@@ -136,9 +137,8 @@ fn function_name(text: &str) -> String {
 fn signature_types(text: &str) -> Result<Vec<RoutineTypeSchema>> {
     let text = text.trim();
     if text == "*" {
-        return Err(SqlError::Unsupported(
-            "aggregates over * are not supported".into(),
-        ));
+        // `agg(*)`: no arguments.
+        return Ok(Vec::new());
     }
     if find_top_level_keyword(text, "ORDER").is_some() {
         return Err(SqlError::Unsupported(
@@ -169,7 +169,10 @@ fn signature_types(text: &str) -> Result<Vec<RoutineTypeSchema>> {
 }
 
 /// `CREATE [OR REPLACE] AGGREGATE name (args) (options)`.
-pub(crate) fn parse_create_aggregate(sql: &str) -> Result<Option<(bool, AggregateDef)>> {
+fn parse_create_aggregate(
+    sql: &str,
+    stored_definition: bool,
+) -> Result<Option<(bool, AggregateDef)>> {
     let text = sql.trim().trim_end_matches(';').trim();
     let words = split_sql_words(text);
     let lower = words
@@ -201,8 +204,14 @@ pub(crate) fn parse_create_aggregate(sql: &str) -> Result<Option<(bool, Aggregat
         .ok_or_else(|| syntax("CREATE AGGREGATE requires an argument list"))?;
     let name = function_name(&rest[..open]);
     let close = matching_paren(rest, open).ok_or_else(|| syntax("unterminated argument list"))?;
-    let args = signature_types(&rest[open + 1..close])?;
-    let options_text = rest[close + 1..].trim();
+    let after = rest[close + 1..].trim();
+    // The old syntax has one list: `CREATE AGGREGATE name (BASETYPE = t, ...)`.
+    let old_style = after.is_empty();
+    let (args, options_text) = if old_style {
+        (Vec::new(), rest)
+    } else {
+        (signature_types(&rest[open + 1..close])?, after)
+    };
     let options_open = options_text
         .find('(')
         .ok_or_else(|| syntax("CREATE AGGREGATE requires its definition options"))?;
@@ -222,6 +231,7 @@ pub(crate) fn parse_create_aggregate(sql: &str) -> Result<Option<(bool, Aggregat
         sortop: None,
     };
     let mut have_stype = false;
+    let mut have_basetype = false;
     for option in split_commas(&options_text[options_open + 1..options_close]) {
         let (key, value) = option
             .split_once('=')
@@ -244,7 +254,23 @@ pub(crate) fn parse_create_aggregate(sql: &str) -> Result<Option<(bool, Aggregat
             "combinefunc" => def.combinefunc = Some(function_name(value)),
             "initcond" | "initcond1" => def.initcond = Some(unquoted()),
             "sortop" => def.sortop = Some(value.to_string()),
-            "basetype" => def.args = vec![type_schema(value)?],
+            "basetype" => {
+                if !old_style && !stored_definition {
+                    return Err(SqlError::data_exception_public(
+                        "42P13",
+                        "basetype is redundant with aggregate input type specification",
+                        None,
+                    ));
+                }
+                let written = unquoted();
+                def.args = if old_style && written.trim().eq_ignore_ascii_case("any") {
+                    // `BASETYPE = 'ANY'` declares an aggregate over `*`.
+                    Vec::new()
+                } else {
+                    vec![type_schema(&written)?]
+                };
+                have_basetype = true;
+            }
             // Planner and storage hints, and the moving-aggregate variants
             // (used by PostgreSQL only as a window-frame optimisation with the
             // same results), do not change what the aggregate computes.
@@ -262,6 +288,13 @@ pub(crate) fn parse_create_aggregate(sql: &str) -> Result<Option<(bool, Aggregat
                 )));
             }
         }
+    }
+    if old_style && !have_basetype {
+        return Err(SqlError::data_exception_public(
+            "42P13",
+            "aggregate input type must be specified",
+            None,
+        ));
     }
     if def.sfunc.is_empty() {
         return Err(SqlError::data_exception_public(
@@ -326,7 +359,7 @@ fn type_display(schema: &RoutineTypeSchema) -> String {
 
 /// The aggregate definition a routine record keeps.
 pub(crate) fn aggregate_def(routine: &RoutineSchema) -> Result<AggregateDef> {
-    parse_create_aggregate(&routine.definition)?
+    parse_create_aggregate(&routine.definition, true)?
         .map(|(_, def)| def)
         .ok_or_else(|| {
             SqlError::InvalidSql(format!("aggregate {} has no definition", routine.name))
@@ -497,27 +530,51 @@ pub(crate) fn rewrite_aggregate_call(db: &BicDb, function: &Function) -> Result<
     if list
         .args
         .first()
-        .is_some_and(|arg| matches!(arg, FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(value))) if matches!(&value.value, sqlparser::ast::Value::SingleQuotedString(text) if text == FOLD_MARKER)))
+        .is_some_and(|arg| matches!(arg, FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(value))) if matches!(&value.value, sqlparser::ast::Value::SingleQuotedString(text) if text == FOLD_MARKER || text == STAR_FOLD_MARKER)))
     {
         return Ok(None);
     }
     let name = object_name(&function.name)?.to_ascii_lowercase();
-    if find_aggregate(db, &name, list.args.len())?.is_none() {
+    let star = matches!(
+        list.args.as_slice(),
+        [FunctionArg::Unnamed(FunctionArgExpr::Wildcard)]
+    );
+    let arity = if star { 0 } else { list.args.len() };
+    if find_aggregate(db, &name, arity)?.is_none() {
         return Ok(None);
+    }
+    if arity == 0 && !star {
+        return Err(SqlError::data_exception_public(
+            "42809",
+            format!(
+                "{}(*) must be used to call a parameterless aggregate function",
+                name
+            ),
+            None,
+        ));
     }
     if !function.within_group.is_empty() {
         return Err(SqlError::Unsupported(format!(
             "{name} is not an ordered-set aggregate, so WITHIN GROUP is not allowed"
         )));
     }
+    let marker = if star { STAR_FOLD_MARKER } else { FOLD_MARKER };
     let mut args = vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::value(
-        sqlparser::ast::Value::SingleQuotedString(FOLD_MARKER.to_string()),
+        sqlparser::ast::Value::SingleQuotedString(marker.to_string()),
     )))];
     for arg in &list.args {
-        let FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) = arg else {
+        if !star && !matches!(arg, FunctionArg::Unnamed(FunctionArgExpr::Expr(_))) {
             return Err(SqlError::Unsupported(format!(
                 "aggregate {name} takes positional arguments"
             )));
+        }
+        // One marker per input row supplies the cardinality for a star fold.
+        let arg = if star {
+            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::value(
+                sqlparser::ast::Value::Boolean(true),
+            )))
+        } else {
+            arg.clone()
         };
         let collected = Function {
             name: ObjectName::from(vec![Ident::new("array_agg")]),
@@ -525,7 +582,7 @@ pub(crate) fn rewrite_aggregate_call(db: &BicDb, function: &Function) -> Result<
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(sqlparser::ast::FunctionArgumentList {
                 duplicate_treatment: list.duplicate_treatment,
-                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(expr.clone()))],
+                args: vec![arg],
                 clauses: list.clauses.clone(),
             }),
             filter: function.filter.clone(),
@@ -592,7 +649,7 @@ pub(crate) fn unbound_aggregate_call(name: &str) -> SqlError {
 
 /// Whether evaluated call arguments are the folding form of an aggregate.
 pub(crate) fn is_fold_call(args: &[SqlValue]) -> bool {
-    matches!(args.first(), Some(SqlValue::String(marker)) if marker == FOLD_MARKER)
+    matches!(args.first(), Some(SqlValue::String(marker)) if marker == FOLD_MARKER || marker == STAR_FOLD_MARKER)
 }
 
 /// The values one input array of the folding call holds.
@@ -617,7 +674,12 @@ pub(crate) struct FoldPlan {
 }
 
 pub(crate) fn fold_plan(db: &BicDb, name: &str, args: &[SqlValue]) -> Result<FoldPlan> {
-    let arity = args.len().saturating_sub(1);
+    let star = matches!(args.first(), Some(SqlValue::String(marker)) if marker == STAR_FOLD_MARKER);
+    let arity = if star {
+        0
+    } else {
+        args.len().saturating_sub(1)
+    };
     let (_, def) = find_aggregate(db, name, arity)?
         .ok_or_else(|| SqlError::undefined_function(format!("aggregate {name} does not exist")))?;
     let strict = |function: &str| -> Result<bool> {
@@ -666,7 +728,7 @@ pub(crate) fn run_fold(
             .zip(&def.args)
             .map(|(column, kind)| {
                 let value = column.get(row).cloned().unwrap_or(SqlValue::Null);
-                if matches!(value, SqlValue::Null) {
+                if matches!(value, SqlValue::Null) || kind.pg_type == "any" {
                     Ok(value)
                 } else {
                     cast_value_to_pg_type(value, &kind.pg_type)
@@ -680,8 +742,8 @@ pub(crate) fn run_fold(
                 continue;
             }
             if matches!(state, SqlValue::Null) {
-                if def.initcond.is_none() {
-                    state = cast_value_to_pg_type(values[0].clone(), &stype)?;
+                if let (None, Some(value)) = (&def.initcond, values.first()) {
+                    state = cast_value_to_pg_type(value.clone(), &stype)?;
                 }
                 continue;
             }
@@ -716,6 +778,9 @@ fn invoke(
         | "int84pl" | "int24pl" | "int42pl" => BinaryOperator::Plus,
         "int2mul" | "int4mul" | "int8mul" | "float4mul" | "float8mul" | "numeric_mul" => {
             BinaryOperator::Multiply
+        }
+        "int8inc" | "int8inc_any" if !args.is_empty() => {
+            return eval_arithmetic_value(args[0].clone(), &BinaryOperator::Plus, SqlValue::Int(1));
         }
         "textcat" => BinaryOperator::StringConcat,
         "int4larger" | "int8larger" | "float8larger" | "numeric_larger" | "text_larger" => {
@@ -757,7 +822,7 @@ fn invoke(
 impl SqlSession<'_> {
     /// `CREATE [OR REPLACE] AGGREGATE`.
     pub(crate) fn execute_raw_create_aggregate(&mut self, sql: &str) -> Result<Option<SqlResult>> {
-        let Some((or_replace, def)) = parse_create_aggregate(sql)? else {
+        let Some((or_replace, def)) = parse_create_aggregate(sql, false)? else {
             return Ok(None);
         };
         let exists = |name: &str| -> Result<bool> {
@@ -894,6 +959,7 @@ mod tests {
     fn create_and_drop_aggregate_parse() {
         let (replace, def) = parse_create_aggregate(
             "CREATE AGGREGATE sumsq(int) (sfunc = add_sq, stype = int, initcond = '0', finalfunc = fin)",
+            false,
         )
         .unwrap()
         .unwrap();
@@ -907,6 +973,7 @@ mod tests {
         assert_eq!(def.finalfunc.as_deref(), Some("fin"));
         let (_, def) = parse_create_aggregate(
             "create or replace aggregate a2(x float8, y text) (SFUNC = f, STYPE = float8[], INITCOND = '{0,0}')",
+            false,
         )
         .unwrap()
         .unwrap();
@@ -920,7 +987,7 @@ mod tests {
         assert!(if_exists);
         assert_eq!(targets.len(), 2);
         assert!(
-            parse_create_aggregate("CREATE AGGREGATE x(int) (stype = int)")
+            parse_create_aggregate("CREATE AGGREGATE x(int) (stype = int)", false)
                 .unwrap_err()
                 .sqlstate()
                 .eq("42P13")

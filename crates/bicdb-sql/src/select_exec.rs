@@ -8,6 +8,7 @@
 // imports and the other split modules' re-exports) into scope so the moved
 // code compiles unchanged.
 use crate::*;
+use std::collections::HashSet;
 
 pub(crate) fn set_expr_insert(expr: &SetExpr) -> Option<&Insert> {
     match expr {
@@ -1530,6 +1531,115 @@ fn retain_set_all_rows(
     Ok(retained)
 }
 
+/// Canonical hash keys use the same type codecs as the set operations'
+/// equality test. If either branch has a value without a codec, preserve
+/// the comparison path for the entire operation.
+fn canonical_set_row_keys(
+    rows: &[Vec<SqlValue>],
+    column_types: &[Option<String>],
+    key_bytes: &mut usize,
+) -> Result<Option<Vec<Vec<u8>>>> {
+    let mut keys = Vec::new();
+    keys.try_reserve_exact(rows.len())
+        .map_err(|_| SqlError::resource_limit("53200", "set operation allocation failed"))?;
+    for row in rows {
+        let mut key = Vec::new();
+        for (index, value) in row.iter().enumerate() {
+            let bytes = if matches!(value, SqlValue::Null) {
+                vec![0]
+            } else {
+                let Some(pg_type) = column_types.get(index).and_then(Option::as_deref) else {
+                    return Ok(None);
+                };
+                let Ok(bytes) = pg_typed_hash_key(pg_type, value) else {
+                    return Ok(None);
+                };
+                bytes
+            };
+            key.extend_from_slice(&bytes.len().to_le_bytes());
+            key.extend(bytes);
+        }
+        // Estimate the encoded key, its vector and its hash table entry.
+        *key_bytes = key_bytes
+            .saturating_add(key.capacity())
+            .saturating_add(2 * std::mem::size_of::<(Vec<u8>, usize)>());
+        bicdb_core::query_budget::observe(*key_bytes);
+        bicdb_core::query_budget::check()?;
+        keys.push(key);
+    }
+    Ok(Some(keys))
+}
+
+fn retain_set_rows(
+    rows: Vec<Vec<SqlValue>>,
+    right: &[Vec<SqlValue>],
+    column_types: &[Option<String>],
+    all: bool,
+    intersect: bool,
+) -> Result<Vec<Vec<SqlValue>>> {
+    let mut key_bytes = 0;
+    if let Some(left_keys) = canonical_set_row_keys(&rows, column_types, &mut key_bytes)? {
+        if let Some(right_keys) = canonical_set_row_keys(right, column_types, &mut key_bytes)? {
+            let mut counts = HashMap::<Vec<u8>, usize>::new();
+            let capacity = if !all && !intersect {
+                right_keys.len().saturating_add(rows.len())
+            } else {
+                right_keys.len()
+            };
+            counts.try_reserve(capacity).map_err(|_| {
+                SqlError::resource_limit("53200", "set operation allocation failed")
+            })?;
+            for key in right_keys {
+                *counts.entry(key).or_default() += 1;
+            }
+            return Ok(rows
+                .into_iter()
+                .zip(left_keys)
+                .filter_map(|(row, key)| {
+                    let keep = match (all, intersect) {
+                        (true, _) => {
+                            let matched = counts.get_mut(&key).is_some_and(|count| {
+                                if *count == 0 {
+                                    return false;
+                                }
+                                *count -= 1;
+                                true
+                            });
+                            matched == intersect
+                        }
+                        (false, true) => counts.remove(&key).is_some(),
+                        (false, false) => match counts.entry(key) {
+                            std::collections::hash_map::Entry::Occupied(_) => false,
+                            std::collections::hash_map::Entry::Vacant(entry) => {
+                                entry.insert(1);
+                                true
+                            }
+                        },
+                    };
+                    keep.then_some(row)
+                })
+                .collect());
+        }
+    }
+    if all {
+        return retain_set_all_rows(rows, right, column_types, intersect);
+    }
+    let mut retained = Vec::new();
+    for row in rows {
+        let mut matched = false;
+        for candidate in right {
+            if sql_rows_not_distinct_typed(&row, candidate, column_types)? {
+                matched = true;
+                break;
+            }
+        }
+        if matched == intersect {
+            retained.push(row);
+        }
+    }
+    deduplicate_sql_rows_typed(retained, column_types)
+}
+
 pub(crate) fn combine_set_results(
     left: SqlResult,
     op: SetOperator,
@@ -1562,55 +1672,22 @@ pub(crate) fn combine_set_results(
             rows.extend(right.rows);
             rows = deduplicate_sql_rows_typed(rows, &column_types)?;
         }
-        SetOperator::Intersect => {
-            if set_quantifier == SetQuantifier::All {
-                rows = retain_set_all_rows(rows, &right.rows, &column_types, true)?;
-            } else {
-                let mut retained = Vec::new();
-                for row in rows {
-                    let mut matched = false;
-                    for candidate in &right.rows {
-                        if sql_rows_not_distinct_typed(&row, candidate, &column_types)? {
-                            matched = true;
-                            break;
-                        }
-                    }
-                    if matched {
-                        retained.push(row);
-                    }
-                }
-                rows = deduplicate_sql_rows_typed(retained, &column_types)?;
+        SetOperator::Intersect | SetOperator::Except | SetOperator::Minus => {
+            let all = set_quantifier == SetQuantifier::All;
+            if all && op == SetOperator::Minus {
+                return Err(SqlError::Unsupported(format!("{op} ALL is not supported")));
             }
-        }
-        SetOperator::Except | SetOperator::Minus => {
-            if set_quantifier == SetQuantifier::All {
-                if op == SetOperator::Minus {
-                    return Err(SqlError::Unsupported(format!("{op} ALL is not supported")));
-                }
-                rows = retain_set_all_rows(rows, &right.rows, &column_types, false)?;
-            } else {
-                let mut retained = Vec::new();
-                for row in rows {
-                    let mut matched = false;
-                    for candidate in &right.rows {
-                        if sql_rows_not_distinct_typed(&row, candidate, &column_types)? {
-                            matched = true;
-                            break;
-                        }
-                    }
-                    if !matched {
-                        retained.push(row);
-                    }
-                }
-                rows = deduplicate_sql_rows_typed(retained, &column_types)?;
-            }
+            rows = retain_set_rows(
+                rows,
+                &right.rows,
+                &column_types,
+                all,
+                op == SetOperator::Intersect,
+            )?;
         }
     }
-    // PostgreSQL resolves a set-operation result column to the common type of the
-    // branches; bicdb uses the first (left) branch's resolved type as the
-    // deterministic output type (a value-independent rule). Without this, the
-    // wire layer would fall back to per-value guessing and a UNION could report a
-    // different OID than the same column read directly.
+    // Execution supplies the resolved branch types after coercion. The left
+    // branch supplies the result column names.
     Ok(SqlResult::new(left.columns, rows).with_column_types(column_types))
 }
 
@@ -1618,6 +1695,17 @@ pub(crate) fn deduplicate_sql_rows_typed(
     rows: Vec<Vec<SqlValue>>,
     column_types: &[Option<String>],
 ) -> Result<Vec<Vec<SqlValue>>> {
+    let mut key_bytes = 0;
+    if let Some(keys) = canonical_set_row_keys(&rows, column_types, &mut key_bytes)? {
+        let mut seen = HashSet::new();
+        seen.try_reserve(keys.len())
+            .map_err(|_| SqlError::resource_limit("53200", "set operation allocation failed"))?;
+        return Ok(rows
+            .into_iter()
+            .zip(keys)
+            .filter_map(|(row, key)| seen.insert(key).then_some(row))
+            .collect());
+    }
     let mut deduped: Vec<Vec<SqlValue>> = Vec::new();
     for row in rows {
         let mut duplicate = false;

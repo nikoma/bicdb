@@ -1,0 +1,5 @@
+set.intersect_10k|SELECT count(*) FROM (SELECT i::int FROM generate_series(1,10000) g(i) INTERSECT SELECT i::int FROM generate_series(5001,15000) h(i)) s
+set.except_10k|SELECT count(*) FROM (SELECT i::int FROM generate_series(1,10000) g(i) EXCEPT SELECT i::int FROM generate_series(5001,15000) h(i)) s
+set.union_10k|SELECT count(*) FROM (SELECT i::int FROM generate_series(1,10000) g(i) UNION SELECT i::int FROM generate_series(5001,15000) h(i)) s
+set.intersect_all|SELECT count(*),count(n) FROM (SELECT * FROM (VALUES (1.00::numeric),(1.0),(NULL),(NULL),(2.0)) l(n) INTERSECT ALL SELECT * FROM (VALUES (1::numeric),(NULL),(3.0)) r(n)) s
+set.except_all|SELECT count(*),count(n) FROM (SELECT * FROM (VALUES (1.00::numeric),(1.0),(NULL),(NULL),(2.0)) l(n) EXCEPT ALL SELECT * FROM (VALUES (1::numeric),(NULL),(3.0)) r(n)) s

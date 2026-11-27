@@ -976,6 +976,11 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn apply_search_path_setting(&mut self, values: &[Expr]) -> Result<()> {
+        if let [value] = values {
+            if is_setting_default(value) {
+                return self.apply_setting_default("search_path".into());
+            }
+        }
         if values.is_empty() {
             return Err(SqlError::InvalidSql(
                 "SET search_path expects at least one schema".to_string(),
@@ -992,6 +997,9 @@ impl<'db> SqlSession<'db> {
 
     pub(crate) fn apply_setting(&mut self, name: &ObjectName, value: &Expr) -> Result<()> {
         let setting = object_name(name)?.to_ascii_lowercase();
+        if is_setting_default(value) {
+            return self.apply_setting_default(setting);
+        }
         let value = eval_setting_value(value)?;
         self.apply_setting_value(setting, value)
     }
@@ -1356,32 +1364,12 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn apply_timezone_setting(&mut self, value: &Expr) -> Result<()> {
-        // `SET TIME ZONE DEFAULT` / `LOCAL` is `RESET TimeZone`.
-        if let Expr::Identifier(ident) = value {
-            if ident.quote_style.is_none()
-                && matches!(
-                    ident.value.to_ascii_lowercase().as_str(),
-                    "default" | "local"
-                )
-            {
-                let startup = self
-                    .session_gucs
-                    .get(&format!(
-                        "{}timezone",
-                        crate::datestyle_output::STARTUP_DEFAULT_PREFIX
-                    ))
-                    .cloned();
-                let gucs = Arc::make_mut(&mut self.session_gucs);
-                match startup {
-                    Some(startup) => {
-                        gucs.insert("timezone".to_string(), startup);
-                    }
-                    None => {
-                        gucs.remove("timezone");
-                    }
-                }
-                return Ok(());
-            }
+        // Both DEFAULT and LOCAL denote the reset value in SET TIME ZONE.
+        if is_setting_default(value)
+            || matches!(value, Expr::Identifier(ident)
+                if ident.quote_style.is_none() && ident.value.eq_ignore_ascii_case("local"))
+        {
+            return self.apply_setting_default("timezone".into());
         }
         let value = eval_setting_value(value)?;
         self.apply_timezone_value(value)
@@ -2520,4 +2508,9 @@ fn with_returning_command_tag(mut result: SqlResult, verb: &str) -> SqlResult {
         result.command_tag = Some(format!("{verb} {}", result.rows.len()));
     }
     result
+}
+
+fn is_setting_default(expr: &Expr) -> bool {
+    matches!(expr, Expr::Identifier(ident)
+        if ident.quote_style.is_none() && ident.value.eq_ignore_ascii_case("default"))
 }

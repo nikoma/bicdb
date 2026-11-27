@@ -1,0 +1,5 @@
+agg.old_syntax|CREATE AGGREGATE s_newsum (sfunc1 = int4pl, basetype = int4, stype1 = int4, initcond1 = '0'); SELECT s_newsum(x) FROM (VALUES (1), (2), (3)) v(x); SELECT proname, pronargs FROM pg_proc WHERE proname = 's_newsum'
+agg.old_syntax_any|CREATE AGGREGATE s_oldcnt (sfunc = int8inc, basetype = 'ANY', stype = int8, initcond = '0'); SELECT s_oldcnt(*) FROM (VALUES (1), (NULL), (3)) v(x); SELECT pronargs FROM pg_proc WHERE proname = 's_oldcnt'
+agg.star|CREATE AGGREGATE s_newcnt (*) (sfunc = int8inc, stype = int8, initcond = '0'); CREATE AGGREGATE s_newcnt ("any") (sfunc = int8inc_any, stype = int8, initcond = '0'); SELECT s_newcnt(*), s_newcnt(x) FROM (VALUES (1), (NULL), (3)) v(x); SELECT s_newcnt(*) FROM (VALUES (1)) v(x) WHERE false
+agg.old_no_basetype|CREATE AGGREGATE s_nb (sfunc = int4pl, stype = int4)
+agg.basetype_redundant|CREATE AGGREGATE s_rb (int4) (sfunc = int4pl, basetype = int4, stype = int4)

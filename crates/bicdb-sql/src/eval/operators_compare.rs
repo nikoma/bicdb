@@ -1235,19 +1235,96 @@ pub(crate) fn values_equal(left: &SqlValue, right: &SqlValue) -> bool {
                     .all(|(left, right)| values_equal(&left.value, &right.value))
         }
         (SqlValue::Json(left), SqlValue::Json(right)) => json_values_equal(left, right),
+        // Two text values compare as text, even when both look like array
+        // literals: `'{x}'::text = '{"x"}'::text` is false.
+        (SqlValue::String(_), SqlValue::String(_)) => values_equal_scalar(left, right),
         _ => {
-            if let (Some(left), Some(right)) = (
-                array_values_for_comparison(left),
-                array_values_for_comparison(right),
-            ) {
-                return left.len() == right.len()
+            if let Some((left, right)) = mixed_array_comparison_operands(left, right) {
+                return left.dimensions == right.dimensions
+                    && left.lower_bounds == right.lower_bounds
+                    && left.elements.len() == right.elements.len()
                     && left
+                        .elements
                         .iter()
-                        .zip(right.iter())
-                        .all(|(left, right)| values_equal(left, right));
+                        .zip(&right.elements)
+                        .all(|(left, right)| values_not_distinct(left, right));
             }
             values_equal_scalar(left, right)
         }
+    }
+}
+
+/// The untyped row path can hold one array as decoded SQL cells and the other
+/// as its literal text. Both still carry dimensions and lower bounds.
+struct ArrayComparisonOperand {
+    elements: Vec<SqlValue>,
+    dimensions: Vec<usize>,
+    lower_bounds: Vec<i32>,
+}
+
+impl ArrayComparisonOperand {
+    fn new(value: &JsonValue, lower_bounds: Option<Vec<i32>>) -> Self {
+        let dimensions = array_dimensions(value);
+        let mut flattened = Vec::new();
+        flatten_array_json(value, &mut flattened);
+        Self {
+            elements: flattened.into_iter().map(json_to_sql_value).collect(),
+            lower_bounds: lower_bounds.unwrap_or_else(|| vec![1; dimensions.len()]),
+            dimensions,
+        }
+    }
+
+    fn compare(&self, other: &Self) -> Option<Ordering> {
+        for (left, right) in self.elements.iter().zip(&other.elements) {
+            let ordering = match (left, right) {
+                (SqlValue::Null, SqlValue::Null) => Ordering::Equal,
+                (SqlValue::Null, _) => Ordering::Greater,
+                (_, SqlValue::Null) => Ordering::Less,
+                (SqlValue::String(left), SqlValue::String(right)) => left.cmp(right),
+                _ => value_ordering(left, right)?,
+            };
+            if ordering != Ordering::Equal {
+                return Some(ordering);
+            }
+        }
+        Some(
+            self.elements
+                .len()
+                .cmp(&other.elements.len())
+                .then_with(|| self.dimensions.len().cmp(&other.dimensions.len()))
+                .then_with(|| self.dimensions.cmp(&other.dimensions))
+                .then_with(|| self.lower_bounds.cmp(&other.lower_bounds)),
+        )
+    }
+}
+
+fn mixed_array_comparison_operands(
+    left: &SqlValue,
+    right: &SqlValue,
+) -> Option<(ArrayComparisonOperand, ArrayComparisonOperand)> {
+    fn operands(
+        array: &SqlValue,
+        literal: &str,
+    ) -> Option<(ArrayComparisonOperand, ArrayComparisonOperand)> {
+        // Square-bracket JSON text is not a PostgreSQL array literal. An
+        // optional PostgreSQL array bounds prefix is followed by '='.
+        let text = literal.trim_start();
+        if !text.starts_with('{') && !(text.starts_with('[') && text.contains('=')) {
+            return None;
+        }
+        let (value, bounds) = array_json_parts(array, "array comparison").ok()??;
+        let literal = parse_pg_array_value(text).ok()?;
+        Some((
+            ArrayComparisonOperand::new(value, Some(bounds)),
+            ArrayComparisonOperand::new(&literal.value, literal.lower_bounds),
+        ))
+    }
+    match (left, right) {
+        (SqlValue::Json(_), SqlValue::String(literal)) => operands(left, literal),
+        (SqlValue::String(literal), SqlValue::Json(_)) => {
+            operands(right, literal).map(|(right, left)| (left, right))
+        }
+        _ => None,
     }
 }
 
@@ -1431,23 +1508,6 @@ pub(crate) fn float_and_numeric(left: &SqlValue, right: &SqlValue) -> Option<(f6
     match (left, right) {
         (SqlValue::Float(left), right) => Some((*left, numeric(right)?)),
         (left, SqlValue::Float(right)) => Some((numeric(left)?, *right)),
-        _ => None,
-    }
-}
-
-pub(crate) fn array_values_for_comparison(value: &SqlValue) -> Option<Vec<SqlValue>> {
-    match value {
-        SqlValue::Json(json) if json.is_array() => {
-            Some(json.as_array()?.iter().map(json_to_sql_value).collect())
-        }
-        SqlValue::String(value) if value.trim_start().starts_with(['{', '[']) => {
-            parse_array_literal(value).ok().map(|values| {
-                values
-                    .into_iter()
-                    .map(|value| json_to_sql_value(&value))
-                    .collect()
-            })
-        }
         _ => None,
     }
 }
@@ -2868,6 +2928,9 @@ pub(crate) fn value_ordering(left: &SqlValue, right: &SqlValue) -> Option<Orderi
     if let (SqlValue::Json(left), SqlValue::Json(right)) = (left, right) {
         return Some(jsonb_value_ordering(left, right));
     }
+    if let Some((left, right)) = mixed_array_comparison_operands(left, right) {
+        return left.compare(&right);
+    }
     if let (Some(small_left), Some(small_right)) =
         (small_decimal_value(left), small_decimal_value(right))
     {
@@ -4086,6 +4149,20 @@ pub(crate) fn compare_values_by_pg_types(
     op: &BinaryOperator,
     right: &SqlValue,
 ) -> Result<Option<Option<bool>>> {
+    let array_type = match (left_type, right_type) {
+        (Some(left), Some(right)) if left == right => Some(left),
+        (Some(kind), None) | (None, Some(kind)) => Some(kind),
+        _ => None,
+    };
+    if let Some(pg_type) =
+        array_type.filter(|kind| kind.ends_with("[]") && pg_type_oid_by_name(kind).is_some())
+    {
+        if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
+            return Ok(Some(None));
+        }
+        let ordering = pg_typed_compare(pg_type, left, right)?;
+        return Ok(Some(Some(comparison_from_ordering(op, ordering))));
+    }
     let (Some(left_type), Some(right_type)) = (left_type, right_type) else {
         return Ok(None);
     };

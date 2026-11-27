@@ -2955,6 +2955,8 @@ pub(crate) struct PreparedJoinConstraint {
 pub(crate) enum ArrayProjectionSetReturningFunction {
     Unnest,
     GenerateSubscripts,
+    RegexpMatches,
+    RegexpSplitToTable,
     /// The form when the argument types settle it; otherwise resolved from the start value.
     GenerateSeries(Option<GenerateSeriesKind>),
     PgSnapshotXip,
@@ -3020,6 +3022,12 @@ impl ArrayProjectionSetReturningCall {
             (_, Some(_)) => None,
             (ArrayProjectionSetReturningFunction::GenerateSubscripts, None) => {
                 Some("int4".to_string())
+            }
+            (ArrayProjectionSetReturningFunction::RegexpMatches, None) => {
+                Some("text[]".to_string())
+            }
+            (ArrayProjectionSetReturningFunction::RegexpSplitToTable, None) => {
+                Some("text".to_string())
             }
             (ArrayProjectionSetReturningFunction::PgSnapshotXip, None) => Some("xid8".to_string()),
             (ArrayProjectionSetReturningFunction::TxidSnapshotXip, None) => {
@@ -3095,6 +3103,8 @@ pub(crate) fn array_projection_set_returning_calls(
                 ArrayProjectionSetReturningFunction::ExpandArray
             }
             "generate_subscripts" => ArrayProjectionSetReturningFunction::GenerateSubscripts,
+            "regexp_matches" => ArrayProjectionSetReturningFunction::RegexpMatches,
+            "regexp_split_to_table" => ArrayProjectionSetReturningFunction::RegexpSplitToTable,
             "pg_snapshot_xip" => ArrayProjectionSetReturningFunction::PgSnapshotXip,
             "txid_snapshot_xip" => ArrayProjectionSetReturningFunction::TxidSnapshotXip,
             "generate_series" => ArrayProjectionSetReturningFunction::GenerateSeries(None),
@@ -3255,6 +3265,10 @@ pub(crate) fn array_projection_set_values(
     match function {
         ArrayProjectionSetReturningFunction::Unnest => {
             unnest_values_from_sql(arguments.into_iter().next().unwrap_or(SqlValue::Null))
+        }
+        ArrayProjectionSetReturningFunction::RegexpMatches => regexp_matches_values(&arguments),
+        ArrayProjectionSetReturningFunction::RegexpSplitToTable => {
+            regexp_split_to_table_values(&arguments)
         }
         ArrayProjectionSetReturningFunction::ExpandArray => {
             let elements =
@@ -4436,10 +4450,13 @@ fn index_range_probe_is_compatible(
     ) {
         return matches!(value, IndexValue::String(_) | IndexValue::Null);
     }
-    match index_field_pg_type(schema, field)
-        .as_deref()
-        .and_then(pg_type_oid_by_name)
-    {
+    let pg_type = index_field_pg_type(schema, field);
+    // Existing array index keys sort NULL elements before other elements.
+    // Equality still uses those keys; inequality must use SQL comparison.
+    if pg_type.as_deref().is_some_and(|kind| kind.ends_with("[]")) {
+        return false;
+    }
+    match pg_type.as_deref().and_then(pg_type_oid_by_name) {
         Some(20 | 21 | 23) => matches!(value, IndexValue::Int(_) | IndexValue::Null),
         _ => true,
     }
@@ -5821,12 +5838,13 @@ impl<'db> SqlEngine<'db> {
         let mut records = self.load_records_for_plan(&collection, &plan)?;
         if let Some(selection) = &select.selection {
             let predicate_env = self.from_relation_columns(&select.from).unwrap_or_default();
+            materialize::register_expression_relation_types(Some(&predicate_env));
             let mut filtered = Vec::new();
             for (idx, record) in records.into_iter().enumerate() {
                 if idx % 1024 == 0 {
                     self.check_cancellation()?;
                 }
-                let row = row_from_record(&collection, &collection, schema.as_ref(), &record)?;
+                let row = row_from_record(&collection, &alias_name, schema.as_ref(), &record)?;
                 if self
                     .eval_row_truth_typed(&row, selection, &predicate_env)?
                     .unwrap_or(false)

@@ -6388,7 +6388,7 @@ impl<'db> SqlEngine<'db> {
             let mut right_type_env = Vec::new();
             let right_key_type = self
                 .collect_relation_columns(&join.relation, &mut right_type_env)
-                .and_then(|_| self.infer_env_expr_type(right_key, &right_type_env));
+                .and_then(|_| self.infer_env_expr_type(right_key.as_ref(), &right_type_env));
             // The existing single-equality path has its typed key contract.
             // For a newly extracted conjunct, only plain integer columns are
             // admitted: textual/numeric/boolean coercions can compare equal
@@ -6404,7 +6404,7 @@ impl<'db> SqlEngine<'db> {
             // them in. Keys of different types whose comparison is not a
             // plain cast of both sides (CHAR against text) are left to the
             // nested loop, which compares each pair by its types.
-            let left_key_type = self.infer_slot_row_expr_type(&left.columns, left_key);
+            let left_key_type = self.infer_slot_row_expr_type(&left.columns, left_key.as_ref());
             let key_types = match (left_key_type.as_deref(), right_key_type.as_deref()) {
                 (Some(left_type), Some(right_type)) if left_type != right_type => {
                     hash_join_common_key_type(left_type, right_type)
@@ -6417,8 +6417,8 @@ impl<'db> SqlEngine<'db> {
             };
             if let Some((key_type, left_cast_from, right_cast_from)) = key_types.filter(|_| {
                 simple_equality
-                    || (self.join_key_values_are_integers(left_key, &left)
-                        && self.join_key_values_are_integers(right_key, &right))
+                    || (self.join_key_values_are_integers(left_key.as_ref(), &left)
+                        && self.join_key_values_are_integers(right_key.as_ref(), &right))
             }) {
                 crate::plan_diagnostics::record_join_method(
                     || join.relation.to_string(),
@@ -6428,8 +6428,8 @@ impl<'db> SqlEngine<'db> {
                     left,
                     right,
                     effective_constraint,
-                    left_key,
-                    right_key,
+                    left_key.as_ref(),
+                    right_key.as_ref(),
                     HashJoinKeyTypes {
                         key: (!key_type.is_empty()).then_some(key_type.as_str()),
                         left_cast_from: left_cast_from.as_deref(),

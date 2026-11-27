@@ -167,7 +167,9 @@ pub(crate) fn lower_routine(ir: &RoutineIR) -> Option<LoweredProc> {
             RoutineDecl::Variable {
                 default_expr: None, ..
             } => {}
-            RoutineDecl::Alias { .. } | RoutineDecl::Cursor { .. } => return None,
+            RoutineDecl::Alias { .. }
+            | RoutineDecl::TriggerRecordAlias { .. }
+            | RoutineDecl::Cursor { .. } => return None,
         }
     }
 

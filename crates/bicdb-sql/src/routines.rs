@@ -501,6 +501,10 @@ pub(crate) fn collect_routine_decl_symbols(
         RoutineDecl::Alias { name, .. } | RoutineDecl::Variable { name, .. } => {
             add_routine_symbol(name, names, seen);
         }
+        RoutineDecl::TriggerRecordAlias { name, target } => {
+            add_routine_symbol(name, names, seen);
+            add_routine_symbol(target, names, seen);
+        }
         RoutineDecl::Cursor { .. } => {}
     }
 }
@@ -718,6 +722,7 @@ pub(crate) fn bind_routine_statement_exprs(statements: &mut [RoutineStmt], scope
                                 .cloned();
                             (name, kind)
                         }
+                        RoutineDecl::TriggerRecordAlias { name, .. } => (name, None),
                         RoutineDecl::Cursor { .. } => continue,
                     };
                     if let Some(id) = local_scope.exact_vars.get(name).copied() {
@@ -1677,7 +1682,14 @@ pub(crate) fn parse_routine_decl(declaration: &str) -> Result<RoutineDecl> {
         });
     }
     if let Some(alias_rest) = strip_prefix_ci(rest, "ALIAS FOR ") {
-        let position = parse_plpgsql_position(alias_rest.trim())?;
+        let target = alias_rest.trim();
+        if target.eq_ignore_ascii_case("new") || target.eq_ignore_ascii_case("old") {
+            return Ok(RoutineDecl::TriggerRecordAlias {
+                name: normalize_object_name(&name),
+                target: target.to_ascii_lowercase(),
+            });
+        }
+        let position = parse_plpgsql_position(target)?;
         return Ok(RoutineDecl::Alias {
             name: normalize_object_name(&name),
             position,

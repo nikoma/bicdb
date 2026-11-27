@@ -5402,6 +5402,10 @@ enum RoutineDecl {
         name: String,
         position: usize,
     },
+    TriggerRecordAlias {
+        name: String,
+        target: String,
+    },
     Variable {
         name: String,
         source_name: String,
@@ -5690,7 +5694,9 @@ fn routine_declarations_may_write(declarations: &[RoutineDecl]) -> bool {
         {
             true
         }
-        RoutineDecl::Alias { .. } | RoutineDecl::Variable { .. } => false,
+        RoutineDecl::Alias { .. }
+        | RoutineDecl::TriggerRecordAlias { .. }
+        | RoutineDecl::Variable { .. } => false,
     })
 }
 
@@ -5857,6 +5863,9 @@ struct RoutineFrame {
     dirty_slots: Vec<bool>,
     full_resync: bool,
     positional: Vec<SqlValue>,
+    trigger_record_variables: bool,
+    record_alias_ids: FxHashMap<String, usize>,
+    record_alias_values: Vec<SqlValue>,
     output_names: Vec<String>,
     cursors: BTreeMap<String, RoutineCursor>,
     returned_set: Option<SqlResult>,

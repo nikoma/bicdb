@@ -85,7 +85,9 @@ fn scope_names(declarations: &[RoutineDecl], outer: &BTreeSet<String>) -> BTreeS
     for decl in declarations {
         let name = match decl {
             RoutineDecl::Variable { source_name, .. } => source_name,
-            RoutineDecl::Alias { name, .. } | RoutineDecl::Cursor { name, .. } => name,
+            RoutineDecl::Alias { name, .. }
+            | RoutineDecl::TriggerRecordAlias { name, .. }
+            | RoutineDecl::Cursor { name, .. } => name,
         };
         names.insert(name.clone());
     }

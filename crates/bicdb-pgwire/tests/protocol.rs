@@ -180,6 +180,52 @@ fn postgres_simple_query_resumes_after_copy_and_keeps_the_implicit_transaction()
 }
 
 #[test]
+fn postgres_explain_execute_plans_a_bound_prepared_statement() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        bicdb_pgwire::handle_client(stream, path).unwrap();
+    });
+    let mut client = TcpStream::connect(address).unwrap();
+    client
+        .set_read_timeout(Some(Duration::from_secs(30)))
+        .unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+
+    for sql in [
+        "CREATE TABLE explained (id int PRIMARY KEY, value text)",
+        "INSERT INTO explained VALUES (1, 'first'), (2, 'second')",
+        "PREPARE \"Find Value\"(int) AS SELECT value FROM explained WHERE id = $1",
+    ] {
+        send_query(&mut client, sql);
+        assert!(read_query_rows(&mut client).is_empty());
+    }
+    send_query(
+        &mut client,
+        r#"EXPLAIN (COSTS OFF) EXECUTE "Find Value"(2)"#,
+    );
+    let plan = read_query_rows(&mut client);
+    assert!(
+        plan.iter().flatten().any(|line| line.contains("explained")),
+        "{plan:?}"
+    );
+    send_query(&mut client, r#"EXECUTE "Find Value"(2)"#);
+    assert_eq!(
+        read_query_rows(&mut client),
+        vec![vec!["second".to_string()]]
+    );
+
+    send_query(&mut client, "EXPLAIN EXECUTE missing");
+    assert!(read_error_response(&mut client).contains("26000"));
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
+}
+
+#[test]
 fn cte_mutations_describe_no_data_and_keep_update_counts() {
     let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

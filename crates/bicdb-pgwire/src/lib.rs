@@ -4294,7 +4294,10 @@ fn execute_sql_prepared_statement_query(
     sql: &str,
     normalized: &str,
 ) -> Result<Option<SqlPreparedStatementResult>> {
-    if !(normalized.starts_with("prepare ")
+    let explain =
+        normalized.starts_with("explain ") && find_top_level_keyword(sql, "execute").is_some();
+    if !(explain
+        || normalized.starts_with("prepare ")
         || normalized.starts_with("execute ")
         || normalized.starts_with("deallocate "))
         || normalized.starts_with("prepare transaction ")
@@ -4322,12 +4325,24 @@ fn execute_sql_prepared_statement_query(
             }
             return Err(PgWireError::Protocol(error.to_string()));
         }
+        Err(_) if explain => return Ok(None),
         Err(error) => return Err(PgWireError::Protocol(error.to_string())),
     };
     let [statement] = statements.as_slice() else {
         return Ok(None);
     };
 
+    let (statement, explain_prefix) = match statement {
+        Statement::Explain { statement, .. }
+            if matches!(statement.as_ref(), Statement::Execute { .. }) =>
+        {
+            let Some(index) = find_top_level_keyword(sql, "execute") else {
+                return Ok(None);
+            };
+            (statement.as_ref(), Some(&sql[..index]))
+        }
+        _ => (statement, None),
+    };
     match statement {
         Statement::Prepare {
             name,
@@ -4374,9 +4389,11 @@ fn execute_sql_prepared_statement_query(
             };
             let name = sql_prepared_name_from_object(name)?;
             let prepared = state.prepared.get(&name).cloned().ok_or_else(|| {
-                PgWireError::Sql(SqlError::InvalidSql(format!(
-                    "prepared statement {name:?} not found"
-                )))
+                PgWireError::Sql(SqlError::data_exception_public(
+                    "26000",
+                    format!("prepared statement {name:?} does not exist"),
+                    None,
+                ))
             })?;
             if parameters.len() != prepared.param_type_oids.len() {
                 return Err(PgWireError::Sql(SqlError::InvalidSql(format!(
@@ -4397,10 +4414,15 @@ fn execute_sql_prepared_statement_query(
                 }
                 None => substitute_parameters(&prepared.sql, &params)?,
             };
-            let result = execute_server_sql_with_options(server, state, &sql, true)?;
+            let result = match explain_prefix {
+                Some(prefix) => {
+                    execute_server_sql_with_options(server, state, &format!("{prefix}{sql}"), true)?
+                }
+                None => execute_server_sql_with_options(server, state, &sql, true)?,
+            };
             Ok(Some(SqlPreparedStatementResult {
                 result,
-                source_sql: Some(prepared.sql),
+                source_sql: explain_prefix.is_none().then_some(prepared.sql),
             }))
         }
         Statement::Deallocate { name, .. } => {

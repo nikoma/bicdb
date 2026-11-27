@@ -181,12 +181,18 @@ impl SqlSession<'_> {
     ) -> Result<Option<Vec<SqlValue>>> {
         let old_value = old.map(|row| Self::view_row_value(view, row));
         let mut current = new;
+        let shape = super::row_triggers::TriggerRecordShape::new(&view.columns);
         for trigger in triggers {
             let new_value = current
                 .as_deref()
                 .map(|row| Self::view_row_value(view, row));
             let vars = Self::instead_vars(trigger, view, op, old_value.clone(), new_value);
-            match self.call_trigger_function(&trigger.name, &trigger.function_name, &vars)? {
+            match self.call_trigger_function(
+                &trigger.name,
+                &trigger.function_name,
+                &vars,
+                &shape,
+            )? {
                 None | Some(SqlValue::Null) => return Ok(None),
                 Some(returned) => {
                     current = Some(Self::view_row_from_value(view, &returned)?);

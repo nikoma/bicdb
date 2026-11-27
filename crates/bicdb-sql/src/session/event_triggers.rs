@@ -970,7 +970,12 @@ impl SqlSession<'_> {
             ];
             FIRING.with(|firing| firing.borrow_mut().push(event));
             let depth = std::mem::replace(&mut self.event_trigger_ddl_depth, 0);
-            let result = self.call_trigger_function(&trigger.name, &trigger.function, &vars);
+            let result = self.call_trigger_function(
+                &trigger.name,
+                &trigger.function,
+                &vars,
+                &super::row_triggers::TriggerRecordShape::default(),
+            );
             self.event_trigger_ddl_depth = depth;
             FIRING.with(|firing| {
                 firing.borrow_mut().pop();

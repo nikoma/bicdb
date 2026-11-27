@@ -3017,17 +3017,27 @@ impl<'db> SqlSession<'db> {
                 | BinaryOperator::GtEq
         ) || self.oracle_routine_frame()
             || self.routine_slots.is_none()
-            || crate::planner::is_unknown_literal(left)
-            || crate::planner::is_unknown_literal(right)
         {
             return Ok(None);
         }
-        let left_type = self
+        let mut left_type = self
             .routine_unary_operand_type(left)
             .map(|pg_type| crate::pg_operators::canonical_type(&pg_type));
-        let right_type = self
+        let mut right_type = self
             .routine_unary_operand_type(right)
             .map(|pg_type| crate::pg_operators::canonical_type(&pg_type));
+        if crate::planner::is_unknown_literal(left) {
+            if right_type.as_deref() != Some("bpchar") {
+                return Ok(None);
+            }
+            left_type.clone_from(&right_type);
+        }
+        if crate::planner::is_unknown_literal(right) {
+            if left_type.as_deref() != Some("bpchar") {
+                return Ok(None);
+            }
+            right_type.clone_from(&left_type);
+        }
         compare_values_by_pg_types(
             left_type.as_deref(),
             right_type.as_deref(),

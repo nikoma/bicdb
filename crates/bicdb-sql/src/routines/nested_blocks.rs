@@ -80,6 +80,7 @@ impl SqlSession<'_> {
             frame.record_alias_ids.remove(name);
             frame.set(name, SqlValue::Null);
             Arc::make_mut(&mut frame.assignment_types).remove(name);
+            frame.clear_record_field_types(name);
             if let Some(dates) = &mut frame.oracle_dates {
                 Arc::make_mut(dates).remove(name);
             }

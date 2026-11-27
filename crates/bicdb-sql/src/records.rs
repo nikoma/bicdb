@@ -522,7 +522,11 @@ pub(crate) fn validate_record_batch_local_constraints(
     Ok(())
 }
 
-fn validate_record_columns(table: &str, schema: &TableSchema, record: &Record) -> Result<()> {
+pub(crate) fn validate_record_columns(
+    table: &str,
+    schema: &TableSchema,
+    record: &Record,
+) -> Result<()> {
     for column in schema
         .columns
         .iter()

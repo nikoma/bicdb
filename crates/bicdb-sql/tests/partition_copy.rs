@@ -179,3 +179,40 @@ fn copy_preserves_parent_insert_privilege_and_rls_without_child_sql_grants() {
         db.close().unwrap();
     }
 }
+
+#[test]
+fn copy_batches_plain_partition_writes_and_rejects_unmatched_rows_atomically() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(root.path(), config(mode)).unwrap();
+        let mut sql = SqlSession::new(&mut db);
+        for statement in [
+            "CREATE TABLE plain_p(k int, payload text NOT NULL, measured float8 NOT NULL DEFAULT random()) PARTITION BY RANGE (k)",
+            "CREATE TABLE plain_low PARTITION OF plain_p FOR VALUES FROM (0) TO (10)",
+            "CREATE TABLE plain_high PARTITION OF plain_p FOR VALUES FROM (10) TO (20)",
+        ] {
+            sql.execute(statement).unwrap();
+        }
+        assert_eq!(
+            sql.copy_insert_rows("plain_p", &columns(), data(&[1, 12, 2, 12]))
+                .unwrap(),
+            4,
+        );
+        let error = sql
+            .copy_insert_rows("plain_p", &columns(), data(&[4, 30]))
+            .unwrap_err();
+        assert_eq!(error.sqlstate(), "23514");
+        let rows = sql
+            .execute("SELECT k, count(measured) FROM plain_p GROUP BY k ORDER BY k")
+            .unwrap()
+            .rows;
+        assert_eq!(
+            rows,
+            [
+                vec![SqlValue::Int(1), SqlValue::Int(1)],
+                vec![SqlValue::Int(2), SqlValue::Int(1)],
+                vec![SqlValue::Int(12), SqlValue::Int(2)],
+            ],
+        );
+    }
+}

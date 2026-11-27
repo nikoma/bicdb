@@ -7,7 +7,7 @@ fn qualified_arrays_keep_their_type_and_postgres_element_comparison() {
         let dir = tempfile::tempdir().unwrap();
         let mut db = BicDb::open_with_config(
             dir.path(),
-            DbConfig::default().with_storage_mode(storage_mode),
+            DbConfig::default().with_storage_mode(storage_mode.clone()),
         )
         .unwrap();
         let mut session = SqlSession::new(&mut db);

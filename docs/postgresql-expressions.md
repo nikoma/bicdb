@@ -234,8 +234,27 @@ cases protect the two front ends.
   type, as in PostgreSQL: `tsvector @@ 'a & b'`, `tsquery && 'c'`,
   `tsquery || 'c'`, `'a' <-> 'b'::tsquery` (the phrase operator) and
   `tsvector || 'b:2'`.
-- `ts_lexize(dictionary, token)` works for `simple` and each built-in
-  `<language>_stem` dictionary.
+- `ts_lexize(dictionary, token)` works for every dictionary: the built-in
+  `simple` and `<language>_stem` ones and user dictionaries.
+- Text search objects are catalog objects: `CREATE`/`ALTER`/`DROP TEXT
+  SEARCH PARSER | TEMPLATE | DICTIONARY | CONFIGURATION` (`RENAME TO`,
+  `OWNER TO`, `SET SCHEMA`, dictionary options, `ADD`/`ALTER`/`DROP
+  MAPPING`, `ALTER MAPPING [FOR ...] REPLACE`, `DROP ... CASCADE`), listed
+  in `pg_ts_parser`, `pg_ts_template`, `pg_ts_dict`, `pg_ts_config` and
+  `pg_ts_config_map` with PostgreSQL's built-in objects and oids, resolved
+  by `regconfig`/`regdictionary` and the search path, and transactional.
+  `to_tsvector`, `to_tsquery`, `plainto_tsquery`, `phraseto_tsquery`,
+  `websearch_to_tsquery`, `ts_headline` and `default_text_search_config`
+  use a configuration's mapping per token type: tokens of an unmapped type,
+  or that no mapped dictionary recognizes, are dropped without taking a
+  position, as in PostgreSQL.
+- Dictionaries of the `simple` (`StopWords`, `Accept`), `snowball`
+  (`Language`, `StopWords`) and `synonym` (`Synonyms`, `CaseSensitive`)
+  templates run; option errors are PostgreSQL's. The `tsearch_data` files
+  available are PostgreSQL's stop-word files and `synonym_sample`.
+  Dictionaries of the `ispell` and `thesaurus` templates, and of templates
+  or parsers made of other support functions, fail with 0A000 at CREATE.
+  Built-in objects cannot be dropped (2BP01).
 - The scalar functions `to_tsvector`, `to_tsquery`, `plainto_tsquery`,
   `phraseto_tsquery` and `websearch_to_tsquery` can be used in FROM
   (`FROM to_tsquery('english', 'x') AS q`).
@@ -257,6 +276,26 @@ cases protect the two front ends.
 - `ts_rank_cd` leaves out positions whose weight the query operand
   excludes (`s:A`), as PostgreSQL's cover density does.
 
+Upgrade note (text search output of built-in configurations). Since
+built-in configurations follow PostgreSQL's token-type mappings, these
+outputs differ from earlier BicDB versions:
+- In `english` and the other Snowball configurations, tokens that are not
+  plain words (letters with digits, hosts, emails, URLs, URL paths, file
+  paths, numbers, versions) are only lower-cased, no longer stemmed:
+  `covid19s`, `/docs/files`, `api.example.org/v2/users` stay whole where
+  they used to lose a suffix.
+- In `russian` and `hindi`, ASCII words go through the English stemmer and
+  English stop words, as in PostgreSQL (they used to be left unstemmed).
+- `websearch_to_tsquery` reads `or` in any letter case as OR (it used to
+  read only `OR`; in `english` a lower-case `or` was a dropped stop word).
+- `simple` output, positions, and all plain-word handling are unchanged.
+Stored values computed by the old rules no longer match queries for those
+tokens: recompute stored `tsvector` columns (`UPDATE t SET doc =
+to_tsvector(...)`), rewrite stored generated columns, and `REINDEX` indexes
+over `to_tsvector(...)` expressions that use an affected configuration.
+Full-text indexes the storage engine builds from raw text fields use their
+own tokenizer and are not affected.
+
 Limits: these fail instead of answering:
 - `ts_debug`, `ts_parse` and `unnest(tsvector)`
-- `CREATE TEXT SEARCH CONFIGURATION/DICTIONARY`
+- Ispell and thesaurus dictionaries (0A000 at CREATE TEXT SEARCH DICTIONARY)

@@ -259,6 +259,7 @@ mod similar_to;
 mod sql_json;
 mod srf_projection;
 mod stats_ext;
+mod text_search_catalog;
 mod user_aggregates;
 mod user_casts;
 pub use application_copy::{copy_application_tables, ApplicationCopyReport};

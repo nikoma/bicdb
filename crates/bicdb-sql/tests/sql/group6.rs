@@ -2962,7 +2962,7 @@ fn postgres_full_text_search_types_are_string_compatible() {
 
     assert_eq!(
         session.execute("SELECT 'english'::regconfig").unwrap().rows,
-        vec![vec![SqlValue::Int(810_102)]]
+        vec![vec![SqlValue::Int(13_248)]]
     );
     assert_eq!(
         session

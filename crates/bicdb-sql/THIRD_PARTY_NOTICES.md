@@ -49,6 +49,11 @@ PostgreSQL License and attribution inline; its separately licensed code is not
 relicensed under Apache-2.0. Binary distributors must also
 retain that notice. The source is PostgreSQL's `REL_17_STABLE` branch.
 
+The text search data files under `crates/bicdb-sql/assets/postgresql-18-stopwords`
+and `crates/bicdb-sql/assets/postgresql-18-tsearch-data` are copied unchanged
+from PostgreSQL 18 (`src/backend/snowball/stopwords` and
+`src/backend/tsearch/dicts`) under the same PostgreSQL License.
+
 ```text
 PostgreSQL Database Management System
 (also known as Postgres, formerly known as Postgres95)

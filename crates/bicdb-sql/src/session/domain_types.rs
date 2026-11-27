@@ -983,6 +983,15 @@ impl<'db> SqlSession<'db> {
                     let owns_database = list_databases(self.db_ref())?
                         .into_iter()
                         .any(|object| object.owner.eq_ignore_ascii_case(&role));
+                    let owns_text_search =
+                        crate::text_search_catalog::user_ts_objects(self.db_ref())?
+                            .iter()
+                            .any(|object| {
+                                object
+                                    .owner
+                                    .as_deref()
+                                    .is_some_and(|owner| owner.eq_ignore_ascii_case(&role))
+                            });
                     let has_privileges = list_privileges(self.db_ref())?
                         .into_iter()
                         .any(|grant| grant.grantee.eq_ignore_ascii_case(&role));
@@ -1006,6 +1015,7 @@ impl<'db> SqlSession<'db> {
                         || owns_routine
                         || owns_namespace
                         || owns_database
+                        || owns_text_search
                         || has_privileges
                         || has_default_privileges
                         || has_granted_membership
@@ -1103,6 +1113,7 @@ impl<'db> SqlSession<'db> {
             routines: Vec<RoutineSchema>,
             types: Vec<UserTypeSchema>,
             operators: Vec<crate::pg_operators::OperatorSchema>,
+            text_search: Vec<crate::text_search_catalog::TsObject>,
         }
         let mut targets: Vec<Contents> = Vec::new();
         for name in names {
@@ -1167,6 +1178,7 @@ impl<'db> SqlSession<'db> {
                 .filter(|user_type| user_type.schema_name == schema)
                 .collect::<Vec<_>>();
             let operators = self.schema_operators(&schema)?;
+            let text_search = self.schema_ts_objects(&schema)?;
             targets.push(Contents {
                 namespace,
                 tables,
@@ -1175,6 +1187,7 @@ impl<'db> SqlSession<'db> {
                 routines,
                 types,
                 operators,
+                text_search,
             });
         }
         let mut cascaded = Vec::new();
@@ -1210,6 +1223,13 @@ impl<'db> SqlSession<'db> {
                         .operators
                         .iter()
                         .map(|operator| format!("operator {}", operator.id.display())),
+                )
+                .chain(
+                    target
+                        .text_search
+                        .iter()
+                        .map(|object| self.ts_object_description(object))
+                        .collect::<Result<Vec<_>>>()?,
                 )
                 .collect::<Vec<_>>();
             if !cascade {
@@ -1260,6 +1280,15 @@ impl<'db> SqlSession<'db> {
                     &format!("operator {}.{}", operator.id.schema, operator.id.name),
                     "drop it",
                 )?;
+            }
+            for object in &target.text_search {
+                if let Some(owner) = &object.owner {
+                    self.require_object_ownership(
+                        owner,
+                        &format!("{} {}", object.kind.noun(), object.name),
+                        "drop it",
+                    )?;
+                }
             }
             cascaded.push((target, objects));
         }
@@ -1329,6 +1358,7 @@ impl<'db> SqlSession<'db> {
                 .map(|operator| operator.id.clone())
                 .collect::<Vec<_>>();
             self.drop_operators(&operators)?;
+            self.drop_schema_ts_objects(&target.text_search)?;
             // Further overloads first: dropping a name's first routine moves
             // its next overload to the name's plain catalog key.
             let mut routines = target.routines.iter().collect::<Vec<_>>();

@@ -40,6 +40,7 @@ pub(crate) fn is_internal_sql_collection(name: &str) -> bool {
         VIEW_COLLECTION,
         ROUTINE_COLLECTION,
         crate::pg_operators::OPERATOR_COLLECTION,
+        crate::text_search_catalog::TS_COLLECTION,
         crate::user_casts::CAST_COLLECTION,
         crate::stats_ext::STATS_COLLECTION,
         crate::query_rules::RULE_COLLECTION,

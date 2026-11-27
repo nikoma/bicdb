@@ -5384,6 +5384,10 @@ impl<'db> SqlEngine<'db> {
     #[inline(never)]
     fn execute_query_guarded(&self, query: &Query) -> Result<SqlResult> {
         let _collations = crate::collations::ActiveCollations::install(self.db_ref())?;
+        let _text_search = crate::text_search_catalog::ActiveTextSearch::install(
+            self.db_ref(),
+            &self.session_gucs,
+        )?;
         self.require_query_exact_decimal_units(query)?;
         let join_budget = crate::join_budget::QueryScope::enter();
         self.db_ref().check_recovery_state()?;

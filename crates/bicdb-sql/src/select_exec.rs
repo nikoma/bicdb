@@ -4031,7 +4031,7 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
         "pg_amproc" => Ok(pg_amproc_rows()),
         "pg_operator" => crate::pg_operators::pg_operator_rows(db),
         "pg_ts_config" | "pg_ts_config_map" | "pg_ts_dict" | "pg_ts_parser" | "pg_ts_template" => {
-            Ok(Vec::new())
+            crate::text_search_catalog::ts_catalog_rows(db, table)
         }
         "pg_foreign_data_wrapper"
         | "pg_foreign_server"
@@ -5208,6 +5208,17 @@ pub(crate) fn virtual_table_column_types(table: &str) -> Option<Vec<(String, Opt
         );
     }
     let table = table.strip_prefix("pg_catalog.").unwrap_or(table);
+    if let Some((_, columns)) = crate::text_search_catalog::TS_CATALOG_COLUMN_TYPES
+        .iter()
+        .find(|(name, _)| *name == table)
+    {
+        return Some(
+            columns
+                .iter()
+                .map(|(name, kind)| (name.to_string(), Some(kind.to_string())))
+                .collect(),
+        );
+    }
     let columns: &[(&str, &str)] = match table {
         "information_schema.tables" => &[
             ("table_catalog", "name"),

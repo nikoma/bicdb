@@ -1217,16 +1217,23 @@ impl<'db> SqlSession<'db> {
             }
             "default_text_search_config" => {
                 let name = value.to_cell();
-                if !crate::fts::is_text_search_config(&name) {
+                let scope = crate::text_search_catalog::TsScope::new(
+                    crate::text_search_catalog::user_ts_objects(self.db_ref())?,
+                    crate::pg_operators::effective_search_path(&self.session_gucs),
+                );
+                let Some(config) =
+                    scope.resolve_text(crate::text_search_catalog::TsKind::Configuration, &name)
+                else {
                     return Err(SqlError::invalid_parameter_value(format!(
                         "invalid value for parameter \"default_text_search_config\": \"{name}\""
                     )));
-                }
-                let name = if name.contains('.') {
-                    name.to_ascii_lowercase()
-                } else {
-                    format!("pg_catalog.{}", name.to_ascii_lowercase())
                 };
+                // Stored qualified, as PostgreSQL canonicalizes it.
+                let name = format!(
+                    "{}.{}",
+                    crate::text_search_catalog::quote_ts_identifier(&config.schema),
+                    crate::text_search_catalog::quote_ts_identifier(&config.name)
+                );
                 crate::set_default_text_search_config(&name);
                 Arc::make_mut(&mut self.session_gucs)
                     .insert("default_text_search_config".to_string(), name);
@@ -1497,6 +1504,10 @@ impl<'db> SqlSession<'db> {
 
     fn execute_statement_inner(&mut self, statement: &Statement) -> Result<SqlResult> {
         let _collations = crate::collations::ActiveCollations::install(self.db_ref())?;
+        let _text_search = crate::text_search_catalog::ActiveTextSearch::install(
+            self.db_ref(),
+            &self.session_gucs,
+        )?;
         crate::collations::reject_unsupported_nondeterministic(statement)?;
         match statement {
             Statement::Query(query) => match self.execute_select_into(query)? {

@@ -1,11 +1,12 @@
 use rust_stemmers::{Algorithm as LegacyAlgorithm, Stemmer as LegacyStemmer};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::sync::{Arc, OnceLock};
 use unicode_categories::UnicodeCategories;
 use waken_snowball::{Algorithm, Stemmer};
 
-use crate::eval::builtin_regconfig_name;
+use crate::text_search_catalog::{active_ts_scope, TsKind, TsObject, TsOption, TsScope};
 use crate::{pg_internal_char_byte, BicDb, Result, SqlEngine, SqlError, SqlValue};
 
 const MAX_LEXEME_BYTES: usize = bicdb_core::MAX_FULL_TEXT_TERM_BYTES;
@@ -1380,184 +1381,682 @@ fn tsquery_distance_error() -> SqlError {
     )
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum TextSearchConfig {
-    Simple,
+/// A text search configuration ready to run: for each token type of the
+/// default parser, the dictionaries tried in order (PostgreSQL's
+/// `pg_ts_config_map`). Built from the catalog object it names.
+#[derive(Clone, Debug)]
+pub(crate) struct TextSearchConfig(Arc<CompiledConfig>);
+
+#[derive(Debug)]
+struct CompiledConfig {
+    /// Indexed by token type id (1..=23); index 0 is unused.
+    maps: Vec<Vec<Arc<CompiledDictionary>>>,
+}
+
+/// A dictionary of a template BicDB executes.
+#[derive(Debug)]
+pub(crate) enum CompiledDictionary {
+    Simple {
+        stopwords: Option<&'static HashSet<String>>,
+        accept: bool,
+    },
     Snowball {
         algorithm: Algorithm,
-        stopwords: &'static str,
+        stopwords: Option<&'static HashSet<String>>,
     },
+    Synonym {
+        entries: HashMap<String, (String, bool)>,
+        case_sensitive: bool,
+    },
+}
+
+/// What a dictionary made of one token: `Unrecognized` passes it to the next
+/// dictionary; an empty lexeme list is a stop word. Each lexeme carries its
+/// prefix-match flag.
+pub(crate) enum Lexized {
+    Unrecognized,
+    Lexemes(Vec<(String, bool)>),
+}
+
+/// What a configuration made of one token: `Unmapped` tokens (no mapping for
+/// their type, or no dictionary recognized them) take no position.
+enum TokenOutcome {
+    Unmapped,
+    Lexemes(Vec<(String, bool)>),
+}
+
+pub(crate) const TOKEN_ASCIIWORD: u8 = 1;
+const TOKEN_WORD: u8 = 2;
+const TOKEN_NUMWORD: u8 = 3;
+const TOKEN_EMAIL: u8 = 4;
+const TOKEN_URL: u8 = 5;
+const TOKEN_HOST: u8 = 6;
+const TOKEN_VERSION: u8 = 8;
+const TOKEN_HWORD_NUMPART: u8 = 9;
+const TOKEN_HWORD_PART: u8 = 10;
+const TOKEN_HWORD_ASCIIPART: u8 = 11;
+const TOKEN_NUMHWORD: u8 = 15;
+const TOKEN_ASCIIHWORD: u8 = 16;
+const TOKEN_HWORD: u8 = 17;
+const TOKEN_URL_PATH: u8 = 18;
+const TOKEN_FILE: u8 = 19;
+const TOKEN_FLOAT: u8 = 20;
+const TOKEN_UINT: u8 = 22;
+
+const STOPWORD_FILES: [(&str, &str); 15] = [
+    (
+        "danish",
+        include_str!("../assets/postgresql-18-stopwords/danish.stop"),
+    ),
+    (
+        "dutch",
+        include_str!("../assets/postgresql-18-stopwords/dutch.stop"),
+    ),
+    (
+        "english",
+        include_str!("../assets/postgresql-18-stopwords/english.stop"),
+    ),
+    (
+        "finnish",
+        include_str!("../assets/postgresql-18-stopwords/finnish.stop"),
+    ),
+    (
+        "french",
+        include_str!("../assets/postgresql-18-stopwords/french.stop"),
+    ),
+    (
+        "german",
+        include_str!("../assets/postgresql-18-stopwords/german.stop"),
+    ),
+    (
+        "hungarian",
+        include_str!("../assets/postgresql-18-stopwords/hungarian.stop"),
+    ),
+    (
+        "italian",
+        include_str!("../assets/postgresql-18-stopwords/italian.stop"),
+    ),
+    (
+        "nepali",
+        include_str!("../assets/postgresql-18-stopwords/nepali.stop"),
+    ),
+    (
+        "norwegian",
+        include_str!("../assets/postgresql-18-stopwords/norwegian.stop"),
+    ),
+    (
+        "portuguese",
+        include_str!("../assets/postgresql-18-stopwords/portuguese.stop"),
+    ),
+    (
+        "russian",
+        include_str!("../assets/postgresql-18-stopwords/russian.stop"),
+    ),
+    (
+        "spanish",
+        include_str!("../assets/postgresql-18-stopwords/spanish.stop"),
+    ),
+    (
+        "swedish",
+        include_str!("../assets/postgresql-18-stopwords/swedish.stop"),
+    ),
+    (
+        "turkish",
+        include_str!("../assets/postgresql-18-stopwords/turkish.stop"),
+    ),
+];
+
+/// The `tsearch_data` synonym files PostgreSQL ships.
+const SYNONYM_FILES: [(&str, &str); 1] = [(
+    "synonym_sample",
+    include_str!("../assets/postgresql-18-tsearch-data/synonym_sample.syn"),
+)];
+
+/// A stop-word file's words, lower-cased as PostgreSQL reads them (the first
+/// word of each non-empty line).
+fn stopword_set(name: &str) -> Option<&'static HashSet<String>> {
+    static SETS: OnceLock<HashMap<&'static str, HashSet<String>>> = OnceLock::new();
+    SETS.get_or_init(|| {
+        STOPWORD_FILES
+            .iter()
+            .map(|(name, text)| {
+                (
+                    *name,
+                    text.lines()
+                        .filter_map(|line| line.split_whitespace().next())
+                        .map(str::to_lowercase)
+                        .collect(),
+                )
+            })
+            .collect()
+    })
+    .get(name)
+}
+
+fn snowball_algorithm(language: &str) -> Option<Algorithm> {
+    Some(match language {
+        "arabic" => Algorithm::Arabic,
+        "armenian" => Algorithm::Armenian,
+        "basque" => Algorithm::Basque,
+        "catalan" => Algorithm::Catalan,
+        "danish" => Algorithm::Danish,
+        "dutch" => Algorithm::Dutch,
+        "english" => Algorithm::English,
+        "estonian" => Algorithm::Estonian,
+        "finnish" => Algorithm::Finnish,
+        "french" => Algorithm::French,
+        "german" => Algorithm::German,
+        "greek" => Algorithm::Greek,
+        "hindi" => Algorithm::Hindi,
+        "hungarian" => Algorithm::Hungarian,
+        "indonesian" => Algorithm::Indonesian,
+        "irish" => Algorithm::Irish,
+        "italian" => Algorithm::Italian,
+        "lithuanian" => Algorithm::Lithuanian,
+        "nepali" => Algorithm::Nepali,
+        "norwegian" => Algorithm::Norwegian,
+        "portuguese" => Algorithm::Portuguese,
+        "romanian" => Algorithm::Romanian,
+        "russian" => Algorithm::Russian,
+        "serbian" => Algorithm::Serbian,
+        "spanish" => Algorithm::Spanish,
+        "swedish" => Algorithm::Swedish,
+        "tamil" => Algorithm::Tamil,
+        "turkish" => Algorithm::Turkish,
+        "yiddish" => Algorithm::Yiddish,
+        _ => return None,
+    })
+}
+
+fn snowball_stem(algorithm: Algorithm, token: &str) -> String {
+    match algorithm {
+        Algorithm::Dutch => LegacyStemmer::create(LegacyAlgorithm::Dutch)
+            .stem(token)
+            .into_owned(),
+        Algorithm::Tamil => LegacyStemmer::create(LegacyAlgorithm::Tamil)
+            .stem(token)
+            .into_owned(),
+        algorithm => Stemmer::new(algorithm).stem(token).into_owned(),
+    }
+}
+
+impl CompiledDictionary {
+    pub(crate) fn lexize(&self, token: &str) -> Lexized {
+        match self {
+            Self::Simple { stopwords, accept } => {
+                let lower = token.to_lowercase();
+                if lower.is_empty() || stopwords.is_some_and(|words| words.contains(&lower)) {
+                    Lexized::Lexemes(Vec::new())
+                } else if *accept {
+                    Lexized::Lexemes(vec![(lower, false)])
+                } else {
+                    Lexized::Unrecognized
+                }
+            }
+            Self::Snowball {
+                algorithm,
+                stopwords,
+            } => {
+                let lower = token.to_lowercase();
+                if token.len() > 1000 {
+                    Lexized::Lexemes(vec![(lower, false)])
+                } else if lower.is_empty() || stopwords.is_some_and(|words| words.contains(&lower))
+                {
+                    Lexized::Lexemes(Vec::new())
+                } else {
+                    Lexized::Lexemes(vec![(snowball_stem(*algorithm, &lower), false)])
+                }
+            }
+            Self::Synonym {
+                entries,
+                case_sensitive,
+            } => {
+                if token.is_empty() || entries.is_empty() {
+                    return Lexized::Unrecognized;
+                }
+                let key = if *case_sensitive {
+                    token.to_string()
+                } else {
+                    token.to_lowercase()
+                };
+                match entries.get(&key) {
+                    Some((output, prefix)) => Lexized::Lexemes(vec![(output.clone(), *prefix)]),
+                    None => Lexized::Unrecognized,
+                }
+            }
+        }
+    }
+}
+
+fn invalid_dictionary_parameter(message: impl Into<String>) -> SqlError {
+    SqlError::data_exception("22023", message.into(), None)
+}
+
+/// `defGetBoolean`.
+fn option_boolean(option: &TsOption) -> Result<bool> {
+    let value = option.value.to_ascii_lowercase();
+    match (option.numeric, value.as_str()) {
+        (true, "1") => Ok(true),
+        (true, "0") => Ok(false),
+        (false, "true" | "on") => Ok(true),
+        (false, "false" | "off") => Ok(false),
+        _ => Err(SqlError::data_exception(
+            "42601",
+            format!("{} requires a Boolean value", option.name),
+            None,
+        )),
+    }
+}
+
+/// `get_tsearch_config_filename`: only `[a-z0-9_]` names reach the
+/// tsearch_data directory.
+fn tsearch_file_name(name: &str) -> Result<&str> {
+    if name
+        .chars()
+        .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_')
+    {
+        Ok(name)
+    } else {
+        Err(invalid_dictionary_parameter(format!(
+            "invalid text search configuration file name \"{name}\""
+        )))
+    }
+}
+
+fn missing_tsearch_file(kind: &str, name: &str, extension: &str) -> SqlError {
+    SqlError::data_exception(
+        "F0000",
+        format!(
+            "could not open {kind} file \"tsearch_data/{name}.{extension}\": No such file or directory"
+        ),
+        None,
+    )
+}
+
+fn stopword_option(option: &TsOption) -> Result<&'static HashSet<String>> {
+    let name = tsearch_file_name(&option.value)?;
+    stopword_set(name).ok_or_else(|| missing_tsearch_file("stop-word", name, "stop"))
+}
+
+/// Builds the dictionary a template's init and lexize methods make of
+/// `options`, raising the errors PostgreSQL's init methods raise. Templates
+/// BicDB cannot execute are refused.
+pub(crate) fn compile_dictionary(
+    template_name: &str,
+    init: &str,
+    lexize: &str,
+    options: &[TsOption],
+) -> Result<CompiledDictionary> {
+    match (init, lexize) {
+        ("dsimple_init", "dsimple_lexize") => {
+            let mut stopwords = None;
+            let mut accept = None;
+            for option in options {
+                match option.name.as_str() {
+                    "stopwords" => {
+                        if stopwords.is_some() {
+                            return Err(invalid_dictionary_parameter(
+                                "multiple StopWords parameters",
+                            ));
+                        }
+                        stopwords = Some(stopword_option(option)?);
+                    }
+                    "accept" => {
+                        if accept.is_some() {
+                            return Err(invalid_dictionary_parameter("multiple Accept parameters"));
+                        }
+                        accept = Some(option_boolean(option)?);
+                    }
+                    other => {
+                        return Err(invalid_dictionary_parameter(format!(
+                            "unrecognized simple dictionary parameter: \"{other}\""
+                        )))
+                    }
+                }
+            }
+            Ok(CompiledDictionary::Simple {
+                stopwords,
+                accept: accept.unwrap_or(true),
+            })
+        }
+        ("dsnowball_init", "dsnowball_lexize") => {
+            let mut stopwords = None;
+            let mut algorithm = None;
+            for option in options {
+                match option.name.as_str() {
+                    "stopwords" => {
+                        if stopwords.is_some() {
+                            return Err(invalid_dictionary_parameter(
+                                "multiple StopWords parameters",
+                            ));
+                        }
+                        stopwords = Some(stopword_option(option)?);
+                    }
+                    "language" => {
+                        if algorithm.is_some() {
+                            return Err(invalid_dictionary_parameter(
+                                "multiple Language parameters",
+                            ));
+                        }
+                        let language = option.value.to_ascii_lowercase();
+                        algorithm = Some(match snowball_algorithm(&language) {
+                            Some(algorithm) => algorithm,
+                            None if matches!(language.as_str(), "porter" | "dutch_porter") => {
+                                return Err(SqlError::Unsupported(format!(
+                                    "the Snowball stemmer for language \"{}\" is not supported",
+                                    option.value
+                                )))
+                            }
+                            None => {
+                                return Err(SqlError::data_exception(
+                                    "42704",
+                                    format!(
+                                        "no Snowball stemmer available for language \"{}\" and encoding \"UTF8\"",
+                                        option.value
+                                    ),
+                                    None,
+                                ))
+                            }
+                        });
+                    }
+                    other => {
+                        return Err(invalid_dictionary_parameter(format!(
+                            "unrecognized Snowball parameter: \"{other}\""
+                        )))
+                    }
+                }
+            }
+            let Some(algorithm) = algorithm else {
+                return Err(invalid_dictionary_parameter("missing Language parameter"));
+            };
+            Ok(CompiledDictionary::Snowball {
+                algorithm,
+                stopwords,
+            })
+        }
+        ("dsynonym_init", "dsynonym_lexize") => {
+            let mut file = None;
+            let mut case_sensitive = false;
+            for option in options {
+                match option.name.as_str() {
+                    "synonyms" => file = Some(option.value.as_str()),
+                    "casesensitive" => case_sensitive = option_boolean(option)?,
+                    other => {
+                        return Err(invalid_dictionary_parameter(format!(
+                            "unrecognized synonym parameter: \"{other}\""
+                        )))
+                    }
+                }
+            }
+            let Some(file) = file else {
+                return Err(invalid_dictionary_parameter("missing Synonyms parameter"));
+            };
+            let file = tsearch_file_name(file)?;
+            let text = SYNONYM_FILES
+                .iter()
+                .find(|(name, _)| *name == file)
+                .map(|(_, text)| *text)
+                .ok_or_else(|| missing_tsearch_file("synonym", file, "syn"))?;
+            let fold = |word: &str| {
+                if case_sensitive {
+                    word.to_string()
+                } else {
+                    word.to_lowercase()
+                }
+            };
+            let mut entries = HashMap::new();
+            for line in text.lines() {
+                let mut words = line.split_whitespace();
+                let (Some(input), Some(output)) = (words.next(), words.next()) else {
+                    continue;
+                };
+                let (output, prefix) = match output.strip_suffix('*') {
+                    Some(stem) if !stem.is_empty() => (stem, true),
+                    _ => (output, false),
+                };
+                entries
+                    .entry(fold(input))
+                    .or_insert_with(|| (fold(output), prefix));
+            }
+            Ok(CompiledDictionary::Synonym {
+                entries,
+                case_sensitive,
+            })
+        }
+        ("dispell_init", "dispell_lexize") => {
+            let mut seen = HashSet::new();
+            for option in options {
+                match option.name.as_str() {
+                    name @ ("dictfile" | "afffile" | "stopwords") => {
+                        if !seen.insert(name) {
+                            let label = match name {
+                                "dictfile" => "DictFile",
+                                "afffile" => "AffFile",
+                                _ => "StopWords",
+                            };
+                            return Err(invalid_dictionary_parameter(format!(
+                                "multiple {label} parameters"
+                            )));
+                        }
+                    }
+                    other => {
+                        return Err(invalid_dictionary_parameter(format!(
+                            "unrecognized Ispell parameter: \"{other}\""
+                        )))
+                    }
+                }
+            }
+            Err(SqlError::Unsupported(
+                "Ispell dictionaries are not supported".to_string(),
+            ))
+        }
+        ("thesaurus_init", "thesaurus_lexize") => {
+            for option in options {
+                if !matches!(option.name.as_str(), "dictfile" | "dictionary") {
+                    return Err(invalid_dictionary_parameter(format!(
+                        "unrecognized Thesaurus parameter: \"{}\"",
+                        option.name
+                    )));
+                }
+            }
+            Err(SqlError::Unsupported(
+                "thesaurus dictionaries are not supported".to_string(),
+            ))
+        }
+        ("", _) if !options.is_empty() => Err(SqlError::data_exception(
+            "42601",
+            format!("text search template \"{template_name}\" does not accept options"),
+            None,
+        )),
+        _ => Err(SqlError::Unsupported(format!(
+            "dictionaries of text search template \"{template_name}\" are not supported"
+        ))),
+    }
+}
+
+/// The dictionary `object` (a `pg_ts_dict` entry) compiled through its
+/// template.
+pub(crate) fn compile_dictionary_object(
+    scope: &TsScope,
+    object: &TsObject,
+) -> Result<CompiledDictionary> {
+    let template = scope
+        .by_oid(TsKind::Template, object.template)
+        .ok_or_else(|| {
+            SqlError::data_exception(
+                "XX000",
+                format!(
+                    "cache lookup failed for text search template {}",
+                    object.template
+                ),
+                None,
+            )
+        })?;
+    let method = |index: usize| template.methods.get(index).map_or("", String::as_str);
+    compile_dictionary(&template.name, method(0), method(1), &object.options)
+}
+
+thread_local! {
+    /// Compiled configurations by oid, with the user catalog they were built
+    /// from (none for built-in configurations, which never change). Holding
+    /// the catalog keeps the identity comparison sound.
+    static COMPILED_CONFIGS: std::cell::RefCell<
+        HashMap<i64, (Option<Arc<Vec<TsObject>>>, TextSearchConfig)>,
+    > = std::cell::RefCell::new(HashMap::new());
+}
+
+fn undefined_config(name: &str) -> SqlError {
+    SqlError::data_exception(
+        "42704",
+        format!("text search configuration \"{name}\" does not exist"),
+        Some("regconfig".to_string()),
+    )
+}
+
+fn undefined_dictionary(name: &str) -> SqlError {
+    SqlError::data_exception(
+        "42704",
+        format!("text search dictionary \"{name}\" does not exist"),
+        None,
+    )
+}
+
+/// The display form of a name that did not resolve (`a.b`, lower-cased
+/// unless quoted).
+fn unresolved_name(text: &str) -> String {
+    crate::text_search_catalog::split_ts_name(text)
+        .map(|parts| parts.join("."))
+        .unwrap_or_else(|| text.to_string())
 }
 
 impl TextSearchConfig {
     fn parse(value: &SqlValue) -> Result<Self> {
-        let input = value.to_cell().to_ascii_lowercase();
-        let input = input.strip_prefix("pg_catalog.").unwrap_or(&input);
-        let value = input
-            .parse::<i64>()
-            .ok()
-            .and_then(builtin_regconfig_name)
-            .unwrap_or(input);
-        match value {
-            "simple" => Ok(Self::Simple),
-            "arabic" => Ok(snowball_config(Algorithm::Arabic, "")),
-            "armenian" => Ok(snowball_config(Algorithm::Armenian, "")),
-            "basque" => Ok(snowball_config(Algorithm::Basque, "")),
-            "catalan" => Ok(snowball_config(Algorithm::Catalan, "")),
-            "danish" => Ok(snowball_config(
-                Algorithm::Danish,
-                include_str!("../assets/postgresql-18-stopwords/danish.stop"),
-            )),
-            "dutch" => Ok(snowball_config(
-                Algorithm::Dutch,
-                include_str!("../assets/postgresql-18-stopwords/dutch.stop"),
-            )),
-            "english" => Ok(snowball_config(
-                Algorithm::English,
-                include_str!("../assets/postgresql-18-stopwords/english.stop"),
-            )),
-            "estonian" => Ok(snowball_config(Algorithm::Estonian, "")),
-            "finnish" => Ok(snowball_config(
-                Algorithm::Finnish,
-                include_str!("../assets/postgresql-18-stopwords/finnish.stop"),
-            )),
-            "french" => Ok(snowball_config(
-                Algorithm::French,
-                include_str!("../assets/postgresql-18-stopwords/french.stop"),
-            )),
-            "german" => Ok(snowball_config(
-                Algorithm::German,
-                include_str!("../assets/postgresql-18-stopwords/german.stop"),
-            )),
-            "greek" => Ok(snowball_config(Algorithm::Greek, "")),
-            "hindi" => Ok(snowball_config(Algorithm::Hindi, "")),
-            "hungarian" => Ok(snowball_config(
-                Algorithm::Hungarian,
-                include_str!("../assets/postgresql-18-stopwords/hungarian.stop"),
-            )),
-            "indonesian" => Ok(snowball_config(Algorithm::Indonesian, "")),
-            "irish" => Ok(snowball_config(Algorithm::Irish, "")),
-            "italian" => Ok(snowball_config(
-                Algorithm::Italian,
-                include_str!("../assets/postgresql-18-stopwords/italian.stop"),
-            )),
-            "lithuanian" => Ok(snowball_config(Algorithm::Lithuanian, "")),
-            "nepali" => Ok(snowball_config(
-                Algorithm::Nepali,
-                include_str!("../assets/postgresql-18-stopwords/nepali.stop"),
-            )),
-            "norwegian" => Ok(snowball_config(
-                Algorithm::Norwegian,
-                include_str!("../assets/postgresql-18-stopwords/norwegian.stop"),
-            )),
-            "portuguese" => Ok(snowball_config(
-                Algorithm::Portuguese,
-                include_str!("../assets/postgresql-18-stopwords/portuguese.stop"),
-            )),
-            "romanian" => Ok(snowball_config(Algorithm::Romanian, "")),
-            "russian" => Ok(snowball_config(
-                Algorithm::Russian,
-                include_str!("../assets/postgresql-18-stopwords/russian.stop"),
-            )),
-            "serbian" => Ok(snowball_config(Algorithm::Serbian, "")),
-            "spanish" => Ok(snowball_config(
-                Algorithm::Spanish,
-                include_str!("../assets/postgresql-18-stopwords/spanish.stop"),
-            )),
-            "swedish" => Ok(snowball_config(
-                Algorithm::Swedish,
-                include_str!("../assets/postgresql-18-stopwords/swedish.stop"),
-            )),
-            "tamil" => Ok(snowball_config(Algorithm::Tamil, "")),
-            "turkish" => Ok(snowball_config(
-                Algorithm::Turkish,
-                include_str!("../assets/postgresql-18-stopwords/turkish.stop"),
-            )),
-            "yiddish" => Ok(snowball_config(Algorithm::Yiddish, "")),
-            _ => Err(SqlError::data_exception(
-                "42704",
-                format!("text search configuration \"{value}\" does not exist"),
-                Some("regconfig".to_string()),
-            )),
+        let scope = active_ts_scope();
+        let text = value.to_cell();
+        let object = scope
+            .resolve_text(TsKind::Configuration, &text)
+            .ok_or_else(|| undefined_config(&unresolved_name(&text)))?;
+        Self::for_object(&scope, object)
+    }
+
+    fn for_object(scope: &TsScope, object: &TsObject) -> Result<Self> {
+        // Without user objects every configuration is a built-in one, which
+        // never changes; otherwise the compiled form belongs to this catalog.
+        let version = (!scope.user.is_empty()).then(|| scope.user.clone());
+        if let Some(config) = COMPILED_CONFIGS.with(|cache| {
+            cache
+                .borrow()
+                .get(&object.oid)
+                .filter(|(cached, _)| match (cached, &version) {
+                    (None, None) => true,
+                    (Some(cached), Some(version)) => Arc::ptr_eq(cached, version),
+                    _ => false,
+                })
+                .map(|(_, config)| config.clone())
+        }) {
+            return Ok(config);
+        }
+        let mut compiled = HashMap::<i64, Arc<CompiledDictionary>>::new();
+        let mut maps = vec![Vec::new(); DEFAULT_PARSER_TOKEN_TYPES.len() + 1];
+        for (token, dictionaries) in &object.mappings {
+            let Some(slot) = usize::try_from(*token)
+                .ok()
+                .and_then(|index| maps.get_mut(index))
+            else {
+                continue;
+            };
+            for oid in dictionaries {
+                let dictionary = match compiled.get(oid) {
+                    Some(dictionary) => dictionary.clone(),
+                    None => {
+                        let Some(dictionary) = scope.by_oid(TsKind::Dictionary, *oid) else {
+                            continue;
+                        };
+                        let dictionary = Arc::new(compile_dictionary_object(scope, dictionary)?);
+                        compiled.insert(*oid, dictionary.clone());
+                        dictionary
+                    }
+                };
+                slot.push(dictionary);
+            }
+        }
+        let config = Self(Arc::new(CompiledConfig { maps }));
+        COMPILED_CONFIGS.with(|cache| {
+            let mut cache = cache.borrow_mut();
+            if cache.len() > 256 {
+                cache.clear();
+            }
+            cache.insert(object.oid, (version, config.clone()));
+        });
+        Ok(config)
+    }
+
+    /// Runs `token` (of parser token type `token_type`) through the
+    /// dictionaries mapped for its type.
+    fn process(&self, token: &str, token_type: u8) -> TokenOutcome {
+        let Some(dictionaries) = self.0.maps.get(usize::from(token_type)) else {
+            return TokenOutcome::Unmapped;
+        };
+        if dictionaries.is_empty() {
+            return TokenOutcome::Unmapped;
+        }
+        // Reject before lowercasing/stemming so a multi-megabyte
+        // no-whitespace token cannot amplify tokenizer memory; such a
+        // token still takes its position, as a stop word does.
+        if !bicdb_core::full_text_term_is_indexable(token) {
+            return TokenOutcome::Lexemes(Vec::new());
+        }
+        for dictionary in dictionaries {
+            if let Lexized::Lexemes(lexemes) = dictionary.lexize(token) {
+                return TokenOutcome::Lexemes(
+                    lexemes
+                        .into_iter()
+                        .filter(|(lexeme, _)| {
+                            !lexeme.is_empty() && bicdb_core::full_text_term_is_indexable(lexeme)
+                        })
+                        .collect(),
+                );
+            }
+        }
+        TokenOutcome::Unmapped
+    }
+
+    /// The lexemes of one stand-alone word (a query operand or a headline
+    /// word); `None` when the configuration drops it.
+    fn lexemes(&self, token: &str) -> Option<Vec<(String, bool)>> {
+        match self.process(token, classify_standalone_token(token)) {
+            TokenOutcome::Lexemes(lexemes) if !lexemes.is_empty() => Some(lexemes),
+            _ => None,
         }
     }
 
-    fn normalize(self, token: &str) -> Option<String> {
-        // Reject before lowercasing/stemming so a multi-megabyte
-        // no-whitespace token cannot amplify tokenizer memory. Check again
-        // after each transformation because Unicode case conversion and
-        // stemming can change the UTF-8 byte length.
-        if !bicdb_core::full_text_term_is_indexable(token) {
-            return None;
-        }
-        let token = token.to_lowercase();
-        if token.is_empty() || !bicdb_core::full_text_term_is_indexable(&token) {
-            return None;
-        }
-        let normalized = match self {
-            Self::Simple => Some(token),
-            Self::Snowball { stopwords, .. } if is_stopword(stopwords, &token) => None,
-            Self::Snowball { algorithm, .. } => {
-                let stem = match algorithm {
-                    Algorithm::Dutch => LegacyStemmer::create(LegacyAlgorithm::Dutch)
-                        .stem(&token)
-                        .into_owned(),
-                    Algorithm::Tamil => LegacyStemmer::create(LegacyAlgorithm::Tamil)
-                        .stem(&token)
-                        .into_owned(),
-                    algorithm => Stemmer::new(algorithm).stem(&token).into_owned(),
-                };
-                Some(stem)
-            }
-        };
-        normalized.filter(|lexeme| bicdb_core::full_text_term_is_indexable(lexeme))
+    fn normalize(&self, token: &str) -> Option<String> {
+        self.lexemes(token)
+            .and_then(|lexemes| lexemes.into_iter().next())
+            .map(|(lexeme, _)| lexeme)
     }
 }
 
-/// `ts_lexize(dictionary, token)` for the built-in dictionaries: `simple`
-/// (the lower-cased token) and each `<language>_stem` Snowball dictionary
-/// (an empty array for a stop word, else the stem).
+/// `ts_lexize(dictionary, token)`: NULL when the dictionary does not
+/// recognize the token, an empty array for a stop word.
 fn ts_lexize(dictionary: &SqlValue, token: &SqlValue) -> Result<SqlValue> {
     if matches!(dictionary, SqlValue::Null) || matches!(token, SqlValue::Null) {
         return Ok(SqlValue::Null);
     }
-    let name = dictionary.to_cell().to_ascii_lowercase();
-    let name = name
-        .strip_prefix("pg_catalog.")
-        .unwrap_or(&name)
-        .to_string();
-    let config = if name == "simple" {
-        TextSearchConfig::Simple
-    } else if let Some(language) = name.strip_suffix("_stem") {
-        match TextSearchConfig::parse(&SqlValue::String(language.to_string())) {
-            Ok(config @ TextSearchConfig::Snowball { .. }) => config,
-            _ => {
-                return Err(SqlError::data_exception(
-                    "42704",
-                    format!("text search dictionary \"{name}\" does not exist"),
-                    None,
-                ))
-            }
-        }
-    } else {
-        return Err(SqlError::data_exception(
-            "42704",
-            format!("text search dictionary \"{name}\" does not exist"),
-            None,
-        ));
-    };
-    let token = token.to_cell();
-    let lexemes = match config.normalize(&token) {
-        Some(lexeme) => vec![SqlValue::String(lexeme)],
-        None => Vec::new(),
-    };
-    Ok(crate::array_value(lexemes))
-}
-
-fn snowball_config(algorithm: Algorithm, stopwords: &'static str) -> TextSearchConfig {
-    TextSearchConfig::Snowball {
-        algorithm,
-        stopwords,
+    let scope = active_ts_scope();
+    let text = dictionary.to_cell();
+    let object = scope
+        .resolve_text(TsKind::Dictionary, &text)
+        .ok_or_else(|| undefined_dictionary(&unresolved_name(&text)))?;
+    let compiled = compile_dictionary_object(&scope, object)?;
+    match compiled.lexize(&token.to_cell()) {
+        Lexized::Unrecognized => Ok(SqlValue::Null),
+        Lexized::Lexemes(lexemes) => Ok(crate::array_value(
+            lexemes
+                .into_iter()
+                .map(|(lexeme, _)| SqlValue::String(lexeme))
+                .collect(),
+        )),
     }
 }
 
@@ -1599,31 +2098,91 @@ impl Drop for TextSearchConfigScope {
     }
 }
 
-/// Whether `name` names a text search configuration (for SET).
-pub(crate) fn is_text_search_config(name: &str) -> bool {
-    TextSearchConfig::parse(&SqlValue::String(name.to_string())).is_ok()
-}
-
 /// The configuration text search functions use when the call names none.
 fn session_default_config() -> Result<TextSearchConfig> {
     let name = DEFAULT_TEXT_SEARCH_CONFIG.with(|cell| cell.borrow().clone());
     TextSearchConfig::parse(&SqlValue::String(name))
 }
 
+fn simple_config() -> TextSearchConfig {
+    TextSearchConfig::parse(&SqlValue::String("pg_catalog.simple".to_string()))
+        .expect("the built-in simple text-search configuration exists")
+}
+
 fn english_config() -> TextSearchConfig {
-    snowball_config(
-        Algorithm::English,
-        include_str!("../assets/postgresql-18-stopwords/english.stop"),
-    )
+    TextSearchConfig::parse(&SqlValue::String("pg_catalog.english".to_string()))
+        .expect("the built-in English text-search configuration exists")
 }
 
-fn is_stopword(stopwords: &str, token: &str) -> bool {
-    stopwords.lines().any(|word| word.trim() == token)
+/// The default parser's token type of a word the tokenizer produced.
+fn classify_word(token: &str) -> u8 {
+    if token.chars().all(|ch| ch.is_ascii_alphabetic()) {
+        TOKEN_ASCIIWORD
+    } else if token.chars().all(|ch| ch.is_alphabetic() || ch.is_mark()) {
+        TOKEN_WORD
+    } else if token.chars().all(|ch| ch.is_ascii_digit()) {
+        TOKEN_UINT
+    } else if token.contains('@') {
+        TOKEN_EMAIL
+    } else if token.contains('.') {
+        if token.chars().all(|ch| ch.is_ascii_digit() || ch == '.') {
+            if token.matches('.').count() == 1 {
+                TOKEN_FLOAT
+            } else {
+                TOKEN_VERSION
+            }
+        } else {
+            TOKEN_HOST
+        }
+    } else {
+        TOKEN_NUMWORD
+    }
 }
 
-fn text_search_tokens(input: &str) -> Vec<(String, u16)> {
+fn classify_hyphenated(parts: &[&str]) -> u8 {
+    if parts
+        .iter()
+        .all(|part| part.chars().all(|ch| ch.is_ascii_alphabetic()))
+    {
+        TOKEN_ASCIIHWORD
+    } else if parts
+        .iter()
+        .all(|part| part.chars().all(|ch| ch.is_alphabetic() || ch.is_mark()))
+    {
+        TOKEN_HWORD
+    } else {
+        TOKEN_NUMHWORD
+    }
+}
+
+fn classify_hyphenated_part(part: &str) -> u8 {
+    match classify_word(part) {
+        TOKEN_ASCIIWORD => TOKEN_HWORD_ASCIIPART,
+        TOKEN_WORD => TOKEN_HWORD_PART,
+        _ => TOKEN_HWORD_NUMPART,
+    }
+}
+
+/// The token type of a stand-alone word (a query operand).
+fn classify_standalone_token(token: &str) -> u8 {
+    if token.starts_with('/') {
+        return TOKEN_FILE;
+    }
+    if token.contains('-') {
+        let parts = token
+            .split('-')
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>();
+        if parts.len() > 1 {
+            return classify_hyphenated(&parts);
+        }
+    }
+    classify_word(token)
+}
+
+/// The tokens of `input` with their default-parser token types, in order.
+fn text_search_tokens(input: &str) -> Vec<(String, u8)> {
     let mut tokens = Vec::new();
-    let mut position = 0u16;
     let mut offset = 0usize;
     while offset < input.len() {
         let Some(character) = input[offset..].chars().next() else {
@@ -1636,14 +2195,14 @@ fn text_search_tokens(input: &str) -> Vec<(String, u16)> {
 
         if let Some((end, expanded)) = scan_url(input, offset) {
             for token in expanded {
-                push_text_search_token(&mut tokens, &mut position, token);
+                push_text_search_token(&mut tokens, token);
             }
             offset = end;
             continue;
         }
         if character == '/' {
             let end = scan_while(input, offset, is_path_character);
-            push_text_search_token(&mut tokens, &mut position, input[offset..end].to_string());
+            push_text_search_token(&mut tokens, (input[offset..end].to_string(), TOKEN_FILE));
             offset = end;
             continue;
         }
@@ -1651,34 +2210,44 @@ fn text_search_tokens(input: &str) -> Vec<(String, u16)> {
         let end = scan_while(input, offset, is_text_token_character);
         let candidate = input[offset..end].trim_end_matches('.');
         if candidate.contains('@') && valid_email(candidate) {
-            push_text_search_token(&mut tokens, &mut position, candidate.to_string());
+            push_text_search_token(&mut tokens, (candidate.to_string(), TOKEN_EMAIL));
         } else if candidate.contains('-') {
             let parts = candidate
                 .split('-')
                 .filter(|part| !part.is_empty())
                 .collect::<Vec<_>>();
             if parts.len() > 1 {
-                push_text_search_token(&mut tokens, &mut position, candidate.to_string());
+                push_text_search_token(
+                    &mut tokens,
+                    (candidate.to_string(), classify_hyphenated(&parts)),
+                );
                 for part in parts {
-                    push_text_search_token(&mut tokens, &mut position, part.to_string());
+                    push_text_search_token(
+                        &mut tokens,
+                        (part.to_string(), classify_hyphenated_part(part)),
+                    );
                 }
             } else {
-                push_text_search_token(&mut tokens, &mut position, candidate.to_string());
+                push_text_search_token(
+                    &mut tokens,
+                    (candidate.to_string(), classify_word(candidate)),
+                );
             }
         } else if !candidate.is_empty() {
-            push_text_search_token(&mut tokens, &mut position, candidate.to_string());
+            push_text_search_token(
+                &mut tokens,
+                (candidate.to_string(), classify_word(candidate)),
+            );
         }
         offset = end.max(offset + character.len_utf8());
     }
     tokens
 }
 
-fn push_text_search_token(tokens: &mut Vec<(String, u16)>, position: &mut u16, token: String) {
-    if token.is_empty() {
-        return;
+fn push_text_search_token(tokens: &mut Vec<(String, u8)>, token: (String, u8)) {
+    if !token.0.is_empty() {
+        tokens.push(token);
     }
-    *position = position.saturating_add(1).min(MAX_POSITION);
-    tokens.push((token, *position));
 }
 
 fn scan_while(input: &str, mut offset: usize, predicate: impl Fn(char) -> bool) -> usize {
@@ -1711,7 +2280,7 @@ fn valid_email(value: &str) -> bool {
             .all(|character| character.is_alphanumeric() || matches!(character, '.' | '-'))
 }
 
-fn scan_url(input: &str, offset: usize) -> Option<(usize, Vec<String>)> {
+fn scan_url(input: &str, offset: usize) -> Option<(usize, Vec<(String, u8)>)> {
     let protocol_end = input[offset..]
         .find("://")
         .map(|relative| offset + relative)?;
@@ -1728,24 +2297,29 @@ fn scan_url(input: &str, offset: usize) -> Option<(usize, Vec<String>)> {
         return None;
     }
     let value = &input[value_start..end];
-    let mut expanded = vec![value.to_string()];
+    let mut expanded = vec![(value.to_string(), TOKEN_URL)];
     if let Some(path_offset) = value.find('/') {
         let host = &value[..path_offset];
         let path = &value[path_offset..];
         if !host.is_empty() {
-            expanded.push(host.to_string());
+            expanded.push((host.to_string(), TOKEN_HOST));
         }
         if !path.is_empty() {
-            expanded.push(path.to_string());
+            expanded.push((path.to_string(), TOKEN_URL_PATH));
         }
     }
     Some((end, expanded))
 }
 
-fn to_tsvector(config: TextSearchConfig, input: &str) -> PgTsVector {
+fn to_tsvector(config: &TextSearchConfig, input: &str) -> PgTsVector {
     let mut entries = BTreeMap::<String, Vec<PgTsPosition>>::new();
-    for (token, position) in text_search_tokens(input) {
-        if let Some(lexeme) = config.normalize(&token) {
+    let mut position = 0u16;
+    for (token, token_type) in text_search_tokens(input) {
+        let TokenOutcome::Lexemes(lexemes) = config.process(&token, token_type) else {
+            continue;
+        };
+        position = position.saturating_add(1).min(MAX_POSITION);
+        for (lexeme, _) in lexemes {
             entries.entry(lexeme).or_default().push(PgTsPosition {
                 position,
                 weight: PgTsWeight::D,
@@ -1761,8 +2335,7 @@ fn to_tsvector(config: TextSearchConfig, input: &str) -> PgTsVector {
 }
 
 pub(crate) fn application_websearch_rank_cd_english(fields: &[String], query: &str) -> f32 {
-    let config = TextSearchConfig::parse(&SqlValue::String("english".to_string()))
-        .expect("the built-in English text-search configuration exists");
+    let config = &english_config();
     let mut document = PgTsVector::default();
     for (index, field) in fields.iter().enumerate() {
         let weight = match index {
@@ -1784,16 +2357,13 @@ struct NormalizedQueryNode {
     trailing_gap: u16,
 }
 
-fn normalize_query_node(node: PgTsQueryNode, config: TextSearchConfig) -> NormalizedQueryNode {
+fn normalize_query_node(node: PgTsQueryNode, config: &TextSearchConfig) -> NormalizedQueryNode {
     match node {
-        PgTsQueryNode::Operand(mut operand) => match config.normalize(&operand.text) {
-            Some(text) => {
-                operand.text = text;
-                NormalizedQueryNode {
-                    node: Some(PgTsQueryNode::Operand(operand)),
-                    ..Default::default()
-                }
-            }
+        PgTsQueryNode::Operand(operand) => match config.lexemes(&operand.text) {
+            Some(lexemes) => NormalizedQueryNode {
+                node: lexeme_alternatives(&operand, lexemes),
+                ..Default::default()
+            },
             None => NormalizedQueryNode::default(),
         },
         PgTsQueryNode::Not(child) => {
@@ -1848,10 +2418,28 @@ fn normalize_query_node(node: PgTsQueryNode, config: TextSearchConfig) -> Normal
     }
 }
 
+/// The query node for an operand's lexemes: one operand, or an OR of the
+/// variants a dictionary produced, each keeping the operand's weights.
+fn lexeme_alternatives(
+    operand: &PgTsQueryOperand,
+    lexemes: Vec<(String, bool)>,
+) -> Option<PgTsQueryNode> {
+    lexemes
+        .into_iter()
+        .map(|(text, prefix)| {
+            PgTsQueryNode::Operand(PgTsQueryOperand {
+                text,
+                weights: operand.weights,
+                prefix: operand.prefix || prefix,
+            })
+        })
+        .reduce(|left, right| PgTsQueryNode::Or(Box::new(left), Box::new(right)))
+}
+
 fn normalize_boolean_query(
     left: PgTsQueryNode,
     right: PgTsQueryNode,
-    config: TextSearchConfig,
+    config: &TextSearchConfig,
     and: bool,
 ) -> NormalizedQueryNode {
     let left = normalize_query_node(left, config);
@@ -1870,7 +2458,7 @@ fn normalize_boolean_query(
     }
 }
 
-fn to_tsquery(config: TextSearchConfig, input: &str) -> Result<PgTsQuery> {
+fn to_tsquery(config: &TextSearchConfig, input: &str) -> Result<PgTsQuery> {
     // SQL text-search constructors share the same oversize policy as
     // document tokenization. Explicit `::tsquery` input still enforces the
     // PostgreSQL representation limit in `from_postgres_text`.
@@ -1882,21 +2470,26 @@ fn to_tsquery(config: TextSearchConfig, input: &str) -> Result<PgTsQuery> {
     })
 }
 
-fn plain_tsquery(config: TextSearchConfig, input: &str, phrase: bool) -> PgTsQuery {
+fn plain_tsquery(config: &TextSearchConfig, input: &str, phrase: bool) -> PgTsQuery {
+    let mut position = 0u16;
+    let template = PgTsQueryOperand {
+        text: String::new(),
+        weights: 0,
+        prefix: false,
+    };
     let mut terms = text_search_tokens(input)
         .into_iter()
-        .filter_map(|(token, position)| {
-            config.normalize(&token).map(|text| {
-                (
-                    PgTsQueryNode::Operand(PgTsQueryOperand {
-                        text,
-                        weights: 0,
-                        prefix: false,
-                    }),
-                    position,
-                )
-            })
-        });
+        .filter_map(
+            |(token, token_type)| match config.process(&token, token_type) {
+                TokenOutcome::Unmapped => None,
+                TokenOutcome::Lexemes(lexemes) => {
+                    position = position.saturating_add(1).min(MAX_POSITION);
+                    lexeme_alternatives(&template, lexemes).map(|node| (node, position))
+                }
+            },
+        )
+        .collect::<Vec<_>>()
+        .into_iter();
     let Some((mut root, mut previous_position)) = terms.next() else {
         return PgTsQuery::default();
     };
@@ -1943,7 +2536,7 @@ fn json_text_segments(value: &serde_json::Value, output: &mut Vec<String>) {
     }
 }
 
-fn json_to_tsvector(config: TextSearchConfig, value: &serde_json::Value) -> PgTsVector {
+fn json_to_tsvector(config: &TextSearchConfig, value: &serde_json::Value) -> PgTsVector {
     let mut segments = Vec::new();
     json_text_segments(value, &mut segments);
     let mut result = PgTsVector::default();
@@ -2058,7 +2651,7 @@ fn headline_positive_operands(
 }
 
 fn headline_tokens(
-    config: TextSearchConfig,
+    config: &TextSearchConfig,
     text: &str,
     operands: &[PgTsQueryOperand],
 ) -> Vec<HeadlineToken> {
@@ -2093,7 +2686,7 @@ fn headline_tokens(
 }
 
 fn text_headline(
-    config: TextSearchConfig,
+    config: &TextSearchConfig,
     text: &str,
     query: &PgTsQuery,
     options: &HeadlineOptions,
@@ -2185,14 +2778,14 @@ fn render_headline(text: &str, tokens: &[HeadlineToken], options: &HeadlineOptio
         }
         cursor = token.end;
     }
-    if tokens.len() == headline_tokens(TextSearchConfig::Simple, text, &[]).len() {
+    if tokens.len() == headline_tokens(&simple_config(), text, &[]).len() {
         output.push_str(&text[cursor..]);
     }
     output
 }
 
 fn json_headline(
-    config: TextSearchConfig,
+    config: &TextSearchConfig,
     value: &serde_json::Value,
     query: &PgTsQuery,
     options: &HeadlineOptions,
@@ -3290,10 +3883,14 @@ pub(crate) fn eval_fts_function_value(
             )));
         }
         let name = DEFAULT_TEXT_SEARCH_CONFIG.with(|cell| cell.borrow().clone());
-        let name = name
-            .strip_prefix("pg_catalog.")
-            .unwrap_or(&name)
-            .to_string();
+        let scope = active_ts_scope();
+        let name = match scope.resolve_text(TsKind::Configuration, &name) {
+            Some(config) => scope.display_name(config),
+            None => name
+                .strip_prefix("pg_catalog.")
+                .unwrap_or(&name)
+                .to_string(),
+        };
         return Ok(Some(SqlValue::String(name)));
     }
     if args
@@ -3315,9 +3912,9 @@ pub(crate) fn eval_fts_function_value(
                 }
             };
             let vector = match value {
-                SqlValue::Json(value) => json_to_tsvector(config, value),
-                SqlValue::JsonText(value) => json_to_tsvector(config, value.parsed()),
-                SqlValue::String(value) => to_tsvector(config, value),
+                SqlValue::Json(value) => json_to_tsvector(&config, value),
+                SqlValue::JsonText(value) => json_to_tsvector(&config, value.parsed()),
+                SqlValue::String(value) => to_tsvector(&config, value),
                 _ => {
                     return Err(SqlError::undefined_function(
                         "text search input must be text, json, or jsonb",
@@ -3328,15 +3925,15 @@ pub(crate) fn eval_fts_function_value(
         }
         "to_tsquery" => {
             let (config, text) = fts_config_and_text(args)?;
-            SqlValue::TsQuery(to_tsquery(config, text)?)
+            SqlValue::TsQuery(to_tsquery(&config, text)?)
         }
         "plainto_tsquery" | "phraseto_tsquery" => {
             let (config, text) = fts_config_and_text(args)?;
-            SqlValue::TsQuery(plain_tsquery(config, text, name == "phraseto_tsquery"))
+            SqlValue::TsQuery(plain_tsquery(&config, text, name == "phraseto_tsquery"))
         }
         "websearch_to_tsquery" => {
             let (config, text) = fts_config_and_text(args)?;
-            SqlValue::TsQuery(websearch_tsquery(config, text))
+            SqlValue::TsQuery(websearch_tsquery(&config, text))
         }
         "numnode" | "querytree" => {
             require_argument_count(name, args, 1)?;
@@ -3503,13 +4100,13 @@ pub(crate) fn eval_fts_function_value(
                 parse_headline_options(args.get(value_index + 2).map(sql_value_str).transpose()?)?;
             match &args[value_index] {
                 SqlValue::String(text) => {
-                    SqlValue::String(text_headline(config, text, &query, &options))
+                    SqlValue::String(text_headline(&config, text, &query, &options))
                 }
                 SqlValue::Json(value) => {
-                    SqlValue::Json(json_headline(config, value, &query, &options).into())
+                    SqlValue::Json(json_headline(&config, value, &query, &options).into())
                 }
                 SqlValue::JsonText(value) => SqlValue::JsonText(crate::PgJsonText::from_value(
-                    json_headline(config, value.parsed(), &query, &options),
+                    json_headline(&config, value.parsed(), &query, &options),
                 )),
                 _ => {
                     return Err(SqlError::undefined_function(
@@ -3853,7 +4450,7 @@ fn querytree(query: &PgTsQuery) -> PgTsQuery {
     }
 }
 
-fn websearch_tsquery(config: TextSearchConfig, input: &str) -> PgTsQuery {
+fn websearch_tsquery(config: &TextSearchConfig, input: &str) -> PgTsQuery {
     WebSearchParser::new(input, config).parse()
 }
 
@@ -3869,7 +4466,7 @@ pub(crate) fn english_websearch_positive_and_terms(input: &str) -> Option<Vec<St
         }
     }
 
-    let query = websearch_tsquery(english_config(), input);
+    let query = websearch_tsquery(&english_config(), input);
     let root = query.root.as_ref()?;
     let mut terms = Vec::new();
     if !collect(root, &mut terms) {
@@ -3883,11 +4480,11 @@ pub(crate) fn english_websearch_positive_and_terms(input: &str) -> Option<Vec<St
 struct WebSearchParser<'a> {
     input: &'a str,
     offset: usize,
-    config: TextSearchConfig,
+    config: &'a TextSearchConfig,
 }
 
 impl<'a> WebSearchParser<'a> {
-    fn new(input: &'a str, config: TextSearchConfig) -> Self {
+    fn new(input: &'a str, config: &'a TextSearchConfig) -> Self {
         Self {
             input,
             offset: 0,
@@ -3915,7 +4512,9 @@ impl<'a> WebSearchParser<'a> {
         if self.offset >= self.input.len() {
             return None;
         }
-        if self.input[self.offset..].starts_with("OR")
+        if self.input.as_bytes()[self.offset..]
+            .get(..2)
+            .is_some_and(|word| word.eq_ignore_ascii_case(b"or"))
             && self
                 .input
                 .as_bytes()

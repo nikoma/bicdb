@@ -1297,8 +1297,18 @@ pub fn resolve_oid_alias_value(db: &BicDb, pg_type: &str, value: SqlValue) -> Re
         "regnamespace" => resolve_regnamespace_oid(db, &input)?,
         "regrole" => resolve_regrole_oid(db, &input)?,
         "regcollation" => resolve_regcollation_oid(&input),
-        "regconfig" => resolve_named_oid(&input, REGCONFIG_OBJECTS),
-        "regdictionary" => resolve_named_oid(&input, REGDICTIONARY_OBJECTS),
+        "regconfig" => crate::text_search_catalog::regconfig_oid(
+            Some(db),
+            crate::text_search_catalog::TsKind::Configuration,
+            &input,
+        )
+        .and_then(|oid| u32::try_from(oid).ok()),
+        "regdictionary" => crate::text_search_catalog::regconfig_oid(
+            Some(db),
+            crate::text_search_catalog::TsKind::Dictionary,
+            &input,
+        )
+        .and_then(|oid| u32::try_from(oid).ok()),
         "regproc" | "regprocedure" => resolve_regprocedure_oid(db, pg_type, &input)?,
         "regoper" | "regoperator" => resolve_regoperator_oid(pg_type, &input)?,
         _ => None,
@@ -1414,8 +1424,16 @@ pub fn render_oid_alias_value(db: &BicDb, pg_type: &str, value: &SqlValue) -> Re
         "regnamespace" => resolve_regnamespace_name(db, oid)?,
         "regrole" => resolve_regrole_name(db, oid)?,
         "regcollation" => resolve_regcollation_name(oid),
-        "regconfig" => resolve_named_oid_output(oid, REGCONFIG_OBJECTS),
-        "regdictionary" => resolve_named_oid_output(oid, REGDICTIONARY_OBJECTS),
+        "regconfig" => crate::text_search_catalog::regconfig_name(
+            Some(db),
+            crate::text_search_catalog::TsKind::Configuration,
+            oid,
+        ),
+        "regdictionary" => crate::text_search_catalog::regconfig_name(
+            Some(db),
+            crate::text_search_catalog::TsKind::Dictionary,
+            oid,
+        ),
         "regproc" | "regprocedure" => resolve_regprocedure_name(db, pg_type, oid)?,
         "regoper" | "regoperator" => resolve_regoperator_name(pg_type, oid),
         _ => None,
@@ -1429,50 +1447,6 @@ pub fn oid_alias_numeric_value(db: &BicDb, pg_type: &str, value: &SqlValue) -> R
         .ok_or_else(|| SqlError::invalid_text_representation(pg_type, value.to_cell()))?;
     u32::try_from(oid).map_err(|_| SqlError::numeric_value_out_of_range("OID out of range"))
 }
-
-const REGCONFIG_OBJECTS: &[(u32, &str)] = &[
-    (3748, "simple"),
-    (810_100, "danish"),
-    (810_101, "dutch"),
-    (810_102, "english"),
-    (810_103, "finnish"),
-    (810_104, "french"),
-    (810_105, "german"),
-    (810_106, "hungarian"),
-    (810_107, "italian"),
-    (810_108, "norwegian"),
-    (810_109, "portuguese"),
-    (810_110, "romanian"),
-    (810_111, "russian"),
-    (810_112, "spanish"),
-    (810_113, "swedish"),
-    (810_114, "turkish"),
-];
-
-pub(crate) fn builtin_regconfig_name(oid: i64) -> Option<&'static str> {
-    REGCONFIG_OBJECTS
-        .iter()
-        .find_map(|(candidate, name)| (i64::from(*candidate) == oid).then_some(*name))
-}
-
-const REGDICTIONARY_OBJECTS: &[(u32, &str)] = &[
-    (3765, "simple"),
-    (810_200, "danish_stem"),
-    (810_201, "dutch_stem"),
-    (810_202, "english_stem"),
-    (810_203, "finnish_stem"),
-    (810_204, "french_stem"),
-    (810_205, "german_stem"),
-    (810_206, "hungarian_stem"),
-    (810_207, "italian_stem"),
-    (810_208, "norwegian_stem"),
-    (810_209, "portuguese_stem"),
-    (810_210, "romanian_stem"),
-    (810_211, "russian_stem"),
-    (810_212, "spanish_stem"),
-    (810_213, "swedish_stem"),
-    (810_214, "turkish_stem"),
-];
 
 const REGOPERATOR_OBJECTS: &[(u32, &str, &str, &str)] = &[
     (96, "=", "int4", "int4"),
@@ -1529,13 +1503,6 @@ fn alias_schema_is(schema: Option<&str>, expected: &str) -> bool {
     schema.is_none_or(|schema| schema.eq_ignore_ascii_case(expected))
 }
 
-fn resolve_named_oid(value: &str, objects: &[(u32, &str)]) -> Option<u32> {
-    let name = normalize_alias_name(value);
-    objects
-        .iter()
-        .find_map(|(oid, candidate)| candidate.eq_ignore_ascii_case(&name).then_some(*oid))
-}
-
 fn resolve_builtin_oid_alias(pg_type: &str, value: &str) -> Option<u32> {
     match pg_type {
         "regclass" => {
@@ -1561,8 +1528,18 @@ fn resolve_builtin_oid_alias(pg_type: &str, value: &str) -> Option<u32> {
                 .and_then(|oid| u32::try_from(oid).ok())
         }
         "regcollation" => resolve_regcollation_oid(value),
-        "regconfig" => resolve_named_oid(value, REGCONFIG_OBJECTS),
-        "regdictionary" => resolve_named_oid(value, REGDICTIONARY_OBJECTS),
+        "regconfig" => crate::text_search_catalog::regconfig_oid(
+            None,
+            crate::text_search_catalog::TsKind::Configuration,
+            value,
+        )
+        .and_then(|oid| u32::try_from(oid).ok()),
+        "regdictionary" => crate::text_search_catalog::regconfig_oid(
+            None,
+            crate::text_search_catalog::TsKind::Dictionary,
+            value,
+        )
+        .and_then(|oid| u32::try_from(oid).ok()),
         "regproc" | "regprocedure" => {
             let (name, signature) = split_alias_signature(value);
             if pg_type == "regprocedure" && signature.is_none() {
@@ -1601,12 +1578,6 @@ fn resolve_builtin_oid_alias(pg_type: &str, value: &str) -> Option<u32> {
         "regoper" | "regoperator" => resolve_regoperator_oid(pg_type, value).ok().flatten(),
         _ => None,
     }
-}
-
-fn resolve_named_oid_output(oid: i64, objects: &[(u32, &str)]) -> Option<String> {
-    objects
-        .iter()
-        .find_map(|(candidate, name)| (i64::from(*candidate) == oid).then(|| (*name).to_string()))
 }
 
 pub(crate) fn resolve_regtype_oid(db: &BicDb, value: &str) -> Result<Option<u32>> {

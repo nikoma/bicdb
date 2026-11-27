@@ -3916,7 +3916,8 @@ impl<'db> SqlSession<'db> {
         };
         let sql: &str = &constants;
         // PostgreSQL's lexer cuts identifiers to 63 bytes (and says so).
-        let truncated = if oracle::is_oracle_database(self.db_ref())? {
+        let oracle = oracle::is_oracle_database(self.db_ref())?;
+        let truncated = if oracle {
             None
         } else {
             crate::identifier_truncation::truncate_long_identifiers(sql)
@@ -3926,10 +3927,21 @@ impl<'db> SqlSession<'db> {
             None => (sql, &[][..]),
         };
         let _cursor_scope = sql_cursors::CursorScope::enter(&self.sql_cursors);
-        let current_of = self.rewrite_where_current_of(sql)?;
+        let postgres_batch = if oracle {
+            None
+        } else {
+            crate::search_path::statements_bound_separately(sql, false, true)
+        };
+        let current_of = if postgres_batch.is_some() {
+            None
+        } else {
+            self.rewrite_where_current_of(sql)?
+        };
         let sql = current_of.as_deref().unwrap_or(sql);
-        if let Some(result) = self.execute_raw_cursor_statement(sql)? {
-            return Ok(result);
+        if postgres_batch.is_none() {
+            if let Some(result) = self.execute_raw_cursor_statement(sql)? {
+                return Ok(result);
+            }
         }
         if !matches!(
             normalize_sql(sql).as_str(),
@@ -3957,7 +3969,11 @@ impl<'db> SqlSession<'db> {
         )?;
         // A statement list binds each statement just before it runs, so a
         // statement sees the path and schemas earlier statements set up.
-        let per_statement = crate::search_path::statements_bound_separately(sql, path.is_some());
+        let per_statement = if oracle {
+            crate::search_path::statements_bound_separately(sql, path.is_some(), false)
+        } else {
+            postgres_batch
+        };
         let path = if per_statement.is_some() { None } else { path };
         let bound = match path.as_deref() {
             Some(path) => crate::search_path::bind_sql_text(self.db_ref(), sql, path)?,
@@ -4001,12 +4017,36 @@ impl<'db> SqlSession<'db> {
                     Some(statements) => {
                         let mut last = None;
                         for statement in statements {
+                            let current_of = if oracle {
+                                None
+                            } else {
+                                session.rewrite_where_current_of(statement)?
+                            };
+                            let statement = current_of.as_deref().unwrap_or(statement);
+                            if !oracle {
+                                if let Some(result) =
+                                    session.execute_raw_cursor_statement(statement)?
+                                {
+                                    last = Some(result);
+                                    continue;
+                                }
+                            }
                             let preprocessing_reads =
                                 session.enter_statement_catalog_reads(statement)?;
+                            let current_temp_schema = if oracle {
+                                temp_schema.clone()
+                            } else {
+                                session.temp_schema_name()
+                            };
+                            let _temp_scope = (!oracle).then(|| {
+                                crate::search_path::TempSchemaScope::enter(
+                                    current_temp_schema.as_deref(),
+                                )
+                            });
                             let path = crate::search_path::binding_path_with_temp(
                                 session.db_ref(),
                                 &session.session_gucs,
-                                temp_schema.as_deref(),
+                                current_temp_schema.as_deref(),
                             )?;
                             let bound = match path.as_deref() {
                                 Some(path) => crate::search_path::bind_sql_text(

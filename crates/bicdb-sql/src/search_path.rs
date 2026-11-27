@@ -838,21 +838,26 @@ pub(crate) fn bind_statements(
 /// Statement text with unqualified relations bound through the session's
 /// `search_path` (PostgreSQL profile), for front ends that describe a
 /// statement before it executes; `None` when nothing changes.
-/// The statements of a multi-statement text when they must bind one at a
-/// time: unqualified names already bind through a non-default path, or a
-/// statement before the last changes the path or the schemas on it (SET or
-/// RESET search_path, set_config, DISCARD ALL, CREATE/ALTER/DROP SCHEMA).
-/// Binding the whole text up front used the path in force before the batch.
-pub(crate) fn statements_bound_separately(sql: &str, path_binds: bool) -> Option<Vec<String>> {
+/// PostgreSQL batches dispatch each statement through the raw and parsed
+/// statement handlers. The Oracle profile splits only when the search path
+/// requires separate name binding.
+pub(crate) fn statements_bound_separately(
+    sql: &str,
+    path_binds: bool,
+    postgres: bool,
+) -> Option<Vec<String>> {
     if !sql.contains(';') {
         return None;
     }
-    if !path_binds && !contains_path_change_word(sql) {
+    if !postgres && !path_binds && !contains_path_change_word(sql) {
         return None;
     }
     let statements = split_sql_statements(sql);
     if statements.len() < 2 {
         return None;
+    }
+    if postgres {
+        return Some(statements);
     }
     let changes_path = statements[..statements.len() - 1]
         .iter()

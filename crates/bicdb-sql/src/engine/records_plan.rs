@@ -2657,12 +2657,43 @@ impl<'db> SqlEngine<'db> {
             // displaced by a key that the snapshot cannot see.
             self.lookup_index_cached(&bounded.index_name, &bounded.prefix)?
         } else {
-            Rc::from(self.db_ref().prefix_ordered_index_records(
-                &bounded.index_name,
-                bounded.prefix.as_slice(),
-                bounded.descending,
-                bounded.limit,
-            )?)
+            match bounded.nulls_first {
+                None => Rc::from(self.db_ref().prefix_ordered_index_records(
+                    &bounded.index_name,
+                    bounded.prefix.as_slice(),
+                    bounded.descending,
+                    bounded.limit,
+                )?),
+                Some(nulls_first) => {
+                    // The NULL-keyed rows under the prefix, then the first
+                    // non-NULL rows in index order: enough candidates for the
+                    // caller's sort and limit to pick the ORDER BY's top rows.
+                    let mut null_prefix = bounded.prefix.clone();
+                    null_prefix.push(IndexValue::Null);
+                    let nulls = self
+                        .db_ref()
+                        .lookup_index(&bounded.index_name, &null_prefix)?;
+                    let null_set = nulls.iter().collect::<std::collections::HashSet<_>>();
+                    let ordered = self.db_ref().prefix_ordered_index_records(
+                        &bounded.index_name,
+                        bounded.prefix.as_slice(),
+                        bounded.descending,
+                        bounded.limit.saturating_add(nulls.len()),
+                    )?;
+                    let values = ordered
+                        .iter()
+                        .filter(|id| !null_set.contains(id))
+                        .take(bounded.limit)
+                        .cloned();
+                    let nulls_taken = nulls.iter().take(bounded.limit).cloned();
+                    let ids: Vec<String> = if nulls_first {
+                        nulls_taken.chain(values).collect()
+                    } else {
+                        values.chain(nulls_taken).collect()
+                    };
+                    Rc::from(ids)
+                }
+            }
         };
         let records =
             self.records_for_ids_with_schema(&bounded.collection, &ids, bounded.schema.as_ref())?;
@@ -2750,8 +2781,11 @@ impl<'db> SqlEngine<'db> {
         else {
             return Ok(None);
         };
+        // Where the index's NULL placement is not the statement's, the read
+        // takes the NULL-keyed rows separately and puts them where ORDER BY
+        // asks (see `try_bounded_ordered_index_row_set`).
         let ordered_index = indexes.iter().find(|index| index.name == index_name);
-        if !ordered_index.is_some_and(|index| {
+        let nulls_first = if ordered_index.is_some_and(|index| {
             index_order_keeps_null_placement(
                 schema.as_ref(),
                 index,
@@ -2760,8 +2794,10 @@ impl<'db> SqlEngine<'db> {
                 query,
             )
         }) {
-            return Ok(None);
-        }
+            None
+        } else {
+            Some(requested_nulls_first(query, descending))
+        };
         let alias = alias
             .as_ref()
             .map(|alias| alias.name.value.clone())
@@ -2780,6 +2816,7 @@ impl<'db> SqlEngine<'db> {
             prefix,
             descending,
             limit,
+            nulls_first,
         }))
     }
 
@@ -3615,6 +3652,10 @@ pub(crate) struct BoundedOrderedIndexPlan {
     prefix: Vec<IndexValue>,
     descending: bool,
     limit: usize,
+    /// `Some(nulls_first)` when the index orders NULLs where the statement
+    /// does not: the NULL-keyed rows are read separately and placed first
+    /// or last.
+    nulls_first: Option<bool>,
 }
 
 impl BoundedOrderedIndexPlan {
@@ -4083,4 +4124,16 @@ pub(crate) fn index_order_keeps_null_placement(
             .find(|candidate| &candidate.name == column)
             .is_some_and(|candidate| !candidate.nullable || candidate.primary_key)
     })
+}
+
+/// The NULL placement the first ORDER BY key asks for: explicit `NULLS
+/// FIRST`/`NULLS LAST`, else PostgreSQL's default (first when descending).
+pub(crate) fn requested_nulls_first(query: &Query, descending: bool) -> bool {
+    match query.order_by.as_ref().map(|order_by| &order_by.kind) {
+        Some(OrderByKind::Expressions(items)) => items
+            .first()
+            .and_then(|item| item.options.nulls_first)
+            .unwrap_or(descending),
+        _ => descending,
+    }
 }

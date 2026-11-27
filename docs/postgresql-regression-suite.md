@@ -147,12 +147,14 @@ and the server needing to share a uid for `\o` files later overwritten by `COPY 
 The SQL files and expected files are never edited. For BicDB only:
 
 1. Tests run as BicDB's bootstrap superuser `bicdb` (the reference runs as `postgres`).
-2. Single-line server-side `COPY t FROM :'file'` / `COPY ... TO :'file'` statements are sent as
-   psql `\copy` with the variable resolved, because BicDB's COPY reads only STDIN and writes only
-   STDOUT. The echoed line in the result is restored to the original statement before comparing.
-   Without this, `test_setup` loads none of the shared fixture tables (onek, tenk1, person, ...)
-   and most later tests fail for that reason alone. Server-side COPY file I/O is listed as its own
-   cluster. `--no-adapt` turns this off.
+2. The server runs with `--copy-server-files-dir` for the regression sources and the run
+   directory, `--allow-copy-program` and `--max-prepared-transactions 2` (pg_regress's own
+   setting, also used by the reference), so server-side COPY and `prepared_xacts` run as under
+   pg_regress. The server's umask is 0000 so psql, which runs as the client image's `postgres`
+   uid, can overwrite the files the server writes.
+3. `--adapt` sends single-line server-side `COPY t FROM :'file'` / `COPY ... TO :'file'` as psql
+   `\copy` instead, for servers without server-side COPY; the echoed line in the result is
+   restored to the original statement before comparing. It is off by default.
 
 ### Rerunning
 

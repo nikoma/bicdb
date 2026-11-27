@@ -18,7 +18,8 @@ Outputs (in --out): results/<test>.out, diffs/<test>.diff, status.tsv, summary.j
 
 Targets:
   --target ref      start a stock PostgreSQL 18.4 container (pgregress-ref, 127.0.0.1:57434, 1G)
-  --target bicdb    start `<bin> serve --port <p> <fresh dir>` under systemd-run (MemoryMax, Nice)
+  --target bicdb    start `<bin> serve --port <p> [server COPY, 2PC flags] <fresh dir>` under
+                    systemd-run (MemoryMax, Nice, UMask=0000)
   --target conn     use an already running server (--host/--port/--user/--admin-db)
 
 Adaptations applied only for BicDB are listed in ADAPTATIONS below and written to summary.json.
@@ -44,13 +45,16 @@ CLIENT = "pgregress-client"
 # Adaptations the harness makes when the target is BicDB. Each one is reported.
 ADAPTATIONS = {
     "superuser": "tests run as BicDB's bootstrap superuser `bicdb` (PostgreSQL reference: `postgres`).",
-    "client_side_copy": (
-        "single-line server-side `COPY ... FROM/TO :'var'` statements (fixture loads in test_setup and "
-        "elsewhere) are sent as psql `\\copy` with the variable resolved, because BicDB's COPY reads "
-        "only STDIN / writes only STDOUT; the echoed line in the result file is restored to the "
-        "original statement, so expected output is compared unchanged. Server-side COPY file I/O "
-        "itself is reported as its own work-queue cluster."),
+    "server_settings": (
+        "the server runs with --copy-server-files-dir for the regression sources and the run "
+        "directory, --allow-copy-program and --max-prepared-transactions 2 (pg_regress's own "
+        "setting), so server-side COPY and two-phase commit run as under pg_regress."),
 }
+# Only with --adapt (servers without server-side COPY).
+CLIENT_SIDE_COPY = (
+    "single-line server-side `COPY ... FROM/TO :'var'` statements (fixture loads in test_setup and "
+    "elsewhere) are sent as psql `\\copy` with the variable resolved; the echoed line in the result "
+    "file is restored to the original statement, so expected output is compared unchanged.")
 
 SET_RE = re.compile(r"^\\set\s+(\w+)\s+(.*)$")
 COPY_FILE_RE = re.compile(r"^(COPY|copy)\s+(.*?)\s+(FROM|from|TO|to)\s+:'(\w+)'(.*?);\s*$")
@@ -223,9 +227,17 @@ class Target:
                 break
             sh(["systemctl", "stop", self.unit], check=False)
             time.sleep(1)
+        # Server-side COPY reads the regression data files and writes results/ in the run
+        # directory, as PostgreSQL's server does. UMask=0000 keeps the files it writes
+        # writable for psql, which runs as the client image's `postgres` uid (psql's \o and
+        # later COPY TO overwrite them). max_prepared_transactions=2 is pg_regress's own
+        # setting, so prepared_xacts runs its enabled variant, as the reference does.
         sh(["systemd-run", "--quiet", f"--unit={self.unit}", "--collect", "-p",
             f"MemoryMax={self.args.memory_max}", "-p", "Nice=15", "-p", "CPUWeight=20",
-            self.args.bicdb_bin, "serve", "--port", str(self.port), self.datadir])
+            "-p", "UMask=0000",
+            self.args.bicdb_bin, "serve", "--port", str(self.port),
+            "--copy-server-files-dir", self.regress, "--copy-server-files-dir", self.builddir,
+            "--allow-copy-program", "--max-prepared-transactions", "2", self.datadir])
 
     def restart_after_crash(self):
         if self.kind == "bicdb":
@@ -386,7 +398,7 @@ def run_test_file(t, args, regress, builddir, test, res):
     sql = os.path.join(regress, "sql", f"{test}.sql")
     note = ""
     pairs = []
-    if args.target == "bicdb" and not args.no_adapt:
+    if args.target == "bicdb" and args.adapt:
         with open(sql, "rb") as f:
             text = f.read().decode("utf-8", errors="surrogateescape")
         text, pairs = adapt_client_side_copy(text, t.env("regression"))
@@ -435,7 +447,11 @@ def main():
                          "among running runs (default: the --out directory name)")
     ap.add_argument("--overwrite", action="store_true",
                     help="reuse an existing --out directory (it is deleted first)")
-    ap.add_argument("--no-adapt", action="store_true", help="BicDB target: run the SQL files unchanged")
+    ap.add_argument("--adapt", action="store_true",
+                    help="BicDB target: send server-side file COPY as client-side \\copy (for "
+                         "servers without server COPY); by default the SQL files run unchanged")
+    ap.add_argument("--no-adapt", action="store_true",
+                    help="accepted for older invocations; unchanged SQL is the default")
     args = ap.parse_args()
     args.label = re.sub(r"[^a-zA-Z0-9_.-]", "-", args.label or os.path.basename(
         os.path.abspath(args.out).rstrip("/")))
@@ -558,7 +574,9 @@ def write_summary(args, builddir, rows, setup_log, total, t):
         "pg_version": PG_VERSION, "target": args.target, "label": args.label,
         "date": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
         "bicdb_bin": args.bicdb_bin if args.target == "bicdb" else None,
-        "adaptations": ADAPTATIONS if args.target == "bicdb" else {},
+        "adaptations": (dict(ADAPTATIONS, **({"client_side_copy": CLIENT_SIDE_COPY}
+                                             if args.adapt else {}))
+                        if args.target == "bicdb" else {}),
         "setup": setup_log, "seconds": round(total, 1),
         "all": count(lambda r: True),
         "in_scope": count(lambda r: r["scope"] == "in"),

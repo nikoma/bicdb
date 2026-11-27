@@ -2191,6 +2191,14 @@ pub(crate) fn eval_quantified_truth(
     if matches!(right, SqlValue::Null) {
         return Ok(None);
     }
+    let element = |value: &JsonValue| {
+        if matches!(left, SqlValue::Composite(_)) {
+            if let Some(record) = pg_composite_from_array_json(value) {
+                return SqlValue::Composite(record);
+            }
+        }
+        json_to_sql_value(value)
+    };
     let values: Vec<SqlValue> = match &right {
         SqlValue::Json(_) => {
             let (array, _) = array_json_parts(&right, "ANY/ALL")?.ok_or_else(|| {
@@ -2198,7 +2206,7 @@ pub(crate) fn eval_quantified_truth(
             })?;
             let mut flattened = Vec::new();
             flatten_array_json(array, &mut flattened);
-            flattened.into_iter().map(json_to_sql_value).collect()
+            flattened.into_iter().map(element).collect()
         }
         SqlValue::String(value) => {
             let parsed = parse_array_literal(value).map_err(|_| {
@@ -2230,7 +2238,13 @@ pub(crate) fn eval_quantified_values_truth<'a>(
     let mut saw_null = false;
     let mut any_true = false;
     for value in values {
-        match compare_values(left, op, value)? {
+        let comparison = match (left, value) {
+            (SqlValue::Composite(left), SqlValue::Composite(right)) => {
+                Some(compare_quantified_records(left, op, right)?)
+            }
+            _ => compare_values(left, op, value)?,
+        };
+        match comparison {
             Some(true) if !all => return Ok(Some(true)),
             Some(false) if all => return Ok(Some(false)),
             Some(true) => any_true = true,
@@ -2245,6 +2259,101 @@ pub(crate) fn eval_quantified_values_truth<'a>(
     } else {
         Ok(Some(any_true))
     }
+}
+
+/// ANY/ALL over records calls PostgreSQL's record operator. Its field
+/// comparisons treat NULL attributes as equal and sort them after values.
+fn compare_quantified_records(
+    left: &SqlComposite,
+    op: &BinaryOperator,
+    right: &SqlComposite,
+) -> Result<bool> {
+    if left.fields.len() != right.fields.len() {
+        return Err(SqlError::data_exception_public(
+            "42804",
+            "cannot compare record types with different numbers of columns",
+            None,
+        ));
+    }
+    let equality = matches!(op, BinaryOperator::Eq | BinaryOperator::NotEq);
+    for (index, (left, right)) in left.fields.iter().zip(&right.fields).enumerate() {
+        let kind = left.pg_type.as_str();
+        let other = right.pg_type.as_str();
+        let display = common_type_display(kind);
+        if kind != other && display != common_type_display(other) {
+            return Err(SqlError::data_exception_public(
+                "42804",
+                format!(
+                    "cannot compare dissimilar column types {} and {} at record column {}",
+                    display,
+                    common_type_display(other),
+                    index + 1,
+                ),
+                None,
+            ));
+        }
+        if matches!(kind, "unknown" | "json" | "xml") {
+            return Err(SqlError::undefined_function(format!(
+                "could not identify an {} operator for type {display}",
+                if equality { "equality" } else { "ordering" },
+            )));
+        }
+        let ordering = match (&left.value, &right.value) {
+            (SqlValue::Null, SqlValue::Null) => Ordering::Equal,
+            (SqlValue::Null, _) => Ordering::Greater,
+            (_, SqlValue::Null) => Ordering::Less,
+            (SqlValue::Composite(left), SqlValue::Composite(right)) => {
+                if compare_quantified_records(left, &BinaryOperator::Eq, right)? {
+                    Ordering::Equal
+                } else if equality {
+                    return Ok(*op == BinaryOperator::NotEq);
+                } else if compare_quantified_records(left, &BinaryOperator::Lt, right)? {
+                    Ordering::Less
+                } else {
+                    Ordering::Greater
+                }
+            }
+            (left, right) => {
+                if let Some(family) = pg_comparison_kind(kind, kind) {
+                    if compare_values_by_kind(family, kind, kind, left, &BinaryOperator::Eq, right)?
+                        == Some(true)
+                    {
+                        Ordering::Equal
+                    } else if equality {
+                        return Ok(*op == BinaryOperator::NotEq);
+                    } else if compare_values_by_kind(
+                        family,
+                        kind,
+                        kind,
+                        left,
+                        &BinaryOperator::Lt,
+                        right,
+                    )? == Some(true)
+                    {
+                        Ordering::Less
+                    } else {
+                        Ordering::Greater
+                    }
+                } else {
+                    match value_ordering(left, right) {
+                        Some(ordering) => ordering,
+                        None if equality => {
+                            return Ok(values_equal(left, right) == (*op == BinaryOperator::Eq));
+                        }
+                        None => {
+                            return Err(SqlError::undefined_function(format!(
+                                "could not identify an ordering operator for type {display}",
+                            )));
+                        }
+                    }
+                }
+            }
+        };
+        if ordering != Ordering::Equal {
+            return Ok(comparison_from_ordering(op, ordering));
+        }
+    }
+    Ok(comparison_from_ordering(op, Ordering::Equal))
 }
 
 pub(crate) fn array_like_values(value: &SqlValue) -> Option<Vec<SqlValue>> {

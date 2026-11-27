@@ -3975,6 +3975,13 @@ impl ColumnSchema {
             .unwrap_or_else(|| pg_type_align(&self.pg_type))
     }
 
+    /// `pg_attribute.attstorage`: the column's storage setting.
+    fn attribute_storage(&self) -> char {
+        self.attributes
+            .storage
+            .unwrap_or_else(|| self.type_storage())
+    }
+
     fn type_storage(&self) -> char {
         match self.user_type.as_ref() {
             Some(user_type) if user_type.array => 'x',
@@ -5067,6 +5074,10 @@ struct ViewSchema {
     // `WITH [LOCAL | CASCADED] CHECK OPTION`: "local" or "cascaded".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     check_option: Option<String>,
+    // `pg_class.reloptions` as written (`security_barrier=true`, ...), in
+    // order. The flags above carry their meaning.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    reloptions: Vec<String>,
     // A materialized view's stored rows; `None` on descriptors written
     // before snapshots existed, which keep expanding their query.
     #[serde(default, skip_serializing_if = "Option::is_none")]

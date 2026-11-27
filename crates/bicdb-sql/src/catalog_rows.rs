@@ -618,6 +618,15 @@ pub(crate) fn pg_class_rows_filtered(
         .iter()
         .map(|view| (view.name.clone(), if view.materialized { "m" } else { "v" }))
         .collect::<BTreeMap<_, _>>();
+    let view_reloptions = views
+        .iter()
+        .map(|view| {
+            (
+                view.name.clone(),
+                crate::session::view_options::view_reloptions_value(view),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
     let view_owners = views
         .iter()
         .map(|view| {
@@ -754,6 +763,12 @@ pub(crate) fn pg_class_rows_filtered(
             .or_else(|| view_owners.get(&table_key).cloned())
             .unwrap_or_else(current_role_name);
         row.insert("relowner".to_string(), SqlValue::Int(role_oid(&owner)));
+        if let Some(options) = view_reloptions
+            .get(&table_key)
+            .filter(|options| !matches!(options, SqlValue::Null))
+        {
+            row.insert("reloptions".to_string(), options.clone());
+        }
         // ANALYZE's size estimate in 8 KB pages, as PostgreSQL's ANALYZE
         // records it.
         if let Some(pages) = db
@@ -1590,7 +1605,7 @@ pub(crate) fn pg_attribute_rows_for_columns(
             let attndims = column.catalog_array_ndims();
             let attbyval = column.type_by_value();
             let attalign = column.type_align();
-            let attstorage = column.type_storage();
+            let attstorage = column.attribute_storage();
             let attcompression = column
                 .compression
                 .map_or_else(String::new, |compression| compression.to_string());

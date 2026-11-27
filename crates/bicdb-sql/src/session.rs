@@ -4,6 +4,7 @@
 //! Moved items were bumped to `pub(crate)` so existing call sites keep
 //! resolving; `lib.rs` re-exports this module via `pub use session::*;`.
 
+mod alter_column_identity;
 mod collation_ddl;
 mod create_schema_elements;
 mod create_table_as;
@@ -20,6 +21,7 @@ pub(crate) mod not_null_constraints;
 mod partition_indexes;
 #[cfg(test)]
 mod timestamp_day_indexes;
+pub(crate) mod view_options;
 pub(crate) use merge::UpdateMatchPolicy;
 pub(crate) mod recycle_bin;
 mod recycle_bin_journal;
@@ -4202,6 +4204,14 @@ impl<'db> SqlSession<'db> {
             return Ok(result);
         }
 
+        if let Some(result) = self.execute_raw_alter_column_identity(sql)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.execute_raw_view_options(sql)? {
+            return Ok(result);
+        }
+
         if let Some(result) = self.execute_raw_alter_identity_restart(sql)? {
             return Ok(result);
         }
@@ -4674,6 +4684,14 @@ impl<'db> SqlSession<'db> {
                 continue;
             }
             if let Some(result) = self.execute_raw_not_null_constraints(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_alter_column_identity(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
+            if let Some(result) = self.execute_raw_view_options(&statement)? {
                 last_result = Some(result);
                 continue;
             }

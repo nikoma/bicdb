@@ -28,6 +28,28 @@ Views are stored query definitions evaluated at read time. Column aliases in
 its tables with its owner's privileges and row-level security; a view created
 `WITH (security_invoker = true)` uses the caller's.
 
+## View options
+
+`CREATE VIEW ... WITH (option [= value], ...)` and `ALTER VIEW ... SET
+(option [= value], ...)` / `RESET (option, ...)` accept PostgreSQL's view
+options, each with its PostgreSQL meaning:
+
+- `security_invoker`: the view reads its relations with the privileges and
+  row-level security of the querying role instead of the view owner's.
+- `security_barrier`: predicates from outside the view are never pushed into
+  it, so a leaky function in a query cannot see rows the view filters out.
+- `check_option = local | cascaded`: the same check as `WITH [LOCAL |
+  CASCADED] CHECK OPTION`.
+
+An option written without a value is `true`. Boolean options take
+PostgreSQL's boolean spellings (`true`, `on`, `1`, ...); anything else fails
+with 22023 `invalid value for boolean option`, and an unknown option with
+22023 `unrecognized parameter`. `pg_class.reloptions` lists the options as
+written, in order (`{security_invoker=false,security_barrier=true}`), plus
+`check_option=...` from a `WITH CHECK OPTION` clause. `CREATE OR REPLACE
+VIEW` replaces the options. Only the view's owner may change them (42501).
+Storage parameters of materialized views are refused with 0A000.
+
 ## Automatically updatable views
 
 `INSERT`, `UPDATE` and `DELETE` (with `RETURNING`) work on views that follow

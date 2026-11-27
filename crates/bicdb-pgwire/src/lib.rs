@@ -3567,6 +3567,16 @@ fn execute_server_query(
                 }
                 return Ok(flow);
             }
+            if !bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile) {
+                // An ordinary multi-statement Simple Query has one implicit
+                // transaction and one result per statement. The final COMMIT
+                // ends the transaction but has no CommandComplete of its own.
+                let standby = server.config.standby_read_only
+                    && server.read_db_for_transaction_progress()?.ha_role() == HaRole::Standby;
+                if !standby {
+                    return execute_implicit_simple_query_batch(stream, server, state, statements);
+                }
+            }
         }
     }
     if let Some(name) = live_queries::parse_unsubscribe(sql) {
@@ -3708,6 +3718,30 @@ fn execute_server_query(
         }
         Ok(QueryFlow::Complete)
     }
+}
+
+fn execute_implicit_simple_query_batch(
+    stream: &mut ClientStream,
+    server: &Arc<PgWireServer>,
+    state: &mut ConnectionState,
+    statements: Vec<String>,
+) -> Result<QueryFlow> {
+    let result = (|| {
+        begin_buffered_transaction(server, state)?;
+        for statement in statements {
+            execute_server_query(stream, server, state, &statement)?;
+        }
+        let commit =
+            execute_server_sql_with_options_normalized(server, state, "COMMIT", "commit", false)?;
+        for notice in &commit.notices {
+            notice_response(stream, notice)?;
+        }
+        Ok(QueryFlow::Complete)
+    })();
+    if result.is_err() && state.in_transaction {
+        rollback_open_transaction(server, state)?;
+    }
+    result
 }
 
 /// The columns a COPY of a table reads or writes and the table's generated

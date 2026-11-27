@@ -50,3 +50,47 @@ fn old_syntax_and_star_aggregates() {
         "aggregate input type must be specified"
     );
 }
+
+#[test]
+fn polymorphic_aggregates_bind_types_without_repeating_their_inputs() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for statement in [
+        "CREATE FUNCTION poly_append(anyarray, anyelement) RETURNS anyarray AS 'SELECT $1 || $2' LANGUAGE SQL",
+        "CREATE AGGREGATE poly_collect(anyelement) (SFUNC = poly_append, STYPE = anyarray, INITCOND = '{}')",
+        "CREATE SEQUENCE aggregate_volatile_seq",
+    ] {
+        session.execute(statement).unwrap();
+    }
+
+    assert_eq!(
+        cell(
+            &mut session,
+            "SELECT poly_collect(x ORDER BY x)::text FROM (VALUES (2), (1)) v(x)"
+        ),
+        "{1,2}",
+    );
+    assert_eq!(
+        cell(
+            &mut session,
+            "SELECT poly_collect(x ORDER BY x)::text FROM (VALUES ('b'::text), ('a')) v(x)"
+        ),
+        "{a,b}",
+    );
+    assert_eq!(
+        cell(
+            &mut session,
+            "SELECT poly_collect(x)::text FROM (VALUES (1)) v(x) WHERE false"
+        ),
+        "{}",
+    );
+    assert_eq!(
+        cell(&mut session, "SELECT poly_collect(nextval('aggregate_volatile_seq'))::text FROM generate_series(1, 3)"),
+        "{1,2,3}",
+    );
+    assert_eq!(
+        cell(&mut session, "SELECT currval('aggregate_volatile_seq')"),
+        "3",
+    );
+}

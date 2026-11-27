@@ -3339,6 +3339,80 @@ impl<'db> SqlEngine<'db> {
         kind.clone()
     }
 
+    /// Bind polymorphic input types before aggregation. A type expression
+    /// evaluated for every input row would repeat volatile arguments and could
+    /// not resolve the transition state of an empty group.
+    #[inline(never)]
+    pub(crate) fn bind_polymorphic_aggregate_query(
+        &self,
+        query: &Query,
+        select: &Select,
+    ) -> Result<Option<Box<Query>>> {
+        use crate::user_aggregates::{aggregate_names, bind_fold_types, untyped_polymorphic_fold};
+        use sqlparser::ast::{VisitMut, VisitorMut};
+        use std::ops::ControlFlow;
+
+        if aggregate_names(self.db_ref())?.is_empty() {
+            return Ok(None);
+        }
+        struct Binder<'a, 'db> {
+            engine: &'a SqlEngine<'db>,
+            env: &'a [RelationColumns],
+            depth: usize,
+            changed: bool,
+        }
+        impl VisitorMut for Binder<'_, '_> {
+            type Break = SqlError;
+            fn pre_visit_query(&mut self, _: &mut Query) -> ControlFlow<SqlError> {
+                self.depth += 1;
+                ControlFlow::Continue(())
+            }
+            fn post_visit_query(&mut self, _: &mut Query) -> ControlFlow<SqlError> {
+                self.depth -= 1;
+                ControlFlow::Continue(())
+            }
+            fn post_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<SqlError> {
+                if self.depth != 1 {
+                    return ControlFlow::Continue(());
+                }
+                if let Expr::Function(function) = expr {
+                    if untyped_polymorphic_fold(function) {
+                        if let Err(error) = bind_fold_types(function, &mut |input| {
+                            self.engine.infer_env_expr_type(input, self.env)
+                        }) {
+                            return ControlFlow::Break(error);
+                        }
+                        self.changed = true;
+                    }
+                }
+                ControlFlow::Continue(())
+            }
+        }
+        // The marker is assigned only to lowered user aggregates, so ordinary
+        // queries with no matching function avoid copying or binding an AST.
+        let found = sqlparser::ast::visit_expressions(query, |expr| match expr {
+            Expr::Function(function) if untyped_polymorphic_fold(function) => {
+                ControlFlow::Break(())
+            }
+            _ => ControlFlow::Continue(()),
+        });
+        if found.is_continue() {
+            return Ok(None);
+        }
+        let env = self.from_relation_columns(&select.from).unwrap_or_default();
+        let mut bound = Box::new(query.clone());
+        let mut binder = Binder {
+            engine: self,
+            env: &env,
+            depth: 0,
+            changed: false,
+        };
+        if let ControlFlow::Break(error) = bound.visit(&mut binder) {
+            return Err(error);
+        }
+        Ok(binder.changed.then_some(bound))
+    }
+
     /// Result type of a function call. Aggregates follow PostgreSQL rules
     /// (`COUNT`->int8, `MIN`/`MAX`->arg type, `SUM`/`AVG` by operand class);
     /// `COALESCE`/`NULLIF`/`GREATEST`/`LEAST` take the common type of their
@@ -3364,6 +3438,13 @@ impl<'db> SqlEngine<'db> {
                     parts.last()?,
                 );
             }
+        }
+        if let Some(data_type) =
+            crate::user_aggregates::folded_result_type(self.db_ref(), function, &mut |input| {
+                self.infer_env_expr_type(input, env)
+            })
+        {
+            return Some(data_type);
         }
         let name = object_name(&function.name).ok()?.to_ascii_lowercase();
         let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(&name);

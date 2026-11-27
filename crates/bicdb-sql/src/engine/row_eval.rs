@@ -4093,6 +4093,13 @@ impl<'db> SqlEngine<'db> {
         let Expr::Function(function) = unwrap_nested_expr(expr) else {
             return None;
         };
+        if let Some(data_type) =
+            crate::user_aggregates::folded_result_type(self.db_ref(), function, &mut |arg| {
+                row_columns_expr_pg_type(self.db_ref(), arg, columns.clone())
+            })
+        {
+            return Some(data_type);
+        }
         let name = object_name(&function.name).ok()?.to_ascii_lowercase();
         if !crate::routine_overloads::user_function_names(self.db_ref())
             .ok()?

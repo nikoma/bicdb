@@ -1945,6 +1945,13 @@ impl<'db> SqlEngine<'db> {
                         && schema
                             .as_ref()
                             .is_none_or(|schema| index_supports_ordering(schema, &index.name))
+                        && index_order_keeps_null_placement(
+                            schema.as_ref(),
+                            index,
+                            0,
+                            descending,
+                            query,
+                        )
                 }) {
                     let limit = limit_for_plan(query)?;
                     let estimated_rows = limit.unwrap_or(total_rows).min(total_rows);
@@ -2589,6 +2596,22 @@ impl<'db> SqlEngine<'db> {
         if let Some((index_name, prefix, descending, limit)) =
             match_prefix_ordered_index(selection, query, indexes)?
         {
+            let keeps_nulls = indexes
+                .iter()
+                .find(|index| index.name == index_name)
+                .is_some_and(|index| {
+                    let schema = load_schema(self.db_ref(), &index.collection).ok().flatten();
+                    index_order_keeps_null_placement(
+                        schema.as_ref(),
+                        index,
+                        prefix.len(),
+                        descending,
+                        query,
+                    )
+                });
+            if !keeps_nulls {
+                return Ok(());
+            }
             candidates.push(QueryPlan {
                 kind: PlanKind::IndexPrefixOrderedScan {
                     index_name,
@@ -2727,38 +2750,17 @@ impl<'db> SqlEngine<'db> {
         else {
             return Ok(None);
         };
-        // Index keys order NULL below every value, so reading the index gives
-        // NULLS FIRST ascending and NULLS LAST descending: the opposite of
-        // ORDER BY's defaults. A nullable ordering column may only use this
-        // path when the statement asks for the index's NULL placement.
-        let index_nulls_first = !descending;
-        let requested_nulls_first = match query.order_by.as_ref().map(|order_by| &order_by.kind) {
-            Some(OrderByKind::Expressions(items)) => items
-                .first()
-                .and_then(|item| item.options.nulls_first)
-                .unwrap_or(descending),
-            _ => descending,
-        };
-        if requested_nulls_first != index_nulls_first {
-            let order_column = indexes
-                .iter()
-                .find(|index| index.name == index_name)
-                .and_then(|index| index.fields.get(prefix.len()))
-                .and_then(|field| match field {
-                    IndexField::MetadataPath(path) if path.len() == 1 => Some(path[0].clone()),
-                    _ => None,
-                });
-            let not_null = match (schema.as_ref(), order_column) {
-                (Some(schema), Some(column)) => schema
-                    .columns
-                    .iter()
-                    .find(|candidate| candidate.name == column)
-                    .is_some_and(|candidate| !candidate.nullable || candidate.primary_key),
-                _ => false,
-            };
-            if !not_null {
-                return Ok(None);
-            }
+        let ordered_index = indexes.iter().find(|index| index.name == index_name);
+        if !ordered_index.is_some_and(|index| {
+            index_order_keeps_null_placement(
+                schema.as_ref(),
+                index,
+                prefix.len(),
+                descending,
+                query,
+            )
+        }) {
+            return Ok(None);
         }
         let alias = alias
             .as_ref()
@@ -4042,4 +4044,43 @@ fn limit_union_all_branches(body: &mut SetExpr, remaining: usize) {
             _ => {}
         }
     }
+}
+
+/// Whether reading `index` in key order (backward when `descending`)
+/// yields the NULL placement the statement's first ORDER BY key asks for.
+/// Index keys order NULL below every value, so an index read gives NULLS
+/// FIRST ascending and NULLS LAST descending: the opposite of ORDER BY's
+/// defaults. Without an explicit matching `NULLS FIRST`/`NULLS LAST`, the
+/// ordering column (the index field at `position`) must be NOT NULL.
+pub(crate) fn index_order_keeps_null_placement(
+    schema: Option<&TableSchema>,
+    index: &IndexDefinition,
+    position: usize,
+    descending: bool,
+    query: &Query,
+) -> bool {
+    let index_nulls_first = !descending;
+    let requested_nulls_first = match query.order_by.as_ref().map(|order_by| &order_by.kind) {
+        Some(OrderByKind::Expressions(items)) => items
+            .first()
+            .and_then(|item| item.options.nulls_first)
+            .unwrap_or(descending),
+        _ => descending,
+    };
+    if requested_nulls_first == index_nulls_first {
+        return true;
+    }
+    let Some(IndexField::MetadataPath(path)) = index.fields.get(position) else {
+        return false;
+    };
+    let [column] = path.as_slice() else {
+        return false;
+    };
+    schema.is_some_and(|schema| {
+        schema
+            .columns
+            .iter()
+            .find(|candidate| &candidate.name == column)
+            .is_some_and(|candidate| !candidate.nullable || candidate.primary_key)
+    })
 }

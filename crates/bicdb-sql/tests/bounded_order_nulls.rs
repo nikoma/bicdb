@@ -28,7 +28,9 @@ fn bounded_ordered_reads_keep_order_by_null_placement() {
              INSERT INTO n VALUES (1, 4, NULL, 1), (2, 4, 5, 2), (3, 4, 9, 3), (4, 4, NULL, 4),
                (5, 4, 1, 5), (6, 5, 2, 6);
              CREATE INDEX n_kj ON n (k, j);
-             CREATE INDEX n_ks ON n (k, s);",
+             CREATE INDEX n_ks ON n (k, s);
+             CREATE INDEX n_j ON n (j);
+             CREATE INDEX n_s ON n (s);",
         )
         .unwrap();
     let cases: &[(&str, &[&str])] = &[
@@ -58,7 +60,7 @@ fn bounded_ordered_reads_keep_order_by_null_placement() {
         let got = cells(&mut session, sql);
         let got_ids: Vec<&str> = got.iter().map(|row| row[0].as_str()).collect();
         // NULL ties (ids 1 and 4) may come in either order.
-        let matches = if sql.contains("ORDER BY j DESC LIMIT 3") || sql.contains("NULLS FIRST") {
+        let matches = if sql.contains("ORDER BY j DESC LIMIT 3") || sql.contains("j NULLS FIRST") {
             let mut a = got_ids[..2].to_vec();
             a.sort();
             let mut b = expected[..2].to_vec();

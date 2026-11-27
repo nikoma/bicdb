@@ -4864,6 +4864,11 @@ impl<'db> SqlSession<'db> {
         ir: &RoutineIR,
         args: &[SqlValue],
     ) -> Result<SqlValue> {
+        if matches!(routine.return_type.as_str(), "trigger" | "event_trigger") {
+            return Err(SqlError::Unsupported(
+                "trigger functions can only be called as triggers".to_string(),
+            ));
+        }
         if routine.returns_set {
             return Err(SqlError::UnsupportedPlpgsqlFeature(format!(
                 "set-returning stored routine {} is not implemented",
@@ -6440,7 +6445,15 @@ impl<'db> SqlSession<'db> {
             )
         });
         let _sql_diagnostics = (!call).then(|| oracle::errors::DiagnosticScope::new(None));
-        let result = self.execute_parsed_statement(statement);
+        let result = if self.event_trigger_ddl_depth == 0
+            && !crate::session::event_triggers::list_event_triggers(self.db_ref())?.is_empty()
+        {
+            let tag =
+                crate::session::event_triggers::event_trigger_command_tag(&statement.to_string());
+            self.with_ddl_event_triggers(tag, |session| session.execute_parsed_statement(statement))
+        } else {
+            self.execute_parsed_statement(statement)
+        };
         self.ir_owned_statement = owned;
         self.unbind_routine_frame(previous);
         if let Some((error, tokens)) = oracle_context {

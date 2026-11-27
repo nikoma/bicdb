@@ -124,6 +124,32 @@ block with `25001`.
 Temporal keys (`PRIMARY KEY`/`UNIQUE` with `WITHOUT OVERLAPS`) are refused
 with `0A000`.
 
+## Event triggers
+
+- `CREATE EVENT TRIGGER name ON ddl_command_start | ddl_command_end [WHEN TAG
+  IN ('...', ...)] EXECUTE { FUNCTION | PROCEDURE } f()` (superuser only;
+  the function must return `event_trigger`), `ALTER EVENT TRIGGER ...
+  ENABLE [REPLICA | ALWAYS] | DISABLE | RENAME TO | OWNER TO` (the owner
+  must be a superuser), `DROP EVENT TRIGGER [IF EXISTS]` and `COMMENT ON
+  EVENT TRIGGER`, listed in `pg_event_trigger`. Tag filters are validated
+  against PostgreSQL's command tags with its messages. DDL on event
+  triggers is transactional, and `DROP ROLE` refuses while the role owns
+  one.
+- Triggers fire in name order with `TG_EVENT` and `TG_TAG` for every DDL
+  command PostgreSQL fires them for, including DDL run from functions,
+  procedures, `DO` blocks and `EXECUTE`; DML, transaction control and
+  commands on global objects (roles, databases, tablespaces, event
+  triggers) do not fire. `ddl_command_end` triggers run in the command's
+  transaction: an error they raise undoes the command.
+- Calling an event trigger function directly fails with PostgreSQL's
+  "trigger functions can only be called as triggers".
+
+Limits (fail with 0A000 instead of answering): event triggers `ON sql_drop`,
+`ON table_rewrite` and `ON login`, and `pg_event_trigger_ddl_commands()` in
+a `ddl_command_end` trigger. Outside triggers, the `pg_event_trigger_*`
+functions fail with 39P03 as in PostgreSQL. `SET session_replication_role`
+stays refused, so `ENABLE REPLICA` triggers do not fire.
+
 ## Exported snapshots
 
 `pg_export_snapshot()` in a REPEATABLE READ transaction returns an identifier

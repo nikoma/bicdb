@@ -4063,7 +4063,7 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
         "pg_partitioned_table" => pg_partitioned_table_rows(db),
         "pg_statistic_ext_data" => Ok(Vec::new()),
         "pg_enum" => pg_enum_rows(db),
-        "pg_event_trigger" => Ok(Vec::new()),
+        "pg_event_trigger" => crate::session::pg_event_trigger_rows(db),
         "pg_range" => pg_range_rows(db),
         "pg_stats" => pg_stats_rows(db),
         "pg_collation" => Ok(pg_collation_rows()),
@@ -5254,6 +5254,7 @@ pub(crate) fn virtual_table_column_types(table: &str) -> Option<Vec<(String, Opt
     }
     let table = table.strip_prefix("pg_catalog.").unwrap_or(table);
     let columns: &[(&str, &str)] = match table {
+        "pg_event_trigger" => &crate::session::PG_EVENT_TRIGGER_COLUMNS,
         "information_schema.tables" => &[
             ("table_catalog", "name"),
             ("table_schema", "name"),

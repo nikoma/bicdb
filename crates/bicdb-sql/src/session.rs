@@ -10,6 +10,11 @@ mod create_schema_elements;
 mod create_table_as;
 pub(crate) mod deferred_constraints;
 mod domain_types;
+mod event_triggers;
+pub(crate) use event_triggers::{
+    event_trigger_function_error, pg_event_trigger_rows, EVENT_TRIGGER_COLLECTION,
+    PG_EVENT_TRIGGER_COLUMNS,
+};
 pub(crate) mod extension_objects;
 mod flashback;
 mod foreign_data_ddl;
@@ -1288,6 +1293,9 @@ pub struct SqlSession<'db> {
     /// Current trigger nesting depth, bounding trigger-writes-table-with-
     /// triggers recursion (see session/row_triggers.rs).
     pub(crate) trigger_depth: usize,
+    /// DDL commands running under event triggers on this session; nested
+    /// commands of one DDL statement do not fire again.
+    pub(crate) event_trigger_ddl_depth: usize,
     /// Last field: drops an embedded session's temporary schema after every
     /// other field (the transaction included) is gone.
     pub(crate) embedded_temp_guard: Option<temp_tables::EmbeddedTempGuard>,
@@ -2362,6 +2370,10 @@ pub(crate) enum DdlUndo {
         name: String,
         previous: Option<Box<crate::collations::CollationSchema>>,
     },
+    RestoreEventTrigger {
+        oid: i64,
+        previous: Option<Box<event_triggers::EventTriggerSchema>>,
+    },
     RestoreForeignCatalog {
         previous: Box<crate::foreign_data::ForeignCatalog>,
     },
@@ -2659,6 +2671,7 @@ impl<'db> SqlSession<'db> {
             bound_context_cache: Rc::new(RefCell::new(BTreeMap::new())),
             routine_slots: None,
             trigger_depth: 0,
+            event_trigger_ddl_depth: 0,
             db,
             exclusive,
             defer_commit: false,
@@ -3847,6 +3860,9 @@ impl<'db> SqlSession<'db> {
     /// small.
     #[inline(never)]
     fn execute_raw_catalog_compat(&mut self, sql: &str) -> Result<Option<SqlResult>> {
+        if let Some(result) = self.execute_raw_event_trigger_ddl(sql)? {
+            return Ok(Some(result));
+        }
         if let Some(result) = self.execute_raw_create_aggregate(sql)? {
             return Ok(Some(result));
         }
@@ -4300,6 +4316,16 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_inner(&mut self, sql: &str) -> Result<SqlResult> {
+        if self.event_trigger_ddl_depth == 0
+            && !event_triggers::list_event_triggers(self.db_ref())?.is_empty()
+        {
+            let tag = event_triggers::event_trigger_command_tag(sql);
+            return self.with_ddl_event_triggers(tag, |session| session.execute_inner_body(sql));
+        }
+        self.execute_inner_body(sql)
+    }
+
+    fn execute_inner_body(&mut self, sql: &str) -> Result<SqlResult> {
         self.cancellation.check()?;
         let _statement_transaction = crate::statement_context::StatementTransactionScope::enter(
             self.tx.as_ref().or(self.parent_tx).map(|tx| tx.id().0),
@@ -6483,6 +6509,9 @@ impl<'db> SqlSession<'db> {
                 Some(previous) => crate::collations::save_collation(self.db_mut()?, &previous)?,
                 None => crate::collations::delete_collation(self.db_mut()?, &schema_name, &name)?,
             },
+            DdlUndo::RestoreEventTrigger { oid, previous } => {
+                event_triggers::restore_event_trigger(self.db_mut()?, oid, previous.as_deref())?
+            }
             DdlUndo::RestoreForeignCatalog { previous } => {
                 crate::foreign_data::save_foreign_catalog(self.db_mut()?, &previous)?;
             }
@@ -7434,6 +7463,9 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_raw_comment(&mut self, sql: &str) -> Result<Option<SqlResult>> {
+        if let Some(result) = self.execute_raw_event_trigger_ddl(sql)? {
+            return Ok(Some(result));
+        }
         let statements = split_sql_statements(sql);
         if statements.is_empty() {
             return Ok(None);

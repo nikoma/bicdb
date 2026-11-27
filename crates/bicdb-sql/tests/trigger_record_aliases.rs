@@ -56,7 +56,7 @@ fn postgres_trigger_records_keep_blank_padded_character_types() {
     let directory = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(directory.path()).unwrap();
     let mut sql = SqlSession::new(&mut db);
-    sql.execute("CREATE TABLE typed_trigger_rows (link char(8), seen bool)")
+    sql.execute("CREATE TABLE typed_trigger_rows (link char(8), seen text)")
         .unwrap();
     sql.execute(
         "CREATE FUNCTION typed_trigger_row() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -65,7 +65,7 @@ fn postgres_trigger_records_keep_blank_padded_character_types() {
             IF NEW.link <> '' OR row_alias.link <> '' THEN
                 RAISE EXCEPTION 'blank link compared as nonblank';
             END IF;
-            NEW.seen := pg_typeof(row_alias.link) = 'bpchar'::regtype;
+            NEW.seen := pg_typeof(row_alias.link)::text;
             RETURN NEW;
         END;
         $$",
@@ -77,9 +77,9 @@ fn postgres_trigger_records_keep_blank_padded_character_types() {
     )
     .unwrap();
     assert_eq!(
-        sql.execute("INSERT INTO typed_trigger_rows VALUES ('', false) RETURNING seen")
+        sql.execute("INSERT INTO typed_trigger_rows VALUES ('', NULL) RETURNING seen")
             .unwrap()
             .rows,
-        [vec![SqlValue::Bool(true)]],
+        [vec![SqlValue::String("character".into())]],
     );
 }

@@ -588,10 +588,11 @@ pub(crate) fn rewrite_aggregate_call(db: &BicDb, function: &Function) -> Result<
             arg.clone()
         };
         let collected = Function {
-            name: ObjectName::from(vec![
-                Ident::new("pg_catalog"),
-                Ident::new(if polymorphic { "json_agg" } else { "array_agg" }),
-            ]),
+            name: ObjectName::from(vec![Ident::new(if polymorphic {
+                "json_agg"
+            } else {
+                "array_agg"
+            })]),
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(sqlparser::ast::FunctionArgumentList {
@@ -757,6 +758,11 @@ pub(crate) fn is_fold_call(args: &[SqlValue]) -> bool {
 fn collected_values(value: &SqlValue) -> Result<Vec<SqlValue>> {
     match value {
         SqlValue::Null => Ok(Vec::new()),
+        SqlValue::JsonText(json) => json
+            .parsed
+            .as_array()
+            .map(|rows| rows.iter().map(json_to_sql_value).collect())
+            .ok_or_else(|| SqlError::InvalidSql("aggregate input expects an array".into())),
         other => match array_json_parts(other, "aggregate input")? {
             Some((array, _)) => Ok(array
                 .as_array()

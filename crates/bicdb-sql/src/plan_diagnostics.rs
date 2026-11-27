@@ -405,12 +405,14 @@ pub(crate) fn record_route_decision(
     if !active() {
         return;
     }
+    // A route that ran under a force of its own signature honored it.
+    let forced = forced_signature().is_some_and(|forced| forced == chosen);
     record_decision_with(
         "locator",
         collection,
         vec![chosen.clone()],
         &chosen,
-        false,
+        forced,
         Some(rows_fetched),
     );
     annotate_last_decision(|decision| decision.parts = parts);

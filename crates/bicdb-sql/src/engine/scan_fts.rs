@@ -335,6 +335,13 @@ impl<'db> SqlEngine<'db> {
         needed: &[String],
         require_selection: bool,
     ) -> Result<Option<IndexOnlyCount>> {
+        // A diagnostics force of another plan (a measurement harness timing
+        // the alternatives) runs that plan instead.
+        if crate::plan_diagnostics::forced_signature()
+            .is_some_and(|forced| forced.kind != "IndexOnlyScan" && forced.kind != "IndexOnlyCount")
+        {
+            return Ok(None);
+        }
         let TableFactor::Table {
             name,
             alias,

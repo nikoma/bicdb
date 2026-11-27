@@ -171,7 +171,8 @@ fn command_tag(messages: &[(u8, Vec<u8>)]) -> Option<String> {
         .map(|(_, payload)| String::from_utf8_lossy(&payload[..payload.len() - 1]).to_string())
 }
 
-const BAD_ROWS: &[u8] = b"1\t{1}\t1\na\t{2}\t2\n3\t{3}\t3333333333\n4\t{a, 4}\t4\n\t{5}\t5\n6\t{6}\t6\n";
+const BAD_ROWS: &[u8] =
+    b"1\t{1}\t1\na\t{2}\t2\n3\t{3}\t3333333333\n4\t{a, 4}\t4\n\t{5}\t5\n6\t{6}\t6\n";
 
 #[test]
 fn on_error_ignore_skips_rows_with_bad_values() {

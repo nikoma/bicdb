@@ -99,6 +99,9 @@ impl PgScalarCodec for PgCanonicalTextCodec {
         let codec_type = codec_type(context)?;
         let left = canonical_value_for_type(codec_type, left)?;
         let right = canonical_value_for_type(codec_type, right)?;
+        if let (PgCanonicalValue::Array(left), PgCanonicalValue::Array(right)) = (&left, &right) {
+            return compare_arrays(codec_type.spec, left, right);
+        }
         Ok(canonical_index_key(codec_type.spec, &left)?
             .cmp(&canonical_index_key(codec_type.spec, &right)?))
     }
@@ -472,6 +475,37 @@ pub(crate) fn canonical_catalog_vector(pg_type: &str, input: &str) -> Result<PgC
     )
     .map(PgCanonicalValue::Array)
     .map_err(|error| SqlError::InvalidTextRepresentation(error.to_string()))
+}
+
+fn compare_arrays(spec: &PgTypeSpec, left: &PgArray, right: &PgArray) -> Result<Ordering> {
+    for (left, right) in left.elements.iter().zip(&right.elements) {
+        let ordering = match (left, right) {
+            (PgCanonicalValue::Null, PgCanonicalValue::Null) => Ordering::Equal,
+            (PgCanonicalValue::Null, _) => Ordering::Greater,
+            (_, PgCanonicalValue::Null) => Ordering::Less,
+            _ => canonical_index_key(spec, left)?.cmp(&canonical_index_key(spec, right)?),
+        };
+        if ordering != Ordering::Equal {
+            return Ok(ordering);
+        }
+    }
+    Ok(left
+        .elements
+        .len()
+        .cmp(&right.elements.len())
+        .then_with(|| left.dimensions.len().cmp(&right.dimensions.len()))
+        .then_with(|| {
+            left.dimensions
+                .iter()
+                .map(|dim| dim.length)
+                .cmp(right.dimensions.iter().map(|dim| dim.length))
+        })
+        .then_with(|| {
+            left.dimensions
+                .iter()
+                .map(|dim| dim.lower_bound)
+                .cmp(right.dimensions.iter().map(|dim| dim.lower_bound))
+        }))
 }
 
 fn canonical_equality_key(spec: &PgTypeSpec, value: &PgCanonicalValue) -> Result<Vec<u8>> {

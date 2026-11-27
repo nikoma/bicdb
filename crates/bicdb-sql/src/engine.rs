@@ -4436,10 +4436,13 @@ fn index_range_probe_is_compatible(
     ) {
         return matches!(value, IndexValue::String(_) | IndexValue::Null);
     }
-    match index_field_pg_type(schema, field)
-        .as_deref()
-        .and_then(pg_type_oid_by_name)
-    {
+    let pg_type = index_field_pg_type(schema, field);
+    // Existing array index keys sort NULL elements before other elements.
+    // Equality still uses those keys; inequality must use SQL comparison.
+    if pg_type.as_deref().is_some_and(|kind| kind.ends_with("[]")) {
+        return false;
+    }
+    match pg_type.as_deref().and_then(pg_type_oid_by_name) {
         Some(20 | 21 | 23) => matches!(value, IndexValue::Int(_) | IndexValue::Null),
         _ => true,
     }

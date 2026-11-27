@@ -4149,6 +4149,20 @@ pub(crate) fn compare_values_by_pg_types(
     op: &BinaryOperator,
     right: &SqlValue,
 ) -> Result<Option<Option<bool>>> {
+    let array_type = match (left_type, right_type) {
+        (Some(left), Some(right)) if left == right => Some(left),
+        (Some(kind), None) | (None, Some(kind)) => Some(kind),
+        _ => None,
+    };
+    if let Some(pg_type) =
+        array_type.filter(|kind| kind.ends_with("[]") && pg_type_oid_by_name(kind).is_some())
+    {
+        if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
+            return Ok(Some(None));
+        }
+        let ordering = pg_typed_compare(pg_type, left, right)?;
+        return Ok(Some(Some(comparison_from_ordering(op, ordering))));
+    }
     let (Some(left_type), Some(right_type)) = (left_type, right_type) else {
         return Ok(None);
     };

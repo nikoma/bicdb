@@ -4277,6 +4277,10 @@ pub struct BicDb {
     postgres_serializable: Arc<sql_serializable::SerializableTransactions>,
     /// PREPARE TRANSACTION state (db/prepared_transactions.rs).
     prepared_xacts: Arc<prepared_transactions::Registry>,
+    /// Collections whose writes are refused because a constraint could not
+    /// be verified at open (see `quarantine_collection_writes`).
+    write_quarantine: RwLock<BTreeMap<String, String>>,
+    write_quarantine_active: AtomicBool,
     /// Set while an automatic checkpoint runs, so concurrent committers that
     /// also see a large log do not start a second one.
     auto_checkpoint_running: AtomicBool,
@@ -11949,6 +11953,8 @@ impl BicDb {
             serializable_commit_admission: RwLock::new(()),
             postgres_serializable: Arc::default(),
             prepared_xacts: Arc::default(),
+            write_quarantine: RwLock::new(BTreeMap::new()),
+            write_quarantine_active: AtomicBool::new(false),
             auto_checkpoint_running: AtomicBool::new(false),
             commit_lock: Mutex::new(()),
             flashback_clock: Mutex::new(flashback::FlashbackClock::default()),

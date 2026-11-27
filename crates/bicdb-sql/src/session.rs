@@ -5772,8 +5772,27 @@ impl<'db> SqlSession<'db> {
         name: &str,
         table_name: Option<&str>,
     ) -> Result<bool> {
+        self.delete_session_trigger_inner(name, table_name, false)
+    }
+
+    /// A trigger of a table being dropped: an inherited partition trigger
+    /// goes with its table (DROP TABLE of a partition tree).
+    pub(crate) fn delete_dropped_table_trigger(
+        &mut self,
+        name: &str,
+        table_name: &str,
+    ) -> Result<bool> {
+        self.delete_session_trigger_inner(name, Some(table_name), true)
+    }
+
+    fn delete_session_trigger_inner(
+        &mut self,
+        name: &str,
+        table_name: Option<&str>,
+        table_dropped: bool,
+    ) -> Result<bool> {
         if let Some(trigger) = find_trigger(self.db_ref(), name, table_name)? {
-            if trigger.partition_parent.is_some() {
+            if trigger.partition_parent.is_some() && !table_dropped {
                 return Err(SqlError::data_exception(
                     "2BP01",
                     "cannot drop an inherited partition trigger directly",

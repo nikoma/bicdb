@@ -94,7 +94,7 @@ fn polymorphic_aggregates_bind_types_without_repeating_their_inputs() {
         "{1,2,3}",
     );
     assert_eq!(
-        cell(&mut session, "SELECT currval('aggregate_volatile_seq')"),
-        "3",
+        cell(&mut session, "SELECT nextval('aggregate_volatile_seq')"),
+        "4",
     );
 }

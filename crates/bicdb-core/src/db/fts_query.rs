@@ -2798,6 +2798,196 @@ impl BicDb {
         Ok(self.rowids_to_pks(&collection, &rowids))
     }
 
+    /// `prefix_ordered_index_records` with ORDER BY's NULL placement instead
+    /// of the index's: at most `limit` primary keys of the rows under `prefix`
+    /// (empty for the whole index), the rows whose next key field is NULL
+    /// placed first or last as `nulls_first` says, the others in key order
+    /// (`descending` reverses it). Both ranges are read with a seek and stop
+    /// after `limit` entries, so a mostly-NULL key costs no more than its
+    /// limit. Resident and read-through paged B-trees alike; `None` for
+    /// other index kinds.
+    pub fn prefix_ordered_index_records_nulls(
+        &self,
+        name: &str,
+        prefix: &[IndexValue],
+        descending: bool,
+        nulls_first: bool,
+        limit: usize,
+    ) -> Result<Option<Vec<String>>> {
+        let state = self
+            .indexes
+            .get(name)
+            .ok_or_else(|| BicDbError::Index(format!("index `{name}` not found")))?
+            .read();
+        if state.definition.kind != IndexKind::BTree {
+            return Ok(None);
+        }
+        if prefix.len() >= state.definition.fields.len() {
+            return Err(BicDbError::Index(format!(
+                "invalid prefix-ordered scan for index `{name}`"
+            )));
+        }
+        let collection = state.definition.collection.clone();
+        let encoded_prefix = encode_index_key(prefix);
+        let mut null_prefix = encoded_prefix.clone();
+        // `IndexValue::Null` encodes as the single tag byte 0, below every
+        // other value's tag.
+        null_prefix.push(0);
+        // The first key after the NULL range: the next field's smallest
+        // non-NULL tag.
+        let mut values_start = encoded_prefix.clone();
+        values_start.push(1);
+        if state.paged_read_through {
+            if limit == 0 {
+                return Ok(Some(Vec::new()));
+            }
+            let paged = self
+                .paged_records
+                .as_ref()
+                .ok_or_else(|| BicDbError::Index(format!("index `{name}` lost its page store")))?;
+            let snapshot = paged.latest_snapshot();
+            let hints_on = paged_tid_hints_enabled();
+            type Cursor<'a> = Box<
+                dyn Iterator<
+                        Item = Result<(Vec<u8>, crate::paged_collection::IndexEntryRef, Vec<u8>)>,
+                    > + 'a,
+            >;
+            // Takes at most `limit` entries whose key starts with `range`.
+            let take = |cursor: Cursor<'_>, range: &[u8]| -> Result<Vec<String>> {
+                let mut pks = Vec::new();
+                for entry in cursor {
+                    let (encoded, entry_ref, entry_value) = entry?;
+                    if !encoded.starts_with(range) {
+                        break;
+                    }
+                    pks.push(resolve_paged_entry_pk(
+                        paged,
+                        &snapshot,
+                        &collection,
+                        name,
+                        entry_ref,
+                        &entry_value,
+                        hints_on,
+                    )?);
+                    if pks.len() >= limit {
+                        break;
+                    }
+                }
+                Ok(pks)
+            };
+            let prefix_bound = Self::encoded_prefix_successor(&encoded_prefix);
+            let (nulls, values) = if descending {
+                // NULL range, read from its top down; then the values from the
+                // top of the prefix down to the NULL range.
+                let nulls = take(
+                    Box::new(paged.scan_index_rev_below_refs(&snapshot, name, &values_start)?),
+                    &null_prefix,
+                )?;
+                let cursor: Cursor<'_> = match prefix_bound.as_deref() {
+                    Some(bound) => {
+                        Box::new(paged.scan_index_rev_below_refs(&snapshot, name, bound)?)
+                    }
+                    None => Box::new(paged.scan_index_rev_refs(&snapshot, name)?),
+                };
+                let mut values = Vec::new();
+                for entry in cursor {
+                    let (encoded, entry_ref, entry_value) = entry?;
+                    if !encoded.starts_with(&encoded_prefix) || encoded.starts_with(&null_prefix) {
+                        break;
+                    }
+                    values.push(resolve_paged_entry_pk(
+                        paged,
+                        &snapshot,
+                        &collection,
+                        name,
+                        entry_ref,
+                        &entry_value,
+                        hints_on,
+                    )?);
+                    if values.len() >= limit {
+                        break;
+                    }
+                }
+                (nulls, values)
+            } else {
+                let nulls = take(
+                    Box::new(paged.scan_index_encoded_prefix_refs(
+                        &snapshot,
+                        name,
+                        &null_prefix,
+                    )?),
+                    &null_prefix,
+                )?;
+                let values = take(
+                    Box::new(paged.scan_index_from_refs(&snapshot, name, &values_start)?),
+                    &encoded_prefix,
+                )?;
+                (nulls, values)
+            };
+            let pks: Vec<String> = if nulls_first {
+                nulls.into_iter().chain(values).take(limit).collect()
+            } else {
+                values.into_iter().chain(nulls).take(limit).collect()
+            };
+            index_trace::record_scan(&index_trace::ORDERED, pks.len());
+            return Ok(Some(pks));
+        }
+        fn take(
+            rowids: &mut Vec<RowId>,
+            ids: &mut dyn Iterator<Item = RowId>,
+            descending: bool,
+            limit: usize,
+        ) -> bool {
+            let mut batch: Vec<RowId> = ids.collect();
+            if descending {
+                batch.reverse();
+            }
+            for id in batch {
+                if rowids.len() >= limit {
+                    return false;
+                }
+                rowids.push(id);
+            }
+            rowids.len() < limit
+        }
+        let mut nulls = Vec::new();
+        let mut values = Vec::new();
+        if limit > 0 {
+            if descending {
+                state.store.scan_prefix_rev(&null_prefix, &mut |_key, ids| {
+                    take(&mut nulls, ids, descending, limit)
+                });
+                // Descending, the NULL keys come last: stop on reaching them.
+                state
+                    .store
+                    .scan_prefix_rev(&encoded_prefix, &mut |key, ids| {
+                        if key.starts_with(&null_prefix) {
+                            return false;
+                        }
+                        take(&mut values, ids, descending, limit)
+                    });
+            } else {
+                state.store.scan_prefix(&null_prefix, &mut |_key, ids| {
+                    take(&mut nulls, ids, descending, limit)
+                });
+                // Ascending, seek past the NULL keys to the first value.
+                state.store.scan_from(&values_start, &mut |key, ids| {
+                    if !key.starts_with(&encoded_prefix) {
+                        return false;
+                    }
+                    take(&mut values, ids, descending, limit)
+                });
+            }
+        }
+        let rowids: Vec<RowId> = if nulls_first {
+            nulls.into_iter().chain(values).take(limit).collect()
+        } else {
+            values.into_iter().chain(nulls).take(limit).collect()
+        };
+        index_trace::record_scan(&index_trace::ORDERED, rowids.len());
+        Ok(Some(self.rowids_to_pks(&collection, &rowids)))
+    }
+
     /// Pin one durable index generation and snapshot for an ascending unique
     /// suffix range. Each cursor batch retains the same view across commits.
     pub fn unique_index_range_cursor(

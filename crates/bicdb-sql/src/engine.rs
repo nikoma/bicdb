@@ -21,6 +21,7 @@ pub(crate) mod flashback;
 use exists_probe::{ExistsCandidate, ExistsProbeMemo};
 mod hierarchy;
 mod joins_windows;
+mod named_joins;
 pub(crate) use joins_windows::RowJoinPrediction;
 pub(crate) mod materialize;
 mod pg_catalog;
@@ -5436,6 +5437,8 @@ impl<'db> SqlEngine<'db> {
     fn execute_query_guarded(&self, query: &Query) -> Result<SqlResult> {
         let _collations = crate::collations::ActiveCollations::install(self.db_ref())?;
         self.require_query_exact_decimal_units(query)?;
+        let named_join = self.rewrite_named_join_query(query)?;
+        let query = named_join.as_deref().unwrap_or(query);
         let join_budget = crate::join_budget::QueryScope::enter();
         self.db_ref().check_recovery_state()?;
         crate::session::recycle_bin::ensure_replica_catalog_ready(self.db_ref())?;

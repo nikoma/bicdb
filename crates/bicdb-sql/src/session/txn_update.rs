@@ -2876,6 +2876,10 @@ impl<'db> SqlSession<'db> {
         tables.dedup_by(|left, right| left.name.eq_ignore_ascii_case(&right.name));
 
         for target in tables {
+            if self.tx.is_some() {
+                // COPY FREEZE needs to know what this transaction truncated.
+                self.fresh_relations.push(target.name.clone());
+            }
             let records =
                 self.scan_session_records_for_action(&target.name, PolicyAction::Delete)?;
             for (idx, record) in records.into_iter().enumerate() {
@@ -4135,13 +4139,17 @@ impl<'db> SqlSession<'db> {
         let args = function_arg_list(function);
         match name.as_str() {
             "nextval" | "pg_catalog.nextval" => {
-                let sequence =
-                    normalize_sequence_name(&self.eval_sequence_arg(args.first(), "nextval")?)?;
+                let sequence = {
+                    let text = self.eval_sequence_arg(args.first(), "nextval")?;
+                    self.session_sequence_name(&text)?
+                };
                 Ok(SqlValue::Int(self.nextval(&sequence)?))
             }
             "currval" | "pg_catalog.currval" => {
-                let sequence =
-                    normalize_sequence_name(&self.eval_sequence_arg(args.first(), "currval")?)?;
+                let sequence = {
+                    let text = self.eval_sequence_arg(args.first(), "currval")?;
+                    self.session_sequence_name(&text)?
+                };
                 let key = sequence.clone();
                 self.currvals
                     .get(&key)
@@ -4175,8 +4183,10 @@ impl<'db> SqlSession<'db> {
                         "setval expects 2 or 3 arguments".to_string(),
                     ));
                 }
-                let sequence =
-                    normalize_sequence_name(&self.eval_sequence_arg(args.first(), "setval")?)?;
+                let sequence = {
+                    let text = self.eval_sequence_arg(args.first(), "setval")?;
+                    self.session_sequence_name(&text)?
+                };
                 let value =
                     self.eval_session_expr(args.get(1).expect("validated argument count"))?;
                 let Some(value) = sql_value_i64(&value) else {
@@ -6493,6 +6503,44 @@ impl<'db> SqlSession<'db> {
             allocation.rollback()?;
         }
         result
+    }
+
+    /// The sequence a `nextval`/`currval`/`setval` argument names: an
+    /// unqualified name is looked up through the search_path, the
+    /// temporary schema first, as PostgreSQL's regclass input does.
+    pub(crate) fn session_sequence_name(&self, text: &str) -> Result<String> {
+        let normalized = normalize_sequence_name(text)?;
+        if load_sequence(self.db_ref(), &normalized)?.is_some() {
+            // A temporary sequence of the same name comes first (only when the
+            // session has a temporary schema, which the path then starts with).
+            let temp = crate::search_path::active_temp_schema().filter(|temp| {
+                crate::search_path::active_path()
+                    .is_some_and(|path| path.first().is_some_and(|first| first == temp))
+            });
+            if let Some(temp) = temp {
+                if let Ok([name]) = sql_identifier_parts(text).as_deref() {
+                    let candidate = relation_name_from_parts(&[temp, name.clone()])?;
+                    if load_sequence(self.db_ref(), &candidate)?.is_some() {
+                        return Ok(candidate);
+                    }
+                }
+            }
+            return Ok(normalized);
+        }
+        if let (Ok(parts), Some(path)) = (
+            sql_identifier_parts(text),
+            crate::search_path::active_path(),
+        ) {
+            if let [name] = parts.as_slice() {
+                for schema in path.iter() {
+                    let candidate = relation_name_from_parts(&[schema.clone(), name.clone()])?;
+                    if load_sequence(self.db_ref(), &candidate)?.is_some() {
+                        return Ok(candidate);
+                    }
+                }
+            }
+        }
+        Ok(normalized)
     }
 
     pub(crate) fn nextval(&mut self, sequence_name: &str) -> Result<i64> {

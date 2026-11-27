@@ -156,20 +156,6 @@ fn unimplemented_options_are_refused_before_copy_mode() {
     let (mut client, server, _dir) = serve();
     simple(&mut client, "CREATE TABLE t(a int, b text)");
     for (sql, message) in [
-        ("COPY t FROM STDIN (FREEZE)", "COPY FREEZE is not supported"),
-        ("COPY t FROM STDIN FREEZE", "COPY FREEZE is not supported"),
-        (
-            "COPY t FROM STDIN (DEFAULT 'd')",
-            "COPY DEFAULT is not supported",
-        ),
-        (
-            "COPY t FROM STDIN (ON_ERROR ignore)",
-            "COPY ON_ERROR IGNORE is not supported",
-        ),
-        (
-            "COPY t FROM STDIN (ON_ERROR ignore, REJECT_LIMIT 2)",
-            "COPY ON_ERROR IGNORE is not supported",
-        ),
         (
             "COPY t FROM STDIN (ENCODING 'EUC_JP')",
             "COPY ENCODING other than UTF8 and LATIN1 is not supported",

@@ -231,18 +231,34 @@ severity and SQLSTATE:
   routine is refused. See [server-side COPY](server-side-copy.md).
 - COPY leaves generated columns (stored and virtual) out of its default column
   list: COPY FROM computes them and COPY TO does not write them. Naming one in
-  the column list is refused before COPY starts (42P10), as is `COPY ... FROM
-  ... WHERE` (42P10 when the condition reads a generated column, otherwise
-  0A000: the filter is not implemented).
+  the column list is refused before COPY starts (42P10), and so is a
+  `COPY ... FROM ... WHERE` condition that reads one.
 - COPY options are read in both PostgreSQL syntaxes (the legacy list after
   `WITH`, `USING DELIMITERS`, and the parenthesized list) and checked as
   PostgreSQL checks them, with its errors and option positions. DELIMITER,
   NULL, QUOTE, ESCAPE, FORCE_QUOTE, FORCE_NOT_NULL, FORCE_NULL and HEADER
   [MATCH] work for text and CSV in both directions, with PostgreSQL's
   backslash escapes in text. ENCODING takes UTF8 and its aliases, SQL_ASCII,
-  and LATIN1 (converted both ways). FREEZE (true), DEFAULT, ON_ERROR IGNORE
-  (and REJECT_LIMIT) and other encodings are refused with 0A000 before COPY
-  starts; no option is accepted and ignored.
+  and LATIN1 (converted both ways); other encodings are refused with 0A000
+  before COPY starts. No option is accepted and ignored.
+- COPY FROM rules, as in PostgreSQL:
+  - `ON_ERROR IGNORE` skips rows a column type's input refuses (domain
+    constraints included) and reports `N rows were skipped due to data type
+    incompatibility`; `LOG_VERBOSITY VERBOSE` adds one NOTICE per skipped
+    row, `SILENT` none; `REJECT_LIMIT n` fails the COPY once more than n rows
+    were skipped. Missing or extra fields and table constraint violations
+    still fail the COPY.
+  - `DEFAULT 'marker'`: a field equal to the marker takes the column default
+    (22P04 "unexpected default marker in COPY data" for a column without
+    one).
+  - `COPY ... FROM ... WHERE condition` loads only the rows for which the
+    condition is true. Subqueries, aggregates, window and set-returning
+    functions are refused as in PostgreSQL.
+  - `FREEZE` is accepted only where PostgreSQL accepts it: in a transaction
+    block, on a table the current subtransaction created or truncated (55000
+    otherwise; 0A000 for a partitioned table). BicDB has no separate frozen
+    row visibility, so where it is accepted it changes nothing: the rows are
+    visible exactly as other rows the transaction wrote.
 
 ## Statistics aggregates, partitions and lock privileges (2026-11)
 
@@ -434,6 +450,26 @@ over one scan report their actual rows), and `EXPLAIN EXECUTE`. A bare
 (`FullScan`, `IndexScan ...`, `EstimatedRows`, `ActualRows`), which tools and
 tests read; statement shapes that report does not cover fall back to the
 PostgreSQL layout.
+
+## Temporary objects (2026-11)
+
+- `CREATE TEMP VIEW`, `CREATE OR REPLACE TEMP VIEW`, `CREATE VIEW pg_temp.v`
+  and `CREATE TEMP SEQUENCE` create session objects in the session's
+  temporary schema (`pg_temp_N`), dropped with the session. A view over a
+  temporary relation becomes temporary with PostgreSQL's NOTICE; in an
+  explicit permanent schema it is 42P16, and a materialized view over one is
+  0A000. Rules of temporary relations go with them.
+- Temporary tables are found, the temporary schema first, by `CREATE TABLE
+  ... (LIKE t)`, `INHERITS`, `COMMENT ON`, `has_table_privilege`, rule
+  actions, `nextval`/`currval`/`setval` and regclass (which prints a visible
+  temporary relation unqualified), as well as by queries and DML. A permanent
+  table cannot inherit from (42809) or reference (42P16) a temporary one.
+- `CREATE TEMP TABLE ... PARTITION OF` and `CREATE TEMP TABLE t(cols) ON
+  COMMIT ... AS query` work; ON COMMIT DROP / DELETE ROWS / PRESERVE ROWS
+  apply as before.
+- Not yet: domains, types and operators in `pg_temp` (refused: "schema
+  pg_temp does not exist"), and a temporary function named like an existing
+  permanent one (refused as already existing).
 
 ## Foreign-data wrappers, servers and user mappings (2026-11)
 

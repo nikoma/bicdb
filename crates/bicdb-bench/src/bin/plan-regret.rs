@@ -282,6 +282,14 @@ fn is_challenge2(dataset: &Dataset) -> bool {
     dataset.name.starts_with("challenge2")
 }
 
+/// Index-covered datasets: the default layout, queried only with shapes an
+/// index-only read can answer (every selected column in one secondary index,
+/// integer equalities on its leading columns, ORDER BY covering the
+/// selection), plus a control the index cannot cover.
+fn is_covered(dataset: &Dataset) -> bool {
+    dataset.name.starts_with("covered")
+}
+
 // ---------------------------------------------------------------- queries
 
 struct Query {
@@ -308,6 +316,47 @@ fn generate_queries(dataset: &Dataset, count: usize, rng: &mut Rng) -> Vec<Query
             let width = *rng.pick(&widths);
             let status = rng.below(8);
             let region = rng.below(REGIONS);
+            if is_covered(dataset) {
+                return match rng.below(6) {
+                    0 => Query {
+                        template: "covered_region_prefix",
+                        sql: format!(
+                            "SELECT region, status FROM orders WHERE region = {region} ORDER BY status, region"
+                        ),
+                    },
+                    1 => Query {
+                        template: "covered_customer_prefix_desc",
+                        sql: format!(
+                            "SELECT customer_id, created_day FROM orders WHERE customer_id = {} ORDER BY created_day DESC, customer_id",
+                            customer(rng)
+                        ),
+                    },
+                    2 => Query {
+                        template: "covered_customer_prefix_limit",
+                        sql: format!(
+                            "SELECT customer_id, created_day FROM orders WHERE customer_id = {} ORDER BY created_day, customer_id LIMIT 5",
+                            customer(rng)
+                        ),
+                    },
+                    3 => Query {
+                        template: "covered_status_eq",
+                        sql: format!("SELECT status FROM orders WHERE status = {status} ORDER BY status"),
+                    },
+                    4 => Query {
+                        template: "covered_whole_index_offset",
+                        sql: format!(
+                            "SELECT region, status FROM orders ORDER BY region, status LIMIT 50 OFFSET {}",
+                            rng.below(dataset.rows as u64 / 2)
+                        ),
+                    },
+                    _ => Query {
+                        template: "covered_control_uncovered",
+                        sql: format!(
+                            "SELECT region, status, id FROM orders WHERE region = {region} ORDER BY status, region, id"
+                        ),
+                    },
+                };
+            }
             if is_challenge2(dataset) {
                 let common = *rng.pick(&[0u64, 0, 0, 1]);
                 return match rng.below(4) {

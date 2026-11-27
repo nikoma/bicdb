@@ -63,6 +63,19 @@ pub(crate) struct CopyOptions {
     pub(crate) force_null_flags: Vec<bool>,
     /// File encoding LATIN1 (ISO 8859-1); otherwise UTF8.
     pub(crate) latin1: bool,
+    /// FREEZE (true): allowed only on a table this subtransaction created or
+    /// truncated (checked when COPY starts).
+    pub(crate) freeze: bool,
+    /// DEFAULT 'marker'.
+    pub(crate) default_marker: Option<String>,
+    /// ON_ERROR IGNORE, REJECT_LIMIT and LOG_VERBOSITY.
+    pub(crate) on_error_ignore: bool,
+    pub(crate) reject_limit: Option<u64>,
+    pub(crate) log_verbose: bool,
+    pub(crate) log_silent: bool,
+    /// Per target column: whether it has a default (the DEFAULT marker
+    /// needs one). Filled when COPY FROM starts.
+    pub(crate) default_flags: Vec<bool>,
 }
 
 impl Default for CopyOptions {
@@ -94,6 +107,13 @@ impl CopyOptions {
             force_not_null_flags: Vec::new(),
             force_null_flags: Vec::new(),
             latin1: false,
+            freeze: false,
+            default_marker: None,
+            on_error_ignore: false,
+            reject_limit: None,
+            log_verbose: false,
+            log_silent: false,
+            default_flags: Vec::new(),
         }
     }
 
@@ -466,8 +486,9 @@ pub(crate) fn process_copy_options(defs: &[CopyDefElem], is_from: bool) -> Resul
     let mut force_null = ForceColumns::None;
     let mut encoding: Option<Option<bool>> = None;
     let mut on_error_ignore: Option<bool> = None;
-    let mut log_verbosity_specified = false;
+    let mut log_verbosity: Option<String> = None;
     let mut reject_limit: Option<i64> = None;
+    let mut convert_selectively = false;
 
     let force_list = |def: &CopyDefElem| -> Result<ForceColumns> {
         match &def.arg {
@@ -563,6 +584,23 @@ pub(crate) fn process_copy_options(defs: &[CopyDefElem], is_from: bool) -> Resul
                 }
                 force_null = force_list(def)?;
             }
+            // Undocumented in PostgreSQL (for file_fdw): converts only the
+            // listed columns. Checked as PostgreSQL checks it, then refused.
+            "convert_selectively" => {
+                if convert_selectively {
+                    return Err(conflicting());
+                }
+                convert_selectively = true;
+                if !matches!(def.arg, None | Some(CopyArg::List(_))) {
+                    return Err(coded(
+                        "22023",
+                        format!(
+                            "argument to option \"{}\" must be a list of column names",
+                            def.name
+                        ),
+                    ));
+                }
+            }
             "encoding" => {
                 if encoding.is_some() {
                     return Err(conflicting());
@@ -598,10 +636,9 @@ pub(crate) fn process_copy_options(defs: &[CopyDefElem], is_from: bool) -> Resul
                 });
             }
             "log_verbosity" => {
-                if log_verbosity_specified {
+                if log_verbosity.is_some() {
                     return Err(conflicting());
                 }
-                log_verbosity_specified = true;
                 let value = def_string(def)?;
                 if !matches!(
                     value.to_ascii_lowercase().as_str(),
@@ -612,6 +649,7 @@ pub(crate) fn process_copy_options(defs: &[CopyDefElem], is_from: bool) -> Resul
                         format!("COPY LOG_VERBOSITY \"{value}\" not recognized"),
                     ));
                 }
+                log_verbosity = Some(value.to_ascii_lowercase());
             }
             "reject_limit" => {
                 if reject_limit.is_some() {
@@ -807,14 +845,8 @@ pub(crate) fn process_copy_options(defs: &[CopyDefElem], is_from: bool) -> Resul
     }
 
     // PostgreSQL's checks passed: refuse what BicDB does not implement.
-    if freeze == Some(true) {
-        return Err(unsupported("COPY FREEZE is not supported"));
-    }
-    if default_print.is_some() {
-        return Err(unsupported("COPY DEFAULT is not supported"));
-    }
-    if ignore {
-        return Err(unsupported("COPY ON_ERROR IGNORE is not supported"));
+    if convert_selectively {
+        return Err(unsupported("COPY CONVERT_SELECTIVELY is not supported"));
     }
     let latin1 = match encoding {
         None | Some(Some(true)) => false,
@@ -843,6 +875,13 @@ pub(crate) fn process_copy_options(defs: &[CopyDefElem], is_from: bool) -> Resul
         force_not_null_flags: Vec::new(),
         force_null_flags: Vec::new(),
         latin1,
+        freeze: freeze == Some(true),
+        default_marker: default_print,
+        on_error_ignore: ignore,
+        reject_limit: reject_limit.map(|limit| limit as u64),
+        log_verbose: log_verbosity.as_deref() == Some("verbose"),
+        log_silent: log_verbosity.as_deref() == Some("silent"),
+        default_flags: Vec::new(),
     })
 }
 
@@ -899,6 +938,16 @@ fn invalid_utf8(bytes: &[u8]) -> PgWireError {
 /// escapes it), NULL where the raw field equals the NULL string, and the
 /// backslash sequences decoded (`\b \f \n \r \t \v`, octal, `\x` hex).
 pub(crate) fn parse_text_fields(line: &str, opts: &CopyOptions) -> Result<Vec<Option<String>>> {
+    parse_text_fields_marked(line, opts, &mut Vec::new())
+}
+
+/// [`parse_text_fields`], recording in `marks` the fields that were the
+/// DEFAULT marker (their value is `None`).
+pub(crate) fn parse_text_fields_marked(
+    line: &str,
+    opts: &CopyOptions,
+    marks: &mut Vec<usize>,
+) -> Result<Vec<Option<String>>> {
     let bytes = line.as_bytes();
     let mut fields = Vec::new();
     let mut idx = 0;
@@ -963,6 +1012,13 @@ pub(crate) fn parse_text_fields(line: &str, opts: &CopyOptions) -> Result<Vec<Op
         let raw = &bytes[start..raw_end];
         if raw == opts.null.as_bytes() {
             fields.push(None);
+        } else if opts
+            .default_marker
+            .as_deref()
+            .is_some_and(|marker| raw == marker.as_bytes())
+        {
+            marks.push(fields.len());
+            fields.push(None);
         } else {
             if out.contains(&0) {
                 return Err(invalid_utf8(&[0]));
@@ -1012,6 +1068,15 @@ pub(crate) fn render_text_value(value: Option<&str>, opts: &CopyOptions, out: &m
 
 /// One CSV record into fields, with FORCE_NOT_NULL / FORCE_NULL applied.
 pub(crate) fn parse_csv_fields(line: &str, opts: &CopyOptions) -> Result<Vec<Option<String>>> {
+    parse_csv_fields_marked(line, opts, &mut Vec::new())
+}
+
+/// [`parse_csv_fields`], recording the DEFAULT marker fields in `marks`.
+pub(crate) fn parse_csv_fields_marked(
+    line: &str,
+    opts: &CopyOptions,
+    marks: &mut Vec<usize>,
+) -> Result<Vec<Option<String>>> {
     let bytes = line.as_bytes();
     let (delim, quote, escape) = (opts.delimiter, opts.quote, opts.escape);
     let mut fields = Vec::new();
@@ -1066,6 +1131,19 @@ pub(crate) fn parse_csv_fields(line: &str, opts: &CopyOptions) -> Result<Vec<Opt
         let raw = &bytes[start..end];
         let column = fields.len();
         let is_null_text = raw == opts.null.as_bytes();
+        if !(!saw_quote && is_null_text)
+            && opts
+                .default_marker
+                .as_deref()
+                .is_some_and(|marker| raw == marker.as_bytes())
+        {
+            marks.push(column);
+            fields.push(None);
+            if !found_delim {
+                return Ok(fields);
+            }
+            continue;
+        }
         let mut value = if !saw_quote && is_null_text {
             None
         } else {
@@ -1221,9 +1299,6 @@ mod tests {
             ("(on_error maybe)", true, "22023"),
             ("(reject_limit 5)", true, "22023"),
             ("(reject_limit 0, on_error ignore)", true, "22023"),
-            ("(on_error ignore)", true, "0A000"),
-            ("(default 'd')", true, "0A000"),
-            ("(freeze)", true, "0A000"),
             ("(freeze)", false, "22023"),
             ("(log_verbosity loud)", true, "22023"),
             ("(bogus 1)", true, "42601"),
@@ -1234,6 +1309,9 @@ mod tests {
         for sql in [
             "(freeze false, on_error stop, log_verbosity verbose, encoding 'UTF-8')",
             "(encoding 'latin1')",
+            "(on_error ignore, reject_limit 2, log_verbosity verbose)",
+            "(default 'd')",
+            "(freeze)",
             "",
         ] {
             assert!(opts(sql, true).is_ok(), "{sql}");

@@ -136,7 +136,18 @@ fn target_object_name(target: &TableSchema) -> ObjectName {
             Ident::with_quote('"', target.schema_name.clone()),
         ));
     }
-    let bare = target.name.rsplit('.').next().unwrap_or(&target.name);
+    // A table outside public is stored under an encoded name; the statement
+    // names it by its own name in its schema.
+    let bare = if target.name.starts_with("__bicdb_s_") {
+        catalog_display_name(&target.name)
+    } else {
+        target
+            .name
+            .rsplit('.')
+            .next()
+            .unwrap_or(&target.name)
+            .to_string()
+    };
     parts.push(sqlparser::ast::ObjectNamePart::Identifier(
         Ident::with_quote('"', bare),
     ));

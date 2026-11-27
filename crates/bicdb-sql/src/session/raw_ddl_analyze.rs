@@ -429,7 +429,12 @@ impl<'db> SqlSession<'db> {
             )));
         }
 
-        let source = load_schema(self.db_ref(), &definition.source_table)?
+        // The source is found as any relation reference is: through the
+        // search_path, temporary schema first.
+        let source_name = self
+            .resolve_written_relation(&definition.source_parts)
+            .unwrap_or_else(|| definition.source_table.clone());
+        let source = load_schema(self.db_ref(), &source_name)?
             .ok_or_else(|| SqlError::InvalidCollection(definition.source_table.clone()))?;
         let mut columns = source
             .columns

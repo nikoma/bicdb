@@ -320,6 +320,21 @@ impl<'db> SqlEngine<'db> {
         {
             return Ok(None);
         }
+        self.index_only_prefix_plan(from, select, &[], true)
+    }
+
+    /// The relation, key prefix and index of an index-only read: `from` is
+    /// one base table without row security or inheritance, the WHERE
+    /// conjuncts are exactly integer equalities, and they bind the leading
+    /// columns of one complete secondary B-tree whose columns also include
+    /// every column in `needed`.
+    fn index_only_prefix_plan(
+        &self,
+        from: &TableWithJoins,
+        select: &Select,
+        needed: &[String],
+        require_selection: bool,
+    ) -> Result<Option<IndexOnlyCount>> {
         let TableFactor::Table {
             name,
             alias,
@@ -352,12 +367,12 @@ impl<'db> SqlEngine<'db> {
             .as_ref()
             .map(|alias| alias.name.value.clone())
             .unwrap_or_else(|| relation_default_alias(name));
-        let Some(selection) = select.selection.as_ref() else {
+        if require_selection && select.selection.is_none() {
             return Ok(None);
-        };
+        }
         // Every conjunct: `column = integer literal`, on distinct columns.
         let mut equalities: Vec<(String, i64)> = Vec::new();
-        for term in and_terms(selection) {
+        for term in select.selection.iter().flat_map(and_terms) {
             let Expr::BinaryOp {
                 left,
                 op: BinaryOperator::Eq,
@@ -448,16 +463,305 @@ impl<'db> SqlEngine<'db> {
                 )?);
                 columns.push(column.clone());
             }
-            if prefix.len() == equalities.len() {
+            // Every index field a plain column, so its key decodes to one.
+            let fields = index
+                .fields
+                .iter()
+                .map(|field| match field {
+                    IndexField::MetadataPath(path) if path.len() == 1 => Some(path[0].clone()),
+                    _ => None,
+                })
+                .collect::<Option<Vec<_>>>();
+            let Some(fields) = fields else {
+                continue;
+            };
+            if prefix.len() == equalities.len()
+                && needed.iter().all(|column| fields.contains(column))
+            {
                 return Ok(Some(IndexOnlyCount {
                     collection,
                     index: index.name.clone(),
                     columns,
                     prefix,
+                    fields,
                 }));
             }
         }
         Ok(None)
+    }
+
+    /// The index-only plan of `SELECT c1, ... FROM t [WHERE k1 = v1 AND ...]
+    /// ORDER BY <every selected column> [LIMIT n]` whose columns are all
+    /// integer or boolean columns of one complete secondary B-tree: the rows
+    /// are the index entries' keys, and no row is read. The ORDER BY must
+    /// cover every selected column, so rows that tie under it are identical
+    /// and the output does not depend on which access path produced them.
+    /// The same gates as the index-only count apply.
+    /// The most rows an index-only projection builds in memory.
+    const MAX_INDEX_ONLY_ROWS: usize = 1_000_000;
+
+    pub(crate) fn index_only_projection_plan(
+        &self,
+        from: &TableWithJoins,
+        select: &Select,
+        query: &Query,
+    ) -> Result<Option<IndexOnlyProjection>> {
+        if !from.joins.is_empty()
+            || select.having.is_some()
+            || select.distinct.is_some()
+            || has_group_by(select)?
+            || query.fetch.is_some()
+            || query.with.is_some()
+            || !query.locks.is_empty()
+            || select_has_window_functions(select, query)?
+            || self.security_context.is_some()
+            || self.tx.is_some_and(|tx| {
+                tx.write_len() > 0
+                    || tx.isolation() != bicdb_core::TransactionIsolation::ReadCommitted
+            })
+        {
+            return Ok(None);
+        }
+        let TableFactor::Table {
+            name,
+            alias,
+            args: None,
+            ..
+        } = &from.relation
+        else {
+            return Ok(None);
+        };
+        let qualifier = alias
+            .as_ref()
+            .map(|alias| alias.name.value.clone())
+            .unwrap_or_else(|| relation_default_alias(name));
+        let column_of = |expr: &Expr| match unwrap_nested_expr(expr) {
+            Expr::Identifier(ident) => Some(ident.value.clone()),
+            Expr::CompoundIdentifier(parts) if parts.len() == 2 && parts[0].value == qualifier => {
+                Some(parts[1].value.clone())
+            }
+            _ => None,
+        };
+        // Selected columns: plain column references.
+        let mut outputs = Vec::new();
+        for item in &select.projection {
+            let (expr, name) = match item {
+                SelectItem::UnnamedExpr(expr) => (expr, None),
+                SelectItem::ExprWithAlias { expr, alias } => (expr, Some(alias.value.clone())),
+                _ => return Ok(None),
+            };
+            let Some(column) = column_of(expr) else {
+                return Ok(None);
+            };
+            outputs.push((name.unwrap_or_else(|| column.clone()), column));
+        }
+        if outputs.is_empty() {
+            return Ok(None);
+        }
+        // ORDER BY: selected columns (by name or alias), covering every one.
+        let Some(order_by) = query.order_by.as_ref() else {
+            return Ok(None);
+        };
+        let OrderByKind::Expressions(items) = &order_by.kind else {
+            return Ok(None);
+        };
+        let mut order = Vec::new();
+        for item in items {
+            let Some(key) = column_of(&item.expr) else {
+                return Ok(None);
+            };
+            let Some(position) = outputs
+                .iter()
+                .position(|(name, column)| name == &key || column == &key)
+            else {
+                return Ok(None);
+            };
+            let descending = item.options.asc == Some(false);
+            let nulls_first = item.options.nulls_first.unwrap_or(descending);
+            order.push(IndexOnlyOrder {
+                position,
+                descending,
+                nulls_first,
+            });
+        }
+        if (0..outputs.len()).any(|position| order.iter().all(|key| key.position != position)) {
+            return Ok(None);
+        }
+        let collection = relation_name(name)?;
+        if is_virtual_table(&collection)
+            || self.cte(&collection).is_some()
+            || load_view(self.db_ref(), &collection)?.is_some()
+        {
+            return Ok(None);
+        }
+        let collection = resolve_session_relation_name(self.db_ref(), &collection)?;
+        let Some(schema) = load_schema(self.db_ref(), &collection)? else {
+            return Ok(None);
+        };
+        let mut types = Vec::new();
+        for (_, column) in &outputs {
+            let Some(declared) = schema
+                .columns
+                .iter()
+                .find(|candidate| &candidate.name == column && !candidate.hidden)
+            else {
+                return Ok(None);
+            };
+            if declared.user_type.is_some()
+                || declared.array_ndims != 0
+                || !matches!(
+                    declared.pg_type.to_ascii_lowercase().as_str(),
+                    "int2"
+                        | "smallint"
+                        | "int4"
+                        | "int"
+                        | "integer"
+                        | "int8"
+                        | "bigint"
+                        | "bool"
+                        | "boolean"
+                )
+            {
+                return Ok(None);
+            }
+            types.push(declared.pg_type.clone());
+        }
+        // An ORDER BY ... LIMIT the bounded ordered index path serves keeps
+        // that path.
+        if self
+            .bounded_ordered_index_plan(from, select, query)?
+            .is_some()
+        {
+            return Ok(None);
+        }
+        let needed = outputs
+            .iter()
+            .map(|(_, column)| column.clone())
+            .collect::<Vec<_>>();
+        let Some(base) = self.index_only_prefix_plan(from, select, &needed, false)? else {
+            return Ok(None);
+        };
+        // The index must list its entries, and within the bound (one entry
+        // per row, so a table within it cannot exceed it).
+        if !self.db_ref().index_entries_listable(&base.index)
+            || self
+                .db_ref()
+                .collection_record_count_cancellable(&base.collection, &self.cancellation)
+                .map_or(true, |rows| rows > Self::MAX_INDEX_ONLY_ROWS)
+        {
+            return Ok(None);
+        }
+        let positions = needed
+            .iter()
+            .map(|column| {
+                base.fields
+                    .iter()
+                    .position(|field| field == column)
+                    .expect("needed columns are index fields")
+            })
+            .collect();
+        Ok(Some(IndexOnlyProjection {
+            base,
+            names: outputs.into_iter().map(|(name, _)| name).collect(),
+            types,
+            positions,
+            order,
+        }))
+    }
+
+    /// Answers a SELECT through [`Self::index_only_projection_plan`], or
+    /// declines (`None`) to the row path, including when the index cannot
+    /// list its entries (a read-through paged index, or more than the
+    /// bound).
+    pub(crate) fn try_index_only_projection(
+        &self,
+        from: &TableWithJoins,
+        select: &Select,
+        query: &Query,
+    ) -> Result<Option<SqlResult>> {
+        let Some(plan) = self.index_only_projection_plan(from, select, query)? else {
+            return Ok(None);
+        };
+        self.require_relation_privilege(&plan.base.collection, "SELECT")?;
+        self.check_cancellation()?;
+        // As for the index-only count: one read of one index under its read
+        // lock sees each commit entirely or not at all.
+        let Some(entries) = self.db_ref().index_prefix_entries(
+            &plan.base.index,
+            &plan.base.prefix,
+            Self::MAX_INDEX_ONLY_ROWS,
+        )?
+        else {
+            return Ok(None);
+        };
+        let mut rows = Vec::with_capacity(entries.len());
+        for (key, _) in &entries {
+            let mut row = Vec::with_capacity(plan.positions.len());
+            for &position in &plan.positions {
+                row.push(match key.get(position) {
+                    Some(IndexValue::Null) => SqlValue::Null,
+                    Some(IndexValue::Int(value)) => SqlValue::Int(*value),
+                    Some(IndexValue::Bool(value)) => SqlValue::Bool(*value),
+                    // A key the column type cannot hold: read the rows.
+                    _ => return Ok(None),
+                });
+            }
+            rows.push(row);
+        }
+        self.check_cancellation()?;
+        rows.sort_by(|left, right| {
+            for key in &plan.order {
+                let (a, b) = (&left[key.position], &right[key.position]);
+                let ordering = match (matches!(a, SqlValue::Null), matches!(b, SqlValue::Null)) {
+                    (true, true) => std::cmp::Ordering::Equal,
+                    (true, false) => {
+                        if key.nulls_first {
+                            std::cmp::Ordering::Less
+                        } else {
+                            std::cmp::Ordering::Greater
+                        }
+                    }
+                    (false, true) => {
+                        if key.nulls_first {
+                            std::cmp::Ordering::Greater
+                        } else {
+                            std::cmp::Ordering::Less
+                        }
+                    }
+                    (false, false) => {
+                        let ordering = match (a, b) {
+                            (SqlValue::Int(a), SqlValue::Int(b)) => a.cmp(b),
+                            (SqlValue::Bool(a), SqlValue::Bool(b)) => a.cmp(b),
+                            _ => std::cmp::Ordering::Equal,
+                        };
+                        if key.descending {
+                            ordering.reverse()
+                        } else {
+                            ordering
+                        }
+                    }
+                };
+                if ordering != std::cmp::Ordering::Equal {
+                    return ordering;
+                }
+            }
+            std::cmp::Ordering::Equal
+        });
+        apply_row_limit(&mut rows, query)?;
+        crate::plan_diagnostics::record_route_decision(
+            &plan.base.collection,
+            crate::plan_diagnostics::PlanSignature {
+                kind: "IndexOnlyScan",
+                index: Some(plan.base.index.clone()),
+                prefix_len: plan.base.prefix.len(),
+            },
+            Vec::new(),
+            entries.len(),
+        );
+        sql_profile_index_lookup();
+        let mut result = SqlResult::new(plan.names.clone(), rows);
+        result.column_types = plan.types.iter().cloned().map(Some).collect();
+        Ok(Some(result))
     }
 
     /// Answers `SELECT count(*)` through [`Self::index_only_count_plan`].

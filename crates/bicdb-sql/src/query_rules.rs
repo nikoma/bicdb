@@ -159,8 +159,17 @@ fn parse_create(sql: &str, db: Option<&BicDb>) -> Result<Option<(RuleSchema, boo
             }
         }
         // Keep the action as written: re-rendering parsed SQL is not a
-        // faithful round trip for every literal.
-        vec![body.trim().to_string()]
+        // faithful round trip for every literal. Its relations are bound now,
+        // as PostgreSQL binds them when the rule is created (a temporary
+        // table the action names stays the one it meant).
+        let body = body.trim();
+        let bound = match (db, crate::search_path::active_path()) {
+            (Some(db), Some(path)) => {
+                crate::search_path::bind_sql_text(db, body, &path).unwrap_or(None)
+            }
+            _ => None,
+        };
+        vec![bound.unwrap_or_else(|| body.to_string())]
     };
     Ok(Some((
         RuleSchema {
@@ -675,6 +684,8 @@ fn keyword<'a>(text: &'a str, word: &str) -> Option<&'a str> {
 pub(crate) fn pg_rules_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
     list_rules(db)?
         .iter()
+        // A rule of a relation that no longer exists is not a rule.
+        .filter(|rule| relation_exists(db, &rule.table))
         .map(|rule| {
             Ok(virtual_row([
                 (
@@ -690,4 +701,24 @@ pub(crate) fn pg_rules_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>
             ]))
         })
         .collect()
+}
+
+/// Deletes the rules of every relation in `relations` (a dropped schema's
+/// tables and views), as PostgreSQL drops a relation's rules with it.
+pub(crate) fn drop_rules_of_relations(db: &mut BicDb, relations: &[String]) -> Result<()> {
+    if relations.is_empty() {
+        return Ok(());
+    }
+    let keys = list_rules(db)?
+        .iter()
+        .filter(|rule| relations.iter().any(|relation| relation == &rule.table))
+        .map(|rule| rule_key(&rule.table, &rule.name))
+        .collect::<Vec<_>>();
+    for key in keys {
+        match db.delete(RULE_COLLECTION, &key) {
+            Ok(_) | Err(BicDbError::CollectionNotFound(_)) => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Ok(())
 }

@@ -895,7 +895,10 @@ impl<'db> SqlSession<'db> {
                                 && !grant.role.eq_ignore_ascii_case(&role)
                                 && !grant.member.eq_ignore_ascii_case(&role)
                         });
+                    let foreign_data_dependency =
+                        crate::foreign_data::role_is_referenced(self.db_ref(), &role)?;
                     if table_dependency
+                        || foreign_data_dependency
                         || owns_type
                         || owns_sequence
                         || owns_view

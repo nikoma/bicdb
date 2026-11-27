@@ -732,6 +732,17 @@ impl<'db> SqlEngine<'db> {
                 &current_user_from_gucs(&self.session_gucs),
             );
         }
+        if crate::foreign_data::is_catalog_relation(table) {
+            let reader = rls_check_user_from_gucs(&self.session_gucs);
+            let mut rows = crate::foreign_data::catalog_rows(self.db_ref(), table, Some(&reader))?;
+            if let Some(tableoid) = virtual_catalog_table_oid(table) {
+                for row in &mut rows {
+                    row.entry("tableoid".to_string())
+                        .or_insert(SqlValue::Int(tableoid));
+                }
+            }
+            return Ok(rows);
+        }
         let stripped = table.strip_prefix("pg_catalog.").unwrap_or(table);
         if stripped == "pg_locks" {
             if let Some(runtime) = &self.runtime {
@@ -3443,6 +3454,8 @@ impl<'db> SqlEngine<'db> {
                 | "has_database_privilege"
                 | "has_language_privilege"
                 | "has_tablespace_privilege"
+                | "has_foreign_data_wrapper_privilege"
+                | "has_server_privilege"
                 | "has_parameter_privilege"
         ) {
             return Some("bool".to_string());

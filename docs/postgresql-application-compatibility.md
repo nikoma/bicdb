@@ -434,3 +434,27 @@ over one scan report their actual rows), and `EXPLAIN EXECUTE`. A bare
 (`FullScan`, `IndexScan ...`, `EstimatedRows`, `ActualRows`), which tools and
 tests read; statement shapes that report does not cover fall back to the
 PostgreSQL layout.
+
+## Foreign-data wrappers, servers and user mappings (2026-11)
+
+`CREATE / ALTER / DROP FOREIGN DATA WRAPPER`, `SERVER` and `USER MAPPING`,
+`GRANT / REVOKE USAGE ON FOREIGN DATA WRAPPER | FOREIGN SERVER` (with
+`WITH GRANT OPTION`, `GRANT OPTION FOR` and `CASCADE`), `COMMENT ON` both and
+`IMPORT FOREIGN SCHEMA` follow PostgreSQL 18.4: generic `OPTIONS` lists with
+`ADD` / `SET` / `DROP`, the built-in `postgresql_fdw_validator` and its
+`invalid option` hints, superuser-only wrappers, owner and USAGE checks for
+servers and mappings, `DROP ... CASCADE` dependencies and their notices, and
+transactional rollback. The catalogs `pg_foreign_data_wrapper`,
+`pg_foreign_server`, `pg_user_mapping` (superusers only), `pg_user_mappings`
+(options shown only to the roles PostgreSQL shows them to),
+`pg_options_to_table()`, `has_foreign_data_wrapper_privilege()`,
+`has_server_privilege()` and the information schema views
+`foreign_data_wrappers`, `foreign_data_wrapper_options`, `foreign_servers`,
+`foreign_server_options`, `user_mappings` and `user_mapping_options` report
+them. A role named by any of these objects cannot be dropped.
+
+BicDB has no wrapper handlers: `HANDLER` naming a function is refused
+(`0A000`, or PostgreSQL's errors for a missing or wrongly typed function),
+user-defined validators are refused with `0A000`, and `IMPORT FOREIGN SCHEMA`
+fails with `foreign-data wrapper "..." has no handler`. Foreign tables are
+not supported yet.

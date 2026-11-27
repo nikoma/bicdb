@@ -3462,6 +3462,7 @@ pub(crate) const PG_BUILTIN_PROC_ROWS: &[(i64, &str, i64, i64)] = &[
     (1021, "pg_get_userbyid", 25, 0),
     (1022, "has_type_privilege", 16, 0),
     (1024, "has_function_privilege", 16, 0),
+    (2316, "postgresql_fdw_validator", 16, 2),
     (715, "lo_create", 26, 1),
     (952, "lo_open", 23, 2),
     (953, "lo_close", 23, 1),

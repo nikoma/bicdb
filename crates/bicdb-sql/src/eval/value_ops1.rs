@@ -63,6 +63,15 @@ pub(crate) fn eval_privilege_function_value(
                 &current_user_from_gucs(session_gucs),
             )?,
         )),
+        "has_foreign_data_wrapper_privilege"
+        | "pg_catalog.has_foreign_data_wrapper_privilege"
+        | "has_server_privilege"
+        | "pg_catalog.has_server_privilege" => Ok(Some(crate::foreign_data::has_privilege_value(
+            db,
+            name,
+            args,
+            &current_user_from_gucs(session_gucs),
+        )?)),
         "has_type_privilege" | "pg_catalog.has_type_privilege" => {
             if args.iter().any(|value| matches!(value, SqlValue::Null)) {
                 return Ok(Some(SqlValue::Null));

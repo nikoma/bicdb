@@ -219,6 +219,23 @@ fn postgres_explain_execute_plans_a_bound_prepared_statement() {
         vec![vec!["second".to_string()]]
     );
 
+    send_query(
+        &mut client,
+        "PREPARE inferred AS SELECT value FROM explained WHERE id = $1",
+    );
+    assert!(read_query_rows(&mut client).is_empty());
+    send_query(&mut client, "EXECUTE inferred(1)");
+    assert_eq!(
+        read_query_rows(&mut client),
+        vec![vec!["first".to_string()]]
+    );
+    send_query(&mut client, "PREPARE inferred AS SELECT 123");
+    assert!(read_error_response(&mut client).contains("42P05"));
+    send_query(&mut client, "EXECUTE inferred(2)");
+    assert_eq!(
+        read_query_rows(&mut client),
+        vec![vec!["second".to_string()]]
+    );
     send_query(&mut client, "EXPLAIN EXECUTE missing");
     assert!(read_error_response(&mut client).contains("26000"));
     client.write_all(b"X\0\0\0\x04").unwrap();

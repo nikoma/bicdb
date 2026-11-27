@@ -1250,7 +1250,8 @@ pub(crate) fn pg_type_regtype_name(name: &str) -> Option<String> {
                     .and_then(|value| value.strip_suffix('>'))
             })?
             .trim();
-        let spec = pg_type_spec(element)?;
+        let element = pg_type_regtype_name(element)?;
+        let spec = pg_type_spec(&element)?;
         return spec.array_oid.map(|_| format!("{}[]", spec.name));
     }
     let pg_type = match normalized.as_str() {
@@ -1263,6 +1264,7 @@ pub(crate) fn pg_type_regtype_name(name: &str) -> Option<String> {
         "float" => "float8",
         "double precision" => "float8",
         "decimal" | "dec" => "numeric",
+        "character" => "bpchar",
         "character varying" => "varchar",
         "time without time zone" => "time",
         "time with time zone" => "timetz",

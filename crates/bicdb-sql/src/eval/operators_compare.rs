@@ -4248,6 +4248,37 @@ pub(crate) fn compare_values_by_kind(
     Ok(Some(comparison_from_ordering(op, ordering)))
 }
 
+/// Catalog display names returned by pg_typeof and the integral values of
+/// regtype casts represent the same OID. Preserve the name at the result
+/// boundary while comparing two resolved built-in regtype operands by OID.
+pub(crate) fn compare_builtin_regtype_values(
+    left: &SqlValue,
+    op: &BinaryOperator,
+    right: &SqlValue,
+) -> Option<Option<bool>> {
+    if !matches!(
+        op,
+        BinaryOperator::Eq
+            | BinaryOperator::NotEq
+            | BinaryOperator::Lt
+            | BinaryOperator::LtEq
+            | BinaryOperator::Gt
+            | BinaryOperator::GtEq
+    ) {
+        return None;
+    }
+    if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
+        return Some(None);
+    }
+    let oid = |value: &SqlValue| {
+        sql_value_i64(value).or_else(|| {
+            pg_type_regtype_name(&value.to_cell()).map(|canonical| pg_type_oid(&canonical))
+        })
+    };
+    let order = oid(left)?.cmp(&oid(right)?);
+    Some(Some(comparison_from_ordering(op, order)))
+}
+
 /// `compare_values_by_kind` when both operand types are resolved and the
 /// pair is one `pg_comparison_kind` covers; `None` otherwise.
 pub(crate) fn compare_values_by_pg_types(
@@ -4257,6 +4288,9 @@ pub(crate) fn compare_values_by_pg_types(
     op: &BinaryOperator,
     right: &SqlValue,
 ) -> Result<Option<Option<bool>>> {
+    if left_type == Some("regtype") && right_type == Some("regtype") {
+        return Ok(compare_builtin_regtype_values(left, op, right));
+    }
     let array_type = match (left_type, right_type) {
         (Some(left), Some(right)) if left == right => Some(left),
         (Some(kind), None) | (None, Some(kind)) => Some(kind),

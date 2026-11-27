@@ -2838,8 +2838,8 @@ pub(crate) fn equi_join_key_exprs<'a>(
             let name = object_name(column).ok()?;
             let name = name.rsplit('.').next()?;
             if let (Some(left), Some(right)) = (
-                unique_join_column_expr(left_columns, name),
-                unique_join_column_expr(right_columns, name),
+                using_join_column_expr(left_columns, name),
+                using_join_column_expr(right_columns, name),
             ) {
                 return Some((Cow::Owned(left), Cow::Owned(right)));
             }
@@ -2891,19 +2891,24 @@ pub(crate) fn equi_join_key_exprs<'a>(
         .map(|(left, right)| (Cow::Borrowed(left), Cow::Borrowed(right)))
 }
 
-fn unique_join_column_expr(columns: &[String], name: &str) -> Option<Expr> {
-    let mut matches = columns
-        .iter()
-        .filter_map(|key| key.rsplit_once('.'))
-        .filter(|(_, column)| *column == name);
-    let (relation, column) = matches.next()?;
-    if matches.next().is_some() {
+fn using_join_column_expr(columns: &[String], name: &str) -> Option<Expr> {
+    // A physical column can appear under both the relation name and its
+    // alias. Resolve the same slot as the residual USING condition, then
+    // bind that precise slot in each side's expression scope.
+    let lookup = SlotRowLookup::new(columns);
+    let slot = lookup.slot_for_key(name)?;
+    let key = &columns[slot];
+    if lookup.slot_for_key(key) != Some(slot) {
         return None;
     }
-    Some(Expr::CompoundIdentifier(vec![
-        Ident::with_quote('"', relation),
-        Ident::with_quote('"', column),
-    ]))
+    if let Some((relation, column)) = key.rsplit_once('.') {
+        Some(Expr::CompoundIdentifier(vec![
+            Ident::with_quote('"', relation),
+            Ident::with_quote('"', column),
+        ]))
+    } else {
+        Some(Expr::Identifier(Ident::with_quote('"', key)))
+    }
 }
 
 /// Whether a join key reads only `columns`. Beyond the predicate column

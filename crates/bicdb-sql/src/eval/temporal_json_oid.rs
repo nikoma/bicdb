@@ -241,21 +241,6 @@ pub(crate) fn regtype_text_cast_source<'a>(
         .then_some(expr))
 }
 
-pub(crate) fn regclass_display_cast_source<'a>(
-    expr: &'a Expr,
-    data_type: &DataType,
-) -> Option<&'a Expr> {
-    if !matches!(data_type, DataType::Regclass) {
-        return None;
-    }
-    match expr {
-        Expr::Function(function) if function_name_is(function, "pg_get_serial_sequence") => {
-            Some(expr)
-        }
-        _ => None,
-    }
-}
-
 pub(crate) fn regclass_text_value(db: &BicDb, value: SqlValue) -> Result<SqlValue> {
     if matches!(value, SqlValue::Null) {
         return Ok(SqlValue::Null);

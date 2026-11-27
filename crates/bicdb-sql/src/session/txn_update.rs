@@ -3948,10 +3948,6 @@ impl<'db> SqlSession<'db> {
     // Keep query/cast temporaries off the recursive operator evaluation stack.
     #[inline(never)]
     fn eval_session_cast_expr(&mut self, expr: &Expr, data_type: &DataType) -> Result<SqlValue> {
-        if let Some(source) = regclass_display_cast_source(expr, data_type) {
-            let value = self.eval_session_expr(source)?;
-            return regclass_text_value(self.db_ref(), value);
-        }
         if let Some(source) = regtype_text_cast_source(expr, data_type)? {
             let value = self.eval_session_expr(source)?;
             return regtype_text_value(self.db_ref(), value);

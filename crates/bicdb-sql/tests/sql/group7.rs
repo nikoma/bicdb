@@ -2615,7 +2615,7 @@ fn serial_and_identity_columns_insert_defaults_and_catalogs() {
     );
     assert_eq!(
         session
-            .execute("SELECT pg_get_serial_sequence('invoices', 'id')::regclass")
+            .execute("SELECT pg_get_serial_sequence('invoices', 'id')::regclass::text")
             .unwrap()
             .rows,
         vec![vec![SqlValue::String("invoices_id_seq".to_string())]]
@@ -2625,7 +2625,7 @@ fn serial_and_identity_columns_insert_defaults_and_catalogs() {
             .execute("SELECT pg_get_serial_sequence('public.events', 'id')")
             .unwrap()
             .rows,
-        vec![vec![SqlValue::String("events_id_seq".to_string())]]
+        vec![vec![SqlValue::String("public.events_id_seq".to_string())]]
     );
     assert_eq!(
         session
@@ -2699,7 +2699,7 @@ fn serial_and_identity_columns_insert_defaults_and_catalogs() {
             )
             .unwrap()
             .rows,
-        vec![vec![SqlValue::String("events_id_seq".to_string())]]
+        vec![vec![SqlValue::String("public.events_id_seq".to_string())]]
     );
 }
 
@@ -2893,7 +2893,9 @@ fn typed_serial_and_identity_ranges_restarts_and_dependencies_match_postgresql()
             .execute("SELECT pg_get_serial_sequence('sequence_types', 'renamed_s')")
             .unwrap()
             .rows,
-        vec![vec![SqlValue::String("sequence_types_s_seq".to_string())]]
+        vec![vec![SqlValue::String(
+            "public.sequence_types_s_seq".to_string()
+        )]]
     );
     session
         .execute("ALTER TABLE sequence_types DROP COLUMN renamed_s")
@@ -3912,4 +3914,42 @@ fn routine_grants_accept_multiline_keywords_and_preserve_quoted_role_names() {
         );
         session.execute("RESET SESSION AUTHORIZATION").unwrap();
     }
+}
+
+#[test]
+fn pg_get_serial_sequence_uses_relation_search_path_and_literal_column_names() {
+    let (_dir, mut db) = empty_test_db();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE SCHEMA seq_schema").unwrap();
+    session
+        .execute(r#"CREATE TABLE seq_schema."Mixed" ("SeqId" serial, plain int)"#)
+        .unwrap();
+    session.execute("SET search_path TO seq_schema").unwrap();
+    let result = session
+        .execute(
+            r#"
+            SELECT pg_get_serial_sequence('"Mixed"', 'SeqId'),
+                   pg_get_serial_sequence('seq_schema."Mixed"', 'SeqId')::regclass::text,
+                   pg_get_serial_sequence('"Mixed"', 'plain'),
+                   pg_get_serial_sequence('pg_catalog.pg_class', 'oid')
+        "#,
+        )
+        .unwrap();
+    assert_eq!(
+        result.rows,
+        vec![vec![
+            SqlValue::String("seq_schema.\"Mixed_SeqId_seq\"".to_string()),
+            SqlValue::String("\"Mixed_SeqId_seq\"".to_string()),
+            SqlValue::Null,
+            SqlValue::Null,
+        ]]
+    );
+    let missing_column = session
+        .execute(r#"SELECT pg_get_serial_sequence('"Mixed"', 'seqid')"#)
+        .unwrap_err();
+    assert_eq!(missing_column.sqlstate(), "42703");
+    let missing_relation = session
+        .execute(r#"SELECT pg_get_serial_sequence('MISSING', 'seqid')"#)
+        .unwrap_err();
+    assert_eq!(missing_relation.sqlstate(), "42P01");
 }

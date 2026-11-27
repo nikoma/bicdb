@@ -2149,22 +2149,100 @@ pub(crate) fn pg_get_serial_sequence(db: &BicDb, args: &[SqlValue]) -> Result<Sq
     let Some(column) = sql_value_text(&args[1]) else {
         return Ok(SqlValue::Null);
     };
-    let table = normalize_object_name(&table);
-    let column = normalize_object_name(&column);
-    Ok(list_sequences(db)?
-        .into_iter()
-        .find(|sequence| {
-            sequence
-                .owned_by_table
-                .as_deref()
-                .is_some_and(|owned_table| normalize_object_name(owned_table) == table)
-                && sequence
-                    .owned_by_column
-                    .as_deref()
-                    .is_some_and(|owned_column| normalize_object_name(owned_column) == column)
-        })
-        .map(|sequence| SqlValue::String(sequence.name))
-        .unwrap_or(SqlValue::Null))
+    // SQL name lookup folds and qualifies the relation; the column
+    // argument is already the literal catalog name of the attribute.
+    let parts = crate::virtual_tables::sql_identifier_parts(table.trim())
+        .map_err(|_| SqlError::data_exception_public("42602", "invalid name syntax", None))?;
+    if parts.is_empty() {
+        return Err(SqlError::data_exception_public(
+            "42602",
+            "invalid name syntax",
+            None,
+        ));
+    }
+    let (name, candidates) = match parts.as_slice() {
+        [name] => {
+            let path = crate::search_path::active_path().unwrap_or_else(|| {
+                let mut path = Vec::new();
+                path.extend(crate::search_path::active_temp_schema());
+                path.extend(["pg_catalog".to_string(), "public".to_string()]);
+                path.into()
+            });
+            let candidates = path
+                .iter()
+                .map(|schema| relation_name_from_parts(&[schema.clone(), name.clone()]))
+                .collect::<Result<Vec<_>>>()?;
+            (name, candidates)
+        }
+        [_, name] => (name, vec![relation_name_from_parts(&parts)?]),
+        [catalog, _, name] => {
+            if *catalog != crate::search_path::current_catalog_name() {
+                return Err(SqlError::data_exception_public(
+                    "0A000",
+                    format!(
+                        "cross-database references are not implemented: \"{}\"",
+                        parts.join(".")
+                    ),
+                    None,
+                ));
+            }
+            (name, vec![relation_name_from_parts(&parts[1..])?])
+        }
+        _ => {
+            return Err(SqlError::data_exception_public(
+                "42601",
+                format!("improper relation name (too many dotted names): {table}"),
+                None,
+            ));
+        }
+    };
+    for candidate in candidates {
+        let (relation, columns) = if let Some(columns) = virtual_table_columns(&candidate) {
+            (candidate, columns)
+        } else if let Some(relation) = resolve_relation_name_memoized(db, &candidate) {
+            let columns = catalog_columns_for_relation(db, &relation)?
+                .into_iter()
+                .map(|column| column.name)
+                .collect::<Vec<_>>();
+            (relation, columns)
+        } else {
+            continue;
+        };
+        if !columns.contains(&column)
+            && !(crate::engine::is_postgres_system_column(&column)
+                && (db.has_collection(&relation) || relation.starts_with("pg_catalog.")))
+        {
+            return Err(SqlError::data_exception_public(
+                "42703",
+                format!("column \"{column}\" of relation \"{name}\" does not exist"),
+                None,
+            ));
+        }
+        let found = list_sequences(db)?.into_iter().find(|sequence| {
+            sequence.owned_by_table.as_deref() == Some(relation.as_str())
+                && sequence.owned_by_column.as_deref() == Some(column.as_str())
+        });
+        let Some(sequence) = found else {
+            return Ok(SqlValue::Null);
+        };
+        let namespace = sequence_catalog_namespace(db, &sequence.name)?;
+        let namespace =
+            if crate::search_path::active_temp_schema().as_deref() == Some(namespace.as_str()) {
+                "pg_temp"
+            } else {
+                &namespace
+            };
+        return Ok(SqlValue::String(format!(
+            "{}.{}",
+            pg_quote_ident(namespace),
+            pg_quote_ident(&sequence_catalog_name(&sequence.name))
+        )));
+    }
+    Err(SqlError::data_exception_public(
+        "42P01",
+        format!("relation \"{}\" does not exist", parts.join(".")),
+        None,
+    ))
 }
 
 /// Logical types shared by scalar projection and metadata-only inference.

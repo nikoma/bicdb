@@ -1755,10 +1755,6 @@ impl<'db> SqlEngine<'db> {
             Expr::Cast {
                 expr, data_type, ..
             } => {
-                if let Some(source) = regclass_display_cast_source(expr, data_type) {
-                    let value = self.eval_row_aggregate_expr(rows, columns, source)?;
-                    return regclass_text_value(self.db_ref(), value);
-                }
                 if let Some(source) = regtype_text_cast_source(expr, data_type)? {
                     let value = self.eval_row_aggregate_expr(rows, columns, source)?;
                     return regtype_text_value(self.db_ref(), value);

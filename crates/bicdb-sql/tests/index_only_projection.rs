@@ -47,8 +47,8 @@ const CASES: &[(&str, &str, bool)] = &[
         true,
     ),
     (
-        "SELECT j FROM v WHERE k = 4 ORDER BY j DESC LIMIT 7",
-        "SELECT j + 0 AS j FROM v WHERE k + 0 = 4 ORDER BY j DESC LIMIT 7",
+        "SELECT k, j FROM v WHERE k = 4 ORDER BY j DESC, k LIMIT 7",
+        "SELECT k + 0 AS k, j + 0 AS j FROM v WHERE k + 0 = 4 ORDER BY j DESC, k LIMIT 7",
         true,
     ),
     (
@@ -65,6 +65,13 @@ const CASES: &[(&str, &str, bool)] = &[
         "SELECT j FROM v WHERE k = 5 ORDER BY j OFFSET 3",
         "SELECT j + 0 AS j FROM v WHERE k + 0 = 5 ORDER BY j OFFSET 3",
         true,
+    ),
+    // The bounded ordered index path serves `prefix ORDER BY next LIMIT n`
+    // (NULL-aware), and the index-only route defers to it.
+    (
+        "SELECT j FROM v WHERE k = 4 ORDER BY j DESC LIMIT 7",
+        "SELECT j + 0 AS j FROM v WHERE k + 0 = 4 ORDER BY j DESC LIMIT 7",
+        false,
     ),
     // Not covered by ORDER BY, not index columns, or no ORDER BY: the row
     // path answers, in its own order.

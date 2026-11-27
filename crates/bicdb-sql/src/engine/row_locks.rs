@@ -11,7 +11,13 @@ pub(crate) fn is_read_committed_lock_refresh(error: &SqlError) -> bool {
     matches!(error, SqlError::BicDb(BicDbError::TransactionConflict(message)) if message.starts_with(READ_COMMITTED_LOCK_REFRESH))
 }
 
-pub(crate) type RowLockTarget = (String, String, TableSchema, Vec<String>, Option<NonBlock>);
+pub(crate) type RowLockTarget = (
+    String,
+    String,
+    TableSchema,
+    Vec<String>,
+    (Option<NonBlock>, bool),
+);
 
 // NUL cannot occur in a protocol SQL identifier. This slot is execution-local,
 // never a catalog column, and must not appear in wildcard output.
@@ -170,7 +176,8 @@ impl SqlEngine<'_> {
                     SqlError::Unsupported("row locking targets must be base tables".into())
                 })?;
                 let keys = primary_key_columns_for_schema(&schema);
-                targets.push((table, row_alias, schema, keys, lock.nonblock));
+                let share = matches!(lock.lock_type, sqlparser::ast::LockType::Share);
+                targets.push((table, row_alias, schema, keys, (lock.nonblock, share)));
             }
             if targets.len() == before {
                 return Err(SqlError::InvalidSql(
@@ -344,9 +351,26 @@ impl SqlEngine<'_> {
                 continue;
             }
             let candidate_mark = tx.rollback_mark();
-            for ((_, _, _, _, nonblock), (table, id)) in targets.iter().zip(ids) {
+            for ((_, _, _, _, (nonblock, share)), (table, id)) in targets.iter().zip(ids) {
                 if nonblock.is_none() {
                     self.check_cancellation()?;
+                    // FOR SHARE takes an exclusive row lock here. A prepared
+                    // transaction's lock is released only by COMMIT or
+                    // ROLLBACK PREPARED, so waiting for it could last
+                    // forever where PostgreSQL would grant a second share
+                    // lock: refuse instead.
+                    if *share && self.db_ref().row_locked_by_prepared_transaction(table, &id) {
+                        return Err(SqlError::RaisedException {
+                            sqlstate: "0A000".into(),
+                            message: format!(
+                                "FOR SHARE of a row locked by a prepared transaction is not supported (relation {table})"
+                            ),
+                            detail: Some(
+                                "BicDB takes FOR SHARE as an exclusive row lock; finish the prepared transaction first."
+                                    .into(),
+                            ),
+                        });
+                    }
                     // Oracle's WAIT budget starts anew for each contended
                     // row. A child timer cannot extend statement cancellation
                     // or leave a deadline on subsequent session operations.

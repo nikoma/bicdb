@@ -55,7 +55,7 @@ struct PersistedWrite {
     snapshot: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct PersistedPrepare {
     format: u32,
     gid: String,
@@ -69,7 +69,18 @@ struct PersistedPrepare {
     serializable: bool,
     writes: Vec<PersistedWrite>,
     locks: Vec<RecordLockKey>,
+    /// Set durably when an open could not restore this transaction: its
+    /// locks were not held for some time, so it must never be committed
+    /// later, even if a later open could restore it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    unrestorable: Option<String>,
 }
+
+/// Present when an open could not even list the prepare records. While it
+/// exists no prepare record is restored (all are unrestorable: never
+/// committed, ROLLBACK PREPARED discards them) and PREPARE stays disabled.
+/// It is removed once a later open lists no prepare record at all.
+const UNRESTORABLE_MARKER: &str = "prepared-transactions.unrestorable";
 
 #[derive(Debug)]
 struct Entry {
@@ -86,6 +97,11 @@ struct Entry {
 #[derive(Debug, Default)]
 struct State {
     entries: BTreeMap<String, Entry>,
+    /// Prepare records that could not be restored at open, by gid (or by
+    /// record id when the record itself is unreadable), with the reason.
+    /// They hold no locks, so COMMIT PREPARED refuses them; ROLLBACK
+    /// PREPARED discards them. The store still opens.
+    unrestorable: BTreeMap<String, String>,
     /// Gids whose PREPARE is writing its record.
     preparing: BTreeSet<String>,
 }
@@ -183,6 +199,9 @@ impl BicDb {
         };
         let mut out = Vec::new();
         for persisted in self.read_prepare_records()? {
+            let Ok(persisted) = persisted else {
+                continue;
+            };
             out.push(PreparedTransaction {
                 transaction: live
                     .get(&persisted.gid)
@@ -198,22 +217,90 @@ impl BicDb {
         Ok(out)
     }
 
-    fn read_prepare_records(&self) -> Result<Vec<PersistedPrepare>> {
+    /// Every prepare record, each parsed on its own: one unreadable record
+    /// never hides the others. An error carries the record id.
+    fn read_prepare_records(
+        &self,
+    ) -> Result<Vec<std::result::Result<PersistedPrepare, (String, String)>>> {
         let reader = self.begin_transaction()?;
         let rows = reader.scan_collection(PREPARED_XACTS_COLLECTION)?;
         drop(reader);
-        rows.into_iter()
+        Ok(rows
+            .into_iter()
             .map(|record| {
-                let persisted: PersistedPrepare = serde_json::from_value(record.metadata)?;
+                let id = record.id.clone();
+                let persisted: PersistedPrepare = serde_json::from_value(record.metadata)
+                    .map_err(|error| (id.clone(), error.to_string()))?;
                 if persisted.format != RECORD_FORMAT {
-                    return Err(BicDbError::FormatCompatibility(format!(
-                        "unsupported prepared transaction record format {}",
-                        persisted.format
-                    )));
+                    return Err((
+                        id,
+                        format!(
+                            "unsupported prepared transaction record format {}",
+                            persisted.format
+                        ),
+                    ));
                 }
                 Ok(persisted)
             })
-            .collect()
+            .collect())
+    }
+
+    fn unrestorable_error(gid: &str, reason: &str) -> BicDbError {
+        error(
+            "55000",
+            format!("prepared transaction with identifier \"{gid}\" could not be restored at startup"),
+            Some(format!(
+                "{reason}. Its locks are not held, so it cannot be committed; ROLLBACK PREPARED discards it."
+            )),
+        )
+    }
+
+    /// Refuse every commit that writes `collection` until the process
+    /// restarts. Used when an integrity structure (a constraint index) could
+    /// not be verified while opening: the store still opens, every other
+    /// table works, and this one cannot be written with its constraint
+    /// unenforced. Reads and DROP TABLE are unaffected.
+    pub fn quarantine_collection_writes(&self, collection: &str, reason: &str) {
+        self.write_quarantine
+            .write()
+            .insert(collection.to_string(), reason.to_string());
+        self.write_quarantine_active
+            .store(true, AtomicOrdering::Release);
+    }
+
+    pub(super) fn check_write_quarantine(&self, tx: &Transaction) -> Result<()> {
+        if !self.write_quarantine_active.load(AtomicOrdering::Acquire) {
+            return Ok(());
+        }
+        let quarantine = self.write_quarantine.read();
+        for write in &tx.writes {
+            if let Some(reason) = quarantine.get(&write.collection) {
+                return Err(BicDbError::CommitValidation(format!(
+                    "writes to {} are refused until it is repaired: {reason}",
+                    write.collection
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    /// Whether the row lock on `collection`/`id` is held by a prepared
+    /// transaction (it is released only by COMMIT/ROLLBACK PREPARED).
+    pub fn row_locked_by_prepared_transaction(&self, collection: &str, id: &str) -> bool {
+        let key = (collection.to_string(), id.to_string());
+        let owner = {
+            let shard = self.write_locks.shards[self.write_locks.shard_idx(&key)].lock();
+            shard.get(&key).copied()
+        };
+        let Some(owner) = owner else {
+            return false;
+        };
+        self.prepared_xacts
+            .state
+            .lock()
+            .entries
+            .values()
+            .any(|entry| entry.tx_id == owner)
     }
 
     /// Restrictions PREPARE enforces before touching any state.
@@ -398,7 +485,10 @@ impl BicDb {
         self.check_preparable(tx)?;
         {
             let mut state = self.prepared_xacts.state.lock();
-            if state.entries.contains_key(gid) || state.preparing.contains(gid) {
+            if state.entries.contains_key(gid)
+                || state.preparing.contains(gid)
+                || state.unrestorable.contains_key(gid)
+            {
                 return Err(error(
                     "42710",
                     format!("transaction identifier \"{gid}\" is already in use"),
@@ -501,6 +591,7 @@ impl BicDb {
             serializable: tx.postgres_serializable.is_some(),
             writes: writes.clone(),
             locks: locks.clone(),
+            unrestorable: None,
         };
         let record = Record::new(record_id(gid)).with_metadata(serde_json::to_value(&persisted)?);
         let mut prepare = self.begin_transaction()?;
@@ -543,6 +634,9 @@ impl BicDb {
             ));
         }
         let mut state = self.prepared_xacts.state.lock();
+        if let Some(reason) = state.unrestorable.get(gid) {
+            return Err(Self::unrestorable_error(gid, reason));
+        }
         let entry = state.entries.get_mut(gid).ok_or_else(|| not_found(gid))?;
         if entry.busy {
             return Err(error(
@@ -650,6 +744,38 @@ impl BicDb {
         gid: &str,
         requester: PreparedTransactionRequester<'_>,
     ) -> Result<u64> {
+        if self
+            .prepared_xacts
+            .state
+            .lock()
+            .unrestorable
+            .contains_key(gid)
+        {
+            // It holds nothing: discarding it only removes its record. Its
+            // owner is unknown when the record was unreadable, so only a
+            // superuser may discard it.
+            if !requester.superuser {
+                return Err(error(
+                    "42501",
+                    "permission denied to finish prepared transaction",
+                    Some("Must be superuser to discard a prepared transaction that could not be restored.".into()),
+                ));
+            }
+            let mut end = self.begin_transaction()?;
+            let id = if self
+                .read_prepare_records()?
+                .iter()
+                .any(|record| matches!(record, Err((id, _)) if id == gid))
+            {
+                gid.to_string()
+            } else {
+                record_id(gid)
+            };
+            end.delete(PREPARED_XACTS_COLLECTION, &id)?;
+            let sequence = end.commit_with_sequence()?;
+            self.prepared_xacts.state.lock().unrestorable.remove(gid);
+            return Ok(sequence);
+        }
         self.claim_prepared(gid, requester)?;
         let ended = (|| {
             let mut end = self.begin_transaction()?;
@@ -748,31 +874,135 @@ impl BicDb {
             // is promoted, which reopens the store.
             return Ok(());
         }
-        for persisted in self.read_prepare_records()? {
-            let tx_id = self.allocate_tx_id()?;
-            self.tx_states.insert(tx_id.0, TxState::Pending);
-            let mut locks = Vec::with_capacity(persisted.locks.len());
+        let marker = self.path.join(UNRESTORABLE_MARKER);
+        let marked = marker.exists();
+        let records = match self.read_prepare_records() {
+            Ok(records) => records,
+            Err(failure) => {
+                // The records cannot even be listed: the store opens, and
+                // two-phase commit stays unavailable. The durable marker
+                // keeps every one of them from being committed later, after
+                // writes their unheld locks did not prevent.
+                eprintln!("BicDB: prepared transactions could not be read at open: {failure}");
+                self.prepared_xacts.max.store(0, AtomicOrdering::Release);
+                write_unrestorable_marker(&marker, &failure.to_string())?;
+                return Ok(());
+            }
+        };
+        if marked {
+            if records.is_empty() {
+                fs::remove_file(&marker)?;
+            } else {
+                self.prepared_xacts.max.store(0, AtomicOrdering::Release);
+            }
+        }
+        let mut mark_durably = Vec::new();
+        for record in records {
+            let persisted = match record {
+                Ok(persisted) => persisted,
+                Err((id, reason)) => {
+                    eprintln!(
+                        "BicDB: prepare record {id} is unreadable and was not restored: {reason}"
+                    );
+                    self.prepared_xacts
+                        .state
+                        .lock()
+                        .unrestorable
+                        .insert(id, reason);
+                    continue;
+                }
+            };
+            let gid = persisted.gid.clone();
+            let earlier = persisted.unrestorable.clone().or_else(|| {
+                marked.then(|| "an earlier open could not read the prepare records".to_string())
+            });
+            if let Some(reason) = earlier {
+                self.prepared_xacts
+                    .state
+                    .lock()
+                    .unrestorable
+                    .insert(gid, reason);
+                continue;
+            }
+            let retained = PersistedPrepare {
+                unrestorable: None,
+                ..persisted.clone()
+            };
+            if let Err(failure) = self.restore_prepared_transaction(persisted) {
+                eprintln!("BicDB: prepared transaction {gid:?} was not restored: {failure}");
+                let reason = failure.to_string();
+                self.prepared_xacts
+                    .state
+                    .lock()
+                    .unrestorable
+                    .insert(gid, reason.clone());
+                mark_durably.push(PersistedPrepare {
+                    unrestorable: Some(reason),
+                    ..retained
+                });
+            }
+        }
+        for persisted in mark_durably {
+            // Its locks are not held from now on: record that durably, so a
+            // later open never restores it as committable.
+            let marked = (|| {
+                let record = Record::new(record_id(&persisted.gid))
+                    .with_metadata(serde_json::to_value(&persisted)?);
+                let mut tx = self.begin_transaction()?;
+                tx.update(PREPARED_XACTS_COLLECTION, record)?;
+                tx.commit()
+            })();
+            if let Err(failure) = marked {
+                eprintln!(
+                    "BicDB: could not record prepared transaction {:?} as unrestorable: {failure}",
+                    persisted.gid
+                );
+                write_unrestorable_marker(&marker, &failure.to_string())?;
+                self.prepared_xacts.max.store(0, AtomicOrdering::Release);
+            }
+        }
+        Ok(())
+    }
+
+    /// Restore one prepared transaction. On failure everything it took
+    /// back is released again and the caller records it as unrestorable.
+    fn restore_prepared_transaction(&mut self, persisted: PersistedPrepare) -> Result<()> {
+        let tx_id = self.allocate_tx_id()?;
+        self.tx_states.insert(tx_id.0, TxState::Pending);
+        let mut locks = Vec::with_capacity(persisted.locks.len());
+        let restored = (|| {
             for key in &persisted.locks {
                 if !self.write_locks.integrity.restore(tx_id, key) {
                     let shard = self.write_locks.shard_idx(key);
-                    self.write_locks.shards[shard]
-                        .lock()
-                        .insert(key.clone(), tx_id);
+                    let mut shard = self.write_locks.shards[shard].lock();
+                    match shard.get(key) {
+                        Some(owner) if *owner != tx_id => {
+                            return Err(BicDbError::TransactionConflict(format!(
+                                "row lock {}:{} is already held by transaction {}",
+                                key.0, key.1, owner.0
+                            )));
+                        }
+                        _ => {
+                            shard.insert(key.clone(), tx_id);
+                        }
+                    }
                 }
                 locks.push(key.clone());
             }
             let bindings: Arc<catalog_admission::Bindings> = Arc::default();
             let mut written = Vec::new();
             for write in &persisted.writes {
-                if let Some(state) = self.collections.get(&write.collection) {
-                    let incarnation = Arc::clone(&state.read().incarnation);
-                    catalog_admission::CatalogAdmission::bind_restored(
-                        &bindings,
-                        &write.collection,
-                        incarnation,
-                    )?;
-                    written.push((write.collection.clone(), write.record_id.clone()));
-                }
+                let state = self
+                    .collections
+                    .get(&write.collection)
+                    .ok_or_else(|| BicDbError::CollectionNotFound(write.collection.clone()))?;
+                let incarnation = Arc::clone(&state.read().incarnation);
+                catalog_admission::CatalogAdmission::bind_restored(
+                    &bindings,
+                    &write.collection,
+                    incarnation,
+                )?;
+                written.push((write.collection.clone(), write.record_id.clone()));
             }
             self.catalog_admission.register(tx_id, &bindings, None)?;
             let serializable = if persisted.serializable {
@@ -780,30 +1010,51 @@ impl BicDb {
             } else {
                 None
             };
-            let isolation = if persisted.repeatable_read || persisted.serializable {
-                TransactionIsolation::RepeatableRead
-            } else {
-                TransactionIsolation::ReadCommitted
-            };
-            let gid = persisted.gid.clone();
-            let entry = Entry {
-                tx_id,
-                info: PreparedTransaction {
-                    gid: persisted.gid,
-                    transaction: tx_id.0,
-                    prepared_at_micros: persisted.prepared_at_micros,
-                    owner: persisted.owner,
-                    database: persisted.database,
-                },
-                isolation,
-                writes: persisted.writes,
-                locks,
-                bindings,
-                serializable,
-                busy: false,
-            };
-            self.prepared_xacts.state.lock().entries.insert(gid, entry);
-        }
+            Ok((bindings, serializable))
+        })();
+        let (bindings, serializable) = match restored {
+            Ok(restored) => restored,
+            Err(failure) => {
+                release_owned_write_locks(&self.write_locks, tx_id, &locks);
+                self.tx_states.remove(&tx_id.0);
+                self.catalog_admission.finish(tx_id, TxState::Aborted);
+                return Err(failure);
+            }
+        };
+        let isolation = if persisted.repeatable_read || persisted.serializable {
+            TransactionIsolation::RepeatableRead
+        } else {
+            TransactionIsolation::ReadCommitted
+        };
+        let gid = persisted.gid.clone();
+        let entry = Entry {
+            tx_id,
+            info: PreparedTransaction {
+                gid: persisted.gid,
+                transaction: tx_id.0,
+                prepared_at_micros: persisted.prepared_at_micros,
+                owner: persisted.owner,
+                database: persisted.database,
+            },
+            isolation,
+            writes: persisted.writes,
+            locks,
+            bindings,
+            serializable,
+            busy: false,
+        };
+        self.prepared_xacts.state.lock().entries.insert(gid, entry);
         Ok(())
     }
+}
+
+fn write_unrestorable_marker(path: &Path, reason: &str) -> Result<()> {
+    let mut file = fs::File::create(path)?;
+    use std::io::Write;
+    file.write_all(reason.as_bytes())?;
+    file.sync_all()?;
+    if let Some(parent) = path.parent() {
+        fs::File::open(parent)?.sync_all()?;
+    }
+    Ok(())
 }

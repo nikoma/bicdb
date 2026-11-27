@@ -435,3 +435,44 @@ fn the_prepare_record_collection_cannot_be_mesh_enabled() {
         .unwrap_err();
     assert!(matches!(error, BicDbError::Authorization(_)), "{error:?}");
 }
+
+#[test]
+fn an_unrestorable_prepare_record_never_keeps_the_store_from_opening() {
+    for mode in MODES {
+        let dir = tempfile::tempdir().unwrap();
+        {
+            let db = fresh(dir.path(), &mode);
+            prepare(&db, "good");
+            // A record that cannot be parsed, and one whose table is gone.
+            let mut tx = db.begin_transaction().unwrap();
+            tx.insert(
+                bicdb_core::PREPARED_XACTS_COLLECTION,
+                Record::new("garbled").with_metadata(json!({ "format": 1, "gid": 7 })),
+            )
+            .unwrap();
+            tx.commit().unwrap();
+            db.close().unwrap();
+        }
+        let db = open(dir.path(), &mode);
+        // The good one is restored with its locks.
+        other_writer_is_blocked(&db, "a");
+        let superuser = PreparedTransactionRequester {
+            user: "root",
+            superuser: true,
+            database: "bicdb",
+        };
+        // The unreadable one is visible as unrestorable, never committable.
+        let error = db.commit_prepared("garbled", superuser).unwrap_err();
+        assert_eq!(sqlstate(&error), "55000", "{mode:?}");
+        assert_eq!(
+            sqlstate(&db.rollback_prepared("garbled", owner()).unwrap_err()),
+            "42501"
+        );
+        db.rollback_prepared("garbled", superuser).unwrap();
+        db.commit_prepared("good", owner()).unwrap();
+        assert_eq!(balance(&db, "a"), Some(50));
+        db.close().unwrap();
+        let db = open(dir.path(), &mode);
+        assert!(db.prepared_transactions().unwrap().is_empty());
+    }
+}

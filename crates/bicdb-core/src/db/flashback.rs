@@ -319,6 +319,9 @@ impl BicDb {
             ));
         }
         self.check_recovery_state()?;
+        if tx.state == TxState::Pending {
+            self.check_write_quarantine(tx)?;
+        }
         if tx.state == TxState::Pending && !tx.writes.is_empty() {
             if self.range_image_initializing.load(AtomicOrdering::Acquire) {
                 return Err(BicDbError::Cluster("fresh image-aware database genesis is incomplete; ordinary writes remain closed".into()));

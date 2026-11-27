@@ -1,0 +1,25 @@
+cr.on_error_verbose|CREATE TABLE cr1(n int, m int[], k int); COPY cr1 FROM PROGRAM 'printf "1\t{1}\t1\na\t{2}\t2\n3\t{3}\t3333333333\n4\t{a, 4}\t4\n\t{5}\t5\n6\t{6}\t6\n"' WITH (on_error ignore, log_verbosity verbose); SELECT * FROM cr1 ORDER BY n
+cr.on_error_default|CREATE TABLE cr2(n int, k int); COPY cr2 FROM PROGRAM 'printf "1\t1\nx\t2\n3\t3\n"' (on_error ignore); SELECT * FROM cr2 ORDER BY n
+cr.on_error_one|CREATE TABLE cr3(n int); COPY cr3 FROM PROGRAM 'printf "x\n2\n"' (on_error ignore); SELECT * FROM cr3
+cr.on_error_silent|CREATE TABLE cr4(n int); COPY cr4 FROM PROGRAM 'printf "x\n2\n"' (on_error ignore, log_verbosity silent); SELECT * FROM cr4
+cr.on_error_csv|CREATE TABLE cr5(n int, t text); COPY cr5 FROM PROGRAM 'printf "1,a\nzz,b\n3,c\n"' (format csv, on_error ignore, log_verbosity verbose); SELECT * FROM cr5 ORDER BY n
+cr.reject_limit_exceeded|CREATE TABLE cr6(n int); COPY cr6 FROM PROGRAM 'printf "a\nb\n1\nc\n"' (on_error ignore, reject_limit 2)
+cr.reject_limit_ok|CREATE TABLE cr7(n int); COPY cr7 FROM PROGRAM 'printf "a\nb\n1\n"' (on_error ignore, reject_limit 2); SELECT * FROM cr7
+cr.on_error_missing_data|CREATE TABLE cr8(n int, k int); COPY cr8 FROM PROGRAM 'printf "1\n"' (on_error ignore)
+cr.on_error_check_violation|CREATE TABLE cr9(n int CHECK (n > 0)); COPY cr9 FROM PROGRAM 'printf "x\n-1\n"' (on_error ignore)
+cr.default_text|CREATE TABLE cr10(id int, t text DEFAULT 'dflt', n int DEFAULT 42, s text); COPY cr10 FROM PROGRAM 'printf "1\t\\\\D\t\\\\D\tx\n2\tgiven\t7\t\\\\D2\n"' (DEFAULT '\D'); SELECT * FROM cr10 ORDER BY id
+cr.default_csv|CREATE TABLE cr11(id int, t text DEFAULT 'dflt', s text); COPY cr11 FROM PROGRAM 'printf "1,DEF,\"DEF\"\n2,x,DEF\n"' (FORMAT csv, DEFAULT 'DEF'); SELECT * FROM cr11 ORDER BY id
+cr.default_missing|CREATE TABLE cr12(id int, t text); COPY cr12 FROM PROGRAM 'printf "\\\\D\tx\n"' (DEFAULT '\D')
+cr.default_serial|CREATE TABLE cr13(id serial, t text); COPY cr13 FROM PROGRAM 'printf "\\\\D\tx\n10\ty\n\\\\D\tz\n"' (DEFAULT '\D'); SELECT * FROM cr13 ORDER BY t
+cr.where_filter|CREATE TABLE cr14(a int, b text); COPY cr14 FROM PROGRAM 'printf "1\tx\n2\ty\n3\tskip\n5\tz\n"' WHERE a % 2 = 1 AND b <> 'skip'; SELECT * FROM cr14 ORDER BY a
+cr.where_csv_null|CREATE TABLE cr15(a int, b text); COPY cr15 FROM PROGRAM 'printf "1,\n2,x\n"' (FORMAT csv) WHERE b IS NULL; SELECT a, b IS NULL FROM cr15
+cr.where_with_on_error|CREATE TABLE cr16(a int); COPY cr16 FROM PROGRAM 'printf "1\nx\n3\n4\n"' (on_error ignore) WHERE a > 2; SELECT * FROM cr16 ORDER BY a
+cr.where_generated|CREATE TABLE cr17(a int, g int GENERATED ALWAYS AS (a * 2) STORED); COPY cr17 FROM PROGRAM 'printf "1\n"' WHERE g > 1
+cr.freeze_outside_transaction|CREATE TABLE cr18(a int); COPY cr18 FROM PROGRAM 'printf "1\n"' (FREEZE)
+cr.freeze_after_truncate|CREATE TABLE cr19(a text); BEGIN; TRUNCATE cr19; COPY cr19 FROM PROGRAM 'printf "x\ny\n"' CSV FREEZE; SELECT * FROM cr19 ORDER BY a; COMMIT; SELECT count(*) FROM cr19
+cr.freeze_after_create|BEGIN; CREATE TABLE cr20(a int); COPY cr20 FROM PROGRAM 'printf "1\n2\n"' (FREEZE); COMMIT; SELECT * FROM cr20 ORDER BY a
+cr.freeze_parent_subxact|CREATE TABLE cr21(a int); BEGIN; TRUNCATE cr21; SAVEPOINT s1; COPY cr21 FROM PROGRAM 'printf "1\n"' (FREEZE)
+cr.freeze_rolled_back_truncate|CREATE TABLE cr22(a int); BEGIN; SAVEPOINT s1; TRUNCATE cr22; ROLLBACK TO SAVEPOINT s1; COPY cr22 FROM PROGRAM 'printf "1\n"' (FREEZE)
+cr.freeze_released_savepoint|CREATE TABLE cr23(a int); BEGIN; SAVEPOINT s1; TRUNCATE cr23; RELEASE SAVEPOINT s1; COPY cr23 FROM PROGRAM 'printf "1\n"' (FREEZE); COMMIT; SELECT * FROM cr23
+cr.freeze_partitioned|CREATE TABLE cr24(a int) PARTITION BY RANGE (a); BEGIN; COPY cr24 FROM PROGRAM 'printf "1\n"' (FREEZE)
+cr.freeze_false|CREATE TABLE cr25(a int); COPY cr25 FROM PROGRAM 'printf "1\n"' (FREEZE false); SELECT * FROM cr25

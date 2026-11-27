@@ -1546,6 +1546,7 @@ pub(crate) fn execute_savepoint_command(
                 write_len: state.tx.as_ref().map(Transaction::write_len).unwrap_or(0),
                 lock_len: state.tx.as_ref().map(Transaction::lock_len).unwrap_or(0),
                 ddl_undo_len: state.tx_ddl_undo.len(),
+                fresh_relations_len: state.tx_ddl_undo.fresh_relation_count(),
                 shared_role_ddl_len: state.tx_shared_role_ddl.len(),
                 large_objects: state.catalog_cache.large_object_savepoint()?,
                 session_state: state.session_state.clone(),
@@ -1576,6 +1577,7 @@ pub(crate) fn execute_savepoint_command(
             };
             let statement_len = state.savepoints[position].statement_len;
             let ddl_undo_len = state.savepoints[position].ddl_undo_len;
+            let fresh_relations_len = state.savepoints[position].fresh_relations_len;
             let shared_role_ddl_len = state.savepoints[position].shared_role_ddl_len;
             let session_state = state.savepoints[position].session_state.clone();
             state
@@ -1589,6 +1591,10 @@ pub(crate) fn execute_savepoint_command(
                 )?;
             }
             rollback_transaction_ddl_to_len(server, state, ddl_undo_len)?;
+            // What was created or truncated after the savepoint is undone.
+            state
+                .tx_ddl_undo
+                .truncate_fresh_relations(fresh_relations_len);
             state.tx_shared_role_ddl.truncate(shared_role_ddl_len);
             state.session_state.restore_savepoint(&session_state);
             state.tx_write_tables = write_tables_for_buffered_statements(&state.tx_statements);
@@ -2374,6 +2380,18 @@ pub(crate) fn finish_copy_in_inner(
         copied_rows +=
             finish_direct_copy_in(server, state, &mut copy, &relation, &columns, &cancellation)?;
     }
+    let skipped = copy.skipped_rows;
+    if copy.spec.options.on_error_ignore && skipped > 0 && !copy.spec.options.log_silent {
+        state.pending_notices.push(bicdb_sql::SqlNotice {
+            sqlstate: "00000".to_string(),
+            message: if skipped == 1 {
+                "1 row was skipped due to data type incompatibility".to_string()
+            } else {
+                format!("{skipped} rows were skipped due to data type incompatibility")
+            },
+            fields: Vec::new(),
+        });
+    }
 
     state.queries_executed += 1;
     server.queries_executed.fetch_add(1, Ordering::SeqCst);
@@ -2405,10 +2423,13 @@ pub(crate) fn spill_copy_rows(copy: &mut CopyInState) -> Result<()> {
         .as_mut()
         .ok_or_else(|| PgWireError::Server("COPY spill was not initialized".to_string()))?;
     let lines = std::mem::take(&mut copy.row_lines);
+    let mut marks = std::mem::take(&mut copy.row_marks);
     for (idx, row) in copy.rows.drain(..).enumerate() {
-        // Each row keeps its input line number for the error CONTEXT.
+        // Each row keeps its input line number for the error CONTEXT and its
+        // DEFAULT markers.
         let line = lines.get(idx).copied().unwrap_or_default();
-        serde_json::to_writer(&mut spill.writer, &(line, row))
+        let row_marks = marks.get_mut(idx).map(std::mem::take).unwrap_or_default();
+        serde_json::to_writer(&mut spill.writer, &(line, row, row_marks))
             .map_err(|error| PgWireError::Server(error.to_string()))?;
         spill.writer.write_all(b"\n")?;
         spill.rows += 1;
@@ -2429,7 +2450,16 @@ pub(crate) fn finish_direct_copy_in(
     execute_server_sql(server, state, "BEGIN")?;
     let result = finish_transactional_copy_in(server, state, copy, relation, columns, cancellation)
         .and_then(|count| {
-            execute_server_sql(server, state, "COMMIT")?;
+            // The COMMIT would take the notices COPY's rows raised (ON_ERROR
+            // VERBOSE, triggers) for its own result; they belong to COPY.
+            let mut notices = std::mem::take(&mut state.pending_notices);
+            let commit = execute_server_sql(server, state, "COMMIT");
+            notices.append(&mut state.pending_notices);
+            state.pending_notices = notices;
+            if let Ok(result) = &commit {
+                state.pending_notices.extend(result.notices.iter().cloned());
+            }
+            commit?;
             Ok(count)
         });
     if result.is_err() {
@@ -2446,18 +2476,32 @@ pub(crate) fn finish_transactional_copy_in(
     columns: &[String],
     cancellation: &CancellationToken,
 ) -> Result<usize> {
+    let options = &copy.spec.options;
+    let rules = bicdb_sql::CopyFromRules {
+        on_error_ignore: options.on_error_ignore,
+        verbose: options.log_verbose,
+        reject_limit: options.reject_limit,
+        skipped_before: 0,
+        where_clause: copy.spec.where_clause.clone(),
+    };
+    let skipped = std::cell::Cell::new(copy.skipped_rows);
     let mut copied_rows = 0;
     copied_rows += replay_spilled_copy_rows(
         copy,
         COPY_IN_TRANSACTION_BATCH_ROWS,
-        |rows, lines| {
+        |rows, lines, marks| {
             append_copy_insert_statements(
                 server,
                 state,
                 relation,
                 columns,
                 rows,
-                Some(lines),
+                Some(CopyRowsContext {
+                    lines,
+                    marks,
+                    rules: &rules,
+                    skipped: &skipped,
+                }),
                 cancellation,
             )
         },
@@ -2466,17 +2510,33 @@ pub(crate) fn finish_transactional_copy_in(
     if !copy.rows.is_empty() {
         let rows = std::mem::take(&mut copy.rows);
         let lines = std::mem::take(&mut copy.row_lines);
+        let marks = std::mem::take(&mut copy.row_marks);
         copied_rows += append_copy_insert_statements(
             server,
             state,
             relation,
             columns,
             rows,
-            Some(lines),
+            Some(CopyRowsContext {
+                lines,
+                marks,
+                rules: &rules,
+                skipped: &skipped,
+            }),
             cancellation,
         )?;
     }
+    copy.skipped_rows = skipped.get();
     Ok(copied_rows)
+}
+
+/// What COPY FROM knows about a batch of rows beyond their values: input
+/// lines, DEFAULT markers, the statement's rules and the rows skipped so far.
+pub(crate) struct CopyRowsContext<'a> {
+    pub(crate) lines: Vec<u64>,
+    pub(crate) marks: Vec<Vec<usize>>,
+    pub(crate) rules: &'a bicdb_sql::CopyFromRules,
+    pub(crate) skipped: &'a std::cell::Cell<u64>,
 }
 
 pub(crate) fn replay_spilled_copy_rows<F>(
@@ -2486,7 +2546,7 @@ pub(crate) fn replay_spilled_copy_rows<F>(
     cancellation: &CancellationToken,
 ) -> Result<usize>
 where
-    F: FnMut(Vec<Vec<Option<String>>>, Vec<u64>) -> Result<usize>,
+    F: FnMut(Vec<Vec<Option<String>>>, Vec<u64>, Vec<Vec<usize>>) -> Result<usize>,
 {
     let Some(spill) = copy.spill.as_mut() else {
         return Ok(0);
@@ -2496,21 +2556,27 @@ where
     let reader = BufReader::new(file);
     let mut batch = Vec::with_capacity(batch_rows);
     let mut batch_lines = Vec::with_capacity(batch_rows);
+    let mut batch_marks = Vec::with_capacity(batch_rows);
     let mut copied_rows = 0;
     for line in reader.lines() {
         cancellation.check().map_err(PgWireError::from)?;
         let line = line?;
-        let (input_line, row) = serde_json::from_str::<(u64, Vec<Option<String>>)>(&line)
-            .map_err(|error| PgWireError::Server(error.to_string()))?;
+        let (input_line, row, marks) =
+            serde_json::from_str::<(u64, Vec<Option<String>>, Vec<usize>)>(&line)
+                .map_err(|error| PgWireError::Server(error.to_string()))?;
         batch.push(row);
         batch_lines.push(input_line);
+        batch_marks.push(marks);
         if batch.len() >= batch_rows {
-            copied_rows +=
-                consume_batch(std::mem::take(&mut batch), std::mem::take(&mut batch_lines))?;
+            copied_rows += consume_batch(
+                std::mem::take(&mut batch),
+                std::mem::take(&mut batch_lines),
+                std::mem::take(&mut batch_marks),
+            )?;
         }
     }
     if !batch.is_empty() {
-        copied_rows += consume_batch(batch, batch_lines)?;
+        copied_rows += consume_batch(batch, batch_lines, batch_marks)?;
     }
     Ok(copied_rows)
 }
@@ -2521,7 +2587,7 @@ pub(crate) fn append_copy_insert_statements(
     relation: &str,
     columns: &[String],
     rows: Vec<Vec<Option<String>>>,
-    lines: Option<Vec<u64>>,
+    context: Option<CopyRowsContext<'_>>,
     cancellation: &CancellationToken,
 ) -> Result<usize> {
     for (idx, row) in rows.iter().enumerate() {
@@ -2538,7 +2604,7 @@ pub(crate) fn append_copy_insert_statements(
             )));
         }
     }
-    let count = rows.len();
+    let mut count = rows.len();
     state.tx_write_tables.insert(relation.to_string());
     // Defaults and trigger bodies can allocate sequences or change catalogs.
     // Keep COPY's existing exclusive batch execution, but retain one transaction
@@ -2562,13 +2628,30 @@ pub(crate) fn append_copy_insert_statements(
             .with_cancellation(cancellation.clone())
             .with_pending_transaction(tx);
     let started = Instant::now();
-    let result = match lines.as_deref() {
-        Some(lines) if lines.len() == rows.len() => {
-            session.copy_insert_rows_reporting_at_lines(relation, columns, rows, lines)
+    let result = match &context {
+        Some(context) if context.lines.len() == rows.len() => {
+            let mut rules = context.rules.clone();
+            rules.skipped_before = context.skipped.get();
+            session
+                .copy_insert_rows_with_rules(
+                    relation,
+                    columns,
+                    rows,
+                    &context.lines,
+                    &context.marks,
+                    &rules,
+                )
+                .map(|(outcome, notices)| {
+                    // Rows ON_ERROR or WHERE left out are not copied.
+                    count = outcome.inserted;
+                    context.skipped.set(context.skipped.get() + outcome.skipped);
+                    notices
+                })
         }
-        _ => session.copy_insert_rows_reporting(relation, columns, rows),
-    }
-    .map(|(_, notices)| notices);
+        _ => session
+            .copy_insert_rows_reporting(relation, columns, rows)
+            .map(|(_, notices)| notices),
+    };
     capture_connection_guc_state(state, &session);
     state.tx = session.take_pending_transaction();
     state.tx_ddl_undo = session.take_ddl_undo_log();
@@ -2589,10 +2672,12 @@ pub(crate) fn copy_in_line(copy: &mut CopyInState, line: &str) -> Result<()> {
     }
     // PostgreSQL counts line ends inside a quoted CSV field as lines.
     copy.line_number += 1 + std::mem::take(&mut copy.csv_embedded_lines);
-    let parse = |copy: &CopyInState| {
+    let mut marks = Vec::new();
+    let mut parse = |copy: &CopyInState| {
+        marks.clear();
         match copy.spec.format {
-            CopyFormat::Text => parse_text_fields(line, &copy.spec.options),
-            CopyFormat::Csv => parse_csv_fields(line, &copy.spec.options),
+            CopyFormat::Text => parse_text_fields_marked(line, &copy.spec.options, &mut marks),
+            CopyFormat::Csv => parse_csv_fields_marked(line, &copy.spec.options, &mut marks),
         }
         .map_err(|error| with_copy_line_context(error, copy, line))
     };
@@ -2606,6 +2691,30 @@ pub(crate) fn copy_in_line(copy: &mut CopyInState, line: &str) -> Result<()> {
     }
     let row = parse(copy)?;
     let expected = copy.target_columns.len();
+    // The DEFAULT marker stands for a column default, which the column must
+    // have; past the last column it is just extra data.
+    marks.retain(|&index| expected == 0 || index < expected);
+    if let Some(&index) = marks.iter().find(|&&index| {
+        !copy
+            .spec
+            .options
+            .default_flags
+            .get(index)
+            .copied()
+            .unwrap_or(true)
+    }) {
+        let column = copy.target_columns.get(index).cloned().unwrap_or_default();
+        return Err(with_copy_line_context(
+            PgWireError::Sql(SqlError::coded_public(
+                "22P04",
+                "unexpected default marker in COPY data",
+                Some(format!("Column \"{column}\" has no default value.")),
+                None,
+            )),
+            copy,
+            line,
+        ));
+    }
     if expected > 0 && row.len() != expected {
         let message = match copy.target_columns.get(row.len()) {
             Some(column) if row.len() < expected => {
@@ -2617,6 +2726,7 @@ pub(crate) fn copy_in_line(copy: &mut CopyInState, line: &str) -> Result<()> {
     }
     copy.rows.push(row);
     copy.row_lines.push(copy.line_number);
+    copy.row_marks.push(marks);
     Ok(())
 }
 
@@ -2737,6 +2847,7 @@ pub(crate) fn copy_in_binary_rows(copy: &mut CopyInState) -> Result<()> {
         copy.line_number += 1;
         copy.rows.push(fields);
         copy.row_lines.push(copy.line_number);
+        copy.row_marks.push(Vec::new());
         offset = cursor;
         spill_copy_rows_if_needed(copy)?;
     }

@@ -3047,6 +3047,10 @@ struct CopyInState {
     extended: bool,
     /// Input line number of each row in `rows` (PostgreSQL's COPY CONTEXT).
     row_lines: Vec<u64>,
+    /// Per row in `rows`: the fields that were the DEFAULT marker.
+    row_marks: Vec<Vec<usize>>,
+    /// Rows ON_ERROR IGNORE skipped so far.
+    skipped_rows: u64,
     /// Lines read so far, counted as PostgreSQL does (a header and newlines
     /// inside quoted CSV fields count).
     line_number: u64,
@@ -3259,6 +3263,8 @@ struct SavepointMark {
     write_len: usize,
     lock_len: usize,
     ddl_undo_len: usize,
+    /// `SqlSessionDdlUndoLog::fresh_relation_count` at the savepoint.
+    fresh_relations_len: usize,
     shared_role_ddl_len: usize,
     large_objects: bicdb_sql::SqlLargeObjectSavepoint,
     session_state: SqlSessionGucState,
@@ -3727,11 +3733,80 @@ pub(crate) fn copy_target_columns(
     Ok(result?)
 }
 
-/// `COPY ... FROM ... WHERE`: PostgreSQL's error when the condition reads a
-/// generated column (a whole-row reference reads them all); otherwise the
-/// filter is not implemented, so the statement is refused before COPY mode
-/// rather than loading rows the condition would have skipped.
-fn copy_where_error(copy: &CopyStatement, condition: &str, generated: &[String]) -> PgWireError {
+/// See `SqlSession::copy_relation_info`.
+fn copy_relation_info(
+    server: &Arc<PgWireServer>,
+    state: &ConnectionState,
+    copy: &CopyStatement,
+    targets: &[String],
+) -> Result<Option<bicdb_sql::CopyRelationInfo>> {
+    let Some(relation) = copy.relation.as_deref() else {
+        return Ok(None);
+    };
+    let db = server.read_db_for_transaction_progress()?;
+    let tx = db.begin_transaction()?;
+    let mut session =
+        with_connection_guc_state(sql_session_shared_for_server(server, &db), server, state)
+            .with_pending_transaction(tx)
+            .with_deferred_commit();
+    let result = session.copy_relation_info(relation, targets);
+    if let Some(tx) = session.take_pending_transaction() {
+        tx.rollback()?;
+    }
+    Ok(result?)
+}
+
+/// COPY FREEZE under PostgreSQL's conditions: not on a partitioned table,
+/// and only on a table the current subtransaction created or truncated (its
+/// rows cannot then be seen by anyone else before commit). BicDB has no
+/// separate frozen visibility, so when the conditions hold FREEZE changes
+/// nothing; when they do not, it fails as in PostgreSQL.
+fn check_copy_freeze(
+    state: &ConnectionState,
+    explicit_transaction: bool,
+    info: Option<&bicdb_sql::CopyRelationInfo>,
+) -> Result<()> {
+    let Some(info) = info else {
+        return Err(PgWireError::Sql(SqlError::coded_public(
+            "0A000",
+            "COPY FREEZE is not supported for this relation",
+            None,
+            None,
+        )));
+    };
+    if info.partitioned {
+        return Err(PgWireError::Sql(SqlError::coded_public(
+            "0A000",
+            "cannot perform COPY FREEZE on a partitioned table",
+            None,
+            None,
+        )));
+    }
+    let since = state
+        .savepoints
+        .last()
+        .map_or(0, |savepoint| savepoint.fresh_relations_len);
+    if !explicit_transaction
+        || !state
+            .tx_ddl_undo
+            .relation_fresh_since(&info.physical_name, since)
+    {
+        return Err(PgWireError::Sql(SqlError::coded_public(
+            "55000",
+            "cannot perform COPY FREEZE because the table was not created or truncated in the current subtransaction",
+            None,
+            None,
+        )));
+    }
+    Ok(())
+}
+
+/// `COPY ... FROM ... WHERE`: PostgreSQL's checks of the condition before
+/// COPY starts. It may not read a generated column (a whole-row reference
+/// reads them all), nor use a subquery, an aggregate, a window function or a
+/// set-returning function. The condition itself is evaluated per row when the
+/// rows are inserted.
+fn check_copy_where(copy: &CopyStatement, condition: &str, generated: &[String]) -> Result<()> {
     let relation = copy
         .relation
         .as_deref()
@@ -3759,19 +3834,94 @@ fn copy_where_error(copy: &CopyStatement, condition: &str, generated: &[String])
         .iter()
         .find(|column| whole_row || referenced.contains(column.as_str()))
     {
-        return PgWireError::Sql(SqlError::coded_public(
+        return Err(PgWireError::Sql(SqlError::coded_public(
             "42P10",
             "generated columns are not supported in COPY FROM WHERE conditions",
             Some(format!("Column \"{column}\" is a generated column.")),
             None,
-        ));
+        )));
     }
-    PgWireError::Sql(SqlError::coded_public(
-        "0A000",
-        "COPY FROM with a WHERE condition is not supported",
-        None,
-        None,
-    ))
+    let expr = sqlparser::parser::Parser::new(&PostgreSqlDialect {})
+        .try_with_sql(condition)
+        .and_then(|mut parser| parser.parse_expr())
+        .map_err(|error| PgWireError::Sql(SqlError::InvalidSql(error.to_string())))?;
+    const AGGREGATES: &[&str] = &[
+        "avg",
+        "bit_and",
+        "bit_or",
+        "bit_xor",
+        "bool_and",
+        "bool_or",
+        "count",
+        "every",
+        "max",
+        "min",
+        "sum",
+        "array_agg",
+        "string_agg",
+        "json_agg",
+        "jsonb_agg",
+        "json_object_agg",
+        "jsonb_object_agg",
+        "stddev",
+        "variance",
+    ];
+    const SET_RETURNING: &[&str] = &[
+        "generate_series",
+        "unnest",
+        "regexp_matches",
+        "regexp_split_to_table",
+        "json_array_elements",
+        "jsonb_array_elements",
+        "json_each",
+        "jsonb_each",
+    ];
+    let mut refusal: Option<(&'static str, &'static str)> = None;
+    let _ = sqlparser::ast::visit_expressions(&expr, |node| {
+        let found = match node {
+            sqlparser::ast::Expr::Subquery(_)
+            | sqlparser::ast::Expr::Exists { .. }
+            | sqlparser::ast::Expr::InSubquery { .. } => {
+                Some(("0A000", "cannot use subquery in COPY FROM WHERE condition"))
+            }
+            sqlparser::ast::Expr::Function(function) => {
+                let name = function.name.to_string().to_ascii_lowercase();
+                let name = name.rsplit('.').next().unwrap_or(&name).to_string();
+                if function.over.is_some() {
+                    Some((
+                        "42P20",
+                        "window functions are not allowed in COPY FROM WHERE conditions",
+                    ))
+                } else if AGGREGATES.contains(&name.as_str()) {
+                    Some((
+                        "42803",
+                        "aggregate functions are not allowed in COPY FROM WHERE conditions",
+                    ))
+                } else if SET_RETURNING.contains(&name.as_str()) {
+                    Some((
+                        "0A000",
+                        "set-returning functions are not allowed in COPY FROM WHERE conditions",
+                    ))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+        match found {
+            Some(found) => {
+                refusal = Some(found);
+                std::ops::ControlFlow::Break(())
+            }
+            None => std::ops::ControlFlow::Continue(()),
+        }
+    });
+    match refusal {
+        Some((sqlstate, message)) => Err(PgWireError::Sql(SqlError::coded_public(
+            sqlstate, message, None, None,
+        ))),
+        None => Ok(()),
+    }
 }
 
 /// Enter COPY FROM mode for `copy`: resolve its target (as the session would)
@@ -3783,6 +3933,9 @@ fn begin_copy_in(
     state: &mut ConnectionState,
     mut copy: CopyStatement,
 ) -> Result<usize> {
+    // COPY FREEZE asks about the client's transaction block, not the one
+    // COPY may open for itself below.
+    let explicit_transaction = state.in_transaction;
     let owns_serializable_transaction = !state.in_transaction
         && !bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile)
         && state
@@ -3840,7 +3993,7 @@ fn begin_copy_in(
             let generated = copy_target_columns(server, state, &copy, &[])?
                 .map(|(_, generated)| generated)
                 .unwrap_or_default();
-            return Err(copy_where_error(&copy, condition, &generated));
+            check_copy_where(&copy, condition, &generated)?;
         }
         let targets = match copy_target_columns(server, state, &copy, &copy.columns)? {
             Some((targets, _)) => targets,
@@ -3871,6 +4024,15 @@ fn begin_copy_in(
         };
         copy.options
             .resolve_columns(&targets, &defaults, copy.relation.as_deref())?;
+        if copy.options.freeze || copy.options.default_marker.is_some() {
+            let info = copy_relation_info(server, state, &copy, &targets)?;
+            if copy.options.freeze {
+                check_copy_freeze(state, explicit_transaction, info.as_ref())?;
+            }
+            if let Some(info) = info {
+                copy.options.default_flags = info.has_default;
+            }
+        }
         Ok(targets)
     })();
     let target_columns = match prepared {
@@ -3909,6 +4071,8 @@ fn begin_copy_in(
         owns_serializable_transaction,
         extended: false,
         row_lines: Vec::new(),
+        row_marks: Vec::new(),
+        skipped_rows: 0,
         line_number: 0,
         csv_scanned: 0,
         csv_in_quote: false,

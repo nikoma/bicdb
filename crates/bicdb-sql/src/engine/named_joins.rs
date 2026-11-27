@@ -11,60 +11,121 @@ enum MergedSide {
     Full,
 }
 
-pub(super) struct MergedColumn {
+#[derive(Clone)]
+pub(super) struct NamedJoinColumn {
     name: String,
     expression: Expr,
+    data_type: Option<String>,
+    merged: bool,
 }
 
 impl SqlEngine<'_> {
     pub(super) fn rewrite_named_join_select(
         &self,
         select: &Select,
-    ) -> Result<Option<(Select, Vec<MergedColumn>)>> {
+    ) -> Result<Option<(Select, Vec<NamedJoinColumn>)>> {
         let [from] = select.from.as_slice() else {
             return Ok(None);
         };
-        let [join] = from.joins.as_slice() else {
-            return Ok(None);
-        };
-        let (constraint, side) = match &join.join_operator {
-            JoinOperator::Join(constraint) | JoinOperator::Inner(constraint) => {
-                (constraint, MergedSide::Inner)
-            }
-            JoinOperator::Left(constraint) | JoinOperator::LeftOuter(constraint) => {
-                (constraint, MergedSide::Left)
-            }
-            JoinOperator::Right(constraint) | JoinOperator::RightOuter(constraint) => {
-                (constraint, MergedSide::Right)
-            }
-            JoinOperator::FullOuter(constraint) => (constraint, MergedSide::Full),
-            _ => return Ok(None),
-        };
-        if !matches!(
-            constraint,
-            JoinConstraint::Using(_) | JoinConstraint::Natural
-        ) || oracle::is_oracle_database(self.db_ref())?
+        if !from.joins.iter().any(|join| {
+            matches!(
+                join_constraint(&join.join_operator),
+                Some((JoinConstraint::Using(_) | JoinConstraint::Natural, _))
+            )
+        }) || oracle::is_oracle_database(self.db_ref())?
         {
             return Ok(None);
         }
 
-        let Some(left) = self.named_join_input(&from.relation) else {
+        let Some(mut columns) = self.named_join_input(&from.relation) else {
             return Ok(None);
         };
-        let Some(right) = self.named_join_input(&join.relation) else {
-            return Ok(None);
-        };
+        let mut output = select.clone();
+        for join in &mut output.from[0].joins {
+            let Some(right) = self.named_join_input(&join.relation) else {
+                return Ok(None);
+            };
+            if let Some((constraint, side)) = join_constraint(&join.join_operator) {
+                if matches!(
+                    constraint,
+                    JoinConstraint::Using(_) | JoinConstraint::Natural
+                ) {
+                    let (operator, joined) =
+                        self.bind_named_join(columns, right, constraint, side)?;
+                    join.join_operator = operator;
+                    columns = joined;
+                    continue;
+                }
+            }
+            columns.extend(right);
+            let merged = unique_merged_columns(&columns);
+            let _ = join
+                .join_operator
+                .visit(&mut ReplaceMergedColumns::new(&merged));
+        }
+        let merged = unique_merged_columns(&columns);
+        output.projection.clear();
+        for mut item in select.projection.clone() {
+            match item {
+                SelectItem::Wildcard(ref options)
+                    if options == &sqlparser::ast::WildcardAdditionalOptions::default() =>
+                {
+                    output.projection.extend(columns.iter().map(|column| {
+                        if column.merged {
+                            SelectItem::ExprWithAlias {
+                                expr: column.expression.clone(),
+                                alias: Ident::with_quote('"', &column.name),
+                            }
+                        } else {
+                            SelectItem::UnnamedExpr(column.expression.clone())
+                        }
+                    }));
+                    continue;
+                }
+                SelectItem::Wildcard(_) => return Ok(None),
+                SelectItem::UnnamedExpr(ref mut expr) => {
+                    if let Expr::Identifier(ident) = expr {
+                        if let Some(column) = merged
+                            .iter()
+                            .find(|column| column.name == ident_value(ident))
+                        {
+                            item = SelectItem::ExprWithAlias {
+                                expr: column.expression.clone(),
+                                alias: Ident::with_quote('"', &column.name),
+                            };
+                        }
+                    }
+                }
+                _ => {}
+            }
+            let _ = item.visit(&mut ReplaceMergedColumns::new(&merged));
+            output.projection.push(item);
+        }
+        let mut rewrite = ReplaceMergedColumns::new(&merged);
+        let _ = output.selection.visit(&mut rewrite);
+        let _ = output.group_by.visit(&mut rewrite);
+        let _ = output.having.visit(&mut rewrite);
+        Ok(Some((output, merged)))
+    }
+
+    fn bind_named_join(
+        &self,
+        left: Vec<NamedJoinColumn>,
+        right: Vec<NamedJoinColumn>,
+        constraint: &JoinConstraint,
+        side: MergedSide,
+    ) -> Result<(JoinOperator, Vec<NamedJoinColumn>)> {
         let names = match constraint {
             JoinConstraint::Using(names) => {
                 names.iter().map(object_name).collect::<Result<Vec<_>>>()?
             }
             JoinConstraint::Natural => {
                 let mut names = Vec::new();
-                for (name, _) in &left.columns {
-                    if right.columns.iter().any(|(candidate, _)| candidate == name)
-                        && !names.contains(name)
+                for column in &left {
+                    if right.iter().any(|candidate| candidate.name == column.name)
+                        && !names.contains(&column.name)
                     {
-                        names.push(name.clone());
+                        names.push(column.name.clone());
                     }
                 }
                 names
@@ -76,7 +137,7 @@ impl SqlEngine<'_> {
         for name in &names {
             if merged
                 .iter()
-                .any(|column: &MergedColumn| column.name == *name)
+                .any(|column: &NamedJoinColumn| column.name == *name)
             {
                 return Err(SqlError::data_exception_public(
                     "42701",
@@ -84,15 +145,17 @@ impl SqlEngine<'_> {
                     None,
                 ));
             }
-            let left_type = using_input_type(&left, name, "left")?;
-            let right_type = using_input_type(&right, name, "right")?;
+            let left_column = using_input_column(&left, name, "left")?;
+            let right_column = using_input_column(&right, name, "right")?;
+            let left_type = &left_column.data_type;
+            let right_type = &right_column.data_type;
             let common = select_common_pg_type(
                 self.db_ref(),
                 &[left_type.clone(), right_type.clone()],
                 "JOIN/USING",
             )?;
-            let left_column = qualified_column(&left.alias, name);
-            let right_column = qualified_column(&right.alias, name);
+            let left_column = left_column.expression.clone();
+            let right_column = right_column.expression.clone();
             let predicate = Expr::BinaryOp {
                 left: Box::new(left_column.clone()),
                 op: BinaryOperator::Eq,
@@ -138,69 +201,32 @@ impl SqlEngine<'_> {
                     })
                 }
             };
-            merged.push(MergedColumn {
+            merged.push(NamedJoinColumn {
                 name: name.clone(),
                 expression: value,
+                data_type: Some(common),
+                merged: true,
             });
         }
 
-        let rewritten_constraint = JoinConstraint::On(
+        let constraint = JoinConstraint::On(
             equality.unwrap_or_else(|| Expr::value(sqlparser::ast::Value::Boolean(true))),
         );
-        let mut output = select.clone();
-        output.from[0].joins[0].join_operator = match side {
-            MergedSide::Inner => JoinOperator::Inner(rewritten_constraint),
-            MergedSide::Left => JoinOperator::Left(rewritten_constraint),
-            MergedSide::Right => JoinOperator::Right(rewritten_constraint),
-            MergedSide::Full => JoinOperator::FullOuter(rewritten_constraint),
+        let operator = match side {
+            MergedSide::Inner => JoinOperator::Inner(constraint),
+            MergedSide::Left => JoinOperator::Left(constraint),
+            MergedSide::Right => JoinOperator::Right(constraint),
+            MergedSide::Full => JoinOperator::FullOuter(constraint),
         };
-        output.projection.clear();
-        for mut item in select.projection.clone() {
-            match item {
-                SelectItem::Wildcard(_) => {
-                    output.projection.extend(merged.iter().map(|column| {
-                        SelectItem::ExprWithAlias {
-                            expr: column.expression.clone(),
-                            alias: Ident::with_quote('"', &column.name),
-                        }
-                    }));
-                    for input in [&left, &right] {
-                        output
-                            .projection
-                            .extend(input.columns.iter().filter_map(|(name, _)| {
-                                (!names.contains(name)).then(|| {
-                                    SelectItem::UnnamedExpr(qualified_column(&input.alias, name))
-                                })
-                            }));
-                    }
-                    continue;
-                }
-                SelectItem::UnnamedExpr(ref mut expr) => {
-                    if let Expr::Identifier(ident) = expr {
-                        if let Some(column) = merged
-                            .iter()
-                            .find(|column| column.name == ident_value(ident))
-                        {
-                            item = SelectItem::ExprWithAlias {
-                                expr: column.expression.clone(),
-                                alias: Ident::with_quote('"', &column.name),
-                            };
-                        }
-                    }
-                }
-                _ => {}
-            }
-            let _ = item.visit(&mut ReplaceMergedColumns::new(&merged));
-            output.projection.push(item);
-        }
-        let mut rewrite = ReplaceMergedColumns::new(&merged);
-        let _ = output.selection.visit(&mut rewrite);
-        let _ = output.group_by.visit(&mut rewrite);
-        let _ = output.having.visit(&mut rewrite);
-        Ok(Some((output, merged)))
+        merged.extend(
+            left.into_iter()
+                .chain(right)
+                .filter(|column| !names.contains(&column.name)),
+        );
+        Ok((operator, merged))
     }
 
-    fn named_join_input(&self, factor: &TableFactor) -> Option<RelationColumns> {
+    fn named_join_input(&self, factor: &TableFactor) -> Option<Vec<NamedJoinColumn>> {
         if !matches!(
             factor,
             TableFactor::Table { args: None, .. } | TableFactor::Derived { .. }
@@ -210,12 +236,26 @@ impl SqlEngine<'_> {
         let mut env = Vec::new();
         self.collect_relation_columns(factor, &mut env)?;
         let [relation] = <[RelationColumns; 1]>::try_from(env).ok()?;
-        (!relation.alias.is_empty()
-            && relation
+        if relation.alias.is_empty()
+            || relation
                 .columns
                 .iter()
-                .all(|(name, _)| name != column_check::UNKNOWN_CTE_COLUMN))
-        .then_some(relation)
+                .any(|(name, _)| name == column_check::UNKNOWN_CTE_COLUMN)
+        {
+            return None;
+        }
+        Some(
+            relation
+                .columns
+                .into_iter()
+                .map(|(name, data_type)| NamedJoinColumn {
+                    expression: qualified_column(&relation.alias, &name),
+                    name,
+                    data_type,
+                    merged: false,
+                })
+                .collect(),
+        )
     }
 
     pub(super) fn rewrite_named_join_query(&self, query: &Query) -> Result<Option<Box<Query>>> {
@@ -252,26 +292,59 @@ impl SqlEngine<'_> {
     }
 }
 
-fn using_input_type(input: &RelationColumns, name: &str, side: &str) -> Result<Option<String>> {
-    let mut columns = input
-        .columns
+fn join_constraint(operator: &JoinOperator) -> Option<(&JoinConstraint, MergedSide)> {
+    match operator {
+        JoinOperator::Join(constraint) | JoinOperator::Inner(constraint) => {
+            Some((constraint, MergedSide::Inner))
+        }
+        JoinOperator::Left(constraint) | JoinOperator::LeftOuter(constraint) => {
+            Some((constraint, MergedSide::Left))
+        }
+        JoinOperator::Right(constraint) | JoinOperator::RightOuter(constraint) => {
+            Some((constraint, MergedSide::Right))
+        }
+        JoinOperator::FullOuter(constraint) => Some((constraint, MergedSide::Full)),
+        _ => None,
+    }
+}
+
+fn unique_merged_columns(columns: &[NamedJoinColumn]) -> Vec<NamedJoinColumn> {
+    columns
         .iter()
-        .filter(|(candidate, _)| candidate == name);
-    let Some((_, data_type)) = columns.next() else {
+        .filter(|column| {
+            column.merged
+                && columns
+                    .iter()
+                    .filter(|candidate| candidate.name == column.name)
+                    .take(2)
+                    .count()
+                    == 1
+        })
+        .cloned()
+        .collect()
+}
+
+fn using_input_column<'a>(
+    input: &'a [NamedJoinColumn],
+    name: &str,
+    side: &str,
+) -> Result<&'a NamedJoinColumn> {
+    let mut matches = input.iter().filter(|column| column.name == name);
+    let Some(column) = matches.next() else {
         return Err(SqlError::data_exception_public(
             "42703",
             format!("column \"{name}\" specified in USING clause does not exist in {side} table"),
             None,
         ));
     };
-    if columns.next().is_some() {
+    if matches.next().is_some() {
         return Err(SqlError::data_exception_public(
             "42702",
             format!("common column name \"{name}\" appears more than once in {side} table"),
             None,
         ));
     }
-    Ok(data_type.clone())
+    Ok(column)
 }
 
 fn qualified_column(alias: &str, name: &str) -> Expr {
@@ -299,12 +372,12 @@ fn cast_join_column(column: Expr, input: Option<&str>, common: &str) -> Result<E
 }
 
 struct ReplaceMergedColumns<'a> {
-    columns: &'a [MergedColumn],
+    columns: &'a [NamedJoinColumn],
     query_depth: usize,
 }
 
 impl<'a> ReplaceMergedColumns<'a> {
-    fn new(columns: &'a [MergedColumn]) -> Self {
+    fn new(columns: &'a [NamedJoinColumn]) -> Self {
         Self {
             columns,
             query_depth: 0,

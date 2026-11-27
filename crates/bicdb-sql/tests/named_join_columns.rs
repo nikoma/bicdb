@@ -64,3 +64,46 @@ fn postgres_named_joins_expose_one_common_column_and_keep_qualified_columns() {
         "42703",
     );
 }
+
+#[test]
+fn postgres_chained_named_joins_bind_the_previous_join_output() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE TABLE first_input (a text, k int);
+             CREATE TABLE second_input (k int, b text);
+             CREATE TABLE third_input (k int, c text);
+             INSERT INTO first_input VALUES ('a', 1);
+             INSERT INTO second_input VALUES (2, 'b');
+             INSERT INTO third_input VALUES (2, 'c')",
+        )
+        .unwrap();
+    let result = session
+        .execute(
+            "SELECT * FROM first_input a FULL JOIN second_input b USING (k)
+             JOIN third_input c USING (k) WHERE k > 0 ORDER BY k",
+        )
+        .unwrap();
+    assert_eq!(result.columns, ["k", "a", "b", "c"]);
+    assert_eq!(
+        result.rows,
+        [vec![
+            SqlValue::Int(2),
+            SqlValue::Null,
+            SqlValue::String("b".into()),
+            SqlValue::String("c".into()),
+        ]],
+    );
+    let result = session
+        .execute(
+            "SELECT k, c.c FROM first_input a FULL JOIN second_input b USING (k)
+             JOIN (SELECT k AS key, c FROM third_input) c ON c.key = k",
+        )
+        .unwrap();
+    assert_eq!(
+        result.rows,
+        [vec![SqlValue::Int(2), SqlValue::String("c".into())]],
+    );
+}

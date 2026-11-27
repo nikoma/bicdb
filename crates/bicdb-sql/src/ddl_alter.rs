@@ -2717,7 +2717,9 @@ pub(crate) fn raw_create_sequence(sql: &str) -> Result<Option<(String, SequenceS
     }
     idx += 1;
     if matches!(tokens.get(idx), Some(&"temporary") | Some(&"temp")) {
-        idx += 1;
+        // A temporary sequence lives in the session's temporary schema,
+        // which the AST path places it in.
+        return Ok(None);
     }
     if tokens.get(idx) != Some(&"sequence") {
         return Ok(None);
@@ -3376,6 +3378,9 @@ pub(crate) struct RawCreateTableLike {
     pub(crate) table: String,
     pub(crate) schema_name: String,
     pub(crate) source_table: String,
+    /// The source as written (schema-qualified or not), resolved through
+    /// the search_path when the LIKE runs.
+    pub(crate) source_parts: Vec<String>,
     pub(crate) options: RawCreateTableLikeOptions,
     pub(crate) partitioning: Option<PartitioningSchema>,
     pub(crate) if_not_exists: bool,
@@ -3458,10 +3463,15 @@ pub(crate) fn raw_create_table_like(sql: &str) -> Result<Option<RawCreateTableLi
 
     let (schema_name, table) = identifier_schema_and_name(&target);
     let (_, source_table) = identifier_schema_and_name(&source);
+    let source_parts = source
+        .split('.')
+        .map(|part| part.trim_matches('"').to_string())
+        .collect();
     Ok(Some(RawCreateTableLike {
         table,
         schema_name,
         source_table,
+        source_parts,
         options,
         partitioning,
         if_not_exists,

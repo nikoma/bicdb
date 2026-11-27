@@ -1,0 +1,36 @@
+tmp.like|CREATE TEMP TABLE tl1(a int, b text DEFAULT 'x'); CREATE TABLE tl2 (LIKE tl1 INCLUDING DEFAULTS); INSERT INTO tl2(a) VALUES (1); SELECT * FROM tl2
+tmp.like_into_temp|CREATE TEMP TABLE tl3(a int); CREATE TEMP TABLE tl4 (LIKE tl3); INSERT INTO tl4 VALUES (1); SELECT * FROM tl4
+tmp.inherits|CREATE TEMP TABLE ti1(a int); CREATE TEMP TABLE ti2(b int) INHERITS (ti1); INSERT INTO ti2 VALUES (1, 2); SELECT * FROM ti1
+tmp.inherits_permanent_child|CREATE TEMP TABLE ti3(a int); CREATE TABLE ti4(b int) INHERITS (ti3)
+tmp.references|CREATE TEMP TABLE tr1(id int PRIMARY KEY); CREATE TEMP TABLE tr2(id int REFERENCES tr1); INSERT INTO tr1 VALUES (1); INSERT INTO tr2 VALUES (1); SELECT * FROM tr2
+tmp.references_permanent|CREATE TEMP TABLE tr3(id int PRIMARY KEY); CREATE TABLE tr4(id int REFERENCES tr3)
+tmp.create_index|CREATE TEMP TABLE tx1(a int); CREATE INDEX tx1_a ON tx1(a); SELECT indexname FROM pg_indexes WHERE tablename = 'tx1'
+tmp.alter_table|CREATE TEMP TABLE ta1(a int); ALTER TABLE ta1 ADD COLUMN b text; ALTER TABLE ta1 RENAME COLUMN a TO c; INSERT INTO ta1 VALUES (1, 'x'); SELECT * FROM ta1
+tmp.truncate|CREATE TEMP TABLE tt1(a int); INSERT INTO tt1 VALUES (1); TRUNCATE tt1; SELECT count(*) FROM tt1
+tmp.comment|CREATE TEMP TABLE tc1(a int); COMMENT ON TABLE tc1 IS 'temp'; COMMENT ON COLUMN tc1.a IS 'col'; SELECT obj_description('tc1'::regclass, 'pg_class'), col_description('tc1'::regclass, 1)
+tmp.grant|CREATE TEMP TABLE tg1(a int); DROP ROLE IF EXISTS tmp_grantee; CREATE ROLE tmp_grantee; GRANT SELECT ON tg1 TO tmp_grantee; SELECT has_table_privilege('tmp_grantee', 'tg1', 'SELECT'); REVOKE SELECT ON tg1 FROM tmp_grantee; DROP ROLE tmp_grantee
+tmp.view_explicit|CREATE TEMP VIEW tv1 AS SELECT 1 AS a; SELECT * FROM tv1; SELECT n.nspname LIKE 'pg_temp%' FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relname = 'tv1'
+tmp.view_auto_temp|CREATE TEMP TABLE tv2t(a int); INSERT INTO tv2t VALUES (5); CREATE VIEW tv2 AS SELECT * FROM tv2t; SELECT * FROM tv2; SELECT n.nspname LIKE 'pg_temp%' FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relname = 'tv2'
+tmp.view_replace|CREATE TEMP VIEW tv3 AS SELECT 1 AS a; CREATE OR REPLACE TEMP VIEW tv3 AS SELECT 2 AS a; SELECT * FROM tv3
+tmp.view_explicit_schema_temp_ref|CREATE TEMP TABLE tv4t(a int); CREATE VIEW public.tv4 AS SELECT * FROM tv4t
+tmp.view_drop|CREATE TEMP VIEW tv5 AS SELECT 1 AS a; DROP VIEW tv5; SELECT count(*) FROM pg_class WHERE relname = 'tv5'
+tmp.view_pg_temp_name|CREATE VIEW pg_temp.tv6 AS SELECT 3 AS a; SELECT * FROM tv6
+tmp.view_shadows_permanent|CREATE TABLE tv7(a int); INSERT INTO tv7 VALUES (1); CREATE TEMP VIEW tv7 AS SELECT 2 AS a; SELECT * FROM tv7; SELECT * FROM public.tv7
+tmp.sequence|CREATE TEMP SEQUENCE ts1; SELECT nextval('ts1'), nextval('ts1'); SELECT n.nspname LIKE 'pg_temp%' FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relname = 'ts1'
+tmp.serial|CREATE TEMP TABLE ts2(id serial, t text); INSERT INTO ts2(t) VALUES ('a'), ('b'); SELECT * FROM ts2
+tmp.on_commit_delete|CREATE TEMP TABLE toc1(a int) ON COMMIT DELETE ROWS; BEGIN; INSERT INTO toc1 VALUES (1); SELECT count(*) FROM toc1; COMMIT; SELECT count(*) FROM toc1
+tmp.on_commit_drop|BEGIN; CREATE TEMP TABLE toc2(a int) ON COMMIT DROP; INSERT INTO toc2 VALUES (1); COMMIT; SELECT count(*) FROM pg_class WHERE relname = 'toc2'
+tmp.on_commit_preserve|CREATE TEMP TABLE toc3(a int) ON COMMIT PRESERVE ROWS; INSERT INTO toc3 VALUES (1); SELECT count(*) FROM toc3
+tmp.drop_table|CREATE TEMP TABLE td1(a int); DROP TABLE td1; SELECT count(*) FROM pg_class WHERE relname = 'td1'
+tmp.shadow_table|CREATE TABLE tsh(a int); INSERT INTO tsh VALUES (1); CREATE TEMP TABLE tsh(a int); INSERT INTO tsh VALUES (2); SELECT * FROM tsh; SELECT * FROM public.tsh
+tmp.ctas|CREATE TEMP TABLE tca AS SELECT 1 AS a; SELECT * FROM tca
+tmp.select_into|SELECT 7 AS a INTO TEMP tsi; SELECT * FROM tsi
+tmp.function_on_temp|CREATE TEMP TABLE tf1(a int); INSERT INTO tf1 VALUES (3); CREATE FUNCTION tmp_f1() RETURNS int LANGUAGE sql AS 'SELECT a FROM tf1'; SELECT tmp_f1(); DROP FUNCTION tmp_f1()
+tmp.trigger|CREATE TEMP TABLE ttr(a int); CREATE FUNCTION tmp_trg() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.a := NEW.a * 10; RETURN NEW; END $$; CREATE TRIGGER ttr_t BEFORE INSERT ON ttr FOR EACH ROW EXECUTE FUNCTION tmp_trg(); INSERT INTO ttr VALUES (2); SELECT * FROM ttr; DROP TABLE ttr; DROP FUNCTION tmp_trg()
+tmp.analyze_vacuum|CREATE TEMP TABLE tav(a int); INSERT INTO tav VALUES (1); ANALYZE tav; VACUUM tav; SELECT count(*) FROM tav
+tmp.lock|CREATE TEMP TABLE tlk(a int); BEGIN; LOCK TABLE tlk IN ACCESS EXCLUSIVE MODE; COMMIT; SELECT 1
+tmp.regclass|CREATE TEMP TABLE trc(a int); SELECT 'trc'::regclass::text
+tmp.alter_rename_table|CREATE TEMP TABLE trn(a int); ALTER TABLE trn RENAME TO trn2; SELECT * FROM trn2
+tmp.cluster_index_constraint|CREATE TEMP TABLE tuq(a int UNIQUE); INSERT INTO tuq VALUES (1); INSERT INTO tuq VALUES (1)
+tmp.partitioned|CREATE TEMP TABLE tpp(a int) PARTITION BY RANGE (a); CREATE TEMP TABLE tpp1 PARTITION OF tpp FOR VALUES FROM (0) TO (10); INSERT INTO tpp VALUES (5); SELECT * FROM tpp
+tmp.matview|CREATE TEMP TABLE tmv(a int); CREATE MATERIALIZED VIEW tmv_v AS SELECT * FROM tmv

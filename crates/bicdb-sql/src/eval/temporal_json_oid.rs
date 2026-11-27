@@ -297,7 +297,18 @@ pub(crate) fn resolve_regclass_oid(db: &BicDb, name: &str) -> Result<Option<i64>
         [schema, name] => (schema, name),
         _ => relation_schema_and_name(&physical),
     };
-    resolve_regclass_physical_oid(db, &physical, namespace, logical_name)
+    // Physical relation lookup already maps pg_temp to the session schema.
+    // Catalog lookup (for generated sequences and indexes) needs that same
+    // namespace to match the object's catalog row.
+    let temporary_namespace = (namespace == "pg_temp")
+        .then(crate::search_path::active_temp_schema)
+        .flatten();
+    resolve_regclass_physical_oid(
+        db,
+        &physical,
+        temporary_namespace.as_deref().unwrap_or(namespace),
+        logical_name,
+    )
 }
 
 fn resolve_regclass_physical_oid(

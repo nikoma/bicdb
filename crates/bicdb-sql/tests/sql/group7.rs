@@ -3944,6 +3944,16 @@ fn pg_get_serial_sequence_uses_relation_search_path_and_literal_column_names() {
             SqlValue::Null,
         ]]
     );
+    session
+        .execute(r#"CREATE TEMP TABLE "Ab" ("X" serial)"#)
+        .unwrap();
+    assert_eq!(
+        session.execute(r#"SELECT pg_get_serial_sequence('"Ab"', 'X'), pg_get_serial_sequence('"Ab"', 'X')::regclass::text"#).unwrap().rows,
+        vec![vec![
+            SqlValue::String("pg_temp.\"Ab_X_seq\"".to_string()),
+            SqlValue::String("\"Ab_X_seq\"".to_string()),
+        ]],
+    );
     let missing_column = session
         .execute(r#"SELECT pg_get_serial_sequence('"Mixed"', 'seqid')"#)
         .unwrap_err();

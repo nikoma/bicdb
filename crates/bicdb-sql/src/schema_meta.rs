@@ -1349,7 +1349,8 @@ pub fn ensure_primary_key_indexes(db: &mut BicDb) -> Result<()> {
     restore_missing_table_storage(db)?;
     for schema in list_schemas(db)? {
         let result = ensure_primary_key_index_for_schema(db, &schema);
-        tolerate_on_empty_partitioned_parent(db, &schema, result)?;
+        tolerate_on_empty_partitioned_parent(db, &schema, result)
+            .or_else(|error| quarantine_at_open(db, &schema, error))?;
     }
     Ok(())
 }
@@ -1423,7 +1424,32 @@ pub fn ensure_unique_constraint_indexes(db: &mut BicDb) -> Result<()> {
     restore_missing_table_storage(db)?;
     for schema in list_schemas(db)? {
         let result = ensure_unique_constraint_indexes_for_schema(db, &schema);
-        tolerate_on_empty_partitioned_parent(db, &schema, result)?;
+        tolerate_on_empty_partitioned_parent(db, &schema, result)
+            .or_else(|error| quarantine_at_open(db, &schema, error))?;
+    }
+    Ok(())
+}
+
+/// At open, a table whose key or UNIQUE constraint index cannot be verified
+/// must not keep the whole database closed. Its writes are refused instead
+/// (it would otherwise accept rows its constraint forbids); every other
+/// table opens normally and the problem is reported. Storage failures still
+/// stop the open.
+fn quarantine_at_open(db: &BicDb, schema: &TableSchema, error: SqlError) -> Result<()> {
+    if matches!(&error, SqlError::BicDb(error) if error.is_durability_failure()) {
+        return Err(error);
+    }
+    eprintln!(
+        "BicDB: table {} opened read-only: a constraint index could not be verified: {error}",
+        schema.name
+    );
+    let reason = error.to_string();
+    db.quarantine_collection_writes(&schema.name, &reason);
+    // A partitioned table's rows live in its partitions.
+    if schema.partitioning.is_some() {
+        for partition in crate::partition::physical_tables(db, schema).unwrap_or_default() {
+            db.quarantine_collection_writes(&partition.name, &reason);
+        }
     }
     Ok(())
 }
@@ -1471,7 +1497,7 @@ pub(crate) fn ensure_unique_constraint_indexes_for_schema(
             // the parent's index of that name enforces it across the partitions. Treating the
             // partition's copy as a conflicting definition made every database holding a
             // partitioned table with a UNIQUE constraint fail to open again.
-            if partition_ancestor_owns_index(schema, &existing.collection)
+            if partition_ancestor_owns_index(db, schema, &existing.collection)
                 && existing.unique
                 && index_field_lists_match(&existing.fields, &definition.fields)
             {
@@ -1487,12 +1513,29 @@ pub(crate) fn ensure_unique_constraint_indexes_for_schema(
     Ok(())
 }
 
-/// Whether `collection` is the partitioned table `schema` is a partition of.
-fn partition_ancestor_owns_index(schema: &TableSchema, collection: &str) -> bool {
-    schema
+/// Whether `collection` is a partitioned table `schema` is (transitively) a
+/// partition of. A partition of a partition carries its root's UNIQUE
+/// constraint too; checking only the direct parent made a store holding a
+/// two-level partition tree with a primary key fail to open again.
+fn partition_ancestor_owns_index(db: &BicDb, schema: &TableSchema, collection: &str) -> bool {
+    let mut link = schema
         .partition_of
         .as_ref()
-        .is_some_and(|link| link.parent_table.eq_ignore_ascii_case(collection))
+        .map(|link| link.parent_table.clone());
+    let mut seen = BTreeSet::new();
+    while let Some(parent) = link {
+        if parent.eq_ignore_ascii_case(collection) {
+            return true;
+        }
+        if !seen.insert(parent.to_ascii_lowercase()) {
+            return false;
+        }
+        link = load_schema_raw(db, &parent)
+            .ok()
+            .flatten()
+            .and_then(|schema| schema.partition_of.map(|link| link.parent_table));
+    }
+    false
 }
 
 /// Compare every property that changes UNIQUE write enforcement.

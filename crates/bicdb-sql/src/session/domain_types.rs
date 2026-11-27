@@ -585,7 +585,7 @@ impl<'db> SqlSession<'db> {
             .into_iter()
             .filter(|trigger| trigger.table_name.eq_ignore_ascii_case(table))
         {
-            self.delete_session_trigger(&trigger.name, Some(&trigger.table_name))?;
+            self.delete_dropped_table_trigger(&trigger.name, &trigger.table_name)?;
         }
         let existed = self.drop_session_collection(table)?;
         self.delete_session_schema(table)?;
@@ -1183,7 +1183,7 @@ impl<'db> SqlSession<'db> {
                 .collect::<BTreeSet<_>>();
             for trigger in list_triggers(self.db_ref())? {
                 if relations.contains(&trigger.table_name) {
-                    self.delete_session_trigger(&trigger.name, Some(&trigger.table_name))?;
+                    self.delete_dropped_table_trigger(&trigger.name, &trigger.table_name)?;
                 }
             }
             let views = target

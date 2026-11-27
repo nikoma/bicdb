@@ -68,10 +68,17 @@ fn incompatible_backing_refuses_without_repair(change: impl Fn(&mut IndexDefinit
                 db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
                 let sequence = db.last_commit_seq();
                 let indexes = db.index_definitions();
-                let error = ensure_primary_key_indexes(&mut db).expect_err(
-                    "an incompatible Native index cannot stand in for a complete SQL primary key",
+                // An incompatible Native index cannot stand in for a complete
+                // SQL primary key. The database still opens; the table's
+                // writes are refused until the index is repaired.
+                ensure_primary_key_indexes(&mut db).unwrap();
+                let error = SqlSession::new(&mut db)
+                    .execute(&format!("INSERT INTO {relation} VALUES(3,3,'refused')"))
+                    .unwrap_err();
+                assert!(
+                    error.to_string().contains("refused until it is repaired"),
+                    "{mode}: partitioned={partitioned}: {error}"
                 );
-                assert!(error.to_string().contains("does not match primary key"));
                 assert_eq!(db.last_commit_seq(), sequence);
                 assert_eq!(db.index_definitions(), indexes);
                 assert_eq!(
@@ -84,6 +91,10 @@ fn incompatible_backing_refuses_without_repair(change: impl Fn(&mut IndexDefinit
             // SQL backfill may then admit it without issuing another commit.
             assert!(db.drop_index(&expected.name).unwrap());
             db.create_index(expected).unwrap();
+            // The write refusal lasts for the process that found the
+            // mismatch; the repaired store reopens normally.
+            db.close().unwrap();
+            db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
             let sequence = db.last_commit_seq();
             ensure_primary_key_indexes(&mut db).unwrap();
             assert_eq!(db.last_commit_seq(), sequence);

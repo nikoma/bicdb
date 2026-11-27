@@ -2268,13 +2268,6 @@ fn compare_quantified_records(
     op: &BinaryOperator,
     right: &SqlComposite,
 ) -> Result<bool> {
-    if left.fields.len() != right.fields.len() {
-        return Err(SqlError::data_exception_public(
-            "42804",
-            "cannot compare record types with different numbers of columns",
-            None,
-        ));
-    }
     let equality = matches!(op, BinaryOperator::Eq | BinaryOperator::NotEq);
     for (index, (left, right)) in left.fields.iter().zip(&right.fields).enumerate() {
         let kind = left.pg_type.as_str();
@@ -2337,9 +2330,8 @@ fn compare_quantified_records(
                 } else {
                     match value_ordering(left, right) {
                         Some(ordering) => ordering,
-                        None if equality => {
-                            return Ok(values_equal(left, right) == (*op == BinaryOperator::Eq));
-                        }
+                        None if values_equal(left, right) => Ordering::Equal,
+                        None if equality => return Ok(*op == BinaryOperator::NotEq),
                         None => {
                             return Err(SqlError::undefined_function(format!(
                                 "could not identify an ordering operator for type {display}",
@@ -2352,6 +2344,13 @@ fn compare_quantified_records(
         if ordering != Ordering::Equal {
             return Ok(comparison_from_ordering(op, ordering));
         }
+    }
+    if left.fields.len() != right.fields.len() {
+        return Err(SqlError::data_exception_public(
+            "42804",
+            "cannot compare record types with different numbers of columns",
+            None,
+        ));
     }
     Ok(comparison_from_ordering(op, Ordering::Equal))
 }

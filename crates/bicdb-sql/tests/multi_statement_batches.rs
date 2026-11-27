@@ -119,3 +119,19 @@ fn a_batch_reports_every_statements_notices() {
     assert!(notices.contains("gone1"), "{notices}");
     assert!(notices.contains("gone2"), "{notices}");
 }
+
+#[test]
+fn nested_comments_do_not_split_a_statement_or_produce_a_phantom_statement() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = open(root.path());
+    let mut session = SqlSession::new(&mut db);
+    let sql = "/* outer /* inner */ ; ' */ SELECT /* 1 /* 2 /* 3 */ ' ; */ ; */ 7;
+               /* trailing comment /* inner */ ; ' */";
+    assert_eq!(bicdb_sql::split_sql_statements(sql).len(), 1);
+    assert_eq!(rows(&mut session, sql), ["7"]);
+    assert_eq!(
+        rows(&mut session, "SELECT 1; SELECT /* /* nested */ ; ' */ 2"),
+        ["2"],
+    );
+    assert!(session.execute("SELECT 1 /* /* nested */").is_err());
+}

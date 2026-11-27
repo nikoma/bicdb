@@ -938,50 +938,212 @@ fn invoke(
     }
 }
 
+fn validate_support_function(
+    db: &BicDb,
+    name: &str,
+    inputs: &[RoutineTypeSchema],
+) -> Result<Option<RoutineTypeSchema>> {
+    use crate::pg_casts::{pg_cast_spec, PgCastMethod};
+    use crate::pg_operators::canonical_type;
+
+    let actual_types = inputs
+        .iter()
+        .map(|kind| Some(canonical_type(&kind.pg_type)))
+        .collect::<Vec<_>>();
+    let contains_pseudotype = inputs
+        .iter()
+        .any(|kind| element_polymorphic_family(&kind.pg_type).is_some());
+    let mut best = None;
+    let mut tied = false;
+    for routine in routines_named(db, RoutineKind::Function, name)? {
+        if is_aggregate_routine(&routine) || routine.returns_set {
+            continue;
+        }
+        let parameters = crate::routine_overloads::declared_inputs(&routine)?;
+        if parameters.len() != inputs.len() {
+            continue;
+        }
+        let Some(declared) = parameters
+            .iter()
+            .map(|(kind, _)| kind.as_deref().map(canonical_type))
+            .collect::<Option<Vec<_>>>()
+        else {
+            continue;
+        };
+        let compatible = declared.iter().zip(&actual_types).all(|(target, actual)| {
+            let actual = actual.as_deref().unwrap_or_default();
+            if element_polymorphic_family(actual).is_some() {
+                return target == actual || target == "any";
+            }
+            if element_polymorphic_family(target).is_some() {
+                return !contains_pseudotype;
+            }
+            target == actual
+                || target == "any"
+                || pg_cast_allows(actual, target, PgCastContext::Implicit)
+        });
+        if !compatible {
+            continue;
+        }
+        let bindings = if contains_pseudotype {
+            BTreeMap::new()
+        } else {
+            match element_polymorphic_bindings(db, &routine, &actual_types, &[]) {
+                Ok(bindings) => bindings,
+                Err(error) if matches!(error.sqlstate(), "42804" | "42883") => continue,
+                Err(error) => return Err(error),
+            }
+        };
+        let mut rank = (false, 0);
+        for (target, actual) in declared.iter().zip(&actual_types) {
+            let actual = actual.as_deref().unwrap_or_default();
+            if target != actual {
+                rank.1 += 1;
+            }
+            let bound = bindings.get(target).unwrap_or(target);
+            if bound != actual
+                && target != "any"
+                && !pg_cast_spec(actual, bound)
+                    .is_some_and(|cast| cast.method == PgCastMethod::Binary)
+            {
+                rank.0 = true;
+            }
+        }
+        match &best {
+            Some((previous, _, _)) if rank > *previous => continue,
+            Some((previous, _, _)) if rank == *previous => {
+                tied = true;
+                continue;
+            }
+            _ => {}
+        }
+        tied = false;
+        let pg_type = bindings
+            .get(&routine.return_type)
+            .cloned()
+            .unwrap_or_else(|| canonical_type(&routine.return_type));
+        best = Some((
+            rank,
+            declared,
+            RoutineTypeSchema {
+                pg_type,
+                type_modifier: routine.return_type_modifier,
+            },
+        ));
+    }
+    if tied {
+        return Err(SqlError::data_exception_public(
+            "42725",
+            format!("function {} is not unique", signature_text(name, inputs)),
+            None,
+        ));
+    }
+    if let Some(((requires_coercion, _), declared, result)) = best {
+        if requires_coercion {
+            let types = declared
+                .iter()
+                .map(|kind| common_type_display(kind))
+                .collect::<Vec<_>>()
+                .join(", ");
+            return Err(SqlError::data_exception_public(
+                "42804",
+                format!("function {name}({types}) requires run-time type coercion"),
+                None,
+            ));
+        }
+        return Ok(Some(result));
+    }
+    let builtin = name.strip_prefix("pg_catalog.").unwrap_or(name);
+    if crate::builtin_signatures::PG_CATALOG_FUNCTION_SIGNATURES
+        .iter()
+        .any(|(candidate, _)| *candidate == builtin)
+    {
+        return Ok(None);
+    }
+    Err(SqlError::undefined_function(format!(
+        "function {} does not exist",
+        signature_text(name, inputs)
+    )))
+}
+
+fn validate_aggregate_support_functions(
+    db: &BicDb,
+    def: &AggregateDef,
+) -> Result<RoutineTypeSchema> {
+    use crate::pg_operators::canonical_type;
+    if let Some(compatible) = element_polymorphic_family(&def.stype.pg_type) {
+        if !def
+            .args
+            .iter()
+            .any(|arg| element_polymorphic_family(&arg.pg_type) == Some(compatible))
+        {
+            let types = if compatible {
+                "anycompatible, anycompatiblearray, anycompatiblenonarray, anycompatiblerange, or anycompatiblemultirange"
+            } else {
+                "anyelement, anyarray, anynonarray, anyenum, anyrange, or anymultirange"
+            };
+            return Err(SqlError::coded(
+                "42P13",
+                "cannot determine transition data type",
+                Some(format!(
+                    "A result of type {} requires at least one input of type {types}.",
+                    def.stype.pg_type
+                )),
+                None,
+            ));
+        }
+    }
+    let transition = std::iter::once(def.stype.clone())
+        .chain(def.args.iter().cloned())
+        .collect::<Vec<_>>();
+    let state = canonical_type(&def.stype.pg_type);
+    if let Some(result) = validate_support_function(db, &def.sfunc, &transition)? {
+        if result.pg_type != state {
+            return Err(SqlError::data_exception_public(
+                "42804",
+                format!(
+                    "return type of transition function {} is not {}",
+                    def.sfunc,
+                    type_display(&def.stype)
+                ),
+                None,
+            ));
+        }
+    }
+    if let Some(combine) = &def.combinefunc {
+        if let Some(result) =
+            validate_support_function(db, combine, &[def.stype.clone(), def.stype.clone()])?
+        {
+            if result.pg_type != state {
+                return Err(SqlError::data_exception_public(
+                    "42804",
+                    format!(
+                        "return type of combine function {combine} is not {}",
+                        type_display(&def.stype)
+                    ),
+                    None,
+                ));
+            }
+        }
+    }
+    match &def.finalfunc {
+        Some(finalfunc) => {
+            Ok(
+                validate_support_function(db, finalfunc, std::slice::from_ref(&def.stype))?
+                    .unwrap_or_else(|| def.stype.clone()),
+            )
+        }
+        None => Ok(def.stype.clone()),
+    }
+}
+
 impl SqlSession<'_> {
     /// `CREATE [OR REPLACE] AGGREGATE`.
     pub(crate) fn execute_raw_create_aggregate(&mut self, sql: &str) -> Result<Option<SqlResult>> {
         let Some((or_replace, def)) = parse_create_aggregate(sql, false)? else {
             return Ok(None);
         };
-        let exists = |name: &str| -> Result<bool> {
-            Ok(
-                !routines_named(self.db_ref(), RoutineKind::Function, name)?.is_empty()
-                    || crate::builtin_signatures::PG_CATALOG_FUNCTION_SIGNATURES
-                        .iter()
-                        .any(|(candidate, _)| *candidate == name),
-            )
-        };
-        if !exists(&def.sfunc)? {
-            return Err(SqlError::undefined_function(format!(
-                "function {} does not exist",
-                signature_text(
-                    &def.sfunc,
-                    &std::iter::once(def.stype.clone())
-                        .chain(def.args.iter().cloned())
-                        .collect::<Vec<_>>()
-                )
-            )));
-        }
-        for function in def.finalfunc.iter().chain(def.combinefunc.iter()) {
-            if !exists(function)? {
-                return Err(SqlError::undefined_function(format!(
-                    "function {}({}) does not exist",
-                    function,
-                    type_display(&def.stype)
-                )));
-            }
-        }
-        let return_type = match &def.finalfunc {
-            Some(finalfunc) => routines_named(self.db_ref(), RoutineKind::Function, finalfunc)?
-                .first()
-                .map(|routine| RoutineTypeSchema {
-                    pg_type: routine.return_type.clone(),
-                    type_modifier: routine.return_type_modifier.clone(),
-                })
-                .unwrap_or_else(|| def.stype.clone()),
-            None => def.stype.clone(),
-        };
+        let return_type = validate_aggregate_support_functions(self.db_ref(), &def)?;
         let signature = def
             .args
             .iter()

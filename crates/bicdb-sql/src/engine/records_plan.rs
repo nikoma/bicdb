@@ -2685,13 +2685,12 @@ impl<'db> SqlEngine<'db> {
                         bounded.limit,
                     )? {
                         Some(ids) => Rc::from(ids),
-                        // Only B-trees reach this path, and every B-tree
-                        // answers the bounded read.
+                        // Only B-trees reach this path and every B-tree
+                        // answers; anything else declines to the ordinary
+                        // sort path rather than failing the statement.
                         None => {
-                            return Err(SqlError::InvalidSql(format!(
-                                "index {} cannot serve an ordered read",
-                                bounded.index_name
-                            )))
+                            debug_assert!(false, "bounded ordered read on a non-B-tree index");
+                            return Ok(None);
                         }
                     }
                 }

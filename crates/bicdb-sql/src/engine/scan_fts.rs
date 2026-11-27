@@ -3846,20 +3846,22 @@ impl<'db> SqlEngine<'db> {
                         .ordered_index_records(index_name, *descending, *limit)?,
                     // ORDER BY's NULL placement, both key ranges bounded by
                     // the limit (resident and paged B-trees).
-                    Some(nulls_first) => self
-                        .db_ref()
-                        .prefix_ordered_index_records_nulls(
-                            index_name,
-                            &[],
-                            *descending,
-                            *nulls_first,
-                            limit.unwrap_or(usize::MAX),
-                        )?
-                        .ok_or_else(|| {
-                            SqlError::InvalidSql(format!(
-                                "index {index_name} cannot list its entries"
-                            ))
-                        })?,
+                    Some(nulls_first) => match self.db_ref().prefix_ordered_index_records_nulls(
+                        index_name,
+                        &[],
+                        *descending,
+                        *nulls_first,
+                        limit.unwrap_or(usize::MAX),
+                    )? {
+                        Some(ids) => ids,
+                        // Only B-trees are planned here; anything else reads
+                        // the table and the caller's sort orders it.
+                        None => {
+                            debug_assert!(false, "ordered read on a non-B-tree index");
+                            sql_profile_full_scan();
+                            return self.scan_records(collection);
+                        }
+                    },
                 };
                 self.records_for_ids(collection, &ids)
             }

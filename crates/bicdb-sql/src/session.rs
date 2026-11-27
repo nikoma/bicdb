@@ -79,8 +79,8 @@ mod vacuum_analyze;
 pub use read_only::parse_transaction_read_only;
 pub use temp_tables::{
     drop_connection_temp_schema, drop_orphan_temp_schemas, drop_temp_on_commit_tables,
-    temp_on_commit_delete_pending, temp_on_commit_drop_pending, temp_on_commit_pending,
-    temp_schema_exists,
+    repair_orphan_views, temp_on_commit_delete_pending, temp_on_commit_drop_pending,
+    temp_on_commit_pending, temp_schema_exists,
 };
 pub(crate) mod txn_update;
 pub(crate) mod updatable_views;

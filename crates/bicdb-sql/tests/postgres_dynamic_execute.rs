@@ -181,3 +181,75 @@ fn nested_readonly_row_functions_keep_the_callers_pending_snapshot() {
     );
     sql.execute("ROLLBACK").unwrap();
 }
+
+#[test]
+fn dynamic_for_loop_accepts_row_returning_statements_and_keeps_parameters_local() {
+    let (_root, mut db) = seeded();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute(
+        r#"CREATE FUNCTION dynamic_loop(p_id integer) RETURNS text LANGUAGE plpgsql AS $$
+        DECLARE rec record; line text; result text := '';
+        BEGIN
+          FOR rec IN EXECUTE 'SELECT value FROM measurements WHERE id = $1' USING p_id LOOP
+            result := rec.value;
+          END LOOP;
+          IF NOT FOUND THEN RETURN 'no rows'; END IF;
+          FOR line IN EXECUTE 'EXPLAIN (COSTS OFF) SELECT 1' LOOP
+            result := result || ':' || line;
+            EXIT;
+          END LOOP;
+          RETURN result;
+        END $$"#,
+    )
+    .unwrap();
+    assert_eq!(
+        sql.execute("SELECT dynamic_loop(2), dynamic_loop(99)")
+            .unwrap()
+            .rows,
+        vec![vec![
+            SqlValue::String("second:Result".into()),
+            SqlValue::String("no rows".into()),
+        ]]
+    );
+    sql.execute(
+        r#"DO $$ DECLARE rec record; BEGIN
+         FOR rec IN EXECUTE 'INSERT INTO measurements VALUES (4, $1, $2) RETURNING id'
+           USING 'c', 'fourth' LOOP
+           ASSERT rec.id = 4;
+         END LOOP;
+        END $$"#,
+    )
+    .unwrap();
+    assert_eq!(
+        sql.execute("SELECT value FROM measurements WHERE id = 4")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::String("fourth".into())]]
+    );
+}
+
+#[test]
+fn dynamic_for_loop_refuses_non_rows_before_execution() {
+    let (_root, mut db) = seeded();
+    let mut sql = SqlSession::new(&mut db);
+    for (command, state) in [
+        ("'DELETE FROM measurements'", "42P11"),
+        ("'SELECT 1; DELETE FROM measurements'", "42P11"),
+        ("''", "42P11"),
+        ("NULL", "22004"),
+        ("'SELECT $1'", "42P02"),
+    ] {
+        let error = sql
+            .execute(&format!(
+                "DO $$ DECLARE rec record; BEGIN FOR rec IN EXECUTE {command} LOOP END LOOP; END $$"
+            ))
+            .unwrap_err();
+        assert_eq!(error.sqlstate(), state, "{command}: {error}");
+    }
+    assert_eq!(
+        sql.execute("SELECT count(*) FROM measurements")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(3)]]
+    );
+}

@@ -418,9 +418,27 @@ impl sqlparser::ast::VisitorMut for Binder<'_> {
                 for column in &mut table.columns {
                     self.bind_column_foreign_key(column, created);
                 }
+                // LIKE and INHERITS name existing relations, found through
+                // the path (the temporary schema first) like any reference.
+                match &mut table.like {
+                    Some(
+                        sqlparser::ast::CreateTableLikeKind::Parenthesized(like)
+                        | sqlparser::ast::CreateTableLikeKind::Plain(like),
+                    ) => self.bind_reference(&mut like.name, relation_exists),
+                    None => {}
+                }
+                if let Some(parents) = &mut table.inherits {
+                    for parent in parents {
+                        self.bind_reference(parent, relation_exists);
+                    }
+                }
             }
-            Statement::CreateView(view) => self.bind_creation(&mut view.name),
-            Statement::CreateSequence { name, .. } => self.bind_creation(name),
+            // A temporary view or sequence goes to the session's temporary
+            // schema, which its CREATE places it in.
+            Statement::CreateView(view) if !view.temporary => self.bind_creation(&mut view.name),
+            Statement::CreateSequence {
+                name, temporary, ..
+            } if !*temporary => self.bind_creation(name),
             Statement::AlterTable(table) => {
                 for operation in &mut table.operations {
                     match operation {
@@ -746,6 +764,18 @@ pub(crate) fn bind_statements(
             }
             RoutineStmt::QueryForLoop { query, body, .. } => {
                 visit(RoutineNode::Query(query));
+                bind_statements(body, visit);
+            }
+            RoutineStmt::DynamicQueryForLoop {
+                query,
+                parameters,
+                body,
+                ..
+            } => {
+                visit(RoutineNode::Expr(&mut query.expr));
+                for parameter in parameters {
+                    visit(RoutineNode::Expr(&mut parameter.expr));
+                }
                 bind_statements(body, visit);
             }
             RoutineStmt::CursorForLoop {

@@ -125,3 +125,38 @@ fn event_triggers_require_a_superuser() {
         .unwrap_err();
     assert_eq!(error.sqlstate(), "42501");
 }
+
+#[test]
+fn event_trigger_failure_rolls_back_foreign_data_catalog_changes() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE FUNCTION reject_wrapper() RETURNS event_trigger LANGUAGE plpgsql AS $$
+             BEGIN RAISE EXCEPTION 'rejected %', tg_tag; END $$",
+        )
+        .unwrap();
+    session
+        .execute(
+            "CREATE EVENT TRIGGER reject_wrapper ON ddl_command_end
+             WHEN TAG IN ('CREATE FOREIGN DATA WRAPPER') EXECUTE FUNCTION reject_wrapper()",
+        )
+        .unwrap();
+    let error = session
+        .execute("CREATE FOREIGN DATA WRAPPER new_wrapper")
+        .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("rejected CREATE FOREIGN DATA WRAPPER"),
+        "{error}"
+    );
+    assert_eq!(
+        count(
+            &mut session,
+            "SELECT count(*) FROM pg_foreign_data_wrapper WHERE fdwname = 'new_wrapper'"
+        ),
+        0
+    );
+}

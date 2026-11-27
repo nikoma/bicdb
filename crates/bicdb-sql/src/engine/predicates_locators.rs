@@ -894,6 +894,14 @@ impl<'db> SqlEngine<'db> {
                     *with_ordinality,
                 );
             }
+            if crate::foreign_data::is_options_to_table_function(&table) {
+                return self.pg_options_to_table_row_set(
+                    &table,
+                    table_alias,
+                    args,
+                    *with_ordinality,
+                );
+            }
             if is_regexp_split_to_table_function(&table) || is_regexp_matches_table_function(&table)
             {
                 return self.regexp_split_to_table_row_set(
@@ -5649,6 +5657,64 @@ impl<'db> SqlEngine<'db> {
         })
     }
 
+    /// `pg_options_to_table(options)`: one `option_name`, `option_value`
+    /// row per `name=value` element of an option array.
+    pub(crate) fn pg_options_to_table_row_set(
+        &self,
+        table: &str,
+        table_alias: Option<&TableAlias>,
+        args: &TableFunctionArgs,
+        with_ordinality: bool,
+    ) -> Result<RowSet> {
+        let alias_name = table_alias
+            .map(|alias| alias.name.value.clone())
+            .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(table).to_string());
+        let mut source_columns = crate::foreign_data::OPTIONS_TO_TABLE_COLUMNS
+            .iter()
+            .map(|column| column.to_string())
+            .collect::<Vec<_>>();
+        if with_ordinality {
+            source_columns.push("ordinality".to_string());
+        }
+        let columns = table_alias_columns(
+            table,
+            &alias_name,
+            table_alias
+                .map(|alias| alias.columns.as_slice())
+                .unwrap_or(&[]),
+            &source_columns,
+        )?;
+        let values = table_function_expr_args(args)?
+            .iter()
+            .map(|expr| self.eval_select_constant_expr(expr))
+            .collect::<Result<Vec<_>>>()?;
+        let [options] = values.as_slice() else {
+            return Err(SqlError::undefined_function(format!(
+                "function pg_options_to_table expects one argument, got {}",
+                values.len()
+            )));
+        };
+        let rows = crate::foreign_data::options_to_table(options)?
+            .into_iter()
+            .enumerate()
+            .map(|(index, (name, value))| {
+                let mut source = vec![
+                    SqlValue::String(name),
+                    value.map_or(SqlValue::Null, SqlValue::String),
+                ];
+                if with_ordinality {
+                    source.push(SqlValue::Int(index as i64 + 1));
+                }
+                slot_row_from_values(&columns, &source)
+            })
+            .collect::<Vec<_>>();
+        sql_profile_sql_rows_materialized(&rows);
+        Ok(RowSet {
+            rows,
+            columns: aliased_row_output_columns(&alias_name, &columns),
+        })
+    }
+
     pub(crate) fn unnest_row_set(
         &self,
         table_alias: Option<&TableAlias>,
@@ -7426,6 +7492,24 @@ impl<'db> SqlEngine<'db> {
                     ));
                 }
                 let source_columns = vec!["generate_series".to_string()];
+                let columns = table_alias_columns(
+                    &table,
+                    &alias_name,
+                    table_alias
+                        .map(|alias| alias.columns.as_slice())
+                        .unwrap_or(&[]),
+                    &source_columns,
+                )?;
+                return Ok(Some(aliased_row_output_columns(&alias_name, &columns)));
+            }
+            if crate::foreign_data::is_options_to_table_function(&table) {
+                let mut source_columns = crate::foreign_data::OPTIONS_TO_TABLE_COLUMNS
+                    .iter()
+                    .map(|column| column.to_string())
+                    .collect::<Vec<_>>();
+                if *with_ordinality {
+                    source_columns.push("ordinality".to_string());
+                }
                 let columns = table_alias_columns(
                     &table,
                     &alias_name,

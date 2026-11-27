@@ -1490,6 +1490,18 @@ impl RoutineBinder<'_, '_> {
                     self.visit(scope, &mut array.expr)?;
                     self.statements(scope, body)?;
                 }
+                RoutineStmt::DynamicQueryForLoop {
+                    query,
+                    parameters,
+                    body,
+                    ..
+                } => {
+                    self.visit(scope, &mut query.expr)?;
+                    for parameter in parameters {
+                        self.visit(scope, &mut parameter.expr)?;
+                    }
+                    self.statements(scope, body)?;
+                }
                 RoutineStmt::CursorForLoop {
                     arguments, body, ..
                 } => {

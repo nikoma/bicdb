@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-provider-grpc"
-version = "1.0.558"
+version = "1.0.565"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -15,8 +15,8 @@ categories = ["database-implementations"]
 include = ["/README.md", "/src/**", "/build.rs", "/proto/**", "/Cargo.toml", "/LICENSE", "/NOTICE", "/THIRD_PARTY_NOTICES.md"]
 
 [dependencies]
-bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "=1.0.558" }
-bicdb-extension = { path = "../bicdb-extension", version = "=1.0.558" }
+bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "=1.0.565" }
+bicdb-extension = { path = "../bicdb-extension", version = "=1.0.565" }
 bytes.workspace = true
 serde_json.workspace = true
 tokio.workspace = true

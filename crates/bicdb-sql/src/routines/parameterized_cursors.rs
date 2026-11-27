@@ -299,6 +299,7 @@ pub(crate) fn validate_capabilities(
             | RoutineStmt::ForeachLoop { body, .. }
             | RoutineStmt::QueryForLoop { body, .. }
             | RoutineStmt::CursorForLoop { body, .. }
+            | RoutineStmt::DynamicQueryForLoop { body, .. }
             | RoutineStmt::WhileLoop { body, .. }
             | RoutineStmt::Loop { body } => validate_capabilities(language, &[], body, &[])?,
             _ => {}

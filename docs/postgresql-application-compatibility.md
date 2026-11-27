@@ -66,6 +66,14 @@ created through the REST API, and a slice of Frappe's own test suite, checked
 by `.github/workflows/frappe.yml`. The page lists the engine fixes, the test
 results and the remaining gaps.
 
+## SQL string formatting
+
+`format()` accepts positional and sequential arguments, fixed widths and
+widths supplied as arguments, and left or right alignment. `%I`, `%L`, and
+`%s` use PostgreSQL identifier quoting, literal quoting, and string output.
+Mixing positional and sequential references advances from the most recently
+consumed argument. An explicit NULL variadic array supplies zero arguments.
+
 ## Routine row-count expressions
 
 PL/pgSQL named variables and positional parameters in LIMIT/OFFSET are bound
@@ -231,18 +239,34 @@ severity and SQLSTATE:
   routine is refused. See [server-side COPY](server-side-copy.md).
 - COPY leaves generated columns (stored and virtual) out of its default column
   list: COPY FROM computes them and COPY TO does not write them. Naming one in
-  the column list is refused before COPY starts (42P10), as is `COPY ... FROM
-  ... WHERE` (42P10 when the condition reads a generated column, otherwise
-  0A000: the filter is not implemented).
+  the column list is refused before COPY starts (42P10), and so is a
+  `COPY ... FROM ... WHERE` condition that reads one.
 - COPY options are read in both PostgreSQL syntaxes (the legacy list after
   `WITH`, `USING DELIMITERS`, and the parenthesized list) and checked as
   PostgreSQL checks them, with its errors and option positions. DELIMITER,
   NULL, QUOTE, ESCAPE, FORCE_QUOTE, FORCE_NOT_NULL, FORCE_NULL and HEADER
   [MATCH] work for text and CSV in both directions, with PostgreSQL's
   backslash escapes in text. ENCODING takes UTF8 and its aliases, SQL_ASCII,
-  and LATIN1 (converted both ways). FREEZE (true), DEFAULT, ON_ERROR IGNORE
-  (and REJECT_LIMIT) and other encodings are refused with 0A000 before COPY
-  starts; no option is accepted and ignored.
+  and LATIN1 (converted both ways); other encodings are refused with 0A000
+  before COPY starts. No option is accepted and ignored.
+- COPY FROM rules, as in PostgreSQL:
+  - `ON_ERROR IGNORE` skips rows a column type's input refuses (domain
+    constraints included) and reports `N rows were skipped due to data type
+    incompatibility`; `LOG_VERBOSITY VERBOSE` adds one NOTICE per skipped
+    row, `SILENT` none; `REJECT_LIMIT n` fails the COPY once more than n rows
+    were skipped. Missing or extra fields and table constraint violations
+    still fail the COPY.
+  - `DEFAULT 'marker'`: a field equal to the marker takes the column default
+    (22P04 "unexpected default marker in COPY data" for a column without
+    one).
+  - `COPY ... FROM ... WHERE condition` loads only the rows for which the
+    condition is true. Subqueries, aggregates, window and set-returning
+    functions are refused as in PostgreSQL.
+  - `FREEZE` is accepted only where PostgreSQL accepts it: in a transaction
+    block, on a table the current subtransaction created or truncated (55000
+    otherwise; 0A000 for a partitioned table). BicDB has no separate frozen
+    row visibility, so where it is accepted it changes nothing: the rows are
+    visible exactly as other rows the transaction wrote.
 
 ## Statistics aggregates, partitions and lock privileges (2026-11)
 
@@ -362,6 +386,10 @@ severity and SQLSTATE:
   PG_EXCEPTION_DETAIL, PG_EXCEPTION_HINT, COLUMN_NAME, CONSTRAINT_NAME,
   PG_DATATYPE_NAME, TABLE_NAME and SCHEMA_NAME. PG_EXCEPTION_CONTEXT is
   always empty. Outside a handler it fails with 0Z002.
+- `FOR target IN EXECUTE command [USING ...]` iterates rows from a dynamic
+  statement, including `EXPLAIN` and data changes with `RETURNING`. Dynamic
+  SQL sees only the explicitly supplied parameters. A non-row-returning
+  command is rejected before it runs.
 - The postfix `x ISNULL` / `x NOTNULL` operators work in PL/pgSQL
   expressions and conditions.
 - A foreign key that references a partitioned table protects rows in every
@@ -434,3 +462,47 @@ over one scan report their actual rows), and `EXPLAIN EXECUTE`. A bare
 (`FullScan`, `IndexScan ...`, `EstimatedRows`, `ActualRows`), which tools and
 tests read; statement shapes that report does not cover fall back to the
 PostgreSQL layout.
+
+## Temporary objects (2026-11)
+
+- `CREATE TEMP VIEW`, `CREATE OR REPLACE TEMP VIEW`, `CREATE VIEW pg_temp.v`
+  and `CREATE TEMP SEQUENCE` create session objects in the session's
+  temporary schema (`pg_temp_N`), dropped with the session. A view over a
+  temporary relation becomes temporary with PostgreSQL's NOTICE; in an
+  explicit permanent schema it is 42P16, and a materialized view over one is
+  0A000. Rules of temporary relations go with them.
+- Temporary tables are found, the temporary schema first, by `CREATE TABLE
+  ... (LIKE t)`, `INHERITS`, `COMMENT ON`, `has_table_privilege`, rule
+  actions, `nextval`/`currval`/`setval` and regclass (which prints a visible
+  temporary relation unqualified), as well as by queries and DML. A permanent
+  table cannot inherit from (42809) or reference (42P16) a temporary one.
+- `CREATE TEMP TABLE ... PARTITION OF` and `CREATE TEMP TABLE t(cols) ON
+  COMMIT ... AS query` work; ON COMMIT DROP / DELETE ROWS / PRESERVE ROWS
+  apply as before.
+- Not yet: domains, types and operators in `pg_temp` (refused: "schema
+  pg_temp does not exist"), and a temporary function named like an existing
+  permanent one (refused as already existing).
+
+## Foreign-data wrappers, servers and user mappings (2026-11)
+
+`CREATE / ALTER / DROP FOREIGN DATA WRAPPER`, `SERVER` and `USER MAPPING`,
+`GRANT / REVOKE USAGE ON FOREIGN DATA WRAPPER | FOREIGN SERVER` (with
+`WITH GRANT OPTION`, `GRANT OPTION FOR` and `CASCADE`), `COMMENT ON` both and
+`IMPORT FOREIGN SCHEMA` follow PostgreSQL 18.4: generic `OPTIONS` lists with
+`ADD` / `SET` / `DROP`, the built-in `postgresql_fdw_validator` and its
+`invalid option` hints, superuser-only wrappers, owner and USAGE checks for
+servers and mappings, `DROP ... CASCADE` dependencies and their notices, and
+transactional rollback. The catalogs `pg_foreign_data_wrapper`,
+`pg_foreign_server`, `pg_user_mapping` (superusers only), `pg_user_mappings`
+(options shown only to the roles PostgreSQL shows them to),
+`pg_options_to_table()`, `has_foreign_data_wrapper_privilege()`,
+`has_server_privilege()` and the information schema views
+`foreign_data_wrappers`, `foreign_data_wrapper_options`, `foreign_servers`,
+`foreign_server_options`, `user_mappings` and `user_mapping_options` report
+them. A role named by any of these objects cannot be dropped.
+
+BicDB has no wrapper handlers: `HANDLER` naming a function is refused
+(`0A000`, or PostgreSQL's errors for a missing or wrongly typed function),
+user-defined validators are refused with `0A000`, and `IMPORT FOREIGN SCHEMA`
+fails with `foreign-data wrapper "..." has no handler`. Foreign tables are
+not supported yet.

@@ -57,6 +57,35 @@ impl<'db> SqlSession<'db> {
             self.drop_user_type_definition(&dependent, true, dropped)?;
         }
 
+        let typed_tables = self.typed_tables_of(user_type)?;
+        if let Some(table) = typed_tables.first().filter(|_| !cascade) {
+            return Err(SqlError::coded(
+                "2BP01",
+                format!(
+                    "cannot drop type {} because other objects depend on it",
+                    user_type.name
+                ),
+                Some(format!(
+                    "table {} depends on type {}",
+                    relation_name_for_message(&table.name),
+                    user_type.name
+                )),
+                Some("Use DROP ... CASCADE to drop the dependent objects too.".to_string()),
+            ));
+        }
+        for table in typed_tables {
+            crate::statement_context::notice_drop_cascades(&[format!(
+                "table {}",
+                relation_name_for_message(&table.name)
+            )]);
+            let target = catalog_display_name(&table.name)
+                .split('.')
+                .map(super::not_null_constraints::quote)
+                .collect::<Vec<_>>()
+                .join(".");
+            self.execute_inner(&format!("DROP TABLE {target} CASCADE"))?;
+        }
+
         let routines = list_routines(self.db_ref())?
             .into_iter()
             .filter(|routine| routine_depends_on_user_type(routine, user_type))
@@ -225,6 +254,86 @@ impl<'db> SqlSession<'db> {
         Ok(())
     }
 
+    /// A temporary view (`CREATE TEMP VIEW v`, `CREATE VIEW pg_temp.v`, or a
+    /// view over a temporary relation, which PostgreSQL makes temporary with
+    /// a NOTICE) lives in the session's temporary schema and is dropped with
+    /// it. Returns the statement with its name placed there, or `None` for a
+    /// permanent view.
+    fn temporary_view_target(&mut self, create_view: &CreateView) -> Result<Option<CreateView>> {
+        let parts = object_name_parts(&create_view.name);
+        let temp_name = self.temp_schema_name();
+        let is_temp_schema =
+            |schema: &str| schema == "pg_temp" || temp_name.as_deref() == Some(schema);
+        let explicit_temp = matches!(parts.as_slice(), [schema, _] if is_temp_schema(schema));
+        if parts.len() == 2 && explicit_temp && parts[0] != "pg_temp" && !create_view.temporary {
+            // Already placed in this session's temporary schema.
+            return Ok(None);
+        }
+        let mut reads_temp = false;
+        let _ = sqlparser::ast::visit_relations(create_view.query.as_ref(), |relation| {
+            let relation_parts = object_name_parts(relation);
+            if matches!(relation_parts.as_slice(), [schema, _]
+                if schema == "pg_temp" || crate::search_path::is_temp_schema(schema))
+            {
+                reads_temp = true;
+                return std::ops::ControlFlow::Break(());
+            }
+            std::ops::ControlFlow::Continue(())
+        });
+        if reads_temp && create_view.materialized {
+            return Err(SqlError::coded(
+                "0A000",
+                "materialized views must not use temporary tables or views",
+                None,
+                None,
+            ));
+        }
+        let explicit_permanent_schema = parts.len() == 2 && !explicit_temp;
+        if !(create_view.temporary || explicit_temp || reads_temp) {
+            return Ok(None);
+        }
+        let view = parts.last().cloned().unwrap_or_default();
+        if !create_view.temporary && !explicit_temp {
+            crate::statement_context::report_notice(
+                None,
+                "00000",
+                format!("view \"{view}\" will be a temporary view"),
+            );
+        }
+        if explicit_permanent_schema {
+            return Err(SqlError::coded(
+                "42P16",
+                "cannot create temporary relation in non-temporary schema",
+                None,
+                None,
+            ));
+        }
+        let temp_schema = self.temp_schema_for_creation();
+        self.ensure_temp_namespace(&temp_schema)?;
+        let mut placed = create_view.clone();
+        placed.temporary = false;
+        placed.name = ObjectName::from(vec![
+            Ident::with_quote('"', temp_schema),
+            Ident::with_quote('"', view),
+        ]);
+        Ok(Some(placed))
+    }
+
+    /// Creates the session's temporary schema on first use.
+    fn ensure_temp_namespace(&mut self, temp_schema: &str) -> Result<()> {
+        if load_namespace(self.db_ref(), temp_schema)?.is_none() {
+            self.create_session_namespace_if_missing(
+                NamespaceSchema {
+                    dropped: false,
+                    name: temp_schema.to_string(),
+                    owner: current_user_from_gucs(&self.session_gucs),
+                },
+                true,
+            )?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn execute_create_view(&mut self, create_view: &CreateView) -> Result<SqlResult> {
         self.execute_create_view_with_options(create_view, None, true)
     }
@@ -236,10 +345,8 @@ impl<'db> SqlSession<'db> {
         mut check_option: Option<super::updatable_views::CheckOption>,
         with_data: bool,
     ) -> Result<SqlResult> {
-        if create_view.temporary {
-            return Err(SqlError::Unsupported(
-                "temporary views are not supported".to_string(),
-            ));
+        if let Some(placed) = self.temporary_view_target(create_view)? {
+            return self.execute_create_view_with_options(&placed, check_option, with_data);
         }
         if create_view.or_alter {
             return Err(SqlError::Unsupported(
@@ -342,8 +449,10 @@ impl<'db> SqlSession<'db> {
             &mut columns,
         );
 
+        let clause_check_option = check_option;
         let mut security_invoker = false;
         let mut security_barrier = false;
+        let mut reloptions = Vec::new();
         if let CreateTableOptions::With(options) = &create_view.options {
             for option in options {
                 let SqlOption::KeyValue { key, value } = option else {
@@ -351,48 +460,28 @@ impl<'db> SqlSession<'db> {
                         "CREATE VIEW option {option} is not supported"
                     )));
                 };
-                if key.value.eq_ignore_ascii_case("check_option") {
-                    let text = match value {
-                        Expr::Value(ValueWithSpan {
-                            value: Value::SingleQuotedString(text),
-                            ..
-                        }) => text.clone(),
-                        Expr::Identifier(ident) => ident.value.clone(),
-                        other => other.to_string(),
-                    };
-                    check_option = Some(
-                        super::updatable_views::CheckOption::parse(&text).ok_or_else(|| {
-                            SqlError::invalid_parameter_value(
-                                "invalid value for enum option \"check_option\": ".to_string()
-                                    + text.as_str(),
-                            )
-                        })?,
-                    );
-                    continue;
-                }
-                let enabled = match eval_constant_expr(value)? {
-                    SqlValue::Bool(enabled) => enabled,
-                    SqlValue::String(text) => {
-                        text.eq_ignore_ascii_case("true") || text.eq_ignore_ascii_case("on")
+                let (name, text) = super::view_options::option_text(key, value);
+                match super::view_options::apply_view_option(&name, &text)? {
+                    super::view_options::ViewOption::SecurityBarrier(enabled) => {
+                        security_barrier = enabled
                     }
-                    other => {
-                        return Err(SqlError::InvalidSql(format!(
-                            "CREATE VIEW option {} expects a boolean, got {}",
-                            key.value,
-                            other.to_cell()
-                        )));
+                    super::view_options::ViewOption::SecurityInvoker(enabled) => {
+                        security_invoker = enabled
                     }
-                };
-                match key.value.to_ascii_lowercase().as_str() {
-                    "security_invoker" => security_invoker = enabled,
-                    "security_barrier" => security_barrier = enabled,
-                    other => {
-                        return Err(SqlError::Unsupported(format!(
-                            "CREATE VIEW option {other} is not supported"
-                        )));
+                    super::view_options::ViewOption::CheckOption(option) => {
+                        check_option = Some(option)
                     }
                 }
+                super::view_options::set_reloption(&mut reloptions, &name, &text);
             }
+        }
+        if let Some(option) = clause_check_option {
+            super::view_options::set_reloption(&mut reloptions, "check_option", option.as_str());
+        }
+        if create_view.materialized && !reloptions.is_empty() {
+            return Err(SqlError::Unsupported(
+                "storage parameters of materialized views are not supported".to_string(),
+            ));
         }
         if create_view.materialized {
             // A materialized view READS its sources and stores the result, so
@@ -422,6 +511,7 @@ impl<'db> SqlSession<'db> {
             security_invoker,
             security_barrier,
             check_option: check_option.map(|option| option.as_str().to_string()),
+            reloptions,
             snapshot: None,
         };
         self.validate_view_check_option(&schema)?;
@@ -496,9 +586,35 @@ impl<'db> SqlSession<'db> {
         owned_by: Option<&ObjectName>,
     ) -> Result<SqlResult> {
         if temporary {
-            return Err(SqlError::Unsupported(
-                "temporary sequences are not supported".to_string(),
-            ));
+            let parts = object_name_parts(name);
+            let temp_schema = self.temp_schema_for_creation();
+            let sequence = match parts.as_slice() {
+                [sequence] => sequence.clone(),
+                [schema, sequence] if schema == "pg_temp" || *schema == temp_schema => {
+                    sequence.clone()
+                }
+                _ => {
+                    return Err(SqlError::coded(
+                        "42P16",
+                        "cannot create temporary relation in non-temporary schema",
+                        None,
+                        None,
+                    ))
+                }
+            };
+            self.ensure_temp_namespace(&temp_schema)?;
+            let placed = ObjectName::from(vec![
+                Ident::with_quote('"', temp_schema),
+                Ident::with_quote('"', sequence),
+            ]);
+            return self.execute_create_sequence(
+                false,
+                if_not_exists,
+                &placed,
+                data_type,
+                sequence_options,
+                owned_by,
+            );
         }
         let sequence_data_type = if let Some(data_type) = data_type {
             let (pg_type, _) = pg_type_from_data_type(data_type)?;
@@ -896,7 +1012,10 @@ impl<'db> SqlSession<'db> {
                                 && !grant.role.eq_ignore_ascii_case(&role)
                                 && !grant.member.eq_ignore_ascii_case(&role)
                         });
+                    let foreign_data_dependency =
+                        crate::foreign_data::role_is_referenced(self.db_ref(), &role)?;
                     if table_dependency
+                        || foreign_data_dependency
                         || owns_type
                         || owns_sequence
                         || owns_view
@@ -972,8 +1091,16 @@ impl<'db> SqlSession<'db> {
         {
             return Ok(());
         }
+        // The rules of the schema's relations go with them.
+        let prefix = relation_name_from_parts(&[temp.to_string(), String::new()])?;
+        let relations = crate::query_rules::list_rules(self.db_ref())?
+            .iter()
+            .filter(|rule| rule.table.starts_with(&prefix))
+            .map(|rule| rule.table.clone())
+            .collect::<Vec<_>>();
         let name = ObjectName::from(vec![Ident::with_quote('"', temp.to_string())]);
         self.drop_schemas(true, &[name], true, true)?;
+        crate::query_rules::drop_rules_of_relations(self.db_mut()?, &relations)?;
         super::temp_tables::forget_on_commit(temp, None);
         Ok(())
     }
@@ -1553,6 +1680,7 @@ impl<'db> SqlSession<'db> {
         let mut table = relation_name(&alter_table.name)?;
         let mut schema = load_schema(self.db_ref(), &table)?
             .ok_or_else(|| SqlError::InvalidCollection(table.clone()))?;
+        Self::reject_typed_table_change(&schema, &alter_table.operations)?;
         if schema.row_type_oid.is_none() {
             schema.row_type_oid = Some(schema.row_type_oid());
         }

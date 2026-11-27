@@ -1547,6 +1547,23 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
         quals: Vec<Expr>,
         select: &Select,
     ) -> Result<PlanNode> {
+        let _ = select;
+        let scan = self.index_only_scan(name, alias, plan, quals)?;
+        Ok(PlanNode::new("Aggregate")
+            .head("Strategy", Prop::Text("Plain".to_string()))
+            .head("Partial Mode", Prop::Text("Simple".to_string()))
+            .child("Outer", scan))
+    }
+
+    /// The `Index Only Scan` of an index-only read: every qualification is
+    /// an index condition.
+    fn index_only_scan(
+        &mut self,
+        name: &ObjectName,
+        alias: Option<&TableAlias>,
+        plan: &crate::engine::IndexOnlyCount,
+        quals: Vec<Expr>,
+    ) -> Result<PlanNode> {
         let relname = relation_default_alias(name);
         let refname = self.refname(&relname, alias.map(|alias| alias.name.value.as_str()));
         let columns = self.table_columns(&plan.collection)?;
@@ -1589,11 +1606,7 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
         if let Some(text) = self.qual(&ordered, prefix) {
             scan = scan.prop("Index Cond", text);
         }
-        let _ = select;
-        Ok(PlanNode::new("Aggregate")
-            .head("Strategy", Prop::Text("Plain".to_string()))
-            .head("Partial Mode", Prop::Text("Simple".to_string()))
-            .child("Outer", scan))
+        Ok(scan)
     }
 
     /// The quals a bitmap index probe applies as index conditions, and the
@@ -2964,6 +2977,17 @@ impl<'e, 'db> ExplainBuilder<'e, 'db> {
             {
                 if let TableFactor::Table { name, alias, .. } = &from.relation {
                     return self.index_only_count_scan(name, alias.as_ref(), &plan, quals, select);
+                }
+            }
+            // Selected columns read from index entries alone.
+            if let Some(plan) = self
+                .engine
+                .index_only_projection_plan(&from, select, query)
+                .ok()
+                .flatten()
+            {
+                if let TableFactor::Table { name, alias, .. } = &from.relation {
+                    return self.index_only_scan(name, alias.as_ref(), &plan.base, quals);
                 }
             }
             // Top-level EXISTS / IN terms the executor answers from a hash

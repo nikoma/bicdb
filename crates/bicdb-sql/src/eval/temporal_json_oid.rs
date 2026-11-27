@@ -365,7 +365,7 @@ pub(crate) fn resolve_regclass_name(db: &BicDb, oid: i64) -> Result<Option<Strin
     {
         let namespace = relation_catalog_namespace(db, name)?;
         let logical = pg_quote_ident(&catalog_display_name(name));
-        return Ok(Some(if namespace == "public" {
+        return Ok(Some(if regclass_namespace_visible(&namespace) {
             logical
         } else {
             format!("{}.{}", pg_quote_ident(&namespace), logical)
@@ -377,7 +377,7 @@ pub(crate) fn resolve_regclass_name(db: &BicDb, oid: i64) -> Result<Option<Strin
     {
         let namespace = sequence_catalog_namespace(db, &sequence.name)?;
         let logical = pg_quote_ident(&sequence_catalog_name(&sequence.name));
-        return Ok(Some(if namespace == "public" {
+        return Ok(Some(if regclass_namespace_visible(&namespace) {
             logical
         } else {
             format!("{}.{}", pg_quote_ident(&namespace), logical)
@@ -1808,9 +1808,7 @@ pub(crate) fn select_expr_column_name(expr: &Expr) -> String {
         Expr::Function(function) if is_current_catalog_keyword(function) => {
             "current_catalog".into()
         }
-        Expr::Function(function) => object_name(&function.name)
-            .map(|name| postgres_xml_function_column_name(&name))
-            .unwrap_or_else(|_| "?column?".to_string()),
+        Expr::Function(function) => postgres_function_column_name(function),
         Expr::Cast {
             expr, data_type, ..
         } => {
@@ -1950,9 +1948,7 @@ pub(crate) fn row_expr_column_name(expr: &Expr) -> String {
             op: sqlparser::ast::BinaryOperator::Overlaps,
             ..
         } => "overlaps".to_string(),
-        Expr::Function(function) => object_name(&function.name)
-            .map(|name| postgres_xml_function_column_name(&name))
-            .unwrap_or_else(|_| "?column?".to_string()),
+        Expr::Function(function) => postgres_function_column_name(function),
         Expr::Cast {
             expr, data_type, ..
         } => {
@@ -1993,6 +1989,26 @@ pub(crate) fn typed_literal_column_name(data_type: &DataType) -> String {
                 .trim_matches('"')
                 .to_string()
         })
+}
+
+fn postgres_function_column_name(function: &Function) -> String {
+    let Ok(name) = object_name(&function.name) else {
+        return "?column?".into();
+    };
+    // The VARIADIC compatibility rewrite stores the original function name as
+    // the wrapper's first argument.
+    if name == "bicdb_variadic_call" {
+        if let FunctionArguments::List(list) = &function.args {
+            if let Some(FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(value)))) =
+                list.args.first()
+            {
+                if let Value::SingleQuotedString(target) = &value.value {
+                    return postgres_xml_function_column_name(target);
+                }
+            }
+        }
+    }
+    postgres_xml_function_column_name(&name)
 }
 
 pub(crate) fn postgres_xml_function_column_name(name: &str) -> String {

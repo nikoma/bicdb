@@ -176,6 +176,18 @@ fn visit_body(body: &mut [RoutineStmt], names: &BTreeSet<String>, symbols: &mut 
             RoutineStmt::QueryForLoop { body, .. } | RoutineStmt::Loop { body } => {
                 visit_body(body, names, symbols)
             }
+            RoutineStmt::DynamicQueryForLoop {
+                query,
+                parameters,
+                body,
+                ..
+            } => {
+                rewrite(&mut query.expr, names, symbols);
+                for parameter in parameters {
+                    rewrite(&mut parameter.expr, names, symbols);
+                }
+                visit_body(body, names, symbols);
+            }
             RoutineStmt::CursorForLoop {
                 arguments, body, ..
             } => {

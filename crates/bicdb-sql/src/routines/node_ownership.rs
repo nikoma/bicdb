@@ -125,6 +125,18 @@ impl OwnedNodes {
                     self.expression(array);
                     pending.extend(body);
                 }
+                RoutineStmt::DynamicQueryForLoop {
+                    query,
+                    parameters,
+                    body,
+                    ..
+                } => {
+                    self.expression(query);
+                    for parameter in parameters {
+                        self.expression(parameter);
+                    }
+                    pending.extend(body);
+                }
                 RoutineStmt::QueryForLoop { query, body, .. } => {
                     self.ast(query);
                     pending.extend(body);

@@ -1724,6 +1724,20 @@ fn statements(
                 visit(db, env, &mut condition.expr)?;
                 statements(db, env, cursors, body)?;
             }
+            RoutineStmt::DynamicQueryForLoop {
+                target,
+                query,
+                parameters,
+                body,
+            } => {
+                visit(db, env, &mut query.expr)?;
+                for parameter in parameters {
+                    visit(db, env, &mut parameter.expr)?;
+                }
+                let mut scope = env.clone();
+                scope.collections.remove(&normalize_object_name(target));
+                statements(db, &scope, cursors, body)?;
+            }
             RoutineStmt::QueryForLoop {
                 target,
                 query,

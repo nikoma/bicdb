@@ -980,6 +980,7 @@ fn enum_runtime_column(user_type: crate::UserTypeColumnSchema) -> ColumnSchema {
         default_expr: None,
         generated_expr: None,
         identity: None,
+        attributes: Default::default(),
     }
 }
 
@@ -1015,6 +1016,7 @@ fn domain_base_runtime_column(user_type: &crate::UserTypeColumnSchema) -> Column
             default_expr: None,
             generated_expr: None,
             identity: None,
+            attributes: Default::default(),
         };
     }
     let pg_type = if user_type.array && !base_type.ends_with("[]") {
@@ -1040,6 +1042,7 @@ fn domain_base_runtime_column(user_type: &crate::UserTypeColumnSchema) -> Column
         default_expr: None,
         generated_expr: None,
         identity: None,
+        attributes: Default::default(),
     }
 }
 

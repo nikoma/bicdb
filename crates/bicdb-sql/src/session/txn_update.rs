@@ -2876,6 +2876,10 @@ impl<'db> SqlSession<'db> {
         tables.dedup_by(|left, right| left.name.eq_ignore_ascii_case(&right.name));
 
         for target in tables {
+            if self.tx.is_some() {
+                // COPY FREEZE needs to know what this transaction truncated.
+                self.fresh_relations.push(target.name.clone());
+            }
             let records =
                 self.scan_session_records_for_action(&target.name, PolicyAction::Delete)?;
             for (idx, record) in records.into_iter().enumerate() {
@@ -4135,13 +4139,17 @@ impl<'db> SqlSession<'db> {
         let args = function_arg_list(function);
         match name.as_str() {
             "nextval" | "pg_catalog.nextval" => {
-                let sequence =
-                    normalize_sequence_name(&self.eval_sequence_arg(args.first(), "nextval")?)?;
+                let sequence = {
+                    let text = self.eval_sequence_arg(args.first(), "nextval")?;
+                    self.session_sequence_name(&text)?
+                };
                 Ok(SqlValue::Int(self.nextval(&sequence)?))
             }
             "currval" | "pg_catalog.currval" => {
-                let sequence =
-                    normalize_sequence_name(&self.eval_sequence_arg(args.first(), "currval")?)?;
+                let sequence = {
+                    let text = self.eval_sequence_arg(args.first(), "currval")?;
+                    self.session_sequence_name(&text)?
+                };
                 let key = sequence.clone();
                 self.currvals
                     .get(&key)
@@ -4175,8 +4183,10 @@ impl<'db> SqlSession<'db> {
                         "setval expects 2 or 3 arguments".to_string(),
                     ));
                 }
-                let sequence =
-                    normalize_sequence_name(&self.eval_sequence_arg(args.first(), "setval")?)?;
+                let sequence = {
+                    let text = self.eval_sequence_arg(args.first(), "setval")?;
+                    self.session_sequence_name(&text)?
+                };
                 let value =
                     self.eval_session_expr(args.get(1).expect("validated argument count"))?;
                 let Some(value) = sql_value_i64(&value) else {
@@ -5154,6 +5164,7 @@ impl<'db> SqlSession<'db> {
                     | RoutineStmt::ForeachLoop { .. }
                     | RoutineStmt::QueryForLoop { .. }
                     | RoutineStmt::CursorForLoop { .. }
+                    | RoutineStmt::DynamicQueryForLoop { .. }
                     | RoutineStmt::Loop { .. }
                     | RoutineStmt::WhileLoop { .. }
             );
@@ -5297,6 +5308,12 @@ impl<'db> SqlSession<'db> {
                 arguments,
                 body,
             } => self.execute_routine_cursor_for_loop(frame, target, cursor, arguments, body),
+            RoutineStmt::DynamicQueryForLoop {
+                target,
+                query,
+                parameters,
+                body,
+            } => self.execute_routine_dynamic_for_loop(frame, target, query, parameters, body),
             _ => self.execute_routine_leaf_statement(frame, statement),
         }
     }
@@ -5641,6 +5658,7 @@ impl<'db> SqlSession<'db> {
             RoutineStmt::Block { .. }
             | RoutineStmt::Case { .. }
             | RoutineStmt::CursorForLoop { .. }
+            | RoutineStmt::DynamicQueryForLoop { .. }
             | RoutineStmt::ForLoop { .. }
             | RoutineStmt::ForeachLoop { .. }
             | RoutineStmt::If { .. }
@@ -5742,7 +5760,69 @@ impl<'db> SqlSession<'db> {
         query: &Query,
         body: &[RoutineStmt],
     ) -> Result<RoutineControl> {
-        let mut result = self.execute_routine_query(frame, query)?;
+        let result = self.execute_routine_query(frame, query)?;
+        self.iterate_routine_rows(frame, target, result, body)
+    }
+
+    fn execute_routine_dynamic_for_loop(
+        &mut self,
+        frame: &mut RoutineFrame,
+        target: &str,
+        query: &RoutineExpr,
+        parameters: &[RoutineExpr],
+        body: &[RoutineStmt],
+    ) -> Result<RoutineControl> {
+        let sql = match self.eval_routine_expr(frame, query)? {
+            SqlValue::Null => {
+                return Err(SqlError::data_exception_public(
+                    "22004",
+                    "query string argument of EXECUTE is null",
+                    None,
+                ))
+            }
+            value => value.to_cell(),
+        };
+        let parameters = parameters
+            .iter()
+            .map(|parameter| self.eval_routine_expr(frame, parameter))
+            .collect::<Result<Vec<_>>>()?;
+        if split_sql_statements(&sql).len() != 1 {
+            return Err(SqlError::data_exception_public(
+                "42P11",
+                "cannot open multi-query plan as cursor",
+                None,
+            ));
+        }
+        let mut parsed = parse_single_statement(&sql)?;
+        if let Some(tag) = non_row_statement_tag(&parsed) {
+            return Err(SqlError::data_exception_public(
+                "42P11",
+                format!("cannot open {tag} query as cursor"),
+                None,
+            ));
+        }
+        let result = self.execute_postgres_dynamic_statement(&mut parsed, parameters)?;
+        let found = !result.rows.is_empty();
+        if !found {
+            if frame.query_loop_target_is_scalar(target) {
+                frame.assign(target, SqlValue::Null)?;
+            } else {
+                let row = vec![SqlValue::Null; result.columns.len()];
+                frame.set(target, routine_record_value(&result.columns, &row));
+            }
+        }
+        let control = self.iterate_routine_rows(frame, target, result, body)?;
+        frame.set(ROUTINE_FOUND_VAR, SqlValue::Bool(found));
+        Ok(control)
+    }
+
+    fn iterate_routine_rows(
+        &mut self,
+        frame: &mut RoutineFrame,
+        target: &str,
+        mut result: SqlResult,
+        body: &[RoutineStmt],
+    ) -> Result<RoutineControl> {
         let scalar_target = frame.query_loop_target_is_scalar(target);
         let display_aliases = !scalar_target || frame.query_loop_target_is_text(target);
         // A `regclass`-typed column carries the relation OID as its value —
@@ -6506,6 +6586,44 @@ impl<'db> SqlSession<'db> {
             allocation.rollback()?;
         }
         result
+    }
+
+    /// The sequence a `nextval`/`currval`/`setval` argument names: an
+    /// unqualified name is looked up through the search_path, the
+    /// temporary schema first, as PostgreSQL's regclass input does.
+    pub(crate) fn session_sequence_name(&self, text: &str) -> Result<String> {
+        let normalized = normalize_sequence_name(text)?;
+        if load_sequence(self.db_ref(), &normalized)?.is_some() {
+            // A temporary sequence of the same name comes first (only when the
+            // session has a temporary schema, which the path then starts with).
+            let temp = crate::search_path::active_temp_schema().filter(|temp| {
+                crate::search_path::active_path()
+                    .is_some_and(|path| path.first().is_some_and(|first| first == temp))
+            });
+            if let Some(temp) = temp {
+                if let Ok([name]) = sql_identifier_parts(text).as_deref() {
+                    let candidate = relation_name_from_parts(&[temp, name.clone()])?;
+                    if load_sequence(self.db_ref(), &candidate)?.is_some() {
+                        return Ok(candidate);
+                    }
+                }
+            }
+            return Ok(normalized);
+        }
+        if let (Ok(parts), Some(path)) = (
+            sql_identifier_parts(text),
+            crate::search_path::active_path(),
+        ) {
+            if let [name] = parts.as_slice() {
+                for schema in path.iter() {
+                    let candidate = relation_name_from_parts(&[schema.clone(), name.clone()])?;
+                    if load_sequence(self.db_ref(), &candidate)?.is_some() {
+                        return Ok(candidate);
+                    }
+                }
+            }
+        }
+        Ok(normalized)
     }
 
     pub(crate) fn nextval(&mut self, sequence_name: &str) -> Result<i64> {
@@ -8387,6 +8505,7 @@ fn plpgsql_statement_kind(statement: &RoutineStmt) -> &'static str {
         RoutineStmt::ForLoop { .. } => "FOR with integer loop variable",
         RoutineStmt::QueryForLoop { .. } => "FOR over SELECT rows",
         RoutineStmt::CursorForLoop { .. } => "FOR over cursor",
+        RoutineStmt::DynamicQueryForLoop { .. } => "FOR over EXECUTE statement",
         RoutineStmt::ForeachLoop { .. } => "FOREACH over array",
         RoutineStmt::ExitLoop => "EXIT",
         RoutineStmt::ContinueLoop => "CONTINUE",
@@ -8480,4 +8599,45 @@ fn statement_line<'a>(
         .lines
         .as_ref()?
         .get(&(statement as *const RoutineStmt as usize))
+}
+
+/// The command tag of a statement that returns no rows, which `FOR ... IN
+/// EXECUTE` refuses before running it (PostgreSQL's "cannot open ... query
+/// as cursor"); `None` for row-returning statements.
+fn non_row_statement_tag(statement: &Statement) -> Option<String> {
+    let returns_rows = match statement {
+        Statement::Query(_)
+        | Statement::Explain { .. }
+        | Statement::ExplainTable { .. }
+        | Statement::ShowVariable { .. }
+        | Statement::ShowVariables { .. }
+        | Statement::Fetch { .. } => true,
+        Statement::Insert(insert) => insert.returning.is_some(),
+        Statement::Update(update) => update.returning.is_some(),
+        Statement::Delete(delete) => delete.returning.is_some(),
+        Statement::Merge(merge) => merge.output.is_some(),
+        _ => false,
+    };
+    if returns_rows {
+        return None;
+    }
+    let words = split_sql_words(&statement.to_string())
+        .into_iter()
+        .take(3)
+        .map(|word| word.to_ascii_uppercase())
+        .collect::<Vec<_>>();
+    let tag = match words.first().map(String::as_str) {
+        Some("INSERT" | "UPDATE" | "DELETE" | "MERGE") => words[0].clone(),
+        Some("CREATE" | "ALTER" | "DROP") if words.len() > 1 => {
+            let object = if words[1] == "TEMP" || words[1] == "TEMPORARY" {
+                words.get(2).cloned().unwrap_or_default()
+            } else {
+                words[1].clone()
+            };
+            format!("{} {object}", words[0])
+        }
+        Some(first) => first.to_string(),
+        None => String::new(),
+    };
+    Some(tag)
 }

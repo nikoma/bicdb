@@ -1,0 +1,122 @@
+t.nn_table_named|CREATE TABLE tnn1(a int, b int, CONSTRAINT tnn1_custom NOT NULL a); SELECT conname, contype, convalidated, connoinherit FROM pg_constraint WHERE conrelid = 'tnn1'::regclass ORDER BY conname; INSERT INTO tnn1 VALUES (NULL, 1)
+t.nn_table_unnamed|CREATE TABLE tnn2(a int, NOT NULL a); SELECT conname, contype FROM pg_constraint WHERE conrelid = 'tnn2'::regclass; SELECT attnotnull FROM pg_attribute WHERE attrelid = 'tnn2'::regclass AND attname = 'a'
+t.nn_column_named|CREATE TABLE tnn3(a int CONSTRAINT tnn3_foo NOT NULL); SELECT conname, contype FROM pg_constraint WHERE conrelid = 'tnn3'::regclass
+t.nn_no_inherit|CREATE TABLE tnn4(a int, NOT NULL a NO INHERIT); CREATE TABLE tnn4c() INHERITS (tnn4); SELECT conrelid::regclass, conname, connoinherit FROM pg_constraint WHERE conname LIKE 'tnn4%' ORDER BY 1; INSERT INTO tnn4c VALUES (NULL); SELECT count(*) FROM tnn4c
+t.nn_alter_add|CREATE TABLE tnn5(a int, b int); ALTER TABLE tnn5 ADD CONSTRAINT tnn5_nn NOT NULL a; SELECT conname, contype FROM pg_constraint WHERE conrelid = 'tnn5'::regclass; ALTER TABLE tnn5 ADD NOT NULL b; SELECT conname FROM pg_constraint WHERE conrelid = 'tnn5'::regclass ORDER BY conname
+t.nn_alter_add_existing_null|CREATE TABLE tnn6(a int); INSERT INTO tnn6 VALUES (NULL); ALTER TABLE tnn6 ADD CONSTRAINT tnn6_nn NOT NULL a
+t.nn_not_valid|CREATE TABLE tnn7(a int); INSERT INTO tnn7 VALUES (NULL); ALTER TABLE tnn7 ADD CONSTRAINT tnn7_nn NOT NULL a NOT VALID; SELECT conname, convalidated FROM pg_constraint WHERE conrelid = 'tnn7'::regclass; SELECT attnotnull FROM pg_attribute WHERE attrelid = 'tnn7'::regclass AND attname = 'a'; SELECT count(*) FROM tnn7 WHERE a IS NULL; INSERT INTO tnn7 VALUES (NULL)
+t.nn_validate|CREATE TABLE tnn8(a int); INSERT INTO tnn8 VALUES (NULL); ALTER TABLE tnn8 ADD CONSTRAINT tnn8_nn NOT NULL a NOT VALID; ALTER TABLE tnn8 VALIDATE CONSTRAINT tnn8_nn
+t.nn_validate_ok|CREATE TABLE tnn9(a int); INSERT INTO tnn9 VALUES (1); ALTER TABLE tnn9 ADD CONSTRAINT tnn9_nn NOT NULL a NOT VALID; ALTER TABLE tnn9 VALIDATE CONSTRAINT tnn9_nn; SELECT convalidated FROM pg_constraint WHERE conname = 'tnn9_nn'
+t.nn_set_not_null_validates|CREATE TABLE tnn9b(a int); INSERT INTO tnn9b VALUES (1); ALTER TABLE tnn9b ADD CONSTRAINT tnn9b_nn NOT NULL a NOT VALID; ALTER TABLE tnn9b ALTER a SET NOT NULL; SELECT conname, convalidated FROM pg_constraint WHERE conrelid = 'tnn9b'::regclass
+t.nn_dup_name|CREATE TABLE tnn10(a int, CONSTRAINT foo NOT NULL a, CONSTRAINT bar NOT NULL a)
+t.nn_dup_name_serial|CREATE TABLE tnn10b(a serial CONSTRAINT foo NOT NULL, CONSTRAINT bar NOT NULL a)
+t.nn_dup_name_column|CREATE TABLE tnn10c(a serial CONSTRAINT foo NOT NULL CONSTRAINT bar NOT NULL)
+t.nn_conflict_no_inherit|CREATE TABLE tnn10d(a int primary key, NOT NULL a NO INHERIT)
+t.nn_same_name_twice|CREATE TABLE tnn10e(a INTEGER CONSTRAINT blah NOT NULL, b INTEGER CONSTRAINT blah NOT NULL)
+t.nn_missing_column|CREATE TABLE tnn10f(a int, NOT NULL nosuch)
+t.nn_partitioned_no_inherit|CREATE TABLE tnn10g(a int, NOT NULL a NO INHERIT) PARTITION BY LIST (a)
+t.nn_drop_named|CREATE TABLE tnn11(a int, CONSTRAINT tnn11_x NOT NULL a); ALTER TABLE tnn11 DROP CONSTRAINT tnn11_x; INSERT INTO tnn11 VALUES (NULL); SELECT count(*) FROM pg_constraint WHERE conrelid = 'tnn11'::regclass
+t.nn_drop_default_named|CREATE TABLE tnn11b(a int NOT NULL); ALTER TABLE tnn11b DROP CONSTRAINT tnn11b_a_not_null; INSERT INTO tnn11b VALUES (NULL); SELECT count(*) FROM tnn11b
+t.nn_inherit_child|CREATE TABLE tnn12(a int, CONSTRAINT tnn12_x NOT NULL a); CREATE TABLE tnn12c(b int) INHERITS (tnn12); SELECT conrelid::regclass, conname, conislocal, coninhcount FROM pg_constraint WHERE conrelid IN ('tnn12'::regclass, 'tnn12c'::regclass) ORDER BY conrelid::regclass::text; INSERT INTO tnn12c VALUES (NULL, 1)
+t.nn_add_recurses|CREATE TABLE tnn15(a int); CREATE TABLE tnn15c() INHERITS (tnn15); ALTER TABLE tnn15 ADD CONSTRAINT tnn15_nn NOT NULL a; SELECT conrelid::regclass, conname, conislocal, coninhcount FROM pg_constraint WHERE conrelid IN ('tnn15'::regclass, 'tnn15c'::regclass) ORDER BY conrelid::regclass::text; INSERT INTO tnn15c VALUES (NULL)
+t.nn_add_recurse_null_child|CREATE TABLE tnn16(a int); CREATE TABLE tnn16c() INHERITS (tnn16); INSERT INTO tnn16c VALUES (NULL); ALTER TABLE tnn16 ADD CONSTRAINT tnn16_nn NOT NULL a
+t.nn_add_no_inherit_skips_child|CREATE TABLE tnn17(a int); CREATE TABLE tnn17c() INHERITS (tnn17); INSERT INTO tnn17c VALUES (NULL); ALTER TABLE tnn17 ADD CONSTRAINT tnn17_nn NOT NULL a NO INHERIT; SELECT conrelid::regclass, conname, connoinherit FROM pg_constraint WHERE conrelid IN ('tnn17'::regclass, 'tnn17c'::regclass) ORDER BY conrelid::regclass::text
+t.nn_not_valid_child|CREATE TABLE tnn18(a int); CREATE TABLE tnn18c() INHERITS (tnn18); INSERT INTO tnn18c VALUES (NULL); ALTER TABLE tnn18 ADD CONSTRAINT tnn18_nn NOT NULL a NOT VALID; SELECT conrelid::regclass, conname, convalidated, conislocal, coninhcount FROM pg_constraint WHERE conrelid IN ('tnn18'::regclass, 'tnn18c'::regclass) ORDER BY conrelid::regclass::text
+t.nn_incompatible_not_valid|CREATE TABLE tnn19(a int); ALTER TABLE tnn19 ADD CONSTRAINT nn NOT NULL a NOT VALID; ALTER TABLE tnn19 ADD CONSTRAINT nn NOT NULL a
+t.nn_change_no_inherit|CREATE TABLE tnn20(a int); ALTER TABLE tnn20 ADD CONSTRAINT nn NOT NULL a NOT VALID; ALTER TABLE tnn20 ADD CONSTRAINT nn1 NOT NULL a NOT VALID NO INHERIT
+t.nn_pk_over_not_valid|CREATE TABLE tnn21(a int); ALTER TABLE tnn21 ADD CONSTRAINT nn NOT NULL a NOT VALID; ALTER TABLE tnn21 ADD PRIMARY KEY (a)
+t.nn_rename|CREATE TABLE tnn22(a int NOT NULL); ALTER TABLE tnn22 RENAME CONSTRAINT tnn22_a_not_null TO tnn22_renamed; SELECT conname FROM pg_constraint WHERE conrelid = 'tnn22'::regclass
+t.nn_two_not_valid|CREATE TABLE tnn23(a int, b int); ALTER TABLE tnn23 ADD NOT NULL a NOT VALID, ADD NOT NULL b NOT VALID; SELECT conname, convalidated FROM pg_constraint WHERE conrelid = 'tnn23'::regclass ORDER BY 1; ALTER TABLE tnn23 ALTER a DROP NOT NULL; ALTER TABLE tnn23 DROP CONSTRAINT tnn23_b_not_null; SELECT count(*) FROM pg_constraint WHERE conrelid = 'tnn23'::regclass
+t.nn_order_nulls_not_valid|CREATE TABLE tnn24(a int, b int); INSERT INTO tnn24 VALUES (NULL, 1), (5, 2); CREATE INDEX ON tnn24(a); ALTER TABLE tnn24 ADD CONSTRAINT nn NOT NULL a NOT VALID; SELECT b FROM tnn24 ORDER BY a NULLS FIRST; SELECT b FROM tnn24 WHERE a IS NULL
+t.check_no_inherit_not_valid|CREATE TABLE tck1(a int); INSERT INTO tck1 VALUES (-1); ALTER TABLE tck1 ADD CONSTRAINT tck1_c CHECK (a > 0) NO INHERIT NOT VALID; SELECT conname, convalidated, connoinherit FROM pg_constraint WHERE conrelid = 'tck1'::regclass
+t.nn_serial_named|CREATE TABLE tnn13(a serial, CONSTRAINT tnn13_foo NOT NULL a); SELECT conname FROM pg_constraint WHERE conrelid = 'tnn13'::regclass AND contype = 'n'
+t.nn_identity_named|CREATE TABLE tnn13b(CONSTRAINT foo NOT NULL a, a int GENERATED BY DEFAULT AS IDENTITY); SELECT conname FROM pg_constraint WHERE conrelid = 'tnn13b'::regclass AND contype = 'n'
+t.nn_alter_add_already|CREATE TABLE tnn14(a int NOT NULL); ALTER TABLE tnn14 ADD CONSTRAINT tnn14_a_not_null NOT NULL a; ALTER TABLE tnn14 ADD CONSTRAINT tnn14_other NOT NULL a
+t.schema_elems|CREATE SCHEMA tsch1 CREATE TABLE t1 (a int) CREATE VIEW v1 AS SELECT a FROM t1 CREATE SEQUENCE s1 CREATE INDEX t1_i ON t1 (a); SELECT relname, relkind FROM pg_class WHERE relnamespace = 'tsch1'::regnamespace ORDER BY relname
+t.schema_elems_order|CREATE SCHEMA tsch2 CREATE VIEW v2 AS SELECT a FROM t2 CREATE TABLE t2 (a int); SELECT count(*) FROM tsch2.v2
+t.schema_elems_qualified_wrong|CREATE SCHEMA tsch3 CREATE TABLE other.t3 (a int)
+t.schema_elems_qualified_right|CREATE SCHEMA tsch3b CREATE TABLE tsch3b.t3 (a int) CREATE INDEX ON tsch3b.t3 (a); SELECT relname FROM pg_class WHERE relnamespace = 'tsch3b'::regnamespace ORDER BY relname
+t.schema_elems_rollback_check|CREATE SCHEMA tsch3d CREATE TABLE t3 (a int) GRANT SELECT ON t3 TO tsch3d_nosuch_role
+t.schema_elems_rollback_after|SELECT count(*) FROM pg_namespace WHERE nspname = 'tsch3d'
+t.schema_elems_grant|CREATE ROLE tsch4_r3; CREATE SCHEMA tsch4 CREATE TABLE t4 (a int) GRANT SELECT ON t4 TO tsch4_r3; SELECT has_table_privilege('tsch4_r3', 'tsch4.t4', 'SELECT')
+t.schema_elems_trigger|CREATE FUNCTION tsch5_f() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN RETURN NEW; END$$; CREATE SCHEMA tsch5 CREATE TABLE t5 (a int) CREATE TRIGGER t5_tr BEFORE INSERT ON t5 FOR EACH ROW EXECUTE FUNCTION public.tsch5_f(); SELECT tgname FROM pg_trigger WHERE tgrelid = 'tsch5.t5'::regclass
+t.schema_authorization_elems|CREATE ROLE tsch6_r3; CREATE SCHEMA AUTHORIZATION tsch6_r3 CREATE TABLE t6 (a int); SELECT nspname FROM pg_namespace WHERE nspname = 'tsch6_r3'; SELECT tableowner FROM pg_tables WHERE tablename = 't6'
+t.schema_current_role|CREATE ROLE tsch7_r3 SUPERUSER; SET ROLE tsch7_r3; CREATE SCHEMA AUTHORIZATION CURRENT_ROLE CREATE TABLE t7 (a int); RESET ROLE; SELECT schemaname, tableowner FROM pg_tables WHERE tablename = 't7'
+t.schema_if_not_exists_elems|CREATE SCHEMA IF NOT EXISTS tsch8 CREATE TABLE t8 (a int)
+t.schema_elems_search_path_restored|CREATE SCHEMA tsch9 CREATE TABLE t9 (a int); SHOW search_path
+t.schema_elems_temp|CREATE SCHEMA tsch10 CREATE TEMP VIEW testview AS SELECT 1
+t.view_security_barrier|CREATE TABLE tv1(a int); CREATE VIEW tv1_v WITH (security_barrier) AS SELECT * FROM tv1; SELECT reloptions FROM pg_class WHERE relname = 'tv1_v'
+t.view_options_list|CREATE TABLE tv1b(a int); CREATE VIEW tv1b_v2 WITH (security_barrier=true) AS SELECT * FROM tv1b; CREATE VIEW tv1b_v3 WITH (security_barrier=false) AS SELECT * FROM tv1b; CREATE VIEW tv1b_v8 WITH (security_invoker=false, security_barrier=true) AS SELECT * FROM tv1b; CREATE VIEW tv1b_v9 WITH (security_invoker) AS SELECT * FROM tv1b; SELECT relname, relkind, reloptions FROM pg_class WHERE relname LIKE 'tv1b_v%' ORDER BY relname
+t.view_replace_options|CREATE TABLE tv1c(a int); CREATE VIEW tv1c_v WITH (security_invoker=false, security_barrier=true) AS SELECT * FROM tv1c; CREATE OR REPLACE VIEW tv1c_v WITH (security_invoker=true) AS SELECT * FROM tv1c; SELECT reloptions FROM pg_class WHERE relname = 'tv1c_v'
+t.view_bad_bool|CREATE TABLE tv1d(a int); CREATE VIEW tv1d_v WITH (security_barrier=100) AS SELECT * FROM tv1d
+t.view_bad_invoker|CREATE TABLE tv1e(a int); CREATE VIEW tv1e_v WITH (security_invoker=100) AS SELECT * FROM tv1e
+t.view_check_option_reloption|CREATE TABLE tv2(a int); CREATE VIEW tv2_v WITH (check_option = local) AS SELECT * FROM tv2 WHERE a > 0; SELECT reloptions FROM pg_class WHERE relname = 'tv2_v'; INSERT INTO tv2_v VALUES (-1)
+t.view_check_option_clause_reloption|CREATE TABLE tv2b(a int); CREATE VIEW tv2b_v AS SELECT * FROM tv2b WHERE a > 0 WITH LOCAL CHECK OPTION; CREATE VIEW tv2b_w AS SELECT * FROM tv2b WITH CHECK OPTION; SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'tv2b_%' ORDER BY relname
+t.view_check_option_bad|CREATE TABLE tv2c(a int); CREATE VIEW tv2c_v WITH (check_option = nosuch) AS SELECT * FROM tv2c
+t.view_security_invoker|CREATE TABLE tv3(a int); CREATE VIEW tv3_v WITH (security_invoker = true) AS SELECT * FROM tv3; SELECT reloptions FROM pg_class WHERE relname = 'tv3_v'
+t.view_security_invoker_privs|CREATE ROLE tv3b_r3; CREATE TABLE tv3b(a int); INSERT INTO tv3b VALUES (1); CREATE VIEW tv3b_owner AS SELECT * FROM tv3b; CREATE VIEW tv3b_invoker WITH (security_invoker) AS SELECT * FROM tv3b; GRANT SELECT ON tv3b_owner, tv3b_invoker TO tv3b_r3; SET ROLE tv3b_r3; SELECT * FROM tv3b_owner; SELECT * FROM tv3b_invoker
+t.view_security_invoker_rls|CREATE ROLE tv3c_r3; CREATE TABLE tv3c(a int, who text); INSERT INTO tv3c VALUES (1, 'tv3c_r3'), (2, 'other'); ALTER TABLE tv3c ENABLE ROW LEVEL SECURITY; CREATE POLICY tv3c_p ON tv3c USING (who = current_user); GRANT SELECT ON tv3c TO tv3c_r3; CREATE VIEW tv3c_invoker WITH (security_invoker) AS SELECT a FROM tv3c; CREATE VIEW tv3c_owner AS SELECT a FROM tv3c; GRANT SELECT ON tv3c_invoker, tv3c_owner TO tv3c_r3; SET ROLE tv3c_r3; SELECT * FROM tv3c_invoker ORDER BY a; SELECT * FROM tv3c_owner ORDER BY a
+t.view_alter_set|CREATE TABLE tv4(a int); CREATE VIEW tv4_v AS SELECT * FROM tv4; ALTER VIEW tv4_v SET (security_barrier = true); SELECT reloptions FROM pg_class WHERE relname = 'tv4_v'; ALTER VIEW tv4_v RESET (security_barrier); SELECT reloptions FROM pg_class WHERE relname = 'tv4_v'
+t.view_alter_set_invoker|CREATE ROLE tv4b_r3; CREATE TABLE tv4b(a int); INSERT INTO tv4b VALUES (1); CREATE VIEW tv4b_v AS SELECT * FROM tv4b; GRANT SELECT ON tv4b_v TO tv4b_r3; ALTER VIEW tv4b_v SET (security_invoker); SET ROLE tv4b_r3; SELECT * FROM tv4b_v
+t.view_alter_set_check_option|CREATE TABLE tv4c(a int); CREATE VIEW tv4c_v AS SELECT * FROM tv4c WHERE a > 0; ALTER VIEW tv4c_v SET (check_option = cascaded); SELECT reloptions FROM pg_class WHERE relname = 'tv4c_v'; INSERT INTO tv4c_v VALUES (-1)
+t.view_alter_not_owner|CREATE ROLE tv4d_r3; CREATE TABLE tv4d(a int); CREATE VIEW tv4d_v AS SELECT * FROM tv4d; SET ROLE tv4d_r3; ALTER VIEW tv4d_v SET (security_barrier)
+t.view_bad_option|CREATE TABLE tv5(a int); CREATE VIEW tv5_v WITH (nosuch = 1) AS SELECT * FROM tv5
+t.view_alter_bad_option|CREATE TABLE tv5b(a int); CREATE VIEW tv5b_v AS SELECT * FROM tv5b; ALTER VIEW tv5b_v SET (nosuch = 1)
+t.overriding_system_always|CREATE TABLE tov1(a int GENERATED ALWAYS AS IDENTITY, b text); INSERT INTO tov1 OVERRIDING SYSTEM VALUE VALUES (5, 'x'); INSERT INTO tov1 (b) VALUES ('y'); SELECT * FROM tov1 ORDER BY a
+t.overriding_system_needed|CREATE TABLE tov1b(a int GENERATED ALWAYS AS IDENTITY, b text); INSERT INTO tov1b VALUES (5, 'x')
+t.overriding_user_always|CREATE TABLE tov1c(a int GENERATED ALWAYS AS IDENTITY, b text); INSERT INTO tov1c OVERRIDING USER VALUE VALUES (99, 'y'), (DEFAULT, 'z'); SELECT * FROM tov1c ORDER BY a
+t.overriding_user_bydefault|CREATE TABLE tov2(a int GENERATED BY DEFAULT AS IDENTITY, b text); INSERT INTO tov2 OVERRIDING USER VALUE VALUES (99, 'y'); INSERT INTO tov2 VALUES (50, 'z'); SELECT * FROM tov2 ORDER BY a
+t.overriding_user_select|CREATE TABLE tov2b(a int GENERATED BY DEFAULT AS IDENTITY, b text); INSERT INTO tov2b OVERRIDING USER VALUE SELECT 99, 'y' UNION ALL SELECT 98, 'z'; SELECT * FROM tov2b ORDER BY a
+t.overriding_system_select|CREATE TABLE tov2c(a int GENERATED ALWAYS AS IDENTITY, b text); INSERT INTO tov2c OVERRIDING SYSTEM VALUE SELECT 7, 'q' RETURNING a, b
+t.overriding_generated_expr|CREATE TABLE tov2d(a int, b int GENERATED ALWAYS AS (a * 2) STORED); INSERT INTO tov2d (a, b) OVERRIDING SYSTEM VALUE VALUES (1, 5)
+t.overriding_merge|CREATE TABLE tov3(a int GENERATED ALWAYS AS IDENTITY, b text); MERGE INTO tov3 t USING (SELECT 7 AS a, 'm' AS b) s ON t.a = s.a WHEN NOT MATCHED THEN INSERT (a, b) OVERRIDING SYSTEM VALUE VALUES (s.a, s.b); SELECT * FROM tov3
+t.overriding_merge_user|CREATE TABLE tov3b(a int GENERATED BY DEFAULT AS IDENTITY, b text); MERGE INTO tov3b t USING (SELECT 7 AS a, 'm' AS b) s ON t.a = s.a WHEN NOT MATCHED THEN INSERT (a, b) OVERRIDING USER VALUE VALUES (s.a, s.b); SELECT * FROM tov3b
+t.overriding_merge_required|CREATE TABLE tov3c(a int GENERATED ALWAYS AS IDENTITY, b text); MERGE INTO tov3c t USING (SELECT 7 AS a, 'm' AS b) s ON t.a = s.a WHEN NOT MATCHED THEN INSERT (a, b) VALUES (s.a, s.b)
+t.drop_owned|CREATE ROLE tdo_r3; CREATE TABLE tdo_keep(a int); GRANT SELECT ON tdo_keep TO tdo_r3; CREATE TABLE tdo_t(a int); ALTER TABLE tdo_t OWNER TO tdo_r3; CREATE VIEW tdo_v AS SELECT * FROM tdo_t; ALTER VIEW tdo_v OWNER TO tdo_r3; CREATE SEQUENCE tdo_s; ALTER SEQUENCE tdo_s OWNER TO tdo_r3; DROP OWNED BY tdo_r3; SELECT count(*) FROM pg_class WHERE relname IN ('tdo_t', 'tdo_v', 'tdo_s'); SELECT has_table_privilege('tdo_r3', 'tdo_keep', 'SELECT'); DROP ROLE tdo_r3
+t.drop_owned_restrict|CREATE ROLE tdo2_r3; CREATE TABLE tdo2_t(a int); ALTER TABLE tdo2_t OWNER TO tdo2_r3; CREATE VIEW tdo2_v AS SELECT * FROM tdo2_t; DROP OWNED BY tdo2_r3
+t.drop_owned_cascade|CREATE ROLE tdo3_r3; CREATE TABLE tdo3_t(a int); ALTER TABLE tdo3_t OWNER TO tdo3_r3; CREATE VIEW tdo3_v AS SELECT * FROM tdo3_t; DROP OWNED BY tdo3_r3 CASCADE; SELECT count(*) FROM pg_class WHERE relname IN ('tdo3_t', 'tdo3_v')
+t.drop_owned_denied|CREATE ROLE tdo4_r3; CREATE ROLE tdo4_x3; CREATE TABLE tdo4_t(a int); ALTER TABLE tdo4_t OWNER TO tdo4_r3; SET ROLE tdo4_x3; DROP OWNED BY tdo4_r3
+t.drop_owned_function_schema|CREATE ROLE tdo5_r3; CREATE SCHEMA tdo5_s AUTHORIZATION tdo5_r3; CREATE FUNCTION tdo5_f(int) RETURNS int LANGUAGE sql AS 'SELECT $1'; ALTER FUNCTION tdo5_f(int) OWNER TO tdo5_r3; DROP OWNED BY tdo5_r3; SELECT count(*) FROM pg_namespace WHERE nspname = 'tdo5_s'; SELECT count(*) FROM pg_proc WHERE proname = 'tdo5_f'
+t.reassign_owned|CREATE ROLE tro_a3; CREATE ROLE tro_b3; CREATE TABLE tro_t(a int); ALTER TABLE tro_t OWNER TO tro_a3; CREATE SEQUENCE tro_s; ALTER SEQUENCE tro_s OWNER TO tro_a3; REASSIGN OWNED BY tro_a3 TO tro_b3; SELECT tableowner FROM pg_tables WHERE tablename = 'tro_t'; SELECT pg_get_userbyid(relowner) FROM pg_class WHERE relname = 'tro_s'
+t.reassign_owned_denied|CREATE ROLE tro2_a3; CREATE ROLE tro2_b3; CREATE ROLE tro2_x3; SET ROLE tro2_x3; REASSIGN OWNED BY tro2_a3 TO tro2_b3
+t.alter_set_storage|CREATE TABLE tst1(a text, b int); ALTER TABLE tst1 ALTER COLUMN a SET STORAGE EXTERNAL; ALTER TABLE tst1 ALTER b SET STORAGE PLAIN; SELECT attname, attstorage FROM pg_attribute WHERE attrelid = 'tst1'::regclass AND attnum > 0 ORDER BY attnum
+t.alter_set_storage_default|CREATE TABLE tst1b(a text); ALTER TABLE tst1b ALTER COLUMN a SET STORAGE MAIN; ALTER TABLE tst1b ALTER COLUMN a SET STORAGE DEFAULT; SELECT attstorage FROM pg_attribute WHERE attrelid = 'tst1b'::regclass AND attname = 'a'
+t.alter_set_storage_plain_only|CREATE TABLE tst1c(a int); ALTER TABLE tst1c ALTER COLUMN a SET STORAGE EXTERNAL
+t.alter_set_storage_bad|CREATE TABLE tst1d(a text); ALTER TABLE tst1d ALTER COLUMN a SET STORAGE nosuch
+t.alter_set_storage_inherit|CREATE TABLE tst1e(a text); CREATE TABLE tst1ec() INHERITS (tst1e); ALTER TABLE tst1e ALTER COLUMN a SET STORAGE EXTERNAL; SELECT attrelid::regclass::text, attstorage FROM pg_attribute WHERE attrelid IN ('tst1e'::regclass, 'tst1ec'::regclass) AND attname = 'a' ORDER BY 1
+t.alter_set_compression|CREATE TABLE tst2(a text); ALTER TABLE tst2 ALTER COLUMN a SET COMPRESSION pglz; SELECT attcompression FROM pg_attribute WHERE attrelid = 'tst2'::regclass AND attname = 'a'
+t.alter_add_identity|CREATE TABLE tid1(a int NOT NULL, b text); ALTER TABLE tid1 ALTER COLUMN a ADD GENERATED ALWAYS AS IDENTITY (START WITH 10 INCREMENT BY 5); INSERT INTO tid1(b) VALUES ('x'), ('y'); SELECT * FROM tid1 ORDER BY a; SELECT attidentity FROM pg_attribute WHERE attrelid = 'tid1'::regclass AND attname = 'a'
+t.alter_add_identity_nullable|CREATE TABLE tid1b(a int, b text); ALTER TABLE tid1b ALTER COLUMN a ADD GENERATED ALWAYS AS IDENTITY
+t.alter_add_identity_twice|CREATE TABLE tid1c(a int NOT NULL); ALTER TABLE tid1c ALTER COLUMN a ADD GENERATED ALWAYS AS IDENTITY; ALTER TABLE tid1c ALTER COLUMN a ADD GENERATED BY DEFAULT AS IDENTITY
+t.alter_add_identity_default|CREATE TABLE tid1d(a int NOT NULL DEFAULT 5); ALTER TABLE tid1d ALTER COLUMN a ADD GENERATED ALWAYS AS IDENTITY
+t.alter_add_identity_type|CREATE TABLE tid1e(a text NOT NULL); ALTER TABLE tid1e ALTER COLUMN a ADD GENERATED ALWAYS AS IDENTITY
+t.alter_add_identity_not_valid|CREATE TABLE tid1f(a int); ALTER TABLE tid1f ADD CONSTRAINT nn NOT NULL a NOT VALID; ALTER TABLE tid1f ALTER COLUMN a ADD GENERATED ALWAYS AS IDENTITY
+t.alter_set_identity|CREATE TABLE tid2(a int GENERATED ALWAYS AS IDENTITY, b text); ALTER TABLE tid2 ALTER COLUMN a SET GENERATED BY DEFAULT SET INCREMENT BY 5 RESTART WITH 100; INSERT INTO tid2(b) VALUES ('x'), ('y'); INSERT INTO tid2 VALUES (1, 'z'); SELECT * FROM tid2 ORDER BY a
+t.alter_set_identity_start_restart|CREATE TABLE tid2b(a int GENERATED BY DEFAULT AS IDENTITY, b text); INSERT INTO tid2b(b) VALUES ('x'); ALTER TABLE tid2b ALTER COLUMN a SET GENERATED BY DEFAULT SET INCREMENT BY 2 SET START WITH 100 RESTART; INSERT INTO tid2b(b) VALUES ('y'), ('z'); SELECT * FROM tid2b ORDER BY a
+t.alter_set_identity_always|CREATE TABLE tid2c(a int GENERATED BY DEFAULT AS IDENTITY, b text); ALTER TABLE tid2c ALTER COLUMN a SET GENERATED ALWAYS; INSERT INTO tid2c VALUES (5, 'x')
+t.alter_set_identity_not_identity|CREATE TABLE tid2d(a int, b int); ALTER TABLE tid2d ALTER COLUMN b SET INCREMENT BY 2
+t.alter_identity_seq_catalog|CREATE TABLE tid2e(a bigint NOT NULL); ALTER TABLE tid2e ALTER COLUMN a ADD GENERATED BY DEFAULT AS IDENTITY (START WITH 7 INCREMENT BY 3 MAXVALUE 1000 CYCLE); SELECT start_value, increment_by, max_value, cycle FROM pg_sequences WHERE sequencename = 'tid2e_a_seq'
+t.alter_drop_identity|CREATE TABLE tid3(a int GENERATED ALWAYS AS IDENTITY); ALTER TABLE tid3 ALTER COLUMN a DROP IDENTITY; ALTER TABLE tid3 ALTER COLUMN a DROP IDENTITY IF EXISTS; SELECT attidentity, attnotnull FROM pg_attribute WHERE attrelid = 'tid3'::regclass AND attname = 'a'; SELECT pg_get_serial_sequence('tid3', 'a'); INSERT INTO tid3 VALUES (NULL)
+t.alter_drop_identity_error|CREATE TABLE tid3b(a int); ALTER TABLE tid3b ALTER COLUMN a DROP IDENTITY
+t.create_table_using_heap|CREATE TABLE tam1(a int) USING heap; SELECT amname FROM pg_class c JOIN pg_am a ON a.oid = c.relam WHERE relname = 'tam1'
+t.create_table_using_other|CREATE TABLE tam2(a int) USING nosuch_am
+t.create_table_using_index_am|CREATE TABLE tam3(a int) USING btree
+t.create_table_as_using_heap|CREATE TABLE tam4 USING heap AS SELECT 1 AS a; SELECT * FROM tam4
+t.alter_table_set_access_method|CREATE TABLE tam5(a int); ALTER TABLE tam5 SET ACCESS METHOD heap; ALTER TABLE tam5 SET ACCESS METHOD DEFAULT; SELECT amname FROM pg_class c JOIN pg_am a ON a.oid = c.relam WHERE relname = 'tam5'
+t.typed_table|CREATE TYPE ttyp1 AS (a int, b text); CREATE TABLE ttt1 OF ttyp1; INSERT INTO ttt1 VALUES (1, 'x'); SELECT * FROM ttt1; SELECT reloftype::regtype FROM pg_class WHERE relname = 'ttt1'; SELECT attname, format_type(atttypid, atttypmod) FROM pg_attribute WHERE attrelid = 'ttt1'::regclass AND attnum > 0 ORDER BY attnum
+t.typed_table_options|CREATE TYPE ttyp2 AS (a int, b varchar(10)); CREATE TABLE ttt2 OF ttyp2 (a WITH OPTIONS PRIMARY KEY, b WITH OPTIONS DEFAULT 'd'); INSERT INTO ttt2(a) VALUES (1); SELECT * FROM ttt2; INSERT INTO ttt2 VALUES (1, 'y')
+t.typed_table_constraints|CREATE TYPE ttyp3 AS (id int, name text); CREATE TABLE ttt3 OF ttyp3 (PRIMARY KEY (id), name NOT NULL DEFAULT ''); INSERT INTO ttt3 (id) VALUES (1); SELECT * FROM ttt3; INSERT INTO ttt3 VALUES (2, NULL)
+t.typed_table_missing_type|CREATE TABLE ttt4 OF nothing_tt
+t.typed_table_not_composite|CREATE TYPE ttyp5 AS ENUM ('a'); CREATE TABLE ttt5 OF ttyp5
+t.typed_table_row_type|CREATE TABLE ttt6_stuff (id int); CREATE TABLE ttt6 OF ttt6_stuff
+t.typed_table_bad_column|CREATE TYPE ttyp7 AS (id int, name text); CREATE TABLE ttt7 OF ttyp7 (myname WITH OPTIONS NOT NULL)
+t.typed_table_twice|CREATE TYPE ttyp8 AS (id int, name text); CREATE TABLE ttt8 OF ttyp8 (name WITH OPTIONS NOT NULL, name WITH OPTIONS DEFAULT '')
+t.typed_table_add_column|CREATE TYPE ttyp9 AS (id int, name text); CREATE TABLE ttt9 OF ttyp9; ALTER TABLE ttt9 ADD COLUMN c text
+t.typed_table_drop_column|CREATE TYPE ttyp10 AS (id int, name text); CREATE TABLE ttt10 OF ttyp10; ALTER TABLE ttt10 DROP COLUMN name
+t.typed_table_rename_column|CREATE TYPE ttyp11 AS (id int, name text); CREATE TABLE ttt11 OF ttyp11; ALTER TABLE ttt11 RENAME COLUMN id TO num
+t.typed_table_alter_type|CREATE TYPE ttyp12 AS (id int, name text); CREATE TABLE ttt12 OF ttyp12; ALTER TABLE ttt12 ALTER COLUMN name TYPE varchar
+t.typed_table_inherit|CREATE TYPE ttyp13 AS (id int, name text); CREATE TABLE ttt13 OF ttyp13; CREATE TABLE ttt13_s (id int); ALTER TABLE ttt13 INHERIT ttt13_s
+t.typed_table_drop_type_restrict|CREATE TYPE ttyp14 AS (id int, name text); CREATE TABLE ttt14 OF ttyp14; DROP TYPE ttyp14 RESTRICT
+t.typed_table_drop_type_cascade|CREATE TYPE ttyp15 AS (id int, name text); CREATE TABLE ttt15 OF ttyp15; DROP TYPE ttyp15 CASCADE; SELECT count(*) FROM pg_class WHERE relname = 'ttt15'
+t.typed_table_alter_composite|CREATE TYPE ttyp16 AS (id int, name text); CREATE TABLE ttt16 OF ttyp16; ALTER TYPE ttyp16 ADD ATTRIBUTE c text
+t.typed_table_if_not_exists|CREATE TYPE ttyp17 AS (id int, name text); CREATE TABLE ttt17 OF ttyp17; CREATE TABLE IF NOT EXISTS ttt17 OF ttyp17; SELECT count(*) FROM ttt17

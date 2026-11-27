@@ -42,6 +42,7 @@ pub(crate) fn is_internal_sql_collection(name: &str) -> bool {
         crate::pg_operators::OPERATOR_COLLECTION,
         crate::session::EVENT_TRIGGER_COLLECTION,
         crate::user_casts::CAST_COLLECTION,
+        crate::foreign_data::FOREIGN_DATA_COLLECTION,
         crate::stats_ext::STATS_COLLECTION,
         crate::query_rules::RULE_COLLECTION,
         TRIGGER_COLLECTION,
@@ -141,6 +142,7 @@ pub(crate) fn graph_virtual_table_columns(table: &str) -> Vec<ColumnSchema> {
             default_expr: None,
             generated_expr: None,
             identity: None,
+            attributes: Default::default(),
         })
         .collect()
 }
@@ -165,6 +167,7 @@ pub(crate) fn default_record_columns() -> Vec<ColumnSchema> {
             default_expr: None,
             generated_expr: None,
             identity: None,
+            attributes: Default::default(),
         },
         ColumnSchema {
             comment: None,
@@ -184,6 +187,7 @@ pub(crate) fn default_record_columns() -> Vec<ColumnSchema> {
             default_expr: None,
             generated_expr: None,
             identity: None,
+            attributes: Default::default(),
         },
         ColumnSchema {
             comment: None,
@@ -203,6 +207,7 @@ pub(crate) fn default_record_columns() -> Vec<ColumnSchema> {
             default_expr: None,
             generated_expr: None,
             identity: None,
+            attributes: Default::default(),
         },
         ColumnSchema {
             comment: None,
@@ -222,6 +227,7 @@ pub(crate) fn default_record_columns() -> Vec<ColumnSchema> {
             default_expr: None,
             generated_expr: None,
             identity: None,
+            attributes: Default::default(),
         },
         ColumnSchema {
             comment: None,
@@ -241,6 +247,7 @@ pub(crate) fn default_record_columns() -> Vec<ColumnSchema> {
             default_expr: None,
             generated_expr: None,
             identity: None,
+            attributes: Default::default(),
         },
     ]
 }

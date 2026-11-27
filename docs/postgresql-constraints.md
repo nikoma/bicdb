@@ -22,6 +22,26 @@ none, and `ON CONFLICT (columns)` on a table with no unique arbiter fails with
 Supported constraint classes:
 
 - `NOT NULL` on columns, including primary-key columns.
+- PostgreSQL 18 not-null constraints written as table constraints:
+  `[CONSTRAINT name] NOT NULL column [NO INHERIT]` in `CREATE TABLE`, and
+  `ALTER TABLE ... ADD [CONSTRAINT name] NOT NULL column [NO INHERIT] [NOT VALID]`.
+  A named constraint (also `column int CONSTRAINT name NOT NULL`) keeps its
+  name in `pg_constraint` and in error reports, children created with
+  `INHERITS` take the parent's name, and `DROP CONSTRAINT`, `RENAME
+  CONSTRAINT`, `VALIDATE CONSTRAINT` and `ALTER CONSTRAINT ... [NO] INHERIT`
+  work on it. Conflicting declarations fail as in PostgreSQL (42601 for two
+  names or NO INHERIT mismatches, 42710 for a duplicate name, 55000 for
+  `ADD` against an existing constraint of another name, NO INHERIT state or
+  validity). An `ADD` without `ONLY` or `NO INHERIT` also adds the
+  constraint to inheritance children and partitions, checking their rows.
+- `NOT VALID` not-null constraints: new and updated rows are checked at once,
+  existing rows only by `VALIDATE CONSTRAINT` (or `ALTER COLUMN ... SET NOT
+  NULL`), which fails with 23502 while a NULL remains. Until then
+  `convalidated` is false, the planner does not treat the column as free of
+  NULLs, and `ADD PRIMARY KEY` or `ADD GENERATED ... AS IDENTITY` on the
+  column fails with 55000, as in PostgreSQL. `ALTER TABLE ... ADD NOT NULL`
+  combined with other actions in one statement is refused with 0A000.
+- `CHECK (...) NO INHERIT NOT VALID` in either order.
 - Basic `UNIQUE` constraints on one or more simple columns.
 - Basic `CHECK` constraints whose expressions use existing BicDB predicate
   support, such as comparisons joined with `AND` or `OR`.
@@ -101,8 +121,9 @@ Constraint metadata appears in:
 - `pg_catalog.pg_attribute` through `attnotnull`.
 - `pg_catalog.pg_class` through `relchecks`.
 - `pg_catalog.pg_constraint` with `contype` values `p`, `u`, `c`, `f`, and
-  generated not-null rows using `n`. `convalidated` reflects `NOT VALID` and
-  later `VALIDATE CONSTRAINT` state.
+  not-null rows using `n` (with their declared or generated names,
+  `connoinherit`, and `conislocal`/`coninhcount` for inherited ones).
+  `convalidated` reflects `NOT VALID` and later `VALIDATE CONSTRAINT` state.
 
 Use `bicdb integrity check <path>` or `bicdb check <path>` to combine
 storage-frame verification with SQL integrity validation for primary keys,

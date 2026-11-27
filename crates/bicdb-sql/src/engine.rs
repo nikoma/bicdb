@@ -2955,6 +2955,8 @@ pub(crate) struct PreparedJoinConstraint {
 pub(crate) enum ArrayProjectionSetReturningFunction {
     Unnest,
     GenerateSubscripts,
+    RegexpMatches,
+    RegexpSplitToTable,
     /// The form when the argument types settle it; otherwise resolved from the start value.
     GenerateSeries(Option<GenerateSeriesKind>),
     PgSnapshotXip,
@@ -3020,6 +3022,12 @@ impl ArrayProjectionSetReturningCall {
             (_, Some(_)) => None,
             (ArrayProjectionSetReturningFunction::GenerateSubscripts, None) => {
                 Some("int4".to_string())
+            }
+            (ArrayProjectionSetReturningFunction::RegexpMatches, None) => {
+                Some("text[]".to_string())
+            }
+            (ArrayProjectionSetReturningFunction::RegexpSplitToTable, None) => {
+                Some("text".to_string())
             }
             (ArrayProjectionSetReturningFunction::PgSnapshotXip, None) => Some("xid8".to_string()),
             (ArrayProjectionSetReturningFunction::TxidSnapshotXip, None) => {
@@ -3095,6 +3103,8 @@ pub(crate) fn array_projection_set_returning_calls(
                 ArrayProjectionSetReturningFunction::ExpandArray
             }
             "generate_subscripts" => ArrayProjectionSetReturningFunction::GenerateSubscripts,
+            "regexp_matches" => ArrayProjectionSetReturningFunction::RegexpMatches,
+            "regexp_split_to_table" => ArrayProjectionSetReturningFunction::RegexpSplitToTable,
             "pg_snapshot_xip" => ArrayProjectionSetReturningFunction::PgSnapshotXip,
             "txid_snapshot_xip" => ArrayProjectionSetReturningFunction::TxidSnapshotXip,
             "generate_series" => ArrayProjectionSetReturningFunction::GenerateSeries(None),
@@ -3255,6 +3265,10 @@ pub(crate) fn array_projection_set_values(
     match function {
         ArrayProjectionSetReturningFunction::Unnest => {
             unnest_values_from_sql(arguments.into_iter().next().unwrap_or(SqlValue::Null))
+        }
+        ArrayProjectionSetReturningFunction::RegexpMatches => regexp_matches_values(&arguments),
+        ArrayProjectionSetReturningFunction::RegexpSplitToTable => {
+            regexp_split_to_table_values(&arguments)
         }
         ArrayProjectionSetReturningFunction::ExpandArray => {
             let elements =

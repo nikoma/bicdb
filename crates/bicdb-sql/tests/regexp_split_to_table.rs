@@ -56,3 +56,34 @@ fn regexp_split_to_table_ignores_postgres_zero_length_boundary_matches() {
         vec![vec![text("a")], vec![text("b")], vec![text("c")]]
     );
 }
+
+#[test]
+fn regexp_functions_expand_in_the_select_list_with_null_padding() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+
+    let result = session
+        .execute(
+            "SELECT pg_catalog.regexp_matches('a1 b2', '([a-z])([0-9])', 'g') AS m,
+                    regexp_split_to_table('only', ',') AS s",
+        )
+        .unwrap();
+    assert_eq!(result.columns, ["m", "s"]);
+    assert_eq!(
+        result.column_types,
+        [Some("text[]".to_string()), Some("text".to_string())]
+    );
+    assert_eq!(result.rows.len(), 2);
+    assert_eq!(result.rows[0][1], text("only"));
+    assert_eq!(result.rows[1][1], SqlValue::Null);
+
+    let result = session
+        .execute(
+            "SELECT src, regexp_matches(src, '([a-z])') AS m
+               FROM (VALUES ('1'), ('a'), (NULL)) AS v(src)",
+        )
+        .unwrap();
+    assert_eq!(result.rows.len(), 1);
+    assert_eq!(result.rows[0][0], text("a"));
+}

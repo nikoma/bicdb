@@ -1373,7 +1373,12 @@ pub(crate) fn run_subscription(
                 }
                 let db = server.read_db()?;
                 for row in &rows.rows {
-                    let payload = render_copy_row(&db, row, &column_types, format)?;
+                    let payload = render_copy_row(
+                        &db,
+                        row,
+                        &column_types,
+                        &CopyOptions::for_format(format == CopyFormat::Csv),
+                    )?;
                     copy_data(stream, &payload)?;
                 }
             }

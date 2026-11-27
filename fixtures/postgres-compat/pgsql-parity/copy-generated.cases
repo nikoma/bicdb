@@ -1,0 +1,11 @@
+cg.copy_from_default_list|CREATE TABLE cg1(a int, b int GENERATED ALWAYS AS (a * 2) STORED, c int GENERATED ALWAYS AS (a * 3) VIRTUAL, d text); COPY cg1 FROM PROGRAM 'printf "1\tx\n2\ty\n"'; SELECT * FROM cg1 ORDER BY a
+cg.copy_to_default_list|CREATE TABLE cg2(a int, b int GENERATED ALWAYS AS (a * 2) STORED, c int GENERATED ALWAYS AS (a * 3) VIRTUAL, d text); INSERT INTO cg2 (a, d) VALUES (1, 'x'), (2, 'y'); COPY cg2 TO STDOUT; COPY cg2 TO STDOUT (HEADER); COPY cg2 (d, a) TO STDOUT
+cg.copy_to_named_stored|CREATE TABLE cg3(a int, b int GENERATED ALWAYS AS (a * 2) STORED); COPY cg3 (a, b) TO STDOUT
+cg.copy_to_named_virtual|CREATE TABLE cg4(a int, c int GENERATED ALWAYS AS (a * 3) VIRTUAL); COPY cg4 (c) TO STDOUT
+cg.copy_from_named_stored|CREATE TABLE cg5(a int, b int GENERATED ALWAYS AS (a * 2) STORED); COPY cg5 (a, b) FROM PROGRAM 'printf "1\t2\n"'
+cg.copy_from_named_virtual|CREATE TABLE cg6(a int, c int GENERATED ALWAYS AS (a * 3) VIRTUAL); COPY cg6 (a, c) FROM PROGRAM 'printf "1\t2\n"'
+cg.copy_from_where_generated|CREATE TABLE cg7(a int, b int GENERATED ALWAYS AS (a * 2) STORED); COPY cg7 FROM PROGRAM 'printf "1\n"' WHERE b <> 10
+cg.copy_from_where_whole_row|CREATE TABLE cg8(a int, b int GENERATED ALWAYS AS (a * 2) STORED); COPY cg8 FROM PROGRAM 'printf "1\n"' WHERE cg8 IS NULL
+cg.copy_to_where|CREATE TABLE cg9(a int); COPY cg9 TO STDOUT WHERE a > 1
+cg.copy_header_match_default|CREATE TABLE cg10(a int, b int GENERATED ALWAYS AS (a * 2) STORED, d text); COPY cg10 FROM PROGRAM 'printf "a,d\n1,x\n"' (FORMAT csv, HEADER MATCH); SELECT * FROM cg10
+cg.copy_binary_round_trip|CREATE TABLE cg11(a int, b int GENERATED ALWAYS AS (a * 2) STORED, d text); INSERT INTO cg11 (a, d) VALUES (4, 'q'); COPY cg11 TO PROGRAM 'cat > /tmp/bicdb-pgq/cg11.bin' (FORMAT binary); TRUNCATE cg11; COPY cg11 FROM '/tmp/bicdb-pgq/cg11.bin' (FORMAT binary); SELECT * FROM cg11

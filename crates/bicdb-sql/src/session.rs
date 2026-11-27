@@ -3315,6 +3315,118 @@ impl<'db> SqlSession<'db> {
         }
     }
 
+    /// The columns a COPY of `table` reads or writes, as PostgreSQL's
+    /// `CopyGetAttnums` decides them, and the table's generated columns in
+    /// column order. Without a column list: every column that is not
+    /// generated (stored or virtual), which are computed on COPY FROM and
+    /// left out of COPY TO. A generated column named in the list is refused
+    /// with 42P10. `None` when the relation has no table schema.
+    pub fn copy_target_columns(
+        &self,
+        table: &str,
+        columns: &[String],
+    ) -> Result<Option<(Vec<String>, Vec<String>)>> {
+        self.with_relation_name_scopes(|| self.copy_target_columns_inner(table, columns))
+    }
+
+    /// Resolve relation names as a statement of this session does: its
+    /// search_path and its temporary schema. `execute` enters these scopes
+    /// itself; entry points that resolve names without it (COPY) need them
+    /// too, or a temporary table is not found.
+    fn with_relation_name_scopes<T>(&self, run: impl FnOnce() -> Result<T>) -> Result<T> {
+        let temp_schema = self.temp_schema_name();
+        let _temp_scope = crate::search_path::TempSchemaScope::enter(temp_schema.as_deref());
+        let path = crate::search_path::binding_path_with_temp(
+            self.db_ref(),
+            &self.session_gucs,
+            temp_schema.as_deref(),
+        )?;
+        let _path_scope = crate::search_path::PathScope::enter(path);
+        let _catalog_scope = crate::search_path::CatalogScope::enter(&self.session_gucs);
+        run()
+    }
+
+    /// The parts of a COPY target, an unqualified name bound through the
+    /// active search_path (and so to the session's temporary schema) as a
+    /// statement binds it. Each part is taken exactly as written.
+    fn bind_copy_relation(&self, table: &str) -> Vec<String> {
+        let mut name = ObjectName::from(
+            table
+                .split('.')
+                .map(|part| Ident::with_quote('"', part))
+                .collect::<Vec<_>>(),
+        );
+        crate::search_path::bind_raw_relation(self.db_ref(), &mut name);
+        crate::eval::rewrite_helpers::object_name_parts(&name)
+    }
+
+    fn copy_target_columns_inner(
+        &self,
+        table: &str,
+        columns: &[String],
+    ) -> Result<Option<(Vec<String>, Vec<String>)>> {
+        let display = table
+            .rsplit('.')
+            .next()
+            .unwrap_or(table)
+            .trim_matches('"')
+            .to_string();
+        let qualified = self.bind_copy_relation(table);
+        let table = relation_name_from_parts(&qualified)?;
+        let table = resolve_session_relation_name(self.db_ref(), &table)?;
+        let Some(schema) = load_schema(self.db_ref(), &table)? else {
+            return Ok(None);
+        };
+        let generated = schema
+            .columns
+            .iter()
+            .filter(|column| !column.hidden && column.generated_expr.is_some())
+            .map(|column| column.name.clone())
+            .collect::<Vec<_>>();
+        if columns.is_empty() {
+            let targets = schema
+                .columns
+                .iter()
+                .filter(|column| !column.hidden && column.generated_expr.is_none())
+                .map(|column| column.name.clone())
+                .collect();
+            return Ok(Some((targets, generated)));
+        }
+        // PostgreSQL's CopyGetAttnums: every named column must exist, once.
+        for (index, column) in columns.iter().enumerate() {
+            if !schema.column(column).is_some_and(|target| !target.hidden) {
+                return Err(SqlError::coded(
+                    "42703",
+                    format!("column \"{column}\" of relation \"{display}\" does not exist"),
+                    None,
+                    None,
+                ));
+            }
+            if columns[..index].contains(column) {
+                return Err(SqlError::coded(
+                    "42701",
+                    format!("column \"{column}\" specified more than once"),
+                    None,
+                    None,
+                ));
+            }
+        }
+        for column in columns {
+            if let Some(target) = schema
+                .column(column)
+                .filter(|target| !target.hidden && target.generated_expr.is_some())
+            {
+                return Err(SqlError::coded(
+                    "42P10",
+                    format!("column \"{}\" is a generated column", target.name),
+                    Some("Generated columns cannot be used in COPY.".to_string()),
+                    None,
+                ));
+            }
+        }
+        Ok(Some((columns.to_vec(), generated)))
+    }
+
     pub fn copy_insert_rows(
         &mut self,
         table: &str,
@@ -3352,6 +3464,16 @@ impl<'db> SqlSession<'db> {
         self.require_transaction_write()?;
         self.with_implicit_guc_statement(|session| {
             session.with_statement_transaction(|session| {
+                let temp_schema = session.temp_schema_name();
+                let _temp_scope =
+                    crate::search_path::TempSchemaScope::enter(temp_schema.as_deref());
+                let path = crate::search_path::binding_path_with_temp(
+                    session.db_ref(),
+                    &session.session_gucs,
+                    temp_schema.as_deref(),
+                )?;
+                let _path_scope = crate::search_path::PathScope::enter(path);
+                let _catalog_scope = crate::search_path::CatalogScope::enter(&session.session_gucs);
                 session.copy_insert_rows_inner(table, columns, rows, lines)
             })
         })
@@ -3376,7 +3498,7 @@ impl<'db> SqlSession<'db> {
         // INSERT/SELECT use before resolving. Without this the qualifier
         // was dropped and `COPY carrier_private.context_nonces` loaded into
         // `public.context_nonces`.
-        let qualified: Vec<String> = table.split('.').map(str::to_string).collect();
+        let qualified = self.bind_copy_relation(table);
         let table = relation_name_from_parts(&qualified)?;
         let table = resolve_session_relation_name(self.db_ref(), &table)?;
         // COPY FROM is an INSERT with a different wire shape. It enforced RLS

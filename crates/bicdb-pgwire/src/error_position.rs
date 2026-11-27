@@ -11,6 +11,9 @@
 
 /// Position for `error` raised by `query`, when PostgreSQL would report one.
 pub(crate) fn error_position(query: &str, sqlstate: &str, message: &str) -> Option<usize> {
+    if let Some(position) = copy_option_position(query, message) {
+        return Some(position);
+    }
     let text = QueryText::new(query);
     if let Some(position) = syntax_error_position(&text, sqlstate, message) {
         return Some(position);
@@ -853,4 +856,98 @@ mod tests {
             None
         );
     }
+}
+
+/// PostgreSQL's `parser_errposition` for the COPY option errors that carry
+/// one: the option's name in a parenthesized option list (for "conflicting or
+/// redundant options", its second occurrence).
+fn copy_option_position(query: &str, message: &str) -> Option<usize> {
+    let trimmed = query.trim_start();
+    if !trimmed
+        .get(..5)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("copy "))
+    {
+        return None;
+    }
+    let option = if message == "conflicting or redundant options" {
+        None
+    } else if let Some(name) = quoted_between(message, "option \"", "\" not recognized")
+        .or_else(|| quoted_between(message, "argument to option \"", "\" must be"))
+    {
+        Some(name.to_ascii_lowercase())
+    } else if message.starts_with("COPY format \"") && message.ends_with("\" not recognized") {
+        Some("format".to_string())
+    } else if message.starts_with("COPY ON_ERROR ") {
+        Some("on_error".to_string())
+    } else if message.starts_with("COPY LOG_VERBOSITY \"") {
+        Some("log_verbosity".to_string())
+    } else {
+        return None;
+    };
+    // Option names in a parenthesized list: the word after `(` or `,` at
+    // depth 1, outside string literals. Byte offsets, then characters.
+    let mut names: Vec<(String, usize)> = Vec::new();
+    let bytes = query.as_bytes();
+    let (mut depth, mut quoted, mut expect_name) = (0_i32, false, false);
+    let mut idx = 0;
+    while idx < bytes.len() {
+        let c = bytes[idx];
+        if quoted {
+            if c == b'\'' {
+                quoted = false;
+            }
+            idx += 1;
+            continue;
+        }
+        match c {
+            b'\'' => quoted = true,
+            b'(' => {
+                depth += 1;
+                expect_name = depth == 1;
+            }
+            b')' => {
+                depth -= 1;
+                expect_name = false;
+            }
+            b',' if depth == 1 => expect_name = true,
+            c if c.is_ascii_whitespace() => {}
+            c if expect_name && (c.is_ascii_alphabetic() || c == b'_' || c == b'"') => {
+                let start = idx;
+                let end = if c == b'"' {
+                    query[idx + 1..]
+                        .find('"')
+                        .map_or(bytes.len(), |end| idx + 2 + end)
+                } else {
+                    query[idx..]
+                        .find(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
+                        .map_or(bytes.len(), |end| idx + end)
+                };
+                let word = &query[start..end];
+                let name = if c == b'"' {
+                    word.trim_matches('"').to_string()
+                } else {
+                    word.to_ascii_lowercase()
+                };
+                names.push((name, start));
+                expect_name = false;
+                idx = end;
+                continue;
+            }
+            _ => expect_name = false,
+        }
+        idx += 1;
+    }
+    let byte = match option {
+        Some(option) => names.iter().find(|(name, _)| *name == option)?.1,
+        None => names
+            .iter()
+            .enumerate()
+            .find_map(|(index, (name, start))| {
+                names[..index]
+                    .iter()
+                    .any(|(earlier, _)| earlier == name)
+                    .then_some(*start)
+            })?,
+    };
+    Some(query[..byte].chars().count() + 1)
 }

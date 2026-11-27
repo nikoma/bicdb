@@ -229,6 +229,20 @@ severity and SQLSTATE:
   below DIR, no symbolic links) and, separately, `--allow-copy-program`;
   otherwise 0A000. Only top-level client statements can use it; COPY in a
   routine is refused. See [server-side COPY](server-side-copy.md).
+- COPY leaves generated columns (stored and virtual) out of its default column
+  list: COPY FROM computes them and COPY TO does not write them. Naming one in
+  the column list is refused before COPY starts (42P10), as is `COPY ... FROM
+  ... WHERE` (42P10 when the condition reads a generated column, otherwise
+  0A000: the filter is not implemented).
+- COPY options are read in both PostgreSQL syntaxes (the legacy list after
+  `WITH`, `USING DELIMITERS`, and the parenthesized list) and checked as
+  PostgreSQL checks them, with its errors and option positions. DELIMITER,
+  NULL, QUOTE, ESCAPE, FORCE_QUOTE, FORCE_NOT_NULL, FORCE_NULL and HEADER
+  [MATCH] work for text and CSV in both directions, with PostgreSQL's
+  backslash escapes in text. ENCODING takes UTF8 and its aliases, SQL_ASCII,
+  and LATIN1 (converted both ways). FREEZE (true), DEFAULT, ON_ERROR IGNORE
+  (and REJECT_LIMIT) and other encodings are refused with 0A000 before COPY
+  starts; no option is accepted and ignored.
 
 ## Statistics aggregates, partitions and lock privileges (2026-11)
 

@@ -79,8 +79,8 @@ mod vacuum_analyze;
 pub use read_only::parse_transaction_read_only;
 pub use temp_tables::{
     drop_connection_temp_schema, drop_orphan_temp_schemas, drop_temp_on_commit_tables,
-    temp_on_commit_delete_pending, temp_on_commit_drop_pending, temp_on_commit_pending,
-    temp_schema_exists,
+    repair_orphan_views, temp_on_commit_delete_pending, temp_on_commit_drop_pending,
+    temp_on_commit_pending, temp_schema_exists,
 };
 pub(crate) mod txn_update;
 pub(crate) mod updatable_views;
@@ -5692,6 +5692,23 @@ impl<'db> SqlSession<'db> {
         Ok(())
     }
 
+    /// The physical name of a relation written as `parts` (`t` or `s.t`),
+    /// an unqualified name bound through the active search_path (temporary
+    /// schema first) as a statement binds it. `None` when it names nothing.
+    pub(crate) fn resolve_written_relation(&self, parts: &[String]) -> Option<String> {
+        let mut name = ObjectName::from(
+            parts
+                .iter()
+                .map(|part| Ident::with_quote('"', part))
+                .collect::<Vec<_>>(),
+        );
+        crate::search_path::bind_raw_relation(self.db_ref(), &mut name);
+        let physical =
+            relation_name_from_parts(&crate::eval::rewrite_helpers::object_name_parts(&name))
+                .ok()?;
+        resolve_relation_name_memoized(self.db_ref(), &physical)
+    }
+
     pub(crate) fn create_session_namespace_if_missing(
         &mut self,
         namespace: NamespaceSchema,
@@ -7241,8 +7258,12 @@ impl<'db> SqlSession<'db> {
         let mut table = relation_name(&relation)?;
         // An unqualified name resolves through search_path, as other DDL.
         if relation.0.len() == 1 {
-            if let Some(path) = crate::search_path::binding_path(self.db_ref(), &self.session_gucs)?
-            {
+            // The session's temporary schema first, as for any reference.
+            if let Some(path) = crate::search_path::binding_path_with_temp(
+                self.db_ref(),
+                &self.session_gucs,
+                self.temp_schema_name().as_deref(),
+            )? {
                 for namespace in path.iter() {
                     let mut parts = vec![sqlparser::ast::ObjectNamePart::Identifier(
                         Ident::with_quote('"', namespace.clone()),

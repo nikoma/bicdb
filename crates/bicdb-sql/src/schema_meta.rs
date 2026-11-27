@@ -4367,7 +4367,29 @@ fn table_name_from_value(db: &BicDb, value: &SqlValue) -> Option<String> {
             .iter()
             .find(|(_, table_oid)| **table_oid == *oid)
             .map(|(name, _)| name.clone()),
-        other => sql_value_text(other),
+        other => {
+            let text = sql_value_text(other)?;
+            // An unqualified name resolves through the search_path (the
+            // temporary schema first), as regclass input does.
+            if let (Ok(parts), Some(path)) = (
+                sql_identifier_parts(&text),
+                crate::search_path::active_path(),
+            ) {
+                if let [name] = parts.as_slice() {
+                    for schema in path.iter() {
+                        let Ok(physical) =
+                            relation_name_from_parts(&[schema.clone(), name.clone()])
+                        else {
+                            continue;
+                        };
+                        if relation_exists(db, &physical) {
+                            return Some(physical);
+                        }
+                    }
+                }
+            }
+            Some(text)
+        }
     }
 }
 

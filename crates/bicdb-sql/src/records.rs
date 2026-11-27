@@ -4279,6 +4279,15 @@ pub(crate) fn integrity_sqlstate(code: &str) -> Option<&'static str> {
 }
 
 pub(crate) fn unique_violation(schema: &TableSchema, name: &str) -> SqlError {
+    // A generated name of a table outside public starts with the table's
+    // storage name; PostgreSQL's starts with the table's own name.
+    let shown = match name.strip_prefix(schema.name.as_str()) {
+        Some(rest) if schema.name.starts_with("__bicdb_s_") => {
+            format!("{}{rest}", catalog_display_name(&schema.name))
+        }
+        _ => name.to_string(),
+    };
+    let name = shown.as_str();
     SqlError::ConstraintViolation {
         sqlstate: "23505",
         message: format!("duplicate key value violates unique constraint \"{name}\""),

@@ -2727,6 +2727,39 @@ impl<'db> SqlEngine<'db> {
         else {
             return Ok(None);
         };
+        // Index keys order NULL below every value, so reading the index gives
+        // NULLS FIRST ascending and NULLS LAST descending: the opposite of
+        // ORDER BY's defaults. A nullable ordering column may only use this
+        // path when the statement asks for the index's NULL placement.
+        let index_nulls_first = !descending;
+        let requested_nulls_first = match query.order_by.as_ref().map(|order_by| &order_by.kind) {
+            Some(OrderByKind::Expressions(items)) => items
+                .first()
+                .and_then(|item| item.options.nulls_first)
+                .unwrap_or(descending),
+            _ => descending,
+        };
+        if requested_nulls_first != index_nulls_first {
+            let order_column = indexes
+                .iter()
+                .find(|index| index.name == index_name)
+                .and_then(|index| index.fields.get(prefix.len()))
+                .and_then(|field| match field {
+                    IndexField::MetadataPath(path) if path.len() == 1 => Some(path[0].clone()),
+                    _ => None,
+                });
+            let not_null = match (schema.as_ref(), order_column) {
+                (Some(schema), Some(column)) => schema
+                    .columns
+                    .iter()
+                    .find(|candidate| candidate.name == column)
+                    .is_some_and(|candidate| !candidate.nullable || candidate.primary_key),
+                _ => false,
+            };
+            if !not_null {
+                return Ok(None);
+            }
+        }
         let alias = alias
             .as_ref()
             .map(|alias| alias.name.value.clone())

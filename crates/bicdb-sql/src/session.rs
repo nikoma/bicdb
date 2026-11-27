@@ -7283,6 +7283,28 @@ impl<'db> SqlSession<'db> {
         } else {
             normalize_object_name(raw)
         };
+        self.reset_named_setting(setting)
+    }
+
+    fn apply_setting_default(&mut self, setting: String) -> Result<()> {
+        self.reset_named_setting(setting.clone())?;
+        self.apply_database_setting_default(&setting);
+        Ok(())
+    }
+
+    fn apply_database_setting_default(&mut self, setting: &str) {
+        if self.session_gucs.contains_key(setting) || is_protected_security_setting(setting) {
+            return;
+        }
+        let name = current_database_from_gucs(&self.session_gucs);
+        if let Ok(mut defaults) = database_settings(self.db_ref(), &name) {
+            if let Some(value) = defaults.remove(setting) {
+                Arc::make_mut(&mut self.session_gucs).insert(setting.to_string(), value);
+            }
+        }
+    }
+
+    fn reset_named_setting(&mut self, setting: String) -> Result<GucAssignmentTargets> {
         let targets = GucAssignmentTargets::setting(&setting);
         self.require_local_transaction_setting_control(&setting)?;
         if targets.is_current_transaction_mode()

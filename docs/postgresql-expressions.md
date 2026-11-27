@@ -276,6 +276,26 @@ cases protect the two front ends.
 - `ts_rank_cd` leaves out positions whose weight the query operand
   excludes (`s:A`), as PostgreSQL's cover density does.
 
+Upgrade note (text search output of built-in configurations). Since
+built-in configurations follow PostgreSQL's token-type mappings, these
+outputs differ from earlier BicDB versions:
+- In `english` and the other Snowball configurations, tokens that are not
+  plain words (letters with digits, hosts, emails, URLs, URL paths, file
+  paths, numbers, versions) are only lower-cased, no longer stemmed:
+  `covid19s`, `/docs/files`, `api.example.org/v2/users` stay whole where
+  they used to lose a suffix.
+- In `russian` and `hindi`, ASCII words go through the English stemmer and
+  English stop words, as in PostgreSQL (they used to be left unstemmed).
+- `websearch_to_tsquery` reads `or` in any letter case as OR (it used to
+  read only `OR`; in `english` a lower-case `or` was a dropped stop word).
+- `simple` output, positions, and all plain-word handling are unchanged.
+Stored values computed by the old rules no longer match queries for those
+tokens: recompute stored `tsvector` columns (`UPDATE t SET doc =
+to_tsvector(...)`), rewrite stored generated columns, and `REINDEX` indexes
+over `to_tsvector(...)` expressions that use an affected configuration.
+Full-text indexes the storage engine builds from raw text fields use their
+own tokenizer and are not affected.
+
 Limits: these fail instead of answering:
 - `ts_debug`, `ts_parse` and `unnest(tsvector)`
 - Ispell and thesaurus dictionaries (0A000 at CREATE TEXT SEARCH DICTIONARY)

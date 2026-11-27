@@ -70,7 +70,10 @@ fn synonym_dictionary_in_a_copied_configuration() {
         ),
         "synonyms = 'synonym_sample'"
     );
-    assert_eq!(text(&mut session, "SELECT 'syn_tst'::regconfig"), "syn_tst");
+    assert_eq!(
+        text(&mut session, "SELECT 'syn_tst'::regconfig::text"),
+        "syn_tst"
+    );
 }
 
 #[test]

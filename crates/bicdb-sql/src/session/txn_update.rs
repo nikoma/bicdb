@@ -2876,6 +2876,10 @@ impl<'db> SqlSession<'db> {
         tables.dedup_by(|left, right| left.name.eq_ignore_ascii_case(&right.name));
 
         for target in tables {
+            if self.tx.is_some() {
+                // COPY FREEZE needs to know what this transaction truncated.
+                self.fresh_relations.push(target.name.clone());
+            }
             let records =
                 self.scan_session_records_for_action(&target.name, PolicyAction::Delete)?;
             for (idx, record) in records.into_iter().enumerate() {

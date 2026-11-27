@@ -32,6 +32,7 @@ impl UpdateMatchPolicy {
 
 impl SqlSession<'_> {
     pub(super) fn execute_merge(&mut self, merge: &Merge) -> Result<SqlResult> {
+        let _overriding = super::insert_overriding::MergeScope::enter();
         let oracle = oracle::preview_routine_language_enabled(self.db_ref())?;
         if !oracle && !is_single_matched_update(merge) {
             let owned = std::mem::replace(&mut self.ir_owned_statement, false);
@@ -994,8 +995,18 @@ impl SqlSession<'_> {
                     "INSERT has more target columns than expressions".into(),
                 ));
             }
+            let discard_identity = super::insert_overriding::merge_overriding()
+                == Some(super::insert_overriding::Overriding::User);
             for (name, value) in names.into_iter().zip(values) {
                 if expr_is_default(value) {
+                    continue;
+                }
+                // OVERRIDING USER VALUE: identity columns take their default.
+                if discard_identity
+                    && schema
+                        .column(&name)
+                        .is_some_and(|column| column.identity.is_some())
+                {
                     continue;
                 }
                 insert_columns.push(name);
@@ -1057,7 +1068,14 @@ impl SqlSession<'_> {
                         .collect(),
                 ),
             );
-            let result = self.execute_insert_with_ctes(&insert, ctes)?;
+            if super::insert_overriding::merge_overriding()
+                == Some(super::insert_overriding::Overriding::System)
+            {
+                super::insert_overriding::arm_system_value(&schema.name);
+            }
+            let result = self.execute_insert_with_ctes(&insert, ctes);
+            super::insert_overriding::disarm_system_value();
+            let result = result?;
             if returning {
                 count += result.rows.len();
                 returned.extend(result.rows.into_iter().map(|row| (batch[0], row)));

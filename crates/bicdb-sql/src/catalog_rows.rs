@@ -465,9 +465,33 @@ pub(crate) fn inherited_not_null_name(
     depth: usize,
 ) -> String {
     match inherited_not_null_parents(schemas, schema, column).first() {
+        _ if declared_not_null_name(schema, column).is_some() => {
+            declared_not_null_name(schema, column).unwrap_or_default()
+        }
         Some(parent) if depth < 64 => inherited_not_null_name(schemas, parent, column, depth + 1),
         _ => not_null_constraint_name(&schema.name, column),
     }
+}
+
+/// The name written for `column`'s not-null constraint on `schema` itself
+/// (`CONSTRAINT name NOT NULL`), if one was given.
+pub(crate) fn declared_not_null_name(schema: &TableSchema, column: &str) -> Option<String> {
+    schema
+        .columns
+        .iter()
+        .find(|candidate| candidate.name == column)
+        .and_then(|candidate| candidate.attributes.not_null_name.clone())
+}
+
+/// The name of `column`'s not-null constraint on `schema` as the catalog
+/// shows it: the declared name, else that of the ancestor the constraint is
+/// inherited from, else the generated one.
+pub(crate) fn effective_not_null_name(
+    schemas: &[TableSchema],
+    schema: &TableSchema,
+    column: &str,
+) -> String {
+    inherited_not_null_name(schemas, schema, column, 0)
 }
 
 pub(crate) fn key_column_usage_row(
@@ -593,6 +617,15 @@ pub(crate) fn pg_class_rows_filtered(
     let view_relkinds = views
         .iter()
         .map(|view| (view.name.clone(), if view.materialized { "m" } else { "v" }))
+        .collect::<BTreeMap<_, _>>();
+    let view_reloptions = views
+        .iter()
+        .map(|view| {
+            (
+                view.name.clone(),
+                crate::session::view_options::view_reloptions_value(view),
+            )
+        })
         .collect::<BTreeMap<_, _>>();
     let view_owners = views
         .iter()
@@ -730,6 +763,12 @@ pub(crate) fn pg_class_rows_filtered(
             .or_else(|| view_owners.get(&table_key).cloned())
             .unwrap_or_else(current_role_name);
         row.insert("relowner".to_string(), SqlValue::Int(role_oid(&owner)));
+        if let Some(options) = view_reloptions
+            .get(&table_key)
+            .filter(|options| !matches!(options, SqlValue::Null))
+        {
+            row.insert("reloptions".to_string(), options.clone());
+        }
         // ANALYZE's size estimate in 8 KB pages, as PostgreSQL's ANALYZE
         // records it.
         if let Some(pages) = db
@@ -747,6 +786,13 @@ pub(crate) fn pg_class_rows_filtered(
         }
         if table_schema.is_some_and(|schema| schema.unlogged) {
             row.insert("relpersistence".to_string(), SqlValue::String("u".into()));
+        }
+        if let Some((type_schema, type_name)) =
+            table_schema.and_then(|schema| schema.of_type.as_ref())
+        {
+            if let Some(user_type) = load_user_type(db, type_schema, type_name)? {
+                row.insert("reloftype".to_string(), SqlValue::Int(user_type.oid));
+            }
         }
         if table_schema
             .is_some_and(|schema| crate::search_path::is_temp_schema(&schema.schema_name))
@@ -1576,7 +1622,7 @@ pub(crate) fn pg_attribute_rows_for_columns(
             let attndims = column.catalog_array_ndims();
             let attbyval = column.type_by_value();
             let attalign = column.type_align();
-            let attstorage = column.type_storage();
+            let attstorage = column.attribute_storage();
             let attcompression = column
                 .compression
                 .map_or_else(String::new, |compression| compression.to_string());
@@ -1754,6 +1800,7 @@ fn composite_attribute_columns(attributes: Vec<CompositeAttributeSchema>) -> Vec
                 default_expr: None,
                 generated_expr: None,
                 identity: None,
+                attributes: Default::default(),
             }
         })
         .collect()
@@ -3472,6 +3519,7 @@ pub(crate) const PG_BUILTIN_PROC_ROWS: &[(i64, &str, i64, i64)] = &[
     (1021, "pg_get_userbyid", 25, 0),
     (1022, "has_type_privilege", 16, 0),
     (1024, "has_function_privilege", 16, 0),
+    (2316, "postgresql_fdw_validator", 16, 2),
     (715, "lo_create", 26, 1),
     (952, "lo_open", 23, 2),
     (953, "lo_close", 23, 1),
@@ -5220,7 +5268,14 @@ pub(crate) fn pg_tables_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue
                 ),
             ),
             ("tablename", SqlValue::String(catalog_display_name(&table))),
-            ("tableowner", SqlValue::String("bicdb".to_string())),
+            (
+                "tableowner",
+                SqlValue::String(
+                    table_schema
+                        .and_then(|schema| schema.owner.clone())
+                        .unwrap_or_else(|| BOOTSTRAP_ROLE_NAME.to_string()),
+                ),
+            ),
             ("tablespace", SqlValue::Null),
             ("hasindexes", SqlValue::Bool(hasindexes)),
             ("hasrules", SqlValue::Bool(false)),
@@ -5617,6 +5672,22 @@ pub(crate) fn pg_constraint_rows_from_schemas(
             }));
         }
     }
+    // Inherited not-null constraints take their names from ancestors,
+    // which a relation filter may have left out of `schemas`.
+    let mut lineage = schemas.to_vec();
+    let mut pending = schemas
+        .iter()
+        .flat_map(|schema| schema.inherits.clone())
+        .collect::<Vec<_>>();
+    while let Some(parent) = pending.pop() {
+        if lineage.len() > 4096 || lineage.iter().any(|known| known.name == parent) {
+            continue;
+        }
+        if let Some(loaded) = load_schema(db, &parent)? {
+            pending.extend(loaded.inherits.clone());
+            lineage.push(loaded);
+        }
+    }
     for schema in schemas {
         let table_oid = *table_oids.get(&schema.name).unwrap_or(&0);
         let mut constraint_slot = 1_i64;
@@ -5626,11 +5697,8 @@ pub(crate) fn pg_constraint_rows_from_schemas(
             }
             if !column.nullable || column.primary_key {
                 // An inherited not-null constraint keeps its parent's name.
-                let parents = inherited_not_null_parents(schemas, schema, &column.name);
-                let name = match parents.first() {
-                    Some(parent) => inherited_not_null_name(schemas, parent, &column.name, 0),
-                    None => not_null_constraint_name(&schema.name, &column.name),
-                };
+                let parents = inherited_not_null_parents(&lineage, schema, &column.name);
+                let name = effective_not_null_name(&lineage, schema, &column.name);
                 if pg_constraint_filter_matches(&name, "n", table_oid, names, types, relation_oids)
                 {
                     rows.push(pg_constraint_row(PgConstraintRow {
@@ -5650,7 +5718,7 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                         ],
                         confkey: Vec::new(),
                         conbin: None,
-                        convalidated: true,
+                        convalidated: !column.attributes.not_null_not_valid,
                     }));
                     let no_inherit = schema
                         .no_inherit_constraints
@@ -5660,7 +5728,10 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                             row.insert("connoinherit".into(), SqlValue::Bool(true));
                         }
                         if !parents.is_empty() {
-                            row.insert("conislocal".into(), SqlValue::Bool(false));
+                            // A name declared on the child makes its copy local too.
+                            if column.attributes.not_null_name.is_none() {
+                                row.insert("conislocal".into(), SqlValue::Bool(false));
+                            }
                             row.insert("coninhcount".into(), SqlValue::Int(parents.len() as i64));
                         }
                     }
@@ -8372,6 +8443,7 @@ pub(crate) fn catalog_view_schema(db: &BicDb, view: ViewSchema) -> Result<TableS
         inheritance_children: Vec::new(),
         no_inherit_constraints: Vec::new(),
         temporal_foreign_keys: Vec::new(),
+        of_type: None,
     })
 }
 pub(crate) fn relation_schemas(db: &BicDb) -> Result<Vec<TableSchema>> {

@@ -63,6 +63,15 @@ pub(crate) fn eval_privilege_function_value(
                 &current_user_from_gucs(session_gucs),
             )?,
         )),
+        "has_foreign_data_wrapper_privilege"
+        | "pg_catalog.has_foreign_data_wrapper_privilege"
+        | "has_server_privilege"
+        | "pg_catalog.has_server_privilege" => Ok(Some(crate::foreign_data::has_privilege_value(
+            db,
+            name,
+            args,
+            &current_user_from_gucs(session_gucs),
+        )?)),
         "has_type_privilege" | "pg_catalog.has_type_privilege" => {
             if args.iter().any(|value| matches!(value, SqlValue::Null)) {
                 return Ok(Some(SqlValue::Null));
@@ -3769,6 +3778,16 @@ pub(crate) fn eval_compatibility_function_value_with_db(
                         *value = SqlValue::String(render_oid_alias_value(db, pg_type, value)?);
                     }
                 }
+                // An array argument formats as its text, not its storage form.
+                if let Some(element) = pg_type.as_deref().and_then(|name| name.strip_suffix("[]")) {
+                    if !matches!(value, SqlValue::Null | SqlValue::String(_)) {
+                        *value = SqlValue::String(postgres_array_cast_text_value_of(
+                            element,
+                            value,
+                            pg_type_delimiter_with_db(db, element)?,
+                        )?);
+                    }
+                }
             }
         }
         return Ok(Some(eval_pg_format(&rendered)?));
@@ -3804,7 +3823,11 @@ pub(crate) fn eval_compatibility_function_value(
         }
         let target = args[0].to_cell().to_ascii_lowercase();
         if matches!(args.last(), Some(SqlValue::Null)) {
-            return Ok(Some(SqlValue::Null));
+            return if matches!(target.as_str(), "format" | "pg_catalog.format") {
+                eval_pg_format(&args[1..args.len() - 1]).map(Some)
+            } else {
+                Ok(Some(SqlValue::Null))
+            };
         }
         let (array, _) = array_json_parts(args.last().unwrap(), "VARIADIC")?.ok_or_else(|| {
             SqlError::InvalidSql("VARIADIC argument must be an array".to_string())
@@ -4501,53 +4524,166 @@ pub(crate) fn eval_pg_format(args: &[SqlValue]) -> Result<SqlValue> {
     let Some(template) = args.first().and_then(sql_value_text) else {
         return Ok(SqlValue::Null);
     };
+    let values = &args[1..];
+    let mut next_argument = 0;
     let mut rendered = String::with_capacity(template.len());
-    let mut values = args[1..].iter();
-    let mut chars = template.chars();
+    let mut chars = template.chars().peekable();
     while let Some(ch) = chars.next() {
         if ch != '%' {
             rendered.push(ch);
             continue;
         }
-        let specifier = chars.next().ok_or_else(|| {
-            SqlError::InvalidSql("unterminated format() conversion specifier".to_string())
-        })?;
-        if specifier == '%' {
+        if chars.next_if_eq(&'%').is_some() {
             rendered.push('%');
             continue;
         }
-        let value = values
-            .next()
-            .ok_or_else(|| SqlError::InvalidSql("too few arguments for format()".to_string()))?;
-        match specifier {
-            'I' => {
-                let value = sql_value_text(value).ok_or_else(|| {
-                    SqlError::InvalidSql(
-                        "null values cannot be formatted as an SQL identifier".to_string(),
-                    )
-                })?;
-                rendered.push_str(&pg_quote_ident(&value));
+
+        let mut width = format_decimal(&mut chars)?;
+        let position = if width.is_some() && chars.next_if_eq(&'$').is_some() {
+            Some(format_argument_index(width.take().unwrap())?)
+        } else {
+            None
+        };
+        let mut left_aligned = false;
+        let mut width_argument = None;
+        if width.is_none() {
+            while chars.next_if_eq(&'-').is_some() {
+                left_aligned = true;
             }
-            'L' => {
-                if matches!(value, SqlValue::Null) {
-                    rendered.push_str("NULL");
+            if chars.next_if_eq(&'*').is_some() {
+                width_argument = Some(if let Some(number) = format_decimal(&mut chars)? {
+                    if chars.peek().is_none() {
+                        return Err(format_specifier_error(
+                            "unterminated format() type specifier",
+                        ));
+                    }
+                    if chars.next_if_eq(&'$').is_none() {
+                        return Err(SqlError::invalid_parameter_value(
+                            "width argument position must be ended by \"$\"",
+                        ));
+                    }
+                    Some(format_argument_index(number)?)
                 } else {
-                    rendered.push_str(&pg_quote_literal(&value.to_cell()));
-                }
+                    None
+                });
+            } else {
+                width = format_decimal(&mut chars)?;
             }
-            's' => {
-                if !matches!(value, SqlValue::Null) {
-                    rendered.push_str(&value.to_cell());
-                }
-            }
-            other => {
-                return Err(SqlError::Unsupported(format!(
-                    "format() conversion %{other} is not supported"
+        }
+        let specifier = match chars.next() {
+            Some(ch @ ('s' | 'I' | 'L')) => ch,
+            Some(ch) => {
+                return Err(format_specifier_error(format!(
+                    "unrecognized format() type specifier \"{ch}\""
                 )));
             }
+            None => {
+                return Err(format_specifier_error(
+                    "unterminated format() type specifier",
+                ))
+            }
+        };
+
+        let width = match width_argument {
+            Some(position) => match format_argument(values, &mut next_argument, position)? {
+                SqlValue::Null => 0,
+                value => pg_integer_input(&format_value_text(value), "int4")? as i32,
+            },
+            None => width.unwrap_or(0),
+        };
+        let value = format_argument(values, &mut next_argument, position)?;
+        let converted = match (specifier, value) {
+            ('I', SqlValue::Null) => {
+                return Err(SqlError::data_exception_public(
+                    "22004",
+                    "null values cannot be formatted as an SQL identifier",
+                    None,
+                ));
+            }
+            ('I', _) => pg_quote_ident(&format_value_text(value)),
+            ('L', SqlValue::Null) => "NULL".into(),
+            ('L', _) => pg_quote_literal(&format_value_text(value)),
+            (_, SqlValue::Null) => String::new(),
+            _ => format_value_text(value),
+        };
+        let absolute_width = width
+            .checked_abs()
+            .ok_or_else(|| SqlError::numeric_value_out_of_range("number is out of range"))?;
+        let padding = (absolute_width as usize).saturating_sub(converted.chars().count());
+        // A formatted string must fit in a PostgreSQL text value.
+        const MAX_TEXT_BYTES: usize = (1 << 30) - 5;
+        let additional = converted.len() + padding;
+        if additional > MAX_TEXT_BYTES.saturating_sub(rendered.len()) {
+            return Err(SqlError::resource_limit(
+                "54000",
+                "formatted string is too long",
+            ));
+        }
+        rendered.try_reserve(additional).map_err(|_| {
+            SqlError::resource_limit("53200", "could not allocate formatted string")
+        })?;
+        if left_aligned || width < 0 {
+            rendered.push_str(&converted);
+            rendered.extend(std::iter::repeat_n(' ', padding));
+        } else {
+            rendered.extend(std::iter::repeat_n(' ', padding));
+            rendered.push_str(&converted);
         }
     }
     Ok(SqlValue::String(rendered))
+}
+
+fn format_decimal(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Result<Option<i32>> {
+    let mut number: Option<i32> = None;
+    while let Some(digit) = chars.next_if(char::is_ascii_digit) {
+        number = Some(
+            number
+                .unwrap_or(0)
+                .checked_mul(10)
+                .and_then(|n| n.checked_add(digit as i32 - '0' as i32))
+                .ok_or_else(|| SqlError::numeric_value_out_of_range("number is out of range"))?,
+        );
+    }
+    Ok(number)
+}
+
+fn format_argument_index(position: i32) -> Result<usize> {
+    if position == 0 {
+        return Err(SqlError::invalid_parameter_value(
+            "format specifies argument 0, but arguments are numbered from 1",
+        ));
+    }
+    Ok((position - 1) as usize)
+}
+
+fn format_argument<'a>(
+    values: &'a [SqlValue],
+    next: &mut usize,
+    position: Option<usize>,
+) -> Result<&'a SqlValue> {
+    let index = position.unwrap_or(*next);
+    let value = values
+        .get(index)
+        .ok_or_else(|| SqlError::invalid_parameter_value("too few arguments for format()"))?;
+    *next = index + 1;
+    Ok(value)
+}
+
+fn format_specifier_error(message: impl Into<String>) -> SqlError {
+    SqlError::coded(
+        "22023",
+        message,
+        None,
+        Some("For a single \"%\" use \"%%\".".into()),
+    )
+}
+
+fn format_value_text(value: &SqlValue) -> String {
+    match value {
+        SqlValue::Bool(true) => "t".into(),
+        SqlValue::Bool(false) => "f".into(),
+        value => value.to_cell(),
+    }
 }
 
 pub(crate) fn extreme_value(args: &[SqlValue], greatest: bool) -> Result<SqlValue> {

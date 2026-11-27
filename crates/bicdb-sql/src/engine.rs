@@ -4114,6 +4114,28 @@ pub(crate) struct IndexOnlyCount {
     pub(crate) index: String,
     pub(crate) columns: Vec<String>,
     pub(crate) prefix: Vec<IndexValue>,
+    /// Every index field's column, in key order.
+    pub(crate) fields: Vec<String>,
+}
+
+/// One ORDER BY key of an index-only projection: the output column and its
+/// direction and NULL placement.
+#[derive(Clone, Debug)]
+pub(crate) struct IndexOnlyOrder {
+    pub(crate) position: usize,
+    pub(crate) descending: bool,
+    pub(crate) nulls_first: bool,
+}
+
+/// An index-only projection: rows built from the entries of `base.index`
+/// under `base.prefix`, one output column per key position in `positions`.
+#[derive(Clone, Debug)]
+pub(crate) struct IndexOnlyProjection {
+    pub(crate) base: IndexOnlyCount,
+    pub(crate) names: Vec<String>,
+    pub(crate) types: Vec<String>,
+    pub(crate) positions: Vec<usize>,
+    pub(crate) order: Vec<IndexOnlyOrder>,
 }
 
 pub(crate) enum RecordLocators {
@@ -5594,6 +5616,9 @@ impl<'db> SqlEngine<'db> {
                 return Ok(result);
             }
             if let Some(result) = self.try_index_only_count(from, select, query)? {
+                return Ok(result);
+            }
+            if let Some(result) = self.try_index_only_projection(from, select, query)? {
                 return Ok(result);
             }
         }

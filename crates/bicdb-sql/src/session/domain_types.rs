@@ -57,6 +57,35 @@ impl<'db> SqlSession<'db> {
             self.drop_user_type_definition(&dependent, true, dropped)?;
         }
 
+        let typed_tables = self.typed_tables_of(user_type)?;
+        if let Some(table) = typed_tables.first().filter(|_| !cascade) {
+            return Err(SqlError::coded(
+                "2BP01",
+                format!(
+                    "cannot drop type {} because other objects depend on it",
+                    user_type.name
+                ),
+                Some(format!(
+                    "table {} depends on type {}",
+                    relation_name_for_message(&table.name),
+                    user_type.name
+                )),
+                Some("Use DROP ... CASCADE to drop the dependent objects too.".to_string()),
+            ));
+        }
+        for table in typed_tables {
+            crate::statement_context::notice_drop_cascades(&[format!(
+                "table {}",
+                relation_name_for_message(&table.name)
+            )]);
+            let target = catalog_display_name(&table.name)
+                .split('.')
+                .map(super::not_null_constraints::quote)
+                .collect::<Vec<_>>()
+                .join(".");
+            self.execute_inner(&format!("DROP TABLE {target} CASCADE"))?;
+        }
+
         let routines = list_routines(self.db_ref())?
             .into_iter()
             .filter(|routine| routine_depends_on_user_type(routine, user_type))
@@ -420,8 +449,10 @@ impl<'db> SqlSession<'db> {
             &mut columns,
         );
 
+        let clause_check_option = check_option;
         let mut security_invoker = false;
         let mut security_barrier = false;
+        let mut reloptions = Vec::new();
         if let CreateTableOptions::With(options) = &create_view.options {
             for option in options {
                 let SqlOption::KeyValue { key, value } = option else {
@@ -429,48 +460,28 @@ impl<'db> SqlSession<'db> {
                         "CREATE VIEW option {option} is not supported"
                     )));
                 };
-                if key.value.eq_ignore_ascii_case("check_option") {
-                    let text = match value {
-                        Expr::Value(ValueWithSpan {
-                            value: Value::SingleQuotedString(text),
-                            ..
-                        }) => text.clone(),
-                        Expr::Identifier(ident) => ident.value.clone(),
-                        other => other.to_string(),
-                    };
-                    check_option = Some(
-                        super::updatable_views::CheckOption::parse(&text).ok_or_else(|| {
-                            SqlError::invalid_parameter_value(
-                                "invalid value for enum option \"check_option\": ".to_string()
-                                    + text.as_str(),
-                            )
-                        })?,
-                    );
-                    continue;
-                }
-                let enabled = match eval_constant_expr(value)? {
-                    SqlValue::Bool(enabled) => enabled,
-                    SqlValue::String(text) => {
-                        text.eq_ignore_ascii_case("true") || text.eq_ignore_ascii_case("on")
+                let (name, text) = super::view_options::option_text(key, value);
+                match super::view_options::apply_view_option(&name, &text)? {
+                    super::view_options::ViewOption::SecurityBarrier(enabled) => {
+                        security_barrier = enabled
                     }
-                    other => {
-                        return Err(SqlError::InvalidSql(format!(
-                            "CREATE VIEW option {} expects a boolean, got {}",
-                            key.value,
-                            other.to_cell()
-                        )));
+                    super::view_options::ViewOption::SecurityInvoker(enabled) => {
+                        security_invoker = enabled
                     }
-                };
-                match key.value.to_ascii_lowercase().as_str() {
-                    "security_invoker" => security_invoker = enabled,
-                    "security_barrier" => security_barrier = enabled,
-                    other => {
-                        return Err(SqlError::Unsupported(format!(
-                            "CREATE VIEW option {other} is not supported"
-                        )));
+                    super::view_options::ViewOption::CheckOption(option) => {
+                        check_option = Some(option)
                     }
                 }
+                super::view_options::set_reloption(&mut reloptions, &name, &text);
             }
+        }
+        if let Some(option) = clause_check_option {
+            super::view_options::set_reloption(&mut reloptions, "check_option", option.as_str());
+        }
+        if create_view.materialized && !reloptions.is_empty() {
+            return Err(SqlError::Unsupported(
+                "storage parameters of materialized views are not supported".to_string(),
+            ));
         }
         if create_view.materialized {
             // A materialized view READS its sources and stores the result, so
@@ -500,6 +511,7 @@ impl<'db> SqlSession<'db> {
             security_invoker,
             security_barrier,
             check_option: check_option.map(|option| option.as_str().to_string()),
+            reloptions,
             snapshot: None,
         };
         self.validate_view_check_option(&schema)?;
@@ -999,7 +1011,10 @@ impl<'db> SqlSession<'db> {
                                 && !grant.role.eq_ignore_ascii_case(&role)
                                 && !grant.member.eq_ignore_ascii_case(&role)
                         });
+                    let foreign_data_dependency =
+                        crate::foreign_data::role_is_referenced(self.db_ref(), &role)?;
                     if table_dependency
+                        || foreign_data_dependency
                         || owns_type
                         || owns_sequence
                         || owns_view
@@ -1663,6 +1678,7 @@ impl<'db> SqlSession<'db> {
         let mut table = relation_name(&alter_table.name)?;
         let mut schema = load_schema(self.db_ref(), &table)?
             .ok_or_else(|| SqlError::InvalidCollection(table.clone()))?;
+        Self::reject_typed_table_change(&schema, &alter_table.operations)?;
         if schema.row_type_oid.is_none() {
             schema.row_type_oid = Some(schema.row_type_oid());
         }

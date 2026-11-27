@@ -251,11 +251,6 @@ fn copy_from_where_is_refused_before_copy_mode() {
             "generated columns are not supported in COPY FROM WHERE conditions",
         ),
         (
-            "COPY g FROM STDIN WHERE a > 1",
-            "0A000",
-            "COPY FROM with a WHERE condition is not supported",
-        ),
-        (
             "COPY g TO STDOUT WHERE a > 1",
             "42601",
             "WHERE clause not allowed with COPY TO",

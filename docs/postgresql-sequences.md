@@ -23,6 +23,13 @@ INSERT INTO invoices (label) VALUES ('first');
 INSERT INTO events (name) VALUES ('created');
 ```
 
+`INSERT ... OVERRIDING SYSTEM VALUE` (also on a `MERGE ... INSERT` action)
+writes the given values into `GENERATED ALWAYS AS IDENTITY` columns, which
+otherwise refuse them with 428C9; `OVERRIDING USER VALUE` discards the values
+written for identity columns, which take their sequence values. Neither
+affects generated expression columns, and the exemption belongs only to the
+statement that wrote it, not to statements its triggers or functions run.
+
 Migration defaults can attach an existing sequence to a column:
 
 ```sql

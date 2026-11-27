@@ -728,7 +728,7 @@ pub(crate) fn run_fold(
             .zip(&def.args)
             .map(|(column, kind)| {
                 let value = column.get(row).cloned().unwrap_or(SqlValue::Null);
-                if matches!(value, SqlValue::Null) {
+                if matches!(value, SqlValue::Null) || kind.pg_type == "any" {
                     Ok(value)
                 } else {
                     cast_value_to_pg_type(value, &kind.pg_type)

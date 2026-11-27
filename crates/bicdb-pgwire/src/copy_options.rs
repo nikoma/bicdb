@@ -1,12 +1,13 @@
 //! COPY options as PostgreSQL 18 reads and checks them (`copy_opt_list`,
 //! `copy_generic_opt_list` and `ProcessCopyOptions`), and the text and CSV
 //! formats they shape: DELIMITER, NULL, QUOTE, ESCAPE, FORCE_QUOTE,
-//! FORCE_NOT_NULL, FORCE_NULL, HEADER [MATCH] and ENCODING (UTF8, LATIN1).
+//! FORCE_NOT_NULL, FORCE_NULL, HEADER [MATCH] and ENCODING (UTF8, SQL_ASCII,
+//! LATIN1).
 //!
 //! Options whose effect BicDB does not implement are refused with 0A000
 //! after PostgreSQL's own validation, before COPY mode starts: FREEZE (true),
-//! DEFAULT, ON_ERROR IGNORE (and so REJECT_LIMIT), and encodings other than
-//! UTF8 and LATIN1. An option is never accepted and then ignored.
+//! DEFAULT, ON_ERROR IGNORE (and so REJECT_LIMIT), and the other encodings.
+//! An option is never accepted and then ignored.
 use super::*;
 #[allow(unused_imports)]
 use crate::*;
@@ -427,7 +428,9 @@ fn encoding_kind(name: &str) -> std::result::Result<Option<bool>, ()> {
         .map(|ch| ch.to_ascii_lowercase())
         .collect();
     match clean.as_str() {
-        "utf8" | "unicode" => Ok(Some(true)),
+        // SQL_ASCII is never converted to or from, so it reads and writes
+        // the server's UTF-8 as UTF8 does.
+        "utf8" | "unicode" | "sqlascii" => Ok(Some(true)),
         "latin1" | "iso88591" => Ok(Some(false)),
         "abc" | "alt" | "big5" | "euccn" | "eucjis2004" | "eucjp" | "euckr" | "euctw"
         | "gb18030" | "gbk" | "iso88592" | "iso88593" | "iso88594" | "iso88595" | "iso88596"
@@ -435,12 +438,12 @@ fn encoding_kind(name: &str) -> std::result::Result<Option<bool>, ()> {
         | "iso885915" | "iso885916" | "johab" | "koi8" | "koi8r" | "koi8u" | "latin2"
         | "latin3" | "latin4" | "latin5" | "latin6" | "latin7" | "latin8" | "latin9"
         | "latin10" | "mskanji" | "muleinternal" | "shiftjis" | "shiftjis2004" | "sjis"
-        | "sqlascii" | "tcvn" | "tcvn5712" | "uhc" | "vscii" | "win" | "win1250" | "win1251"
-        | "win1252" | "win1253" | "win1254" | "win1255" | "win1256" | "win1257" | "win1258"
-        | "win866" | "win874" | "win932" | "win936" | "win949" | "win950" | "windows1250"
-        | "windows1251" | "windows1252" | "windows1253" | "windows1254" | "windows1255"
-        | "windows1256" | "windows1257" | "windows1258" | "windows866" | "windows874"
-        | "windows932" | "windows936" | "windows949" | "windows950" => Ok(None),
+        | "tcvn" | "tcvn5712" | "uhc" | "vscii" | "win" | "win1250" | "win1251" | "win1252"
+        | "win1253" | "win1254" | "win1255" | "win1256" | "win1257" | "win1258" | "win866"
+        | "win874" | "win932" | "win936" | "win949" | "win950" | "windows1250" | "windows1251"
+        | "windows1252" | "windows1253" | "windows1254" | "windows1255" | "windows1256"
+        | "windows1257" | "windows1258" | "windows866" | "windows874" | "windows932"
+        | "windows936" | "windows949" | "windows950" => Ok(None),
         _ => Err(()),
     }
 }

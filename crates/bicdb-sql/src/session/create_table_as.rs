@@ -505,6 +505,22 @@ pub(crate) fn raw_create_table_as(sql: &str) -> Option<RawCreateTableAs> {
             }
         }
     }
+    // `ON COMMIT {DROP | DELETE ROWS | PRESERVE ROWS}` before AS.
+    let mut on_commit = None;
+    if next_is(index, "ON") && next_is(index + 1, "COMMIT") {
+        on_commit = Some(if next_is(index + 2, "DROP") {
+            index += 3;
+            "ON COMMIT DROP"
+        } else if next_is(index + 2, "DELETE") && next_is(index + 3, "ROWS") {
+            index += 4;
+            "ON COMMIT DELETE ROWS"
+        } else if next_is(index + 2, "PRESERVE") && next_is(index + 3, "ROWS") {
+            index += 4;
+            "ON COMMIT PRESERVE ROWS"
+        } else {
+            return None;
+        });
+    }
     if !next_is(index, "AS") {
         return None;
     }
@@ -530,7 +546,7 @@ pub(crate) fn raw_create_table_as(sql: &str) -> Option<RawCreateTableAs> {
             data_clause = Some(end - 3);
         }
     }
-    if column_names.is_empty() && data_clause.is_none() {
+    if column_names.is_empty() && data_clause.is_none() && on_commit.is_none() {
         return None;
     }
     let mut line_starts = vec![0];
@@ -545,8 +561,11 @@ pub(crate) fn raw_create_table_as(sql: &str) -> Option<RawCreateTableAs> {
         return None;
     }
     let rewritten = format!(
-        "{} AS {}",
+        "{}{} AS {}",
         sql.get(..name_end)?,
+        on_commit
+            .map(|clause| format!(" {clause}"))
+            .unwrap_or_default(),
         sql.get(query_start..query_end)?.trim()
     );
     Some(RawCreateTableAs {

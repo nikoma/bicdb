@@ -315,6 +315,48 @@ impl<'db> SqlSession<'db> {
             Some(_) => {}
         }
         if !temporary {
+            // A permanent table cannot depend on a temporary one, which
+            // disappears with its session.
+            let is_temp = |name: &ObjectName| {
+                matches!(object_name_parts(name).as_slice(), [schema, _]
+                    if schema == "pg_temp" || crate::search_path::is_temp_schema(schema))
+            };
+            if let Some(parent) = create_table
+                .inherits
+                .iter()
+                .flatten()
+                .find(|parent| is_temp(parent))
+            {
+                return Err(SqlError::coded(
+                    "42809",
+                    format!(
+                        "cannot inherit from temporary relation \"{}\"",
+                        object_name_parts(parent)
+                            .last()
+                            .cloned()
+                            .unwrap_or_default()
+                    ),
+                    None,
+                    None,
+                ));
+            }
+            let references_temp = create_table.constraints.iter().any(|constraint| {
+                matches!(constraint, sqlparser::ast::TableConstraint::ForeignKey(key)
+                    if is_temp(&key.foreign_table))
+            }) || create_table.columns.iter().any(|column| {
+                column.options.iter().any(|option| {
+                    matches!(&option.option,
+                        sqlparser::ast::ColumnOption::ForeignKey(key) if is_temp(&key.foreign_table))
+                })
+            });
+            if references_temp {
+                return Err(SqlError::coded(
+                    "42P16",
+                    "constraints on permanent tables may reference only permanent tables",
+                    None,
+                    None,
+                ));
+            }
             return Ok(None);
         }
         let temp_schema = self.temp_schema_for_creation();
@@ -393,8 +435,14 @@ impl<'db> SqlSession<'db> {
             // single PARTITION OF statement uses the raw compatibility path.
             // Keep the parent link, bound, ownership checks and physical
             // creation identical for text batches and direct AST callers.
+            // A temporary partition is placed in the temporary schema first;
+            // its text then names it there.
+            let mut definition = self
+                .temporary_table_target(create_table)?
+                .unwrap_or_else(|| create_table.clone());
+            definition.temporary = false;
             let partition =
-                raw_create_partition_table(&create_table.to_string())?.ok_or_else(|| {
+                raw_create_partition_table(&definition.to_string())?.ok_or_else(|| {
                     SqlError::InvalidSql("invalid CREATE TABLE PARTITION OF definition".into())
                 })?;
             self.apply_raw_create_partition_table(partition)?;

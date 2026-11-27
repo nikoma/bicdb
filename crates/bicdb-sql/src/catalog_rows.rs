@@ -1353,9 +1353,19 @@ pub(crate) fn set_view_column_pg_type(columns: &mut [ColumnSchema], name: &str, 
     }
 }
 
+/// Whether regclass output names a relation of `namespace` without its
+/// schema, as PostgreSQL does for a relation visible through the search_path:
+/// `public`, the session's temporary schema, or a schema on the active path.
+pub(crate) fn regclass_namespace_visible(namespace: &str) -> bool {
+    namespace == "public"
+        || crate::search_path::active_temp_schema().as_deref() == Some(namespace)
+            && crate::search_path::active_path()
+                .is_some_and(|path| path.iter().any(|schema| schema == namespace))
+}
+
 pub(crate) fn regclass_text_for_schema(schema: &TableSchema) -> String {
     let name = pg_quote_ident(&catalog_display_name(&schema.name));
-    if schema.schema_name == "public" {
+    if regclass_namespace_visible(&schema.schema_name) {
         name
     } else {
         format!("{}.{}", pg_quote_ident(&schema.schema_name), name)

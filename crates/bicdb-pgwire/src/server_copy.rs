@@ -339,9 +339,9 @@ fn copy_from_server(
 fn copy_to_server(
     server: &Arc<PgWireServer>,
     state: &mut ConnectionState,
-    copy: CopyStatement,
+    mut copy: CopyStatement,
 ) -> Result<usize> {
-    let result = execute_copy_query(server, state, &copy)?;
+    let result = execute_copy_query(server, state, &mut copy)?;
     let rows = result.rows.len();
     match &copy.endpoint {
         CopyEndpoint::File(path) => {

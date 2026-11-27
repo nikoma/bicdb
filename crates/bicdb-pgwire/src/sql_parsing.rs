@@ -1546,6 +1546,7 @@ pub(crate) fn execute_savepoint_command(
                 write_len: state.tx.as_ref().map(Transaction::write_len).unwrap_or(0),
                 lock_len: state.tx.as_ref().map(Transaction::lock_len).unwrap_or(0),
                 ddl_undo_len: state.tx_ddl_undo.len(),
+                fresh_relations_len: state.tx_ddl_undo.fresh_relation_count(),
                 shared_role_ddl_len: state.tx_shared_role_ddl.len(),
                 large_objects: state.catalog_cache.large_object_savepoint()?,
                 session_state: state.session_state.clone(),
@@ -1576,6 +1577,7 @@ pub(crate) fn execute_savepoint_command(
             };
             let statement_len = state.savepoints[position].statement_len;
             let ddl_undo_len = state.savepoints[position].ddl_undo_len;
+            let fresh_relations_len = state.savepoints[position].fresh_relations_len;
             let shared_role_ddl_len = state.savepoints[position].shared_role_ddl_len;
             let session_state = state.savepoints[position].session_state.clone();
             state
@@ -1589,6 +1591,10 @@ pub(crate) fn execute_savepoint_command(
                 )?;
             }
             rollback_transaction_ddl_to_len(server, state, ddl_undo_len)?;
+            // What was created or truncated after the savepoint is undone.
+            state
+                .tx_ddl_undo
+                .truncate_fresh_relations(fresh_relations_len);
             state.tx_shared_role_ddl.truncate(shared_role_ddl_len);
             state.session_state.restore_savepoint(&session_state);
             state.tx_write_tables = write_tables_for_buffered_statements(&state.tx_statements);
@@ -1822,30 +1828,34 @@ pub(crate) fn parse_copy_statement(sql: &str) -> Result<Option<CopyStatement>> {
     // The options follow the endpoint; a file name or command is a string
     // literal whose words (`/tmp/binary.csv`) must not be read as options.
     let (endpoint, options) = parse_copy_endpoint(after_direction)?;
-    let binary = target.len() != full_target.len() || contains_word(options, "binary");
-    if contains_word(target, "freeze") || contains_word(options, "freeze") {
-        return Err(PgWireError::Server(
-            "this COPY variant is not supported by BicDB".to_string(),
-        ));
+    let (options, where_clause) = split_copy_where(options);
+    if where_clause.is_some() && direction == CopyDirection::ToStdout {
+        return Err(PgWireError::Sql(bicdb_sql::SqlError::RaisedException {
+            sqlstate: "42601".to_string(),
+            message: "WHERE clause not allowed with COPY TO".to_string(),
+            detail: None,
+        }));
     }
-    let format = if contains_word(options, "csv") {
+    // PostgreSQL's option list: the legacy `COPY BINARY t` keyword comes
+    // first, then the options after the endpoint. Each is implemented or
+    // refused here, before COPY mode; none is ignored.
+    let mut defs = Vec::new();
+    if target.len() != full_target.len() {
+        defs.push(CopyDefElem {
+            name: "format".into(),
+            arg: Some(CopyArg::Str("binary".into())),
+        });
+    }
+    defs.extend(parse_copy_option_list(options)?);
+    let copy_options = process_copy_options(&defs, direction == CopyDirection::FromStdin)?;
+    let binary = copy_options.binary;
+    let format = if copy_options.csv {
         CopyFormat::Csv
     } else {
         CopyFormat::Text
     };
-    let header = contains_word(options, "header");
-    if binary && (header || format == CopyFormat::Csv) {
-        return Err(PgWireError::Sql(bicdb_sql::SqlError::RaisedException {
-            sqlstate: "42601".to_string(),
-            message: if header {
-                "cannot specify HEADER in BINARY mode".to_string()
-            } else {
-                "cannot specify more than one COPY format".to_string()
-            },
-            detail: None,
-        }));
-    }
-    let header_match = header && contains_word(options, "match");
+    let header = copy_options.header;
+    let header_match = copy_options.header_match;
 
     let query =
         if direction == CopyDirection::ToStdout && target.starts_with('(') && target.ends_with(')')
@@ -1873,7 +1883,31 @@ pub(crate) fn parse_copy_statement(sql: &str) -> Result<Option<CopyStatement>> {
         header_expected: Vec::new(),
         binary,
         binary_column_oids: Vec::new(),
+        where_clause,
+        options: copy_options,
     }))
+}
+
+/// COPY options and a trailing `WHERE <condition>` (outside parentheses and
+/// string literals), which the options must not be read from.
+pub(crate) fn split_copy_where(options: &str) -> (&str, Option<String>) {
+    let mut depth = 0_i32;
+    let mut quoted = false;
+    for (idx, ch) in options.char_indices() {
+        match ch {
+            '\'' => quoted = !quoted,
+            '(' if !quoted => depth += 1,
+            ')' if !quoted => depth -= 1,
+            _ if !quoted && depth == 0 && word_at(options, idx, "where") => {
+                return (
+                    &options[..idx],
+                    Some(options[idx + "where".len()..].trim().to_string()),
+                );
+            }
+            _ => {}
+        }
+    }
+    (options, None)
 }
 
 /// The endpoint after `FROM`/`TO` and the option text that follows it.
@@ -2028,7 +2062,7 @@ pub(crate) fn parse_copy_table_target(target: &str) -> Result<(String, Vec<Strin
 pub(crate) fn execute_copy_query(
     server: &Arc<PgWireServer>,
     state: &mut ConnectionState,
-    copy: &CopyStatement,
+    copy: &mut CopyStatement,
 ) -> Result<SqlResult> {
     let sql = if let Some(query) = &copy.query {
         query.clone()
@@ -2037,12 +2071,18 @@ pub(crate) fn execute_copy_query(
             .relation_sql
             .as_ref()
             .ok_or_else(|| PgWireError::Server("COPY TO missing relation".to_string()))?;
-        if copy.columns.is_empty() {
+        // PostgreSQL leaves generated columns (stored and virtual) out of
+        // the default list and refuses them when named.
+        let columns = match copy_target_columns(server, state, copy, &copy.columns)? {
+            Some((targets, _)) => targets,
+            None => copy.columns.clone(),
+        };
+        if columns.is_empty() {
             format!("SELECT * FROM {relation}")
         } else {
             format!(
                 "SELECT {} FROM {relation}",
-                copy.columns
+                columns
                     .iter()
                     .map(|column| quote_sql_identifier(column))
                     .collect::<Vec<_>>()
@@ -2050,7 +2090,15 @@ pub(crate) fn execute_copy_query(
             )
         }
     };
-    execute_server_sql_with_options(server, state, &sql, false)
+    let result = execute_server_sql_with_options(server, state, &sql, false)?;
+    // FORCE_QUOTE names columns of what is written.
+    let all = match copy_target_columns(server, state, copy, &[])? {
+        Some((defaults, _)) => defaults,
+        None => result.columns.clone(),
+    };
+    copy.options
+        .resolve_columns(&result.columns, &all, copy.relation.as_deref())?;
+    Ok(result)
 }
 
 pub(crate) fn copy_in_data(state: &mut ConnectionState, payload: &[u8]) -> Result<()> {
@@ -2062,13 +2110,34 @@ pub(crate) fn copy_in_data(state: &mut ConnectionState, payload: &[u8]) -> Resul
         copy.pending_bytes.extend_from_slice(payload);
         return copy_in_binary_rows(copy);
     }
+    if copy.spec.options.latin1 {
+        // ENCODING 'LATIN1': every byte is the code point of its value.
+        copy.pending
+            .extend(payload.iter().map(|&byte| char::from(byte)));
+        payload_records(copy)?;
+        return Ok(());
+    }
     // Decode everything up to a character split by the message boundary;
     // keep its leading bytes for the next CopyData.
     copy.pending_bytes.extend_from_slice(payload);
     let valid = match std::str::from_utf8(&copy.pending_bytes) {
         Ok(text) => text.len(),
         Err(error) if error.error_len().is_none() => error.valid_up_to(),
-        Err(error) => return Err(PgWireError::Protocol(error.to_string())),
+        Err(error) => {
+            let start = error.valid_up_to();
+            let end = (start + error.error_len().unwrap_or(1) + 1).min(copy.pending_bytes.len());
+            let shown = copy.pending_bytes[start..end]
+                .iter()
+                .map(|byte| format!("0x{byte:02x}"))
+                .collect::<Vec<_>>()
+                .join(" ");
+            return Err(PgWireError::Sql(SqlError::coded_public(
+                "22021",
+                format!("invalid byte sequence for encoding \"UTF8\": {shown}"),
+                None,
+                None,
+            )));
+        }
     };
     let rest = copy.pending_bytes.split_off(valid);
     let decoded = std::mem::replace(&mut copy.pending_bytes, rest);
@@ -2076,6 +2145,11 @@ pub(crate) fn copy_in_data(state: &mut ConnectionState, payload: &[u8]) -> Resul
     copy.pending.push_str(
         std::str::from_utf8(&decoded).map_err(|error| PgWireError::Protocol(error.to_string()))?,
     );
+    payload_records(copy)
+}
+
+/// Hand every complete record in `pending` to `copy_in_line`.
+fn payload_records(copy: &mut CopyInState) -> Result<()> {
     while let Some(newline) = next_copy_record_end(copy) {
         let mut line = copy.pending[..newline].to_string();
         note_csv_embedded_lines(copy, &line, true);
@@ -2108,13 +2182,22 @@ pub(crate) fn note_csv_embedded_lines(copy: &mut CopyInState, record: &str, term
         Some(false) => '\n',
         Some(true) | None => '\r',
     };
+    let quote = copy.spec.options.quote as char;
+    let escape = Some(copy.spec.options.escape as char).filter(|&escape| escape != quote);
     let mut quoted = false;
+    let mut last_was_escape = false;
     let mut count = 0_u64;
     for ch in body.chars() {
-        if ch == '"' {
+        if quoted && Some(ch) == escape {
+            last_was_escape = !last_was_escape;
+        }
+        if ch == quote && !last_was_escape {
             quoted = !quoted;
         } else if quoted && ch == target {
             count += 1;
+        }
+        if Some(ch) != escape {
+            last_was_escape = false;
         }
     }
     copy.csv_embedded_lines = count;
@@ -2131,16 +2214,27 @@ fn next_copy_record_end(copy: &mut CopyInState) -> Option<usize> {
     if copy.spec.format != CopyFormat::Csv {
         return copy.pending.find('\n');
     }
+    let quote = copy.spec.options.quote;
+    // An escape equal to the quote is just the toggle (PostgreSQL ignores it).
+    let escape = Some(copy.spec.options.escape).filter(|&escape| escape != quote);
     let bytes = copy.pending.as_bytes();
     let mut idx = copy.csv_scanned;
     while idx < bytes.len() {
-        match bytes[idx] {
-            b'"' => copy.csv_in_quote = !copy.csv_in_quote,
-            b'\n' if !copy.csv_in_quote => {
-                copy.csv_scanned = idx;
-                return Some(idx);
-            }
-            _ => {}
+        let c = bytes[idx];
+        // PostgreSQL's CopyReadLineText: an escaped quote inside quotes
+        // does not end them.
+        if copy.csv_in_quote && Some(c) == escape {
+            copy.csv_last_was_escape = !copy.csv_last_was_escape;
+        }
+        if c == quote && !copy.csv_last_was_escape {
+            copy.csv_in_quote = !copy.csv_in_quote;
+        }
+        if Some(c) != escape {
+            copy.csv_last_was_escape = false;
+        }
+        if c == b'\n' && !copy.csv_in_quote {
+            copy.csv_scanned = idx;
+            return Some(idx);
         }
         idx += 1;
     }
@@ -2246,7 +2340,11 @@ pub(crate) fn finish_copy_in_inner(
         .relation
         .clone()
         .ok_or_else(|| PgWireError::Server("COPY FROM STDIN missing relation".to_string()))?;
-    let columns = if copy.spec.columns.is_empty() {
+    let columns = if !copy.target_columns.is_empty() {
+        // Resolved when COPY began: the named columns, or every column
+        // that is not generated.
+        copy.target_columns.clone()
+    } else if copy.spec.columns.is_empty() {
         let relation_sql = copy.spec.relation_sql.as_ref().ok_or_else(|| {
             PgWireError::Server("COPY FROM STDIN missing SQL relation".to_string())
         })?;
@@ -2282,6 +2380,18 @@ pub(crate) fn finish_copy_in_inner(
         copied_rows +=
             finish_direct_copy_in(server, state, &mut copy, &relation, &columns, &cancellation)?;
     }
+    let skipped = copy.skipped_rows;
+    if copy.spec.options.on_error_ignore && skipped > 0 && !copy.spec.options.log_silent {
+        state.pending_notices.push(bicdb_sql::SqlNotice {
+            sqlstate: "00000".to_string(),
+            message: if skipped == 1 {
+                "1 row was skipped due to data type incompatibility".to_string()
+            } else {
+                format!("{skipped} rows were skipped due to data type incompatibility")
+            },
+            fields: Vec::new(),
+        });
+    }
 
     state.queries_executed += 1;
     server.queries_executed.fetch_add(1, Ordering::SeqCst);
@@ -2313,10 +2423,13 @@ pub(crate) fn spill_copy_rows(copy: &mut CopyInState) -> Result<()> {
         .as_mut()
         .ok_or_else(|| PgWireError::Server("COPY spill was not initialized".to_string()))?;
     let lines = std::mem::take(&mut copy.row_lines);
+    let mut marks = std::mem::take(&mut copy.row_marks);
     for (idx, row) in copy.rows.drain(..).enumerate() {
-        // Each row keeps its input line number for the error CONTEXT.
+        // Each row keeps its input line number for the error CONTEXT and its
+        // DEFAULT markers.
         let line = lines.get(idx).copied().unwrap_or_default();
-        serde_json::to_writer(&mut spill.writer, &(line, row))
+        let row_marks = marks.get_mut(idx).map(std::mem::take).unwrap_or_default();
+        serde_json::to_writer(&mut spill.writer, &(line, row, row_marks))
             .map_err(|error| PgWireError::Server(error.to_string()))?;
         spill.writer.write_all(b"\n")?;
         spill.rows += 1;
@@ -2337,7 +2450,16 @@ pub(crate) fn finish_direct_copy_in(
     execute_server_sql(server, state, "BEGIN")?;
     let result = finish_transactional_copy_in(server, state, copy, relation, columns, cancellation)
         .and_then(|count| {
-            execute_server_sql(server, state, "COMMIT")?;
+            // The COMMIT would take the notices COPY's rows raised (ON_ERROR
+            // VERBOSE, triggers) for its own result; they belong to COPY.
+            let mut notices = std::mem::take(&mut state.pending_notices);
+            let commit = execute_server_sql(server, state, "COMMIT");
+            notices.append(&mut state.pending_notices);
+            state.pending_notices = notices;
+            if let Ok(result) = &commit {
+                state.pending_notices.extend(result.notices.iter().cloned());
+            }
+            commit?;
             Ok(count)
         });
     if result.is_err() {
@@ -2354,18 +2476,32 @@ pub(crate) fn finish_transactional_copy_in(
     columns: &[String],
     cancellation: &CancellationToken,
 ) -> Result<usize> {
+    let options = &copy.spec.options;
+    let rules = bicdb_sql::CopyFromRules {
+        on_error_ignore: options.on_error_ignore,
+        verbose: options.log_verbose,
+        reject_limit: options.reject_limit,
+        skipped_before: 0,
+        where_clause: copy.spec.where_clause.clone(),
+    };
+    let skipped = std::cell::Cell::new(copy.skipped_rows);
     let mut copied_rows = 0;
     copied_rows += replay_spilled_copy_rows(
         copy,
         COPY_IN_TRANSACTION_BATCH_ROWS,
-        |rows, lines| {
+        |rows, lines, marks| {
             append_copy_insert_statements(
                 server,
                 state,
                 relation,
                 columns,
                 rows,
-                Some(lines),
+                Some(CopyRowsContext {
+                    lines,
+                    marks,
+                    rules: &rules,
+                    skipped: &skipped,
+                }),
                 cancellation,
             )
         },
@@ -2374,17 +2510,36 @@ pub(crate) fn finish_transactional_copy_in(
     if !copy.rows.is_empty() {
         let rows = std::mem::take(&mut copy.rows);
         let lines = std::mem::take(&mut copy.row_lines);
+        let marks = std::mem::take(&mut copy.row_marks);
         copied_rows += append_copy_insert_statements(
             server,
             state,
             relation,
             columns,
             rows,
-            Some(lines),
+            Some(CopyRowsContext {
+                lines,
+                marks,
+                rules: &rules,
+                skipped: &skipped,
+            }),
             cancellation,
         )?;
     }
+    copy.skipped_rows = skipped.get();
+    if let Some(error) = copy.deferred_error.take() {
+        return Err(error);
+    }
     Ok(copied_rows)
+}
+
+/// What COPY FROM knows about a batch of rows beyond their values: input
+/// lines, DEFAULT markers, the statement's rules and the rows skipped so far.
+pub(crate) struct CopyRowsContext<'a> {
+    pub(crate) lines: Vec<u64>,
+    pub(crate) marks: Vec<Vec<usize>>,
+    pub(crate) rules: &'a bicdb_sql::CopyFromRules,
+    pub(crate) skipped: &'a std::cell::Cell<u64>,
 }
 
 pub(crate) fn replay_spilled_copy_rows<F>(
@@ -2394,7 +2549,7 @@ pub(crate) fn replay_spilled_copy_rows<F>(
     cancellation: &CancellationToken,
 ) -> Result<usize>
 where
-    F: FnMut(Vec<Vec<Option<String>>>, Vec<u64>) -> Result<usize>,
+    F: FnMut(Vec<Vec<Option<String>>>, Vec<u64>, Vec<Vec<usize>>) -> Result<usize>,
 {
     let Some(spill) = copy.spill.as_mut() else {
         return Ok(0);
@@ -2404,21 +2559,27 @@ where
     let reader = BufReader::new(file);
     let mut batch = Vec::with_capacity(batch_rows);
     let mut batch_lines = Vec::with_capacity(batch_rows);
+    let mut batch_marks = Vec::with_capacity(batch_rows);
     let mut copied_rows = 0;
     for line in reader.lines() {
         cancellation.check().map_err(PgWireError::from)?;
         let line = line?;
-        let (input_line, row) = serde_json::from_str::<(u64, Vec<Option<String>>)>(&line)
-            .map_err(|error| PgWireError::Server(error.to_string()))?;
+        let (input_line, row, marks) =
+            serde_json::from_str::<(u64, Vec<Option<String>>, Vec<usize>)>(&line)
+                .map_err(|error| PgWireError::Server(error.to_string()))?;
         batch.push(row);
         batch_lines.push(input_line);
+        batch_marks.push(marks);
         if batch.len() >= batch_rows {
-            copied_rows +=
-                consume_batch(std::mem::take(&mut batch), std::mem::take(&mut batch_lines))?;
+            copied_rows += consume_batch(
+                std::mem::take(&mut batch),
+                std::mem::take(&mut batch_lines),
+                std::mem::take(&mut batch_marks),
+            )?;
         }
     }
     if !batch.is_empty() {
-        copied_rows += consume_batch(batch, batch_lines)?;
+        copied_rows += consume_batch(batch, batch_lines, batch_marks)?;
     }
     Ok(copied_rows)
 }
@@ -2429,7 +2590,7 @@ pub(crate) fn append_copy_insert_statements(
     relation: &str,
     columns: &[String],
     rows: Vec<Vec<Option<String>>>,
-    lines: Option<Vec<u64>>,
+    context: Option<CopyRowsContext<'_>>,
     cancellation: &CancellationToken,
 ) -> Result<usize> {
     for (idx, row) in rows.iter().enumerate() {
@@ -2446,7 +2607,7 @@ pub(crate) fn append_copy_insert_statements(
             )));
         }
     }
-    let count = rows.len();
+    let mut count = rows.len();
     state.tx_write_tables.insert(relation.to_string());
     // Defaults and trigger bodies can allocate sequences or change catalogs.
     // Keep COPY's existing exclusive batch execution, but retain one transaction
@@ -2470,13 +2631,30 @@ pub(crate) fn append_copy_insert_statements(
             .with_cancellation(cancellation.clone())
             .with_pending_transaction(tx);
     let started = Instant::now();
-    let result = match lines.as_deref() {
-        Some(lines) if lines.len() == rows.len() => {
-            session.copy_insert_rows_reporting_at_lines(relation, columns, rows, lines)
+    let result = match &context {
+        Some(context) if context.lines.len() == rows.len() => {
+            let mut rules = context.rules.clone();
+            rules.skipped_before = context.skipped.get();
+            session
+                .copy_insert_rows_with_rules(
+                    relation,
+                    columns,
+                    rows,
+                    &context.lines,
+                    &context.marks,
+                    &rules,
+                )
+                .map(|(outcome, notices)| {
+                    // Rows ON_ERROR or WHERE left out are not copied.
+                    count = outcome.inserted;
+                    context.skipped.set(context.skipped.get() + outcome.skipped);
+                    notices
+                })
         }
-        _ => session.copy_insert_rows_reporting(relation, columns, rows),
-    }
-    .map(|(_, notices)| notices);
+        _ => session
+            .copy_insert_rows_reporting(relation, columns, rows)
+            .map(|(_, notices)| notices),
+    };
     capture_connection_guc_state(state, &session);
     state.tx = session.take_pending_transaction();
     state.tx_ddl_undo = session.take_ddl_undo_log();
@@ -2489,6 +2667,24 @@ pub(crate) fn append_copy_insert_statements(
 }
 
 pub(crate) fn copy_in_line(copy: &mut CopyInState, line: &str) -> Result<()> {
+    if copy.deferred_error.is_some() {
+        // The input already failed at an earlier line; the rest is read and
+        // dropped, as PostgreSQL drops it after its error.
+        return Ok(());
+    }
+    match copy_in_line_inner(copy, line) {
+        // A row that cannot be read fails COPY where PostgreSQL reaches it:
+        // after the rows before it were converted, so an earlier row's bad
+        // value is the error reported (see `finish_transactional_copy_in`).
+        Err(error) if !copy.spec.header || copy.header_seen => {
+            copy.deferred_error = Some(error);
+            Ok(())
+        }
+        other => other,
+    }
+}
+
+fn copy_in_line_inner(copy: &mut CopyInState, line: &str) -> Result<()> {
     // A blank record is one field: empty text, or CSV NULL. It is also a
     // real header record when HEADER is set. No input is handled by the
     // pending-buffer boundary, not by discarding a parsed record here.
@@ -2497,10 +2693,12 @@ pub(crate) fn copy_in_line(copy: &mut CopyInState, line: &str) -> Result<()> {
     }
     // PostgreSQL counts line ends inside a quoted CSV field as lines.
     copy.line_number += 1 + std::mem::take(&mut copy.csv_embedded_lines);
-    let parse = |copy: &CopyInState| {
+    let mut marks = Vec::new();
+    let mut parse = |copy: &CopyInState| {
+        marks.clear();
         match copy.spec.format {
-            CopyFormat::Text => parse_copy_text_row(line),
-            CopyFormat::Csv => parse_copy_csv_row(line),
+            CopyFormat::Text => parse_text_fields_marked(line, &copy.spec.options, &mut marks),
+            CopyFormat::Csv => parse_csv_fields_marked(line, &copy.spec.options, &mut marks),
         }
         .map_err(|error| with_copy_line_context(error, copy, line))
     };
@@ -2508,12 +2706,36 @@ pub(crate) fn copy_in_line(copy: &mut CopyInState, line: &str) -> Result<()> {
         copy.header_seen = true;
         if copy.spec.header_match {
             let fields = parse(copy)?;
-            check_copy_header(&fields, &copy.spec.header_expected)?;
+            check_copy_header(&fields, &copy.spec.header_expected, &copy.spec.options.null)?;
         }
         return Ok(());
     }
     let row = parse(copy)?;
     let expected = copy.target_columns.len();
+    // The DEFAULT marker stands for a column default, which the column must
+    // have; past the last column it is just extra data.
+    marks.retain(|&index| expected == 0 || index < expected);
+    if let Some(&index) = marks.iter().find(|&&index| {
+        !copy
+            .spec
+            .options
+            .default_flags
+            .get(index)
+            .copied()
+            .unwrap_or(true)
+    }) {
+        let column = copy.target_columns.get(index).cloned().unwrap_or_default();
+        return Err(with_copy_line_context(
+            PgWireError::Sql(SqlError::coded_public(
+                "22P04",
+                "unexpected default marker in COPY data",
+                Some(format!("Column \"{column}\" has no default value.")),
+                None,
+            )),
+            copy,
+            line,
+        ));
+    }
     if expected > 0 && row.len() != expected {
         let message = match copy.target_columns.get(row.len()) {
             Some(column) if row.len() < expected => {
@@ -2525,6 +2747,7 @@ pub(crate) fn copy_in_line(copy: &mut CopyInState, line: &str) -> Result<()> {
     }
     copy.rows.push(row);
     copy.row_lines.push(copy.line_number);
+    copy.row_marks.push(marks);
     Ok(())
 }
 
@@ -2645,6 +2868,7 @@ pub(crate) fn copy_in_binary_rows(copy: &mut CopyInState) -> Result<()> {
         copy.line_number += 1;
         copy.rows.push(fields);
         copy.row_lines.push(copy.line_number);
+        copy.row_marks.push(Vec::new());
         offset = cursor;
         spill_copy_rows_if_needed(copy)?;
     }
@@ -2682,7 +2906,7 @@ pub(crate) fn copy_binary_header() -> Vec<u8> {
 }
 
 /// PostgreSQL's `HEADER MATCH` check of a COPY FROM header line.
-fn check_copy_header(fields: &[Option<String>], expected: &[String]) -> Result<()> {
+fn check_copy_header(fields: &[Option<String>], expected: &[String], null: &str) -> Result<()> {
     let bad = |message: String| {
         PgWireError::Sql(bicdb_sql::SqlError::RaisedException {
             sqlstate: "22P04".to_string(),
@@ -2700,7 +2924,7 @@ fn check_copy_header(fields: &[Option<String>], expected: &[String]) -> Result<(
     for (index, (field, name)) in fields.iter().zip(expected).enumerate() {
         let Some(field) = field else {
             return Err(bad(format!(
-                "column name mismatch in header line field {}: got null value (\"\\N\"), expected \"{name}\"",
+                "column name mismatch in header line field {}: got null value (\"{null}\"), expected \"{name}\"",
                 index + 1
             )));
         };
@@ -2714,114 +2938,34 @@ fn check_copy_header(fields: &[Option<String>], expected: &[String]) -> Result<(
     Ok(())
 }
 
-/// The header line of `COPY ... TO STDOUT (HEADER)`: the column names.
-pub(crate) fn render_copy_header(columns: &[String], format: CopyFormat) -> Vec<u8> {
+/// The header line of `COPY ... TO (HEADER)`: the column names, written as
+/// values (PostgreSQL's CopyAttributeOutText / CopyAttributeOutCSV).
+pub(crate) fn render_copy_header(columns: &[String], opts: &CopyOptions) -> Result<Vec<u8>> {
     let mut output = String::new();
     for (idx, name) in columns.iter().enumerate() {
         if idx > 0 {
-            output.push(match format {
-                CopyFormat::Text => '\t',
-                CopyFormat::Csv => ',',
-            });
+            output.push(opts.delimiter as char);
         }
-        match format {
-            CopyFormat::Text => output.push_str(&render_copy_text_value(Some(name))),
-            CopyFormat::Csv => output.push_str(&render_copy_csv_value(Some(name))),
+        if opts.csv {
+            render_csv_value(Some(name), false, columns.len() == 1, opts, &mut output);
+        } else {
+            render_text_value(Some(name), opts, &mut output);
         }
     }
     output.push('\n');
-    output.into_bytes()
-}
-
-pub(crate) fn parse_copy_text_row(line: &str) -> Result<Vec<Option<String>>> {
-    line.split('\t')
-        .map(|field| {
-            if field == "\\N" {
-                Ok(None)
-            } else {
-                Ok(Some(unescape_copy_text(field)?))
-            }
-        })
-        .collect()
-}
-
-pub(crate) fn unescape_copy_text(field: &str) -> Result<String> {
-    let mut output = String::with_capacity(field.len());
-    let mut chars = field.chars();
-    while let Some(ch) = chars.next() {
-        if ch != '\\' {
-            output.push(ch);
-            continue;
-        }
-        match chars.next() {
-            Some('n') => output.push('\n'),
-            Some('r') => output.push('\r'),
-            Some('t') => output.push('\t'),
-            Some('\\') => output.push('\\'),
-            Some(other) => output.push(other),
-            None => output.push('\\'),
-        }
-    }
-    Ok(output)
-}
-
-pub(crate) fn parse_copy_csv_row(line: &str) -> Result<Vec<Option<String>>> {
-    let mut fields = Vec::new();
-    let mut field = String::new();
-    let mut chars = line.chars().peekable();
-    let mut quoted = false;
-    let mut field_was_quoted = false;
-    while let Some(ch) = chars.next() {
-        if quoted {
-            if ch == '"' {
-                if chars.peek() == Some(&'"') {
-                    chars.next();
-                    field.push('"');
-                } else {
-                    quoted = false;
-                }
-            } else {
-                field.push(ch);
-            }
-        } else if ch == '"' && field.is_empty() {
-            quoted = true;
-            field_was_quoted = true;
-        } else if ch == ',' {
-            fields.push(csv_field_value(&field, field_was_quoted));
-            field.clear();
-            field_was_quoted = false;
-        } else {
-            field.push(ch);
-        }
-    }
-    if quoted {
-        return Err(bad_copy_data("unterminated CSV quoted field"));
-    }
-    fields.push(csv_field_value(&field, field_was_quoted));
-    Ok(fields)
-}
-
-pub(crate) fn csv_field_value(field: &str, quoted: bool) -> Option<String> {
-    if !quoted && field.is_empty() {
-        None
-    } else {
-        Some(field.to_string())
-    }
+    encode_copy_line(output, opts)
 }
 
 pub(crate) fn render_copy_row(
     db: &BicDb,
     row: &[SqlValue],
     column_types: &[i32],
-    format: CopyFormat,
+    opts: &CopyOptions,
 ) -> Result<Vec<u8>> {
     let mut output = String::new();
     for (idx, value) in row.iter().enumerate() {
         if idx > 0 {
-            output.push(match format {
-                CopyFormat::Text => '\t',
-                CopyFormat::Csv => ',',
-            });
+            output.push(opts.delimiter as char);
         }
         let rendered = if matches!(value, SqlValue::Null) {
             None
@@ -2832,36 +2976,21 @@ pub(crate) fn render_copy_row(
                     .map_err(|error| PgWireError::Protocol(error.to_string()))?,
             )
         };
-        match format {
-            CopyFormat::Text => output.push_str(&render_copy_text_value(rendered.as_deref())),
-            CopyFormat::Csv => output.push_str(&render_copy_csv_value(rendered.as_deref())),
+        if opts.csv {
+            let force = opts.force_quote_flags.get(idx).copied().unwrap_or(false);
+            render_csv_value(
+                rendered.as_deref(),
+                force,
+                row.len() == 1,
+                opts,
+                &mut output,
+            );
+        } else {
+            render_text_value(rendered.as_deref(), opts, &mut output);
         }
     }
     output.push('\n');
-    Ok(output.into_bytes())
-}
-
-pub(crate) fn render_copy_text_value(value: Option<&str>) -> String {
-    let Some(value) = value else {
-        return "\\N".to_string();
-    };
-    value
-        .replace('\\', "\\\\")
-        .replace('\n', "\\n")
-        .replace('\r', "\\r")
-        .replace('\t', "\\t")
-}
-
-pub(crate) fn render_copy_csv_value(value: Option<&str>) -> String {
-    let Some(value) = value else {
-        return String::new();
-    };
-    // An empty string is quoted so it reads back as text, not NULL.
-    if value.is_empty() || value.contains([',', '"', '\n', '\r']) {
-        format!("\"{}\"", value.replace('"', "\"\""))
-    } else {
-        value.to_string()
-    }
+    encode_copy_line(output, opts)
 }
 
 pub(crate) fn copy_in_response(

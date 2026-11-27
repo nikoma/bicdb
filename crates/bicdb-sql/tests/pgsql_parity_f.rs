@@ -738,3 +738,26 @@ fn added_scalar_functions_and_input_details() {
         "invalid hexadecimal data: odd number of digits"
     );
 }
+
+#[test]
+fn views_left_without_a_schema_are_repaired_on_open() {
+    let (_dir, mut db) = open();
+    {
+        let mut sql = SqlSession::new(&mut db);
+        sql.execute("CREATE SCHEMA gone").unwrap();
+        sql.execute("CREATE VIEW gone.v AS SELECT 1 AS a").unwrap();
+        sql.execute("CREATE TABLE kept(a int)").unwrap();
+    }
+    // An earlier build could leave a view whose schema never existed.
+    db.delete("__bicdb_pg_namespaces", "gone").unwrap();
+    assert!(SqlSession::new(&mut db)
+        .execute("SELECT count(*) FROM pg_class")
+        .is_err());
+    assert_eq!(bicdb_sql::drop_orphan_temp_schemas(&mut db).unwrap(), 0);
+    let mut sql = SqlSession::new(&mut db);
+    rows(&mut sql, "SELECT count(*) FROM pg_class");
+    assert_eq!(
+        rows(&mut sql, "SELECT count(*) FROM kept"),
+        [[SqlValue::Int(0)]]
+    );
+}

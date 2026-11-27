@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-provider-llm"
-version = "1.0.556"
+version = "1.0.560"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -15,8 +15,8 @@ categories = ["database-implementations"]
 include = ["/README.md", "/src/**", "/Cargo.toml", "/LICENSE", "/NOTICE", "/THIRD_PARTY_NOTICES.md"]
 
 [dependencies]
-bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "=1.0.556" }
-bicdb-extension = { path = "../bicdb-extension", version = "=1.0.556" }
+bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "=1.0.560" }
+bicdb-extension = { path = "../bicdb-extension", version = "=1.0.560" }
 reqwest.workspace = true
 serde_json.workspace = true
 url.workspace = true

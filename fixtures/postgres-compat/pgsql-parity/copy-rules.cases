@@ -23,3 +23,5 @@ cr.freeze_rolled_back_truncate|CREATE TABLE cr22(a int); BEGIN; SAVEPOINT s1; TR
 cr.freeze_released_savepoint|CREATE TABLE cr23(a int); BEGIN; SAVEPOINT s1; TRUNCATE cr23; RELEASE SAVEPOINT s1; COPY cr23 FROM PROGRAM 'printf "1\n"' (FREEZE); COMMIT; SELECT * FROM cr23
 cr.freeze_partitioned|CREATE TABLE cr24(a int) PARTITION BY RANGE (a); BEGIN; COPY cr24 FROM PROGRAM 'printf "1\n"' (FREEZE)
 cr.freeze_false|CREATE TABLE cr25(a int); COPY cr25 FROM PROGRAM 'printf "1\n"' (FREEZE false); SELECT * FROM cr25
+cr.where_unknown_column|CREATE TABLE cr26(a int); COPY cr26 FROM PROGRAM 'printf "1\n"' WHERE f > 1
+cr.convert_selectively_twice|CREATE TABLE cr27(a int); COPY cr27 FROM PROGRAM 'printf "1\n"' (convert_selectively (a), convert_selectively (a))

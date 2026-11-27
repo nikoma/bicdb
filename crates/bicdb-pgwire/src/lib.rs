@@ -3806,7 +3806,12 @@ fn check_copy_freeze(
 /// reads them all), nor use a subquery, an aggregate, a window function or a
 /// set-returning function. The condition itself is evaluated per row when the
 /// rows are inserted.
-fn check_copy_where(copy: &CopyStatement, condition: &str, generated: &[String]) -> Result<()> {
+fn check_copy_where(
+    copy: &CopyStatement,
+    condition: &str,
+    generated: &[String],
+    table_columns: &[String],
+) -> Result<()> {
     let relation = copy
         .relation
         .as_deref()
@@ -3876,6 +3881,39 @@ fn check_copy_where(copy: &CopyStatement, condition: &str, generated: &[String])
         "json_each",
         "jsonb_each",
     ];
+    // A column the table does not have fails before COPY starts, as the
+    // parse analysis of PostgreSQL's DoCopy does.
+    let mut unknown: Option<String> = None;
+    let _ = sqlparser::ast::visit_expressions(&expr, |node| {
+        let name = match node {
+            sqlparser::ast::Expr::Identifier(ident) => Some(ident),
+            sqlparser::ast::Expr::CompoundIdentifier(parts) if parts.len() == 2 => Some(&parts[1]),
+            _ => None,
+        };
+        if let Some(ident) = name {
+            let column = if ident.quote_style.is_some() {
+                ident.value.clone()
+            } else {
+                ident.value.to_ascii_lowercase()
+            };
+            if column != relation
+                && !table_columns.iter().any(|known| *known == column)
+                && !matches!(column.as_str(), "true" | "false" | "null")
+            {
+                unknown = Some(column);
+                return std::ops::ControlFlow::Break(());
+            }
+        }
+        std::ops::ControlFlow::Continue(())
+    });
+    if let Some(column) = unknown {
+        return Err(PgWireError::Sql(SqlError::coded_public(
+            "42703",
+            format!("column \"{column}\" does not exist"),
+            None,
+            None,
+        )));
+    }
     let mut refusal: Option<(&'static str, &'static str)> = None;
     let _ = sqlparser::ast::visit_expressions(&expr, |node| {
         let found = match node {
@@ -3993,7 +4031,7 @@ fn begin_copy_in(
             let generated = copy_target_columns(server, state, &copy, &[])?
                 .map(|(_, generated)| generated)
                 .unwrap_or_default();
-            check_copy_where(&copy, condition, &generated)?;
+            check_copy_where(&copy, condition, &generated, &all_columns.columns)?;
         }
         let targets = match copy_target_columns(server, state, &copy, &copy.columns)? {
             Some((targets, _)) => targets,

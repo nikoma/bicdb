@@ -488,6 +488,7 @@ pub(crate) fn process_copy_options(defs: &[CopyDefElem], is_from: bool) -> Resul
     let mut on_error_ignore: Option<bool> = None;
     let mut log_verbosity: Option<String> = None;
     let mut reject_limit: Option<i64> = None;
+    let mut convert_selectively = false;
 
     let force_list = |def: &CopyDefElem| -> Result<ForceColumns> {
         match &def.arg {
@@ -582,6 +583,23 @@ pub(crate) fn process_copy_options(defs: &[CopyDefElem], is_from: bool) -> Resul
                     return Err(conflicting());
                 }
                 force_null = force_list(def)?;
+            }
+            // Undocumented in PostgreSQL (for file_fdw): converts only the
+            // listed columns. Checked as PostgreSQL checks it, then refused.
+            "convert_selectively" => {
+                if convert_selectively {
+                    return Err(conflicting());
+                }
+                convert_selectively = true;
+                if !matches!(def.arg, None | Some(CopyArg::List(_))) {
+                    return Err(coded(
+                        "22023",
+                        format!(
+                            "argument to option \"{}\" must be a list of column names",
+                            def.name
+                        ),
+                    ));
+                }
             }
             "encoding" => {
                 if encoding.is_some() {
@@ -827,6 +845,9 @@ pub(crate) fn process_copy_options(defs: &[CopyDefElem], is_from: bool) -> Resul
     }
 
     // PostgreSQL's checks passed: refuse what BicDB does not implement.
+    if convert_selectively {
+        return Err(unsupported("COPY CONVERT_SELECTIVELY is not supported"));
+    }
     let latin1 = match encoding {
         None | Some(Some(true)) => false,
         Some(Some(false)) => true,

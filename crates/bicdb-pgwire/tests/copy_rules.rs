@@ -349,6 +349,8 @@ fn copy_from_where_filters_rows() {
         vec![vec![Some("1".into())], vec![Some("5".into())]]
     );
     for (sql, state) in [
+        ("COPY w FROM STDIN WHERE f > 1", "42703"),
+        ("COPY w FROM STDIN WHERE w.f > 1", "42703"),
         ("COPY w FROM STDIN WHERE a IN (SELECT 1)", "0A000"),
         ("COPY w FROM STDIN WHERE a = row_number() OVER ()", "42P20"),
         ("COPY w FROM STDIN WHERE max(a) > 1", "42803"),

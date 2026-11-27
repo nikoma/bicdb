@@ -54,3 +54,4 @@ ts.missing_config|SELECT to_tsvector('no_such_cfg', 'x')
 ts.missing_dict|SELECT ts_lexize('no_such_dict', 'x')
 ts.builtin_unchanged|SELECT to_tsvector('english', 'The quick brown foxes jumped over http://example.com/a/b and foo-bar2 abc123 1.5 1.2.3 user@example.com /usr/bin'); SELECT to_tsvector('russian', 'running собаки'); SELECT to_tsquery('english', 'running & dogs:*'); SELECT plainto_tsquery('english', 'the running dogs'); SELECT websearch_to_tsquery('english', '"running dogs" -cats or birds')
 ts.alter_builtin|BEGIN; ALTER TEXT SEARCH CONFIGURATION english RENAME TO s_eng; SELECT 's_eng'::regconfig::oid, to_tsvector('s_eng', 'dogs'); SELECT count(*) FROM pg_ts_config WHERE cfgname = 'english'; ROLLBACK; SELECT 'english'::regconfig::oid
+ts.drop_owner_role|DROP ROLE IF EXISTS s_tsr4; CREATE ROLE s_tsr4; CREATE TEXT SEARCH DICTIONARY s_od (template = simple); ALTER TEXT SEARCH DICTIONARY s_od OWNER TO s_tsr4; DROP ROLE s_tsr4

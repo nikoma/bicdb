@@ -879,6 +879,15 @@ impl<'db> SqlSession<'db> {
                     let owns_database = list_databases(self.db_ref())?
                         .into_iter()
                         .any(|object| object.owner.eq_ignore_ascii_case(&role));
+                    let owns_text_search =
+                        crate::text_search_catalog::user_ts_objects(self.db_ref())?
+                            .iter()
+                            .any(|object| {
+                                object
+                                    .owner
+                                    .as_deref()
+                                    .is_some_and(|owner| owner.eq_ignore_ascii_case(&role))
+                            });
                     let has_privileges = list_privileges(self.db_ref())?
                         .into_iter()
                         .any(|grant| grant.grantee.eq_ignore_ascii_case(&role));
@@ -902,6 +911,7 @@ impl<'db> SqlSession<'db> {
                         || owns_routine
                         || owns_namespace
                         || owns_database
+                        || owns_text_search
                         || has_privileges
                         || has_default_privileges
                         || has_granted_membership

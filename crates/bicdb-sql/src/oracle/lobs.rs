@@ -276,6 +276,7 @@ pub(crate) fn lower(
             | RoutineStmt::ForeachLoop { body, .. }
             | RoutineStmt::QueryForLoop { body, .. }
             | RoutineStmt::CursorForLoop { body, .. }
+            | RoutineStmt::DynamicQueryForLoop { body, .. }
             | RoutineStmt::Loop { body }
             | RoutineStmt::WhileLoop { body, .. } => lower(body, &mut [])?,
             _ => {}

@@ -386,6 +386,10 @@ severity and SQLSTATE:
   PG_EXCEPTION_DETAIL, PG_EXCEPTION_HINT, COLUMN_NAME, CONSTRAINT_NAME,
   PG_DATATYPE_NAME, TABLE_NAME and SCHEMA_NAME. PG_EXCEPTION_CONTEXT is
   always empty. Outside a handler it fails with 0Z002.
+- `FOR target IN EXECUTE command [USING ...]` iterates rows from a dynamic
+  statement, including `EXPLAIN` and data changes with `RETURNING`. Dynamic
+  SQL sees only the explicitly supplied parameters. A non-row-returning
+  command is rejected before it runs.
 - The postfix `x ISNULL` / `x NOTNULL` operators work in PL/pgSQL
   expressions and conditions.
 - A foreign key that references a partitioned table protects rows in every

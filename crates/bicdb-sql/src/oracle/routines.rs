@@ -151,6 +151,18 @@ fn bind_namespace_statements(
                 bind_relations(db, query, schema, calls)?;
                 bind_namespace_statements(db, body, schema, calls)?;
             }
+            RoutineStmt::DynamicQueryForLoop {
+                query,
+                parameters,
+                body,
+                ..
+            } => {
+                bind_relations(db, &mut query.expr, schema, calls)?;
+                for parameter in parameters {
+                    bind_relations(db, &mut parameter.expr, schema, calls)?;
+                }
+                bind_namespace_statements(db, body, schema, calls)?;
+            }
             RoutineStmt::CursorForLoop {
                 arguments, body, ..
             } => {
@@ -430,6 +442,18 @@ fn lower_statements(statements: &mut [RoutineStmt], types: &Types) {
             }
             RoutineStmt::WhileLoop { condition, body } => {
                 lower_expression(&mut condition.expr, types);
+                lower_statements(body, types);
+            }
+            RoutineStmt::DynamicQueryForLoop {
+                query,
+                parameters,
+                body,
+                ..
+            } => {
+                lower_expression(&mut query.expr, types);
+                for parameter in parameters {
+                    lower_expression(&mut parameter.expr, types);
+                }
                 lower_statements(body, types);
             }
             RoutineStmt::CursorForLoop {

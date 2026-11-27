@@ -38,6 +38,7 @@ pub(crate) fn prepare_declared_types(
             | RoutineStmt::ForeachLoop { body, .. }
             | RoutineStmt::QueryForLoop { body, .. }
             | RoutineStmt::CursorForLoop { body, .. }
+            | RoutineStmt::DynamicQueryForLoop { body, .. }
             | RoutineStmt::Loop { body }
             | RoutineStmt::WhileLoop { body, .. } => prepare_declared_types(body, &mut [])?,
             _ => {}

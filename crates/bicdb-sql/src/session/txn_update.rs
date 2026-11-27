@@ -5159,6 +5159,7 @@ impl<'db> SqlSession<'db> {
                     | RoutineStmt::ForeachLoop { .. }
                     | RoutineStmt::QueryForLoop { .. }
                     | RoutineStmt::CursorForLoop { .. }
+                    | RoutineStmt::DynamicQueryForLoop { .. }
                     | RoutineStmt::Loop { .. }
                     | RoutineStmt::WhileLoop { .. }
             );
@@ -5302,6 +5303,12 @@ impl<'db> SqlSession<'db> {
                 arguments,
                 body,
             } => self.execute_routine_cursor_for_loop(frame, target, cursor, arguments, body),
+            RoutineStmt::DynamicQueryForLoop {
+                target,
+                query,
+                parameters,
+                body,
+            } => self.execute_routine_dynamic_for_loop(frame, target, query, parameters, body),
             _ => self.execute_routine_leaf_statement(frame, statement),
         }
     }
@@ -5646,6 +5653,7 @@ impl<'db> SqlSession<'db> {
             RoutineStmt::Block { .. }
             | RoutineStmt::Case { .. }
             | RoutineStmt::CursorForLoop { .. }
+            | RoutineStmt::DynamicQueryForLoop { .. }
             | RoutineStmt::ForLoop { .. }
             | RoutineStmt::ForeachLoop { .. }
             | RoutineStmt::If { .. }
@@ -5747,7 +5755,69 @@ impl<'db> SqlSession<'db> {
         query: &Query,
         body: &[RoutineStmt],
     ) -> Result<RoutineControl> {
-        let mut result = self.execute_routine_query(frame, query)?;
+        let result = self.execute_routine_query(frame, query)?;
+        self.iterate_routine_rows(frame, target, result, body)
+    }
+
+    fn execute_routine_dynamic_for_loop(
+        &mut self,
+        frame: &mut RoutineFrame,
+        target: &str,
+        query: &RoutineExpr,
+        parameters: &[RoutineExpr],
+        body: &[RoutineStmt],
+    ) -> Result<RoutineControl> {
+        let sql = match self.eval_routine_expr(frame, query)? {
+            SqlValue::Null => {
+                return Err(SqlError::data_exception_public(
+                    "22004",
+                    "query string argument of EXECUTE is null",
+                    None,
+                ))
+            }
+            value => value.to_cell(),
+        };
+        let parameters = parameters
+            .iter()
+            .map(|parameter| self.eval_routine_expr(frame, parameter))
+            .collect::<Result<Vec<_>>>()?;
+        if split_sql_statements(&sql).len() != 1 {
+            return Err(SqlError::data_exception_public(
+                "42P11",
+                "cannot open multi-query plan as cursor",
+                None,
+            ));
+        }
+        let mut parsed = parse_single_statement(&sql)?;
+        if let Some(tag) = non_row_statement_tag(&parsed) {
+            return Err(SqlError::data_exception_public(
+                "42P11",
+                format!("cannot open {tag} query as cursor"),
+                None,
+            ));
+        }
+        let result = self.execute_postgres_dynamic_statement(&mut parsed, parameters)?;
+        let found = !result.rows.is_empty();
+        if !found {
+            if frame.query_loop_target_is_scalar(target) {
+                frame.assign(target, SqlValue::Null)?;
+            } else {
+                let row = vec![SqlValue::Null; result.columns.len()];
+                frame.set(target, routine_record_value(&result.columns, &row));
+            }
+        }
+        let control = self.iterate_routine_rows(frame, target, result, body)?;
+        frame.set(ROUTINE_FOUND_VAR, SqlValue::Bool(found));
+        Ok(control)
+    }
+
+    fn iterate_routine_rows(
+        &mut self,
+        frame: &mut RoutineFrame,
+        target: &str,
+        mut result: SqlResult,
+        body: &[RoutineStmt],
+    ) -> Result<RoutineControl> {
         let scalar_target = frame.query_loop_target_is_scalar(target);
         let display_aliases = !scalar_target || frame.query_loop_target_is_text(target);
         // A `regclass`-typed column carries the relation OID as its value —
@@ -8422,6 +8492,7 @@ fn plpgsql_statement_kind(statement: &RoutineStmt) -> &'static str {
         RoutineStmt::ForLoop { .. } => "FOR with integer loop variable",
         RoutineStmt::QueryForLoop { .. } => "FOR over SELECT rows",
         RoutineStmt::CursorForLoop { .. } => "FOR over cursor",
+        RoutineStmt::DynamicQueryForLoop { .. } => "FOR over EXECUTE statement",
         RoutineStmt::ForeachLoop { .. } => "FOREACH over array",
         RoutineStmt::ExitLoop => "EXIT",
         RoutineStmt::ContinueLoop => "CONTINUE",
@@ -8515,4 +8586,45 @@ fn statement_line<'a>(
         .lines
         .as_ref()?
         .get(&(statement as *const RoutineStmt as usize))
+}
+
+/// The command tag of a statement that returns no rows, which `FOR ... IN
+/// EXECUTE` refuses before running it (PostgreSQL's "cannot open ... query
+/// as cursor"); `None` for row-returning statements.
+fn non_row_statement_tag(statement: &Statement) -> Option<String> {
+    let returns_rows = match statement {
+        Statement::Query(_)
+        | Statement::Explain { .. }
+        | Statement::ExplainTable { .. }
+        | Statement::ShowVariable { .. }
+        | Statement::ShowVariables { .. }
+        | Statement::Fetch { .. } => true,
+        Statement::Insert(insert) => insert.returning.is_some(),
+        Statement::Update(update) => update.returning.is_some(),
+        Statement::Delete(delete) => delete.returning.is_some(),
+        Statement::Merge(merge) => merge.output.is_some(),
+        _ => false,
+    };
+    if returns_rows {
+        return None;
+    }
+    let words = split_sql_words(&statement.to_string())
+        .into_iter()
+        .take(3)
+        .map(|word| word.to_ascii_uppercase())
+        .collect::<Vec<_>>();
+    let tag = match words.first().map(String::as_str) {
+        Some("INSERT" | "UPDATE" | "DELETE" | "MERGE") => words[0].clone(),
+        Some("CREATE" | "ALTER" | "DROP") if words.len() > 1 => {
+            let object = if words[1] == "TEMP" || words[1] == "TEMPORARY" {
+                words.get(2).cloned().unwrap_or_default()
+            } else {
+                words[1].clone()
+            };
+            format!("{} {object}", words[0])
+        }
+        Some(first) => first.to_string(),
+        None => String::new(),
+    };
+    Some(tag)
 }

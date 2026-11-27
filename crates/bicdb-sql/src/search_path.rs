@@ -766,6 +766,18 @@ pub(crate) fn bind_statements(
                 visit(RoutineNode::Query(query));
                 bind_statements(body, visit);
             }
+            RoutineStmt::DynamicQueryForLoop {
+                query,
+                parameters,
+                body,
+                ..
+            } => {
+                visit(RoutineNode::Expr(&mut query.expr));
+                for parameter in parameters {
+                    visit(RoutineNode::Expr(&mut parameter.expr));
+                }
+                bind_statements(body, visit);
+            }
             RoutineStmt::CursorForLoop {
                 arguments, body, ..
             } => {

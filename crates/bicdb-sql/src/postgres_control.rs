@@ -251,6 +251,24 @@ pub(crate) fn parse(statement: &str) -> Result<Option<PostgresControl>> {
     }))
 }
 
+pub(crate) fn parse_for_execute(source: &str) -> Result<(RoutineExpr, Vec<RoutineExpr>)> {
+    match parse(&format!("EXECUTE {source}"))? {
+        Some(PostgresControl::Execute {
+            command,
+            targets: None,
+            parameters,
+            ..
+        }) => Ok((command, parameters)),
+        Some(_) => Err(SqlError::InvalidSql(
+            "FOR ... IN EXECUTE does not allow an INTO clause".into(),
+        )),
+        None => Ok((
+            RoutineExpr::unbound(parse_routine_expr(source)?),
+            Vec::new(),
+        )),
+    }
+}
+
 pub(crate) fn row_count(result: &SqlResult) -> i64 {
     result
         .command_tag
@@ -354,7 +372,7 @@ impl SqlSession<'_> {
                     .iter()
                     .map(|parameter| self.eval_routine_expr(frame, parameter))
                     .collect::<Result<Vec<_>>>()?;
-                let parsed = parse_single_statement(&sql)?;
+                let mut parsed = parse_single_statement(&sql)?;
                 if !matches!(
                     parsed,
                     Statement::Query(_)
@@ -374,27 +392,7 @@ impl SqlSession<'_> {
                         | Statement::Delete(_)
                         | Statement::Merge(_)
                 );
-                // PostgreSQL dynamic SQL never substitutes local variable names.
-                // Only explicitly supplied USING values are visible as $n.
-                let vars = std::mem::replace(
-                    &mut self.routine_vars,
-                    Arc::new(
-                        parameters
-                            .into_iter()
-                            .enumerate()
-                            .map(|(index, value)| (format!("${}", index + 1), value))
-                            .collect(),
-                    ),
-                );
-                let slots = self.routine_slots.take();
-                let ir = self.current_routine_ir.take();
-                let owned = std::mem::replace(&mut self.ir_owned_statement, false);
-                let result = self.execute_parsed_statement(&parsed);
-                self.routine_vars = vars;
-                self.routine_slots = slots;
-                self.current_routine_ir = ir;
-                self.ir_owned_statement = owned;
-                let result = result?;
+                let result = self.execute_postgres_dynamic_statement(&mut parsed, parameters)?;
                 frame.last_sql_row_count = row_count(&result);
                 if let Some(targets) = targets {
                     if *strict && result.rows.is_empty() {
@@ -417,5 +415,53 @@ impl SqlSession<'_> {
                 Ok(RoutineControl::Continue)
             }
         }
+    }
+
+    pub(crate) fn execute_postgres_dynamic_statement(
+        &mut self,
+        statement: &mut Statement,
+        parameters: Vec<SqlValue>,
+    ) -> Result<SqlResult> {
+        if let ControlFlow::Break(name) = sqlparser::ast::visit_expressions(&*statement, |expr| {
+            if let Expr::Value(value) = expr {
+                if let Value::Placeholder(name) = &value.value {
+                    let number = name.strip_prefix('$').and_then(|n| n.parse::<usize>().ok());
+                    if number.is_none_or(|n| n == 0 || n > parameters.len()) {
+                        return ControlFlow::Break(name.clone());
+                    }
+                }
+            }
+            ControlFlow::Continue(())
+        }) {
+            return Err(SqlError::data_exception_public(
+                "42P02",
+                format!("there is no parameter {name}"),
+                None,
+            ));
+        }
+        if let Some(path) = crate::search_path::active_path() {
+            crate::search_path::bind_node(self.db_ref(), statement, &path);
+        }
+
+        // Only the explicitly supplied USING values are visible as $n.
+        let vars = std::mem::replace(
+            &mut self.routine_vars,
+            Arc::new(
+                parameters
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, value)| (format!("${}", index + 1), value))
+                    .collect(),
+            ),
+        );
+        let slots = self.routine_slots.take();
+        let ir = self.current_routine_ir.take();
+        let owned = std::mem::replace(&mut self.ir_owned_statement, false);
+        let result = self.execute_parsed_statement(statement);
+        self.routine_vars = vars;
+        self.routine_slots = slots;
+        self.current_routine_ir = ir;
+        self.ir_owned_statement = owned;
+        result
     }
 }

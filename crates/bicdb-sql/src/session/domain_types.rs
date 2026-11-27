@@ -1074,8 +1074,16 @@ impl<'db> SqlSession<'db> {
         {
             return Ok(());
         }
+        // The rules of the schema's relations go with them.
+        let prefix = relation_name_from_parts(&[temp.to_string(), String::new()])?;
+        let relations = crate::query_rules::list_rules(self.db_ref())?
+            .iter()
+            .filter(|rule| rule.table.starts_with(&prefix))
+            .map(|rule| rule.table.clone())
+            .collect::<Vec<_>>();
         let name = ObjectName::from(vec![Ident::with_quote('"', temp.to_string())]);
         self.drop_schemas(true, &[name], true, true)?;
+        crate::query_rules::drop_rules_of_relations(self.db_mut()?, &relations)?;
         super::temp_tables::forget_on_commit(temp, None);
         Ok(())
     }

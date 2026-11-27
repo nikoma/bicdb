@@ -34,3 +34,7 @@ tmp.alter_rename_table|CREATE TEMP TABLE trn(a int); ALTER TABLE trn RENAME TO t
 tmp.cluster_index_constraint|CREATE TEMP TABLE tuq(a int UNIQUE); INSERT INTO tuq VALUES (1); INSERT INTO tuq VALUES (1)
 tmp.partitioned|CREATE TEMP TABLE tpp(a int) PARTITION BY RANGE (a); CREATE TEMP TABLE tpp1 PARTITION OF tpp FOR VALUES FROM (0) TO (10); INSERT INTO tpp VALUES (5); SELECT * FROM tpp
 tmp.matview|CREATE TEMP TABLE tmv(a int); CREATE MATERIALIZED VIEW tmv_v AS SELECT * FROM tmv
+tmp.ctas_on_commit_delete|BEGIN; CREATE TEMP TABLE tcd(col) ON COMMIT DELETE ROWS AS SELECT 1; SELECT * FROM tcd; COMMIT; SELECT count(*) FROM tcd
+tmp.ctas_on_commit_drop|BEGIN; CREATE TEMP TABLE tcdr(col) ON COMMIT DROP AS SELECT 1; SELECT * FROM tcdr; COMMIT; SELECT count(*) FROM pg_class WHERE relname = 'tcdr'
+tmp.ctas_on_commit_permanent|CREATE TABLE tcp(col) ON COMMIT DELETE ROWS AS SELECT 1
+tmp.rule_on_temp_view|CREATE TEMP TABLE trt(a int); CREATE TEMP VIEW trv AS SELECT * FROM trt; CREATE RULE trv_ins AS ON INSERT TO trv DO INSTEAD INSERT INTO trt VALUES (NEW.a); INSERT INTO trv VALUES (3); SELECT * FROM trt; SELECT count(*) FROM pg_rules WHERE rulename = 'trv_ins'

@@ -297,7 +297,9 @@ impl<'db> SqlEngine<'db> {
                 }
                 Ok(sql_or(left, self.eval_row_truth_typed(row, right, env)?))
             }
-            Expr::BinaryOp { left, op, right } if *op == BinaryOperator::AtAt => {
+            Expr::BinaryOp { left, op, right }
+                if matches!(op, BinaryOperator::AtAt | BinaryOperator::AtQuestion) =>
+            {
                 let left_value = self.eval_row_value(row, left)?;
                 let right_value = self.eval_row_value(row, right)?;
                 let left_type = resolved_text_search_operand_type(
@@ -322,20 +324,13 @@ impl<'db> SqlEngine<'db> {
                     right,
                     &right_value,
                 );
-                eval_atat_match_value(
+                eval_match_operator_value(
+                    op,
                     left_value,
                     right_value,
                     left_type.as_deref(),
                     right_type.as_deref(),
                 )
-            }
-            Expr::BinaryOp { left, op, right } if *op == BinaryOperator::AtQuestion => {
-                eval_jsonpath_operator_value(
-                    self.eval_row_value(row, left)?,
-                    self.eval_row_value(row, right)?,
-                    false,
-                )
-                .and_then(sql_value_truth)
             }
             Expr::BinaryOp { left, op, right }
                 if matches!(
@@ -571,7 +566,9 @@ impl<'db> SqlEngine<'db> {
                     self.eval_slot_row_truth_typed(row, context, right, env)?,
                 ))
             }
-            Expr::BinaryOp { left, op, right } if *op == BinaryOperator::AtAt => {
+            Expr::BinaryOp { left, op, right }
+                if matches!(op, BinaryOperator::AtAt | BinaryOperator::AtQuestion) =>
+            {
                 let left_value = self.eval_slot_row_value(row, context, left)?;
                 let right_value = self.eval_slot_row_value(row, context, right)?;
                 let left_type = resolved_text_search_operand_type(
@@ -586,20 +583,13 @@ impl<'db> SqlEngine<'db> {
                     right,
                     &right_value,
                 );
-                eval_atat_match_value(
+                eval_match_operator_value(
+                    op,
                     left_value,
                     right_value,
                     left_type.as_deref(),
                     right_type.as_deref(),
                 )
-            }
-            Expr::BinaryOp { left, op, right } if *op == BinaryOperator::AtQuestion => {
-                eval_jsonpath_operator_value(
-                    self.eval_slot_row_value(row, context, left)?,
-                    self.eval_slot_row_value(row, context, right)?,
-                    false,
-                )
-                .and_then(sql_value_truth)
             }
             Expr::BinaryOp { left, op, right }
                 if matches!(
@@ -911,7 +901,7 @@ impl<'db> SqlEngine<'db> {
                         "unsupported WHERE operator {op}"
                     )))
                 }
-                BinaryOperator::AtAt => {
+                BinaryOperator::AtAt | BinaryOperator::AtQuestion => {
                     let left_value = self.eval_slot_row_value(row, context, left)?;
                     let right_value = self.eval_slot_row_value(row, context, right)?;
                     let left_type = resolved_text_search_operand_type(
@@ -924,19 +914,14 @@ impl<'db> SqlEngine<'db> {
                         right,
                         &right_value,
                     );
-                    eval_atat_match_value(
+                    eval_match_operator_value(
+                        op,
                         left_value,
                         right_value,
                         left_type.as_deref(),
                         right_type.as_deref(),
                     )
                 }
-                BinaryOperator::AtQuestion => eval_jsonpath_operator_value(
-                    self.eval_slot_row_value(row, context, left)?,
-                    self.eval_slot_row_value(row, context, right)?,
-                    false,
-                )
-                .and_then(sql_value_truth),
                 BinaryOperator::Question
                 | BinaryOperator::QuestionAnd
                 | BinaryOperator::QuestionPipe => eval_json_existence_value(
@@ -3030,7 +3015,7 @@ impl<'db> SqlEngine<'db> {
                         "unsupported WHERE operator {op}"
                     )))
                 }
-                BinaryOperator::AtAt => {
+                BinaryOperator::AtAt | BinaryOperator::AtQuestion => {
                     let left_value = self.eval_row_value(row, left)?;
                     let right_value = self.eval_row_value(row, right)?;
                     let left_type = resolved_text_search_operand_type(
@@ -3051,19 +3036,14 @@ impl<'db> SqlEngine<'db> {
                         right,
                         &right_value,
                     );
-                    eval_atat_match_value(
+                    eval_match_operator_value(
+                        op,
                         left_value,
                         right_value,
                         left_type.as_deref(),
                         right_type.as_deref(),
                     )
                 }
-                BinaryOperator::AtQuestion => eval_jsonpath_operator_value(
-                    self.eval_row_value(row, left)?,
-                    self.eval_row_value(row, right)?,
-                    false,
-                )
-                .and_then(sql_value_truth),
                 BinaryOperator::Question
                 | BinaryOperator::QuestionAnd
                 | BinaryOperator::QuestionPipe => eval_json_existence_value(

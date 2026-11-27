@@ -2937,6 +2937,17 @@ pub(crate) fn eval_binary_expr_value(
     eval_binary_expr_value_typed(left_expr, op, right_expr, left, right, schema, &types)
 }
 
+pub(crate) fn jsonpath_operator_signature(
+    left_type: Option<&str>,
+    right_type: Option<&str>,
+    right: &SqlValue,
+) -> bool {
+    left_type == Some("jsonb")
+        && (right_type == Some("jsonpath")
+            || (right_type.is_none_or(|pg_type| pg_type == "unknown")
+                && matches!(right, SqlValue::String(_) | SqlValue::Null)))
+}
+
 pub(crate) fn eval_binary_expr_value_typed(
     left_expr: &Expr,
     op: &BinaryOperator,
@@ -3146,8 +3157,7 @@ pub(crate) fn eval_binary_expr_value_typed(
             || untyped(pg_type, value)
     };
     let value = if matches!(op, BinaryOperator::AtAt | BinaryOperator::AtQuestion)
-        && left_type.as_deref() == Some("jsonb")
-        && (right_type.as_deref() == Some("jsonpath") || untyped(right_type, &right))
+        && jsonpath_operator_signature(left_type.as_deref(), right_type.as_deref(), &right)
     {
         eval_jsonpath_operator_value(left, right, matches!(op, BinaryOperator::AtAt))?
     } else if vector_distance_operator(op) == Some("<->")

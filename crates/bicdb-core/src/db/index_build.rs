@@ -1959,6 +1959,15 @@ impl BicDb {
         Ok(rowids)
     }
 
+    /// Whether [`Self::index_prefix_entries`] can list this index: a
+    /// resident (not read-through paged) B-tree.
+    pub fn index_entries_listable(&self, name: &str) -> bool {
+        self.indexes.get(name).is_some_and(|state| {
+            let state = state.read();
+            state.definition.kind == IndexKind::BTree && !state.paged_read_through
+        })
+    }
+
     /// The entries of a resident B-tree index whose key starts with
     /// `prefix` (every entry for an empty prefix), in ascending key order,
     /// each as its full decoded key and row id: what an index-only scan

@@ -3429,6 +3429,7 @@ fn row_security_disabled(session_gucs: &HashMap<String, String>) -> bool {
 }
 
 pub(crate) fn row_security_disabled_error(table: &str) -> SqlError {
+    let table = catalog_display_name(table);
     SqlError::BicDb(BicDbError::Authorization(format!(
         "query would be affected by row-level security policy for table \"{table}\""
     )))
@@ -4187,6 +4188,7 @@ pub(crate) fn parse_policy_expression(expression: &str) -> Result<Expr> {
 }
 
 pub(crate) fn rls_permission_denied(table: &str) -> SqlError {
+    let table = catalog_display_name(table);
     SqlError::BicDb(BicDbError::Authorization(format!(
         "new row violates row-level security policy for table \"{table}\""
     )))
@@ -4194,9 +4196,12 @@ pub(crate) fn rls_permission_denied(table: &str) -> SqlError {
 
 pub(crate) fn rls_check_denied(table: &str, verdict: &RlsRowVerdict) -> SqlError {
     match verdict {
-        RlsRowVerdict::Denied(Some(policy)) => SqlError::BicDb(BicDbError::Authorization(format!(
-            "new row violates row-level security policy \"{policy}\" for table \"{table}\""
-        ))),
+        RlsRowVerdict::Denied(Some(policy)) => {
+            let table = catalog_display_name(table);
+            SqlError::BicDb(BicDbError::Authorization(format!(
+                "new row violates row-level security policy \"{policy}\" for table \"{table}\""
+            )))
+        }
         _ => rls_permission_denied(table),
     }
 }
@@ -4204,6 +4209,7 @@ pub(crate) fn rls_check_denied(table: &str, verdict: &RlsRowVerdict) -> SqlError
 // PostgreSQL's ON CONFLICT DO UPDATE message variant: the conflicting
 // existing row failed the UPDATE or SELECT policies' USING expression.
 pub(crate) fn rls_using_denied(table: &str, verdict: &RlsRowVerdict) -> SqlError {
+    let table = catalog_display_name(table);
     SqlError::BicDb(BicDbError::Authorization(match verdict {
         RlsRowVerdict::Denied(Some(policy)) => format!(
             "new row violates row-level security policy \"{policy}\" (USING expression) for table \"{table}\""

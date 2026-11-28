@@ -4275,7 +4275,16 @@ pub(crate) fn apply_order_by_cancellable(
                     projected_expr_pg_type(&order.expr, schema),
                     expr_collation(&order.expr, schema)?,
                     schema.and_then(|schema| {
-                        partition_key_column_name(&order.expr)
+                        // The cast's result has its own ordering semantics.
+                        // The underlying column codec applies to column reads.
+                        let mut expr = &order.expr;
+                        while let Expr::Nested(inner) | Expr::Collate { expr: inner, .. } = expr {
+                            expr = inner;
+                        }
+                        if !matches!(expr, Expr::Identifier(_) | Expr::CompoundIdentifier(_)) {
+                            return None;
+                        }
+                        partition_key_column_name(expr)
                             .ok()
                             .and_then(|column| schema.column(&column))
                     }),

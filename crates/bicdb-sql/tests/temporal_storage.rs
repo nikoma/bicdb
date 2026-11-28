@@ -895,6 +895,76 @@ fn interval_add_subtract_and_negate_check_bounds_and_infinities() {
 }
 
 #[test]
+fn interval_scaling_cascades_rounded_fractions_and_handles_float_specials() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+
+    for (expression, expected) in [
+        (
+            "interval '9 mon -27 days 12:34:56' * 0.3",
+            "2 mons 13 days 01:22:28.8",
+        ),
+        (
+            "interval '9 mon -27 days 12:34:56' / 10",
+            "25 days -15:32:30.4",
+        ),
+        (
+            "interval '-3 years 482 days 76:54:32.189' / 100",
+            "-6 days +01:14:56.72189",
+        ),
+        ("interval '4 mon' * 0.3", "1 mon 6 days"),
+        (
+            "interval '999 mon 999 days' * 8.2",
+            "682 years 7 mons 8215 days 19:12:00",
+        ),
+        ("interval '25 hours' * 2", "50:00:00"),
+        ("interval '1 microsecond' * 0.5", "00:00:00"),
+        ("interval '-3 microseconds' / 2", "-00:00:00.000002"),
+        ("interval '1 day' * 'Infinity'::float8", "infinity"),
+        ("'-Infinity'::float8 * interval '1 day'", "-infinity"),
+        ("interval '1 day' / 'Infinity'::float8", "00:00:00"),
+        ("interval 'infinity' * -2", "-infinity"),
+        ("interval '-infinity' / -2", "infinity"),
+    ] {
+        assert_eq!(
+            session
+                .execute(&format!("SELECT {expression}"))
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::String(expected.to_string())]],
+            "{expression}",
+        );
+    }
+    for expression in [
+        "interval '256 microseconds' * (2^55)::float8",
+        "interval '1 month 2146410 days' * 1000.5002",
+        "interval '4611686018427387904 usec' / 0.1",
+        "interval 'infinity' / 'Infinity'::float8",
+        "interval 'infinity' * 0",
+        "interval '1 month -30 days' * 'Infinity'::float8",
+        "interval '1 day' / 'NaN'::float8",
+    ] {
+        let error = session
+            .execute(&format!("SELECT {expression}"))
+            .unwrap_err();
+        assert_eq!(error.sqlstate(), "22008", "{expression}");
+        assert_eq!(
+            error.postgres_message(),
+            "interval out of range",
+            "{expression}"
+        );
+    }
+    assert_eq!(
+        session
+            .execute("SELECT interval '2 days' / '-0.0'::float8")
+            .unwrap_err()
+            .sqlstate(),
+        "22012",
+    );
+}
+
+#[test]
 fn interval_matches_postgresql_typmods_styles_arithmetic_and_indexes() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();
@@ -1188,4 +1258,53 @@ fn postgres_interval_input_uses_its_field_range_before_time_decoding() {
             .sqlstate(),
         "22007"
     );
+}
+
+#[test]
+fn interval_justify_checks_carries_and_aligns_signs() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for (expression, expected) in [
+        (
+            "justify_hours(interval '2 days -5 hours')",
+            "1 day 19:00:00",
+        ),
+        ("justify_days(interval '-1 month 1 day')", "-29 days"),
+        (
+            "justify_interval(interval '2147483647 days 24 hrs')",
+            "5965232 years 4 mons 8 days",
+        ),
+        (
+            "justify_interval(interval '-2147483648 days -24 hrs')",
+            "-5965232 years -4 mons -9 days",
+        ),
+        ("justify_hours(interval 'infinity')", "infinity"),
+        ("justify_days(interval '-infinity')", "-infinity"),
+        ("justify_interval(interval '-infinity')", "-infinity"),
+    ] {
+        assert_eq!(
+            session
+                .execute(&format!("SELECT {expression}"))
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::String(expected.to_string())]],
+            "{expression}",
+        );
+    }
+    for expression in [
+        "justify_hours(interval '2147483647 days 24 hrs')",
+        "justify_days(interval '-2147483648 months -30 days')",
+        "justify_interval(interval '2147483647 months -30 days 1440 hrs')",
+    ] {
+        let error = session
+            .execute(&format!("SELECT {expression}"))
+            .unwrap_err();
+        assert_eq!(error.sqlstate(), "22008", "{expression}");
+        assert_eq!(
+            error.postgres_message(),
+            "interval out of range",
+            "{expression}"
+        );
+    }
 }

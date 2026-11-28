@@ -3986,16 +3986,7 @@ pub(crate) fn eval_typed_interval_arithmetic(
             interval.checked_scale(scalar)
         }
     }
-    .map_err(|error| match error {
-        PgCanonicalValueError::IntervalOutOfRange => {
-            SqlError::data_exception("22008", "interval out of range", None)
-        }
-        _ => SqlError::data_exception(
-            "22015",
-            "interval out of range",
-            Some("interval".to_string()),
-        ),
-    })?;
+    .map_err(|_| SqlError::data_exception("22008", "interval out of range", None))?;
     Ok(Some(SqlValue::String(render_interval(result))))
 }
 

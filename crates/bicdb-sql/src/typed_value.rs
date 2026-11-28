@@ -2116,74 +2116,161 @@ impl PgInterval {
     }
 
     pub fn checked_scale(self, factor: f64) -> Result<Self, PgCanonicalValueError> {
-        if !factor.is_finite() {
-            return Err(PgCanonicalValueError::TemporalOverflow("interval"));
+        if factor.is_nan() {
+            return Err(PgCanonicalValueError::IntervalOutOfRange);
         }
-        let months_exact = f64::from(self.months) * factor;
-        let months = months_exact.trunc();
-        let month_remainder_days = (months_exact - months) * 30.0;
-        let days_exact = f64::from(self.days) * factor + month_remainder_days;
-        let days = days_exact.trunc();
-        let day_remainder_micros = (days_exact - days) * MICROS_PER_DAY as f64;
-        let micros = (self.micros as f64 * factor + day_remainder_micros).round_ties_even();
-        Ok(Self {
-            months: f64_to_i32_interval(months)?,
-            days: f64_to_i32_interval(days)?,
-            micros: f64_to_i64_interval(micros)?,
-        })
+        if !self.is_finite() {
+            return if factor == 0.0 {
+                Err(PgCanonicalValueError::IntervalOutOfRange)
+            } else if factor.is_sign_negative() {
+                self.checked_neg()
+            } else {
+                Ok(self)
+            };
+        }
+        if factor.is_infinite() {
+            let sign = self.comparison_micros().signum();
+            return if sign == 0 {
+                Err(PgCanonicalValueError::IntervalOutOfRange)
+            } else if (sign < 0) != factor.is_sign_negative() {
+                Ok(Self::NEGATIVE_INFINITY)
+            } else {
+                Ok(Self::POSITIVE_INFINITY)
+            };
+        }
+        Self::from_scaled_components(
+            f64::from(self.months) * factor,
+            f64::from(self.days) * factor,
+            self.micros as f64 * factor,
+        )
     }
 
     pub fn checked_div(self, divisor: f64) -> Result<Self, PgCanonicalValueError> {
-        if divisor == 0.0 || !divisor.is_finite() {
-            return Err(PgCanonicalValueError::TemporalOverflow("interval"));
+        if divisor == 0.0 || divisor.is_nan() {
+            return Err(PgCanonicalValueError::IntervalOutOfRange);
         }
-        self.checked_scale(1.0 / divisor)
+        if !self.is_finite() {
+            return if divisor.is_infinite() {
+                Err(PgCanonicalValueError::IntervalOutOfRange)
+            } else if divisor.is_sign_negative() {
+                self.checked_neg()
+            } else {
+                Ok(self)
+            };
+        }
+        Self::from_scaled_components(
+            f64::from(self.months) / divisor,
+            f64::from(self.days) / divisor,
+            self.micros as f64 / divisor,
+        )
     }
 
-    pub fn justify_hours(self) -> Result<Self, PgCanonicalValueError> {
-        let extra_days = self.micros / MICROS_PER_DAY;
-        Ok(Self {
-            months: self.months,
-            days: self
-                .days
-                .checked_add(
-                    i32::try_from(extra_days)
-                        .map_err(|_| PgCanonicalValueError::TemporalOverflow("interval"))?,
-                )
-                .ok_or(PgCanonicalValueError::TemporalOverflow("interval"))?,
-            micros: self.micros % MICROS_PER_DAY,
-        })
+    fn from_scaled_components(
+        exact_months: f64,
+        exact_days: f64,
+        exact_micros: f64,
+    ) -> Result<Self, PgCanonicalValueError> {
+        const SECONDS_PER_DAY: f64 = 86_400.0;
+        let months = f64_to_i32_interval(exact_months)?;
+        let days = f64_to_i32_interval(exact_days)?;
+        let month_remainder = round_interval_fraction((exact_months - f64::from(months)) * 30.0);
+        let whole_month_days = month_remainder as i32;
+        // Carry whole fractional months into days only after rounding the
+        // combined fractional seconds, so each stored component keeps its sign.
+        let day_remainder = exact_days - f64::from(days);
+        let mut seconds = round_interval_fraction(
+            (day_remainder + month_remainder - f64::from(whole_month_days)) * SECONDS_PER_DAY,
+        );
+        let days_from_seconds = (seconds / SECONDS_PER_DAY) as i32;
+        seconds -= f64::from(days_from_seconds) * SECONDS_PER_DAY;
+        let days = days
+            .checked_add(days_from_seconds)
+            .and_then(|days| days.checked_add(whole_month_days))
+            .ok_or(PgCanonicalValueError::IntervalOutOfRange)?;
+        let micros = f64_to_i64_interval((exact_micros + seconds * 1_000_000.0).round_ties_even())?;
+        Self {
+            months,
+            days,
+            micros,
+        }
+        .finite_arithmetic_result()
     }
 
-    pub fn justify_days(self) -> Result<Self, PgCanonicalValueError> {
-        let extra_months = self.days / 30;
-        Ok(Self {
-            months: self
-                .months
-                .checked_add(extra_months)
-                .ok_or(PgCanonicalValueError::TemporalOverflow("interval"))?,
-            days: self.days % 30,
-            micros: self.micros,
-        })
+    pub fn justify_hours(mut self) -> Result<Self, PgCanonicalValueError> {
+        if self.is_finite() {
+            self.carry_hours_into_days()?;
+            self.align_day_time_signs();
+        }
+        Ok(self)
     }
 
-    pub fn justify_interval(self) -> Result<Self, PgCanonicalValueError> {
-        let mut value = self.justify_hours()?.justify_days()?;
-        if value.months > 0 && (value.days < 0 || (value.days == 0 && value.micros < 0)) {
-            value.months -= 1;
-            value.days += 30;
-        } else if value.months < 0 && (value.days > 0 || (value.days == 0 && value.micros > 0)) {
-            value.months += 1;
-            value.days -= 30;
+    pub fn justify_days(mut self) -> Result<Self, PgCanonicalValueError> {
+        if self.is_finite() {
+            self.carry_days_into_months()?;
+            self.align_month_day_signs(self.days.signum());
         }
-        if value.days > 0 && value.micros < 0 {
-            value.days -= 1;
-            value.micros += MICROS_PER_DAY;
-        } else if value.days < 0 && value.micros > 0 {
-            value.days += 1;
-            value.micros -= MICROS_PER_DAY;
+        Ok(self)
+    }
+
+    pub fn justify_interval(mut self) -> Result<Self, PgCanonicalValueError> {
+        if !self.is_finite() {
+            return Ok(self);
         }
-        Ok(value)
+        // Make room for whole days from the clock when both components
+        // have the same sign and their sum could otherwise overflow.
+        if self.days != 0 && i64::from(self.days.signum()) == self.micros.signum() {
+            self.carry_days_into_months()?;
+        }
+        self.carry_hours_into_days()?;
+        self.carry_days_into_months()?;
+        let day_time_sign = if self.days == 0 {
+            self.micros.signum() as i32
+        } else {
+            self.days.signum()
+        };
+        self.align_month_day_signs(day_time_sign);
+        self.align_day_time_signs();
+        Ok(self)
+    }
+
+    fn carry_hours_into_days(&mut self) -> Result<(), PgCanonicalValueError> {
+        // An i64 microsecond count spans fewer than 107 million whole days.
+        let whole_days = (self.micros / MICROS_PER_DAY) as i32;
+        self.days = self
+            .days
+            .checked_add(whole_days)
+            .ok_or(PgCanonicalValueError::IntervalOutOfRange)?;
+        self.micros %= MICROS_PER_DAY;
+        Ok(())
+    }
+
+    fn carry_days_into_months(&mut self) -> Result<(), PgCanonicalValueError> {
+        self.months = self
+            .months
+            .checked_add(self.days / 30)
+            .ok_or(PgCanonicalValueError::IntervalOutOfRange)?;
+        self.days %= 30;
+        Ok(())
+    }
+
+    fn align_month_day_signs(&mut self, day_sign: i32) {
+        if self.months > 0 && day_sign < 0 {
+            self.months -= 1;
+            self.days += 30;
+        } else if self.months < 0 && day_sign > 0 {
+            self.months += 1;
+            self.days -= 30;
+        }
+    }
+
+    fn align_day_time_signs(&mut self) {
+        if self.days > 0 && self.micros < 0 {
+            self.days -= 1;
+            self.micros += MICROS_PER_DAY;
+        } else if self.days < 0 && self.micros > 0 {
+            self.days += 1;
+            self.micros -= MICROS_PER_DAY;
+        }
     }
 
     pub fn comparison_micros(self) -> i128 {
@@ -2964,16 +3051,22 @@ fn push_verbose_interval_part(parts: &mut Vec<String>, value: i64, one: &str, ma
     }
 }
 
+fn round_interval_fraction(value: f64) -> f64 {
+    (value * 1_000_000.0).round_ties_even() / 1_000_000.0
+}
+
 fn f64_to_i32_interval(value: f64) -> Result<i32, PgCanonicalValueError> {
-    if value < f64::from(i32::MIN) || value > f64::from(i32::MAX) {
-        return Err(PgCanonicalValueError::TemporalOverflow("interval"));
+    if !(f64::from(i32::MIN)..-f64::from(i32::MIN)).contains(&value) {
+        return Err(PgCanonicalValueError::IntervalOutOfRange);
     }
     Ok(value as i32)
 }
 
 fn f64_to_i64_interval(value: f64) -> Result<i64, PgCanonicalValueError> {
-    if value < i64::MIN as f64 || value > i64::MAX as f64 {
-        return Err(PgCanonicalValueError::TemporalOverflow("interval"));
+    // i64::MAX would round up to 2^63 as f64, so use an exclusive upper bound.
+    let minimum = i64::MIN as f64;
+    if !(minimum..-minimum).contains(&value) {
+        return Err(PgCanonicalValueError::IntervalOutOfRange);
     }
     Ok(value as i64)
 }

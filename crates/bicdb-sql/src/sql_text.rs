@@ -61,7 +61,7 @@ pub fn sql_text<T: Clone + VisitMut + std::fmt::Display + Serialize + Deserializ
         && !text.contains("``")
         && !text.contains("\\`")
     {
-        return text;
+        return crate::conflict_inference::render(&text).unwrap_or(text);
     }
     // The upstream visitor has no Ident callback. Its serde AST preserves every
     // identifier position (including DDL/type names and aliases), allowing a
@@ -94,5 +94,6 @@ pub fn sql_text<T: Clone + VisitMut + std::fmt::Display + Serialize + Deserializ
     let mut tree = serde_json::to_value(&copy).expect("SQL AST is serializable");
     escape_identifiers(&mut tree);
     let escaped: T = serde_json::from_value(tree).expect("rendering preserves the SQL AST shape");
-    escaped.to_string()
+    let text = escaped.to_string();
+    crate::conflict_inference::render(&text).unwrap_or(text)
 }

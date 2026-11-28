@@ -496,6 +496,9 @@ impl<'db> SqlSession<'db> {
         }
 
         let parents = self.inheritance_parents(create_table)?;
+        let postgres = !oracle::is_oracle_database(self.db_ref())?;
+        let postgres_inheritance = postgres && !parents.is_empty();
+        let mut inherited_default_conflicts = BTreeSet::new();
         let has_like_clause = create_table.like.is_some();
         let (mut columns, mut constraints, inherited_virtual) =
             if let Some(like) = &create_table.like {
@@ -510,7 +513,11 @@ impl<'db> SqlSession<'db> {
                     Vec::new(),
                 )
             } else {
-                crate::inheritance::inherited_table_definition(&parents)?
+                crate::inheritance::inherited_table_definition(
+                    &parents,
+                    postgres_inheritance,
+                    &mut inherited_default_conflicts,
+                )?
             };
         let inherited_names = columns
             .iter()
@@ -518,7 +525,6 @@ impl<'db> SqlSession<'db> {
             .collect::<BTreeSet<_>>();
         let mut merged_names = BTreeSet::new();
         let mut primary_key_name = None;
-        let postgres = !oracle::is_oracle_database(self.db_ref())?;
         for column in &create_table.columns {
             let mut column_schema = column_schema_from_def(self.db_ref(), column)?;
             if let Some(compression) = compression
@@ -537,7 +543,11 @@ impl<'db> SqlSession<'db> {
                     .iter()
                     .position(|existing| existing.name == column_schema.name)
                     .expect("inherited column is present");
-                crate::inheritance::merge_inherited_column(&columns[position], &mut column_schema)?;
+                crate::inheritance::merge_inherited_column(
+                    &columns[position],
+                    &mut column_schema,
+                    postgres_inheritance,
+                )?;
                 Some(position)
             } else {
                 None
@@ -650,6 +660,26 @@ impl<'db> SqlSession<'db> {
                     }
                 });
             }
+            if postgres_inheritance {
+                if let Some(position) = merge_position {
+                    // An explicit DEFAULT NULL also resolves an inherited
+                    // conflict, even though it has no catalog default.
+                    if column_schema.default_expr.is_some()
+                        || column_schema.default_sequence.is_some()
+                    {
+                        inherited_default_conflicts.remove(&column_schema.name);
+                        if !crate::inheritance::has_inheritable_default(&column_schema) {
+                            column_schema.default_expr = None;
+                            column_schema.default_value = None;
+                        }
+                    } else if crate::inheritance::has_inheritable_default(&columns[position]) {
+                        crate::inheritance::copy_inherited_default(
+                            &columns[position],
+                            &mut column_schema,
+                        );
+                    }
+                }
+            }
             constraints.extend(column_constraints_from_def(
                 &table,
                 column,
@@ -660,6 +690,20 @@ impl<'db> SqlSession<'db> {
                 Some(position) => columns[position] = column_schema,
                 None => columns.push(column_schema),
             }
+        }
+        if let Some(column) = columns
+            .iter()
+            .find(|column| inherited_default_conflicts.contains(&column.name))
+        {
+            return Err(SqlError::coded(
+                "42611",
+                format!(
+                    "column \"{}\" inherits conflicting default values",
+                    column.name
+                ),
+                None,
+                Some("To resolve the conflict, specify a default explicitly.".to_string()),
+            ));
         }
         for requested in compression {
             if !columns.iter().any(|column| column.name == requested.column) {

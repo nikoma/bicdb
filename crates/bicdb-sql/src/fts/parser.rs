@@ -58,7 +58,8 @@ pub(crate) fn resolve(db: &BicDb, parser: &SqlValue) -> Result<()> {
         _ => {}
     }
     Err(SqlError::undefined_object(format!(
-        "text search parser \"{input}\" does not exist"
+        "text search parser \"{}\" does not exist",
+        parts.join("."),
     )))
 }
 
@@ -66,6 +67,11 @@ pub(crate) fn tokens(mut input: &str) -> Vec<(u8, &str)> {
     let mut rows = Vec::new();
     let mut blank = None;
     while !input.is_empty() {
+        if input.starts_with("...") {
+            blank.get_or_insert(input);
+            input = input.trim_start_matches('.');
+            continue;
+        }
         if let Some((kind, end)) = token(input) {
             flush_blank(&mut rows, &mut blank, input);
             let text = &input[..end];
@@ -81,7 +87,7 @@ pub(crate) fn tokens(mut input: &str) -> Vec<(u8, &str)> {
             input = &input[end..];
         } else {
             let character = input.chars().next().unwrap();
-            if matches!(character, '+' | '-' | '<' | '/') {
+            if matches!(character, '+' | '-' | '<' | '/' | '&') {
                 flush_blank(&mut rows, &mut blank, input);
             }
             blank.get_or_insert(input);
@@ -151,8 +157,11 @@ fn token(input: &str) -> Option<(u8, usize)> {
             };
             return Some(path_end(input, host_end, true).map_or((6, host_end), |end| (5, end)));
         }
-        let end = path_end(input, dotted_end, false).unwrap_or(dotted_end);
-        return Some((19, end));
+        let first_label = input[..dotted_end].split('.').next().unwrap_or_default();
+        if !first_label.contains('-') {
+            let end = path_end(input, dotted_end, false).unwrap_or(dotted_end);
+            return Some((19, end));
+        }
     }
     if let Some(end) = path_end(input, word_end, false) {
         return Some((19, end));
@@ -182,7 +191,7 @@ fn number(input: &str) -> Option<(u8, usize)> {
             break;
         }
         if signed && fractions > 0 {
-            break;
+            return None;
         }
         fractions += 1;
         end = portion_end;
@@ -250,15 +259,11 @@ fn email(input: &str, word_end: usize) -> Option<usize> {
 fn standalone_path(input: &str) -> Option<usize> {
     if input.starts_with('/') {
         path_end(input, 0, false)
-    } else if input.starts_with("../") {
-        path_end(input, 2, false)
-    } else if input.starts_with("./") {
-        path_end(input, 1, false)
     } else if input.starts_with("..")
         && !input[2..]
             .chars()
             .next()
-            .is_some_and(|ch| ch == '.' || word_character(ch))
+            .is_some_and(|ch| matches!(ch, '.' | '/') || word_character(ch))
     {
         Some(2)
     } else {

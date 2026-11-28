@@ -2650,7 +2650,7 @@ mod tests {
             "CREATE INDEX cleanup_target_value_idx ON cleanup_target (value)",
         )
         .expect("recreate conflicting index");
-        rollback_open_transaction(&server, &mut state).expect_err("DDL undo must fail");
+        rollback_open_transaction(&server, &mut state, None).expect_err("DDL undo must fail");
 
         assert_connection_identity_cleared(&state, "DDL rollback failure");
     }

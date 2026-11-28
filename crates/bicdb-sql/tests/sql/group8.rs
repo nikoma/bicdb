@@ -2796,6 +2796,62 @@ fn rls_row_security_off_errors_when_policies_would_apply() {
 }
 
 #[test]
+fn rls_column_changes_preserve_or_drop_the_bound_policies() {
+    let (_dir, mut db) = empty_test_db();
+    let mut session = rls_test_session(&mut db);
+    session
+        .execute(
+            "CREATE ROLE column_policy_reader;
+             CREATE TABLE policy_columns (id int PRIMARY KEY, tenant int, note text);
+             INSERT INTO policy_columns VALUES (1, 1, 'first'), (2, 2, 'second');
+             ALTER TABLE policy_columns ENABLE ROW LEVEL SECURITY;
+             GRANT SELECT ON policy_columns TO column_policy_reader;
+             CREATE POLICY read_rule ON policy_columns FOR SELECT USING (policy_columns.tenant = 1);
+             CREATE POLICY write_rule ON policy_columns FOR INSERT WITH CHECK (tenant > 0);
+             CREATE POLICY unrelated ON policy_columns FOR UPDATE USING (note <> 'tenant');
+             ALTER TABLE policy_columns RENAME COLUMN tenant TO client;",
+        )
+        .unwrap();
+    session.execute("SET ROLE column_policy_reader").unwrap();
+    assert_eq!(
+        session
+            .execute("SELECT id FROM policy_columns")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(1)]]
+    );
+    session.execute("RESET ROLE").unwrap();
+
+    let error = session
+        .execute("ALTER TABLE policy_columns DROP COLUMN client")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "2BP01");
+    let error = session
+        .execute("ALTER TABLE policy_columns ALTER COLUMN client TYPE bigint")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "0A000");
+    session
+        .execute("BEGIN; ALTER TABLE policy_columns DROP COLUMN client CASCADE")
+        .unwrap();
+    let policies =
+        "SELECT policyname FROM pg_policies WHERE tablename = 'policy_columns' ORDER BY 1";
+    assert_eq!(
+        session.execute(policies).unwrap().rows,
+        vec![vec![SqlValue::String("unrelated".into())]]
+    );
+    session.execute("ROLLBACK").unwrap();
+    assert_eq!(session.execute(policies).unwrap().rows.len(), 3);
+    session.execute("SET ROLE column_policy_reader").unwrap();
+    assert_eq!(
+        session
+            .execute("SELECT id FROM policy_columns")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(1)]]
+    );
+}
+
+#[test]
 fn rls_create_policy_validation_matches_postgres() {
     let (_dir, mut db) = empty_test_db();
     let mut session = rls_test_session(&mut db);
@@ -2805,24 +2861,28 @@ fn rls_create_policy_validation_matches_postgres() {
     let error = session
         .execute("CREATE POLICY bad ON t FOR INSERT USING (true)")
         .unwrap_err();
+    assert_eq!(error.sqlstate(), "42601");
     assert!(error
         .to_string()
         .contains("only WITH CHECK expression allowed for INSERT"));
     let error = session
         .execute("CREATE POLICY bad ON t FOR SELECT WITH CHECK (true)")
         .unwrap_err();
+    assert_eq!(error.sqlstate(), "42601");
     assert!(error
         .to_string()
         .contains("WITH CHECK cannot be applied to SELECT or DELETE"));
     let error = session
         .execute("CREATE POLICY bad ON t USING (count(*) > 0)")
         .unwrap_err();
+    assert_eq!(error.sqlstate(), "42803");
     assert!(error
         .to_string()
         .contains("aggregate functions are not allowed in policy expressions"));
     let error = session
         .execute("CREATE POLICY bad ON t USING (nosuchcol = 1)")
         .unwrap_err();
+    assert_eq!(error.sqlstate(), "42703");
     assert!(error
         .to_string()
         .contains("column \"nosuchcol\" does not exist"));
@@ -2832,8 +2892,26 @@ fn rls_create_policy_validation_matches_postgres() {
     let error = session
         .execute("CREATE POLICY dup ON t USING (true)")
         .unwrap_err();
+    assert_eq!(error.sqlstate(), "42710");
     assert!(error.to_string().contains("already exists"));
+    session.execute("CREATE POLICY \"Dup\" ON t").unwrap();
+    let error = session
+        .execute("ALTER POLICY dup ON t RENAME TO \"Dup\"")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42710");
+    session.execute("DROP POLICY dup ON t").unwrap();
+    session
+        .execute("ALTER POLICY \"Dup\" ON t USING (true)")
+        .unwrap();
+    assert_eq!(
+        session
+            .execute("SELECT qual FROM pg_policies WHERE policyname = 'Dup'")
+            .unwrap()
+            .rows,
+        [[SqlValue::String("true".into())]]
+    );
     let error = session.execute("DROP POLICY nope ON t").unwrap_err();
+    assert_eq!(error.sqlstate(), "42704");
     assert!(error
         .to_string()
         .contains("policy \"nope\" for table \"t\" does not exist"));

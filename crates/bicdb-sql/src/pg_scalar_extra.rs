@@ -732,6 +732,7 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             | "exp"
             | "ln"
             | "log"
+            | "log10"
             | "ceil"
             | "ceiling"
             | "floor"
@@ -866,7 +867,12 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
                 return Ok(Some(SqlValue::Null));
             }
             // power(numeric, numeric) is NUMERIC (NUMERIC travels as text).
-            if crate::eval::numeric_operand(&args[0]) || crate::eval::numeric_operand(&args[1]) {
+            let prefer_float = !oracle::simple_case::enabled()
+                && args.iter().any(|value| matches!(value, SqlValue::Float(_)));
+            if !prefer_float
+                && (crate::eval::numeric_operand(&args[0])
+                    || crate::eval::numeric_operand(&args[1]))
+            {
                 return crate::eval::numeric_power_value(&args[0], &args[1]).map(Some);
             }
             let (base, exponent) = (float_arg(name, &args[0])?, float_arg(name, &args[1])?);
@@ -915,8 +921,8 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             }
             SqlValue::Float(result)
         }
-        "ln" | "log" => {
-            arity(name, args, 1..=2)?;
+        "ln" | "log" | "log10" => {
+            arity(name, args, 1..=if name == "log" { 2 } else { 1 })?;
             let (base, value) = if args.len() == 2 {
                 (float_arg(name, &args[0])?, float_arg(name, &args[1])?)
             } else {

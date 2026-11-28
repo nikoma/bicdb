@@ -360,7 +360,10 @@ fn lower_bound(be: &BoundExpr) -> Option<IrExpr> {
         BoundExpr::And(a, b) => Some(IrExpr::And(bx(lower_bound(a)?), bx(lower_bound(b)?))),
         BoundExpr::Or(a, b) => Some(IrExpr::Or(bx(lower_bound(a)?), bx(lower_bound(b)?))),
         BoundExpr::UnaryNot(a) => Some(IrExpr::Not(bx(lower_bound(a)?))),
-        BoundExpr::UnaryMinus(a) => Some(IrExpr::Neg(bx(lower_bound(a)?))),
+        BoundExpr::UnaryMinus { expr, pg_type } => match pg_type.as_deref() {
+            Some("float8" | "float4") | None => Some(IrExpr::Neg(bx(lower_bound(expr)?))),
+            _ => None,
+        },
         _ => None,
     }
 }

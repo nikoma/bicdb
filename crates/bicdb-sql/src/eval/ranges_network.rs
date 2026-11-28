@@ -2762,8 +2762,13 @@ pub(crate) fn eval_binary_value(
         // Exponentiation, as power().
         BinaryOperator::PGExp => match (&left, &right) {
             (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
-            // A NUMERIC operand (decimal text) makes the power NUMERIC.
-            _ if numeric_operand(&left) || numeric_operand(&right) => {
+            _ if (numeric_operand(&left) || numeric_operand(&right))
+                && (oracle::simple_case::enabled()
+                    || !matches!(
+                        (&left, &right),
+                        (SqlValue::Float(_), _) | (_, SqlValue::Float(_))
+                    )) =>
+            {
                 numeric_power_value(&left, &right)
             }
             _ => crate::pg_scalar_extra::eval_pg_scalar_extra("power", &[left, right])?
@@ -2997,6 +3002,16 @@ pub(crate) fn eval_binary_expr_value_typed(
     let pg_type = &types.result;
     let left = enforce_integer_value_type(left, left_type.as_deref())?;
     let right = enforce_integer_value_type(right, right_type.as_deref())?;
+    if *op == BinaryOperator::PGExp
+        && !oracle::simple_case::enabled()
+        && uses_numeric_power(
+            [left_type.as_deref(), right_type.as_deref()]
+                .into_iter()
+                .flatten(),
+        )
+    {
+        return super::numeric_power::pg_numeric_power_value(&left, &right);
+    }
     if left_type.as_deref() == Some("regtype") && right_type.as_deref() == Some("regtype") {
         if let Some(truth) = compare_builtin_regtype_values(&left, op, &right) {
             return Ok(truth.map(SqlValue::Bool).unwrap_or(SqlValue::Null));

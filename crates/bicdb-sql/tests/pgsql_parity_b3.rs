@@ -45,6 +45,44 @@ fn result_types_follow_postgresql_resolution() {
 }
 
 #[test]
+fn numeric_power_handles_nan_and_infinities() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT n ^ e, pg_catalog.power(n,e) FROM \
+             (VALUES ('NaN'::numeric,0), ('-Infinity'::numeric,3), ('Infinity'::numeric,-2)) v(n,e)"
+        ),
+        vec![
+            vec![text("1"), text("1")],
+            vec![text("-Infinity"), text("-Infinity")],
+            vec![text("0"), text("0")],
+        ]
+    );
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT 1::numeric ^ 'NaN', power(0.5::numeric, '-Infinity'), \
+             power((-2)::numeric, 'Infinity'), '-Infinity'::numeric ^ 2"
+        ),
+        vec![vec![
+            text("1"),
+            text("Infinity"),
+            text("Infinity"),
+            text("Infinity")
+        ]]
+    );
+    for statement in [
+        "SELECT power(0::numeric, '-Infinity')",
+        "SELECT '-Infinity'::numeric ^ 0.5",
+    ] {
+        assert_eq!(session.execute(statement).unwrap_err().sqlstate(), "2201F");
+    }
+}
+
+#[test]
 fn foreign_keys_are_checked_at_statement_end() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();

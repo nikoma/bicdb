@@ -873,3 +873,45 @@ fn postgres_internal_char_decodes_exact_octal_escapes() {
         [r"A|\377||-1|\377|\|\|\303"]
     );
 }
+
+#[test]
+fn plpgsql_select_into_before_projection_assigns_a_typed_record() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = open(dir.path());
+    let mut s = SqlSession::new(&mut db);
+    exec(
+        &mut s,
+        "CREATE TABLE into_wall (slotname char(4) PRIMARY KEY, backlink char(4))",
+    );
+    exec(
+        &mut s,
+        "CREATE TABLE into_patch (slotname char(4) PRIMARY KEY, backlink char(4))",
+    );
+    exec(&mut s, "INSERT INTO into_wall VALUES ('W1','')");
+    s.execute(
+        "CREATE FUNCTION set_into_backlink() RETURNS trigger LANGUAGE plpgsql AS $$
+          DECLARE rec record; a integer; b integer;
+          BEGIN
+            SELECT INTO a, b 1, 2;
+            SELECT INTO STRICT rec * FROM into_wall WHERE slotname=NEW.backlink;
+            IF a=1 AND b=2 AND rec.backlink = '' THEN
+              UPDATE into_wall SET backlink=NEW.slotname WHERE slotname=rec.slotname;
+            END IF;
+            RETURN NEW;
+          END $$",
+    )
+    .unwrap();
+    exec(&mut s, "CREATE TRIGGER set_into_trigger AFTER INSERT ON into_patch FOR EACH ROW EXECUTE FUNCTION set_into_backlink()");
+    exec(&mut s, "INSERT INTO into_patch VALUES ('P1','W1')");
+    assert_eq!(rows(&mut s, "SELECT backlink::text FROM into_wall"), ["P1"]);
+    s.execute(
+        "CREATE FUNCTION late_into() RETURNS integer LANGUAGE plpgsql AS $$
+          DECLARE n integer;
+          BEGIN
+            SELECT 7 INTO n;
+            RETURN n;
+          END $$",
+    )
+    .unwrap();
+    assert_eq!(rows(&mut s, "SELECT late_into()"), ["7"]);
+}

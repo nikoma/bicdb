@@ -48,3 +48,113 @@ fn set_default_restores_session_settings_with_local_scope() {
         vec![vec![SqlValue::String("4MB".into())]]
     );
 }
+
+#[test]
+fn search_path_preserves_quoted_names_in_session_and_persisted_defaults() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    {
+        let mut sql = SqlSession::new(&mut db);
+        sql.execute(
+            r#"CREATE SCHEMA "Partial.Path";
+               CREATE SCHEMA "with,comma";
+               CREATE SCHEMA "quo""te";
+               CREATE TABLE public.path_probe (value text);
+               SET search_path TO "Partial.Path", public;
+               CREATE TABLE path_probe (value int);
+               INSERT INTO path_probe VALUES (23)"#,
+        )
+        .unwrap();
+        assert_eq!(
+            sql.execute("SHOW search_path").unwrap().rows,
+            [[SqlValue::String(r#""Partial.Path", public"#.into())]]
+        );
+        assert_eq!(
+            sql.execute(r#"SELECT value FROM "Partial.Path".path_probe"#)
+                .unwrap()
+                .rows,
+            [[SqlValue::Int(23)]]
+        );
+        for (assignment, name) in [
+            ("SET search_path TO 'with,comma', public", "with,comma"),
+            (r#"SET search_path TO "quo""te", public"#, "quo\"te"),
+            (
+                r#"SELECT set_config('search_path', '"with,comma", public', false)"#,
+                "with,comma",
+            ),
+        ] {
+            sql.execute(assignment).unwrap();
+            assert_eq!(
+                sql.execute("SELECT current_schema()").unwrap().rows,
+                [[SqlValue::String(name.into())]],
+                "{assignment}"
+            );
+        }
+        sql.execute(r#"CREATE ROLE path_default_role; ALTER ROLE path_default_role SET search_path TO 'with,comma', "Partial.Path", public"#)
+            .unwrap();
+        let database = sql.execute("SELECT current_database()").unwrap().rows[0][0].to_cell();
+        sql.execute(&format!(
+            r#"ALTER DATABASE "{database}" SET search_path = 'with,comma', "Partial.Path", public"#
+        ))
+        .unwrap();
+    }
+    assert_eq!(
+        bicdb_sql::role_session_settings(&db, "path_default_role").unwrap(),
+        vec![(
+            "search_path".into(),
+            r#""with,comma", "Partial.Path", public"#.into()
+        )]
+    );
+    let mut sql = SqlSession::new(&mut db);
+    assert_eq!(
+        sql.execute("SHOW search_path").unwrap().rows,
+        [[SqlValue::String(
+            r#""with,comma", "Partial.Path", public"#.into()
+        )]]
+    );
+    assert_eq!(
+        sql.execute("SELECT current_schema()").unwrap().rows,
+        [[SqlValue::String("with,comma".into())]]
+    );
+}
+
+#[test]
+fn oracle_search_path_keeps_serialized_namespace_for_type_anchors() {
+    use bicdb_sql::oracle::{ensure_database_profile, lower_session_sql, ORACLE_PREVIEW_PROFILE};
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+    {
+        let mut sql = SqlSession::new(&mut db);
+        for command in [
+            r#"CREATE SCHEMA "left_scope""#,
+            r#"CREATE TABLE "left_scope"."anchor_rows"("value" NUMERIC(5,2))"#,
+            r#"SET search_path = '"left_scope"'"#,
+            "CREATE ROLE oracle_anchor_settings",
+            r#"ALTER ROLE oracle_anchor_settings SET search_path TO '"left_scope"'"#,
+        ] {
+            sql.execute(command).unwrap();
+        }
+        assert_eq!(
+            sql.execute("SHOW search_path").unwrap().rows,
+            [[SqlValue::String(r#""left_scope""#.into())]]
+        );
+    }
+
+    let role_defaults = bicdb_sql::role_session_settings(&db, "oracle_anchor_settings").unwrap();
+    assert_eq!(
+        role_defaults,
+        vec![("search_path".into(), r#""left_scope""#.into())]
+    );
+    lower_session_sql(
+        &db,
+        r#"CREATE FUNCTION role_anchor RETURN NUMBER IS
+               result "anchor_rows"."value"%TYPE;
+           BEGIN RETURN result; END;"#,
+        ORACLE_PREVIEW_PROFILE,
+        Some(&role_defaults[0].1),
+        "oracle_anchor_settings",
+    )
+    .unwrap();
+}

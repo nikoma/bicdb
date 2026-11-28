@@ -261,11 +261,7 @@ impl SqlEngine<'_> {
             )?);
             contents.push('\n');
         }
-        Ok(crate::xml::wrap_xml_mapping(
-            &contents,
-            schema,
-            Some(namespace),
-        ))
+        Ok(crate::xml::wrap_xml_mapping(&contents, schema, namespace))
     }
 
     fn xml_query_result(&self, query: &str) -> Result<SqlResult> {

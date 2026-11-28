@@ -199,7 +199,11 @@ fn copy_checks_used_constant_defaults_before_entering_copy_mode() {
         "COPY oversized_defaults (b) FROM STDIN (ON_ERROR IGNORE)",
     ] {
         let messages = copy_in(&mut client, sql, b"");
-        assert_eq!(messages.first().map(|message| message.0), Some(b'E'));
+        assert_eq!(
+            messages.first().map(|message| message.0),
+            Some(b'E'),
+            "{sql}"
+        );
         assert_eq!(error_field(&messages, 'C').as_deref(), Some("22001"));
         assert_eq!(
             error_field(&messages, 'M').as_deref(),
@@ -219,6 +223,30 @@ fn copy_checks_used_constant_defaults_before_entering_copy_mode() {
     assert_eq!(
         rows(&simple(&mut client, "SELECT a,b FROM oversized_defaults")),
         vec![vec![Some("hello".into()), Some("x".into())]]
+    );
+    let insert = simple(
+        &mut client,
+        "INSERT INTO oversized_defaults (b) VALUES ('y')",
+    );
+    assert_eq!(error_field(&insert, 'C').as_deref(), Some("22001"));
+
+    let setup = simple(
+        &mut client,
+        "CREATE TABLE explicitly_cast_default (a varchar(5) DEFAULT 'overlong'::varchar(5))",
+    );
+    assert!(error_field(&setup, 'C').is_none());
+    let copied = copy_in(
+        &mut client,
+        "COPY explicitly_cast_default FROM STDIN (DEFAULT '!')",
+        b"!\n",
+    );
+    assert!(error_field(&copied, 'C').is_none(), "{copied:?}");
+    assert_eq!(
+        rows(&simple(
+            &mut client,
+            "SELECT a FROM explicitly_cast_default"
+        )),
+        vec![vec![Some("overl".into())]],
     );
 
     simple(

@@ -3889,12 +3889,16 @@ pub(crate) fn raw_alter_table_exclusion_constraint(
         return Ok(None);
     };
     let (name, rest) = parse_leading_policy_identifier(rest)?;
-    let Some(mut rest) = strip_prefix_ci(rest.trim_start(), "EXCLUDE ") else {
+    let Some(mut rest) = strip_prefix_ci(rest.trim_start(), "EXCLUDE")
+        .filter(|tail| tail.starts_with(|ch: char| ch.is_whitespace() || ch == '('))
+    else {
         return Ok(None);
     };
     rest = rest.trim_start();
-    let access_method = if let Some(after_using) = strip_prefix_ci(rest, "USING ") {
-        let (method, after_method) = parse_leading_policy_identifier(after_using)?;
+    let access_method = if let Some(after_using) =
+        strip_prefix_ci(rest, "USING").filter(|tail| tail.starts_with(char::is_whitespace))
+    {
+        let (method, after_method) = parse_leading_qualified_sql_identifier(after_using)?;
         rest = after_method.trim_start();
         normalize_object_name(&method)
     } else {

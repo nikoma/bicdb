@@ -7,6 +7,13 @@ thread_local! {
     pub(crate) static SQL_STORED_INSERT_HITS: std::cell::RefCell<usize> = const { std::cell::RefCell::new(0) };
 }
 
+#[derive(Clone, Copy)]
+enum ConflictDoNothingTarget<'a> {
+    All,
+    Columns(&'a [String]),
+    Exclusion(&'a str),
+}
+
 impl<'db> SqlSession<'db> {
     pub(crate) fn execute_raw_create_function(&mut self, sql: &str) -> Result<Option<SqlResult>> {
         let trimmed = sql.trim().trim_end_matches(';').trim();
@@ -1018,6 +1025,39 @@ impl<'db> SqlSession<'db> {
             return self.execute_insert_into_view(insert, view, ctes);
         }
         let schema = load_schema_shared(self.db_ref(), &table)?;
+        if let (Some(schema), Some(OnInsert::OnConflict(conflict))) =
+            (schema.as_deref(), &insert.on)
+        {
+            if let Some(ConflictTarget::OnConstraint(name)) = &conflict.conflict_target {
+                let target = relation_name(name)?;
+                for constraint in &schema.constraints {
+                    let ConstraintSchema::Exclusion {
+                        name,
+                        equal_columns,
+                        range,
+                        ..
+                    } = constraint
+                    else {
+                        continue;
+                    };
+                    if name != &target {
+                        continue;
+                    }
+                    let columns = match range {
+                        // An expression arbiter marks the whole row as read.
+                        Some(range) if range.range_column.is_none() => schema
+                            .columns
+                            .iter()
+                            .filter(|column| !column.hidden)
+                            .map(|column| column.name.clone())
+                            .collect(),
+                        _ => exclusion_constraint_columns(equal_columns, range),
+                    };
+                    self.require_column_privilege(&table, "SELECT", &columns)?;
+                    break;
+                }
+            }
+        }
         let mut columns = insert
             .columns
             .iter()
@@ -1959,75 +1999,45 @@ impl<'db> SqlSession<'db> {
         if let Some(schema) = schema.filter(|_| !records.is_empty()) {
             self.reject_deferrable_conflict_arbiters(table, schema, on_conflict)?;
         }
-        // ON CONFLICT ON CONSTRAINT naming an exclusion constraint or a temporal key.
-        let records = match (on_conflict.conflict_target.as_ref(), schema) {
-            (Some(ConflictTarget::OnConstraint(name)), Some(schema)) => {
-                let name = relation_name(name)?;
-                let exclusion = schema.constraints.iter().any(|constraint| {
-                    matches!(constraint, ConstraintSchema::Exclusion { .. })
-                        && constraint_name(constraint).eq_ignore_ascii_case(&name)
-                });
-                if exclusion {
-                    if matches!(on_conflict.action, OnConflictAction::DoUpdate(_)) {
-                        return Err(SqlError::data_exception(
-                            "42809",
-                            "ON CONFLICT DO UPDATE not supported with exclusion constraints",
-                            None,
-                        ));
-                    }
-                    // DO NOTHING arbitrates that constraint alone; any other unique or
-                    // exclusion violation must still fail. Only the case where nothing else
-                    // could conflict is handled; others are refused rather than skipped.
-                    let others = !unique_arbiters_for_table(self.db_ref(), table, schema)
-                        .is_empty()
-                        || schema
-                            .constraints
-                            .iter()
-                            .filter(|constraint| {
-                                matches!(constraint, ConstraintSchema::Exclusion { .. })
-                            })
-                            .count()
-                            > 1;
-                    if others || schema.partitioning.is_some() {
-                        return Err(SqlError::RaisedException {
-                            sqlstate: "0A000".to_string(),
-                            message: "ON CONFLICT ON CONSTRAINT with an exclusion constraint is \
-                                      supported only when no other unique or exclusion \
-                                      constraint applies"
-                                .to_string(),
-                            detail: None,
-                        });
-                    }
-                    let records = self.non_conflicting_exclusion_records(
-                        table,
-                        schema,
-                        Some(&name),
-                        records,
-                    )?;
-                    let no_target = sqlparser::ast::OnConflict {
-                        conflict_target: None,
-                        action: OnConflictAction::DoNothing,
-                    };
-                    return self.execute_insert_on_conflict(
-                        table,
-                        Some(schema),
-                        records,
-                        &OnInsert::OnConflict(no_target),
-                        returning,
-                    );
-                }
-                records
-            }
-            _ => records,
-        };
-        let access_table = table;
-        let access_schema = schema;
-        let partition_parent = schema.filter(|schema| schema.partitioning.is_some());
         // An arbiter reads the target relation (PostgreSQL requires SELECT
         // rights for it), so the SELECT policies join the new-row checks.
         let select_required = on_conflict.conflict_target.is_some()
             || matches!(on_conflict.action, OnConflictAction::DoUpdate(_))
             || returning.is_some_and(select_items_reference_stored_columns);
+        // ON CONFLICT ON CONSTRAINT naming an exclusion constraint or a temporal key.
+        if let (Some(ConflictTarget::OnConstraint(name)), Some(schema)) =
+            (on_conflict.conflict_target.as_ref(), schema)
+        {
+            let target = relation_name(name)?;
+            if schema.constraints.iter().any(|constraint| {
+                matches!(constraint, ConstraintSchema::Exclusion { name, .. } if name == &target)
+            }) {
+                if matches!(on_conflict.action, OnConflictAction::DoUpdate(_)) {
+                    return Err(SqlError::data_exception(
+                        "42809",
+                        "ON CONFLICT DO UPDATE not supported with exclusion constraints",
+                        None,
+                    ));
+                }
+                if schema.partitioning.is_some() {
+                    return Err(SqlError::Unsupported(
+                        "ON CONFLICT targeting an exclusion constraint on a partitioned table"
+                            .to_string(),
+                    ));
+                }
+                return self.execute_insert_on_conflict_do_nothing(
+                    table,
+                    Some(schema),
+                    records,
+                    ConflictDoNothingTarget::Exclusion(&target),
+                    returning,
+                    select_required,
+                );
+            }
+        }
+        let access_table = table;
+        let access_schema = schema;
+        let partition_parent = schema.filter(|schema| schema.partitioning.is_some());
         // A column conflict target needs some unique arbiter to infer; a
         // table with none (no primary key, unique constraint or unique
         // index) fails as in PostgreSQL instead of never conflicting.
@@ -2043,22 +2053,19 @@ impl<'db> SqlSession<'db> {
             }
         }
         if partition_parent.is_none() && matches!(on_conflict.action, OnConflictAction::DoNothing) {
-            if on_conflict.conflict_target.is_none() {
-                return self.execute_insert_on_conflict_do_nothing_all_unique(
-                    table,
-                    schema,
-                    records,
-                    returning,
-                    select_required,
-                );
-            }
-            let conflict_columns =
-                conflict_target_columns(table, schema, on_conflict.conflict_target.as_ref())?;
+            let columns;
+            let target = if on_conflict.conflict_target.is_none() {
+                ConflictDoNothingTarget::All
+            } else {
+                columns =
+                    conflict_target_columns(table, schema, on_conflict.conflict_target.as_ref())?;
+                ConflictDoNothingTarget::Columns(&columns)
+            };
             return self.execute_insert_on_conflict_do_nothing(
                 table,
                 schema,
                 records,
-                &conflict_columns,
+                target,
                 returning,
                 select_required,
             );
@@ -3002,26 +3009,40 @@ impl<'db> SqlSession<'db> {
         )))
     }
 
-    pub(crate) fn execute_insert_on_conflict_do_nothing(
+    fn execute_insert_on_conflict_do_nothing(
         &mut self,
         table: &str,
         schema: Option<&TableSchema>,
         records: Vec<Record>,
-        conflict_columns: &[String],
+        target: ConflictDoNothingTarget<'_>,
         returning: Option<&[SelectItem]>,
         select_required: bool,
     ) -> Result<SqlResult> {
-        self.enforce_rls_before_do_nothing(
-            table,
-            schema,
-            &records,
-            select_required,
-            |session, rows| {
-                session.non_conflicting_insert_records(table, schema, rows, conflict_columns)
-            },
-        )?;
-        let inserted_records =
-            self.non_conflicting_insert_records(table, schema, records, conflict_columns)?;
+        let filter = |session: &Self, rows: Vec<Record>| match target {
+            ConflictDoNothingTarget::All => {
+                session.non_conflicting_insert_records_all_unique(table, schema, rows)
+            }
+            ConflictDoNothingTarget::Columns(columns) => {
+                session.non_conflicting_insert_records(table, schema, rows, columns)
+            }
+            ConflictDoNothingTarget::Exclusion(name) => session.non_conflicting_exclusion_records(
+                table,
+                schema.expect("an exclusion arbiter belongs to a table schema"),
+                Some(name),
+                rows,
+            ),
+        };
+        self.enforce_rls_before_do_nothing(table, schema, &records, select_required, filter)?;
+        let inserted_records = filter(self, records)?;
+        let map_error = |session: &Self, error| match target {
+            ConflictDoNothingTarget::All => {
+                session.arbiter_race_as_conflict(table, schema, None, error)
+            }
+            ConflictDoNothingTarget::Columns(columns) => {
+                session.arbiter_race_as_conflict(table, schema, Some(columns), error)
+            }
+            ConflictDoNothingTarget::Exclusion(_) => error,
+        };
         if let Some(schema) = schema {
             validate_records_for_write(
                 self.db_ref(),
@@ -3032,19 +3053,10 @@ impl<'db> SqlSession<'db> {
                 false,
                 Some(&self.sql_engine()),
             )
-            .map_err(|error| {
-                self.arbiter_race_as_conflict(table, Some(schema), Some(conflict_columns), error)
-            })?;
+            .map_err(|error| map_error(self, error))?;
         }
-        if let Err(error) = self.insert_session_new_records(table, schema, inserted_records.clone())
-        {
-            return Err(self.arbiter_race_as_conflict(
-                table,
-                schema,
-                Some(conflict_columns),
-                error,
-            ));
-        }
+        self.insert_session_new_records(table, schema, inserted_records.clone())
+            .map_err(|error| map_error(self, error))?;
         self.fire_after_insert_triggers(table, schema, &inserted_records)?;
         self.insert_result(
             table,
@@ -3085,47 +3097,6 @@ impl<'db> SqlSession<'db> {
             ));
         }
         Ok(())
-    }
-
-    pub(crate) fn execute_insert_on_conflict_do_nothing_all_unique(
-        &mut self,
-        table: &str,
-        schema: Option<&TableSchema>,
-        records: Vec<Record>,
-        returning: Option<&[SelectItem]>,
-        select_required: bool,
-    ) -> Result<SqlResult> {
-        self.enforce_rls_before_do_nothing(
-            table,
-            schema,
-            &records,
-            select_required,
-            |session, rows| session.non_conflicting_insert_records_all_unique(table, schema, rows),
-        )?;
-        let inserted_records =
-            self.non_conflicting_insert_records_all_unique(table, schema, records)?;
-        if let Some(schema) = schema {
-            validate_records_for_write(
-                self.db_ref(),
-                self.tx.as_ref(),
-                table,
-                schema,
-                &inserted_records,
-                false,
-                Some(&self.sql_engine()),
-            )
-            .map_err(|error| self.arbiter_race_as_conflict(table, Some(schema), None, error))?;
-        }
-        self.insert_session_new_records(table, schema, inserted_records.clone())
-            .map_err(|error| self.arbiter_race_as_conflict(table, schema, None, error))?;
-        self.fire_after_insert_triggers(table, schema, &inserted_records)?;
-        self.insert_result(
-            table,
-            schema,
-            returning,
-            &inserted_records,
-            inserted_records.len(),
-        )
     }
 
     /// `ON CONFLICT DO NOTHING`: every proposed row, conflicting or not,
@@ -3251,8 +3222,8 @@ impl<'db> SqlSession<'db> {
                     range,
                     predicate,
                     ..
-                } if only.is_none_or(|only| name.eq_ignore_ascii_case(only)) => {
-                    Some((equal_columns, range, predicate))
+                } if only.is_none_or(|only| name == only) => {
+                    Some((name, equal_columns, range, predicate))
                 }
                 _ => None,
             })
@@ -3261,7 +3232,15 @@ impl<'db> SqlSession<'db> {
             return Ok(records);
         }
         let mut compiled = Vec::with_capacity(constraints.len());
-        for (equal_columns, range, predicate) in constraints {
+        for (name, equal_columns, range, predicate) in constraints {
+            reserve_exclusion_keys(
+                self.tx.as_ref(),
+                table,
+                schema,
+                name,
+                equal_columns,
+                &records,
+            )?;
             compiled.push((
                 equal_columns,
                 range,
@@ -3269,13 +3248,15 @@ impl<'db> SqlSession<'db> {
             ));
         }
         let existing = current_integrity_records(self.db_ref(), self.tx.as_ref(), table)?;
+        let fixed_snapshot = records::postgres_fixed_snapshot(self.db_ref(), self.tx.as_ref())?;
         let mut kept: Vec<Record> = Vec::with_capacity(records.len());
         'records: for record in records {
             for (equal_columns, range, predicate) in &compiled {
-                for other in existing.iter().chain(kept.iter()) {
-                    if other.id == record.id {
-                        continue;
-                    }
+                let candidates = existing
+                    .iter()
+                    .map(|other| (other, fixed_snapshot))
+                    .chain(kept.iter().map(|other| (other, None)));
+                for (other, snapshot) in candidates {
                     if crate::records::exclusion_record_pair_conflicts(
                         schema,
                         equal_columns,
@@ -3284,6 +3265,9 @@ impl<'db> SqlSession<'db> {
                         &record,
                         other,
                     )? {
+                        if let Some(tx) = snapshot {
+                            tx.require_conflict_tuple_in_snapshot(table, &other.id)?;
+                        }
                         continue 'records;
                     }
                 }

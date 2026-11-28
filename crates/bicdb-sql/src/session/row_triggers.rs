@@ -223,11 +223,18 @@ impl<'db> SqlSession<'db> {
         function_name: &str,
         vars: &[(String, SqlValue)],
         shape: &TriggerRecordShape,
+        updated_columns: Option<&[String]>,
     ) -> Result<Option<SqlValue>> {
         if self.trigger_depth >= MAX_TRIGGER_DEPTH {
             return Err(SqlError::InvalidSql(format!(
                 "trigger {trigger_name} exceeded the maximum trigger nesting depth of {MAX_TRIGGER_DEPTH}"
             )));
+        }
+        if function_name.starts_with("pg_catalog.")
+            && crate::fts::update_trigger_oid(function_name).is_some()
+        {
+            return text_search_update_trigger(function_name, vars, shape, updated_columns)
+                .map(Some);
         }
         let Some(routine) =
             resolve_routine_cached(self.db_ref(), RoutineKind::Function, function_name)?
@@ -441,6 +448,7 @@ impl<'db> SqlSession<'db> {
                     &trigger.function_name,
                     &vars,
                     &shape,
+                    None,
                 )? {
                     Some(SqlValue::Null) => continue 'record,
                     Some(returned) => {
@@ -472,7 +480,7 @@ impl<'db> SqlSession<'db> {
         old: &Record,
         record: Record,
     ) -> Result<Option<Record>> {
-        self.apply_before_update_row_triggers_with_identity(table, schema, old, record, None)
+        self.apply_before_update_row_triggers_with_identity(table, schema, old, record, None, None)
     }
 
     pub(crate) fn apply_before_update_row_triggers_with_identity(
@@ -482,6 +490,7 @@ impl<'db> SqlSession<'db> {
         old: &Record,
         mut record: Record,
         partition_identity: Option<&TableSchema>,
+        updated_columns: Option<&[String]>,
     ) -> Result<Option<Record>> {
         let Some(schema) = schema else {
             return Ok(Some(record));
@@ -506,6 +515,7 @@ impl<'db> SqlSession<'db> {
                 &trigger.function_name,
                 &vars,
                 &shape,
+                updated_columns,
             )? {
                 Some(SqlValue::Null) => return Ok(None),
                 Some(returned) => {
@@ -544,9 +554,13 @@ impl<'db> SqlSession<'db> {
         let old_value = Self::trigger_row_value(schema, old);
         for trigger in &triggers {
             let vars = Self::trigger_vars(trigger, schema, "delete", Some(old_value.clone()), None);
-            if let Some(SqlValue::Null) =
-                self.call_trigger_function(&trigger.name, &trigger.function_name, &vars, &shape)?
-            {
+            if let Some(SqlValue::Null) = self.call_trigger_function(
+                &trigger.name,
+                &trigger.function_name,
+                &vars,
+                &shape,
+                None,
+            )? {
                 return Ok(false);
             }
         }
@@ -601,6 +615,7 @@ impl<'db> SqlSession<'db> {
                         &trigger.function_name,
                         &vars,
                         &shape,
+                        None,
                     )?;
                 }
             }
@@ -675,6 +690,7 @@ impl<'db> SqlSession<'db> {
                     &call.function_name,
                     &call.vars,
                     &call.record_shape,
+                    None,
                 )?;
             }
             // A deferred body may itself write rows that queue more deferred
@@ -716,4 +732,138 @@ impl Drop for TriggerDepthScope {
 /// `pg_trigger_depth()`.
 pub(crate) fn current_trigger_depth() -> usize {
     TRIGGER_DEPTH.with(std::cell::Cell::get)
+}
+
+fn text_search_update_trigger(
+    function: &str,
+    vars: &[(String, SqlValue)],
+    shape: &TriggerRecordShape,
+    updated_columns: Option<&[String]>,
+) -> Result<SqlValue> {
+    let protocol_error = |message: &str| {
+        SqlError::data_exception_public(
+            "XX000",
+            format!("tsvector_update_trigger: {message}"),
+            None,
+        )
+    };
+    let get = |name| {
+        vars.iter()
+            .find(|(key, _)| key == name)
+            .map(|(_, value)| value)
+    };
+    if !get("tg_when").is_some_and(|when| when.to_cell() == "BEFORE") {
+        return Err(protocol_error("must be fired BEFORE event"));
+    }
+    if !get("tg_op")
+        .is_some_and(|operation| matches!(operation.to_cell().as_str(), "INSERT" | "UPDATE"))
+    {
+        return Err(protocol_error("must be fired for INSERT or UPDATE"));
+    }
+    let arguments = get("tg_argv").ok_or_else(|| protocol_error("missing trigger arguments"))?;
+    let arguments = array_json_parts(arguments, "tsvector_update_trigger")?
+        .and_then(|(value, _)| value.as_array())
+        .ok_or_else(|| protocol_error("missing trigger arguments"))?;
+    let [target, config, sources @ ..] = arguments.as_slice() else {
+        return Err(protocol_error(
+            "arguments must be tsvector_field, ts_config, text_field1, ...)",
+        ));
+    };
+    if sources.is_empty() {
+        return Err(protocol_error(
+            "arguments must be tsvector_field, ts_config, text_field1, ...)",
+        ));
+    }
+    let target = target.as_str().expect("trigger arguments are strings");
+    let config = config.as_str().expect("trigger arguments are strings");
+    let column_type = |name: &str| {
+        shape
+            .columns
+            .iter()
+            .position(|column| column == name)
+            .map(|index| shape.types[index].as_deref())
+            .ok_or_else(|| {
+                SqlError::data_exception_public(
+                    "42703",
+                    format!("column \"{name}\" does not exist"),
+                    None,
+                )
+            })
+    };
+    if column_type(target)? != Some("tsvector") {
+        return Err(SqlError::data_exception_public(
+            "42804",
+            format!("column \"{target}\" is not of tsvector type"),
+            None,
+        ));
+    }
+    let Some(SqlValue::Json(new)) = get("new") else {
+        return Err(protocol_error("missing NEW row"));
+    };
+    let old = match get("old") {
+        Some(SqlValue::Json(row)) => Some(row),
+        _ => None,
+    };
+    let config_value = if function.ends_with("_column") {
+        if column_type(config)? != Some("regconfig") {
+            return Err(SqlError::data_exception_public(
+                "42804",
+                format!("column \"{config}\" is not of regconfig type"),
+                None,
+            ));
+        }
+        match new.get(config).filter(|value| !value.is_null()) {
+            Some(value) => json_to_sql_value(value),
+            None => {
+                return Err(SqlError::data_exception_public(
+                    "22004",
+                    format!("configuration column \"{config}\" must not be null"),
+                    None,
+                ))
+            }
+        }
+    } else {
+        if !crate::fts::authored::qualified_name(config).is_some_and(|parts| parts.len() == 2) {
+            return Err(SqlError::data_exception_public(
+                "22023",
+                format!("text search configuration name \"{config}\" must be schema-qualified"),
+                None,
+            ));
+        }
+        SqlValue::String(config.to_owned())
+    };
+
+    let mut changed = old.is_none();
+    let mut document = String::new();
+    for source in sources {
+        let source = source.as_str().expect("trigger arguments are strings");
+        if !matches!(column_type(source)?, Some("text" | "varchar" | "bpchar")) {
+            return Err(SqlError::data_exception_public(
+                "42804",
+                format!("column \"{source}\" is not of a character type"),
+                None,
+            ));
+        }
+        let value = new.get(source);
+        changed |= match updated_columns {
+            Some(columns) => columns.iter().any(|column| column == source),
+            None => old.is_some_and(|old| old.get(source) != value),
+        };
+        if let Some(text) = value.and_then(JsonValue::as_str) {
+            if !document.is_empty() {
+                document.push(' ');
+            }
+            document.push_str(text);
+        }
+    }
+    if !changed {
+        return Ok(SqlValue::Json(Arc::clone(new)));
+    }
+    let vector = crate::fts::update_trigger_vector(&config_value, &document)?;
+    let mut returned = (**new).clone();
+    let fields = returned
+        .as_object_mut()
+        .ok_or_else(|| protocol_error("missing NEW row fields"))?;
+    fields.insert(target.to_owned(), JsonValue::String(vector));
+    Ok(SqlValue::json(returned))
 }

@@ -595,20 +595,8 @@ impl<'db> SqlSession<'db> {
         // could attach a capturing function to another tenant's table and
         // exfiltrate every row the owner later writes.
         self.require_table_ownership(&trigger.table_name, "create a trigger on it")?;
-        let function = load_routine(self.db_ref(), RoutineKind::Function, &trigger.function_name)?
-            .ok_or_else(|| {
-                SqlError::InvalidSql(format!(
-                    "function \"{}\" does not exist",
-                    trigger.function_name
-                ))
-            })?;
-        if function.return_type != "trigger" {
-            return Err(SqlError::InvalidSql(format!(
-                "function \"{}\" must return trigger",
-                trigger.function_name
-            )));
-        }
-        self.require_trigger_function_execute(&trigger.function_name)?;
+        trigger.function_name =
+            self.bind_trigger_function(&trigger.function_name, &trigger.for_each)?;
         self.create_session_trigger_if_missing(trigger, or_replace)?;
         Ok(Some(SqlResult::command("CREATE TRIGGER")))
     }
@@ -644,17 +632,7 @@ impl<'db> SqlSession<'db> {
         let exec_body = create_trigger.exec_body.as_ref().ok_or_else(|| {
             SqlError::Unsupported("trigger statement bodies are not supported".to_string())
         })?;
-        let (_, function_name) = routine_schema_and_name(&object_name(&exec_body.func_desc.name)?);
-        let function = load_routine(self.db_ref(), RoutineKind::Function, &function_name)?
-            .ok_or_else(|| {
-                SqlError::InvalidSql(format!("function \"{function_name}\" does not exist"))
-            })?;
-        if function.return_type != "trigger" {
-            return Err(SqlError::InvalidSql(format!(
-                "function \"{function_name}\" must return trigger"
-            )));
-        }
-        self.require_trigger_function_execute(&function_name)?;
+        let authored_function_name = object_name(&exec_body.func_desc.name)?;
         // DEFERRABLE INITIALLY DEFERRED constraint triggers queue on the
         // transaction and fire at COMMIT; everything else fires in-statement.
         let initially_deferred = create_trigger.is_constraint
@@ -673,6 +651,7 @@ impl<'db> SqlSession<'db> {
             // PostgreSQL: constraint triggers default to FOR EACH ROW.
             for_each = "row".to_string();
         }
+        let function_name = self.bind_trigger_function(&authored_function_name, &for_each)?;
         let definition = crate::sql_text::sql_text(create_trigger);
         let arguments = parse_raw_create_trigger(&definition)?
             .map(|(trigger, _)| trigger.arguments)
@@ -695,6 +674,38 @@ impl<'db> SqlSession<'db> {
         self.validate_view_trigger(&trigger)?;
         self.create_session_trigger_if_missing(trigger, create_trigger.or_replace)?;
         Ok(SqlResult::command("CREATE TRIGGER"))
+    }
+
+    fn bind_trigger_function(&self, authored: &str, for_each: &str) -> Result<String> {
+        let (_, name) = routine_schema_and_name(authored);
+        let builtin = crate::fts::update_trigger_oid(authored).is_some();
+        let routine = if builtin && authored.starts_with("pg_catalog.") {
+            None
+        } else {
+            load_routine(self.db_ref(), RoutineKind::Function, authored)?
+        };
+        if let Some(function) = routine {
+            if function.return_type != "trigger" {
+                return Err(SqlError::InvalidSql(format!(
+                    "function \"{name}\" must return trigger",
+                )));
+            }
+            self.require_trigger_function_execute(authored)?;
+            return Ok(authored.to_string());
+        }
+        if builtin {
+            if !for_each.eq_ignore_ascii_case("row") {
+                return Err(SqlError::data_exception_public(
+                    "XX000",
+                    "tsvector_update_trigger: must be fired for row",
+                    None,
+                ));
+            }
+            return Ok(format!("pg_catalog.{name}"));
+        }
+        Err(SqlError::InvalidSql(format!(
+            "function \"{authored}\" does not exist",
+        )))
     }
 
     fn owned_routine_for_ddl(
@@ -2348,6 +2359,7 @@ impl<'db> SqlSession<'db> {
                                 &existing,
                                 updated,
                                 partition_parent,
+                                Some(&assigned_columns),
                             )?
                         else {
                             continue;

@@ -2847,6 +2847,13 @@ fn rls_create_policy_validation_matches_postgres() {
     session
         .execute("ALTER POLICY \"Dup\" ON t USING (true)")
         .unwrap();
+    assert_eq!(
+        session
+            .execute("SELECT qual FROM pg_policies WHERE policyname = 'Dup'")
+            .unwrap()
+            .rows,
+        [[SqlValue::String("true".into())]]
+    );
     let error = session.execute("DROP POLICY nope ON t").unwrap_err();
     assert_eq!(error.sqlstate(), "42704");
     assert!(error

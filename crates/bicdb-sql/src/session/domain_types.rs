@@ -3390,7 +3390,7 @@ impl<'db> SqlSession<'db> {
                 "00000",
                 format!(
                     "policy \"{name}\" for relation \"{}\" does not exist, skipping",
-                    catalog_display_name(&table)
+                    object_name(&drop_policy.table_name)?
                 ),
             );
             return Ok(SqlResult::command("DROP POLICY"));

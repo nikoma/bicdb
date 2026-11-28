@@ -831,10 +831,13 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
                 other.to_cell()
             ))),
         },
+        "pg_lsn" => {
+            parse_pg_lsn_input(&value.to_cell()).map(|lsn| SqlValue::String(format_pg_lsn(lsn)))
+        }
         "cidr" | "inet" | "macaddr" | "macaddr8" | "point" | "line" | "lseg" | "box" | "path"
         | "polygon" | "circle" | "int4range" | "numrange" | "tsrange" | "tstzrange"
         | "daterange" | "int8range" | "int4multirange" | "nummultirange" | "tsmultirange"
-        | "tstzmultirange" | "datemultirange" | "int8multirange" | "pg_lsn" | "pg_snapshot"
+        | "tstzmultirange" | "datemultirange" | "int8multirange" | "pg_snapshot"
         | "txid_snapshot" | "xid" | "xid8" | "cid" | "tid" => {
             let text = value.to_cell();
             if is_builtin_multirange_type(pg_type) {

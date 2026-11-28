@@ -69,11 +69,12 @@ pub(crate) fn reject_undefined_comparison(
 ) -> Result<()> {
     if let (Some(left), Some(right)) = (left_type, right_type) {
         let known = |pg_type: &str| pg_type != "unknown";
-        let catalog_vector = |pg_type: &str| matches!(pg_type, "oidvector" | "int2vector");
+        let same_type_required =
+            |pg_type: &str| matches!(pg_type, "oidvector" | "int2vector" | "pg_lsn");
         if left != right
             && known(left)
             && known(right)
-            && (catalog_vector(left) || catalog_vector(right))
+            && (same_type_required(left) || same_type_required(right))
         {
             return Err(SqlError::coded(
                 "42883",

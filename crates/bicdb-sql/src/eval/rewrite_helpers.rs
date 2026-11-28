@@ -810,8 +810,9 @@ pub(crate) fn rewrite_qualified_unnest_calls(sql: &str) -> Option<String> {
     changed.then_some(out)
 }
 
-fn rewrite_name_literals(sql: &str) -> Option<String> {
-    if !sql.to_ascii_lowercase().contains("name") {
+fn rewrite_named_type_literals(sql: &str) -> Option<String> {
+    let lower = sql.to_ascii_lowercase();
+    if !lower.contains("name") && !lower.contains("pg_lsn") {
         return None;
     }
     let tokens = tokens_with_source(&PostgreSqlDialect {}, sql)?;
@@ -854,7 +855,7 @@ fn rewrite_name_literals(sql: &str) -> Option<String> {
             option_depth = option_depth.saturating_sub(1);
         }
         if option_depth > 0
-            || !is_word(token, "name")
+            || !(is_word(token, "name") || is_word(token, "pg_lsn"))
             || !matches!(
                 literal,
                 Token::SingleQuotedString(_)
@@ -924,7 +925,7 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
         changed = true;
     }
 
-    if let Some(next) = rewrite_name_literals(&rewritten) {
+    if let Some(next) = rewrite_named_type_literals(&rewritten) {
         rewritten = next;
         changed = true;
     }

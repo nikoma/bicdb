@@ -191,3 +191,36 @@ fn pg_lsn_rejects_invalid_input_and_out_of_range_arithmetic() {
         assert!(session.execute(sql).is_err(), "{sql}");
     }
 }
+#[test]
+fn postgres_lsn_literals_compare_and_round_with_unsigned_value_semantics() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let query = "SELECT pg_lsn '16/b6c50', '0/10' > pg_lsn '0/F', pg_lsn '0/F' = '0/000F', pg_lsn '0/0' - 0.2, pg_lsn 'FFFFFFFF/FFFFFFFF' + 0.2";
+    assert_eq!(
+        session.execute(query).unwrap().rows,
+        [[
+            SqlValue::String("16/B6C50".into()),
+            SqlValue::Bool(true),
+            SqlValue::Bool(true),
+            SqlValue::String("0/0".into()),
+            SqlValue::String("FFFFFFFF/FFFFFFFF".into()),
+        ]]
+    );
+    for (sql, state) in [
+        ("SELECT pg_lsn ' 0/1'", "22P02"),
+        ("SELECT pg_lsn '0/1 '", "22P02"),
+        ("SELECT pg_lsn '+1/2'", "22P02"),
+        ("SELECT pg_lsn '0/000000001'", "22P02"),
+        ("SELECT pg_lsn '0xF/0'", "22P02"),
+        ("SELECT pg_lsn '0/F' = '0/F'::text", "42883"),
+        ("SELECT pg_lsn '0/0' - 0.5", "22023"),
+        ("SELECT pg_lsn 'FFFFFFFF/FFFFFFFF' + 0.5", "22023"),
+        ("SELECT pg_lsn '0/F' + 'NaN'::numeric", "0A000"),
+        ("SELECT pg_lsn '0/F' - 'NaN'::numeric", "0A000"),
+        ("SELECT pg_lsn '0/F' + 'Infinity'::numeric", "0A000"),
+    ] {
+        let error = session.execute(sql).unwrap_err();
+        assert_eq!(error.sqlstate(), state, "{sql}: {error:?}");
+    }
+}

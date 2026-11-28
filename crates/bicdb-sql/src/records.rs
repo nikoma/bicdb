@@ -1180,18 +1180,31 @@ pub(crate) fn unique_arbiters_for_table_uncached(
     arbiters
 }
 
-pub(crate) fn unique_arbiter_for_columns(
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ConflictColumnInference {
+    pub(crate) columns: Vec<String>,
+    pub(crate) predicate: Option<bicdb_core::IndexPredicate>,
+}
+
+pub(crate) fn unique_arbiters_for_columns(
     db: &BicDb,
     table: &str,
     schema: &TableSchema,
-    columns: &[String],
-) -> Result<Option<UniqueConflictArbiter>> {
-    let requested: BTreeSet<_> = columns.iter().map(String::as_str).collect();
+    inference: &ConflictColumnInference,
+) -> Vec<UniqueConflictArbiter> {
+    let requested: BTreeSet<_> = inference.columns.iter().map(String::as_str).collect();
     // SQL inference matches a set of named columns. Ordered matching still
-    // matters when encoding a key for the chosen index.
-    Ok(unique_arbiters_for_table(db, table, schema)
+    // matters when encoding a key for each chosen index.
+    unique_arbiters_for_table(db, table, schema)
         .iter()
-        .find(|arbiter| match &arbiter.key {
+        .filter(|arbiter| {
+            arbiter.predicate.as_ref().is_none_or(|index| {
+                inference.predicate.as_ref().is_some_and(|predicate| {
+                    crate::partial_index::inference_implies(predicate, index)
+                })
+            })
+        })
+        .filter(|arbiter| match &arbiter.key {
             UniqueKey::Columns(names) => {
                 names.iter().map(String::as_str).collect::<BTreeSet<_>>() == requested
             }
@@ -1206,7 +1219,8 @@ pub(crate) fn unique_arbiter_for_columns(
                         .eq(requested.iter().copied())
                 }),
         })
-        .cloned())
+        .cloned()
+        .collect()
 }
 
 /// Index lookups see committed rows. A row this transaction has since deleted or rewritten no longer holds its

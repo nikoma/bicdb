@@ -63,11 +63,19 @@ pub fn is_postgres_rule_command(sql: &str) -> Result<bool> {
     crate::query_rules::is_rule_command(sql)
 }
 
+/// Text search configuration DDL has neither parameters nor result columns.
+pub fn is_postgres_text_search_configuration_ddl(sql: &str) -> bool {
+    crate::session::text_search_ddl::is_text_search_configuration_ddl(sql)
+}
+
 fn parse_inference_statements(db: &BicDb, sql: &str) -> Result<Vec<Statement>> {
     if let Some((stripped, _)) = postgres_transaction_deferrability(sql)? {
         return parse_statements(&stripped);
     }
-    if is_constraint_timing_command(sql)? || is_postgres_rule_command(sql)? {
+    if is_constraint_timing_command(sql)?
+        || is_postgres_rule_command(sql)?
+        || is_postgres_text_search_configuration_ddl(sql)
+    {
         return Ok(Vec::new());
     }
     if crate::recursive_search_cycle::lower(sql).is_some() {

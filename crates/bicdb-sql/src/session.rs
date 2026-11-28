@@ -29,7 +29,7 @@ pub(crate) mod not_null_constraints;
 mod owned_objects;
 mod partition_indexes;
 mod table_access_method;
-mod text_search_ddl;
+pub(crate) mod text_search_ddl;
 #[cfg(test)]
 mod timestamp_day_indexes;
 mod typed_tables;

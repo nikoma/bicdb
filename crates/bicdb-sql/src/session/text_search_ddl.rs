@@ -50,7 +50,7 @@ impl SqlSession<'_> {
         &mut self,
         sql: &str,
     ) -> Result<Option<SqlResult>> {
-        if !has_text_search_configuration_prefix(sql) {
+        if !is_text_search_configuration_ddl(sql) {
             return Ok(None);
         }
         let mut tokens = Tokenizer::new(&PostgreSqlDialect {}, sql)
@@ -534,7 +534,7 @@ fn replace_text_search_dictionary<'a>(
     Ok(())
 }
 
-fn has_text_search_configuration_prefix(sql: &str) -> bool {
+pub(crate) fn is_text_search_configuration_ddl(sql: &str) -> bool {
     let Some(action) = leading_sql_keyword(sql) else {
         return false;
     };
@@ -544,6 +544,17 @@ fn has_text_search_configuration_prefix(sql: &str) -> bool {
     {
         return false;
     }
-    let rest = &sql[action.as_ptr() as usize - sql.as_ptr() as usize + action.len()..];
-    leading_sql_keyword(rest).is_some_and(|word| word.eq_ignore_ascii_case("text"))
+    let after =
+        |input: &str, word: &str| word.as_ptr() as usize - input.as_ptr() as usize + word.len();
+    let mut rest = &sql[after(sql, action)..];
+    for expected in ["text", "search", "configuration"] {
+        let Some(word) = leading_sql_keyword(rest) else {
+            return false;
+        };
+        if !word.eq_ignore_ascii_case(expected) {
+            return false;
+        }
+        rest = &rest[after(rest, word)..];
+    }
+    true
 }

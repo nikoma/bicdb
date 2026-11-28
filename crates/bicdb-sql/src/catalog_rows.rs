@@ -3508,6 +3508,12 @@ pub(crate) const PG_BUILTIN_PROC_ROWS: &[(i64, &str, i64, i64)] = &[
     (1002, "version", 25, 0),
     (1023, "bicdb_version", 25, 0),
     (1003, "now", 1184, 0),
+    (1598, "random", 701, 0),
+    (1599, "setseed", 2278, 1),
+    (6212, "random_normal", 701, 2),
+    (6339, "random", 23, 2),
+    (6340, "random", 20, 2),
+    (6341, "random", 1700, 2),
     (2272, "has_schema_privilege", 16, 2),
     (1005, "has_table_privilege", 16, 0),
     (1006, "pg_get_constraintdef", 25, 0),
@@ -3582,6 +3588,34 @@ pub(crate) const PG_PLPGSQL_PROC_ROWS: &[(i64, &str, i64, &str, &str, i64)] = &[
 ];
 
 type PgProcRows = std::sync::Arc<Vec<BTreeMap<String, SqlValue>>>;
+
+// OID, name, result OID, argument OID vector, and internal implementation.
+// The sole SQL wrapper has an empty prosrc, as in PostgreSQL.
+pub(crate) const PG_STRING_PROC_ROWS: &[(i64, &str, i64, &str, &str)] = &[
+    (749, "overlay", 17, "17 17 23 23", "byteaoverlay"),
+    (752, "overlay", 17, "17 17 23", "byteaoverlay_no_len"),
+    (1404, "overlay", 25, "25 25 23 23", "textoverlay"),
+    (1405, "overlay", 25, "25 25 23", "textoverlay_no_len"),
+    (3030, "overlay", 1560, "1560 1560 23 23", "bitoverlay"),
+    (3031, "overlay", 1560, "1560 1560 23", "bitoverlay_no_len"),
+    (849, "position", 23, "25 25", "textpos"),
+    (1698, "position", 23, "1560 1560", "bitposition"),
+    (2014, "position", 23, "17 17", "byteapos"),
+    (877, "substr", 25, "25 23 23", "text_substr"),
+    (883, "substr", 25, "25 23", "text_substr_no_len"),
+    (2085, "substr", 17, "17 23 23", "bytea_substr"),
+    (2086, "substr", 17, "17 23", "bytea_substr_no_len"),
+    (936, "substring", 25, "25 23 23", "text_substr"),
+    (937, "substring", 25, "25 23", "text_substr_no_len"),
+    (1680, "substring", 1560, "1560 23 23", "bitsubstr"),
+    (1699, "substring", 1560, "1560 23", "bitsubstr_no_len"),
+    (2012, "substring", 17, "17 23 23", "bytea_substr"),
+    (2013, "substring", 17, "17 23", "bytea_substr_no_len"),
+    (2073, "substring", 25, "25 25", "textregexsubstr"),
+    (2074, "substring", 25, "25 25 25", ""),
+    (2895, "xmlcomment", 142, "25", "xmlcomment"),
+    (3813, "xmltext", 142, "25", "xmltext"),
+];
 
 thread_local! {
     // db -> (catalog stamp, pg_proc rows). Building the rows parses every
@@ -3663,6 +3697,23 @@ fn pg_proc_rows_uncached(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> 
                 row.insert("proargtypes".into(), SqlValue::String("25 25".into()));
                 row.insert("proisstrict".into(), SqlValue::Bool(true));
             }
+            if let Some((args, source, names)) = crate::pg_random::catalog_signature(oid) {
+                row.insert("proargtypes".into(), SqlValue::String(args.into()));
+                row.insert("prosrc".into(), SqlValue::String(source.into()));
+                row.insert("prolang".into(), SqlValue::Int(12));
+                row.insert("proisstrict".into(), SqlValue::Bool(true));
+                row.insert("provolatile".into(), SqlValue::String("v".into()));
+                row.insert("proparallel".into(), SqlValue::String("r".into()));
+                if let Some(names) = names {
+                    row.insert(
+                        "proargnames".into(),
+                        SqlValue::json(serde_json::json!(names)),
+                    );
+                }
+                if oid == 6212 {
+                    row.insert("pronargdefaults".into(), SqlValue::Int(2));
+                }
+            }
             if matches!(
                 name,
                 "gen_random_uuid"
@@ -3687,6 +3738,30 @@ fn pg_proc_rows_uncached(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> 
             row
         })
         .collect::<Vec<_>>();
+    rows.extend(
+        PG_STRING_PROC_ROWS
+            .iter()
+            .map(|&(oid, name, result, args, source)| {
+                let language = if source.is_empty() { "sql" } else { "internal" };
+                let mut row = proc_row(
+                    oid,
+                    name,
+                    11,
+                    result,
+                    false,
+                    "f",
+                    language,
+                    source,
+                    args.split_ascii_whitespace().count() as i64,
+                    BOOTSTRAP_ROLE_NAME,
+                    false,
+                );
+                row.insert("proargtypes".into(), SqlValue::String(args.into()));
+                row.insert("proisstrict".into(), SqlValue::Bool(true));
+                row.insert("provolatile".into(), SqlValue::String("i".into()));
+                row
+            }),
+    );
     rows.extend(PG_PLPGSQL_PROC_ROWS.iter().map(
         |(oid, name, return_type, language, source, nargs)| {
             proc_row(
@@ -4857,6 +4932,21 @@ pub(crate) fn pg_collation_rows() -> Vec<BTreeMap<String, SqlValue>> {
         (810_001, "en-x-icu", "i", -1, None, None, Some("en")),
     ]
     .into_iter()
+    .chain(
+        crate::collations::BUILTIN_ICU_COLLATIONS
+            .iter()
+            .map(|collation| {
+                (
+                    collation.oid,
+                    collation.name,
+                    "i",
+                    -1,
+                    None,
+                    None,
+                    Some(collation.locale),
+                )
+            }),
+    )
     .map(|(oid, name, provider, encoding, collate, ctype, locale)| {
         virtual_row([
             ("oid", SqlValue::Int(oid)),

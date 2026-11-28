@@ -1110,12 +1110,30 @@ pub(crate) fn array_cardinality(value: &JsonValue) -> usize {
 pub(crate) fn eval_position_typed_value(
     needle: SqlValue,
     haystack: SqlValue,
-    bytea: bool,
+    operand_types: [Option<&str>; 2],
 ) -> Result<SqlValue> {
+    let bit_typed = operand_types
+        .into_iter()
+        .any(|kind| matches!(kind, Some("bit" | "varbit")));
+    if bit_typed
+        && operand_types
+            .into_iter()
+            .flatten()
+            .any(|kind| !matches!(kind, "bit" | "varbit" | "unknown"))
+    {
+        let [needle_type, haystack_type] =
+            operand_types.map(|kind| pg_cast_display_type(kind.unwrap_or("unknown")));
+        return Err(SqlError::coded(
+            "42883",
+            format!("function pg_catalog.position({haystack_type}, {needle_type}) does not exist"),
+            None,
+            Some("No function matches the given name and argument types. You might need to add explicit type casts.".into()),
+        ));
+    }
     if matches!(needle, SqlValue::Null) || matches!(haystack, SqlValue::Null) {
         return Ok(SqlValue::Null);
     }
-    if bytea {
+    if operand_types.contains(&Some("bytea")) {
         let needle = bytea_argument(&needle)?.unwrap();
         let haystack = bytea_argument(&haystack)?.unwrap();
         let position = if needle.is_empty() {
@@ -1129,8 +1147,21 @@ pub(crate) fn eval_position_typed_value(
         };
         return Ok(SqlValue::Int(position));
     }
-    let needle = needle.to_cell();
-    let haystack = haystack.to_cell();
+    let position_text = |value: SqlValue| -> Result<String> {
+        let text = value.to_cell();
+        if bit_typed {
+            PgBitString::from_postgres_text(&text)
+                .map(|value| value.to_bit_text())
+                .map_err(|_| bit_input_error("bit", &text))
+        } else {
+            Ok(text)
+        }
+    };
+    let needle = position_text(needle)?;
+    let haystack = position_text(haystack)?;
+    if bit_typed && needle.is_empty() && haystack.is_empty() {
+        return Ok(SqlValue::Int(0));
+    }
     let position = haystack
         .find(&needle)
         .map(|index| haystack[..index].chars().count() as i64 + 1)
@@ -1153,16 +1184,24 @@ where
     let replacement = eval(overlay_what)?;
     let start = eval(overlay_from)?;
     let length = overlay_for.map(&mut eval).transpose()?;
+    eval_overlay_values(&value, &replacement, &start, length.as_ref(), bytea)
+}
+
+pub(crate) fn eval_overlay_values(
+    value: &SqlValue,
+    replacement: &SqlValue,
+    start: &SqlValue,
+    length: Option<&SqlValue>,
+    bytea: bool,
+) -> Result<SqlValue> {
     if matches!(value, SqlValue::Null)
         || matches!(replacement, SqlValue::Null)
         || matches!(start, SqlValue::Null)
-        || length
-            .as_ref()
-            .is_some_and(|value| matches!(value, SqlValue::Null))
+        || length.is_some_and(|value| matches!(value, SqlValue::Null))
     {
         return Ok(SqlValue::Null);
     }
-    let start = sql_value_i64(&start)
+    let start = sql_value_i64(start)
         .ok_or_else(|| SqlError::InvalidSql("overlay start must be an integer".to_string()))?;
     if start <= 0 {
         return Err(SqlError::data_exception(
@@ -1173,9 +1212,9 @@ where
     }
 
     if bytea {
-        let bytes = bytea_argument(&value)?.unwrap();
-        let replacement = bytea_argument(&replacement)?.unwrap();
-        let remove = match length.as_ref() {
+        let bytes = bytea_argument(value)?.unwrap();
+        let replacement = bytea_argument(replacement)?.unwrap();
+        let remove = match length {
             Some(value) => sql_value_i64(value).ok_or_else(|| {
                 SqlError::InvalidSql("overlay length must be an integer".to_string())
             })?,
@@ -1203,7 +1242,7 @@ where
 
     let value = value.to_cell().chars().collect::<Vec<_>>();
     let replacement = replacement.to_cell().chars().collect::<Vec<_>>();
-    let remove = match length.as_ref() {
+    let remove = match length {
         Some(value) => sql_value_i64(value)
             .ok_or_else(|| SqlError::InvalidSql("overlay length must be an integer".to_string()))?,
         None => replacement.len() as i64,
@@ -1472,15 +1511,11 @@ pub(crate) fn cast_value(value: SqlValue, data_type: &DataType) -> Result<SqlVal
     }
     let (pg_type, _) = pg_type_from_data_type(data_type)?;
     let value = decode_typed_storage_envelope(value);
-    let value = match explicit_boolean_cast(value.clone(), None, &pg_type) {
-        Some(value) => value?,
-        None => cast_value_to_pg_type(value, &pg_type)?,
-    };
-    apply_pg_type_modifier(
-        value,
-        &pg_type,
-        pg_type_modifier_from_data_type(data_type)?.as_ref(),
-    )
+    let modifier = pg_type_modifier_from_data_type(data_type)?;
+    if let Some(value) = explicit_boolean_cast(value.clone(), None, &pg_type) {
+        return apply_pg_type_modifier_with_context(value?, &pg_type, modifier.as_ref(), true);
+    }
+    cast_value_with_pg_modifier(value, &pg_type, modifier.as_ref(), true)
 }
 
 pub(crate) fn cast_value_with_assignment_semantics(
@@ -1492,16 +1527,11 @@ pub(crate) fn cast_value_with_assignment_semantics(
     }
     let (pg_type, _) = pg_type_from_data_type(data_type)?;
     let value = decode_typed_storage_envelope(value);
-    let value = match explicit_boolean_cast(value.clone(), None, &pg_type) {
-        Some(value) => value?,
-        None => cast_value_to_pg_type(value, &pg_type)?,
-    };
-    apply_pg_type_modifier_with_context(
-        value,
-        &pg_type,
-        pg_type_modifier_from_data_type(data_type)?.as_ref(),
-        false,
-    )
+    let modifier = pg_type_modifier_from_data_type(data_type)?;
+    if let Some(value) = explicit_boolean_cast(value.clone(), None, &pg_type) {
+        return apply_pg_type_modifier_with_context(value?, &pg_type, modifier.as_ref(), false);
+    }
+    cast_value_with_pg_modifier(value, &pg_type, modifier.as_ref(), false)
 }
 
 pub(crate) fn decode_typed_storage_envelope(value: SqlValue) -> SqlValue {
@@ -1867,11 +1897,11 @@ pub(crate) fn cast_expr_value(
             .to_postgres_text(),
         ));
     }
-    let value = cast_value_to_pg_type(value, &target_type)?;
-    apply_pg_type_modifier(
+    cast_value_with_pg_modifier(
         value,
         &target_type,
         pg_type_modifier_from_data_type(data_type)?.as_ref(),
+        true,
     )
 }
 
@@ -2009,7 +2039,7 @@ fn postgres_array_text_value_with(
                 _ => number.to_string(),
             }),
             JsonValue::Object(_) => crate::pg_composite_from_array_json(value)
-                .map(|composite| quote_scalar(&composite.to_postgres_text(), delimiter, true))
+                .map(|composite| quote_scalar(&composite.to_postgres_text(), delimiter, false))
                 .ok_or_else(|| invalid_array_text("internal array value")),
         }
     }
@@ -2119,13 +2149,26 @@ pub(crate) fn cast_value_to_column_type(
     if let Some(user_type) = &column.user_type {
         return cast_value_to_user_type(value, user_type);
     }
-    let value = cast_value_to_pg_type(value, &column.pg_type)?;
-    apply_pg_type_modifier_with_context(
-        value,
-        &column.pg_type,
-        column.type_modifier.as_ref(),
-        false,
-    )
+    cast_value_with_pg_modifier(value, &column.pg_type, column.type_modifier.as_ref(), false)
+}
+
+fn cast_value_with_pg_modifier(
+    value: SqlValue,
+    pg_type: &str,
+    modifier: Option<&PgTypeModifier>,
+    explicit_cast: bool,
+) -> Result<SqlValue> {
+    // A textual interval must see its field range during input. Applying the
+    // range to an already parsed HH:MM value cannot recover MM:SS.
+    let value = if pg_type == "interval"
+        && matches!(modifier, Some(PgTypeModifier::Interval { .. }))
+        && matches!(value, SqlValue::String(_))
+    {
+        value
+    } else {
+        cast_value_to_pg_type(value, pg_type)?
+    };
+    apply_pg_type_modifier_with_context(value, pg_type, modifier, explicit_cast)
 }
 
 pub(crate) fn cast_value_to_user_type(
@@ -2906,7 +2949,7 @@ pub(crate) fn apply_pg_type_modifier_with_context(
             return Ok(value);
         };
         let text = value.to_cell();
-        return PgInterval::from_postgres_text(&text)
+        return PgInterval::from_postgres_text_with_field_range(&text, fields.as_deref())
             .and_then(|interval| interval.with_typmod(fields.as_deref(), *precision))
             .map(|interval| SqlValue::String(render_interval(interval)))
             .map_err(|error| postgres_interval_input_error(&text, error));

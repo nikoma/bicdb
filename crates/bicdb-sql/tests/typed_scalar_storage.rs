@@ -154,3 +154,147 @@ fn money_preserves_exact_cents_in_versioned_metadata_across_reopen() {
         ]
     );
 }
+#[test]
+fn postgres_catalog_vectors_use_their_input_and_ordering_rules() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let scalar = session
+        .execute(
+            "SELECT '2 10'::oidvector > '2 2', '3'::oidvector < '2 100',
+                '3'::int2vector < '2 100', '-1 10'::int2vector > '-1 2',
+                ' 2  10 ' = '2 10'::oidvector",
+        )
+        .unwrap();
+    assert_eq!(
+        scalar.rows,
+        vec![vec![
+            SqlValue::Bool(true),
+            SqlValue::Bool(true),
+            SqlValue::Bool(false),
+            SqlValue::Bool(true),
+            SqlValue::Bool(true),
+        ]]
+    );
+    assert_eq!(
+        session
+            .execute("SELECT '2 10'::oidvector = '2 bogus'")
+            .unwrap_err()
+            .sqlstate(),
+        "22P02"
+    );
+    assert_eq!(
+        session
+            .execute("SELECT '2 10'::oidvector = '2 10'::text")
+            .unwrap_err()
+            .sqlstate(),
+        "42883"
+    );
+}
+#[test]
+fn bit_literals_and_position_keep_their_postgresql_type_and_result_name() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let result = session
+        .execute("SELECT position(B'' IN B''), position('' IN ''), position(B'0' IN 'x8'), overlay(B'010' PLACING B'1' FROM 1)")
+        .unwrap();
+    assert_eq!(
+        result.columns,
+        ["position", "position", "position", "overlay"]
+    );
+    assert_eq!(
+        result.rows,
+        vec![vec![
+            SqlValue::Int(0),
+            SqlValue::Int(1),
+            SqlValue::Int(2),
+            SqlValue::String("110".into()),
+        ]]
+    );
+    session
+        .execute("CREATE TABLE bit_positions(bits bit varying)")
+        .unwrap();
+    session
+        .execute("INSERT INTO bit_positions VALUES (B'')")
+        .unwrap();
+    assert_eq!(
+        session
+            .execute("SELECT position(B'' IN bits) FROM bit_positions")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(0)]]
+    );
+    for (sql, state, message) in [
+        (
+            "SELECT B'01z'",
+            "22P02",
+            "\"z\" is not a valid binary digit",
+        ),
+        (
+            "SELECT X'F✕'",
+            "22P02",
+            "\"✕\" is not a valid hexadecimal digit",
+        ),
+        (
+            "SELECT position(''::text IN B'0')",
+            "42883",
+            "function pg_catalog.position(bit, text) does not exist",
+        ),
+    ] {
+        let error = session.execute(sql).unwrap_err();
+        assert_eq!(error.sqlstate(), state, "{sql}: {error:?}");
+        assert!(error.to_string().contains(message), "{sql}: {error:?}");
+    }
+}
+
+#[test]
+fn prefixed_integer_input_and_lcm_zero_preserve_postgresql_boundaries() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    assert_eq!(
+        session.execute("SELECT int8 '-0B_101', int4 '+0x_12', int2 '0o_17', lcm((-2147483648)::int4, 0), lcm(0, '-9223372036854775808'::int8)").unwrap().rows,
+        vec![vec![SqlValue::Int(-5), SqlValue::Int(18), SqlValue::Int(15), SqlValue::Int(0), SqlValue::Int(0)]]
+    );
+    for sql in [
+        "SELECT int2 '0x__a'",
+        "SELECT int4 '0b_'",
+        "SELECT int8 '0x_FF_'",
+    ] {
+        assert_eq!(session.execute(sql).unwrap_err().sqlstate(), "22P02");
+    }
+    for sql in [
+        "SELECT lcm((-2147483648)::int4, 1)",
+        "SELECT gcd((-2147483648)::int4, 0)",
+    ] {
+        assert_eq!(session.execute(sql).unwrap_err().sqlstate(), "22003");
+    }
+}
+#[test]
+fn postgres_catalog_string_routine_overloads_are_resolvable_and_callable() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    assert_eq!(
+        session.execute("SELECT proname,proargtypes::text FROM pg_catalog.pg_proc WHERE proname='substring' AND proargtypes = '25 23'").unwrap().rows,
+        [[SqlValue::String("substring".into()), SqlValue::String("25 23".into())]]
+    );
+    assert_eq!(
+        session.execute("SELECT 'substring(text,integer)'::regprocedure::oid, 'overlay(bit,bit,integer,integer)'::regprocedure::oid, 'position(bytea,bytea)'::regprocedure::oid").unwrap().rows,
+        [[SqlValue::Int(937), SqlValue::Int(3030), SqlValue::Int(2014)]]
+    );
+    let result = session.execute("SELECT pg_catalog.substring('abc'::text,2), pg_catalog.substring('abc','[ab]'), pg_catalog.position('abc','b'), pg_catalog.overlay(B'110',B'0',2,1), pg_catalog.substr('abc'::text,2)").unwrap();
+    assert_eq!(
+        result.rows,
+        [[
+            SqlValue::String("bc".into()),
+            SqlValue::String("a".into()),
+            SqlValue::Int(2),
+            SqlValue::String("100".into()),
+            SqlValue::String("bc".into()),
+        ]]
+    );
+    assert_eq!(result.column_types[2].as_deref(), Some("int4"));
+    assert_eq!(result.column_types[3].as_deref(), Some("bit"));
+}

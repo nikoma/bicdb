@@ -794,3 +794,202 @@ fn postgres_dml_returning_evaluates_predicate_subqueries() {
         );
     }
 }
+
+#[test]
+fn postgres_upsert_update_resolves_declared_defaults_after_qualification() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = open(dir.path());
+    let mut s = SqlSession::new(&mut db);
+    exec(&mut s, "CREATE SEQUENCE upsert_default_seq");
+    exec(&mut s, "CREATE TABLE upsert_defaults (id int PRIMARY KEY, a bigint DEFAULT nextval('upsert_default_seq'), b bigint, c int DEFAULT 42, d int)");
+    exec(&mut s, "INSERT INTO upsert_defaults VALUES (1,0,0,0,9)");
+    assert_eq!(
+        rows(
+            &mut s,
+            "INSERT INTO upsert_defaults VALUES (1,0,0,0,0)
+            ON CONFLICT (id) DO UPDATE SET a=DEFAULT WHERE false RETURNING a"
+        ),
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        rows(&mut s, "INSERT INTO upsert_defaults VALUES (1,0,0,0,0)
+            ON CONFLICT (id) DO UPDATE SET b=nextval('upsert_default_seq'), a=DEFAULT, c=DEFAULT, d=DEFAULT
+            RETURNING a,b,c,d"),
+        ["1|2|42|NULL"]
+    );
+    assert_eq!(rows(&mut s, "SELECT currval('upsert_default_seq')"), ["2"]);
+}
+
+#[test]
+fn postgres_boolean_comparison_functions_accept_row_operands() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = open(dir.path());
+    let mut s = SqlSession::new(&mut db);
+    exec(
+        &mut s,
+        "CREATE TABLE bool_compare (id int PRIMARY KEY, flag bool)",
+    );
+    exec(
+        &mut s,
+        "INSERT INTO bool_compare VALUES (1,false),(2,true),(3,NULL)",
+    );
+    assert_eq!(
+        rows(
+            &mut s,
+            "SELECT id FROM bool_compare WHERE pg_catalog.booleq(false,flag)"
+        ),
+        ["1"]
+    );
+    assert_eq!(
+        rows(
+            &mut s,
+            "SELECT lhs.id,rhs.id FROM bool_compare lhs, bool_compare rhs
+            WHERE boolne(lhs.flag,rhs.flag) ORDER BY lhs.id,rhs.id"
+        ),
+        ["1|2", "2|1"]
+    );
+    assert_eq!(
+        rows(
+            &mut s,
+            "SELECT boollt('f',true),boolle(true,true),boolgt(true,false),
+                             boolge(false,true),booleq(NULL,true),btboolcmp(false,true)"
+        ),
+        ["t|t|t|f|NULL|-1"]
+    );
+}
+
+#[test]
+fn postgres_internal_char_decodes_exact_octal_escapes() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = open(dir.path());
+    let mut s = SqlSession::new(&mut db);
+    assert_eq!(
+        rows(
+            &mut s,
+            r#"SELECT '\101'::"char", '\377'::"char"::text,
+                              '\000'::"char"::text, '\377'::text::"char"::int,
+                              '\777'::"char", '\888'::"char", '\12'::"char", 'é'::"char""#
+        ),
+        [r"A|\377||-1|\377|\|\|\303"]
+    );
+}
+
+#[test]
+fn plpgsql_select_into_before_projection_assigns_a_typed_record() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = open(dir.path());
+    let mut s = SqlSession::new(&mut db);
+    exec(
+        &mut s,
+        "CREATE TABLE into_wall (slotname char(4) PRIMARY KEY, backlink char(4))",
+    );
+    exec(
+        &mut s,
+        "CREATE TABLE into_patch (slotname char(4) PRIMARY KEY, backlink char(4))",
+    );
+    exec(&mut s, "INSERT INTO into_wall VALUES ('W1','')");
+    s.execute(
+        "CREATE FUNCTION set_into_backlink() RETURNS trigger LANGUAGE plpgsql AS $$
+          DECLARE rec record; a integer; b integer;
+          BEGIN
+            SELECT INTO a, b 1, 2;
+            SELECT INTO STRICT rec * FROM into_wall WHERE slotname=NEW.backlink;
+            IF a=1 AND b=2 AND rec.backlink = '' THEN
+              UPDATE into_wall SET backlink=NEW.slotname WHERE slotname=rec.slotname;
+            END IF;
+            RETURN NEW;
+          END $$",
+    )
+    .unwrap();
+    exec(&mut s, "CREATE TRIGGER set_into_trigger AFTER INSERT ON into_patch FOR EACH ROW EXECUTE FUNCTION set_into_backlink()");
+    exec(&mut s, "INSERT INTO into_patch VALUES ('P1','W1')");
+    assert_eq!(rows(&mut s, "SELECT backlink::text FROM into_wall"), ["P1"]);
+    s.execute(
+        "CREATE FUNCTION late_into() RETURNS integer LANGUAGE plpgsql AS $$
+          DECLARE n integer;
+          BEGIN
+            SELECT 7 INTO n;
+            RETURN n;
+          END $$",
+    )
+    .unwrap();
+    assert_eq!(rows(&mut s, "SELECT late_into()"), ["7"]);
+}
+#[test]
+fn postgres_name_literals_and_unknown_comparison_inputs() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let input = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijé";
+    assert_eq!(
+        session
+            .execute(&format!(
+                "SELECT octet_length(name '{input}'), NAME 'x' = name 'x ', pg_typeof(pg_catalog.name 'x')"
+            ))
+            .unwrap()
+            .rows[0]
+            .iter()
+            .map(SqlValue::to_cell)
+            .collect::<Vec<_>>(),
+        ["62", "false", "name"]
+    );
+    session
+        .execute(&format!(
+            "CREATE TABLE names_fixture(k name PRIMARY KEY); INSERT INTO names_fixture VALUES (name '{input}')"
+        ))
+        .unwrap();
+    assert_eq!(
+        session
+            .execute(&format!("SELECT k FROM names_fixture WHERE k = '{input}'"))
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::String(input[..62].to_string())]]
+    );
+    assert!(session
+        .execute(&format!(
+            "SELECT k FROM names_fixture WHERE k = '{input}'::text"
+        ))
+        .unwrap()
+        .rows
+        .is_empty());
+    session
+        .execute(&format!(
+            "CREATE TABLE indexed_names(k name); INSERT INTO indexed_names VALUES (name '{input}'); CREATE INDEX name_probe_idx ON indexed_names(k)"
+        ))
+        .unwrap();
+    let expected = vec![vec![SqlValue::String(input[..62].to_string())]];
+    for predicate in [format!("k = '{input}'"), format!("k < '{input}'::text")] {
+        assert_eq!(
+            session
+                .execute(&format!("SELECT k FROM indexed_names WHERE {predicate}"))
+                .unwrap()
+                .rows,
+            expected,
+            "{predicate}"
+        );
+    }
+}
+
+#[test]
+fn parse_ident_supports_named_arguments_and_scalar_from_rows() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    assert_eq!(
+        session
+            .execute(r#"SELECT a[1], a[2], pos, pg_typeof(a) FROM pg_catalog.parse_ident(strict => false, str => 'foo."BAR"[]') WITH ORDINALITY AS t(a, pos)"#)
+            .unwrap()
+            .rows[0]
+            .iter()
+            .map(SqlValue::to_cell)
+            .collect::<Vec<_>>(),
+        ["foo", "BAR", "1", "text[]"]
+    );
+    assert_eq!(
+        session
+            .execute("SELECT parse_ident('value', strict_mode => false)")
+            .unwrap_err()
+            .sqlstate(),
+        "42883"
+    );
+}

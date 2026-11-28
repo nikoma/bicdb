@@ -676,7 +676,9 @@ impl<'db> SqlEngine<'db> {
                 validate_zero_arg_table_function(&table, args)?;
                 return Ok(1);
             }
-            if is_scalar_text_search_table_function(&table) {
+            if is_scalar_text_search_table_function(&table)
+                || crate::routine_calls::parse_ident_function(&table)
+            {
                 return Ok(1);
             }
             return Ok(usize::MAX / 2);
@@ -708,6 +710,20 @@ impl<'db> SqlEngine<'db> {
         needed_columns: Option<&ReferencedColumns>,
         single_relation: bool,
     ) -> Result<RowSet> {
+        if let TableFactor::Table {
+            name,
+            alias: Some(alias),
+            args: None,
+            ..
+        } = relation
+        {
+            if !alias.columns.is_empty() {
+                let table = relation_name(name)?;
+                if self.cte(&table).is_none() && load_view(self.db_ref(), &table)?.is_none() {
+                    return self.read_relation_with_column_aliases(relation, &table, alias);
+                }
+            }
+        }
         let rows = self.row_set_from_table_factor_with_selection_inner(
             relation,
             selection,
@@ -730,6 +746,78 @@ impl<'db> SqlEngine<'db> {
             }
         }
         Ok(rows)
+    }
+
+    fn read_relation_with_column_aliases(
+        &self,
+        relation: &TableFactor,
+        table: &str,
+        alias: &TableAlias,
+    ) -> Result<RowSet> {
+        let Some((columns, base_table)) = self.relation_table_columns(table, &[]) else {
+            resolve_session_relation_name(self.db_ref(), table)?;
+            return Err(SqlError::Unsupported(
+                "column aliases require a relation with declared columns".into(),
+            ));
+        };
+        let qualifier = &alias.name.value;
+        let (old_names, types): (Vec<_>, Vec<_>) = columns.into_iter().unzip();
+        let new_names = table_alias_columns(table, qualifier, &alias.columns, &old_names)?;
+        let collations = if base_table {
+            let physical = resolve_session_relation_name(self.db_ref(), table)?;
+            let schema = load_schema_shared(self.db_ref(), &physical)?;
+            old_names
+                .iter()
+                .map(|name| schema.as_ref()?.column(name)?.collation.clone())
+                .collect()
+        } else {
+            Vec::new()
+        };
+        // A predicate or projection over the new names cannot be pushed into
+        // a scan keyed on the original schema names.
+        let RowSet { rows, columns } =
+            self.row_set_from_table_factor_with_selection_inner(relation, None, None, false)?;
+        let prefix = format!("{qualifier}.");
+        let mut output = Vec::new();
+        let mut keep = vec![false; columns.len()];
+        for (slot, source) in columns.iter().enumerate() {
+            if let Some(name) = source.strip_prefix(&prefix) {
+                let name = if let Some(index) = old_names.iter().position(|old| old == name) {
+                    &new_names[index]
+                } else if name == super::row_locks::HEAP_LOCK_IDENTITY
+                    || (POSTGRES_SYSTEM_COLUMNS.contains(&name)
+                        && !new_names.iter().any(|column| column == name))
+                {
+                    name
+                } else {
+                    continue;
+                };
+                output.push(format!("{prefix}{name}"));
+                keep[slot] = true;
+            }
+        }
+        crate::slot_types::register_columns_with_collations(
+            qualifier,
+            &new_names,
+            &types,
+            &collations,
+        );
+        let rows = if output.len() == columns.len() {
+            rows
+        } else {
+            rows.into_iter()
+                .map(|row| {
+                    row.into_iter()
+                        .zip(&keep)
+                        .filter_map(|(value, keep)| keep.then_some(value))
+                        .collect()
+                })
+                .collect()
+        };
+        Ok(RowSet {
+            columns: output,
+            rows,
+        })
     }
 
     fn row_set_from_table_factor_with_selection_inner(
@@ -924,8 +1012,10 @@ impl<'db> SqlEngine<'db> {
             {
                 return Ok(row_set);
             }
-            if is_scalar_text_search_table_function(&table) && !*with_ordinality {
-                return self.scalar_text_search_row_set(&table, table_alias, args);
+            if (is_scalar_text_search_table_function(&table) && !*with_ordinality)
+                || crate::routine_calls::parse_ident_function(&table)
+            {
+                return self.scalar_builtin_row_set(&table, table_alias, args, *with_ordinality);
             }
             if let Some(row_set) =
                 self.text_search_catalog_row_set(&table, table_alias, args, *with_ordinality)?
@@ -1105,9 +1195,11 @@ impl<'db> SqlEngine<'db> {
         let table = resolve_session_relation_name(self.db_ref(), &table)?;
         self.require_relation_privilege(&table, "SELECT")?;
         if let Some(schema) = load_schema_shared(self.db_ref(), &table)? {
-            crate::slot_types::register_table(&alias_name, &schema);
-            if alias_name != table {
-                crate::slot_types::register_table(&table, &schema);
+            if table_alias.is_none_or(|alias| alias.columns.is_empty()) {
+                crate::slot_types::register_table(&alias_name, &schema);
+                if alias_name != table {
+                    crate::slot_types::register_table(&table, &schema);
+                }
             }
             if schema.has_descendant_tables() {
                 return self.partition_row_set(&table, &alias_name, &schema, needed_columns);
@@ -5513,13 +5605,13 @@ impl<'db> SqlEngine<'db> {
         }))
     }
 
-    /// A scalar text search function in FROM (`FROM to_tsquery('x') AS q`)
-    /// is a one-row relation whose single column is named after the alias.
-    pub(crate) fn scalar_text_search_row_set(
+    /// A scalar function in FROM produces one row, even for a NULL result.
+    fn scalar_builtin_row_set(
         &self,
         table: &str,
         table_alias: Option<&TableAlias>,
         args: &TableFunctionArgs,
+        with_ordinality: bool,
     ) -> Result<RowSet> {
         let function = table
             .rsplit('.')
@@ -5529,11 +5621,14 @@ impl<'db> SqlEngine<'db> {
         let alias_name = table_alias
             .map(|alias| alias.name.value.clone())
             .unwrap_or_else(|| function.clone());
-        let source_columns = table_function_source_columns_for_alias(
+        let mut source_columns = table_function_source_columns_for_alias(
             table_alias,
             &alias_name,
             vec![function.clone()],
         );
+        if with_ordinality {
+            source_columns.push("ordinality".to_string());
+        }
         let columns = table_alias_columns(
             table,
             &alias_name,
@@ -5546,11 +5641,18 @@ impl<'db> SqlEngine<'db> {
             .iter()
             .map(|expr| self.eval_select_constant_expr(expr))
             .collect::<Result<Vec<_>>>()?;
-        let value =
-            crate::fts::eval_fts_function_value(&function, &values, None)?.ok_or_else(|| {
-                SqlError::Unsupported(format!("table function {table} is not supported"))
-            })?;
-        let rows = vec![slot_row_from_values(&columns, &[value])];
+        let value = if crate::routine_calls::parse_ident_function(table) {
+            crate::pg_number_input::eval_pg_number_input(table, &values)?
+        } else {
+            crate::fts::eval_fts_function_value(&function, &values, None)?
+        };
+        let mut row = vec![value.ok_or_else(|| {
+            SqlError::Unsupported(format!("table function {table} is not supported"))
+        })?];
+        if with_ordinality {
+            row.push(SqlValue::Int(1));
+        }
+        let rows = vec![slot_row_from_values(&columns, &row)];
         Ok(RowSet {
             rows,
             columns: aliased_row_output_columns(&alias_name, &columns),
@@ -6340,7 +6442,10 @@ impl<'db> SqlEngine<'db> {
                 Some(selection) => self.selection_pins_primary_key(&join.relation, selection)?,
                 None => false,
             };
-        if matches!(kind, RowJoinKind::Inner | RowJoinKind::Left) && !selection_pins_right {
+        if matches!(kind, RowJoinKind::Inner | RowJoinKind::Left)
+            && !selection_pins_right
+            && !has_relation_column_aliases(&join.relation)
+        {
             if let Some(row_set) = self.apply_indexed_right_table_join(
                 &mut left,
                 &join.relation,
@@ -7540,6 +7645,7 @@ impl<'db> SqlEngine<'db> {
                 || is_regexp_matches_table_function(&table)
                 || is_generate_subscripts_table_function(&table)
                 || is_scalar_text_search_table_function(&table)
+                || crate::routine_calls::parse_ident_function(&table)
             {
                 let mut source_columns = table_function_source_columns_for_alias(
                     table_alias,
@@ -7774,6 +7880,15 @@ impl<'db> SqlEngine<'db> {
         let table = resolve_session_relation_name(self.db_ref(), &table)?;
 
         let schema = load_schema_shared(self.db_ref(), &table)?;
+        if let Some(alias) = table_alias.filter(|alias| !alias.columns.is_empty()) {
+            let fields = FieldRef::wildcard(schema.as_deref());
+            let visible = fields
+                .iter()
+                .map(|field| field.name().to_string())
+                .collect::<Vec<_>>();
+            let columns = table_alias_columns(&table, &alias_name, &alias.columns, &visible)?;
+            return Ok(Some(aliased_row_output_columns(&alias_name, &columns)));
+        }
         Ok(Some(row_output_columns(
             &table,
             &alias_name,

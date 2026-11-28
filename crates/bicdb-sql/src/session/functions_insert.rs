@@ -18,6 +18,19 @@ impl<'db> SqlSession<'db> {
         } else {
             return Ok(None);
         };
+        if !crate::sql_atomic_body::atomic_bodies(trimmed).is_empty() {
+            return Ok(None);
+        }
+        if let Some(return_start) = find_top_level_keyword(trimmed, "RETURN") {
+            if find_top_level_keyword(&trimmed[..return_start], "AS").is_some() {
+                return Err(SqlError::data_exception_public(
+                    "42P13",
+                    "duplicate function body specified",
+                    None,
+                ));
+            }
+            return Ok(None);
+        }
         let rest = trimmed[prefix.len()..].trim_start();
         let name_end = rest
             .find(|ch: char| ch == '(' || ch.is_whitespace())
@@ -1918,9 +1931,12 @@ impl<'db> SqlSession<'db> {
                 select_required,
             );
         }
-        if let OnConflictAction::DoUpdate(update) = &on_conflict.action {
+        let assignments = if let OnConflictAction::DoUpdate(update) = &on_conflict.action {
             self.require_update_privileges(table, &update.assignments)?;
-        }
+            super::row_assignments::default_assignment_order(&update.assignments, schema)
+        } else {
+            None
+        };
         let conflict_columns = if matches!(on_conflict.action, OnConflictAction::DoNothing)
             && on_conflict.conflict_target.is_none()
         {
@@ -2079,9 +2095,9 @@ impl<'db> SqlSession<'db> {
                             &update_row,
                             &row_from_record("excluded", "excluded", Some(schema), &record)?,
                         );
-                        let row_engine = self.row_engine();
                         if let Some(selection) = &update.selection {
-                            if !row_engine
+                            if !self
+                                .row_engine()
                                 .eval_row_truth(&update_row, selection)?
                                 .unwrap_or(false)
                             {
@@ -2100,7 +2116,11 @@ impl<'db> SqlSession<'db> {
 
                         let mut updated = existing.clone();
                         let mut assigned_columns = Vec::with_capacity(update.assignments.len());
-                        for assignment in &update.assignments {
+                        for index in 0..update.assignments.len() {
+                            let assignment = match assignments.as_ref() {
+                                Some(ordered) => ordered[index],
+                                None => &update.assignments[index],
+                            };
                             let AssignmentTarget::ColumnName(column_name) = &assignment.target
                             else {
                                 return Err(SqlError::Unsupported(
@@ -2122,8 +2142,16 @@ impl<'db> SqlSession<'db> {
                                 )));
                             }
                             assigned_columns.push(column.clone());
-                            let mut value =
-                                row_engine.eval_row_value(&update_row, &assignment.value)?;
+                            let mut value = if expr_is_default(&assignment.value) {
+                                self.default_value_for_column(
+                                    access_schema.or(Some(schema)),
+                                    &column,
+                                )?
+                                .unwrap_or(SqlValue::Null)
+                            } else {
+                                self.row_engine()
+                                    .eval_row_value(&update_row, &assignment.value)?
+                            };
                             if schema
                                 .column(&column)
                                 .is_some_and(|column| column.pg_type == "oid")
@@ -3675,9 +3703,10 @@ impl<'db> SqlSession<'db> {
                 Ok(Some(eval_position_typed_value(
                     expr,
                     r#in,
-                    projected_expr_pg_type(needle_expr, Some(schema)).as_deref() == Some("bytea")
-                        || projected_expr_pg_type(haystack_expr, Some(schema)).as_deref()
-                            == Some("bytea"),
+                    [
+                        projected_expr_pg_type(needle_expr, Some(schema)).as_deref(),
+                        projected_expr_pg_type(haystack_expr, Some(schema)).as_deref(),
+                    ],
                 )?))
             }
             Expr::Substring {

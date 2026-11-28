@@ -18,11 +18,10 @@ use std::ops::ControlFlow;
 /// Output column names of a FROM relation, for `SELECT *` (None when unknown).
 pub(crate) type RelationColumns<'a> = dyn Fn(&TableFactor) -> Option<Vec<String>> + 'a;
 
-/// A resolved key that is itself an integer literal (`SELECT 1 ... ORDER BY
-/// 1`) would read as a position again and be resolved forever; `+1` keeps
-/// the constant's value without being positional.
-fn not_positional(expr: Expr) -> Expr {
-    if ordinal(&expr).is_some() {
+/// A resolved constant key keeps its scalar value when the normalized query
+/// is planned again. Unary plus distinguishes it from an authored position.
+pub(crate) fn not_positional(expr: Expr) -> Expr {
+    if position_literal(&expr).is_some() {
         Expr::UnaryOp {
             op: sqlparser::ast::UnaryOperator::Plus,
             expr: Box::new(expr),
@@ -41,6 +40,44 @@ fn ordinal(expr: &Expr) -> Option<usize> {
         Expr::Nested(inner) => ordinal(inner),
         _ => None,
     }
+}
+
+enum PositionLiteral {
+    Integer(i32),
+    NonInteger,
+}
+
+fn position_literal(expr: &Expr) -> Option<PositionLiteral> {
+    let number = match expr {
+        Expr::Nested(inner) => return position_literal(inner),
+        Expr::Value(value) => match &value.value {
+            Value::Number(number, _) => number.as_str(),
+            Value::Placeholder(_) => return None,
+            _ => return Some(PositionLiteral::NonInteger),
+        },
+        Expr::UnaryOp {
+            op: UnaryOperator::Minus,
+            expr,
+        } => {
+            let Expr::Value(value) = expr.as_ref() else {
+                return None;
+            };
+            let Value::Number(number, _) = &value.value else {
+                return None;
+            };
+            return Some(
+                match number.parse::<i32>().ok().and_then(i32::checked_neg) {
+                    Some(position) => PositionLiteral::Integer(position),
+                    None => PositionLiteral::NonInteger,
+                },
+            );
+        }
+        _ => return None,
+    };
+    Some(match number.parse::<i32>() {
+        Ok(position) => PositionLiteral::Integer(position),
+        Err(_) => PositionLiteral::NonInteger,
+    })
 }
 
 /// An identifier as PostgreSQL names the column: unquoted names fold to lower case.
@@ -80,14 +117,14 @@ fn alias_target(body: &SetExpr, key: &Expr) -> Option<Expr> {
 }
 
 fn rewritable(query: &Query, key: &Expr) -> bool {
-    ordinal(key).is_some() || alias_target(query.body.as_ref(), key).is_some()
+    position_literal(key).is_some() || alias_target(query.body.as_ref(), key).is_some()
 }
 
 /// `GROUP BY 1`: positional grouping keys in this body (or the SELECTs of a set operation).
 fn body_has_group_ordinal(body: &SetExpr) -> bool {
     match body {
         SetExpr::Select(select) => {
-            matches!(&select.group_by, GroupByExpr::Expressions(keys, _) if keys.iter().any(|key| ordinal(key).is_some()))
+            matches!(&select.group_by, GroupByExpr::Expressions(keys, _) if keys.iter().any(|key| position_literal(key).is_some()))
         }
         SetExpr::SetOperation { left, right, .. } => {
             body_has_group_ordinal(left) || body_has_group_ordinal(right)
@@ -364,33 +401,41 @@ pub(crate) fn query_has_ordinal_order_by(query: &Query) -> bool {
 pub(crate) fn rewrite_ordinal_order_by(
     query: &Query,
     columns: &RelationColumns<'_>,
-) -> Option<Query> {
+    db: &BicDb,
+) -> Result<Option<Query>> {
     if !query_has_ordinal_order_by(query) {
-        return None;
+        return Ok(None);
     }
     let mut rewritten = query.clone();
     let mut rewriter = Rewriter {
         columns,
         changed: false,
+        db,
     };
-    let _ = VisitMut::visit(&mut rewritten, &mut rewriter);
-    rewriter.changed.then_some(rewritten)
+    if let ControlFlow::Break(error) = VisitMut::visit(&mut rewritten, &mut rewriter) {
+        return Err(error);
+    }
+    Ok(rewriter.changed.then_some(rewritten))
 }
 
 struct Rewriter<'a, 'b> {
     columns: &'a RelationColumns<'b>,
     changed: bool,
+    db: &'a BicDb,
 }
 
 impl VisitorMut for Rewriter<'_, '_> {
-    type Break = ();
-    fn post_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<()> {
+    type Break = SqlError;
+    fn post_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<SqlError> {
         if positional_make_interval(expr) || ceil_floor_as_call(expr) {
             self.changed = true;
         }
         ControlFlow::Continue(())
     }
-    fn post_visit_query(&mut self, query: &mut Query) -> ControlFlow<()> {
+    fn post_visit_query(&mut self, query: &mut Query) -> ControlFlow<SqlError> {
+        if let Err(error) = self.validate_query_positions(query) {
+            return ControlFlow::Break(error);
+        }
         // ORDER BY is resolved against the select list as written, so group keys are rewritten
         // after the order keys have been computed from the same items (both read the projection).
         if flatten_body(query.body.as_mut()) {
@@ -406,6 +451,91 @@ impl VisitorMut for Rewriter<'_, '_> {
 }
 
 impl Rewriter<'_, '_> {
+    fn validate_query_positions(&self, query: &Query) -> Result<()> {
+        if let Some(keys) = order_expressions(query) {
+            for key in keys {
+                self.validate_position(&key.expr, &query.body, "ORDER BY")?;
+            }
+        }
+        self.validate_group_positions(&query.body)
+    }
+
+    fn validate_group_positions(&self, body: &SetExpr) -> Result<()> {
+        match body {
+            SetExpr::Select(select) => {
+                if let GroupByExpr::Expressions(keys, _) = &select.group_by {
+                    for key in keys {
+                        self.validate_position(key, body, "GROUP BY")?;
+                    }
+                }
+            }
+            SetExpr::SetOperation { left, right, .. } => {
+                self.validate_group_positions(left)?;
+                self.validate_group_positions(right)?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn validate_position(&self, expr: &Expr, body: &SetExpr, clause: &str) -> Result<()> {
+        let error = match position_literal(expr) {
+            Some(PositionLiteral::NonInteger) => SqlError::data_exception_public(
+                "42601",
+                format!("non-integer constant in {clause}"),
+                None,
+            ),
+            Some(PositionLiteral::Integer(position))
+                if position <= 0
+                    || self
+                        .output_width(body)
+                        .is_some_and(|width| position as usize > width) =>
+            {
+                SqlError::data_exception_public(
+                    "42P10",
+                    format!("{clause} position {position} is not in select list"),
+                    None,
+                )
+            }
+            _ => return Ok(()),
+        };
+        if oracle::is_oracle_database(self.db)? {
+            Ok(())
+        } else {
+            Err(error)
+        }
+    }
+
+    fn output_width(&self, body: &SetExpr) -> Option<usize> {
+        match body {
+            SetExpr::Select(select) => select.projection.iter().try_fold(0, |width, item| {
+                let added = match item {
+                    SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(..) => {
+                        let [from] = select.from.as_slice() else {
+                            return None;
+                        };
+                        if !from.joins.is_empty() {
+                            return None;
+                        }
+                        match &from.relation {
+                            TableFactor::Derived { subquery, .. } => {
+                                self.output_width(&subquery.body)?
+                            }
+                            relation => relation_names(relation, self.columns)?.len(),
+                        }
+                    }
+                    SelectItem::ExprWithAliases { .. } => return None,
+                    _ => 1,
+                };
+                Some(width + added)
+            }),
+            SetExpr::SetOperation { left, .. } => self.output_width(left),
+            SetExpr::Query(query) => self.output_width(&query.body),
+            SetExpr::Values(values) => values.rows.first().map(|row| row.content.len()),
+            _ => None,
+        }
+    }
+
     fn rewrite_order_by(&mut self, query: &mut Query) {
         let Some(order_by) = query.order_by.as_ref() else {
             return;

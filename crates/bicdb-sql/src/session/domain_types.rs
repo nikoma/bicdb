@@ -4586,6 +4586,17 @@ impl<'db> SqlSession<'db> {
             .map(ident_value)
             .unwrap_or_else(|| "sql".to_string())
             .to_ascii_lowercase();
+        let inline_sql = matches!(
+            create_function.function_body,
+            Some(CreateFunctionBody::Return(_) | CreateFunctionBody::AsBeginEnd(_))
+        );
+        if inline_sql && requested_language != "sql" {
+            return Err(SqlError::data_exception_public(
+                "42P13",
+                "inline SQL function body only valid for language SQL",
+                None,
+            ));
+        }
         let (language, internal_symbol) = if requested_language == "internal" {
             let symbol = create_function_internal_symbol(create_function)?;
             if pg_internal_codec_type(&symbol).is_none()
@@ -4625,6 +4636,17 @@ impl<'db> SqlSession<'db> {
         }
         let (input_types, mut output_types) =
             routine_argument_directions(create_function.args.as_ref(), &arg_types);
+        if inline_sql
+            && input_types
+                .iter()
+                .any(|arg| polymorphic_type_family(&arg.pg_type).is_some())
+        {
+            return Err(SqlError::data_exception_public(
+                "42P13",
+                "SQL function with unquoted function body cannot have polymorphic arguments",
+                None,
+            ));
+        }
         output_types.extend(explicit_return_type_schemas(
             create_function.return_type.as_ref(),
         )?);
@@ -4637,6 +4659,21 @@ impl<'db> SqlSession<'db> {
             trigger_return,
             &language,
         )?;
+        let mut bound_inline = None;
+        if inline_sql {
+            let mut declaration = create_function.clone();
+            match &mut declaration.function_body {
+                Some(CreateFunctionBody::Return(expression)) => {
+                    crate::search_path::bind_inline_sql_body(self.db_ref(), expression);
+                }
+                Some(CreateFunctionBody::AsBeginEnd(block)) => {
+                    crate::search_path::bind_inline_sql_body(self.db_ref(), &mut block.statements);
+                }
+                _ => unreachable!("inline function body checked above"),
+            }
+            bound_inline = Some(declaration);
+        }
+        let create_function = bound_inline.as_ref().unwrap_or(create_function);
         let routine = RoutineSchema {
             oracle_invalid: None,
             name,
@@ -4653,13 +4690,16 @@ impl<'db> SqlSession<'db> {
             return_type_declaration: Some(return_type_declaration),
             returns_set,
             language,
-            definition: crate::sql_text::sql_text(create_function),
+            definition: crate::sql_atomic_body::render_function(create_function),
             internal_symbol,
             owner: Some(current_user_from_gucs(&self.session_gucs)),
             security_definer: matches!(create_function.security, Some(FunctionSecurity::Definer)),
             overload: None,
             catalog_oid: None,
         };
+        if inline_sql {
+            validate_inline_sql_routine(&self.sql_engine(), create_function, &routine)?;
+        }
         if create_function.or_replace
             && list_user_types(self.db_ref())?
                 .iter()

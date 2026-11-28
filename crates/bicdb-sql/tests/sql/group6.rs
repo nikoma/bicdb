@@ -951,12 +951,26 @@ fn cte_column_aliases_replace_output_names() {
         result.rows,
         vec![vec![SqlValue::String("p1".to_string()), SqlValue::Int(45)]]
     );
-    assert!(matches!(
-        session.execute(
-            "WITH renamed(only_one) AS (SELECT id, age FROM patients) SELECT only_one FROM renamed"
-        ),
-        Err(SqlError::InvalidSql(message)) if message.contains("columns available")
-    ));
+    let partial = session
+        .execute(
+            "WITH renamed(only_one) AS (SELECT id, age FROM patients)
+             SELECT only_one, age FROM renamed",
+        )
+        .unwrap();
+    assert_eq!(partial.columns, ["only_one", "age"]);
+    assert_eq!(partial.rows, result.rows);
+
+    let error = session
+        .execute(
+            "WITH renamed(first, second, third) AS (SELECT id, age FROM patients)
+             SELECT * FROM renamed",
+        )
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42P10");
+    assert_eq!(
+        error.to_string(),
+        "WITH query \"renamed\" has 2 columns available but 3 columns specified",
+    );
 }
 
 #[test]

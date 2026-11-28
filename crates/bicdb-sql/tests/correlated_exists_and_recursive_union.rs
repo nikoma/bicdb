@@ -16,6 +16,48 @@ fn cells(db: &mut BicDb, sql: &str) -> Vec<Vec<String>> {
 }
 
 #[test]
+fn recursive_search_and_cycle_expose_rank_mark_and_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    SqlSession::new(&mut db)
+        .execute("CREATE TABLE edges(parent int, child int); INSERT INTO edges VALUES (1,2),(1,3),(2,4),(3,4),(4,1)")
+        .unwrap();
+    let rows = cells(
+        &mut db,
+        "WITH RECURSIVE walk(n) AS (
+        SELECT 1 UNION ALL SELECT e.child FROM walk w JOIN edges e ON e.parent = w.n
+    ) SEARCH DEPTH FIRST BY n SET ord CYCLE n SET hit USING path
+    SELECT n, hit, ord::text, path::text FROM walk ORDER BY walk.ord",
+    );
+    let expected = [
+        ["1", "false", "{(1)}", "{(1)}"],
+        ["2", "false", "{(1),(2)}", "{(1),(2)}"],
+        ["4", "false", "{(1),(2),(4)}", "{(1),(2),(4)}"],
+        ["1", "true", "{(1),(2),(4),(1)}", "{(1),(2),(4),(1)}"],
+        ["3", "false", "{(1),(3)}", "{(1),(3)}"],
+        ["4", "false", "{(1),(3),(4)}", "{(1),(3),(4)}"],
+        ["1", "true", "{(1),(3),(4),(1)}", "{(1),(3),(4),(1)}"],
+    ];
+    assert_eq!(rows, expected.map(|row| row.map(String::from).to_vec()));
+
+    let rows = cells(&mut db, "WITH RECURSIVE walk(n, depth) AS (
+        SELECT 1,0 UNION ALL SELECT e.child,w.depth+1 FROM walk w JOIN edges e ON e.parent = w.n WHERE w.depth < 2
+    ) SEARCH BREADTH FIRST BY n SET ord
+    SELECT n, ord::text FROM walk ORDER BY walk.ord");
+    assert_eq!(
+        rows,
+        [
+            ["1", "(0,1)"],
+            ["2", "(1,2)"],
+            ["3", "(1,3)"],
+            ["4", "(2,4)"],
+            ["4", "(2,4)"]
+        ]
+        .map(|row| row.map(String::from).to_vec())
+    );
+}
+
+#[test]
 fn correlated_exists_over_a_table_without_primary_key_is_not_quadratic() {
     let (sender, receiver) = std::sync::mpsc::channel();
     std::thread::spawn(move || {

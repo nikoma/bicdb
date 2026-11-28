@@ -268,3 +268,31 @@ fn explicit_lateral_function_lock_targets_are_refused_without_weakening_base_pri
     let mut reader = SqlSession::new_shared_unprivileged(&db, "lateral_reader");
     assert_eq!(reader.execute("SELECT j.id FROM lateral_private_jobs j CROSS JOIN LATERAL jsonb_array_elements(j.nodes) node FOR UPDATE").unwrap_err().sqlstate(),"42501");
 }
+#[test]
+fn row_locks_keep_the_physical_key_when_its_column_has_an_alias() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    SqlSession::new(&mut db)
+        .execute("CREATE TABLE named_lock (id integer PRIMARY KEY, other integer); INSERT INTO named_lock VALUES (1, 2), (2, 1)")
+        .unwrap();
+    let mut first = SqlSession::new_shared(&db);
+    let mut second = SqlSession::new_shared(&db);
+    first.execute("BEGIN").unwrap();
+    assert_eq!(
+        first
+            .execute("SELECT actual FROM named_lock n(actual, id) WHERE actual=1 FOR UPDATE OF n")
+            .unwrap()
+            .rows,
+        [[SqlValue::Int(1)]]
+    );
+    second.execute("BEGIN").unwrap();
+    assert_eq!(
+        second
+            .execute("SELECT id FROM named_lock ORDER BY id FOR UPDATE SKIP LOCKED")
+            .unwrap()
+            .rows,
+        [[SqlValue::Int(2)]]
+    );
+    second.execute("ROLLBACK").unwrap();
+    first.execute("ROLLBACK").unwrap();
+}

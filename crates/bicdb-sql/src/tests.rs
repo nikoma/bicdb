@@ -1016,7 +1016,7 @@ fn routine_into_transfers_text_and_array_allocations_to_slots() {
         SqlValue::String(text),
         SqlValue::Json(JsonValue::Array(array).into()),
     ];
-    assign_routine_targets_with_columns(&mut frame, &targets, &[], Some(row)).unwrap();
+    assign_routine_targets_with_columns(&mut frame, &targets, &[], &[], Some(row)).unwrap();
     let stored_text = frame
         .slot_values()
         .iter()

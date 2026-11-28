@@ -16,6 +16,7 @@ pub(crate) type RowLockTarget = (
     String,
     TableSchema,
     Vec<String>,
+    Vec<String>,
     (Option<NonBlock>, bool),
 );
 
@@ -176,8 +177,24 @@ impl SqlEngine<'_> {
                     SqlError::Unsupported("row locking targets must be base tables".into())
                 })?;
                 let keys = primary_key_columns_for_schema(&schema);
+                let mut key_columns = keys.clone();
+                if let Some(alias) = alias.as_ref().filter(|alias| !alias.columns.is_empty()) {
+                    let physical = schema.columns.iter().filter(|column| !column.hidden);
+                    for (column, alias) in physical.zip(&alias.columns) {
+                        if let Some(index) = keys.iter().position(|key| key == &column.name) {
+                            key_columns[index] = ident_value(&alias.name);
+                        }
+                    }
+                }
                 let share = matches!(lock.lock_type, sqlparser::ast::LockType::Share);
-                targets.push((table, row_alias, schema, keys, (lock.nonblock, share)));
+                targets.push((
+                    table,
+                    row_alias,
+                    schema,
+                    keys,
+                    key_columns,
+                    (lock.nonblock, share),
+                ));
             }
             if targets.len() == before {
                 return Err(SqlError::InvalidSql(
@@ -204,7 +221,7 @@ impl SqlEngine<'_> {
             .with_routine_slots(self.routine_slots.clone())
             .with_cancellation(self.cancellation.clone())
             .with_fts_limits(self.fts_limits);
-        engine.heap_lock_identity = targets.iter().any(|(_, _, _, keys, _)| keys.is_empty());
+        engine.heap_lock_identity = targets.iter().any(|(_, _, _, keys, _, _)| keys.is_empty());
         let from = Self::comma_from_items_to_cross_join(&select.from);
         let row_set = engine.row_set_from_table_with_joins_with_selection(
             &from,
@@ -229,7 +246,7 @@ impl SqlEngine<'_> {
         let wait_duration = oracle::lock_waits::duration(self.db_ref(), query)?;
         let physical_sources = targets
             .iter()
-            .map(|(_, alias, schema, _, _)| {
+            .map(|(_, alias, schema, _, _, _)| {
                 if !schema.has_descendant_tables() {
                     return Ok(None);
                 }
@@ -255,7 +272,7 @@ impl SqlEngine<'_> {
             .collect::<Result<Vec<_>>>()?;
         let key_slots = targets
             .iter()
-            .map(|(_, alias, _, keys, _)| {
+            .map(|(_, alias, _, _, keys, _)| {
                 if keys.is_empty() {
                     let name = format!("{alias}.{HEAP_LOCK_IDENTITY}");
                     return columns
@@ -291,7 +308,7 @@ impl SqlEngine<'_> {
             let mut ids = Vec::with_capacity(targets.len());
             // UPDATE USING policies are additional to SELECT visibility for
             // a locking read. Check every target before reserving any row.
-            for (((table, _, schema, keys, _), slots), sources) in
+            for (((table, _, schema, keys, _, _), slots), sources) in
                 targets.iter().zip(&key_slots).zip(&physical_sources)
             {
                 let physical = match sources {
@@ -351,7 +368,7 @@ impl SqlEngine<'_> {
                 continue;
             }
             let candidate_mark = tx.rollback_mark();
-            for ((_, _, _, _, (nonblock, share)), (table, id)) in targets.iter().zip(ids) {
+            for ((_, _, _, _, _, (nonblock, share)), (table, id)) in targets.iter().zip(ids) {
                 if nonblock.is_none() {
                     self.check_cancellation()?;
                     // FOR SHARE takes an exclusive row lock here. A prepared

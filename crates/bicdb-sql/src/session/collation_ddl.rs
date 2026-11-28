@@ -67,7 +67,9 @@ impl SqlSession<'_> {
             || (matches!(schema_name, "public" | "pg_catalog")
                 && BUILTIN_COLLATIONS
                     .iter()
-                    .any(|builtin| builtin.eq_ignore_ascii_case(name))))
+                    .any(|builtin| builtin.eq_ignore_ascii_case(name)))
+            || (schema_name == "pg_catalog"
+                && crate::collations::builtin_icu_collation(name).is_some()))
     }
 
     pub(crate) fn execute_create_collation(
@@ -102,10 +104,19 @@ impl SqlSession<'_> {
                     }
                     "en-x-icu" => ('i', "en".to_string(), true),
                     _ => {
-                        let source =
-                            load_collation(self.db_ref(), &existing_schema, &existing_name)?
-                                .ok_or_else(|| undefined_collation(&existing_name))?;
-                        (source.provider, source.locale, source.deterministic)
+                        let can_use_builtin = existing_schema == "pg_catalog"
+                            || object_name_parts(existing).len() == 1;
+                        if let Some(builtin) = can_use_builtin
+                            .then(|| crate::collations::builtin_icu_collation(&existing_name))
+                            .flatten()
+                        {
+                            ('i', builtin.locale.to_string(), true)
+                        } else {
+                            let source =
+                                load_collation(self.db_ref(), &existing_schema, &existing_name)?
+                                    .ok_or_else(|| undefined_collation(&existing_name))?;
+                            (source.provider, source.locale, source.deterministic)
+                        }
                     }
                 }
             }

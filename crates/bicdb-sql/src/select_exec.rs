@@ -70,6 +70,17 @@ pub(crate) fn cte_columns(
     aliases: &[TableAliasColumnDef],
     result_columns: &[String],
 ) -> Result<Vec<String>> {
+    if aliases.len() > result_columns.len() {
+        return Err(SqlError::data_exception_public(
+            "42P10",
+            format!(
+                "WITH query \"{name}\" has {} columns available but {} columns specified",
+                result_columns.len(),
+                aliases.len(),
+            ),
+            None,
+        ));
+    }
     table_alias_columns(name, name, aliases, result_columns)
 }
 
@@ -82,17 +93,28 @@ pub(crate) fn table_alias_columns(
     if aliases.is_empty() {
         return Ok(result_columns.to_vec());
     }
-    if aliases.len() != result_columns.len() {
-        return Err(SqlError::InvalidSql(format!(
-            "table alias \"{alias}\" has {} columns available but {} columns specified for \"{table}\"",
-            result_columns.len(),
-            aliases.len()
-        )));
+    if aliases.len() > result_columns.len() {
+        let alias = if alias.is_empty() { table } else { alias };
+        return Err(SqlError::data_exception_public(
+            "42P10",
+            format!(
+                "table \"{alias}\" has {} columns available but {} columns specified",
+                result_columns.len(),
+                aliases.len()
+            ),
+            None,
+        ));
     }
-    Ok(aliases
-        .iter()
-        .map(|column| column.name.value.clone())
-        .collect())
+    let mut columns = result_columns.to_vec();
+    for (column, alias) in columns.iter_mut().zip(aliases) {
+        *column = ident_value(&alias.name);
+    }
+    Ok(columns)
+}
+
+pub(crate) fn has_relation_column_aliases(relation: &TableFactor) -> bool {
+    matches!(relation, TableFactor::Table { alias: Some(alias), args: None, .. }
+        if !alias.columns.is_empty())
 }
 
 pub(crate) fn btree_null_row_for_columns(columns: &[String]) -> BTreeMap<String, SqlValue> {
@@ -1239,6 +1261,7 @@ pub(crate) fn typed_order_value_ordering(
     left_key: Option<&[u8]>,
     right: &SqlValue,
     right_key: Option<&[u8]>,
+    pg_type: Option<&str>,
     options: &OrderByOptions,
 ) -> Ordering {
     let ascending = options.asc != Some(false);
@@ -1259,7 +1282,9 @@ pub(crate) fn typed_order_value_ordering(
                 Ordering::Less
             }
         }
-        (SqlValue::Json(left), SqlValue::Json(right)) => jsonb_value_ordering(left, right),
+        (SqlValue::Json(left), SqlValue::Json(right)) if pg_type != Some("record[]") => {
+            jsonb_value_ordering(left, right)
+        }
         _ => match (left_key, right_key) {
             (Some(left), Some(right)) => left.cmp(right),
             _ => value_ordering(left, right).unwrap_or(Ordering::Equal),
@@ -1278,6 +1303,7 @@ pub(crate) fn typed_order_expr_value_ordering(
     left_key: Option<&[u8]>,
     right: &SqlValue,
     right_key: Option<&[u8]>,
+    pg_type: Option<&str>,
     options: &OrderByOptions,
 ) -> Ordering {
     typed_order_collation_value_ordering(
@@ -1286,6 +1312,7 @@ pub(crate) fn typed_order_expr_value_ordering(
         left_key,
         right,
         right_key,
+        pg_type,
         options,
     )
 }
@@ -1296,6 +1323,7 @@ pub(crate) fn typed_order_collation_value_ordering(
     left_key: Option<&[u8]>,
     right: &SqlValue,
     right_key: Option<&[u8]>,
+    pg_type: Option<&str>,
     options: &OrderByOptions,
 ) -> Ordering {
     if let (Some(collation), SqlValue::String(left), SqlValue::String(right)) =
@@ -1308,7 +1336,7 @@ pub(crate) fn typed_order_collation_value_ordering(
             return ordering;
         }
     }
-    typed_order_value_ordering(left, left_key, right, right_key, options)
+    typed_order_value_ordering(left, left_key, right, right_key, pg_type, options)
 }
 
 pub(crate) fn window_keys_are_peers(left: &[SqlValue], right: &[SqlValue]) -> bool {
@@ -1879,6 +1907,10 @@ pub(crate) fn expr_contains_volatile_function(expr: &Expr) -> bool {
                 name.as_str(),
                 "random"
                     | "pg_catalog.random"
+                    | "random_normal"
+                    | "pg_catalog.random_normal"
+                    | "setseed"
+                    | "pg_catalog.setseed"
                     | "now"
                     | "pg_catalog.now"
                     | "current_timestamp"

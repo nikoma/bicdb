@@ -5125,7 +5125,7 @@ pub(crate) fn sql_identifier_parts(identifier: &str) -> Result<Vec<String>> {
     Ok(parts)
 }
 
-fn strip_sql_keywords<'a>(mut sql: &'a str, keywords: &[&str]) -> Option<&'a str> {
+pub(crate) fn strip_sql_keywords<'a>(mut sql: &'a str, keywords: &[&str]) -> Option<&'a str> {
     for keyword in keywords {
         sql = trim_leading_sql_comments_with_offset(sql).0.trim_start();
         if !keyword_matches_at(sql, keyword, 0) {

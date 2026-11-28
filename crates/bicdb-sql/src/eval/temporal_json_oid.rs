@@ -512,6 +512,14 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
         }
     }
     match pg_type {
+        "record" => match value {
+            value @ SqlValue::Composite(_) => Ok(value),
+            _ => Err(SqlError::data_exception_public(
+                "0A000",
+                "input of anonymous composite types is not implemented",
+                None,
+            )),
+        },
         "oid" => match value {
             SqlValue::Int(value) if value < 0 => i32::try_from(value)
                 .map(|value| SqlValue::Int(i64::from(value as u32)))
@@ -749,7 +757,13 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
                             Some("char".to_string()),
                         ));
                     }
-                    value.as_bytes().first().copied().unwrap_or(0)
+                    match value.as_bytes() {
+                        [b'\\', first @ b'0'..=b'7', second @ b'0'..=b'7', third @ b'0'..=b'7'] => {
+                            let digit = |byte: u8| u16::from(byte - b'0');
+                            ((digit(*first) << 6) | (digit(*second) << 3) | digit(*third)) as u8
+                        }
+                        bytes => bytes.first().copied().unwrap_or(0),
+                    }
                 }
                 other => {
                     return Err(SqlError::cannot_coerce(format!(
@@ -817,10 +831,13 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
                 other.to_cell()
             ))),
         },
+        "pg_lsn" => {
+            parse_pg_lsn_input(&value.to_cell()).map(|lsn| SqlValue::String(format_pg_lsn(lsn)))
+        }
         "cidr" | "inet" | "macaddr" | "macaddr8" | "point" | "line" | "lseg" | "box" | "path"
         | "polygon" | "circle" | "int4range" | "numrange" | "tsrange" | "tstzrange"
         | "daterange" | "int8range" | "int4multirange" | "nummultirange" | "tsmultirange"
-        | "tstzmultirange" | "datemultirange" | "int8multirange" | "pg_lsn" | "pg_snapshot"
+        | "tstzmultirange" | "datemultirange" | "int8multirange" | "pg_snapshot"
         | "txid_snapshot" | "xid" | "xid8" | "cid" | "tid" => {
             let text = value.to_cell();
             if is_builtin_multirange_type(pg_type) {
@@ -1547,6 +1564,9 @@ pub(crate) fn cast_array_json(value: JsonValue, element_type: &str) -> Result<Js
             .collect::<Result<Vec<_>>>()
             .map(JsonValue::Array),
         JsonValue::Null => Ok(JsonValue::Null),
+        value if element_type == "record" && pg_composite_from_array_json(&value).is_some() => {
+            Ok(value)
+        }
         value => {
             cast_value_to_pg_type(json_to_sql_value(&value), element_type).map(sql_value_to_json)
         }
@@ -1872,6 +1892,7 @@ pub(crate) fn postgres_figure_column_name(expr: &Expr) -> Option<(String, u8)> {
             2,
         )),
         Expr::Position { .. } => Some(("position".to_string(), 2)),
+        Expr::Overlay { .. } => Some(("overlay".to_string(), 2)),
         Expr::Trim { .. } => Some(("btrim".to_string(), 2)),
         Expr::Ceil { .. } => Some(("ceil".to_string(), 2)),
         Expr::Floor { .. } => Some(("floor".to_string(), 2)),
@@ -2022,6 +2043,7 @@ pub(crate) fn postgres_xml_function_column_name(name: &str) -> String {
         "bicdb_xmlparse_content" | "bicdb_xmlparse_document" => "xmlparse".to_string(),
         "bicdb_xmlserialize_content" | "bicdb_xmlserialize_document" => "xmlserialize".to_string(),
         "bicdb_xmlexists" => "xmlexists".to_string(),
+        "bicdb_xml_is_document" | "bicdb_xml_is_not_document" => "?column?".to_string(),
         "bicdb_xmlelement" => "xmlelement".to_string(),
         "bicdb_xmlpi" => "xmlpi".to_string(),
         "bicdb_xmlroot" => "xmlroot".to_string(),
@@ -3623,38 +3645,7 @@ pub(crate) fn unix_seconds_to_utc_timestamp(seconds: i64) -> String {
 }
 
 pub(crate) fn sql_random_value() -> f64 {
-    let seed = || {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|duration| duration.as_nanos() as u64)
-            .unwrap_or(0x9e37_79b9_7f4a_7c15);
-        nanos ^ 0xa076_1d64_78bd_642f
-    };
-    let mut current = SQL_RANDOM_STATE.load(std::sync::atomic::Ordering::Relaxed);
-    if current == 0 {
-        let initialized = seed().max(1);
-        let _ = SQL_RANDOM_STATE.compare_exchange(
-            0,
-            initialized,
-            std::sync::atomic::Ordering::Relaxed,
-            std::sync::atomic::Ordering::Relaxed,
-        );
-        current = SQL_RANDOM_STATE.load(std::sync::atomic::Ordering::Relaxed);
-    }
-    loop {
-        let next = current
-            .wrapping_mul(6_364_136_223_846_793_005)
-            .wrapping_add(1_442_695_040_888_963_407);
-        match SQL_RANDOM_STATE.compare_exchange(
-            current,
-            next,
-            std::sync::atomic::Ordering::Relaxed,
-            std::sync::atomic::Ordering::Relaxed,
-        ) {
-            Ok(_) => return ((next >> 11) as f64) / ((1u64 << 53) as f64),
-            Err(observed) => current = observed,
-        }
-    }
+    crate::pg_random::unit()
 }
 
 /// Epoch-day count for a date-only text (`2026-08-22`). `None` for anything
@@ -3916,17 +3907,7 @@ pub(crate) fn interval_literal_value<F>(interval: &Interval, mut eval: F) -> Res
 where
     F: FnMut(&Expr) -> Result<SqlValue>,
 {
-    let mut value = eval(&interval.value)?.to_cell();
-    if let Some(field) = &interval.leading_field {
-        let bare_number = is_valid_numeric_text(value.trim());
-        if bare_number {
-            value = format!(
-                "{} {}",
-                value.trim(),
-                field.to_string().to_ascii_lowercase()
-            );
-        }
-    }
+    let value = eval(&interval.value)?.to_cell();
     let fields = interval.leading_field.as_ref().map(|leading| {
         interval.last_field.as_ref().map_or_else(
             || leading.to_string().to_ascii_uppercase(),
@@ -3944,7 +3925,7 @@ where
             "interval precision must be between 0 and 6",
         ));
     }
-    PgInterval::from_postgres_text(&value)
+    PgInterval::from_postgres_text_with_field_range(&value, fields.as_deref())
         .and_then(|value| value.with_typmod(fields.as_deref(), precision.map(|value| value as u8)))
         .map(|value| SqlValue::String(render_interval(value)))
         .map_err(|error| postgres_interval_input_error(&value, error))
@@ -4493,7 +4474,7 @@ fn pg_integer_type_name(pg_type: &str) -> &'static str {
 
 /// `bit_in`'s message for an invalid digit: the first character that is not
 /// a binary (or, after an `x` prefix, hexadecimal) digit.
-fn bit_input_error(pg_type: &str, text: &str) -> SqlError {
+pub(crate) fn bit_input_error(pg_type: &str, text: &str) -> SqlError {
     let (hex, digits) = match text.chars().next() {
         Some('x' | 'X') => (true, &text[1..]),
         Some('b' | 'B') => (false, &text[1..]),
@@ -4513,7 +4494,7 @@ fn bit_input_error(pg_type: &str, text: &str) -> SqlError {
                 "\"{c}\" is not a valid {} digit",
                 if hex { "hexadecimal" } else { "binary" }
             ),
-            Some(pg_type.to_string()),
+            None,
         ),
         None => SqlError::InvalidTextRepresentation(format!(
             "invalid input syntax for type {pg_type}: \"{text}\""
@@ -4523,7 +4504,7 @@ fn bit_input_error(pg_type: &str, text: &str) -> SqlError {
 
 /// The integer types' input function (`int2in`, `int4in`, `int8in`):
 /// surrounding whitespace, an optional sign, then decimal digits or a
-/// `0x`/`0o`/`0b` prefix, with single underscores between digits. Text in any
+/// `0x`/`0o`/`0b` prefix, with single underscores between digits or after a prefix. Text in any
 /// other form (`34.5`, `1e3`) is invalid input, never rounded.
 pub(crate) fn pg_integer_input(text: &str, pg_type: &str) -> Result<i64> {
     let invalid = || {
@@ -4550,6 +4531,11 @@ pub(crate) fn pg_integer_input(text: &str, pg_type: &str) -> Result<i64> {
         Some("0o") => (8, &body[2..]),
         Some("0b") => (2, &body[2..]),
         _ => (10, body),
+    };
+    let digits = if radix == 10 {
+        digits
+    } else {
+        digits.strip_prefix('_').unwrap_or(digits)
     };
     if digits.is_empty()
         || digits.starts_with('_')

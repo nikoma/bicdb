@@ -353,7 +353,12 @@ impl<'db> SqlEngine<'db> {
                     op,
                     right_type.as_deref(),
                 )?;
-                let collation = comparison_collation(left, right, None)?;
+                let collation = self.slot_comparison_collation(
+                    left,
+                    right,
+                    row.keys(),
+                    [left_type.as_deref(), right_type.as_deref()],
+                )?;
                 let pg_type = if matches!(left_type.as_deref(), Some("inet" | "cidr"))
                     && matches!(right_type.as_deref(), Some("inet" | "cidr"))
                 {
@@ -618,7 +623,12 @@ impl<'db> SqlEngine<'db> {
                     op,
                     right_type.as_deref(),
                 )?;
-                let collation = comparison_collation(left, right, None)?;
+                let collation = self.slot_comparison_collation(
+                    left,
+                    right,
+                    context.column_keys().iter(),
+                    [left_type.as_deref(), right_type.as_deref()],
+                )?;
                 let pg_type = if matches!(left_type.as_deref(), Some("inet" | "cidr"))
                     && matches!(right_type.as_deref(), Some("inet" | "cidr"))
                 {
@@ -715,7 +725,12 @@ impl<'db> SqlEngine<'db> {
                         op,
                         right_type.as_deref(),
                     )?;
-                    let collation = comparison_collation(left, right, None)?;
+                    let collation = self.slot_comparison_collation(
+                        left,
+                        right,
+                        context.column_keys().iter(),
+                        [left_type.as_deref(), right_type.as_deref()],
+                    )?;
                     let left = enforce_integer_value_type(
                         self.eval_slot_row_value(row, context, left)?,
                         left_type.as_deref(),
@@ -1541,6 +1556,20 @@ impl<'db> SqlEngine<'db> {
                         op,
                         right_type.as_deref(),
                     )?;
+                    let collation = self.slot_comparison_collation(
+                        left,
+                        right,
+                        context.column_keys().iter(),
+                        [left_type.as_deref(), right_type.as_deref()],
+                    )?;
+                    if let Some(truth) = compare_values_with_collation(
+                        collation.as_deref(),
+                        &left_value,
+                        op,
+                        &right_value,
+                    ) {
+                        return Ok(truth.map(SqlValue::Bool).unwrap_or(SqlValue::Null));
+                    }
                 }
                 if let Some(value) = eval_range_binary_value_with_db(
                     self.db_ref(),
@@ -1644,13 +1673,12 @@ impl<'db> SqlEngine<'db> {
             Expr::Position { expr, r#in } => eval_position_typed_value(
                 self.eval_slot_row_value(row, context, expr)?,
                 self.eval_slot_row_value(row, context, r#in)?,
-                self.infer_slot_row_expr_type(context.row_lookup.columns(), expr)
-                    .as_deref()
-                    == Some("bytea")
-                    || self
-                        .infer_slot_row_expr_type(context.row_lookup.columns(), r#in)
-                        .as_deref()
-                        == Some("bytea"),
+                [
+                    self.infer_slot_row_expr_type(context.row_lookup.columns(), expr)
+                        .as_deref(),
+                    self.infer_slot_row_expr_type(context.row_lookup.columns(), r#in)
+                        .as_deref(),
+                ],
             ),
             Expr::Substring {
                 expr,
@@ -2784,7 +2812,12 @@ impl<'db> SqlEngine<'db> {
                         op,
                         right_type.as_deref(),
                     )?;
-                    let collation = comparison_collation(left, right, None)?;
+                    let collation = self.slot_comparison_collation(
+                        left,
+                        right,
+                        row.keys(),
+                        [left_type.as_deref(), right_type.as_deref()],
+                    )?;
                     let left = enforce_integer_value_type(
                         self.eval_row_value(row, left)?,
                         left_type.as_deref(),
@@ -3530,9 +3563,10 @@ impl<'db> SqlEngine<'db> {
             Expr::Position { expr, r#in } => eval_position_typed_value(
                 self.eval_row_value(row, expr)?,
                 self.eval_row_value(row, r#in)?,
-                projected_expr_pg_type_with_db(self.db_ref(), expr).as_deref() == Some("bytea")
-                    || projected_expr_pg_type_with_db(self.db_ref(), r#in).as_deref()
-                        == Some("bytea"),
+                [
+                    self.infer_sql_row_expr_type(row, expr).as_deref(),
+                    self.infer_sql_row_expr_type(row, r#in).as_deref(),
+                ],
             ),
             Expr::Substring {
                 expr,
@@ -4583,6 +4617,7 @@ fn function_is_volatile(name: &str) -> bool {
     matches!(
         bare.as_str(),
         "random"
+            | "random_normal"
             | "setseed"
             | "nextval"
             | "setval"

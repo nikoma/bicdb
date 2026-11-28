@@ -579,8 +579,10 @@ pub(crate) fn eval_constant_expr(expr: &Expr) -> Result<SqlValue> {
         Expr::Position { expr, r#in } => eval_position_typed_value(
             eval_constant_expr(expr)?,
             eval_constant_expr(r#in)?,
-            projected_expr_pg_type(expr, None).as_deref() == Some("bytea")
-                || projected_expr_pg_type(r#in, None).as_deref() == Some("bytea"),
+            [
+                projected_expr_pg_type(expr, None).as_deref(),
+                projected_expr_pg_type(r#in, None).as_deref(),
+            ],
         ),
         Expr::Substring {
             expr,

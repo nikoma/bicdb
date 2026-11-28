@@ -379,3 +379,363 @@ fn postgres_xmlbinary_controls_bytea_in_elements_attributes_and_forests() {
         "22023"
     );
 }
+#[test]
+fn xml_fragment_concatenation_preserves_a_single_compatible_declaration() {
+    let (_dir, mut db) = session_db();
+    let mut session = SqlSession::new(&mut db);
+    let result = session.execute(r#"SELECT
+        xmlconcat(NULL,NULL) IS NULL,
+        xmlconcat('<a/>', '<?xml version="1.0" standalone="no"?><b/>'),
+        xmlconcat('<?xml version="1.1"?><a/>', NULL, '<?xml version="1.1" standalone="no"?><b/>'),
+        xmlconcat('<?xml version="1.0" standalone="yes"?><a/>', '<?xml version="1.1" standalone="yes"?><b/>'),
+        '<?xml-stylesheet type="text/xsl" href="style.xsl"?><a/>'::xml,
+        xml_is_well_formed('<?xml version="1.0" standalone="y"?><a/>')"#).unwrap();
+    assert_eq!(
+        result.rows,
+        [[
+            SqlValue::Bool(true),
+            SqlValue::String("<a/><b/>".into()),
+            SqlValue::String("<?xml version=\"1.1\"?><a/><b/>".into()),
+            SqlValue::String("<?xml version=\"1.0\" standalone=\"yes\"?><a/><b/>".into()),
+            SqlValue::String("<?xml-stylesheet type=\"text/xsl\" href=\"style.xsl\"?><a/>".into()),
+            SqlValue::Bool(false),
+        ]]
+    );
+    let aggregate = session
+        .execute(
+            r#"SELECT xmlagg(fragment ORDER BY id) FROM (VALUES
+        (2, '<?xml version="1.1" standalone="no"?><b/>'::xml),
+        (1, '<?xml version="1.1"?><a/>'::xml)
+    ) q(id,fragment)"#,
+        )
+        .unwrap();
+    assert_eq!(
+        aggregate.rows,
+        [[SqlValue::String("<?xml version=\"1.1\"?><a/><b/>".into())]]
+    );
+    for (sql, state, message) in [
+        (
+            "SELECT xmlconcat(1,2)",
+            "42804",
+            "argument of XMLCONCAT must be type xml, not type integer",
+        ),
+        (
+            "SELECT xmlconcat('x'::text)",
+            "42804",
+            "argument of XMLCONCAT must be type xml, not type text",
+        ),
+        (
+            "SELECT xmlconcat('ok','<broken')",
+            "2200N",
+            "invalid XML content",
+        ),
+        ("SELECT xmlcomment('bad-')", "2200S", "invalid XML comment"),
+    ] {
+        let error = session.execute(sql).unwrap_err();
+        assert_eq!(error.sqlstate(), state, "{sql}: {error:?}");
+        assert!(error.to_string().contains(message), "{sql}: {error:?}");
+    }
+}
+#[test]
+fn xmltable_uses_the_selected_node_as_xpath_context() {
+    let (_dir, mut db) = session_db();
+    let mut session = SqlSession::new(&mut db);
+    let result = session
+        .execute(
+            r#"
+        SELECT q.* FROM XMLTABLE(
+            '/doc/item' PASSING '<doc x="ok"><item id="one"><b>txt &amp; x</b><b>c</b></item></doc>'
+            COLUMNS ord FOR ORDINALITY, "Id" text PATH '@id',
+                whole text PATH '.', parent text PATH '../@x',
+                n int PATH 'count(b)', joined text PATH 'concat(@id,"-",../@x)',
+                bs xml PATH 'b', truth integer PATH 'true()',
+                missing text PATH 'absent' DEFAULT 'fallback'
+        ) AS q
+    "#,
+        )
+        .unwrap();
+    assert_eq!(
+        result.columns,
+        ["ord", "Id", "whole", "parent", "n", "joined", "bs", "truth", "missing"]
+    );
+    assert_eq!(
+        result.rows,
+        [[
+            SqlValue::Int(1),
+            SqlValue::String("one".into()),
+            SqlValue::String("txt & xc".into()),
+            SqlValue::String("ok".into()),
+            SqlValue::Int(2),
+            SqlValue::String("one-ok".into()),
+            SqlValue::String("<b>txt &amp; x</b><b>c</b>".into()),
+            SqlValue::Int(1),
+            SqlValue::String("fallback".into()),
+        ]]
+    );
+    assert!(session.execute(
+        "SELECT * FROM XMLTABLE('count(/doc/item)' PASSING '<doc><item/></doc>' COLUMNS v text PATH '.')"
+    ).unwrap().rows.is_empty());
+    assert_eq!(
+        session.execute("SELECT xmltable.* FROM XMLTABLE('/doc/item' PASSING '<doc><item/></doc>' COLUMNS v text DEFAULT 'fallback' PATH 'missing')").unwrap().rows,
+        [[SqlValue::String("fallback".into())]]
+    );
+    for (sql, state, message) in [
+        ("SELECT * FROM XMLTABLE('/doc/item' PASSING '<doc><item><b>x</b><b>y</b></item></doc>' COLUMNS many text PATH 'b')", "21000", "more than one value returned by column XPath expression"),
+        ("SELECT * FROM XMLTABLE('/doc/item' PASSING '<doc><item/></doc>' COLUMNS \"UPPER\" text PATH '@absent' NOT NULL)", "22004", "null is not allowed in column \"UPPER\""),
+        ("SELECT * FROM XMLTABLE('/doc/item' PASSING '<doc/>' COLUMNS v text PATH NULL)", "22004", "column filter expression must not be null"),
+        ("SELECT * FROM XMLTABLE(NULL PASSING '<doc/>' COLUMNS v text)", "22004", "row filter expression must not be null"),
+    ] {
+        let error = session.execute(sql).unwrap_err();
+        assert_eq!(error.sqlstate(), state, "{sql}: {error:?}");
+        assert!(error.to_string().contains(message), "{sql}: {error:?}");
+    }
+}
+#[test]
+fn xmlroot_applies_version_and_standalone_modes_to_the_declaration() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let result = session.execute(
+        r#"SELECT xmlroot(xml '<x/>', VERSION '2.0'),
+                   xmlroot(xml '<x/>', VERSION 123),
+                   xmlroot('<?xml version="1.2" standalone="yes"?> <x/>', VERSION NO VALUE),
+                   xmlroot('<?xml version="1.2" standalone="yes"?> <x/>', VERSION NO VALUE, STANDALONE NO VALUE),
+                   xmlroot(xml '  <x/>  ', VERSION '1.1'),
+                   xmlroot(xmlroot(xml '<x/>', VERSION '1.0'), VERSION '1.1', STANDALONE NO),
+                   xmlroot(NULL, VERSION '1.1')"#,
+    ).unwrap();
+    let expected = [
+        r#"<?xml version="2.0"?><x/>"#,
+        r#"<?xml version="123"?><x/>"#,
+        r#"<?xml version="1.0" standalone="yes"?> <x/>"#,
+        " <x/>",
+        r#"<?xml version="1.1"?>  <x/>  "#,
+        r#"<?xml version="1.1" standalone="no"?><x/>"#,
+    ];
+    assert_eq!(
+        result.rows[0][..6],
+        expected.map(|text| SqlValue::String(text.into()))
+    );
+    assert_eq!(result.rows[0][6], SqlValue::Null);
+    assert_eq!(
+        session
+            .execute("SELECT xmlroot('<x/>'::text, VERSION '1.1')")
+            .unwrap_err()
+            .sqlstate(),
+        "42804"
+    );
+}
+
+#[test]
+fn xml_document_predicates_preserve_postfix_precedence_and_types() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let result = session
+        .execute(
+            "SELECT xml '<a/>' IS DOCUMENT,
+                    xml '<a/><b/>' IS NOT DOCUMENT,
+                    'text' IS DOCUMENT, NULL IS DOCUMENT,
+                    NOT xml '<a/>' IS DOCUMENT,
+                    xml '<a/>' IS DOCUMENT IS NOT NULL,
+                    CASE WHEN false THEN xml '<a/>' ELSE xml 'text' END IS NOT DOCUMENT",
+        )
+        .unwrap();
+    assert_eq!(
+        result.rows,
+        vec![vec![
+            SqlValue::Bool(true),
+            SqlValue::Bool(true),
+            SqlValue::Bool(false),
+            SqlValue::Null,
+            SqlValue::Bool(false),
+            SqlValue::Bool(true),
+            SqlValue::Bool(true),
+        ]]
+    );
+    assert_eq!(result.columns[0], "?column?");
+    assert_eq!(result.column_types[0].as_deref(), Some("bool"));
+    for (sql, state) in [
+        ("SELECT ('x'::text) IS NOT DOCUMENT", "42804"),
+        ("SELECT 'plain <' IS DOCUMENT", "2200N"),
+    ] {
+        assert_eq!(session.execute(sql).unwrap_err().sqlstate(), state, "{sql}");
+    }
+    session
+        .execute(
+            "CREATE TABLE checked_xml(document xml CHECK (document IS DOCUMENT));
+         INSERT INTO checked_xml VALUES ('<a/>')",
+        )
+        .unwrap();
+    assert_eq!(
+        session
+            .execute("INSERT INTO checked_xml VALUES ('plain')")
+            .unwrap_err()
+            .sqlstate(),
+        "23514"
+    );
+}
+
+#[test]
+fn postgres_server_encoding_is_visible_and_read_only() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    assert_eq!(
+        session.execute("SHOW server_encoding").unwrap().rows,
+        vec![vec![SqlValue::String("UTF8".into())]]
+    );
+    assert_eq!(
+        session
+            .execute("SELECT current_setting('server_encoding')")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::String("UTF8".into())]]
+    );
+    for sql in [
+        "SET server_encoding = 'LATIN1'",
+        "SELECT set_config('server_encoding','UTF8',false)",
+        "RESET server_encoding",
+    ] {
+        assert_eq!(
+            session.execute(sql).unwrap_err().sqlstate(),
+            "55P02",
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn xpath_existence_uses_result_cardinality_and_sql_xml_passing_modes() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let result = session
+        .execute(
+            "SELECT xpath_exists('false()', xml '<x/>'),
+                    xpath_exists('count(/missing)', xml '<x/>'),
+                    xpath_exists('/missing', xml '<x/>'),
+                    xmlexists('/x' PASSING BY REF xmlparse(DOCUMENT '<x/>') BY VALUE),
+                    xmlexists('/missing' PASSING xml '<x/>' BY REF)",
+        )
+        .unwrap();
+    assert_eq!(
+        result.rows,
+        vec![vec![
+            SqlValue::Bool(true),
+            SqlValue::Bool(true),
+            SqlValue::Bool(false),
+            SqlValue::Bool(true),
+            SqlValue::Bool(false),
+        ]]
+    );
+    assert_eq!(
+        session
+            .execute("SELECT n FROM XMLTABLE('/x' PASSING BY REF xml '<x/>' BY REF COLUMNS n FOR ORDINALITY)")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(1)]]
+    );
+    assert_eq!(
+        session
+            .execute("SELECT xpath_exists('', xml '<x/>')")
+            .unwrap_err()
+            .sqlstate(),
+        "10608"
+    );
+}
+
+#[test]
+fn postgres_xmltext_and_xml_processing_instructions_preserve_text() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let result = session
+        .execute(
+            r#"SELECT xmltext(NULL), xmltext(''), xmltext(E' '' " & < >\r\n'),
+                       pg_catalog.xmltext('a  '::char(4)), xmlpi(NAME ident, NULL),
+                       xmlpi(NAME IdEnt), xmlpi(NAME "IdEnt", ''),
+                       xmlpi(NAME ident, '  words   ')"#,
+        )
+        .unwrap();
+    assert_eq!(
+        result.rows,
+        vec![vec![
+            SqlValue::Null,
+            SqlValue::String("".into()),
+            SqlValue::String(" ' &quot; &amp; &lt; &gt;&#13;\n".into()),
+            SqlValue::String("a".into()),
+            SqlValue::Null,
+            SqlValue::String("<?ident?>".into()),
+            SqlValue::String("<?IdEnt ?>".into()),
+            SqlValue::String("<?ident words   ?>".into()),
+        ]]
+    );
+    assert_eq!(result.column_types[2].as_deref(), Some("xml"));
+    for (sql, state) in [
+        ("SELECT xmltext(1)", "42883"),
+        ("SELECT xmlpi(NAME Xml)", "2200T"),
+        ("SELECT xmlpi(NAME ident, 'ab?>')", "2200T"),
+    ] {
+        assert_eq!(session.execute(sql).unwrap_err().sqlstate(), state, "{sql}");
+    }
+}
+
+#[test]
+fn xmlparse_and_xmlserialize_preserve_document_and_content_modes() {
+    let (_dir, mut db) = session_db();
+    let mut session = SqlSession::new(&mut db);
+    let value = session
+        .execute(
+            r#"SELECT
+        xmlparse(DOCUMENT '<?xml version="1.0" encoding="LATIN1"?><a>å</a>'),
+        xmlparse(CONTENT ' a ' STRIP WHITESPACE),
+        xmlserialize(DOCUMENT xml '<a><b/><c>text</c></a>' AS text INDENT),
+        xmlserialize(CONTENT xml '<a/><b/>' AS text INDENT),
+        xmlserialize(CONTENT xml '<a>at<b/>b</a>' AS text INDENT),
+        xmlserialize(CONTENT xml '<a><b/></a>' AS text NO INDENT)"#,
+        )
+        .unwrap();
+    assert_eq!(
+        value.rows,
+        [[
+            SqlValue::String("<a>å</a>".into()),
+            SqlValue::String(" a ".into()),
+            SqlValue::String("<a>\n  <b/>\n  <c>text</c>\n</a>".into()),
+            SqlValue::String("<a/>\n<b/>".into()),
+            SqlValue::String("<a>at<b/>b</a>".into()),
+            SqlValue::String("<a><b/></a>".into()),
+        ]]
+    );
+    for (sql, state, message) in [
+        (
+            "SELECT xmlparse(DOCUMENT '<a/><b/>')",
+            "2200M",
+            "invalid XML document",
+        ),
+        (
+            "SELECT xmlserialize(DOCUMENT xml '<a/><b/>' AS text)",
+            "2200L",
+            "not an XML document",
+        ),
+        (
+            "SELECT xmlserialize(CONTENT '<a/>'::text AS text)",
+            "42804",
+            "argument of XMLSERIALIZE must be type xml",
+        ),
+        (
+            "SELECT xmlserialize(CONTENT xml '<a/>' AS integer)",
+            "42846",
+            "cannot cast XMLSERIALIZE result to integer",
+        ),
+        (
+            "SELECT xmlserialize(CONTENT xml '<long/>' AS varchar(4))",
+            "22001",
+            "value too long for type character varying(4)",
+        ),
+    ] {
+        let error = session.execute(sql).unwrap_err();
+        assert_eq!(error.sqlstate(), state, "{sql}: {error:?}");
+        assert!(error.to_string().contains(message), "{sql}: {error:?}");
+    }
+}

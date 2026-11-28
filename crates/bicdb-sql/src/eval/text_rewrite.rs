@@ -345,9 +345,16 @@ pub(crate) fn rewrite_xml_constructor_once(input: &str) -> Option<String> {
             return None;
         }
         let identifier = tokens.get(index + 3)?;
-        let xml_name = input[identifier.start..identifier.end]
-            .trim()
-            .trim_matches('"');
+        let authored_name = input[identifier.start..identifier.end].trim();
+        let xml_name = match authored_name
+            .strip_prefix('"')
+            .and_then(|name| name.strip_suffix('"'))
+        {
+            Some(name) => name.replace("\"\"", "\""),
+            None if name == "xmlpi" => authored_name.to_ascii_lowercase(),
+            None => authored_name.to_owned(),
+        };
+        let xml_name = xml_name.replace('\'', "''");
         let remainder = input[identifier.end..tokens[close_index].start].trim();
         let remainder = remainder.strip_prefix(',').unwrap_or(remainder).trim();
         let internal = if name == "xmlelement" {

@@ -43,7 +43,7 @@ impl SqlEngine<'_> {
         args: &[SqlValue],
     ) -> Result<Option<SqlValue>> {
         let name = name.strip_prefix("pg_catalog.").unwrap_or(name);
-        if !matches!(name, "table_to_xml" | "query_to_xml") {
+        if !matches!(name, "table_to_xml" | "query_to_xml" | "schema_to_xml") {
             return Ok(None);
         }
         let [source, nulls, forest, namespace] = args else {
@@ -59,6 +59,11 @@ impl SqlEngine<'_> {
         let forest = sql_value_bool(forest)
             .ok_or_else(|| SqlError::invalid_parameter_value("tableforest must be boolean"))?;
         let namespace = namespace.to_cell();
+        if name == "schema_to_xml" {
+            return self
+                .map_schema_rows(&source.to_cell(), nulls, forest, &namespace)
+                .map(|value| Some(SqlValue::String(value)));
+        }
         let (query, document_name, row_name) = if name == "table_to_xml" {
             let oid = i64::from(oid_alias_numeric_value(self.db_ref(), "regclass", source)?);
             let relation = resolve_regclass_name(self.db_ref(), oid)?.ok_or_else(|| {
@@ -85,8 +90,78 @@ impl SqlEngine<'_> {
             (source.to_cell(), "table".to_string(), "row".to_string())
         };
 
+        let result = self.xml_query_result(&query)?;
+        crate::xml::map_query_rows(
+            &result,
+            &document_name,
+            &row_name,
+            nulls,
+            forest,
+            Some(&namespace),
+            || self.check_cancellation(),
+        )
+        .map(|value| Some(SqlValue::String(value)))
+    }
+
+    fn map_schema_rows(
+        &self,
+        schema: &str,
+        nulls: bool,
+        forest: bool,
+        namespace: &str,
+    ) -> Result<String> {
+        let label = pg_quote_literal(schema);
+        let found = self.xml_query_result(&format!(
+            "SELECT oid FROM pg_catalog.pg_namespace WHERE nspname = {label}"
+        ))?;
+        if found.rows.is_empty() {
+            return Err(SqlError::data_exception_public(
+                "3F000",
+                format!("schema \"{schema}\" does not exist"),
+                None,
+            ));
+        }
+        // Partition roots and sequences are absent from PostgreSQL's schema
+        // map. A table-level SELECT grant determines table membership.
+        let tables = self.xml_query_result(&format!(
+            "SELECT c.relname
+               FROM pg_catalog.pg_class AS c
+               JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+              WHERE n.nspname = {label}
+                AND c.relkind IN ('r', 'v', 'm', 'f')
+                AND pg_catalog.has_table_privilege(c.oid, 'SELECT')
+              ORDER BY c.relname"
+        ))?;
+        let source_schema = pg_quote_ident(schema);
+        let mut contents = String::new();
+        for row in tables.rows {
+            self.check_cancellation()?;
+            let table = row[0].to_cell();
+            let source = pg_quote_ident(&table);
+            let result =
+                self.xml_query_result(&format!("SELECT * FROM {source_schema}.{source}"))?;
+            let row_name = if forest { &table } else { "row" };
+            contents.push_str(&crate::xml::map_query_rows(
+                &result,
+                &table,
+                row_name,
+                nulls,
+                forest,
+                None,
+                || self.check_cancellation(),
+            )?);
+            contents.push('\n');
+        }
+        Ok(crate::xml::wrap_xml_mapping(
+            &contents,
+            schema,
+            Some(namespace),
+        ))
+    }
+
+    fn xml_query_result(&self, query: &str) -> Result<SqlResult> {
         let mut result = None;
-        for command in split_sql_statements(&query) {
+        for command in split_sql_statements(query) {
             let statements = parse_statements(&command)?;
             if let ControlFlow::Break(operation) = statements.visit(&mut ReadOnlyXmlQuery) {
                 let operation = match statements.as_slice() {
@@ -140,15 +215,6 @@ impl SqlEngine<'_> {
         for pg_type in result.column_types.iter_mut().flatten() {
             *pg_type = common_type_base_name(self.db_ref(), pg_type)?;
         }
-        crate::xml::map_query_rows(
-            &result,
-            &document_name,
-            &row_name,
-            nulls,
-            forest,
-            &namespace,
-            || self.check_cancellation(),
-        )
-        .map(|value| Some(SqlValue::String(value)))
+        Ok(result)
     }
 }

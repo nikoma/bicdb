@@ -1114,3 +1114,41 @@ fn xml_constructors_infer_names_from_column_references() {
         );
     }
 }
+
+#[test]
+fn schema_xml_maps_readable_relations_in_name_order() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            r#"CREATE SCHEMA "xml Set";
+               CREATE TABLE "xml Set".z (a int);
+               INSERT INTO "xml Set".z VALUES (NULL);
+               CREATE TABLE "xml Set".a (b text);
+               INSERT INTO "xml Set".a VALUES ('&');
+               CREATE VIEW "xml Set".m AS SELECT a FROM "xml Set".z;
+               CREATE SEQUENCE "xml Set".s"#,
+        )
+        .unwrap();
+    let result = session
+        .execute(r#"SELECT schema_to_xml('xml Set', true, false, 'urn:x')"#)
+        .unwrap();
+    assert_eq!(
+        result.rows[0][0].to_cell(),
+        concat!(
+            "<xml_x0020_Set xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns=\"urn:x\">\n\n",
+            "<a>\n\n<row>\n  <b>&amp;</b>\n</row>\n\n</a>\n\n",
+            "<m>\n\n<row>\n  <a xsi:nil=\"true\"/>\n</row>\n\n</m>\n\n",
+            "<z>\n\n<row>\n  <a xsi:nil=\"true\"/>\n</row>\n\n</z>\n\n",
+            "</xml_x0020_Set>\n",
+        )
+    );
+    assert_eq!(
+        session
+            .execute("SELECT schema_to_xml('xml_schema_absent', true, false, '')")
+            .unwrap_err()
+            .sqlstate(),
+        "3F000"
+    );
+}

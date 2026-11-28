@@ -229,7 +229,7 @@ pub(crate) fn eval_db_catalog_function_value_with_engine(
     query_engine: Option<&SqlEngine<'_>>,
 ) -> Result<Option<SqlValue>> {
     let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(name);
-    if matches!(bare_name, "table_to_xml" | "query_to_xml") {
+    if matches!(bare_name, "table_to_xml" | "query_to_xml" | "schema_to_xml") {
         if let Some(engine) = query_engine {
             return engine.eval_xml_mapping(bare_name, args);
         }

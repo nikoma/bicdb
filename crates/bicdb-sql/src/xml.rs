@@ -1701,30 +1701,19 @@ pub(crate) fn map_query_rows(
     row_name: &str,
     nulls: bool,
     forest: bool,
-    namespace: &str,
+    namespace: Option<&str>,
     check_cancellation: impl Fn() -> Result<()>,
 ) -> Result<String> {
     use std::fmt::Write as _;
 
-    let document = map_sql_identifier_to_xml_name(document_name, true);
     let row_name = map_sql_identifier_to_xml_name(row_name, true);
     let columns = result
         .columns
         .iter()
         .map(|label| map_sql_identifier_to_xml_name(label, true))
         .collect::<Vec<_>>();
-    let namespace = if namespace.is_empty() {
-        String::new()
-    } else {
-        format!(" xmlns=\"{namespace}\"")
-    };
-    let attributes =
-        format!(" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"{namespace}",);
-
+    let attributes = xml_mapping_attributes(namespace);
     let mut output = String::new();
-    if !forest {
-        write!(output, "<{document}{attributes}>\n\n").unwrap();
-    }
     for (index, row) in result.rows.iter().enumerate() {
         if index % 1024 == 0 {
             check_cancellation()?;
@@ -1744,10 +1733,32 @@ pub(crate) fn map_query_rows(
         }
         write!(output, "</{row_name}>\n\n").unwrap();
     }
-    if !forest {
-        writeln!(output, "</{document}>").unwrap();
+    if forest {
+        Ok(output)
+    } else {
+        Ok(wrap_xml_mapping(&output, document_name, namespace))
     }
-    Ok(output)
+}
+
+fn xml_mapping_attributes(namespace: Option<&str>) -> String {
+    let Some(namespace) = namespace else {
+        return String::new();
+    };
+    let mut attributes = " xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"".to_string();
+    if !namespace.is_empty() {
+        attributes.push_str(&format!(" xmlns=\"{namespace}\""));
+    }
+    attributes
+}
+
+pub(crate) fn wrap_xml_mapping(
+    contents: &str,
+    document_name: &str,
+    namespace: Option<&str>,
+) -> String {
+    let document = map_sql_identifier_to_xml_name(document_name, true);
+    let attributes = xml_mapping_attributes(namespace);
+    format!("<{document}{attributes}>\n\n{contents}</{document}>\n")
 }
 
 pub(crate) fn xml_function_pg_type(name: &str) -> Option<&'static str> {
@@ -1772,6 +1783,7 @@ pub(crate) fn xml_function_pg_type(name: &str) -> Option<&'static str> {
         "xmlconcat"
         | "table_to_xml"
         | "query_to_xml"
+        | "schema_to_xml"
         | "xmlcomment"
         | "xmltext"
         | "xml_in"

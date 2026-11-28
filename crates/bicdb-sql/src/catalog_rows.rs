@@ -5138,14 +5138,14 @@ pub(crate) fn pg_policies_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlVal
                     "qual",
                     policy
                         .using_expr
-                        .map(SqlValue::String)
+                        .map(policy_catalog_expression)
                         .unwrap_or(SqlValue::Null),
                 ),
                 (
                     "with_check",
                     policy
                         .check_expr
-                        .map(SqlValue::String)
+                        .map(policy_catalog_expression)
                         .unwrap_or(SqlValue::Null),
                 ),
                 ("bicdb_enforced", SqlValue::Bool(policy.enforced)),
@@ -5153,6 +5153,23 @@ pub(crate) fn pg_policies_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlVal
         }
     }
     Ok(rows)
+}
+
+fn policy_catalog_expression(expression: String) -> SqlValue {
+    // The stored expression has an outer wrapper for reparsing. PostgreSQL's
+    // deparser displays boolean literal expressions without that wrapper.
+    let literal =
+        expression.trim_matches(|ch: char| ch.is_ascii_whitespace() || ch == '(' || ch == ')');
+    let displayed = if literal.eq_ignore_ascii_case("true") {
+        "true"
+    } else if literal.eq_ignore_ascii_case("false") {
+        "false"
+    } else if literal.eq_ignore_ascii_case("null") {
+        "NULL::boolean"
+    } else {
+        return SqlValue::String(expression);
+    };
+    SqlValue::String(displayed.into())
 }
 
 pub(crate) fn pg_index_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {

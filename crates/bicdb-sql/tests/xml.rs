@@ -436,3 +436,53 @@ fn xml_fragment_concatenation_preserves_a_single_compatible_declaration() {
         assert!(error.to_string().contains(message), "{sql}: {error:?}");
     }
 }
+#[test]
+fn xmltable_uses_the_selected_node_as_xpath_context() {
+    let (_dir, mut db) = session_db();
+    let mut session = SqlSession::new(&mut db);
+    let result = session
+        .execute(
+            r#"
+        SELECT q.* FROM XMLTABLE(
+            '/doc/item' PASSING '<doc x="ok"><item id="one"><b>txt &amp; x</b><b>c</b></item></doc>'
+            COLUMNS ord FOR ORDINALITY, "Id" text PATH '@id',
+                whole text PATH '.', parent text PATH '../@x',
+                n int PATH 'count(b)', joined text PATH 'concat(@id,"-",../@x)',
+                bs xml PATH 'b', truth integer PATH 'true()',
+                missing text PATH 'absent' DEFAULT 'fallback'
+        ) AS q
+    "#,
+        )
+        .unwrap();
+    assert_eq!(
+        result.columns,
+        ["ord", "Id", "whole", "parent", "n", "joined", "bs", "truth", "missing"]
+    );
+    assert_eq!(
+        result.rows,
+        [[
+            SqlValue::Int(1),
+            SqlValue::String("one".into()),
+            SqlValue::String("txt & xc".into()),
+            SqlValue::String("ok".into()),
+            SqlValue::Int(2),
+            SqlValue::String("one-ok".into()),
+            SqlValue::String("<b>txt &amp; x</b><b>c</b>".into()),
+            SqlValue::Int(1),
+            SqlValue::String("fallback".into()),
+        ]]
+    );
+    assert!(session.execute(
+        "SELECT * FROM XMLTABLE('count(/doc/item)' PASSING '<doc><item/></doc>' COLUMNS v text PATH '.')"
+    ).unwrap().rows.is_empty());
+    for (sql, state, message) in [
+        ("SELECT * FROM XMLTABLE('/doc/item' PASSING '<doc><item><b>x</b><b>y</b></item></doc>' COLUMNS many text PATH 'b')", "21000", "more than one value returned by column XPath expression"),
+        ("SELECT * FROM XMLTABLE('/doc/item' PASSING '<doc><item/></doc>' COLUMNS \"UPPER\" text PATH '@absent' NOT NULL)", "22004", "null is not allowed in column \"UPPER\""),
+        ("SELECT * FROM XMLTABLE('/doc/item' PASSING '<doc/>' COLUMNS v text PATH NULL)", "22004", "column filter expression must not be null"),
+        ("SELECT * FROM XMLTABLE(NULL PASSING '<doc/>' COLUMNS v text)", "22004", "row filter expression must not be null"),
+    ] {
+        let error = session.execute(sql).unwrap_err();
+        assert_eq!(error.sqlstate(), state, "{sql}: {error:?}");
+        assert!(error.to_string().contains(message), "{sql}: {error:?}");
+    }
+}

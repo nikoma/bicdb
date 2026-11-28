@@ -1,7 +1,7 @@
 use serde_json::Value as JsonValue;
 use std::collections::BTreeMap;
 use sxd_document::{dom, parser};
-use sxd_xpath::{nodeset::Node, Context, Factory, Value as XPathValue};
+use sxd_xpath::{nodeset::Node, Context, Factory, Value as XPathValue, XPath};
 
 use crate::{Result, SqlError, SqlValue};
 
@@ -565,10 +565,27 @@ fn xpath_results(
 ) -> Result<Vec<String>> {
     let package = parse_xpath_document(xml)?;
     let document = package.as_document();
+    let xpath = compile_xpath(expression)?;
+    let context = xpath_context(namespaces);
+    let value = evaluate_xpath(&xpath, &context, document.root().into())?;
+    Ok(match value {
+        XPathValue::Nodeset(nodes) => nodes
+            .document_order()
+            .into_iter()
+            .map(xpath_node_xml)
+            .collect(),
+        other => vec![other.string()],
+    })
+}
+
+fn compile_xpath(expression: &str) -> Result<XPath> {
     check_nesting_budget(expression, &['(', '['], &[')', ']'], "XPath expression")?;
-    let xpath = Factory::new().build(expression).map_err(|error| {
+    Factory::new().build(expression).map_err(|error| {
         SqlError::invalid_parameter_value(format!("invalid XPath expression: {error}"))
-    })?;
+    })
+}
+
+fn xpath_context<'d>(namespaces: Option<&JsonValue>) -> Context<'d> {
     let mut context = Context::new();
     if let Some(JsonValue::Array(entries)) = namespaces {
         for entry in entries {
@@ -579,17 +596,182 @@ fn xpath_results(
             }
         }
     }
-    let value = xpath.evaluate(&context, document.root()).map_err(|error| {
+    context
+}
+
+fn evaluate_xpath<'d>(
+    xpath: &XPath,
+    context: &Context<'d>,
+    node: Node<'d>,
+) -> Result<XPathValue<'d>> {
+    xpath.evaluate(context, node).map_err(|error| {
         SqlError::invalid_parameter_value(format!("XPath evaluation failed: {error}"))
-    })?;
-    Ok(match value {
-        XPathValue::Nodeset(nodes) => nodes
-            .document_order()
-            .into_iter()
-            .map(xpath_node_xml)
-            .collect(),
-        other => vec![other.string()],
     })
+}
+
+struct XmlTableColumn<'a> {
+    name: &'a str,
+    xpath: Option<XPath>,
+    xml: bool,
+    numeric: bool,
+    required: bool,
+    default: JsonValue,
+}
+
+fn xml_table_columns<'a>(
+    specs: &'a [JsonValue],
+    args: &[SqlValue],
+) -> Result<Vec<XmlTableColumn<'a>>> {
+    let mut columns = Vec::with_capacity(specs.len());
+    let mut seen_ordinality = false;
+    for spec in specs {
+        let Some(name) = spec.get("name").and_then(JsonValue::as_str) else {
+            continue;
+        };
+        let flag = |key| spec.get(key).and_then(JsonValue::as_bool).unwrap_or(false);
+        let argument = |key| {
+            spec.get(key)
+                .and_then(JsonValue::as_u64)
+                .and_then(|index| args.get(index as usize))
+        };
+        let xpath = if flag("ordinality") {
+            if std::mem::replace(&mut seen_ordinality, true) {
+                return Err(SqlError::data_exception_public(
+                    "42601",
+                    "only one FOR ORDINALITY column is allowed",
+                    None,
+                ));
+            }
+            None
+        } else {
+            let path = match argument("path_arg") {
+                Some(SqlValue::Null) => {
+                    return Err(SqlError::with_detail(
+                        SqlError::data_exception_public(
+                            "22004",
+                            "column filter expression must not be null",
+                            None,
+                        ),
+                        format!("Filter for column \"{name}\" is null."),
+                    ));
+                }
+                Some(path) => path.to_cell(),
+                None => name.to_owned(),
+            };
+            Some(compile_xpath(&path)?)
+        };
+        columns.push(XmlTableColumn {
+            name,
+            xpath,
+            xml: flag("xml"),
+            numeric: flag("numeric"),
+            required: flag("required"),
+            default: argument("default_arg").map_or(JsonValue::Null, sql_value_json),
+        });
+    }
+    Ok(columns)
+}
+
+fn xml_table_column_value<'d>(
+    column: &XmlTableColumn<'_>,
+    context: &Context<'d>,
+    row: Node<'d>,
+    ordinal: usize,
+) -> Result<JsonValue> {
+    let Some(xpath) = &column.xpath else {
+        return Ok(JsonValue::Number(ordinal.into()));
+    };
+    let value = match evaluate_xpath(xpath, context, row)? {
+        XPathValue::Nodeset(nodes) if nodes.size() == 0 => column.default.clone(),
+        XPathValue::Nodeset(nodes) if column.xml => JsonValue::String(
+            nodes
+                .document_order()
+                .into_iter()
+                .map(xpath_node_xml)
+                .collect(),
+        ),
+        XPathValue::Nodeset(nodes) => {
+            if nodes.size() > 1 {
+                return Err(SqlError::data_exception_public(
+                    "21000",
+                    "more than one value returned by column XPath expression",
+                    None,
+                ));
+            }
+            let node = nodes.document_order()[0];
+            JsonValue::String(node.string_value())
+        }
+        XPathValue::Boolean(value) if column.numeric => JsonValue::Number(u64::from(value).into()),
+        value if column.xml => JsonValue::String(escape_text(&value.string())),
+        value => JsonValue::String(value.string()),
+    };
+    if column.required && value.is_null() {
+        return Err(SqlError::data_exception_public(
+            "22004",
+            format!("null is not allowed in column \"{}\"", column.name),
+            None,
+        ));
+    }
+    Ok(value)
+}
+
+fn xml_table_rows(args: &[SqlValue]) -> Result<SqlValue> {
+    if args.len() < 4 || matches!(args[0], SqlValue::Null) {
+        return Ok(SqlValue::Null);
+    }
+    if matches!(args[1], SqlValue::Null) {
+        return Err(SqlError::data_exception_public(
+            "22004",
+            "row filter expression must not be null",
+            None,
+        ));
+    }
+    let document = xml_text(&args[0]);
+    let row_path = xml_text(&args[1]);
+    let spec_json = match &args[2] {
+        SqlValue::Json(value) => value.as_ref().clone(),
+        value => serde_json::from_str::<JsonValue>(&value.to_cell())?,
+    };
+    let specs = spec_json.as_array().map_or(&[][..], Vec::as_slice);
+    let namespaces = match &args[3] {
+        SqlValue::Json(value) => Some(value.as_ref()),
+        _ => None,
+    };
+    if namespaces
+        .and_then(JsonValue::as_array)
+        .is_some_and(|entries| {
+            entries
+                .iter()
+                .any(|entry| entry.get(0).and_then(JsonValue::as_str) == Some(""))
+        })
+    {
+        return Err(SqlError::data_exception_public(
+            "0A000",
+            "DEFAULT namespace is not supported",
+            None,
+        ));
+    }
+    let columns = xml_table_columns(specs, args)?;
+    let package = parse_xpath_document(&document)?;
+    let context = xpath_context(namespaces);
+    let xpath = compile_xpath(&row_path)?;
+    let XPathValue::Nodeset(rows) =
+        evaluate_xpath(&xpath, &context, package.as_document().root().into())?
+    else {
+        return Ok(SqlValue::Json(JsonValue::Array(Vec::new()).into()));
+    };
+    let mut output = Vec::with_capacity(rows.size());
+    for (index, row) in rows.document_order().into_iter().enumerate() {
+        let mut values = serde_json::Map::new();
+        for column in &columns {
+            values.insert(
+                column.name.to_owned(),
+                xml_table_column_value(column, &context, row, index + 1)?,
+            );
+        }
+        output.push(JsonValue::Object(values));
+    }
+    Ok(SqlValue::Json(JsonValue::Array(output).into()))
 }
 
 fn sql_value_json(value: &SqlValue) -> JsonValue {
@@ -932,90 +1114,7 @@ pub(crate) fn eval_xml_function_value(
                 )
             }
         }
-        "bicdb_xmltable_json" => {
-            let required_null = args.get(..4).is_none_or(|required| {
-                required.iter().any(|value| matches!(value, SqlValue::Null))
-            });
-            if required_null {
-                SqlValue::Null
-            } else {
-                let document = xml_text(&args[0]);
-                let row_path = xml_text(&args[1]);
-                let specs = match &args[2] {
-                    SqlValue::Json(value) => value.as_array().cloned().unwrap_or_default(),
-                    value => serde_json::from_str::<JsonValue>(&value.to_cell())?
-                        .as_array()
-                        .cloned()
-                        .unwrap_or_default(),
-                };
-                let namespaces = args.get(3).and_then(|value| match value {
-                    SqlValue::Json(value) => Some(&**value),
-                    _ => None,
-                });
-                let rows = xpath_results(&document, &row_path, namespaces)?;
-                let mut output = Vec::with_capacity(rows.len());
-                for (ordinality, row_xml) in rows.into_iter().enumerate() {
-                    let mut object = serde_json::Map::new();
-                    for spec in &specs {
-                        let Some(name) = spec.get("name").and_then(JsonValue::as_str) else {
-                            continue;
-                        };
-                        if spec.get("ordinality").and_then(JsonValue::as_bool) == Some(true) {
-                            object.insert(
-                                name.to_string(),
-                                JsonValue::Number((ordinality + 1).into()),
-                            );
-                            continue;
-                        }
-                        let path_arg = spec
-                            .get("path_arg")
-                            .and_then(JsonValue::as_u64)
-                            .unwrap_or(0) as usize;
-                        let path = args
-                            .get(path_arg)
-                            .map(xml_text)
-                            .unwrap_or_else(|| name.to_string());
-                        let relative_path = if path.starts_with('/') {
-                            path
-                        } else {
-                            format!("/*/{path}")
-                        };
-                        let raw_values = xpath_results(&row_xml, &relative_path, namespaces)?;
-                        let values = if raw_values.is_empty()
-                            || spec.get("xml").and_then(JsonValue::as_bool) == Some(true)
-                        {
-                            raw_values
-                        } else {
-                            xpath_results(
-                                &row_xml,
-                                &format!("string({relative_path})"),
-                                namespaces,
-                            )?
-                        };
-                        if values.len() > 1 {
-                            return Err(SqlError::data_exception_public(
-                                "21000",
-                                "more than one value returned by XMLTABLE column expression",
-                                None,
-                            ));
-                        }
-                        let value = values
-                            .first()
-                            .map(|value| JsonValue::String(value.clone()))
-                            .or_else(|| {
-                                spec.get("default_arg")
-                                    .and_then(JsonValue::as_u64)
-                                    .and_then(|index| args.get(index as usize))
-                                    .map(sql_value_json)
-                            })
-                            .unwrap_or(JsonValue::Null);
-                        object.insert(name.to_string(), value);
-                    }
-                    output.push(JsonValue::Object(object));
-                }
-                SqlValue::Json(JsonValue::Array(output).into())
-            }
-        }
+        "bicdb_xmltable_json" => return xml_table_rows(args).map(Some),
         "xml_in" | "bicdb_xmlparse_content" | "bicdb_xmlparse_document" => {
             if strict_null {
                 SqlValue::Null

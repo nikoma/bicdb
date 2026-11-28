@@ -2173,10 +2173,12 @@ pub(crate) fn strip_case_insensitive_keyword<'a>(value: &'a str, keyword: &str) 
 
 pub(crate) fn rewrite_xmltable_once(input: &str) -> Option<String> {
     let tokens = json_predicate_tokens(input);
-    let (index, function) = tokens
-        .iter()
-        .enumerate()
-        .find(|(_, token)| token.word.as_deref() == Some("xmltable"))?;
+    let (index, function) = tokens.iter().enumerate().find(|(index, token)| {
+        token.word.as_deref() == Some("xmltable")
+            && tokens
+                .get(index + 1)
+                .is_some_and(|open| open.depth == token.depth && open.symbol == Some(b'('))
+    })?;
     let open = tokens
         .get(index + 1)
         .filter(|token| token.symbol == Some(b'('))?;
@@ -2293,15 +2295,21 @@ pub(crate) fn rewrite_xmltable_once(input: &str) -> Option<String> {
             .filter(|token| token.start >= start && token.end <= end && token.depth == inner_depth)
             .collect::<Vec<_>>();
         let name_token = *segment_tokens.first()?;
-        let column_name = input[name_token.start..name_token.end]
-            .trim()
-            .trim_matches('"');
-        let for_ordinality = segment_tokens
-            .iter()
-            .any(|token| token.word.as_deref() == Some("ordinality"));
+        let authored_name = input[name_token.start..name_token.end].trim();
+        let column_name = match authored_name
+            .strip_prefix('"')
+            .and_then(|name| name.strip_suffix('"'))
+        {
+            Some(name) => name.replace("\"\"", "\""),
+            None => authored_name.to_ascii_lowercase(),
+        };
+        let column_sql = format!("\"{}\"", column_name.replace('"', "\"\""));
+        let for_ordinality = segment_tokens.windows(2).any(|pair| {
+            pair[0].word.as_deref() == Some("for") && pair[1].word.as_deref() == Some("ordinality")
+        });
         if for_ordinality {
             specs.push(serde_json::json!({"name": column_name, "ordinality": true}));
-            aliases.push(format!("{column_name} int"));
+            aliases.push(format!("{column_sql} int"));
             continue;
         }
         let boundary = segment_tokens
@@ -2321,31 +2329,49 @@ pub(crate) fn rewrite_xmltable_once(input: &str) -> Option<String> {
             .iter()
             .find(|token| token.word.as_deref() == Some("default"));
         let not_token = segment_tokens
-            .iter()
-            .find(|token| token.word.as_deref() == Some("not"));
-        let path_end = default_token
-            .map(|token| token.start)
-            .or_else(|| not_token.map(|token| token.start))
-            .unwrap_or(end);
+            .windows(2)
+            .find(|pair| {
+                pair[0].word.as_deref() == Some("not") && pair[1].word.as_deref() == Some("null")
+            })
+            .map(|pair| pair[0]);
+        let option_end = |start| {
+            [path_token.copied(), default_token.copied(), not_token]
+                .into_iter()
+                .flatten()
+                .map(|token| token.start)
+                .filter(|position| *position > start)
+                .min()
+                .unwrap_or(end)
+        };
         let path_expression = path_token
-            .map(|token| input[token.end..path_end].trim().to_string())
-            .unwrap_or_else(|| format!("'{column_name}'"));
+            .map(|token| input[token.end..option_end(token.start)].trim().to_string())
+            .unwrap_or_else(|| format!("'{}'", column_name.replace('\'', "''")));
         let path_arg = 4 + extra_arguments.len();
         extra_arguments.push(path_expression);
+        let pg_type = Parser::new(&PostgreSqlDialect {})
+            .try_with_sql(data_type)
+            .ok()
+            .and_then(|mut parser| parser.parse_data_type().ok())
+            .and_then(|ty| pg_type_from_data_type(&ty).ok())
+            .map(|(kind, _)| kind);
         let mut spec = serde_json::json!({
             "name": column_name,
             "path_arg": path_arg,
-            "xml": data_type.trim().eq_ignore_ascii_case("xml")
+            "xml": pg_type.as_deref() == Some("xml"),
+            "numeric": pg_type.as_deref().is_some_and(|kind| {
+                matches!(kind, "int2" | "int4" | "int8" | "numeric" | "float4" | "float8")
+            }),
+            "required": not_token.is_some()
         });
         if let Some(default_token) = default_token {
-            let default_end = not_token.map(|token| token.start).unwrap_or(end);
+            let default_end = option_end(default_token.start);
             let expression = input[default_token.end..default_end].trim();
             let default_arg = 4 + extra_arguments.len();
             extra_arguments.push(expression.to_string());
             spec["default_arg"] = serde_json::json!(default_arg);
         }
         specs.push(spec);
-        aliases.push(format!("{column_name} {data_type}"));
+        aliases.push(format!("{column_sql} {data_type}"));
     }
     let spec = serde_json::to_string(&specs).ok()?.replace('\'', "''");
     let extras = if extra_arguments.is_empty() {
@@ -2353,12 +2379,28 @@ pub(crate) fn rewrite_xmltable_once(input: &str) -> Option<String> {
     } else {
         format!(", {}", extra_arguments.join(", "))
     };
+    let after = tokens
+        .get(close_index + 1)
+        .filter(|token| token.depth == function.depth);
+    let alias_token = match after.and_then(|token| token.word.as_deref()) {
+        Some("as") => tokens.get(close_index + 2),
+        Some(
+            "where" | "join" | "inner" | "left" | "right" | "full" | "cross" | "natural" | "on"
+            | "using" | "group" | "order" | "limit" | "offset" | "fetch" | "for" | "window"
+            | "having" | "union" | "intersect" | "except" | "qualify",
+        ) => None,
+        _ => after
+            .filter(|token| token.word.is_some() || input[token.start..token.end].starts_with('"')),
+    };
+    let (alias, end) = alias_token.map_or(("\"xmltable\"", tokens[close_index].end), |token| {
+        (&input[token.start..token.end], token.end)
+    });
     let replacement = format!(
-        "jsonb_to_recordset(bicdb_xmltable_json(({document}), ({row_path}), '{spec}'::jsonb, {namespace_expression}{extras})) AS xmltable({})",
+        "jsonb_to_recordset(bicdb_xmltable_json(({document}), ({row_path}), '{spec}'::jsonb, {namespace_expression}{extras})) AS {alias}({})",
         aliases.join(", ")
     );
     let mut output = input.to_string();
-    output.replace_range(function.start..tokens[close_index].end, &replacement);
+    output.replace_range(function.start..end, &replacement);
     Some(output)
 }
 

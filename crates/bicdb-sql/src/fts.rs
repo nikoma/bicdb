@@ -3454,6 +3454,19 @@ fn sql_value_number_array(value: &SqlValue) -> Result<Vec<f32>> {
     }
 }
 
+pub(crate) fn update_trigger_oid(name: &str) -> Option<i64> {
+    match name.strip_prefix("pg_catalog.").unwrap_or(name) {
+        "tsvector_update_trigger" => Some(3752),
+        "tsvector_update_trigger_column" => Some(3753),
+        _ => None,
+    }
+}
+
+pub(crate) fn update_trigger_vector(config: &SqlValue, document: &str) -> Result<String> {
+    let config = TextSearchConfig::parse(config)?;
+    Ok(to_tsvector(&config, document).to_postgres_text())
+}
+
 pub(crate) fn eval_fts_function_value(
     name: &str,
     args: &[SqlValue],
@@ -3462,6 +3475,13 @@ pub(crate) fn eval_fts_function_value(
     let name = name.strip_prefix("pg_catalog.").unwrap_or(name);
     if name == "ts_lexize" && args.len() == 2 {
         return ts_lexize(&args[0], &args[1]).map(Some);
+    }
+    if update_trigger_oid(name).is_some() && args.is_empty() {
+        return Err(SqlError::data_exception_public(
+            "XX000",
+            "tsvector_update_trigger: not fired by trigger manager",
+            None,
+        ));
     }
     let first_type = arg_types
         .and_then(|types| types.first())
@@ -3878,6 +3898,7 @@ pub(crate) fn fts_function_pg_type(
 ) -> Option<&'static str> {
     match name.strip_prefix("pg_catalog.").unwrap_or(name) {
         "to_tsvector" | "strip" => Some("tsvector"),
+        "tsvector_update_trigger" | "tsvector_update_trigger_column" => Some("trigger"),
         "to_tsquery"
         | "plainto_tsquery"
         | "phraseto_tsquery"

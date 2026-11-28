@@ -4018,11 +4018,16 @@ pub(crate) fn pg_trigger_rows_filtered(
                 ("tgname", SqlValue::String(trigger.name.clone())),
                 (
                     "tgfoid",
-                    SqlValue::Int(named_routine_oid(
-                        db,
-                        RoutineKind::Function,
-                        &trigger.function_name,
-                    )?),
+                    SqlValue::Int(
+                        match crate::fts::update_trigger_oid(&trigger.function_name) {
+                            Some(oid) if trigger.function_name.starts_with("pg_catalog.") => oid,
+                            _ => named_routine_oid(
+                                db,
+                                RoutineKind::Function,
+                                &trigger.function_name,
+                            )?,
+                        },
+                    ),
                 ),
                 (
                     "tgtype",

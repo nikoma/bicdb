@@ -229,6 +229,12 @@ pub(crate) fn eval_db_catalog_function_value_with_engine(
     query_engine: Option<&SqlEngine<'_>>,
 ) -> Result<Option<SqlValue>> {
     let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(name);
+    if matches!(bare_name, "table_to_xml" | "query_to_xml") {
+        if let Some(engine) = query_engine {
+            return engine.eval_xml_mapping(bare_name, args);
+        }
+    }
+
     if bare_name == "pg_partition_ancestors" && args.len() == 1 {
         if let Some(oid) =
             sql_value_i64(&args[0]).or_else(|| args[0].to_cell().trim().parse::<i64>().ok())

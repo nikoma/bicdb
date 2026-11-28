@@ -37,7 +37,7 @@ impl Visitor for ReadOnlyXmlQuery {
 }
 
 impl SqlEngine<'_> {
-    pub(super) fn eval_xml_mapping(
+    pub(crate) fn eval_xml_mapping(
         &self,
         name: &str,
         args: &[SqlValue],

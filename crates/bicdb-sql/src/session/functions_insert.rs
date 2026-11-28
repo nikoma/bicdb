@@ -1032,6 +1032,9 @@ impl<'db> SqlSession<'db> {
             return self.execute_insert_into_view(insert, view, ctes);
         }
         let schema = load_schema_shared(self.db_ref(), &table)?;
+        if let Some(schema) = schema.as_deref() {
+            super::conflict_scope::validate_excluded_references(insert, &table, schema)?;
+        }
         if let (Some(schema), Some(OnInsert::OnConflict(conflict))) =
             (schema.as_deref(), &insert.on)
         {

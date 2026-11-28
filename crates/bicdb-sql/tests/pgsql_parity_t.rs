@@ -1058,3 +1058,61 @@ fn postgres_upsert_column_inference_requires_a_matching_unique_key() {
         "42P10"
     );
 }
+
+#[test]
+fn postgres_upsert_excluded_is_bound_only_in_the_update_action() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = open(dir.path());
+    let mut session = SqlSession::new(&mut db);
+    exec(
+        &mut session,
+        "CREATE TABLE exclusion_scope (id int PRIMARY KEY, val text);
+         INSERT INTO exclusion_scope VALUES (1,'before')",
+    );
+    for (sql, state) in [
+        (
+            "INSERT INTO exclusion_scope VALUES(1,'changed') ON CONFLICT (id)
+             DO UPDATE SET val=excluded.val RETURNING excluded.val",
+            "42P01",
+        ),
+        (
+            "INSERT INTO exclusion_scope VALUES(1,'changed') ON CONFLICT (id)
+             DO UPDATE SET val=excluded.val RETURNING excluded.*",
+            "42P01",
+        ),
+        (
+            "INSERT INTO exclusion_scope VALUES(1,'changed') ON CONFLICT (id)
+             DO NOTHING RETURNING excluded.val",
+            "42P01",
+        ),
+        (
+            "INSERT INTO exclusion_scope VALUES(2,'changed') ON CONFLICT (id)
+             DO UPDATE SET val=excluded.missing_field",
+            "42703",
+        ),
+        (
+            "INSERT INTO exclusion_scope AS excluded VALUES(1,'changed') ON CONFLICT (id)
+             DO UPDATE SET val=excluded.val",
+            "42P09",
+        ),
+    ] {
+        assert_eq!(sqlstate(&mut session, sql), state, "{sql}");
+    }
+    assert_eq!(
+        rows(&mut session, "SELECT id,val FROM exclusion_scope"),
+        ["1|before"]
+    );
+    assert_eq!(
+        rows(
+            &mut session,
+            "INSERT INTO exclusion_scope VALUES(1,'updated') ON CONFLICT (id)
+             DO UPDATE SET val=excluded.val RETURNING
+             (SELECT excluded.val FROM (VALUES ('local')) AS excluded(val))",
+        ),
+        ["local"]
+    );
+    assert_eq!(
+        rows(&mut session, "SELECT id,val FROM exclusion_scope"),
+        ["1|updated"]
+    );
+}

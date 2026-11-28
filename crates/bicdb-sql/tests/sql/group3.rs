@@ -1832,45 +1832,61 @@ fn postgres_pg_dump_operator_class_family_queries_expose_builtin_entries() {
 }
 
 #[test]
-fn postgres_pg_dump_text_search_queries_are_supported_without_user_defined_entries() {
+fn postgres_pg_dump_text_search_queries_expose_builtin_entries() {
     let (_dir, db) = empty_test_db();
     let engine = SqlEngine::new(&db);
-
-    assert!(engine
+    let parser = engine
         .execute(
             "SELECT tableoid, oid, prsname, prsnamespace, prsstart::oid,
                     prstoken::oid, prsend::oid, prsheadline::oid, prslextype::oid
              FROM pg_ts_parser",
         )
         .unwrap()
-        .rows
-        .is_empty());
-    assert!(engine
+        .rows;
+    assert_eq!(parser.len(), 1);
+    assert_eq!(
+        parser[0].iter().map(SqlValue::to_cell).collect::<Vec<_>>(),
+        ["3601", "3722", "default", "11", "3717", "3718", "3719", "3720", "3721"]
+    );
+    let dictionaries = engine
         .execute(
             "SELECT tableoid, oid, dictname, dictnamespace, dictowner,
                     dicttemplate, dictinitoption
              FROM pg_ts_dict",
         )
         .unwrap()
-        .rows
-        .is_empty());
-    assert!(engine
+        .rows;
+    assert_eq!(dictionaries.len(), 30);
+    assert!(dictionaries.iter().all(|row| row[3] == SqlValue::Int(11)));
+    let templates = engine
         .execute(
             "SELECT tableoid, oid, tmplname, tmplnamespace,
                     tmplinit::oid, tmpllexize::oid
-             FROM pg_ts_template",
+             FROM pg_ts_template WHERE tmplname IN ('simple', 'snowball') ORDER BY oid",
         )
         .unwrap()
-        .rows
-        .is_empty());
-    assert!(engine
+        .rows;
+    assert_eq!(
+        templates
+            .iter()
+            .map(|row| row.iter().map(SqlValue::to_cell).collect::<Vec<_>>())
+            .collect::<Vec<_>>(),
+        [
+            ["3764", "3727", "simple", "11", "3725", "3726"],
+            ["3764", "13234", "snowball", "11", "13232", "13233"],
+        ]
+    );
+    let configurations = engine
         .execute(
             "SELECT tableoid, oid, cfgname, cfgnamespace, cfgowner, cfgparser
              FROM pg_ts_config",
         )
         .unwrap()
-        .rows
-        .is_empty());
+        .rows;
+    assert_eq!(configurations.len(), 30);
+    assert!(configurations
+        .iter()
+        .all(|row| row[3] == SqlValue::Int(11) && row[5] == SqlValue::Int(3722)));
 }
 
 #[test]

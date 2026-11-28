@@ -3375,7 +3375,64 @@ impl<'db> SqlSession<'db> {
             )))
     }
 
-    pub(crate) fn project_update_from_returning_slot_rows(
+    pub(crate) fn dml_returning_wildcard_columns(
+        &self,
+        projection: &[SelectItem],
+        target_alias: &str,
+        target_columns: &[String],
+        sources: &[TableWithJoins],
+        source_columns: &[String],
+        ctes: &BTreeMap<String, CteResult>,
+    ) -> Result<Vec<String>> {
+        if !projection
+            .iter()
+            .any(|item| matches!(item, SelectItem::Wildcard(_)))
+            || oracle::is_oracle_database(self.db_ref())?
+        {
+            return Ok(target_columns.to_vec());
+        }
+        let mut columns = target_columns
+            .iter()
+            .filter(|column| {
+                column
+                    .rsplit_once('.')
+                    .is_some_and(|(relation, _)| relation == target_alias)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        columns.extend(
+            self.sql_engine_with_ctes(ctes.clone())
+                .logical_wildcard_columns(sources, source_columns)?
+                .into_iter()
+                .filter(|column| !is_postgres_system_column(column)),
+        );
+        Ok(columns)
+    }
+
+    pub(crate) fn type_joined_dml_returning(
+        &self,
+        result: SqlResult,
+        projection: &[SelectItem],
+        target: &TableWithJoins,
+        sources: &[TableWithJoins],
+        ctes: &BTreeMap<String, CteResult>,
+    ) -> SqlResult {
+        let mut from = Vec::with_capacity(sources.len() + 1);
+        from.push(target.clone());
+        from.extend_from_slice(sources);
+        let engine = self.sql_engine_with_ctes(ctes.clone());
+        match engine.describe_relation_projection(&from, projection, false) {
+            Some(columns) if columns.len() == result.columns.len() => result.with_column_types(
+                columns
+                    .into_iter()
+                    .map(|(_, value_type)| value_type)
+                    .collect(),
+            ),
+            _ => result,
+        }
+    }
+
+    pub(crate) fn project_joined_dml_returning(
         &self,
         table: &str,
         schema: Option<&TableSchema>,

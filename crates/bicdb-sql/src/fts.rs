@@ -5,8 +5,10 @@ use std::collections::BTreeMap;
 use unicode_categories::UnicodeCategories;
 use waken_snowball::{Algorithm, Stemmer};
 
-use crate::eval::builtin_regconfig_name;
+use crate::eval::{builtin_regconfig_name, builtin_regdictionary_name};
 use crate::{pg_internal_char_byte, BicDb, Result, SqlEngine, SqlError, SqlValue};
+
+pub(crate) mod catalog;
 
 const MAX_LEXEME_BYTES: usize = bicdb_core::MAX_FULL_TEXT_TERM_BYTES;
 const MAX_POSITION: u16 = 16_383;
@@ -1522,10 +1524,12 @@ fn ts_lexize(dictionary: &SqlValue, token: &SqlValue) -> Result<SqlValue> {
         return Ok(SqlValue::Null);
     }
     let name = dictionary.to_cell().to_ascii_lowercase();
+    let name = name.strip_prefix("pg_catalog.").unwrap_or(&name);
     let name = name
-        .strip_prefix("pg_catalog.")
-        .unwrap_or(&name)
-        .to_string();
+        .parse()
+        .ok()
+        .and_then(builtin_regdictionary_name)
+        .unwrap_or(name);
     let config = if name == "simple" {
         TextSearchConfig::Simple
     } else if let Some(language) = name.strip_suffix("_stem") {

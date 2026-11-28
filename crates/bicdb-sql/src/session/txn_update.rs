@@ -2,6 +2,20 @@
 //! unchanged — a separate `impl` block on the same type.
 use super::*;
 
+fn has_relation_columns(columns: &[String], relation: &str) -> bool {
+    columns.iter().any(|column| {
+        column
+            .rsplit_once('.')
+            .is_some_and(|(qualifier, _)| qualifier == relation)
+    })
+}
+
+fn update_from_tables(from: &UpdateTableFromKind) -> &[TableWithJoins] {
+    match from {
+        UpdateTableFromKind::BeforeSet(tables) | UpdateTableFromKind::AfterSet(tables) => tables,
+    }
+}
+
 /// Inferred types for one routine binary-operator node: the operand types the
 /// range operators consult (`projected_expr_pg_type_with_db`) and the three
 /// types the generic evaluator consults (`binary_expr_types`).
@@ -369,7 +383,7 @@ impl<'db> SqlSession<'db> {
                 Rc::new(RefCell::new(FxHashMap::default())),
             )
         });
-        SqlEngine::from_session_parts(
+        let mut engine = SqlEngine::from_session_parts(
             &*self.db_ref(),
             tx,
             self.settings,
@@ -389,7 +403,9 @@ impl<'db> SqlSession<'db> {
             self.app_exact_decimal_units,
         )
         .with_routine_host(Some(&SESSION_ROUTINE_HOST))
-        .with_oracle_output(self.oracle_output.clone())
+        .with_oracle_output(self.oracle_output.clone());
+        engine.sequence_values = Some(self.sequence_values.clone());
+        engine
     }
 
     fn extension_event_relation(table: &str) -> String {
@@ -894,13 +910,32 @@ impl<'db> SqlSession<'db> {
         let mut updated_record_snapshots = Vec::new();
         let mut returning_rows = (update.returning.is_some() && from_rows.is_some()).then(Vec::new);
         let mut returning_columns: Option<Arc<Vec<String>>> = None;
-        let target_columns = Arc::new(row_output_columns(&table, &target_alias, schema.as_deref()));
+        let original_name_is_source = merge.is_none()
+            && matches!(
+                update.table.relation,
+                TableFactor::Table { alias: Some(_), .. }
+            )
+            && table != target_alias
+            && from_rows
+                .as_ref()
+                .is_some_and(|rows| has_relation_columns(&rows.columns, &table))
+            && !oracle::is_oracle_database(self.db_ref())?;
+        let row_qualifier = if original_name_is_source {
+            &target_alias
+        } else {
+            &table
+        };
+        let target_columns = Arc::new(row_output_columns(
+            row_qualifier,
+            &target_alias,
+            schema.as_deref(),
+        ));
         // Simple updates of resident rows never parse the row: the assigned
         // columns are spliced into the old row's JSON text and the result is
         // written in its stored form (typed resident rows phase 3).
         if let Some(schema) = schema
             .as_ref()
-            .filter(|_| match_policy == UpdateMatchPolicy::First)
+            .filter(|_| match_policy == UpdateMatchPolicy::First && !original_name_is_source)
         {
             if let Some(result) = self.try_execute_update_stored(
                 update,
@@ -924,6 +959,7 @@ impl<'db> SqlSession<'db> {
                 update,
                 &ctes,
                 parent,
+                row_qualifier,
                 &target_alias,
                 from_rows.as_ref(),
                 target_columns.clone(),
@@ -972,6 +1008,26 @@ impl<'db> SqlSession<'db> {
             })?
         } else {
             assignment_candidates
+        };
+        let has_default_assignments = update
+            .assignments
+            .iter()
+            .any(|assignment| expr_is_default(&assignment.value));
+        let mut ordered_assignments = Vec::new();
+        if let Some(schema) = schema.as_deref().filter(|_| has_default_assignments) {
+            ordered_assignments.extend(update.assignments.iter());
+            ordered_assignments.sort_by_cached_key(|assignment| {
+                super::row_assignments::assignment_columns(&assignment.target)
+                    .first()
+                    .and_then(|name| relation_name(name).ok())
+                    .and_then(|name| schema.columns.iter().position(|column| column.name == name))
+                    .unwrap_or(usize::MAX)
+            });
+        }
+        let assignments = if ordered_assignments.is_empty() {
+            None
+        } else {
+            Some(ordered_assignments.as_slice())
         };
         let mut before_after_records = Vec::new();
         let mut partition_after_events = Vec::new();
@@ -1129,7 +1185,7 @@ impl<'db> SqlSession<'db> {
                         // which stay as scanned) and re-evaluate the predicate
                         // against the latest committed version.
                         let target_row = slot_row_from_record(
-                            &table,
+                            row_qualifier,
                             &target_alias,
                             schema.as_deref(),
                             &latest,
@@ -1175,6 +1231,12 @@ impl<'db> SqlSession<'db> {
                 let (scope, context) = row_engine.bound_row_context(candidate.columns.as_ref());
                 let mut values = Vec::with_capacity(update.assignments.len());
                 for assignment in &update.assignments {
+                    // A default can allocate a sequence value. Evaluate all
+                    // assignments in order when the statement uses DEFAULT.
+                    if has_default_assignments {
+                        values.push(None);
+                        continue;
+                    }
                     if matches!(assignment.target, AssignmentTarget::Tuple(_)) {
                         if super::row_assignments::independent_row_query(assignment).is_some() {
                             values.push(None);
@@ -1248,7 +1310,11 @@ impl<'db> SqlSession<'db> {
                 });
                 (values.into_iter(), deltas.map(Vec::into_iter))
             };
-            for assignment in &update.assignments {
+            for index in 0..update.assignments.len() {
+                let assignment = match assignments {
+                    Some(ordered) => ordered[index],
+                    None => &update.assignments[index],
+                };
                 let evaluated = assignment_values.next().flatten();
                 if let AssignmentTarget::Tuple(names) = &assignment.target {
                     let values = match evaluated {
@@ -1299,6 +1365,9 @@ impl<'db> SqlSession<'db> {
                     }
                 }
                 let mut value = match evaluated {
+                    _ if expr_is_default(&assignment.value) => self
+                        .default_value_for_column(schema.as_deref(), &column)?
+                        .unwrap_or(SqlValue::Null),
                     Some(Ok(value)) => value,
                     Some(Err(SqlError::Unsupported(_))) => {
                         self.eval_session_expr(&assignment.value)?
@@ -1476,7 +1545,7 @@ impl<'db> SqlSession<'db> {
             if let Some(returning_rows) = returning_rows.as_mut() {
                 candidate.row = match (returning_patch_columns.as_ref(), schema.as_deref()) {
                     (Some(assigned), Some(schema)) => update_returning_slot_row_patched(
-                        &table,
+                        row_qualifier,
                         &target_alias,
                         schema,
                         &record,
@@ -1485,7 +1554,7 @@ impl<'db> SqlSession<'db> {
                         assigned,
                     ),
                     _ => update_returning_slot_row_from_assignment(
-                        &table,
+                        row_qualifier,
                         &target_alias,
                         schema.as_deref(),
                         &record,
@@ -1641,18 +1710,36 @@ impl<'db> SqlSession<'db> {
             return Ok(SqlResult::command(format!("UPDATE {updated}")));
         }
         if let Some(returning) = &update.returning {
-            if from_rows.is_some() {
-                return self.project_update_from_returning_slot_rows(
+            if let (Some(rows), Some(from)) = (from_rows.as_ref(), update.from.as_ref()) {
+                let columns = returning_columns.unwrap_or_else(|| {
+                    Arc::new(merge_row_set_columns(
+                        target_columns.as_ref().clone(),
+                        rows.columns.clone(),
+                    ))
+                });
+                let wildcard_columns = self.dml_returning_wildcard_columns(
+                    returning,
+                    &target_alias,
+                    target_columns.as_ref(),
+                    update_from_tables(from),
+                    &rows.columns,
+                    &ctes,
+                )?;
+                let result = self.project_joined_dml_returning(
                     &table,
                     schema.as_deref(),
                     returning,
                     returning_rows.as_deref().unwrap_or(&[]),
-                    returning_columns
-                        .as_deref()
-                        .map(Vec::as_slice)
-                        .unwrap_or(&[]),
-                    target_columns.as_ref(),
-                );
+                    &columns,
+                    &wildcard_columns,
+                )?;
+                return Ok(self.type_joined_dml_returning(
+                    result,
+                    returning,
+                    &update.table,
+                    update_from_tables(from),
+                    &ctes,
+                ));
             }
             if let Some(result) = returning_result {
                 return Ok(result);
@@ -1770,6 +1857,13 @@ impl<'db> SqlSession<'db> {
         let mut candidates = Vec::new();
         let mut seen_record_ids = BTreeSet::new();
         let mut fallback_records = None;
+        let row_qualifier =
+            if table != target_alias && !has_relation_columns(&target_columns, table) {
+                target_alias
+            } else {
+                table
+            };
+        let can_locate_target = row_qualifier == table;
         let candidate_columns = Arc::new(merge_row_set_columns(
             target_columns.as_ref().clone(),
             from_rows.columns.clone(),
@@ -1781,6 +1875,7 @@ impl<'db> SqlSession<'db> {
         // slot row changes between iterations.
         let mut row_engine = self.sql_engine_with_ctes(ctes.clone());
         let cell_fields = schema
+            .filter(|_| can_locate_target)
             .filter(|schema| {
                 row_engine
                     .cell_rows_eligible(table, schema, PolicyAction::Update)
@@ -1828,12 +1923,13 @@ impl<'db> SqlSession<'db> {
                         .into_iter()
                         .collect::<Vec<String>>(),
                 ),
-                _ => row_engine.indexed_record_ids_for_table_selection(
+                _ if can_locate_target => row_engine.indexed_record_ids_for_table_selection(
                     table,
                     target_alias,
                     schema,
                     selection,
                 )?,
+                _ => None,
             };
             let candidate_pairs: Vec<(SlotRow, Record)> = if let Some(ids) = located {
                 sql_profile_index_lookup();
@@ -1884,7 +1980,7 @@ impl<'db> SqlSession<'db> {
                     .into_iter()
                     .map(|record| {
                         Ok((
-                            slot_row_from_record(table, target_alias, schema, &record)?,
+                            slot_row_from_record(row_qualifier, target_alias, schema, &record)?,
                             record,
                         ))
                     })
@@ -2179,11 +2275,7 @@ impl<'db> SqlSession<'db> {
         let Some(from) = from else {
             return Ok(None);
         };
-        let tables = match from {
-            UpdateTableFromKind::BeforeSet(tables) | UpdateTableFromKind::AfterSet(tables) => {
-                tables
-            }
-        };
+        let tables = update_from_tables(from);
         if tables.is_empty() {
             return Ok(None);
         }
@@ -2290,7 +2382,32 @@ impl<'db> SqlSession<'db> {
             }),
             None => self.delete_using_row_set(delete.using.as_deref(), &ctes)?,
         };
-        let target_columns = Arc::new(row_output_columns(&table, &target_alias, schema.as_ref()));
+        let target_tables = match &delete.from {
+            FromTable::WithFromKeyword(tables) | FromTable::WithoutKeyword(tables) => tables,
+        };
+        let postgres_using =
+            merge.is_none() && using_rows.is_some() && !oracle::is_oracle_database(self.db_ref())?;
+        let original_name_is_source = postgres_using
+            && matches!(
+                &target_tables[0].relation,
+                TableFactor::Table { alias: Some(_), .. }
+            )
+            && table != target_alias
+            && using_rows
+                .as_ref()
+                .is_some_and(|rows| has_relation_columns(&rows.columns, &table));
+        let row_qualifier = if original_name_is_source {
+            &target_alias
+        } else {
+            &table
+        };
+        let target_columns = Arc::new(row_output_columns(
+            row_qualifier,
+            &target_alias,
+            schema.as_ref(),
+        ));
+        let mut returning_rows = (postgres_using && delete.returning.is_some()).then(Vec::new);
+
         let records_to_delete = if let Some(merge) = merge.as_mut() {
             std::mem::take(&mut merge.update_candidates)
                 .into_iter()
@@ -2309,6 +2426,7 @@ impl<'db> SqlSession<'db> {
                 delete,
                 &ctes,
                 parent,
+                row_qualifier,
                 &target_alias,
                 using_rows.as_ref(),
                 target_columns.clone(),
@@ -2334,13 +2452,17 @@ impl<'db> SqlSession<'db> {
                     let using_outer_row = OuterSlotRow::from_slot(&using_rows.columns, using_row);
                     let row_engine = build_row_engine(Some(using_outer_row));
                     let _subqueries = row_engine.subquery_memo.scope();
-                    let (candidate_records, from_key_lookup) = if let Some(ids) = row_engine
-                        .indexed_record_ids_for_table_selection(
+                    let located = if original_name_is_source {
+                        None
+                    } else {
+                        row_engine.indexed_record_ids_for_table_selection(
                             &table,
                             &target_alias,
                             schema.as_ref(),
                             delete.selection.as_ref(),
-                        )? {
+                        )?
+                    };
+                    let (candidate_records, from_key_lookup) = if let Some(ids) = located {
                         sql_profile_index_lookup();
                         let records = self.session_records_for_action_ids_with_schema(
                             &table,
@@ -2387,7 +2509,7 @@ impl<'db> SqlSession<'db> {
                             match delete.selection.as_ref() {
                                 Some(selection) => {
                                     let target_row = slot_row_from_record(
-                                        &table,
+                                        row_qualifier,
                                         &target_alias,
                                         schema.as_ref(),
                                         &record,
@@ -2407,7 +2529,7 @@ impl<'db> SqlSession<'db> {
                         };
                         if row_matches && seen_record_ids.insert(record.id.clone()) {
                             let target_row = slot_row_from_record(
-                                &table,
+                                row_qualifier,
                                 &target_alias,
                                 schema.as_ref(),
                                 &record,
@@ -2574,8 +2696,12 @@ impl<'db> SqlSession<'db> {
                             continue;
                         }
                     }
-                    let target_row =
-                        slot_row_from_record(&table, &target_alias, schema.as_ref(), &latest)?;
+                    let target_row = slot_row_from_record(
+                        row_qualifier,
+                        &target_alias,
+                        schema.as_ref(),
+                        &latest,
+                    )?;
                     let mut refreshed_row = candidate.row.clone();
                     for (idx, value) in target_row.into_iter().enumerate() {
                         if let Some(slot) = refreshed_row.get_mut(idx) {
@@ -2633,6 +2759,8 @@ impl<'db> SqlSession<'db> {
             deleted_records.push(record);
             if let Some(merge) = merge.as_mut() {
                 merge.returned_rows.push(candidate.row);
+            } else if let Some(rows) = returning_rows.as_mut() {
+                rows.push(candidate.row);
             }
         }
         let deleted = if schema
@@ -2690,6 +2818,35 @@ impl<'db> SqlSession<'db> {
             return Ok(SqlResult::command(format!("DELETE {deleted}")));
         }
         if let Some(returning) = &delete.returning {
+            if let (Some(using), Some(rows)) = (using_rows.as_ref(), returning_rows.as_ref()) {
+                let columns =
+                    merge_row_set_columns(target_columns.as_ref().clone(), using.columns.clone());
+                let wildcard_columns = self.dml_returning_wildcard_columns(
+                    returning,
+                    &target_alias,
+                    target_columns.as_ref(),
+                    delete.using.as_deref().unwrap_or_default(),
+                    &using.columns,
+                    &ctes,
+                )?;
+                let result = self.project_joined_dml_returning(
+                    &table,
+                    schema.as_ref(),
+                    returning,
+                    rows,
+                    &columns,
+                    &wildcard_columns,
+                )?;
+                let mut result = self.type_joined_dml_returning(
+                    result,
+                    returning,
+                    &target_tables[0],
+                    delete.using.as_deref().unwrap_or_default(),
+                    &ctes,
+                );
+                result.command_tag = Some(format!("DELETE {deleted}"));
+                return Ok(result);
+            }
             return self.project_returning_records_with_alias(
                 &table,
                 &target_alias,
@@ -4142,74 +4299,87 @@ impl<'db> SqlSession<'db> {
 
     pub(crate) fn eval_sequence_function(&mut self, function: &Function) -> Result<SqlValue> {
         let name = object_name(&function.name)?.to_ascii_lowercase();
-        let args = function_arg_list(function);
-        match name.as_str() {
-            "nextval" | "pg_catalog.nextval" => {
-                let sequence = {
-                    let text = self.eval_sequence_arg(args.first(), "nextval")?;
-                    self.session_sequence_name(&text)?
-                };
-                Ok(SqlValue::Int(self.nextval(&sequence)?))
+        let args = function_arg_list(function)
+            .iter()
+            .map(|expr| self.eval_session_expr(expr))
+            .collect::<Result<Vec<_>>>()?;
+        self.eval_sequence_values(&name, &args)
+    }
+
+    pub(crate) fn eval_sequence_values(
+        &mut self,
+        name: &str,
+        args: &[SqlValue],
+    ) -> Result<SqlValue> {
+        let name = name.strip_prefix("pg_catalog.").unwrap_or(name);
+        if args.iter().any(|value| matches!(value, SqlValue::Null)) {
+            return Ok(SqlValue::Null);
+        }
+        if name == "lastval" {
+            if !args.is_empty() {
+                return Err(SqlError::InvalidSql("lastval expects no arguments".into()));
             }
-            "currval" | "pg_catalog.currval" => {
-                let sequence = {
-                    let text = self.eval_sequence_arg(args.first(), "currval")?;
-                    self.session_sequence_name(&text)?
-                };
-                let key = sequence.clone();
-                self.currvals
-                    .get(&key)
+            let values = self.sequence_values.borrow();
+            let undefined = || {
+                SqlError::coded_public(
+                    "55000",
+                    "lastval is not yet defined in this session",
+                    None,
+                    None,
+                )
+            };
+            let sequence = values.last_sequence.as_deref().ok_or_else(undefined)?;
+            let schema = load_sequence(self.db_ref(), sequence)?.ok_or_else(undefined)?;
+            self.require_sequence_privilege(&schema, &["SELECT", "USAGE"])?;
+            return values
+                .current
+                .get(sequence)
+                .copied()
+                .map(SqlValue::Int)
+                .ok_or_else(undefined);
+        }
+        let sequence = self.sequence_argument(args.first(), name)?;
+        match name {
+            "nextval" => self.nextval(&sequence).map(SqlValue::Int),
+            "currval" => {
+                let schema = load_sequence_required(self.db_ref(), &sequence)?;
+                self.require_sequence_privilege(&schema, &["SELECT", "USAGE"])?;
+                self.sequence_values
+                    .borrow()
+                    .current
+                    .get(&sequence)
                     .copied()
                     .map(SqlValue::Int)
                     .ok_or_else(|| {
-                        SqlError::InvalidSql(format!(
-                            "currval of sequence \"{sequence}\" is not yet defined in this session"
-                        ))
-                    })
-            }
-            "lastval" | "pg_catalog.lastval" => {
-                if !args.is_empty() {
-                    return Err(SqlError::InvalidSql(
-                        "lastval expects no arguments".to_string(),
-                    ));
-                }
-                self.session_gucs
-                    .get(LASTVAL_SESSION_KEY)
-                    .and_then(|value| value.parse::<i64>().ok())
-                    .map(SqlValue::Int)
-                    .ok_or_else(|| {
-                        SqlError::InvalidSql(
-                            "lastval is not yet defined in this session".to_string(),
+                        SqlError::coded_public(
+                            "55000",
+                            format!(
+                                "currval of sequence \"{}\" is not yet defined in this session",
+                                sequence_catalog_name(&sequence)
+                            ),
+                            None,
+                            None,
                         )
                     })
             }
-            "setval" | "pg_catalog.setval" => {
-                if args.len() != 2 && args.len() != 3 {
-                    return Err(SqlError::InvalidSql(
-                        "setval expects 2 or 3 arguments".to_string(),
-                    ));
-                }
-                let sequence = {
-                    let text = self.eval_sequence_arg(args.first(), "setval")?;
-                    self.session_sequence_name(&text)?
-                };
-                let value =
-                    self.eval_session_expr(args.get(1).expect("validated argument count"))?;
-                let Some(value) = sql_value_i64(&value) else {
-                    return Err(SqlError::InvalidSql(
-                        "setval value must be an integer".to_string(),
-                    ));
-                };
-                let is_called = if let Some(expr) = args.get(2) {
-                    let SqlValue::Bool(value) = self.eval_session_expr(expr)? else {
+            "setval" => {
+                let (value, is_called) = match args {
+                    [_, value] => (value, true),
+                    [_, value, SqlValue::Bool(is_called)] => (value, *is_called),
+                    [_, _, _] => {
                         return Err(SqlError::InvalidSql(
-                            "setval is_called must be boolean".to_string(),
-                        ));
-                    };
-                    value
-                } else {
-                    true
+                            "setval is_called must be boolean".into(),
+                        ))
+                    }
+                    _ => {
+                        return Err(SqlError::InvalidSql(
+                            "setval expects 2 or 3 arguments".into(),
+                        ))
+                    }
                 };
+                let value = sql_value_i64(value).ok_or_else(|| {
+                    SqlError::InvalidSql("setval value must be an integer".into())
+                })?;
                 self.setval(&sequence, value, is_called)?;
                 Ok(SqlValue::Int(value))
             }
@@ -4231,6 +4401,9 @@ impl<'db> SqlSession<'db> {
         session.row_routine_call = true;
         session.parent_tx = engine.tx;
         session.session_gucs = engine.session_gucs.clone();
+        if let Some(values) = &engine.sequence_values {
+            session.sequence_values = values.clone();
+        }
         session.oracle_output = engine.oracle_output.clone();
         session.settings = engine.settings;
         session.runtime = engine.runtime.clone();
@@ -6522,28 +6695,112 @@ impl<'db> SqlSession<'db> {
         result
     }
 
-    pub(crate) fn eval_sequence_arg(
-        &mut self,
-        expr: Option<&Expr>,
-        function: &str,
-    ) -> Result<String> {
-        let Some(expr) = expr else {
-            return Err(SqlError::InvalidSql(format!(
-                "{function} expects a sequence name"
-            )));
-        };
-        match self.eval_session_expr(expr)? {
-            SqlValue::String(value) => Ok(value),
-            SqlValue::Int(oid) => resolve_regclass_name(self.db_ref(), oid)?.ok_or_else(|| {
-                SqlError::InvalidSql(format!(
-                    "{function} sequence oid {oid} does not name a relation"
-                ))
-            }),
-            other => Err(SqlError::InvalidSql(format!(
-                "{function} sequence name must be text, got {}",
-                other.to_cell()
-            ))),
+    fn sequence_argument(&self, value: Option<&SqlValue>, function: &str) -> Result<String> {
+        if !oracle::is_oracle_database(self.db_ref())? {
+            match value {
+                Some(SqlValue::String(text)) => return self.postgres_sequence_name(text),
+                Some(SqlValue::Int(oid)) => return self.postgres_sequence_oid(*oid),
+                _ => {}
+            }
         }
+        let text = match value {
+            Some(SqlValue::String(value)) => std::borrow::Cow::Borrowed(value.as_str()),
+            Some(SqlValue::Int(oid)) => std::borrow::Cow::Owned(
+                resolve_regclass_name(self.db_ref(), *oid)?.ok_or_else(|| {
+                    SqlError::InvalidSql(format!(
+                        "{function} sequence oid {oid} does not name a relation"
+                    ))
+                })?,
+            ),
+            Some(other) => {
+                return Err(SqlError::InvalidSql(format!(
+                    "{function} sequence name must be text, got {}",
+                    other.to_cell()
+                )))
+            }
+            None => {
+                return Err(SqlError::InvalidSql(format!(
+                    "{function} expects a sequence name"
+                )))
+            }
+        };
+        self.session_sequence_name(&text)
+    }
+
+    fn postgres_sequence_name(&self, text: &str) -> Result<String> {
+        let db = self.db_ref();
+        let normalized = normalize_sequence_name(text)
+            .map_err(|_| SqlError::data_exception_public("42602", "invalid name syntax", None))?;
+        // Stored sequence defaults can carry the catalog's physical name.
+        if text.starts_with("__bicdb_s_") && load_sequence(db, &normalized)?.is_some() {
+            return Ok(normalized);
+        }
+        let oid = resolve_regclass_oid(db, text)?.ok_or_else(|| {
+            SqlError::coded_public(
+                "42P01",
+                format!("relation \"{text}\" does not exist"),
+                None,
+                None,
+            )
+        })?;
+        if sequence_oid(&normalized) == oid && load_sequence(db, &normalized)?.is_some() {
+            return Ok(normalized);
+        }
+        if let (Ok(parts), Some(path)) = (
+            sql_identifier_parts(text),
+            crate::search_path::active_path(),
+        ) {
+            if let [name] = parts.as_slice() {
+                for namespace in path.iter() {
+                    let candidate = relation_name_from_parts(&[namespace.clone(), name.clone()])?;
+                    if sequence_oid(&candidate) == oid && load_sequence(db, &candidate)?.is_some() {
+                        return Ok(candidate);
+                    }
+                }
+            }
+        }
+        self.postgres_sequence_oid(oid)
+    }
+
+    fn postgres_sequence_oid(&self, oid: i64) -> Result<String> {
+        let db = self.db_ref();
+        if let Some(sequence) = list_sequences(db)?
+            .into_iter()
+            .find(|sequence| sequence_oid(&sequence.name) == oid)
+        {
+            return Ok(sequence.name);
+        }
+        let class = pg_class_rows_filtered(db, None, None, Some(&BTreeSet::from([oid])))?
+            .into_iter()
+            .next();
+        if let Some(class) = class {
+            let name = virtual_cell(&class, "relname").to_cell();
+            let kind = virtual_cell(&class, "relkind").to_cell();
+            let relation_type = match kind.as_str() {
+                "i" => "indexes",
+                "I" => "partitioned indexes",
+                "m" => "materialized views",
+                "p" => "partitioned tables",
+                "v" => "views",
+                "f" => "foreign tables",
+                "c" => "composite types",
+                _ => "tables",
+            };
+            return Err(SqlError::coded_public(
+                "42809",
+                format!("cannot open relation \"{name}\""),
+                Some(format!(
+                    "This operation is not supported for {relation_type}."
+                )),
+                None,
+            ));
+        }
+        Err(SqlError::coded_public(
+            "XX000",
+            format!("could not open relation with OID {oid}"),
+            None,
+            None,
+        ))
     }
 
     /// Sequence state is independent of the caller's transaction. Persist it
@@ -6649,9 +6906,9 @@ impl<'db> SqlSession<'db> {
                 Err(error) => (Err(error), false),
             }
         })?;
-        self.currvals.insert(sequence_name.to_string(), value);
-        Arc::make_mut(&mut self.session_gucs)
-            .insert(LASTVAL_SESSION_KEY.to_string(), value.to_string());
+        self.sequence_values
+            .borrow_mut()
+            .record_nextval(sequence_name, value);
         Ok(value)
     }
 
@@ -6670,9 +6927,9 @@ impl<'db> SqlSession<'db> {
             (Ok(values), true)
         })?;
         if let Some(value) = values.last().copied() {
-            self.currvals.insert(sequence_name.to_string(), value);
-            Arc::make_mut(&mut self.session_gucs)
-                .insert(LASTVAL_SESSION_KEY.to_string(), value.to_string());
+            self.sequence_values
+                .borrow_mut()
+                .record_nextval(sequence_name, value);
         }
         Ok(values)
     }
@@ -6697,9 +6954,16 @@ impl<'db> SqlSession<'db> {
             sequence.is_called = is_called;
             (Ok(()), true)
         })?;
-        self.currvals.insert(sequence_name.to_string(), value);
-        Arc::make_mut(&mut self.session_gucs)
-            .insert(LASTVAL_SESSION_KEY.to_string(), value.to_string());
+        let mut values = self.sequence_values.borrow_mut();
+        if self
+            .session_gucs
+            .get("bicdb.sql_profile")
+            .is_some_and(|profile| oracle::is_oracle_profile(profile))
+        {
+            values.record_nextval(sequence_name, value);
+        } else if is_called {
+            values.current.insert(sequence_name.to_owned(), value);
+        }
         Ok(())
     }
 
@@ -8261,21 +8525,36 @@ impl<'db> SqlSession<'db> {
             // with qualified and unqualified copies of every cell.
             // An alias adds a second set of table-qualified lookup slots, not
             // a second set of columns to an unqualified RETURNING *.
-            let wildcard_columns = if from_rows.is_none() {
-                &target_columns[..fields.len()]
-            } else {
-                target_columns.as_ref()
-            };
-            return self
-                .project_update_from_returning_slot_rows(
-                    table,
-                    Some(schema),
+            let wildcard_columns = match (from_rows, update.from.as_ref()) {
+                (Some(rows), Some(from)) => self.dml_returning_wildcard_columns(
                     returning,
-                    &returning_rows,
-                    candidate_columns.as_ref(),
-                    wildcard_columns,
-                )
-                .map(Some);
+                    target_alias,
+                    target_columns.as_ref(),
+                    update_from_tables(from),
+                    &rows.columns,
+                    ctes,
+                )?,
+                _ => target_columns[..fields.len()].to_vec(),
+            };
+            let result = self.project_joined_dml_returning(
+                table,
+                Some(schema),
+                returning,
+                &returning_rows,
+                candidate_columns.as_ref(),
+                &wildcard_columns,
+            )?;
+            let result = match update.from.as_ref() {
+                Some(from) => self.type_joined_dml_returning(
+                    result,
+                    returning,
+                    &update.table,
+                    update_from_tables(from),
+                    ctes,
+                ),
+                None => result,
+            };
+            return Ok(Some(result));
         }
         Ok(Some(SqlResult::command(format!("UPDATE {updated}"))))
     }

@@ -233,8 +233,34 @@ fn record_reference_dependencies(parts: &[Ident], scope: &Scope, outer: &[Scope]
 #[derive(Clone, Debug, Default)]
 struct Scope {
     relations: Vec<ScopeRelation>,
+    hidden_target: Option<HiddenDmlTarget>,
     /// Select-list output names, visible to ORDER BY / GROUP BY / HAVING.
     output_names: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+struct HiddenDmlTarget {
+    relation: String,
+    name: String,
+    alias: String,
+    visible_as_source: bool,
+}
+
+impl HiddenDmlTarget {
+    fn error(&self) -> SqlError {
+        SqlError::coded(
+            "42P01",
+            format!(
+                "invalid reference to FROM-clause entry for table \"{}\"",
+                self.name
+            ),
+            None,
+            Some(format!(
+                "Perhaps you meant to reference the table alias \"{}\".",
+                self.alias
+            )),
+        )
+    }
 }
 
 impl Scope {
@@ -379,7 +405,7 @@ impl SqlEngine<'_> {
             Statement::Update(update) => {
                 let mut scope = Scope::default();
                 let mut deferred = Vec::new();
-                self.scope_table_with_joins(&update.table, &[], &mut scope, &mut deferred)?;
+                self.scope_dml_target(&update.table, &mut scope, &mut deferred)?;
                 if let Some(
                     UpdateTableFromKind::BeforeSet(from) | UpdateTableFromKind::AfterSet(from),
                 ) = &update.from
@@ -395,7 +421,7 @@ impl SqlEngine<'_> {
                 if let Some(selection) = &update.selection {
                     self.check_expr_columns(selection, &scope, &[], false)?;
                 }
-                Ok(())
+                self.check_dml_returning(update.returning.as_deref(), &scope)
             }
             Statement::Delete(delete) => {
                 let from = match &delete.from {
@@ -403,17 +429,118 @@ impl SqlEngine<'_> {
                 };
                 let mut scope = Scope::default();
                 let mut deferred = Vec::new();
-                for table in from.iter().chain(delete.using.iter().flatten()) {
+                for table in from {
+                    self.scope_dml_target(table, &mut scope, &mut deferred)?;
+                }
+                for table in delete.using.iter().flatten() {
                     self.scope_table_with_joins(table, &[], &mut scope, &mut deferred)?;
                 }
                 self.check_deferred(&deferred, &scope, &[])?;
                 if let Some(selection) = &delete.selection {
                     self.check_expr_columns(selection, &scope, &[], false)?;
                 }
-                Ok(())
+                self.check_dml_returning(delete.returning.as_deref(), &scope)
             }
             _ => Ok(()),
         }
+    }
+
+    fn scope_dml_target<'q>(
+        &self,
+        table: &'q TableWithJoins,
+        scope: &mut Scope,
+        deferred: &mut Vec<&'q Expr>,
+    ) -> Result<()> {
+        self.scope_table_with_joins(table, &[], scope, deferred)?;
+        if let TableFactor::Table {
+            name,
+            alias: Some(alias),
+            ..
+        } = &table.relation
+        {
+            if self
+                .session_gucs
+                .get("bicdb.sql_profile")
+                .is_some_and(|profile| oracle::is_oracle_profile(profile))
+                || oracle::preview_routine_language_enabled(self.db_ref())?
+            {
+                return Ok(());
+            }
+            let relation =
+                resolve_session_relation_name_if_exists(self.db_ref(), &relation_name(name)?);
+            crate::session::functions_insert::require_dml_target_exists(self.db_ref(), &relation)?;
+            let name = relation_default_alias(name);
+            let alias = ident_value(&alias.name);
+            scope.relations.retain(|entry| {
+                entry.alias == alias || (entry.alias != name && entry.alias != relation)
+            });
+            scope.hidden_target = Some(HiddenDmlTarget {
+                relation,
+                name,
+                alias,
+                visible_as_source: false,
+            });
+        }
+        Ok(())
+    }
+
+    fn check_dml_returning(&self, items: Option<&[SelectItem]>, scope: &Scope) -> Result<()> {
+        if scope.hidden_target.is_none() {
+            return Ok(());
+        }
+        for item in items.into_iter().flatten() {
+            match item {
+                SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => {
+                    self.check_expr_columns(expr, scope, &[], false)?;
+                }
+                SelectItem::QualifiedWildcard(
+                    sqlparser::ast::SelectItemQualifiedWildcardKind::ObjectName(name),
+                    _,
+                ) => {
+                    let parts = object_name_parts(name);
+                    match parts.as_slice() {
+                        [qualifier] => self.check_hidden_target(scope, None, qualifier)?,
+                        [schema, qualifier] => {
+                            self.check_hidden_target(scope, Some(schema), qualifier)?
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    fn check_hidden_target(
+        &self,
+        scope: &Scope,
+        schema: Option<&str>,
+        qualifier: &str,
+    ) -> Result<()> {
+        let Some(target) = &scope.hidden_target else {
+            return Ok(());
+        };
+        if qualifier != target.name {
+            return Ok(());
+        }
+        if let Some(schema) = schema {
+            let relation = relation_name_from_parts(&[schema.to_owned(), qualifier.to_owned()])?;
+            if target.visible_as_source
+                || resolve_session_relation_name_if_exists(self.db_ref(), &relation)
+                    != target.relation
+            {
+                return Ok(());
+            }
+        } else if target.alias == qualifier
+            || scope
+                .relations
+                .iter()
+                .any(|relation| relation.alias == qualifier)
+        {
+            return Ok(());
+        }
+        Err(target.error())
     }
 
     fn check_query_columns(&self, query: &Query, outer: &[Scope]) -> Result<()> {
@@ -510,7 +637,7 @@ impl SqlEngine<'_> {
                             columns: output
                                 .map(|columns| columns.into_iter().map(|(name, _)| name).collect()),
                         }],
-                        output_names: Vec::new(),
+                        ..Scope::default()
                     };
                     if let OrderByKind::Expressions(exprs) = &order_by.kind {
                         for order in exprs {
@@ -539,6 +666,9 @@ impl SqlEngine<'_> {
                     }
                 }
                 Ok(())
+            }
+            SetExpr::Update(statement) | SetExpr::Delete(statement) => {
+                self.check_statement_column_references(statement)
             }
             _ => Ok(()),
         }
@@ -703,6 +833,24 @@ impl SqlEngine<'_> {
                 }
             }
             _ => {}
+        }
+        if let (
+            Some(target),
+            TableFactor::Table {
+                name,
+                alias: None,
+                args: None,
+                ..
+            },
+        ) = (&mut scope.hidden_target, factor)
+        {
+            let relation = relation_name(name)?;
+            if self.cte(&relation).is_none()
+                && resolve_session_relation_name_if_exists(self.db_ref(), &relation)
+                    == target.relation
+            {
+                target.visible_as_source = true;
+            }
         }
         let alias = table_factor_alias(factor);
         let source = if collecting_view_dependencies() {
@@ -922,6 +1070,12 @@ impl SqlEngine<'_> {
                 Err(undefined_column(name))
             }
             [.., qualifier, column] if parts.len() <= 3 => {
+                let schema = if let [schema, _, _] = parts {
+                    Some(ident_value(schema))
+                } else {
+                    None
+                };
+                let qualifier_name = ident_value(qualifier);
                 let (qualifier, column) = (qualifier.value.as_str(), column.value.as_str());
                 if PSEUDO_QUALIFIERS
                     .iter()
@@ -932,6 +1086,7 @@ impl SqlEngine<'_> {
                 }
                 let mut any_open = false;
                 for scope in scopes {
+                    self.check_hidden_target(scope, schema.as_deref(), &qualifier_name)?;
                     any_open |= scope.is_open();
                     for relation in scope
                         .relations

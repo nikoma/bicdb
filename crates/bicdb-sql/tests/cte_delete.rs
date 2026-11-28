@@ -1,7 +1,7 @@
 //! Top-level WITH DELETE shares the native DELETE transaction/CTE path.
 //! Results independently checked against PostgreSQL16.13.
 use bicdb_core::{BicDb, DbConfig};
-use bicdb_sql::SqlSession;
+use bicdb_sql::{SqlErrorField, SqlSession, SqlValue};
 #[test]
 fn top_level_with_delete_uses_ctes_for_using_returning_and_subqueries() {
     let root = tempfile::tempdir().unwrap();
@@ -73,4 +73,159 @@ fn top_level_delete_rolls_back_cte_mutations_on_constraint_failure() {
         session.execute("SELECT count(*) FROM child").unwrap().rows[0][0].to_cell(),
         "1"
     );
+}
+
+#[test]
+fn postgres_dml_target_alias_hides_the_original_relation_name() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE TABLE alias_target(id int PRIMARY KEY); INSERT INTO alias_target VALUES (1), (2)")
+        .unwrap();
+
+    for statement in [
+        "DELETE FROM alias_target AS t WHERE alias_target.id = 1",
+        "DELETE FROM public.alias_target AS t WHERE public.alias_target.id = 1",
+        "DELETE FROM alias_target AS t WHERE EXISTS (SELECT alias_target.id)",
+        "DELETE FROM alias_target AS t WHERE t.id = 1 RETURNING alias_target.*",
+        "WITH search AS (SELECT 1 AS id) DELETE FROM alias_target AS t USING search WHERE alias_target.id = search.id",
+        "UPDATE alias_target AS t SET id = alias_target.id + 10",
+    ] {
+        let error = session.execute(statement).unwrap_err();
+        assert_eq!(error.sqlstate(), "42P01", "{statement}: {error}");
+        assert_eq!(
+            error.postgres_message(),
+            "invalid reference to FROM-clause entry for table \"alias_target\"",
+            "{statement}",
+        );
+        assert!(error.fields().contains(&SqlErrorField::Hint(
+            "Perhaps you meant to reference the table alias \"t\".".to_owned(),
+        )));
+    }
+    assert_eq!(
+        session
+            .execute("SELECT id FROM alias_target ORDER BY id")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(2)]],
+    );
+    assert_eq!(
+        session
+            .execute("DELETE FROM alias_target AS t WHERE t.id = (SELECT alias_target.id FROM alias_target WHERE id = 2) RETURNING t.id")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(2)]],
+    );
+}
+
+#[test]
+fn postgres_aliased_dml_target_can_join_its_original_name() {
+    for partitioned in [false, true] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        let partition_clause = if partitioned {
+            " PARTITION BY RANGE (id)"
+        } else {
+            ""
+        };
+        session
+            .execute(&format!(
+                "CREATE TABLE target_source(id int PRIMARY KEY, label text){partition_clause}"
+            ))
+            .unwrap();
+        if partitioned {
+            session.execute("CREATE TABLE target_source_rows PARTITION OF target_source FOR VALUES FROM (0) TO (10)").unwrap();
+        }
+        session
+            .execute("INSERT INTO target_source VALUES (1, 'one'), (2, 'two')")
+            .unwrap();
+
+        let changed = session
+            .execute(
+                "UPDATE target_source t SET label = target_source.label FROM target_source
+             WHERE t.id = target_source.id + 1 RETURNING t.id, target_source.id, t.label",
+            )
+            .unwrap();
+        assert_eq!(
+            changed.rows,
+            vec![vec![
+                SqlValue::Int(2),
+                SqlValue::Int(1),
+                SqlValue::String("one".into())
+            ]]
+        );
+
+        let deleted = session
+            .execute(
+                "DELETE FROM target_source t USING target_source
+             WHERE t.id = target_source.id + 1 RETURNING t.id, target_source.id, t.label",
+            )
+            .unwrap();
+        assert_eq!(deleted.rows, changed.rows);
+        assert_eq!(deleted.command_tag.as_deref(), Some("DELETE 1"));
+        let empty = session.execute(
+            "DELETE FROM target_source t USING target_source WHERE false RETURNING target_source.id",
+        ).unwrap();
+        assert_eq!(empty.columns, vec!["id"]);
+        assert!(empty.rows.is_empty());
+        assert_eq!(empty.command_tag.as_deref(), Some("DELETE 0"));
+        assert_eq!(
+            session
+                .execute("SELECT id, label FROM target_source")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(1), SqlValue::String("one".into())]]
+        );
+    }
+}
+
+#[test]
+fn postgres_joined_returning_star_preserves_target_and_source_column_order() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut sql = SqlSession::new(&mut db);
+    for statement in [
+        "CREATE TABLE ret_target (id int PRIMARY KEY, val int)",
+        "CREATE TABLE ret_source (id int PRIMARY KEY, label text)",
+        "INSERT INTO ret_target VALUES (1,0),(2,0)",
+        "INSERT INTO ret_source VALUES (1,'one'),(2,'two')",
+    ] {
+        sql.execute(statement).unwrap();
+    }
+    for (statement, expected) in [
+        ("UPDATE ret_target t SET val=7 FROM ret_source s WHERE t.id=s.id AND t.id=1 RETURNING *", Some((1, 7, "one"))),
+        ("DELETE FROM ret_target t USING ret_source s WHERE t.id=s.id AND t.id=2 RETURNING *", Some((2, 0, "two"))),
+        ("UPDATE ret_target t SET val=8 FROM ret_source s WHERE false RETURNING *", None),
+        ("DELETE FROM ret_target t USING ret_source s WHERE false RETURNING *", None),
+    ] {
+        let result = sql.execute(statement).unwrap();
+        assert_eq!(result.columns, ["id", "val", "id", "label"]);
+        let expected = expected.map(|(id, val, label)| vec![
+            SqlValue::Int(id), SqlValue::Int(val), SqlValue::Int(id), SqlValue::String(label.into()),
+        ]).into_iter().collect::<Vec<_>>();
+        assert_eq!(result.rows, expected);
+    }
+}
+
+#[test]
+fn quoted_dml_target_alias_can_match_the_original_relation_name() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(r#"CREATE TABLE "Target"(id int); INSERT INTO "Target" VALUES (1)"#)
+        .unwrap();
+    assert_eq!(
+        session
+            .execute(r#"UPDATE "Target" AS "Target" SET id = (SELECT "Target".id + 1) RETURNING "Target".id"#)
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(2)]],
+    );
+    let error = session
+        .execute(r#"DELETE FROM "Target" AS "Target" WHERE public."Target".id = 2"#)
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42P01");
 }

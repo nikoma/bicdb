@@ -518,6 +518,7 @@ impl<'db> SqlSession<'db> {
             .collect::<BTreeSet<_>>();
         let mut merged_names = BTreeSet::new();
         let mut primary_key_name = None;
+        let postgres = !oracle::is_oracle_database(self.db_ref())?;
         for column in &create_table.columns {
             let mut column_schema = column_schema_from_def(self.db_ref(), column)?;
             if let Some(compression) = compression
@@ -556,7 +557,13 @@ impl<'db> SqlSession<'db> {
                     .pg_type
                     .strip_suffix("[]")
                     .is_some_and(is_oid_alias_type);
-            let constant_default = if has_oid_alias_default {
+            // A PostgreSQL character default keeps its original length in
+            // the catalog. Assignment checks its width when the default is
+            // used. An explicit cast inside the expression still truncates.
+            let defers_character_width = postgres
+                && column_schema.type_modifier.is_some()
+                && matches!(column_schema.pg_type.as_str(), "varchar" | "bpchar");
+            let constant_default = if has_oid_alias_default || defers_character_width {
                 column
                     .options
                     .iter()

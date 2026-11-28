@@ -365,6 +365,36 @@ fn create_schema_elements_restore_an_explicit_empty_search_path() {
 }
 
 #[test]
+fn drop_schema_cascade_names_only_unshadowed_relations_without_a_schema() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = open(root.path());
+    let mut session = SqlSession::new(&mut db);
+    exec(
+        &mut session,
+        "CREATE SCHEMA visible_schema CREATE TABLE t (a int);
+         CREATE SCHEMA shadowed_schema CREATE TABLE t (a int);
+         CREATE TABLE public.t (a int)",
+    );
+    for (path, statement, expected) in [
+        (
+            "visible_schema, public",
+            "DROP SCHEMA visible_schema CASCADE",
+            "drop cascades to table t",
+        ),
+        (
+            "public, shadowed_schema",
+            "DROP SCHEMA shadowed_schema CASCADE",
+            "drop cascades to table shadowed_schema.t",
+        ),
+    ] {
+        exec(&mut session, &format!("SET search_path = {path}"));
+        let notices = session.execute(statement).unwrap().notices;
+        assert_eq!(notices.len(), 1, "{statement}: {notices:?}");
+        assert_eq!(notices[0].message, expected);
+    }
+}
+
+#[test]
 fn create_schema_elements_run_as_the_schema_owner() {
     let root = tempfile::tempdir().unwrap();
     let mut db = open(root.path());
@@ -717,4 +747,50 @@ fn typed_tables_follow_their_composite_type() {
         ),
         vec!["0"]
     );
+}
+
+#[test]
+fn postgres_update_default_uses_declared_defaults_in_attribute_order() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = open(dir.path());
+    let mut s = SqlSession::new(&mut db);
+    exec(&mut s, "CREATE SEQUENCE dml_default_seq");
+    exec(&mut s, "CREATE TABLE dml_defaults (id int PRIMARY KEY, a bigint DEFAULT nextval('dml_default_seq'), b bigint, c int DEFAULT 42, d int, \"default\" int)");
+    exec(&mut s, "INSERT INTO dml_defaults VALUES (1,0,0,0,9,11)");
+    assert_eq!(
+        rows(&mut s, "UPDATE dml_defaults SET b=nextval('dml_default_seq'), a=DEFAULT, c=DEFAULT, d=DEFAULT RETURNING a,b,c,d"),
+        ["1|2|42|NULL"]
+    );
+    assert_eq!(
+        rows(&mut s, "UPDATE dml_defaults SET c=\"default\" RETURNING c"),
+        ["11"]
+    );
+}
+
+#[test]
+fn postgres_dml_returning_evaluates_predicate_subqueries() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = open(dir.path());
+    let mut s = SqlSession::new(&mut db);
+    exec(
+        &mut s,
+        "CREATE TABLE returning_dml (id int PRIMARY KEY, val int)",
+    );
+    exec(&mut s, "CREATE TABLE returning_lookup (id int, data int)");
+    exec(
+        &mut s,
+        "INSERT INTO returning_lookup VALUES (1,15), (2,NULL)",
+    );
+    let projection = "RETURNING id, val IN (SELECT data FROM returning_lookup), EXISTS (SELECT 1 FROM returning_lookup WHERE returning_lookup.id = returning_dml.id)";
+    for (statement, expected) in [
+        ("INSERT INTO returning_dml VALUES (1,15)", "1|t|t"),
+        ("UPDATE returning_dml SET val=25 WHERE id=1", "1|NULL|t"),
+        ("DELETE FROM returning_dml WHERE id=1", "1|NULL|t"),
+        ("INSERT INTO returning_dml VALUES (3,15)", "3|t|f"),
+    ] {
+        assert_eq!(
+            rows(&mut s, &format!("{statement} {projection}")),
+            [expected]
+        );
+    }
 }

@@ -3828,6 +3828,7 @@ fn copy_relation_info(
     state: &ConnectionState,
     copy: &CopyStatement,
     targets: &[String],
+    check_defaults: bool,
 ) -> Result<Option<bicdb_sql::CopyRelationInfo>> {
     let Some(relation) = copy.relation.as_deref() else {
         return Ok(None);
@@ -3838,7 +3839,16 @@ fn copy_relation_info(
         with_connection_guc_state(sql_session_shared_for_server(server, &db), server, state)
             .with_pending_transaction(tx)
             .with_deferred_commit();
-    let result = session.copy_relation_info(relation, targets);
+    let result = (|| {
+        if check_defaults {
+            session.validate_copy_from_defaults(
+                relation,
+                targets,
+                copy.options.default_marker.is_some(),
+            )?;
+        }
+        session.copy_relation_info(relation, targets)
+    })();
     if let Some(tx) = session.take_pending_transaction() {
         tx.rollback()?;
     }
@@ -4151,8 +4161,11 @@ fn begin_copy_in(
         };
         copy.options
             .resolve_columns(&targets, &defaults, copy.relation.as_deref())?;
-        if copy.options.freeze || copy.options.default_marker.is_some() {
-            let info = copy_relation_info(server, state, &copy, &targets)?;
+        let has_default_marker = copy.options.default_marker.is_some();
+        let check_defaults = !bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile)
+            && (has_default_marker || targets.len() < defaults.len());
+        if copy.options.freeze || has_default_marker || check_defaults {
+            let info = copy_relation_info(server, state, &copy, &targets, check_defaults)?;
             if copy.options.freeze {
                 check_copy_freeze(state, explicit_transaction, info.as_ref())?;
             }

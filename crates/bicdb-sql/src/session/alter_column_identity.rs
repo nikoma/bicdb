@@ -87,12 +87,17 @@ fn integer(tokens: &[&Token], at: &mut usize) -> Result<i64> {
         return Err(syntax_error(tokens.get(*at)));
     };
     *at += 1;
-    let value = text.parse::<i64>().map_err(|_| {
+    let signed = if negative {
+        format!("-{text}")
+    } else {
+        text.clone()
+    };
+    let value = signed.parse::<i64>().map_err(|_| {
         SqlError::numeric_value_out_of_range(format!(
-            "value \"{text}\" is out of range for type bigint"
+            "value \"{signed}\" is out of range for type bigint"
         ))
     })?;
-    Ok(if negative { -value } else { value })
+    Ok(value)
 }
 
 /// One sequence option at `*at` (an identity's option list).
@@ -166,6 +171,129 @@ fn seq_option(tokens: &[&Token], at: &mut usize) -> Result<SeqOption> {
         return Err(syntax_error(here));
     };
     Ok(option)
+}
+
+pub(crate) struct SequenceAlterParameters {
+    data_type: Option<String>,
+    options: Vec<SeqOption>,
+}
+
+pub(crate) fn parse_alter_sequence_parameters(
+    sql: &str,
+) -> Result<Option<SequenceAlterParameters>> {
+    let raw = Tokenizer::new(&PostgreSqlDialect {}, sql)
+        .tokenize()
+        .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+    let tokens = raw
+        .iter()
+        .filter(|token| !matches!(token, Token::Whitespace(_) | Token::SemiColon))
+        .collect::<Vec<_>>();
+    let recognized = [
+        "AS",
+        "START",
+        "INCREMENT",
+        "MINVALUE",
+        "MAXVALUE",
+        "CACHE",
+        "CYCLE",
+        "NO",
+        "RESTART",
+    ];
+    if !recognized.iter().any(|word| keyword(tokens.first(), word)) {
+        return Ok(None);
+    }
+    let mut at = 0;
+    let mut parameters = SequenceAlterParameters {
+        data_type: None,
+        options: Vec::new(),
+    };
+    while at < tokens.len() {
+        if keyword(tokens.get(at), "AS") {
+            at += 1;
+            let mut name = ident(tokens.get(at)).ok_or_else(|| syntax_error(tokens.get(at)))?;
+            at += 1;
+            if tokens.get(at) == Some(&&Token::Period) {
+                let part =
+                    ident(tokens.get(at + 1)).ok_or_else(|| syntax_error(tokens.get(at + 1)))?;
+                name = format!("{name}.{part}");
+                at += 2;
+            }
+            if parameters.data_type.replace(name).is_some() {
+                return Err(SqlError::coded(
+                    "42601",
+                    "conflicting or redundant options",
+                    None,
+                    None,
+                ));
+            }
+        } else {
+            let option = seq_option(&tokens, &mut at)?;
+            if parameters
+                .options
+                .iter()
+                .any(|previous| std::mem::discriminant(previous) == std::mem::discriminant(&option))
+            {
+                return Err(SqlError::coded(
+                    "42601",
+                    "conflicting or redundant options",
+                    None,
+                    None,
+                ));
+            }
+            parameters.options.push(option);
+        }
+    }
+    // The standalone RESTART form uses its existing path.
+    if parameters.data_type.is_none()
+        && matches!(parameters.options.as_slice(), [SeqOption::Restart(_)])
+    {
+        return Ok(None);
+    }
+    Ok(Some(parameters))
+}
+
+impl SequenceAlterParameters {
+    pub(crate) fn apply(&self, db: &BicDb, sequence: &mut SequenceSchema) -> Result<()> {
+        if let Some(data_type) = &self.data_type {
+            let oid = resolve_regtype_oid(db, data_type)?.ok_or_else(|| {
+                SqlError::undefined_object(format!("type \"{data_type}\" does not exist"))
+            })?;
+            let data_type = match oid {
+                21 => "int2",
+                23 => "int4",
+                20 => "int8",
+                _ => {
+                    return Err(SqlError::invalid_parameter_value(
+                        "sequence type must be smallint, integer, or bigint",
+                    ))
+                }
+            };
+            let (old_min, old_max) = sequence_type_limits(&sequence.data_type);
+            let (new_min, new_max) = sequence_type_limits(data_type);
+            if sequence.min_value == old_min {
+                sequence.min_value = new_min;
+            }
+            if sequence.max_value == old_max {
+                sequence.max_value = new_max;
+            }
+            sequence.data_type = data_type.to_owned();
+        }
+        apply_options(sequence, &self.options, false)?;
+        let last_value = sequence.last_value;
+        if last_value < sequence.min_value {
+            return Err(SqlError::invalid_parameter_value(format!(
+                "RESTART value ({last_value}) cannot be less than MINVALUE ({})",
+                sequence.min_value
+            )));
+        }
+        if last_value > sequence.max_value {
+            return Err(SqlError::invalid_parameter_value(format!(
+                "RESTART value ({last_value}) cannot be greater than MAXVALUE ({})",
+                sequence.max_value
+            )));
+        }
+        Ok(())
+    }
 }
 
 fn parse(sql: &str) -> Result<Option<AlterColumn>> {

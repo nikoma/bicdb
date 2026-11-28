@@ -5,6 +5,7 @@
 //! resolving; `lib.rs` re-exports this module via `pub use session::*;`.
 
 mod alter_column_identity;
+pub(crate) use alter_column_identity::{parse_alter_sequence_parameters, SequenceAlterParameters};
 mod collation_ddl;
 mod create_schema_elements;
 mod create_table_as;
@@ -1274,7 +1275,7 @@ pub struct SqlSession<'db> {
     /// replace the host-bound security context. Ordinary SQL sessions never
     /// enable this mode.
     pub(crate) signed_application_security_guc_compatibility: bool,
-    pub(crate) currvals: FxHashMap<String, i64>,
+    pub(crate) sequence_values: Rc<RefCell<SequenceSessionValues>>,
     pub(crate) sql_cursors: sql_cursors::SqlCursors,
     pub(crate) oracle_output: oracle::output::State,
     pub(crate) oracle_lobs: oracle::lobs::State,
@@ -1309,9 +1310,22 @@ pub struct SqlSessionGucState {
     transaction_timestamp_micros: Option<i64>,
     local_restore: HashMap<String, Option<String>>,
     local_settings_restore: SqlSettingsRestore,
-    currvals: FxHashMap<String, i64>,
+    sequence_values: SequenceSessionValues,
     sql_cursors: sql_cursors::SqlCursors,
     oracle_output: oracle::output::State,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct SequenceSessionValues {
+    pub(crate) current: FxHashMap<String, i64>,
+    pub(crate) last_sequence: Option<String>,
+}
+
+impl SequenceSessionValues {
+    pub(crate) fn record_nextval(&mut self, sequence: &str, value: i64) {
+        self.current.insert(sequence.to_owned(), value);
+        self.last_sequence = Some(sequence.to_owned());
+    }
 }
 
 impl SqlSessionGucState {
@@ -1387,18 +1401,8 @@ impl SqlSessionGucState {
     pub fn rollback_transaction(&mut self) {
         self.sql_cursors.rollback();
         if let Some(start) = self.transaction_start.take() {
-            let lastval = self.session_gucs.get(LASTVAL_SESSION_KEY).cloned();
             self.settings = start.settings;
             self.session_gucs = start.session_gucs;
-            match lastval {
-                Some(lastval) => {
-                    Arc::make_mut(&mut self.session_gucs)
-                        .insert(LASTVAL_SESSION_KEY.to_string(), lastval);
-                }
-                None => {
-                    Arc::make_mut(&mut self.session_gucs).remove(LASTVAL_SESSION_KEY);
-                }
-            }
         }
         self.local_restore.clear();
         self.local_settings_restore = SqlSettingsRestore::default();
@@ -1408,22 +1412,12 @@ impl SqlSessionGucState {
     pub fn restore_savepoint(&mut self, savepoint: &Self) {
         self.sql_cursors
             .rollback_to(savepoint.sql_cursors.copy_mark());
-        let lastval = self.session_gucs.get(LASTVAL_SESSION_KEY).cloned();
         self.settings = savepoint.settings;
         self.session_gucs = savepoint.session_gucs.clone();
         self.transaction_start = savepoint.transaction_start.clone();
         self.transaction_timestamp_micros = savepoint.transaction_timestamp_micros;
         self.local_restore = savepoint.local_restore.clone();
         self.local_settings_restore = savepoint.local_settings_restore.clone();
-        match lastval {
-            Some(lastval) => {
-                Arc::make_mut(&mut self.session_gucs)
-                    .insert(LASTVAL_SESSION_KEY.to_string(), lastval);
-            }
-            None => {
-                Arc::make_mut(&mut self.session_gucs).remove(LASTVAL_SESSION_KEY);
-            }
-        }
     }
 
     /// Conservatively estimates memory owned by this opaque state, including
@@ -1469,7 +1463,15 @@ impl SqlSessionGucState {
                     .unwrap_or_default(),
             )
             .saturating_add(optional_string_map_memory_estimate(&self.local_restore))
-            .saturating_add(sequence_value_map_memory_estimate(&self.currvals))
+            .saturating_add(sequence_value_map_memory_estimate(
+                &self.sequence_values.current,
+            ))
+            .saturating_add(
+                self.sequence_values
+                    .last_sequence
+                    .as_ref()
+                    .map_or(0, String::capacity),
+            )
             .saturating_add(self.oracle_output.memory_estimate())
     }
 }
@@ -2716,7 +2718,7 @@ impl<'db> SqlSession<'db> {
             pending_notifications: Vec::new(),
             signed_mutation_grants: BTreeMap::new(),
             signed_application_security_guc_compatibility: false,
-            currvals: FxHashMap::default(),
+            sequence_values: Rc::new(RefCell::new(SequenceSessionValues::default())),
             sql_cursors: sql_cursors::SqlCursors::default(),
             oracle_output: oracle::output::State::default(),
             oracle_lobs: oracle::lobs::State::default(),
@@ -2872,7 +2874,7 @@ impl<'db> SqlSession<'db> {
         self.transaction_timestamp_micros = state.transaction_timestamp_micros;
         self.guc_local_restore = state.local_restore;
         self.guc_local_settings_restore = state.local_settings_restore;
-        self.currvals = state.currvals;
+        *self.sequence_values.borrow_mut() = state.sequence_values;
         self.sql_cursors = state.sql_cursors;
         self.oracle_output = state.oracle_output;
         self.rebind_trusted_security_settings();
@@ -2889,7 +2891,7 @@ impl<'db> SqlSession<'db> {
             transaction_timestamp_micros: self.transaction_timestamp_micros.take(),
             local_restore: std::mem::take(&mut self.guc_local_restore),
             local_settings_restore: std::mem::take(&mut self.guc_local_settings_restore),
-            currvals: std::mem::take(&mut self.currvals),
+            sequence_values: std::mem::take(&mut *self.sequence_values.borrow_mut()),
             sql_cursors: self.sql_cursors.snapshot(),
             oracle_output: std::mem::take(&mut self.oracle_output),
         };
@@ -3142,7 +3144,7 @@ impl<'db> SqlSession<'db> {
             transaction_timestamp_micros: self.transaction_timestamp_micros,
             local_restore: self.guc_local_restore.clone(),
             local_settings_restore: self.guc_local_settings_restore.clone(),
-            currvals: self.currvals.clone(),
+            sequence_values: self.sequence_values.borrow().clone(),
             sql_cursors: self.sql_cursors.snapshot(),
             oracle_output: self.oracle_output.clone(),
         }
@@ -3291,13 +3293,8 @@ impl<'db> SqlSession<'db> {
                 self.rollback_ddl_to_len(ddl_undo_len)?;
                 self.savepoints.truncate(savepoint_len);
                 // Sequence consumption and currval/lastval are not rolled back.
-                gucs.currvals = std::mem::take(&mut self.currvals);
-                let lastval = self.session_gucs.get(LASTVAL_SESSION_KEY).cloned();
+                gucs.sequence_values = std::mem::take(&mut *self.sequence_values.borrow_mut());
                 self.install_session_guc_state(gucs);
-                if let Some(lastval) = lastval {
-                    Arc::make_mut(&mut self.session_gucs)
-                        .insert(LASTVAL_SESSION_KEY.into(), lastval);
-                }
             }
             return result;
         }
@@ -3413,6 +3410,33 @@ impl<'db> SqlSession<'db> {
                 physical_name: table,
                 has_default,
             }))
+        })
+    }
+
+    /// Validate folded defaults that COPY may use, before the client starts
+    /// sending rows. Expression defaults and sequence values are evaluated
+    /// only if a row actually uses them.
+    pub fn validate_copy_from_defaults(
+        &self,
+        table: &str,
+        targets: &[String],
+        default_marker: bool,
+    ) -> Result<()> {
+        self.with_relation_name_scopes(|| {
+            let qualified = self.bind_copy_relation(table);
+            let table = relation_name_from_parts(&qualified)?;
+            let table = resolve_session_relation_name(self.db_ref(), &table)?;
+            let Some(schema) = load_schema(self.db_ref(), &table)? else {
+                return Ok(());
+            };
+            for column in schema.columns.iter().filter(|column| {
+                !column.hidden && (default_marker || !targets.contains(&column.name))
+            }) {
+                if let Some(value) = &column.default_value {
+                    cast_value_to_column_type(value.clone(), column)?;
+                }
+            }
+            Ok(())
         })
     }
 
@@ -4209,13 +4233,8 @@ impl<'db> SqlSession<'db> {
                     tx.rollback_to_mark(mark)?;
                     self.rollback_ddl_to_len(ddl_len)?;
                     self.savepoints.truncate(savepoint_len);
-                    gucs.currvals = std::mem::take(&mut self.currvals);
-                    let lastval = self.session_gucs.get(LASTVAL_SESSION_KEY).cloned();
+                    gucs.sequence_values = std::mem::take(&mut *self.sequence_values.borrow_mut());
                     self.install_session_guc_state(gucs);
-                    if let Some(lastval) = lastval {
-                        Arc::make_mut(&mut self.session_gucs)
-                            .insert(LASTVAL_SESSION_KEY.into(), lastval);
-                    }
                 }
                 Some(_) => {
                     self.rollback_current_transaction()?;
@@ -5460,18 +5479,8 @@ impl<'db> SqlSession<'db> {
             .restore(self.savepoints[position].pg_large_objects);
         let write_rollback = tx.rollback_to_mark(transaction);
         let ddl_rollback = self.rollback_ddl_to_len(ddl_undo_len);
-        let lastval = self.session_gucs.get(LASTVAL_SESSION_KEY).cloned();
         self.settings = settings;
         self.session_gucs = session_gucs;
-        match lastval {
-            Some(lastval) => {
-                Arc::make_mut(&mut self.session_gucs)
-                    .insert(LASTVAL_SESSION_KEY.to_string(), lastval);
-            }
-            None => {
-                Arc::make_mut(&mut self.session_gucs).remove(LASTVAL_SESSION_KEY);
-            }
-        }
         self.guc_local_restore = guc_local_restore;
         self.guc_local_settings_restore = guc_local_settings_restore;
         self.savepoints.truncate(position + 1);
@@ -6131,12 +6140,7 @@ impl<'db> SqlSession<'db> {
     pub(crate) fn drop_owned_sequences_for_table(&mut self, table: &str) -> Result<()> {
         let owned_sequences = list_sequences(self.db_ref())?
             .into_iter()
-            .filter(|sequence| {
-                sequence
-                    .owned_by_table
-                    .as_deref()
-                    .is_some_and(|owned_table| owned_table.eq_ignore_ascii_case(table))
-            })
+            .filter(|sequence| sequence.owned_by_table.as_deref() == Some(table))
             .map(|sequence| sequence.name)
             .collect::<Vec<_>>();
         for sequence in owned_sequences {
@@ -6177,6 +6181,9 @@ impl<'db> SqlSession<'db> {
         let existed = delete_view(self.db_mut()?, view)?;
         if let Some(view) = previous {
             self.ddl_undo.push(DdlUndo::RestoreView { view });
+        }
+        if existed {
+            self.drop_owned_sequences_for_table(view)?;
         }
         Ok(existed)
     }
@@ -7525,7 +7532,7 @@ impl<'db> SqlSession<'db> {
         self.transaction_timestamp_micros = None;
         self.guc_local_restore.clear();
         self.guc_local_settings_restore = SqlSettingsRestore::default();
-        self.currvals.clear();
+        *self.sequence_values.borrow_mut() = SequenceSessionValues::default();
         self.sql_cursors.close_all();
         self.oracle_output.reset()?;
         self.rebind_trusted_security_settings();

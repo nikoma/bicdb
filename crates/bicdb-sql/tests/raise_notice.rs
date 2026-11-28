@@ -1,5 +1,5 @@
 use bicdb_core::BicDb;
-use bicdb_sql::{SqlSession, SqlValue};
+use bicdb_sql::{SqlErrorField, SqlSession, SqlValue};
 
 #[test]
 fn notice_does_not_abort_or_skip_remaining_writes() {
@@ -125,4 +125,85 @@ fn handled_exception_keeps_notices_and_notice_preserves_found() {
             .collect::<Vec<_>>(),
         vec!["found 7", "before rollback", "after rollback"]
     );
+}
+
+#[test]
+fn postgres_raise_accepts_dollar_quoted_format_and_options() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let result = session
+        .execute(
+            "DO $body$ BEGIN
+            RAISE NOTICE $msg$item %, USING (',' and %%)$msg$, 7
+                USING DETAIL = $detail$detail, with 'quotes'$detail$;
+        END $body$",
+        )
+        .unwrap();
+    assert_eq!(result.notices.len(), 1);
+    assert_eq!(result.notices[0].message, "item 7, USING (',' and %)");
+    assert!(result.notices[0]
+        .fields
+        .contains(&SqlErrorField::Detail("detail, with 'quotes'".into(),)));
+
+    let error = session
+        .execute(
+            "DO $body$ BEGIN
+            RAISE $$value %$$, 4 USING ERRCODE = $code$22023$code$, HINT = $$hint, with comma$$;
+        END $body$",
+        )
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "22023");
+    assert_eq!(error.postgres_message(), "value 4");
+    assert!(error
+        .fields()
+        .contains(&SqlErrorField::Hint("hint, with comma".into())));
+
+    session
+        .execute(
+            "CREATE TABLE raise_input (id int);
+         CREATE FUNCTION check_raise_input() RETURNS trigger LANGUAGE plpgsql AS $fn$
+         BEGIN
+            IF NEW.id < 0 THEN
+                RAISE EXCEPTION $$bad input: '%'$$, NEW.id;
+            END IF;
+            RETURN NEW;
+         END $fn$;
+         CREATE TRIGGER raise_input_check BEFORE INSERT ON raise_input
+            FOR EACH ROW EXECUTE FUNCTION check_raise_input()",
+        )
+        .unwrap();
+    session
+        .execute("INSERT INTO raise_input VALUES (1)")
+        .unwrap();
+    let error = session
+        .execute("INSERT INTO raise_input VALUES (-1)")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "P0001");
+    assert_eq!(error.postgres_message(), "bad input: '-1'");
+}
+
+#[test]
+fn postgres_raise_accepts_escape_strings_and_arrays_in_arguments() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let result = session
+        .execute(
+            r"DO $$ BEGIN
+            RAISE NOTICE E'can\'t, USING; %', ARRAY[1,2]::text
+                USING DETAIL = E'foo\\bar\041baz';
+        END $$",
+        )
+        .unwrap();
+    assert_eq!(result.notices[0].message, "can't, USING; {1,2}");
+    assert!(result.notices[0]
+        .fields
+        .contains(&SqlErrorField::Detail(r"foo\bar!baz".into(),)));
+
+    let error = session
+        .execute(r"DO $$ BEGIN RAISE E'value \041'; END $$")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "P0001");
+    assert_eq!(error.postgres_message(), "value !");
 }

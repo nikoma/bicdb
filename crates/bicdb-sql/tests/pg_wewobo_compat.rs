@@ -1496,6 +1496,104 @@ fn generate_series_steps_timestamps_by_an_interval() {
 }
 
 #[test]
+fn generate_series_uses_exact_numeric_steps_and_result_types() {
+    let (_dir, mut db) = db();
+    let mut session = SqlSession::new(&mut db);
+    let positive = session
+        .execute("SELECT v FROM generate_series(0.0, 1.0, 0.25) AS v")
+        .unwrap();
+    assert_eq!(positive.column_types, vec![Some("numeric".to_owned())]);
+    assert_eq!(
+        positive.rows,
+        ["0.0", "0.25", "0.50", "0.75", "1.00"]
+            .into_iter()
+            .map(|value| vec![text(value)])
+            .collect::<Vec<_>>(),
+    );
+    let descending = session
+        .execute("SELECT generate_series(3, 1, -0.50)")
+        .unwrap();
+    assert_eq!(descending.column_types, vec![Some("numeric".to_owned())]);
+    assert_eq!(
+        descending.rows,
+        ["3", "2.50", "2.00", "1.50", "1.00"]
+            .into_iter()
+            .map(|value| vec![text(value)])
+            .collect::<Vec<_>>(),
+    );
+    assert_eq!(
+        session
+            .execute("SELECT count(*) FROM generate_series(1, 1e4)")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(10_000)]],
+    );
+    for sql in [
+        "SELECT generate_series(NULL::numeric, 2)",
+        "SELECT * FROM generate_series(1::numeric, 2, -1)",
+    ] {
+        assert!(session.execute(sql).unwrap().rows.is_empty(), "{sql}");
+    }
+    for (sql, message) in [
+        (
+            "SELECT generate_series(1::numeric, 2, 0)",
+            "step size cannot equal zero",
+        ),
+        (
+            "SELECT generate_series('NaN'::numeric, 2)",
+            "start value cannot be NaN",
+        ),
+        (
+            "SELECT * FROM generate_series(1, 'Infinity'::numeric)",
+            "stop value cannot be infinity",
+        ),
+    ] {
+        let error = session.execute(sql).unwrap_err();
+        assert_eq!(error.sqlstate(), "22023", "{sql}: {error}");
+        assert_eq!(error.postgres_message(), message);
+    }
+}
+
+#[test]
+fn generate_series_with_ordinality_labels_rows_and_allows_partial_aliases() {
+    let (_dir, mut db) = db();
+    let mut session = SqlSession::new(&mut db);
+    let integers = session
+        .execute("SELECT v, n FROM generate_series(4, 2, -1) WITH ORDINALITY AS s(v, n)")
+        .unwrap();
+    assert_eq!(
+        integers.column_types,
+        vec![Some("int4".into()), Some("int8".into())]
+    );
+    assert_eq!(
+        integers.rows,
+        vec![
+            vec![SqlValue::Int(4), SqlValue::Int(1)],
+            vec![SqlValue::Int(3), SqlValue::Int(2)],
+            vec![SqlValue::Int(2), SqlValue::Int(3)],
+        ],
+    );
+    let numeric = session
+        .execute("SELECT step, ordinality FROM generate_series(0.0, 0.25, 0.25) WITH ORDINALITY AS s(step)")
+        .unwrap();
+    assert_eq!(
+        numeric.rows,
+        vec![
+            vec![text("0.0"), SqlValue::Int(1)],
+            vec![text("0.25"), SqlValue::Int(2)]
+        ],
+    );
+    let error = session
+        .execute("SELECT * FROM generate_series(1, 2) WITH ORDINALITY AS s(a, b, c)")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42P10");
+    assert_eq!(
+        error.postgres_message(),
+        "table \"s\" has 2 columns available but 3 columns specified"
+    );
+}
+
+#[test]
 fn partial_unique_index_frees_a_key_when_the_transaction_moves_the_row_out_of_its_predicate() {
     let (_dir, mut db) = db();
     // $1/$2 are the WeWoBo statement's parameters; the other statements take none.

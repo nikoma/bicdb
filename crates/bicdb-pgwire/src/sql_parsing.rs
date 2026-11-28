@@ -3456,7 +3456,13 @@ pub(crate) fn describe_message(
                     None,
                     Some(&mut state.catalog_cache),
                 )?;
-            } else if let Some(result) = returning_describe_result(server, &statement.sql)? {
+            } else if let Some(result) = returning_describe_result(
+                server,
+                &statement.sql,
+                &state.session_state,
+                state.security_context.as_ref(),
+                &mut state.catalog_cache,
+            )? {
                 describe_result(
                     stream,
                     server,
@@ -3570,7 +3576,13 @@ pub(crate) fn describe_message(
                 || is_mutation_without_returning(&portal_sql)
             {
                 no_data(stream)?;
-            } else if let Some(result) = returning_describe_result(server, &portal_sql)? {
+            } else if let Some(result) = returning_describe_result(
+                server,
+                &portal_sql,
+                &state.session_state,
+                state.security_context.as_ref(),
+                &mut state.catalog_cache,
+            )? {
                 describe_result(
                     stream,
                     server,
@@ -3918,9 +3930,82 @@ pub(crate) fn is_describable_query(sql: &str) -> bool {
         || normalized.starts_with("table ")
 }
 
+// The read-only stand-in for one DML statement, or None if it cannot be
+// expressed (for example a DML CTE without RETURNING that is referenced).
+fn describe_dml_as_select(statement: &Statement) -> Option<String> {
+    use sqlparser::ast::{FromTable, TableObject, UpdateTableFromKind};
+    fn join_tables(tables: &[sqlparser::ast::TableWithJoins]) -> String {
+        tables
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+    fn select_items(items: &Option<Vec<sqlparser::ast::SelectItem>>) -> Option<String> {
+        let items = items.as_ref()?;
+        if items.is_empty() {
+            return None;
+        }
+        Some(
+            items
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", "),
+        )
+    }
+
+    match statement {
+        Statement::Insert(insert) => {
+            let TableObject::TableName(table) = &insert.table else {
+                return None;
+            };
+            let alias = insert
+                .table_alias
+                .as_ref()
+                .map(|alias| format!(" AS {}", alias.alias))
+                .unwrap_or_default();
+            let items = select_items(&insert.returning).unwrap_or_else(|| "NULL".to_string());
+            Some(format!("SELECT {items} FROM {table}{alias} LIMIT 0"))
+        }
+        Statement::Update(update) => {
+            let mut tables = vec![update.table.clone()];
+            match &update.from {
+                Some(UpdateTableFromKind::BeforeSet(from))
+                | Some(UpdateTableFromKind::AfterSet(from)) => tables.extend(from.iter().cloned()),
+                None => {}
+            }
+            let items = select_items(&update.returning).unwrap_or_else(|| "NULL".to_string());
+            Some(format!(
+                "SELECT {items} FROM {} LIMIT 0",
+                join_tables(&tables)
+            ))
+        }
+        Statement::Delete(delete) => {
+            let mut tables = match &delete.from {
+                FromTable::WithFromKeyword(tables) | FromTable::WithoutKeyword(tables) => {
+                    tables.clone()
+                }
+            };
+            if let Some(using) = &delete.using {
+                tables.extend(using.iter().cloned());
+            }
+            let items = select_items(&delete.returning).unwrap_or_else(|| "NULL".to_string());
+            Some(format!(
+                "SELECT {items} FROM {} LIMIT 0",
+                join_tables(&tables)
+            ))
+        }
+        _ => None,
+    }
+}
+
 pub(crate) fn returning_describe_result(
     server: &Arc<PgWireServer>,
     sql: &str,
+    session_state: &SqlSessionGucState,
+    security_context: Option<&SecurityContext>,
+    catalog_cache: &mut SqlSessionCatalogCache,
 ) -> Result<Option<SqlResult>> {
     let normalized = sql.trim_start().to_ascii_lowercase();
     if !(normalized.starts_with("insert")
@@ -3932,6 +4017,27 @@ pub(crate) fn returning_describe_result(
     let Some(returning_idx) = find_top_level_keyword(sql, "returning") else {
         return Ok(None);
     };
+    if normalized.starts_with("update") || normalized.starts_with("delete") {
+        if let Ok(statements) = Parser::parse_sql(&PostgreSqlDialect {}, sql) {
+            let joined_statement = match statements.as_slice() {
+                [statement @ Statement::Update(update)] if update.from.is_some() => Some(statement),
+                [statement @ Statement::Delete(delete)] if delete.using.is_some() => {
+                    Some(statement)
+                }
+                _ => None,
+            };
+            if let Some(describe_sql) = joined_statement.and_then(describe_dml_as_select) {
+                return execute_server_sql_for_describe_with_session(
+                    server,
+                    &describe_sql,
+                    session_state,
+                    security_context,
+                    catalog_cache,
+                )
+                .map(Some);
+            }
+        }
+    }
     let returning_sql = strip_sql_comments(&sql[returning_idx + "returning".len()..]);
     let returning = returning_sql.trim().trim_end_matches(';').trim();
     let expressions = split_top_level_commas(returning);
@@ -4777,7 +4883,7 @@ mod query_text_fast_path_tests {
 /// `None` when the statement is not such a query or uses a shape this does
 /// not cover (the caller then reports no row description, as before).
 pub(crate) fn mutating_with_describe_sql(sql: &str) -> Option<String> {
-    use sqlparser::ast::{FromTable, SetExpr, Statement, TableObject, UpdateTableFromKind};
+    use sqlparser::ast::{SetExpr, Statement};
     use sqlparser::dialect::PostgreSqlDialect;
     use sqlparser::parser::Parser;
 
@@ -4794,75 +4900,6 @@ pub(crate) fn mutating_with_describe_sql(sql: &str) -> Option<String> {
     };
     let mut query = *query;
 
-    fn join_tables(tables: &[sqlparser::ast::TableWithJoins]) -> String {
-        tables
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join(", ")
-    }
-    fn select_items(items: &Option<Vec<sqlparser::ast::SelectItem>>) -> Option<String> {
-        let items = items.as_ref()?;
-        if items.is_empty() {
-            return None;
-        }
-        Some(
-            items
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-                .join(", "),
-        )
-    }
-    // The read-only stand-in for one DML statement, or None if it cannot be
-    // expressed (for example a DML CTE without RETURNING that is referenced).
-    fn read_only(statement: &Statement) -> Option<String> {
-        match statement {
-            Statement::Insert(insert) => {
-                let TableObject::TableName(table) = &insert.table else {
-                    return None;
-                };
-                let alias = insert
-                    .table_alias
-                    .as_ref()
-                    .map(|alias| format!(" AS {}", alias.alias))
-                    .unwrap_or_default();
-                let items = select_items(&insert.returning).unwrap_or_else(|| "NULL".to_string());
-                Some(format!("SELECT {items} FROM {table}{alias} LIMIT 0"))
-            }
-            Statement::Update(update) => {
-                let mut tables = vec![update.table.clone()];
-                match &update.from {
-                    Some(UpdateTableFromKind::BeforeSet(from))
-                    | Some(UpdateTableFromKind::AfterSet(from)) => {
-                        tables.extend(from.iter().cloned())
-                    }
-                    None => {}
-                }
-                let items = select_items(&update.returning).unwrap_or_else(|| "NULL".to_string());
-                Some(format!(
-                    "SELECT {items} FROM {} LIMIT 0",
-                    join_tables(&tables)
-                ))
-            }
-            Statement::Delete(delete) => {
-                let mut tables = match &delete.from {
-                    FromTable::WithFromKeyword(tables) | FromTable::WithoutKeyword(tables) => {
-                        tables.clone()
-                    }
-                };
-                if let Some(using) = &delete.using {
-                    tables.extend(using.iter().cloned());
-                }
-                let items = select_items(&delete.returning).unwrap_or_else(|| "NULL".to_string());
-                Some(format!(
-                    "SELECT {items} FROM {} LIMIT 0",
-                    join_tables(&tables)
-                ))
-            }
-            _ => None,
-        }
-    }
     fn dml_of(body: &SetExpr) -> Option<&Statement> {
         match body {
             SetExpr::Insert(statement)
@@ -4896,13 +4933,13 @@ pub(crate) fn mutating_with_describe_sql(sql: &str) -> Option<String> {
     if let Some(with) = query.with.as_mut() {
         for cte in &mut with.cte_tables {
             if let Some(statement) = dml_of(&cte.query.body) {
-                let replacement = parse_query(&read_only(statement)?)?;
+                let replacement = parse_query(&describe_dml_as_select(statement)?)?;
                 *cte.query = replacement;
             }
         }
     }
     if let Some(statement) = dml_of(&query.body) {
-        let replacement = parse_query(&read_only(statement)?)?;
+        let replacement = parse_query(&describe_dml_as_select(statement)?)?;
         query.body = replacement.body;
         query.limit_clause = replacement.limit_clause;
     }

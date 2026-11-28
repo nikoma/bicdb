@@ -944,7 +944,7 @@ impl SqlSession<'_> {
             .map(|slot| source.columns[*slot].clone())
             .collect::<Vec<_>>();
         wildcard.extend(target_columns[..target_width].iter().cloned());
-        let mut result = self.project_update_from_returning_slot_rows(
+        let mut result = self.project_joined_dml_returning(
             &table,
             Some(&schema),
             &items,

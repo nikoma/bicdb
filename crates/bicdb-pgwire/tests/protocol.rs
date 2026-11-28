@@ -5819,14 +5819,16 @@ fn pgwire_copy_start_snapshot_crossing_memory_limit_is_rejected_before_copy_mode
 
 #[test]
 fn pgwire_set_local_restore_crossing_memory_limit_is_rejected_immediately() {
+    const SETTINGS: usize = 64;
     let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
     let server = PgWireServer::open(
         dir.path(),
         PgWireConfig {
-            // Above the BEGIN snapshot, below the fourth local-restore growth.
-            per_connection_memory_limit: 102_200,
+            // Leave room for BEGIN and the entire request. The accumulated
+            // restore map crosses the limit as the statements execute.
+            per_connection_memory_limit: 160 * 1024,
             ..PgWireConfig::default()
         },
     )
@@ -5838,28 +5840,21 @@ fn pgwire_set_local_restore_crossing_memory_limit_is_rejected_immediately() {
     startup(&mut client);
     read_until_ready(&mut client);
 
-    let value = "l".repeat(8 * 1024);
-    for index in 0..6 {
+    let value = "l".repeat(1024);
+    for index in 0..SETTINGS {
         send_query(&mut client, &format!("SET app.local_{index} = '{value}';"));
         assert_eq!(read_query_rows_with_status(&mut client).1, b'I');
     }
     send_query(&mut client, "BEGIN;");
     assert_eq!(read_query_rows_with_status(&mut client).1, b'T');
 
-    let mut rejection = None;
-    for index in 0..6 {
-        send_query(
-            &mut client,
-            &format!("SET LOCAL app.local_{index} = 'request';"),
-        );
-        let (error, status) = read_error_response_with_status(&mut client);
-        if !error.is_empty() {
-            rejection = Some((error, status));
-            break;
-        }
-        assert_eq!(status, b'T');
-    }
-    let (error, status) = rejection.expect("SET LOCAL must cross the memory cap");
+    send_query(&mut client, "SET LOCAL app.local_0 = 'request';");
+    assert_eq!(read_query_rows_with_status(&mut client).1, b'T');
+    let local_statements: String = (1..SETTINGS)
+        .map(|index| format!("SET LOCAL app.local_{index} = 'request';"))
+        .collect();
+    send_query(&mut client, &local_statements);
+    let (error, status) = read_error_response_with_status(&mut client);
     assert!(error.contains("connection memory estimate"), "{error}");
     assert_eq!(status, b'E');
 
@@ -14662,6 +14657,63 @@ fn typed_float_parameter_keeps_all_widened_integer_primary_key_matches() {
             "{query}"
         );
     }
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
+}
+
+#[test]
+fn extended_joined_dml_returning_describes_source_columns() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        bicdb_pgwire::handle_client(stream, path).unwrap();
+    });
+    let mut client = TcpStream::connect(address).unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+    for statement in [
+        "CREATE TABLE ret_target (id int PRIMARY KEY, val int)",
+        "CREATE TABLE ret_source (id int PRIMARY KEY, payload jsonb)",
+        "INSERT INTO ret_target VALUES (1,0),(2,0)",
+        r#"INSERT INTO ret_source VALUES (1,'{"n":1}'),(2,'{"n":2}')"#,
+    ] {
+        send_query(&mut client, statement);
+        read_query_rows(&mut client);
+    }
+
+    for (name, statement, id, val) in [
+        (
+            "update_star",
+            "UPDATE ret_target t SET val=7 FROM ret_source s WHERE t.id=s.id AND t.id=1 RETURNING *, 9::bigint",
+            1_i32,
+            7_i32,
+        ),
+        (
+            "delete_star",
+            "DELETE FROM ret_target t USING ret_source s WHERE t.id=s.id AND t.id=2 RETURNING *, 9::bigint",
+            2,
+            0,
+        ),
+    ] {
+        send_parse(&mut client, name, statement, &[]);
+        send_bind_binary(&mut client, "", name, &[], &[1]);
+        send_describe_portal(&mut client, "");
+        send_execute(&mut client, "");
+        send_sync(&mut client);
+        let (oids, formats, rows, _) = read_binary_query_result_with_oids(&mut client);
+        assert_eq!(oids, [23, 23, 23, 3802, 20]);
+        assert_eq!(formats, [1; 5]);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0][0], id.to_be_bytes());
+        assert_eq!(rows[0][1], val.to_be_bytes());
+        assert_eq!(rows[0][2], id.to_be_bytes());
+        assert_eq!(rows[0][3].first(), Some(&1));
+        assert_eq!(rows[0][4], 9_i64.to_be_bytes());
+    }
+
     client.write_all(b"X\0\0\0\x04").unwrap();
     server.join().unwrap();
 }

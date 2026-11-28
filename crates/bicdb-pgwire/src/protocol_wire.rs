@@ -848,6 +848,16 @@ pub(crate) fn infer_dml_returning_oids(sql: &str) -> Option<Vec<Option<i32>>> {
         Statement::Delete(delete) => delete.returning.as_ref()?,
         _ => return None,
     };
+    // A wildcard can expand to multiple columns. Positional inference
+    // over the unexpanded syntax would assign later casts to the wrong slot.
+    if projection.iter().any(|item| {
+        matches!(
+            item,
+            SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(_, _)
+        )
+    }) {
+        return None;
+    }
     Some(
         projection
             .iter()

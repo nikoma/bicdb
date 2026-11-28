@@ -185,6 +185,87 @@ fn text_copy_end_marker_requires_its_own_line() {
     finish(client, server);
 }
 
+#[test]
+fn copy_checks_used_constant_defaults_before_entering_copy_mode() {
+    let (mut client, server, _dir) = serve();
+    let setup = simple(
+        &mut client,
+        "CREATE TABLE oversized_defaults (a varchar(5) DEFAULT 'overlong', b varchar(5))",
+    );
+    assert!(error_field(&setup, 'C').is_none());
+    for sql in [
+        "COPY oversized_defaults (b) FROM STDIN",
+        "COPY oversized_defaults FROM STDIN (DEFAULT '!')",
+        "COPY oversized_defaults (b) FROM STDIN (ON_ERROR IGNORE)",
+    ] {
+        let messages = copy_in(&mut client, sql, b"");
+        assert_eq!(
+            messages.first().map(|message| message.0),
+            Some(b'E'),
+            "{sql}"
+        );
+        assert_eq!(error_field(&messages, 'C').as_deref(), Some("22001"));
+        assert_eq!(
+            error_field(&messages, 'M').as_deref(),
+            Some("value too long for type character varying(5)")
+        );
+        assert!(error_field(&messages, 'W').is_none());
+    }
+    assert!(error_field(
+        &copy_in(
+            &mut client,
+            "COPY oversized_defaults FROM STDIN",
+            b"hello\tx\n"
+        ),
+        'C'
+    )
+    .is_none());
+    assert_eq!(
+        rows(&simple(&mut client, "SELECT a,b FROM oversized_defaults")),
+        vec![vec![Some("hello".into()), Some("x".into())]]
+    );
+    let insert = simple(
+        &mut client,
+        "INSERT INTO oversized_defaults (b) VALUES ('y')",
+    );
+    assert_eq!(error_field(&insert, 'C').as_deref(), Some("22001"));
+
+    let setup = simple(
+        &mut client,
+        "CREATE TABLE explicitly_cast_default (a varchar(5) DEFAULT 'overlong'::varchar(5))",
+    );
+    assert!(error_field(&setup, 'C').is_none());
+    let copied = copy_in(
+        &mut client,
+        "COPY explicitly_cast_default FROM STDIN (DEFAULT '!')",
+        b"!\n",
+    );
+    assert!(error_field(&copied, 'C').is_none(), "{copied:?}");
+    assert_eq!(
+        rows(&simple(
+            &mut client,
+            "SELECT a FROM explicitly_cast_default"
+        )),
+        vec![vec![Some("overl".into())]],
+    );
+
+    simple(
+        &mut client,
+        "CREATE SEQUENCE copy_unconsumed;
+         CREATE TABLE expression_defaults (a bigint DEFAULT nextval('copy_unconsumed'), b int)",
+    );
+    assert!(error_field(
+        &copy_in(&mut client, "COPY expression_defaults (b) FROM STDIN", b""),
+        'C'
+    )
+    .is_none());
+    assert_eq!(
+        rows(&simple(&mut client, "SELECT nextval('copy_unconsumed')")),
+        vec![vec![Some("1".into())]]
+    );
+    finish(client, server);
+}
+
 fn copy_bytes(messages: &[(u8, Vec<u8>)]) -> Vec<u8> {
     messages
         .iter()

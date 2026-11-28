@@ -49,8 +49,13 @@ pub(crate) fn error_position(query: &str, sqlstate: &str, message: &str) -> Opti
     if let Some(name) = message.strip_prefix("collection not found: ") {
         return text.relation_reference(name.trim());
     }
-    if let Some(name) = quoted_between(message, "missing FROM-clause entry for table \"", "\"") {
-        return text.qualifier_reference(name);
+    for prefix in [
+        "missing FROM-clause entry for table \"",
+        "invalid reference to FROM-clause entry for table \"",
+    ] {
+        if let Some(name) = quoted_between(message, prefix, "\"") {
+            return text.qualifier_reference(name);
+        }
     }
     if let Some(name) = quoted_between(message, "type \"", "\" does not exist") {
         return text.word_reference(name);
@@ -493,7 +498,7 @@ impl QueryText {
         self.word_offsets(name)
             .into_iter()
             .find(|&offset| self.next_code_char(self.after_word(offset)) == Some('.'))
-            .map(|offset| offset + 1)
+            .map(|offset| self.qualified_start(offset) + 1)
     }
 
     fn word_reference(&self, name: &str) -> Option<usize> {
@@ -713,6 +718,19 @@ fn is_ident_char(c: char) -> bool {
 #[cfg(test)]
 mod tests {
     use super::error_position;
+
+    #[test]
+    fn hidden_dml_alias_error_points_to_the_qualified_reference() {
+        let query = "DELETE FROM public.t AS target WHERE public.t.id = 1";
+        assert_eq!(
+            error_position(
+                query,
+                "42P01",
+                "invalid reference to FROM-clause entry for table \"t\""
+            ),
+            Some(query.rfind("public.t").unwrap() + 1),
+        );
+    }
 
     #[test]
     fn syntax_errors_point_at_the_token_or_end_of_input() {

@@ -1434,8 +1434,24 @@ pub fn oid_alias_numeric_value(db: &BicDb, pg_type: &str, value: &SqlValue) -> R
     u32::try_from(oid).map_err(|_| SqlError::numeric_value_out_of_range("OID out of range"))
 }
 
-const REGCONFIG_OBJECTS: &[(u32, &str)] = &[
+// Keep previously published IDs for stored regconfig and regdictionary values.
+// The languages previously accepted only by name use PostgreSQL's IDs.
+pub(crate) const REGCONFIG_OBJECTS: &[(u32, &str)] = &[
     (3748, "simple"),
+    (13236, "arabic"),
+    (13238, "armenian"),
+    (13240, "basque"),
+    (13242, "catalan"),
+    (13250, "estonian"),
+    (13258, "greek"),
+    (13260, "hindi"),
+    (13264, "indonesian"),
+    (13266, "irish"),
+    (13270, "lithuanian"),
+    (13272, "nepali"),
+    (13282, "serbian"),
+    (13288, "tamil"),
+    (13292, "yiddish"),
     (810_100, "danish"),
     (810_101, "dutch"),
     (810_102, "english"),
@@ -1459,8 +1475,22 @@ pub(crate) fn builtin_regconfig_name(oid: i64) -> Option<&'static str> {
         .find_map(|(candidate, name)| (i64::from(*candidate) == oid).then_some(*name))
 }
 
-const REGDICTIONARY_OBJECTS: &[(u32, &str)] = &[
+pub(crate) const REGDICTIONARY_OBJECTS: &[(u32, &str)] = &[
     (3765, "simple"),
+    (13235, "arabic_stem"),
+    (13237, "armenian_stem"),
+    (13239, "basque_stem"),
+    (13241, "catalan_stem"),
+    (13249, "estonian_stem"),
+    (13257, "greek_stem"),
+    (13259, "hindi_stem"),
+    (13263, "indonesian_stem"),
+    (13265, "irish_stem"),
+    (13269, "lithuanian_stem"),
+    (13271, "nepali_stem"),
+    (13281, "serbian_stem"),
+    (13287, "tamil_stem"),
+    (13291, "yiddish_stem"),
     (810_200, "danish_stem"),
     (810_201, "dutch_stem"),
     (810_202, "english_stem"),
@@ -1477,6 +1507,12 @@ const REGDICTIONARY_OBJECTS: &[(u32, &str)] = &[
     (810_213, "swedish_stem"),
     (810_214, "turkish_stem"),
 ];
+
+pub(crate) fn builtin_regdictionary_name(oid: i64) -> Option<&'static str> {
+    REGDICTIONARY_OBJECTS
+        .iter()
+        .find_map(|(candidate, name)| (i64::from(*candidate) == oid).then_some(*name))
+}
 
 const REGOPERATOR_OBJECTS: &[(u32, &str, &str, &str)] = &[
     (96, "=", "int4", "int4"),

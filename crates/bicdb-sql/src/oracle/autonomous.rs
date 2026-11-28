@@ -317,7 +317,7 @@ impl SqlSession<'_> {
         child.oracle_autonomous = true;
         child.settings = self.settings;
         child.session_gucs = self.session_gucs.clone();
-        child.currvals = self.currvals.clone();
+        *child.sequence_values.borrow_mut() = self.sequence_values.borrow().clone();
         child.oracle_output = self.oracle_output.clone();
         child.oracle_exception = self.oracle_exception.clone();
         child.oracle_error_tokens = self.oracle_error_tokens.clone();
@@ -349,10 +349,13 @@ impl SqlSession<'_> {
         // Errors roll back only the currently open child transaction. Earlier
         // child commits and the caller's pending transaction remain separate.
         let cleanup = child.rollback_current_transaction();
-        self.currvals.extend(child.currvals);
-        if let Some(last) = child.session_gucs.get(LASTVAL_SESSION_KEY) {
-            Arc::make_mut(&mut self.session_gucs).insert(LASTVAL_SESSION_KEY.into(), last.clone());
+        let child_sequences = std::mem::take(&mut *child.sequence_values.borrow_mut());
+        let mut sequences = self.sequence_values.borrow_mut();
+        sequences.current.extend(child_sequences.current);
+        if child_sequences.last_sequence.is_some() {
+            sequences.last_sequence = child_sequences.last_sequence;
         }
+        drop(sequences);
         let sequence = effects.latest_sequence();
         self.snapshot_floor = self.snapshot_floor.max(sequence);
         if let Some(tx) = self.tx.as_mut() {

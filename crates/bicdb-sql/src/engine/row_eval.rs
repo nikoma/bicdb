@@ -2024,6 +2024,9 @@ impl<'db> SqlEngine<'db> {
                 return Ok(value);
             }
         }
+        if self.sequence_values.is_some() && is_sequence_function_name(&name) {
+            return SqlSession::for_row_routine_call(self).eval_sequence_values(&name, &args);
+        }
         if let Some(value) = eval_network_function_value(&name, &args, &arg_types)?
             .or(eval_user_range_function_value_for(
                 self.db_ref(),
@@ -3635,6 +3638,9 @@ impl<'db> SqlEngine<'db> {
                 )
                 .as_deref(),
             ),
+            Expr::InSubquery { .. } | Expr::Exists { .. } => self
+                .eval_row_truth(row, expr)
+                .map(|value| value.map(SqlValue::Bool).unwrap_or(SqlValue::Null)),
             Expr::Subquery(query) => self.execute_correlated_scalar_subquery(row, query),
             Expr::Nested(expr) => self.eval_row_value(row, expr),
             Expr::Collate { expr, collation } => {
@@ -3803,6 +3809,9 @@ impl<'db> SqlEngine<'db> {
             if let Some(value) = self.eval_stored_sql_function_value(&name, &args, &arg_types)? {
                 return Ok(value);
             }
+        }
+        if self.sequence_values.is_some() && is_sequence_function_name(&name) {
+            return SqlSession::for_row_routine_call(self).eval_sequence_values(&name, &args);
         }
         if let Some(value) = eval_network_function_value(&name, &args, &arg_types)?
             .or(eval_user_range_function_value_for(

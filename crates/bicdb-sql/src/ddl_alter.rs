@@ -2793,6 +2793,10 @@ pub(crate) fn raw_create_sequence(sql: &str) -> Result<Option<(String, SequenceS
         ));
     };
     let option_tokens = &tokens[idx + 1..];
+    // Resolve ownership against the SQL catalog using the parsed target names.
+    if option_tokens.windows(2).any(|pair| pair == ["owned", "by"]) {
+        return Ok(None);
+    }
     let data_type = option_tokens
         .windows(2)
         .find(|pair| pair[0] == "as")
@@ -2877,20 +2881,6 @@ pub(crate) fn raw_create_sequence(sql: &str) -> Result<Option<(String, SequenceS
                 sequence.cycle = false;
                 idx += 2;
             }
-            "owned" if tokens.get(idx + 1) == Some(&"by") => {
-                let Some(owner) = tokens.get(idx + 2) else {
-                    return Err(SqlError::InvalidSql(
-                        "CREATE SEQUENCE OWNED BY expects an owner".to_string(),
-                    ));
-                };
-                if *owner != "none" {
-                    if let Some((table, column)) = owner.rsplit_once('.') {
-                        sequence.owned_by_table = Some(normalize_sequence_name(table)?);
-                        sequence.owned_by_column = Some(column.trim_matches('"').to_string());
-                    }
-                }
-                idx += 3;
-            }
             other => {
                 return Err(SqlError::Unsupported(format!(
                     "CREATE SEQUENCE option {other} is not supported"
@@ -2955,8 +2945,6 @@ pub(crate) fn raw_analyze_target(sql: &str) -> Result<Option<Option<String>>> {
     Ok(Some(Some(table)))
 }
 
-pub(crate) type SequenceOwner = Option<(String, String)>;
-
 pub(crate) enum RawAlterSequence {
     OwnerTo {
         sequence: String,
@@ -2964,11 +2952,15 @@ pub(crate) enum RawAlterSequence {
     },
     OwnedBy {
         sequence: String,
-        owner: SequenceOwner,
+        owner: Option<ObjectName>,
     },
     Restart {
         sequence: String,
         value: Option<i64>,
+    },
+    Parameters {
+        sequence: String,
+        options: crate::session::SequenceAlterParameters,
     },
 }
 
@@ -2984,6 +2976,9 @@ pub(crate) fn raw_alter_sequence(sql: &str) -> Result<Option<RawAlterSequence>> 
     let sequence = normalize_sequence_name(&target)?;
     let normalized = format!("alter sequence __target {}", normalize_sql(options_source));
     let tokens = normalized.split_whitespace().collect::<Vec<_>>();
+    if let Some(options) = crate::session::parse_alter_sequence_parameters(options_source)? {
+        return Ok(Some(RawAlterSequence::Parameters { sequence, options }));
+    }
     if tokens.get(3..5) == Some(&["owner", "to"][..]) {
         let Some(_owner) = tokens.get(5) else {
             return Err(SqlError::InvalidSql(
@@ -3049,17 +3044,9 @@ pub(crate) fn raw_alter_sequence(sql: &str) -> Result<Option<RawAlterSequence>> 
     let owner = parser
         .parse_object_name(false)
         .map_err(|e| SqlError::InvalidSql(e.to_string()))?;
-    let mut parts = object_name_parts(&owner);
-    if parts.len() < 2 {
-        return Err(SqlError::InvalidSql(
-            "ALTER SEQUENCE OWNED BY expects table.column".into(),
-        ));
-    }
-    let column = parts.pop().unwrap();
-    let table = relation_name_from_parts(&parts)?;
     Ok(Some(RawAlterSequence::OwnedBy {
         sequence,
-        owner: Some((table, column)),
+        owner: Some(owner),
     }))
 }
 
@@ -4838,10 +4825,23 @@ pub(crate) fn split_top_level_commas_nested(value: &str) -> Vec<String> {
             idx += 1;
             continue;
         }
+        if let Some(end) = escape_string_end(bytes, idx) {
+            idx = end;
+            continue;
+        }
+        if byte == b'$' && (idx == 0 || !is_sql_identifier_byte(bytes[idx - 1])) {
+            if let Some(delimiter) = dollar_quote_delimiter(&value[idx..]) {
+                let body_start = idx + delimiter.len();
+                if let Some(body_end) = value[body_start..].find(&delimiter) {
+                    idx = body_start + body_end + delimiter.len();
+                    continue;
+                }
+            }
+        }
         match byte {
             b'\'' => in_string = true,
-            b'(' => depth += 1,
-            b')' => depth = depth.saturating_sub(1),
+            b'(' | b'[' => depth += 1,
+            b')' | b']' => depth = depth.saturating_sub(1),
             b',' if depth == 0 => {
                 parts.push(value[start..idx].trim().to_string());
                 start = idx + 1;
@@ -4928,17 +4928,16 @@ fn parse_relation_identifier(identifier: &str) -> Result<String> {
 }
 
 pub(crate) fn is_sequence_function(function: &Function) -> Result<bool> {
-    Ok(matches!(
-        object_name(&function.name)?.to_ascii_lowercase().as_str(),
-        "nextval"
-            | "pg_catalog.nextval"
-            | "currval"
-            | "pg_catalog.currval"
-            | "lastval"
-            | "pg_catalog.lastval"
-            | "setval"
-            | "pg_catalog.setval"
+    Ok(is_sequence_function_name(
+        &object_name(&function.name)?.to_ascii_lowercase(),
     ))
+}
+
+pub(crate) fn is_sequence_function_name(name: &str) -> bool {
+    matches!(
+        name.strip_prefix("pg_catalog.").unwrap_or(name),
+        "nextval" | "currval" | "lastval" | "setval"
+    )
 }
 
 pub(crate) fn is_pg_notify_function(function: &Function) -> Result<bool> {
@@ -5030,7 +5029,7 @@ pub(crate) fn nextval_sequence_from_expr(expr: &Expr) -> Result<Option<String>> 
 }
 
 pub(crate) fn expr_is_default(expr: &Expr) -> bool {
-    matches!(expr, Expr::Identifier(ident) if ident.value.eq_ignore_ascii_case("default"))
+    matches!(expr, Expr::Identifier(ident) if ident.quote_style.is_none() && ident.value.eq_ignore_ascii_case("default"))
 }
 
 /// Rendering the `DataType` to text (and lower-casing it) is only needed for

@@ -3172,13 +3172,41 @@ pub(crate) fn array_projection_set_returning_calls(
 fn generate_series_declared_kind(arguments: &[Expr]) -> Option<GenerateSeriesKind> {
     let types = arguments
         .iter()
-        .take(2)
         .map(|argument| projected_expr_pg_type(argument, None))
         .collect::<Vec<_>>();
     if types.iter().all(Option::is_none) {
         return None;
     }
     Some(GenerateSeriesKind::resolve(&types, &SqlValue::Null))
+}
+
+fn generate_series_column_names(
+    alias: Option<&TableAlias>,
+    alias_name: &str,
+    with_ordinality: bool,
+) -> Result<Vec<String>> {
+    let mut columns = vec!["generate_series".to_owned()];
+    if with_ordinality {
+        columns.push("ordinality".to_owned());
+    }
+    let mut columns = table_function_source_columns_for_alias(alias, alias_name, columns);
+    let aliases = alias.map_or(&[][..], |alias| alias.columns.as_slice());
+    if aliases.len() > columns.len() {
+        return Err(SqlError::coded(
+            "42P10",
+            format!(
+                "table \"{alias_name}\" has {} columns available but {} columns specified",
+                columns.len(),
+                aliases.len(),
+            ),
+            None,
+            None,
+        ));
+    }
+    for (column, alias) in columns.iter_mut().zip(aliases) {
+        *column = ident_value(&alias.name);
+    }
+    Ok(columns)
 }
 
 /// The output type of a SELECT-list `generate_series`.
@@ -3196,11 +3224,11 @@ pub(crate) fn generate_series_projection_pg_type(
 /// PostgreSQL's `generate_series` result type for these argument types: the timestamp type it
 /// steps over, or int4/int8/numeric following integer arguments. None when no bound is typed.
 pub(crate) fn generate_series_output_pg_type(argument_types: &[Option<String>]) -> Option<String> {
-    if argument_types.iter().take(2).all(Option::is_none) {
-        return None;
-    }
     if let Some(pg_type) = GenerateSeriesKind::resolve(argument_types, &SqlValue::Null).pg_type() {
         return Some(pg_type.to_string());
+    }
+    if argument_types.iter().take(2).all(Option::is_none) {
+        return None;
     }
     let declared = |names: &[&str]| {
         argument_types.iter().any(|pg_type| {
@@ -3210,9 +3238,7 @@ pub(crate) fn generate_series_output_pg_type(argument_types: &[Option<String>]) 
         })
     };
     Some(
-        if declared(&["numeric", "decimal"]) {
-            "numeric"
-        } else if declared(&["int8", "bigint"]) {
+        if declared(&["int8", "bigint"]) {
             "int8"
         } else {
             "int4"
@@ -3394,10 +3420,12 @@ pub(crate) fn array_projection_set_values(
             let kind = kind.unwrap_or_else(|| {
                 GenerateSeriesKind::resolve(&[], arguments.first().unwrap_or(&SqlValue::Null))
             });
-            if kind == GenerateSeriesKind::Integer {
-                generate_series_integer_values(&arguments)
-            } else {
-                generate_series_timestamp_values(kind, &arguments, |_| Ok(()))
+            match kind {
+                GenerateSeriesKind::Integer => generate_series_integer_values(&arguments),
+                GenerateSeriesKind::Numeric => {
+                    generate_series_numeric_values(&arguments, |_| Ok(()))
+                }
+                _ => generate_series_timestamp_values(kind, &arguments, |_| Ok(())),
             }
         }
     }
@@ -4311,6 +4339,9 @@ pub struct SqlEngine<'db> {
     /// engines built for statement description leave it unset, so they never
     /// execute a routine body.
     pub(crate) routine_host: Option<&'static dyn RoutineCallHost>,
+    /// Values consumed by the owning connection, shared with row routine
+    /// sessions and with engines for correlated subqueries.
+    pub(crate) sequence_values: Option<Rc<RefCell<SequenceSessionValues>>>,
 }
 
 /// See [`SqlEngine::routine_host`].
@@ -4534,6 +4565,7 @@ impl<'db> SqlEngine<'db> {
             cancellation: CancellationToken::uncancelable(),
             fts_limits: bicdb_core::FtsQueryLimits::UNLIMITED,
             routine_host: None,
+            sequence_values: None,
         }
     }
 
@@ -4572,6 +4604,7 @@ impl<'db> SqlEngine<'db> {
             cancellation: CancellationToken::uncancelable(),
             fts_limits: bicdb_core::FtsQueryLimits::UNLIMITED,
             routine_host: None,
+            sequence_values: None,
         }
     }
 
@@ -4631,6 +4664,7 @@ impl<'db> SqlEngine<'db> {
             cancellation,
             fts_limits,
             routine_host: None,
+            sequence_values: None,
         }
     }
 
@@ -4671,6 +4705,7 @@ impl<'db> SqlEngine<'db> {
             cancellation: CancellationToken::uncancelable(),
             fts_limits: bicdb_core::FtsQueryLimits::UNLIMITED,
             routine_host: None,
+            sequence_values: None,
         }
     }
 
@@ -4918,6 +4953,7 @@ impl<'db> SqlEngine<'db> {
             .with_oracle_output(self.oracle_output.clone());
         engine.heap_lock_identity = self.heap_lock_identity;
         engine.app_exact_decimal_units = self.app_exact_decimal_units;
+        engine.sequence_values.clone_from(&self.sequence_values);
         if engine.outer_row.is_none() {
             engine.outer_row.clone_from(&self.outer_row);
         }
@@ -6138,6 +6174,7 @@ impl<'db> SqlEngine<'db> {
             cancellation: self.cancellation.clone(),
             fts_limits: self.fts_limits,
             routine_host: self.routine_host,
+            sequence_values: self.sequence_values.clone(),
         }
     }
 }

@@ -491,6 +491,85 @@ fn xmltable_uses_the_selected_node_as_xpath_context() {
     }
 }
 #[test]
+fn xml_document_predicates_preserve_postfix_precedence_and_types() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let result = session
+        .execute(
+            "SELECT xml '<a/>' IS DOCUMENT,
+                    xml '<a/><b/>' IS NOT DOCUMENT,
+                    'text' IS DOCUMENT, NULL IS DOCUMENT,
+                    NOT xml '<a/>' IS DOCUMENT,
+                    xml '<a/>' IS DOCUMENT IS NOT NULL,
+                    CASE WHEN false THEN xml '<a/>' ELSE xml 'text' END IS NOT DOCUMENT",
+        )
+        .unwrap();
+    assert_eq!(
+        result.rows,
+        vec![vec![
+            SqlValue::Bool(true),
+            SqlValue::Bool(true),
+            SqlValue::Bool(false),
+            SqlValue::Null,
+            SqlValue::Bool(false),
+            SqlValue::Bool(true),
+            SqlValue::Bool(true),
+        ]]
+    );
+    assert_eq!(result.columns[0], "?column?");
+    assert_eq!(result.column_types[0].as_deref(), Some("bool"));
+    for (sql, state) in [
+        ("SELECT ('x'::text) IS NOT DOCUMENT", "42804"),
+        ("SELECT 'plain <' IS DOCUMENT", "2200N"),
+    ] {
+        assert_eq!(session.execute(sql).unwrap_err().sqlstate(), state, "{sql}");
+    }
+    session
+        .execute(
+            "CREATE TABLE checked_xml(document xml CHECK (document IS DOCUMENT));
+         INSERT INTO checked_xml VALUES ('<a/>')",
+        )
+        .unwrap();
+    assert_eq!(
+        session
+            .execute("INSERT INTO checked_xml VALUES ('plain')")
+            .unwrap_err()
+            .sqlstate(),
+        "23514"
+    );
+}
+
+#[test]
+fn postgres_server_encoding_is_visible_and_read_only() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    assert_eq!(
+        session.execute("SHOW server_encoding").unwrap().rows,
+        vec![vec![SqlValue::String("UTF8".into())]]
+    );
+    assert_eq!(
+        session
+            .execute("SELECT current_setting('server_encoding')")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::String("UTF8".into())]]
+    );
+    for sql in [
+        "SET server_encoding = 'LATIN1'",
+        "SELECT set_config('server_encoding','UTF8',false)",
+        "RESET server_encoding",
+    ] {
+        assert_eq!(
+            session.execute(sql).unwrap_err().sqlstate(),
+            "55P02",
+            "{sql}"
+        );
+    }
+}
+
+#[test]
 fn xpath_existence_uses_result_cardinality_and_sql_xml_passing_modes() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();

@@ -1,6 +1,9 @@
 //! Lower PostgreSQL TABLE query bodies without changing TABLE used as a label
 //! or in DDL. Keep identifier tokens and their source positions intact.
-use sqlparser::ast::Statement;
+use sqlparser::ast::{
+    visit_expressions_mut, Expr, Function, FunctionArg, FunctionArgExpr, FunctionArgumentList,
+    FunctionArguments, Ident, ObjectName, Statement,
+};
 use sqlparser::dialect::PostgreSqlDialect;
 use sqlparser::keywords::Keyword;
 use sqlparser::parser::{Parser, ParserError};
@@ -65,9 +68,7 @@ pub(crate) fn parse(sql: &str) -> Result<Vec<Statement>, ParserError> {
         .iter()
         .any(|token| keyword(&token.token) == Keyword::TABLE)
     {
-        return Parser::new(&dialect)
-            .with_tokens_with_locations(original)
-            .parse_statements();
+        return parse_tokens(&dialect, original);
     }
     let tokens = original
         .iter()
@@ -125,9 +126,118 @@ pub(crate) fn parse(sql: &str) -> Result<Vec<Statement>, ParserError> {
         }
         index += 1;
     }
-    Parser::new(&dialect)
-        .with_tokens_with_locations(lowered)
-        .parse_statements()
+    parse_tokens(&dialect, lowered)
+}
+
+fn parse_tokens(
+    dialect: &PostgreSqlDialect,
+    mut tokens: Vec<TokenWithSpan>,
+) -> Result<Vec<Statement>, ParserError> {
+    let document = lower_xml_document_predicates(&mut tokens);
+    let mut statements = Parser::new(dialect)
+        .with_tokens_with_locations(tokens)
+        .parse_statements()?;
+    if document {
+        crate::reject_deep_expressions(&statements)
+            .map_err(|error| ParserError::ParserError(error.to_string()))?;
+        let _ = visit_expressions_mut(&mut statements, |expr| {
+            let Expr::IsNormalized {
+                expr: input,
+                form: None,
+                negated,
+            } = expr
+            else {
+                return std::ops::ControlFlow::<()>::Continue(());
+            };
+            let name = if *negated {
+                "bicdb_xml_is_not_document"
+            } else {
+                "bicdb_xml_is_document"
+            };
+            let input = std::mem::replace(
+                input.as_mut(),
+                Expr::Value(sqlparser::ast::Value::Null.into()),
+            );
+            *expr = Expr::Function(Function {
+                name: ObjectName::from(vec![Ident::new(name)]),
+                uses_odbc_syntax: false,
+                parameters: FunctionArguments::None,
+                args: FunctionArguments::List(FunctionArgumentList {
+                    duplicate_treatment: None,
+                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(input))],
+                    clauses: Vec::new(),
+                }),
+                filter: None,
+                null_treatment: None,
+                over: None,
+                within_group: Vec::new(),
+            });
+            std::ops::ControlFlow::Continue(())
+        });
+    }
+    Ok(statements)
+}
+
+fn lower_xml_document_predicates(tokens: &mut Vec<TokenWithSpan>) -> bool {
+    if !tokens.iter().any(|token| {
+        matches!(&token.token, Token::Word(word) if word.quote_style.is_none() && word.value.eq_ignore_ascii_case("document"))
+    }) {
+        return false;
+    }
+    let significant = tokens
+        .iter()
+        .enumerate()
+        .filter(|(_, token)| !matches!(token.token, Token::Whitespace(_)))
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+    let mut documents = Vec::new();
+    let mut authored_normalized = Vec::new();
+    for (position, &index) in significant.iter().enumerate() {
+        if keyword(&tokens[index].token) != Keyword::IS {
+            continue;
+        }
+        let mut following = significant.iter().skip(position + 1);
+        let Some(&first) = following.next() else {
+            continue;
+        };
+        let target = if keyword(&tokens[first].token) == Keyword::NOT {
+            let Some(&after_not) = following.next() else {
+                continue;
+            };
+            after_not
+        } else {
+            first
+        };
+        match &tokens[target].token {
+            Token::Word(word)
+                if word.quote_style.is_none() && word.value.eq_ignore_ascii_case("document") =>
+            {
+                documents.push(target);
+            }
+            token if keyword(token) == Keyword::NORMALIZED => authored_normalized.push(target),
+            _ => {}
+        }
+    }
+    if documents.is_empty() {
+        return false;
+    }
+    // sqlparser's existing IS NORMALIZED has the same unary postfix
+    // grammar as IS DOCUMENT. Keep explicit NFC on authored normalization
+    // predicates so only the XML predicates use the temporary AST form.
+    for index in documents {
+        tokens[index].token = Token::make_keyword("NORMALIZED");
+    }
+    for index in authored_normalized.into_iter().rev() {
+        let span = tokens[index].span;
+        tokens.insert(
+            index,
+            TokenWithSpan {
+                token: Token::make_keyword("NFC"),
+                span,
+            },
+        );
+    }
+    true
 }
 
 /// sqlparser's remaining TABLE AST stores bare strings, losing quoted-name

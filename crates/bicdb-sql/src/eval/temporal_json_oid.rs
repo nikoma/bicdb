@@ -2043,6 +2043,7 @@ pub(crate) fn postgres_xml_function_column_name(name: &str) -> String {
         "bicdb_xmlparse_content" | "bicdb_xmlparse_document" => "xmlparse".to_string(),
         "bicdb_xmlserialize_content" | "bicdb_xmlserialize_document" => "xmlserialize".to_string(),
         "bicdb_xmlexists" => "xmlexists".to_string(),
+        "bicdb_xml_is_document" | "bicdb_xml_is_not_document" => "?column?".to_string(),
         "bicdb_xmlelement" => "xmlelement".to_string(),
         "bicdb_xmlpi" => "xmlpi".to_string(),
         "bicdb_xmlroot" => "xmlroot".to_string(),

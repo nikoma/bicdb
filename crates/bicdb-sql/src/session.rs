@@ -7370,6 +7370,13 @@ impl<'db> SqlSession<'db> {
     fn reset_named_setting(&mut self, setting: String) -> Result<GucAssignmentTargets> {
         let targets = GucAssignmentTargets::setting(&setting);
         self.require_local_transaction_setting_control(&setting)?;
+        if setting == "server_encoding" {
+            return Err(SqlError::data_exception_public(
+                "55P02",
+                "parameter \"server_encoding\" cannot be changed",
+                None,
+            ));
+        }
         if targets.is_current_transaction_mode()
             && !oracle::preview_routine_language_enabled(self.db_ref())?
         {

@@ -33,11 +33,13 @@ fn accepts_unknown(dictionary: &AuthoredDictionary) -> Result<bool> {
         return Ok(true);
     };
     match value.to_ascii_lowercase().as_str() {
-        "true" | "t" | "on" | "yes" | "y" | "1" => Ok(true),
-        "false" | "f" | "off" | "no" | "n" | "0" => Ok(false),
-        _ => Err(SqlError::invalid_parameter_value(format!(
-            "invalid value for text search dictionary parameter \"accept\": \"{value}\""
-        ))),
+        "true" | "on" | "1" => Ok(true),
+        "false" | "off" | "0" => Ok(false),
+        _ => Err(SqlError::data_exception_public(
+            "42601",
+            "accept requires a Boolean value",
+            None,
+        )),
     }
 }
 

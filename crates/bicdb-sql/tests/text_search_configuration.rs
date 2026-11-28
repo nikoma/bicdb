@@ -196,10 +196,12 @@ fn authored_configuration_names_obey_schema_usage() {
             "SELECT to_tsvector('search_private.secret','running')",
             "42501",
         ),
-        ("SELECT 'secret'::regconfig", "42704"),
     ] {
         assert_eq!(sql.execute(query).unwrap_err().sqlstate(), state, "{query}");
     }
+    let missing = sql.execute("SELECT 'secret'::regconfig").unwrap_err();
+    assert_eq!(missing.sqlstate(), "42704");
+    assert!(missing.fields().is_empty());
     assert_eq!(
         sql.execute(
             "SELECT oid::regconfig::text, to_tsvector(oid::regconfig,'running')::text
@@ -259,6 +261,10 @@ fn authored_dictionaries_run_in_mapping_order_and_track_dependencies() {
         .execute("DROP TEXT SEARCH DICTIONARY leading_dictionary")
         .unwrap_err();
     assert_eq!(error.sqlstate(), "2BP01");
+    let error = sql
+        .execute("ALTER TEXT SEARCH DICTIONARY leading_dictionary (ACCEPT = yes)")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42601");
 
     sql.execute("ALTER TEXT SEARCH DICTIONARY leading_dictionary (ACCEPT = true)")
         .unwrap();

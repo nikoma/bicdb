@@ -113,6 +113,15 @@ impl CancellationToken {
         Ok(result)
     }
 
+    /// Release host execution capacity when statement execution is finished
+    /// but transaction cleanup must still wait for an exclusive catalog lock.
+    /// The statement will not resume execution or reacquire admission.
+    pub fn release_execution_admission(&self) {
+        if let Some(admission) = &self.wait_admission {
+            admission.suspend();
+        }
+    }
+
     pub fn is_cancel_requested(&self) -> bool {
         self.cancel_requested.load(Ordering::SeqCst)
             || self

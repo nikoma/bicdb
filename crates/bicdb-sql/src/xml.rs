@@ -511,10 +511,7 @@ fn serialize_element(
     }
     output.push('>');
     let indent = indent.filter(|_| {
-        !element.attributes().iter().any(|attribute| {
-            attribute.name().namespace_uri() == Some("http://www.w3.org/XML/1998/namespace")
-                && attribute.name().local_part() == "space" && attribute.value() == "preserve"
-        })
+        element.attribute_value(("http://www.w3.org/XML/1998/namespace", "space")).as_deref() != Some("preserve")
             && children.iter().any(|child| !matches!(child, dom::ChildOfElement::Text(_)))
             && children.iter().all(|child| {
                 !matches!(child, dom::ChildOfElement::Text(text) if !text.text().trim().is_empty())
@@ -642,7 +639,7 @@ fn xml_serialize(
             return Err(SqlError::cannot_coerce(format!(
                 "cannot cast XMLSERIALIZE result to {}",
                 if kind == "char" {
-                    target
+                    target.to_owned()
                 } else {
                     crate::common_type_display(kind)
                 }

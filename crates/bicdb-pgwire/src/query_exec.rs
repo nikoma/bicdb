@@ -289,13 +289,13 @@ pub(crate) fn execute_server_virtual_query_cancellable(
             match result {
                 Ok(result) => {
                     if let Err(error) = commit_buffered_transaction(server, state, cancellation) {
-                        rollback_open_transaction(server, state)?;
+                        rollback_open_transaction(server, state, Some(cancellation))?;
                         return Err(error);
                     }
                     return Ok(Some(result));
                 }
                 Err(error) => {
-                    rollback_open_transaction(server, state)?;
+                    rollback_open_transaction(server, state, Some(cancellation))?;
                     return Err(error);
                 }
             }

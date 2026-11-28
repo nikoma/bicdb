@@ -445,9 +445,10 @@ impl SqlSession<'_> {
 }
 
 fn parse_mapping_token_types(tokens: Tokens<'_>) -> Result<(Vec<(u8, String)>, Tokens<'_>)> {
-    let [keyword_for, mut tokens @ ..] = tokens else {
+    let [keyword_for, tokens @ ..] = tokens else {
         return Err(syntax_error(tokens.first()));
     };
+    let mut tokens = tokens;
     if !keyword(keyword_for, "for") {
         return Err(syntax_error(Some(keyword_for)));
     }

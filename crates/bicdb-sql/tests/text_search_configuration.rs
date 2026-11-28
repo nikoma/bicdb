@@ -226,3 +226,69 @@ fn authored_configuration_names_obey_schema_usage() {
         vec![vec![SqlValue::String("secret".into())]]
     );
 }
+
+#[test]
+fn authored_dictionaries_run_in_mapping_order_and_track_dependencies() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute(
+        "CREATE TEXT SEARCH DICTIONARY leading_dictionary (
+             TEMPLATE = pg_catalog.simple, STOPWORDS = english, ACCEPT = false);
+         CREATE TEXT SEARCH CONFIGURATION dictionary_terms (PARSER = default);
+         ALTER TEXT SEARCH CONFIGURATION dictionary_terms
+             ADD MAPPING FOR asciiword WITH leading_dictionary, english_stem;",
+    )
+    .unwrap();
+    let initial = sql
+        .execute(
+            "SELECT ts_lexize('leading_dictionary','the')::text,
+                ts_lexize('leading_dictionary','running') IS NULL,
+                to_tsvector('dictionary_terms','running and foxes')::text",
+        )
+        .unwrap();
+    assert_eq!(
+        initial.rows,
+        vec![vec![
+            SqlValue::String("{}".into()),
+            SqlValue::Bool(true),
+            SqlValue::String("'fox':3 'run':1".into()),
+        ]]
+    );
+    let error = sql
+        .execute("DROP TEXT SEARCH DICTIONARY leading_dictionary")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "2BP01");
+
+    sql.execute("ALTER TEXT SEARCH DICTIONARY leading_dictionary (ACCEPT = true)")
+        .unwrap();
+    assert_eq!(
+        sql.execute("SELECT to_tsvector('dictionary_terms','running and foxes')::text")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::String("'foxes':3 'running':1".into())]]
+    );
+    sql.execute("BEGIN").unwrap();
+    sql.execute("DROP TEXT SEARCH DICTIONARY leading_dictionary CASCADE")
+        .unwrap();
+    assert_eq!(
+        sql.execute("SELECT count(*) FROM pg_ts_config WHERE cfgname = 'dictionary_terms'")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(0)]]
+    );
+    sql.execute("ROLLBACK").unwrap();
+    let restored = sql
+        .execute(
+            "SELECT 'leading_dictionary'::regdictionary::text,
+                to_tsvector('dictionary_terms','running and foxes')::text",
+        )
+        .unwrap();
+    assert_eq!(
+        restored.rows,
+        vec![vec![
+            SqlValue::String("leading_dictionary".into()),
+            SqlValue::String("'foxes':3 'running':1".into()),
+        ]]
+    );
+}

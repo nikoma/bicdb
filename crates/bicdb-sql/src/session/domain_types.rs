@@ -1168,6 +1168,10 @@ impl<'db> SqlSession<'db> {
                     let owns_text_search_configuration = crate::fts::authored::list(self.db_ref())?
                         .iter()
                         .any(|config| config.owner.eq_ignore_ascii_case(&role));
+                    let owns_text_search_dictionary =
+                        crate::fts::authored::list_dictionaries(self.db_ref())?
+                            .iter()
+                            .any(|dictionary| dictionary.owner.eq_ignore_ascii_case(&role));
                     let has_privileges = list_privileges(self.db_ref())?
                         .into_iter()
                         .any(|grant| grant.grantee.eq_ignore_ascii_case(&role));
@@ -1196,6 +1200,7 @@ impl<'db> SqlSession<'db> {
                         || owns_database
                         || owns_event_trigger
                         || owns_text_search_configuration
+                        || owns_text_search_dictionary
                         || has_privileges
                         || has_default_privileges
                         || has_granted_membership
@@ -1294,8 +1299,10 @@ impl<'db> SqlSession<'db> {
             types: Vec<UserTypeSchema>,
             operators: Vec<crate::pg_operators::OperatorSchema>,
             text_search_configurations: Vec<crate::fts::authored::AuthoredConfig>,
+            text_search_dictionaries: Vec<crate::fts::authored::AuthoredDictionary>,
         }
         let mut targets: Vec<Contents> = Vec::new();
+        let mut seen_text_search_configurations = BTreeSet::new();
         for name in names {
             let schema = object_name(name)?;
             if temporary && !crate::search_path::is_temp_schema(&schema) {
@@ -1358,9 +1365,26 @@ impl<'db> SqlSession<'db> {
                 .filter(|user_type| user_type.schema_name == schema)
                 .collect::<Vec<_>>();
             let operators = self.schema_operators(&schema)?;
+            let text_search_dictionaries: Vec<_> =
+                crate::fts::authored::list_dictionaries(self.db_ref())?
+                    .iter()
+                    .filter(|dictionary| dictionary.schema == schema)
+                    .cloned()
+                    .collect();
+            let local_dictionary_ids = text_search_dictionaries
+                .iter()
+                .map(|dictionary| dictionary.oid)
+                .collect();
             let text_search_configurations = crate::fts::authored::list(self.db_ref())?
                 .iter()
-                .filter(|config| config.schema == schema)
+                .filter(|config| {
+                    (config.schema == schema
+                        || super::text_search_dictionaries::dictionary_dependencies(
+                            config,
+                            &local_dictionary_ids,
+                        ))
+                        && seen_text_search_configurations.insert(config.oid)
+                })
                 .cloned()
                 .collect();
             targets.push(Contents {
@@ -1372,6 +1396,7 @@ impl<'db> SqlSession<'db> {
                 types,
                 operators,
                 text_search_configurations,
+                text_search_dictionaries,
             });
         }
         let mut cascaded = Vec::new();
@@ -1427,12 +1452,20 @@ impl<'db> SqlSession<'db> {
                     ),
             );
             objects.extend(target.text_search_configurations.iter().map(|config| {
-                let name = if schema_visible {
+                let name = if schema_visible && config.schema == *schema {
                     pg_quote_ident(&config.name)
                 } else {
                     config.qualified_name()
                 };
                 format!("text search configuration {name}")
+            }));
+            objects.extend(target.text_search_dictionaries.iter().map(|dictionary| {
+                let name = if schema_visible {
+                    pg_quote_ident(&dictionary.name)
+                } else {
+                    dictionary.qualified_name()
+                };
+                format!("text search dictionary {name}")
             }));
             if !cascade {
                 if let Some(first) = objects.first() {
@@ -1553,6 +1586,9 @@ impl<'db> SqlSession<'db> {
             self.drop_operators(&operators)?;
             for config in target.text_search_configurations {
                 self.remove_text_search_configuration(config)?;
+            }
+            for dictionary in target.text_search_dictionaries {
+                self.remove_text_search_dictionary(dictionary)?;
             }
             // Further overloads first: dropping a name's first routine moves
             // its next overload to the name's plain catalog key.

@@ -1,22 +1,22 @@
-//! DDL for authored copies of text search configurations.
+//! DDL for authored text search configurations and dispatch of catalog commands.
 use crate::fts::authored::{self, AuthoredConfig, Catalog, Configuration};
 use crate::*;
 use sqlparser::tokenizer::{Token, Tokenizer};
 
 const OBJECT: &str = "text search configuration";
 
-type Tokens<'a> = &'a [Token];
+pub(super) type Tokens<'a> = &'a [Token];
 
-fn keyword(token: &Token, value: &str) -> bool {
+pub(super) fn keyword(token: &Token, value: &str) -> bool {
     matches!(token, Token::Word(word) if word.quote_style.is_none() && word.value.eq_ignore_ascii_case(value))
 }
 
-fn syntax_error(token: Option<&Token>) -> SqlError {
+pub(super) fn syntax_error(token: Option<&Token>) -> SqlError {
     let near = token.map_or_else(|| "end of input".to_owned(), |token| format!("\"{token}\""));
     SqlError::data_exception("42601", format!("syntax error at or near {near}"), None)
 }
 
-fn ident(tokens: Tokens<'_>) -> Result<(String, Tokens<'_>)> {
+pub(super) fn ident(tokens: Tokens<'_>) -> Result<(String, Tokens<'_>)> {
     let Some((Token::Word(word), rest)) = tokens.split_first() else {
         return Err(syntax_error(tokens.first()));
     };
@@ -28,7 +28,7 @@ fn ident(tokens: Tokens<'_>) -> Result<(String, Tokens<'_>)> {
     Ok((name, rest))
 }
 
-fn object_name_from_tokens(tokens: Tokens<'_>) -> Result<(String, Tokens<'_>)> {
+pub(super) fn object_name_from_tokens(tokens: Tokens<'_>) -> Result<(String, Tokens<'_>)> {
     let (first, rest) = ident(tokens)?;
     if let [Token::Period, suffix @ ..] = rest {
         let (second, rest) = ident(suffix)?;
@@ -46,11 +46,8 @@ fn unknown_config(name: &str) -> SqlError {
 }
 
 impl SqlSession<'_> {
-    pub(crate) fn execute_raw_text_search_configuration(
-        &mut self,
-        sql: &str,
-    ) -> Result<Option<SqlResult>> {
-        if !is_text_search_configuration_ddl(sql) {
+    pub(crate) fn execute_raw_text_search_ddl(&mut self, sql: &str) -> Result<Option<SqlResult>> {
+        if !is_text_search_ddl(sql) {
             return Ok(None);
         }
         let mut tokens = Tokenizer::new(&PostgreSqlDialect {}, sql)
@@ -70,10 +67,13 @@ impl SqlSession<'_> {
         let [action, text, search, configuration, rest @ ..] = tokens.as_slice() else {
             return Ok(None);
         };
-        if !keyword(text, "text")
-            || !keyword(search, "search")
-            || !keyword(configuration, "configuration")
-        {
+        if !keyword(text, "text") || !keyword(search, "search") {
+            return Ok(None);
+        }
+        if keyword(configuration, "dictionary") {
+            return self.execute_text_search_dictionary(action, rest).map(Some);
+        }
+        if !keyword(configuration, "configuration") {
             return Ok(None);
         }
         if keyword(action, "create") {
@@ -87,7 +87,7 @@ impl SqlSession<'_> {
         }
     }
 
-    fn text_search_creation_schema(&self, explicit: Option<&str>) -> Result<String> {
+    pub(super) fn text_search_creation_schema(&self, explicit: Option<&str>) -> Result<String> {
         let schema = if let Some(schema) = explicit {
             schema.to_owned()
         } else {
@@ -294,7 +294,8 @@ impl SqlSession<'_> {
                 config.owner = role;
             }
             [action, mapping, tail @ ..] if keyword(mapping, "mapping") => {
-                config.mappings = Some(self.change_text_search_mapping(&config, action, tail)?);
+                config.mappings =
+                    Some(self.change_text_search_mapping(&catalog, &config, action, tail)?);
             }
             _ => return Err(syntax_error(rest.first())),
         }
@@ -304,6 +305,7 @@ impl SqlSession<'_> {
 
     fn change_text_search_mapping(
         &self,
+        catalog: &Catalog,
         config: &AuthoredConfig,
         action: &Token,
         tokens: Tokens<'_>,
@@ -338,14 +340,14 @@ impl SqlSession<'_> {
         } else if keyword(action, "add") || keyword(action, "alter") {
             if let [replace, rest @ ..] = tokens {
                 if keyword(action, "alter") && keyword(replace, "replace") {
-                    replace_text_search_dictionary(mappings_mut.values_mut(), rest)?;
+                    replace_text_search_dictionary(catalog, mappings_mut.values_mut(), rest)?;
                     return Ok(mappings);
                 }
             }
             let (types, rest) = parse_mapping_token_types(tokens)?;
             match rest {
                 [with, dictionaries @ ..] if keyword(with, "with") => {
-                    let dictionaries = parse_mapping_dictionaries(dictionaries)?;
+                    let dictionaries = parse_mapping_dictionaries(catalog, dictionaries)?;
                     for (id, _) in types {
                         if keyword(action, "add") && mappings_mut.contains_key(&id) {
                             return Err(SqlError::coded(
@@ -361,6 +363,7 @@ impl SqlSession<'_> {
                 [replace, rest @ ..] if keyword(action, "alter") && keyword(replace, "replace") => {
                     let selected = types.into_iter().map(|(id, _)| id).collect::<BTreeSet<_>>();
                     replace_text_search_dictionary(
+                        catalog,
                         mappings_mut.iter_mut().filter_map(|(id, dictionaries)| {
                             selected.contains(id).then_some(dictionaries)
                         }),
@@ -474,34 +477,21 @@ fn parse_mapping_token_types(tokens: Tokens<'_>) -> Result<(Vec<(u8, String)>, T
     }
 }
 
-fn text_search_dictionary_oid(tokens: Tokens<'_>) -> Result<(u32, Tokens<'_>)> {
+fn text_search_dictionary_oid<'a>(
+    catalog: &Catalog,
+    tokens: Tokens<'a>,
+) -> Result<(u32, Tokens<'a>)> {
     let (written, rest) = object_name_from_tokens(tokens)?;
-    let parts = authored::qualified_name(&written).expect("parsed dictionary name");
-    let name = match parts.as_slice() {
-        [name] => Some(name),
-        [schema, name] if schema == "pg_catalog" => Some(name),
-        _ => None,
-    };
-    let oid = name
-        .and_then(|name| {
-            crate::eval::REGDICTIONARY_OBJECTS
-                .iter()
-                .find_map(|&(oid, candidate)| (candidate == name.as_str()).then_some(oid))
-        })
-        .ok_or_else(|| {
-            SqlError::data_exception_public(
-                "42704",
-                format!("text search dictionary \"{written}\" does not exist"),
-                None,
-            )
-        })?;
+    let oid = catalog
+        .dictionary_oid(&written)?
+        .ok_or_else(|| super::text_search_dictionaries::unknown_dictionary(&written))?;
     Ok((oid, rest))
 }
 
-fn parse_mapping_dictionaries(mut tokens: Tokens<'_>) -> Result<Vec<u32>> {
+fn parse_mapping_dictionaries(catalog: &Catalog, mut tokens: Tokens<'_>) -> Result<Vec<u32>> {
     let mut ids = Vec::new();
     loop {
-        let (id, rest) = text_search_dictionary_oid(tokens)?;
+        let (id, rest) = text_search_dictionary_oid(catalog, tokens)?;
         ids.push(id);
         match rest {
             [Token::Comma, tail @ ..] => tokens = tail,
@@ -512,17 +502,18 @@ fn parse_mapping_dictionaries(mut tokens: Tokens<'_>) -> Result<Vec<u32>> {
 }
 
 fn replace_text_search_dictionary<'a>(
+    catalog: &Catalog,
     mappings: impl Iterator<Item = &'a mut Vec<u32>>,
     tokens: Tokens<'_>,
 ) -> Result<()> {
-    let (old, rest) = text_search_dictionary_oid(tokens)?;
+    let (old, rest) = text_search_dictionary_oid(catalog, tokens)?;
     let [with, catalogue @ ..] = rest else {
         return Err(syntax_error(rest.first()));
     };
     if !keyword(with, "with") {
         return Err(syntax_error(Some(with)));
     }
-    let (new, tail) = text_search_dictionary_oid(catalogue)?;
+    let (new, tail) = text_search_dictionary_oid(catalog, catalogue)?;
     if !tail.is_empty() {
         return Err(syntax_error(tail.first()));
     }
@@ -534,7 +525,7 @@ fn replace_text_search_dictionary<'a>(
     Ok(())
 }
 
-pub(crate) fn is_text_search_configuration_ddl(sql: &str) -> bool {
+pub(crate) fn is_text_search_ddl(sql: &str) -> bool {
     let Some(action) = leading_sql_keyword(sql) else {
         return false;
     };
@@ -547,7 +538,7 @@ pub(crate) fn is_text_search_configuration_ddl(sql: &str) -> bool {
     let after =
         |input: &str, word: &str| word.as_ptr() as usize - input.as_ptr() as usize + word.len();
     let mut rest = &sql[after(sql, action)..];
-    for expected in ["text", "search", "configuration"] {
+    for expected in ["text", "search"] {
         let Some(word) = leading_sql_keyword(rest) else {
             return false;
         };
@@ -556,5 +547,7 @@ pub(crate) fn is_text_search_configuration_ddl(sql: &str) -> bool {
         }
         rest = &rest[after(rest, word)..];
     }
-    true
+    leading_sql_keyword(rest).is_some_and(|word| {
+        word.eq_ignore_ascii_case("configuration") || word.eq_ignore_ascii_case("dictionary")
+    })
 }

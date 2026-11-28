@@ -1305,7 +1305,8 @@ pub fn resolve_oid_alias_value(db: &BicDb, pg_type: &str, value: SqlValue) -> Re
         "regcollation" => resolve_regcollation_oid(&input),
         "regconfig" => crate::fts::authored::resolve_oid(db, &input)?
             .or_else(|| resolve_named_oid(&input, REGCONFIG_OBJECTS)),
-        "regdictionary" => resolve_named_oid(&input, REGDICTIONARY_OBJECTS),
+        "regdictionary" => crate::fts::authored::dictionary_oid(db, &input)?
+            .or_else(|| resolve_named_oid(&input, REGDICTIONARY_OBJECTS)),
         "regproc" | "regprocedure" => resolve_regprocedure_oid(db, pg_type, &input)?,
         "regoper" | "regoperator" => resolve_regoperator_oid(pg_type, &input)?,
         _ => None,
@@ -1423,7 +1424,8 @@ pub fn render_oid_alias_value(db: &BicDb, pg_type: &str, value: &SqlValue) -> Re
         "regcollation" => resolve_regcollation_name(oid),
         "regconfig" => crate::fts::authored::display_name(db, oid)?
             .or_else(|| resolve_named_oid_output(oid, REGCONFIG_OBJECTS)),
-        "regdictionary" => resolve_named_oid_output(oid, REGDICTIONARY_OBJECTS),
+        "regdictionary" => crate::fts::authored::dictionary_name(db, oid)?
+            .or_else(|| resolve_named_oid_output(oid, REGDICTIONARY_OBJECTS)),
         "regproc" | "regprocedure" => resolve_regprocedure_name(db, pg_type, oid)?,
         "regoper" | "regoperator" => resolve_regoperator_name(pg_type, oid),
         _ => None,
@@ -1608,7 +1610,10 @@ fn resolve_builtin_oid_alias(pg_type: &str, value: &str) -> Option<u32> {
         "regconfig" => {
             crate::fts::authored::oid(value).or_else(|| resolve_named_oid(value, REGCONFIG_OBJECTS))
         }
-        "regdictionary" => resolve_named_oid(value, REGDICTIONARY_OBJECTS),
+        "regdictionary" => crate::fts::authored::active_dictionary_oid(value)
+            .ok()
+            .flatten()
+            .or_else(|| resolve_named_oid(value, REGDICTIONARY_OBJECTS)),
         "regproc" | "regprocedure" => {
             let (name, signature) = split_alias_signature(value);
             if pg_type == "regprocedure" && signature.is_none() {

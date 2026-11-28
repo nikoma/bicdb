@@ -30,6 +30,7 @@ mod owned_objects;
 mod partition_indexes;
 mod table_access_method;
 pub(crate) mod text_search_ddl;
+mod text_search_dictionaries;
 #[cfg(test)]
 mod timestamp_day_indexes;
 mod typed_tables;
@@ -2384,6 +2385,10 @@ pub(crate) enum DdlUndo {
         oid: u32,
         previous: Option<Box<crate::fts::authored::AuthoredConfig>>,
     },
+    RestoreTextSearchDictionary {
+        oid: u32,
+        previous: Option<Box<crate::fts::authored::AuthoredDictionary>>,
+    },
     RestoreEventTrigger {
         oid: i64,
         previous: Option<Box<event_triggers::EventTriggerSchema>>,
@@ -3901,7 +3906,7 @@ impl<'db> SqlSession<'db> {
     /// small.
     #[inline(never)]
     fn execute_raw_catalog_compat(&mut self, sql: &str) -> Result<Option<SqlResult>> {
-        if let Some(result) = self.execute_raw_text_search_configuration(sql)? {
+        if let Some(result) = self.execute_raw_text_search_ddl(sql)? {
             return Ok(Some(result));
         }
         if let Some(result) = self.execute_raw_event_trigger_ddl(sql)? {
@@ -6592,6 +6597,12 @@ impl<'db> SqlSession<'db> {
             DdlUndo::RestoreTextSearchConfiguration { oid, previous } => match previous {
                 Some(previous) => crate::fts::authored::store(self.db_mut()?, &previous)?,
                 None => crate::fts::authored::delete(self.db_mut()?, oid)?,
+            },
+            DdlUndo::RestoreTextSearchDictionary { oid, previous } => match previous {
+                Some(previous) => {
+                    crate::fts::authored::store_dictionary(self.db_mut()?, &previous)?
+                }
+                None => crate::fts::authored::delete_dictionary(self.db_mut()?, oid)?,
             },
             DdlUndo::RestoreEventTrigger { oid, previous } => {
                 event_triggers::restore_event_trigger(self.db_mut()?, oid, previous.as_deref())?

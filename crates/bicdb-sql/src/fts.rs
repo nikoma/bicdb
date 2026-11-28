@@ -11,6 +11,7 @@ use crate::{pg_internal_char_byte, BicDb, Result, SqlEngine, SqlError, SqlValue}
 
 pub(crate) mod authored;
 pub(crate) mod catalog;
+pub(crate) mod dictionary;
 
 const MAX_LEXEME_BYTES: usize = bicdb_core::MAX_FULL_TEXT_TERM_BYTES;
 const MAX_POSITION: u16 = 16_383;
@@ -1521,11 +1522,23 @@ impl TextSearchConfig {
     fn token_lexeme(&self, token: &str, kind: u8) -> Option<Option<String>> {
         match self {
             Self::Mapped(mappings) => {
-                let oid = mappings.get(&kind)?.first().copied()?;
-                let dictionary = builtin_regdictionary_name(i64::from(oid))?;
-                let language = dictionary.strip_suffix("_stem").unwrap_or(dictionary);
-                let dictionary = Self::parse_builtin(language).ok()?;
-                Some(dictionary.normalize_builtin(token))
+                for &oid in mappings.get(&kind)? {
+                    if let Some(result) = authored::with_dictionary(oid, |object| {
+                        dictionary::Dictionary::compile(object)
+                            .ok()
+                            .and_then(|dict| dict.lexize(token))
+                    }) {
+                        if result.is_some() {
+                            return result;
+                        }
+                        continue;
+                    }
+                    let name = builtin_regdictionary_name(i64::from(oid))?;
+                    let language = name.strip_suffix("_stem").unwrap_or(name);
+                    let dictionary = Self::parse_builtin(language).ok()?;
+                    return Some(dictionary.normalize_builtin(token));
+                }
+                None
             }
             config => Some(config.normalize_builtin(token)),
         }
@@ -1571,7 +1584,27 @@ fn ts_lexize(dictionary: &SqlValue, token: &SqlValue) -> Result<SqlValue> {
     if matches!(dictionary, SqlValue::Null) || matches!(token, SqlValue::Null) {
         return Ok(SqlValue::Null);
     }
-    let name = dictionary.to_cell().to_ascii_lowercase();
+    let text = dictionary.to_cell();
+    if let Some(oid) = authored::active_dictionary_oid(&text)? {
+        let lexized = authored::with_dictionary(oid, |object| {
+            dictionary::Dictionary::compile(object).map(|dict| dict.lexize(&token.to_cell()))
+        });
+        if let Some(result) = lexized {
+            return Ok(match result? {
+                None => SqlValue::Null,
+                Some(None) => crate::array_value(Vec::new()),
+                Some(Some(lexeme)) => crate::array_value(vec![SqlValue::String(lexeme)]),
+            });
+        }
+        if let Some(name) = builtin_regdictionary_name(i64::from(oid)) {
+            return ts_lexize_builtin(name, token);
+        }
+    }
+    ts_lexize_builtin(&text, token)
+}
+
+fn ts_lexize_builtin(name: &str, token: &SqlValue) -> Result<SqlValue> {
+    let name = name.to_ascii_lowercase();
     let name = name.strip_prefix("pg_catalog.").unwrap_or(&name);
     let name = name
         .parse()

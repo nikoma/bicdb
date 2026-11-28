@@ -64,8 +64,8 @@ pub fn is_postgres_rule_command(sql: &str) -> Result<bool> {
 }
 
 /// Text search configuration DDL has neither parameters nor result columns.
-pub fn is_postgres_text_search_configuration_ddl(sql: &str) -> bool {
-    crate::session::text_search_ddl::is_text_search_configuration_ddl(sql)
+pub fn is_postgres_text_search_ddl(sql: &str) -> bool {
+    crate::session::text_search_ddl::is_text_search_ddl(sql)
 }
 
 fn parse_inference_statements(db: &BicDb, sql: &str) -> Result<Vec<Statement>> {
@@ -74,7 +74,7 @@ fn parse_inference_statements(db: &BicDb, sql: &str) -> Result<Vec<Statement>> {
     }
     if is_constraint_timing_command(sql)?
         || is_postgres_rule_command(sql)?
-        || is_postgres_text_search_configuration_ddl(sql)
+        || is_postgres_text_search_ddl(sql)
     {
         return Ok(Vec::new());
     }

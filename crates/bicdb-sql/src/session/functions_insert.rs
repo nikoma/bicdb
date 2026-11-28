@@ -2251,6 +2251,7 @@ impl<'db> SqlSession<'db> {
                                 &existing,
                                 updated,
                                 partition_parent,
+                                Some(&assigned_columns),
                             )?
                         else {
                             continue;

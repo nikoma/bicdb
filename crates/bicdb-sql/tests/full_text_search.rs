@@ -800,8 +800,9 @@ fn tsvector_update_triggers_refresh_search_text_before_writes() {
             "UPDATE docs SET config = 'pg_catalog.simple' RETURNING search",
             "'preset'",
         ),
+        ("UPDATE docs SET search = NULL RETURNING search", ""),
         (
-            "UPDATE docs SET search = NULL RETURNING search",
+            "UPDATE docs SET title = title RETURNING search",
             "'cats':2 'dogs':4 'the':1,3",
         ),
         (

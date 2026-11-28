@@ -223,6 +223,7 @@ impl<'db> SqlSession<'db> {
         function_name: &str,
         vars: &[(String, SqlValue)],
         shape: &TriggerRecordShape,
+        updated_columns: Option<&[String]>,
     ) -> Result<Option<SqlValue>> {
         if self.trigger_depth >= MAX_TRIGGER_DEPTH {
             return Err(SqlError::InvalidSql(format!(
@@ -232,7 +233,8 @@ impl<'db> SqlSession<'db> {
         if function_name.starts_with("pg_catalog.")
             && crate::fts::update_trigger_oid(function_name).is_some()
         {
-            return text_search_update_trigger(function_name, vars, shape).map(Some);
+            return text_search_update_trigger(function_name, vars, shape, updated_columns)
+                .map(Some);
         }
         let Some(routine) =
             resolve_routine_cached(self.db_ref(), RoutineKind::Function, function_name)?
@@ -446,6 +448,7 @@ impl<'db> SqlSession<'db> {
                     &trigger.function_name,
                     &vars,
                     &shape,
+                    None,
                 )? {
                     Some(SqlValue::Null) => continue 'record,
                     Some(returned) => {
@@ -477,7 +480,7 @@ impl<'db> SqlSession<'db> {
         old: &Record,
         record: Record,
     ) -> Result<Option<Record>> {
-        self.apply_before_update_row_triggers_with_identity(table, schema, old, record, None)
+        self.apply_before_update_row_triggers_with_identity(table, schema, old, record, None, None)
     }
 
     pub(crate) fn apply_before_update_row_triggers_with_identity(
@@ -487,6 +490,7 @@ impl<'db> SqlSession<'db> {
         old: &Record,
         mut record: Record,
         partition_identity: Option<&TableSchema>,
+        updated_columns: Option<&[String]>,
     ) -> Result<Option<Record>> {
         let Some(schema) = schema else {
             return Ok(Some(record));
@@ -511,6 +515,7 @@ impl<'db> SqlSession<'db> {
                 &trigger.function_name,
                 &vars,
                 &shape,
+                updated_columns,
             )? {
                 Some(SqlValue::Null) => return Ok(None),
                 Some(returned) => {
@@ -549,9 +554,13 @@ impl<'db> SqlSession<'db> {
         let old_value = Self::trigger_row_value(schema, old);
         for trigger in &triggers {
             let vars = Self::trigger_vars(trigger, schema, "delete", Some(old_value.clone()), None);
-            if let Some(SqlValue::Null) =
-                self.call_trigger_function(&trigger.name, &trigger.function_name, &vars, &shape)?
-            {
+            if let Some(SqlValue::Null) = self.call_trigger_function(
+                &trigger.name,
+                &trigger.function_name,
+                &vars,
+                &shape,
+                None,
+            )? {
                 return Ok(false);
             }
         }
@@ -606,6 +615,7 @@ impl<'db> SqlSession<'db> {
                         &trigger.function_name,
                         &vars,
                         &shape,
+                        None,
                     )?;
                 }
             }
@@ -680,6 +690,7 @@ impl<'db> SqlSession<'db> {
                     &call.function_name,
                     &call.vars,
                     &call.record_shape,
+                    None,
                 )?;
             }
             // A deferred body may itself write rows that queue more deferred
@@ -727,6 +738,7 @@ fn text_search_update_trigger(
     function: &str,
     vars: &[(String, SqlValue)],
     shape: &TriggerRecordShape,
+    updated_columns: Option<&[String]>,
 ) -> Result<SqlValue> {
     let protocol_error = |message: &str| {
         SqlError::data_exception_public(
@@ -821,7 +833,7 @@ fn text_search_update_trigger(
         SqlValue::String(config.to_owned())
     };
 
-    let mut changed = old.is_none() || new.get(target).is_none_or(JsonValue::is_null);
+    let mut changed = old.is_none();
     let mut document = String::new();
     for source in sources {
         let source = source.as_str().expect("trigger arguments are strings");
@@ -833,9 +845,10 @@ fn text_search_update_trigger(
             ));
         }
         let value = new.get(source);
-        if old.is_some_and(|old| old.get(source) != value) {
-            changed = true;
-        }
+        changed |= match updated_columns {
+            Some(columns) => columns.iter().any(|column| column == source),
+            None => old.is_some_and(|old| old.get(source) != value),
+        };
         if let Some(text) = value.and_then(JsonValue::as_str) {
             if !document.is_empty() {
                 document.push(' ');

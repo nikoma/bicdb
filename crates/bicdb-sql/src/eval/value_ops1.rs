@@ -3274,6 +3274,7 @@ pub(crate) fn default_session_guc(name: &str) -> Option<&'static str> {
         "bicdb_version" => Some(BICDB_VERSION),
         "server_version" => Some(POSTGRES_COMPATIBILITY_VERSION),
         "server_version_num" => Some(POSTGRES_COMPATIBILITY_VERSION_NUM),
+        "server_encoding" => Some("UTF8"),
         "application_name" => Some("bicdb"),
         "client_encoding" => Some("UTF8"),
         "client_min_messages" => Some("notice"),

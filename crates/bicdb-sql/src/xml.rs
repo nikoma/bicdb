@@ -1021,6 +1021,36 @@ pub(crate) fn eval_xml_function_value(
         .to_ascii_lowercase();
     let strict_null = args.iter().any(|value| matches!(value, SqlValue::Null));
     let value = match name.as_str() {
+        "bicdb_xml_is_document" | "bicdb_xml_is_not_document" => {
+            let [value] = args else {
+                return Err(SqlError::invalid_parameter_value(
+                    "IS DOCUMENT requires one argument",
+                ));
+            };
+            let kind = arg_types
+                .and_then(|kinds| kinds.first())
+                .and_then(Option::as_deref);
+            if let Some(kind) = kind.filter(|kind| !matches!(*kind, "unknown" | "xml")) {
+                return Err(SqlError::data_exception_public(
+                    "42804",
+                    format!(
+                        "argument of IS DOCUMENT must be type xml, not type {}",
+                        crate::common_type_display(kind)
+                    ),
+                    None,
+                ));
+            }
+            if strict_null {
+                SqlValue::Null
+            } else {
+                let text = xml_text(value);
+                if kind != Some("xml") {
+                    validate_xml(&text, false)?;
+                }
+                let document = validate_xml(&text, true).is_ok();
+                SqlValue::Bool(document == (name == "bicdb_xml_is_document"))
+            }
+        }
         "xml_is_well_formed" | "xml_is_well_formed_content" => {
             if strict_null {
                 SqlValue::Null
@@ -1366,6 +1396,8 @@ pub(crate) fn xml_function_pg_type(name: &str) -> Option<&'static str> {
         | "xml_is_well_formed_content"
         | "xml_is_well_formed_document"
         | "xpath_exists"
+        | "bicdb_xml_is_document"
+        | "bicdb_xml_is_not_document"
         | "bicdb_xmlexists" => Some("bool"),
         "xpath" => Some("xml[]"),
         "bicdb_xmltable_json" => Some("jsonb"),

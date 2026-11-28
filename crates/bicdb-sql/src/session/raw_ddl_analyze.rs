@@ -1018,6 +1018,13 @@ impl<'db> SqlSession<'db> {
 
     pub(crate) fn apply_setting_value(&mut self, setting: String, value: SqlValue) -> Result<()> {
         self.require_local_transaction_setting_control(&setting)?;
+        if setting == "server_encoding" {
+            return Err(SqlError::data_exception_public(
+                "55P02",
+                "parameter \"server_encoding\" cannot be changed",
+                None,
+            ));
+        }
         if setting == super::read_only::SETTING {
             return Err(SqlError::Unsupported(
                 "transaction access mode must be changed with SET TRANSACTION".into(),

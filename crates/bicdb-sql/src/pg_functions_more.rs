@@ -103,11 +103,12 @@ fn integer_gcd(left: i64, right: i64) -> i64 {
 }
 
 fn out_of_range(width: u32) -> SqlError {
-    SqlError::numeric_value_out_of_range(if width == 32 {
+    let message = if width == 32 {
         "integer out of range"
     } else {
         "bigint out of range"
-    })
+    };
+    SqlError::data_exception_public("22003", message, None)
 }
 
 fn float_value(value: &SqlValue) -> Result<f64> {

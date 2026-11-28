@@ -379,3 +379,60 @@ fn postgres_xmlbinary_controls_bytea_in_elements_attributes_and_forests() {
         "22023"
     );
 }
+#[test]
+fn xml_fragment_concatenation_preserves_a_single_compatible_declaration() {
+    let (_dir, mut db) = session_db();
+    let mut session = SqlSession::new(&mut db);
+    let result = session.execute(r#"SELECT
+        xmlconcat(NULL,NULL) IS NULL,
+        xmlconcat('<a/>', '<?xml version="1.0" standalone="no"?><b/>'),
+        xmlconcat('<?xml version="1.1"?><a/>', NULL, '<?xml version="1.1" standalone="no"?><b/>'),
+        xmlconcat('<?xml version="1.0" standalone="yes"?><a/>', '<?xml version="1.1" standalone="yes"?><b/>'),
+        '<?xml-stylesheet type="text/xsl" href="style.xsl"?><a/>'::xml,
+        xml_is_well_formed('<?xml version="1.0" standalone="y"?><a/>')"#).unwrap();
+    assert_eq!(
+        result.rows,
+        [[
+            SqlValue::Bool(true),
+            SqlValue::String("<a/><b/>".into()),
+            SqlValue::String("<?xml version=\"1.1\"?><a/><b/>".into()),
+            SqlValue::String("<?xml version=\"1.0\" standalone=\"yes\"?><a/><b/>".into()),
+            SqlValue::String("<?xml-stylesheet type=\"text/xsl\" href=\"style.xsl\"?><a/>".into()),
+            SqlValue::Bool(false),
+        ]]
+    );
+    let aggregate = session
+        .execute(
+            r#"SELECT xmlagg(fragment ORDER BY id) FROM (VALUES
+        (2, '<?xml version="1.1" standalone="no"?><b/>'::xml),
+        (1, '<?xml version="1.1"?><a/>'::xml)
+    ) q(id,fragment)"#,
+        )
+        .unwrap();
+    assert_eq!(
+        aggregate.rows,
+        [[SqlValue::String("<?xml version=\"1.1\"?><a/><b/>".into())]]
+    );
+    for (sql, state, message) in [
+        (
+            "SELECT xmlconcat(1,2)",
+            "42804",
+            "argument of XMLCONCAT must be type xml, not type integer",
+        ),
+        (
+            "SELECT xmlconcat('x'::text)",
+            "42804",
+            "argument of XMLCONCAT must be type xml, not type text",
+        ),
+        (
+            "SELECT xmlconcat('ok','<broken')",
+            "2200N",
+            "invalid XML content",
+        ),
+        ("SELECT xmlcomment('bad-')", "2200S", "invalid XML comment"),
+    ] {
+        let error = session.execute(sql).unwrap_err();
+        assert_eq!(error.sqlstate(), state, "{sql}: {error:?}");
+        assert!(error.to_string().contains(message), "{sql}: {error:?}");
+    }
+}

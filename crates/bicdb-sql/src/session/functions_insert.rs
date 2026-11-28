@@ -981,6 +981,20 @@ impl<'db> SqlSession<'db> {
         // Consumed here, before the source or any trigger can run another INSERT.
         let overriding_system_value = super::insert_overriding::take_system_value(&table);
         require_dml_target_exists(self.db_ref(), &table)?;
+        if matches!(
+            &insert.on,
+            Some(OnInsert::OnConflict(conflict))
+                if conflict.conflict_target.is_none()
+                    && matches!(conflict.action, OnConflictAction::DoUpdate(_))
+        ) && !oracle::is_oracle_database(self.db_ref())?
+        {
+            return Err(SqlError::coded(
+                "42601",
+                "ON CONFLICT DO UPDATE requires inference specification or constraint name",
+                None,
+                Some("For example, ON CONFLICT (column_name).".to_string()),
+            ));
+        }
         // Without the table privilege, column INSERT grants are checked once
         // the target columns are known.
         let mut insert_columns_need_grants = false;
@@ -1018,6 +1032,35 @@ impl<'db> SqlSession<'db> {
             return self.execute_insert_into_view(insert, view, ctes);
         }
         let schema = load_schema_shared(self.db_ref(), &table)?;
+        if let Some(schema) = schema.as_deref() {
+            super::conflict_scope::validate_excluded_references(insert, &table, schema)?;
+        }
+        if let (Some(schema), Some(OnInsert::OnConflict(conflict))) =
+            (schema.as_deref(), &insert.on)
+        {
+            if let target @ Some(ConflictTarget::Columns(_)) = conflict.conflict_target.as_ref() {
+                let columns = conflict_target_columns(&table, Some(schema), target)?;
+                for name in &columns {
+                    if schema.column(name).is_none_or(|column| column.hidden) {
+                        return Err(SqlError::data_exception(
+                            "42703",
+                            format!("column \"{name}\" does not exist"),
+                            None,
+                        ));
+                    }
+                }
+                if self
+                    .memoized_unique_arbiter(&table, schema, &columns)?
+                    .is_none()
+                {
+                    return Err(SqlError::data_exception(
+                        "42P10",
+                        "there is no unique or exclusion constraint matching the ON CONFLICT specification",
+                        None,
+                    ));
+                }
+            }
+        }
         let mut columns = insert
             .columns
             .iter()
@@ -1901,9 +1944,7 @@ impl<'db> SqlSession<'db> {
                 expanded.push(assignment.clone());
                 continue;
             }
-            let normalized = conflict_values_subquery(&assignment.value).map(Expr::Subquery);
-            let source = normalized.as_ref().unwrap_or(&assignment.value);
-            let values = match unwrap_nested_expr(source) {
+            let values = match unwrap_nested_expr(&assignment.value) {
                 Expr::Tuple(values) => values.iter().collect::<Vec<_>>(),
                 Expr::Function(function) if is_row_constructor(function) => {
                     unnamed_function_arg_exprs(function)
@@ -1918,10 +1959,7 @@ impl<'db> SqlSession<'db> {
                     for name in names {
                         check_conflict_generated_assignment(schema, name, None)?;
                     }
-                    expanded.push(Assignment {
-                        target: assignment.target.clone(),
-                        value: source.clone(),
-                    });
+                    expanded.push(assignment.clone());
                     continue;
                 }
                 _ => return Err(SqlError::data_exception(
@@ -2028,20 +2066,6 @@ impl<'db> SqlSession<'db> {
         let select_required = on_conflict.conflict_target.is_some()
             || matches!(on_conflict.action, OnConflictAction::DoUpdate(_))
             || returning.is_some_and(select_items_reference_stored_columns);
-        // A column conflict target needs some unique arbiter to infer; a
-        // table with none (no primary key, unique constraint or unique
-        // index) fails as in PostgreSQL instead of never conflicting.
-        if let (Some(ConflictTarget::Columns(_)), Some(schema)) =
-            (on_conflict.conflict_target.as_ref(), schema)
-        {
-            if unique_arbiters_for_table(self.db_ref(), table, schema).is_empty() {
-                return Err(SqlError::data_exception(
-                    "42P10",
-                    "there is no unique or exclusion constraint matching the ON CONFLICT specification",
-                    None,
-                ));
-            }
-        }
         if partition_parent.is_none() && matches!(on_conflict.action, OnConflictAction::DoNothing) {
             if on_conflict.conflict_target.is_none() {
                 return self.execute_insert_on_conflict_do_nothing_all_unique(
@@ -4427,41 +4451,6 @@ fn select_output_is_unknown_literal(source: &Query, index: usize) -> bool {
     matches!(select.projection.get(index),
         Some(SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. })
             if is_string_literal_expr(expr))
-}
-
-/// The parser reads a parenthesized VALUES query in an assignment as a
-/// tuple starting with a VALUES function. Recover the query's row structure.
-fn conflict_values_subquery(expr: &Expr) -> Option<Box<Query>> {
-    let (first, rest) = match unwrap_nested_expr(expr) {
-        Expr::Tuple(items) => items.split_first()?,
-        expr => (expr, &[][..]),
-    };
-    let Expr::Function(first) = first else {
-        return None;
-    };
-    let [sqlparser::ast::ObjectNamePart::Identifier(name)] = first.name.0.as_slice() else {
-        return None;
-    };
-    if name.quote_style.is_some() || !name.value.eq_ignore_ascii_case("values") {
-        return None;
-    }
-    let first_row = unnamed_function_arg_exprs(first)?.cloned().collect();
-    let mut rows = vec![sqlparser::ast::Parens::with_empty_span(first_row)];
-    for row in rest {
-        let values = match row {
-            Expr::Tuple(values) => values.clone(),
-            Expr::Nested(value) => vec![(**value).clone()],
-            _ => return None,
-        };
-        rows.push(sqlparser::ast::Parens::with_empty_span(values));
-    }
-    Some(Box::new(query_from_body(SetExpr::Values(
-        sqlparser::ast::Values {
-            explicit_row: false,
-            value_keyword: false,
-            rows,
-        },
-    ))))
 }
 
 fn check_conflict_assignment_width(columns: usize, values: usize) -> Result<()> {

@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-fleet"
-version = "1.0.589"
+version = "1.0.590"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true

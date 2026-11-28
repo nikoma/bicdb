@@ -55,6 +55,7 @@ mod case_mapped_index_tests;
 mod cast_lookup_tests;
 #[cfg(test)]
 mod catalog_join_tests;
+mod conflict_scope;
 #[cfg(test)]
 mod driver_metadata_tests;
 pub(crate) mod functions_insert;

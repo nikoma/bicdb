@@ -3317,3 +3317,37 @@ fn rls_errors_name_the_sql_relation_in_an_authored_schema() {
         .to_string()
         .contains("query would be affected by row-level security policy for table \"docs\""));
 }
+
+#[test]
+fn update_row_assignment_treats_parenthesized_values_as_a_query() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = bicdb_core::BicDb::open(root.path()).unwrap();
+    let mut session = bicdb_sql::SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE TABLE values_update (id int PRIMARY KEY, a int, b int);
+             INSERT INTO values_update VALUES (1,2,3)",
+        )
+        .unwrap();
+    let result = session
+        .execute("UPDATE values_update SET (a,b) = (VALUES (b,a)) RETURNING a,b")
+        .unwrap();
+    assert_eq!(
+        result.rows,
+        [[bicdb_sql::SqlValue::Int(3), bicdb_sql::SqlValue::Int(2)]],
+    );
+    for (source, state) in [
+        ("(VALUES (9))", "42601"),
+        ("(VALUES (9,8), (7,6))", "21000"),
+    ] {
+        let error = session
+            .execute(&format!("UPDATE values_update SET (a,b) = {source}"))
+            .unwrap_err();
+        assert_eq!(error.sqlstate(), state, "{source}: {error:?}");
+    }
+    let result = session.execute("SELECT a,b FROM values_update").unwrap();
+    assert_eq!(
+        result.rows,
+        [[bicdb_sql::SqlValue::Int(3), bicdb_sql::SqlValue::Int(2)]],
+    );
+}

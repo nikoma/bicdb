@@ -3889,12 +3889,16 @@ pub(crate) fn raw_alter_table_exclusion_constraint(
         return Ok(None);
     };
     let (name, rest) = parse_leading_policy_identifier(rest)?;
-    let Some(mut rest) = strip_prefix_ci(rest.trim_start(), "EXCLUDE ") else {
+    let Some(mut rest) = strip_prefix_ci(rest.trim_start(), "EXCLUDE")
+        .filter(|tail| tail.starts_with(|ch: char| ch.is_whitespace() || ch == '('))
+    else {
         return Ok(None);
     };
     rest = rest.trim_start();
-    let access_method = if let Some(after_using) = strip_prefix_ci(rest, "USING ") {
-        let (method, after_method) = parse_leading_policy_identifier(after_using)?;
+    let access_method = if let Some(after_using) =
+        strip_prefix_ci(rest, "USING").filter(|tail| tail.starts_with(char::is_whitespace))
+    {
+        let (method, after_method) = parse_leading_qualified_sql_identifier(after_using)?;
         rest = after_method.trim_start();
         normalize_object_name(&method)
     } else {
@@ -5700,10 +5704,14 @@ pub(crate) fn conflict_target_columns(
     target: Option<&ConflictTarget>,
 ) -> Result<Vec<String>> {
     match target {
-        Some(ConflictTarget::Columns(columns)) => Ok(columns
-            .iter()
-            .map(|column| column.value.clone())
-            .collect::<Vec<_>>()),
+        Some(ConflictTarget::Columns(columns)) => {
+            let mut seen = BTreeSet::new();
+            Ok(columns
+                .iter()
+                .map(ident_value)
+                .filter(|column| seen.insert(column.clone()))
+                .collect())
+        }
         Some(ConflictTarget::OnConstraint(name)) => {
             let name = relation_name(name)?;
             let Some(schema) = schema else {

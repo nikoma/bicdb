@@ -1261,40 +1261,57 @@ impl<'db> SqlSession<'db> {
             });
         }
         let mut cascaded = Vec::new();
+        let active_path = crate::search_path::active_path();
         for target in &targets {
             let schema = &target.namespace.name;
-            let objects = target
-                .tables
-                .iter()
-                .map(|table| format!("table {schema}.{}", catalog_display_name(table)))
-                .chain(
-                    target
-                        .views
-                        .iter()
-                        .map(|view| format!("view {schema}.{}", catalog_display_name(view))),
-                )
-                .chain(target.sequences.iter().map(|sequence| {
-                    format!("sequence {schema}.{}", catalog_display_name(sequence))
-                }))
-                .chain(target.routines.iter().map(|routine| {
-                    format!(
-                        "function {schema}.{}",
-                        routine_schema_and_name(&routine.name).1
+            let schema_visible = active_path.as_ref().map_or(schema == "public", |path| {
+                path.iter().any(|component| component == schema)
+            });
+            let quoted_schema = pg_quote_ident(schema);
+            let mut objects = Vec::new();
+            for (kind, names) in [
+                ("table", &target.tables),
+                ("view", &target.views),
+                ("sequence", &target.sequences),
+            ] {
+                for name in names {
+                    let short = pg_quote_ident(&catalog_display_name(name));
+                    let qualified = format!("{quoted_schema}.{short}");
+                    let mut display = &qualified;
+                    if schema_visible {
+                        let target_oid = resolve_regclass_oid(self.db_ref(), &qualified)?;
+                        if target_oid.is_some()
+                            && resolve_regclass_oid(self.db_ref(), &short)? == target_oid
+                        {
+                            display = &short;
+                        }
+                    }
+                    objects.push(format!("{kind} {display}"));
+                }
+            }
+            objects.extend(
+                target
+                    .routines
+                    .iter()
+                    .map(|routine| {
+                        format!(
+                            "function {schema}.{}",
+                            routine_schema_and_name(&routine.name).1
+                        )
+                    })
+                    .chain(
+                        target
+                            .types
+                            .iter()
+                            .map(|user_type| format!("type {schema}.{}", user_type.name)),
                     )
-                }))
-                .chain(
-                    target
-                        .types
-                        .iter()
-                        .map(|user_type| format!("type {schema}.{}", user_type.name)),
-                )
-                .chain(
-                    target
-                        .operators
-                        .iter()
-                        .map(|operator| format!("operator {}", operator.id.display())),
-                )
-                .collect::<Vec<_>>();
+                    .chain(
+                        target
+                            .operators
+                            .iter()
+                            .map(|operator| format!("operator {}", operator.id.display())),
+                    ),
+            );
             if !cascade {
                 if let Some(first) = objects.first() {
                     return Err(SqlError::dependent_objects_still_exist(format!(

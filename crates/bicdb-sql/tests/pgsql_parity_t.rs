@@ -365,6 +365,36 @@ fn create_schema_elements_restore_an_explicit_empty_search_path() {
 }
 
 #[test]
+fn drop_schema_cascade_names_only_unshadowed_relations_without_a_schema() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = open(root.path());
+    let mut session = SqlSession::new(&mut db);
+    exec(
+        &mut session,
+        "CREATE SCHEMA visible_schema CREATE TABLE t (a int);
+         CREATE SCHEMA shadowed_schema CREATE TABLE t (a int);
+         CREATE TABLE public.t (a int)",
+    );
+    for (path, statement, expected) in [
+        (
+            "visible_schema, public",
+            "DROP SCHEMA visible_schema CASCADE",
+            "drop cascades to table t",
+        ),
+        (
+            "public, shadowed_schema",
+            "DROP SCHEMA shadowed_schema CASCADE",
+            "drop cascades to table shadowed_schema.t",
+        ),
+    ] {
+        exec(&mut session, &format!("SET search_path = {path}"));
+        let notices = session.execute(statement).unwrap().notices;
+        assert_eq!(notices.len(), 1, "{statement}: {notices:?}");
+        assert_eq!(notices[0].message, expected);
+    }
+}
+
+#[test]
 fn create_schema_elements_run_as_the_schema_owner() {
     let root = tempfile::tempdir().unwrap();
     let mut db = open(root.path());

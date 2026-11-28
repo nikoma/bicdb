@@ -2379,6 +2379,28 @@ pub(crate) fn pg_lsn_argument(value: &SqlValue) -> Result<u64> {
     }
 }
 
+/// Check the SQL input syntax before decoding the hexadecimal halves.
+/// Values already stored in the database retain their legacy decoder.
+pub(crate) fn parse_pg_lsn_input(text: &str) -> Result<u64> {
+    let half = |part: &str| {
+        !part.is_empty() && part.len() <= 8 && part.bytes().all(|byte| byte.is_ascii_hexdigit())
+    };
+    if let Some((high, low)) = text.split_once('/') {
+        if half(high) && half(low) {
+            if let Ok(Some(PgCanonicalValue::Lsn(value))) =
+                parse_pg_canonical_special("pg_lsn", text)
+            {
+                return Ok(value);
+            }
+        }
+    }
+    Err(SqlError::data_exception_public(
+        "22P02",
+        format!("invalid input syntax for type pg_lsn: \"{text}\""),
+        None,
+    ))
+}
+
 pub(crate) fn pg_lsn_with_numeric_offset(lsn: u64, offset: Decimal, subtract: bool) -> Result<u64> {
     let divisor = pow10_bigint(offset.scale);
     let base = BigInt::from(lsn) * &divisor;
@@ -2387,13 +2409,14 @@ pub(crate) fn pg_lsn_with_numeric_offset(lsn: u64, offset: Decimal, subtract: bo
     } else {
         base + offset.mantissa
     };
-    if scaled.is_negative() {
-        return Err(SqlError::invalid_parameter_value("pg_lsn out of range"));
-    }
     let mut rounded = &scaled / &divisor;
-    let remainder = &scaled % &divisor;
+    let remainder = (&scaled % &divisor).abs();
     if remainder * 2 >= divisor {
-        rounded += 1;
+        if scaled.is_negative() {
+            rounded -= 1;
+        } else {
+            rounded += 1;
+        }
     }
     rounded
         .to_u64()
@@ -2443,35 +2466,47 @@ pub(crate) fn eval_pg_lsn_binary_value(
         )));
     }
 
-    let (lsn, offset, subtract) = if left_type == Some("pg_lsn") {
-        (
-            pg_lsn_argument(left)?,
-            decimal_value(right).transpose()?.ok_or_else(|| {
-                SqlError::invalid_text_representation(
-                    "numeric",
-                    format!(
-                        "invalid input syntax for type numeric: \"{}\"",
-                        right.to_cell()
-                    ),
-                )
-            })?,
-            matches!(op, BinaryOperator::Minus),
-        )
+    let lsn_on_left = left_type == Some("pg_lsn");
+    let (lsn, offset) = if lsn_on_left {
+        (left, right)
     } else {
-        (
-            pg_lsn_argument(right)?,
-            decimal_value(left).transpose()?.ok_or_else(|| {
-                SqlError::invalid_text_representation(
-                    "numeric",
-                    format!(
-                        "invalid input syntax for type numeric: \"{}\"",
-                        left.to_cell()
-                    ),
-                )
-            })?,
-            false,
-        )
+        (right, left)
     };
+    let subtract = matches!(op, BinaryOperator::Minus);
+    let lsn = pg_lsn_argument(lsn)?;
+    if let SqlValue::String(value) = offset {
+        if value == "NaN" {
+            let action = if subtract {
+                "subtract NaN from"
+            } else {
+                "add NaN to"
+            };
+            let error =
+                SqlError::data_exception_public("0A000", format!("cannot {action} pg_lsn"), None);
+            return Err(if lsn_on_left {
+                error
+            } else {
+                error.with_context_line("SQL function \"numeric_pl_pg_lsn\" statement 1".into())
+            });
+        }
+        if matches!(value.as_str(), "Infinity" | "-Infinity") {
+            return Err(SqlError::data_exception_public(
+                "0A000",
+                "cannot convert infinity to pg_lsn",
+                None,
+            ));
+        }
+    }
+    let offset = decimal_value(offset).transpose()?.ok_or_else(|| {
+        SqlError::data_exception_public(
+            "22P02",
+            format!(
+                "invalid input syntax for type numeric: \"{}\"",
+                offset.to_cell()
+            ),
+            None,
+        )
+    })?;
     let result = pg_lsn_with_numeric_offset(lsn, offset, subtract)?;
     Ok(Some(SqlValue::String(format_pg_lsn(result))))
 }
@@ -4080,10 +4115,22 @@ pub(crate) fn compare_expr_values_resolved(
     )? {
         return Ok(truth);
     }
-    if left_expr_type.as_deref() == Some("pg_lsn") && right_expr_type.as_deref() == Some("pg_lsn") {
+    let left_lsn = left_expr_type.as_deref() == Some("pg_lsn");
+    let right_lsn = right_expr_type.as_deref() == Some("pg_lsn");
+    if (left_lsn && right_lsn)
+        || (left_lsn && is_string_literal_expr(right_expr))
+        || (right_lsn && is_string_literal_expr(left_expr))
+    {
+        let operand = |value: &SqlValue, typed| {
+            if typed {
+                pg_lsn_argument(value)
+            } else {
+                parse_pg_lsn_input(&value.to_cell())
+            }
+        };
         return Ok(Some(comparison_from_ordering(
             op,
-            pg_typed_compare("pg_lsn", left, right)?,
+            operand(left, left_lsn)?.cmp(&operand(right, right_lsn)?),
         )));
     }
     if let Some(SqlValue::Bool(value)) = eval_geometric_binary_value(

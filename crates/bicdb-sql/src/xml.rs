@@ -1203,32 +1203,44 @@ pub(crate) fn eval_xml_function_value(
             }
         }
         "bicdb_xmlroot" => {
+            let kind = arg_types
+                .and_then(|types| types.first())
+                .and_then(Option::as_deref);
+            if let Some(kind) = kind.filter(|kind| !matches!(*kind, "unknown" | "xml")) {
+                return Err(SqlError::data_exception_public(
+                    "42804",
+                    format!(
+                        "argument of XMLROOT must be type xml, not type {}",
+                        crate::common_type_display(kind)
+                    ),
+                    None,
+                ));
+            }
             if args
                 .first()
                 .is_none_or(|value| matches!(value, SqlValue::Null))
             {
                 SqlValue::Null
             } else {
-                let body = strip_declaration(&xml_text(&args[0]))
-                    .trim_start()
-                    .to_string();
+                let text = xml_text(&args[0]);
+                if kind != Some("xml") {
+                    validate_xml(&text, false)?;
+                }
+                let declaration = xml_declaration(&text);
+                let body = declaration.map_or(text.as_str(), |(_, body)| body);
                 let version = args
                     .get(1)
                     .filter(|value| !matches!(value, SqlValue::Null))
                     .map(xml_text);
-                if version
-                    .as_deref()
-                    .is_some_and(|version| !matches!(version, "1.0" | "1.1"))
-                {
-                    return Err(invalid_xml("invalid XML version"));
-                }
-                let standalone = args
-                    .get(2)
-                    .filter(|value| !matches!(value, SqlValue::Null))
-                    .map(xml_text);
+                let standalone = match args.get(2) {
+                    Some(SqlValue::Null) => None,
+                    Some(value) => Some(xml_text(value)),
+                    None => declaration
+                        .and_then(|(decl, _)| xml_declaration_attribute(decl, "standalone")),
+                };
                 if version.as_deref().is_none_or(|version| version == "1.0") && standalone.is_none()
                 {
-                    SqlValue::String(body)
+                    SqlValue::String(body.to_owned())
                 } else {
                     let version = version.unwrap_or_else(|| "1.0".to_string());
                     let standalone = standalone

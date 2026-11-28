@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-extension"
-version = "1.0.618"
+version = "1.0.619"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true

@@ -1078,7 +1078,10 @@ impl<'db> SqlSession<'db> {
             // its resident form; nothing here builds a Value tree.
             if let (SetExpr::Values(values), Some(schema)) = (source.body.as_ref(), schema.as_ref())
             {
-                if source.with.is_none() && ctes.is_empty() {
+                if source.with.is_none()
+                    && ctes.is_empty()
+                    && !document_xml_insert(schema, &columns)
+                {
                     if let Some(result) =
                         self.try_execute_insert_stored(insert, &table, schema, &columns, values)?
                     {
@@ -1090,7 +1093,10 @@ impl<'db> SqlSession<'db> {
             // (the template built for the column list, no expressions);
             // eligibility and the template are settled before the query runs.
             if let (SetExpr::Select(_), Some(schema)) = (source.body.as_ref(), schema.as_ref()) {
-                if ctes.is_empty() && self.stored_insert_eligible(insert, &table, schema)? {
+                if ctes.is_empty()
+                    && !document_xml_insert(schema, &columns)
+                    && self.stored_insert_eligible(insert, &table, schema)?
+                {
                     if let Some(template) =
                         self.stored_insert_rows_template(schema, &columns, source)
                     {
@@ -1549,7 +1555,7 @@ impl<'db> SqlSession<'db> {
             Vec<Vec<Option<SqlValue>>>,
         )>,
     > {
-        if !ir_insert_plan::enabled() {
+        if !ir_insert_plan::enabled() || document_xml_insert(schema, columns) {
             return Ok(None);
         }
         let Some(key) = self
@@ -1635,11 +1641,38 @@ impl<'db> SqlSession<'db> {
             source.body.as_ref(),
             SetExpr::Select(_) | SetExpr::SetOperation { .. } | SetExpr::Query(_)
         ) {
-            let result = if ctes.is_empty() {
+            let mut result = if ctes.is_empty() {
                 self.execute_query(source)?
             } else {
                 self.sql_engine_with_ctes(ctes).execute_query(source)?
             };
+            if let Some(schema) = schema.filter(|schema| document_xml_insert(schema, columns)) {
+                let mut xml_columns = Vec::new();
+                for (index, name) in columns.iter().enumerate() {
+                    let Some(column) = schema.column(name).filter(|column| column.pg_type == "xml")
+                    else {
+                        continue;
+                    };
+                    let source_type = if select_output_is_unknown_literal(source, index) {
+                        None
+                    } else {
+                        result.column_types.get(index).and_then(Option::as_deref)
+                    };
+                    crate::xml::xml_assignment_value(column, source_type, SqlValue::Null)?;
+                    xml_columns.push((index, column, source_type));
+                }
+                for row in &mut result.rows {
+                    for &(index, column, source_type) in &xml_columns {
+                        if let Some(value) = row.get_mut(index) {
+                            *value = crate::xml::xml_assignment_value(
+                                column,
+                                source_type,
+                                std::mem::replace(value, SqlValue::Null),
+                            )?;
+                        }
+                    }
+                }
+            }
             return self.records_from_insert_result(table, schema, columns, result.rows);
         }
 
@@ -1674,7 +1707,23 @@ impl<'db> SqlSession<'db> {
                     self.default_value_for_column(schema, column)?
                         .unwrap_or(SqlValue::Null)
                 } else {
-                    self.eval_session_expr(expr)?
+                    let value = self.eval_session_expr(expr)?;
+                    if let Some(column) =
+                        schema
+                            .and_then(|schema| schema.column(column))
+                            .filter(|column| {
+                                column.pg_type == "xml" && crate::xml::xml_input_is_document()
+                            })
+                    {
+                        let source = if is_string_literal_expr(expr) {
+                            None
+                        } else {
+                            projected_expr_pg_type(expr, None)
+                        };
+                        crate::xml::xml_assignment_value(column, source.as_deref(), value)?
+                    } else {
+                        value
+                    }
                 };
                 fields.insert(column.clone(), value);
             }
@@ -4245,4 +4294,22 @@ pub(crate) fn validate_integer_text_literals(
         }
     }
     Ok(())
+}
+
+fn document_xml_insert(schema: &TableSchema, columns: &[String]) -> bool {
+    crate::xml::xml_input_is_document()
+        && columns.iter().any(|column| {
+            schema
+                .column(column)
+                .is_some_and(|column| column.pg_type == "xml")
+        })
+}
+
+fn select_output_is_unknown_literal(source: &Query, index: usize) -> bool {
+    let SetExpr::Select(select) = source.body.as_ref() else {
+        return false;
+    };
+    matches!(select.projection.get(index),
+        Some(SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. })
+            if is_string_literal_expr(expr))
 }

@@ -306,6 +306,27 @@ pub(crate) fn xml_input_value(value: SqlValue) -> Result<SqlValue> {
     parse_xml_value(&value.to_cell(), xml_input_is_document()).map(SqlValue::String)
 }
 
+pub(crate) fn xml_assignment_value(
+    column: &crate::ColumnSchema,
+    source: Option<&str>,
+    value: SqlValue,
+) -> Result<SqlValue> {
+    match source {
+        Some("xml") => Ok(value),
+        None | Some("unknown") => xml_input_value(value),
+        Some(source) => Err(SqlError::coded(
+            "42804",
+            format!(
+                "column \"{}\" is of type xml but expression is of type {}",
+                column.name,
+                crate::common_type_display(source)
+            ),
+            None,
+            Some("You will need to rewrite or cast the expression.".to_owned()),
+        )),
+    }
+}
+
 fn normalize_validated_xml(value: &str) -> String {
     let value = value.trim_start_matches('\u{feff}');
     let Some((declaration, body)) = xml_declaration(value) else {

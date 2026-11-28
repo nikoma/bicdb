@@ -3650,6 +3650,7 @@ impl<'db> SqlSession<'db> {
         default_marks: &[Vec<usize>],
         rules: Option<&CopyFromRules>,
     ) -> Result<CopyFromOutcome> {
+        let _xml_settings = crate::xml::XmlSettingsScope::enter(&self.session_gucs);
         // PostgreSQL's CONTEXT names the relation without its schema.
         let display_relation = table
             .rsplit('.')
@@ -3733,22 +3734,17 @@ impl<'db> SqlSession<'db> {
                         value,
                         schema.as_ref().and_then(|schema| schema.column(column)),
                     ) {
-                        (Some(text), Some(target))
-                            if target.user_type.is_none()
-                                && matches!(target.pg_type.as_str(), "int2" | "int4" | "int8") =>
-                        {
-                            SqlValue::Int(pg_integer_input(&text, &target.pg_type).map_err(
-                                |error| match line {
-                                    Some(line) => copy_value_error(
-                                        error,
-                                        &display_relation,
-                                        line,
-                                        &target.name,
-                                        &text,
-                                    ),
-                                    None => error,
-                                },
-                            )?)
+                        (Some(text), Some(target)) if copy_input_requires_special_type(target) => {
+                            copy_text_input(&text, target).map_err(|error| match line {
+                                Some(line) => copy_value_error(
+                                    error,
+                                    &display_relation,
+                                    line,
+                                    &target.name,
+                                    &text,
+                                ),
+                                None => error,
+                            })?
                         }
                         (value, _) => value.map(SqlValue::String).unwrap_or(SqlValue::Null),
                     };
@@ -8609,6 +8605,22 @@ fn is_soft_copy_input_error(error: &SqlError) -> bool {
     sqlstate.starts_with("22") || matches!(sqlstate, "23502" | "23514")
 }
 
+fn copy_input_requires_special_type(target: &ColumnSchema) -> bool {
+    target.user_type.is_none()
+        && (matches!(target.pg_type.as_str(), "int2" | "int4" | "int8")
+            || (target.pg_type == "xml" && crate::xml::xml_input_is_document()))
+}
+
+fn copy_text_input(text: &str, target: &ColumnSchema) -> Result<SqlValue> {
+    if copy_input_requires_special_type(target) {
+        if target.pg_type == "xml" {
+            return crate::xml::xml_input_value(SqlValue::String(text.to_owned()));
+        }
+        return pg_integer_input(text, &target.pg_type).map(SqlValue::Int);
+    }
+    Ok(SqlValue::String(text.to_owned()))
+}
+
 /// The first field of a skipped row its column's input refuses, for the
 /// verbose NOTICE: (column, the value or `None` for NULL input).
 fn copy_refused_field(
@@ -8622,13 +8634,7 @@ fn copy_refused_field(
                 continue;
             };
             let input = match value {
-                Some(text)
-                    if target.user_type.is_none()
-                        && matches!(target.pg_type.as_str(), "int2" | "int4" | "int8") =>
-                {
-                    pg_integer_input(text, &target.pg_type).map(SqlValue::Int)
-                }
-                Some(text) => Ok(SqlValue::String(text.clone())),
+                Some(text) => copy_text_input(text, target),
                 None => Ok(SqlValue::Null),
             };
             let refused = match input {

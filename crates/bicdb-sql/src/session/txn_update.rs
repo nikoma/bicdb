@@ -888,7 +888,7 @@ impl<'db> SqlSession<'db> {
         }
         self.validate_row_assignments(update, &table, schema.as_deref())?;
         if let Some(schema) = schema.as_deref() {
-            validate_integer_text_assignments(schema, &update.assignments)?;
+            validate_unknown_text_assignments(schema, &update.assignments)?;
         }
         if let Some(schema) = schema
             .as_deref()
@@ -8762,7 +8762,7 @@ fn check_return_next_target(has_out_parameters: bool, query: &Query) -> Result<(
 
 /// `SET int_column = '34.5'` reads the literal with the column type's input
 /// function, as an INSERT does.
-fn validate_integer_text_assignments(
+fn validate_unknown_text_assignments(
     schema: &TableSchema,
     assignments: &[sqlparser::ast::Assignment],
 ) -> Result<()> {
@@ -8784,6 +8784,8 @@ fn validate_integer_text_assignments(
             if let SqlValue::String(text) = eval_constant_expr(&assignment.value)? {
                 pg_integer_input(&text, &column.pg_type)?;
             }
+        } else if column.pg_type == "xml" && crate::xml::xml_input_is_document() {
+            crate::xml::xml_input_value(eval_constant_expr(&assignment.value)?)?;
         }
     }
     Ok(())

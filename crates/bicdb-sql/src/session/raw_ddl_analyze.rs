@@ -1178,13 +1178,7 @@ impl<'db> SqlSession<'db> {
                 Ok(())
             }
             "search_path" => {
-                let path = value.to_cell();
-                if path.trim().is_empty() {
-                    return Err(SqlError::InvalidSql(
-                        "SET search_path expects at least one schema".to_string(),
-                    ));
-                }
-                Arc::make_mut(&mut self.session_gucs).insert(setting, path);
+                Arc::make_mut(&mut self.session_gucs).insert(setting, value.to_cell());
                 Ok(())
             }
             "extra_float_digits" => {

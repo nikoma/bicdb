@@ -60,11 +60,7 @@ impl SqlEngine<'_> {
             .ok_or_else(|| SqlError::invalid_parameter_value("tableforest must be boolean"))?;
         let namespace = namespace.to_cell();
         let (query, document_name, row_name) = if name == "table_to_xml" {
-            let oid = i64::from(oid_alias_numeric_value(
-                self.db_ref(),
-                "regclass",
-                source.clone(),
-            )?);
+            let oid = i64::from(oid_alias_numeric_value(self.db_ref(), "regclass", source)?);
             let relation = resolve_regclass_name(self.db_ref(), oid)?.ok_or_else(|| {
                 SqlError::data_exception_public(
                     "XX000",

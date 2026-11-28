@@ -2641,7 +2641,7 @@ fn handle_frontend_message(
                     Ok(_) => {}
                     Err(error) => {
                         if state.implicit_simple_transaction {
-                            rollback_open_transaction(server, state)?;
+                            rollback_open_transaction(server, state, None)?;
                         }
                         state.failed_queries += 1;
                         server.failed_queries.fetch_add(1, Ordering::SeqCst);
@@ -3790,7 +3790,7 @@ fn execute_simple_query_batch(
         Ok(QueryFlow::Complete)
     })();
     if result.is_err() && state.implicit_simple_transaction {
-        rollback_open_transaction(server, state)?;
+        rollback_open_transaction(server, state, None)?;
     }
     result
 }
@@ -4072,7 +4072,7 @@ fn begin_copy_in(
     if owns_serializable_transaction {
         begin_buffered_transaction(server, state)?;
         if let Err(error) = acquire_postgres_statement_snapshot(server, state, None, || true) {
-            rollback_open_transaction(server, state)?;
+            rollback_open_transaction(server, state, None)?;
             return Err(error);
         }
     }
@@ -4166,7 +4166,7 @@ fn begin_copy_in(
         Ok(columns) => columns,
         Err(error) => {
             if owns_serializable_transaction {
-                rollback_open_transaction(server, state)?;
+                rollback_open_transaction(server, state, None)?;
             } else if started_guc_transaction {
                 state.session_state.rollback_transaction();
             }
@@ -4897,7 +4897,7 @@ fn execute_server_db_sql_for_state_inner(
                 Ok(result)
             }
             Err(error) => {
-                rollback_open_transaction(server, state)?;
+                rollback_open_transaction(server, state, None)?;
                 Err(error)
             }
         };
@@ -5835,7 +5835,7 @@ fn execute_server_sql_with_options_normalized(
                 ),
                 delegation::TransactionEnd::Commit { chain }
                 | delegation::TransactionEnd::Rollback { chain } => {
-                    rollback_open_transaction(server, state)?;
+                    rollback_open_transaction(server, state, Some(&cancellation))?;
                     (SqlResult::command("ROLLBACK"), chain)
                 }
             };
@@ -5875,7 +5875,7 @@ fn execute_server_sql_with_options_normalized(
             }
             Ok(result)
         } else if let Some(command) = parse_savepoint_command(sql, normalized) {
-            execute_savepoint_command(server, state, command)
+            execute_savepoint_command(server, state, command, &cancellation)
         } else if state.failed_transaction {
             Err(PgWireError::InFailedTransaction)
         } else if let Some(result) = delegation::execute_delegation(server, state, sql)? {

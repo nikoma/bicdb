@@ -300,11 +300,18 @@ impl SqlSession<'_> {
         triggers: Vec<TriggerSchema>,
         ctes: BTreeMap<String, CteResult>,
     ) -> Result<SqlResult> {
-        if insert.on.is_some() {
-            return Err(SqlError::Unsupported(
-                "INSERT ... ON CONFLICT on a view with an INSTEAD OF trigger is not supported"
-                    .to_string(),
-            ));
+        if let Some(on_insert) = &insert.on {
+            let OnInsert::OnConflict(conflict) = on_insert else {
+                return Err(SqlError::Unsupported(
+                    "INSERT ON DUPLICATE KEY UPDATE is not supported".to_string(),
+                ));
+            };
+            super::updatable_views::reject_view_conflict_constraint(conflict, &view.name)?;
+            if conflict.conflict_target.is_some()
+                || !matches!(conflict.action, OnConflictAction::DoNothing)
+            {
+                return Err(super::updatable_views::no_view_conflict_arbiter());
+            }
         }
         let alias = Self::view_alias(&view, insert.table_alias.as_ref().map(|a| &a.alias));
         let columns: Vec<usize> = if insert.columns.is_empty() {

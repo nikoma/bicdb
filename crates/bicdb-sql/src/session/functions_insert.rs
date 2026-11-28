@@ -1079,6 +1079,15 @@ impl<'db> SqlSession<'db> {
         insert: &Insert,
         ctes: BTreeMap<String, CteResult>,
     ) -> Result<SqlResult> {
+        self.execute_insert_with_view_visibility(insert, ctes, &[])
+    }
+
+    pub(super) fn execute_insert_with_view_visibility(
+        &mut self,
+        insert: &Insert,
+        ctes: BTreeMap<String, CteResult>,
+        view_visibility: &[(String, Expr)],
+    ) -> Result<SqlResult> {
         let TableObject::TableName(table_name) = &insert.table else {
             return Err(SqlError::Unsupported(
                 "INSERT supports only table names".to_string(),
@@ -1174,11 +1183,13 @@ impl<'db> SqlSession<'db> {
                         insert.table_alias.as_ref().map(|alias| &alias.alias),
                     )?);
                 }
-                self.require_column_privilege(
-                    &table,
-                    "SELECT",
-                    &read_columns.into_iter().collect::<Vec<_>>(),
-                )?;
+                if !preauthorized {
+                    self.require_column_privilege(
+                        &table,
+                        "SELECT",
+                        &read_columns.into_iter().collect::<Vec<_>>(),
+                    )?;
+                }
                 let inferred = ConflictColumnInference {
                     columns,
                     predicate: predicate.and_then(|predicate| {
@@ -1365,6 +1376,8 @@ impl<'db> SqlSession<'db> {
                     inference.as_ref(),
                     insert.table_alias.as_ref().map(|alias| &alias.alias),
                     insert.returning.as_deref(),
+                    preauthorized,
+                    view_visibility,
                 );
             }
             return self.execute_partition_insert(parent, records, insert);
@@ -1391,6 +1404,8 @@ impl<'db> SqlSession<'db> {
                 inference.as_ref(),
                 insert.table_alias.as_ref().map(|alias| &alias.alias),
                 insert.returning.as_deref(),
+                preauthorized,
+                view_visibility,
             );
         }
         // PostgreSQL checks a new row against the row policies before its
@@ -2088,6 +2103,7 @@ impl<'db> SqlSession<'db> {
         table: &str,
         schema: &TableSchema,
         update: &sqlparser::ast::DoUpdate,
+        preauthorized: bool,
     ) -> Result<Vec<Assignment>> {
         let mut target_columns = BTreeSet::new();
         let mut reads = crate::column_privileges::ReferencedNames::default();
@@ -2146,7 +2162,9 @@ impl<'db> SqlSession<'db> {
                 });
             }
         }
-        self.require_select_on_names(table, &reads, &["excluded".to_string()])?;
+        if !preauthorized {
+            self.require_select_on_names(table, &reads, &["excluded".to_string()])?;
+        }
         Ok(expanded)
     }
 
@@ -2159,6 +2177,8 @@ impl<'db> SqlSession<'db> {
         inference: Option<&ConflictColumnInference>,
         insert_alias: Option<&Ident>,
         returning: Option<&[SelectItem]>,
+        preauthorized: bool,
+        view_visibility: &[(String, Expr)],
     ) -> Result<SqlResult> {
         let OnInsert::OnConflict(on_conflict) = on_insert else {
             return Err(SqlError::Unsupported(
@@ -2252,13 +2272,15 @@ impl<'db> SqlSession<'db> {
                     .iter()
                     .any(|assignment| matches!(assignment.target, AssignmentTarget::Tuple(_))) =>
             {
-                Some(self.prepare_conflict_row_assignments(table, schema, update)?)
+                Some(self.prepare_conflict_row_assignments(table, schema, update, preauthorized)?)
             }
             _ => None,
         };
         let mut update_assignments = &[][..];
         let assignments = if let OnConflictAction::DoUpdate(update) = &on_conflict.action {
-            self.require_update_privileges(table, &update.assignments)?;
+            if !preauthorized {
+                self.require_update_privileges(table, &update.assignments)?;
+            }
             update_assignments = expanded_assignments
                 .as_deref()
                 .unwrap_or(&update.assignments);
@@ -2395,6 +2417,26 @@ impl<'db> SqlSession<'db> {
                             Some(row_schema),
                             &existing,
                         )?;
+                        if preauthorized {
+                            self.enforce_rls_conflict_check(access_table, row_schema, &existing)?;
+                        }
+                        // Check visibility before evaluating the user's action
+                        // against a conflicting row hidden by the view.
+                        for (view, selection) in view_visibility.iter().rev() {
+                            if !self
+                                .row_engine()
+                                .eval_row_truth(&old_row, selection)?
+                                .unwrap_or(false)
+                            {
+                                return Err(SqlError::data_exception(
+                                    "55000",
+                                    format!(
+                                        "conflicting row is not visible through view \"{view}\""
+                                    ),
+                                    None,
+                                ));
+                            }
+                        }
                         let mut excluded_row =
                             row_from_record("excluded", "excluded", Some(row_schema), &record)?;
                         if whole_rows.target {
@@ -2413,15 +2455,9 @@ impl<'db> SqlSession<'db> {
                                 continue;
                             }
                         }
-                        // Unlike a plain UPDATE (which silently skips rows
-                        // failing USING), PostgreSQL errors when the
-                        // conflicting existing row is not updatable or not
-                        // visible; the DO UPDATE WHERE is evaluated first.
-                        self.enforce_rls_conflict_check(
-                            access_table,
-                            access_schema.unwrap_or(schema),
-                            &existing,
-                        )?;
+                        if !preauthorized {
+                            self.enforce_rls_conflict_check(access_table, row_schema, &existing)?;
+                        }
 
                         let mut updated = existing.clone();
                         let mut assigned_columns = Vec::with_capacity(update_assignments.len());

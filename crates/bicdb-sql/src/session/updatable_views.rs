@@ -16,6 +16,9 @@
 //! row security and whose checking role differs from the caller is refused
 //! (0A000) rather than evaluated with the wrong role's policies.
 use super::*;
+use crate::column_privileges::ReferencedNames;
+use crate::conflict_inference::{column_inference, column_target};
+use sqlparser::ast::{OnConflict, TableAliasWithoutColumns};
 use sqlparser::ast::{Visit, VisitMut, Visitor, VisitorMut};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -86,6 +89,7 @@ pub(crate) struct UpdatableView {
     base: String,
     /// The name that qualifies base columns in the rewritten statement.
     qualifier: String,
+    base_sql_name: String,
     /// The view's WHERE, qualified for the rewritten statement.
     selection: Option<Expr>,
     columns: Vec<ViewColumn>,
@@ -124,6 +128,11 @@ fn unsupported(message: impl Into<String>) -> SqlError {
 
 fn short_relation(name: &str) -> String {
     name.rsplit('.').next().unwrap_or(name).to_string()
+}
+
+fn view_sql_name(name: &str) -> String {
+    crate::eval::rewrite_helpers::logical_relation_name(name)
+        .unwrap_or_else(|| short_relation(name))
 }
 
 fn normalized(ident: &Ident) -> String {
@@ -369,7 +378,7 @@ pub(crate) fn analyze_updatable_view(
     db: &BicDb,
     view: &ViewSchema,
 ) -> Result<std::result::Result<UpdatableView, &'static str>> {
-    let short = short_relation(&view.name);
+    let short = view_sql_name(&view.name);
     if view.materialized {
         return Ok(Err("materialized"));
     }
@@ -479,7 +488,8 @@ pub(crate) fn analyze_updatable_view(
         return Ok(Err(single));
     };
     let base_short = short_relation(&base);
-    let mut old_qualifiers = vec![base_short.clone()];
+    let base_sql_name = view_sql_name(&base);
+    let mut old_qualifiers = vec![base_short.clone(), base_sql_name.clone()];
     if let Some(alias) = alias {
         old_qualifiers = vec![normalized(&alias.name)];
     }
@@ -543,6 +553,7 @@ pub(crate) fn analyze_updatable_view(
         base,
         selection: select.selection.as_ref().map(requalify),
         qualifier,
+        base_sql_name,
         columns,
         base_columns,
         check_option: view.check_option.as_deref().and_then(CheckOption::parse),
@@ -569,6 +580,14 @@ fn plain_base_column(expr: &Expr, qualifier: &str, base_columns: &[String]) -> O
     base_columns.contains(&column).then_some(column)
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ViewExpression {
+    Ordinary,
+    ConflictTarget,
+    ConflictUpdate,
+    ConflictReturning,
+}
+
 /// Replaces references to a view's columns in a statement's expressions with
 /// their definitions on the base relation.
 struct Substitute<'a> {
@@ -576,6 +595,7 @@ struct Substitute<'a> {
     view: &'a UpdatableView,
     /// The name the statement gives the view (its alias or its name).
     target: String,
+    expression: ViewExpression,
     /// One entry per enclosing subquery SELECT: its qualifiers and columns.
     scopes: Vec<(BTreeSet<String>, Option<BTreeSet<String>>)>,
     error: Option<SqlError>,
@@ -593,6 +613,52 @@ impl Substitute<'_> {
 
     fn replacement(&self, column: &ViewColumn) -> Expr {
         Expr::Nested(Box::new(column.expr.clone()))
+    }
+
+    fn shadows(&self, qualifier: &str) -> bool {
+        self.scopes
+            .iter()
+            .any(|(qualifiers, _)| qualifiers.contains(qualifier))
+    }
+
+    fn conflict_whole_row(&self, qualifier: &str) -> bool {
+        self.expression != ViewExpression::Ordinary
+            && (qualifier == self.target
+                || qualifier == self.view.qualifier
+                || qualifier == self.view.base_sql_name
+                || qualifier == "excluded")
+            && !self.shadows(qualifier)
+    }
+
+    fn conflict_column_replacement(
+        &mut self,
+        expr: &mut Expr,
+        column: &ViewColumn,
+    ) -> ControlFlow<()> {
+        if self.expression != ViewExpression::Ordinary && self.shadows(&self.view.qualifier) {
+            return self.fail(unsupported(
+                "a view column reference shadowed by a subquery is not supported in ON CONFLICT",
+            ));
+        }
+        *expr = self.replacement(column);
+        ControlFlow::Continue(())
+    }
+
+    fn excluded_replacement(&self, column: &ViewColumn) -> Result<Expr> {
+        let mut expr = column.expr.clone();
+        if crate::planner::expr_contains_subquery(&expr) {
+            return Err(unsupported(
+                "EXCLUDED view columns defined by subqueries are not supported",
+            ));
+        }
+        let mut requalify = Requalify {
+            from: std::slice::from_ref(&self.view.qualifier),
+            to: "excluded",
+            columns: &self.view.base_columns,
+            scopes: Vec::new(),
+        };
+        let _ = VisitMut::visit(&mut expr, &mut requalify);
+        Ok(Expr::Nested(Box::new(expr)))
     }
 }
 
@@ -613,6 +679,12 @@ impl VisitorMut for Substitute<'_> {
     fn post_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<()> {
         match expr {
             Expr::Identifier(ident) => {
+                if self.expression == ViewExpression::ConflictUpdate
+                    && ident.quote_style.is_none()
+                    && ident.value.eq_ignore_ascii_case("default")
+                {
+                    return ControlFlow::Continue(());
+                }
                 let name = normalized(ident);
                 // An inner FROM list that provides the name binds it first.
                 let mut unknown_scope = false;
@@ -628,13 +700,21 @@ impl VisitorMut for Substitute<'_> {
                 let hidden = self.view.base_columns.contains(&name);
                 match self.column(&name).cloned() {
                     Some(column) => {
+                        if self.expression == ViewExpression::ConflictUpdate && !unknown_scope {
+                            return self.fail(SqlError::data_exception(
+                                "42702",
+                                format!("column reference \"{name}\" is ambiguous"),
+                                None,
+                            ));
+                        }
+
                         if unknown_scope && column.base_column.as_deref() != Some(name.as_str()) {
                             return self.fail(unsupported(format!(
                                 "a reference to view column \"{name}\" inside this subquery is not supported"
                             )));
                         }
                         if !unknown_scope {
-                            *expr = self.replacement(&column);
+                            return self.conflict_column_replacement(expr, &column);
                         }
                     }
                     None if hidden => {
@@ -649,22 +729,55 @@ impl VisitorMut for Substitute<'_> {
                             detail: None,
                         });
                     }
+                    None if self.conflict_whole_row(&name) => {
+                        if name != self.target
+                            && (name != "excluded"
+                                || !matches!(self.expression, ViewExpression::ConflictUpdate))
+                        {
+                            return self.fail(SqlError::data_exception(
+                                "42703",
+                                format!("column \"{name}\" does not exist"),
+                                None,
+                            ));
+                        }
+                        return self.fail(unsupported(
+                            "whole-row expressions in ON CONFLICT on a view are not supported",
+                        ));
+                    }
                     None => {}
                 }
             }
             Expr::CompoundIdentifier(parts) if parts.len() == 2 => {
                 let qualifier = normalized(&parts[0]);
                 let column = normalized(&parts[1]);
-                let shadowed = self
-                    .scopes
-                    .iter()
-                    .any(|(qualifiers, _)| qualifiers.contains(&qualifier));
-                if shadowed {
+                if self.shadows(&qualifier) {
                     return ControlFlow::Continue(());
                 }
-                if qualifier == self.target {
+                if qualifier == "excluded" && self.expression == ViewExpression::ConflictUpdate {
+                    if self.target == "excluded" {
+                        return self.fail(SqlError::data_exception(
+                            "42P09",
+                            "table reference \"excluded\" is ambiguous",
+                            None,
+                        ));
+                    }
+                    let result = self.column(&column).map_or_else(
+                        || {
+                            Err(SqlError::data_exception(
+                                "42703",
+                                format!("column excluded.{column} does not exist"),
+                                None,
+                            ))
+                        },
+                        |column| self.excluded_replacement(column),
+                    );
+                    match result {
+                        Ok(replacement) => *expr = replacement,
+                        Err(error) => return self.fail(error),
+                    }
+                } else if qualifier == self.target {
                     match self.column(&column).cloned() {
-                        Some(found) => *expr = self.replacement(&found),
+                        Some(found) => return self.conflict_column_replacement(expr, &found),
                         None => {
                             return self.fail(SqlError::RaisedException {
                                 sqlstate: "42703".to_string(),
@@ -676,14 +789,58 @@ impl VisitorMut for Substitute<'_> {
                             });
                         }
                     }
-                } else if qualifier == self.view.qualifier {
-                    // The base relation is not in scope under its own name.
+                } else if qualifier == self.view.qualifier
+                    || self.expression != ViewExpression::Ordinary
+                        && (qualifier != "excluded" || qualifier == self.view.base_sql_name)
+                {
+                    // The base relation is not in the user's expression scope.
                     return self.fail(SqlError::RaisedException {
                         sqlstate: "42P01".to_string(),
                         message: format!("missing FROM-clause entry for table \"{qualifier}\""),
                         detail: None,
                     });
                 }
+            }
+            Expr::CompoundIdentifier(parts)
+                if self.expression != ViewExpression::Ordinary && parts.len() > 2 =>
+            {
+                let qualifier = normalized(&parts[parts.len() - 2]);
+                if (qualifier == self.view.qualifier || qualifier == self.view.base_sql_name)
+                    && qualifier != self.target
+                {
+                    return self.fail(SqlError::data_exception(
+                        "42P01",
+                        format!("missing FROM-clause entry for table \"{qualifier}\""),
+                        None,
+                    ));
+                }
+                return self.fail(unsupported(
+                    "ON CONFLICT on a view supports two-part column references only",
+                ));
+            }
+            Expr::QualifiedWildcard(name, _)
+                if object_name_parts(name)
+                    .last()
+                    .is_some_and(|name| self.conflict_whole_row(name)) =>
+            {
+                return self.fail(unsupported(
+                    "whole-row expressions in ON CONFLICT on a view are not supported",
+                ));
+            }
+            Expr::Function(function)
+                if self.expression != ViewExpression::Ordinary
+                    && matches!(&function.args, FunctionArguments::List(args)
+                    if args.args.iter().any(|arg| match arg {
+                        FunctionArg::Unnamed(FunctionArgExpr::QualifiedWildcard(name))
+                        | FunctionArg::Named { arg: FunctionArgExpr::QualifiedWildcard(name), .. }
+                        | FunctionArg::ExprNamed { arg: FunctionArgExpr::QualifiedWildcard(name), .. } =>
+                            object_name_parts(name).last().is_some_and(|name| self.conflict_whole_row(name)),
+                        _ => false,
+                    })) =>
+            {
+                return self.fail(unsupported(
+                    "whole-row expressions in ON CONFLICT on a view are not supported",
+                ));
             }
             _ => {}
         }
@@ -699,12 +856,48 @@ struct Chain {
     cascade: bool,
 }
 
+pub(super) fn no_view_conflict_arbiter() -> SqlError {
+    SqlError::data_exception(
+        "42P10",
+        "there is no unique or exclusion constraint matching the ON CONFLICT specification",
+        None,
+    )
+}
+
+pub(super) fn reject_view_conflict_constraint(conflict: &OnConflict, view: &str) -> Result<()> {
+    if let Some(target @ ConflictTarget::OnConstraint(name)) = &conflict.conflict_target {
+        if column_inference(target).is_none() {
+            return Err(SqlError::data_exception(
+                "42704",
+                format!(
+                    "constraint \"{}\" for table \"{}\" does not exist",
+                    relation_name(name)?,
+                    view_sql_name(view)
+                ),
+                None,
+            ));
+        }
+    }
+    Ok(())
+}
+
 impl SqlSession<'_> {
     fn substitute_expr(&self, view: &UpdatableView, target: &str, expr: &mut Expr) -> Result<()> {
+        self.substitute_view_expr(view, target, expr, ViewExpression::Ordinary)
+    }
+
+    fn substitute_view_expr(
+        &self,
+        view: &UpdatableView,
+        target: &str,
+        expr: &mut Expr,
+        expression: ViewExpression,
+    ) -> Result<()> {
         let mut visitor = Substitute {
             db: self.db_ref(),
             view,
             target: target.to_string(),
+            expression,
             scopes: Vec::new(),
             error: None,
         };
@@ -720,6 +913,7 @@ impl SqlSession<'_> {
         view: &UpdatableView,
         target: &str,
         items: &[SelectItem],
+        expression: ViewExpression,
     ) -> Result<Vec<SelectItem>> {
         let mut out = Vec::new();
         for item in items {
@@ -759,7 +953,7 @@ impl SqlSession<'_> {
                         _ => None,
                     };
                     let mut substituted = expr.clone();
-                    self.substitute_expr(view, target, &mut substituted)?;
+                    self.substitute_view_expr(view, target, &mut substituted, expression)?;
                     match name {
                         Some(name) if substituted != *expr => out.push(SelectItem::ExprWithAlias {
                             expr: substituted,
@@ -770,7 +964,7 @@ impl SqlSession<'_> {
                 }
                 SelectItem::ExprWithAlias { expr, alias } => {
                     let mut substituted = expr.clone();
-                    self.substitute_expr(view, target, &mut substituted)?;
+                    self.substitute_view_expr(view, target, &mut substituted, expression)?;
                     out.push(SelectItem::ExprWithAlias {
                         expr: substituted,
                         alias: alias.clone(),
@@ -793,6 +987,7 @@ impl SqlSession<'_> {
         dml: ViewDml,
         view: ViewSchema,
         reads: bool,
+        updates_conflict: bool,
     ) -> Result<Vec<(UpdatableView, String)>> {
         let mut levels = Vec::new();
         let mut checking_role = current_user_from_gucs(&self.session_gucs);
@@ -830,6 +1025,11 @@ impl SqlSession<'_> {
                 )))
             };
             if !role_has_table_privilege(self.db_ref(), &base_role, &level.base, dml.privilege())? {
+                return Err(denied());
+            }
+            if updates_conflict
+                && !role_has_table_privilege(self.db_ref(), &base_role, &level.base, "UPDATE")?
+            {
                 return Err(denied());
             }
             if reads && !role_has_table_privilege(self.db_ref(), &base_role, &level.base, "SELECT")?
@@ -925,6 +1125,124 @@ impl SqlSession<'_> {
             .collect()
     }
 
+    fn require_view_conflict_privileges(
+        &self,
+        insert: &Insert,
+        view: &ViewSchema,
+        conflict: &OnConflict,
+    ) -> Result<()> {
+        let mut reads = ReferencedNames::default();
+        if let Some((columns, predicate)) =
+            conflict.conflict_target.as_ref().and_then(column_inference)
+        {
+            for column in columns {
+                reads.add_name(normalized(column));
+            }
+            if let Some(predicate) = predicate {
+                reads.add_expr(predicate);
+            }
+        }
+        if let OnConflictAction::DoUpdate(update) = &conflict.action {
+            self.require_update_privileges(&view.name, &update.assignments)?;
+            for assignment in &update.assignments {
+                reads.add_expr(&assignment.value);
+            }
+            if let Some(selection) = &update.selection {
+                reads.add_expr(selection);
+            }
+        }
+        let mut aliases = vec!["excluded".to_string()];
+        if let Some(alias) = &insert.table_alias {
+            aliases.push(normalized(&alias.alias));
+        }
+        self.require_select_on_names(&view.name, &reads, &aliases)
+    }
+
+    fn substitute_view_conflict(
+        &self,
+        level: &UpdatableView,
+        target: &str,
+        conflict: &mut OnConflict,
+    ) -> Result<()> {
+        if let Some((keys, predicate)) =
+            conflict.conflict_target.as_ref().and_then(column_inference)
+        {
+            let mapped = keys
+                .into_iter()
+                .map(|key| {
+                    let name = normalized(key);
+                    let Some(column) = level.columns.iter().find(|column| column.name == name)
+                    else {
+                        return Err(SqlError::data_exception(
+                            "42703",
+                            format!("column \"{name}\" does not exist"),
+                            None,
+                        ));
+                    };
+                    let Some(base_column) = &column.base_column else {
+                        return Err(no_view_conflict_arbiter());
+                    };
+                    Ok(Ident::with_quote('"', base_column.clone()))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            let mut predicate = predicate.cloned();
+            if let Some(predicate) = &mut predicate {
+                self.substitute_view_expr(
+                    level,
+                    target,
+                    predicate,
+                    ViewExpression::ConflictTarget,
+                )?;
+            }
+            conflict.conflict_target = Some(column_target(mapped, predicate));
+        }
+        if let OnConflictAction::DoUpdate(update) = &mut conflict.action {
+            for assignment in &mut update.assignments {
+                let targets: Vec<&mut ObjectName> = match &mut assignment.target {
+                    AssignmentTarget::ColumnName(name) => vec![name],
+                    AssignmentTarget::Tuple(names) => names.iter_mut().collect(),
+                };
+                for name in targets {
+                    let parts = object_name_parts(name);
+                    let [column] = parts.as_slice() else {
+                        return Err(unsupported(
+                            "ON CONFLICT on a view supports plain column assignments only",
+                        ));
+                    };
+                    let Some(found) = level
+                        .columns
+                        .iter()
+                        .find(|candidate| candidate.name == *column)
+                    else {
+                        return Err(SqlError::UndefinedColumn {
+                            table: level.short.clone(),
+                            column: column.clone(),
+                        });
+                    };
+                    let Some(base_column) = &found.base_column else {
+                        return Err(column_not_updatable(ViewDml::Update, column, &level.short));
+                    };
+                    *name = ObjectName::from(vec![Ident::with_quote('"', base_column.clone())]);
+                }
+                self.substitute_view_expr(
+                    level,
+                    target,
+                    &mut assignment.value,
+                    ViewExpression::ConflictUpdate,
+                )?;
+            }
+            if let Some(selection) = &mut update.selection {
+                self.substitute_view_expr(
+                    level,
+                    target,
+                    selection,
+                    ViewExpression::ConflictUpdate,
+                )?;
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn execute_insert_into_view(
         &mut self,
         insert: &Insert,
@@ -934,17 +1252,47 @@ impl SqlSession<'_> {
         if view.materialized {
             return Err(super::materialized_views::cannot_change(&view.name));
         }
-        if insert.on.is_some() {
-            return Err(unsupported(
-                "INSERT ... ON CONFLICT on a view is not supported",
-            ));
+        let mut conflict_reads = false;
+        let mut updates_conflict = false;
+        if let Some(on_insert) = &insert.on {
+            let OnInsert::OnConflict(conflict) = on_insert else {
+                return Err(unsupported(
+                    "INSERT ON DUPLICATE KEY UPDATE is not supported",
+                ));
+            };
+            reject_view_conflict_constraint(conflict, &view.name)?;
+            self.require_view_conflict_privileges(insert, &view, conflict)?;
+            conflict_reads = conflict.conflict_target.is_some();
+            updates_conflict = matches!(conflict.action, OnConflictAction::DoUpdate(_));
         }
-        let levels =
-            self.updatable_view_levels(ViewDml::Insert, view, insert.returning.is_some())?;
+        let levels = self.updatable_view_levels(
+            ViewDml::Insert,
+            view,
+            insert.returning.is_some() || conflict_reads,
+            updates_conflict,
+        )?;
+        if insert.on.is_some() {
+            for (level, _) in levels.iter().take(levels.len() - 1) {
+                if !self.instead_of_triggers(&level.base, "insert")?.is_empty() {
+                    return Err(unsupported(
+                        "ON CONFLICT through nested INSTEAD OF triggers is not supported",
+                    ));
+                }
+            }
+            if updates_conflict
+                && levels
+                    .iter()
+                    .any(|(level, _)| level.qualifier == "excluded")
+            {
+                return Err(unsupported(
+                    "ON CONFLICT on a view over a relation named excluded is not supported",
+                ));
+            }
+        }
         let mut statement = insert.clone();
         let mut target = match &insert.table_alias {
             Some(alias) => normalized(&alias.alias),
-            None => short_relation(&levels[0].0.short),
+            None => levels[0].0.short.clone(),
         };
         statement.table_alias = None;
         let mut columns: Vec<String> = insert
@@ -971,7 +1319,24 @@ impl SqlSession<'_> {
             cascade: false,
         };
         let mut returning = insert.returning.clone();
+        let mut view_visibility = Vec::new();
+        let returning_expression = if insert.on.is_some() {
+            ViewExpression::ConflictReturning
+        } else {
+            ViewExpression::Ordinary
+        };
         for (level, _) in &levels {
+            if let Some(OnInsert::OnConflict(conflict)) = &mut statement.on {
+                self.substitute_view_conflict(level, &target, conflict)?;
+            }
+            if updates_conflict {
+                for (_, selection) in &mut view_visibility {
+                    self.substitute_expr(level, &target, selection)?;
+                }
+                if let Some(selection) = &level.selection {
+                    view_visibility.push((level.short.clone(), selection.clone()));
+                }
+            }
             let mut mapped = Vec::with_capacity(columns.len());
             for column in &columns {
                 let Some(found) = level
@@ -996,7 +1361,8 @@ impl SqlSession<'_> {
             }
             columns = mapped;
             if let Some(items) = &returning {
-                returning = Some(self.substitute_returning(level, &target, items)?);
+                returning =
+                    Some(self.substitute_returning(level, &target, items, returning_expression)?);
             }
             let mut checks = Vec::with_capacity(chain.checks.len());
             for (name, mut expr) in std::mem::take(&mut chain.checks) {
@@ -1009,6 +1375,12 @@ impl SqlSession<'_> {
         }
         let (bottom, _) = levels.last().expect("at least one level");
         statement.table = TableObject::TableName(bottom.base_name.clone());
+        if insert.on.is_some() && bottom.qualifier != bottom.base_sql_name {
+            statement.table_alias = Some(TableAliasWithoutColumns {
+                explicit: true,
+                alias: Ident::with_quote('"', bottom.qualifier.clone()),
+            });
+        }
         statement.columns = columns
             .iter()
             .map(|column| ObjectName::from(vec![Ident::with_quote('"', column.clone())]))
@@ -1021,7 +1393,8 @@ impl SqlSession<'_> {
         let base = bottom.base.clone();
         self.with_statement_transaction(|session| {
             session.view_target_preauthorized = Some(base);
-            let result = session.execute_insert_with_ctes(&statement, ctes);
+            let result =
+                session.execute_insert_with_view_visibility(&statement, ctes, &view_visibility);
             session.view_target_preauthorized = None;
             let result = result?;
             session.finish_view_statement(result, user_columns, &check_names, "INSERT 0")
@@ -1045,7 +1418,7 @@ impl SqlSession<'_> {
             return Err(unsupported("UPDATE of a joined view is not supported"));
         }
         let reads = update.selection.is_some() || update.returning.is_some();
-        let levels = self.updatable_view_levels(ViewDml::Update, view, reads)?;
+        let levels = self.updatable_view_levels(ViewDml::Update, view, reads, false)?;
         let TableFactor::Table { alias, .. } = &update.table.relation else {
             return Err(unsupported("UPDATE target must be a view name"));
         };
@@ -1102,7 +1475,12 @@ impl SqlSession<'_> {
                 (view, user) => view.or(user),
             };
             if let Some(items) = &statement.returning {
-                statement.returning = Some(self.substitute_returning(level, &target, items)?);
+                statement.returning = Some(self.substitute_returning(
+                    level,
+                    &target,
+                    items,
+                    ViewExpression::Ordinary,
+                )?);
             }
             let mut checks = Vec::with_capacity(chain.checks.len());
             for (name, mut expr) in std::mem::take(&mut chain.checks) {
@@ -1158,7 +1536,7 @@ impl SqlSession<'_> {
             return Err(unsupported("DELETE ... USING on a view is not supported"));
         }
         let reads = delete.selection.is_some() || delete.returning.is_some();
-        let levels = self.updatable_view_levels(ViewDml::Delete, view, reads)?;
+        let levels = self.updatable_view_levels(ViewDml::Delete, view, reads, false)?;
         let mut statement = delete.clone();
         let tables = match &mut statement.from {
             FromTable::WithFromKeyword(tables) | FromTable::WithoutKeyword(tables) => tables,
@@ -1190,7 +1568,12 @@ impl SqlSession<'_> {
                 (view, user) => view.or(user),
             };
             if let Some(items) = &statement.returning {
-                statement.returning = Some(self.substitute_returning(level, &target, items)?);
+                statement.returning = Some(self.substitute_returning(
+                    level,
+                    &target,
+                    items,
+                    ViewExpression::Ordinary,
+                )?);
             }
             target = level.qualifier.clone();
         }

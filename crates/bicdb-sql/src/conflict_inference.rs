@@ -237,22 +237,10 @@ impl LoweredInference<'_> {
                 )));
             };
             columns.pop();
-            let keys = Expr::Tuple(
-                std::mem::take(columns)
-                    .into_iter()
-                    .map(Expr::Identifier)
-                    .collect(),
-            );
-            let args = [keys, *predicate.clone()]
-                .into_iter()
-                .map(|expr| FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)))
-                .collect();
-            conflict.conflict_target = Some(ConflictTarget::OnConstraint(ObjectName(vec![
-                ObjectNamePart::Function(ObjectNamePartFunction {
-                    name: Ident::new(CARRIER),
-                    args,
-                }),
-            ])));
+            conflict.conflict_target = Some(column_target(
+                std::mem::take(columns),
+                Some(*predicate.clone()),
+            ));
             ControlFlow::Continue(())
         });
         if let ControlFlow::Break(error) = outcome {
@@ -265,6 +253,23 @@ impl LoweredInference<'_> {
         }
         Ok(())
     }
+}
+
+pub(crate) fn column_target(columns: Vec<Ident>, predicate: Option<Expr>) -> ConflictTarget {
+    let Some(predicate) = predicate else {
+        return ConflictTarget::Columns(columns);
+    };
+    let keys = Expr::Tuple(columns.into_iter().map(Expr::Identifier).collect());
+    let args = [keys, predicate]
+        .into_iter()
+        .map(|expr| FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)))
+        .collect();
+    ConflictTarget::OnConstraint(ObjectName(vec![ObjectNamePart::Function(
+        ObjectNamePartFunction {
+            name: Ident::new(CARRIER),
+            args,
+        },
+    )]))
 }
 
 pub(crate) fn column_inference(target: &ConflictTarget) -> Option<(Vec<&Ident>, Option<&Expr>)> {

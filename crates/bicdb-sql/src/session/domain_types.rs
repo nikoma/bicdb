@@ -4697,6 +4697,9 @@ impl<'db> SqlSession<'db> {
             overload: None,
             catalog_oid: None,
         };
+        if inline_sql {
+            validate_inline_sql_routine(&self.sql_engine(), create_function, &routine)?;
+        }
         if create_function.or_replace
             && list_user_types(self.db_ref())?
                 .iter()

@@ -349,9 +349,12 @@ impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
         }
         let left = self.expr_type(left, env);
         let right = self.expr_type(right, env);
-        self.comparison_error =
+        self.comparison_error = if self.inline_routine_scope.is_some() {
+            inline_routine::validate_catalog_comparison(self.engine, left, op, right).err()
+        } else {
             reject_comparison_for_db(self.engine.db_ref(), left.as_deref(), op, right.as_deref())
-                .err();
+                .err()
+        };
     }
 
     fn routine_env(locals: &BTreeMap<String, String>) -> Vec<RelationColumns> {

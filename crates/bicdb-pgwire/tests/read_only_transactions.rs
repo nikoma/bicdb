@@ -116,7 +116,7 @@ async fn read_only_survives_wire_messages_prepared_execution_and_pool_reuse() {
     task.join().unwrap().unwrap();
 }
 
-// PostgreSQL 16 reports READ UNCOMMITTED but uses a fresh committed snapshot
+// PostgreSQL reports READ UNCOMMITTED but uses a fresh committed snapshot
 // for each statement. Exercise both wire protocols and every host entry path,
 // including AND CHAIN, which must not accidentally pin this mode's snapshot.
 #[tokio::test]
@@ -158,12 +158,30 @@ async fn read_uncommitted_uses_read_committed_visibility_in_both_storage_modes()
         let b_task = tokio::spawn(b_connection);
         a.batch_execute("CREATE TABLE ru_rows(id integer PRIMARY KEY, v integer); INSERT INTO ru_rows VALUES(1,0)").await.unwrap();
         let prepared = a.prepare("SELECT v FROM ru_rows WHERE id=1").await.unwrap();
+        for setting in [
+            "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ UNCOMMITTED",
+            "SET default_transaction_isolation='read uncommitted'",
+        ] {
+            a.batch_execute(&format!("{setting}; BEGIN")).await.unwrap();
+            // BEGIN uses the isolation already chosen for this Query message.
+            for (show, expected) in [
+                ("SHOW transaction_isolation", "read committed"),
+                ("SHOW default_transaction_isolation", "read uncommitted"),
+            ] {
+                assert_eq!(
+                    a.query_one(show, &[]).await.unwrap().get::<_, String>(0),
+                    expected,
+                    "{mode:?}: {setting}"
+                );
+            }
+            a.batch_execute("ROLLBACK").await.unwrap();
+        }
         for begin in [
             "BEGIN ISOLATION LEVEL READ UNCOMMITTED",
             "START TRANSACTION ISOLATION LEVEL READ UNCOMMITTED",
             "BEGIN; SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED",
-            "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ UNCOMMITTED; BEGIN",
-            "SET default_transaction_isolation='read uncommitted'; BEGIN",
+            "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ UNCOMMITTED; COMMIT; BEGIN",
+            "SET default_transaction_isolation='read uncommitted'; COMMIT; BEGIN",
             "BEGIN ISOLATION LEVEL READ UNCOMMITTED; COMMIT AND CHAIN",
             "BEGIN ISOLATION LEVEL READ UNCOMMITTED; ROLLBACK AND CHAIN",
         ] {

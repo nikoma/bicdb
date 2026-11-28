@@ -151,6 +151,10 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>> {
     reject_oversized_sql(sql)?;
     let atomic = crate::sql_atomic_body::lower(sql);
     let sql = atomic.as_ref().map_or(sql, |lowered| lowered.sql.as_str());
+    let recursive = crate::recursive_search_cycle::lower(sql);
+    let sql = recursive
+        .as_ref()
+        .map_or(sql, |lowered| lowered.sql.as_str());
     let parse_sql = rewrite_postgres_parse_compat(sql);
     let sql_for_parse = parse_sql.as_deref().unwrap_or(sql);
     let bounded_sql = crate::boolean_parse::prepare(sql_for_parse)?;
@@ -187,6 +191,10 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>> {
     reject_deep_expressions(&statements)?;
     if let Some(atomic) = &atomic {
         atomic.restore(&mut statements)?;
+        reject_deep_expressions(&statements)?;
+    }
+    if let Some(recursive) = &recursive {
+        recursive.restore(&mut statements)?;
         reject_deep_expressions(&statements)?;
     }
     crate::table_queries::reject_unlowered(&statements)?;

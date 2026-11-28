@@ -251,6 +251,7 @@ mod json_table;
 mod lock_lists;
 mod parse_compat_postfix;
 mod query_rules;
+mod recursive_search_cycle;
 mod role_settings;
 mod routine_calls;
 mod routine_overloads;

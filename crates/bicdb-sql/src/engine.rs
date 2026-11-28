@@ -67,6 +67,11 @@ fn parse_inference_statements(db: &BicDb, sql: &str) -> Result<Vec<Statement>> {
     if is_constraint_timing_command(sql)? || is_postgres_rule_command(sql)? {
         return Ok(Vec::new());
     }
+    if crate::recursive_search_cycle::lower(sql).is_some() {
+        let statements = parse_statements(sql)?;
+        oracle::lock_waits::validate(db, &statements)?;
+        return Ok(statements);
+    }
     // A dollar-quoted anonymous body is one command with no wire parameters
     // or result columns. Its procedural syntax is parsed at execution, just
     // like a stored routine body; $1 inside it is not an outer bind marker.

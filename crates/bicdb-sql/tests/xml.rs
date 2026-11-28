@@ -1315,3 +1315,35 @@ fn cursor_xml_schema_uses_saved_columns_without_moving_the_cursor() {
         "34000"
     );
 }
+
+#[test]
+fn table_xml_schema_describes_qualified_relations_and_public_column_metadata() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE SCHEMA \"a.b\";
+             CREATE TABLE \"a.b\".\"c d\" (n int, v varchar(4));
+             CREATE ROLE xml_schema_reader;
+             GRANT USAGE ON SCHEMA \"a.b\" TO xml_schema_reader;
+             SET ROLE xml_schema_reader",
+        )
+        .unwrap();
+    let result = session
+        .execute("SELECT table_to_xmlschema('\"a.b\".\"c d\"',true,false,'urn:probe')")
+        .unwrap();
+    let schema = result.rows[0][0].to_cell();
+    assert!(schema.contains("targetNamespace=\"urn:probe\""));
+    assert!(schema.contains(".a_x002E_b.c_x0020_d\""));
+    assert!(schema.contains("<xsd:element name=\"n\" type=\"INTEGER\" nillable=\"true\">"));
+    assert!(schema.contains("<xsd:element name=\"v\" type=\"VARCHAR\" nillable=\"true\">"));
+    assert!(schema.contains("<xsd:element name=\"c_x0020_d\" type=\"TableType."));
+    assert_eq!(
+        session
+            .execute("SELECT table_to_xml('\"a.b\".\"c d\"',true,false,'urn:probe')")
+            .unwrap_err()
+            .sqlstate(),
+        "42501"
+    );
+}

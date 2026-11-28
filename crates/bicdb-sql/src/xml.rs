@@ -1794,6 +1794,7 @@ pub(crate) fn xml_function_pg_type(name: &str) -> Option<&'static str> {
         "xmlconcat"
         | "table_to_xml"
         | "query_to_xml"
+        | "table_to_xmlschema"
         | "query_to_xmlschema"
         | "cursor_to_xmlschema"
         | "schema_to_xml"

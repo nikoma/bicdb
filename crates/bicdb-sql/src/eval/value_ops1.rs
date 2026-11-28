@@ -233,6 +233,7 @@ pub(crate) fn eval_db_catalog_function_value_with_engine(
         bare_name,
         "table_to_xml"
             | "query_to_xml"
+            | "table_to_xmlschema"
             | "query_to_xmlschema"
             | "cursor_to_xmlschema"
             | "schema_to_xml"

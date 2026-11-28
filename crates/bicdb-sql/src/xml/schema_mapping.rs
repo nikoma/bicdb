@@ -7,6 +7,7 @@ use super::map_sql_identifier_to_xml_name as xml_name;
 pub(crate) fn query_schema(
     columns: &[(String, Option<String>)],
     database: &str,
+    relation: Option<(&str, &str)>,
     namespace: &str,
     nulls: bool,
     forest: bool,
@@ -34,7 +35,21 @@ pub(crate) fn query_schema(
         types.push(name);
     }
 
-    output.push_str("<xsd:complexType name=\"RowType\">\n  <xsd:sequence>\n");
+    let component = |name: &str| xml_name(name, true).replace('.', "_x002E_");
+    let suffix = relation.map_or_else(String::new, |(schema, relation)| {
+        format!(
+            ".{}.{}.{}",
+            component(database),
+            component(schema),
+            component(relation),
+        )
+    });
+    let row_type = format!("RowType{suffix}");
+    write!(
+        output,
+        "<xsd:complexType name=\"{row_type}\">\n  <xsd:sequence>\n"
+    )
+    .unwrap();
     let optional = if nulls {
         "nillable=\"true\""
     } else {
@@ -50,18 +65,38 @@ pub(crate) fn query_schema(
     }
     output.push_str("  </xsd:sequence>\n</xsd:complexType>\n\n");
 
-    if forest {
-        output.push_str("<xsd:element name=\"row\" type=\"RowType\"/>\n\n");
+    let element = relation.map_or_else(
+        || {
+            if forest {
+                "row".to_string()
+            } else {
+                "table".to_string()
+            }
+        },
+        |(_, name)| xml_name(name, true),
+    );
+    let element_type = if forest {
+        row_type
     } else {
-        output.push_str(concat!(
-            "<xsd:complexType name=\"TableType\">\n",
-            "  <xsd:sequence>\n",
-            "    <xsd:element name=\"row\" type=\"RowType\" minOccurs=\"0\" maxOccurs=\"unbounded\"/>\n",
-            "  </xsd:sequence>\n",
-            "</xsd:complexType>\n\n",
-            "<xsd:element name=\"table\" type=\"TableType\"/>\n\n"
-        ));
-    }
+        let table_type = format!("TableType{suffix}");
+        write!(
+            output,
+            concat!(
+                "<xsd:complexType name=\"{0}\">\n",
+                "  <xsd:sequence>\n",
+                "    <xsd:element name=\"row\" type=\"{1}\" minOccurs=\"0\" maxOccurs=\"unbounded\"/>\n",
+                "  </xsd:sequence>\n",
+                "</xsd:complexType>\n\n",
+            ),
+            table_type, row_type,
+        ).unwrap();
+        table_type
+    };
+    write!(
+        output,
+        "<xsd:element name=\"{element}\" type=\"{element_type}\"/>\n\n"
+    )
+    .unwrap();
     output.push_str("</xsd:schema>");
     output
 }

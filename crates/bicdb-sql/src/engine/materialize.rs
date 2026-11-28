@@ -2088,6 +2088,10 @@ impl<'db> SqlEngine<'db> {
         &self,
         select: &Select,
     ) -> Option<Vec<(String, Option<String>)>> {
+        match self.rewrite_named_join_select(select).ok()? {
+            Some((rewritten, _)) => return self.select_output_columns(&rewritten),
+            None => {}
+        }
         if select.from.is_empty() {
             let env: Vec<RelationColumns> = Vec::new();
             return select

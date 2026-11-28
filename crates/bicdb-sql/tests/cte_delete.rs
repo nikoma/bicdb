@@ -180,3 +180,31 @@ fn postgres_aliased_dml_target_can_join_its_original_name() {
         );
     }
 }
+
+#[test]
+fn postgres_joined_returning_star_preserves_target_and_source_column_order() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut sql = SqlSession::new(&mut db);
+    for statement in [
+        "CREATE TABLE ret_target (id int PRIMARY KEY, val int)",
+        "CREATE TABLE ret_source (id int PRIMARY KEY, label text)",
+        "INSERT INTO ret_target VALUES (1,0),(2,0)",
+        "INSERT INTO ret_source VALUES (1,'one'),(2,'two')",
+    ] {
+        sql.execute(statement).unwrap();
+    }
+    for (statement, expected) in [
+        ("UPDATE ret_target t SET val=7 FROM ret_source s WHERE t.id=s.id AND t.id=1 RETURNING *", Some((1, 7, "one"))),
+        ("DELETE FROM ret_target t USING ret_source s WHERE t.id=s.id AND t.id=2 RETURNING *", Some((2, 0, "two"))),
+        ("UPDATE ret_target t SET val=8 FROM ret_source s WHERE false RETURNING *", None),
+        ("DELETE FROM ret_target t USING ret_source s WHERE false RETURNING *", None),
+    ] {
+        let result = sql.execute(statement).unwrap();
+        assert_eq!(result.columns, ["id", "val", "id", "label"]);
+        let expected = expected.map(|(id, val, label)| vec![
+            SqlValue::Int(id), SqlValue::Int(val), SqlValue::Int(id), SqlValue::String(label.into()),
+        ]).into_iter().collect::<Vec<_>>();
+        assert_eq!(result.rows, expected);
+    }
+}

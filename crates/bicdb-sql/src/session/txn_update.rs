@@ -10,6 +10,12 @@ fn has_relation_columns(columns: &[String], relation: &str) -> bool {
     })
 }
 
+fn update_from_tables(from: &UpdateTableFromKind) -> &[TableWithJoins] {
+    match from {
+        UpdateTableFromKind::BeforeSet(tables) | UpdateTableFromKind::AfterSet(tables) => tables,
+    }
+}
+
 /// Inferred types for one routine binary-operator node: the operand types the
 /// range operators consult (`projected_expr_pg_type_with_db`) and the three
 /// types the generic evaluator consults (`binary_expr_types`).
@@ -1704,18 +1710,36 @@ impl<'db> SqlSession<'db> {
             return Ok(SqlResult::command(format!("UPDATE {updated}")));
         }
         if let Some(returning) = &update.returning {
-            if from_rows.is_some() {
-                return self.project_joined_dml_returning(
+            if let (Some(rows), Some(from)) = (from_rows.as_ref(), update.from.as_ref()) {
+                let columns = returning_columns.unwrap_or_else(|| {
+                    Arc::new(merge_row_set_columns(
+                        target_columns.as_ref().clone(),
+                        rows.columns.clone(),
+                    ))
+                });
+                let wildcard_columns = self.dml_returning_wildcard_columns(
+                    returning,
+                    &target_alias,
+                    target_columns.as_ref(),
+                    update_from_tables(from),
+                    &rows.columns,
+                    &ctes,
+                )?;
+                let result = self.project_joined_dml_returning(
                     &table,
                     schema.as_deref(),
                     returning,
                     returning_rows.as_deref().unwrap_or(&[]),
-                    returning_columns
-                        .as_deref()
-                        .map(Vec::as_slice)
-                        .unwrap_or(&[]),
-                    target_columns.as_ref(),
-                );
+                    &columns,
+                    &wildcard_columns,
+                )?;
+                return Ok(self.type_joined_dml_returning(
+                    result,
+                    returning,
+                    &update.table,
+                    update_from_tables(from),
+                    &ctes,
+                ));
             }
             if let Some(result) = returning_result {
                 return Ok(result);
@@ -2251,11 +2275,7 @@ impl<'db> SqlSession<'db> {
         let Some(from) = from else {
             return Ok(None);
         };
-        let tables = match from {
-            UpdateTableFromKind::BeforeSet(tables) | UpdateTableFromKind::AfterSet(tables) => {
-                tables
-            }
-        };
+        let tables = update_from_tables(from);
         if tables.is_empty() {
             return Ok(None);
         }
@@ -2801,14 +2821,29 @@ impl<'db> SqlSession<'db> {
             if let (Some(using), Some(rows)) = (using_rows.as_ref(), returning_rows.as_ref()) {
                 let columns =
                     merge_row_set_columns(target_columns.as_ref().clone(), using.columns.clone());
-                let mut result = self.project_joined_dml_returning(
+                let wildcard_columns = self.dml_returning_wildcard_columns(
+                    returning,
+                    &target_alias,
+                    target_columns.as_ref(),
+                    delete.using.as_deref().unwrap_or_default(),
+                    &using.columns,
+                    &ctes,
+                )?;
+                let result = self.project_joined_dml_returning(
                     &table,
                     schema.as_ref(),
                     returning,
                     rows,
                     &columns,
-                    target_columns.as_ref(),
+                    &wildcard_columns,
                 )?;
+                let mut result = self.type_joined_dml_returning(
+                    result,
+                    returning,
+                    &target_tables[0],
+                    delete.using.as_deref().unwrap_or_default(),
+                    &ctes,
+                );
                 result.command_tag = Some(format!("DELETE {deleted}"));
                 return Ok(result);
             }
@@ -8490,21 +8525,36 @@ impl<'db> SqlSession<'db> {
             // with qualified and unqualified copies of every cell.
             // An alias adds a second set of table-qualified lookup slots, not
             // a second set of columns to an unqualified RETURNING *.
-            let wildcard_columns = if from_rows.is_none() {
-                &target_columns[..fields.len()]
-            } else {
-                target_columns.as_ref()
-            };
-            return self
-                .project_joined_dml_returning(
-                    table,
-                    Some(schema),
+            let wildcard_columns = match (from_rows, update.from.as_ref()) {
+                (Some(rows), Some(from)) => self.dml_returning_wildcard_columns(
                     returning,
-                    &returning_rows,
-                    candidate_columns.as_ref(),
-                    wildcard_columns,
-                )
-                .map(Some);
+                    target_alias,
+                    target_columns.as_ref(),
+                    update_from_tables(from),
+                    &rows.columns,
+                    ctes,
+                )?,
+                _ => target_columns[..fields.len()].to_vec(),
+            };
+            let result = self.project_joined_dml_returning(
+                table,
+                Some(schema),
+                returning,
+                &returning_rows,
+                candidate_columns.as_ref(),
+                &wildcard_columns,
+            )?;
+            let result = match update.from.as_ref() {
+                Some(from) => self.type_joined_dml_returning(
+                    result,
+                    returning,
+                    &update.table,
+                    update_from_tables(from),
+                    ctes,
+                ),
+                None => result,
+            };
+            return Ok(Some(result));
         }
         Ok(Some(SqlResult::command(format!("UPDATE {updated}"))))
     }

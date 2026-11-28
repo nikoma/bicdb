@@ -1121,7 +1121,7 @@ impl<'db> SqlEngine<'db> {
             .iter()
             .any(|item| matches!(item, SelectItem::Wildcard(_)))
         {
-            self.logical_wildcard_columns(from, &row_set.columns)?
+            self.logical_wildcard_columns(std::slice::from_ref(from), &row_set.columns)?
         } else {
             row_set.columns.clone()
         };
@@ -2008,20 +2008,18 @@ impl<'db> SqlEngine<'db> {
 
     /// SQL-visible columns follow the original FROM order, rather than physical
     /// join order or the executor's additional binding qualifiers.
-    fn logical_wildcard_columns(
+    pub(crate) fn logical_wildcard_columns(
         &self,
-        from: &TableWithJoins,
+        from: &[TableWithJoins],
         row_columns: &[String],
     ) -> Result<Vec<String>> {
         if row_columns.iter().all(|column| !column.contains('.')) {
             return Ok(row_columns.to_vec());
         }
-        let Some(relations) = self.from_relation_columns(std::slice::from_ref(from)) else {
+        let Some(relations) = self.from_relation_columns(from) else {
             return Ok(row_columns.to_vec());
         };
-        let Some(relations) =
-            Self::wildcard_relation_columns(std::slice::from_ref(from), &relations)
-        else {
+        let Some(relations) = Self::wildcard_relation_columns(from, &relations) else {
             return Ok(row_columns.to_vec());
         };
         let sources = relations
@@ -2109,13 +2107,25 @@ impl<'db> SqlEngine<'db> {
                 })
                 .collect();
         }
-        let env = self.from_relation_columns(&select.from)?;
-        let wildcard_env = Self::wildcard_relation_columns(&select.from, &env)?;
-        let hide_flashback_pseudo = flashback::select_has_flashback_versions(select);
+        self.describe_relation_projection(
+            &select.from,
+            &select.projection,
+            flashback::select_has_flashback_versions(select),
+        )
+    }
+
+    pub(crate) fn describe_relation_projection(
+        &self,
+        from: &[TableWithJoins],
+        projection: &[SelectItem],
+        hide_flashback_pseudo: bool,
+    ) -> Option<Vec<(String, Option<String>)>> {
+        let env = self.from_relation_columns(from)?;
+        let wildcard_env = Self::wildcard_relation_columns(from, &env)?;
         let wildcard_visible =
             |name: &str| !(hide_flashback_pseudo && flashback::is_flashback_pseudo_column(name));
         let mut out: Vec<(String, Option<String>)> = Vec::new();
-        for item in &select.projection {
+        for item in projection {
             match item {
                 SelectItem::Wildcard(_) => {
                     for relation in &wildcard_env {

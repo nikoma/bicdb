@@ -5819,14 +5819,16 @@ fn pgwire_copy_start_snapshot_crossing_memory_limit_is_rejected_before_copy_mode
 
 #[test]
 fn pgwire_set_local_restore_crossing_memory_limit_is_rejected_immediately() {
+    const SETTINGS: usize = 64;
     let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
     let server = PgWireServer::open(
         dir.path(),
         PgWireConfig {
-            // Above the BEGIN snapshot, below the fourth local-restore growth.
-            per_connection_memory_limit: 102_200,
+            // Leave room for BEGIN and the entire request. The accumulated
+            // restore map crosses the limit as the statements execute.
+            per_connection_memory_limit: 160 * 1024,
             ..PgWireConfig::default()
         },
     )
@@ -5838,28 +5840,21 @@ fn pgwire_set_local_restore_crossing_memory_limit_is_rejected_immediately() {
     startup(&mut client);
     read_until_ready(&mut client);
 
-    let value = "l".repeat(8 * 1024);
-    for index in 0..6 {
+    let value = "l".repeat(1024);
+    for index in 0..SETTINGS {
         send_query(&mut client, &format!("SET app.local_{index} = '{value}';"));
         assert_eq!(read_query_rows_with_status(&mut client).1, b'I');
     }
     send_query(&mut client, "BEGIN;");
     assert_eq!(read_query_rows_with_status(&mut client).1, b'T');
 
-    let mut rejection = None;
-    for index in 0..6 {
-        send_query(
-            &mut client,
-            &format!("SET LOCAL app.local_{index} = 'request';"),
-        );
-        let (error, status) = read_error_response_with_status(&mut client);
-        if !error.is_empty() {
-            rejection = Some((error, status));
-            break;
-        }
-        assert_eq!(status, b'T');
-    }
-    let (error, status) = rejection.expect("SET LOCAL must cross the memory cap");
+    send_query(&mut client, "SET LOCAL app.local_0 = 'request';");
+    assert_eq!(read_query_rows_with_status(&mut client).1, b'T');
+    let local_statements: String = (1..SETTINGS)
+        .map(|index| format!("SET LOCAL app.local_{index} = 'request';"))
+        .collect();
+    send_query(&mut client, &local_statements);
+    let (error, status) = read_error_response_with_status(&mut client);
     assert!(error.contains("connection memory estimate"), "{error}");
     assert_eq!(status, b'E');
 

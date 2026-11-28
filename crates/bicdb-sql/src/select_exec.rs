@@ -4185,7 +4185,7 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
         "pg_ts_config" | "pg_ts_dict" | "pg_ts_parser" | "pg_ts_template" => {
             crate::fts::catalog::rows(db, table)
         }
-        "pg_ts_config_map" => Ok(Vec::new()),
+        "pg_ts_config_map" => crate::fts::catalog::config_mapping_rows(db),
         "pg_default_acl" => pg_default_acl_rows(db),
         "pg_tablespace" => Ok(pg_tablespace_rows()),
         "pg_auth_members" => pg_auth_members_rows(db),

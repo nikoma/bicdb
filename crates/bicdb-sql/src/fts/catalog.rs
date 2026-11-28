@@ -1,5 +1,5 @@
 use super::TextSearchConfig;
-use crate::eval::{REGCONFIG_OBJECTS, REGDICTIONARY_OBJECTS};
+use crate::eval::{builtin_regconfig_name, REGCONFIG_OBJECTS, REGDICTIONARY_OBJECTS};
 use crate::{namespace_oid, role_oid, virtual_row, BicDb, Result, SqlValue};
 use std::collections::BTreeMap;
 
@@ -79,4 +79,48 @@ pub(crate) fn rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<String, SqlVa
         ])],
         _ => Vec::new(),
     })
+}
+
+// PostgreSQL's default parser maps these token types for each stock config.
+const MAPPED_TOKENS: [i64; 19] = [
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 15, 16, 17, 18, 19, 20, 21, 22,
+];
+const STEMMED_TOKENS: [i64; 6] = [1, 2, 10, 11, 16, 17];
+const ASCII_STEMMED_TOKENS: [i64; 3] = [1, 11, 16];
+
+pub(crate) fn config_mapping_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
+    let authored = super::authored::list(db)?;
+    let configs = REGCONFIG_OBJECTS
+        .iter()
+        .copied()
+        .chain(authored.iter().filter_map(|config| {
+            builtin_regconfig_name(i64::from(config.source_oid)).map(|name| (config.oid, name))
+        }));
+    let mut rows = Vec::new();
+    for (config_oid, language) in configs {
+        let stemmer_name = format!("{language}_stem");
+        for token in MAPPED_TOKENS {
+            let dictionary = if language == "simple" || !STEMMED_TOKENS.contains(&token) {
+                "simple"
+            } else if matches!(language, "hindi" | "russian")
+                && ASCII_STEMMED_TOKENS.contains(&token)
+            {
+                "english_stem"
+            } else {
+                &stemmer_name
+            };
+            if let Some(&(dictionary_oid, _)) = REGDICTIONARY_OBJECTS
+                .iter()
+                .find(|&&(_, name)| name == dictionary)
+            {
+                rows.push(virtual_row([
+                    ("mapcfg", SqlValue::Int(i64::from(config_oid))),
+                    ("maptokentype", SqlValue::Int(token)),
+                    ("mapseqno", SqlValue::Int(1)),
+                    ("mapdict", SqlValue::Int(i64::from(dictionary_oid))),
+                ]));
+            }
+        }
+    }
+    Ok(rows)
 }

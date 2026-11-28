@@ -3971,12 +3971,13 @@ impl<'db> SqlEngine<'db> {
             | "bicdb_oracle_plsql_trunc_date"
             | "bicdb_oracle_date_add_days" => Some("timestamp".to_string()),
             "regexp_match" | "regexp_split_to_array" => Some("text[]".to_string()),
-            "substr" | "substring" => match self.infer_env_expr_type(args.first()?, env).as_deref()
-            {
-                Some("bit" | "varbit") => Some("bit".to_string()),
-                Some("bytea") => Some("bytea".to_string()),
-                _ => Some("text".to_string()),
-            },
+            "substr" | "substring" | "overlay" => {
+                match self.infer_env_expr_type(args.first()?, env).as_deref() {
+                    Some("bit" | "varbit") => Some("bit".to_string()),
+                    Some("bytea") => Some("bytea".to_string()),
+                    _ => Some("text".to_string()),
+                }
+            }
             "length" | "char_length" | "character_length" | "octet_length" | "bit_length"
             | "position" | "strpos" | "ascii" => Some("int4".to_string()),
             "bit_count" | "crc32" | "crc32c" => Some("int8".to_string()),

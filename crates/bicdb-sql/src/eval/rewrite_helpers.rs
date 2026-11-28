@@ -964,6 +964,11 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
         changed = true;
     }
 
+    if let Some(next) = rewrite_qualified_substring_calls(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
     if let Some(next) = rewrite_variadic_builtin_calls(&rewritten) {
         rewritten = next;
         changed = true;
@@ -1114,6 +1119,49 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
     }
 
     changed.then_some(rewritten)
+}
+
+fn rewrite_qualified_substring_calls(sql: &str) -> Option<String> {
+    if !sql
+        .as_bytes()
+        .windows(6)
+        .any(|text| text.eq_ignore_ascii_case(b"substr"))
+    {
+        return None;
+    }
+    let tokens = tokens_with_source(&PostgreSqlDialect {}, sql)?;
+    let mut offset = 0;
+    let mut code = Vec::new();
+    for (token, original) in tokens {
+        let end = offset + original.len();
+        if !matches!(token, Token::Whitespace(_)) {
+            code.push((token, offset, end));
+        }
+        offset = end;
+    }
+    let mut rewritten = String::new();
+    let mut copied = 0;
+    for window in code.windows(3) {
+        if let [(Token::Period, _, _), (Token::Word(word), start, end), (Token::LParen, _, _)] =
+            window
+        {
+            let name = word.value.to_ascii_lowercase();
+            if word.quote_style.is_none() && matches!(name.as_str(), "substring" | "substr") {
+                // The generic parser treats a bare SUBSTRING token as the
+                // special SQL syntax even after a schema qualifier.
+                rewritten.push_str(&sql[copied..*start]);
+                rewritten.push('"');
+                rewritten.push_str(&name);
+                rewritten.push('"');
+                copied = *end;
+            }
+        }
+    }
+    if copied == 0 {
+        return None;
+    }
+    rewritten.push_str(&sql[copied..]);
+    Some(rewritten)
 }
 
 /// `FOR KEY SHARE` and `FOR NO KEY UPDATE` are PostgreSQL's weaker row lock

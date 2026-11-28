@@ -2031,6 +2031,13 @@ pub(crate) fn pg_builtin_proc_return_type_oid(oid: i64) -> Option<i64> {
         .iter()
         .find_map(|&(proc_oid, _, return_type, _)| (proc_oid == oid).then_some(return_type))
         .or_else(|| {
+            PG_STRING_PROC_ROWS
+                .iter()
+                .find_map(|&(proc_oid, _, return_type, _, _)| {
+                    (proc_oid == oid).then_some(return_type)
+                })
+        })
+        .or_else(|| {
             PG_PLPGSQL_PROC_ROWS
                 .iter()
                 .find_map(|&(proc_oid, _, return_type, _, _, _)| {
@@ -3856,6 +3863,36 @@ pub(crate) fn eval_compatibility_function_value_with_db(
     eval_compatibility_function_value(name, args, arg_types)
 }
 
+fn scalar_argument_type(arg_types: Option<&[Option<String>]>, index: usize) -> Option<&str> {
+    arg_types?.get(index)?.as_deref()
+}
+
+fn eval_substring_call(
+    args: &[SqlValue],
+    arg_types: Option<&[Option<String>]>,
+) -> Result<SqlValue> {
+    if args.iter().any(|value| matches!(value, SqlValue::Null)) {
+        return Ok(SqlValue::Null);
+    }
+    let text = |index| {
+        scalar_argument_type(arg_types, index)
+            .is_none_or(|kind| matches!(kind, "text" | "varchar" | "bpchar" | "unknown"))
+    };
+    if text(0) && text(1) {
+        match args {
+            [source, SqlValue::String(pattern)] => {
+                return crate::pg_scalar_extra::regex_substring(&source.to_cell(), pattern);
+            }
+            [source, SqlValue::String(pattern), SqlValue::String(escape)] if text(2) => {
+                return crate::similar_to::similar_substring(&source.to_cell(), pattern, escape)
+                    .map(|value| value.map_or(SqlValue::Null, SqlValue::String));
+            }
+            _ => {}
+        }
+    }
+    substr_value(args)
+}
+
 pub(crate) fn eval_compatibility_function_value(
     name: &str,
     args: &[SqlValue],
@@ -4239,8 +4276,35 @@ pub(crate) fn eval_compatibility_function_value(
             require_arg_count("octet_length", args, 1)?;
             Ok(Some(text_length_value(&args[0], true)))
         }
-        "substr" | "pg_catalog.substr" | "substring" | "pg_catalog.substring" => {
-            Ok(Some(substr_value(args)?))
+        "substr" | "pg_catalog.substr" => Ok(Some(substr_value(args)?)),
+        "substring" | "pg_catalog.substring" => eval_substring_call(args, arg_types).map(Some),
+        "position" | "pg_catalog.position" => {
+            require_arg_count("position", args, 2)?;
+            eval_position_typed_value(
+                args[1].clone(),
+                args[0].clone(),
+                [
+                    scalar_argument_type(arg_types, 1),
+                    scalar_argument_type(arg_types, 0),
+                ],
+            )
+            .map(Some)
+        }
+        "overlay" | "pg_catalog.overlay" => {
+            if !(3..=4).contains(&args.len()) {
+                return Err(SqlError::undefined_function(format!(
+                    "function {name} has no overload with {} arguments",
+                    args.len()
+                )));
+            }
+            eval_overlay_values(
+                &args[0],
+                &args[1],
+                &args[2],
+                args.get(3),
+                scalar_argument_type(arg_types, 0) == Some("bytea"),
+            )
+            .map(Some)
         }
         "coalesce" | "pg_catalog.coalesce" => Ok(Some(
             args.iter()

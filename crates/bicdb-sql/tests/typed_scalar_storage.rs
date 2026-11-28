@@ -271,3 +271,30 @@ fn prefixed_integer_input_and_lcm_zero_preserve_postgresql_boundaries() {
         assert_eq!(session.execute(sql).unwrap_err().sqlstate(), "22003");
     }
 }
+#[test]
+fn postgres_catalog_string_routine_overloads_are_resolvable_and_callable() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    assert_eq!(
+        session.execute("SELECT proname,proargtypes::text FROM pg_catalog.pg_proc WHERE proname='substring' AND proargtypes = '25 23'").unwrap().rows,
+        [[SqlValue::String("substring".into()), SqlValue::String("25 23".into())]]
+    );
+    assert_eq!(
+        session.execute("SELECT 'substring(text,integer)'::regprocedure::oid, 'overlay(bit,bit,integer,integer)'::regprocedure::oid, 'position(bytea,bytea)'::regprocedure::oid").unwrap().rows,
+        [[SqlValue::Int(937), SqlValue::Int(3030), SqlValue::Int(2014)]]
+    );
+    let result = session.execute("SELECT pg_catalog.substring('abc'::text,2), pg_catalog.substring('abc','[ab]'), pg_catalog.position('abc','b'), pg_catalog.overlay(B'110',B'0',2,1), pg_catalog.substr('abc'::text,2)").unwrap();
+    assert_eq!(
+        result.rows,
+        [[
+            SqlValue::String("bc".into()),
+            SqlValue::String("a".into()),
+            SqlValue::Int(2),
+            SqlValue::String("100".into()),
+            SqlValue::String("bc".into()),
+        ]]
+    );
+    assert_eq!(result.column_types[2].as_deref(), Some("int4"));
+    assert_eq!(result.column_types[3].as_deref(), Some("bit"));
+}

@@ -3583,6 +3583,32 @@ pub(crate) const PG_PLPGSQL_PROC_ROWS: &[(i64, &str, i64, &str, &str, i64)] = &[
 
 type PgProcRows = std::sync::Arc<Vec<BTreeMap<String, SqlValue>>>;
 
+// OID, name, result OID, argument OID vector, and internal implementation.
+// The sole SQL wrapper has an empty prosrc, as in PostgreSQL.
+pub(crate) const PG_STRING_PROC_ROWS: &[(i64, &str, i64, &str, &str)] = &[
+    (749, "overlay", 17, "17 17 23 23", "byteaoverlay"),
+    (752, "overlay", 17, "17 17 23", "byteaoverlay_no_len"),
+    (1404, "overlay", 25, "25 25 23 23", "textoverlay"),
+    (1405, "overlay", 25, "25 25 23", "textoverlay_no_len"),
+    (3030, "overlay", 1560, "1560 1560 23 23", "bitoverlay"),
+    (3031, "overlay", 1560, "1560 1560 23", "bitoverlay_no_len"),
+    (849, "position", 23, "25 25", "textpos"),
+    (1698, "position", 23, "1560 1560", "bitposition"),
+    (2014, "position", 23, "17 17", "byteapos"),
+    (877, "substr", 25, "25 23 23", "text_substr"),
+    (883, "substr", 25, "25 23", "text_substr_no_len"),
+    (2085, "substr", 17, "17 23 23", "bytea_substr"),
+    (2086, "substr", 17, "17 23", "bytea_substr_no_len"),
+    (936, "substring", 25, "25 23 23", "text_substr"),
+    (937, "substring", 25, "25 23", "text_substr_no_len"),
+    (1680, "substring", 1560, "1560 23 23", "bitsubstr"),
+    (1699, "substring", 1560, "1560 23", "bitsubstr_no_len"),
+    (2012, "substring", 17, "17 23 23", "bytea_substr"),
+    (2013, "substring", 17, "17 23", "bytea_substr_no_len"),
+    (2073, "substring", 25, "25 25", "textregexsubstr"),
+    (2074, "substring", 25, "25 25 25", ""),
+];
+
 thread_local! {
     // db -> (catalog stamp, pg_proc rows). Building the rows parses every
     // routine's argument list; a constant 'f(args)'::regprocedure in a
@@ -3687,6 +3713,30 @@ fn pg_proc_rows_uncached(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> 
             row
         })
         .collect::<Vec<_>>();
+    rows.extend(
+        PG_STRING_PROC_ROWS
+            .iter()
+            .map(|&(oid, name, result, args, source)| {
+                let language = if source.is_empty() { "sql" } else { "internal" };
+                let mut row = proc_row(
+                    oid,
+                    name,
+                    11,
+                    result,
+                    false,
+                    "f",
+                    language,
+                    source,
+                    args.split_ascii_whitespace().count() as i64,
+                    BOOTSTRAP_ROLE_NAME,
+                    false,
+                );
+                row.insert("proargtypes".into(), SqlValue::String(args.into()));
+                row.insert("proisstrict".into(), SqlValue::Bool(true));
+                row.insert("provolatile".into(), SqlValue::String("i".into()));
+                row
+            }),
+    );
     rows.extend(PG_PLPGSQL_PROC_ROWS.iter().map(
         |(oid, name, return_type, language, source, nargs)| {
             proc_row(

@@ -272,21 +272,25 @@ fn xml_declaration_attribute(declaration: &str, name: &str) -> Option<String> {
 
 pub(crate) fn normalize_xml(value: &str) -> Result<String> {
     validate_xml(value, false)?;
+    Ok(normalize_validated_xml(value))
+}
+
+fn normalize_validated_xml(value: &str) -> String {
     let value = value.trim_start_matches('\u{feff}');
     let Some((declaration, body)) = xml_declaration(value) else {
-        return Ok(value.to_string());
+        return value.to_string();
     };
     let declaration = &declaration[5..declaration.len() - 2];
     let version =
         xml_declaration_attribute(declaration, "version").unwrap_or_else(|| "1.0".to_string());
     let standalone = xml_declaration_attribute(declaration, "standalone");
     if version == "1.0" && standalone.is_none() {
-        return Ok(body.to_string());
+        return body.to_string();
     }
     let standalone = standalone
         .map(|standalone| format!(" standalone=\"{standalone}\""))
         .unwrap_or_default();
-    Ok(format!("<?xml version=\"{version}\"{standalone}?>{body}"))
+    format!("<?xml version=\"{version}\"{standalone}?>{body}")
 }
 
 fn escape_text(value: &str) -> String {
@@ -462,6 +466,7 @@ fn serialize_element(
     element: dom::Element<'_>,
     inherited_namespaces: &BTreeMap<String, String>,
     output: &mut String,
+    indent: Option<usize>,
 ) {
     let name = element.name();
     let local_name = name.local_part_clone();
@@ -505,36 +510,190 @@ fn serialize_element(
         return;
     }
     output.push('>');
+    let indent = indent.filter(|_| {
+        !element.attributes().iter().any(|attribute| {
+            attribute.name().namespace_uri() == Some("http://www.w3.org/XML/1998/namespace")
+                && attribute.name().local_part() == "space" && attribute.value() == "preserve"
+        })
+            && children.iter().any(|child| !matches!(child, dom::ChildOfElement::Text(_)))
+            && children.iter().all(|child| {
+                !matches!(child, dom::ChildOfElement::Text(text) if !text.text().trim().is_empty())
+            })
+    });
     for child in children {
-        match child {
-            dom::ChildOfElement::Element(child) => serialize_element(child, &namespaces, output),
-            dom::ChildOfElement::Text(text) => output.push_str(&escape_text(&text.text())),
-            dom::ChildOfElement::Comment(comment) => {
-                output.push_str("<!--");
-                output.push_str(&comment.text());
-                output.push_str("-->");
+        if let Some(level) = indent {
+            if matches!(child, dom::ChildOfElement::Text(_)) {
+                continue;
             }
-            dom::ChildOfElement::ProcessingInstruction(pi) => {
-                output.push_str("<?");
-                output.push_str(&pi.target());
-                if let Some(value) = pi.value() {
-                    output.push(' ');
-                    output.push_str(&value);
-                }
-                output.push_str("?>");
-            }
+            write_xml_indent(output, level + 1);
         }
+        serialize_child(child, &namespaces, output, indent.map(|level| level + 1));
+    }
+    if let Some(level) = indent {
+        write_xml_indent(output, level);
     }
     output.push_str("</");
     output.push_str(&element_name);
     output.push('>');
 }
 
+fn write_xml_indent(output: &mut String, level: usize) {
+    output.push('\n');
+    for _ in 0..level {
+        output.push_str("  ");
+    }
+}
+
+fn serialize_child(
+    child: dom::ChildOfElement<'_>,
+    namespaces: &BTreeMap<String, String>,
+    output: &mut String,
+    indent: Option<usize>,
+) {
+    match child {
+        dom::ChildOfElement::Element(child) => serialize_element(child, namespaces, output, indent),
+        dom::ChildOfElement::Text(text) => output.push_str(&escape_text(&text.text())),
+        dom::ChildOfElement::Comment(comment) => {
+            output.push_str("<!--");
+            output.push_str(&comment.text());
+            output.push_str("-->");
+        }
+        dom::ChildOfElement::ProcessingInstruction(pi) => {
+            output.push_str("<?");
+            output.push_str(&pi.target());
+            if let Some(value) = pi.value() {
+                output.push(' ');
+                output.push_str(&value);
+            }
+            output.push_str("?>");
+        }
+    }
+}
+
+fn indent_xml_content(value: &str) -> Result<String> {
+    check_nesting_budget_for_document(value)?;
+    let prepared = xml_for_parser(value)?;
+    let content = strip_declaration(&prepared);
+    let package = parser::parse(&wrapped_content(&prepared)).map_err(invalid_xml)?;
+    let document = package.as_document();
+    let root = document
+        .root()
+        .children()
+        .into_iter()
+        .find_map(dom::ChildOfRoot::element)
+        .expect("wrapped XML has one enclosing element");
+    let children = root.children();
+    if children.iter().all(|child| matches!(child, dom::ChildOfElement::Text(_)))
+        || children.iter().any(|child| {
+            matches!(child, dom::ChildOfElement::Text(text) if !text.text().trim().is_empty())
+        })
+    {
+        return Ok(content.to_owned());
+    }
+    let mut output = String::new();
+    let namespaces = BTreeMap::new();
+    let last = children.len().saturating_sub(1);
+    for (index, child) in children.into_iter().enumerate() {
+        if let dom::ChildOfElement::Text(text) = child {
+            if index == last {
+                output.push_str(&text.text());
+            }
+            continue;
+        }
+        if !output.is_empty() {
+            output.push('\n');
+        }
+        serialize_child(child, &namespaces, &mut output, Some(0));
+    }
+    Ok(output)
+}
+
+fn xml_serialize(
+    name: &str,
+    args: &[SqlValue],
+    arg_types: Option<&[Option<String>]>,
+) -> Result<SqlValue> {
+    let input_type = arg_types
+        .and_then(|types| types.first())
+        .and_then(Option::as_deref);
+    if let Some(input_type) = input_type.filter(|kind| !matches!(*kind, "xml" | "unknown")) {
+        return Err(SqlError::data_exception_public(
+            "42804",
+            format!(
+                "argument of XMLSERIALIZE must be type xml, not type {}",
+                crate::common_type_display(input_type)
+            ),
+            None,
+        ));
+    }
+    let target = args.get(2).map(xml_text);
+    let target_type = target.as_deref().and_then(|declaration| {
+        sqlparser::parser::Parser::new(&sqlparser::dialect::PostgreSqlDialect {})
+            .try_with_sql(declaration)
+            .ok()
+            .and_then(|mut parser| parser.parse_data_type().ok())
+            .and_then(|data_type| crate::pg_type_from_data_type(&data_type).ok())
+    });
+    if let Some((kind, _)) = target_type.as_ref() {
+        if crate::pg_type_oid_by_name(kind).is_some()
+            && !matches!(kind.as_str(), "text" | "varchar" | "bpchar" | "name")
+        {
+            let target = target.as_deref().unwrap_or(kind);
+            return Err(SqlError::cannot_coerce(format!(
+                "cannot cast XMLSERIALIZE result to {}",
+                if kind == "char" {
+                    target
+                } else {
+                    crate::common_type_display(kind)
+                }
+            )));
+        }
+    }
+    let Some(value) = args
+        .first()
+        .filter(|value| !matches!(value, SqlValue::Null))
+    else {
+        return Ok(SqlValue::Null);
+    };
+    let value = xml_text(value);
+    let document = name == "bicdb_xmlserialize_document";
+    if document && validate_xml(&value, true).is_err() {
+        return Err(SqlError::data_exception_public(
+            "2200L",
+            "not an XML document",
+            None,
+        ));
+    }
+    if !document {
+        validate_xml(&value, false)?;
+    }
+    let value = if matches!(args.get(1), Some(SqlValue::Bool(true))) {
+        indent_xml_content(&value)?
+    } else {
+        normalize_validated_xml(&value)
+    };
+    if let Some((kind, Some(length))) = target_type {
+        if matches!(kind.as_str(), "varchar" | "bpchar")
+            && value.chars().skip(length).any(|character| character != ' ')
+        {
+            return Err(SqlError::data_exception_public(
+                "22001",
+                format!(
+                    "value too long for type {}({length})",
+                    crate::common_type_display(&kind)
+                ),
+                None,
+            ));
+        }
+    }
+    Ok(SqlValue::String(value))
+}
+
 fn xpath_node_xml(node: Node<'_>) -> String {
     match node {
         Node::Element(element) => {
             let mut output = String::new();
-            serialize_element(element, &BTreeMap::new(), &mut output);
+            serialize_element(element, &BTreeMap::new(), &mut output, None);
             output
         }
         Node::Attribute(attribute) => escape_text(&attribute.value()),
@@ -551,7 +710,7 @@ fn xpath_node_xml(node: Node<'_>) -> String {
             .filter_map(dom::ChildOfRoot::element)
             .map(|element| {
                 let mut output = String::new();
-                serialize_element(element, &BTreeMap::new(), &mut output);
+                serialize_element(element, &BTreeMap::new(), &mut output, None);
                 output
             })
             .collect(),
@@ -1121,12 +1280,19 @@ pub(crate) fn eval_xml_function_value(
             } else {
                 let document = name == "bicdb_xmlparse_document";
                 let text = xml_text(&args[0]);
-                validate_xml(&text, document)?;
-                SqlValue::String(text)
+                validate_xml(&text, document).map_err(|error| {
+                    if document {
+                        SqlError::data_exception_public("2200M", "invalid XML document", None)
+                    } else {
+                        error
+                    }
+                })?;
+                SqlValue::String(normalize_validated_xml(&text))
             }
         }
-        "xml_out" | "bicdb_xmlserialize_content" | "bicdb_xmlserialize_document" => {
-            args.first().cloned().unwrap_or(SqlValue::Null)
+        "xml_out" => args.first().cloned().unwrap_or(SqlValue::Null),
+        "bicdb_xmlserialize_content" | "bicdb_xmlserialize_document" => {
+            return xml_serialize(&name, args, arg_types).map(Some);
         }
         "xml_send" => {
             if strict_null {

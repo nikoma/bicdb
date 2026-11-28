@@ -1013,22 +1013,10 @@ impl<'db> SqlSession<'db> {
             .assignments
             .iter()
             .any(|assignment| expr_is_default(&assignment.value));
-        let mut ordered_assignments = Vec::new();
-        if let Some(schema) = schema.as_deref().filter(|_| has_default_assignments) {
-            ordered_assignments.extend(update.assignments.iter());
-            ordered_assignments.sort_by_cached_key(|assignment| {
-                super::row_assignments::assignment_columns(&assignment.target)
-                    .first()
-                    .and_then(|name| relation_name(name).ok())
-                    .and_then(|name| schema.columns.iter().position(|column| column.name == name))
-                    .unwrap_or(usize::MAX)
-            });
-        }
-        let assignments = if ordered_assignments.is_empty() {
-            None
-        } else {
-            Some(ordered_assignments.as_slice())
-        };
+        let assignments = super::row_assignments::default_assignment_order(
+            &update.assignments,
+            schema.as_deref(),
+        );
         let mut before_after_records = Vec::new();
         let mut partition_after_events = Vec::new();
         let mut partition_suppressed_deletes = Vec::new();
@@ -1311,7 +1299,7 @@ impl<'db> SqlSession<'db> {
                 (values.into_iter(), deltas.map(Vec::into_iter))
             };
             for index in 0..update.assignments.len() {
-                let assignment = match assignments {
+                let assignment = match assignments.as_ref() {
                     Some(ordered) => ordered[index],
                     None => &update.assignments[index],
                 };
@@ -6727,7 +6715,7 @@ impl<'db> SqlSession<'db> {
         self.session_sequence_name(&text)
     }
 
-    fn postgres_sequence_name(&self, text: &str) -> Result<String> {
+    pub(super) fn postgres_sequence_name(&self, text: &str) -> Result<String> {
         let db = self.db_ref();
         let normalized = normalize_sequence_name(text)
             .map_err(|_| SqlError::data_exception_public("42602", "invalid name syntax", None))?;

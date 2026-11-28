@@ -34,7 +34,8 @@ pub(crate) fn pg_function_more_result_type(
             "num_nulls" | "num_nonnulls" => "int4",
             "sinh" | "cosh" | "tanh" | "asinh" | "acosh" | "atanh" => "float8",
             "getdatabaseencoding" => "name",
-            "isfinite" => "bool",
+            "isfinite" | "booleq" | "boolne" | "boollt" | "boolle" | "boolgt" | "boolge" => "bool",
+            "btboolcmp" => "int4",
             "scale" | "min_scale" => "int4",
             "trim_scale" => "numeric",
             "regexp_count" | "regexp_instr" => "int4",
@@ -263,6 +264,37 @@ pub(crate) fn eval_pg_function_more(
     };
     let strict = |args: &[SqlValue]| args.iter().any(|arg| matches!(arg, SqlValue::Null));
     Ok(Some(match (name, args.len()) {
+        ("booleq" | "boolne" | "boollt" | "boolle" | "boolgt" | "boolge" | "btboolcmp", 2) => {
+            if (0..2).any(|index| {
+                arg_type(index).is_some_and(|pg_type| !matches!(pg_type, "bool" | "unknown"))
+                    || !matches!(
+                        args[index],
+                        SqlValue::Bool(_) | SqlValue::String(_) | SqlValue::Null
+                    )
+            }) {
+                return Ok(None);
+            }
+            if strict(args) {
+                return Ok(Some(SqlValue::Null));
+            }
+            let cast = |value: &SqlValue| -> Result<bool> {
+                let SqlValue::Bool(flag) = cast_value_to_pg_type(value.clone(), "bool")? else {
+                    unreachable!("non-null boolean input")
+                };
+                Ok(flag)
+            };
+            let left = cast(&args[0])?;
+            let right = cast(&args[1])?;
+            match name {
+                "booleq" => SqlValue::Bool(left == right),
+                "boolne" => SqlValue::Bool(left != right),
+                "boollt" => SqlValue::Bool(!left && right),
+                "boolle" => SqlValue::Bool(!left || right),
+                "boolgt" => SqlValue::Bool(left && !right),
+                "boolge" => SqlValue::Bool(left || !right),
+                _ => SqlValue::Int((left.cmp(&right) as i8).into()),
+            }
+        }
         ("to_hex" | "to_oct" | "to_bin", 1) => {
             let Some(value) = integer_arg(name, &args[0])? else {
                 return Ok(Some(SqlValue::Null));

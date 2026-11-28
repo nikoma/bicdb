@@ -8,6 +8,30 @@ pub(super) fn assignment_columns(target: &AssignmentTarget) -> &[ObjectName] {
     }
 }
 
+pub(super) fn default_assignment_order<'a>(
+    assignments: &'a [Assignment],
+    schema: Option<&TableSchema>,
+) -> Option<Vec<&'a Assignment>> {
+    let schema = schema?;
+    if !assignments
+        .iter()
+        .any(|assignment| expr_is_default(&assignment.value))
+    {
+        return None;
+    }
+    // Defaults and explicit expressions in the same write can consume the
+    // same sequence. PostgreSQL projects those values in attribute order.
+    let mut ordered = assignments.iter().collect::<Vec<_>>();
+    ordered.sort_by_cached_key(|assignment| {
+        assignment_columns(&assignment.target)
+            .first()
+            .and_then(|name| relation_name(name).ok())
+            .and_then(|name| schema.columns.iter().position(|column| column.name == name))
+            .unwrap_or(usize::MAX)
+    });
+    Some(ordered)
+}
+
 fn source_expr(mut expr: &Expr) -> &Expr {
     while let Expr::Nested(inner) = expr {
         expr = inner;

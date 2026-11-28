@@ -440,22 +440,25 @@ pub(crate) fn canonical_catalog_vector(pg_type: &str, input: &str) -> Result<PgC
             ("int2", values)
         }
         "oidvector" => {
-            let values = input
-                .split_whitespace()
-                .map(|value| {
-                    let parsed = value.parse::<i64>().map_err(|_| {
-                        SqlError::invalid_text_representation("oid", format!("\"{value}\""))
+            let mut values = Vec::new();
+            let mut rest = input.trim_start_matches(|ch: char| ch.is_ascii_whitespace());
+            while !rest.is_empty() {
+                let (oid, consumed) =
+                    crate::parse_pg_oid_prefix(rest).map_err(|error| match error {
+                        crate::PgOidParseError::InvalidSyntax => SqlError::data_exception_public(
+                            "22P02",
+                            format!("invalid input syntax for type oid: \"{rest}\""),
+                            None,
+                        ),
+                        crate::PgOidParseError::OutOfRange => SqlError::data_exception_public(
+                            "22003",
+                            format!("value \"{rest}\" is out of range for type oid"),
+                            None,
+                        ),
                     })?;
-                    let wrapped = if parsed < 0 {
-                        i128::from(parsed) + (1_i128 << 32)
-                    } else {
-                        i128::from(parsed)
-                    };
-                    u32::try_from(wrapped)
-                        .map(PgCanonicalValue::Oid)
-                        .map_err(|_| SqlError::numeric_value_out_of_range("oid out of range"))
-                })
-                .collect::<Result<Vec<_>>>()?;
+                values.push(PgCanonicalValue::Oid(oid));
+                rest = rest[consumed..].trim_start_matches(|ch: char| ch.is_ascii_whitespace());
+            }
             ("oid", values)
         }
         _ => {

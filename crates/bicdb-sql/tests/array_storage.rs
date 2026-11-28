@@ -644,3 +644,32 @@ fn supported_registered_arrays_persist_and_catalog_only_arrays_refuse_storage() 
         ]))]]
     );
 }
+
+#[test]
+fn postgres_oidvector_reads_oid_prefixes_and_reports_unconsumed_input() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut sql = SqlSession::new(&mut db);
+    assert_eq!(
+        sql.execute("SELECT '01 010 -1 0x20 -0x10 1-2+03 09'::oidvector")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::String(
+            "1 8 4294967295 32 4294967280 1 4294967294 3 0 9".into()
+        )]]
+    );
+    let error = sql.execute("SELECT '01 01XYZ 99'::oidvector").unwrap_err();
+    assert_eq!(error.sqlstate(), "22P02");
+    assert_eq!(
+        error.postgres_message(),
+        "invalid input syntax for type oid: \"XYZ 99\""
+    );
+    let error = sql
+        .execute("SELECT '01 9999999999 22'::oidvector")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "22003");
+    assert_eq!(
+        error.postgres_message(),
+        "value \"9999999999 22\" is out of range for type oid"
+    );
+}

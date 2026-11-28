@@ -1472,15 +1472,11 @@ pub(crate) fn cast_value(value: SqlValue, data_type: &DataType) -> Result<SqlVal
     }
     let (pg_type, _) = pg_type_from_data_type(data_type)?;
     let value = decode_typed_storage_envelope(value);
-    let value = match explicit_boolean_cast(value.clone(), None, &pg_type) {
-        Some(value) => value?,
-        None => cast_value_to_pg_type(value, &pg_type)?,
-    };
-    apply_pg_type_modifier(
-        value,
-        &pg_type,
-        pg_type_modifier_from_data_type(data_type)?.as_ref(),
-    )
+    let modifier = pg_type_modifier_from_data_type(data_type)?;
+    if let Some(value) = explicit_boolean_cast(value.clone(), None, &pg_type) {
+        return apply_pg_type_modifier_with_context(value?, &pg_type, modifier.as_ref(), true);
+    }
+    cast_value_with_pg_modifier(value, &pg_type, modifier.as_ref(), true)
 }
 
 pub(crate) fn cast_value_with_assignment_semantics(
@@ -1492,16 +1488,11 @@ pub(crate) fn cast_value_with_assignment_semantics(
     }
     let (pg_type, _) = pg_type_from_data_type(data_type)?;
     let value = decode_typed_storage_envelope(value);
-    let value = match explicit_boolean_cast(value.clone(), None, &pg_type) {
-        Some(value) => value?,
-        None => cast_value_to_pg_type(value, &pg_type)?,
-    };
-    apply_pg_type_modifier_with_context(
-        value,
-        &pg_type,
-        pg_type_modifier_from_data_type(data_type)?.as_ref(),
-        false,
-    )
+    let modifier = pg_type_modifier_from_data_type(data_type)?;
+    if let Some(value) = explicit_boolean_cast(value.clone(), None, &pg_type) {
+        return apply_pg_type_modifier_with_context(value?, &pg_type, modifier.as_ref(), false);
+    }
+    cast_value_with_pg_modifier(value, &pg_type, modifier.as_ref(), false)
 }
 
 pub(crate) fn decode_typed_storage_envelope(value: SqlValue) -> SqlValue {
@@ -1867,11 +1858,11 @@ pub(crate) fn cast_expr_value(
             .to_postgres_text(),
         ));
     }
-    let value = cast_value_to_pg_type(value, &target_type)?;
-    apply_pg_type_modifier(
+    cast_value_with_pg_modifier(
         value,
         &target_type,
         pg_type_modifier_from_data_type(data_type)?.as_ref(),
+        true,
     )
 }
 
@@ -2119,13 +2110,26 @@ pub(crate) fn cast_value_to_column_type(
     if let Some(user_type) = &column.user_type {
         return cast_value_to_user_type(value, user_type);
     }
-    let value = cast_value_to_pg_type(value, &column.pg_type)?;
-    apply_pg_type_modifier_with_context(
-        value,
-        &column.pg_type,
-        column.type_modifier.as_ref(),
-        false,
-    )
+    cast_value_with_pg_modifier(value, &column.pg_type, column.type_modifier.as_ref(), false)
+}
+
+fn cast_value_with_pg_modifier(
+    value: SqlValue,
+    pg_type: &str,
+    modifier: Option<&PgTypeModifier>,
+    explicit_cast: bool,
+) -> Result<SqlValue> {
+    // A textual interval must see its field range during input. Applying the
+    // range to an already parsed HH:MM value cannot recover MM:SS.
+    let value = if pg_type == "interval"
+        && matches!(modifier, Some(PgTypeModifier::Interval { .. }))
+        && matches!(value, SqlValue::String(_))
+    {
+        value
+    } else {
+        cast_value_to_pg_type(value, pg_type)?
+    };
+    apply_pg_type_modifier_with_context(value, pg_type, modifier, explicit_cast)
 }
 
 pub(crate) fn cast_value_to_user_type(
@@ -2906,7 +2910,7 @@ pub(crate) fn apply_pg_type_modifier_with_context(
             return Ok(value);
         };
         let text = value.to_cell();
-        return PgInterval::from_postgres_text(&text)
+        return PgInterval::from_postgres_text_with_field_range(&text, fields.as_deref())
             .and_then(|interval| interval.with_typmod(fields.as_deref(), *precision))
             .map(|interval| SqlValue::String(render_interval(interval)))
             .map_err(|error| postgres_interval_input_error(&text, error));

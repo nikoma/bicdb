@@ -3375,7 +3375,7 @@ impl<'db> SqlSession<'db> {
             )))
     }
 
-    pub(crate) fn project_update_from_returning_slot_rows(
+    pub(crate) fn project_joined_dml_returning(
         &self,
         table: &str,
         schema: Option<&TableSchema>,

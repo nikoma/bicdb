@@ -118,3 +118,65 @@ fn postgres_dml_target_alias_hides_the_original_relation_name() {
         vec![vec![SqlValue::Int(2)]],
     );
 }
+
+#[test]
+fn postgres_aliased_dml_target_can_join_its_original_name() {
+    for partitioned in [false, true] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        let partition_clause = if partitioned {
+            " PARTITION BY RANGE (id)"
+        } else {
+            ""
+        };
+        session
+            .execute(&format!(
+                "CREATE TABLE target_source(id int PRIMARY KEY, label text){partition_clause}"
+            ))
+            .unwrap();
+        if partitioned {
+            session.execute("CREATE TABLE target_source_rows PARTITION OF target_source FOR VALUES FROM (0) TO (10)").unwrap();
+        }
+        session
+            .execute("INSERT INTO target_source VALUES (1, 'one'), (2, 'two')")
+            .unwrap();
+
+        let changed = session
+            .execute(
+                "UPDATE target_source t SET label = target_source.label FROM target_source
+             WHERE t.id = target_source.id + 1 RETURNING t.id, target_source.id, t.label",
+            )
+            .unwrap();
+        assert_eq!(
+            changed.rows,
+            vec![vec![
+                SqlValue::Int(2),
+                SqlValue::Int(1),
+                SqlValue::String("one".into())
+            ]]
+        );
+
+        let deleted = session
+            .execute(
+                "DELETE FROM target_source t USING target_source
+             WHERE t.id = target_source.id + 1 RETURNING t.id, target_source.id, t.label",
+            )
+            .unwrap();
+        assert_eq!(deleted.rows, changed.rows);
+        assert_eq!(deleted.command_tag.as_deref(), Some("DELETE 1"));
+        let empty = session.execute(
+            "DELETE FROM target_source t USING target_source WHERE false RETURNING target_source.id",
+        ).unwrap();
+        assert_eq!(empty.columns, vec!["id"]);
+        assert!(empty.rows.is_empty());
+        assert_eq!(empty.command_tag.as_deref(), Some("DELETE 0"));
+        assert_eq!(
+            session
+                .execute("SELECT id, label FROM target_source")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(1), SqlValue::String("one".into())]]
+        );
+    }
+}

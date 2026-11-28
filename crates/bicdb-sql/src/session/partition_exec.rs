@@ -374,6 +374,7 @@ impl SqlSession<'_> {
         update: &sqlparser::ast::Update,
         ctes: &BTreeMap<String, CteResult>,
         schema: &TableSchema,
+        row_qualifier: &str,
         alias: &str,
         from_rows: Option<&RowSet>,
         target_columns: Arc<Vec<String>>,
@@ -410,7 +411,7 @@ impl SqlSession<'_> {
                 )? {
                     continue;
                 }
-                let target = slot_row_from_record(&schema.name, alias, Some(schema), &record)?;
+                let target = slot_row_from_record(row_qualifier, alias, Some(schema), &record)?;
                 let mut consider = |row: SlotRow| -> Result<bool> {
                     let (_scope, context) = engine.bound_row_context(columns.as_ref());
                     if update
@@ -603,6 +604,7 @@ impl SqlSession<'_> {
         delete: &Delete,
         ctes: &BTreeMap<String, CteResult>,
         schema: &TableSchema,
+        row_qualifier: &str,
         alias: &str,
         using_rows: Option<&RowSet>,
         target_columns: Arc<Vec<String>>,
@@ -639,7 +641,7 @@ impl SqlSession<'_> {
                 )? {
                     continue;
                 }
-                let target_row = slot_row_from_record(&schema.name, alias, Some(schema), &record)?;
+                let target_row = slot_row_from_record(row_qualifier, alias, Some(schema), &record)?;
                 let predicate_matches = |row: &SlotRow| -> Result<bool> {
                     let (_scope, context) = engine.bound_row_context(columns.as_ref());
                     match delete.selection.as_ref() {

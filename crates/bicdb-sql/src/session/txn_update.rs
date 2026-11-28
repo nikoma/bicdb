@@ -2,6 +2,14 @@
 //! unchanged — a separate `impl` block on the same type.
 use super::*;
 
+fn has_relation_columns(columns: &[String], relation: &str) -> bool {
+    columns.iter().any(|column| {
+        column
+            .rsplit_once('.')
+            .is_some_and(|(qualifier, _)| qualifier == relation)
+    })
+}
+
 /// Inferred types for one routine binary-operator node: the operand types the
 /// range operators consult (`projected_expr_pg_type_with_db`) and the three
 /// types the generic evaluator consults (`binary_expr_types`).
@@ -896,13 +904,32 @@ impl<'db> SqlSession<'db> {
         let mut updated_record_snapshots = Vec::new();
         let mut returning_rows = (update.returning.is_some() && from_rows.is_some()).then(Vec::new);
         let mut returning_columns: Option<Arc<Vec<String>>> = None;
-        let target_columns = Arc::new(row_output_columns(&table, &target_alias, schema.as_deref()));
+        let original_name_is_source = merge.is_none()
+            && matches!(
+                update.table.relation,
+                TableFactor::Table { alias: Some(_), .. }
+            )
+            && table != target_alias
+            && from_rows
+                .as_ref()
+                .is_some_and(|rows| has_relation_columns(&rows.columns, &table))
+            && !oracle::is_oracle_database(self.db_ref())?;
+        let row_qualifier = if original_name_is_source {
+            &target_alias
+        } else {
+            &table
+        };
+        let target_columns = Arc::new(row_output_columns(
+            row_qualifier,
+            &target_alias,
+            schema.as_deref(),
+        ));
         // Simple updates of resident rows never parse the row: the assigned
         // columns are spliced into the old row's JSON text and the result is
         // written in its stored form (typed resident rows phase 3).
         if let Some(schema) = schema
             .as_ref()
-            .filter(|_| match_policy == UpdateMatchPolicy::First)
+            .filter(|_| match_policy == UpdateMatchPolicy::First && !original_name_is_source)
         {
             if let Some(result) = self.try_execute_update_stored(
                 update,
@@ -926,6 +953,7 @@ impl<'db> SqlSession<'db> {
                 update,
                 &ctes,
                 parent,
+                row_qualifier,
                 &target_alias,
                 from_rows.as_ref(),
                 target_columns.clone(),
@@ -1131,7 +1159,7 @@ impl<'db> SqlSession<'db> {
                         // which stay as scanned) and re-evaluate the predicate
                         // against the latest committed version.
                         let target_row = slot_row_from_record(
-                            &table,
+                            row_qualifier,
                             &target_alias,
                             schema.as_deref(),
                             &latest,
@@ -1478,7 +1506,7 @@ impl<'db> SqlSession<'db> {
             if let Some(returning_rows) = returning_rows.as_mut() {
                 candidate.row = match (returning_patch_columns.as_ref(), schema.as_deref()) {
                     (Some(assigned), Some(schema)) => update_returning_slot_row_patched(
-                        &table,
+                        row_qualifier,
                         &target_alias,
                         schema,
                         &record,
@@ -1487,7 +1515,7 @@ impl<'db> SqlSession<'db> {
                         assigned,
                     ),
                     _ => update_returning_slot_row_from_assignment(
-                        &table,
+                        row_qualifier,
                         &target_alias,
                         schema.as_deref(),
                         &record,
@@ -1644,7 +1672,7 @@ impl<'db> SqlSession<'db> {
         }
         if let Some(returning) = &update.returning {
             if from_rows.is_some() {
-                return self.project_update_from_returning_slot_rows(
+                return self.project_joined_dml_returning(
                     &table,
                     schema.as_deref(),
                     returning,
@@ -1772,6 +1800,13 @@ impl<'db> SqlSession<'db> {
         let mut candidates = Vec::new();
         let mut seen_record_ids = BTreeSet::new();
         let mut fallback_records = None;
+        let row_qualifier =
+            if table != target_alias && !has_relation_columns(&target_columns, table) {
+                target_alias
+            } else {
+                table
+            };
+        let can_locate_target = row_qualifier == table;
         let candidate_columns = Arc::new(merge_row_set_columns(
             target_columns.as_ref().clone(),
             from_rows.columns.clone(),
@@ -1783,6 +1818,7 @@ impl<'db> SqlSession<'db> {
         // slot row changes between iterations.
         let mut row_engine = self.sql_engine_with_ctes(ctes.clone());
         let cell_fields = schema
+            .filter(|_| can_locate_target)
             .filter(|schema| {
                 row_engine
                     .cell_rows_eligible(table, schema, PolicyAction::Update)
@@ -1830,12 +1866,13 @@ impl<'db> SqlSession<'db> {
                         .into_iter()
                         .collect::<Vec<String>>(),
                 ),
-                _ => row_engine.indexed_record_ids_for_table_selection(
+                _ if can_locate_target => row_engine.indexed_record_ids_for_table_selection(
                     table,
                     target_alias,
                     schema,
                     selection,
                 )?,
+                _ => None,
             };
             let candidate_pairs: Vec<(SlotRow, Record)> = if let Some(ids) = located {
                 sql_profile_index_lookup();
@@ -1886,7 +1923,7 @@ impl<'db> SqlSession<'db> {
                     .into_iter()
                     .map(|record| {
                         Ok((
-                            slot_row_from_record(table, target_alias, schema, &record)?,
+                            slot_row_from_record(row_qualifier, target_alias, schema, &record)?,
                             record,
                         ))
                     })
@@ -2292,7 +2329,32 @@ impl<'db> SqlSession<'db> {
             }),
             None => self.delete_using_row_set(delete.using.as_deref(), &ctes)?,
         };
-        let target_columns = Arc::new(row_output_columns(&table, &target_alias, schema.as_ref()));
+        let target_tables = match &delete.from {
+            FromTable::WithFromKeyword(tables) | FromTable::WithoutKeyword(tables) => tables,
+        };
+        let postgres_using =
+            merge.is_none() && using_rows.is_some() && !oracle::is_oracle_database(self.db_ref())?;
+        let original_name_is_source = postgres_using
+            && matches!(
+                &target_tables[0].relation,
+                TableFactor::Table { alias: Some(_), .. }
+            )
+            && table != target_alias
+            && using_rows
+                .as_ref()
+                .is_some_and(|rows| has_relation_columns(&rows.columns, &table));
+        let row_qualifier = if original_name_is_source {
+            &target_alias
+        } else {
+            &table
+        };
+        let target_columns = Arc::new(row_output_columns(
+            row_qualifier,
+            &target_alias,
+            schema.as_ref(),
+        ));
+        let mut returning_rows = (postgres_using && delete.returning.is_some()).then(Vec::new);
+
         let records_to_delete = if let Some(merge) = merge.as_mut() {
             std::mem::take(&mut merge.update_candidates)
                 .into_iter()
@@ -2311,6 +2373,7 @@ impl<'db> SqlSession<'db> {
                 delete,
                 &ctes,
                 parent,
+                row_qualifier,
                 &target_alias,
                 using_rows.as_ref(),
                 target_columns.clone(),
@@ -2336,13 +2399,17 @@ impl<'db> SqlSession<'db> {
                     let using_outer_row = OuterSlotRow::from_slot(&using_rows.columns, using_row);
                     let row_engine = build_row_engine(Some(using_outer_row));
                     let _subqueries = row_engine.subquery_memo.scope();
-                    let (candidate_records, from_key_lookup) = if let Some(ids) = row_engine
-                        .indexed_record_ids_for_table_selection(
+                    let located = if original_name_is_source {
+                        None
+                    } else {
+                        row_engine.indexed_record_ids_for_table_selection(
                             &table,
                             &target_alias,
                             schema.as_ref(),
                             delete.selection.as_ref(),
-                        )? {
+                        )?
+                    };
+                    let (candidate_records, from_key_lookup) = if let Some(ids) = located {
                         sql_profile_index_lookup();
                         let records = self.session_records_for_action_ids_with_schema(
                             &table,
@@ -2389,7 +2456,7 @@ impl<'db> SqlSession<'db> {
                             match delete.selection.as_ref() {
                                 Some(selection) => {
                                     let target_row = slot_row_from_record(
-                                        &table,
+                                        row_qualifier,
                                         &target_alias,
                                         schema.as_ref(),
                                         &record,
@@ -2409,7 +2476,7 @@ impl<'db> SqlSession<'db> {
                         };
                         if row_matches && seen_record_ids.insert(record.id.clone()) {
                             let target_row = slot_row_from_record(
-                                &table,
+                                row_qualifier,
                                 &target_alias,
                                 schema.as_ref(),
                                 &record,
@@ -2576,8 +2643,12 @@ impl<'db> SqlSession<'db> {
                             continue;
                         }
                     }
-                    let target_row =
-                        slot_row_from_record(&table, &target_alias, schema.as_ref(), &latest)?;
+                    let target_row = slot_row_from_record(
+                        row_qualifier,
+                        &target_alias,
+                        schema.as_ref(),
+                        &latest,
+                    )?;
                     let mut refreshed_row = candidate.row.clone();
                     for (idx, value) in target_row.into_iter().enumerate() {
                         if let Some(slot) = refreshed_row.get_mut(idx) {
@@ -2635,6 +2706,8 @@ impl<'db> SqlSession<'db> {
             deleted_records.push(record);
             if let Some(merge) = merge.as_mut() {
                 merge.returned_rows.push(candidate.row);
+            } else if let Some(rows) = returning_rows.as_mut() {
+                rows.push(candidate.row);
             }
         }
         let deleted = if schema
@@ -2692,6 +2765,20 @@ impl<'db> SqlSession<'db> {
             return Ok(SqlResult::command(format!("DELETE {deleted}")));
         }
         if let Some(returning) = &delete.returning {
+            if let (Some(using), Some(rows)) = (using_rows.as_ref(), returning_rows.as_ref()) {
+                let columns =
+                    merge_row_set_columns(target_columns.as_ref().clone(), using.columns.clone());
+                let mut result = self.project_joined_dml_returning(
+                    &table,
+                    schema.as_ref(),
+                    returning,
+                    rows,
+                    &columns,
+                    target_columns.as_ref(),
+                )?;
+                result.command_tag = Some(format!("DELETE {deleted}"));
+                return Ok(result);
+            }
             return self.project_returning_records_with_alias(
                 &table,
                 &target_alias,
@@ -8290,7 +8377,7 @@ impl<'db> SqlSession<'db> {
                 target_columns.as_ref()
             };
             return self
-                .project_update_from_returning_slot_rows(
+                .project_joined_dml_returning(
                     table,
                     Some(schema),
                     returning,

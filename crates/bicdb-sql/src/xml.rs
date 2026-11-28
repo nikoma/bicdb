@@ -857,8 +857,7 @@ fn xml_table_column_value<'d>(
                     None,
                 ));
             }
-            let node = nodes.document_order()[0];
-            JsonValue::String(node.string_value())
+            JsonValue::String(nodes.document_order()[0].string_value())
         }
         XPathValue::Boolean(value) if column.numeric => JsonValue::Number(u64::from(value).into()),
         value if column.xml => JsonValue::String(escape_text(&value.string())),
@@ -925,7 +924,7 @@ fn xml_table_rows(args: &[SqlValue]) -> Result<SqlValue> {
         for column in &columns {
             values.insert(
                 column.name.to_owned(),
-                xml_table_column_value(column, &context, row, index + 1)?,
+                xml_table_column_value(column, &context, row.clone(), index + 1)?,
             );
         }
         output.push(JsonValue::Object(values));

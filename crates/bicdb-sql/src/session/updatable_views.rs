@@ -253,7 +253,7 @@ impl VisitorMut for Requalify<'_> {
     }
 }
 
-fn select_qualifiers(select: &Select) -> BTreeSet<String> {
+pub(super) fn select_qualifiers(select: &Select) -> BTreeSet<String> {
     let mut names = BTreeSet::new();
     for from in &select.from {
         for factor in std::iter::once(&from.relation).chain(from.joins.iter().map(|j| &j.relation))

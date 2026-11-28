@@ -2171,9 +2171,9 @@ impl BoundExprScope {
                 ..
             } => {
                 if regclass_text_cast_source(inner, data_type)
-                        .ok()
-                        .flatten()
-                        .is_some()
+                    .ok()
+                    .flatten()
+                    .is_some()
                     || regtype_text_cast_source(inner, data_type)
                         .ok()
                         .flatten()
@@ -2184,19 +2184,25 @@ impl BoundExprScope {
                             // (`box::point` is `point(box)`), which this IR
                             // does not carry.
                             || is_geometric_type(Some(&pg_type))
+                            // Vector conversion needs the source type to
+                            // preserve the catalog vector's zero lower bound.
+                            || (pg_type.ends_with("[]")
+                                && self
+                                    .known_expr_type(inner)
+                                    .as_deref()
+                                    .and_then(catalog_vector_element_type)
+                                    .is_some())
+                            // Text to integer uses the typed input function.
+                            || (matches!(pg_type.as_str(), "int2" | "int4" | "int8")
+                                && (is_string_literal_expr(inner)
+                                    || !matches!(
+                                        self.known_expr_type(inner).as_deref(),
+                                        Some(
+                                            "int2" | "int4" | "int8" | "numeric" | "float4"
+                                                | "float8" | "bool" | "oid" | "money"
+                                        )
+                                    )))
                     })
-                    // Text to an integer type is the type's input function,
-                    // which the typed evaluator applies.
-                    || (pg_type_from_data_type(data_type).is_ok_and(|(pg_type, _)| {
-                        matches!(pg_type.as_str(), "int2" | "int4" | "int8")
-                    }) && (is_string_literal_expr(inner)
-                        || !matches!(
-                            self.known_expr_type(inner).as_deref(),
-                            Some(
-                                "int2" | "int4" | "int8" | "numeric" | "float4" | "float8"
-                                    | "bool" | "oid" | "money"
-                            )
-                        )))
                 {
                     None
                 } else {

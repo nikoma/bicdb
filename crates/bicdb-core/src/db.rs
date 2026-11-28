@@ -5124,6 +5124,13 @@ pub enum IndexPredicate {
     Literal {
         value: Value,
     },
+    Like {
+        value: Box<IndexPredicate>,
+        pattern: String,
+        escape: Option<char>,
+        #[serde(default)]
+        negated: bool,
+    },
     Unary {
         operator: IndexPredicateUnaryOperator,
         value: Box<IndexPredicate>,
@@ -5243,11 +5250,22 @@ impl IndexField {
     }
 }
 impl IndexPredicate {
+    fn uses_like(&self) -> bool {
+        match self {
+            Self::Like { .. } => true,
+            Self::Unary { value, .. } => value.uses_like(),
+            Self::Binary { left, right, .. } => left.uses_like() || right.uses_like(),
+            Self::Field { .. } | Self::Literal { .. } => false,
+        }
+    }
+
     fn uses_oracle_simple_case_v1(&self) -> bool {
         match self {
             Self::Field { field } => field.uses_oracle_simple_case_v1(),
             Self::Literal { .. } => false,
-            Self::Unary { value, .. } => value.uses_oracle_simple_case_v1(),
+            Self::Unary { value, .. } | Self::Like { value, .. } => {
+                value.uses_oracle_simple_case_v1()
+            }
             Self::Binary { left, right, .. } => {
                 left.uses_oracle_simple_case_v1() || right.uses_oracle_simple_case_v1()
             }
@@ -25037,6 +25055,19 @@ fn validate_index_predicate_definition(name: &str, predicate: &IndexPredicate) -
                 Ok(())
             }
         }
+        IndexPredicate::Like {
+            value,
+            pattern,
+            escape,
+            ..
+        } => {
+            if crate::like_pattern_ends_with_escape(pattern, *escape) {
+                return Err(BicDbError::Index(format!(
+                    "partial index `{name}` LIKE pattern ends with an escape character",
+                )));
+            }
+            validate_index_predicate_definition(name, value)
+        }
         IndexPredicate::Unary { value, .. } => validate_index_predicate_definition(name, value),
         IndexPredicate::Binary { left, right, .. } => {
             validate_index_predicate_definition(name, left)?;
@@ -25731,6 +25762,20 @@ fn evaluate_index_predicate(record: &Record, predicate: &IndexPredicate) -> Resu
     Ok(match predicate {
         IndexPredicate::Field { field } => record_index_field_json(record, field),
         IndexPredicate::Literal { value } => value.clone(),
+        IndexPredicate::Like {
+            value,
+            pattern,
+            escape,
+            negated,
+        } => {
+            let value = evaluate_index_predicate(record, value)?;
+            // Unknown LIKE and NOT LIKE both stay outside a partial index.
+            Value::Bool(value.as_str().is_some_and(|value| {
+                let value = value.chars().collect::<Vec<_>>();
+                let pattern = pattern.chars().collect::<Vec<_>>();
+                crate::like_match_chars(&value, &pattern, *escape) != *negated
+            }))
+        }
         IndexPredicate::Unary {
             operator,
             value,

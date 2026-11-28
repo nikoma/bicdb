@@ -975,6 +975,7 @@ impl SqlSession<'_> {
                 &trigger.function,
                 &vars,
                 &super::row_triggers::TriggerRecordShape::default(),
+                None,
             );
             self.event_trigger_ddl_depth = depth;
             FIRING.with(|firing| {

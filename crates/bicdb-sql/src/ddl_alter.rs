@@ -3677,6 +3677,16 @@ pub(crate) fn copied_like_index_name(
         .unwrap_or_else(|| format!("{target_table}_{index_name}"))
 }
 
+fn raw_partition_relation(identifier: &str) -> Result<(String, String)> {
+    let parts = sql_identifier_parts(identifier)?;
+    let (table, qualifiers) = parts
+        .split_last()
+        .ok_or_else(|| SqlError::InvalidSql("expected relation name".into()))?;
+    let schema = qualifiers.last().map(String::as_str).unwrap_or("public");
+    let table = relation_name_from_parts(&[schema.to_owned(), table.clone()])?;
+    Ok((schema.to_owned(), table))
+}
+
 pub(crate) fn raw_create_partition_table(sql: &str) -> Result<Option<RawCreatePartitionTable>> {
     let Some(mut rest) = strip_prefix_ci(trim_sql_statement(sql), "CREATE TABLE ") else {
         return Ok(None);
@@ -3710,16 +3720,8 @@ pub(crate) fn raw_create_partition_table(sql: &str) -> Result<Option<RawCreatePa
         ));
     }
 
-    let (partition_schema, partition_table) = identifier_schema_and_name(&partition);
-    let (parent_schema, parent_table) = identifier_schema_and_name(&parent);
-    let partition_schema = normalize_object_name(&partition_schema);
-    let parent_schema = normalize_object_name(&parent_schema);
-    let partition_table = relation_name_from_parts(&[
-        partition_schema.clone(),
-        normalize_object_name(&partition_table),
-    ])?;
-    let parent_table =
-        relation_name_from_parts(&[parent_schema.clone(), normalize_object_name(&parent_table)])?;
+    let (partition_schema, partition_table) = raw_partition_relation(&partition)?;
+    let (parent_schema, parent_table) = raw_partition_relation(&parent)?;
     Ok(Some(RawCreatePartitionTable {
         partition_table,
         partition_schema,
@@ -3789,19 +3791,11 @@ pub(crate) fn raw_alter_table_partition_action(
         rest = after_only.trim_start();
     }
     let (parent, after_parent) = parse_leading_qualified_sql_identifier(rest)?;
-    let (parent_schema, parent_table) = identifier_schema_and_name(&parent);
-    let parent_schema = normalize_object_name(&parent_schema);
-    let parent_table =
-        relation_name_from_parts(&[parent_schema.clone(), normalize_object_name(&parent_table)])?;
+    let (parent_schema, parent_table) = raw_partition_relation(&parent)?;
     let rest = after_parent.trim_start();
     if let Some(after_attach) = strip_prefix_ci(rest, "ATTACH PARTITION ") {
         let (partition, after_partition) = parse_leading_qualified_sql_identifier(after_attach)?;
-        let (partition_schema, partition_table) = identifier_schema_and_name(&partition);
-        let partition_schema = normalize_object_name(&partition_schema);
-        let partition_table = relation_name_from_parts(&[
-            partition_schema.clone(),
-            normalize_object_name(&partition_table),
-        ])?;
+        let (partition_schema, partition_table) = raw_partition_relation(&partition)?;
         let bound = after_partition.trim();
         if !bound.eq_ignore_ascii_case("DEFAULT")
             && !bound
@@ -3828,11 +3822,7 @@ pub(crate) fn raw_alter_table_partition_action(
                 trailing.trim()
             )));
         }
-        let (partition_schema, partition_table) = identifier_schema_and_name(&partition);
-        let partition_table = relation_name_from_parts(&[
-            normalize_object_name(&partition_schema),
-            normalize_object_name(&partition_table),
-        ])?;
+        let (_, partition_table) = raw_partition_relation(&partition)?;
         return Ok(Some(RawAlterTablePartition::Detach {
             parent_table,
             parent_schema,
@@ -3889,12 +3879,16 @@ pub(crate) fn raw_alter_table_exclusion_constraint(
         return Ok(None);
     };
     let (name, rest) = parse_leading_policy_identifier(rest)?;
-    let Some(mut rest) = strip_prefix_ci(rest.trim_start(), "EXCLUDE ") else {
+    let Some(mut rest) = strip_prefix_ci(rest.trim_start(), "EXCLUDE")
+        .filter(|tail| tail.starts_with(|ch: char| ch.is_whitespace() || ch == '('))
+    else {
         return Ok(None);
     };
     rest = rest.trim_start();
-    let access_method = if let Some(after_using) = strip_prefix_ci(rest, "USING ") {
-        let (method, after_method) = parse_leading_policy_identifier(after_using)?;
+    let access_method = if let Some(after_using) =
+        strip_prefix_ci(rest, "USING").filter(|tail| tail.starts_with(char::is_whitespace))
+    {
+        let (method, after_method) = parse_leading_qualified_sql_identifier(after_using)?;
         rest = after_method.trim_start();
         normalize_object_name(&method)
     } else {
@@ -4230,7 +4224,17 @@ fn parse_database_setting_assignment(text: &str) -> Result<(String, Option<Strin
             "ALTER DATABASE ... SET ... FROM CURRENT is not supported".to_string(),
         ));
     }
-    // A list (search_path = a, b) keeps PostgreSQL's comma-space rendering; quotes are removed.
+    if raw_value.is_empty() {
+        return Err(SqlError::InvalidSql(format!(
+            "missing value in ALTER DATABASE SET {name}"
+        )));
+    }
+    if name == "search_path" {
+        return Ok((
+            name,
+            Some(crate::search_path::render_raw_assignment(raw_value)),
+        ));
+    }
     let parts = split_setting_list(raw_value)
         .into_iter()
         .map(|part| {
@@ -4244,15 +4248,10 @@ fn parse_database_setting_assignment(text: &str) -> Result<(String, Option<Strin
             }
         })
         .collect::<Vec<_>>();
-    if raw_value.is_empty() {
-        return Err(SqlError::InvalidSql(format!(
-            "missing value in ALTER DATABASE SET {name}"
-        )));
-    }
     Ok((name, Some(parts.join(", "))))
 }
 
-fn split_setting_list(value: &str) -> Vec<String> {
+pub(crate) fn split_setting_list(value: &str) -> Vec<String> {
     let mut parts = Vec::new();
     let mut current = String::new();
     let mut quote: Option<char> = None;
@@ -4261,7 +4260,7 @@ fn split_setting_list(value: &str) -> Vec<String> {
         match quote {
             Some(q) if ch == q => {
                 current.push(ch);
-                if q == '\'' && chars.peek() == Some(&'\'') {
+                if chars.peek() == Some(&q) {
                     current.push(chars.next().unwrap());
                 } else {
                     quote = None;
@@ -5699,11 +5698,16 @@ pub(crate) fn conflict_target_columns(
     schema: Option<&TableSchema>,
     target: Option<&ConflictTarget>,
 ) -> Result<Vec<String>> {
+    if let Some((columns, _)) = target.and_then(crate::conflict_inference::column_inference) {
+        let mut seen = BTreeSet::new();
+        return Ok(columns
+            .into_iter()
+            .map(ident_value)
+            .filter(|column| seen.insert(column.clone()))
+            .collect());
+    }
     match target {
-        Some(ConflictTarget::Columns(columns)) => Ok(columns
-            .iter()
-            .map(|column| column.value.clone())
-            .collect::<Vec<_>>()),
+        Some(ConflictTarget::Columns(_)) => unreachable!("column inference was handled above"),
         Some(ConflictTarget::OnConstraint(name)) => {
             let name = relation_name(name)?;
             let Some(schema) = schema else {

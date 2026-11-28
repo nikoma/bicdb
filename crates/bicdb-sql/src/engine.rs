@@ -6146,6 +6146,7 @@ impl<'db> SqlEngine<'db> {
             cancellation: self.cancellation.clone(),
             fts_limits: self.fts_limits,
             routine_host: self.routine_host,
+            sequence_values: self.sequence_values.clone(),
         }
     }
 }

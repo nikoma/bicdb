@@ -5794,9 +5794,10 @@ impl RoutineFrame {
             dirty_slots: vec![false; slot_count],
             full_resync: true,
             positional: args.to_vec(),
+            template_parameters: Arc::clone(&template.params),
             trigger_record_variables: false,
-            record_alias_ids: FxHashMap::default(),
-            record_alias_values: Vec::new(),
+            alias_ids: FxHashMap::default(),
+            alias_values: Vec::new(),
             output_names: Vec::new(),
             cursors: BTreeMap::new(),
             returned_set: None,
@@ -5806,7 +5807,7 @@ impl RoutineFrame {
         };
 
         let mut input_idx = 0usize;
-        for param in &template.params {
+        for param in template.params.iter() {
             let value = match param.mode {
                 RoutineArgMode::In | RoutineArgMode::InOut => {
                     let value = args
@@ -6038,6 +6039,41 @@ impl RoutineFrame {
         self.set(key, value);
     }
 
+    pub(crate) fn link_named_parameters(&mut self) {
+        let parameters = Arc::clone(&self.template_parameters);
+        for parameter in parameters.iter() {
+            if let Some(name) = parameter.name.as_deref() {
+                self.link_alias(name, &parameter.positional_key);
+            }
+        }
+    }
+
+    pub(crate) fn bind_parameter_alias(&mut self, name: &str, position: usize) -> Result<()> {
+        let target = format!("${position}");
+        if !self.slot_ids.contains_key(&target) {
+            return Err(SqlError::data_exception_public(
+                "42704",
+                format!("variable \"{target}\" does not exist"),
+                None,
+            ));
+        }
+        self.link_alias(name, &target);
+        Ok(())
+    }
+
+    fn link_alias(&mut self, name: &str, target: &str) {
+        let id = if let Some(&id) = self.alias_ids.get(target) {
+            id
+        } else {
+            let id = self.alias_values.len();
+            self.alias_values.push(self.get(target));
+            self.alias_ids.insert(target.to_owned(), id);
+            id
+        };
+        self.alias_ids.insert(name.to_owned(), id);
+        self.set_unaliased(name, self.alias_values[id].clone());
+    }
+
     pub(crate) fn bind_trigger_record_alias(&mut self, name: &str, target: &str) -> Result<()> {
         if !self.trigger_record_variables || self.oracle_procedural_evaluation {
             return Err(SqlError::data_exception_public(
@@ -6046,16 +6082,7 @@ impl RoutineFrame {
                 None,
             ));
         }
-        let id = if let Some(&id) = self.record_alias_ids.get(target) {
-            id
-        } else {
-            let id = self.record_alias_values.len();
-            self.record_alias_values.push(self.get(target));
-            self.record_alias_ids.insert(target.to_owned(), id);
-            id
-        };
-        self.record_alias_ids.insert(name.to_owned(), id);
-        self.set_unaliased(name, self.record_alias_values[id].clone());
+        self.link_alias(name, target);
         let target_prefix = routine_record_field_type_prefix(target);
         let alias_prefix = routine_record_field_type_prefix(name);
         let field_types = self
@@ -6074,12 +6101,12 @@ impl RoutineFrame {
 
     pub(crate) fn set(&mut self, name: &str, value: SqlValue) {
         let key = normalized_object_name_ref(name);
-        if let Some(&id) = self.record_alias_ids.get(key.as_ref()) {
-            self.record_alias_values[id] = value.clone();
-            // Bound expression ids remain fixed. Mirror the record into each
+        if let Some(&id) = self.alias_ids.get(key.as_ref()) {
+            self.alias_values[id] = value.clone();
+            // Bound expression ids remain fixed. Mirror the value into each
             // visible name's slot so reads work through either name.
             let names: Vec<_> = self
-                .record_alias_ids
+                .alias_ids
                 .iter()
                 .filter(|(_, binding)| **binding == id)
                 .map(|(name, _)| name.clone())
@@ -6251,6 +6278,12 @@ impl RoutineFrame {
                 None => value,
             }
         };
+        if self.alias_ids.contains_key(key.as_ref()) {
+            let mut array = self.get(name);
+            routine_array_set_value(name, &mut array, offset, value)?;
+            self.set(name, array);
+            return Ok(());
+        }
         if let Some(id) = self.slot_ids.get(key.as_ref()).copied() {
             if let Some(slot) = std::rc::Rc::make_mut(&mut self.slot_values).get_mut(id.0) {
                 routine_array_set_value(name, slot, offset, value)?;
@@ -6375,7 +6408,7 @@ impl RoutineFrameTemplate {
             },
             slot_names: Arc::new(slot_names),
             slot_ids: Arc::new(slot_ids),
-            params: template_params,
+            params: Arc::new(template_params),
             output_names,
         }
     }

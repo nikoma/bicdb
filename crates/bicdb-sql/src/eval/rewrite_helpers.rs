@@ -2007,7 +2007,35 @@ pub(crate) struct JsonPredicateToken {
     pub(crate) symbol: Option<u8>,
 }
 
-pub(crate) fn rewrite_sql_xml_expressions(input: &str) -> Option<String> {
+fn xml_passing_document<'a>(
+    input: &'a str,
+    tokens: &[JsonPredicateToken],
+    passing: usize,
+    end: usize,
+) -> &'a str {
+    let depth = tokens[passing].depth;
+    let by_mode = |start: usize| {
+        tokens.get(start..start + 2).is_some_and(|pair| {
+            pair.iter().all(|token| token.depth == depth)
+                && pair[0].word.as_deref() == Some("by")
+                && matches!(pair[1].word.as_deref(), Some("ref" | "value"))
+        })
+    };
+    let (prefix, suffix) = (passing + 1, end.saturating_sub(2));
+    let start_byte = if prefix + 2 < end && by_mode(prefix) {
+        tokens[prefix + 1].end
+    } else {
+        tokens[passing].end
+    };
+    let end_byte = if suffix > prefix && tokens[suffix].start >= start_byte && by_mode(suffix) {
+        tokens[suffix].start
+    } else {
+        tokens[end].start
+    };
+    input[start_byte..end_byte].trim()
+}
+
+fn rewrite_sql_xml_calls(input: &str) -> Option<String> {
     let tokens = json_predicate_tokens(input);
     let mut replacements = Vec::new();
     for (index, function) in tokens.iter().enumerate() {
@@ -2108,29 +2136,34 @@ pub(crate) fn rewrite_sql_xml_expressions(input: &str) -> Option<String> {
                     continue;
                 };
                 let path = input[open.end..tokens[passing_index].start].trim();
-                let mut document_start = tokens[passing_index].end;
-                let mut cursor = passing_index + 1;
-                if tokens.get(cursor).is_some_and(|token| {
-                    token.depth == inner_depth && token.word.as_deref() == Some("by")
-                }) && tokens.get(cursor + 1).is_some_and(|token| {
-                    token.depth == inner_depth && token.word.as_deref() == Some("value")
-                }) {
-                    document_start = tokens[cursor + 1].end;
-                    cursor += 2;
-                }
-                let _ = cursor;
-                let document = input[document_start..tokens[close_index].start].trim();
+                let document = xml_passing_document(input, &tokens, passing_index, close_index);
                 format!("bicdb_xmlexists(({path}), ({document}))")
             }
             _ => unreachable!(),
         };
         replacements.push((function.start, tokens[close_index].end, replacement));
     }
-    let mut changed = !replacements.is_empty();
+    if replacements.is_empty() {
+        return None;
+    }
     replacements.sort_by_key(|(start, _, _)| *start);
     let mut output = input.to_string();
+    let mut rightmost = input.len();
     for (start, end, replacement) in replacements.into_iter().rev() {
-        output.replace_range(start..end, &replacement);
+        if end <= rightmost {
+            output.replace_range(start..end, &replacement);
+            rightmost = start;
+        }
+    }
+    Some(output)
+}
+
+pub(crate) fn rewrite_sql_xml_expressions(input: &str) -> Option<String> {
+    let mut output = input.to_string();
+    let mut changed = false;
+    while let Some(next) = rewrite_sql_xml_calls(&output) {
+        output = next;
+        changed = true;
     }
     while let Some(next) = rewrite_xml_constructor_once(&output) {
         output = next;
@@ -2287,20 +2320,7 @@ pub(crate) fn rewrite_xmltable_once(input: &str) -> Option<String> {
         .position(|token| token.depth == inner_depth && token.word.as_deref() == Some("columns"))
         .map(|offset| passing_index + 1 + offset)?;
     let row_path = input[row_path_start..tokens[passing_index].start].trim();
-    let mut document_start = tokens[passing_index].end;
-    if let Some(by_index) = tokens[passing_index + 1..columns_index]
-        .iter()
-        .position(|token| token.depth == inner_depth && token.word.as_deref() == Some("by"))
-        .map(|offset| passing_index + 1 + offset)
-    {
-        if tokens
-            .get(by_index + 1)
-            .is_some_and(|token| token.word.as_deref() == Some("value"))
-        {
-            document_start = tokens[by_index + 1].end;
-        }
-    }
-    let document = input[document_start..tokens[columns_index].start].trim();
+    let document = xml_passing_document(input, &tokens, passing_index, columns_index);
     let mut starts = vec![tokens[columns_index].end];
     starts.extend(
         tokens[columns_index + 1..close_index]

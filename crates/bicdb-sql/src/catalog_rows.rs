@@ -3508,6 +3508,12 @@ pub(crate) const PG_BUILTIN_PROC_ROWS: &[(i64, &str, i64, i64)] = &[
     (1002, "version", 25, 0),
     (1023, "bicdb_version", 25, 0),
     (1003, "now", 1184, 0),
+    (1598, "random", 701, 0),
+    (1599, "setseed", 2278, 1),
+    (6212, "random_normal", 701, 2),
+    (6339, "random", 23, 2),
+    (6340, "random", 20, 2),
+    (6341, "random", 1700, 2),
     (2272, "has_schema_privilege", 16, 2),
     (1005, "has_table_privilege", 16, 0),
     (1006, "pg_get_constraintdef", 25, 0),
@@ -3690,6 +3696,23 @@ fn pg_proc_rows_uncached(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> 
             if oid == 2272 {
                 row.insert("proargtypes".into(), SqlValue::String("25 25".into()));
                 row.insert("proisstrict".into(), SqlValue::Bool(true));
+            }
+            if let Some((args, source, names)) = crate::pg_random::catalog_signature(oid) {
+                row.insert("proargtypes".into(), SqlValue::String(args.into()));
+                row.insert("prosrc".into(), SqlValue::String(source.into()));
+                row.insert("prolang".into(), SqlValue::Int(12));
+                row.insert("proisstrict".into(), SqlValue::Bool(true));
+                row.insert("provolatile".into(), SqlValue::String("v".into()));
+                row.insert("proparallel".into(), SqlValue::String("r".into()));
+                if let Some(names) = names {
+                    row.insert(
+                        "proargnames".into(),
+                        SqlValue::json(serde_json::json!(names)),
+                    );
+                }
+                if oid == 6212 {
+                    row.insert("pronargdefaults".into(), SqlValue::Int(2));
+                }
             }
             if matches!(
                 name,

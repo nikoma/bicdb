@@ -1276,6 +1276,7 @@ pub struct SqlSession<'db> {
     /// enable this mode.
     pub(crate) signed_application_security_guc_compatibility: bool,
     pub(crate) sequence_values: Rc<RefCell<SequenceSessionValues>>,
+    random_state: crate::pg_random::RandomState,
     pub(crate) sql_cursors: sql_cursors::SqlCursors,
     pub(crate) oracle_output: oracle::output::State,
     pub(crate) oracle_lobs: oracle::lobs::State,
@@ -1311,6 +1312,7 @@ pub struct SqlSessionGucState {
     local_restore: HashMap<String, Option<String>>,
     local_settings_restore: SqlSettingsRestore,
     sequence_values: SequenceSessionValues,
+    random_state: crate::pg_random::RandomState,
     sql_cursors: sql_cursors::SqlCursors,
     oracle_output: oracle::output::State,
 }
@@ -2719,6 +2721,7 @@ impl<'db> SqlSession<'db> {
             signed_mutation_grants: BTreeMap::new(),
             signed_application_security_guc_compatibility: false,
             sequence_values: Rc::new(RefCell::new(SequenceSessionValues::default())),
+            random_state: crate::pg_random::RandomState::default(),
             sql_cursors: sql_cursors::SqlCursors::default(),
             oracle_output: oracle::output::State::default(),
             oracle_lobs: oracle::lobs::State::default(),
@@ -2875,6 +2878,7 @@ impl<'db> SqlSession<'db> {
         self.guc_local_restore = state.local_restore;
         self.guc_local_settings_restore = state.local_settings_restore;
         *self.sequence_values.borrow_mut() = state.sequence_values;
+        self.random_state = state.random_state;
         self.sql_cursors = state.sql_cursors;
         self.oracle_output = state.oracle_output;
         self.rebind_trusted_security_settings();
@@ -2892,6 +2896,7 @@ impl<'db> SqlSession<'db> {
             local_restore: std::mem::take(&mut self.guc_local_restore),
             local_settings_restore: std::mem::take(&mut self.guc_local_settings_restore),
             sequence_values: std::mem::take(&mut *self.sequence_values.borrow_mut()),
+            random_state: self.random_state.clone(),
             sql_cursors: self.sql_cursors.snapshot(),
             oracle_output: std::mem::take(&mut self.oracle_output),
         };
@@ -3145,6 +3150,7 @@ impl<'db> SqlSession<'db> {
             local_restore: self.guc_local_restore.clone(),
             local_settings_restore: self.guc_local_settings_restore.clone(),
             sequence_values: self.sequence_values.borrow().clone(),
+            random_state: self.random_state.clone(),
             sql_cursors: self.sql_cursors.snapshot(),
             oracle_output: self.oracle_output.clone(),
         }
@@ -4171,6 +4177,7 @@ impl<'db> SqlSession<'db> {
     /// Statement text through the profiled executor; a read-only transaction
     /// checks a single statement before it runs.
     fn execute_text_statements(&mut self, sql: &str) -> Result<SqlResult> {
+        let _random = crate::pg_random::RandomScope::enter(&self.random_state);
         let _xml_binary = crate::xml::XmlBinaryScope::enter(&self.session_gucs);
         let _preflight = self.prepare_catalog_preflight_text(sql)?;
         let _catalog_reads = if !sql.contains(';') || split_sql_statements(sql).len() == 1 {
@@ -4326,6 +4333,7 @@ impl<'db> SqlSession<'db> {
     /// diagnostics that want to preserve normal statement semantics without
     /// measuring parser or SQL-string construction cost.
     pub fn execute_statement_ast(&mut self, statement: &Statement) -> Result<SqlResult> {
+        let _random = crate::pg_random::RandomScope::enter(&self.random_state);
         if !matches!(statement, Statement::Rollback { .. }) {
             self.admit_partition_execution()?;
         }
@@ -4352,6 +4360,7 @@ impl<'db> SqlSession<'db> {
     /// Execute a stored procedure directly from its already-typed arguments,
     /// bypassing SQL text parsing and `CALL` AST construction.
     pub fn call_procedure(&mut self, name: &str, args: &[SqlValue]) -> Result<SqlResult> {
+        let _random = crate::pg_random::RandomScope::enter(&self.random_state);
         self.admit_partition_execution()?;
         let _preflight = self.prepare_catalog_preflight(true)?;
         let _catalog_reads = self.enter_catalog_reads_requiring_snapshot(true)?;

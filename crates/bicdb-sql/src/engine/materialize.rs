@@ -3957,6 +3957,14 @@ impl<'db> SqlEngine<'db> {
                     .and_then(|arg| self.infer_env_expr_type(arg, env))
                     .as_deref(),
             )),
+            "random" if args.len() == 2 => {
+                let types = args
+                    .iter()
+                    .map(|arg| self.infer_env_expr_type(arg, env))
+                    .collect::<Vec<_>>();
+                crate::pg_random::range_pg_type(&types).map(str::to_owned)
+            }
+            "setseed" => Some("void".to_owned()),
             "random" | "pi" | "sin" | "cos" | "tan" | "asin" | "acos" | "atan" | "atan2"
             | "cot" | "random_normal" => Some("float8".to_string()),
             "generate_series" => args

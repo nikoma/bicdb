@@ -2888,24 +2888,6 @@ pub(crate) fn eval_session_function_value(
             Ok(Some(SqlValue::String(value.into_owned())))
         }
         "to_timestamp" | "pg_catalog.to_timestamp" => Ok(Some(eval_pg_to_timestamp(args)?)),
-        "lastval" | "pg_catalog.lastval" => {
-            if !args.is_empty() {
-                return Err(SqlError::InvalidSql(
-                    "lastval expects no arguments".to_string(),
-                ));
-            }
-            Ok(Some(
-                session_gucs
-                    .get(LASTVAL_SESSION_KEY)
-                    .and_then(|value| value.parse::<i64>().ok())
-                    .map(SqlValue::Int)
-                    .ok_or_else(|| {
-                        SqlError::InvalidSql(
-                            "lastval is not yet defined in this session".to_string(),
-                        )
-                    })?,
-            ))
-        }
         _ => Ok(None),
     }
 }

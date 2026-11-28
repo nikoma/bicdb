@@ -211,11 +211,9 @@ impl SqlSession<'_> {
         }
         self.publish_partition_schema_change_with_auxiliary(&planned, auxiliary)?;
         if let Some(sequence) = pending_sequence.filter(|sequence| sequence.is_called) {
-            self.currvals.insert(sequence.name, sequence.last_value);
-            Arc::make_mut(&mut self.session_gucs).insert(
-                LASTVAL_SESSION_KEY.to_string(),
-                sequence.last_value.to_string(),
-            );
+            self.sequence_values
+                .borrow_mut()
+                .record_nextval(&sequence.name, sequence.last_value);
         }
         *schema = parent;
         Ok(true)

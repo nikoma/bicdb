@@ -369,7 +369,7 @@ impl<'db> SqlSession<'db> {
                 Rc::new(RefCell::new(FxHashMap::default())),
             )
         });
-        SqlEngine::from_session_parts(
+        let mut engine = SqlEngine::from_session_parts(
             &*self.db_ref(),
             tx,
             self.settings,
@@ -389,7 +389,9 @@ impl<'db> SqlSession<'db> {
             self.app_exact_decimal_units,
         )
         .with_routine_host(Some(&SESSION_ROUTINE_HOST))
-        .with_oracle_output(self.oracle_output.clone())
+        .with_oracle_output(self.oracle_output.clone());
+        engine.sequence_values = Some(self.sequence_values.clone());
+        engine
     }
 
     fn extension_event_relation(table: &str) -> String {
@@ -4142,74 +4144,84 @@ impl<'db> SqlSession<'db> {
 
     pub(crate) fn eval_sequence_function(&mut self, function: &Function) -> Result<SqlValue> {
         let name = object_name(&function.name)?.to_ascii_lowercase();
-        let args = function_arg_list(function);
-        match name.as_str() {
-            "nextval" | "pg_catalog.nextval" => {
-                let sequence = {
-                    let text = self.eval_sequence_arg(args.first(), "nextval")?;
-                    self.session_sequence_name(&text)?
-                };
-                Ok(SqlValue::Int(self.nextval(&sequence)?))
+        let args = function_arg_list(function)
+            .iter()
+            .map(|expr| self.eval_session_expr(expr))
+            .collect::<Result<Vec<_>>>()?;
+        self.eval_sequence_values(&name, &args)
+    }
+
+    pub(crate) fn eval_sequence_values(
+        &mut self,
+        name: &str,
+        args: &[SqlValue],
+    ) -> Result<SqlValue> {
+        let name = name.strip_prefix("pg_catalog.").unwrap_or(name);
+        if args.iter().any(|value| matches!(value, SqlValue::Null)) {
+            return Ok(SqlValue::Null);
+        }
+        if name == "lastval" {
+            if !args.is_empty() {
+                return Err(SqlError::InvalidSql("lastval expects no arguments".into()));
             }
-            "currval" | "pg_catalog.currval" => {
-                let sequence = {
-                    let text = self.eval_sequence_arg(args.first(), "currval")?;
-                    self.session_sequence_name(&text)?
-                };
-                let key = sequence.clone();
-                self.currvals
-                    .get(&key)
+            let values = self.sequence_values.borrow();
+            let undefined = || {
+                SqlError::coded_public(
+                    "55000",
+                    "lastval is not yet defined in this session",
+                    None,
+                    None,
+                )
+            };
+            let sequence = values.last_sequence.as_deref().ok_or_else(undefined)?;
+            let schema = load_sequence(self.db_ref(), sequence)?.ok_or_else(undefined)?;
+            self.require_sequence_privilege(&schema, &["SELECT", "USAGE"])?;
+            return values
+                .current
+                .get(sequence)
+                .copied()
+                .map(SqlValue::Int)
+                .ok_or_else(undefined);
+        }
+        let sequence = self.sequence_argument(args.first(), name)?;
+        match name {
+            "nextval" => self.nextval(&sequence).map(SqlValue::Int),
+            "currval" => {
+                let schema = load_sequence_required(self.db_ref(), &sequence)?;
+                self.require_sequence_privilege(&schema, &["SELECT", "USAGE"])?;
+                self.sequence_values
+                    .borrow()
+                    .current
+                    .get(&sequence)
                     .copied()
                     .map(SqlValue::Int)
                     .ok_or_else(|| {
-                        SqlError::InvalidSql(format!(
-                            "currval of sequence \"{sequence}\" is not yet defined in this session"
-                        ))
-                    })
-            }
-            "lastval" | "pg_catalog.lastval" => {
-                if !args.is_empty() {
-                    return Err(SqlError::InvalidSql(
-                        "lastval expects no arguments".to_string(),
-                    ));
-                }
-                self.session_gucs
-                    .get(LASTVAL_SESSION_KEY)
-                    .and_then(|value| value.parse::<i64>().ok())
-                    .map(SqlValue::Int)
-                    .ok_or_else(|| {
-                        SqlError::InvalidSql(
-                            "lastval is not yet defined in this session".to_string(),
+                        SqlError::coded_public(
+                            "55000",
+                            format!("currval of sequence \"{sequence}\" is not yet defined in this session"),
+                            None,
+                            None,
                         )
                     })
             }
-            "setval" | "pg_catalog.setval" => {
-                if args.len() != 2 && args.len() != 3 {
-                    return Err(SqlError::InvalidSql(
-                        "setval expects 2 or 3 arguments".to_string(),
-                    ));
-                }
-                let sequence = {
-                    let text = self.eval_sequence_arg(args.first(), "setval")?;
-                    self.session_sequence_name(&text)?
-                };
-                let value =
-                    self.eval_session_expr(args.get(1).expect("validated argument count"))?;
-                let Some(value) = sql_value_i64(&value) else {
-                    return Err(SqlError::InvalidSql(
-                        "setval value must be an integer".to_string(),
-                    ));
-                };
-                let is_called = if let Some(expr) = args.get(2) {
-                    let SqlValue::Bool(value) = self.eval_session_expr(expr)? else {
+            "setval" => {
+                let (value, is_called) = match args {
+                    [_, value] => (value, true),
+                    [_, value, SqlValue::Bool(is_called)] => (value, *is_called),
+                    [_, _, _] => {
                         return Err(SqlError::InvalidSql(
-                            "setval is_called must be boolean".to_string(),
-                        ));
-                    };
-                    value
-                } else {
-                    true
+                            "setval is_called must be boolean".into(),
+                        ))
+                    }
+                    _ => {
+                        return Err(SqlError::InvalidSql(
+                            "setval expects 2 or 3 arguments".into(),
+                        ))
+                    }
                 };
+                let value = sql_value_i64(value).ok_or_else(|| {
+                    SqlError::InvalidSql("setval value must be an integer".into())
+                })?;
                 self.setval(&sequence, value, is_called)?;
                 Ok(SqlValue::Int(value))
             }
@@ -4231,6 +4243,9 @@ impl<'db> SqlSession<'db> {
         session.row_routine_call = true;
         session.parent_tx = engine.tx;
         session.session_gucs = engine.session_gucs.clone();
+        if let Some(values) = &engine.sequence_values {
+            session.sequence_values = values.clone();
+        }
         session.oracle_output = engine.oracle_output.clone();
         session.settings = engine.settings;
         session.runtime = engine.runtime.clone();
@@ -6522,28 +6537,29 @@ impl<'db> SqlSession<'db> {
         result
     }
 
-    pub(crate) fn eval_sequence_arg(
-        &mut self,
-        expr: Option<&Expr>,
-        function: &str,
-    ) -> Result<String> {
-        let Some(expr) = expr else {
-            return Err(SqlError::InvalidSql(format!(
-                "{function} expects a sequence name"
-            )));
+    fn sequence_argument(&self, value: Option<&SqlValue>, function: &str) -> Result<String> {
+        let text = match value {
+            Some(SqlValue::String(value)) => std::borrow::Cow::Borrowed(value.as_str()),
+            Some(SqlValue::Int(oid)) => std::borrow::Cow::Owned(
+                resolve_regclass_name(self.db_ref(), *oid)?.ok_or_else(|| {
+                    SqlError::InvalidSql(format!(
+                        "{function} sequence oid {oid} does not name a relation"
+                    ))
+                })?,
+            ),
+            Some(other) => {
+                return Err(SqlError::InvalidSql(format!(
+                    "{function} sequence name must be text, got {}",
+                    other.to_cell()
+                )))
+            }
+            None => {
+                return Err(SqlError::InvalidSql(format!(
+                    "{function} expects a sequence name"
+                )))
+            }
         };
-        match self.eval_session_expr(expr)? {
-            SqlValue::String(value) => Ok(value),
-            SqlValue::Int(oid) => resolve_regclass_name(self.db_ref(), oid)?.ok_or_else(|| {
-                SqlError::InvalidSql(format!(
-                    "{function} sequence oid {oid} does not name a relation"
-                ))
-            }),
-            other => Err(SqlError::InvalidSql(format!(
-                "{function} sequence name must be text, got {}",
-                other.to_cell()
-            ))),
-        }
+        self.session_sequence_name(&text)
     }
 
     /// Sequence state is independent of the caller's transaction. Persist it
@@ -6649,9 +6665,9 @@ impl<'db> SqlSession<'db> {
                 Err(error) => (Err(error), false),
             }
         })?;
-        self.currvals.insert(sequence_name.to_string(), value);
-        Arc::make_mut(&mut self.session_gucs)
-            .insert(LASTVAL_SESSION_KEY.to_string(), value.to_string());
+        self.sequence_values
+            .borrow_mut()
+            .record_nextval(sequence_name, value);
         Ok(value)
     }
 
@@ -6670,9 +6686,9 @@ impl<'db> SqlSession<'db> {
             (Ok(values), true)
         })?;
         if let Some(value) = values.last().copied() {
-            self.currvals.insert(sequence_name.to_string(), value);
-            Arc::make_mut(&mut self.session_gucs)
-                .insert(LASTVAL_SESSION_KEY.to_string(), value.to_string());
+            self.sequence_values
+                .borrow_mut()
+                .record_nextval(sequence_name, value);
         }
         Ok(values)
     }
@@ -6697,9 +6713,16 @@ impl<'db> SqlSession<'db> {
             sequence.is_called = is_called;
             (Ok(()), true)
         })?;
-        self.currvals.insert(sequence_name.to_string(), value);
-        Arc::make_mut(&mut self.session_gucs)
-            .insert(LASTVAL_SESSION_KEY.to_string(), value.to_string());
+        let mut values = self.sequence_values.borrow_mut();
+        if self
+            .session_gucs
+            .get("bicdb.sql_profile")
+            .is_some_and(|profile| oracle::is_oracle_profile(profile))
+        {
+            values.record_nextval(sequence_name, value);
+        } else if is_called {
+            values.current.insert(sequence_name.to_owned(), value);
+        }
         Ok(())
     }
 

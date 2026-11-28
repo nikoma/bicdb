@@ -4928,17 +4928,16 @@ fn parse_relation_identifier(identifier: &str) -> Result<String> {
 }
 
 pub(crate) fn is_sequence_function(function: &Function) -> Result<bool> {
-    Ok(matches!(
-        object_name(&function.name)?.to_ascii_lowercase().as_str(),
-        "nextval"
-            | "pg_catalog.nextval"
-            | "currval"
-            | "pg_catalog.currval"
-            | "lastval"
-            | "pg_catalog.lastval"
-            | "setval"
-            | "pg_catalog.setval"
+    Ok(is_sequence_function_name(
+        &object_name(&function.name)?.to_ascii_lowercase(),
     ))
+}
+
+pub(crate) fn is_sequence_function_name(name: &str) -> bool {
+    matches!(
+        name.strip_prefix("pg_catalog.").unwrap_or(name),
+        "nextval" | "currval" | "lastval" | "setval"
+    )
 }
 
 pub(crate) fn is_pg_notify_function(function: &Function) -> Result<bool> {

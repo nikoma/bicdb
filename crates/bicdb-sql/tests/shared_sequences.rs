@@ -81,3 +81,64 @@ fn shared_batch_defaults_and_setval_keep_nontransactional_sequence_state() {
         vec![vec![SqlValue::Int(40)]]
     );
 }
+
+#[test]
+fn postgres_sequence_values_from_rows_and_nested_routines_share_the_session() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = BicDb::open(dir.path()).unwrap();
+    let mut sql = SqlSession::new_shared(&db);
+    sql.execute("CREATE SEQUENCE outer_seq").unwrap();
+    sql.execute("CREATE SEQUENCE other_seq").unwrap();
+    sql.execute("CREATE TABLE sequence_inputs (id int PRIMARY KEY)")
+        .unwrap();
+    sql.execute("INSERT INTO sequence_inputs VALUES (1), (2), (3)")
+        .unwrap();
+    sql.execute(
+        "CREATE FUNCTION sequence_tick() RETURNS bigint LANGUAGE plpgsql AS
+         $$ BEGIN RETURN nextval('outer_seq'); END $$",
+    )
+    .unwrap();
+    sql.execute("BEGIN").unwrap();
+    sql.execute("SAVEPOINT s").unwrap();
+    assert_eq!(
+        sql.execute("SELECT sum(pg_catalog.nextval('outer_seq'))::bigint FROM sequence_inputs")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(6)]],
+    );
+    assert_eq!(
+        sql.execute("SELECT sum(sequence_tick())::bigint FROM sequence_inputs")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(15)]],
+    );
+    sql.execute("ROLLBACK TO s").unwrap();
+    sql.execute("ROLLBACK").unwrap();
+    sql.execute("SELECT setval('outer_seq', 40, false), setval('other_seq', 90)")
+        .unwrap();
+    assert_eq!(
+        sql.execute(
+            "SELECT currval('outer_seq'), lastval(), currval('other_seq'), nextval(NULL::regclass)"
+        )
+        .unwrap()
+        .rows,
+        vec![vec![
+            SqlValue::Int(6),
+            SqlValue::Int(6),
+            SqlValue::Int(90),
+            SqlValue::Null
+        ]],
+    );
+    assert_eq!(
+        sql.execute("SELECT nextval('outer_seq')").unwrap().rows,
+        vec![vec![SqlValue::Int(40)]],
+    );
+    let mut other = SqlSession::new_shared(&db);
+    assert_eq!(
+        other
+            .execute("SELECT currval('outer_seq')")
+            .unwrap_err()
+            .sqlstate(),
+        "55000",
+    );
+}

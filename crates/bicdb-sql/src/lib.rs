@@ -3514,7 +3514,6 @@ const NAMESPACE_COLLECTION: &str = "__bicdb_pg_namespaces";
 const DATABASE_COLLECTION: &str = "__bicdb_pg_databases";
 const EXTENSION_COLLECTION: &str = "__bicdb_pg_extensions";
 const SEQUENCE_COLLECTION: &str = "__bicdb_pg_sequences";
-const LASTVAL_SESSION_KEY: &str = "__bicdb_lastval";
 const VIEW_COLLECTION: &str = "__bicdb_pg_views";
 const ROUTINE_COLLECTION: &str = "__bicdb_pg_routines";
 const TRIGGER_COLLECTION: &str = "__bicdb_pg_triggers";

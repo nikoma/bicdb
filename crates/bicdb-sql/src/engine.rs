@@ -4311,6 +4311,9 @@ pub struct SqlEngine<'db> {
     /// engines built for statement description leave it unset, so they never
     /// execute a routine body.
     pub(crate) routine_host: Option<&'static dyn RoutineCallHost>,
+    /// Values consumed by the owning connection, shared with row routine
+    /// sessions and with engines for correlated subqueries.
+    pub(crate) sequence_values: Option<Rc<RefCell<SequenceSessionValues>>>,
 }
 
 /// See [`SqlEngine::routine_host`].
@@ -4534,6 +4537,7 @@ impl<'db> SqlEngine<'db> {
             cancellation: CancellationToken::uncancelable(),
             fts_limits: bicdb_core::FtsQueryLimits::UNLIMITED,
             routine_host: None,
+            sequence_values: None,
         }
     }
 
@@ -4572,6 +4576,7 @@ impl<'db> SqlEngine<'db> {
             cancellation: CancellationToken::uncancelable(),
             fts_limits: bicdb_core::FtsQueryLimits::UNLIMITED,
             routine_host: None,
+            sequence_values: None,
         }
     }
 
@@ -4631,6 +4636,7 @@ impl<'db> SqlEngine<'db> {
             cancellation,
             fts_limits,
             routine_host: None,
+            sequence_values: None,
         }
     }
 
@@ -4671,6 +4677,7 @@ impl<'db> SqlEngine<'db> {
             cancellation: CancellationToken::uncancelable(),
             fts_limits: bicdb_core::FtsQueryLimits::UNLIMITED,
             routine_host: None,
+            sequence_values: None,
         }
     }
 
@@ -4918,6 +4925,7 @@ impl<'db> SqlEngine<'db> {
             .with_oracle_output(self.oracle_output.clone());
         engine.heap_lock_identity = self.heap_lock_identity;
         engine.app_exact_decimal_units = self.app_exact_decimal_units;
+        engine.sequence_values.clone_from(&self.sequence_values);
         if engine.outer_row.is_none() {
             engine.outer_row.clone_from(&self.outer_row);
         }

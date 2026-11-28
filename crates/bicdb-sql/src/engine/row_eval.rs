@@ -2024,6 +2024,9 @@ impl<'db> SqlEngine<'db> {
                 return Ok(value);
             }
         }
+        if self.sequence_values.is_some() && is_sequence_function_name(&name) {
+            return SqlSession::for_row_routine_call(self).eval_sequence_values(&name, &args);
+        }
         if let Some(value) = eval_network_function_value(&name, &args, &arg_types)?
             .or(eval_user_range_function_value_for(
                 self.db_ref(),
@@ -3803,6 +3806,9 @@ impl<'db> SqlEngine<'db> {
             if let Some(value) = self.eval_stored_sql_function_value(&name, &args, &arg_types)? {
                 return Ok(value);
             }
+        }
+        if self.sequence_values.is_some() && is_sequence_function_name(&name) {
+            return SqlSession::for_row_routine_call(self).eval_sequence_values(&name, &args);
         }
         if let Some(value) = eval_network_function_value(&name, &args, &arg_types)?
             .or(eval_user_range_function_value_for(

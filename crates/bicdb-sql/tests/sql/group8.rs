@@ -3281,3 +3281,73 @@ fn on_conflict_row_assignments_use_the_old_and_excluded_rows() {
     assert_eq!(result.rows[0][0].to_cell(), "3");
     assert!(matches!(result.rows[0][1], bicdb_sql::SqlValue::Null));
 }
+
+#[test]
+fn rls_errors_name_the_sql_relation_in_an_authored_schema() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = bicdb_core::BicDb::open(root.path()).unwrap();
+    let mut session = bicdb_sql::SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE ROLE rls_message_reader;
+             CREATE SCHEMA rls_message;
+             CREATE TABLE rls_message.docs(id int PRIMARY KEY);
+             ALTER TABLE rls_message.docs ENABLE ROW LEVEL SECURITY;
+             CREATE POLICY readable ON rls_message.docs FOR SELECT USING (true);
+             CREATE POLICY insertable ON rls_message.docs FOR INSERT WITH CHECK (true);
+             CREATE POLICY positive ON rls_message.docs AS RESTRICTIVE FOR INSERT WITH CHECK (id > 0);
+             GRANT USAGE ON SCHEMA rls_message TO rls_message_reader;
+             GRANT SELECT, INSERT ON rls_message.docs TO rls_message_reader;
+             SET ROLE rls_message_reader",
+        )
+        .unwrap();
+    let error = session
+        .execute("INSERT INTO rls_message.docs VALUES (-1)")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42501");
+    assert!(error
+        .to_string()
+        .contains("new row violates row-level security policy \"positive\" for table \"docs\""));
+    session.execute("SET row_security = off").unwrap();
+    let error = session
+        .execute("SELECT * FROM rls_message.docs")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42501");
+    assert!(error
+        .to_string()
+        .contains("query would be affected by row-level security policy for table \"docs\""));
+}
+
+#[test]
+fn update_row_assignment_treats_parenthesized_values_as_a_query() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = bicdb_core::BicDb::open(root.path()).unwrap();
+    let mut session = bicdb_sql::SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE TABLE values_update (id int PRIMARY KEY, a int, b int);
+             INSERT INTO values_update VALUES (1,2,3)",
+        )
+        .unwrap();
+    let result = session
+        .execute("UPDATE values_update SET (a,b) = (VALUES (b,a)) RETURNING a,b")
+        .unwrap();
+    assert_eq!(
+        result.rows,
+        [[bicdb_sql::SqlValue::Int(3), bicdb_sql::SqlValue::Int(2)]],
+    );
+    for (source, state) in [
+        ("(VALUES (9))", "42601"),
+        ("(VALUES (9,8), (7,6))", "21000"),
+    ] {
+        let error = session
+            .execute(&format!("UPDATE values_update SET (a,b) = {source}"))
+            .unwrap_err();
+        assert_eq!(error.sqlstate(), state, "{source}: {error:?}");
+    }
+    let result = session.execute("SELECT a,b FROM values_update").unwrap();
+    assert_eq!(
+        result.rows,
+        [[bicdb_sql::SqlValue::Int(3), bicdb_sql::SqlValue::Int(2)]],
+    );
+}

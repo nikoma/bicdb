@@ -3290,6 +3290,13 @@ pub(crate) fn index_field_from_expr_for_schema(
             return index_field_from_expr_for_schema(schema, expr);
         }
         Expr::Identifier(ident) => {
+            // A declared SQL id can have a separate, hidden record key.
+            if schema
+                .column(&ident_value(ident))
+                .is_some_and(|column| column.name == "id" && !column.primary_key)
+            {
+                return Ok(IndexField::MetadataPath(vec!["id".to_string()]));
+            }
             let column = if ident.quote_style.is_some() {
                 schema.column(&ident.value)
             } else {

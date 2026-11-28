@@ -3090,16 +3090,18 @@ impl<'db> SqlSession<'db> {
             ));
         }
         // Validate the entire column list before changing any grants.
-        for (_, table) in &targets {
-            for (_, column) in &privileges {
-                if let Some(column) = column {
-                    let schema = load_schema_shared(self.db_ref(), table)?;
-                    if !schema.as_ref().is_some_and(|schema| {
-                        schema.column(column).is_some_and(|column| !column.hidden)
-                    }) {
+        let requested_columns: Vec<_> = privileges
+            .iter()
+            .filter_map(|(_, column)| column.as_ref())
+            .collect();
+        if !requested_columns.is_empty() {
+            for (_, table) in &targets {
+                let available = crate::column_privileges::relation_columns(self.db_ref(), table)?;
+                for column in &requested_columns {
+                    if !available.contains(column) {
                         return Err(SqlError::UndefinedColumn {
                             table: relation_name_for_message(table),
-                            column: column.clone(),
+                            column: (*column).clone(),
                         });
                     }
                 }

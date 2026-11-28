@@ -229,7 +229,19 @@ pub(crate) fn eval_db_catalog_function_value_with_engine(
     query_engine: Option<&SqlEngine<'_>>,
 ) -> Result<Option<SqlValue>> {
     let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(name);
-    if matches!(bare_name, "table_to_xml" | "query_to_xml") {
+    if matches!(
+        bare_name,
+        "table_to_xml"
+            | "query_to_xml"
+            | "table_to_xmlschema"
+            | "query_to_xmlschema"
+            | "cursor_to_xmlschema"
+            | "schema_to_xml"
+            | "schema_to_xmlschema"
+            | "cursor_to_xml"
+            | "database_to_xml"
+            | "database_to_xmlschema"
+    ) {
         if let Some(engine) = query_engine {
             return engine.eval_xml_mapping(bare_name, args);
         }
@@ -1411,7 +1423,16 @@ pub(crate) fn eval_db_catalog_function_value_with_engine(
                 return Ok(Some(SqlValue::Null));
             };
             let definition = routine_for_oid(db, oid)?.map(|routine| {
-                let sql = routine.definition.trim();
+                let mut sql = routine.definition.trim().to_owned();
+                if routine.leakproof {
+                    let location = ["RETURN", "BEGIN"]
+                        .iter()
+                        .filter_map(|keyword| find_top_level_keyword(&sql, keyword))
+                        .min()
+                        .unwrap_or(sql.len());
+                    sql.insert_str(location, " LEAKPROOF ");
+                }
+                let sql = sql.trim();
                 if let Some(rest) = strip_prefix_ci(sql, "CREATE FUNCTION ") {
                     format!("CREATE OR REPLACE FUNCTION {rest}")
                 } else if let Some(rest) = strip_prefix_ci(sql, "CREATE PROCEDURE ") {

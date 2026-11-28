@@ -1294,9 +1294,13 @@ pub(crate) fn postgres_array_text_result_with_delimiter(
                     value
                 )));
             };
-            let dimensions = binary_array_json_dimensions(array).ok_or_else(|| {
+            let mut dimensions = binary_array_json_dimensions(array).ok_or_else(|| {
                 PgWireError::Protocol("array result must be rectangular".to_string())
             })?;
+            bicdb_sql::restore_empty_catalog_vector_dimension(
+                &mut dimensions,
+                lower_bounds.as_deref(),
+            );
             let prefix = if let Some(lower_bounds) = lower_bounds {
                 if lower_bounds.len() != dimensions.len() {
                     return Err(PgWireError::Protocol(format!(
@@ -1305,7 +1309,9 @@ pub(crate) fn postgres_array_text_result_with_delimiter(
                         dimensions.len()
                     )));
                 }
-                if lower_bounds.iter().any(|lower_bound| *lower_bound != 1) {
+                if !dimensions.contains(&0)
+                    && lower_bounds.iter().any(|lower_bound| *lower_bound != 1)
+                {
                     dimensions
                         .iter()
                         .zip(lower_bounds)
@@ -2123,9 +2129,10 @@ pub(crate) fn binary_array_result_parts(
     } else {
         (value, None)
     };
-    let lengths = binary_array_json_dimensions(value).ok_or_else(|| {
+    let mut lengths = binary_array_json_dimensions(value).ok_or_else(|| {
         PgWireError::Protocol("binary array result must be rectangular".to_string())
     })?;
+    bicdb_sql::restore_empty_catalog_vector_dimension(&mut lengths, lower_bounds.as_deref());
     if lengths.len() > 6 {
         return Err(PgWireError::Protocol(format!(
             "binary array result rank {} exceeds PostgreSQL's limit of 6",

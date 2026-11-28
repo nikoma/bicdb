@@ -442,6 +442,11 @@ pub(crate) fn merge_rows(left: &SqlRow, right: &SqlRow) -> SqlRow {
     row
 }
 
+/// Whole-row values in DML evaluation occupy keys outside the SQL identifier space.
+pub(crate) fn compound_row_value_key(alias: &str) -> String {
+    format!("\0bicdb:whole-row:{alias}")
+}
+
 pub(crate) fn row_value_from_parts(row: &SqlRow, parts: &[String]) -> SqlValue {
     row_value_from_parts_opt(row, parts).unwrap_or(SqlValue::Null)
 }

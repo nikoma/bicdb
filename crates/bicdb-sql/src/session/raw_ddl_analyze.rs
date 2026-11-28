@@ -998,16 +998,23 @@ impl<'db> SqlSession<'db> {
                 "SET search_path expects at least one schema".to_string(),
             ));
         }
+        // Oracle's preview consumes a path string whose literals may already
+        // include the identifier quotes used for its namespace lookup.
+        let oracle_path = oracle::is_oracle_database(self.db_ref())?;
         let path = values
             .iter()
             .map(|value| {
                 let name = match value {
-                    Expr::Identifier(ident) if ident.quote_style.is_none() => {
+                    Expr::Identifier(ident) if !oracle_path && ident.quote_style.is_none() => {
                         ident.value.to_ascii_lowercase()
                     }
                     _ => eval_setting_value(value)?.to_cell(),
                 };
-                Ok(pg_quote_ident(&name))
+                Ok(if oracle_path {
+                    name
+                } else {
+                    pg_quote_ident(&name)
+                })
             })
             .collect::<Result<Vec<_>>>()?
             .join(", ");

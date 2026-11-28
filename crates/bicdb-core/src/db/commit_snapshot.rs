@@ -2776,11 +2776,33 @@ impl BicDb {
     }
 
     pub(crate) fn ensure_no_pending_transactions(&self) -> Result<()> {
+        self.ensure_no_other_pending_transactions(None)
+    }
+
+    /// Index builds can share a transaction's lifetime only while it has no
+    /// write locks and no other transaction is pending. Keep the caller's
+    /// snapshot pinned throughout the build and leave maintenance fences
+    /// unchanged for operations without a build owner.
+    pub(super) fn ensure_no_other_pending_transactions(
+        &self,
+        owner: Option<TransactionId>,
+    ) -> Result<()> {
         self.check_recovery_state()?;
         let has_write_locks = !self.write_locks.is_empty();
-        let has_pending = self
-            .tx_states
-            .values_any(|state| *state == TxState::Pending);
+        let has_pending = match owner {
+            None => self
+                .tx_states
+                .values_any(|state| *state == TxState::Pending),
+            Some(id) => {
+                self.tx_states.get_copied(&id.0) != Some(TxState::Pending)
+                    || self.tx_states.shards.iter().any(|shard| {
+                        shard
+                            .lock()
+                            .iter()
+                            .any(|(other, state)| *other != id.0 && *state == TxState::Pending)
+                    })
+            }
+        };
         if has_write_locks || has_pending {
             return Err(BicDbError::Compaction(
                 "cannot compact while transactions are pending".to_string(),

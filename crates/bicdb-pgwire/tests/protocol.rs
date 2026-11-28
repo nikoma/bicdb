@@ -63,6 +63,61 @@ fn cold_monitoring_validator_uses_an_ordinary_protocol_stack() {
 }
 
 #[test]
+fn postgres_simple_query_batches_report_each_result_and_roll_back_on_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        bicdb_pgwire::handle_client(stream, path).unwrap();
+    });
+    let mut client = TcpStream::connect(address).unwrap();
+    client
+        .set_read_timeout(Some(Duration::from_secs(30)))
+        .unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+
+    send_query(&mut client, "SELECT 1; SELECT 2");
+    let mut rows = Vec::new();
+    let mut tags = Vec::new();
+    loop {
+        let (tag, payload) = read_message(&mut client);
+        match tag {
+            b'D' => rows.push(parse_data_row(&payload)),
+            b'C' => tags.push(String::from_utf8(payload).unwrap()),
+            b'E' => panic!("{}", String::from_utf8_lossy(&payload)),
+            b'Z' => {
+                assert_eq!(payload, [b'I']);
+                break;
+            }
+            _ => {}
+        }
+    }
+    assert_eq!(rows, vec![vec!["1".to_string()], vec!["2".to_string()]]);
+    assert_eq!(tags, ["SELECT 1\0", "SELECT 1\0"]);
+
+    send_query(
+        &mut client,
+        "CREATE TABLE batch_rows (id int PRIMARY KEY); INSERT INTO batch_rows VALUES (1)",
+    );
+    assert!(read_query_rows(&mut client).is_empty());
+    send_query(
+        &mut client,
+        "INSERT INTO batch_rows VALUES (2); SELECT missing FROM batch_rows; INSERT INTO batch_rows VALUES (3)",
+    );
+    let (error, status) = read_error_response_with_status(&mut client);
+    assert!(error.contains("42703"), "{error}");
+    assert_eq!(status, b'I');
+    send_query(&mut client, "SELECT id FROM batch_rows ORDER BY id");
+    assert_eq!(read_query_rows(&mut client), vec![vec!["1".to_string()]]);
+
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
+}
+
+#[test]
 fn cte_mutations_describe_no_data_and_keep_update_counts() {
     let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

@@ -4943,7 +4943,7 @@ pub(crate) fn sql_array_value(values: Vec<SqlValue>) -> Result<SqlValue> {
     Ok(SqlValue::json(JsonValue::Array(
         values
             .into_iter()
-            .map(sql_value_to_json)
+            .map(crate::eval::composite_array_element_json)
             .collect::<Vec<_>>(),
     )))
 }

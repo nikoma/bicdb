@@ -2148,8 +2148,7 @@ impl BoundExprScope {
                 data_type,
                 ..
             } => {
-                if regclass_display_cast_source(inner, data_type).is_some()
-                    || regclass_text_cast_source(inner, data_type)
+                if regclass_text_cast_source(inner, data_type)
                         .ok()
                         .flatten()
                         .is_some()

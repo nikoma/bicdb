@@ -241,21 +241,6 @@ pub(crate) fn regtype_text_cast_source<'a>(
         .then_some(expr))
 }
 
-pub(crate) fn regclass_display_cast_source<'a>(
-    expr: &'a Expr,
-    data_type: &DataType,
-) -> Option<&'a Expr> {
-    if !matches!(data_type, DataType::Regclass) {
-        return None;
-    }
-    match expr {
-        Expr::Function(function) if function_name_is(function, "pg_get_serial_sequence") => {
-            Some(expr)
-        }
-        _ => None,
-    }
-}
-
 pub(crate) fn regclass_text_value(db: &BicDb, value: SqlValue) -> Result<SqlValue> {
     if matches!(value, SqlValue::Null) {
         return Ok(SqlValue::Null);
@@ -312,7 +297,18 @@ pub(crate) fn resolve_regclass_oid(db: &BicDb, name: &str) -> Result<Option<i64>
         [schema, name] => (schema, name),
         _ => relation_schema_and_name(&physical),
     };
-    resolve_regclass_physical_oid(db, &physical, namespace, logical_name)
+    // Physical relation lookup already maps pg_temp to the session schema.
+    // Catalog lookup (for generated sequences and indexes) needs that same
+    // namespace to match the object's catalog row.
+    let temporary_namespace = (namespace == "pg_temp")
+        .then(crate::search_path::active_temp_schema)
+        .flatten();
+    resolve_regclass_physical_oid(
+        db,
+        &physical,
+        temporary_namespace.as_deref().unwrap_or(namespace),
+        logical_name,
+    )
 }
 
 fn resolve_regclass_physical_oid(
@@ -338,11 +334,13 @@ fn resolve_regclass_physical_oid(
     {
         return Ok(Some(named_relation_oid(physical)));
     }
-    // Index catalogs carry the logical name and owning namespace separately.
-    // Splitting a schema-encoded storage name would incorrectly select public.
+    // Indexes and generated sequences can carry a storage name different
+    // from the SQL name shown in pg_class.
     Ok(pg_class_rows(db)?.into_iter().find_map(|row| {
-        (matches!(virtual_cell(&row, "relkind").to_cell().as_str(), "i" | "I")
-            && virtual_cell(&row, "relname").to_cell() == logical_name
+        (matches!(
+            virtual_cell(&row, "relkind").to_cell().as_str(),
+            "i" | "I" | "S"
+        ) && virtual_cell(&row, "relname").to_cell() == logical_name
             && sql_value_i64(&virtual_cell(&row, "relnamespace")) == Some(namespace_oid(namespace)))
         .then(|| sql_value_i64(&virtual_cell(&row, "oid")))
         .flatten()
@@ -377,7 +375,9 @@ pub(crate) fn resolve_regclass_name(db: &BicDb, oid: i64) -> Result<Option<Strin
     {
         let namespace = sequence_catalog_namespace(db, &sequence.name)?;
         let logical = pg_quote_ident(&sequence_catalog_name(&sequence.name));
-        return Ok(Some(if regclass_namespace_visible(&namespace) {
+        // Use the unqualified spelling only if it resolves back to this
+        // exact sequence. A same-named relation earlier in the path wins.
+        return Ok(Some(if resolve_regclass_oid(db, &logical)? == Some(oid) {
             logical
         } else {
             format!("{}.{}", pg_quote_ident(&namespace), logical)

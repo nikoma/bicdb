@@ -3573,14 +3573,6 @@ impl<'db> SqlSession<'db> {
             Expr::Cast {
                 expr, data_type, ..
             } => {
-                if let Some(source) = regclass_display_cast_source(expr, data_type) {
-                    let Some(value) =
-                        self.eval_target_record_expr(table, alias, schema, record, source)?
-                    else {
-                        return Ok(None);
-                    };
-                    return regclass_text_value(self.db_ref(), value).map(Some);
-                }
                 if let Some(source) = regtype_text_cast_source(expr, data_type)? {
                     let Some(value) =
                         self.eval_target_record_expr(table, alias, schema, record, source)?

@@ -41,6 +41,7 @@ async fn parent_write_first(
     parent_write: &str,
     add_key: &str,
     violations: &str,
+    created_table: Option<&str>,
 ) {
     let owner = connect(port).await;
     run_each(&owner, setup).await;
@@ -64,7 +65,21 @@ async fn parent_write_first(
             "{add_key}: refused with {code}: {added:?}"
         );
     }
-    let uncovered: i64 = owner.query_one(violations, &[]).await.unwrap().get(0);
+    let uncovered = if let Some(table) = created_table.filter(|_| added.is_err()) {
+        let missing: bool = owner
+            .query_one("SELECT to_regclass($1) IS NULL", &[&table])
+            .await
+            .unwrap()
+            .get(0);
+        assert!(missing, "{add_key}: failed batch left {table} behind");
+        0
+    } else {
+        owner
+            .query_one(violations, &[])
+            .await
+            .unwrap()
+            .get::<_, i64>(0)
+    };
     assert!(
         !(committed.is_ok() && added.is_ok() && uncovered > 0),
         "{add_key}: both committed and {uncovered} rows are uncovered"
@@ -213,6 +228,7 @@ async fn adding_an_equality_key_races_an_uncommitted_parent_delete() {
         "DELETE FROM eq_parent WHERE id = 1",
         "ALTER TABLE eq_child ADD FOREIGN KEY (pid) REFERENCES eq_parent(id)",
         &equality_violations("eq"),
+        None,
     )
     .await;
     parent_write_first(
@@ -221,6 +237,7 @@ async fn adding_an_equality_key_races_an_uncommitted_parent_delete() {
         "UPDATE equ_parent SET id = 9 WHERE id = 1",
         "ALTER TABLE equ_child ADD FOREIGN KEY (pid) REFERENCES equ_parent(id)",
         &equality_violations("equ"),
+        None,
     )
     .await;
     // CREATE TABLE ... REFERENCES, with a referencing row in the same batch.
@@ -230,6 +247,7 @@ async fn adding_an_equality_key_races_an_uncommitted_parent_delete() {
         "DELETE FROM cr_parent WHERE id = 1",
         "CREATE TABLE cr_child(pid int REFERENCES cr_parent(id)); INSERT INTO cr_child VALUES (1)",
         "SELECT count(*) FROM cr_child c WHERE NOT EXISTS (SELECT 1 FROM cr_parent p WHERE p.id = c.pid)",
+        Some("cr_child"),
     )
     .await;
     // ATTACH PARTITION validates the attached rows against the parent's keys.
@@ -241,6 +259,7 @@ async fn adding_an_equality_key_races_an_uncommitted_parent_delete() {
         "DELETE FROM ap_parent WHERE id = 1",
         "ALTER TABLE ap_child ATTACH PARTITION ap_part FOR VALUES IN (1)",
         "SELECT count(*) FROM ap_child c WHERE NOT EXISTS (SELECT 1 FROM ap_parent p WHERE p.id = c.pid)",
+        None,
     )
     .await;
     server.request_shutdown();
@@ -256,6 +275,7 @@ async fn adding_a_temporal_key_races_an_uncommitted_parent_delete() {
         "DELETE FROM tp_parent WHERE id = '[1,2)'",
         "ALTER TABLE tp_child ADD FOREIGN KEY (id, PERIOD valid_at) REFERENCES tp_parent (id, PERIOD valid_at)",
         &temporal_violations("tp"),
+        None,
     )
     .await;
     server.request_shutdown();

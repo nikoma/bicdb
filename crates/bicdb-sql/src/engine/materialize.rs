@@ -459,10 +459,6 @@ impl<'db> SqlEngine<'db> {
             Expr::Cast {
                 expr, data_type, ..
             } => {
-                if let Some(source) = regclass_display_cast_source(expr, data_type) {
-                    let value = self.eval_select_constant_expr(source)?;
-                    return regclass_text_value(self.db_ref(), value);
-                }
                 if let Some(source) = regtype_text_cast_source(expr, data_type)? {
                     let value = self.eval_select_constant_expr(source)?;
                     return regtype_text_value(self.db_ref(), value);

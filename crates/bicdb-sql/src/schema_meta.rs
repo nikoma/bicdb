@@ -195,6 +195,7 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>> {
     // it — the precedence visitor below, the evaluator, and even Drop all
     // overflow the stack (aborting the process) on a hostile AST.
     reject_deep_expressions(&statements)?;
+    let check_xmltable_aliases = sql_for_parse.contains("bicdb_xmltable_json");
     if let Some(targets) = conflict_targets {
         targets.restore(&mut statements)?;
         reject_deep_expressions(&statements)?;
@@ -211,7 +212,7 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>> {
     if check_xml_names {
         crate::xml::validate_xml_constructor_names(&statements)?;
     }
-    if sql_for_parse.contains("bicdb_xmltable_json") {
+    if check_xmltable_aliases {
         crate::xml::validate_xmltable_aliases(&statements)?;
     }
     restore_postgres_distinct_boolean_precedence(&mut statements);

@@ -139,6 +139,25 @@ struct InputParam {
     variadic: bool,
 }
 
+pub(crate) fn parse_ident_function(name: &str) -> bool {
+    matches!(name, "parse_ident" | "pg_catalog.parse_ident")
+}
+
+fn parse_ident_inputs() -> Vec<InputParam> {
+    vec![
+        InputParam {
+            name: Some("str".to_string()),
+            default_expr: None,
+            variadic: false,
+        },
+        InputParam {
+            name: Some("strict".to_string()),
+            default_expr: Some(Expr::Value(Value::Boolean(true).into())),
+            variadic: false,
+        },
+    ]
+}
+
 fn candidate_inputs(routine: &RoutineSchema) -> Option<Vec<InputParam>> {
     let params = parse_routine_params(&routine.args).ok()?;
     Some(
@@ -254,13 +273,26 @@ impl CallBinder<'_> {
         {
             return Ok(());
         }
-        let name = object_name(&function.name)?.to_ascii_lowercase();
-        if !self.names.contains(&name) {
+        let FunctionArguments::List(list) = &mut function.args else {
+            unreachable!("argument list checked above");
+        };
+        self.bind_arguments(&function.name, &mut list.args)
+    }
+
+    fn bind_arguments(
+        &mut self,
+        sql_name: &ObjectName,
+        arguments: &mut Vec<FunctionArg>,
+    ) -> Result<()> {
+        let name = object_name(sql_name)?.to_ascii_lowercase();
+        let is_parse_ident = parse_ident_function(&name);
+        let is_user_function = self.names.contains(&name);
+        if !is_user_function && !(is_parse_ident && arguments.iter().any(is_named_argument)) {
             return Ok(());
         }
-        let mut args = Vec::with_capacity(list.args.len());
+        let mut args = Vec::with_capacity(arguments.len());
         let mut named_seen = false;
-        for arg in &list.args {
+        for arg in arguments.iter() {
             let call_arg = match arg {
                 FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => {
                     if named_seen {
@@ -315,11 +347,22 @@ impl CallBinder<'_> {
         let special = args
             .iter()
             .any(|arg| !matches!(arg, CallArg::Positional(_)));
-        let candidates = routines_named(self.db, RoutineKind::Function, &name)?
-            .into_iter()
-            .filter(|routine| routine.kind == RoutineKind::Function)
-            .filter_map(|routine| candidate_inputs(&routine))
-            .collect::<Vec<_>>();
+        let mut candidates = if is_user_function {
+            routines_named(self.db, RoutineKind::Function, &name)?
+                .into_iter()
+                .filter(|routine| routine.kind == RoutineKind::Function)
+                .filter_map(|routine| candidate_inputs(&routine))
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
+        if is_parse_ident
+            && candidates
+                .iter()
+                .all(|inputs| positional_arguments(inputs, &args).is_none())
+        {
+            candidates.push(parse_ident_inputs());
+        }
         let any_variadic = candidates
             .iter()
             .any(|inputs| inputs.last().is_some_and(|param| param.variadic));
@@ -362,9 +405,9 @@ impl CallBinder<'_> {
             if !special {
                 return Ok(());
             }
-            return Err(SqlError::undefined_function(format!(
+            let message = format!(
                 "function {}({}) does not exist",
-                function.name,
+                sql_name,
                 args.iter()
                     .map(|arg| match arg {
                         CallArg::Positional(expr) => call_arg_type(expr),
@@ -373,12 +416,19 @@ impl CallBinder<'_> {
                     })
                     .collect::<Vec<_>>()
                     .join(", ")
-            )));
+            );
+            return Err(if is_parse_ident {
+                SqlError::coded(
+                    "42883",
+                    message,
+                    None,
+                    Some("No function matches the given name and argument types. You might need to add explicit type casts.".to_string()),
+                )
+            } else {
+                SqlError::undefined_function(message)
+            });
         };
-        let FunctionArguments::List(list) = &mut function.args else {
-            unreachable!("argument list checked above");
-        };
-        list.args = positional
+        *arguments = positional
             .into_iter()
             .map(|expr| FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)))
             .collect();
@@ -446,6 +496,25 @@ impl VisitorMut for CallBinder<'_> {
         }
         ControlFlow::Continue(())
     }
+
+    fn post_visit_table_factor(&mut self, factor: &mut TableFactor) -> ControlFlow<()> {
+        if let TableFactor::Table {
+            name,
+            args: Some(args),
+            ..
+        } = factor
+        {
+            if object_name(name).is_ok_and(|name| parse_ident_function(&name)) {
+                if let Err(error) = self.bind_arguments(name, &mut args.args) {
+                    if self.strict {
+                        self.error = Some(error);
+                        return ControlFlow::Break(());
+                    }
+                }
+            }
+        }
+        ControlFlow::Continue(())
+    }
 }
 
 thread_local! {
@@ -481,6 +550,13 @@ fn variadic_function_names(db: &BicDb) -> Result<Arc<rustc_hash::FxHashSet<Strin
 
 /// Whether `node` calls a user function by name with a named or VARIADIC
 /// argument, or calls a variadic user function at all.
+fn is_named_argument(arg: &FunctionArg) -> bool {
+    matches!(
+        arg,
+        FunctionArg::Named { .. } | FunctionArg::ExprNamed { .. }
+    )
+}
+
 fn mentions_call_form(
     node: &impl sqlparser::ast::Visit,
     names: &rustc_hash::FxHashSet<String>,
@@ -505,15 +581,26 @@ fn mentions_call_form(
             };
             let name = name.to_ascii_lowercase();
             if self.variadic.contains(&name)
-                || (self.names.contains(&name)
-                    && list.args.iter().any(|arg| {
-                        matches!(
-                            arg,
-                            FunctionArg::Named { .. } | FunctionArg::ExprNamed { .. }
-                        )
-                    }))
+                || ((self.names.contains(&name) || parse_ident_function(&name))
+                    && list.args.iter().any(is_named_argument))
             {
                 return ControlFlow::Break(());
+            }
+            ControlFlow::Continue(())
+        }
+
+        fn pre_visit_table_factor(&mut self, factor: &TableFactor) -> ControlFlow<()> {
+            if let TableFactor::Table {
+                name,
+                args: Some(args),
+                ..
+            } = factor
+            {
+                if args.args.iter().any(is_named_argument)
+                    && object_name(name).is_ok_and(|name| parse_ident_function(&name))
+                {
+                    return ControlFlow::Break(());
+                }
             }
             ControlFlow::Continue(())
         }
@@ -526,9 +613,6 @@ fn binder(db: &BicDb, strict: bool) -> Result<Option<CallBinder<'_>>> {
         return Ok(None);
     }
     let names = user_function_names(db)?;
-    if names.is_empty() {
-        return Ok(None);
-    }
     Ok(Some(CallBinder {
         db,
         names,

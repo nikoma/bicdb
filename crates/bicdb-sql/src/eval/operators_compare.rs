@@ -4089,12 +4089,17 @@ pub(crate) enum PgComparisonKind {
     BpcharText {
         left_bpchar: bool,
     },
+    /// A name operand and a name or unknown literal use the name input limit.
+    Name,
     /// text / varchar / name with one another: plain text comparison.
     Text,
     Bool,
 }
 
 pub(crate) fn pg_comparison_kind(left: &str, right: &str) -> Option<PgComparisonKind> {
+    if left == "name" && right == "name" {
+        return Some(PgComparisonKind::Name);
+    }
     #[derive(PartialEq)]
     enum Class {
         Int,
@@ -4239,6 +4244,7 @@ pub(crate) fn compare_values_by_kind(
             };
             left_text.cmp(right_text)
         }
+        Kind::Name => pg_typed_compare("name", left, right)?,
         Kind::Text => comparison_text(left).cmp(&comparison_text(right)),
         Kind::Bool => match (left, right) {
             (SqlValue::Bool(left), SqlValue::Bool(right)) => left.cmp(right),
@@ -4290,6 +4296,13 @@ pub(crate) fn compare_values_by_pg_types(
 ) -> Result<Option<Option<bool>>> {
     if left_type == Some("regtype") && right_type == Some("regtype") {
         return Ok(compare_builtin_regtype_values(left, op, right));
+    }
+    if matches!(
+        (left_type, right_type),
+        (Some("name"), Some("unknown") | None) | (Some("unknown") | None, Some("name"))
+    ) {
+        return compare_values_by_kind(PgComparisonKind::Name, "name", "name", left, op, right)
+            .map(Some);
     }
     let array_type = match (left_type, right_type) {
         (Some(left), Some(right)) if left == right => Some(left),

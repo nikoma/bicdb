@@ -1938,7 +1938,12 @@ pub(crate) fn primary_key_identity_cell(
         if is_empty_text_key(value) {
             return Ok(EMPTY_TEXT_KEY_CELL.to_string());
         }
-        return Ok(value.to_cell());
+        let cell = value.to_cell();
+        return Ok(if column_schema.pg_type == "name" {
+            clip_postgres_name(cell)
+        } else {
+            cell
+        });
     }
     column_typed_index_label(column_schema, value)
 }

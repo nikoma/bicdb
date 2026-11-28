@@ -2825,6 +2825,40 @@ impl<'db> SqlEngine<'db> {
                 name,
                 alias,
                 args: Some(_),
+                with_ordinality,
+                ..
+            } if relation_name(name)
+                .ok()
+                .is_some_and(|table| crate::routine_calls::parse_ident_function(&table)) =>
+            {
+                let alias_name = alias
+                    .as_ref()
+                    .map(|alias| ident_value(&alias.name))
+                    .unwrap_or_else(|| "parse_ident".to_string());
+                let source_columns = table_function_source_columns_for_alias(
+                    alias.as_ref(),
+                    &alias_name,
+                    vec!["parse_ident".to_string()],
+                );
+                let mut columns = vec![(source_columns[0].clone(), Some("text[]".to_string()))];
+                if *with_ordinality {
+                    columns.push(("ordinality".to_string(), Some("int8".to_string())));
+                }
+                let alias_cols = alias
+                    .as_ref()
+                    .map(|alias| alias.columns.as_slice())
+                    .unwrap_or(&[]);
+                env.push(RelationColumns {
+                    alias: alias_name.to_ascii_lowercase(),
+                    row_type: None,
+                    columns: rename_relation_columns(columns, alias_cols)?,
+                });
+                Some(())
+            }
+            TableFactor::Table {
+                name,
+                alias,
+                args: Some(_),
                 with_ordinality: false,
                 ..
             }

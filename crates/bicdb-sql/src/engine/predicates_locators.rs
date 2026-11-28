@@ -676,7 +676,9 @@ impl<'db> SqlEngine<'db> {
                 validate_zero_arg_table_function(&table, args)?;
                 return Ok(1);
             }
-            if is_scalar_text_search_table_function(&table) {
+            if is_scalar_text_search_table_function(&table)
+                || crate::routine_calls::parse_ident_function(&table)
+            {
                 return Ok(1);
             }
             return Ok(usize::MAX / 2);
@@ -924,8 +926,10 @@ impl<'db> SqlEngine<'db> {
             {
                 return Ok(row_set);
             }
-            if is_scalar_text_search_table_function(&table) && !*with_ordinality {
-                return self.scalar_text_search_row_set(&table, table_alias, args);
+            if (is_scalar_text_search_table_function(&table) && !*with_ordinality)
+                || crate::routine_calls::parse_ident_function(&table)
+            {
+                return self.scalar_builtin_row_set(&table, table_alias, args, *with_ordinality);
             }
             if let Some(row_set) =
                 self.text_search_catalog_row_set(&table, table_alias, args, *with_ordinality)?
@@ -5513,13 +5517,13 @@ impl<'db> SqlEngine<'db> {
         }))
     }
 
-    /// A scalar text search function in FROM (`FROM to_tsquery('x') AS q`)
-    /// is a one-row relation whose single column is named after the alias.
-    pub(crate) fn scalar_text_search_row_set(
+    /// A scalar function in FROM produces one row, even for a NULL result.
+    fn scalar_builtin_row_set(
         &self,
         table: &str,
         table_alias: Option<&TableAlias>,
         args: &TableFunctionArgs,
+        with_ordinality: bool,
     ) -> Result<RowSet> {
         let function = table
             .rsplit('.')
@@ -5529,11 +5533,14 @@ impl<'db> SqlEngine<'db> {
         let alias_name = table_alias
             .map(|alias| alias.name.value.clone())
             .unwrap_or_else(|| function.clone());
-        let source_columns = table_function_source_columns_for_alias(
+        let mut source_columns = table_function_source_columns_for_alias(
             table_alias,
             &alias_name,
             vec![function.clone()],
         );
+        if with_ordinality {
+            source_columns.push("ordinality".to_string());
+        }
         let columns = table_alias_columns(
             table,
             &alias_name,
@@ -5546,11 +5553,18 @@ impl<'db> SqlEngine<'db> {
             .iter()
             .map(|expr| self.eval_select_constant_expr(expr))
             .collect::<Result<Vec<_>>>()?;
-        let value =
-            crate::fts::eval_fts_function_value(&function, &values, None)?.ok_or_else(|| {
-                SqlError::Unsupported(format!("table function {table} is not supported"))
-            })?;
-        let rows = vec![slot_row_from_values(&columns, &[value])];
+        let value = if crate::routine_calls::parse_ident_function(table) {
+            crate::pg_number_input::eval_pg_number_input(table, &values)?
+        } else {
+            crate::fts::eval_fts_function_value(&function, &values, None)?
+        };
+        let mut row = vec![value.ok_or_else(|| {
+            SqlError::Unsupported(format!("table function {table} is not supported"))
+        })?];
+        if with_ordinality {
+            row.push(SqlValue::Int(1));
+        }
+        let rows = vec![slot_row_from_values(&columns, &row)];
         Ok(RowSet {
             rows,
             columns: aliased_row_output_columns(&alias_name, &columns),
@@ -7540,6 +7554,7 @@ impl<'db> SqlEngine<'db> {
                 || is_regexp_matches_table_function(&table)
                 || is_generate_subscripts_table_function(&table)
                 || is_scalar_text_search_table_function(&table)
+                || crate::routine_calls::parse_ident_function(&table)
             {
                 let mut source_columns = table_function_source_columns_for_alias(
                     table_alias,

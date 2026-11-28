@@ -4420,9 +4420,11 @@ fn typed_index_predicate_value(
     // the padded text. A predicate literal is not padded, which made an
     // indexed CHAR column disagree with an unindexed one: `code = 'ab'`
     // matched the row until the column gained an index, and then silently
-    // matched nothing. Put the probe through the same cast the stored value
-    // went through.
-    if let Some(column) = column.filter(|column| column.pg_type == "bpchar") {
+    // matched nothing. A name probe likewise needs the name input limit.
+    // Put the probe through the same cast as the stored value.
+    if let Some(column) =
+        column.filter(|column| matches!(column.pg_type.as_str(), "bpchar" | "name"))
+    {
         let value = cast_value_to_column_type(sql_value_from_index_value(&value), column)?;
         return Ok(index_value_from_sql(value)?);
     }

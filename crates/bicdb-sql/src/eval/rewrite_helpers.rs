@@ -820,6 +820,91 @@ pub(crate) fn rewrite_qualified_unnest_calls(sql: &str) -> Option<String> {
     changed.then_some(out)
 }
 
+fn rewrite_name_literals(sql: &str) -> Option<String> {
+    if !sql.to_ascii_lowercase().contains("name") {
+        return None;
+    }
+    let tokens = tokens_with_source(&PostgreSqlDialect {}, sql)?;
+    let mut offset = 0;
+    let mut code = Vec::new();
+    for (token, source) in &tokens {
+        if !matches!(token, Token::Whitespace(_)) {
+            code.push((token, offset, offset + source.len()));
+        }
+        offset += source.len();
+    }
+    let is_word = |token: &Token, spelling: &str| {
+        matches!(token, Token::Word(word) if if word.quote_style.is_none() {
+            word.value.eq_ignore_ascii_case(spelling)
+        } else {
+            word.value == spelling
+        })
+    };
+    let mut edits = Vec::new();
+    let mut ddl = false;
+    let mut statement_start = true;
+    let mut option_depth = 0usize;
+    for (index, pair) in code.windows(2).enumerate() {
+        let [(token, start, end), (literal, _, literal_end)] = pair else {
+            unreachable!("window contains the type and input token");
+        };
+        if statement_start {
+            ddl = is_word(token, "create") || is_word(token, "alter");
+        }
+        statement_start = matches!(token, Token::SemiColon);
+        if ddl
+            && matches!(token, Token::LParen)
+            && (option_depth > 0
+                || index
+                    .checked_sub(1)
+                    .is_some_and(|i| is_word(code[i].0, "options")))
+        {
+            option_depth += 1;
+        } else if matches!(token, Token::RParen) {
+            option_depth = option_depth.saturating_sub(1);
+        }
+        if option_depth > 0
+            || !is_word(token, "name")
+            || !matches!(
+                literal,
+                Token::SingleQuotedString(_)
+                    | Token::EscapedStringLiteral(_)
+                    | Token::DollarQuotedString(_)
+            )
+        {
+            continue;
+        }
+        let start = if matches!(index.checked_sub(1).map(|i| code[i].0), Some(Token::Period)) {
+            let Some((schema, start, _)) = index.checked_sub(2).map(|i| code[i]) else {
+                continue;
+            };
+            if !is_word(schema, "pg_catalog") {
+                continue;
+            }
+            start
+        } else {
+            *start
+        };
+        edits.push((
+            start,
+            *literal_end,
+            format!(
+                "CAST({} AS {})",
+                &sql[*end..*literal_end],
+                &sql[start..*end]
+            ),
+        ));
+    }
+    if edits.is_empty() {
+        return None;
+    }
+    let mut result = sql.to_string();
+    for (start, end, replacement) in edits.into_iter().rev() {
+        result.replace_range(start..end, &replacement);
+    }
+    Some(result)
+}
+
 pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
     let mut rewritten = sql.to_string();
     let mut changed = false;
@@ -845,6 +930,11 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
     }
 
     if let Some(next) = rewrite_select_top_identifiers(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
+    if let Some(next) = rewrite_name_literals(&rewritten) {
         rewritten = next;
         changed = true;
     }

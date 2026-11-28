@@ -451,3 +451,146 @@ fn inheritance_checks_named_constraints_by_definition_and_validation_state() {
         assert_eq!(session.execute(statement).unwrap_err().sqlstate(), state);
     }
 }
+
+#[test]
+fn inheritance_enforces_column_collations_and_generation_kinds() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = open(root.path());
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE TABLE collate_c (v text COLLATE \"C\");
+             CREATE TABLE collate_posix (v text COLLATE \"POSIX\");
+             CREATE TABLE collate_implicit (v text);
+             CREATE TABLE generated_a (x int, y int GENERATED ALWAYS AS (x + 1) STORED);
+             CREATE TABLE generated_b (x int, y int GENERATED ALWAYS AS (x + 2) STORED);
+             CREATE TABLE generated_v (x int, y int GENERATED ALWAYS AS (x + 1) VIRTUAL);
+             CREATE TABLE generated_plain (x int, y int)",
+        )
+        .unwrap();
+    for (statement, state) in [
+        (
+            "CREATE TABLE clash () INHERITS (collate_c, collate_posix)",
+            "42P21",
+        ),
+        ("CREATE TABLE clash (v text) INHERITS (collate_c)", "42P21"),
+        ("ALTER TABLE collate_implicit INHERIT collate_c", "42P21"),
+        (
+            "CREATE TABLE clash () INHERITS (generated_a, generated_b)",
+            "42611",
+        ),
+        (
+            "CREATE TABLE clash () INHERITS (generated_a, generated_v)",
+            "42804",
+        ),
+        (
+            "CREATE TABLE clash () INHERITS (generated_a, generated_plain)",
+            "42804",
+        ),
+        (
+            "CREATE TABLE clash (y int DEFAULT 4) INHERITS (generated_a)",
+            "42611",
+        ),
+        ("ALTER TABLE generated_v INHERIT generated_a", "42804"),
+    ] {
+        let error = session.execute(statement).unwrap_err();
+        assert_eq!(error.sqlstate(), state, "{statement}: {error}");
+    }
+
+    let notices = session
+        .execute("CREATE TABLE generated_child (y int GENERATED ALWAYS AS (x + 3) STORED) INHERITS (generated_a, generated_b)")
+        .unwrap()
+        .notices;
+    assert_eq!(
+        notices.last().unwrap().message,
+        "moving and merging column \"y\" with inherited definition"
+    );
+    assert_eq!(
+        rows(
+            &mut session,
+            "INSERT INTO generated_child (x) VALUES (6) RETURNING y"
+        ),
+        ["9"]
+    );
+    session
+        .execute("CREATE TABLE virtual_child (y int) INHERITS (generated_v)")
+        .unwrap();
+    assert_eq!(
+        rows(&mut session, "SELECT attgenerated FROM pg_attribute WHERE attrelid = 'virtual_child'::regclass AND attname = 'y'"),
+        ["v"]
+    );
+}
+
+#[test]
+fn pg_attribute_keeps_column_inheritance_provenance_through_rollback_and_reopen() {
+    fn attributes(session: &mut SqlSession<'_>, relation: &str) -> Vec<String> {
+        rows(
+            session,
+            &format!(
+                "SELECT attname, attislocal, attinhcount FROM pg_attribute
+                 WHERE attrelid = '{relation}'::regclass AND attnum > 0 ORDER BY attnum"
+            ),
+        )
+    }
+
+    let root = tempfile::tempdir().unwrap();
+    let mut db = open(root.path());
+    {
+        let mut session = SqlSession::new(&mut db);
+        session
+            .execute(
+                "CREATE TABLE origin_a (a int, b int);
+                 CREATE TABLE origin_b (a int, c int);
+                 CREATE TABLE declared_child (a int, d int) INHERITS (origin_a, origin_b);
+                 CREATE TABLE inherited_child () INHERITS (origin_a, origin_b);
+                 CREATE TABLE attached_child (a int, b int);
+                 ALTER TABLE attached_child INHERIT origin_a",
+            )
+            .unwrap();
+        assert_eq!(
+            attributes(&mut session, "declared_child"),
+            ["a|t|2", "b|f|1", "c|f|1", "d|t|0"]
+        );
+        assert_eq!(
+            attributes(&mut session, "inherited_child"),
+            ["a|f|2", "b|f|1", "c|f|1"]
+        );
+        assert_eq!(
+            attributes(&mut session, "attached_child"),
+            ["a|t|1", "b|t|1"]
+        );
+
+        session
+            .execute("BEGIN; SAVEPOINT original; ALTER TABLE inherited_child NO INHERIT origin_a")
+            .unwrap();
+        assert_eq!(
+            attributes(&mut session, "inherited_child"),
+            ["a|f|1", "b|t|0", "c|f|1"]
+        );
+        session
+            .execute("ROLLBACK TO SAVEPOINT original; COMMIT")
+            .unwrap();
+        assert_eq!(
+            attributes(&mut session, "inherited_child"),
+            ["a|f|2", "b|f|1", "c|f|1"]
+        );
+        session
+            .execute(
+                "ALTER TABLE inherited_child NO INHERIT origin_a;
+                 ALTER TABLE inherited_child INHERIT origin_a",
+            )
+            .unwrap();
+        assert_eq!(
+            attributes(&mut session, "inherited_child"),
+            ["a|f|2", "b|t|1", "c|f|1"]
+        );
+    }
+
+    db.close().unwrap();
+    let mut db = open(root.path());
+    let mut session = SqlSession::new(&mut db);
+    assert_eq!(
+        attributes(&mut session, "inherited_child"),
+        ["a|f|2", "b|t|1", "c|f|1"]
+    );
+}

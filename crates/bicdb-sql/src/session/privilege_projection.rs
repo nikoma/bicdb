@@ -498,7 +498,7 @@ impl<'db> SqlSession<'db> {
         let parents = self.inheritance_parents(create_table)?;
         let postgres = !oracle::is_oracle_database(self.db_ref())?;
         let postgres_inheritance = postgres && !parents.is_empty();
-        let mut inherited_default_conflicts = BTreeSet::new();
+        let mut inherited_expression_conflicts = BTreeSet::new();
         let has_like_clause = create_table.like.is_some();
         let (mut columns, mut constraints, inherited_virtual) =
             if let Some(like) = &create_table.like {
@@ -516,7 +516,7 @@ impl<'db> SqlSession<'db> {
                 crate::inheritance::inherited_table_definition(
                     &parents,
                     postgres_inheritance,
-                    &mut inherited_default_conflicts,
+                    &mut inherited_expression_conflicts,
                 )?
             };
         let inherited_names = columns
@@ -525,7 +525,7 @@ impl<'db> SqlSession<'db> {
             .collect::<BTreeSet<_>>();
         let mut merged_names = BTreeSet::new();
         let mut primary_key_name = None;
-        for column in &create_table.columns {
+        for (local_position, column) in create_table.columns.iter().enumerate() {
             let mut column_schema = column_schema_from_def(self.db_ref(), column)?;
             if let Some(compression) = compression
                 .iter()
@@ -543,11 +543,37 @@ impl<'db> SqlSession<'db> {
                     .iter()
                     .position(|existing| existing.name == column_schema.name)
                     .expect("inherited column is present");
+                let explicitly_generated = column_schema.generated_expr.is_some();
                 crate::inheritance::merge_inherited_column(
                     &columns[position],
                     &mut column_schema,
                     postgres_inheritance,
+                    position != local_position,
                 )?;
+                if explicitly_generated {
+                    inherited_expression_conflicts.remove(&column_schema.name);
+                }
+                if postgres_inheritance && columns[position].generated_expr.is_some() {
+                    let conflict = if column_schema.default_expr.is_some()
+                        || serial_type(&column.data_type).is_some()
+                    {
+                        Some("default")
+                    } else if identity_options(column)?.is_some() {
+                        Some("identity")
+                    } else {
+                        None
+                    };
+                    if let Some(conflict) = conflict {
+                        return Err(SqlError::data_exception(
+                            "42611",
+                            format!(
+                                "column \"{}\" inherits from generated column but specifies {conflict}",
+                                column_schema.name
+                            ),
+                            None,
+                        ));
+                    }
+                }
                 Some(position)
             } else {
                 None
@@ -667,7 +693,7 @@ impl<'db> SqlSession<'db> {
                     if column_schema.default_expr.is_some()
                         || column_schema.default_sequence.is_some()
                     {
-                        inherited_default_conflicts.remove(&column_schema.name);
+                        inherited_expression_conflicts.remove(&column_schema.name);
                         if !crate::inheritance::has_inheritable_default(&column_schema) {
                             column_schema.default_expr = None;
                             column_schema.default_value = None;
@@ -693,16 +719,20 @@ impl<'db> SqlSession<'db> {
         }
         if let Some(column) = columns
             .iter()
-            .find(|column| inherited_default_conflicts.contains(&column.name))
+            .find(|column| inherited_expression_conflicts.contains(&column.name))
         {
+            let (conflict, resolution) = if column.generated_expr.is_some() {
+                ("generation expressions", "generation expression")
+            } else {
+                ("default values", "default")
+            };
             return Err(SqlError::coded(
                 "42611",
-                format!(
-                    "column \"{}\" inherits conflicting default values",
-                    column.name
-                ),
+                format!("column \"{}\" inherits conflicting {conflict}", column.name),
                 None,
-                Some("To resolve the conflict, specify a default explicitly.".to_string()),
+                Some(format!(
+                    "To resolve the conflict, specify a {resolution} explicitly."
+                )),
             ));
         }
         for requested in compression {

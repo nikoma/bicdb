@@ -453,6 +453,7 @@ impl<'db> SqlSession<'db> {
                 None,
             ));
         };
+        let postgres = !oracle::is_oracle_database(self.db_ref())?;
         if !inherit {
             if !child.inherits.contains(&parent.name) {
                 return Err(SqlError::data_exception(
@@ -465,6 +466,9 @@ impl<'db> SqlSession<'db> {
                 ));
             }
             child.inherits.retain(|name| name != &parent.name);
+            if postgres {
+                crate::inheritance::preserve_local_columns(self.db_ref(), &mut child, &parent)?;
+            }
             parent
                 .inheritance_children
                 .retain(|name| name != &child.name);
@@ -507,6 +511,7 @@ impl<'db> SqlSession<'db> {
                 None,
             ));
         }
+        let child_name = relation_name_for_message(&child.name);
         for column in parent.columns.iter().filter(|column| !column.hidden) {
             let Some(own) = child.column(&column.name) else {
                 return Err(wrong(format!(
@@ -520,15 +525,55 @@ impl<'db> SqlSession<'db> {
                     child.name, column.name
                 )));
             }
+            if postgres && column.collation_oid() != own.collation_oid() {
+                return Err(SqlError::data_exception(
+                    "42P21",
+                    format!(
+                        "child table \"{child_name}\" has different collation for column \"{}\"",
+                        column.name
+                    ),
+                    None,
+                ));
+            }
             if !column.nullable && own.nullable {
                 return Err(wrong(format!(
                     "column \"{}\" in child table must be marked NOT NULL",
                     column.name
                 )));
             }
+            if postgres {
+                let parent_kind = crate::inheritance::column_generation_kind(
+                    column,
+                    &parent.virtual_generated_columns,
+                );
+                let own_kind = crate::inheritance::column_generation_kind(
+                    own,
+                    &child.virtual_generated_columns,
+                );
+                let column = &column.name;
+                match (parent_kind, own_kind) {
+                    (Some(parent), Some(own)) if parent != own => {
+                        return Err(SqlError::coded(
+                            "42804",
+                            format!("column \"{column}\" inherits from generated column of different kind"),
+                            Some(format!("Parent column is {parent}, child column is {own}.")),
+                            None,
+                        ));
+                    }
+                    (Some(_), None) => {
+                        return Err(wrong(format!(
+                            "column \"{column}\" in child table must be a generated column"
+                        )));
+                    }
+                    (None, Some(_)) => {
+                        return Err(wrong(format!(
+                            "column \"{column}\" in child table must not be a generated column"
+                        )));
+                    }
+                    _ => {}
+                }
+            }
         }
-        let postgres = !oracle::is_oracle_database(self.db_ref())?;
-        let child_name = relation_name_for_message(&child.name);
         for constraint in &parent.constraints {
             let ConstraintSchema::Check {
                 name,
@@ -569,6 +614,9 @@ impl<'db> SqlSession<'db> {
                     ));
                 }
             }
+        }
+        if postgres {
+            crate::inheritance::preserve_local_columns(self.db_ref(), &mut child, &parent)?;
         }
         child.inherits.push(parent.name.clone());
         parent.inheritance_children.push(child.name.clone());

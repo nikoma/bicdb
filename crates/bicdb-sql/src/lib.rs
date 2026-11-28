@@ -3787,6 +3787,10 @@ struct ColumnAttributes {
     /// is the type's default. Catalog-only: values are always stored whole.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     storage: Option<char>,
+    /// Whether this definition is also local when it has inheritance
+    /// parents. Legacy records did not retain explicit redeclarations.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    inherited_local: Option<bool>,
 }
 
 impl ColumnAttributes {

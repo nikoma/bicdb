@@ -452,20 +452,20 @@ impl SqlEngine<'_> {
         deferred: &mut Vec<&'q Expr>,
     ) -> Result<()> {
         self.scope_table_with_joins(table, &[], scope, deferred)?;
-        if oracle::is_oracle_profile(
-            self.session_gucs
-                .get("bicdb.sql_profile")
-                .map(String::as_str)
-                .unwrap_or_default(),
-        ) {
-            return Ok(());
-        }
         if let TableFactor::Table {
             name,
             alias: Some(alias),
             ..
         } = &table.relation
         {
+            if self
+                .session_gucs
+                .get("bicdb.sql_profile")
+                .is_some_and(|profile| oracle::is_oracle_profile(profile))
+                || oracle::preview_routine_language_enabled(self.db_ref())?
+            {
+                return Ok(());
+            }
             let relation =
                 resolve_session_relation_name_if_exists(self.db_ref(), &relation_name(name)?);
             crate::session::functions_insert::require_dml_target_exists(self.db_ref(), &relation)?;
@@ -532,10 +532,11 @@ impl SqlEngine<'_> {
             {
                 return Ok(());
             }
-        } else if scope
-            .relations
-            .iter()
-            .any(|relation| relation.alias == qualifier)
+        } else if target.alias == qualifier
+            || scope
+                .relations
+                .iter()
+                .any(|relation| relation.alias == qualifier)
         {
             return Ok(());
         }

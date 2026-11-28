@@ -82,24 +82,20 @@ pub(crate) fn rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<String, SqlVa
 }
 
 // PostgreSQL's default parser maps these token types for each stock config.
-const MAPPED_TOKENS: [i64; 19] = [
+const MAPPED_TOKENS: [u8; 19] = [
     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 15, 16, 17, 18, 19, 20, 21, 22,
 ];
-const STEMMED_TOKENS: [i64; 6] = [1, 2, 10, 11, 16, 17];
-const ASCII_STEMMED_TOKENS: [i64; 3] = [1, 11, 16];
+const STEMMED_TOKENS: [u8; 6] = [1, 2, 10, 11, 16, 17];
+const ASCII_STEMMED_TOKENS: [u8; 3] = [1, 11, 16];
 
-pub(crate) fn config_mapping_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
-    let authored = super::authored::list(db)?;
-    let configs = REGCONFIG_OBJECTS
-        .iter()
-        .copied()
-        .chain(authored.iter().filter_map(|config| {
-            builtin_regconfig_name(i64::from(config.source_oid)).map(|name| (config.oid, name))
-        }));
-    let mut rows = Vec::new();
-    for (config_oid, language) in configs {
-        let stemmer_name = format!("{language}_stem");
-        for token in MAPPED_TOKENS {
+pub(super) fn builtin_config_mappings(oid: u32) -> super::authored::DictionaryMappings {
+    let Some(language) = builtin_regconfig_name(i64::from(oid)) else {
+        return Default::default();
+    };
+    let stemmer_name = format!("{language}_stem");
+    MAPPED_TOKENS
+        .into_iter()
+        .filter_map(|token| {
             let dictionary = if language == "simple" || !STEMMED_TOKENS.contains(&token) {
                 "simple"
             } else if matches!(language, "hindi" | "russian")
@@ -109,18 +105,44 @@ pub(crate) fn config_mapping_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, Sql
             } else {
                 &stemmer_name
             };
-            if let Some(&(dictionary_oid, _)) = REGDICTIONARY_OBJECTS
+            let &(oid, _) = REGDICTIONARY_OBJECTS
                 .iter()
-                .find(|&&(_, name)| name == dictionary)
-            {
-                rows.push(virtual_row([
-                    ("mapcfg", SqlValue::Int(i64::from(config_oid))),
-                    ("maptokentype", SqlValue::Int(token)),
-                    ("mapseqno", SqlValue::Int(1)),
-                    ("mapdict", SqlValue::Int(i64::from(dictionary_oid))),
-                ]));
-            }
-        }
+                .find(|&&(_, name)| name == dictionary)?;
+            Some((token, vec![oid]))
+        })
+        .collect()
+}
+
+pub(crate) fn config_mapping_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
+    let authored = super::authored::list(db)?;
+    let mut rows = Vec::new();
+    for &(oid, _) in REGCONFIG_OBJECTS {
+        rows.extend(mapping_rows(oid, &builtin_config_mappings(oid)));
+    }
+    for config in authored.iter() {
+        rows.extend(mapping_rows(config.oid, &config.effective_mappings()));
     }
     Ok(rows)
+}
+
+fn mapping_rows(
+    config_oid: u32,
+    mappings: &super::authored::DictionaryMappings,
+) -> Vec<BTreeMap<String, SqlValue>> {
+    mappings
+        .iter()
+        .flat_map(|(&token, dictionaries)| {
+            dictionaries
+                .iter()
+                .enumerate()
+                .map(move |(index, &dictionary_oid)| {
+                    virtual_row([
+                        ("mapcfg", SqlValue::Int(i64::from(config_oid))),
+                        ("maptokentype", SqlValue::Int(i64::from(token))),
+                        ("mapseqno", SqlValue::Int((index + 1) as i64)),
+                        ("mapdict", SqlValue::Int(i64::from(dictionary_oid))),
+                    ])
+                })
+        })
+        .collect()
 }

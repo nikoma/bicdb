@@ -115,3 +115,63 @@ fn authored_text_search_objects_follow_search_path_and_savepoints() {
         vec![vec![SqlValue::Int(1)]]
     );
 }
+
+#[test]
+fn authored_mappings_distinguish_unmapped_tokens_from_stop_words_and_copy_the_definition() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE TEXT SEARCH CONFIGURATION authored_terms (PARSER = pg_catalog.default)")
+        .unwrap();
+    assert_eq!(
+        sql.execute("SELECT to_tsvector('authored_terms', 'running foxes')::text")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::String(String::new())]]
+    );
+    sql.execute(
+        "ALTER TEXT SEARCH CONFIGURATION authored_terms ADD MAPPING FOR asciiword WITH english_stem;
+         CREATE TEXT SEARCH CONFIGURATION copied_terms (COPY = authored_terms);
+         ALTER TEXT SEARCH CONFIGURATION authored_terms ALTER MAPPING FOR word WITH pg_catalog.simple;
+         ALTER TEXT SEARCH CONFIGURATION authored_terms ALTER MAPPING REPLACE english_stem WITH simple;",
+    ).unwrap();
+    let result = sql
+        .execute(
+            "SELECT to_tsvector('authored_terms', 'running 42 the foxes café')::text,
+                to_tsvector('copied_terms', 'running 42 the foxes café')::text,
+                phraseto_tsquery('copied_terms', 'running 42 the foxes café')::text",
+        )
+        .unwrap();
+    assert_eq!(
+        result.rows,
+        vec![vec![
+            SqlValue::String("'café':4 'foxes':3 'running':1 'the':2".into()),
+            SqlValue::String("'fox':3 'run':1".into()),
+            SqlValue::String("'run' <2> 'fox'".into()),
+        ]]
+    );
+
+    sql.execute("BEGIN").unwrap();
+    sql.execute("SAVEPOINT before_drop").unwrap();
+    sql.execute("ALTER TEXT SEARCH CONFIGURATION authored_terms DROP MAPPING FOR word, asciiword")
+        .unwrap();
+    assert_eq!(
+        sql.execute("SELECT to_tsvector('authored_terms', 'running café')::text")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::String(String::new())]]
+    );
+    sql.execute("ROLLBACK TO SAVEPOINT before_drop").unwrap();
+    sql.execute("COMMIT").unwrap();
+    assert_eq!(
+        sql.execute("SELECT to_tsvector('authored_terms', 'running café')::text")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::String("'café':2 'running':1".into())]]
+    );
+
+    let error = sql.execute(
+        "ALTER TEXT SEARCH CONFIGURATION authored_terms ADD MAPPING FOR asciiword WITH english_stem",
+    ).unwrap_err();
+    assert_eq!(error.sqlstate(), "23505");
+}

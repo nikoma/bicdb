@@ -2,6 +2,7 @@ use rust_stemmers::{Algorithm as LegacyAlgorithm, Stemmer as LegacyStemmer};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use unicode_categories::UnicodeCategories;
 use waken_snowball::{Algorithm, Stemmer};
 
@@ -1383,18 +1384,22 @@ fn tsquery_distance_error() -> SqlError {
     )
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 enum TextSearchConfig {
     Simple,
     Snowball {
         algorithm: Algorithm,
         stopwords: &'static str,
     },
+    Mapped(Arc<authored::DictionaryMappings>),
 }
 
 impl TextSearchConfig {
     fn parse(value: &SqlValue) -> Result<Self> {
         let text = value.to_cell();
+        if let Some(mappings) = authored::mapped_dictionaries(&text) {
+            return Ok(Self::Mapped(mappings));
+        }
         let authored =
             authored::source_oid(&text).and_then(|oid| builtin_regconfig_name(i64::from(oid)));
         let input = text.to_ascii_lowercase();
@@ -1402,7 +1407,11 @@ impl TextSearchConfig {
         let value = authored
             .or_else(|| input.parse::<i64>().ok().and_then(builtin_regconfig_name))
             .unwrap_or(input);
-        match value {
+        Self::parse_builtin(value)
+    }
+
+    fn parse_builtin(name: &str) -> Result<Self> {
+        match name {
             "simple" => Ok(Self::Simple),
             "arabic" => Ok(snowball_config(Algorithm::Arabic, "")),
             "armenian" => Ok(snowball_config(Algorithm::Armenian, "")),
@@ -1480,13 +1489,49 @@ impl TextSearchConfig {
             "yiddish" => Ok(snowball_config(Algorithm::Yiddish, "")),
             _ => Err(SqlError::data_exception(
                 "42704",
-                format!("text search configuration \"{value}\" does not exist"),
+                format!("text search configuration \"{name}\" does not exist"),
                 Some("regconfig".to_string()),
             )),
         }
     }
 
-    fn normalize(self, token: &str) -> Option<String> {
+    fn normalize(&self, token: &str) -> Option<String> {
+        if matches!(self, Self::Mapped(_)) {
+            let kind = if token.starts_with('/') {
+                TextToken::File
+            } else if token
+                .split('-')
+                .filter(|part| !part.is_empty())
+                .take(2)
+                .count()
+                == 2
+            {
+                TextToken::Hyphenated
+            } else {
+                TextToken::Word
+            };
+            self.token_lexeme(token, kind.kind(token)).flatten()
+        } else {
+            self.normalize_builtin(token)
+        }
+    }
+
+    // None marks an unmapped token. A stop word consumes a position but
+    // produces no lexeme, represented by Some(None).
+    fn token_lexeme(&self, token: &str, kind: u8) -> Option<Option<String>> {
+        match self {
+            Self::Mapped(mappings) => {
+                let oid = mappings.get(&kind)?.first().copied()?;
+                let dictionary = builtin_regdictionary_name(i64::from(oid))?;
+                let language = dictionary.strip_suffix("_stem").unwrap_or(dictionary);
+                let dictionary = Self::parse_builtin(language).ok()?;
+                Some(dictionary.normalize_builtin(token))
+            }
+            config => Some(config.normalize_builtin(token)),
+        }
+    }
+
+    fn normalize_builtin(&self, token: &str) -> Option<String> {
         // Reject before lowercasing/stemming so a multi-megabyte
         // no-whitespace token cannot amplify tokenizer memory. Check again
         // after each transformation because Unicode case conversion and
@@ -1502,7 +1547,7 @@ impl TextSearchConfig {
             Self::Simple => Some(token),
             Self::Snowball { stopwords, .. } if is_stopword(stopwords, &token) => None,
             Self::Snowball { algorithm, .. } => {
-                let stem = match algorithm {
+                let stem = match *algorithm {
                     Algorithm::Dutch => LegacyStemmer::create(LegacyAlgorithm::Dutch)
                         .stem(&token)
                         .into_owned(),
@@ -1513,6 +1558,7 @@ impl TextSearchConfig {
                 };
                 Some(stem)
             }
+            Self::Mapped(_) => unreachable!("mapped configuration resolves a dictionary first"),
         };
         normalized.filter(|lexeme| bicdb_core::full_text_term_is_indexable(lexeme))
     }
@@ -1535,7 +1581,7 @@ fn ts_lexize(dictionary: &SqlValue, token: &SqlValue) -> Result<SqlValue> {
     let config = if name == "simple" {
         TextSearchConfig::Simple
     } else if let Some(language) = name.strip_suffix("_stem") {
-        match TextSearchConfig::parse(&SqlValue::String(language.to_string())) {
+        match TextSearchConfig::parse_builtin(language) {
             Ok(config @ TextSearchConfig::Snowball { .. }) => config,
             _ => {
                 return Err(SqlError::data_exception(
@@ -1627,9 +1673,92 @@ fn is_stopword(stopwords: &str, token: &str) -> bool {
     stopwords.lines().any(|word| word.trim() == token)
 }
 
-fn text_search_tokens(input: &str) -> Vec<(String, u16)> {
+#[derive(Clone, Copy)]
+enum TextToken {
+    Word,
+    Hyphenated,
+    HyphenPart,
+    Url,
+    Host,
+    UrlPath,
+    File,
+}
+
+impl TextToken {
+    fn kind(self, token: &str) -> u8 {
+        match self {
+            Self::Word => classify_word(token),
+            Self::Hyphenated => {
+                let parts = || token.split('-').filter(|part| !part.is_empty());
+                if parts().all(|part| classify_word(part) == 1) {
+                    16
+                } else if parts().all(|part| matches!(classify_word(part), 1 | 2)) {
+                    17
+                } else {
+                    15
+                }
+            }
+            Self::HyphenPart => match classify_word(token) {
+                1 => 11,
+                2 => 10,
+                _ => 9,
+            },
+            Self::Url => 5,
+            Self::Host => 6,
+            Self::UrlPath => 18,
+            Self::File => 19,
+        }
+    }
+}
+
+fn classify_word(token: &str) -> u8 {
+    if token.bytes().all(|byte| byte.is_ascii_alphabetic()) {
+        1
+    } else if token.chars().all(|ch| ch.is_alphabetic() || ch.is_mark()) {
+        2
+    } else if token.bytes().all(|byte| byte.is_ascii_digit()) {
+        22
+    } else if valid_email(token) {
+        4
+    } else if token.contains('.') {
+        if token
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || byte == b'.')
+        {
+            if token.matches('.').count() == 1 {
+                20
+            } else {
+                8
+            }
+        } else {
+            6
+        }
+    } else {
+        3
+    }
+}
+
+fn normalized_text_search_tokens(config: &TextSearchConfig, input: &str) -> Vec<(String, u16)> {
     let mut tokens = Vec::new();
-    let mut position = 0u16;
+    let mut position: u16 = 0;
+    let mapped = matches!(config, TextSearchConfig::Mapped(_));
+    for_each_text_search_token(input, |token, kind| {
+        let lexeme = if mapped {
+            config.token_lexeme(&token, kind.kind(&token))
+        } else {
+            Some(config.normalize_builtin(&token))
+        };
+        if let Some(lexeme) = lexeme {
+            position = position.saturating_add(1).min(MAX_POSITION);
+            if let Some(lexeme) = lexeme {
+                tokens.push((lexeme, position));
+            }
+        }
+    });
+    tokens
+}
+
+fn for_each_text_search_token(input: &str, mut emit: impl FnMut(String, TextToken)) {
     let mut offset = 0usize;
     while offset < input.len() {
         let Some(character) = input[offset..].chars().next() else {
@@ -1641,15 +1770,22 @@ fn text_search_tokens(input: &str) -> Vec<(String, u16)> {
         }
 
         if let Some((end, expanded)) = scan_url(input, offset) {
-            for token in expanded {
-                push_text_search_token(&mut tokens, &mut position, token);
+            for (index, token) in expanded.into_iter().enumerate() {
+                let kind = if index == 0 {
+                    TextToken::Url
+                } else if token.starts_with('/') {
+                    TextToken::UrlPath
+                } else {
+                    TextToken::Host
+                };
+                emit(token, kind);
             }
             offset = end;
             continue;
         }
         if character == '/' {
             let end = scan_while(input, offset, is_path_character);
-            push_text_search_token(&mut tokens, &mut position, input[offset..end].to_string());
+            emit(input[offset..end].to_string(), TextToken::File);
             offset = end;
             continue;
         }
@@ -1657,34 +1793,25 @@ fn text_search_tokens(input: &str) -> Vec<(String, u16)> {
         let end = scan_while(input, offset, is_text_token_character);
         let candidate = input[offset..end].trim_end_matches('.');
         if candidate.contains('@') && valid_email(candidate) {
-            push_text_search_token(&mut tokens, &mut position, candidate.to_string());
+            emit(candidate.to_string(), TextToken::Word);
         } else if candidate.contains('-') {
             let parts = candidate
                 .split('-')
                 .filter(|part| !part.is_empty())
                 .collect::<Vec<_>>();
             if parts.len() > 1 {
-                push_text_search_token(&mut tokens, &mut position, candidate.to_string());
+                emit(candidate.to_string(), TextToken::Hyphenated);
                 for part in parts {
-                    push_text_search_token(&mut tokens, &mut position, part.to_string());
+                    emit(part.to_string(), TextToken::HyphenPart);
                 }
             } else {
-                push_text_search_token(&mut tokens, &mut position, candidate.to_string());
+                emit(candidate.to_string(), TextToken::Word);
             }
         } else if !candidate.is_empty() {
-            push_text_search_token(&mut tokens, &mut position, candidate.to_string());
+            emit(candidate.to_string(), TextToken::Word);
         }
         offset = end.max(offset + character.len_utf8());
     }
-    tokens
-}
-
-fn push_text_search_token(tokens: &mut Vec<(String, u16)>, position: &mut u16, token: String) {
-    if token.is_empty() {
-        return;
-    }
-    *position = position.saturating_add(1).min(MAX_POSITION);
-    tokens.push((token, *position));
 }
 
 fn scan_while(input: &str, mut offset: usize, predicate: impl Fn(char) -> bool) -> usize {
@@ -1748,15 +1875,13 @@ fn scan_url(input: &str, offset: usize) -> Option<(usize, Vec<String>)> {
     Some((end, expanded))
 }
 
-fn to_tsvector(config: TextSearchConfig, input: &str) -> PgTsVector {
+fn to_tsvector(config: &TextSearchConfig, input: &str) -> PgTsVector {
     let mut entries = BTreeMap::<String, Vec<PgTsPosition>>::new();
-    for (token, position) in text_search_tokens(input) {
-        if let Some(lexeme) = config.normalize(&token) {
-            entries.entry(lexeme).or_default().push(PgTsPosition {
-                position,
-                weight: PgTsWeight::D,
-            });
-        }
+    for (lexeme, position) in normalized_text_search_tokens(config, input) {
+        entries.entry(lexeme).or_default().push(PgTsPosition {
+            position,
+            weight: PgTsWeight::D,
+        });
     }
     PgTsVector {
         lexemes: entries
@@ -1767,8 +1892,7 @@ fn to_tsvector(config: TextSearchConfig, input: &str) -> PgTsVector {
 }
 
 pub(crate) fn application_websearch_rank_cd_english(fields: &[String], query: &str) -> f32 {
-    let config = TextSearchConfig::parse(&SqlValue::String("english".to_string()))
-        .expect("the built-in English text-search configuration exists");
+    let config = english_config();
     let mut document = PgTsVector::default();
     for (index, field) in fields.iter().enumerate() {
         let weight = match index {
@@ -1777,9 +1901,9 @@ pub(crate) fn application_websearch_rank_cd_english(fields: &[String], query: &s
             2 => PgTsWeight::C,
             _ => PgTsWeight::D,
         };
-        document = document.concat(&setweight(&to_tsvector(config, field), weight, None));
+        document = document.concat(&setweight(&to_tsvector(&config, field), weight, None));
     }
-    let query = websearch_tsquery(config, query);
+    let query = websearch_tsquery(&config, query);
     ts_rank_cd(&document, &query, [0.1, 0.2, 0.4, 1.0], 0)
 }
 
@@ -1790,7 +1914,7 @@ struct NormalizedQueryNode {
     trailing_gap: u16,
 }
 
-fn normalize_query_node(node: PgTsQueryNode, config: TextSearchConfig) -> NormalizedQueryNode {
+fn normalize_query_node(node: PgTsQueryNode, config: &TextSearchConfig) -> NormalizedQueryNode {
     match node {
         PgTsQueryNode::Operand(mut operand) => match config.normalize(&operand.text) {
             Some(text) => {
@@ -1857,7 +1981,7 @@ fn normalize_query_node(node: PgTsQueryNode, config: TextSearchConfig) -> Normal
 fn normalize_boolean_query(
     left: PgTsQueryNode,
     right: PgTsQueryNode,
-    config: TextSearchConfig,
+    config: &TextSearchConfig,
     and: bool,
 ) -> NormalizedQueryNode {
     let left = normalize_query_node(left, config);
@@ -1876,7 +2000,7 @@ fn normalize_boolean_query(
     }
 }
 
-fn to_tsquery(config: TextSearchConfig, input: &str) -> Result<PgTsQuery> {
+fn to_tsquery(config: &TextSearchConfig, input: &str) -> Result<PgTsQuery> {
     // SQL text-search constructors share the same oversize policy as
     // document tokenization. Explicit `::tsquery` input still enforces the
     // PostgreSQL representation limit in `from_postgres_text`.
@@ -1888,20 +2012,18 @@ fn to_tsquery(config: TextSearchConfig, input: &str) -> Result<PgTsQuery> {
     })
 }
 
-fn plain_tsquery(config: TextSearchConfig, input: &str, phrase: bool) -> PgTsQuery {
-    let mut terms = text_search_tokens(input)
+fn plain_tsquery(config: &TextSearchConfig, input: &str, phrase: bool) -> PgTsQuery {
+    let mut terms = normalized_text_search_tokens(config, input)
         .into_iter()
-        .filter_map(|(token, position)| {
-            config.normalize(&token).map(|text| {
-                (
-                    PgTsQueryNode::Operand(PgTsQueryOperand {
-                        text,
-                        weights: 0,
-                        prefix: false,
-                    }),
-                    position,
-                )
-            })
+        .map(|(text, position)| {
+            (
+                PgTsQueryNode::Operand(PgTsQueryOperand {
+                    text,
+                    weights: 0,
+                    prefix: false,
+                }),
+                position,
+            )
         });
     let Some((mut root, mut previous_position)) = terms.next() else {
         return PgTsQuery::default();
@@ -1949,7 +2071,7 @@ fn json_text_segments(value: &serde_json::Value, output: &mut Vec<String>) {
     }
 }
 
-fn json_to_tsvector(config: TextSearchConfig, value: &serde_json::Value) -> PgTsVector {
+fn json_to_tsvector(config: &TextSearchConfig, value: &serde_json::Value) -> PgTsVector {
     let mut segments = Vec::new();
     json_text_segments(value, &mut segments);
     let mut result = PgTsVector::default();
@@ -2064,7 +2186,7 @@ fn headline_positive_operands(
 }
 
 fn headline_tokens(
-    config: TextSearchConfig,
+    config: &TextSearchConfig,
     text: &str,
     operands: &[PgTsQueryOperand],
 ) -> Vec<HeadlineToken> {
@@ -2099,7 +2221,7 @@ fn headline_tokens(
 }
 
 fn text_headline(
-    config: TextSearchConfig,
+    config: &TextSearchConfig,
     text: &str,
     query: &PgTsQuery,
     options: &HeadlineOptions,
@@ -2191,14 +2313,14 @@ fn render_headline(text: &str, tokens: &[HeadlineToken], options: &HeadlineOptio
         }
         cursor = token.end;
     }
-    if tokens.len() == headline_tokens(TextSearchConfig::Simple, text, &[]).len() {
+    if tokens.len() == headline_tokens(&TextSearchConfig::Simple, text, &[]).len() {
         output.push_str(&text[cursor..]);
     }
     output
 }
 
 fn json_headline(
-    config: TextSearchConfig,
+    config: &TextSearchConfig,
     value: &serde_json::Value,
     query: &PgTsQuery,
     options: &HeadlineOptions,
@@ -3321,9 +3443,9 @@ pub(crate) fn eval_fts_function_value(
                 }
             };
             let vector = match value {
-                SqlValue::Json(value) => json_to_tsvector(config, value),
-                SqlValue::JsonText(value) => json_to_tsvector(config, value.parsed()),
-                SqlValue::String(value) => to_tsvector(config, value),
+                SqlValue::Json(value) => json_to_tsvector(&config, value),
+                SqlValue::JsonText(value) => json_to_tsvector(&config, value.parsed()),
+                SqlValue::String(value) => to_tsvector(&config, value),
                 _ => {
                     return Err(SqlError::undefined_function(
                         "text search input must be text, json, or jsonb",
@@ -3334,15 +3456,15 @@ pub(crate) fn eval_fts_function_value(
         }
         "to_tsquery" => {
             let (config, text) = fts_config_and_text(args)?;
-            SqlValue::TsQuery(to_tsquery(config, text)?)
+            SqlValue::TsQuery(to_tsquery(&config, text)?)
         }
         "plainto_tsquery" | "phraseto_tsquery" => {
             let (config, text) = fts_config_and_text(args)?;
-            SqlValue::TsQuery(plain_tsquery(config, text, name == "phraseto_tsquery"))
+            SqlValue::TsQuery(plain_tsquery(&config, text, name == "phraseto_tsquery"))
         }
         "websearch_to_tsquery" => {
             let (config, text) = fts_config_and_text(args)?;
-            SqlValue::TsQuery(websearch_tsquery(config, text))
+            SqlValue::TsQuery(websearch_tsquery(&config, text))
         }
         "numnode" | "querytree" => {
             require_argument_count(name, args, 1)?;
@@ -3509,13 +3631,13 @@ pub(crate) fn eval_fts_function_value(
                 parse_headline_options(args.get(value_index + 2).map(sql_value_str).transpose()?)?;
             match &args[value_index] {
                 SqlValue::String(text) => {
-                    SqlValue::String(text_headline(config, text, &query, &options))
+                    SqlValue::String(text_headline(&config, text, &query, &options))
                 }
                 SqlValue::Json(value) => {
-                    SqlValue::Json(json_headline(config, value, &query, &options).into())
+                    SqlValue::Json(json_headline(&config, value, &query, &options).into())
                 }
                 SqlValue::JsonText(value) => SqlValue::JsonText(crate::PgJsonText::from_value(
-                    json_headline(config, value.parsed(), &query, &options),
+                    json_headline(&config, value.parsed(), &query, &options),
                 )),
                 _ => {
                     return Err(SqlError::undefined_function(
@@ -3859,7 +3981,7 @@ fn querytree(query: &PgTsQuery) -> PgTsQuery {
     }
 }
 
-fn websearch_tsquery(config: TextSearchConfig, input: &str) -> PgTsQuery {
+fn websearch_tsquery(config: &TextSearchConfig, input: &str) -> PgTsQuery {
     WebSearchParser::new(input, config).parse()
 }
 
@@ -3875,7 +3997,7 @@ pub(crate) fn english_websearch_positive_and_terms(input: &str) -> Option<Vec<St
         }
     }
 
-    let query = websearch_tsquery(english_config(), input);
+    let query = websearch_tsquery(&english_config(), input);
     let root = query.root.as_ref()?;
     let mut terms = Vec::new();
     if !collect(root, &mut terms) {
@@ -3889,11 +4011,11 @@ pub(crate) fn english_websearch_positive_and_terms(input: &str) -> Option<Vec<St
 struct WebSearchParser<'a> {
     input: &'a str,
     offset: usize,
-    config: TextSearchConfig,
+    config: &'a TextSearchConfig,
 }
 
 impl<'a> WebSearchParser<'a> {
-    fn new(input: &'a str, config: TextSearchConfig) -> Self {
+    fn new(input: &'a str, config: &'a TextSearchConfig) -> Self {
         Self {
             input,
             offset: 0,

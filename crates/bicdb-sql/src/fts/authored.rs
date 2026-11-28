@@ -6,10 +6,12 @@ use serde::{Deserialize, Serialize};
 use sqlparser::dialect::PostgreSqlDialect;
 use sqlparser::tokenizer::{Token, Tokenizer};
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 pub(crate) const COLLECTION: &str = "__bicdb_pg_ts_configurations";
+
+pub(crate) type DictionaryMappings = BTreeMap<u8, Vec<u32>>;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct AuthoredConfig {
@@ -18,6 +20,8 @@ pub(crate) struct AuthoredConfig {
     pub(crate) name: String,
     pub(crate) owner: String,
     pub(crate) source_oid: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) mappings: Option<Arc<DictionaryMappings>>,
 }
 
 thread_local! {
@@ -79,6 +83,13 @@ impl Configuration<'_> {
         match self {
             Self::Builtin(oid) => *oid,
             Self::Authored(config) => config.oid,
+        }
+    }
+
+    pub(crate) fn mappings(&self) -> Option<Arc<DictionaryMappings>> {
+        match self {
+            Self::Authored(config) => config.mappings.clone(),
+            Self::Builtin(_) => None,
         }
     }
 
@@ -239,6 +250,17 @@ pub(crate) fn oid(input: &str) -> Option<u32> {
     })
 }
 
+pub(super) fn mapped_dictionaries(input: &str) -> Option<Arc<DictionaryMappings>> {
+    ACTIVE.with(|active| {
+        active
+            .borrow()
+            .as_ref()?
+            .resolve_authored(input)?
+            .mappings
+            .clone()
+    })
+}
+
 pub(crate) fn source_oid(input: &str) -> Option<u32> {
     ACTIVE.with(|active| {
         active
@@ -293,6 +315,12 @@ pub(crate) fn display_name(db: &BicDb, oid: i64) -> Result<Option<String>> {
 }
 
 impl AuthoredConfig {
+    pub(crate) fn effective_mappings(&self) -> Arc<DictionaryMappings> {
+        self.mappings
+            .clone()
+            .unwrap_or_else(|| Arc::new(super::catalog::builtin_config_mappings(self.source_oid)))
+    }
+
     pub(crate) fn qualified_name(&self) -> String {
         format!(
             "{}.{}",

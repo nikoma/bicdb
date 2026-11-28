@@ -77,7 +77,7 @@ impl SqlSession<'_> {
             return Ok(None);
         }
         if keyword(action, "create") {
-            self.create_text_search_copy(rest).map(Some)
+            self.create_text_search_configuration(rest).map(Some)
         } else if keyword(action, "drop") {
             self.drop_text_search_configurations(rest).map(Some)
         } else if keyword(action, "alter") {
@@ -127,14 +127,11 @@ impl SqlSession<'_> {
         Ok(schema)
     }
 
-    fn create_text_search_copy(&mut self, tokens: Tokens<'_>) -> Result<SqlResult> {
+    fn create_text_search_configuration(&mut self, tokens: Tokens<'_>) -> Result<SqlResult> {
         let (target, tokens) = object_name_from_tokens(tokens)?;
-        let [Token::LParen, copy, Token::Eq, source @ ..] = tokens else {
+        let [Token::LParen, option, Token::Eq, source @ ..] = tokens else {
             return Err(syntax_error(tokens.first()));
         };
-        if !keyword(copy, "copy") {
-            return Err(syntax_error(Some(copy)));
-        }
         let (source, rest) = match source {
             [Token::SingleQuotedString(source), rest @ ..] => (pg_quote_ident(source), rest),
             _ => object_name_from_tokens(source)?,
@@ -147,10 +144,24 @@ impl SqlSession<'_> {
         let schema =
             self.text_search_creation_schema((parts.len() == 2).then(|| parts[0].as_str()))?;
         let catalog = Catalog::load(self.db_ref(), &self.session_gucs)?;
-        let source_oid = catalog
-            .resolve(&source)
-            .ok_or_else(|| unknown_config(&source))?
-            .source_oid();
+        let (source_oid, mappings) = if keyword(option, "copy") {
+            let source = catalog
+                .resolve(&source)
+                .ok_or_else(|| unknown_config(&source))?;
+            (source.source_oid(), source.mappings())
+        } else if keyword(option, "parser") {
+            let parts = authored::qualified_name(&source).expect("parsed parser name");
+            let name = parts.join(".");
+            crate::fts::is_default_text_search_parser(&SqlValue::String(name))?;
+            (0, Some(Arc::new(authored::DictionaryMappings::new())))
+        } else {
+            let (name, _) = ident(std::slice::from_ref(option))?;
+            return Err(SqlError::data_exception_public(
+                "42601",
+                format!("text search configuration parameter \"{name}\" not recognized"),
+                None,
+            ));
+        };
         self.require_free_text_search_name(&catalog, &schema, &name)?;
         let oid = allocate_user_type_oids(self.db_mut()?, 1)?[0];
         let config = AuthoredConfig {
@@ -160,6 +171,7 @@ impl SqlSession<'_> {
             name,
             owner: current_user_from_gucs(&self.session_gucs),
             source_oid,
+            mappings,
         };
         self.save_text_search_configuration(&config, None)?;
         Ok(SqlResult::command("CREATE TEXT SEARCH CONFIGURATION"))
@@ -281,10 +293,86 @@ impl SqlSession<'_> {
                 }
                 config.owner = role;
             }
+            [action, mapping, tail @ ..] if keyword(mapping, "mapping") => {
+                config.mappings = Some(self.change_text_search_mapping(&config, action, tail)?);
+            }
             _ => return Err(syntax_error(rest.first())),
         }
         self.save_text_search_configuration(&config, Some(previous))?;
         Ok(SqlResult::command("ALTER TEXT SEARCH CONFIGURATION"))
+    }
+
+    fn change_text_search_mapping(
+        &self,
+        config: &AuthoredConfig,
+        action: &Token,
+        tokens: Tokens<'_>,
+    ) -> Result<Arc<authored::DictionaryMappings>> {
+        let mut mappings = config.effective_mappings();
+        let mappings_mut = Arc::make_mut(&mut mappings);
+        if keyword(action, "drop") {
+            let (if_exists, tokens) = match tokens {
+                [first, second, rest @ ..] if keyword(first, "if") && keyword(second, "exists") => {
+                    (true, rest)
+                }
+                _ => (false, tokens),
+            };
+            let (types, rest) = parse_mapping_token_types(tokens)?;
+            if !rest.is_empty() {
+                return Err(syntax_error(rest.first()));
+            }
+            for (id, alias) in types {
+                if mappings_mut.remove(&id).is_none() {
+                    let message = format!("mapping for token type \"{alias}\" does not exist");
+                    if if_exists {
+                        crate::statement_context::report_notice(
+                            None,
+                            "00000",
+                            format!("{message}, skipping"),
+                        );
+                    } else {
+                        return Err(SqlError::data_exception_public("42704", message, None));
+                    }
+                }
+            }
+        } else if keyword(action, "add") || keyword(action, "alter") {
+            if let [replace, rest @ ..] = tokens {
+                if keyword(action, "alter") && keyword(replace, "replace") {
+                    replace_text_search_dictionary(mappings_mut.values_mut(), rest)?;
+                    return Ok(mappings);
+                }
+            }
+            let (types, rest) = parse_mapping_token_types(tokens)?;
+            match rest {
+                [with, dictionaries @ ..] if keyword(with, "with") => {
+                    let dictionaries = parse_mapping_dictionaries(dictionaries)?;
+                    for (id, _) in types {
+                        if keyword(action, "add") && mappings_mut.contains_key(&id) {
+                            return Err(SqlError::coded(
+                                "23505",
+                                "duplicate key value violates unique constraint \"pg_ts_config_map_index\"",
+                                Some(format!("Key (mapcfg, maptokentype, mapseqno)=({}, {id}, 1) already exists.", config.oid)),
+                                None,
+                            ));
+                        }
+                        mappings_mut.insert(id, dictionaries.clone());
+                    }
+                }
+                [replace, rest @ ..] if keyword(action, "alter") && keyword(replace, "replace") => {
+                    let selected = types.into_iter().map(|(id, _)| id).collect::<BTreeSet<_>>();
+                    replace_text_search_dictionary(
+                        mappings_mut.iter_mut().filter_map(|(id, dictionaries)| {
+                            selected.contains(id).then_some(dictionaries)
+                        }),
+                        rest,
+                    )?;
+                }
+                _ => return Err(syntax_error(rest.first())),
+            }
+        } else {
+            return Err(syntax_error(Some(action)));
+        }
+        Ok(mappings)
     }
 
     fn drop_text_search_configurations(&mut self, tokens: Tokens<'_>) -> Result<SqlResult> {
@@ -354,6 +442,96 @@ impl SqlSession<'_> {
         }
         Ok(())
     }
+}
+
+fn parse_mapping_token_types(tokens: Tokens<'_>) -> Result<(Vec<(u8, String)>, Tokens<'_>)> {
+    let [keyword_for, mut tokens @ ..] = tokens else {
+        return Err(syntax_error(tokens.first()));
+    };
+    if !keyword(keyword_for, "for") {
+        return Err(syntax_error(Some(keyword_for)));
+    }
+    let mut result = Vec::new();
+    loop {
+        let (alias, rest) = ident(tokens)?;
+        let id = crate::fts::DEFAULT_PARSER_TOKEN_TYPES
+            .iter()
+            .position(|(token, _)| *token == alias)
+            .map(|index| (index + 1) as u8)
+            .ok_or_else(|| {
+                SqlError::data_exception_public(
+                    "22023",
+                    format!("alias \"{alias}\" is not a valid token type"),
+                    None,
+                )
+            })?;
+        result.push((id, alias));
+        if let [Token::Comma, tail @ ..] = rest {
+            tokens = tail;
+        } else {
+            return Ok((result, rest));
+        }
+    }
+}
+
+fn text_search_dictionary_oid(tokens: Tokens<'_>) -> Result<(u32, Tokens<'_>)> {
+    let (written, rest) = object_name_from_tokens(tokens)?;
+    let parts = authored::qualified_name(&written).expect("parsed dictionary name");
+    let name = match parts.as_slice() {
+        [name] => Some(name),
+        [schema, name] if schema == "pg_catalog" => Some(name),
+        _ => None,
+    };
+    let oid = name
+        .and_then(|name| {
+            crate::eval::REGDICTIONARY_OBJECTS
+                .iter()
+                .find_map(|&(oid, candidate)| (candidate == name.as_str()).then_some(oid))
+        })
+        .ok_or_else(|| {
+            SqlError::data_exception_public(
+                "42704",
+                format!("text search dictionary \"{written}\" does not exist"),
+                None,
+            )
+        })?;
+    Ok((oid, rest))
+}
+
+fn parse_mapping_dictionaries(mut tokens: Tokens<'_>) -> Result<Vec<u32>> {
+    let mut ids = Vec::new();
+    loop {
+        let (id, rest) = text_search_dictionary_oid(tokens)?;
+        ids.push(id);
+        match rest {
+            [Token::Comma, tail @ ..] => tokens = tail,
+            [] => return Ok(ids),
+            _ => return Err(syntax_error(rest.first())),
+        }
+    }
+}
+
+fn replace_text_search_dictionary<'a>(
+    mappings: impl Iterator<Item = &'a mut Vec<u32>>,
+    tokens: Tokens<'_>,
+) -> Result<()> {
+    let (old, rest) = text_search_dictionary_oid(tokens)?;
+    let [with, catalogue @ ..] = rest else {
+        return Err(syntax_error(rest.first()));
+    };
+    if !keyword(with, "with") {
+        return Err(syntax_error(Some(with)));
+    }
+    let (new, tail) = text_search_dictionary_oid(catalogue)?;
+    if !tail.is_empty() {
+        return Err(syntax_error(tail.first()));
+    }
+    for oid in mappings.flatten() {
+        if *oid == old {
+            *oid = new;
+        }
+    }
+    Ok(())
 }
 
 fn has_text_search_configuration_prefix(sql: &str) -> bool {

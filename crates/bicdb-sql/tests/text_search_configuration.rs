@@ -259,6 +259,10 @@ fn authored_dictionaries_run_in_mapping_order_and_track_dependencies() {
         .execute("DROP TEXT SEARCH DICTIONARY leading_dictionary")
         .unwrap_err();
     assert_eq!(error.sqlstate(), "2BP01");
+    let error = sql
+        .execute("ALTER TEXT SEARCH DICTIONARY leading_dictionary (ACCEPT = yes)")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42601");
 
     sql.execute("ALTER TEXT SEARCH DICTIONARY leading_dictionary (ACCEPT = true)")
         .unwrap();

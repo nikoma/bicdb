@@ -268,7 +268,8 @@ fn parse_options(tokens: Tokens<'_>) -> Result<Options> {
             let (value, more) = match tail {
                 [Token::SingleQuotedString(value), more @ ..] => (value.clone(), more),
                 [Token::Number(value, _), more @ ..] => (value.clone(), more),
-                _ => object_name_from_tokens(tail)?,
+                _ if name == "template" => object_name_from_tokens(tail)?,
+                _ => ident(tail)?,
             };
             (Some(value), more)
         } else {

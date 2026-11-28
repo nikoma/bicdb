@@ -1901,9 +1901,7 @@ impl<'db> SqlSession<'db> {
                 expanded.push(assignment.clone());
                 continue;
             }
-            let normalized = conflict_values_subquery(&assignment.value).map(Expr::Subquery);
-            let source = normalized.as_ref().unwrap_or(&assignment.value);
-            let values = match unwrap_nested_expr(source) {
+            let values = match unwrap_nested_expr(&assignment.value) {
                 Expr::Tuple(values) => values.iter().collect::<Vec<_>>(),
                 Expr::Function(function) if is_row_constructor(function) => {
                     unnamed_function_arg_exprs(function)
@@ -1918,10 +1916,7 @@ impl<'db> SqlSession<'db> {
                     for name in names {
                         check_conflict_generated_assignment(schema, name, None)?;
                     }
-                    expanded.push(Assignment {
-                        target: assignment.target.clone(),
-                        value: source.clone(),
-                    });
+                    expanded.push(assignment.clone());
                     continue;
                 }
                 _ => return Err(SqlError::data_exception(
@@ -4432,41 +4427,6 @@ fn select_output_is_unknown_literal(source: &Query, index: usize) -> bool {
     matches!(select.projection.get(index),
         Some(SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. })
             if is_string_literal_expr(expr))
-}
-
-/// The parser reads a parenthesized VALUES query in an assignment as a
-/// tuple starting with a VALUES function. Recover the query's row structure.
-fn conflict_values_subquery(expr: &Expr) -> Option<Box<Query>> {
-    let (first, rest) = match unwrap_nested_expr(expr) {
-        Expr::Tuple(items) => items.split_first()?,
-        expr => (expr, &[][..]),
-    };
-    let Expr::Function(first) = first else {
-        return None;
-    };
-    let [sqlparser::ast::ObjectNamePart::Identifier(name)] = first.name.0.as_slice() else {
-        return None;
-    };
-    if name.quote_style.is_some() || !name.value.eq_ignore_ascii_case("values") {
-        return None;
-    }
-    let first_row = unnamed_function_arg_exprs(first)?.cloned().collect();
-    let mut rows = vec![sqlparser::ast::Parens::with_empty_span(first_row)];
-    for row in rest {
-        let values = match row {
-            Expr::Tuple(values) => values.clone(),
-            Expr::Nested(value) => vec![(**value).clone()],
-            _ => return None,
-        };
-        rows.push(sqlparser::ast::Parens::with_empty_span(values));
-    }
-    Some(Box::new(query_from_body(SetExpr::Values(
-        sqlparser::ast::Values {
-            explicit_row: false,
-            value_keyword: false,
-            rows,
-        },
-    ))))
 }
 
 fn check_conflict_assignment_width(columns: usize, values: usize) -> Result<()> {

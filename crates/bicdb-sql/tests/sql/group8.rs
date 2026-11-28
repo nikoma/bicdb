@@ -3281,3 +3281,37 @@ fn on_conflict_row_assignments_use_the_old_and_excluded_rows() {
     assert_eq!(result.rows[0][0].to_cell(), "3");
     assert!(matches!(result.rows[0][1], bicdb_sql::SqlValue::Null));
 }
+
+#[test]
+fn update_row_assignment_treats_parenthesized_values_as_a_query() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = bicdb_core::BicDb::open(root.path()).unwrap();
+    let mut session = bicdb_sql::SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE TABLE values_update (id int PRIMARY KEY, a int, b int);
+             INSERT INTO values_update VALUES (1,2,3)",
+        )
+        .unwrap();
+    let result = session
+        .execute("UPDATE values_update SET (a,b) = (VALUES (b,a)) RETURNING a,b")
+        .unwrap();
+    assert_eq!(
+        result.rows,
+        [[bicdb_sql::SqlValue::Int(3), bicdb_sql::SqlValue::Int(2)]],
+    );
+    for (source, state) in [
+        ("(VALUES (9))", "42601"),
+        ("(VALUES (9,8), (7,6))", "21000"),
+    ] {
+        let error = session
+            .execute(&format!("UPDATE values_update SET (a,b) = {source}"))
+            .unwrap_err();
+        assert_eq!(error.sqlstate(), state, "{source}: {error:?}");
+    }
+    let result = session.execute("SELECT a,b FROM values_update").unwrap();
+    assert_eq!(
+        result.rows,
+        [[bicdb_sql::SqlValue::Int(3), bicdb_sql::SqlValue::Int(2)]],
+    );
+}

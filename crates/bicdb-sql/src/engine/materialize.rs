@@ -3362,6 +3362,8 @@ impl<'db> SqlEngine<'db> {
             | Expr::IsNotTrue(_)
             | Expr::IsFalse(_)
             | Expr::IsNotFalse(_)
+            | Expr::IsUnknown(_)
+            | Expr::IsNotUnknown(_)
             | Expr::IsDistinctFrom(_, _)
             | Expr::IsNotDistinctFrom(_, _)
             | Expr::Exists { .. }

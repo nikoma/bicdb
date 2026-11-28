@@ -2621,7 +2621,7 @@ impl<'db> SqlEngine<'db> {
                 with_ordinality,
                 ..
             } if relation_name(name).ok().is_some_and(|name| {
-                super::predicates_locators::text_search_debug_function_columns(&name).is_some()
+                super::predicates_locators::text_search_catalog_function_columns(&name).is_some()
             }) =>
             {
                 let table = relation_name(name).ok()?;
@@ -2634,7 +2634,7 @@ impl<'db> SqlEngine<'db> {
                     .map(|alias| alias.columns.as_slice())
                     .unwrap_or(&[]);
                 let mut columns =
-                    super::predicates_locators::text_search_debug_function_columns(&table)?
+                    super::predicates_locators::text_search_catalog_function_columns(&table)?
                         .iter()
                         .map(|(name, pg_type)| (name.to_string(), Some(pg_type.to_string())))
                         .collect::<Vec<_>>();

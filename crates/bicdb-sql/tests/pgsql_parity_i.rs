@@ -283,3 +283,42 @@ fn ts_debug_shows_each_dictionary_choice_and_stop_word() {
         ["regdictionary[]|regdictionary|text[]|simple|{running}"],
     );
 }
+
+#[test]
+fn text_search_catalog_functions_handle_lateral_arguments_and_typed_queries() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = open(root.path());
+    let mut session = SqlSession::new(&mut db);
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT cfgname, d.tokid, d.alias, pg_typeof(d.tokid)
+             FROM pg_ts_config AS c CROSS JOIN LATERAL ts_token_type(c.cfgparser) AS d
+             WHERE c.cfgname = 'english' AND d.tokid < 3 ORDER BY d.tokid",
+        ),
+        ["english|1|asciiword|integer", "english|2|word|integer"],
+    );
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT pg_typeof(ndoc), word FROM ts_stat('SELECT ''a:1A b''::tsvector','X')
+             ORDER BY word",
+        ),
+        ["integer|a", "integer|b"],
+    );
+    for sql in [
+        "SELECT * FROM ts_token_type(NULL::oid)",
+        "SELECT * FROM ts_stat(NULL)",
+        "SELECT * FROM ts_stat('SELECT ''a''::tsvector', NULL)",
+    ] {
+        assert!(rows(&mut session, sql).is_empty(), "{sql}");
+    }
+    for sql in [
+        "SELECT * FROM ts_stat('SELECT ''a''')",
+        "SELECT * FROM ts_stat('SELECT ''a''::text WHERE false')",
+        "SELECT * FROM ts_stat('SELECT ''a''::tsvector, 2')",
+    ] {
+        let error = session.execute(sql).unwrap_err();
+        assert_eq!(error.sqlstate(), "22023", "{sql}: {error:?}");
+    }
+}

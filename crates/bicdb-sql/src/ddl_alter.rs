@@ -2970,6 +2970,10 @@ pub(crate) enum RawAlterSequence {
         sequence: String,
         value: Option<i64>,
     },
+    Parameters {
+        sequence: String,
+        options: crate::session::SequenceAlterParameters,
+    },
 }
 
 pub(crate) fn raw_alter_sequence(sql: &str) -> Result<Option<RawAlterSequence>> {
@@ -2984,6 +2988,9 @@ pub(crate) fn raw_alter_sequence(sql: &str) -> Result<Option<RawAlterSequence>> 
     let sequence = normalize_sequence_name(&target)?;
     let normalized = format!("alter sequence __target {}", normalize_sql(options_source));
     let tokens = normalized.split_whitespace().collect::<Vec<_>>();
+    if let Some(options) = crate::session::parse_alter_sequence_parameters(options_source)? {
+        return Ok(Some(RawAlterSequence::Parameters { sequence, options }));
+    }
     if tokens.get(3..5) == Some(&["owner", "to"][..]) {
         let Some(_owner) = tokens.get(5) else {
             return Err(SqlError::InvalidSql(

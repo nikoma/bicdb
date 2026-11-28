@@ -5,6 +5,7 @@
 //! resolving; `lib.rs` re-exports this module via `pub use session::*;`.
 
 mod alter_column_identity;
+pub(crate) use alter_column_identity::{parse_alter_sequence_parameters, SequenceAlterParameters};
 mod collation_ddl;
 mod create_schema_elements;
 mod create_table_as;

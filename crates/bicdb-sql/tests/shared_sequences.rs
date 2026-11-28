@@ -144,3 +144,68 @@ fn postgres_sequence_values_from_rows_and_nested_routines_share_the_session() {
         "55000",
     );
 }
+
+#[test]
+fn postgres_alter_sequence_changes_type_bounds_and_parameters_atomically() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE SEQUENCE resizing START 17")
+        .unwrap();
+    session.execute("SELECT setval('resizing', 50000)").unwrap();
+    let error = session
+        .execute("ALTER SEQUENCE resizing AS smallint")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "22023");
+    assert_eq!(
+        error.postgres_message(),
+        "RESTART value (50000) cannot be greater than MAXVALUE (32767)"
+    );
+    session
+        .execute("ALTER SEQUENCE resizing AS smallint RESTART WITH 28 CACHE 2")
+        .unwrap();
+    let sequence = |session: &mut SqlSession<'_>| {
+        session.execute("SELECT min_value, max_value, cache_size FROM pg_sequences WHERE sequencename = 'resizing'")
+            .unwrap().rows
+    };
+    let narrowed = vec![vec![
+        SqlValue::Int(1),
+        SqlValue::Int(32767),
+        SqlValue::Int(2),
+    ]];
+    assert_eq!(sequence(&mut session), narrowed);
+    assert_eq!(
+        session.execute("SELECT nextval('resizing')").unwrap().rows,
+        vec![vec![SqlValue::Int(28)]],
+    );
+    session.execute("BEGIN").unwrap();
+    session
+        .execute("ALTER SEQUENCE resizing AS integer CACHE 4")
+        .unwrap();
+    assert_eq!(
+        sequence(&mut session),
+        vec![vec![
+            SqlValue::Int(1),
+            SqlValue::Int(2147483647),
+            SqlValue::Int(4)
+        ]],
+    );
+    session.execute("ROLLBACK").unwrap();
+    assert_eq!(sequence(&mut session), narrowed);
+
+    session
+        .execute("CREATE SEQUENCE resizing_fixed MAXVALUE 100000")
+        .unwrap();
+    let error = session
+        .execute("ALTER SEQUENCE resizing_fixed AS smallint")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "22023");
+    assert_eq!(
+        error.postgres_message(),
+        "MAXVALUE (100000) is out of range for sequence data type smallint"
+    );
+    session
+        .execute("ALTER SEQUENCE resizing_fixed AS int2 MAXVALUE 20000")
+        .unwrap();
+}

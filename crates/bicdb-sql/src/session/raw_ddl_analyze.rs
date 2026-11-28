@@ -121,6 +121,19 @@ impl<'db> SqlSession<'db> {
                     sequence.is_called = false;
                     self.save_session_sequence(&sequence)?;
                 }
+                RawAlterSequence::Parameters {
+                    sequence: name,
+                    options,
+                } => {
+                    let mut sequence = load_sequence_required(self.db_ref(), &name)?;
+                    self.require_object_ownership(
+                        &sequence.owner,
+                        &format!("sequence {name}"),
+                        "alter it",
+                    )?;
+                    options.apply(self.db_ref(), &mut sequence)?;
+                    self.save_session_sequence(&sequence)?;
+                }
             }
         }
         Ok(Some(SqlResult::command("ALTER SEQUENCE")))

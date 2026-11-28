@@ -1555,6 +1555,45 @@ fn generate_series_uses_exact_numeric_steps_and_result_types() {
 }
 
 #[test]
+fn generate_series_with_ordinality_labels_rows_and_allows_partial_aliases() {
+    let (_dir, mut db) = db();
+    let mut session = SqlSession::new(&mut db);
+    let integers = session
+        .execute("SELECT v, n FROM generate_series(4, 2, -1) WITH ORDINALITY AS s(v, n)")
+        .unwrap();
+    assert_eq!(
+        integers.column_types,
+        vec![Some("int4".into()), Some("int8".into())]
+    );
+    assert_eq!(
+        integers.rows,
+        vec![
+            vec![SqlValue::Int(4), SqlValue::Int(1)],
+            vec![SqlValue::Int(3), SqlValue::Int(2)],
+            vec![SqlValue::Int(2), SqlValue::Int(3)],
+        ],
+    );
+    let numeric = session
+        .execute("SELECT step, ordinality FROM generate_series(0.0, 0.25, 0.25) WITH ORDINALITY AS s(step)")
+        .unwrap();
+    assert_eq!(
+        numeric.rows,
+        vec![
+            vec![text("0.0"), SqlValue::Int(1)],
+            vec![text("0.25"), SqlValue::Int(2)]
+        ],
+    );
+    let error = session
+        .execute("SELECT * FROM generate_series(1, 2) WITH ORDINALITY AS s(a, b, c)")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42P10");
+    assert_eq!(
+        error.postgres_message(),
+        "table \"s\" has 2 columns available but 3 columns specified"
+    );
+}
+
+#[test]
 fn partial_unique_index_frees_a_key_when_the_transaction_moves_the_row_out_of_its_predicate() {
     let (_dir, mut db) = db();
     // $1/$2 are the WeWoBo statement's parameters; the other statements take none.

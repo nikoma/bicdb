@@ -5221,27 +5221,17 @@ impl<'db> SqlEngine<'db> {
         args: &TableFunctionArgs,
         with_ordinality: bool,
     ) -> Result<RowSet> {
-        if with_ordinality {
-            return Err(SqlError::Unsupported(
-                "generate_series WITH ORDINALITY is not supported".to_string(),
-            ));
-        }
         let alias_name = table_alias
             .map(|alias| alias.name.value.clone())
             .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(table).to_string());
-        let source_columns = table_function_source_columns_for_alias(
-            table_alias,
-            &alias_name,
-            vec!["generate_series".to_string()],
-        );
-        let columns = table_alias_columns(
-            table,
-            &alias_name,
-            table_alias
-                .map(|alias| alias.columns.as_slice())
-                .unwrap_or(&[]),
-            &source_columns,
-        )?;
+        let columns = generate_series_column_names(table_alias, &alias_name, with_ordinality)?;
+        let materialize = |index: usize, value| {
+            if with_ordinality {
+                vec![value, SqlValue::Int(index as i64 + 1)]
+            } else {
+                vec![value]
+            }
+        };
         let expressions = table_function_expr_args(args)?;
         let values = expressions
             .iter()
@@ -5272,7 +5262,8 @@ impl<'db> SqlEngine<'db> {
         if let Some(series) = series {
             let rows = series
                 .into_iter()
-                .map(|value| slot_row_from_values(&columns, &[value]))
+                .enumerate()
+                .map(|(index, value)| materialize(index, value))
                 .collect::<Vec<_>>();
             sql_profile_sql_rows_materialized(&rows);
             return Ok(RowSet {
@@ -5298,8 +5289,7 @@ impl<'db> SqlEngine<'db> {
             if idx % 1024 == 0 {
                 self.check_cancellation()?;
             }
-            let source = [SqlValue::Int(value)];
-            rows.push(slot_row_from_values(&columns, &source));
+            rows.push(materialize(idx, SqlValue::Int(value)));
             if idx + 1 < row_count {
                 value = value.checked_add(step).ok_or_else(|| {
                     SqlError::InvalidSql("generate_series integer overflow".to_string())

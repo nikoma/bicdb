@@ -3180,6 +3180,35 @@ fn generate_series_declared_kind(arguments: &[Expr]) -> Option<GenerateSeriesKin
     Some(GenerateSeriesKind::resolve(&types, &SqlValue::Null))
 }
 
+fn generate_series_column_names(
+    alias: Option<&TableAlias>,
+    alias_name: &str,
+    with_ordinality: bool,
+) -> Result<Vec<String>> {
+    let mut columns = vec!["generate_series".to_owned()];
+    if with_ordinality {
+        columns.push("ordinality".to_owned());
+    }
+    let mut columns = table_function_source_columns_for_alias(alias, alias_name, columns);
+    let aliases = alias.map_or(&[][..], |alias| alias.columns.as_slice());
+    if aliases.len() > columns.len() {
+        return Err(SqlError::coded(
+            "42P10",
+            format!(
+                "table \"{alias_name}\" has {} columns available but {} columns specified",
+                columns.len(),
+                aliases.len(),
+            ),
+            None,
+            None,
+        ));
+    }
+    for (column, alias) in columns.iter_mut().zip(aliases) {
+        *column = ident_value(&alias.name);
+    }
+    Ok(columns)
+}
+
 /// The output type of a SELECT-list `generate_series`.
 pub(crate) fn generate_series_projection_pg_type(
     call: &ArrayProjectionSetReturningCall,

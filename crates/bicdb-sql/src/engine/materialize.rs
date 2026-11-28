@@ -2626,7 +2626,7 @@ impl<'db> SqlEngine<'db> {
                 name,
                 alias,
                 args: Some(args),
-                with_ordinality: false,
+                with_ordinality,
                 ..
             } if relation_name(name)
                 .ok()
@@ -2641,21 +2641,19 @@ impl<'db> SqlEngine<'db> {
                     .as_ref()
                     .map(|alias| alias.name.value.clone())
                     .unwrap_or_else(|| "generate_series".to_string());
-                let alias_columns = alias
-                    .as_ref()
-                    .map(|alias| alias.columns.as_slice())
-                    .unwrap_or(&[]);
-                let column = table_function_source_columns_for_alias(
-                    alias.as_ref(),
-                    &alias_name,
-                    vec!["generate_series".to_string()],
-                )
-                .remove(0);
-                let columns = vec![(column, generate_series_output_pg_type(&argument_types))];
+                let columns =
+                    generate_series_column_names(alias.as_ref(), &alias_name, *with_ordinality)
+                        .ok()?
+                        .into_iter()
+                        .zip([
+                            generate_series_output_pg_type(&argument_types),
+                            Some("int8".to_owned()),
+                        ])
+                        .collect();
                 env.push(RelationColumns {
                     alias: alias_name.to_ascii_lowercase(),
                     row_type: None,
-                    columns: rename_relation_columns(columns, alias_columns)?,
+                    columns,
                 });
                 Some(())
             }

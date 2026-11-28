@@ -149,6 +149,8 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>> {
 
     ensure_parser_stack_margin();
     reject_oversized_sql(sql)?;
+    let atomic = crate::sql_atomic_body::lower(sql);
+    let sql = atomic.as_ref().map_or(sql, |lowered| lowered.sql.as_str());
     let parse_sql = rewrite_postgres_parse_compat(sql);
     let sql_for_parse = parse_sql.as_deref().unwrap_or(sql);
     let bounded_sql = crate::boolean_parse::prepare(sql_for_parse)?;
@@ -183,6 +185,10 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>> {
     // it — the precedence visitor below, the evaluator, and even Drop all
     // overflow the stack (aborting the process) on a hostile AST.
     reject_deep_expressions(&statements)?;
+    if let Some(atomic) = &atomic {
+        atomic.restore(&mut statements)?;
+        reject_deep_expressions(&statements)?;
+    }
     crate::table_queries::reject_unlowered(&statements)?;
     restore_postgres_distinct_boolean_precedence(&mut statements);
     restore_postgres_whole_row_function_args(&mut statements);
@@ -482,8 +488,15 @@ pub fn split_sql_statements(sql: &str) -> Vec<String> {
     let mut double_quoted = false;
     let mut line_comment = false;
     let mut dollar_quote: Option<String> = None;
+    let mut atomic = crate::sql_atomic_body::atomic_bodies(sql)
+        .into_iter()
+        .peekable();
 
     while idx < bytes.len() {
+        if atomic.peek().is_some_and(|body| body.span.start == idx) {
+            idx = atomic.next().expect("an atomic span starts here").span.end;
+            continue;
+        }
         if line_comment {
             if bytes[idx] == b'\n' {
                 line_comment = false;

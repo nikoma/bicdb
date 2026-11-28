@@ -82,3 +82,92 @@ fn return_next_expressions_are_refused_with_out_parameters() {
         vec![vec![SqlValue::Int(7)], vec![SqlValue::Int(8)]]
     );
 }
+
+#[test]
+fn sql_return_bodies_use_arguments_and_bind_tables_at_creation() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(directory.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE SCHEMA shadow",
+        "CREATE TABLE public.sql_return_data(n int)",
+        "CREATE TABLE shadow.sql_return_data(n int)",
+        "INSERT INTO public.sql_return_data VALUES (7)",
+        "INSERT INTO shadow.sql_return_data VALUES (9)",
+        "CREATE FUNCTION sql_return_scalar(a int, b int DEFAULT 2) RETURNS int LANGUAGE SQL RETURN a + b",
+        "CREATE FUNCTION sql_return_table() RETURNS int RETURN (SELECT n FROM sql_return_data)",
+        "CREATE FUNCTION sql_return_rows() RETURNS SETOF int RETURN generate_series(2, 4)",
+        "SET search_path = shadow, public",
+    ] {
+        session.execute(sql).unwrap();
+    }
+    assert_eq!(
+        session
+            .execute("SELECT sql_return_scalar(3), sql_return_scalar(b => 2, a => 6), sql_return_table()")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(5), SqlValue::Int(8), SqlValue::Int(7)]]
+    );
+    assert_eq!(
+        session
+            .execute("SELECT * FROM sql_return_rows()")
+            .unwrap()
+            .rows,
+        vec![
+            vec![SqlValue::Int(2)],
+            vec![SqlValue::Int(3)],
+            vec![SqlValue::Int(4)]
+        ]
+    );
+    for sql in [
+        "CREATE FUNCTION sql_return_error(a anyarray) RETURNS anyelement RETURN a[1]",
+        "CREATE FUNCTION sql_return_error() RETURNS int LANGUAGE plpgsql RETURN 1",
+        "CREATE FUNCTION sql_return_error() RETURNS int LANGUAGE sql AS 'SELECT 1' RETURN 1",
+    ] {
+        assert_eq!(
+            session.execute(sql).unwrap_err().sqlstate(),
+            "42P13",
+            "{sql}"
+        );
+    }
+}
+
+#[test]
+fn sql_atomic_body_keeps_statement_boundaries_and_parameter_scope() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(directory.path()).unwrap();
+    let definition = r#"CREATE FUNCTION sql_atomic(x int) RETURNS int LANGUAGE SQL
+        BEGIN /* body */ ATOMIC
+            INSERT INTO atomic_output VALUES ($1, 'END; BEGIN ATOMIC');
+            RETURN (SELECT CASE WHEN n > 0 THEN CASE WHEN n > 1 THEN n ELSE 1 END ELSE 0 END
+                    FROM atomic_output WHERE n = x);
+        END"#;
+    let batch = format!("{definition}; SELECT 3;");
+    assert_eq!(bicdb_sql::split_sql_statements(&batch).len(), 2);
+    assert!(bicdb_sql::infer_parameter_types(&db, definition)
+        .unwrap()
+        .is_empty());
+    assert!(bicdb_sql::infer_parameter_types(
+        &db,
+        "CREATE FUNCTION direct_arg(x int) RETURNS int RETURN $1"
+    )
+    .unwrap()
+    .is_empty());
+
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE TABLE atomic_output(n int, note text)")
+        .unwrap();
+    session.execute(&batch).unwrap();
+    assert_eq!(
+        session.execute("SELECT sql_atomic(5)").unwrap().rows,
+        vec![vec![SqlValue::Int(5)]]
+    );
+    assert_eq!(
+        session
+            .execute("SELECT note FROM atomic_output")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::String("END; BEGIN ATOMIC".into())]]
+    );
+}

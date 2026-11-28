@@ -3467,6 +3467,9 @@ impl<'db> SqlEngine<'db> {
         if is_current_catalog_keyword(function) {
             return Some("name".into());
         }
+        if is_row_constructor(function) {
+            return Some("record".to_string());
+        }
         if matches!(function.args, sqlparser::ast::FunctionArguments::None) {
             let parts = object_name_parts(&function.name);
             if parts.len() >= 2

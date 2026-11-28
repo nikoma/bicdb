@@ -512,6 +512,14 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
         }
     }
     match pg_type {
+        "record" => match value {
+            value @ SqlValue::Composite(_) => Ok(value),
+            _ => Err(SqlError::data_exception_public(
+                "0A000",
+                "input of anonymous composite types is not implemented",
+                None,
+            )),
+        },
         "oid" => match value {
             SqlValue::Int(value) if value < 0 => i32::try_from(value)
                 .map(|value| SqlValue::Int(i64::from(value as u32)))
@@ -1553,6 +1561,9 @@ pub(crate) fn cast_array_json(value: JsonValue, element_type: &str) -> Result<Js
             .collect::<Result<Vec<_>>>()
             .map(JsonValue::Array),
         JsonValue::Null => Ok(JsonValue::Null),
+        value if element_type == "record" && pg_composite_from_array_json(&value).is_some() => {
+            Ok(value)
+        }
         value => {
             cast_value_to_pg_type(json_to_sql_value(&value), element_type).map(sql_value_to_json)
         }

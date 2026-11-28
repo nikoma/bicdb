@@ -291,8 +291,9 @@ pub(crate) fn canonical_value(spec: &PgTypeSpec, value: &SqlValue) -> Result<PgC
             SqlValue::TsQuery(query) => query.clone(),
             _ => PgTsQuery::from_postgres_text(&text)?,
         }),
-        "name" | "text" | "varchar" | "refcursor" | "pg_node_tree" | "pg_ndistinct"
-        | "pg_dependencies" | "pg_mcv_list" => PgCanonicalValue::Text(text),
+        "name" => PgCanonicalValue::Text(crate::clip_postgres_name(text)),
+        "text" | "varchar" | "refcursor" | "pg_node_tree" | "pg_ndistinct" | "pg_dependencies"
+        | "pg_mcv_list" => PgCanonicalValue::Text(text),
         "regproc" | "regprocedure" | "regoper" | "regoperator" | "regclass" | "regcollation"
         | "regtype" | "regrole" | "regnamespace" | "regconfig" | "regdictionary" => {
             let alias = if spec.name == "regtype" {

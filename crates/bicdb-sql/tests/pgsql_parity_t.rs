@@ -915,3 +915,81 @@ fn plpgsql_select_into_before_projection_assigns_a_typed_record() {
     .unwrap();
     assert_eq!(rows(&mut s, "SELECT late_into()"), ["7"]);
 }
+#[test]
+fn postgres_name_literals_and_unknown_comparison_inputs() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let input = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijé";
+    assert_eq!(
+        session
+            .execute(&format!(
+                "SELECT octet_length(name '{input}'), NAME 'x' = name 'x ', pg_typeof(pg_catalog.name 'x')"
+            ))
+            .unwrap()
+            .rows[0]
+            .iter()
+            .map(SqlValue::to_cell)
+            .collect::<Vec<_>>(),
+        ["62", "false", "name"]
+    );
+    session
+        .execute(&format!(
+            "CREATE TABLE names_fixture(k name PRIMARY KEY); INSERT INTO names_fixture VALUES (name '{input}')"
+        ))
+        .unwrap();
+    assert_eq!(
+        session
+            .execute(&format!("SELECT k FROM names_fixture WHERE k = '{input}'"))
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::String(input[..62].to_string())]]
+    );
+    assert!(session
+        .execute(&format!(
+            "SELECT k FROM names_fixture WHERE k = '{input}'::text"
+        ))
+        .unwrap()
+        .rows
+        .is_empty());
+    session
+        .execute(&format!(
+            "CREATE TABLE indexed_names(k name); INSERT INTO indexed_names VALUES (name '{input}'); CREATE INDEX name_probe_idx ON indexed_names(k)"
+        ))
+        .unwrap();
+    let expected = vec![vec![SqlValue::String(input[..62].to_string())]];
+    for predicate in [format!("k = '{input}'"), format!("k < '{input}'::text")] {
+        assert_eq!(
+            session
+                .execute(&format!("SELECT k FROM indexed_names WHERE {predicate}"))
+                .unwrap()
+                .rows,
+            expected,
+            "{predicate}"
+        );
+    }
+}
+
+#[test]
+fn parse_ident_supports_named_arguments_and_scalar_from_rows() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    assert_eq!(
+        session
+            .execute(r#"SELECT a[1], a[2], pos, pg_typeof(a) FROM pg_catalog.parse_ident(strict => false, str => 'foo."BAR"[]') WITH ORDINALITY AS t(a, pos)"#)
+            .unwrap()
+            .rows[0]
+            .iter()
+            .map(SqlValue::to_cell)
+            .collect::<Vec<_>>(),
+        ["foo", "BAR", "1", "text[]"]
+    );
+    assert_eq!(
+        session
+            .execute("SELECT parse_ident('value', strict_mode => false)")
+            .unwrap_err()
+            .sqlstate(),
+        "42883"
+    );
+}

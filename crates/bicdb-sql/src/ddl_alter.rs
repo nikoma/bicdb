@@ -2090,8 +2090,17 @@ pub(crate) fn text_column_schema(name: String) -> ColumnSchema {
 
 pub(crate) fn normalize_column_collation(name: &ObjectName) -> Result<String> {
     let full = object_name(name)?;
-    let qualifier = full.rsplit_once('.').map(|(schema, _)| schema.to_string());
-    let name = full.rsplit('.').next().unwrap_or(&full);
+    let parts = object_name_parts(name);
+    let name = parts.last().map(String::as_str).unwrap_or(&full);
+    let qualifier = (parts.len() > 1).then(|| parts[..parts.len() - 1].join("."));
+    if qualifier
+        .as_deref()
+        .is_some_and(|schema| schema != "pg_catalog")
+    {
+        return crate::collations::resolve_user_collation(qualifier.as_deref(), name)
+            .map(|collation| collation.name)
+            .ok_or_else(|| undefined_column_collation(&full));
+    }
     let canonical = match name.to_ascii_lowercase().as_str() {
         "default" => "default",
         "c" => "C",
@@ -2099,20 +2108,23 @@ pub(crate) fn normalize_column_collation(name: &ObjectName) -> Result<String> {
         "ucs_basic" => "ucs_basic",
         "en-x-icu" => "en-x-icu",
         _ => {
-            let schema = qualifier.filter(|schema| schema != "pg_catalog");
             if let Some(collation) =
-                crate::collations::resolve_user_collation(schema.as_deref(), name)
+                crate::collations::resolve_user_collation(qualifier.as_deref(), name)
             {
                 return Ok(collation.name);
             }
-            return Err(SqlError::data_exception(
-                "42704",
-                format!("collation \"{name}\" for encoding UTF8 does not exist"),
-                None,
-            ));
+            return Err(undefined_column_collation(&full));
         }
     };
     Ok(canonical.to_string())
+}
+
+fn undefined_column_collation(name: &str) -> SqlError {
+    SqlError::data_exception(
+        "42704",
+        format!("collation \"{name}\" for encoding \"UTF8\" does not exist"),
+        None,
+    )
 }
 
 pub(crate) fn pg_type_is_collatable(pg_type: &str) -> bool {

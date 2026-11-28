@@ -353,7 +353,12 @@ impl<'db> SqlEngine<'db> {
                     op,
                     right_type.as_deref(),
                 )?;
-                let collation = comparison_collation(left, right, None)?;
+                let collation = self.slot_comparison_collation(
+                    left,
+                    right,
+                    row.keys(),
+                    [left_type.as_deref(), right_type.as_deref()],
+                )?;
                 let pg_type = if matches!(left_type.as_deref(), Some("inet" | "cidr"))
                     && matches!(right_type.as_deref(), Some("inet" | "cidr"))
                 {
@@ -618,7 +623,12 @@ impl<'db> SqlEngine<'db> {
                     op,
                     right_type.as_deref(),
                 )?;
-                let collation = comparison_collation(left, right, None)?;
+                let collation = self.slot_comparison_collation(
+                    left,
+                    right,
+                    context.column_keys().iter(),
+                    [left_type.as_deref(), right_type.as_deref()],
+                )?;
                 let pg_type = if matches!(left_type.as_deref(), Some("inet" | "cidr"))
                     && matches!(right_type.as_deref(), Some("inet" | "cidr"))
                 {
@@ -715,7 +725,12 @@ impl<'db> SqlEngine<'db> {
                         op,
                         right_type.as_deref(),
                     )?;
-                    let collation = comparison_collation(left, right, None)?;
+                    let collation = self.slot_comparison_collation(
+                        left,
+                        right,
+                        context.column_keys().iter(),
+                        [left_type.as_deref(), right_type.as_deref()],
+                    )?;
                     let left = enforce_integer_value_type(
                         self.eval_slot_row_value(row, context, left)?,
                         left_type.as_deref(),
@@ -2783,7 +2798,12 @@ impl<'db> SqlEngine<'db> {
                         op,
                         right_type.as_deref(),
                     )?;
-                    let collation = comparison_collation(left, right, None)?;
+                    let collation = self.slot_comparison_collation(
+                        left,
+                        right,
+                        row.keys(),
+                        [left_type.as_deref(), right_type.as_deref()],
+                    )?;
                     let left = enforce_integer_value_type(
                         self.eval_row_value(row, left)?,
                         left_type.as_deref(),

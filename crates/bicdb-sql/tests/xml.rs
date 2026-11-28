@@ -739,3 +739,138 @@ fn xmlparse_and_xmlserialize_preserve_document_and_content_modes() {
         assert!(error.to_string().contains(message), "{sql}: {error:?}");
     }
 }
+
+#[test]
+fn xmloption_controls_input_without_reinterpreting_existing_xml_values() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut sql = SqlSession::new(&mut db);
+    let initial = sql
+        .execute("SELECT current_setting('xmloption'), xml_is_well_formed('text')")
+        .unwrap();
+    assert_eq!(
+        initial.rows,
+        vec![vec![
+            SqlValue::String("content".into()),
+            SqlValue::Bool(true)
+        ]]
+    );
+    sql.execute(
+        "CREATE TABLE xmloption_values (id int PRIMARY KEY, body xml);
+         INSERT INTO xmloption_values VALUES (1, XMLPARSE(CONTENT '<a/><b/>'));
+         BEGIN;
+         SET LOCAL xmloption TO DOCUMENT;",
+    )
+    .unwrap();
+    let result = sql
+        .execute("SELECT body::xml::text, xml_is_well_formed(body::text), pg_input_is_valid(body::text, 'xml') FROM xmloption_values")
+        .unwrap();
+    assert_eq!(
+        result.rows,
+        vec![vec![
+            SqlValue::String("<a/><b/>".into()),
+            SqlValue::Bool(false),
+            SqlValue::Bool(false),
+        ]]
+    );
+    let result = sql
+        .execute("SELECT XMLPARSE(CONTENT 'text<a/>')::xml::text, xml_is_well_formed_content('text<a/>'), xml_is_well_formed_document('<!-- no element -->')")
+        .unwrap();
+    assert_eq!(
+        result.rows,
+        vec![vec![
+            SqlValue::String("text<a/>".into()),
+            SqlValue::Bool(true),
+            SqlValue::Bool(false),
+        ]]
+    );
+    sql.execute("COMMIT").unwrap();
+    for input in [
+        "SELECT 'text'::xml",
+        "SELECT XML 'text'",
+        "SELECT xml_in('text')",
+    ] {
+        sql.execute("SET XMLOPTION TO DOCUMENT").unwrap();
+        let error = sql.execute(input).unwrap_err();
+        assert_eq!(error.sqlstate(), "2200M", "{input}");
+    }
+    let normalized = sql
+        .execute("SELECT set_config('xmloption', 'CoNTent', false)")
+        .unwrap();
+    assert_eq!(
+        normalized.rows,
+        vec![vec![SqlValue::String("content".into())]]
+    );
+    assert_eq!(
+        sql.execute("SELECT 'text'::xml::text").unwrap().rows,
+        vec![vec![SqlValue::String("text".into())]]
+    );
+}
+
+#[test]
+fn xml_document_mode_applies_to_assignment_and_copy_input() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute(
+        "CREATE TABLE xml_write_input (id int PRIMARY KEY, body xml);
+         SET xmloption TO DOCUMENT;
+         INSERT INTO xml_write_input VALUES (1, XMLPARSE(CONTENT 'keep this fragment'));",
+    )
+    .unwrap();
+
+    for (statement, state) in [
+        (
+            "INSERT INTO xml_write_input VALUES (2, 'bad fragment')",
+            "2200M",
+        ),
+        (
+            "INSERT INTO xml_write_input SELECT 2, 'bad fragment'",
+            "2200M",
+        ),
+        (
+            "INSERT INTO xml_write_input SELECT 2, 'typed text'::text WHERE false",
+            "42804",
+        ),
+        (
+            "UPDATE xml_write_input SET body = 'bad fragment' WHERE id = 1",
+            "2200M",
+        ),
+    ] {
+        assert_eq!(
+            sql.execute(statement).unwrap_err().sqlstate(),
+            state,
+            "{statement}"
+        );
+    }
+    let error = sql
+        .copy_insert_rows_reporting_at_lines(
+            "xml_write_input",
+            &[],
+            vec![vec![Some("2".into()), Some("<a/><b/>".into())]],
+            &[1],
+        )
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "2200M");
+    assert!(error.fields().iter().any(|field| {
+        matches!(field, bicdb_sql::SqlErrorField::Context(context)
+            if context == "COPY xml_write_input, line 1, column body: \"<a/><b/>\"")
+    }));
+    let inserted = sql
+        .copy_insert_rows(
+            "xml_write_input",
+            &[],
+            vec![vec![Some("2".into()), Some("<root/>".into())]],
+        )
+        .unwrap();
+    assert_eq!(inserted, 1);
+    assert_eq!(
+        sql.execute("SELECT body::text FROM xml_write_input ORDER BY id")
+            .unwrap()
+            .rows,
+        vec![
+            vec![SqlValue::String("keep this fragment".into())],
+            vec![SqlValue::String("<root/>".into())]
+        ]
+    );
+}

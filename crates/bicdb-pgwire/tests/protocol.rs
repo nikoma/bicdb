@@ -8094,6 +8094,62 @@ fn extended_query_binary_array_matrix_covers_every_registered_scalar_codec() {
 }
 
 #[test]
+fn authored_text_search_ddl_is_described_without_executing_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        bicdb_pgwire::handle_client(stream, path).unwrap();
+    });
+
+    let mut client = TcpStream::connect(address).unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+
+    send_parse(
+        &mut client,
+        "create_search",
+        "CREATE TEXT SEARCH CONFIGURATION wire_search (COPY = pg_catalog.english)",
+        &[],
+    );
+    send_bind(&mut client, "description", "create_search", &[]);
+    send_describe_portal(&mut client, "description");
+    send_sync(&mut client);
+    let (tags, status) = read_tags_until_ready(&mut client);
+    assert_eq!(status, b'I');
+    assert!(tags.contains(&b'n'));
+    assert!(!tags.contains(&b'E'));
+    assert!(!tags.contains(&b'C'));
+
+    send_query(
+        &mut client,
+        "SELECT count(*) FROM pg_ts_config WHERE cfgname = 'wire_search'",
+    );
+    assert_eq!(read_query_rows(&mut client), vec![vec!["0".to_owned()]]);
+
+    send_bind(&mut client, "execution", "create_search", &[]);
+    send_execute(&mut client, "execution");
+    send_sync(&mut client);
+    let (tags, status) = read_tags_until_ready(&mut client);
+    assert_eq!(status, b'I');
+    assert!(tags.contains(&b'C'));
+    assert!(!tags.contains(&b'E'));
+
+    send_query(
+        &mut client,
+        "SELECT 'wire_search'::regconfig, to_tsvector('wire_search', 'running foxes')",
+    );
+    assert_eq!(
+        read_query_rows(&mut client),
+        vec![vec!["wire_search".to_owned(), "'fox':2 'run':1".to_owned()]],
+    );
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
+}
+
+#[test]
 fn extended_query_binary_text_search_parameters_and_results_match_postgres() {
     let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

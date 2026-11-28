@@ -26,6 +26,7 @@ mod named_joins;
 pub(crate) use inline_routine::validate_inline_sql_routine;
 pub(crate) use joins_windows::RowJoinPrediction;
 pub(crate) mod materialize;
+mod outer_aggregates;
 mod pg_catalog;
 mod predicates_locators;
 pub(crate) use predicates_locators::selection_has_false_term;
@@ -62,11 +63,19 @@ pub fn is_postgres_rule_command(sql: &str) -> Result<bool> {
     crate::query_rules::is_rule_command(sql)
 }
 
+/// Text search configuration DDL has neither parameters nor result columns.
+pub fn is_postgres_text_search_ddl(sql: &str) -> bool {
+    crate::session::text_search_ddl::is_text_search_ddl(sql)
+}
+
 fn parse_inference_statements(db: &BicDb, sql: &str) -> Result<Vec<Statement>> {
     if let Some((stripped, _)) = postgres_transaction_deferrability(sql)? {
         return parse_statements(&stripped);
     }
-    if is_constraint_timing_command(sql)? || is_postgres_rule_command(sql)? {
+    if is_constraint_timing_command(sql)?
+        || is_postgres_rule_command(sql)?
+        || is_postgres_text_search_ddl(sql)
+    {
         return Ok(Vec::new());
     }
     if crate::recursive_search_cycle::lower(sql).is_some() {
@@ -5521,7 +5530,9 @@ impl<'db> SqlEngine<'db> {
 
     #[inline(never)]
     fn execute_query_guarded(&self, query: &Query) -> Result<SqlResult> {
-        let _xml_binary = crate::xml::XmlBinaryScope::enter(&self.session_gucs);
+        let _authored_text_search =
+            crate::fts::authored::Scope::enter(self.db_ref(), &self.session_gucs)?;
+        let _xml_settings = crate::xml::XmlSettingsScope::enter(&self.session_gucs);
         let _collations = crate::collations::ActiveCollations::install(self.db_ref())?;
         self.require_query_exact_decimal_units(query)?;
         let named_join = self.rewrite_named_join_query(query)?;
@@ -5581,6 +5592,9 @@ impl<'db> SqlEngine<'db> {
             return self.execute_grouping_sets_query(query);
         }
         self.check_cancellation()?;
+        if let Some(rewritten) = self.rewrite_outer_owned_scalar_aggregates(query)? {
+            return self.execute_query(&rewritten);
+        }
         if let Some(rewritten) = rewrite_ordinal_order_by(
             query,
             &|relation| table_factor_column_names(self.db, relation),

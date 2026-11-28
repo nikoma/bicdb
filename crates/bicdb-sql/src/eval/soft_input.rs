@@ -65,6 +65,9 @@ pub(crate) fn soft_input_error(
         .ok()
         .map(|(pg_type, _)| pg_type);
     let result = match (db, builtin.clone()) {
+        (_, Some(pg_type)) if pg_type == "xml" && crate::xml::xml_input_is_document() => {
+            crate::xml::xml_input_value(input)
+        }
         // A built-in type's input function applies its type modifier the
         // way assignment does (`char(4)` rejects five characters, `bit(10)`
         // rejects eight digits) rather than truncating like an explicit cast.

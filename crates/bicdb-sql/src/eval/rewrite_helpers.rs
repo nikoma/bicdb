@@ -53,7 +53,7 @@ pub(crate) fn literal_to_value(value: &ValueWithSpan) -> Result<SqlValue> {
 
 pub(crate) fn typed_string_to_value(value: &TypedString) -> Result<SqlValue> {
     let literal = literal_to_value(&value.value)?;
-    if let Some(input) = typed_string_integer_input(&literal, &value.data_type) {
+    if let Some(input) = typed_string_builtin_input(&literal, &value.data_type) {
         return input;
     }
     cast_value(literal, &value.data_type)
@@ -61,18 +61,21 @@ pub(crate) fn typed_string_to_value(value: &TypedString) -> Result<SqlValue> {
 
 pub(crate) fn typed_string_to_value_with_db(db: &BicDb, value: &TypedString) -> Result<SqlValue> {
     let literal = literal_to_value(&value.value)?;
-    if let Some(input) = typed_string_integer_input(&literal, &value.data_type) {
+    if let Some(input) = typed_string_builtin_input(&literal, &value.data_type) {
         return input;
     }
     cast_value_with_db(db, literal, &value.data_type)
 }
 
-/// `int2 '34.5'` is the type's input function applied to the literal.
-fn typed_string_integer_input(
+/// Typed literals go through their type's input function.
+fn typed_string_builtin_input(
     literal: &SqlValue,
     data_type: &DataType,
 ) -> Option<Result<SqlValue>> {
     let (pg_type, _) = pg_type_from_data_type(data_type).ok()?;
+    if pg_type == "xml" && crate::xml::xml_input_is_document() {
+        return Some(crate::xml::xml_input_value(literal.clone()));
+    }
     text_input_integer_value(literal, &pg_type)
 }
 

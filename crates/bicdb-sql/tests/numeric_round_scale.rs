@@ -53,13 +53,24 @@ fn numeric_rounding_and_special_arithmetic_follow_postgresql() {
     let rows = sql
         .execute(
             "WITH v(x) AS (VALUES ('Infinity'::numeric), ('-Infinity'), ('NaN'), ('4.200'))
-             SELECT -x FROM v",
+             SELECT -x, abs(x), round(x), trunc(x, 1) FROM v",
         )
         .unwrap()
         .rows;
     assert_eq!(
-        rows.iter().map(|row| row[0].to_cell()).collect::<Vec<_>>(),
-        ["-Infinity", "Infinity", "NaN", "-4.200"]
+        rows.iter()
+            .map(|row| row
+                .iter()
+                .map(|value| value.to_cell())
+                .collect::<Vec<_>>()
+                .join("|"))
+            .collect::<Vec<_>>(),
+        [
+            "-Infinity|Infinity|Infinity|Infinity",
+            "Infinity|Infinity|-Infinity|-Infinity",
+            "NaN|NaN|NaN|NaN",
+            "-4.200|4.200|4|4.2",
+        ]
     );
     for (statement, expected) in cases {
         let result = sql.execute(statement).unwrap();

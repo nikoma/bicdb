@@ -594,3 +594,70 @@ fn pg_attribute_keeps_column_inheritance_provenance_through_rollback_and_reopen(
         ["a|f|2", "b|t|1", "c|f|1"]
     );
 }
+
+#[test]
+fn inheritance_respects_not_null_no_inherit_and_validation_state() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = open(root.path());
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE TABLE required_parent (a int, b int NOT NULL);
+             CREATE TABLE ordinary_parent (a int, b int);
+             CREATE TABLE local_parent (a int, b int NOT NULL NO INHERIT);
+             CREATE TABLE nullable_child (a int, b int);
+             CREATE TABLE local_child (a int, b int NOT NULL NO INHERIT);
+             CREATE TABLE unvalidated_child (a int, b int);
+             ALTER TABLE unvalidated_child ADD NOT NULL b NOT VALID",
+        )
+        .unwrap();
+
+    for statement in [
+        "CREATE TABLE rejected_child (b int NOT NULL NO INHERIT) INHERITS (required_parent)",
+        "CREATE TABLE rejected_child (CONSTRAINT local_nn NOT NULL b NO INHERIT) INHERITS (required_parent)",
+        "CREATE TABLE rejected_child (b int NOT NULL NO INHERIT) INHERITS (ordinary_parent,required_parent)",
+    ] {
+        let error = session.execute(statement).unwrap_err();
+        assert_eq!(error.sqlstate(), "42804");
+        assert_eq!(
+            error.postgres_message(),
+            "cannot define not-null constraint with NO INHERIT on column \"b\""
+        );
+        assert_eq!(
+            rows(&mut session, "SELECT to_regclass('rejected_child') IS NULL"),
+            ["t"]
+        );
+    }
+
+    session
+        .execute("ALTER TABLE nullable_child INHERIT local_parent")
+        .unwrap();
+    assert_eq!(
+        rows(
+            &mut session,
+            "INSERT INTO nullable_child (b) VALUES(NULL) RETURNING b"
+        ),
+        ["NULL"]
+    );
+    for (relation, state) in [
+        ("nullable_child", "42804"),
+        ("local_child", "42P17"),
+        ("unvalidated_child", "42P17"),
+    ] {
+        let error = session
+            .execute(&format!("ALTER TABLE {relation} INHERIT required_parent"))
+            .unwrap_err();
+        assert_eq!(error.sqlstate(), state);
+    }
+
+    session
+        .execute(
+            "CREATE TABLE accepted_child (b int NOT NULL NO INHERIT) INHERITS (local_parent);
+             CREATE TABLE unrequired_grandchild () INHERITS (accepted_child)",
+        )
+        .unwrap();
+    assert_eq!(
+        rows(&mut session, "SELECT attnotnull FROM pg_attribute WHERE attrelid='unrequired_grandchild'::regclass AND attname='b'"),
+        ["f"]
+    );
+}

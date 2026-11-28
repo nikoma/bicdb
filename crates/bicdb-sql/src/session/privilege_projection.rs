@@ -453,6 +453,7 @@ impl<'db> SqlSession<'db> {
                 super::create_table_as::CreateTableAs::from_parsed(create_table)?,
             );
         }
+        let original_name = &create_table.name;
         let temporary_target = self.temporary_table_target(create_table)?;
         let create_table = temporary_target.as_ref().unwrap_or(create_table);
 
@@ -914,6 +915,10 @@ impl<'db> SqlSession<'db> {
             .as_deref()
             .map(partitioning_schema_from_expr)
             .transpose()?;
+
+        if postgres_inheritance {
+            super::not_null_constraints::validate_created_no_inherit(original_name, &parents)?;
+        }
 
         let mut schema = TableSchema {
             comment: None,

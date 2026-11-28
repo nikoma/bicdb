@@ -902,7 +902,13 @@ impl<'db> SqlSession<'db> {
                     }
                     None => false,
                 };
-                let result = self.execute_inner(&sql)?;
+                let result = {
+                    let _scope = super::not_null_constraints::CreateNoInheritScope::enter(
+                        &table,
+                        no_inherit_not_null.clone(),
+                    );
+                    self.execute_inner(&sql)?
+                };
                 if existed {
                     return Ok(result);
                 }

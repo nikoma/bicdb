@@ -433,6 +433,16 @@ pub(crate) fn not_null_constraint_name(table: &str, column: &str) -> String {
     format!("{table}_{column}_not_null")
 }
 
+pub(crate) fn inheritable_not_null(schema: &TableSchema, column: &str) -> bool {
+    schema.column(column).is_some_and(|column| {
+        !column.hidden
+            && (!column.nullable || column.primary_key)
+            && !schema
+                .no_inherit_constraints
+                .contains(&not_null_constraint_name(&schema.name, &column.name))
+    })
+}
+
 /// The direct parents whose not-null constraint on `column` `schema`
 /// inherits (constraints declared NO INHERIT are not passed on).
 pub(crate) fn inherited_not_null_parents<'a>(
@@ -444,15 +454,7 @@ pub(crate) fn inherited_not_null_parents<'a>(
         .inherits
         .iter()
         .filter_map(|parent| schemas.iter().find(|candidate| candidate.name == *parent))
-        .filter(|parent| {
-            parent.columns.iter().any(|candidate| {
-                candidate.name == column
-                    && !candidate.hidden
-                    && (!candidate.nullable || candidate.primary_key)
-            }) && !parent
-                .no_inherit_constraints
-                .contains(&not_null_constraint_name(&parent.name, column))
-        })
+        .filter(|parent| inheritable_not_null(parent, column))
         .collect()
 }
 

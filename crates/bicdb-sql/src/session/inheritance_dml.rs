@@ -512,6 +512,7 @@ impl<'db> SqlSession<'db> {
             ));
         }
         let child_name = relation_name_for_message(&child.name);
+        let mut not_null_conflict = None;
         for column in parent.columns.iter().filter(|column| !column.hidden) {
             let Some(own) = child.column(&column.name) else {
                 return Err(wrong(format!(
@@ -535,11 +536,30 @@ impl<'db> SqlSession<'db> {
                     None,
                 ));
             }
-            if !column.nullable && own.nullable {
+            let inherits_not_null = if postgres {
+                inheritable_not_null(&parent, &column.name)
+            } else {
+                !column.nullable
+            };
+            if inherits_not_null && own.nullable {
+                let child_table = if postgres {
+                    format!(" \"{child_name}\"")
+                } else {
+                    String::new()
+                };
                 return Err(wrong(format!(
-                    "column \"{}\" in child table must be marked NOT NULL",
+                    "column \"{}\" in child table{child_table} must be marked NOT NULL",
                     column.name
                 )));
+            }
+            if postgres && inherits_not_null && not_null_conflict.is_none() {
+                let key = not_null_constraint_name(&child.name, &column.name);
+                if child.no_inherit_constraints.contains(&key) {
+                    not_null_conflict = Some((&column.name, "non-inherited"));
+                } else if !column.attributes.not_null_not_valid && own.attributes.not_null_not_valid
+                {
+                    not_null_conflict = Some((&column.name, "NOT VALID"));
+                }
             }
             if postgres {
                 let parent_kind = crate::inheritance::column_generation_kind(
@@ -573,6 +593,15 @@ impl<'db> SqlSession<'db> {
                     _ => {}
                 }
             }
+        }
+        if let Some((column, conflict)) = not_null_conflict {
+            let schemas = list_schemas(self.db_ref())?;
+            let name = effective_not_null_name(&schemas, &child, column);
+            return Err(SqlError::data_exception(
+                "42P17",
+                format!("constraint \"{name}\" conflicts with {conflict} constraint on child table \"{child_name}\""),
+                None,
+            ));
         }
         for constraint in &parent.constraints {
             let ConstraintSchema::Check {

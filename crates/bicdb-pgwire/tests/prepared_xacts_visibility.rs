@@ -38,7 +38,13 @@ async fn prepare_records_are_not_a_relation_for_any_role() {
     admin
         .batch_execute(
             "CREATE ROLE p_reader LOGIN; CREATE TABLE secret(id int PRIMARY KEY, v text); \
-             GRANT ALL ON secret TO p_reader; BEGIN; INSERT INTO secret VALUES (1, 'pending'); \
+             GRANT ALL ON secret TO p_reader",
+        )
+        .await
+        .unwrap();
+    admin
+        .batch_execute(
+            "BEGIN; INSERT INTO secret VALUES (1, 'pending'); \
              PREPARE TRANSACTION 'hidden'",
         )
         .await

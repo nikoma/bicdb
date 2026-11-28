@@ -2616,7 +2616,6 @@ fn handle_frontend_message(
                     .copy_in
                     .as_mut()
                     .and_then(|copy| copy.simple_batch.take());
-                let owns_transaction = batch.as_ref().is_some_and(|batch| batch.owns_transaction);
                 let result = finish_copy_in(server, state).and_then(|count| {
                     if let Some(seq) = bicdb_core::take_thread_commit_seq() {
                         server.sync_quorum.wait_for(seq)?;
@@ -2641,8 +2640,8 @@ fn handle_frontend_message(
                     }
                     Ok(_) => {}
                     Err(error) => {
-                        if owns_transaction && state.in_transaction {
-                            rollback_open_transaction(server, state)?;
+                        if state.implicit_simple_transaction {
+                            rollback_open_transaction(server, state, None)?;
                         }
                         state.failed_queries += 1;
                         server.failed_queries.fetch_add(1, Ordering::SeqCst);
@@ -3046,7 +3045,6 @@ struct Portal {
 #[derive(Debug)]
 struct SimpleQueryBatch {
     statements: VecDeque<String>,
-    owns_transaction: bool,
 }
 
 #[derive(Debug)]
@@ -3245,6 +3243,9 @@ struct ConnectionState {
     queries_executed: u64,
     failed_queries: u64,
     in_transaction: bool,
+    /// The current transaction was opened by a multi-statement Simple Query
+    /// and has not been promoted to an explicit block by BEGIN.
+    implicit_simple_transaction: bool,
     failed_transaction: bool,
     oracle_error_recovered: bool,
     discard_until_sync: bool,
@@ -3384,6 +3385,7 @@ impl ConnectionState {
             queries_executed: 0,
             failed_queries: 0,
             in_transaction: false,
+            implicit_simple_transaction: false,
             failed_transaction: false,
             oracle_error_recovered: false,
             discard_until_sync: false,
@@ -3550,6 +3552,19 @@ fn execute_server_query(
     if sql.contains(';') {
         let statements = split_sql_statements(sql);
         if statements.len() > 1 {
+            let oracle = bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile);
+            let standby = server.config.standby_read_only
+                && server.read_db_for_transaction_progress()?.ha_role() == HaRole::Standby;
+            if !oracle && !standby {
+                return execute_simple_query_batch(
+                    stream,
+                    server,
+                    state,
+                    SimpleQueryBatch {
+                        statements: statements.into(),
+                    },
+                );
+            }
             let mut boundaries = state.in_transaction;
             let mut copy = false;
             for statement in &statements {
@@ -3562,24 +3577,6 @@ fn execute_server_query(
                     .is_some()
                     || delegation::transaction_end(statement, &normalized)?.is_some();
                 copy |= normalized.starts_with("copy ");
-            }
-            let oracle = bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile);
-            let standby = server.config.standby_read_only
-                && server.read_db_for_transaction_progress()?.ha_role() == HaRole::Standby;
-            if !oracle && !standby {
-                let owns_transaction = !boundaries;
-                if owns_transaction {
-                    begin_buffered_transaction(server, state)?;
-                }
-                return execute_simple_query_batch(
-                    stream,
-                    server,
-                    state,
-                    SimpleQueryBatch {
-                        statements: statements.into(),
-                        owns_transaction,
-                    },
-                );
             }
             if boundaries || copy {
                 for statement in &statements[..statements.len() - 1] {
@@ -3751,9 +3748,20 @@ fn execute_simple_query_batch(
     state: &mut ConnectionState,
     mut batch: SimpleQueryBatch,
 ) -> Result<QueryFlow> {
-    let owns_transaction = batch.owns_transaction;
     let result = (|| {
         while let Some(statement) = batch.statements.pop_front() {
+            if !state.in_transaction {
+                let normalized = normalize_executable_sql(&statement);
+                let opens_block = is_transaction_control_candidate(&normalized)
+                    && parse_transaction_control_for_profile(
+                        &statement,
+                        &server.config.sql_profile,
+                    )? == Some(TransactionControl::Begin);
+                if !opens_block {
+                    begin_buffered_transaction(server, state)?;
+                    state.implicit_simple_transaction = true;
+                }
+            }
             if matches!(
                 execute_server_query(stream, server, state, &statement)?,
                 QueryFlow::CopyInStarted
@@ -3765,19 +3773,24 @@ fn execute_simple_query_batch(
                 return Ok(QueryFlow::CopyInStarted);
             }
         }
-        if owns_transaction {
+        if state.implicit_simple_transaction {
             // The implicit COMMIT can issue notices but has no result frame.
+            state.implicit_simple_transaction = false;
             let result = execute_server_sql_with_options_normalized(
                 server, state, "COMMIT", "commit", false,
-            )?;
+            );
+            if result.is_err() && state.in_transaction {
+                state.implicit_simple_transaction = true;
+            }
+            let result = result?;
             for notice in &result.notices {
                 notice_response(stream, notice)?;
             }
         }
         Ok(QueryFlow::Complete)
     })();
-    if result.is_err() && owns_transaction && state.in_transaction {
-        rollback_open_transaction(server, state)?;
+    if result.is_err() && state.implicit_simple_transaction {
+        rollback_open_transaction(server, state, None)?;
     }
     result
 }
@@ -4059,7 +4072,7 @@ fn begin_copy_in(
     if owns_serializable_transaction {
         begin_buffered_transaction(server, state)?;
         if let Err(error) = acquire_postgres_statement_snapshot(server, state, None, || true) {
-            rollback_open_transaction(server, state)?;
+            rollback_open_transaction(server, state, None)?;
             return Err(error);
         }
     }
@@ -4153,7 +4166,7 @@ fn begin_copy_in(
         Ok(columns) => columns,
         Err(error) => {
             if owns_serializable_transaction {
-                rollback_open_transaction(server, state)?;
+                rollback_open_transaction(server, state, None)?;
             } else if started_guc_transaction {
                 state.session_state.rollback_transaction();
             }
@@ -4884,7 +4897,7 @@ fn execute_server_db_sql_for_state_inner(
                 Ok(result)
             }
             Err(error) => {
-                rollback_open_transaction(server, state)?;
+                rollback_open_transaction(server, state, None)?;
                 Err(error)
             }
         };
@@ -5511,6 +5524,14 @@ fn acquire_postgres_statement_snapshot(
     Ok(())
 }
 
+fn no_explicit_transaction_warning() -> bicdb_sql::SqlNotice {
+    bicdb_sql::SqlNotice {
+        sqlstate: "25P01".to_string(),
+        message: "there is no transaction in progress".to_string(),
+        fields: vec![bicdb_sql::SqlErrorField::Severity("WARNING".to_string())],
+    }
+}
+
 /// `execute_server_sql_with_options` for a caller that already normalized
 /// the text (the simple-query path normalizes once per query).
 fn execute_server_sql_with_options_normalized(
@@ -5685,7 +5706,7 @@ fn execute_server_sql_with_options_normalized(
             })?;
         }
         if transaction_control == Some(Some(TransactionControl::Begin)) && state.in_transaction {
-            // PostgreSQL: BEGIN inside a transaction block warns and keeps the
+            // PostgreSQL: BEGIN inside an explicit transaction block warns and keeps the
             // block, but still applies its modes as SET TRANSACTION would
             // (`START TRANSACTION READ ONLY` makes the open block read-only).
             if state.failed_transaction {
@@ -5706,11 +5727,13 @@ fn execute_server_sql_with_options_normalized(
                 });
             }
             let mut result = SqlResult::command("BEGIN");
-            result.notices.push(bicdb_sql::SqlNotice {
-                sqlstate: "25001".to_string(),
-                message: "there is already a transaction in progress".to_string(),
-                fields: vec![bicdb_sql::SqlErrorField::Severity("WARNING".to_string())],
-            });
+            if !std::mem::take(&mut state.implicit_simple_transaction) {
+                result.notices.push(bicdb_sql::SqlNotice {
+                    sqlstate: "25001".to_string(),
+                    message: "there is already a transaction in progress".to_string(),
+                    fields: vec![bicdb_sql::SqlErrorField::Severity("WARNING".to_string())],
+                });
+            }
             Ok(result)
         } else if transaction_control == Some(Some(TransactionControl::Begin)) {
             let deferrable = if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile) {
@@ -5782,18 +5805,22 @@ fn execute_server_sql_with_options_normalized(
         } else if let Some(command) = two_phase_command.clone() {
             two_phase::execute(server, state, command, &cancellation)
         } else if let Some(ending) = transaction_end {
-            if matches!(
-                ending,
-                delegation::TransactionEnd::Commit { chain: true }
-                    | delegation::TransactionEnd::Rollback { chain: true }
-            ) && !state.in_transaction
-            {
-                return Err(SqlError::InvalidTransactionState {
-                    message: "AND CHAIN requires an active transaction".into(),
+            let had_explicit_block = state.in_transaction && !state.implicit_simple_transaction;
+            if !had_explicit_block {
+                let command = match ending {
+                    delegation::TransactionEnd::Commit { chain: true } => Some("COMMIT"),
+                    delegation::TransactionEnd::Rollback { chain: true } => Some("ROLLBACK"),
+                    _ => None,
+                };
+                if let Some(command) = command {
+                    return Err(SqlError::InvalidTransactionState {
+                        message: format!(
+                            "{command} AND CHAIN can only be used in transaction blocks"
+                        ),
+                    }
+                    .into());
                 }
-                .into());
             }
-            let had_transaction = state.in_transaction;
             let chain_read_only = state.session_state.transaction_read_only();
             let chain_deferrable = state.session_state.transaction_deferrable();
             let chain_isolation = state
@@ -5808,19 +5835,16 @@ fn execute_server_sql_with_options_normalized(
                 ),
                 delegation::TransactionEnd::Commit { chain }
                 | delegation::TransactionEnd::Rollback { chain } => {
-                    rollback_open_transaction(server, state)?;
+                    rollback_open_transaction(server, state, Some(&cancellation))?;
                     (SqlResult::command("ROLLBACK"), chain)
                 }
             };
             // Notices the deferred triggers reported while committing.
             result.notices.append(&mut state.pending_notices);
-            if !had_transaction && !bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile)
+            if !had_explicit_block
+                && !bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile)
             {
-                result.notices.push(bicdb_sql::SqlNotice {
-                    sqlstate: "25P01".to_string(),
-                    message: "there is no transaction in progress".to_string(),
-                    fields: vec![bicdb_sql::SqlErrorField::Severity("WARNING".to_string())],
-                });
+                result.notices.push(no_explicit_transaction_warning());
             }
             if chain {
                 begin_buffered_transaction(server, state)?;
@@ -5851,7 +5875,7 @@ fn execute_server_sql_with_options_normalized(
             }
             Ok(result)
         } else if let Some(command) = parse_savepoint_command(sql, normalized) {
-            execute_savepoint_command(server, state, command)
+            execute_savepoint_command(server, state, command, &cancellation)
         } else if state.failed_transaction {
             Err(PgWireError::InFailedTransaction)
         } else if let Some(result) = delegation::execute_delegation(server, state, sql)? {

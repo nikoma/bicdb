@@ -452,7 +452,7 @@ pub(crate) fn commit_buffered_transaction(
         if let Some(tx) = state.tx.take() {
             let _ = tx.rollback();
         }
-        let _ = rollback_transaction_ddl_to_len(server, state, 0);
+        let _ = rollback_transaction_ddl_to_len(server, state, 0, Some(cancellation));
         state.session_state.rollback_transaction();
         state.tx_shared_role_ddl.clear();
         clear_open_transaction_state(server, state);
@@ -471,7 +471,7 @@ pub(crate) fn commit_buffered_transaction(
         {
             Ok(tx) => tx,
             Err(error) => {
-                let _ = rollback_transaction_ddl_to_len(server, state, 0);
+                let _ = rollback_transaction_ddl_to_len(server, state, 0, Some(cancellation));
                 state.session_state.rollback_transaction();
                 state.tx_shared_role_ddl.clear();
                 clear_open_transaction_state(server, state);
@@ -525,6 +525,9 @@ pub(crate) fn commit_buffered_transaction(
                     // State is already committed: cleanup errors must never
                     // invoke the transaction's former DDL undo log.
                     drop(tx);
+                    // COMMIT is already durable. A woken row waiter may
+                    // hold a shared database guard while it resumes execution.
+                    cancellation.release_execution_admission();
                     let admission = server.try_admit_write()?;
                     let mut db = server.write_db_with_admission(&admission)?;
                     committed_catalog_scopes.finish_committed_catalog_scopes(&db)?;
@@ -541,7 +544,7 @@ pub(crate) fn commit_buffered_transaction(
                 // right after recovery, when conflict-heavy retries make
                 // commits fail.
                 let _ = tx.rollback();
-                let _ = rollback_transaction_ddl_to_len(server, state, 0);
+                let _ = rollback_transaction_ddl_to_len(server, state, 0, Some(cancellation));
                 state.session_state.rollback_transaction();
                 state.tx_shared_role_ddl.clear();
                 clear_open_transaction_state(server, state);
@@ -620,6 +623,7 @@ pub(crate) fn commit_buffered_transaction(
 pub(crate) fn rollback_open_transaction(
     server: &Arc<PgWireServer>,
     state: &mut ConnectionState,
+    cancellation: Option<&CancellationToken>,
 ) -> Result<()> {
     state.tx_statements.clear();
     let transaction_rollback = state
@@ -628,7 +632,7 @@ pub(crate) fn rollback_open_transaction(
         .map(Transaction::rollback)
         .unwrap_or(Ok(()))
         .map_err(PgWireError::from);
-    let ddl_rollback = rollback_transaction_ddl_to_len(server, state, 0);
+    let ddl_rollback = rollback_transaction_ddl_to_len(server, state, 0, cancellation);
     state.session_state.rollback_transaction();
     state.tx_shared_role_ddl.clear();
     state.committed_shared_role_ddl.clear();
@@ -645,6 +649,7 @@ pub(crate) fn clear_open_transaction_state(server: &PgWireServer, state: &mut Co
     state.catalog_cache.close_transaction_large_objects();
     delegation::clear_delegation(server, state);
     state.in_transaction = false;
+    state.implicit_simple_transaction = false;
     state.failed_transaction = false;
     state.tx_statements.clear();
     state.tx = None;
@@ -660,9 +665,15 @@ pub(crate) fn rollback_transaction_ddl_to_len(
     server: &Arc<PgWireServer>,
     state: &mut ConnectionState,
     len: usize,
+    cancellation: Option<&CancellationToken>,
 ) -> Result<()> {
     if state.tx_ddl_undo.len() <= len {
         return Ok(());
+    }
+    // Releasing row locks can wake a statement that needs to reacquire its
+    // execution permit while holding a shared database guard.
+    if let Some(cancellation) = cancellation {
+        cancellation.release_execution_admission();
     }
     ensure_server_writable(server)?;
     let admission = server.try_admit_write()?;
@@ -1522,13 +1533,14 @@ pub(crate) fn execute_savepoint_command(
     server: &Arc<PgWireServer>,
     state: &mut ConnectionState,
     command: SavepointCommand,
+    cancellation: &CancellationToken,
 ) -> Result<SqlResult> {
     match command {
         SavepointCommand::Create(name) => {
             if state.failed_transaction {
                 return Err(PgWireError::InFailedTransaction);
             }
-            if !state.in_transaction {
+            if !state.in_transaction || state.implicit_simple_transaction {
                 if server.config.sql_profile == bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE {
                     // Oracle SAVEPOINT can establish an otherwise idle
                     // transaction; PostgreSQL retains its explicit-block rule.
@@ -1558,7 +1570,7 @@ pub(crate) fn execute_savepoint_command(
             Ok(SqlResult::command("SAVEPOINT"))
         }
         SavepointCommand::RollbackTo(name) => {
-            if !state.in_transaction {
+            if !state.in_transaction || state.implicit_simple_transaction {
                 if server.config.sql_profile == bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE {
                     return Err(missing_transport_savepoint(server, state, name));
                 }
@@ -1590,7 +1602,7 @@ pub(crate) fn execute_savepoint_command(
                     state.savepoints[position].lock_len,
                 )?;
             }
-            rollback_transaction_ddl_to_len(server, state, ddl_undo_len)?;
+            rollback_transaction_ddl_to_len(server, state, ddl_undo_len, Some(cancellation))?;
             // What was created or truncated after the savepoint is undone.
             state
                 .tx_ddl_undo
@@ -1606,7 +1618,7 @@ pub(crate) fn execute_savepoint_command(
             if state.failed_transaction {
                 return Err(PgWireError::InFailedTransaction);
             }
-            if !state.in_transaction {
+            if !state.in_transaction || state.implicit_simple_transaction {
                 if server.config.sql_profile == bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE {
                     return Err(missing_transport_savepoint(server, state, name));
                 }
@@ -2288,7 +2300,7 @@ pub(crate) fn finish_copy_in(
             Ok(count)
         });
         if result.is_err() && state.in_transaction {
-            rollback_open_transaction(server, state)?;
+            rollback_open_transaction(server, state, None)?;
         }
         result
     } else {
@@ -2317,12 +2329,8 @@ pub(crate) fn finish_copy_in(
 
 pub(crate) fn abort_copy_in(server: &Arc<PgWireServer>, state: &mut ConnectionState) -> Result<()> {
     if let Some(copy) = state.copy_in.take() {
-        if copy.owns_serializable_transaction
-            || copy
-                .simple_batch
-                .is_some_and(|batch| batch.owns_transaction)
-        {
-            rollback_open_transaction(server, state)?;
+        if copy.owns_serializable_transaction || state.implicit_simple_transaction {
+            rollback_open_transaction(server, state, None)?;
         } else if copy.started_guc_transaction {
             state.session_state.rollback_transaction();
         }
@@ -2492,7 +2500,7 @@ pub(crate) fn finish_direct_copy_in(
             Ok(count)
         });
     if result.is_err() {
-        rollback_open_transaction(server, state)?;
+        rollback_open_transaction(server, state, None)?;
     }
     result
 }

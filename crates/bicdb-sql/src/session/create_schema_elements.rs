@@ -438,17 +438,31 @@ impl<'a> SqlSession<'a> {
         let gucs = Arc::make_mut(&mut self.session_gucs);
         let previous_role = owner.map(|owner| gucs.insert(CURRENT_ROLE_GUC.to_string(), owner));
         let previous_path = gucs.get("search_path").cloned();
-        let path = match &previous_path {
-            Some(path) if !path.trim().is_empty() => format!("{}, {path}", qualifier_sql(schema)),
-            _ => format!("{}, \"$user\", public", qualifier_sql(schema)),
+        let path = match previous_path.as_deref() {
+            Some(path) if path.trim().is_empty() => qualifier_sql(schema),
+            Some(path) => format!("{}, {path}", qualifier_sql(schema)),
+            None => format!("{}, \"$user\", public", qualifier_sql(schema)),
         };
         gucs.insert("search_path".to_string(), path);
-        let outcome = elements.iter().try_for_each(|element| {
-            let sql = element
-                .segments
-                .join(&format!("{}.", qualifier_sql(schema)));
-            self.execute_inner(&sql).map(|_| ())
-        });
+        let outcome = (|| {
+            let temp_schema = self.temp_schema_name();
+            let path = crate::search_path::binding_path_with_temp(
+                self.db_ref(),
+                &self.session_gucs,
+                temp_schema.as_deref(),
+            )?;
+            let _path_scope = crate::search_path::PathScope::enter(path.clone());
+            let qualifier = format!("{}.", qualifier_sql(schema));
+            for element in &elements {
+                let sql = element.segments.join(&qualifier);
+                let bound = match path.as_deref() {
+                    Some(path) => crate::search_path::bind_sql_text(self.db_ref(), &sql, path)?,
+                    None => None,
+                };
+                self.execute_inner(bound.as_deref().unwrap_or(&sql))?;
+            }
+            Ok(())
+        })();
         let gucs = Arc::make_mut(&mut self.session_gucs);
         match previous_path {
             Some(path) => {

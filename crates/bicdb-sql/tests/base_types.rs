@@ -395,6 +395,21 @@ fn variable_width_base_types_preserve_the_declared_storage_policy() {
                 .rows,
             vec![vec![SqlValue::String("héllo".into())]]
         );
+        session
+            .execute(&format!("INSERT INTO {name}_rows VALUES ('界')"))
+            .unwrap();
+        assert_eq!(
+            session
+                .execute(&format!(
+                    "SELECT value FROM {name}_rows ORDER BY value::text"
+                ))
+                .unwrap()
+                .rows,
+            vec![
+                vec![SqlValue::String("héllo".into())],
+                vec![SqlValue::String("界".into())],
+            ]
+        );
     }
 
     for sql in [

@@ -2608,6 +2608,47 @@ impl<'db> SqlEngine<'db> {
             return Some(());
         }
         match factor {
+            TableFactor::Table {
+                name,
+                alias,
+                args: Some(_),
+                with_ordinality,
+                ..
+            }
+            | TableFactor::Function {
+                name,
+                alias,
+                with_ordinality,
+                ..
+            } if relation_name(name).ok().is_some_and(|name| {
+                super::predicates_locators::text_search_debug_function_columns(&name).is_some()
+            }) =>
+            {
+                let table = relation_name(name).ok()?;
+                let alias_name = alias
+                    .as_ref()
+                    .map(|alias| ident_value(&alias.name))
+                    .unwrap_or_else(|| unqualified_relation(&table));
+                let alias_columns = alias
+                    .as_ref()
+                    .map(|alias| alias.columns.as_slice())
+                    .unwrap_or(&[]);
+                let mut columns =
+                    super::predicates_locators::text_search_debug_function_columns(&table)?
+                        .iter()
+                        .map(|(name, pg_type)| (name.to_string(), Some(pg_type.to_string())))
+                        .collect::<Vec<_>>();
+                if *with_ordinality {
+                    columns.push(("ordinality".to_string(), Some("int8".to_string())));
+                }
+                env.push(RelationColumns {
+                    alias: alias_name.to_ascii_lowercase(),
+                    row_type: None,
+                    columns: rename_relation_columns(columns, alias_columns)?,
+                });
+                Some(())
+            }
+
             TableFactor::UNNEST {
                 alias,
                 array_exprs,

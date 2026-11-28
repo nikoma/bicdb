@@ -1020,21 +1020,12 @@ impl<'db> SqlSession<'db> {
         let mut before_after_records = Vec::new();
         let mut partition_after_events = Vec::new();
         let mut partition_suppressed_deletes = Vec::new();
-        let partition_assigned_columns = if schema
-            .as_deref()
-            .is_some_and(|schema| schema.requires_row_move_plan())
-        {
-            update
-                .assignments
-                .iter()
-                .flat_map(|assignment| {
-                    super::row_assignments::assignment_columns(&assignment.target)
-                })
-                .map(relation_name)
-                .collect::<Result<Vec<_>>>()?
-        } else {
-            Vec::new()
-        };
+        let assigned_columns = update
+            .assignments
+            .iter()
+            .flat_map(|assignment| super::row_assignments::assignment_columns(&assignment.target))
+            .map(relation_name)
+            .collect::<Result<Vec<_>>>()?;
         // Whether anything downstream reads the pre-update image of a row:
         // unique-key change validation, inbound foreign keys, AFTER UPDATE
         // row triggers, or extension event bindings. When none applies (the
@@ -1414,6 +1405,7 @@ impl<'db> SqlSession<'db> {
                     schema
                         .as_deref()
                         .filter(|schema| schema.requires_row_move_plan()),
+                    Some(&assigned_columns),
                 )? {
                     Some(record) => record,
                     None => continue,
@@ -1440,7 +1432,7 @@ impl<'db> SqlSession<'db> {
                         before,
                         record,
                         statement_snapshot,
-                        &partition_assigned_columns,
+                        &assigned_columns,
                         reads_existing,
                         &mut partition_after_events,
                     )? {
@@ -1583,14 +1575,6 @@ impl<'db> SqlSession<'db> {
             .as_deref()
             .filter(|schema| !schema.requires_row_move_plan())
         {
-            let assigned_columns = update
-                .assignments
-                .iter()
-                .flat_map(|assignment| {
-                    super::row_assignments::assignment_columns(&assignment.target)
-                })
-                .map(relation_name)
-                .collect::<Result<Vec<_>>>()?;
             let checked = match &rls_violation {
                 Some((index, _)) => &updated_records[..*index],
                 None => &updated_records[..],

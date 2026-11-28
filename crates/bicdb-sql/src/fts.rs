@@ -12,6 +12,7 @@ use crate::{pg_internal_char_byte, BicDb, Result, SqlEngine, SqlError, SqlValue}
 pub(crate) mod authored;
 pub(crate) mod catalog;
 pub(crate) mod dictionary;
+pub(crate) mod parser;
 
 const MAX_LEXEME_BYTES: usize = bicdb_core::MAX_FULL_TEXT_TERM_BYTES;
 const MAX_POSITION: u16 = 16_383;
@@ -1599,6 +1600,55 @@ fn ts_lexize(dictionary: &SqlValue, token: &SqlValue) -> Result<SqlValue> {
         }
     }
     ts_lexize_builtin(&text, token)
+}
+
+/// Show each raw token and the dictionaries actually consulted by its configuration.
+pub(crate) fn debug_rows(db: &BicDb, config: &str, document: &str) -> Result<Vec<Vec<SqlValue>>> {
+    let mappings = match authored::normalization(config)? {
+        Some((_, Some(mappings))) => mappings,
+        Some((source_oid, None)) => Arc::new(catalog::builtin_config_mappings(source_oid)),
+        None => {
+            let oid = crate::eval::oid_alias_numeric_value(
+                db,
+                "regconfig",
+                &SqlValue::String(config.to_owned()),
+            )?;
+            Arc::new(catalog::builtin_config_mappings(oid))
+        }
+    };
+    parser::tokens(document)
+        .into_iter()
+        .map(|(kind, token)| {
+            let (alias, description) = DEFAULT_PARSER_TOKEN_TYPES[usize::from(kind) - 1];
+            let dictionary_oids = mappings.get(&kind).map(Vec::as_slice).unwrap_or(&[]);
+            let value = SqlValue::String(token.to_owned());
+            let mut accepted = SqlValue::Null;
+            let mut lexemes = SqlValue::Null;
+            for &oid in dictionary_oids {
+                let dictionary = SqlValue::Int(i64::from(oid));
+                let result = ts_lexize(&dictionary, &value)?;
+                if !matches!(result, SqlValue::Null) {
+                    accepted = dictionary;
+                    lexemes = result;
+                    break;
+                }
+            }
+            let dictionaries = crate::array_value(
+                dictionary_oids
+                    .iter()
+                    .map(|&oid| SqlValue::Int(i64::from(oid)))
+                    .collect(),
+            );
+            Ok(vec![
+                SqlValue::String(alias.to_owned()),
+                SqlValue::String(description.to_owned()),
+                value,
+                dictionaries,
+                accepted,
+                lexemes,
+            ])
+        })
+        .collect()
 }
 
 fn ts_lexize_builtin(name: &str, token: &SqlValue) -> Result<SqlValue> {
@@ -3404,6 +3454,19 @@ fn sql_value_number_array(value: &SqlValue) -> Result<Vec<f32>> {
     }
 }
 
+pub(crate) fn update_trigger_oid(name: &str) -> Option<i64> {
+    match name.strip_prefix("pg_catalog.").unwrap_or(name) {
+        "tsvector_update_trigger" => Some(3752),
+        "tsvector_update_trigger_column" => Some(3753),
+        _ => None,
+    }
+}
+
+pub(crate) fn update_trigger_vector(config: &SqlValue, document: &str) -> Result<String> {
+    let config = TextSearchConfig::parse(config)?;
+    Ok(to_tsvector(&config, document).to_postgres_text())
+}
+
 pub(crate) fn eval_fts_function_value(
     name: &str,
     args: &[SqlValue],
@@ -3412,6 +3475,13 @@ pub(crate) fn eval_fts_function_value(
     let name = name.strip_prefix("pg_catalog.").unwrap_or(name);
     if name == "ts_lexize" && args.len() == 2 {
         return ts_lexize(&args[0], &args[1]).map(Some);
+    }
+    if update_trigger_oid(name).is_some() && args.is_empty() {
+        return Err(SqlError::data_exception_public(
+            "XX000",
+            "tsvector_update_trigger: not fired by trigger manager",
+            None,
+        ));
     }
     let first_type = arg_types
         .and_then(|types| types.first())
@@ -3828,6 +3898,7 @@ pub(crate) fn fts_function_pg_type(
 ) -> Option<&'static str> {
     match name.strip_prefix("pg_catalog.").unwrap_or(name) {
         "to_tsvector" | "strip" => Some("tsvector"),
+        "tsvector_update_trigger" | "tsvector_update_trigger_column" => Some("trigger"),
         "to_tsquery"
         | "plainto_tsquery"
         | "phraseto_tsquery"

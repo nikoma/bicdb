@@ -3136,14 +3136,13 @@ pub(crate) fn cast_expr_value_with_db_and_source_type(
         .is_some_and(|target| matches!(target, "text" | "varchar"))
         && source_pg_type.as_deref().is_some_and(is_oid_alias_type)
     {
-        return render_oid_alias_value(
+        return oid_alias_text_value(
             db,
             source_pg_type
                 .as_deref()
                 .expect("alias source type checked"),
             &value,
-        )
-        .map(SqlValue::String);
+        );
     }
     if target_pg_type.as_deref() == Some("oid")
         && source_pg_type.as_deref().is_some_and(is_oid_alias_type)

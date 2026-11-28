@@ -1403,6 +1403,17 @@ pub fn render_oid_alias_array_value(
     .map(SqlValue::json)
 }
 
+pub(crate) fn oid_alias_text_value(
+    db: &BicDb,
+    pg_type: &str,
+    value: &SqlValue,
+) -> Result<SqlValue> {
+    if matches!(value, SqlValue::Null) {
+        return Ok(SqlValue::Null);
+    }
+    render_oid_alias_value(db, pg_type, value).map(SqlValue::String)
+}
+
 pub fn render_oid_alias_value(db: &BicDb, pg_type: &str, value: &SqlValue) -> Result<String> {
     if matches!(value, SqlValue::Null) {
         return Ok(String::new());

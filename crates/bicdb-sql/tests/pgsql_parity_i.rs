@@ -178,3 +178,108 @@ fn alter_table_inherit_lists_and_not_null_no_inherit() {
         .unwrap_err();
     assert_eq!(error.sqlstate(), "42P16");
 }
+
+#[test]
+fn ts_parse_reports_raw_tokens_and_their_types() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = open(root.path());
+    let mut session = SqlSession::new(&mut db);
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT * FROM pg_catalog.ts_parse(
+                'pg_catalog.default',
+                'Running café foo-bar, HTTP://Example.com/a?x=1 test@x.org! 1.23 -43 1e-2 <x>ok</x>&gt;'
+            )",
+        ),
+        [
+            "1|Running", "12| ", "2|café", "12| ", "16|foo-bar", "11|foo", "12|-",
+            "11|bar", "12|, ", "14|HTTP://", "5|Example.com/a?x=1", "6|Example.com",
+            "18|/a?x=1", "12| ", "4|test@x.org", "12|! ", "20|1.23", "12| ",
+            "21|-43", "12| ", "7|1e-2", "12| ", "13|<x>", "1|ok", "13|</x>", "23|&gt;",
+        ],
+    );
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT pg_typeof(k), pg_typeof(t), pg_typeof(pos), k, t, pos
+             FROM ts_parse(3722::oid, 'Hi.!') WITH ORDINALITY p(k, t, pos)",
+        ),
+        ["integer|text|bigint|1|Hi|1", "integer|text|bigint|12|.!|2"],
+    );
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT d.id, t.kind, t.fragment, t.position
+             FROM (VALUES (1, 'Hi!'), (2, NULL)) AS d(id, body)
+             LEFT JOIN LATERAL ts_parse('default', d.body) WITH ORDINALITY
+               AS t(kind, fragment, position) ON true
+             ORDER BY d.id, t.position",
+        ),
+        ["1|1|Hi|1", "1|12|!|2", "2|NULL|NULL|NULL"],
+    );
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT * FROM ts_parse('default', 'readline-4.2 ...< bad &x')",
+        ),
+        [
+            "1|readline",
+            "20|-4.2",
+            "12| ...",
+            "12|< ",
+            "1|bad",
+            "12| ",
+            "12|&",
+            "1|x"
+        ],
+    );
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT pg_typeof(p.k), pg_typeof(p.frag), p.k, p.frag
+             FROM (VALUES ('Café')) AS source(body),
+                  ts_parse('default', source.body) AS p(k, frag)",
+        ),
+        ["integer|text|2|Café"],
+    );
+    assert!(rows(&mut session, "SELECT * FROM ts_parse('missing', NULL)").is_empty());
+    assert_eq!(
+        session
+            .execute("SELECT * FROM ts_parse(1::oid, 'Hi')")
+            .unwrap_err()
+            .sqlstate(),
+        "XX000",
+    );
+}
+
+#[test]
+fn ts_debug_shows_each_dictionary_choice_and_stop_word() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = open(root.path());
+    let mut session = SqlSession::new(&mut db);
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT alias, token, dictionary::text, lexemes::text
+             FROM ts_debug('english', 'The Running &amp;')",
+        ),
+        [
+            "asciiword|The|english_stem|{}",
+            "blank| |NULL|NULL",
+            "asciiword|Running|english_stem|{run}",
+            "blank| |NULL|NULL",
+            "entity|&amp;|NULL|NULL",
+        ],
+    );
+    assert_eq!(
+        rows(
+            &mut session,
+            "SET default_text_search_config = 'simple';
+             SELECT pg_typeof(dictionaries), pg_typeof(dictionary), pg_typeof(lexemes),
+                    dictionary::text, lexemes::text
+             FROM ts_debug('Running')",
+        ),
+        ["regdictionary[]|regdictionary|text[]|simple|{running}"],
+    );
+}

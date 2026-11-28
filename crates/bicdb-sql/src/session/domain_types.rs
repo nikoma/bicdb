@@ -4542,14 +4542,13 @@ impl<'db> SqlSession<'db> {
                 return Err(SqlError::Unsupported("timestamp day index requires canonical ordered storage keys; reconcile source column types first".into()));
             }
         }
-        // A partial index (`WHERE predicate`) only holds the rows the predicate is true for. A UNIQUE
-        // one must enforce exactly that, so an untranslatable predicate is refused for it; a plain
-        // partial index may index every row instead (same query results, larger index).
+        // A non-unique index with an unsupported predicate can be a superset
+        // of the requested keys. An invalid predicate still fails the DDL.
         let predicate = match create_index.predicate.as_ref() {
             Some(predicate) => match partial_index_predicate(&schema, predicate) {
                 Ok(translated) => Some(translated),
-                Err(error) if create_index.unique => return Err(error),
-                Err(_) => None,
+                Err(SqlError::Unsupported(_)) if !create_index.unique => None,
+                Err(error) => return Err(error),
             },
             None => None,
         };

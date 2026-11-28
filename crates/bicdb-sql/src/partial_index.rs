@@ -5,6 +5,8 @@
 //! Supported (what PostgreSQL schemas use for partial indexes): `col IS [NOT] NULL`, `col IS [NOT]
 //! TRUE/FALSE`, a bare boolean column and `NOT col`, `col = / <> / < / <= / > / >= literal` (either side),
 //! JSONB key existence (`col ? 'key'`), `col IN (...)` / `col = ANY (ARRAY[...])` / `NOT IN`, `AND`, `OR`, parentheses and casts of literals.
+//! String predicates can use constant LIKE patterns, and comparisons can use an indexable COALESCE
+//! with one type-preserving column and one constant fallback.
 //! Comparisons are limited to columns stored as plain JSON (text, boolean, integer and float types);
 //! `IS [NOT] NULL` works on every column. Anything else is reported as unsupported rather than
 //! silently indexing every row, which would make a partial UNIQUE index reject valid rows.
@@ -23,7 +25,7 @@ pub(crate) fn partial_index_predicate(
 fn unsupported(predicate: &Expr) -> SqlError {
     SqlError::Unsupported(format!(
         "partial index predicate {predicate} is not supported; supported forms are IS [NOT] NULL, \
-         boolean columns, comparisons of a column with a constant, JSONB key existence, IN lists, AND and OR"
+         boolean columns, comparisons with constants, LIKE patterns, JSONB key existence, IN lists, AND and OR"
     ))
 }
 
@@ -85,8 +87,38 @@ fn column_ident(expr: &Expr) -> Option<&Ident> {
     }
 }
 
+fn coalesce_ref(schema: &TableSchema, expression: &Expr) -> Option<ColumnRef> {
+    let Expr::Function(function) = strip(expression) else {
+        return None;
+    };
+    if !function_name_is(function, "coalesce") {
+        return None;
+    }
+    let mut function = function.clone();
+    let FunctionArguments::List(args) = &mut function.args else {
+        return None;
+    };
+    let [FunctionArg::Unnamed(FunctionArgExpr::Expr(input)), _] = args.args.as_mut_slice() else {
+        return None;
+    };
+    let ident = column_ident(input)?.clone();
+    let column = schema.column(&ident_value(&ident))?;
+    *input = Expr::Identifier(ident);
+    // Use the same typed constant fallback and field identity as index keys.
+    let field = index_field_from_expr_for_schema(schema, &Expr::Function(function)).ok()?;
+    if !matches!(field, IndexField::Coalesce { .. }) {
+        return None;
+    }
+    Some(ColumnRef {
+        field: IndexPredicate::Field { field },
+        value_type: comparable_type(column),
+    })
+}
+
 fn column_ref(schema: &TableSchema, expr: &Expr) -> Option<ColumnRef> {
-    if let Some(reference) = json_text_field_ref(schema, expr) {
+    if let Some(reference) =
+        json_text_field_ref(schema, expr).or_else(|| coalesce_ref(schema, expr))
+    {
         return Some(reference);
     }
     let ident = column_ident(expr)?;
@@ -287,9 +319,103 @@ fn array_elements(expr: &Expr) -> Option<Vec<Expr>> {
     }
 }
 
+fn pattern_literal(expr: &Expr) -> Option<SqlValue> {
+    match strip(expr) {
+        Expr::Value(_) => eval_constant_expr(expr).ok(),
+        Expr::Cast { expr: inner, .. } => {
+            pattern_literal(inner)?;
+            eval_constant_expr(expr).ok()
+        }
+        _ => None,
+    }
+}
+
+fn like_predicate(
+    schema: &TableSchema,
+    value: &Expr,
+    pattern: &Expr,
+    escape: Option<&ValueWithSpan>,
+    negated: bool,
+    whole: &Expr,
+) -> Result<IndexPredicate> {
+    let ident = column_ident(value).ok_or_else(|| unsupported(whole))?;
+    let column = schema
+        .column(&ident_value(ident))
+        .ok_or_else(|| unsupported(whole))?;
+    if column.user_type.is_some()
+        || !matches!(column.pg_type.as_str(), "text" | "varchar" | "name")
+        || column
+            .collation
+            .as_deref()
+            .is_some_and(|collation| !matches!(collation, "default" | "C" | "POSIX" | "ucs_basic"))
+    {
+        return Err(unsupported(whole));
+    }
+    let pattern = match pattern_literal(pattern) {
+        Some(SqlValue::String(pattern)) => pattern,
+        Some(SqlValue::Null) => return Ok(literal(JsonValue::Bool(false))),
+        _ => return Err(unsupported(whole)),
+    };
+    let escape = match escape.map(literal_to_value).transpose()? {
+        None => Some('\\'),
+        Some(SqlValue::Null) => return Ok(literal(JsonValue::Bool(false))),
+        Some(SqlValue::String(escape)) => {
+            let mut chars = escape.chars();
+            let escape = chars.next();
+            if chars.next().is_some() {
+                return Err(invalid_like_escape());
+            }
+            escape
+        }
+        _ => return Err(unsupported(whole)),
+    };
+    if bicdb_core::like_pattern_ends_with_escape(&pattern, escape) {
+        return Err(SqlError::data_exception(
+            "22025",
+            "LIKE pattern must not end with escape character",
+            None,
+        ));
+    }
+    let value = column_ref(schema, value)
+        .ok_or_else(|| unsupported(whole))?
+        .field;
+    Ok(IndexPredicate::Like {
+        value: Box::new(value),
+        pattern,
+        escape,
+        negated,
+    })
+}
+
 fn translate(schema: &TableSchema, predicate: &Expr) -> Result<IndexPredicate> {
     let expr = strip(predicate);
     match expr {
+        Expr::Function(function) if function_name_is(function, "coalesce") => {
+            let column = coalesce_ref(schema, expr).ok_or_else(|| unsupported(predicate))?;
+            if column.value_type != Some(IndexPredicateValueType::Bool) {
+                return Err(unsupported(predicate));
+            }
+            Ok(compare(
+                &column,
+                IndexPredicateBinaryOperator::Equal,
+                JsonValue::Bool(true),
+                IndexPredicateValueType::Bool,
+            ))
+        }
+        Expr::Like {
+            negated,
+            any: false,
+            expr,
+            pattern,
+            escape_char,
+        } => like_predicate(
+            schema,
+            expr,
+            pattern,
+            escape_char.as_ref(),
+            *negated,
+            predicate,
+        ),
         Expr::IsNull(inner) => {
             let column = column_ref(schema, inner).ok_or_else(|| unsupported(predicate))?;
             Ok(is_null(column.field))
@@ -492,7 +618,7 @@ pub(crate) fn inference_predicate(schema: &TableSchema, expr: &Expr) -> Option<I
         )),
         _ => {
             let static_atom = sqlparser::ast::visit_expressions(expr, |expr| {
-                if matches!(expr, Expr::Function(_))
+                if matches!(expr, Expr::Function(function) if !function_name_is(function, "coalesce"))
                     || matches!(expr, Expr::Identifier(ident) if ident.quote_style.is_none() && ident.value.eq_ignore_ascii_case("current_date"))
                 {
                     std::ops::ControlFlow::Break(())

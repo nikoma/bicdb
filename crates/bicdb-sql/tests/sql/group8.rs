@@ -3269,7 +3269,8 @@ fn on_conflict_row_assignments_use_the_old_and_excluded_rows() {
             "INSERT INTO qa(k,a,b) VALUES (1,6,7)
              ON CONFLICT (k) DO UPDATE SET {targets}={source}"
         ));
-        assert_eq!(result.unwrap_err().sqlstate(), state);
+        let error = result.unwrap_err();
+        assert_eq!(error.sqlstate(), state, "{source}: {error:?}");
     }
     let result = session
         .execute(

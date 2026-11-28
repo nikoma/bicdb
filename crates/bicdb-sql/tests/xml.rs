@@ -1084,3 +1084,33 @@ fn xml_mapping_serializes_query_rows_and_does_not_execute_writes() {
     let result = session.execute("SELECT count(*) FROM \"t-xml\"").unwrap();
     assert_eq!(result.rows[0][0].to_cell(), "1");
 }
+
+#[test]
+fn xml_constructors_infer_names_from_column_references() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let result = session
+        .execute(
+            r#"SELECT xmlelement(NAME BIG,
+                  xmlattributes(x.VAL),
+                  xmlforest(x.VAL, ("VaL"), amount+1 AS "Ca'Se"))
+               FROM (VALUES (1,2,3)) AS x(val,"VaL",amount)"#,
+        )
+        .unwrap();
+    assert_eq!(
+        result.rows[0][0].to_cell(),
+        r#"<big val="1"><val>1</val><VaL>2</VaL><Ca_x0027_Se>4</Ca_x0027_Se></big>"#
+    );
+    for (sql, kind) in [
+        ("SELECT xmlforest(1) WHERE false", "element"),
+        ("SELECT xmlelement(NAME X, xmlattributes(1))", "attribute"),
+    ] {
+        let error = session.execute(sql).unwrap_err();
+        assert_eq!(error.sqlstate(), "42601");
+        assert_eq!(
+            error.to_string(),
+            format!("unnamed XML {kind} value must be a column reference")
+        );
+    }
+}

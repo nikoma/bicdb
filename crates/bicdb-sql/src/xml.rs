@@ -457,6 +457,55 @@ fn map_sql_identifier_to_xml_name(identifier: &str, fully_escaped: bool) -> Stri
     name
 }
 
+/// The constructor rewrite uses a NULL label for an unnamed non-column
+/// expression. Reject it during parsing, including queries over empty inputs.
+pub(crate) fn validate_xml_constructor_names(
+    statements: &[sqlparser::ast::Statement],
+) -> Result<()> {
+    use sqlparser::ast::{
+        Expr, FunctionArg, FunctionArgExpr, FunctionArguments, Value, ValueWithSpan,
+    };
+    use std::ops::ControlFlow;
+
+    let invalid_name = |expression: &Expr| {
+        let Expr::Function(function) = expression else {
+            return ControlFlow::Continue(());
+        };
+        let kind = match function.name.to_string().as_str() {
+            "bicdb_xmlattributes" => "attribute",
+            "bicdb_xmlforest" => "element",
+            _ => return ControlFlow::Continue(()),
+        };
+        let FunctionArguments::List(arguments) = &function.args else {
+            return ControlFlow::Continue(());
+        };
+        if arguments.args.iter().step_by(2).any(|argument| {
+            matches!(
+                argument,
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(ValueWithSpan {
+                    value: Value::Null,
+                    ..
+                })))
+            )
+        }) {
+            ControlFlow::Break(kind)
+        } else {
+            ControlFlow::Continue(())
+        }
+    };
+    for statement in statements {
+        if let ControlFlow::Break(kind) = sqlparser::ast::visit_expressions(statement, invalid_name)
+        {
+            return Err(SqlError::data_exception_public(
+                "42601",
+                format!("unnamed XML {kind} value must be a column reference"),
+                None,
+            ));
+        }
+    }
+    Ok(())
+}
+
 const XML_ATTRIBUTES_MARKER: &str = "\0bicdb:xmlattributes:";
 
 thread_local! {

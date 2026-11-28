@@ -741,6 +741,36 @@ fn xmlparse_and_xmlserialize_preserve_document_and_content_modes() {
 }
 
 #[test]
+fn sql_xml_names_escape_characters_and_duplicate_attributes_are_rejected() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = bicdb_core::BicDb::open(root.path()).unwrap();
+    let mut sql = bicdb_sql::SqlSession::new(&mut db);
+    let result = sql
+        .execute(
+            r#"SELECT xmlpi(NAME "123"), xmlpi(NAME ":::_xml_abc135.%-&_"),
+              xmlelement(NAME "a b", 'text'),
+              xmlelement(NAME "_x0031_", xmlattributes(1 AS "any value")),
+              xmlforest(1 AS "123", 'value' AS "café", 2 AS "é", 3 AS "𐐀")"#,
+        )
+        .unwrap();
+    let cells: Vec<_> = result.rows[0].iter().map(|value| value.to_cell()).collect();
+    assert_eq!(
+        cells,
+        [
+            "<?_x0031_23?>",
+            "<?_x003A_::_x005F_xml_abc135._x0025_-_x0026__?>",
+            "<a_x0020_b>text</a_x0020_b>",
+            r#"<_x005F_x0031_ any_x0020_value="1"/>"#,
+            "<_x0031_23>1</_x0031_23><café>value</café><é>2</é><_x10400_>3</_x10400_>",
+        ]
+    );
+    let error = sql
+        .execute("SELECT xmlelement(NAME e, XMLATTRIBUTES(NULL AS a, 'value' AS a))")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42601");
+}
+
+#[test]
 fn xmloption_controls_input_without_reinterpreting_existing_xml_values() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();
@@ -759,7 +789,7 @@ fn xmloption_controls_input_without_reinterpreting_existing_xml_values() {
         "CREATE TABLE xmloption_values (id int PRIMARY KEY, body xml);
          INSERT INTO xmloption_values VALUES (1, XMLPARSE(CONTENT '<a/><b/>'));
          BEGIN;
-         SET LOCAL xmloption TO DOCUMENT;",
+         SET LOCAL XML /* language syntax */ OPTION DOCUMENT;",
     )
     .unwrap();
     let result = sql

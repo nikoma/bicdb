@@ -399,6 +399,34 @@ fn xml_name(value: &str) -> Result<&str> {
     Ok(value)
 }
 
+fn map_sql_identifier_to_xml_name(identifier: &str) -> String {
+    use std::fmt::Write;
+
+    let mut name = String::with_capacity(identifier.len());
+    let mut characters = identifier.chars().enumerate().peekable();
+    while let Some((index, character)) = characters.next() {
+        let letter = u32::from(character) <= 0xffff && character.is_alphabetic();
+        let valid = match index {
+            0 => letter || character == '_',
+            _ => {
+                letter
+                    || character.is_ascii_digit()
+                    || matches!(character, '.' | '-' | '_' | ':' | '\u{00b7}')
+                    || unicode_normalization::char::is_combining_mark(character)
+            }
+        };
+        let starts_escape =
+            character == '_' && characters.peek().is_some_and(|(_, next)| *next == 'x');
+        if valid && !starts_escape {
+            name.push(character);
+        } else {
+            write!(name, "_x{:04X}_", u32::from(character))
+                .expect("writing to a String cannot fail");
+        }
+    }
+    name
+}
+
 const XML_ATTRIBUTES_MARKER: &str = "\0bicdb:xmlattributes:";
 
 thread_local! {
@@ -1177,8 +1205,17 @@ pub(crate) fn eval_xml_function_value(
         }
         "bicdb_xmlattributes" => {
             let mut attributes = Vec::new();
+            let mut names = std::collections::BTreeSet::new();
             for (pair_index, pair) in args.chunks(2).enumerate() {
                 if let [name, value] = pair {
+                    let name = xml_text(name);
+                    if !names.insert(name.clone()) {
+                        return Err(SqlError::data_exception_public(
+                            "42601",
+                            format!("XML attribute name \"{name}\" appears more than once"),
+                            None,
+                        ));
+                    }
                     if matches!(value, SqlValue::Null) {
                         continue;
                     }
@@ -1186,7 +1223,7 @@ pub(crate) fn eval_xml_function_value(
                         .and_then(|types| types.get(pair_index * 2 + 1))
                         .and_then(Option::as_deref);
                     attributes.push(JsonValue::Array(vec![
-                        JsonValue::String(xml_name(&xml_text(name))?.to_string()),
+                        JsonValue::String(map_sql_identifier_to_xml_name(&name)),
                         JsonValue::String(xml_scalar_text(value, value_type)?),
                     ]));
                 }
@@ -1203,8 +1240,7 @@ pub(crate) fn eval_xml_function_value(
                     if matches!(value, SqlValue::Null) {
                         continue;
                     }
-                    let name_text = xml_text(name);
-                    let name = xml_name(&name_text)?;
+                    let name = map_sql_identifier_to_xml_name(&xml_text(name));
                     let value_type = arg_types
                         .and_then(|types| types.get(pair_index * 2 + 1))
                         .and_then(Option::as_deref);
@@ -1222,8 +1258,7 @@ pub(crate) fn eval_xml_function_value(
                     "XMLELEMENT requires a name",
                 ));
             };
-            let name_text = xml_text(first);
-            let name = xml_name(&name_text)?;
+            let name = map_sql_identifier_to_xml_name(&xml_text(first));
             let mut attributes = String::new();
             let mut content = String::new();
             for (index, value) in args[1..].iter().enumerate() {
@@ -1263,8 +1298,7 @@ pub(crate) fn eval_xml_function_value(
             let Some(first) = args.first() else {
                 return Err(SqlError::invalid_parameter_value("XMLPI requires a name"));
             };
-            let name_text = xml_text(first);
-            let name = xml_name(&name_text)?;
+            let name = map_sql_identifier_to_xml_name(&xml_text(first));
             if name.eq_ignore_ascii_case("xml") {
                 return Err(SqlError::coded(
                     "2200T",

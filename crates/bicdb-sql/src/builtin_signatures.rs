@@ -3155,6 +3155,7 @@ pub(crate) const PG_CATALOG_FUNCTION_SIGNATURES: &[(&str, &str)] = &[
     ("xml_recv", "2281"),
     ("xml_send", "142"),
     ("xmlcomment", "25"),
+    ("xmltext", "25"),
     ("xmlconcat2", "142,142"),
     ("xmlexists", "25,142"),
     ("xmlvalidate", "142,25"),

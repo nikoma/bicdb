@@ -3607,6 +3607,8 @@ pub(crate) const PG_STRING_PROC_ROWS: &[(i64, &str, i64, &str, &str)] = &[
     (2013, "substring", 17, "17 23", "bytea_substr_no_len"),
     (2073, "substring", 25, "25 25", "textregexsubstr"),
     (2074, "substring", 25, "25 25 25", ""),
+    (2895, "xmlcomment", 142, "25", "xmlcomment"),
+    (3813, "xmltext", 142, "25", "xmltext"),
 ];
 
 thread_local! {

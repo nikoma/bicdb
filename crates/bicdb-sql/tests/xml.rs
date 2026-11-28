@@ -491,6 +491,82 @@ fn xmltable_uses_the_selected_node_as_xpath_context() {
     }
 }
 #[test]
+fn xpath_existence_uses_result_cardinality_and_sql_xml_passing_modes() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let result = session
+        .execute(
+            "SELECT xpath_exists('false()', xml '<x/>'),
+                    xpath_exists('count(/missing)', xml '<x/>'),
+                    xpath_exists('/missing', xml '<x/>'),
+                    xmlexists('/x' PASSING BY REF xmlparse(DOCUMENT '<x/>') BY VALUE),
+                    xmlexists('/missing' PASSING xml '<x/>' BY REF)",
+        )
+        .unwrap();
+    assert_eq!(
+        result.rows,
+        vec![vec![
+            SqlValue::Bool(true),
+            SqlValue::Bool(true),
+            SqlValue::Bool(false),
+            SqlValue::Bool(true),
+            SqlValue::Bool(false),
+        ]]
+    );
+    assert_eq!(
+        session
+            .execute("SELECT n FROM XMLTABLE('/x' PASSING BY REF xml '<x/>' BY REF COLUMNS n FOR ORDINALITY)")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(1)]]
+    );
+    assert_eq!(
+        session
+            .execute("SELECT xpath_exists('', xml '<x/>')")
+            .unwrap_err()
+            .sqlstate(),
+        "10608"
+    );
+}
+
+#[test]
+fn postgres_xmltext_and_xml_processing_instructions_preserve_text() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let result = session
+        .execute(
+            r#"SELECT xmltext(NULL), xmltext(''), xmltext(E' '' " & < >\r\n'),
+                       pg_catalog.xmltext('a  '::char(4)), xmlpi(NAME ident, NULL),
+                       xmlpi(NAME IdEnt), xmlpi(NAME "IdEnt", ''),
+                       xmlpi(NAME ident, '  words   ')"#,
+        )
+        .unwrap();
+    assert_eq!(
+        result.rows,
+        vec![vec![
+            SqlValue::Null,
+            SqlValue::String("".into()),
+            SqlValue::String(" ' &quot; &amp; &lt; &gt;&#13;\n".into()),
+            SqlValue::String("a".into()),
+            SqlValue::Null,
+            SqlValue::String("<?ident?>".into()),
+            SqlValue::String("<?IdEnt ?>".into()),
+            SqlValue::String("<?ident words   ?>".into()),
+        ]]
+    );
+    assert_eq!(result.column_types[2].as_deref(), Some("xml"));
+    for (sql, state) in [
+        ("SELECT xmltext(1)", "42883"),
+        ("SELECT xmlpi(NAME Xml)", "2200T"),
+        ("SELECT xmlpi(NAME ident, 'ab?>')", "2200T"),
+    ] {
+        assert_eq!(session.execute(sql).unwrap_err().sqlstate(), state, "{sql}");
+    }
+}
+
+#[test]
 fn xmlparse_and_xmlserialize_preserve_document_and_content_modes() {
     let (_dir, mut db) = session_db();
     let mut session = SqlSession::new(&mut db);

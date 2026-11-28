@@ -1148,21 +1148,29 @@ pub(crate) fn eval_xml_function_value(
             let name_text = xml_text(first);
             let name = xml_name(&name_text)?;
             if name.eq_ignore_ascii_case("xml") {
-                return Err(invalid_xml(
-                    "XML processing instruction target name cannot be xml",
+                return Err(SqlError::coded(
+                    "2200T",
+                    "invalid XML processing instruction",
+                    Some("XML processing instruction target name cannot be \"xml\".".into()),
+                    None,
                 ));
             }
-            let content = args
-                .get(1)
-                .filter(|value| !matches!(value, SqlValue::Null))
-                .map(xml_text);
-            if content.as_deref().is_some_and(|value| value.contains("?>")) {
-                return Err(invalid_xml("invalid XML processing instruction"));
+            match args.get(1) {
+                Some(SqlValue::Null) => SqlValue::Null,
+                Some(value) => {
+                    let content = xml_text(value);
+                    if content.contains("?>") {
+                        return Err(SqlError::coded(
+                            "2200T",
+                            "invalid XML processing instruction",
+                            Some("XML processing instruction cannot contain \"?>\".".into()),
+                            None,
+                        ));
+                    }
+                    SqlValue::String(format!("<?{name} {}?>", content.trim_start_matches(' ')))
+                }
+                None => SqlValue::String(format!("<?{name}?>")),
             }
-            SqlValue::String(match content {
-                Some(content) => format!("<?{name} {}?>", content.trim()),
-                None => format!("<?{name}?>"),
-            })
         }
         "bicdb_xmlroot" => {
             if args
@@ -1215,6 +1223,40 @@ pub(crate) fn eval_xml_function_value(
                 SqlValue::String(format!("<!--{text}-->"))
             }
         }
+        "xmltext" => {
+            let [value] = args else {
+                return Err(SqlError::undefined_function(
+                    "function xmltext requires one argument",
+                ));
+            };
+            let kind = arg_types
+                .and_then(|kinds| kinds.first())
+                .and_then(Option::as_deref);
+            if let Some(kind) = kind.filter(|kind| {
+                !matches!(
+                    *kind,
+                    "text" | "varchar" | "bpchar" | "char" | "name" | "unknown"
+                )
+            }) {
+                return Err(SqlError::coded(
+                    "42883",
+                    format!("function xmltext({}) does not exist", crate::common_type_display(kind)),
+                    None,
+                    Some("No function matches the given name and argument types. You might need to add explicit type casts.".into()),
+                ));
+            }
+            if strict_null {
+                SqlValue::Null
+            } else {
+                let text = xml_text(value);
+                let text = if kind == Some("bpchar") {
+                    text.trim_end_matches(' ')
+                } else {
+                    &text
+                };
+                SqlValue::String(escape_attribute(text).replace('\r', "&#13;"))
+            }
+        }
         "xpath" => {
             if strict_null {
                 SqlValue::Null
@@ -1245,6 +1287,13 @@ pub(crate) fn eval_xml_function_value(
                 let package = parse_xpath_document(&xml_text(&args[1]))?;
                 let document = package.as_document();
                 let expression_text = xml_text(&args[0]);
+                if expression_text.is_empty() {
+                    return Err(SqlError::data_exception_public(
+                        "10608",
+                        "empty XPath expression",
+                        None,
+                    ));
+                }
                 check_nesting_budget(
                     &expression_text,
                     &['(', '['],
@@ -1266,16 +1315,10 @@ pub(crate) fn eval_xml_function_value(
                         }
                     }
                 }
-                SqlValue::Bool(
-                    xpath
-                        .evaluate(&context, document.root())
-                        .map_err(|error| {
-                            SqlError::invalid_parameter_value(format!(
-                                "XPath evaluation failed: {error}"
-                            ))
-                        })?
-                        .boolean(),
-                )
+                let result = xpath.evaluate(&context, document.root()).map_err(|error| {
+                    SqlError::invalid_parameter_value(format!("XPath evaluation failed: {error}"))
+                })?;
+                SqlValue::Bool(!matches!(result, XPathValue::Nodeset(nodes) if nodes.size() == 0))
             }
         }
         "bicdb_xmltable_json" => return xml_table_rows(args).map(Some),
@@ -1330,6 +1373,7 @@ pub(crate) fn xml_function_pg_type(name: &str) -> Option<&'static str> {
         "xml_out" => Some("cstring"),
         "xmlconcat"
         | "xmlcomment"
+        | "xmltext"
         | "xml_in"
         | "bicdb_xmlattributes"
         | "bicdb_xmlforest"

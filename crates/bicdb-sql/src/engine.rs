@@ -5656,6 +5656,16 @@ impl<'db> SqlEngine<'db> {
             return self.execute_row_query(select, query);
         }
 
+        if select.from.iter().any(|from| {
+            has_relation_column_aliases(&from.relation)
+                || from
+                    .joins
+                    .iter()
+                    .any(|join| has_relation_column_aliases(&join.relation))
+        }) {
+            return self.execute_row_query(select, query);
+        }
+
         // Parent-only statistics, heaps and indexes cannot answer a partition
         // tree. Materialize physical sources with the accessed relation's RLS
         // and each source's own tableoid/MVCC identity before query operators.

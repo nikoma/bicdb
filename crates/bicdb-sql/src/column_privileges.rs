@@ -196,11 +196,11 @@ pub(crate) fn relation_columns(db: &BicDb, table: &str) -> Result<Vec<String>> {
 
 /// The names a query gives `table` in its FROM lists (aliases, or the bare
 /// table name).
-fn relation_aliases(db: &BicDb, query: &Query, table: &str) -> Vec<String> {
+fn relation_aliases(db: &BicDb, query: &Query, table: &str) -> Vec<(String, Vec<String>)> {
     struct Aliases<'a> {
         db: &'a BicDb,
         table: &'a str,
-        found: Vec<String>,
+        found: Vec<(String, Vec<String>)>,
     }
     impl Visitor for Aliases<'_> {
         type Break = ();
@@ -211,10 +211,17 @@ fn relation_aliases(db: &BicDb, query: &Query, table: &str) -> Vec<String> {
                 };
                 if resolve_session_relation_name_if_exists(self.db, &relation) == self.table {
                     match alias {
-                        Some(alias) => self.found.push(ident_value(&alias.name)),
+                        Some(alias) => self.found.push((
+                            ident_value(&alias.name),
+                            alias
+                                .columns
+                                .iter()
+                                .map(|column| ident_value(&column.name))
+                                .collect(),
+                        )),
                         None => {
                             if let Some(last) = object_name_parts(name).last() {
-                                self.found.push(last.clone());
+                                self.found.push((last.clone(), Vec::new()));
                             }
                         }
                     }
@@ -226,7 +233,10 @@ fn relation_aliases(db: &BicDb, query: &Query, table: &str) -> Vec<String> {
     let mut aliases = Aliases {
         db,
         table,
-        found: vec![table.rsplit('.').next().unwrap_or(table).to_string()],
+        found: vec![(
+            table.rsplit('.').next().unwrap_or(table).to_string(),
+            Vec::new(),
+        )],
     };
     let _ = query.visit(&mut aliases);
     aliases.found
@@ -244,8 +254,18 @@ pub(crate) fn select_allowed_by_columns(
         return Ok(false);
     }
     let columns = relation_columns(db, table)?;
-    let required = ReferencedNames::of_query(query)
-        .required_columns(&columns, &relation_aliases(db, query, table));
+    let names = ReferencedNames::of_query(query);
+    let (aliases, column_aliases): (Vec<_>, Vec<_>) =
+        relation_aliases(db, query, table).into_iter().unzip();
+    let mut required = names.required_columns(&columns, &aliases);
+    for alias_columns in column_aliases {
+        required.extend(
+            columns
+                .iter()
+                .zip(alias_columns)
+                .filter_map(|(column, alias)| names.names.contains(&alias).then(|| column.clone())),
+        );
+    }
     Ok(required.iter().all(|column| grants.contains(column)))
 }
 

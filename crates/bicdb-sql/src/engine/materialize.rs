@@ -1836,10 +1836,11 @@ impl<'db> SqlEngine<'db> {
                         .iter()
                         .enumerate()
                         .filter(|(_, column)| !column.hidden)
-                        .map(|(index, column)| {
+                        .zip(typed_columns)
+                        .map(|((index, column), (name, _))| {
                             let attribute_number = i16::try_from(index + 1).ok()?;
                             Some((
-                                column.name.clone(),
+                                name,
                                 SqlColumnMetadata {
                                     table_oid,
                                     attribute_number,
@@ -2939,15 +2940,13 @@ impl<'db> SqlEngine<'db> {
         }
         let table = resolve_session_relation_name(self.db_ref(), table).ok()?;
         let schema = load_schema_shared(self.db_ref(), &table).ok().flatten()?;
-        // The base-table scan path keys columns off the schema field names and
-        // ignores any relation column-alias list, so we do too.
         let columns = schema
             .columns
             .iter()
             .filter(|column| !column.hidden)
             .map(|column| (column.name.clone(), Some(column.pg_type.clone())))
             .collect();
-        Some((columns, true))
+        Some((rename_relation_columns(columns, alias_cols)?, true))
     }
 
     /// Infer the logical PostgreSQL type of a projected expression against a
@@ -4374,25 +4373,34 @@ impl<'db> SqlEngine<'db> {
         let selection = folded_selection.as_ref().or(selection);
         let qualified_selection = self.qualify_catalog_cross_join_selection(from, selection)?;
         let selection = qualified_selection.as_ref().or(selection);
-        if let Some(row_set) = self.pg_class_index_join_row_set(from, selection)? {
-            return Ok(row_set);
-        }
-        if let Some(row_set) = self.pg_class_indexrelid_join_row_set(from, selection)? {
-            return Ok(row_set);
-        }
-        if let Some(row_set) =
-            self.pg_class_namespace_join_row_set(from, selection, projection, order_by)?
-        {
-            return Ok(row_set);
-        }
-        if let Some(row_set) = self.pg_constraint_foreign_key_join_row_set(from, selection)? {
-            return Ok(row_set);
-        }
-        if let Some(row_set) = self.pg_constraint_class_namespace_join_row_set(from, selection)? {
-            return Ok(row_set);
-        }
-        if let Some(row_set) = self.pg_locks_class_join_row_set(from)? {
-            return Ok(row_set);
+        let has_column_aliases = has_relation_column_aliases(&from.relation)
+            || from
+                .joins
+                .iter()
+                .any(|join| has_relation_column_aliases(&join.relation));
+        if !has_column_aliases {
+            if let Some(row_set) = self.pg_class_index_join_row_set(from, selection)? {
+                return Ok(row_set);
+            }
+            if let Some(row_set) = self.pg_class_indexrelid_join_row_set(from, selection)? {
+                return Ok(row_set);
+            }
+            if let Some(row_set) =
+                self.pg_class_namespace_join_row_set(from, selection, projection, order_by)?
+            {
+                return Ok(row_set);
+            }
+            if let Some(row_set) = self.pg_constraint_foreign_key_join_row_set(from, selection)? {
+                return Ok(row_set);
+            }
+            if let Some(row_set) =
+                self.pg_constraint_class_namespace_join_row_set(from, selection)?
+            {
+                return Ok(row_set);
+            }
+            if let Some(row_set) = self.pg_locks_class_join_row_set(from)? {
+                return Ok(row_set);
+            }
         }
 
         let (relation, joins) = self.plan_row_join_order(from, selection)?;

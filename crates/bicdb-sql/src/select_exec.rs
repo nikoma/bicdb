@@ -82,17 +82,28 @@ pub(crate) fn table_alias_columns(
     if aliases.is_empty() {
         return Ok(result_columns.to_vec());
     }
-    if aliases.len() != result_columns.len() {
-        return Err(SqlError::InvalidSql(format!(
-            "table alias \"{alias}\" has {} columns available but {} columns specified for \"{table}\"",
-            result_columns.len(),
-            aliases.len()
-        )));
+    if aliases.len() > result_columns.len() {
+        let alias = if alias.is_empty() { table } else { alias };
+        return Err(SqlError::data_exception_public(
+            "42P10",
+            format!(
+                "table \"{alias}\" has {} columns available but {} columns specified",
+                result_columns.len(),
+                aliases.len()
+            ),
+            None,
+        ));
     }
-    Ok(aliases
-        .iter()
-        .map(|column| column.name.value.clone())
-        .collect())
+    let mut columns = result_columns.to_vec();
+    for (column, alias) in columns.iter_mut().zip(aliases) {
+        *column = ident_value(&alias.name);
+    }
+    Ok(columns)
+}
+
+pub(crate) fn has_relation_column_aliases(relation: &TableFactor) -> bool {
+    matches!(relation, TableFactor::Table { alias: Some(alias), args: None, .. }
+        if !alias.columns.is_empty())
 }
 
 pub(crate) fn btree_null_row_for_columns(columns: &[String]) -> BTreeMap<String, SqlValue> {

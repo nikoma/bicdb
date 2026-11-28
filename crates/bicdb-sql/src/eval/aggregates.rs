@@ -1019,25 +1019,19 @@ pub(crate) struct RelationColumns {
 }
 
 /// Apply a relation alias's optional column-rename list to a typed column list,
-/// preserving types positionally. Returns `None` when an explicit list is present
-/// but its length doesn't match (mirrors `table_alias_columns`' error).
+/// preserving types positionally. The list may rename a prefix of the
+/// columns, but must fit the row width.
 pub(crate) fn rename_relation_columns(
-    columns: Vec<(String, Option<String>)>,
+    mut columns: Vec<(String, Option<String>)>,
     alias_cols: &[TableAliasColumnDef],
 ) -> Option<Vec<(String, Option<String>)>> {
-    if alias_cols.is_empty() {
-        return Some(columns);
-    }
-    if alias_cols.len() != columns.len() {
+    if alias_cols.len() > columns.len() {
         return None;
     }
-    Some(
-        alias_cols
-            .iter()
-            .zip(columns)
-            .map(|(alias, (_, ty))| (ident_value(&alias.name), ty))
-            .collect(),
-    )
+    for ((name, _), alias) in columns.iter_mut().zip(alias_cols) {
+        *name = ident_value(&alias.name);
+    }
+    Some(columns)
 }
 
 /// Look up an unqualified column name across all FROM relations. Returns the type

@@ -710,6 +710,20 @@ impl<'db> SqlEngine<'db> {
         needed_columns: Option<&ReferencedColumns>,
         single_relation: bool,
     ) -> Result<RowSet> {
+        if let TableFactor::Table {
+            name,
+            alias: Some(alias),
+            args: None,
+            ..
+        } = relation
+        {
+            if !alias.columns.is_empty() {
+                let table = relation_name(name)?;
+                if self.cte(&table).is_none() && load_view(self.db_ref(), &table)?.is_none() {
+                    return self.read_relation_with_column_aliases(relation, &table, alias);
+                }
+            }
+        }
         let rows = self.row_set_from_table_factor_with_selection_inner(
             relation,
             selection,
@@ -732,6 +746,63 @@ impl<'db> SqlEngine<'db> {
             }
         }
         Ok(rows)
+    }
+
+    fn read_relation_with_column_aliases(
+        &self,
+        relation: &TableFactor,
+        table: &str,
+        alias: &TableAlias,
+    ) -> Result<RowSet> {
+        let Some((columns, _)) = self.relation_table_columns(table, &[]) else {
+            resolve_session_relation_name(self.db_ref(), table)?;
+            return Err(SqlError::Unsupported(
+                "column aliases require a relation with declared columns".into(),
+            ));
+        };
+        let qualifier = &alias.name.value;
+        let (old_names, types): (Vec<_>, Vec<_>) = columns.into_iter().unzip();
+        let new_names = table_alias_columns(table, qualifier, &alias.columns, &old_names)?;
+        // A predicate or projection over the new names cannot be pushed into
+        // a scan keyed on the original schema names.
+        let RowSet { rows, columns } =
+            self.row_set_from_table_factor_with_selection_inner(relation, None, None, false)?;
+        let prefix = format!("{qualifier}.");
+        let mut output = Vec::new();
+        let mut keep = vec![false; columns.len()];
+        for (slot, source) in columns.iter().enumerate() {
+            if let Some(name) = source.strip_prefix(&prefix) {
+                let name = if let Some(index) = old_names.iter().position(|old| old == name) {
+                    &new_names[index]
+                } else if name == super::row_locks::HEAP_LOCK_IDENTITY
+                    || (POSTGRES_SYSTEM_COLUMNS.contains(&name)
+                        && !new_names.iter().any(|column| column == name))
+                {
+                    name
+                } else {
+                    continue;
+                };
+                output.push(format!("{prefix}{name}"));
+                keep[slot] = true;
+            }
+        }
+        crate::slot_types::register_columns(qualifier, &new_names, &types);
+        let rows = if output.len() == columns.len() {
+            rows
+        } else {
+            rows.into_iter()
+                .map(|row| {
+                    row.into_iter()
+                        .zip(&keep)
+                        .filter_map(|(value, keep)| keep.then_some(value))
+                        .collect()
+                })
+                .collect()
+        };
+        Ok(RowSet {
+            columns: output,
+            rows,
+        })
     }
 
     fn row_set_from_table_factor_with_selection_inner(
@@ -1109,9 +1180,11 @@ impl<'db> SqlEngine<'db> {
         let table = resolve_session_relation_name(self.db_ref(), &table)?;
         self.require_relation_privilege(&table, "SELECT")?;
         if let Some(schema) = load_schema_shared(self.db_ref(), &table)? {
-            crate::slot_types::register_table(&alias_name, &schema);
-            if alias_name != table {
-                crate::slot_types::register_table(&table, &schema);
+            if table_alias.is_none_or(|alias| alias.columns.is_empty()) {
+                crate::slot_types::register_table(&alias_name, &schema);
+                if alias_name != table {
+                    crate::slot_types::register_table(&table, &schema);
+                }
             }
             if schema.has_descendant_tables() {
                 return self.partition_row_set(&table, &alias_name, &schema, needed_columns);
@@ -6354,7 +6427,10 @@ impl<'db> SqlEngine<'db> {
                 Some(selection) => self.selection_pins_primary_key(&join.relation, selection)?,
                 None => false,
             };
-        if matches!(kind, RowJoinKind::Inner | RowJoinKind::Left) && !selection_pins_right {
+        if matches!(kind, RowJoinKind::Inner | RowJoinKind::Left)
+            && !selection_pins_right
+            && !has_relation_column_aliases(&join.relation)
+        {
             if let Some(row_set) = self.apply_indexed_right_table_join(
                 &mut left,
                 &join.relation,
@@ -7789,6 +7865,15 @@ impl<'db> SqlEngine<'db> {
         let table = resolve_session_relation_name(self.db_ref(), &table)?;
 
         let schema = load_schema_shared(self.db_ref(), &table)?;
+        if let Some(alias) = table_alias.filter(|alias| !alias.columns.is_empty()) {
+            let fields = FieldRef::wildcard(schema.as_deref());
+            let visible = fields
+                .iter()
+                .map(|field| field.name().to_string())
+                .collect::<Vec<_>>();
+            let columns = table_alias_columns(&table, &alias_name, &alias.columns, &visible)?;
+            return Ok(Some(aliased_row_output_columns(&alias_name, &columns)));
+        }
         Ok(Some(row_output_columns(
             &table,
             &alias_name,

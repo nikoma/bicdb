@@ -107,3 +107,36 @@ fn postgres_chained_named_joins_bind_the_previous_join_output() {
         [vec![SqlValue::Int(2), SqlValue::String("c".into())]],
     );
 }
+#[test]
+fn postgres_from_column_aliases_rename_a_prefix_and_validate_the_source_width() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE TABLE alias_data (id integer PRIMARY KEY, body text); INSERT INTO alias_data VALUES (1, 'one'), (2, 'two')").unwrap();
+    let result = session
+        .execute("SELECT item.* FROM alias_data AS item(renamed) WHERE renamed=2")
+        .unwrap();
+    assert_eq!(result.columns, ["renamed", "body"]);
+    assert_eq!(
+        result.rows,
+        [[SqlValue::Int(2), SqlValue::String("two".into())]]
+    );
+    assert_eq!(result.column_types[0].as_deref(), Some("int4"));
+    assert_eq!(result.column_metadata[0].attribute_number, 1);
+    assert_ne!(result.column_metadata[0].table_oid, 0);
+    let result = session.execute("WITH data(new_id) AS (SELECT id, body FROM alias_data) SELECT nested.* FROM (SELECT new_id, body FROM data) nested(k) WHERE k=1").unwrap();
+    assert_eq!(result.columns, ["k", "body"]);
+    assert_eq!(
+        result.rows,
+        [[SqlValue::Int(1), SqlValue::String("one".into())]]
+    );
+    let result = session.execute("SELECT r.renamed FROM alias_data l JOIN alias_data r(renamed) ON l.id=r.renamed WHERE l.id=1").unwrap();
+    assert_eq!(result.rows, [[SqlValue::Int(1)]]);
+    let error = session
+        .execute("SELECT count(*) FROM alias_data item(a,b,c)")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42P10");
+    assert!(error
+        .to_string()
+        .contains("table \"item\" has 2 columns available but 3 columns specified"));
+}

@@ -181,7 +181,7 @@ pub(crate) fn qualified_name(input: &str) -> Option<Vec<String>> {
 }
 
 fn configuration_search_path(gucs: &HashMap<String, String>) -> Vec<String> {
-    let role = crate::eval::current_user_from_gucs(gucs);
+    let role = crate::schema_meta::current_user_from_gucs(gucs);
     let path = gucs
         .get("search_path")
         .map_or("\"$user\", public", String::as_str);

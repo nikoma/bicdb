@@ -2182,10 +2182,12 @@ pub(crate) fn rewrite_sql_xml_expressions(input: &str) -> Option<String> {
 
 pub(crate) fn rewrite_xmlroot_once(input: &str) -> Option<String> {
     let tokens = json_predicate_tokens(input);
-    let (index, function) = tokens
-        .iter()
-        .enumerate()
-        .find(|(_, token)| token.word.as_deref() == Some("xmlroot"))?;
+    let (index, function) = tokens.iter().enumerate().rev().find(|(index, token)| {
+        token.word.as_deref() == Some("xmlroot")
+            && tokens
+                .get(index + 1)
+                .is_some_and(|next| next.depth == token.depth && next.symbol == Some(b'('))
+    })?;
     let open = tokens
         .get(index + 1)
         .filter(|token| token.symbol == Some(b'('))?;
@@ -2198,29 +2200,35 @@ pub(crate) fn rewrite_xmlroot_once(input: &str) -> Option<String> {
         .iter()
         .filter(|token| token.depth == depth && token.symbol == Some(b','))
         .collect::<Vec<_>>();
-    if commas.len() != 2 {
-        return None;
-    }
-    let document = input[open.end..commas[0].start].trim();
-    let version_clause = input[commas[0].end..commas[1].start].trim();
-    let standalone_clause = input[commas[1].end..tokens[close_index].start].trim();
+    let (version_start, standalone_start) = match commas.as_slice() {
+        [version] => (*version, None),
+        [version, standalone] => (*version, Some(*standalone)),
+        _ => return None,
+    };
+    let document = input[open.end..version_start.start].trim();
+    let close = &tokens[close_index];
+    let version_end = standalone_start.map_or(close.start, |token| token.start);
+    let version_clause = input[version_start.end..version_end].trim();
     let version = strip_case_insensitive_keyword(version_clause, "version")?.trim();
     let version = if version.eq_ignore_ascii_case("no value") {
         "NULL"
     } else {
         version
     };
-    let standalone = strip_case_insensitive_keyword(standalone_clause, "standalone")?.trim();
-    let standalone = if standalone.eq_ignore_ascii_case("no value") {
-        "NULL"
-    } else {
-        match standalone.to_ascii_lowercase().as_str() {
-            "yes" => "'yes'",
-            "no" => "'no'",
-            _ => return None,
+    let replacement = match standalone_start {
+        Some(token) => {
+            let clause = input[token.end..close.start].trim();
+            let standalone = strip_case_insensitive_keyword(clause, "standalone")?.trim();
+            let standalone = match standalone.to_ascii_lowercase().as_str() {
+                "no value" => "NULL",
+                "yes" => "'yes'",
+                "no" => "'no'",
+                _ => return None,
+            };
+            format!("bicdb_xmlroot(({document}), {version}, {standalone})")
         }
+        None => format!("bicdb_xmlroot(({document}), {version})"),
     };
-    let replacement = format!("bicdb_xmlroot(({document}), {version}, {standalone})");
     let mut output = input.to_string();
     output.replace_range(function.start..tokens[close_index].end, &replacement);
     Some(output)

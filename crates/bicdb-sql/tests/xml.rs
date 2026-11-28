@@ -491,6 +491,42 @@ fn xmltable_uses_the_selected_node_as_xpath_context() {
     }
 }
 #[test]
+fn xmlroot_applies_version_and_standalone_modes_to_the_declaration() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let result = session.execute(
+        r#"SELECT xmlroot(xml '<x/>', VERSION '2.0'),
+                   xmlroot(xml '<x/>', VERSION 123),
+                   xmlroot('<?xml version="1.2" standalone="yes"?> <x/>', VERSION NO VALUE),
+                   xmlroot('<?xml version="1.2" standalone="yes"?> <x/>', VERSION NO VALUE, STANDALONE NO VALUE),
+                   xmlroot(xml '  <x/>  ', VERSION '1.1'),
+                   xmlroot(xmlroot(xml '<x/>', VERSION '1.0'), VERSION '1.1', STANDALONE NO),
+                   xmlroot(NULL, VERSION '1.1')"#,
+    ).unwrap();
+    let expected = [
+        r#"<?xml version="2.0"?><x/>"#,
+        r#"<?xml version="123"?><x/>"#,
+        r#"<?xml version="1.0" standalone="yes"?> <x/>"#,
+        " <x/>",
+        r#"<?xml version="1.1"?>  <x/>  "#,
+        r#"<?xml version="1.1" standalone="no"?><x/>"#,
+    ];
+    assert_eq!(
+        result.rows[0][..6],
+        expected.map(|text| SqlValue::String(text.into()))
+    );
+    assert_eq!(result.rows[0][6], SqlValue::Null);
+    assert_eq!(
+        session
+            .execute("SELECT xmlroot('<x/>'::text, VERSION '1.1')")
+            .unwrap_err()
+            .sqlstate(),
+        "42804"
+    );
+}
+
+#[test]
 fn xml_document_predicates_preserve_postfix_precedence_and_types() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();

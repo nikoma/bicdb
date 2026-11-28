@@ -13,6 +13,40 @@ use icu_collator::{Collator, CollatorBorrowed, CollatorPreferences};
 pub(crate) const COLLATION_COLLECTION: &str = "__bicdb_pg_collations";
 const SEMANTIC_MARK: char = '\u{1}';
 
+pub(crate) struct BuiltinIcuCollation {
+    pub(crate) oid: i64,
+    pub(crate) name: &'static str,
+    pub(crate) locale: &'static str,
+}
+
+pub(crate) const BUILTIN_ICU_COLLATIONS: &[BuiltinIcuCollation] = &[
+    BuiltinIcuCollation {
+        oid: 12362,
+        name: "und-x-icu",
+        locale: "und",
+    },
+    BuiltinIcuCollation {
+        oid: 12477,
+        name: "de-x-icu",
+        locale: "de",
+    },
+    BuiltinIcuCollation {
+        oid: 13111,
+        name: "sv-x-icu",
+        locale: "sv",
+    },
+];
+
+pub(crate) fn builtin_icu_collation(name: &str) -> Option<&'static BuiltinIcuCollation> {
+    BUILTIN_ICU_COLLATIONS
+        .iter()
+        .find(|collation| collation.name == name)
+}
+
+pub(crate) fn stored_builtin_icu_collation(name: &str) -> Option<&'static BuiltinIcuCollation> {
+    builtin_icu_collation(name.strip_prefix("pg_catalog.")?)
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct CollationSchema {
     pub(crate) name: String,
@@ -63,6 +97,9 @@ fn decode(semantic: &str) -> Option<SemanticCollation<'_>> {
 
 /// The user-visible name of a (possibly semantic) collation name.
 pub(crate) fn display_name(collation: &str) -> &str {
+    if let Some(builtin) = stored_builtin_icu_collation(collation) {
+        return builtin.name;
+    }
     decode(collation).map_or(collation, |semantic| semantic.name)
 }
 
@@ -178,6 +215,14 @@ pub(crate) fn resolve_user_collation(schema: Option<&str>, name: &str) -> Option
 pub(crate) fn semantic_collation(name: String) -> String {
     if name.starts_with(SEMANTIC_MARK) {
         return name;
+    }
+    // Keep the catalog qualification in durable definitions. Older bare
+    // names can still refer to a user collation with the same spelling.
+    if let Some(builtin) = stored_builtin_icu_collation(&name) {
+        return format!(
+            "{SEMANTIC_MARK}i{SEMANTIC_MARK}d{SEMANTIC_MARK}{}{SEMANTIC_MARK}{}",
+            builtin.locale, builtin.name
+        );
     }
     match resolve_user_collation(None, &name) {
         Some(collation) => collation.semantic_name(),

@@ -4255,6 +4255,9 @@ fn information_schema_datetime_for(
 }
 
 fn collation_oid(name: &str) -> Option<i64> {
+    if let Some(collation) = crate::collations::stored_builtin_icu_collation(name) {
+        return Some(collation.oid);
+    }
     match name {
         "default" => Some(100),
         "C" => Some(950),

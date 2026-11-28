@@ -2101,6 +2101,22 @@ pub(crate) fn normalize_column_collation(name: &ObjectName) -> Result<String> {
             .map(|collation| collation.name)
             .ok_or_else(|| undefined_column_collation(&full));
     }
+    if let Some(collation) = crate::collations::builtin_icu_collation(name) {
+        let shadow = qualifier
+            .is_none()
+            .then(crate::search_path::active_path)
+            .flatten()
+            .and_then(|path| {
+                let index = path.iter().position(|schema| schema == "pg_catalog")?;
+                path[..index].iter().find_map(|schema| {
+                    crate::collations::resolve_user_collation(Some(schema), name)
+                })
+            });
+        return Ok(shadow.map_or_else(
+            || format!("pg_catalog.{}", collation.name),
+            |shadow| shadow.name,
+        ));
+    }
     let canonical = match name.to_ascii_lowercase().as_str() {
         "default" => "default",
         "c" => "C",

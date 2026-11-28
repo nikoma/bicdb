@@ -4907,6 +4907,21 @@ pub(crate) fn pg_collation_rows() -> Vec<BTreeMap<String, SqlValue>> {
         (810_001, "en-x-icu", "i", -1, None, None, Some("en")),
     ]
     .into_iter()
+    .chain(
+        crate::collations::BUILTIN_ICU_COLLATIONS
+            .iter()
+            .map(|collation| {
+                (
+                    collation.oid,
+                    collation.name,
+                    "i",
+                    -1,
+                    None,
+                    None,
+                    Some(collation.locale),
+                )
+            }),
+    )
     .map(|(oid, name, provider, encoding, collate, ctype, locale)| {
         virtual_row([
             ("oid", SqlValue::Int(oid)),

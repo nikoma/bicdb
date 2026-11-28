@@ -295,3 +295,45 @@ fn declared_collations_follow_columns_through_predicates_aliases_and_indexes() {
             .contains("collation \"ja_JP.eucjp-x-icu\" for encoding \"UTF8\" does not exist"));
     });
 }
+#[test]
+fn stock_icu_catalog_collations_keep_their_identity_and_locale() {
+    with_session(|session| {
+        assert_eq!(
+            rows(session, "SELECT oid, collname, colllocale FROM pg_collation WHERE collname IN ('und-x-icu','de-x-icu','sv-x-icu') ORDER BY oid"),
+            [
+                ["12362", "und-x-icu", "und"],
+                ["12477", "de-x-icu", "de"],
+                ["13111", "sv-x-icu", "sv"],
+            ]
+        );
+        assert_eq!(
+            rows(
+                session,
+                "SELECT 'äbc' COLLATE \"sv-x-icu\" > 'bbc', 'äbc' COLLATE \"de-x-icu\" < 'bbc'"
+            ),
+            [["true", "true"]]
+        );
+        session.execute("CREATE COLLATION public.\"sv-x-icu\" (provider=icu,locale='de'); CREATE TABLE locale_words(v text COLLATE public.\"sv-x-icu\"); INSERT INTO locale_words VALUES('äbc'),('bbc')").unwrap();
+        assert_eq!(
+            column(session, "SELECT v FROM locale_words ORDER BY v"),
+            ["äbc", "bbc"]
+        );
+        assert_eq!(
+            column(
+                session,
+                "SELECT v FROM locale_words ORDER BY v COLLATE pg_catalog.\"sv-x-icu\""
+            ),
+            ["bbc", "äbc"]
+        );
+        session
+            .execute("CREATE COLLATION copied_sv FROM pg_catalog.\"sv-x-icu\"")
+            .unwrap();
+        assert_eq!(
+            column(
+                session,
+                "SELECT v FROM locale_words ORDER BY v COLLATE copied_sv"
+            ),
+            ["bbc", "äbc"]
+        );
+    });
+}

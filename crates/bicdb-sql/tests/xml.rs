@@ -1347,3 +1347,76 @@ fn table_xml_schema_describes_qualified_relations_and_public_column_metadata() {
         "42501"
     );
 }
+
+#[test]
+fn namespace_and_database_xml_schemas_use_visible_catalog_descriptors() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE SCHEMA \"scope.z\";
+             CREATE SCHEMA private_scope;
+             CREATE TABLE \"scope.z\".z_items(hide boolean);
+             CREATE TABLE \"scope.z\".\"a.items\"(id int, other int);
+             CREATE TABLE private_scope.messages(value bytea);
+             CREATE ROLE xml_scope_reader;
+             GRANT SELECT ON \"scope.z\".\"a.items\" TO xml_scope_reader;
+             GRANT SELECT ON private_scope.messages TO xml_scope_reader;
+             SET ROLE xml_scope_reader",
+        )
+        .unwrap();
+    for call in [
+        "SELECT schema_to_xmlschema('scope.z', true, true, 'urn:scope')",
+        "SELECT schema_to_xml('scope.z', true, true, 'urn:scope')",
+    ] {
+        let error = session.execute(call).unwrap_err();
+        assert_eq!(error.sqlstate(), "42501");
+        assert!(error
+            .to_string()
+            .contains("permission denied for schema scope.z"));
+    }
+    session
+        .execute(
+            "RESET ROLE;
+             GRANT USAGE ON SCHEMA \"scope.z\" TO xml_scope_reader;
+             SET ROLE xml_scope_reader",
+        )
+        .unwrap();
+
+    let schema = session
+        .execute("SELECT schema_to_xmlschema('scope.z', true, true, 'urn:scope')")
+        .unwrap()
+        .rows[0][0]
+        .to_cell();
+    assert!(schema.contains("targetNamespace=\"urn:scope\""));
+    assert_eq!(schema.matches("simpleType name=\"INTEGER\"").count(), 1);
+    assert!(schema.contains("<xsd:sequence>"));
+    let row_reference = schema
+        .lines()
+        .find(|line| line.contains("name=\"a.items\""))
+        .unwrap();
+    assert!(row_reference.contains("type=\"RowType."));
+    assert!(row_reference
+        .contains(".scope_x002E_z.a_x002E_items\" minOccurs=\"0\" maxOccurs=\"unbounded\""));
+    assert!(!schema.contains("name=\"RowType."));
+    assert!(!schema.contains("BOOLEAN"));
+    assert!(!schema.contains("z_items"));
+
+    let catalog = session
+        .execute("SELECT database_to_xmlschema(false, false, '')")
+        .unwrap()
+        .rows[0][0]
+        .to_cell();
+    assert!(catalog.contains("name=\"CatalogType."));
+    assert!(catalog.contains("<xsd:all>"));
+    assert!(catalog.contains("name=\"scope.z\" type=\"SchemaType."));
+    assert!(catalog.contains("name=\"public\" type=\"SchemaType."));
+    assert!(!catalog.contains("private_scope"));
+    assert!(!catalog.contains("bytea"));
+
+    let error = session
+        .execute("SELECT schema_to_xmlschema('missing_scope', false, false, '')")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "3F000");
+}

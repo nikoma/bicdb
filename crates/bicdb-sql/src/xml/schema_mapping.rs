@@ -13,35 +13,21 @@ pub(crate) fn query_schema(
     forest: bool,
     binary_hex: bool,
 ) -> String {
-    let mut output =
-        String::from("<xsd:schema\n    xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\"");
-    if !namespace.is_empty() {
-        write!(
-            output,
-            "\n    targetNamespace=\"{namespace}\"\n    elementFormDefault=\"qualified\""
-        )
-        .unwrap();
-    }
-    output.push_str(">\n\n");
-
+    let mut output = start_schema(namespace);
     let mut definitions = BTreeSet::new();
-    let mut types = Vec::with_capacity(columns.len());
-    for (_, pg_type) in columns {
-        let pg_type = pg_type.as_deref().unwrap_or("text");
-        let (name, definition) = type_definition(pg_type, database, binary_hex);
-        if definitions.insert(name.clone()) {
-            output.push_str(&definition);
-        }
-        types.push(name);
-    }
+    let types = columns
+        .iter()
+        .map(|(_, pg_type)| {
+            add_column_type(&mut output, &mut definitions, pg_type, database, binary_hex)
+        })
+        .collect::<Vec<_>>();
 
-    let component = |name: &str| xml_name(name, true).replace('.', "_x002E_");
     let suffix = relation.map_or_else(String::new, |(schema, relation)| {
         format!(
             ".{}.{}.{}",
-            component(database),
-            component(schema),
-            component(relation),
+            qualified_component(database),
+            qualified_component(schema),
+            qualified_component(relation),
         )
     });
     let row_type = format!("RowType{suffix}");
@@ -99,6 +85,136 @@ pub(crate) fn query_schema(
     .unwrap();
     output.push_str("</xsd:schema>");
     output
+}
+
+pub(crate) fn namespace_schema<'a>(
+    tables: impl Iterator<Item = &'a str>,
+    columns: impl Iterator<Item = &'a Option<String>>,
+    database: &str,
+    schema: &str,
+    namespace: &str,
+    forest: bool,
+    binary_hex: bool,
+) -> String {
+    let mut output = start_schema(namespace);
+    let mut definitions = BTreeSet::new();
+    for pg_type in columns {
+        add_column_type(&mut output, &mut definitions, pg_type, database, binary_hex);
+    }
+    let database = qualified_component(database);
+    let qualified_schema = qualified_component(schema);
+    let child_type = if forest { "RowType" } else { "TableType" };
+    append_container(
+        &mut output,
+        schema,
+        &format!("SchemaType.{database}.{qualified_schema}"),
+        forest,
+        tables.map(|table| {
+            let kind = format!(
+                "{child_type}.{database}.{qualified_schema}.{}",
+                qualified_component(table)
+            );
+            (table, kind)
+        }),
+    );
+    output.push_str("</xsd:schema>");
+    output
+}
+
+pub(crate) fn database_schema<'a>(
+    schemas: impl Iterator<Item = &'a str>,
+    columns: impl Iterator<Item = &'a Option<String>>,
+    database: &str,
+    namespace: &str,
+    binary_hex: bool,
+) -> String {
+    let mut output = start_schema(namespace);
+    let mut definitions = BTreeSet::new();
+    for pg_type in columns {
+        add_column_type(&mut output, &mut definitions, pg_type, database, binary_hex);
+    }
+    let qualified_database = qualified_component(database);
+    append_container(
+        &mut output,
+        database,
+        &format!("CatalogType.{qualified_database}"),
+        false,
+        schemas.map(|schema| {
+            let kind = format!(
+                "SchemaType.{qualified_database}.{}",
+                qualified_component(schema)
+            );
+            (schema, kind)
+        }),
+    );
+    output.push_str("</xsd:schema>");
+    output
+}
+
+fn start_schema(namespace: &str) -> String {
+    let mut output =
+        String::from("<xsd:schema\n    xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\"");
+    if !namespace.is_empty() {
+        write!(
+            output,
+            "\n    targetNamespace=\"{namespace}\"\n    elementFormDefault=\"qualified\""
+        )
+        .unwrap();
+    }
+    output.push_str(">\n\n");
+    output
+}
+
+fn add_column_type(
+    output: &mut String,
+    definitions: &mut BTreeSet<String>,
+    pg_type: &Option<String>,
+    database: &str,
+    binary_hex: bool,
+) -> String {
+    let (name, definition) =
+        type_definition(pg_type.as_deref().unwrap_or("text"), database, binary_hex);
+    if definitions.insert(name.clone()) {
+        output.push_str(&definition);
+    }
+    name
+}
+
+fn qualified_component(name: &str) -> String {
+    xml_name(name, true).replace('.', "_x002E_")
+}
+
+fn append_container<'a>(
+    output: &mut String,
+    name: &str,
+    kind: &str,
+    repeating: bool,
+    children: impl Iterator<Item = (&'a str, String)>,
+) {
+    let (compositor, count) = if repeating {
+        ("sequence", " minOccurs=\"0\" maxOccurs=\"unbounded\"")
+    } else {
+        ("all", "")
+    };
+    writeln!(
+        output,
+        "<xsd:complexType name=\"{kind}\">\n  <xsd:{compositor}>"
+    )
+    .unwrap();
+    for (child, child_type) in children {
+        let child = xml_name(child, true);
+        writeln!(
+            output,
+            "    <xsd:element name=\"{child}\" type=\"{child_type}\"{count}/>"
+        )
+        .unwrap();
+    }
+    let name = xml_name(name, true);
+    write!(
+        output,
+        "  </xsd:{compositor}>\n</xsd:complexType>\n\n<xsd:element name=\"{name}\" type=\"{kind}\"/>\n\n"
+    )
+    .unwrap();
 }
 
 fn type_definition(pg_type: &str, database: &str, binary_hex: bool) -> (String, String) {

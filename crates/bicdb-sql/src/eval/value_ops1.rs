@@ -237,8 +237,10 @@ pub(crate) fn eval_db_catalog_function_value_with_engine(
             | "query_to_xmlschema"
             | "cursor_to_xmlschema"
             | "schema_to_xml"
+            | "schema_to_xmlschema"
             | "cursor_to_xml"
             | "database_to_xml"
+            | "database_to_xmlschema"
     ) {
         if let Some(engine) = query_engine {
             return engine.eval_xml_mapping(bare_name, args);

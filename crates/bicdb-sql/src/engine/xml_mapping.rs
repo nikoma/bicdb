@@ -55,13 +55,14 @@ impl SqlEngine<'_> {
                 | "table_to_xmlschema"
                 | "query_to_xmlschema"
                 | "cursor_to_xmlschema"
-                | "schema_to_xml",
+                | "schema_to_xml"
+                | "schema_to_xmlschema",
                 [source, nulls, forest, namespace],
             ) => (Some(source), None, nulls, forest, namespace),
-            ("database_to_xml", [nulls, forest, namespace]) => {
+            ("database_to_xml" | "database_to_xmlschema", [nulls, forest, namespace]) => {
                 (None, None, nulls, forest, namespace)
             }
-            ("database_to_xml", _) => {
+            ("database_to_xml" | "database_to_xmlschema", _) => {
                 return Err(SqlError::undefined_function(format!(
                     "{name} expects three arguments"
                 )));
@@ -77,7 +78,8 @@ impl SqlEngine<'_> {
                 | "table_to_xmlschema"
                 | "query_to_xmlschema"
                 | "cursor_to_xmlschema"
-                | "schema_to_xml",
+                | "schema_to_xml"
+                | "schema_to_xmlschema",
                 _,
             ) => {
                 return Err(SqlError::undefined_function(format!(
@@ -95,9 +97,12 @@ impl SqlEngine<'_> {
             .ok_or_else(|| SqlError::invalid_parameter_value("tableforest must be boolean"))?;
         let namespace = namespace.to_cell();
         let Some(source) = source else {
-            return self
-                .map_database_rows(nulls, forest, &namespace)
-                .map(|value| Some(SqlValue::String(value)));
+            let value = if name == "database_to_xmlschema" {
+                self.map_database_schema(&namespace)?
+            } else {
+                self.map_database_rows(nulls, forest, &namespace)?
+            };
+            return Ok(Some(SqlValue::String(value)));
         };
         if let Some(count) = count {
             let count = sql_value_i64(count)
@@ -140,10 +145,15 @@ impl SqlEngine<'_> {
                 &namespace,
             ))));
         }
-        if name == "schema_to_xml" {
-            return self
-                .map_schema_rows(&source.to_cell(), nulls, forest, Some(&namespace))
-                .map(|value| Some(SqlValue::String(value)));
+        if matches!(name, "schema_to_xml" | "schema_to_xmlschema") {
+            let requested = source.to_cell();
+            let schema = self.require_xml_namespace(&requested)?;
+            let value = if name == "schema_to_xmlschema" {
+                self.map_namespace_schema(&schema, forest, &namespace)?
+            } else {
+                self.map_schema_rows(&schema, nulls, forest, Some(&namespace))?
+            };
+            return Ok(Some(SqlValue::String(value)));
         }
         let (query, document_name, row_name) = if name == "table_to_xml" {
             let oid = i64::from(oid_alias_numeric_value(self.db_ref(), "regclass", source)?);
@@ -236,6 +246,10 @@ impl SqlEngine<'_> {
             ));
         }
 
+        Ok((schema, table, self.describe_xml_relation_columns(oid)?))
+    }
+
+    fn describe_xml_relation_columns(&self, oid: i64) -> Result<Vec<(String, Option<String>)>> {
         // A schema-only operation reads the public catalog descriptor. The
         // data export separately applies relation and column access checks.
         let attributes = self.xml_query_result(&format!(
@@ -265,7 +279,7 @@ impl SqlEngine<'_> {
                 (name, Some(pg_type))
             })
             .collect();
-        Ok((schema, table, columns))
+        Ok(columns)
     }
 
     fn render_xml_schema(
@@ -283,26 +297,135 @@ impl SqlEngine<'_> {
             namespace,
             nulls,
             forest,
-            self.session_gucs
-                .get("xmlbinary")
-                .is_some_and(|mode| mode == "hex"),
+            self.xml_binary_hex(),
         )
     }
 
-    fn map_database_rows(&self, nulls: bool, forest: bool, namespace: &str) -> Result<String> {
-        let mut namespaces = list_namespaces(self.db_ref())?;
-        namespaces.sort_by(|left, right| left.name.cmp(&right.name));
+    fn xml_binary_hex(&self) -> bool {
+        self.session_gucs
+            .get("xmlbinary")
+            .is_some_and(|mode| mode == "hex")
+    }
+
+    fn require_xml_namespace(&self, schema: &str) -> Result<String> {
+        let temp_schema = (schema == "pg_temp")
+            .then(crate::search_path::active_temp_schema)
+            .flatten();
+        let resolved = temp_schema.as_deref().unwrap_or(schema);
+        let label = pg_quote_literal(resolved);
+        let found = self.xml_query_result(&format!(
+            "SELECT oid FROM pg_catalog.pg_namespace WHERE nspname = {label}"
+        ))?;
+        if found.rows.is_empty() {
+            return Err(SqlError::data_exception_public(
+                "3F000",
+                format!("schema \"{schema}\" does not exist"),
+                None,
+            ));
+        }
         let role = current_user_from_gucs(&self.session_gucs);
-        let mut contents = String::new();
-        for schema in namespaces {
+        if temp_schema.is_none() && !role_can_use_schema(self.db_ref(), &role, resolved)? {
+            return Err(SqlError::data_exception_public(
+                "42501",
+                format!("permission denied for schema {schema}"),
+                None,
+            ));
+        }
+        Ok(resolved.to_owned())
+    }
+
+    fn xml_visible_namespaces(&self) -> Result<Vec<String>> {
+        let role = current_user_from_gucs(&self.session_gucs);
+        let mut result = Vec::new();
+        for schema in list_namespaces(self.db_ref())? {
             self.check_cancellation()?;
-            if schema.name.starts_with("pg_")
-                || schema.name == "information_schema"
-                || !role_can_use_schema(self.db_ref(), &role, &schema.name)?
+            if !schema.name.starts_with("pg_")
+                && schema.name != "information_schema"
+                && role_can_use_schema(self.db_ref(), &role, &schema.name)?
             {
-                continue;
+                result.push(schema.name);
             }
-            contents.push_str(&self.map_schema_rows(&schema.name, nulls, forest, None)?);
+        }
+        result.sort();
+        Ok(result)
+    }
+
+    fn xml_visible_tables(&self, schemas: &[&str], ordered: bool) -> Result<Vec<(i64, String)>> {
+        if schemas.is_empty() {
+            return Ok(Vec::new());
+        }
+        let labels = schemas
+            .iter()
+            .map(|schema| pg_quote_literal(schema))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let order = if ordered { "ORDER BY c.relname" } else { "" };
+        // PostgreSQL schema exports use table-level SELECT and include
+        // ordinary tables, views and materialized views.
+        let tables = self.xml_query_result(&format!(
+            "SELECT c.oid, c.relname
+               FROM pg_catalog.pg_class AS c
+               JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+              WHERE n.nspname IN ({labels})
+                AND c.relkind IN ('r', 'v', 'm')
+                AND pg_catalog.has_table_privilege(c.oid, 'SELECT')
+              {order}"
+        ))?;
+        Ok(tables
+            .rows
+            .into_iter()
+            .map(|row| {
+                let oid = sql_value_i64(&row[0]).expect("pg_class.oid is an integer");
+                (oid, row[1].to_cell())
+            })
+            .collect())
+    }
+
+    fn xml_visible_column_types(&self, tables: &[(i64, String)]) -> Result<Vec<Option<String>>> {
+        let mut types = Vec::new();
+        for (oid, _) in tables {
+            self.check_cancellation()?;
+            types.extend(
+                self.describe_xml_relation_columns(*oid)?
+                    .into_iter()
+                    .map(|(_, kind)| kind),
+            );
+        }
+        Ok(types)
+    }
+
+    fn map_namespace_schema(&self, schema: &str, forest: bool, namespace: &str) -> Result<String> {
+        let tables = self.xml_visible_tables(&[schema], true)?;
+        let types = self.xml_visible_column_types(&tables)?;
+        Ok(crate::xml::schema_mapping::namespace_schema(
+            tables.iter().map(|(_, table)| table.as_str()),
+            types.iter(),
+            &current_database_from_gucs(&self.session_gucs),
+            schema,
+            namespace,
+            forest,
+            self.xml_binary_hex(),
+        ))
+    }
+
+    fn map_database_schema(&self, namespace: &str) -> Result<String> {
+        let schemas = self.xml_visible_namespaces()?;
+        let schema_names = schemas.iter().map(String::as_str).collect::<Vec<_>>();
+        let tables = self.xml_visible_tables(&schema_names, false)?;
+        let types = self.xml_visible_column_types(&tables)?;
+        Ok(crate::xml::schema_mapping::database_schema(
+            schema_names.into_iter(),
+            types.iter(),
+            &current_database_from_gucs(&self.session_gucs),
+            namespace,
+            self.xml_binary_hex(),
+        ))
+    }
+
+    fn map_database_rows(&self, nulls: bool, forest: bool, namespace: &str) -> Result<String> {
+        let mut contents = String::new();
+        for schema in self.xml_visible_namespaces()? {
+            contents.push_str(&self.map_schema_rows(&schema, nulls, forest, None)?);
             contents.push('\n');
         }
         let database = current_database_from_gucs(&self.session_gucs);
@@ -320,33 +443,11 @@ impl SqlEngine<'_> {
         forest: bool,
         namespace: Option<&str>,
     ) -> Result<String> {
-        let label = pg_quote_literal(schema);
-        let found = self.xml_query_result(&format!(
-            "SELECT oid FROM pg_catalog.pg_namespace WHERE nspname = {label}"
-        ))?;
-        if found.rows.is_empty() {
-            return Err(SqlError::data_exception_public(
-                "3F000",
-                format!("schema \"{schema}\" does not exist"),
-                None,
-            ));
-        }
-        // Partition roots and sequences are absent from PostgreSQL's schema
-        // map. A table-level SELECT grant determines table membership.
-        let tables = self.xml_query_result(&format!(
-            "SELECT c.relname
-               FROM pg_catalog.pg_class AS c
-               JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
-              WHERE n.nspname = {label}
-                AND c.relkind IN ('r', 'v', 'm', 'f')
-                AND pg_catalog.has_table_privilege(c.oid, 'SELECT')
-              ORDER BY c.relname"
-        ))?;
+        let tables = self.xml_visible_tables(&[schema], true)?;
         let source_schema = pg_quote_ident(schema);
         let mut contents = String::new();
-        for row in tables.rows {
+        for (_, table) in tables {
             self.check_cancellation()?;
-            let table = row[0].to_cell();
             let source = pg_quote_ident(&table);
             let result =
                 self.xml_query_result(&format!("SELECT * FROM {source_schema}.{source}"))?;

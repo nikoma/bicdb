@@ -780,6 +780,53 @@ fn xmlparse_and_xmlserialize_preserve_document_and_content_modes() {
 }
 
 #[test]
+fn sql_xml_maps_arrays_and_temporal_values_to_xml_text() {
+    let (_dir, mut db) = session_db();
+    let mut session = SqlSession::new(&mut db);
+    let result = session
+        .execute(
+            r#"SELECT
+                xmlelement(NAME demo, ARRAY[[1,NULL],[2,3]]),
+                xmlforest(ARRAY['x<','y>'] AS vals),
+                xmlelement(NAME t, xmlattributes(ARRAY['<&'] AS a)),
+                xmlelement(NAME demo, ARRAY[xml '<a/>', xml 'some text']),
+                xmlelement(NAME demo, true, false, timestamp '2009-04-09 00:24:37.1234'),
+                xmlelement(NAME demo, '[0:2]={1,NULL,3}'::int[])"#,
+        )
+        .unwrap();
+    assert_eq!(
+        result.rows[0]
+            .iter()
+            .map(SqlValue::to_cell)
+            .collect::<Vec<_>>(),
+        [
+            "<demo><element>1</element><element>2</element><element>3</element></demo>",
+            "<vals><element>x&lt;</element><element>y&gt;</element></vals>",
+            r#"<t a="&lt;element&gt;&amp;lt;&amp;amp;&lt;/element&gt;"/>"#,
+            "<demo><element><a/></element><element>some text</element></demo>",
+            "<demo>truefalse2009-04-09T00:24:37.1234</demo>",
+            "<demo><element>1</element><element>3</element></demo>",
+        ]
+    );
+    session.execute("SET TIME ZONE 'America/New_York'").unwrap();
+    assert_eq!(
+        session
+            .execute("SELECT xmlelement(NAME demo, timestamptz '2009-04-09 00:24:37Z')")
+            .unwrap()
+            .rows[0][0]
+            .to_cell(),
+        "<demo>2009-04-08T20:24:37-04:00</demo>"
+    );
+    for sql in [
+        "SELECT xmlelement(NAME x, date 'infinity')",
+        "SELECT xmlelement(NAME x, timestamp '-infinity')",
+        "SELECT xmlelement(NAME x, timestamptz 'infinity')",
+    ] {
+        assert_eq!(session.execute(sql).unwrap_err().sqlstate(), "22008");
+    }
+}
+
+#[test]
 fn xmlserialize_indents_mixed_content_and_keeps_the_document_prolog() {
     let (_dir, mut db) = session_db();
     let mut session = SqlSession::new(&mut db);

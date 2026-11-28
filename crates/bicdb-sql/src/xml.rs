@@ -487,8 +487,47 @@ impl Drop for XmlSettingsScope {
 }
 
 fn xml_scalar_text(value: &SqlValue, pg_type: Option<&str>) -> Result<String> {
-    if pg_type != Some("bytea") {
-        return Ok(xml_text(value));
+    if let Some(element_type) = pg_type.and_then(|kind| kind.strip_suffix("[]")) {
+        let decoded;
+        let value = if let (SqlValue::String(_), Some(pg_type)) = (value, pg_type) {
+            decoded = crate::cast_value_to_pg_type(value.clone(), pg_type)?;
+            &decoded
+        } else {
+            value
+        };
+        let Some((array, _)) = crate::array_json_parts(value, "SQL/XML")? else {
+            return Ok(String::new());
+        };
+        let mut elements = Vec::new();
+        crate::flatten_array_json(array, &mut elements);
+        let mut output = String::new();
+        for element in elements.into_iter().filter(|element| !element.is_null()) {
+            let element = crate::json_to_sql_value(element);
+            output.push_str("<element>");
+            output.push_str(&xml_content(&element, Some(element_type))?);
+            output.push_str("</element>");
+        }
+        return Ok(output);
+    }
+    match pg_type {
+        Some("bool") => {
+            let value = crate::sql_value_bool(value)
+                .ok_or_else(|| SqlError::InvalidSql("expected a boolean XML value".into()))?;
+            return Ok(value.to_string());
+        }
+        Some("date") => {
+            let value = crate::PgDate::from_postgres_text(&xml_text(value))
+                .map_err(|_| xml_datetime_out_of_range("date", false))?;
+            if value.epoch_days().is_none() {
+                return Err(xml_datetime_out_of_range("date", true));
+            }
+            return Ok(value.to_iso_text());
+        }
+        Some("timestamp" | "timestamptz") => {
+            return xml_timestamp(value, pg_type == Some("timestamptz"))
+        }
+        Some("bytea") => {}
+        _ => return Ok(xml_text(value)),
     }
     use base64::Engine;
     let bytes = crate::bytea_argument(value)?.unwrap_or_default();
@@ -499,13 +538,44 @@ fn xml_scalar_text(value: &SqlValue, pg_type: Option<&str>) -> Result<String> {
     })
 }
 
+fn xml_datetime_out_of_range(kind: &str, infinite: bool) -> SqlError {
+    SqlError::coded(
+        "22008",
+        format!("{kind} out of range"),
+        infinite.then(|| format!("XML does not support infinite {kind} values.")),
+        None,
+    )
+}
+
+fn xml_timestamp(value: &SqlValue, with_timezone: bool) -> Result<String> {
+    let timestamp = crate::PgTimestamp::from_postgres_text(&xml_text(value), with_timezone)
+        .map_err(|_| xml_datetime_out_of_range("timestamp", false))?;
+    if timestamp.finite_micros().is_none() {
+        return Err(xml_datetime_out_of_range("timestamp", true));
+    }
+    if !with_timezone {
+        return Ok(timestamp.to_iso_text(false).replacen(' ', "T", 1));
+    }
+    let mut text = crate::render_timestamptz(timestamp).replacen(' ', "T", 1);
+    let offset_end = text.strip_suffix(" BC").unwrap_or(&text).len();
+    if text[..offset_end]
+        .rfind(['+', '-'])
+        .is_some_and(|offset| offset_end - offset == 3)
+    {
+        text.insert_str(offset_end, ":00");
+    }
+    Ok(text)
+}
+
 fn xml_content(value: &SqlValue, pg_type: Option<&str>) -> Result<String> {
     let text = xml_scalar_text(value, pg_type)?;
-    Ok(if pg_type == Some("xml") {
-        text
-    } else {
-        escape_text(&text)
-    })
+    Ok(
+        if pg_type == Some("xml") || crate::is_array_pg_type(pg_type) {
+            text
+        } else {
+            escape_text(&text).replace('\r', "&#x0d;")
+        },
+    )
 }
 
 /// Nesting cap for XML documents and XPath expressions.

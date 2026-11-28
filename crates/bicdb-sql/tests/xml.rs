@@ -1137,11 +1137,11 @@ fn schema_xml_maps_readable_relations_in_name_order() {
     assert_eq!(
         result.rows[0][0].to_cell(),
         concat!(
-            "<xml_x0020_Set xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns=\"urn:x\">\n\n",
+            "<_x0078_ml_x0020_Set xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns=\"urn:x\">\n\n",
             "<a>\n\n<row>\n  <b>&amp;</b>\n</row>\n\n</a>\n\n",
             "<m>\n\n<row>\n  <a xsi:nil=\"true\"/>\n</row>\n\n</m>\n\n",
             "<z>\n\n<row>\n  <a xsi:nil=\"true\"/>\n</row>\n\n</z>\n\n",
-            "</xml_x0020_Set>\n",
+            "</_x0078_ml_x0020_Set>\n",
         )
     );
     assert_eq!(

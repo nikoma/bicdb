@@ -741,6 +741,41 @@ fn xmlparse_and_xmlserialize_preserve_document_and_content_modes() {
 }
 
 #[test]
+fn xmlserialize_indents_mixed_content_and_keeps_the_document_prolog() {
+    let (_dir, mut db) = session_db();
+    let mut session = SqlSession::new(&mut db);
+    let result = session
+        .execute(
+            r#"SELECT
+                xmlserialize(CONTENT 'text<foo>73</foo>next<bar><val x="y">42</val></bar>' AS text INDENT),
+                xmlserialize(DOCUMENT '<?xml version="1.0"?><foo><bar/></foo>' AS text INDENT),
+                xmlserialize(DOCUMENT '<?pi hi?><!DOCTYPE a><a/>' AS text INDENT),
+                xmlserialize(CONTENT '<?pi hi?><!DOCTYPE a><a/>' AS text INDENT),
+                xmlserialize(CONTENT ' a &#65; &amp; ' AS text INDENT),
+                xmlserialize(CONTENT '<!--<!DOCTYPE sample>--><a/><b/>' AS text INDENT)"#,
+        )
+        .unwrap();
+    assert_eq!(
+        result.rows[0]
+            .iter()
+            .map(SqlValue::to_cell)
+            .collect::<Vec<_>>(),
+        [
+            "text\n<foo>73</foo>next\n<bar>\n  <val x=\"y\">42</val>\n</bar>",
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<foo>\n  <bar/>\n</foo>",
+            "<?pi hi?>\n<!DOCTYPE a>\n<a/>",
+            "<?pi hi?>\n<!DOCTYPE a>\n<a/>\n",
+            " a A &amp; ",
+            "<!--<!DOCTYPE sample>-->\n<a/>\n<b/>",
+        ]
+    );
+    let error = session
+        .execute("SELECT xml '<!DOCTYPE a><a/><b/>'")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "2200N");
+}
+
+#[test]
 fn sql_xml_names_escape_characters_and_duplicate_attributes_are_rejected() {
     let root = tempfile::tempdir().unwrap();
     let mut db = bicdb_core::BicDb::open(root.path()).unwrap();

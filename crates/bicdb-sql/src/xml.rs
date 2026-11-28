@@ -46,8 +46,25 @@ struct XmlDoctype {
 }
 
 fn xml_doctype(value: &str) -> Result<Option<XmlDoctype>> {
-    let Some(start) = value.find("<!DOCTYPE") else {
-        return Ok(None);
+    // A DTD can appear only in the prolog, outside comments and processing
+    // instructions. Identical characters inside XML content are ordinary text.
+    let mut prolog = value.trim_start_matches('\u{feff}');
+    let start = loop {
+        prolog = prolog.trim_start_matches([' ', '\t', '\r', '\n']);
+        if prolog.starts_with("<!DOCTYPE") {
+            break value.len() - prolog.len();
+        }
+        let (skip, terminator) = if prolog.starts_with("<!--") {
+            (4, "-->")
+        } else if prolog.starts_with("<?") {
+            (2, "?>")
+        } else {
+            return Ok(None);
+        };
+        let Some(end) = prolog[skip..].find(terminator) else {
+            return Ok(None);
+        };
+        prolog = &prolog[skip + end + terminator.len()..];
     };
     let bytes = value.as_bytes();
     let mut quote = None;
@@ -196,7 +213,12 @@ fn expand_xml_entities(
 }
 
 fn xml_for_parser(value: &str) -> Result<String> {
-    let Some(doctype) = xml_doctype(value)? else {
+    let doctype = xml_doctype(value)?;
+    xml_for_parser_with_doctype(value, doctype.as_ref())
+}
+
+fn xml_for_parser_with_doctype(value: &str, doctype: Option<&XmlDoctype>) -> Result<String> {
+    let Some(doctype) = doctype else {
         return Ok(value.to_string());
     };
     let mut budget = MAX_XML_ENTITY_EXPANSION;
@@ -217,7 +239,10 @@ pub(crate) fn validate_xml(value: &str, document: bool) -> Result<()> {
         parser::parse(&format!("{declaration}<bicdb/>"))
             .map_err(|_| invalid_xml("invalid XML declaration"))?;
     }
-    let prepared = xml_for_parser(value)?;
+    // An explicit DTD describes an XML document even in CONTENT mode.
+    let doctype = xml_doctype(value)?;
+    let document = document || doctype.is_some();
+    let prepared = xml_for_parser_with_doctype(value, doctype.as_ref())?;
     let parsed = if document {
         parser::parse(&prepared)
     } else {
@@ -688,40 +713,75 @@ fn serialize_child(
     }
 }
 
-fn indent_xml_content(value: &str) -> Result<String> {
-    check_nesting_budget_for_document(value)?;
-    let prepared = xml_for_parser(value)?;
-    let content = strip_declaration(&prepared);
-    let package = parser::parse(&wrapped_content(&prepared)).map_err(invalid_xml)?;
-    let document = package.as_document();
-    let root = document
+fn wrapped_xml_children(package: &sxd_document::Package) -> Vec<dom::ChildOfElement<'_>> {
+    package
+        .as_document()
         .root()
         .children()
         .into_iter()
         .find_map(dom::ChildOfRoot::element)
-        .expect("wrapped XML has one enclosing element");
-    let children = root.children();
-    if children.iter().all(|child| matches!(child, dom::ChildOfElement::Text(_)))
-        || children.iter().any(|child| {
-            matches!(child, dom::ChildOfElement::Text(text) if !text.text().trim().is_empty())
-        })
-    {
-        return Ok(content.to_owned());
-    }
+        .expect("wrapped XML has one enclosing element")
+        .children()
+}
+
+fn indent_xml_content(value: &str, document: bool) -> Result<String> {
+    check_nesting_budget_for_document(value)?;
+    let doctype = xml_doctype(value)?;
+    let prepared = xml_for_parser_with_doctype(value, doctype.as_ref())?;
+    let package = parser::parse(&wrapped_content(&prepared)).map_err(invalid_xml)?;
+    let children = wrapped_xml_children(&package);
+    let mixed = children.iter().any(
+        |child| matches!(child, dom::ChildOfElement::Text(text) if !text.text().trim().is_empty()),
+    );
+    let doctype_after = if let Some(doctype) = &doctype {
+        let prefix =
+            parser::parse(&wrapped_content(&value[..doctype.start])).map_err(invalid_xml)?;
+        Some(
+            wrapped_xml_children(&prefix)
+                .iter()
+                .filter(|child| !matches!(child, dom::ChildOfElement::Text(_)))
+                .count(),
+        )
+    } else {
+        None
+    };
+
     let mut output = String::new();
+    if let Some((declaration, _)) = xml_declaration(value).filter(|_| document) {
+        let version =
+            xml_declaration_attribute(declaration, "version").unwrap_or_else(|| "1.0".into());
+        output = format!("<?xml version=\"{version}\" encoding=\"UTF-8\"");
+        if let Some(standalone) = xml_declaration_attribute(declaration, "standalone") {
+            output.push_str(&format!(" standalone=\"{standalone}\""));
+        }
+        output.push_str("?>");
+    }
     let namespaces = BTreeMap::new();
     let last = children.len().saturating_sub(1);
+    let mut markup = 0;
     for (index, child) in children.into_iter().enumerate() {
-        if let dom::ChildOfElement::Text(text) = child {
-            if index == last {
-                output.push_str(&text.text());
+        if matches!(child, dom::ChildOfElement::Text(_)) {
+            if mixed || (index == last && !document && doctype.is_none()) {
+                serialize_child(child, &namespaces, &mut output, None);
             }
             continue;
+        }
+        if let Some(doctype) = &doctype {
+            if doctype_after == Some(markup) {
+                if !output.is_empty() {
+                    output.push('\n');
+                }
+                output.push_str(&value[doctype.start..doctype.end]);
+            }
         }
         if !output.is_empty() {
             output.push('\n');
         }
         serialize_child(child, &namespaces, &mut output, Some(0));
+        markup += 1;
+    }
+    if !document && doctype.is_some() {
+        output.push('\n');
     }
     Ok(output)
 }
@@ -797,7 +857,7 @@ fn xml_serialize(
         validate_xml(&value, false)?;
     }
     let value = if matches!(args.get(1), Some(SqlValue::Bool(true))) {
-        indent_xml_content(&value)?
+        indent_xml_content(&value, document)?
     } else {
         normalize_validated_xml(&value)
     };

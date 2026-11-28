@@ -29,6 +29,8 @@ pub(crate) mod not_null_constraints;
 mod owned_objects;
 mod partition_indexes;
 mod table_access_method;
+pub(crate) mod text_search_ddl;
+mod text_search_dictionaries;
 #[cfg(test)]
 mod timestamp_day_indexes;
 mod typed_tables;
@@ -1349,6 +1351,11 @@ impl SqlSessionGucState {
         &self.session_gucs
     }
 
+    /// A connection's immutable settings for wire encoding and decoding.
+    pub fn shared_session_gucs(&self) -> Arc<HashMap<String, String>> {
+        self.session_gucs.clone()
+    }
+
     pub fn insert_session_guc(&mut self, key: String, value: String) {
         if !is_protected_security_setting(&key) {
             Arc::make_mut(&mut self.session_gucs).insert(key, value);
@@ -2373,6 +2380,14 @@ pub(crate) enum DdlUndo {
         schema_name: String,
         name: String,
         previous: Option<Box<crate::collations::CollationSchema>>,
+    },
+    RestoreTextSearchConfiguration {
+        oid: u32,
+        previous: Option<Box<crate::fts::authored::AuthoredConfig>>,
+    },
+    RestoreTextSearchDictionary {
+        oid: u32,
+        previous: Option<Box<crate::fts::authored::AuthoredDictionary>>,
     },
     RestoreEventTrigger {
         oid: i64,
@@ -3635,6 +3650,7 @@ impl<'db> SqlSession<'db> {
         default_marks: &[Vec<usize>],
         rules: Option<&CopyFromRules>,
     ) -> Result<CopyFromOutcome> {
+        let _xml_settings = crate::xml::XmlSettingsScope::enter(&self.session_gucs);
         // PostgreSQL's CONTEXT names the relation without its schema.
         let display_relation = table
             .rsplit('.')
@@ -3718,22 +3734,17 @@ impl<'db> SqlSession<'db> {
                         value,
                         schema.as_ref().and_then(|schema| schema.column(column)),
                     ) {
-                        (Some(text), Some(target))
-                            if target.user_type.is_none()
-                                && matches!(target.pg_type.as_str(), "int2" | "int4" | "int8") =>
-                        {
-                            SqlValue::Int(pg_integer_input(&text, &target.pg_type).map_err(
-                                |error| match line {
-                                    Some(line) => copy_value_error(
-                                        error,
-                                        &display_relation,
-                                        line,
-                                        &target.name,
-                                        &text,
-                                    ),
-                                    None => error,
-                                },
-                            )?)
+                        (Some(text), Some(target)) if copy_input_requires_special_type(target) => {
+                            copy_text_input(&text, target).map_err(|error| match line {
+                                Some(line) => copy_value_error(
+                                    error,
+                                    &display_relation,
+                                    line,
+                                    &target.name,
+                                    &text,
+                                ),
+                                None => error,
+                            })?
                         }
                         (value, _) => value.map(SqlValue::String).unwrap_or(SqlValue::Null),
                     };
@@ -3891,6 +3902,9 @@ impl<'db> SqlSession<'db> {
     /// small.
     #[inline(never)]
     fn execute_raw_catalog_compat(&mut self, sql: &str) -> Result<Option<SqlResult>> {
+        if let Some(result) = self.execute_raw_text_search_ddl(sql)? {
+            return Ok(Some(result));
+        }
         if let Some(result) = self.execute_raw_event_trigger_ddl(sql)? {
             return Ok(Some(result));
         }
@@ -4178,7 +4192,7 @@ impl<'db> SqlSession<'db> {
     /// checks a single statement before it runs.
     fn execute_text_statements(&mut self, sql: &str) -> Result<SqlResult> {
         let _random = crate::pg_random::RandomScope::enter(&self.random_state);
-        let _xml_binary = crate::xml::XmlBinaryScope::enter(&self.session_gucs);
+        let _xml_settings = crate::xml::XmlSettingsScope::enter(&self.session_gucs);
         let _preflight = self.prepare_catalog_preflight_text(sql)?;
         let _catalog_reads = if !sql.contains(';') || split_sql_statements(sql).len() == 1 {
             self.enter_statement_catalog_reads(sql)?
@@ -4190,6 +4204,8 @@ impl<'db> SqlSession<'db> {
                 && postgres_execution_requires_snapshot(sql)
         })?;
         self.refresh_client_statement_snapshot()?;
+        let _authored_text_search =
+            crate::fts::authored::Scope::enter(self.db_ref(), &self.session_gucs)?;
         if !self.transaction_read_only() {
             return self.execute_profiled(sql);
         }
@@ -4339,13 +4355,15 @@ impl<'db> SqlSession<'db> {
         }
         let _preflight = self.prepare_catalog_preflight(matches!(statement, Statement::Call(_)))?;
         let _catalog_reads = self.enter_parsed_catalog_reads(statement)?;
+        let _authored_text_search =
+            crate::fts::authored::Scope::enter(self.db_ref(), &self.session_gucs)?;
         let _case = oracle::simple_case::Scope::for_db(self.db_ref())?;
         self.statement_error_recovered = false;
         let _clock = oracle::current_time::StatementScope::new();
         self.db_ref().check_recovery_state()?;
         let effects = crate::statement_context::StatementScope::enter();
         let result = self.with_implicit_guc_statement(|session| {
-            let _xml_binary = crate::xml::XmlBinaryScope::enter(&session.session_gucs);
+            let _xml_settings = crate::xml::XmlSettingsScope::enter(&session.session_gucs);
             let mut result = session.execute_statement(statement)?;
             session.apply_bytea_output(&mut result);
             Ok(result)
@@ -6572,6 +6590,16 @@ impl<'db> SqlSession<'db> {
                 Some(previous) => crate::collations::save_collation(self.db_mut()?, &previous)?,
                 None => crate::collations::delete_collation(self.db_mut()?, &schema_name, &name)?,
             },
+            DdlUndo::RestoreTextSearchConfiguration { oid, previous } => match previous {
+                Some(previous) => crate::fts::authored::store(self.db_mut()?, &previous)?,
+                None => crate::fts::authored::delete(self.db_mut()?, oid)?,
+            },
+            DdlUndo::RestoreTextSearchDictionary { oid, previous } => match previous {
+                Some(previous) => {
+                    crate::fts::authored::store_dictionary(self.db_mut()?, &previous)?
+                }
+                None => crate::fts::authored::delete_dictionary(self.db_mut()?, oid)?,
+            },
             DdlUndo::RestoreEventTrigger { oid, previous } => {
                 event_triggers::restore_event_trigger(self.db_mut()?, oid, previous.as_deref())?
             }
@@ -8577,6 +8605,22 @@ fn is_soft_copy_input_error(error: &SqlError) -> bool {
     sqlstate.starts_with("22") || matches!(sqlstate, "23502" | "23514")
 }
 
+fn copy_input_requires_special_type(target: &ColumnSchema) -> bool {
+    target.user_type.is_none()
+        && (matches!(target.pg_type.as_str(), "int2" | "int4" | "int8")
+            || (target.pg_type == "xml" && crate::xml::xml_input_is_document()))
+}
+
+fn copy_text_input(text: &str, target: &ColumnSchema) -> Result<SqlValue> {
+    if copy_input_requires_special_type(target) {
+        if target.pg_type == "xml" {
+            return crate::xml::xml_input_value(SqlValue::String(text.to_owned()));
+        }
+        return pg_integer_input(text, &target.pg_type).map(SqlValue::Int);
+    }
+    Ok(SqlValue::String(text.to_owned()))
+}
+
 /// The first field of a skipped row its column's input refuses, for the
 /// verbose NOTICE: (column, the value or `None` for NULL input).
 fn copy_refused_field(
@@ -8590,13 +8634,7 @@ fn copy_refused_field(
                 continue;
             };
             let input = match value {
-                Some(text)
-                    if target.user_type.is_none()
-                        && matches!(target.pg_type.as_str(), "int2" | "int4" | "int8") =>
-                {
-                    pg_integer_input(text, &target.pg_type).map(SqlValue::Int)
-                }
-                Some(text) => Ok(SqlValue::String(text.clone())),
+                Some(text) => copy_text_input(text, target),
                 None => Ok(SqlValue::Null),
             };
             let refused = match input {

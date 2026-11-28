@@ -1591,6 +1591,13 @@ pub(crate) fn cast_expr_value(
     }
     let (target_type, _) = pg_type_from_data_type(data_type)?;
     let source_type = projected_arithmetic_operand_pg_type(expr, schema);
+    if target_type == "xml" && crate::xml::xml_input_is_document() {
+        return if projected_expr_pg_type(expr, schema).as_deref() == Some("xml") {
+            Ok(value)
+        } else {
+            crate::xml::xml_input_value(value)
+        };
+    }
     // Text (or an unknown-typed literal) becomes an integer through the
     // type's input function; only numeric sources round.
     if matches!(target_type.as_str(), "int2" | "int4" | "int8")
@@ -3116,6 +3123,13 @@ pub(crate) fn cast_expr_value_with_db_and_source_type(
                 }
             }
         }
+    }
+    if target_pg_type.as_deref() == Some("xml") && crate::xml::xml_input_is_document() {
+        return if source_pg_type.as_deref() == Some("xml") {
+            Ok(value)
+        } else {
+            crate::xml::xml_input_value(value)
+        };
     }
     if target_pg_type
         .as_deref()

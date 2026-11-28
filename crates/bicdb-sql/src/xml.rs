@@ -223,7 +223,18 @@ pub(crate) fn validate_xml(value: &str, document: bool) -> Result<()> {
     } else {
         parser::parse(&prepared).or_else(|_| parser::parse(&wrapped_content(&prepared)))
     };
-    parsed.map(|_| ()).map_err(invalid_xml)
+    let parsed = parsed.map_err(invalid_xml)?;
+    if document
+        && !parsed
+            .as_document()
+            .root()
+            .children()
+            .iter()
+            .any(|child| matches!(child, dom::ChildOfRoot::Element(_)))
+    {
+        return Err(invalid_xml("document has no root element"));
+    }
+    Ok(())
 }
 
 fn xml_declaration_attribute(declaration: &str, name: &str) -> Option<String> {
@@ -275,6 +286,47 @@ pub(crate) fn normalize_xml(value: &str) -> Result<String> {
     Ok(normalize_validated_xml(value))
 }
 
+// SQL input follows the setting or the authored XMLPARSE option. Values
+// already stored with type XML use normalize_xml when read under any setting.
+fn parse_xml_value(value: &str, document: bool) -> Result<String> {
+    validate_xml(value, document).map_err(|error| {
+        if document {
+            SqlError::data_exception_public("2200M", "invalid XML document", None)
+        } else {
+            error
+        }
+    })?;
+    Ok(normalize_validated_xml(value))
+}
+
+pub(crate) fn xml_input_value(value: SqlValue) -> Result<SqlValue> {
+    if matches!(value, SqlValue::Null) {
+        return Ok(value);
+    }
+    parse_xml_value(&value.to_cell(), xml_input_is_document()).map(SqlValue::String)
+}
+
+pub(crate) fn xml_assignment_value(
+    column: &crate::ColumnSchema,
+    source: Option<&str>,
+    value: SqlValue,
+) -> Result<SqlValue> {
+    match source {
+        Some("xml") => Ok(value),
+        None | Some("unknown") => xml_input_value(value),
+        Some(source) => Err(SqlError::coded(
+            "42804",
+            format!(
+                "column \"{}\" is of type xml but expression is of type {}",
+                column.name,
+                crate::common_type_display(source)
+            ),
+            None,
+            Some("You will need to rewrite or cast the expression.".to_owned()),
+        )),
+    }
+}
+
 fn normalize_validated_xml(value: &str) -> String {
     let value = value.trim_start_matches('\u{feff}');
     let Some((declaration, body)) = xml_declaration(value) else {
@@ -323,20 +375,33 @@ const XML_ATTRIBUTES_MARKER: &str = "\0bicdb:xmlattributes:";
 
 thread_local! {
     static XML_BINARY_HEX: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static XML_INPUT_DOCUMENT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
-pub(crate) struct XmlBinaryScope(bool);
+pub(crate) fn xml_input_is_document() -> bool {
+    XML_INPUT_DOCUMENT.with(std::cell::Cell::get)
+}
 
-impl XmlBinaryScope {
+pub(crate) struct XmlSettingsScope {
+    binary_hex: bool,
+    input_document: bool,
+}
+
+impl XmlSettingsScope {
     pub(crate) fn enter(gucs: &std::collections::HashMap<String, String>) -> Self {
         let hex = gucs.get("xmlbinary").is_some_and(|mode| mode == "hex");
-        Self(XML_BINARY_HEX.with(|setting| setting.replace(hex)))
+        let document = gucs.get("xmloption").is_some_and(|mode| mode == "document");
+        Self {
+            binary_hex: XML_BINARY_HEX.with(|setting| setting.replace(hex)),
+            input_document: XML_INPUT_DOCUMENT.with(|setting| setting.replace(document)),
+        }
     }
 }
 
-impl Drop for XmlBinaryScope {
+impl Drop for XmlSettingsScope {
     fn drop(&mut self) {
-        XML_BINARY_HEX.with(|setting| setting.set(self.0));
+        XML_BINARY_HEX.with(|setting| setting.set(self.binary_hex));
+        XML_INPUT_DOCUMENT.with(|setting| setting.set(self.input_document));
     }
 }
 
@@ -1051,18 +1116,13 @@ pub(crate) fn eval_xml_function_value(
                 SqlValue::Bool(document == (name == "bicdb_xml_is_document"))
             }
         }
-        "xml_is_well_formed" | "xml_is_well_formed_content" => {
+        "xml_is_well_formed" | "xml_is_well_formed_content" | "xml_is_well_formed_document" => {
             if strict_null {
                 SqlValue::Null
             } else {
-                SqlValue::Bool(validate_xml(&xml_text(&args[0]), false).is_ok())
-            }
-        }
-        "xml_is_well_formed_document" => {
-            if strict_null {
-                SqlValue::Null
-            } else {
-                SqlValue::Bool(validate_xml(&xml_text(&args[0]), true).is_ok())
+                let document = name == "xml_is_well_formed_document"
+                    || (name == "xml_is_well_formed" && xml_input_is_document());
+                SqlValue::Bool(validate_xml(&xml_text(&args[0]), document).is_ok())
             }
         }
         "xmlconcat" => {
@@ -1368,16 +1428,9 @@ pub(crate) fn eval_xml_function_value(
             if strict_null {
                 SqlValue::Null
             } else {
-                let document = name == "bicdb_xmlparse_document";
-                let text = xml_text(&args[0]);
-                validate_xml(&text, document).map_err(|error| {
-                    if document {
-                        SqlError::data_exception_public("2200M", "invalid XML document", None)
-                    } else {
-                        error
-                    }
-                })?;
-                SqlValue::String(normalize_validated_xml(&text))
+                let document = name == "bicdb_xmlparse_document"
+                    || (name == "xml_in" && xml_input_is_document());
+                SqlValue::String(parse_xml_value(&xml_text(&args[0]), document)?)
             }
         }
         "xml_out" => args.first().cloned().unwrap_or(SqlValue::Null),

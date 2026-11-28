@@ -728,3 +728,47 @@ fn untyped_literals_lexize_and_input_rules_match_postgres() {
         .unwrap_err();
     assert_eq!(error.to_string(), "weight array may not contain nulls");
 }
+
+#[test]
+fn text_search_mapping_catalog_links_legacy_and_stock_ids() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut sql = SqlSession::new(&mut db);
+    let mappings = sql
+        .execute(
+            "SELECT c.cfgname, m.maptokentype, d.dictname, m.mapseqno
+             FROM pg_ts_config_map m JOIN pg_ts_config c ON c.oid = m.mapcfg
+             JOIN pg_ts_dict d ON d.oid = m.mapdict
+             WHERE c.cfgname IN ('simple', 'english', 'russian', 'hindi')
+               AND m.maptokentype IN (1, 2, 4, 12)
+             ORDER BY c.cfgname, m.maptokentype",
+        )
+        .unwrap();
+    let actual: Vec<_> = mappings
+        .rows
+        .iter()
+        .map(|row| {
+            row.iter()
+                .map(SqlValue::to_cell)
+                .collect::<Vec<_>>()
+                .join(":")
+        })
+        .collect();
+    assert_eq!(
+        actual,
+        [
+            "english:1:english_stem:1",
+            "english:2:english_stem:1",
+            "english:4:simple:1",
+            "hindi:1:english_stem:1",
+            "hindi:2:hindi_stem:1",
+            "hindi:4:simple:1",
+            "russian:1:english_stem:1",
+            "russian:2:russian_stem:1",
+            "russian:4:simple:1",
+            "simple:1:simple:1",
+            "simple:2:simple:1",
+            "simple:4:simple:1",
+        ]
+    );
+}

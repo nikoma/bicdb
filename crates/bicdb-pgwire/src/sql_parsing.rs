@@ -3573,6 +3573,7 @@ pub(crate) fn describe_message(
                 no_data(stream)?;
             } else if bicdb_sql::is_constraint_timing_command(&portal_sql)?
                 || bicdb_sql::is_postgres_rule_command(&portal_sql)?
+                || bicdb_sql::is_postgres_text_search_ddl(&portal_sql)
                 || is_mutation_without_returning(&portal_sql)
             {
                 no_data(stream)?;

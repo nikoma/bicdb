@@ -163,7 +163,7 @@ pub(crate) fn undefined_oid_alias(pg_type: &str, value: &str) -> SqlError {
     SqlError::data_exception(
         state,
         format!("{object} \"{value}\" does not exist"),
-        Some(value.to_string()),
+        (!matches!(pg_type, "regconfig" | "regdictionary")).then(|| value.to_string()),
     )
 }
 

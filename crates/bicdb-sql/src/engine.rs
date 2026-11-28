@@ -20,8 +20,10 @@ pub(crate) use explain_pg::ExplainBuilder;
 pub(crate) mod flashback;
 use exists_probe::{ExistsCandidate, ExistsProbeMemo};
 mod hierarchy;
+mod inline_routine;
 mod joins_windows;
 mod named_joins;
+pub(crate) use inline_routine::validate_inline_sql_routine;
 pub(crate) use joins_windows::RowJoinPrediction;
 pub(crate) mod materialize;
 mod pg_catalog;
@@ -305,6 +307,8 @@ struct ParameterTypeResolver<'engine, 'db> {
     ctes: BTreeMap<String, Vec<(String, Option<String>)>>,
     comparison_error: Option<SqlError>,
     check_comparisons: bool,
+    inline_routine_scope: Option<RelationColumns>,
+    query_depth: usize,
 }
 
 impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
@@ -315,6 +319,8 @@ impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
             ctes: BTreeMap::new(),
             comparison_error: None,
             check_comparisons: false,
+            inline_routine_scope: None,
+            query_depth: 0,
         }
     }
 
@@ -343,9 +349,12 @@ impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
         }
         let left = self.expr_type(left, env);
         let right = self.expr_type(right, env);
-        self.comparison_error =
+        self.comparison_error = if self.inline_routine_scope.is_some() {
+            inline_routine::validate_catalog_comparison(self.engine, left, op, right).err()
+        } else {
             reject_comparison_for_db(self.engine.db_ref(), left.as_deref(), op, right.as_deref())
-                .err();
+                .err()
+        };
     }
 
     fn routine_env(locals: &BTreeMap<String, String>) -> Vec<RelationColumns> {
@@ -778,6 +787,7 @@ impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
     }
 
     fn query(&mut self, query: &Query, expected: Option<&[Option<String>]>) {
+        self.query_depth += 1;
         let outer_ctes = self.ctes.clone();
         if let Some(with) = &query.with {
             for cte in &with.cte_tables {
@@ -805,6 +815,7 @@ impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
             }
         }
         self.ctes = outer_ctes;
+        self.query_depth -= 1;
     }
 
     fn cte_output_columns(
@@ -977,7 +988,16 @@ impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
     }
 
     fn select(&mut self, select: &Select, expected: Option<&[Option<String>]>) {
-        let env = self.from_relation_columns(&select.from);
+        let mut env = self.from_relation_columns(&select.from);
+        if let Some(scope) = &self.inline_routine_scope {
+            let mut parameters = scope.clone();
+            // Table columns have precedence over unqualified parameter names.
+            parameters.columns.retain(|(name, _)| {
+                !env.iter()
+                    .any(|relation| relation.columns.iter().any(|(column, _)| column == name))
+            });
+            env.push(parameters);
+        }
         for table in &select.from {
             self.table_factor(&table.relation);
             for join in &table.joins {
@@ -994,6 +1014,9 @@ impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
                 SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => expr,
                 _ => continue,
             };
+            if self.inline_routine_scope.is_some() && self.query_depth == 1 {
+                self.check_inline_projection_column(expr, &env, &select.from);
+            }
             let expected = expected
                 .and_then(|expected| expected.get(idx))
                 .and_then(Option::as_deref);

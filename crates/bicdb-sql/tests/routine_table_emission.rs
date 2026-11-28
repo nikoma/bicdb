@@ -171,3 +171,51 @@ fn sql_atomic_body_keeps_statement_boundaries_and_parameter_scope() {
         vec![vec![SqlValue::String("END; BEGIN ATOMIC".into())]]
     );
 }
+#[test]
+fn sql_standard_body_checks_definition_before_running_it() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE TABLE definition_source(n integer)")
+        .unwrap();
+    for (body, state, message) in [
+        (
+            "RETURN (SELECT n FROM missing_relation)",
+            "42P01",
+            "missing_relation",
+        ),
+        (
+            "RETURN (SELECT missing_column FROM definition_source)",
+            "42703",
+            "missing_column",
+        ),
+        ("RETURN $2", "42P02", "there is no parameter $2"),
+        (
+            "RETURN x > 1",
+            "42883",
+            "operator does not exist: date > integer",
+        ),
+        ("RETURN '123'", "42P13", "return type mismatch"),
+        (
+            "BEGIN ATOMIC SELECT 1, 2; END",
+            "42P13",
+            "return type mismatch",
+        ),
+    ] {
+        let error = session
+            .execute(&format!(
+                "CREATE FUNCTION definition_check(x date) RETURNS integer {body}"
+            ))
+            .unwrap_err();
+        assert_eq!(error.sqlstate(), state, "{body}: {error:?}");
+        assert!(error.to_string().contains(message), "{body}: {error:?}");
+    }
+    session
+        .execute("CREATE FUNCTION definition_check(x integer) RETURNS text RETURN x + $1")
+        .unwrap();
+    assert_eq!(
+        session.execute("SELECT definition_check(3)").unwrap().rows,
+        vec![vec![SqlValue::String("6".into())]]
+    );
+}

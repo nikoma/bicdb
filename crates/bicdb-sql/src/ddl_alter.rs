@@ -3677,6 +3677,16 @@ pub(crate) fn copied_like_index_name(
         .unwrap_or_else(|| format!("{target_table}_{index_name}"))
 }
 
+fn raw_partition_relation(identifier: &str) -> Result<(String, String)> {
+    let parts = sql_identifier_parts(identifier)?;
+    let (table, qualifiers) = parts
+        .split_last()
+        .ok_or_else(|| SqlError::InvalidSql("expected relation name".into()))?;
+    let schema = qualifiers.last().map(String::as_str).unwrap_or("public");
+    let table = relation_name_from_parts(&[schema.to_owned(), table.clone()])?;
+    Ok((schema.to_owned(), table))
+}
+
 pub(crate) fn raw_create_partition_table(sql: &str) -> Result<Option<RawCreatePartitionTable>> {
     let Some(mut rest) = strip_prefix_ci(trim_sql_statement(sql), "CREATE TABLE ") else {
         return Ok(None);
@@ -3710,16 +3720,8 @@ pub(crate) fn raw_create_partition_table(sql: &str) -> Result<Option<RawCreatePa
         ));
     }
 
-    let (partition_schema, partition_table) = identifier_schema_and_name(&partition);
-    let (parent_schema, parent_table) = identifier_schema_and_name(&parent);
-    let partition_schema = normalize_object_name(&partition_schema);
-    let parent_schema = normalize_object_name(&parent_schema);
-    let partition_table = relation_name_from_parts(&[
-        partition_schema.clone(),
-        normalize_object_name(&partition_table),
-    ])?;
-    let parent_table =
-        relation_name_from_parts(&[parent_schema.clone(), normalize_object_name(&parent_table)])?;
+    let (partition_schema, partition_table) = raw_partition_relation(&partition)?;
+    let (parent_schema, parent_table) = raw_partition_relation(&parent)?;
     Ok(Some(RawCreatePartitionTable {
         partition_table,
         partition_schema,
@@ -3789,19 +3791,11 @@ pub(crate) fn raw_alter_table_partition_action(
         rest = after_only.trim_start();
     }
     let (parent, after_parent) = parse_leading_qualified_sql_identifier(rest)?;
-    let (parent_schema, parent_table) = identifier_schema_and_name(&parent);
-    let parent_schema = normalize_object_name(&parent_schema);
-    let parent_table =
-        relation_name_from_parts(&[parent_schema.clone(), normalize_object_name(&parent_table)])?;
+    let (parent_schema, parent_table) = raw_partition_relation(&parent)?;
     let rest = after_parent.trim_start();
     if let Some(after_attach) = strip_prefix_ci(rest, "ATTACH PARTITION ") {
         let (partition, after_partition) = parse_leading_qualified_sql_identifier(after_attach)?;
-        let (partition_schema, partition_table) = identifier_schema_and_name(&partition);
-        let partition_schema = normalize_object_name(&partition_schema);
-        let partition_table = relation_name_from_parts(&[
-            partition_schema.clone(),
-            normalize_object_name(&partition_table),
-        ])?;
+        let (partition_schema, partition_table) = raw_partition_relation(&partition)?;
         let bound = after_partition.trim();
         if !bound.eq_ignore_ascii_case("DEFAULT")
             && !bound
@@ -3828,11 +3822,7 @@ pub(crate) fn raw_alter_table_partition_action(
                 trailing.trim()
             )));
         }
-        let (partition_schema, partition_table) = identifier_schema_and_name(&partition);
-        let partition_table = relation_name_from_parts(&[
-            normalize_object_name(&partition_schema),
-            normalize_object_name(&partition_table),
-        ])?;
+        let (_, partition_table) = raw_partition_relation(&partition)?;
         return Ok(Some(RawAlterTablePartition::Detach {
             parent_table,
             parent_schema,

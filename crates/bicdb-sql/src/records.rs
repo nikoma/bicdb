@@ -2623,16 +2623,7 @@ pub(crate) fn validate_exclusion_constraints(
         // equality columns), then read current committed rows with this
         // transaction's own writes overlaid: overlapping transactions cannot
         // both pass, and a row written earlier in this transaction counts.
-        if let Some(tx) = tx {
-            let scope = format!("exclusion:{}", serde_json::to_string(&(table, name))?);
-            for record in records {
-                let key = equal_columns
-                    .iter()
-                    .map(|column| record_column_value(record, schema, column).to_cell())
-                    .collect::<Vec<_>>();
-                tx.reserve_integrity_key(&scope, &serde_json::to_string(&key)?)?;
-            }
-        }
+        reserve_exclusion_keys(tx, table, schema, name, equal_columns, records)?;
         let existing_records = current_integrity_records(db, tx, table)?;
         let batch_ids = records
             .iter()
@@ -2666,6 +2657,27 @@ pub(crate) fn validate_exclusion_constraints(
                     ));
                 }
             }
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn reserve_exclusion_keys(
+    tx: Option<&Transaction>,
+    table: &str,
+    schema: &TableSchema,
+    name: &str,
+    equal_columns: &[String],
+    records: &[Record],
+) -> Result<()> {
+    if let Some(tx) = tx {
+        let scope = format!("exclusion:{}", serde_json::to_string(&(table, name))?);
+        for record in records {
+            let key = equal_columns
+                .iter()
+                .map(|column| record_column_value(record, schema, column).to_cell())
+                .collect::<Vec<_>>();
+            tx.reserve_integrity_key(&scope, &serde_json::to_string(&key)?)?;
         }
     }
     Ok(())
@@ -4398,7 +4410,14 @@ fn exclusion_conflict_violation(
     record: &Record,
     existing: &Record,
 ) -> SqlError {
-    let error = exclusion_violation(table, name);
+    let mut error = exclusion_violation(&catalog_display_name(table), name);
+    if let SqlError::ConstraintViolation {
+        schema: error_schema,
+        ..
+    } = &mut error
+    {
+        *error_schema = Some(Box::new(schema.schema_name.clone()));
+    }
     // The range element's place among the elements orders the key; an older
     // catalog without it is printed only when that place cannot matter.
     let columns = match range {

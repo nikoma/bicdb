@@ -481,7 +481,6 @@ pub fn split_sql_statements(sql: &str) -> Vec<String> {
     let mut single_quoted = false;
     let mut double_quoted = false;
     let mut line_comment = false;
-    let mut block_comment = false;
     let mut dollar_quote: Option<String> = None;
 
     while idx < bytes.len() {
@@ -490,15 +489,6 @@ pub fn split_sql_statements(sql: &str) -> Vec<String> {
                 line_comment = false;
             }
             idx += 1;
-            continue;
-        }
-        if block_comment {
-            if bytes[idx] == b'*' && bytes.get(idx + 1) == Some(&b'/') {
-                block_comment = false;
-                idx += 2;
-            } else {
-                idx += 1;
-            }
             continue;
         }
         if let Some(delimiter) = dollar_quote.as_ref() {
@@ -545,8 +535,7 @@ pub fn split_sql_statements(sql: &str) -> Vec<String> {
                 idx += 2;
             }
             b'/' if bytes.get(idx + 1) == Some(&b'*') => {
-                block_comment = true;
-                idx += 2;
+                idx = end_nested_block_comment(bytes, idx).unwrap_or(bytes.len());
             }
             b'$' => {
                 if let Some(delimiter) = dollar_quote_delimiter(&sql[idx..]) {
@@ -575,6 +564,28 @@ pub fn split_sql_statements(sql: &str) -> Vec<String> {
     statements
 }
 
+fn end_nested_block_comment(bytes: &[u8], start: usize) -> Option<usize> {
+    let mut idx = start + 2;
+    let mut depth = 1_usize;
+    while idx + 1 < bytes.len() {
+        match (bytes[idx], bytes[idx + 1]) {
+            (b'/', b'*') => {
+                depth += 1;
+                idx += 2;
+            }
+            (b'*', b'/') => {
+                depth -= 1;
+                idx += 2;
+                if depth == 0 {
+                    return Some(idx);
+                }
+            }
+            _ => idx += 1,
+        }
+    }
+    None
+}
+
 pub(crate) fn has_executable_sql(sql: &str) -> bool {
     let bytes = sql.as_bytes();
     let mut idx = 0usize;
@@ -588,11 +599,11 @@ pub(crate) fn has_executable_sql(sql: &str) -> bool {
                 }
             }
             b'/' if bytes.get(idx + 1) == Some(&b'*') => {
-                idx += 2;
-                while idx + 1 < bytes.len() && !(bytes[idx] == b'*' && bytes[idx + 1] == b'/') {
-                    idx += 1;
-                }
-                idx = (idx + 2).min(bytes.len());
+                let Some(end) = end_nested_block_comment(bytes, idx) else {
+                    // Let the SQL parser report an unterminated comment.
+                    return true;
+                };
+                idx = end;
             }
             _ => return true,
         }

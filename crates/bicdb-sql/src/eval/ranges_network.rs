@@ -2962,6 +2962,11 @@ pub(crate) fn eval_binary_expr_value_typed(
     let pg_type = &types.result;
     let left = enforce_integer_value_type(left, left_type.as_deref())?;
     let right = enforce_integer_value_type(right, right_type.as_deref())?;
+    if left_type.as_deref() == Some("regtype") && right_type.as_deref() == Some("regtype") {
+        if let Some(truth) = compare_builtin_regtype_values(&left, op, &right) {
+            return Ok(truth.map(SqlValue::Bool).unwrap_or(SqlValue::Null));
+        }
+    }
     if let Some(value) = eval_geometric_binary_value(
         &left,
         op,

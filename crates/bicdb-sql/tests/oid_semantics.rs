@@ -148,3 +148,41 @@ fn oid_rejects_out_of_range_malformed_and_undefined_operations() {
         );
     }
 }
+
+#[test]
+fn builtin_regtype_names_compare_by_oid() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut sql = SqlSession::new(&mut db);
+    let rows = sql
+        .execute(
+            "SELECT pg_typeof('a'::char(8)) = 'bpchar'::regtype,
+                    pg_typeof(NULL::int) = 'int4'::regtype,
+                    pg_typeof(ARRAY[1]) = 'integer[]'::regtype,
+                    pg_typeof('a'::char(8))::oid",
+        )
+        .unwrap()
+        .rows;
+    assert_eq!(
+        rows,
+        [vec![
+            SqlValue::Bool(true),
+            SqlValue::Bool(true),
+            SqlValue::Bool(true),
+            SqlValue::Int(1042),
+        ]],
+    );
+    let result = sql
+        .execute("SELECT pg_typeof(x) = 'bpchar'::regtype FROM (VALUES ('a'::char(8))) AS v(x)")
+        .unwrap();
+    assert_eq!(result.rows, [vec![SqlValue::Bool(true)]]);
+    sql.execute(
+        "CREATE FUNCTION regtype_comparison() RETURNS bool LANGUAGE plpgsql AS $$
+         DECLARE v char(8) := 'a'; BEGIN RETURN pg_typeof(v) = 'bpchar'::regtype; END $$",
+    )
+    .unwrap();
+    assert_eq!(
+        sql.execute("SELECT regtype_comparison()").unwrap().rows,
+        [vec![SqlValue::Bool(true)]],
+    );
+}

@@ -749,7 +749,13 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
                             Some("char".to_string()),
                         ));
                     }
-                    value.as_bytes().first().copied().unwrap_or(0)
+                    match value.as_bytes() {
+                        [b'\\', first @ b'0'..=b'7', second @ b'0'..=b'7', third @ b'0'..=b'7'] => {
+                            let digit = |byte: u8| u16::from(byte - b'0');
+                            ((digit(*first) << 6) | (digit(*second) << 3) | digit(*third)) as u8
+                        }
+                        bytes => bytes.first().copied().unwrap_or(0),
+                    }
                 }
                 other => {
                     return Err(SqlError::cannot_coerce(format!(
@@ -3916,17 +3922,7 @@ pub(crate) fn interval_literal_value<F>(interval: &Interval, mut eval: F) -> Res
 where
     F: FnMut(&Expr) -> Result<SqlValue>,
 {
-    let mut value = eval(&interval.value)?.to_cell();
-    if let Some(field) = &interval.leading_field {
-        let bare_number = is_valid_numeric_text(value.trim());
-        if bare_number {
-            value = format!(
-                "{} {}",
-                value.trim(),
-                field.to_string().to_ascii_lowercase()
-            );
-        }
-    }
+    let value = eval(&interval.value)?.to_cell();
     let fields = interval.leading_field.as_ref().map(|leading| {
         interval.last_field.as_ref().map_or_else(
             || leading.to_string().to_ascii_uppercase(),
@@ -3944,7 +3940,7 @@ where
             "interval precision must be between 0 and 6",
         ));
     }
-    PgInterval::from_postgres_text(&value)
+    PgInterval::from_postgres_text_with_field_range(&value, fields.as_deref())
         .and_then(|value| value.with_typmod(fields.as_deref(), precision.map(|value| value as u8)))
         .map(|value| SqlValue::String(render_interval(value)))
         .map_err(|error| postgres_interval_input_error(&value, error))

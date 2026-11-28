@@ -124,6 +124,35 @@ pub fn parse_pg_oid(value: &str) -> Result<u32, PgOidParseError> {
     }
 }
 
+/// Read one OID from an oidvector input. As in PostgreSQL's oidin_subr,
+/// the first unconsumed byte starts the next value, even without whitespace.
+pub(crate) fn parse_pg_oid_prefix(value: &str) -> Result<(u32, usize), PgOidParseError> {
+    let sign = usize::from(matches!(value.as_bytes().first(), Some(b'+' | b'-')));
+    let unsigned = &value.as_bytes()[sign..];
+    let (prefix, radix) = if matches!(unsigned.get(..2), Some(b"0x" | b"0X"))
+        && unsigned.get(2).is_some_and(u8::is_ascii_hexdigit)
+    {
+        (2, 16)
+    } else if unsigned.first() == Some(&b'0') {
+        (0, 8)
+    } else {
+        (0, 10)
+    };
+    let digits = unsigned[prefix..]
+        .iter()
+        .take_while(|&&byte| match radix {
+            16 => byte.is_ascii_hexdigit(),
+            8 => matches!(byte, b'0'..=b'7'),
+            _ => byte.is_ascii_digit(),
+        })
+        .count();
+    if digits == 0 {
+        return Err(PgOidParseError::InvalidSyntax);
+    }
+    let consumed = sign + prefix + digits;
+    parse_pg_oid(&value[..consumed]).map(|oid| (oid, consumed))
+}
+
 pub fn parse_postgres_uuid(value: &str) -> Result<[u8; 16], PgCanonicalValueError> {
     let original = value;
     let value = value
@@ -1718,6 +1747,13 @@ impl PgInterval {
     }
 
     pub fn from_postgres_text(value: &str) -> Result<Self, PgCanonicalValueError> {
+        Self::from_postgres_text_with_field_range(value, None)
+    }
+
+    pub(crate) fn from_postgres_text_with_field_range(
+        value: &str,
+        fields: Option<&str>,
+    ) -> Result<Self, PgCanonicalValueError> {
         let original = value.trim();
         if original.is_empty() {
             return Err(invalid_temporal("interval", original));
@@ -1747,7 +1783,7 @@ impl PgInterval {
             .chars()
             .any(|character| character.is_ascii_alphabetic())
         {
-            let mut interval = parse_sql_standard_interval(value)?;
+            let mut interval = parse_sql_standard_interval(value, fields)?;
             if ago {
                 interval = interval.checked_neg()?;
             }
@@ -1761,7 +1797,7 @@ impl PgInterval {
         while index < parts.len() {
             if parts[index].contains(':') {
                 micros = micros
-                    .checked_add(parse_interval_clock_micros(parts[index])?)
+                    .checked_add(parse_interval_clock_micros(parts[index], fields)?)
                     .ok_or(PgCanonicalValueError::TemporalOverflow("interval"))?;
                 index += 1;
                 continue;
@@ -1978,6 +2014,9 @@ impl PgInterval {
         fields: Option<&str>,
         precision: Option<u8>,
     ) -> Result<Self, PgCanonicalValueError> {
+        if !self.is_finite() && precision.is_none_or(|precision| precision <= 6) {
+            return Ok(self);
+        }
         let mut value = self;
         if let Some(precision) = precision {
             if precision > 6 {
@@ -2333,60 +2372,85 @@ fn add_interval_day_fraction(
     Ok(())
 }
 
-fn parse_interval_clock_micros(value: &str) -> Result<i64, PgCanonicalValueError> {
+fn parse_interval_clock_micros(
+    value: &str,
+    fields: Option<&str>,
+) -> Result<i64, PgCanonicalValueError> {
     let (sign, clock) = if let Some(value) = value.strip_prefix('-') {
-        (-1_i64, value)
-    } else if let Some(value) = value.strip_prefix('+') {
-        (1_i64, value)
+        (-1_i128, value)
     } else {
-        (1_i64, value)
+        (1_i128, value.strip_prefix('+').unwrap_or(value))
     };
     let parts = clock.split(':').collect::<Vec<_>>();
-    if !(2..=3).contains(&parts.len()) {
-        return Err(invalid_temporal("interval", value));
-    }
-    let hours = parts[0]
+    let (hours, minutes, seconds) = match parts.as_slice() {
+        [minutes, seconds] if fields == Some("MINUTE TO SECOND") || seconds.contains('.') => {
+            ("0", *minutes, *seconds)
+        }
+        [hours, minutes] => (*hours, *minutes, "0"),
+        [hours, minutes, seconds] => (*hours, *minutes, *seconds),
+        _ => return Err(invalid_temporal("interval", value)),
+    };
+    let hours = hours
         .parse::<i64>()
         .map_err(|_| invalid_temporal("interval", value))?;
-    let minutes = parts[1]
+    let minutes = minutes
         .parse::<i64>()
         .map_err(|_| invalid_temporal("interval", value))?;
-    if minutes > 59 {
+    let seconds_integer = match seconds.split_once('.') {
+        Some(("", _)) => 0,
+        Some((whole, _)) => whole
+            .parse::<i64>()
+            .map_err(|_| invalid_temporal("interval", value))?,
+        None => seconds
+            .parse::<i64>()
+            .map_err(|_| invalid_temporal("interval", value))?,
+    };
+    if hours < 0 || !(0..60).contains(&minutes) || !(0..=60).contains(&seconds_integer) {
         return Err(PgCanonicalValueError::TemporalFieldOverflow("interval"));
     }
-    let seconds = parts.get(2).copied().unwrap_or("0");
     let micros = parse_interval_decimal_scaled(seconds, 1_000_000)?;
-    if !(0..60_000_000).contains(&micros) {
-        return Err(PgCanonicalValueError::TemporalFieldOverflow("interval"));
-    }
-    hours
-        .checked_mul(3_600_000_000)
-        .and_then(|value| value.checked_add(minutes * 60_000_000))
-        .and_then(|value| value.checked_add(micros))
-        .and_then(|value| value.checked_mul(sign))
-        .ok_or(PgCanonicalValueError::TemporalOverflow("interval"))
+    let magnitude =
+        i128::from(hours) * 3_600_000_000 + i128::from(minutes) * 60_000_000 + i128::from(micros);
+    i64::try_from(sign * magnitude).map_err(|_| PgCanonicalValueError::TemporalOverflow("interval"))
 }
 
-fn parse_sql_standard_interval(value: &str) -> Result<PgInterval, PgCanonicalValueError> {
+fn parse_sql_standard_interval(
+    value: &str,
+    fields: Option<&str>,
+) -> Result<PgInterval, PgCanonicalValueError> {
     let parts = value.split_whitespace().collect::<Vec<_>>();
     if parts.is_empty() || parts.len() > 3 {
         return Err(invalid_temporal("interval", value));
     }
     let part_count = parts.len();
     let mut interval = PgInterval::ZERO;
+    let mut has_clock = false;
     for part in parts {
         if part.contains(':') {
-            interval.micros = interval
-                .micros
-                .checked_add(parse_interval_clock_micros(part)?)
-                .ok_or(PgCanonicalValueError::TemporalOverflow("interval"))?;
+            if has_clock {
+                return Err(invalid_temporal("interval", value));
+            }
+            interval.micros = parse_interval_clock_micros(part, fields)?;
+            has_clock = true;
         } else if let Some(months) = parse_sql_year_month(part)? {
             interval.months = interval
                 .months
                 .checked_add(months)
                 .ok_or(PgCanonicalValueError::TemporalOverflow("interval"))?;
         } else if part_count == 1 {
-            interval.micros = parse_interval_decimal_scaled(part, 1_000_000)?;
+            let unit = fields
+                .map(|fields| fields.rsplit_once(" TO ").map_or(fields, |(_, unit)| unit))
+                .unwrap_or("SECOND")
+                .to_ascii_lowercase();
+            let (mut months, mut days, mut micros) = (0, 0, 0);
+            add_interval_unit(part, &unit, &mut months, &mut days, &mut micros, value)?;
+            interval = PgInterval {
+                months: i32::try_from(months)
+                    .map_err(|_| PgCanonicalValueError::TemporalOverflow("interval"))?,
+                days: i32::try_from(days)
+                    .map_err(|_| PgCanonicalValueError::TemporalOverflow("interval"))?,
+                micros,
+            };
         } else {
             interval.days = interval
                 .days

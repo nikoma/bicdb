@@ -794,3 +794,82 @@ fn postgres_dml_returning_evaluates_predicate_subqueries() {
         );
     }
 }
+
+#[test]
+fn postgres_upsert_update_resolves_declared_defaults_after_qualification() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = open(dir.path());
+    let mut s = SqlSession::new(&mut db);
+    exec(&mut s, "CREATE SEQUENCE upsert_default_seq");
+    exec(&mut s, "CREATE TABLE upsert_defaults (id int PRIMARY KEY, a bigint DEFAULT nextval('upsert_default_seq'), b bigint, c int DEFAULT 42, d int)");
+    exec(&mut s, "INSERT INTO upsert_defaults VALUES (1,0,0,0,9)");
+    assert_eq!(
+        rows(
+            &mut s,
+            "INSERT INTO upsert_defaults VALUES (1,0,0,0,0)
+            ON CONFLICT (id) DO UPDATE SET a=DEFAULT WHERE false RETURNING a"
+        ),
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        rows(&mut s, "INSERT INTO upsert_defaults VALUES (1,0,0,0,0)
+            ON CONFLICT (id) DO UPDATE SET b=nextval('upsert_default_seq'), a=DEFAULT, c=DEFAULT, d=DEFAULT
+            RETURNING a,b,c,d"),
+        ["1|2|42|NULL"]
+    );
+    assert_eq!(rows(&mut s, "SELECT currval('upsert_default_seq')"), ["2"]);
+}
+
+#[test]
+fn postgres_boolean_comparison_functions_accept_row_operands() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = open(dir.path());
+    let mut s = SqlSession::new(&mut db);
+    exec(
+        &mut s,
+        "CREATE TABLE bool_compare (id int PRIMARY KEY, flag bool)",
+    );
+    exec(
+        &mut s,
+        "INSERT INTO bool_compare VALUES (1,false),(2,true),(3,NULL)",
+    );
+    assert_eq!(
+        rows(
+            &mut s,
+            "SELECT id FROM bool_compare WHERE pg_catalog.booleq(false,flag)"
+        ),
+        ["1"]
+    );
+    assert_eq!(
+        rows(
+            &mut s,
+            "SELECT lhs.id,rhs.id FROM bool_compare lhs, bool_compare rhs
+            WHERE boolne(lhs.flag,rhs.flag) ORDER BY lhs.id,rhs.id"
+        ),
+        ["1|2", "2|1"]
+    );
+    assert_eq!(
+        rows(
+            &mut s,
+            "SELECT boollt('f',true),boolle(true,true),boolgt(true,false),
+                             boolge(false,true),booleq(NULL,true),btboolcmp(false,true)"
+        ),
+        ["t|t|t|f|NULL|-1"]
+    );
+}
+
+#[test]
+fn postgres_internal_char_decodes_exact_octal_escapes() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = open(dir.path());
+    let mut s = SqlSession::new(&mut db);
+    assert_eq!(
+        rows(
+            &mut s,
+            r#"SELECT '\101'::"char", '\377'::"char"::text,
+                              '\000'::"char"::text, '\377'::text::"char"::int,
+                              '\777'::"char", '\888'::"char", '\12'::"char", 'é'::"char""#
+        ),
+        [r"A|\377||-1|\377|\|\|\303"]
+    );
+}

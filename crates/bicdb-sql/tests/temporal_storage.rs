@@ -901,3 +901,65 @@ fn timestamp_extract_cast_in_returning_preserves_int8_type_and_value() {
         matches!(result.rows.as_slice(), [row] if matches!(row.as_slice(), [SqlValue::Int(value)] if *value >= 0))
     );
 }
+
+#[test]
+fn postgres_interval_input_uses_its_field_range_before_time_decoding() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let result = session
+        .execute(
+            "SELECT interval '12:34', interval '12:34' minute to second,
+                interval '12:34.5678' minute to second(2), interval '1 2:03.4567' day to second(2),
+                interval '3' year to month, '3'::interval day, '3'::interval hour to minute,
+                interval 'infinity' day to second(3)",
+        )
+        .unwrap();
+    assert_eq!(
+        result.rows[0]
+            .iter()
+            .map(SqlValue::to_cell)
+            .collect::<Vec<_>>(),
+        [
+            "12:34:00",
+            "00:12:34",
+            "00:12:34.57",
+            "1 day 00:02:03.46",
+            "3 mons",
+            "3 days",
+            "00:03:00",
+            "infinity"
+        ]
+    );
+    session
+        .execute("CREATE TABLE field_range (duration interval minute to second(2))")
+        .unwrap();
+    session
+        .execute("INSERT INTO field_range VALUES ('12:34.567')")
+        .unwrap();
+    assert_eq!(
+        session
+            .execute("SELECT duration FROM field_range")
+            .unwrap()
+            .rows[0][0]
+            .to_cell(),
+        "00:12:34.57"
+    );
+    assert_eq!(
+        session
+            .execute("SELECT interval '55:60.123', interval '05:.5'")
+            .unwrap()
+            .rows,
+        vec![vec![
+            SqlValue::String("00:56:00.123".into()),
+            SqlValue::String("00:05:00.5".into())
+        ]],
+    );
+    assert_eq!(
+        session
+            .execute("SELECT interval '3 02:03 -02:04'")
+            .unwrap_err()
+            .sqlstate(),
+        "22007"
+    );
+}

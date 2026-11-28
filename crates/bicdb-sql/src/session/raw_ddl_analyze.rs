@@ -62,11 +62,21 @@ impl<'db> SqlSession<'db> {
             changes.push(change);
         }
         for change in changes {
-            match change {
-                RawAlterSequence::OwnerTo {
-                    sequence: name,
-                    owner,
-                } => {
+            let name = if oracle::is_oracle_database(self.db_ref())? {
+                normalize_sequence_name(&change.target)?
+            } else {
+                match self.postgres_sequence_name(&change.target) {
+                    Ok(name) => name,
+                    Err(error) if change.if_exists && error.sqlstate() == "42P01" => {
+                        let (_, name) = identifier_schema_and_name(&change.target);
+                        crate::statement_context::notice_skipping_missing("relation", &name);
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                }
+            };
+            match change.action {
+                RawAlterSequenceAction::OwnerTo(owner) => {
                     ensure_known_role(&list_roles(self.db_ref())?, &owner)?;
                     let mut sequence = load_sequence_required(self.db_ref(), &name)?;
                     let object = format!("sequence {name}");
@@ -75,10 +85,7 @@ impl<'db> SqlSession<'db> {
                     sequence.owner = owner;
                     self.save_session_sequence(&sequence)?;
                 }
-                RawAlterSequence::OwnedBy {
-                    sequence: name,
-                    owner,
-                } => {
+                RawAlterSequenceAction::OwnedBy(owner) => {
                     let mut sequence = load_sequence_required(self.db_ref(), &name)?;
                     self.require_object_ownership(
                         &sequence.owner,
@@ -103,10 +110,7 @@ impl<'db> SqlSession<'db> {
                     self.set_sequence_owned_by(&mut sequence, owner.as_ref())?;
                     self.save_session_sequence(&sequence)?;
                 }
-                RawAlterSequence::Restart {
-                    sequence: name,
-                    value,
-                } => {
+                RawAlterSequenceAction::Restart(value) => {
                     let mut sequence = load_sequence_required(self.db_ref(), &name)?;
                     self.require_object_ownership(
                         &sequence.owner,
@@ -119,10 +123,7 @@ impl<'db> SqlSession<'db> {
                     sequence.is_called = false;
                     self.save_session_sequence(&sequence)?;
                 }
-                RawAlterSequence::Parameters {
-                    sequence: name,
-                    options,
-                } => {
+                RawAlterSequenceAction::Parameters(options) => {
                     let mut sequence = load_sequence_required(self.db_ref(), &name)?;
                     self.require_object_ownership(
                         &sequence.owner,

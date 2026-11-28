@@ -3412,6 +3412,33 @@ impl<'db> SqlSession<'db> {
         })
     }
 
+    /// Validate folded defaults that COPY may use, before the client starts
+    /// sending rows. Expression defaults and sequence values are evaluated
+    /// only if a row actually uses them.
+    pub fn validate_copy_from_defaults(
+        &self,
+        table: &str,
+        targets: &[String],
+        default_marker: bool,
+    ) -> Result<()> {
+        self.with_relation_name_scopes(|| {
+            let qualified = self.bind_copy_relation(table);
+            let table = relation_name_from_parts(&qualified)?;
+            let table = resolve_session_relation_name(self.db_ref(), &table)?;
+            let Some(schema) = load_schema(self.db_ref(), &table)? else {
+                return Ok(());
+            };
+            for column in schema.columns.iter().filter(|column| {
+                !column.hidden && (default_marker || !targets.contains(&column.name))
+            }) {
+                if let Some(value) = &column.default_value {
+                    cast_value_to_column_type(value.clone(), column)?;
+                }
+            }
+            Ok(())
+        })
+    }
+
     /// Resolve relation names as a statement of this session does: its
     /// search_path and its temporary schema. `execute` enters these scopes
     /// itself; entry points that resolve names without it (COPY) need them

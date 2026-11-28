@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-provider-redis"
-version = "1.0.594"
+version = "1.0.595"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -16,7 +16,7 @@ include = ["/README.md", "/src/**", "/Cargo.toml", "/LICENSE", "/NOTICE", "/THIR
 
 [dependencies]
 base64.workspace = true
-bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "=1.0.594" }
+bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "=1.0.595" }
 r2d2.workspace = true
 redis.workspace = true
 url.workspace = true

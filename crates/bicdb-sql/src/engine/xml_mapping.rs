@@ -2,6 +2,8 @@ use crate::*;
 use sqlparser::ast::{Visit, Visitor};
 use std::ops::ControlFlow;
 
+type XmlRelationDescriptor = (String, String, Vec<(String, Option<String>)>);
+
 struct ReadOnlyXmlQuery;
 
 impl Visitor for ReadOnlyXmlQuery {
@@ -48,7 +50,12 @@ impl SqlEngine<'_> {
                 (Some(source), Some(count), nulls, forest, namespace)
             }
             (
-                "table_to_xml" | "query_to_xml" | "schema_to_xml",
+                "table_to_xml"
+                | "query_to_xml"
+                | "table_to_xmlschema"
+                | "query_to_xmlschema"
+                | "cursor_to_xmlschema"
+                | "schema_to_xml",
                 [source, nulls, forest, namespace],
             ) => (Some(source), None, nulls, forest, namespace),
             ("database_to_xml", [nulls, forest, namespace]) => {
@@ -64,7 +71,15 @@ impl SqlEngine<'_> {
                     "{name} expects five arguments"
                 )));
             }
-            ("table_to_xml" | "query_to_xml" | "schema_to_xml", _) => {
+            (
+                "table_to_xml"
+                | "query_to_xml"
+                | "table_to_xmlschema"
+                | "query_to_xmlschema"
+                | "cursor_to_xmlschema"
+                | "schema_to_xml",
+                _,
+            ) => {
                 return Err(SqlError::undefined_function(format!(
                     "{name} expects four arguments"
                 )));
@@ -102,6 +117,28 @@ impl SqlEngine<'_> {
                 || self.check_cancellation(),
             )
             .map(|value| Some(SqlValue::String(value)));
+        }
+        if matches!(name, "query_to_xmlschema" | "cursor_to_xmlschema") {
+            let source = source.to_cell();
+            let columns = if name == "cursor_to_xmlschema" {
+                crate::session::describe_xml_cursor(&source)?
+            } else {
+                self.describe_xml_query(&source)?
+            };
+            return Ok(Some(SqlValue::String(
+                self.render_xml_schema(&columns, None, nulls, forest, &namespace),
+            )));
+        }
+        if name == "table_to_xmlschema" {
+            let oid = i64::from(oid_alias_numeric_value(self.db_ref(), "regclass", source)?);
+            let (schema, table, columns) = self.describe_xml_relation(oid)?;
+            return Ok(Some(SqlValue::String(self.render_xml_schema(
+                &columns,
+                Some((&schema, &table)),
+                nulls,
+                forest,
+                &namespace,
+            ))));
         }
         if name == "schema_to_xml" {
             return self
@@ -145,6 +182,111 @@ impl SqlEngine<'_> {
             || self.check_cancellation(),
         )
         .map(|value| Some(SqlValue::String(value)))
+    }
+
+    fn describe_xml_query(&self, query: &str) -> Result<Vec<(String, Option<String>)>> {
+        let multi_query_error = || {
+            SqlError::data_exception_public("42P11", "cannot open multi-query plan as cursor", None)
+        };
+        let commands = split_sql_statements(query);
+        let [command] = commands.as_slice() else {
+            return Err(multi_query_error());
+        };
+        let mut queries = read_only_xml_queries(command)?;
+        if queries.len() != 1 {
+            return Err(multi_query_error());
+        }
+        let query = queries.pop().expect("one cursor query");
+        self.authorize_read_relations(&query)?;
+        // A schema-only call describes the cursor without consuming it.
+        self.query_describe_output_columns(&query)
+            .ok_or_else(multi_query_error)
+    }
+
+    fn describe_xml_relation(&self, oid: i64) -> Result<XmlRelationDescriptor> {
+        let relation = self.xml_query_result(&format!(
+            "SELECT n.nspname, c.relname, c.relkind
+               FROM pg_catalog.pg_class AS c
+               JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+              WHERE c.oid = {oid}"
+        ))?;
+        let Some(row) = relation.rows.first() else {
+            return Err(SqlError::data_exception_public(
+                "XX000",
+                format!("could not open relation with OID {oid}"),
+                None,
+            ));
+        };
+        let schema = row[0].to_cell();
+        let table = row[1].to_cell();
+        let kind = row[2].to_cell();
+        let unsupported = match kind.as_str() {
+            "i" | "I" => Some("indexes"),
+            "c" => Some("composite types"),
+            _ => None,
+        };
+        if let Some(unsupported) = unsupported {
+            return Err(SqlError::coded(
+                "42809",
+                format!("cannot open relation \"{table}\""),
+                Some(format!(
+                    "This operation is not supported for {unsupported}."
+                )),
+                None,
+            ));
+        }
+
+        // A schema-only operation reads the public catalog descriptor. The
+        // data export separately applies relation and column access checks.
+        let attributes = self.xml_query_result(&format!(
+            "SELECT a.attname, n.nspname, t.typname
+               FROM pg_catalog.pg_attribute AS a
+               JOIN pg_catalog.pg_type AS t ON t.oid = a.atttypid
+               JOIN pg_catalog.pg_namespace AS n ON n.oid = t.typnamespace
+              WHERE a.attrelid = {oid} AND a.attnum > 0 AND NOT a.attisdropped
+              ORDER BY a.attnum"
+        ))?;
+        let columns = attributes
+            .rows
+            .into_iter()
+            .map(|row| {
+                let name = row[0].to_cell();
+                let namespace = row[1].to_cell();
+                let pg_type = row[2].to_cell();
+                let pg_type = if namespace == "pg_catalog" {
+                    pg_type
+                } else {
+                    format!(
+                        "{}.{}",
+                        pg_quote_ident(&namespace),
+                        pg_quote_ident(&pg_type)
+                    )
+                };
+                (name, Some(pg_type))
+            })
+            .collect();
+        Ok((schema, table, columns))
+    }
+
+    fn render_xml_schema(
+        &self,
+        columns: &[(String, Option<String>)],
+        relation: Option<(&str, &str)>,
+        nulls: bool,
+        forest: bool,
+        namespace: &str,
+    ) -> String {
+        crate::xml::schema_mapping::query_schema(
+            columns,
+            &current_database_from_gucs(&self.session_gucs),
+            relation,
+            namespace,
+            nulls,
+            forest,
+            self.session_gucs
+                .get("xmlbinary")
+                .is_some_and(|mode| mode == "hex"),
+        )
     }
 
     fn map_database_rows(&self, nulls: bool, forest: bool, namespace: &str) -> Result<String> {
@@ -226,36 +368,7 @@ impl SqlEngine<'_> {
     fn xml_query_result(&self, query: &str) -> Result<SqlResult> {
         let mut result = None;
         for command in split_sql_statements(query) {
-            let statements = parse_statements(&command)?;
-            if let ControlFlow::Break(operation) = statements.visit(&mut ReadOnlyXmlQuery) {
-                let operation = match statements.as_slice() {
-                    [Statement::Query(query)]
-                        if matches!(
-                            operation.as_str(),
-                            "INSERT" | "UPDATE" | "DELETE" | "MERGE"
-                        ) && !matches!(
-                            query.body.as_ref(),
-                            SetExpr::Insert(_)
-                                | SetExpr::Update(_)
-                                | SetExpr::Delete(_)
-                                | SetExpr::Merge(_)
-                        ) =>
-                    {
-                        "SELECT"
-                    }
-                    _ => operation.as_str(),
-                };
-                return Err(SqlError::data_exception_public(
-                    "0A000",
-                    format!("{operation} is not allowed in a non-volatile function"),
-                    None,
-                )
-                .with_context_line(format!("SQL statement \"{command}\"")));
-            }
-            for statement in statements {
-                let Statement::Query(query) = statement else {
-                    unreachable!("checked for read-only statements");
-                };
+            for query in read_only_xml_queries(&command)? {
                 self.authorize_read_relations(&query)?;
                 let mut output = self.execute_query(&query)?;
                 if let Some(described) = self.query_describe_output_columns(&query) {
@@ -286,4 +399,38 @@ impl SqlEngine<'_> {
         }
         Ok(())
     }
+}
+
+fn read_only_xml_queries(command: &str) -> Result<Vec<Box<Query>>> {
+    let statements = parse_statements(command)?;
+    if let ControlFlow::Break(operation) = statements.visit(&mut ReadOnlyXmlQuery) {
+        let operation = match statements.as_slice() {
+            [Statement::Query(query)]
+                if matches!(operation.as_str(), "INSERT" | "UPDATE" | "DELETE" | "MERGE")
+                    && !matches!(
+                        query.body.as_ref(),
+                        SetExpr::Insert(_)
+                            | SetExpr::Update(_)
+                            | SetExpr::Delete(_)
+                            | SetExpr::Merge(_)
+                    ) =>
+            {
+                "SELECT"
+            }
+            _ => operation.as_str(),
+        };
+        return Err(SqlError::data_exception_public(
+            "0A000",
+            format!("{operation} is not allowed in a non-volatile function"),
+            None,
+        )
+        .with_context_line(format!("SQL statement \"{command}\"")));
+    }
+    Ok(statements
+        .into_iter()
+        .map(|statement| match statement {
+            Statement::Query(query) => query,
+            _ => unreachable!("checked for read-only statements"),
+        })
+        .collect())
 }

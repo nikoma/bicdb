@@ -298,3 +298,54 @@ fn postgres_catalog_string_routine_overloads_are_resolvable_and_callable() {
     assert_eq!(result.column_types[2].as_deref(), Some("int4"));
     assert_eq!(result.column_types[3].as_deref(), Some("bit"));
 }
+
+#[test]
+fn postgres_numeric_input_and_int8_gcd_accept_boundary_values() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let value = session
+        .execute(
+            "SELECT gcd('-9223372036854775808'::bigint, 1::bigint),
+                    gcd(1::bigint, '-9223372036854775808'::bigint),
+                    gcd('-9223372036854775808'::bigint, 4611686018427387904),
+                    lcm('-9223372036854775808'::bigint, 0::bigint),
+                    '0X_1_0000000000000000'::numeric,
+                    '-0b_1010'::numeric, '+0o112402761777'::numeric,
+                    '12_000.123_456'::numeric, '.000_000_000_123e+1_1'::numeric",
+        )
+        .unwrap();
+    assert_eq!(
+        value.rows[0]
+            .iter()
+            .map(SqlValue::to_cell)
+            .collect::<Vec<_>>(),
+        [
+            "1",
+            "1",
+            "4611686018427387904",
+            "0",
+            "18446744073709551616",
+            "-10",
+            "9999999999",
+            "12000.123456",
+            "12.3",
+        ],
+    );
+    for (sql, state) in [
+        (
+            "SELECT lcm('-9223372036854775808'::bigint, 1::bigint)",
+            "22003",
+        ),
+        ("SELECT gcd('-9223372036854775808'::bigint, 0)", "22003"),
+        ("SELECT gcd('3','9')", "42725"),
+        ("SELECT '0x__1'::numeric", "22P02"),
+        ("SELECT '0b102'::numeric", "22P02"),
+        ("SELECT '0x+1'::numeric", "22P02"),
+        ("SELECT '1_.2'::numeric", "22P02"),
+        ("SELECT '1e-_2'::numeric", "22P02"),
+    ] {
+        let error = session.execute(sql).unwrap_err();
+        assert_eq!(error.sqlstate(), state, "{sql}: {error:?}");
+    }
+}

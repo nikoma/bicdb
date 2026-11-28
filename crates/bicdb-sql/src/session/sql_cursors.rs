@@ -633,7 +633,7 @@ impl SqlSession<'_> {
         let default_scrollable = query_supports_backward_scan(&query);
         let target = self.cursor_target(&mut query)?;
         let autocommit = self.tx.is_none();
-        let result = self.execute(&query.to_string())?;
+        let result = self.execute(&crate::sql_text::sql_text(&query))?;
         let hidden = target.as_ref().map_or(0, |target| target.key.len());
         let visible = result.columns.len().saturating_sub(hidden);
         let mut column_types = result.column_types.clone();

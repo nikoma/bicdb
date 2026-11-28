@@ -242,6 +242,7 @@ pub use session::*;
 mod runtime;
 pub use runtime::*;
 mod application_copy;
+mod conflict_inference;
 mod constraint_nulls;
 pub mod datestyle_output;
 mod datetime_input;

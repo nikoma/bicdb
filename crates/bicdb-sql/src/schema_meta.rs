@@ -157,8 +157,14 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>> {
         .map_or(sql, |lowered| lowered.sql.as_str());
     let parse_sql = rewrite_postgres_parse_compat(sql);
     let sql_for_parse = parse_sql.as_deref().unwrap_or(sql);
+    let conflict_targets = crate::conflict_inference::lower(sql_for_parse);
+    let sql_for_parse = conflict_targets
+        .as_ref()
+        .map_or(sql_for_parse, |targets| targets.sql.as_str());
     let bounded_sql = crate::boolean_parse::prepare(sql_for_parse)?;
     let sql_for_parse = bounded_sql.as_ref();
+    let check_xml_names =
+        sql_for_parse.contains("bicdb_xmlattributes") || sql_for_parse.contains("bicdb_xmlforest");
     let mut statements = match crate::table_queries::parse(sql_for_parse) {
         Ok(statements) => statements,
         Err(original) => {
@@ -189,6 +195,10 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>> {
     // it — the precedence visitor below, the evaluator, and even Drop all
     // overflow the stack (aborting the process) on a hostile AST.
     reject_deep_expressions(&statements)?;
+    if let Some(targets) = conflict_targets {
+        targets.restore(&mut statements)?;
+        reject_deep_expressions(&statements)?;
+    }
     if let Some(atomic) = &atomic {
         atomic.restore(&mut statements)?;
         reject_deep_expressions(&statements)?;
@@ -198,7 +208,7 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>> {
         reject_deep_expressions(&statements)?;
     }
     crate::table_queries::reject_unlowered(&statements)?;
-    if sql_for_parse.contains("bicdb_xmlattributes") || sql_for_parse.contains("bicdb_xmlforest") {
+    if check_xml_names {
         crate::xml::validate_xml_constructor_names(&statements)?;
     }
     restore_postgres_distinct_boolean_precedence(&mut statements);

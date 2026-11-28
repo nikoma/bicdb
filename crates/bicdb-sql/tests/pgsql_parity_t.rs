@@ -1153,3 +1153,138 @@ fn postgres_upsert_compares_and_casts_whole_existing_and_excluded_rows() {
         ["(1,3,new)"]
     );
 }
+
+#[test]
+fn partial_conflict_inference_proves_bounds_and_distinguishes_arbiters() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE TABLE arbiter_probe (a int, b int, c bool, v text);
+             CREATE UNIQUE INDEX arbiter_probe_positive ON arbiter_probe(a) WHERE b > 0;
+             CREATE UNIQUE INDEX arbiter_probe_enabled ON arbiter_probe(a) WHERE c;
+             INSERT INTO arbiter_probe VALUES(1,-1,true,'existing')",
+        )
+        .unwrap();
+    for target in ["(a)", "(a) WHERE b < 0", "(a) WHERE FALSE"] {
+        assert_eq!(
+            session
+                .execute(&format!(
+                    "INSERT INTO arbiter_probe VALUES (2,1,false,'missing')
+                     ON CONFLICT {target} DO NOTHING"
+                ))
+                .unwrap_err()
+                .sqlstate(),
+            "42P10"
+        );
+    }
+    assert_eq!(
+        session
+            .execute(
+                "INSERT INTO arbiter_probe AS t VALUES (1,2,true,'skip'),(1,2,false,'keep')
+                 ON /* nested /* comment */ works */ CONFLICT (a) WHERE 1 <= t.b AND t.c
+                 DO NOTHING RETURNING v",
+            )
+            .unwrap()
+            .rows,
+        [[SqlValue::String("keep".into())]]
+    );
+    assert_eq!(
+        session
+            .execute(
+                "INSERT INTO arbiter_probe VALUES (1,-2,true,'updated')
+                 ON CONFLICT (a) WHERE b > 0 AND c
+                 DO UPDATE SET v = excluded.v WHERE arbiter_probe.v = 'existing'
+                 RETURNING v",
+            )
+            .unwrap()
+            .rows,
+        [[SqlValue::String("updated".into())]]
+    );
+    assert_eq!(
+        session
+            .execute(
+                "INSERT INTO arbiter_probe VALUES (1,-2,false,'outside')
+                 ON CONFLICT (a) WHERE b > 0 AND c
+                 DO UPDATE SET v = excluded.v RETURNING v",
+            )
+            .unwrap()
+            .rows,
+        [[SqlValue::String("outside".into())]]
+    );
+}
+
+#[test]
+fn partial_conflict_predicates_round_trip_through_ctes_and_atomic_routines() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            r#"CREATE TABLE partial_roundtrip ("__bicdb_conflict_inference_0" int, live bool, v text);
+               CREATE UNIQUE INDEX partial_roundtrip_live ON partial_roundtrip("__bicdb_conflict_inference_0") WHERE live;
+               CREATE FUNCTION partial_roundtrip_insert() RETURNS text LANGUAGE SQL BEGIN ATOMIC
+                 INSERT INTO partial_roundtrip VALUES (1, true, 'function')
+                   ON CONFLICT ("__bicdb_conflict_inference_0") WHERE live
+                   DO UPDATE SET v=excluded.v RETURNING v;
+               END;"#,
+        )
+        .unwrap();
+    assert_eq!(
+        session
+            .execute(
+                r#"WITH w AS (
+                     INSERT INTO partial_roundtrip VALUES(1,true,'CTE')
+                     ON CONFLICT ("__bicdb_conflict_inference_0") WHERE live
+                     DO UPDATE SET v=excluded.v RETURNING v)
+                   SELECT v FROM w"#,
+            )
+            .unwrap()
+            .rows,
+        [[SqlValue::String("CTE".into())]]
+    );
+    assert_eq!(
+        session
+            .execute("SELECT partial_roundtrip_insert()")
+            .unwrap()
+            .rows,
+        [[SqlValue::String("function".into())]]
+    );
+    assert_eq!(
+        session
+            .execute(
+                "SELECT pg_get_functiondef('partial_roundtrip_insert()'::regprocedure)
+                 LIKE '%WHERE live DO UPDATE%'",
+            )
+            .unwrap()
+            .rows,
+        [[SqlValue::Bool(true)]]
+    );
+}
+
+#[test]
+fn conflict_predicate_carrier_is_never_accepted_as_client_sql() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            r#"CREATE TABLE marker_table ("__bicdb_conflict_inference_0" int, v int,
+                        CONSTRAINT "__bicdb_conflict_inference" UNIQUE ("__bicdb_conflict_inference_0"));
+               INSERT INTO marker_table VALUES(1,1)
+                 ON CONFLICT ON CONSTRAINT "__bicdb_conflict_inference" DO NOTHING;
+               INSERT INTO marker_table VALUES(1,2)
+                 ON CONFLICT ("__bicdb_conflict_inference_0") WHERE v>0
+                 DO UPDATE SET v=excluded.v;"#,
+        )
+        .unwrap();
+    let sql = r#"INSERT INTO marker_table VALUES(1,3)
+        ON CONFLICT ON CONSTRAINT __bicdb_conflict_inference(("__bicdb_conflict_inference_0"), v>0)
+        DO UPDATE SET v=excluded.v"#;
+    assert_eq!(session.execute(sql).unwrap_err().sqlstate(), "42601");
+    assert_eq!(
+        session.execute("SELECT v FROM marker_table").unwrap().rows,
+        [[SqlValue::Int(2)]]
+    );
+}

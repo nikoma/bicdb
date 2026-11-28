@@ -45,12 +45,20 @@ impl SqlEngine<'_> {
         let name = name.strip_prefix("pg_catalog.").unwrap_or(name);
         let (source, count, nulls, forest, namespace) = match (name, args) {
             ("cursor_to_xml", [source, count, nulls, forest, namespace]) => {
-                (source, Some(count), nulls, forest, namespace)
+                (Some(source), Some(count), nulls, forest, namespace)
             }
             (
                 "table_to_xml" | "query_to_xml" | "schema_to_xml",
                 [source, nulls, forest, namespace],
-            ) => (source, None, nulls, forest, namespace),
+            ) => (Some(source), None, nulls, forest, namespace),
+            ("database_to_xml", [nulls, forest, namespace]) => {
+                (None, None, nulls, forest, namespace)
+            }
+            ("database_to_xml", _) => {
+                return Err(SqlError::undefined_function(format!(
+                    "{name} expects three arguments"
+                )));
+            }
             ("cursor_to_xml", _) => {
                 return Err(SqlError::undefined_function(format!(
                     "{name} expects five arguments"
@@ -71,6 +79,11 @@ impl SqlEngine<'_> {
         let forest = sql_value_bool(forest)
             .ok_or_else(|| SqlError::invalid_parameter_value("tableforest must be boolean"))?;
         let namespace = namespace.to_cell();
+        let Some(source) = source else {
+            return self
+                .map_database_rows(nulls, forest, &namespace)
+                .map(|value| Some(SqlValue::String(value)));
+        };
         if let Some(count) = count {
             let count = sql_value_i64(count)
                 .and_then(|count| i32::try_from(count).ok())
@@ -92,7 +105,7 @@ impl SqlEngine<'_> {
         }
         if name == "schema_to_xml" {
             return self
-                .map_schema_rows(&source.to_cell(), nulls, forest, &namespace)
+                .map_schema_rows(&source.to_cell(), nulls, forest, Some(&namespace))
                 .map(|value| Some(SqlValue::String(value)));
         }
         let (query, document_name, row_name) = if name == "table_to_xml" {
@@ -134,12 +147,36 @@ impl SqlEngine<'_> {
         .map(|value| Some(SqlValue::String(value)))
     }
 
+    fn map_database_rows(&self, nulls: bool, forest: bool, namespace: &str) -> Result<String> {
+        let mut namespaces = list_namespaces(self.db_ref())?;
+        namespaces.sort_by(|left, right| left.name.cmp(&right.name));
+        let role = current_user_from_gucs(&self.session_gucs);
+        let mut contents = String::new();
+        for schema in namespaces {
+            self.check_cancellation()?;
+            if schema.name.starts_with("pg_")
+                || schema.name == "information_schema"
+                || !role_can_use_schema(self.db_ref(), &role, &schema.name)?
+            {
+                continue;
+            }
+            contents.push_str(&self.map_schema_rows(&schema.name, nulls, forest, None)?);
+            contents.push('\n');
+        }
+        let database = current_database_from_gucs(&self.session_gucs);
+        Ok(crate::xml::wrap_xml_mapping(
+            &contents,
+            &database,
+            Some(namespace),
+        ))
+    }
+
     fn map_schema_rows(
         &self,
         schema: &str,
         nulls: bool,
         forest: bool,
-        namespace: &str,
+        namespace: Option<&str>,
     ) -> Result<String> {
         let label = pg_quote_literal(schema);
         let found = self.xml_query_result(&format!(
@@ -183,11 +220,7 @@ impl SqlEngine<'_> {
             )?);
             contents.push('\n');
         }
-        Ok(crate::xml::wrap_xml_mapping(
-            &contents,
-            schema,
-            Some(namespace),
-        ))
+        Ok(crate::xml::wrap_xml_mapping(&contents, schema, namespace))
     }
 
     fn xml_query_result(&self, query: &str) -> Result<SqlResult> {

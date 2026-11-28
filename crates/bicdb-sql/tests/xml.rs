@@ -1210,3 +1210,33 @@ fn xpath_reports_postgresql_syntax_and_empty_path_errors() {
         assert_eq!(error.to_string(), message, "{sql}");
     }
 }
+
+#[test]
+fn database_xml_exports_only_namespaces_visible_to_the_current_role() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE SCHEMA archive_z;
+             CREATE SCHEMA archive_a;
+             CREATE TABLE archive_z.messages(v text);
+             CREATE TABLE archive_a.entries(v text);
+             INSERT INTO archive_z.messages VALUES ('hidden');
+             INSERT INTO archive_a.entries VALUES ('visible');
+             CREATE ROLE xml_reader;
+             GRANT USAGE ON SCHEMA archive_a TO xml_reader;
+             GRANT SELECT ON archive_a.entries TO xml_reader;
+             SET ROLE xml_reader",
+        )
+        .unwrap();
+    let result = session
+        .execute("SELECT database_to_xml(true, false, 'urn:export')")
+        .unwrap();
+    let xml = result.rows[0][0].to_cell();
+    assert!(xml.contains("xmlns=\"urn:export\""));
+    assert!(xml.contains("<archive_a>") && xml.contains("<v>visible</v>"));
+    assert!(xml.contains("<public>"));
+    assert!(!xml.contains("<archive_z>") && !xml.contains("hidden"));
+    assert!(!xml.contains("<pg_catalog>") && !xml.contains("<information_schema>"));
+}

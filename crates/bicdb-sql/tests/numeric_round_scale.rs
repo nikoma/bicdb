@@ -50,6 +50,17 @@ fn numeric_rounding_and_special_arithmetic_follow_postgresql() {
             ],
         ),
     ];
+    let rows = sql
+        .execute(
+            "WITH v(x) AS (VALUES ('Infinity'::numeric), ('-Infinity'), ('NaN'), ('4.200'))
+             SELECT -x FROM v",
+        )
+        .unwrap()
+        .rows;
+    assert_eq!(
+        rows.iter().map(|row| row[0].to_cell()).collect::<Vec<_>>(),
+        ["-Infinity", "Infinity", "NaN", "-4.200"]
+    );
     for (statement, expected) in cases {
         let result = sql.execute(statement).unwrap();
         let cells: Vec<_> = result.rows[0].iter().map(|value| value.to_cell()).collect();

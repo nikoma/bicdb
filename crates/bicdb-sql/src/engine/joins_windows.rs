@@ -1889,10 +1889,10 @@ impl<'db> SqlEngine<'db> {
                 .eval_row_aggregate_truth(rows, columns, expr)
                 .map(sql_not)
                 .map(|value| value.map(SqlValue::Bool).unwrap_or(SqlValue::Null)),
-            Expr::UnaryOp { op, expr } if op.to_string() == "-" => eval_unary_minus_expr_value(
-                expr,
+            Expr::UnaryOp { op, expr } if op.to_string() == "-" => eval_unary_minus_typed_value(
                 self.eval_row_aggregate_expr(rows, columns, expr)?,
-                None,
+                row_columns_expr_pg_type(self.db_ref(), expr, columns.iter().map(String::as_str))
+                    .as_deref(),
             ),
             Expr::UnaryOp { op, expr } if op.to_string() == "+" => eval_unary_plus_expr_value(
                 expr,

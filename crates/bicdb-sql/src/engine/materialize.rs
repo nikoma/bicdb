@@ -2621,21 +2621,23 @@ impl<'db> SqlEngine<'db> {
                 with_ordinality,
                 ..
             } if relation_name(name).ok().is_some_and(|name| {
-                matches!(name.as_str(), "ts_parse" | "pg_catalog.ts_parse")
+                super::predicates_locators::text_search_debug_function_columns(&name).is_some()
             }) =>
             {
+                let table = relation_name(name).ok()?;
                 let alias_name = alias
                     .as_ref()
                     .map(|alias| ident_value(&alias.name))
-                    .unwrap_or_else(|| "ts_parse".to_string());
+                    .unwrap_or_else(|| unqualified_relation(&table));
                 let alias_columns = alias
                     .as_ref()
                     .map(|alias| alias.columns.as_slice())
                     .unwrap_or(&[]);
-                let mut columns = vec![
-                    ("tokid".to_string(), Some("int4".to_string())),
-                    ("token".to_string(), Some("text".to_string())),
-                ];
+                let mut columns =
+                    super::predicates_locators::text_search_debug_function_columns(&table)?
+                        .iter()
+                        .map(|(name, pg_type)| (name.to_string(), Some(pg_type.to_string())))
+                        .collect::<Vec<_>>();
                 if *with_ordinality {
                     columns.push(("ordinality".to_string(), Some("int8".to_string())));
                 }

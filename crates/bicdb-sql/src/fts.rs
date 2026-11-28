@@ -1602,6 +1602,55 @@ fn ts_lexize(dictionary: &SqlValue, token: &SqlValue) -> Result<SqlValue> {
     ts_lexize_builtin(&text, token)
 }
 
+/// Show each raw token and the dictionaries actually consulted by its configuration.
+pub(crate) fn debug_rows(db: &BicDb, config: &str, document: &str) -> Result<Vec<Vec<SqlValue>>> {
+    let mappings = match authored::normalization(config)? {
+        Some((_, Some(mappings))) => mappings,
+        Some((source_oid, None)) => Arc::new(catalog::builtin_config_mappings(source_oid)),
+        None => {
+            let oid = authored::resolve_oid(db, config)?.ok_or_else(|| {
+                SqlError::undefined_object(format!(
+                    "text search configuration \"{config}\" does not exist",
+                ))
+            })?;
+            Arc::new(catalog::builtin_config_mappings(oid))
+        }
+    };
+    parser::tokens(document)
+        .into_iter()
+        .map(|(kind, token)| {
+            let (alias, description) = DEFAULT_PARSER_TOKEN_TYPES[usize::from(kind) - 1];
+            let dictionary_oids = mappings.get(&kind).map(Vec::as_slice).unwrap_or(&[]);
+            let value = SqlValue::String(token.to_owned());
+            let mut accepted = SqlValue::Null;
+            let mut lexemes = SqlValue::Null;
+            for &oid in dictionary_oids {
+                let dictionary = SqlValue::Int(i64::from(oid));
+                let result = ts_lexize(&dictionary, &value)?;
+                if !matches!(result, SqlValue::Null) {
+                    accepted = dictionary;
+                    lexemes = result;
+                    break;
+                }
+            }
+            let dictionaries = crate::array_value(
+                dictionary_oids
+                    .iter()
+                    .map(|&oid| SqlValue::Int(i64::from(oid)))
+                    .collect(),
+            );
+            Ok(vec![
+                SqlValue::String(alias.to_owned()),
+                SqlValue::String(description.to_owned()),
+                value,
+                dictionaries,
+                accepted,
+                lexemes,
+            ])
+        })
+        .collect()
+}
+
 fn ts_lexize_builtin(name: &str, token: &SqlValue) -> Result<SqlValue> {
     let name = name.to_ascii_lowercase();
     let name = name.strip_prefix("pg_catalog.").unwrap_or(&name);

@@ -5518,19 +5518,16 @@ impl<'db> SqlEngine<'db> {
     ) -> Result<Option<RowSet>> {
         let function = table.strip_prefix("pg_catalog.").unwrap_or(table);
         let function = function.to_ascii_lowercase();
-        let (mut source_columns, mut rows): (Vec<String>, Vec<Vec<SqlValue>>) =
-            match function.as_str() {
-                "ts_parse" => {
-                    let values = table_function_expr_args(args)?
-                        .iter()
-                        .map(|expr| self.eval_select_constant_expr(expr))
-                        .collect::<Result<Vec<_>>>()?;
-                    let [parser, document] = values.as_slice() else {
-                        return Err(SqlError::undefined_function(
-                            "function ts_parse expects two arguments",
-                        ));
-                    };
-                    let rows =
+        let (mut source_columns, mut rows): (Vec<String>, Vec<Vec<SqlValue>>) = match function
+            .as_str()
+        {
+            "ts_parse" | "ts_debug" => {
+                let values = table_function_expr_args(args)?
+                    .iter()
+                    .map(|expr| self.eval_select_constant_expr(expr))
+                    .collect::<Result<Vec<_>>>()?;
+                let rows = match (function.as_str(), values.as_slice()) {
+                    ("ts_parse", [parser, document]) => {
                         if matches!(parser, SqlValue::Null) || matches!(document, SqlValue::Null) {
                             Vec::new()
                         } else {
@@ -5544,75 +5541,108 @@ impl<'db> SqlEngine<'db> {
                                     ]
                                 })
                                 .collect()
-                        };
-                    (vec!["tokid".into(), "token".into()], rows)
-                }
-                "ts_token_type" | "ts_stat" => {
-                    let values = table_function_expr_args(args)?
-                        .iter()
-                        .map(|expr| self.eval_select_constant_expr(expr))
-                        .collect::<Result<Vec<_>>>()?;
-                    if function == "ts_token_type" {
-                        let [parser] = values.as_slice() else {
-                            return Err(SqlError::undefined_function(
-                                "function ts_token_type expects one argument",
-                            ));
-                        };
-                        crate::fts::is_default_text_search_parser(parser)?;
-                        let rows = crate::fts::DEFAULT_PARSER_TOKEN_TYPES
-                            .iter()
-                            .enumerate()
-                            .map(|(index, (alias, description))| {
-                                vec![
-                                    SqlValue::Int(index as i64 + 1),
-                                    SqlValue::String((*alias).to_string()),
-                                    SqlValue::String((*description).to_string()),
-                                ]
-                            })
-                            .collect();
-                        (
-                            vec!["tokid".into(), "alias".into(), "description".into()],
-                            rows,
-                        )
-                    } else {
-                        let (query, weights) = match values.as_slice() {
-                            [query] => (query, None),
-                            [query, weights] => (query, Some(weights.to_cell())),
-                            _ => {
-                                return Err(SqlError::undefined_function(
-                                    "function ts_stat expects one or two arguments",
-                                ))
-                            }
-                        };
-                        // The query runs with the caller's privileges.
-                        let result = self.execute(&query.to_cell())?;
-                        if result.columns.len() != 1 {
-                            return Err(SqlError::data_exception_public(
-                                "42804",
-                                "ts_stat query must return one tsvector column",
-                                None,
-                            ));
                         }
-                        let vectors = result
-                            .rows
-                            .into_iter()
-                            .filter_map(|row| row.into_iter().next())
-                            .collect::<Vec<_>>();
-                        let rows = crate::fts::ts_stat_rows(&vectors, weights.as_deref())?
-                            .into_iter()
-                            .map(|(word, ndoc, nentry)| {
-                                vec![
-                                    SqlValue::String(word),
-                                    SqlValue::Int(ndoc),
-                                    SqlValue::Int(nentry),
-                                ]
-                            })
-                            .collect();
-                        (vec!["word".into(), "ndoc".into(), "nentry".into()], rows)
                     }
+                    ("ts_debug", [document]) => {
+                        if matches!(document, SqlValue::Null) {
+                            Vec::new()
+                        } else {
+                            let config =
+                                crate::fts::default_text_search_config_setting(&self.session_gucs);
+                            crate::fts::debug_rows(self.db_ref(), &config, &document.to_cell())?
+                        }
+                    }
+                    ("ts_debug", [config, document]) => {
+                        if matches!(config, SqlValue::Null) || matches!(document, SqlValue::Null) {
+                            Vec::new()
+                        } else {
+                            crate::fts::debug_rows(
+                                self.db_ref(),
+                                &config.to_cell(),
+                                &document.to_cell(),
+                            )?
+                        }
+                    }
+                    _ => {
+                        return Err(SqlError::undefined_function(format!(
+                            "function {function} does not accept {} arguments",
+                            values.len(),
+                        )));
+                    }
+                };
+                let columns = text_search_debug_function_columns(&function)
+                    .expect("selected text search debug function")
+                    .iter()
+                    .map(|(name, _)| name.to_string())
+                    .collect();
+                (columns, rows)
+            }
+            "ts_token_type" | "ts_stat" => {
+                let values = table_function_expr_args(args)?
+                    .iter()
+                    .map(|expr| self.eval_select_constant_expr(expr))
+                    .collect::<Result<Vec<_>>>()?;
+                if function == "ts_token_type" {
+                    let [parser] = values.as_slice() else {
+                        return Err(SqlError::undefined_function(
+                            "function ts_token_type expects one argument",
+                        ));
+                    };
+                    crate::fts::is_default_text_search_parser(parser)?;
+                    let rows = crate::fts::DEFAULT_PARSER_TOKEN_TYPES
+                        .iter()
+                        .enumerate()
+                        .map(|(index, (alias, description))| {
+                            vec![
+                                SqlValue::Int(index as i64 + 1),
+                                SqlValue::String((*alias).to_string()),
+                                SqlValue::String((*description).to_string()),
+                            ]
+                        })
+                        .collect();
+                    (
+                        vec!["tokid".into(), "alias".into(), "description".into()],
+                        rows,
+                    )
+                } else {
+                    let (query, weights) = match values.as_slice() {
+                        [query] => (query, None),
+                        [query, weights] => (query, Some(weights.to_cell())),
+                        _ => {
+                            return Err(SqlError::undefined_function(
+                                "function ts_stat expects one or two arguments",
+                            ))
+                        }
+                    };
+                    // The query runs with the caller's privileges.
+                    let result = self.execute(&query.to_cell())?;
+                    if result.columns.len() != 1 {
+                        return Err(SqlError::data_exception_public(
+                            "42804",
+                            "ts_stat query must return one tsvector column",
+                            None,
+                        ));
+                    }
+                    let vectors = result
+                        .rows
+                        .into_iter()
+                        .filter_map(|row| row.into_iter().next())
+                        .collect::<Vec<_>>();
+                    let rows = crate::fts::ts_stat_rows(&vectors, weights.as_deref())?
+                        .into_iter()
+                        .map(|(word, ndoc, nentry)| {
+                            vec![
+                                SqlValue::String(word),
+                                SqlValue::Int(ndoc),
+                                SqlValue::Int(nentry),
+                            ]
+                        })
+                        .collect();
+                    (vec!["word".into(), "ndoc".into(), "nentry".into()], rows)
                 }
-                _ => return Ok(None),
-            };
+            }
+            _ => return Ok(None),
+        };
         if with_ordinality {
             for (index, row) in rows.iter_mut().enumerate() {
                 row.push(SqlValue::Int(index as i64 + 1));
@@ -5630,8 +5660,11 @@ impl<'db> SqlEngine<'db> {
                 .unwrap_or(&[]),
             &source_columns,
         )?;
-        if function == "ts_parse" {
-            let mut types = vec![Some("int4".to_string()), Some("text".to_string())];
+        if let Some(definition) = text_search_debug_function_columns(&function) {
+            let mut types = definition
+                .iter()
+                .map(|(_, pg_type)| Some(pg_type.to_string()))
+                .collect::<Vec<_>>();
             if with_ordinality {
                 types.push(Some("int8".to_string()));
             }
@@ -6371,7 +6404,7 @@ impl<'db> SqlEngine<'db> {
                 let table = normalize_object_name(&object_name(name)?);
                 // The select-list SRF source checks EXECUTE per call it runs.
                 let zip = table == crate::routine_srf_projection::ZIP_FUNCTION;
-                let builtin = matches!(table.as_str(), "ts_parse" | "pg_catalog.ts_parse");
+                let builtin = text_search_debug_function_columns(&table).is_some();
                 if builtin
                     || zip
                     || resolve_routine_cached(self.db_ref(), RoutineKind::Function, &table)?
@@ -7739,15 +7772,18 @@ impl<'db> SqlEngine<'db> {
                 .to_ascii_lowercase()
                 .as_str()
             {
-                "ts_parse" => Some(&["tokid", "token"]),
                 "ts_token_type" => Some(&["tokid", "alias", "description"]),
                 "ts_stat" => Some(&["word", "ndoc", "nentry"]),
                 _ => None,
             };
-            if let Some(names) = text_search_columns {
-                let mut source_columns = names
-                    .iter()
-                    .map(|name| name.to_string())
+            let debug_columns = text_search_debug_function_columns(&table);
+            if text_search_columns.is_some() || debug_columns.is_some() {
+                let mut source_columns = text_search_columns
+                    .into_iter()
+                    .flatten()
+                    .copied()
+                    .chain(debug_columns.into_iter().flatten().map(|(name, _)| *name))
+                    .map(str::to_owned)
                     .collect::<Vec<_>>();
                 if *with_ordinality {
                     source_columns.push("ordinality".to_string());
@@ -9867,5 +9903,22 @@ impl HoistedLateral {
             Some(SqlValue::Null) | None => Vec::new(),
             Some(_) => self.rows.clone(),
         }
+    }
+}
+
+pub(super) fn text_search_debug_function_columns(
+    table: &str,
+) -> Option<&'static [(&'static str, &'static str)]> {
+    match table.strip_prefix("pg_catalog.").unwrap_or(table) {
+        "ts_parse" => Some(&[("tokid", "int4"), ("token", "text")]),
+        "ts_debug" => Some(&[
+            ("alias", "text"),
+            ("description", "text"),
+            ("token", "text"),
+            ("dictionaries", "regdictionary[]"),
+            ("dictionary", "regdictionary"),
+            ("lexemes", "text[]"),
+        ]),
+        _ => None,
     }
 }

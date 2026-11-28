@@ -227,3 +227,34 @@ fn ts_parse_reports_raw_tokens_and_their_types() {
         "XX000",
     );
 }
+
+#[test]
+fn ts_debug_shows_each_dictionary_choice_and_stop_word() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = open(root.path());
+    let mut session = SqlSession::new(&mut db);
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT alias, token, dictionary::text, lexemes::text
+             FROM ts_debug('english', 'The Running &amp;')",
+        ),
+        [
+            "asciiword|The|english_stem|{}",
+            "blank| |NULL|NULL",
+            "asciiword|Running|english_stem|{run}",
+            "blank| |NULL|NULL",
+            "entity|&amp;|NULL|NULL",
+        ],
+    );
+    assert_eq!(
+        rows(
+            &mut session,
+            "SET default_text_search_config = 'simple';
+             SELECT pg_typeof(dictionaries), pg_typeof(dictionary), pg_typeof(lexemes),
+                    dictionary::text, lexemes::text
+             FROM ts_debug('Running')",
+        ),
+        ["regdictionary[]|regdictionary|text[]|simple|{running}"],
+    );
+}

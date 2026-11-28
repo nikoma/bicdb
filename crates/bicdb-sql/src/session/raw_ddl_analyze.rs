@@ -1241,16 +1241,26 @@ impl<'db> SqlSession<'db> {
             }
             "default_text_search_config" => {
                 let name = value.to_cell();
-                if !crate::fts::is_text_search_config(&name) {
+                let catalog =
+                    crate::fts::authored::Catalog::load(self.db_ref(), &self.session_gucs)?;
+                let authored = match catalog.resolve(&name) {
+                    Some(crate::fts::authored::Configuration::Authored(config)) => {
+                        Some(config.qualified_name())
+                    }
+                    _ => None,
+                };
+                if authored.is_none() && !crate::fts::is_text_search_config(&name) {
                     return Err(SqlError::invalid_parameter_value(format!(
                         "invalid value for parameter \"default_text_search_config\": \"{name}\""
                     )));
                 }
-                let name = if name.contains('.') {
-                    name.to_ascii_lowercase()
-                } else {
-                    format!("pg_catalog.{}", name.to_ascii_lowercase())
-                };
+                let name = authored.unwrap_or_else(|| {
+                    if name.contains('.') {
+                        name.to_ascii_lowercase()
+                    } else {
+                        format!("pg_catalog.{}", name.to_ascii_lowercase())
+                    }
+                });
                 crate::set_default_text_search_config(&name);
                 Arc::make_mut(&mut self.session_gucs)
                     .insert("default_text_search_config".to_string(), name);

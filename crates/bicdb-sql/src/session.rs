@@ -29,6 +29,7 @@ pub(crate) mod not_null_constraints;
 mod owned_objects;
 mod partition_indexes;
 mod table_access_method;
+mod text_search_ddl;
 #[cfg(test)]
 mod timestamp_day_indexes;
 mod typed_tables;
@@ -1349,6 +1350,11 @@ impl SqlSessionGucState {
         &self.session_gucs
     }
 
+    /// A connection's immutable settings for wire encoding and decoding.
+    pub fn shared_session_gucs(&self) -> Arc<HashMap<String, String>> {
+        self.session_gucs.clone()
+    }
+
     pub fn insert_session_guc(&mut self, key: String, value: String) {
         if !is_protected_security_setting(&key) {
             Arc::make_mut(&mut self.session_gucs).insert(key, value);
@@ -2373,6 +2379,10 @@ pub(crate) enum DdlUndo {
         schema_name: String,
         name: String,
         previous: Option<Box<crate::collations::CollationSchema>>,
+    },
+    RestoreTextSearchConfiguration {
+        oid: u32,
+        previous: Option<Box<crate::fts::authored::AuthoredConfig>>,
     },
     RestoreEventTrigger {
         oid: i64,
@@ -3891,6 +3901,9 @@ impl<'db> SqlSession<'db> {
     /// small.
     #[inline(never)]
     fn execute_raw_catalog_compat(&mut self, sql: &str) -> Result<Option<SqlResult>> {
+        if let Some(result) = self.execute_raw_text_search_configuration(sql)? {
+            return Ok(Some(result));
+        }
         if let Some(result) = self.execute_raw_event_trigger_ddl(sql)? {
             return Ok(Some(result));
         }
@@ -4190,6 +4203,8 @@ impl<'db> SqlSession<'db> {
                 && postgres_execution_requires_snapshot(sql)
         })?;
         self.refresh_client_statement_snapshot()?;
+        let _authored_text_search =
+            crate::fts::authored::Scope::enter(self.db_ref(), &self.session_gucs)?;
         if !self.transaction_read_only() {
             return self.execute_profiled(sql);
         }
@@ -4339,6 +4354,8 @@ impl<'db> SqlSession<'db> {
         }
         let _preflight = self.prepare_catalog_preflight(matches!(statement, Statement::Call(_)))?;
         let _catalog_reads = self.enter_parsed_catalog_reads(statement)?;
+        let _authored_text_search =
+            crate::fts::authored::Scope::enter(self.db_ref(), &self.session_gucs)?;
         let _case = oracle::simple_case::Scope::for_db(self.db_ref())?;
         self.statement_error_recovered = false;
         let _clock = oracle::current_time::StatementScope::new();
@@ -6571,6 +6588,10 @@ impl<'db> SqlSession<'db> {
             } => match previous {
                 Some(previous) => crate::collations::save_collation(self.db_mut()?, &previous)?,
                 None => crate::collations::delete_collation(self.db_mut()?, &schema_name, &name)?,
+            },
+            DdlUndo::RestoreTextSearchConfiguration { oid, previous } => match previous {
+                Some(previous) => crate::fts::authored::store(self.db_mut()?, &previous)?,
+                None => crate::fts::authored::delete(self.db_mut()?, oid)?,
             },
             DdlUndo::RestoreEventTrigger { oid, previous } => {
                 event_triggers::restore_event_trigger(self.db_mut()?, oid, previous.as_deref())?

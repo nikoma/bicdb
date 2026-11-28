@@ -1303,7 +1303,8 @@ pub fn resolve_oid_alias_value(db: &BicDb, pg_type: &str, value: SqlValue) -> Re
         "regnamespace" => resolve_regnamespace_oid(db, &input)?,
         "regrole" => resolve_regrole_oid(db, &input)?,
         "regcollation" => resolve_regcollation_oid(&input),
-        "regconfig" => resolve_named_oid(&input, REGCONFIG_OBJECTS),
+        "regconfig" => crate::fts::authored::resolve_oid(db, &input)?
+            .or_else(|| resolve_named_oid(&input, REGCONFIG_OBJECTS)),
         "regdictionary" => resolve_named_oid(&input, REGDICTIONARY_OBJECTS),
         "regproc" | "regprocedure" => resolve_regprocedure_oid(db, pg_type, &input)?,
         "regoper" | "regoperator" => resolve_regoperator_oid(pg_type, &input)?,
@@ -1420,7 +1421,8 @@ pub fn render_oid_alias_value(db: &BicDb, pg_type: &str, value: &SqlValue) -> Re
         "regnamespace" => resolve_regnamespace_name(db, oid)?,
         "regrole" => resolve_regrole_name(db, oid)?,
         "regcollation" => resolve_regcollation_name(oid),
-        "regconfig" => resolve_named_oid_output(oid, REGCONFIG_OBJECTS),
+        "regconfig" => crate::fts::authored::display_name(db, oid)?
+            .or_else(|| resolve_named_oid_output(oid, REGCONFIG_OBJECTS)),
         "regdictionary" => resolve_named_oid_output(oid, REGDICTIONARY_OBJECTS),
         "regproc" | "regprocedure" => resolve_regprocedure_name(db, pg_type, oid)?,
         "regoper" | "regoperator" => resolve_regoperator_name(pg_type, oid),
@@ -1603,7 +1605,9 @@ fn resolve_builtin_oid_alias(pg_type: &str, value: &str) -> Option<u32> {
                 .and_then(|oid| u32::try_from(oid).ok())
         }
         "regcollation" => resolve_regcollation_oid(value),
-        "regconfig" => resolve_named_oid(value, REGCONFIG_OBJECTS),
+        "regconfig" => {
+            crate::fts::authored::oid(value).or_else(|| resolve_named_oid(value, REGCONFIG_OBJECTS))
+        }
         "regdictionary" => resolve_named_oid(value, REGDICTIONARY_OBJECTS),
         "regproc" | "regprocedure" => {
             let (name, signature) = split_alias_signature(value);

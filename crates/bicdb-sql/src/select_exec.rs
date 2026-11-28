@@ -4183,7 +4183,7 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
         "pg_amproc" => Ok(pg_amproc_rows()),
         "pg_operator" => crate::pg_operators::pg_operator_rows(db),
         "pg_ts_config" | "pg_ts_dict" | "pg_ts_parser" | "pg_ts_template" => {
-            Ok(crate::fts::catalog::rows(table))
+            crate::fts::catalog::rows(db, table)
         }
         "pg_ts_config_map" => Ok(Vec::new()),
         "pg_default_acl" => pg_default_acl_rows(db),

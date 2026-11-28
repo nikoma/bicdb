@@ -8,6 +8,7 @@ use waken_snowball::{Algorithm, Stemmer};
 use crate::eval::{builtin_regconfig_name, builtin_regdictionary_name};
 use crate::{pg_internal_char_byte, BicDb, Result, SqlEngine, SqlError, SqlValue};
 
+pub(crate) mod authored;
 pub(crate) mod catalog;
 
 const MAX_LEXEME_BYTES: usize = bicdb_core::MAX_FULL_TEXT_TERM_BYTES;
@@ -1393,12 +1394,13 @@ enum TextSearchConfig {
 
 impl TextSearchConfig {
     fn parse(value: &SqlValue) -> Result<Self> {
-        let input = value.to_cell().to_ascii_lowercase();
+        let text = value.to_cell();
+        let authored =
+            authored::source_oid(&text).and_then(|oid| builtin_regconfig_name(i64::from(oid)));
+        let input = text.to_ascii_lowercase();
         let input = input.strip_prefix("pg_catalog.").unwrap_or(&input);
-        let value = input
-            .parse::<i64>()
-            .ok()
-            .and_then(builtin_regconfig_name)
+        let value = authored
+            .or_else(|| input.parse::<i64>().ok().and_then(builtin_regconfig_name))
             .unwrap_or(input);
         match value {
             "simple" => Ok(Self::Simple),

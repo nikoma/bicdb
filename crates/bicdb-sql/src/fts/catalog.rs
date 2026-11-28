@@ -1,6 +1,6 @@
 use super::TextSearchConfig;
 use crate::eval::{REGCONFIG_OBJECTS, REGDICTIONARY_OBJECTS};
-use crate::{virtual_row, SqlValue};
+use crate::{namespace_oid, role_oid, virtual_row, BicDb, Result, SqlValue};
 use std::collections::BTreeMap;
 
 const DEFAULT_PARSER: i64 = 3722;
@@ -9,20 +9,29 @@ const SNOWBALL_TEMPLATE: i64 = 13234;
 const PG_CATALOG_NAMESPACE: i64 = 11;
 const BOOTSTRAP_OWNER: i64 = 10;
 
-pub(crate) fn rows(table: &str) -> Vec<BTreeMap<String, SqlValue>> {
+pub(crate) fn rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<String, SqlValue>>> {
     let namespace = || SqlValue::Int(PG_CATALOG_NAMESPACE);
     let owner = || SqlValue::Int(BOOTSTRAP_OWNER);
     let text = |value: &str| SqlValue::String(value.to_owned());
-    match table {
-        "pg_ts_config" => REGCONFIG_OBJECTS.iter().map(|&(oid, name)| {
-            virtual_row([
+    Ok(match table {
+        "pg_ts_config" => {
+            let mut rows: Vec<_> = REGCONFIG_OBJECTS.iter().map(|&(oid, name)| virtual_row([
                 ("oid", SqlValue::Int(i64::from(oid))),
                 ("cfgname", text(name)),
                 ("cfgnamespace", namespace()),
                 ("cfgowner", owner()),
                 ("cfgparser", SqlValue::Int(DEFAULT_PARSER)),
-            ])
-        }).collect(),
+            ])).collect();
+            let authored = super::authored::list(db)?;
+            rows.extend(authored.iter().map(|config| virtual_row([
+                ("oid", SqlValue::Int(i64::from(config.oid))),
+                ("cfgname", text(&config.name)),
+                ("cfgnamespace", SqlValue::Int(namespace_oid(&config.schema))),
+                ("cfgowner", SqlValue::Int(role_oid(&config.owner))),
+                ("cfgparser", SqlValue::Int(DEFAULT_PARSER)),
+            ])));
+            rows
+        }
         "pg_ts_dict" => REGDICTIONARY_OBJECTS.iter().map(|&(oid, name)| {
             let (template, options) = match name.strip_suffix("_stem") {
                 Some(language) => {
@@ -69,5 +78,5 @@ pub(crate) fn rows(table: &str) -> Vec<BTreeMap<String, SqlValue>> {
             ("prslextype", SqlValue::Int(3721)),
         ])],
         _ => Vec::new(),
-    }
+    })
 }

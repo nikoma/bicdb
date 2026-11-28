@@ -5661,14 +5661,7 @@ impl<'db> SqlEngine<'db> {
             &source_columns,
         )?;
         if let Some(definition) = text_search_debug_function_columns(&function) {
-            let mut types = definition
-                .iter()
-                .map(|(_, pg_type)| Some(pg_type.to_string()))
-                .collect::<Vec<_>>();
-            if with_ordinality {
-                types.push(Some("int8".to_string()));
-            }
-            crate::slot_types::register_columns(&alias_name, &columns, &types);
+            register_text_search_function_types(&alias_name, &columns, definition, with_ordinality);
         }
         let rows = rows
             .iter()
@@ -6474,10 +6467,30 @@ impl<'db> SqlEngine<'db> {
                         columns: Vec::new(),
                         at: None,
                     };
+                    let bound_alias = alias.unwrap_or(&fallback_alias);
+                    if let Some(definition) = text_search_debug_function_columns(&table) {
+                        let source_names = definition
+                            .iter()
+                            .map(|(name, _)| name.to_string())
+                            .chain(with_ordinality.then_some("ordinality".to_string()))
+                            .collect::<Vec<_>>();
+                        let columns = table_alias_columns(
+                            &table,
+                            &bound_alias.name.value,
+                            &bound_alias.columns,
+                            &source_names,
+                        )?;
+                        register_text_search_function_types(
+                            &bound_alias.name.value,
+                            &columns,
+                            definition,
+                            with_ordinality,
+                        );
+                    }
                     return self.apply_lateral_derived_table_join(
                         left,
                         &query,
-                        Some(alias.unwrap_or(&fallback_alias)),
+                        Some(bound_alias),
                         kind,
                         effective_constraint,
                     );
@@ -9904,6 +9917,20 @@ impl HoistedLateral {
             Some(_) => self.rows.clone(),
         }
     }
+}
+
+fn register_text_search_function_types(
+    alias: &str,
+    columns: &[String],
+    definition: &[(&str, &str)],
+    with_ordinality: bool,
+) {
+    let types = definition
+        .iter()
+        .map(|(_, pg_type)| Some(pg_type.to_string()))
+        .chain(with_ordinality.then_some(Some("int8".to_string())))
+        .collect::<Vec<_>>();
+    crate::slot_types::register_columns(alias, columns, &types);
 }
 
 pub(super) fn text_search_debug_function_columns(

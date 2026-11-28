@@ -234,6 +234,15 @@ fn ts_parse_reports_raw_tokens_and_their_types() {
             "1|x"
         ],
     );
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT pg_typeof(p.k), pg_typeof(p.frag), p.k, p.frag
+             FROM (VALUES ('Café')) AS source(body),
+                  ts_parse('default', source.body) AS p(k, frag)",
+        ),
+        ["integer|text|2|Café"],
+    );
     assert!(rows(&mut session, "SELECT * FROM ts_parse('missing', NULL)").is_empty());
     assert_eq!(
         session

@@ -231,7 +231,12 @@ pub(crate) fn eval_db_catalog_function_value_with_engine(
     let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(name);
     if matches!(
         bare_name,
-        "table_to_xml" | "query_to_xml" | "schema_to_xml" | "cursor_to_xml" | "database_to_xml"
+        "table_to_xml"
+            | "query_to_xml"
+            | "query_to_xmlschema"
+            | "schema_to_xml"
+            | "cursor_to_xml"
+            | "database_to_xml"
     ) {
         if let Some(engine) = query_engine {
             return engine.eval_xml_mapping(bare_name, args);

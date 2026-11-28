@@ -1240,3 +1240,41 @@ fn database_xml_exports_only_namespaces_visible_to_the_current_role() {
     assert!(!xml.contains("<archive_z>") && !xml.contains("hidden"));
     assert!(!xml.contains("<pg_catalog>") && !xml.contains("<information_schema>"));
 }
+
+#[test]
+fn query_xml_schema_describes_types_without_running_the_query() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE SEQUENCE xml_schema_seq").unwrap();
+    let schema = session
+        .execute(
+            "SELECT query_to_xmlschema(
+               'SELECT nextval(''xml_schema_seq'') AS seq, NULL::int AS n, 1::int AS m',
+               true, true, 'urn:probe')",
+        )
+        .unwrap();
+    let schema = schema.rows[0][0].to_cell();
+    assert!(schema.contains("targetNamespace=\"urn:probe\""));
+    assert_eq!(
+        schema.matches("<xsd:simpleType name=\"INTEGER\">").count(),
+        1
+    );
+    assert!(schema.contains("<xsd:element name=\"seq\" type=\"BIGINT\" nillable=\"true\">"));
+    assert!(schema.contains("<xsd:element name=\"row\" type=\"RowType\"/>"));
+    assert!(!schema.contains("name=\"TableType\""));
+    assert_eq!(
+        session
+            .execute("SELECT nextval('xml_schema_seq')")
+            .unwrap()
+            .rows,
+        [[SqlValue::Int(1)]],
+    );
+    assert_eq!(
+        session
+            .execute("SELECT query_to_xmlschema('SELECT 1; SELECT 2',false,false,'')")
+            .unwrap_err()
+            .sqlstate(),
+        "42P11"
+    );
+}

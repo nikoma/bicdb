@@ -1,3 +1,5 @@
+pub(crate) mod schema_mapping;
+
 use serde_json::Value as JsonValue;
 use std::collections::BTreeMap;
 use sxd_document::{dom, parser};
@@ -1792,6 +1794,7 @@ pub(crate) fn xml_function_pg_type(name: &str) -> Option<&'static str> {
         "xmlconcat"
         | "table_to_xml"
         | "query_to_xml"
+        | "query_to_xmlschema"
         | "schema_to_xml"
         | "cursor_to_xml"
         | "database_to_xml"

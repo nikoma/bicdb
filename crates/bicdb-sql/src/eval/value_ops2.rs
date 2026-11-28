@@ -2000,7 +2000,7 @@ fn postgres_array_text_value_with(
                 _ => number.to_string(),
             }),
             JsonValue::Object(_) => crate::pg_composite_from_array_json(value)
-                .map(|composite| quote_scalar(&composite.to_postgres_text(), delimiter, true))
+                .map(|composite| quote_scalar(&composite.to_postgres_text(), delimiter, false))
                 .ok_or_else(|| invalid_array_text("internal array value")),
         }
     }

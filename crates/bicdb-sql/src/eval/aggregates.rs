@@ -1979,6 +1979,9 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         if is_current_catalog_keyword(function) {
             return Some("name".into());
         }
+        if is_row_constructor(function) {
+            return Some("record".to_string());
+        }
         // Type memos retain node addresses across calls. Borrow real argument
         // nodes; never cache the addresses of function_args' temporary clones.
         let argument_nodes = function_arg_list(function);
@@ -4337,6 +4340,7 @@ pub(crate) fn apply_order_by_cancellable(
                     left.1.as_deref(),
                     &right.0,
                     right.1.as_deref(),
+                    drivers[index].3.as_deref(),
                     &order.options,
                 )
             })

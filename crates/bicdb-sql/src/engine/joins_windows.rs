@@ -2668,13 +2668,20 @@ impl<'db> SqlEngine<'db> {
                     .iter()
                     .zip(&order_collations)
                     .zip(left_values.iter().zip(right_values))
-                    .map(|((order, collation), (left, right))| {
+                    .zip(
+                        order_types
+                            .iter()
+                            .map(Option::as_deref)
+                            .chain(std::iter::repeat(None)),
+                    )
+                    .map(|(((order, collation), (left, right)), pg_type)| {
                         typed_order_collation_value_ordering(
                             collation.as_deref(),
                             &left.0,
                             left.1.as_deref(),
                             &right.0,
                             right.1.as_deref(),
+                            pg_type,
                             &order.options,
                         )
                     })
@@ -2846,6 +2853,7 @@ impl<'db> SqlEngine<'db> {
                         left,
                         None,
                         right,
+                        None,
                         None,
                         &order.options,
                     )
@@ -3406,6 +3414,7 @@ impl<'db> SqlEngine<'db> {
                             None,
                             &target,
                             None,
+                            None,
                             &order.options,
                         ) != Ordering::Less
                 })
@@ -3421,6 +3430,7 @@ impl<'db> SqlEngine<'db> {
                             key,
                             None,
                             &target,
+                            None,
                             None,
                             &order.options,
                         ) != Ordering::Greater
@@ -3747,16 +3757,20 @@ impl<'db> SqlEngine<'db> {
             expressions
                 .iter()
                 .zip(keys[left].iter().zip(&keys[right]))
-                .map(|(order, ((left, left_key), (right, right_key)))| {
-                    typed_order_expr_value_ordering(
-                        &order.expr,
-                        left,
-                        left_key.as_deref(),
-                        right,
-                        right_key.as_deref(),
-                        &order.options,
-                    )
-                })
+                .zip(&order_types)
+                .map(
+                    |((order, ((left, left_key), (right, right_key))), pg_type)| {
+                        typed_order_expr_value_ordering(
+                            &order.expr,
+                            left,
+                            left_key.as_deref(),
+                            right,
+                            right_key.as_deref(),
+                            pg_type.as_deref(),
+                            &order.options,
+                        )
+                    },
+                )
                 .find(|ordering| *ordering != Ordering::Equal)
                 .unwrap_or(Ordering::Equal)
         });

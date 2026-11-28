@@ -1239,6 +1239,7 @@ pub(crate) fn typed_order_value_ordering(
     left_key: Option<&[u8]>,
     right: &SqlValue,
     right_key: Option<&[u8]>,
+    pg_type: Option<&str>,
     options: &OrderByOptions,
 ) -> Ordering {
     let ascending = options.asc != Some(false);
@@ -1259,7 +1260,9 @@ pub(crate) fn typed_order_value_ordering(
                 Ordering::Less
             }
         }
-        (SqlValue::Json(left), SqlValue::Json(right)) => jsonb_value_ordering(left, right),
+        (SqlValue::Json(left), SqlValue::Json(right)) if pg_type != Some("record[]") => {
+            jsonb_value_ordering(left, right)
+        }
         _ => match (left_key, right_key) {
             (Some(left), Some(right)) => left.cmp(right),
             _ => value_ordering(left, right).unwrap_or(Ordering::Equal),
@@ -1278,6 +1281,7 @@ pub(crate) fn typed_order_expr_value_ordering(
     left_key: Option<&[u8]>,
     right: &SqlValue,
     right_key: Option<&[u8]>,
+    pg_type: Option<&str>,
     options: &OrderByOptions,
 ) -> Ordering {
     typed_order_collation_value_ordering(
@@ -1286,6 +1290,7 @@ pub(crate) fn typed_order_expr_value_ordering(
         left_key,
         right,
         right_key,
+        pg_type,
         options,
     )
 }
@@ -1296,6 +1301,7 @@ pub(crate) fn typed_order_collation_value_ordering(
     left_key: Option<&[u8]>,
     right: &SqlValue,
     right_key: Option<&[u8]>,
+    pg_type: Option<&str>,
     options: &OrderByOptions,
 ) -> Ordering {
     if let (Some(collation), SqlValue::String(left), SqlValue::String(right)) =
@@ -1308,7 +1314,7 @@ pub(crate) fn typed_order_collation_value_ordering(
             return ordering;
         }
     }
-    typed_order_value_ordering(left, left_key, right, right_key, options)
+    typed_order_value_ordering(left, left_key, right, right_key, pg_type, options)
 }
 
 pub(crate) fn window_keys_are_peers(left: &[SqlValue], right: &[SqlValue]) -> bool {

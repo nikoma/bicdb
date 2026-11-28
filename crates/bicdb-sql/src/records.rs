@@ -6626,6 +6626,9 @@ fn canonical_array_element(value: &JsonValue, element_type: &str) -> Result<PgCa
             parse_postgres_uuid(value.as_str().ok_or_else(invalid)?).map_err(|_| invalid())?,
         ),
         "json" | "jsonb" => PgCanonicalValue::Json(value.clone()),
+        "record" => crate::type_codec::canonical_record_value(
+            &pg_composite_from_array_json(value).ok_or_else(invalid)?,
+        )?,
         "oid" => PgCanonicalValue::Oid(
             u32::try_from(value.as_i64().ok_or_else(invalid)?).map_err(|_| invalid())?,
         ),

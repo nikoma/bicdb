@@ -1556,6 +1556,20 @@ impl<'db> SqlEngine<'db> {
                         op,
                         right_type.as_deref(),
                     )?;
+                    let collation = self.slot_comparison_collation(
+                        left,
+                        right,
+                        context.column_keys().iter(),
+                        [left_type.as_deref(), right_type.as_deref()],
+                    )?;
+                    if let Some(truth) = compare_values_with_collation(
+                        collation.as_deref(),
+                        &left_value,
+                        op,
+                        &right_value,
+                    ) {
+                        return Ok(truth.map(SqlValue::Bool).unwrap_or(SqlValue::Null));
+                    }
                 }
                 if let Some(value) = eval_range_binary_value_with_db(
                     self.db_ref(),

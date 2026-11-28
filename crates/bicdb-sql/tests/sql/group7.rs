@@ -937,10 +937,11 @@ fn sequences_nextval_currval_setval_and_persistence_work() {
         session
             .execute("CREATE SEQUENCE invoice_seq INCREMENT BY 3 START WITH 7")
             .unwrap();
-        assert!(matches!(
-            session.execute("SELECT currval('invoice_seq')"),
-            Err(SqlError::InvalidSql(message)) if message.contains("not yet defined")
-        ));
+        let undefined_currval = session
+            .execute("SELECT currval('invoice_seq')")
+            .unwrap_err();
+        assert_eq!(undefined_currval.sqlstate(), "55000");
+        assert!(undefined_currval.to_string().contains("not yet defined"));
         assert_eq!(
             session
                 .execute("SELECT nextval('invoice_seq')")
@@ -961,6 +962,13 @@ fn sequences_nextval_currval_setval_and_persistence_work() {
                 .unwrap()
                 .rows,
             vec![vec![SqlValue::Int(20)]]
+        );
+        assert_eq!(
+            session
+                .execute("SELECT currval('invoice_seq')")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(7)]]
         );
         assert_eq!(
             session

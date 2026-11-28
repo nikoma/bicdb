@@ -46,6 +46,10 @@ pub(crate) fn pg_function_more_result_type(
             | "cosd" | "tand" | "cotd" | "asind" | "acosd" | "atand" | "atan2d" | "degrees"
             | "radians" | "pi" => "float8",
             "div" | "factorial" => "numeric",
+            "numeric_inc" if !oracle::simple_case::enabled() => "numeric",
+            "sign" if !oracle::simple_case::enabled() => {
+                return Some(float8_or_numeric_result_type(first.as_deref()));
+            }
             "array_reverse" | "array_sort" => return first,
             _ => return None,
         }
@@ -566,19 +570,59 @@ pub(crate) fn eval_pg_function_more(
             if strict(args) {
                 return Ok(Some(SqlValue::Null));
             }
-            let left = parse_decimal(&numeric_text(&args[0]))?;
-            let right = parse_decimal(&numeric_text(&args[1]))?;
-            if right.mantissa.is_zero() {
-                return Err(SqlError::data_exception_public(
-                    "22012",
-                    "division by zero",
-                    None,
-                ));
+            let left = pg_numeric_from_sql_value(args[0].clone())?;
+            let right = pg_numeric_from_sql_value(args[1].clone())?;
+            match (&left, &right) {
+                (PgNumeric::Finite { .. }, PgNumeric::Finite { .. }) => {
+                    if pg_numeric_is_zero(&right) {
+                        return Err(division_by_zero());
+                    }
+                    let left = decimal_from_pg_numeric(left)?;
+                    let right = decimal_from_pg_numeric(right)?;
+                    let scale = left.scale.max(right.scale);
+                    let numerator = &left.mantissa * pow10_bigint(scale - left.scale);
+                    let denominator = &right.mantissa * pow10_bigint(scale - right.scale);
+                    SqlValue::String((numerator / denominator).to_string())
+                }
+                _ => eval_pg_numeric_arithmetic(
+                    args[0].clone(),
+                    &BinaryOperator::Divide,
+                    args[1].clone(),
+                )?,
             }
-            let scale = left.scale.max(right.scale);
-            let numerator = &left.mantissa * pow10_bigint(scale - left.scale);
-            let denominator = &right.mantissa * pow10_bigint(scale - right.scale);
-            SqlValue::String((numerator / denominator).to_string())
+        }
+        ("numeric_inc", 1) if !oracle::simple_case::enabled() => {
+            if strict(args) {
+                return Ok(Some(SqlValue::Null));
+            }
+            eval_pg_numeric_arithmetic(args[0].clone(), &BinaryOperator::Plus, SqlValue::Int(1))?
+        }
+        ("sign", 1) if !oracle::simple_case::enabled() => {
+            if strict(args) {
+                return Ok(Some(SqlValue::Null));
+            }
+            if arg_type(0) == Some("numeric") {
+                let number = pg_numeric_from_sql_value(args[0].clone())?;
+                let sign = if number == PgNumeric::NaN {
+                    "NaN"
+                } else if pg_numeric_is_negative(&number) {
+                    "-1"
+                } else if pg_numeric_is_zero(&number) {
+                    "0"
+                } else {
+                    "1"
+                };
+                SqlValue::String(sign.to_string())
+            } else {
+                let number = float_value(&args[0])?;
+                SqlValue::Float(if number > 0.0 {
+                    1.0
+                } else if number < 0.0 {
+                    -1.0
+                } else {
+                    0.0
+                })
+            }
         }
         ("factorial", 1) => {
             if strict(args) {

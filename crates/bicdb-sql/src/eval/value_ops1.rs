@@ -3949,6 +3949,9 @@ pub(crate) fn eval_compatibility_function_value(
     }
     let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(name);
     if !oracle::simple_case::enabled() {
+        let first_type = arg_types
+            .and_then(|types| types.first())
+            .and_then(Option::as_deref);
         match (bare_name, args) {
             ("power" | "pow", [base, exponent])
                 if arg_types.is_some_and(|types| {
@@ -3958,10 +3961,7 @@ pub(crate) fn eval_compatibility_function_value(
                 return super::numeric_power::pg_numeric_power_value(base, exponent).map(Some);
             }
             ("ln" | "log" | "log10" | "sqrt", [arg])
-                if arg_types
-                    .and_then(|types| types.first())
-                    .and_then(Option::as_deref)
-                    .map_or_else(|| numeric_operand(arg), |pg_type| pg_type == "numeric") =>
+                if first_type.map_or_else(|| numeric_operand(arg), |kind| kind == "numeric") =>
             {
                 if bare_name == "sqrt" {
                     return super::numeric_power::numeric_sqrt(arg).map(Some);
@@ -3985,6 +3985,36 @@ pub(crate) fn eval_compatibility_function_value(
                     ));
                 }
                 return super::numeric_power::numeric_logarithm(Some(base), arg).map(Some);
+            }
+            ("round" | "trunc" | "ceil" | "ceiling" | "floor", [arg])
+                if first_type == Some("numeric") =>
+            {
+                if matches!(arg, SqlValue::Null) {
+                    return Ok(Some(SqlValue::Null));
+                }
+                return match bare_name {
+                    "round" => super::numeric_power::round_pg_numeric(arg, 0),
+                    "trunc" => truncate_numeric_value(arg, 0, true),
+                    _ => super::numeric_power::pg_numeric_ceil_floor(arg, bare_name != "floor"),
+                }
+                .map(Some);
+            }
+            ("round", [arg, scale]) => {
+                if matches!(arg, SqlValue::Null) || matches!(scale, SqlValue::Null) {
+                    return Ok(Some(SqlValue::Null));
+                }
+                if matches!(first_type, Some("float4" | "float8")) {
+                    return Err(SqlError::undefined_function(
+                        "function round does not exist for these argument types",
+                    ));
+                }
+                let scale = sql_value_i64(scale).ok_or_else(|| {
+                    SqlError::invalid_parameter_value("round requires an integer scale")
+                })?;
+                let scale = i32::try_from(scale).map_err(|_| {
+                    SqlError::numeric_value_out_of_range("round scale is out of range")
+                })?;
+                return super::numeric_power::round_pg_numeric(arg, scale).map(Some);
             }
             _ => {}
         }
@@ -4204,7 +4234,12 @@ pub(crate) fn eval_compatibility_function_value(
             let value = sql_value_f64(&args[0]).ok_or_else(|| {
                 SqlError::InvalidSql(format!("round expects numeric, got {}", args[0].to_cell()))
             })?;
-            Ok(Some(SqlValue::Float(value.round())))
+            let rounded = if oracle::simple_case::enabled() {
+                value.round()
+            } else {
+                value.round_ties_even()
+            };
+            Ok(Some(SqlValue::Float(rounded)))
         }
         "md5" | "pg_catalog.md5" => {
             require_arg_count("md5", args, 1)?;

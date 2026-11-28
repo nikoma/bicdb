@@ -356,6 +356,40 @@ pub(super) fn numeric_sqrt(value: &SqlValue) -> Result<SqlValue> {
     Ok(SqlValue::String(result.format()))
 }
 
+pub(super) fn round_pg_numeric(value: &SqlValue, scale: i32) -> Result<SqlValue> {
+    let number = pg_numeric_from_sql_value(value.clone())?;
+    if !matches!(number, PgNumeric::Finite { .. }) {
+        return Ok(SqlValue::String(number.to_decimal_text()));
+    }
+    let value = decimal_from_pg_numeric(number)?;
+    let scale = i64::from(scale.min(PG_NUMERIC_MAX_FRACTIONAL_DIGITS));
+    let current = i64::from(value.scale);
+    if current - scale > value.mantissa.abs().to_str_radix(10).len() as i64 {
+        return Ok(SqlValue::String("0".to_string()));
+    }
+    if scale < 0 {
+        let digits = pow10_bigint((current - scale) as u32);
+        let integer = divide(&value.mantissa, &digits, 0) * pow10_bigint((-scale) as u32);
+        return cast_value_to_pg_type(SqlValue::String(integer.to_string()), "numeric");
+    }
+    let rounded = rescale(&value.mantissa, current, scale);
+    cast_value_to_pg_type(SqlValue::String(rounded.format()), "numeric")
+}
+
+pub(super) fn pg_numeric_ceil_floor(value: &SqlValue, ceil: bool) -> Result<SqlValue> {
+    let number = pg_numeric_from_sql_value(value.clone())?;
+    if !matches!(number, PgNumeric::Finite { .. }) {
+        return Ok(SqlValue::String(number.to_decimal_text()));
+    }
+    let decimal = decimal_from_pg_numeric(number)?;
+    let divisor = pow10_bigint(decimal.scale);
+    let mut integer = &decimal.mantissa / &divisor;
+    if (&decimal.mantissa % divisor) != BigInt::ZERO && ceil != decimal.mantissa.is_negative() {
+        integer += if ceil { 1 } else { -1 };
+    }
+    cast_value_to_pg_type(SqlValue::String(integer.to_string()), "numeric")
+}
+
 /// PostgreSQL uses the decimal weight of ln(x) to choose its display scale.
 fn ln_weight(value: &Decimal) -> i64 {
     let one = pow10_bigint(value.scale);

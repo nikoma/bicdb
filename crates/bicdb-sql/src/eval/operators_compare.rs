@@ -460,18 +460,10 @@ pub(crate) fn eval_pg_numeric_arithmetic(
     if matches!(left, PgNumeric::NaN) || matches!(right, PgNumeric::NaN) {
         return Ok(SqlValue::String("NaN".to_string()));
     }
-    if let (
-        PgNumeric::Finite { .. },
-        PgNumeric::Finite {
-            coefficient: right_coefficient,
-            ..
-        },
-    ) = (&left, &right)
-    {
-        if matches!(op, BinaryOperator::Divide | BinaryOperator::Modulo) && right_coefficient == "0"
-        {
-            return Err(division_by_zero());
-        }
+    if matches!(op, BinaryOperator::Divide | BinaryOperator::Modulo) && pg_numeric_is_zero(&right) {
+        return Err(division_by_zero());
+    }
+    if let (PgNumeric::Finite { .. }, PgNumeric::Finite { .. }) = (&left, &right) {
         let result = eval_decimal_arithmetic(
             decimal_from_pg_numeric(left)?,
             op,
@@ -515,24 +507,19 @@ pub(crate) fn eval_pg_numeric_arithmetic(
                 PgNumeric::NegativeInfinity
             }
         }
-        BinaryOperator::Divide => {
-            if pg_numeric_is_zero(&right) {
-                return Err(division_by_zero());
+        BinaryOperator::Divide => match (&left, &right) {
+            (
+                PgNumeric::PositiveInfinity | PgNumeric::NegativeInfinity,
+                PgNumeric::PositiveInfinity | PgNumeric::NegativeInfinity,
+            ) => PgNumeric::NaN,
+            (PgNumeric::Finite { .. }, _) => {
+                PgNumeric::finite(false, "0", 0).expect("zero is a valid numeric")
             }
-            match (&left, &right) {
-                (
-                    PgNumeric::PositiveInfinity | PgNumeric::NegativeInfinity,
-                    PgNumeric::PositiveInfinity | PgNumeric::NegativeInfinity,
-                ) => PgNumeric::NaN,
-                (PgNumeric::Finite { .. }, _) => {
-                    PgNumeric::finite(false, "0", 0).expect("zero is a valid numeric")
-                }
-                _ if pg_numeric_is_negative(&left) == pg_numeric_is_negative(&right) => {
-                    PgNumeric::PositiveInfinity
-                }
-                _ => PgNumeric::NegativeInfinity,
+            _ if pg_numeric_is_negative(&left) == pg_numeric_is_negative(&right) => {
+                PgNumeric::PositiveInfinity
             }
-        }
+            _ => PgNumeric::NegativeInfinity,
+        },
         BinaryOperator::Modulo => match (&left, &right) {
             (PgNumeric::PositiveInfinity | PgNumeric::NegativeInfinity, _) => PgNumeric::NaN,
             (value @ PgNumeric::Finite { .. }, _) => value.clone(),

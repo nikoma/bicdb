@@ -221,6 +221,26 @@ pub(crate) fn fetch_xml_cursor_rows(name: &str, count: i32) -> Result<SqlResult>
     })
 }
 
+/// Read a session cursor's descriptor without advancing its position.
+pub(crate) fn describe_xml_cursor(name: &str) -> Result<Vec<(String, Option<String>)>> {
+    ACTIVE_CURSORS.with(|active| {
+        let active = active.borrow();
+        let cursors = active.as_ref().ok_or_else(|| undefined_cursor(name))?;
+        cursors.with(|cursors| {
+            let cursor = cursors
+                .iter()
+                .find(|cursor| cursor.name == name)
+                .ok_or_else(|| undefined_cursor(name))?;
+            Ok(cursor
+                .columns
+                .iter()
+                .cloned()
+                .zip(cursor.column_types.iter().cloned())
+                .collect())
+        })
+    })
+}
+
 pub(crate) const PG_CURSORS_COLUMNS: [(&str, &str); 6] = [
     ("name", "text"),
     ("statement", "text"),

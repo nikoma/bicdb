@@ -1240,3 +1240,110 @@ fn database_xml_exports_only_namespaces_visible_to_the_current_role() {
     assert!(!xml.contains("<archive_z>") && !xml.contains("hidden"));
     assert!(!xml.contains("<pg_catalog>") && !xml.contains("<information_schema>"));
 }
+
+#[test]
+fn query_xml_schema_describes_types_without_running_the_query() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE SEQUENCE xml_schema_seq").unwrap();
+    let schema = session
+        .execute(
+            "SELECT query_to_xmlschema(
+               'SELECT nextval(''xml_schema_seq'') AS seq, NULL::int AS n, 1::int AS m',
+               true, true, 'urn:probe')",
+        )
+        .unwrap();
+    let schema = schema.rows[0][0].to_cell();
+    assert!(schema.contains("targetNamespace=\"urn:probe\""));
+    assert_eq!(
+        schema.matches("<xsd:simpleType name=\"INTEGER\">").count(),
+        1
+    );
+    assert!(schema.contains("<xsd:element name=\"seq\" type=\"BIGINT\" nillable=\"true\">"));
+    assert!(schema.contains("<xsd:element name=\"row\" type=\"RowType\"/>"));
+    assert!(!schema.contains("name=\"TableType\""));
+    assert_eq!(
+        session
+            .execute("SELECT nextval('xml_schema_seq')")
+            .unwrap()
+            .rows,
+        [[SqlValue::Int(1)]],
+    );
+    assert_eq!(
+        session
+            .execute("SELECT query_to_xmlschema('SELECT 1; SELECT 2',false,false,'')")
+            .unwrap_err()
+            .sqlstate(),
+        "42P11"
+    );
+}
+
+#[test]
+fn cursor_xml_schema_uses_saved_columns_without_moving_the_cursor() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("BEGIN; DECLARE xml_schema_cursor CURSOR FOR SELECT 3::smallint AS n, 'a'::varchar AS v")
+        .unwrap();
+    let schema = session
+        .execute("SELECT cursor_to_xmlschema('xml_schema_cursor',true,true,'urn:probe')")
+        .unwrap();
+    let schema = schema.rows[0][0].to_cell();
+    assert!(schema.contains("targetNamespace=\"urn:probe\""));
+    assert!(schema.contains("<xsd:element name=\"n\" type=\"SMALLINT\" nillable=\"true\">"));
+    assert!(schema.contains("<xsd:element name=\"v\" type=\"VARCHAR\" nillable=\"true\">"));
+    assert_eq!(
+        session
+            .execute("FETCH NEXT FROM xml_schema_cursor")
+            .unwrap()
+            .rows,
+        [[SqlValue::Int(3), SqlValue::String("a".into())]]
+    );
+    assert!(session
+        .execute("FETCH NEXT FROM xml_schema_cursor")
+        .unwrap()
+        .rows
+        .is_empty());
+    session.execute("CLOSE xml_schema_cursor; COMMIT").unwrap();
+    assert_eq!(
+        session
+            .execute("SELECT cursor_to_xmlschema('xml_schema_cursor',false,false,'')")
+            .unwrap_err()
+            .sqlstate(),
+        "34000"
+    );
+}
+
+#[test]
+fn table_xml_schema_describes_qualified_relations_and_public_column_metadata() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE SCHEMA \"a.b\";
+             CREATE TABLE \"a.b\".\"c d\" (n int, v varchar(4));
+             CREATE ROLE xml_schema_reader;
+             GRANT USAGE ON SCHEMA \"a.b\" TO xml_schema_reader;
+             SET ROLE xml_schema_reader",
+        )
+        .unwrap();
+    let result = session
+        .execute("SELECT table_to_xmlschema('\"a.b\".\"c d\"',true,false,'urn:probe')")
+        .unwrap();
+    let schema = result.rows[0][0].to_cell();
+    assert!(schema.contains("targetNamespace=\"urn:probe\""));
+    assert!(schema.contains(".a_x002E_b.c_x0020_d\""));
+    assert!(schema.contains("<xsd:element name=\"n\" type=\"INTEGER\" nillable=\"true\">"));
+    assert!(schema.contains("<xsd:element name=\"v\" type=\"VARCHAR\" nillable=\"true\">"));
+    assert!(schema.contains("<xsd:element name=\"c_x0020_d\" type=\"TableType."));
+    assert_eq!(
+        session
+            .execute("SELECT table_to_xml('\"a.b\".\"c d\"',true,false,'urn:probe')")
+            .unwrap_err()
+            .sqlstate(),
+        "42501"
+    );
+}

@@ -33,32 +33,35 @@ pub(crate) fn truncate_long_identifiers(sql: &str) -> Option<(String, Vec<Trunca
             b'"' => {
                 let start = at + 1;
                 let mut end = start;
-                while end < bytes.len() && bytes[end] != b'"' {
-                    end += 1;
-                }
-                let escaped = bytes.get(end + 1) == Some(&b'"');
-                if !escaped && end < bytes.len() && end - start > MAX_IDENTIFIER_BYTES {
-                    let identifier = &sql[start..end];
-                    let truncated = clip(identifier).to_string();
-                    truncations.push(Truncation {
-                        identifier: identifier.to_string(),
-                        truncated: truncated.clone(),
-                    });
-                    edits.push((start, end, truncated));
-                }
-                // An escaped quote continues the identifier; skip it whole.
-                at = end + 1;
-                while escaped && at < bytes.len() {
-                    if bytes[at] == b'"' {
-                        if bytes.get(at + 1) == Some(&b'"') {
-                            at += 2;
+                let mut escaped = false;
+                while end < bytes.len() {
+                    if bytes[end] == b'"' {
+                        if bytes.get(end + 1) == Some(&b'"') {
+                            escaped = true;
+                            end += 2;
                             continue;
                         }
-                        at += 1;
                         break;
                     }
-                    at += 1;
+                    end += 1;
                 }
+                if end < bytes.len() && end - start > MAX_IDENTIFIER_BYTES {
+                    let identifier = &sql[start..end];
+                    let decoded = if escaped {
+                        std::borrow::Cow::Owned(identifier.replace("\"\"", "\""))
+                    } else {
+                        std::borrow::Cow::Borrowed(identifier)
+                    };
+                    if decoded.len() > MAX_IDENTIFIER_BYTES {
+                        let truncated = clip(&decoded);
+                        edits.push((start, end, truncated.replace('"', "\"\"")));
+                        truncations.push(Truncation {
+                            identifier: decoded.to_string(),
+                            truncated: truncated.to_string(),
+                        });
+                    }
+                }
+                at = end + 1;
             }
             byte if is_identifier_start(byte) => {
                 let start = at;
@@ -193,6 +196,29 @@ mod tests {
         assert_eq!(truncations.len(), 2);
         assert_eq!(truncations[0].truncated, cut);
         assert!(truncate_long_identifiers("SELECT abc, $1, 'x'").is_none());
+    }
+
+    #[test]
+    fn escaped_identifier_quotes_keep_following_statements_and_count_as_one_byte() {
+        let sql = concat!(
+            "CREATE SCHEMA \"quo\"\"te\"; ",
+            "CREATE TABLE public.path_probe (value text); ",
+            "SET search_path TO \"Partial.Path\", public;"
+        );
+        assert!(truncate_long_identifiers(sql).is_none());
+
+        let retained = format!("{}\"", "a".repeat(62));
+        let full = format!("{retained}suffix");
+        let escaped = full.replace('"', "\"\"");
+        let sql = format!("SELECT \"{escaped}\"");
+        let (rewritten, notices) = truncate_long_identifiers(&sql).unwrap();
+        assert_eq!(
+            rewritten,
+            format!("SELECT \"{}\"", retained.replace('"', "\"\""))
+        );
+        assert_eq!(notices.len(), 1);
+        assert_eq!(notices[0].identifier, full);
+        assert_eq!(notices[0].truncated, retained);
     }
 
     #[test]

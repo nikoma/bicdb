@@ -3280,6 +3280,7 @@ pub(crate) fn default_session_guc(name: &str) -> Option<&'static str> {
         "client_min_messages" => Some("notice"),
         "bytea_output" => Some("hex"),
         "xmlbinary" => Some("base64"),
+        "xmloption" => Some("content"),
         "intervalstyle" => Some("postgres"),
         "jit" => Some("off"),
         "search_path" => Some("public"),

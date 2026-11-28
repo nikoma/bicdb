@@ -739,3 +739,70 @@ fn xmlparse_and_xmlserialize_preserve_document_and_content_modes() {
         assert!(error.to_string().contains(message), "{sql}: {error:?}");
     }
 }
+
+#[test]
+fn xmloption_controls_input_without_reinterpreting_existing_xml_values() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut sql = SqlSession::new(&mut db);
+    let initial = sql
+        .execute("SELECT current_setting('xmloption'), xml_is_well_formed('text')")
+        .unwrap();
+    assert_eq!(
+        initial.rows,
+        vec![vec![
+            SqlValue::String("content".into()),
+            SqlValue::Bool(true)
+        ]]
+    );
+    sql.execute(
+        "CREATE TABLE xmloption_values (id int PRIMARY KEY, body xml);
+         INSERT INTO xmloption_values VALUES (1, XMLPARSE(CONTENT '<a/><b/>'));
+         BEGIN;
+         SET LOCAL xmloption TO DOCUMENT;",
+    )
+    .unwrap();
+    let result = sql
+        .execute("SELECT body::xml::text, xml_is_well_formed(body::text), pg_input_is_valid(body::text, 'xml') FROM xmloption_values")
+        .unwrap();
+    assert_eq!(
+        result.rows,
+        vec![vec![
+            SqlValue::String("<a/><b/>".into()),
+            SqlValue::Bool(false),
+            SqlValue::Bool(false),
+        ]]
+    );
+    let result = sql
+        .execute("SELECT XMLPARSE(CONTENT 'text<a/>')::xml::text, xml_is_well_formed_content('text<a/>'), xml_is_well_formed_document('<!-- no element -->')")
+        .unwrap();
+    assert_eq!(
+        result.rows,
+        vec![vec![
+            SqlValue::String("text<a/>".into()),
+            SqlValue::Bool(true),
+            SqlValue::Bool(false),
+        ]]
+    );
+    sql.execute("COMMIT").unwrap();
+    for input in [
+        "SELECT 'text'::xml",
+        "SELECT XML 'text'",
+        "SELECT xml_in('text')",
+    ] {
+        sql.execute("SET XMLOPTION TO DOCUMENT").unwrap();
+        let error = sql.execute(input).unwrap_err();
+        assert_eq!(error.sqlstate(), "2200M", "{input}");
+    }
+    let normalized = sql
+        .execute("SELECT set_config('xmloption', 'CoNTent', false)")
+        .unwrap();
+    assert_eq!(
+        normalized.rows,
+        vec![vec![SqlValue::String("content".into())]]
+    );
+    assert_eq!(
+        sql.execute("SELECT 'text'::xml::text").unwrap().rows,
+        vec![vec![SqlValue::String("text".into())]]
+    );
+}

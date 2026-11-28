@@ -1326,15 +1326,18 @@ impl<'db> SqlSession<'db> {
                 Ok(())
             }
             "xmloption" => {
-                let option = value.to_cell().to_ascii_lowercase();
-                if matches!(option.as_str(), "content" | "document") {
-                    Arc::make_mut(&mut self.session_gucs).insert(setting, option);
-                    Ok(())
-                } else {
-                    Err(SqlError::invalid_parameter_value(format!(
-                        "invalid value for parameter xmloption: {option}"
-                    )))
+                let written = value.to_cell();
+                let option = written.to_ascii_lowercase();
+                if !matches!(option.as_str(), "content" | "document") {
+                    return Err(SqlError::coded(
+                        "22023",
+                        format!("invalid value for parameter \"xmloption\": \"{written}\""),
+                        None,
+                        Some("Available values: content, document.".to_owned()),
+                    ));
                 }
+                Arc::make_mut(&mut self.session_gucs).insert(setting, option);
+                Ok(())
             }
             "statement_timeout"
             | "lock_timeout"

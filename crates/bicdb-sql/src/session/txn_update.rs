@@ -4252,7 +4252,7 @@ impl<'db> SqlSession<'db> {
             session.apply_setting_value(setting.clone(), SqlValue::String(value.clone()))
         })?;
         // PostgreSQL returns the setting's normalised value (`65536` -> `64MB`).
-        if crate::session::planner_gucs::is_planner_guc(&setting) {
+        if crate::session::planner_gucs::is_planner_guc(&setting) || setting == "xmloption" {
             if let Some(normalized) = self.session_gucs.get(&setting) {
                 return Ok(SqlValue::String(normalized.clone()));
             }

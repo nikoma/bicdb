@@ -1369,11 +1369,13 @@ impl<'db> SqlEngine<'db> {
         let (scope, _) = self.bound_row_context(context.column_keys());
         // An integer target reads a string source with the integer input
         // function; a geometric source casts through its conversion function.
-        let integer_target = pg_type_from_data_type(data_type)
-            .is_ok_and(|(pg_type, _)| matches!(pg_type.as_str(), "int2" | "int4" | "int8"));
+        let needs_source_type = pg_type_from_data_type(data_type).is_ok_and(|(pg_type, _)| {
+            matches!(pg_type.as_str(), "int2" | "int4" | "int8")
+                || (pg_type == "xml" && crate::xml::xml_input_is_document())
+        });
         let source_type = scope.known_expr_type(expr).or_else(|| {
             self.infer_slot_row_expr_type(context.row_lookup.columns(), expr)
-                .filter(|pg_type| integer_target || is_geometric_type(Some(pg_type)))
+                .filter(|pg_type| needs_source_type || is_geometric_type(Some(pg_type)))
         });
         cast_expr_value_with_db_and_source_type(
             self.db_ref(),
@@ -1400,11 +1402,13 @@ impl<'db> SqlEngine<'db> {
         let (scope, _) = self.bound_row_context(&columns);
         // An integer target reads a string source with the integer input
         // function; a geometric source casts through its conversion function.
-        let integer_target = pg_type_from_data_type(data_type)
-            .is_ok_and(|(pg_type, _)| matches!(pg_type.as_str(), "int2" | "int4" | "int8"));
+        let needs_source_type = pg_type_from_data_type(data_type).is_ok_and(|(pg_type, _)| {
+            matches!(pg_type.as_str(), "int2" | "int4" | "int8")
+                || (pg_type == "xml" && crate::xml::xml_input_is_document())
+        });
         let source_type = scope.known_expr_type(expr).or_else(|| {
             self.infer_sql_row_expr_type(row, expr)
-                .filter(|pg_type| integer_target || is_geometric_type(Some(pg_type)))
+                .filter(|pg_type| needs_source_type || is_geometric_type(Some(pg_type)))
         });
         cast_expr_value_with_db_and_source_type(
             self.db_ref(),

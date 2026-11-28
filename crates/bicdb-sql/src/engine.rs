@@ -5524,7 +5524,7 @@ impl<'db> SqlEngine<'db> {
     fn execute_query_guarded(&self, query: &Query) -> Result<SqlResult> {
         let _authored_text_search =
             crate::fts::authored::Scope::enter(self.db_ref(), &self.session_gucs)?;
-        let _xml_binary = crate::xml::XmlBinaryScope::enter(&self.session_gucs);
+        let _xml_settings = crate::xml::XmlSettingsScope::enter(&self.session_gucs);
         let _collations = crate::collations::ActiveCollations::install(self.db_ref())?;
         self.require_query_exact_decimal_units(query)?;
         let named_join = self.rewrite_named_join_query(query)?;

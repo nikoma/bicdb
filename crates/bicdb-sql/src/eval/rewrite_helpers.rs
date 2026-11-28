@@ -2464,22 +2464,34 @@ pub(crate) fn rewrite_xmltable_once(input: &str) -> Option<String> {
     let has_column_aliases = alias_index
         .and_then(|alias_index| tokens.get(alias_index + 1))
         .is_some_and(|token| token.depth == function.depth && token.symbol == Some(b'('));
+    let mut start = function.start;
     let replacement = if has_column_aliases {
         // Keep the COLUMNS clause's names and types for XML evaluation.
         // The outer alias list only renames the projected SQL columns.
-        let explicit_lateral = index
+        let explicit_lateral = index.checked_sub(1).filter(|previous| {
+            let token = &tokens[*previous];
+            token.depth == function.depth && token.word.as_deref() == Some("lateral")
+        });
+        let first_source = explicit_lateral
+            .unwrap_or(index)
             .checked_sub(1)
-            .and_then(|previous| tokens.get(previous))
-            .is_some_and(|token| {
-                token.depth == function.depth && token.word.as_deref() == Some("lateral")
-            });
-        let lateral = if explicit_lateral { "" } else { "LATERAL " };
+            .is_some_and(|previous| tokens[previous].word.as_deref() == Some("from"));
+        if first_source {
+            if let Some(lateral) = explicit_lateral {
+                start = tokens[lateral].start;
+            }
+        }
+        let lateral = if first_source || explicit_lateral.is_some() {
+            ""
+        } else {
+            "LATERAL "
+        };
         format!("{lateral}(SELECT * FROM {recordset} AS \"xmltable\"({columns})) AS {alias}")
     } else {
         format!("{recordset} AS {alias}({columns})")
     };
     let mut output = input.to_string();
-    output.replace_range(function.start..end, &replacement);
+    output.replace_range(start..end, &replacement);
     Some(output)
 }
 

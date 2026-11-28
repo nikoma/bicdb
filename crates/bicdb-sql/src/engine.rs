@@ -5581,9 +5581,11 @@ impl<'db> SqlEngine<'db> {
             return self.execute_grouping_sets_query(query);
         }
         self.check_cancellation()?;
-        if let Some(rewritten) = rewrite_ordinal_order_by(query, &|relation| {
-            table_factor_column_names(self.db, relation)
-        }) {
+        if let Some(rewritten) = rewrite_ordinal_order_by(
+            query,
+            &|relation| table_factor_column_names(self.db, relation),
+            self.db_ref(),
+        )? {
             return self.execute_query(&rewritten);
         }
         if let Some(rewritten) = rewrite_row_type_constructs(self.db, query)? {

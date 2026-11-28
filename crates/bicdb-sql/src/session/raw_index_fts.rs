@@ -976,9 +976,11 @@ impl<'db> SqlSession<'db> {
         if let Some(rewritten) = normalize_fetch_clause(query)? {
             return self.execute_temporary_query(&rewritten);
         }
-        if let Some(rewritten) = rewrite_ordinal_order_by(query, &|relation| {
-            table_factor_column_names(self.db_ref(), relation)
-        }) {
+        if let Some(rewritten) = rewrite_ordinal_order_by(
+            query,
+            &|relation| table_factor_column_names(self.db_ref(), relation),
+            self.db_ref(),
+        )? {
             return self.execute_temporary_query(&rewritten);
         }
         if let Some(rewritten) = rewrite_row_type_constructs(self.db_ref(), query)? {

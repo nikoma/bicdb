@@ -118,3 +118,24 @@ fn postgres_dml_target_alias_hides_the_original_relation_name() {
         vec![vec![SqlValue::Int(2)]],
     );
 }
+
+#[test]
+fn quoted_dml_target_alias_can_match_the_original_relation_name() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(r#"CREATE TABLE "Target"(id int); INSERT INTO "Target" VALUES (1)"#)
+        .unwrap();
+    assert_eq!(
+        session
+            .execute(r#"UPDATE "Target" AS "Target" SET id = (SELECT "Target".id + 1) RETURNING "Target".id"#)
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(2)]],
+    );
+    let error = session
+        .execute(r#"DELETE FROM "Target" AS "Target" WHERE public."Target".id = 2"#)
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42P01");
+}

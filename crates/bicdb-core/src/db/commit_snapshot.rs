@@ -1779,6 +1779,15 @@ impl BicDb {
                 format::ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG.into()
             ])?;
         }
+        if definition
+            .predicate
+            .as_ref()
+            .is_some_and(IndexPredicate::uses_like)
+        {
+            self.install_replicated_reader_features(&[
+                format::SQL_LIKE_INDEX_PREDICATE_FEATURE_FLAG.into(),
+            ])?;
+        }
         if decimal_predicate::affected(definition) {
             if let Err(error) = format::enable_decimal_predicate_comparison_v1(&self.path) {
                 self.fence_durability("decimal_predicate.format_fence", &error);

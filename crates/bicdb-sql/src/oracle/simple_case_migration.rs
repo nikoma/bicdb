@@ -70,7 +70,9 @@ fn convert_predicate(schema: Option<&TableSchema>, predicate: &mut IndexPredicat
     match predicate {
         IndexPredicate::Field { field } => convert_field(schema, field),
         IndexPredicate::Literal { .. } => {}
-        IndexPredicate::Unary { value, .. } => convert_predicate(schema, value),
+        IndexPredicate::Unary { value, .. } | IndexPredicate::Like { value, .. } => {
+            convert_predicate(schema, value)
+        }
         IndexPredicate::Binary { left, right, .. } => {
             convert_predicate(schema, left);
             convert_predicate(schema, right);

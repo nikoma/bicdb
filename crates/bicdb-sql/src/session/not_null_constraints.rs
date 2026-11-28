@@ -19,6 +19,69 @@ pub(crate) struct NotNullSpec {
     pub(crate) not_valid: bool,
 }
 
+thread_local! {
+    static CREATE_NO_INHERIT: RefCell<Vec<(String, Vec<String>)>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Preserve NO INHERIT through the raw rewrite so inherited constraints
+/// can be checked before CREATE publishes the relation.
+pub(super) struct CreateNoInheritScope(bool);
+
+impl CreateNoInheritScope {
+    pub(super) fn enter(relation: &str, columns: Vec<String>) -> Self {
+        if columns.is_empty() {
+            return Self(false);
+        }
+        CREATE_NO_INHERIT.with(|active| {
+            active.borrow_mut().push((relation.to_string(), columns));
+        });
+        Self(true)
+    }
+}
+
+impl Drop for CreateNoInheritScope {
+    fn drop(&mut self) {
+        if self.0 {
+            CREATE_NO_INHERIT.with(|active| active.borrow_mut().pop());
+        }
+    }
+}
+
+pub(super) fn validate_created_no_inherit(
+    name: &ObjectName,
+    parents: &[TableSchema],
+) -> Result<()> {
+    CREATE_NO_INHERIT.with(|active| {
+        let active = active.borrow();
+        if active.is_empty() {
+            return Ok(());
+        }
+        let relation = relation_name(name)?;
+        for column in active
+            .iter()
+            .filter(|(table, _)| *table == relation)
+            .flat_map(|(_, columns)| columns)
+        {
+            if parents
+                .iter()
+                .any(|parent| inheritable_not_null(parent, column))
+            {
+                return Err(no_inherit_conflicts_with_parent(column));
+            }
+        }
+        Ok(())
+    })
+}
+
+fn no_inherit_conflicts_with_parent(column: &str) -> SqlError {
+    SqlError::coded(
+        "42804",
+        format!("cannot define not-null constraint with NO INHERIT on column \"{column}\""),
+        Some("The column has an inherited not-null constraint.".into()),
+        None,
+    )
+}
+
 #[derive(Debug, PartialEq)]
 pub(crate) enum NotNullDdl {
     /// `CREATE TABLE` with the not-null table constraints removed.
@@ -477,16 +540,25 @@ impl<'a> SqlSession<'a> {
         };
         match ddl {
             NotNullDdl::Create { sql, table, specs } => {
+                let relation = relation_name_from_parts(&sql_identifier_parts(&table)?)?;
                 let existed = load_schema(
                     self.db_ref(),
-                    &resolve_session_relation_name_if_exists(self.db_ref(), &table),
+                    &resolve_session_relation_name_if_exists(self.db_ref(), &relation),
                 )?
                 .is_some();
-                let result = self.execute_inner(&sql)?;
+                let no_inherit = specs
+                    .iter()
+                    .filter(|spec| spec.no_inherit)
+                    .map(|spec| spec.column.clone())
+                    .collect();
+                let result = {
+                    let _scope = CreateNoInheritScope::enter(&relation, no_inherit);
+                    self.execute_inner(&sql)?
+                };
                 if existed {
                     return Ok(Some(result));
                 }
-                if let Err(error) = self.apply_created_not_null(&table, specs) {
+                if let Err(error) = self.apply_created_not_null(&relation, specs) {
                     if self.tx.is_none() {
                         let _ = self.execute_inner(&format!("DROP TABLE {table}"));
                     }
@@ -546,17 +618,7 @@ impl<'a> SqlSession<'a> {
                     ));
                 }
                 if !inherited_not_null_parents(&schemas, &schema, &spec.column).is_empty() {
-                    return Err(SqlError::with_detail(
-                        SqlError::data_exception_public(
-                            "42804",
-                            format!(
-                                "cannot define not-null constraint with NO INHERIT on column \"{}\"",
-                                spec.column
-                            ),
-                            None,
-                        ),
-                        "The column has an inherited not-null constraint.",
-                    ));
+                    return Err(no_inherit_conflicts_with_parent(&spec.column));
                 }
             }
             let column = &mut schema.columns[index];

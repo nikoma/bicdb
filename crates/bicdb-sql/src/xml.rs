@@ -1,7 +1,11 @@
+pub(crate) mod schema_mapping;
+#[rustfmt::skip]
+mod xpath;
+
+use self::xpath::{nodeset::Node, Context, Factory, Value as XPathValue, XPath};
 use serde_json::Value as JsonValue;
 use std::collections::BTreeMap;
 use sxd_document::{dom, parser};
-use sxd_xpath::{nodeset::Node, Context, Factory, Value as XPathValue, XPath};
 
 use crate::{Result, SqlError, SqlValue};
 
@@ -46,8 +50,25 @@ struct XmlDoctype {
 }
 
 fn xml_doctype(value: &str) -> Result<Option<XmlDoctype>> {
-    let Some(start) = value.find("<!DOCTYPE") else {
-        return Ok(None);
+    // A DTD can appear only in the prolog, outside comments and processing
+    // instructions. Identical characters inside XML content are ordinary text.
+    let mut prolog = value.trim_start_matches('\u{feff}');
+    let start = loop {
+        prolog = prolog.trim_start_matches([' ', '\t', '\r', '\n']);
+        if prolog.starts_with("<!DOCTYPE") {
+            break value.len() - prolog.len();
+        }
+        let (skip, terminator) = if prolog.starts_with("<!--") {
+            (4, "-->")
+        } else if prolog.starts_with("<?") {
+            (2, "?>")
+        } else {
+            return Ok(None);
+        };
+        let Some(end) = prolog[skip..].find(terminator) else {
+            return Ok(None);
+        };
+        prolog = &prolog[skip + end + terminator.len()..];
     };
     let bytes = value.as_bytes();
     let mut quote = None;
@@ -196,7 +217,12 @@ fn expand_xml_entities(
 }
 
 fn xml_for_parser(value: &str) -> Result<String> {
-    let Some(doctype) = xml_doctype(value)? else {
+    let doctype = xml_doctype(value)?;
+    xml_for_parser_with_doctype(value, doctype.as_ref())
+}
+
+fn xml_for_parser_with_doctype(value: &str, doctype: Option<&XmlDoctype>) -> Result<String> {
+    let Some(doctype) = doctype else {
         return Ok(value.to_string());
     };
     let mut budget = MAX_XML_ENTITY_EXPANSION;
@@ -217,7 +243,10 @@ pub(crate) fn validate_xml(value: &str, document: bool) -> Result<()> {
         parser::parse(&format!("{declaration}<bicdb/>"))
             .map_err(|_| invalid_xml("invalid XML declaration"))?;
     }
-    let prepared = xml_for_parser(value)?;
+    // An explicit DTD describes an XML document even in CONTENT mode.
+    let doctype = xml_doctype(value)?;
+    let document = document || doctype.is_some();
+    let prepared = xml_for_parser_with_doctype(value, doctype.as_ref())?;
     let parsed = if document {
         parser::parse(&prepared)
     } else {
@@ -306,6 +335,34 @@ pub(crate) fn xml_input_value(value: SqlValue) -> Result<SqlValue> {
     parse_xml_value(&value.to_cell(), xml_input_is_document()).map(SqlValue::String)
 }
 
+/// Validate a scalar XML value using the settings at PostgreSQL Bind time.
+pub fn decode_postgres_xml_parameter(bytes: &[u8], binary: bool, document: bool) -> Result<String> {
+    let mut encoding = "UTF8";
+    if binary {
+        // A binary XML declaration determines the encoding. Its attributes
+        // are ASCII, so they can be read before decoding the rest of the value.
+        let header = bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(bytes);
+        if header.starts_with(b"<?xml") {
+            let declared = header
+                .windows(2)
+                .position(|pair| pair == b"?>")
+                .and_then(|end| std::str::from_utf8(&header[..end + 2]).ok())
+                .and_then(xml_declaration)
+                .and_then(|(declaration, _)| xml_declaration_attribute(declaration, "encoding"));
+            if let Some(declared) = declared {
+                encoding = crate::normalized_encoding_name(&SqlValue::String(declared.clone()))
+                    .map_err(|_| {
+                        SqlError::invalid_parameter_value(format!(
+                            "invalid encoding name \"{declared}\""
+                        ))
+                    })?;
+            }
+        }
+    }
+    let value = crate::decode_server_text(bytes, encoding)?;
+    parse_xml_value(&value, document)
+}
+
 pub(crate) fn xml_assignment_value(
     column: &crate::ColumnSchema,
     source: Option<&str>,
@@ -371,6 +428,168 @@ fn xml_name(value: &str) -> Result<&str> {
     Ok(value)
 }
 
+fn map_sql_identifier_to_xml_name(identifier: &str, fully_escaped: bool) -> String {
+    use std::fmt::Write;
+
+    let reserved_prefix = fully_escaped
+        && identifier
+            .get(..3)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("xml"));
+    let mut name = String::with_capacity(identifier.len());
+    let mut characters = identifier.chars().enumerate().peekable();
+    while let Some((index, character)) = characters.next() {
+        let letter = u32::from(character) <= 0xffff && character.is_alphabetic();
+        let valid = match index {
+            0 => letter || character == '_',
+            _ => {
+                letter
+                    || character.is_ascii_digit()
+                    || matches!(character, '.' | '-' | '_' | '\u{00b7}')
+                    || (!fully_escaped && character == ':')
+                    || unicode_normalization::char::is_combining_mark(character)
+            }
+        };
+        let starts_escape =
+            character == '_' && characters.peek().is_some_and(|(_, next)| *next == 'x');
+        if valid && !starts_escape && !(index == 0 && reserved_prefix) {
+            name.push(character);
+        } else {
+            write!(name, "_x{:04X}_", u32::from(character))
+                .expect("writing to a String cannot fail");
+        }
+    }
+    name
+}
+
+/// The constructor rewrite uses a NULL label for an unnamed non-column
+/// expression. Reject it during parsing, including queries over empty inputs.
+pub(crate) fn validate_xml_constructor_names(
+    statements: &[sqlparser::ast::Statement],
+) -> Result<()> {
+    use sqlparser::ast::{
+        Expr, FunctionArg, FunctionArgExpr, FunctionArguments, Value, ValueWithSpan,
+    };
+    use std::ops::ControlFlow;
+
+    let invalid_name = |expression: &Expr| {
+        let Expr::Function(function) = expression else {
+            return ControlFlow::Continue(());
+        };
+        let kind = match function.name.to_string().as_str() {
+            "bicdb_xmlattributes" => "attribute",
+            "bicdb_xmlforest" => "element",
+            _ => return ControlFlow::Continue(()),
+        };
+        let FunctionArguments::List(arguments) = &function.args else {
+            return ControlFlow::Continue(());
+        };
+        if arguments.args.iter().step_by(2).any(|argument| {
+            matches!(
+                argument,
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(ValueWithSpan {
+                    value: Value::Null,
+                    ..
+                })))
+            )
+        }) {
+            ControlFlow::Break(kind)
+        } else {
+            ControlFlow::Continue(())
+        }
+    };
+    for statement in statements {
+        if let ControlFlow::Break(kind) = sqlparser::ast::visit_expressions(statement, invalid_name)
+        {
+            return Err(SqlError::data_exception_public(
+                "42601",
+                format!("unnamed XML {kind} value must be a column reference"),
+                None,
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Validate XMLTABLE's projected aliases before evaluating XPath or reading rows.
+pub(crate) fn validate_xmltable_aliases(statements: &[sqlparser::ast::Statement]) -> Result<()> {
+    use sqlparser::ast::{
+        Expr, FunctionArg, FunctionArgExpr, SelectItem, TableFactor, Visit, Visitor,
+    };
+    use std::ops::ControlFlow;
+
+    // The SQL/XML rewrite keeps the typed XMLTABLE columns on the inner
+    // jsonb_to_recordset call and applies the authored aliases to its wrapper.
+    fn xmltable_columns(source: &TableFactor) -> Option<(usize, usize)> {
+        let TableFactor::Derived {
+            subquery,
+            alias: Some(alias),
+            ..
+        } = source
+        else {
+            return None;
+        };
+        if alias.columns.is_empty() {
+            return None;
+        }
+        let select = subquery.body.as_select()?;
+        let [SelectItem::Wildcard(_)] = select.projection.as_slice() else {
+            return None;
+        };
+        let [from] = select.from.as_slice() else {
+            return None;
+        };
+        let TableFactor::Table {
+            name,
+            args: Some(arguments),
+            alias: Some(inner_alias),
+            ..
+        } = &from.relation
+        else {
+            return None;
+        };
+        if !from.joins.is_empty()
+            || name.to_string() != "jsonb_to_recordset"
+            || inner_alias.name.value != "xmltable"
+        {
+            return None;
+        }
+        let [FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Function(call)))] =
+            arguments.args.as_slice()
+        else {
+            return None;
+        };
+        (call.name.to_string() == "bicdb_xmltable_json")
+            .then_some((inner_alias.columns.len(), alias.columns.len()))
+    }
+
+    struct XmlTableAliases;
+    impl Visitor for XmlTableAliases {
+        type Break = (usize, usize);
+
+        fn pre_visit_table_factor(&mut self, factor: &TableFactor) -> ControlFlow<Self::Break> {
+            if let Some((available, specified)) = xmltable_columns(factor) {
+                if specified > available {
+                    return ControlFlow::Break((available, specified));
+                }
+            }
+            ControlFlow::Continue(())
+        }
+    }
+
+    for statement in statements {
+        if let ControlFlow::Break((available, specified)) = statement.visit(&mut XmlTableAliases) {
+            return Err(SqlError::data_exception_public(
+                "42P10",
+                format!(
+                    "XMLTABLE function has {available} columns available but {specified} columns specified"
+                ),
+                None,
+            ));
+        }
+    }
+    Ok(())
+}
+
 const XML_ATTRIBUTES_MARKER: &str = "\0bicdb:xmlattributes:";
 
 thread_local! {
@@ -406,8 +625,47 @@ impl Drop for XmlSettingsScope {
 }
 
 fn xml_scalar_text(value: &SqlValue, pg_type: Option<&str>) -> Result<String> {
-    if pg_type != Some("bytea") {
-        return Ok(xml_text(value));
+    if let Some(element_type) = pg_type.and_then(|kind| kind.strip_suffix("[]")) {
+        let decoded;
+        let value = if let (SqlValue::String(_), Some(pg_type)) = (value, pg_type) {
+            decoded = crate::cast_value_to_pg_type(value.clone(), pg_type)?;
+            &decoded
+        } else {
+            value
+        };
+        let Some((array, _)) = crate::array_json_parts(value, "SQL/XML")? else {
+            return Ok(String::new());
+        };
+        let mut elements = Vec::new();
+        crate::flatten_array_json(array, &mut elements);
+        let mut output = String::new();
+        for element in elements.into_iter().filter(|element| !element.is_null()) {
+            let element = crate::json_to_sql_value(element);
+            output.push_str("<element>");
+            output.push_str(&xml_content(&element, Some(element_type))?);
+            output.push_str("</element>");
+        }
+        return Ok(output);
+    }
+    match pg_type {
+        Some("bool") => {
+            let value = crate::sql_value_bool(value)
+                .ok_or_else(|| SqlError::InvalidSql("expected a boolean XML value".into()))?;
+            return Ok(value.to_string());
+        }
+        Some("date") => {
+            let value = crate::PgDate::from_postgres_text(&xml_text(value))
+                .map_err(|_| xml_datetime_out_of_range("date", false))?;
+            if value.epoch_days().is_none() {
+                return Err(xml_datetime_out_of_range("date", true));
+            }
+            return Ok(value.to_iso_text());
+        }
+        Some("timestamp" | "timestamptz") => {
+            return xml_timestamp(value, pg_type == Some("timestamptz"))
+        }
+        Some("bytea") => {}
+        _ => return Ok(xml_text(value)),
     }
     use base64::Engine;
     let bytes = crate::bytea_argument(value)?.unwrap_or_default();
@@ -418,13 +676,44 @@ fn xml_scalar_text(value: &SqlValue, pg_type: Option<&str>) -> Result<String> {
     })
 }
 
+fn xml_datetime_out_of_range(kind: &str, infinite: bool) -> SqlError {
+    SqlError::coded(
+        "22008",
+        format!("{kind} out of range"),
+        infinite.then(|| format!("XML does not support infinite {kind} values.")),
+        None,
+    )
+}
+
+fn xml_timestamp(value: &SqlValue, with_timezone: bool) -> Result<String> {
+    let timestamp = crate::PgTimestamp::from_postgres_text(&xml_text(value), with_timezone)
+        .map_err(|_| xml_datetime_out_of_range("timestamp", false))?;
+    if timestamp.finite_micros().is_none() {
+        return Err(xml_datetime_out_of_range("timestamp", true));
+    }
+    if !with_timezone {
+        return Ok(timestamp.to_iso_text(false).replacen(' ', "T", 1));
+    }
+    let mut text = crate::render_timestamptz(timestamp).replacen(' ', "T", 1);
+    let offset_end = text.strip_suffix(" BC").unwrap_or(&text).len();
+    if text[..offset_end]
+        .rfind(['+', '-'])
+        .is_some_and(|offset| offset_end - offset == 3)
+    {
+        text.insert_str(offset_end, ":00");
+    }
+    Ok(text)
+}
+
 fn xml_content(value: &SqlValue, pg_type: Option<&str>) -> Result<String> {
     let text = xml_scalar_text(value, pg_type)?;
-    Ok(if pg_type == Some("xml") {
-        text
-    } else {
-        escape_text(&text)
-    })
+    Ok(
+        if pg_type == Some("xml") || crate::is_array_pg_type(pg_type) {
+            text
+        } else {
+            escape_text(&text).replace('\r', "&#x0d;")
+        },
+    )
 }
 
 /// Nesting cap for XML documents and XPath expressions.
@@ -632,40 +921,75 @@ fn serialize_child(
     }
 }
 
-fn indent_xml_content(value: &str) -> Result<String> {
-    check_nesting_budget_for_document(value)?;
-    let prepared = xml_for_parser(value)?;
-    let content = strip_declaration(&prepared);
-    let package = parser::parse(&wrapped_content(&prepared)).map_err(invalid_xml)?;
-    let document = package.as_document();
-    let root = document
+fn wrapped_xml_children(package: &sxd_document::Package) -> Vec<dom::ChildOfElement<'_>> {
+    package
+        .as_document()
         .root()
         .children()
         .into_iter()
         .find_map(dom::ChildOfRoot::element)
-        .expect("wrapped XML has one enclosing element");
-    let children = root.children();
-    if children.iter().all(|child| matches!(child, dom::ChildOfElement::Text(_)))
-        || children.iter().any(|child| {
-            matches!(child, dom::ChildOfElement::Text(text) if !text.text().trim().is_empty())
-        })
-    {
-        return Ok(content.to_owned());
-    }
+        .expect("wrapped XML has one enclosing element")
+        .children()
+}
+
+fn indent_xml_content(value: &str, document: bool) -> Result<String> {
+    check_nesting_budget_for_document(value)?;
+    let doctype = xml_doctype(value)?;
+    let prepared = xml_for_parser_with_doctype(value, doctype.as_ref())?;
+    let package = parser::parse(&wrapped_content(&prepared)).map_err(invalid_xml)?;
+    let children = wrapped_xml_children(&package);
+    let mixed = children.iter().any(
+        |child| matches!(child, dom::ChildOfElement::Text(text) if !text.text().trim().is_empty()),
+    );
+    let doctype_after = if let Some(doctype) = &doctype {
+        let prefix =
+            parser::parse(&wrapped_content(&value[..doctype.start])).map_err(invalid_xml)?;
+        Some(
+            wrapped_xml_children(&prefix)
+                .iter()
+                .filter(|child| !matches!(child, dom::ChildOfElement::Text(_)))
+                .count(),
+        )
+    } else {
+        None
+    };
+
     let mut output = String::new();
+    if let Some((declaration, _)) = xml_declaration(value).filter(|_| document) {
+        let version =
+            xml_declaration_attribute(declaration, "version").unwrap_or_else(|| "1.0".into());
+        output = format!("<?xml version=\"{version}\" encoding=\"UTF-8\"");
+        if let Some(standalone) = xml_declaration_attribute(declaration, "standalone") {
+            output.push_str(&format!(" standalone=\"{standalone}\""));
+        }
+        output.push_str("?>");
+    }
     let namespaces = BTreeMap::new();
     let last = children.len().saturating_sub(1);
+    let mut markup = 0;
     for (index, child) in children.into_iter().enumerate() {
-        if let dom::ChildOfElement::Text(text) = child {
-            if index == last {
-                output.push_str(&text.text());
+        if matches!(child, dom::ChildOfElement::Text(_)) {
+            if mixed || (index == last && !document && doctype.is_none()) {
+                serialize_child(child, &namespaces, &mut output, None);
             }
             continue;
+        }
+        if let Some(doctype) = &doctype {
+            if doctype_after == Some(markup) {
+                if !output.is_empty() {
+                    output.push('\n');
+                }
+                output.push_str(&value[doctype.start..doctype.end]);
+            }
         }
         if !output.is_empty() {
             output.push('\n');
         }
         serialize_child(child, &namespaces, &mut output, Some(0));
+        markup += 1;
+    }
+    if !document && doctype.is_some() {
+        output.push('\n');
     }
     Ok(output)
 }
@@ -741,7 +1065,7 @@ fn xml_serialize(
         validate_xml(&value, false)?;
     }
     let value = if matches!(args.get(1), Some(SqlValue::Bool(true))) {
-        indent_xml_content(&value)?
+        indent_xml_content(&value, document)?
     } else {
         normalize_validated_xml(&value)
     };
@@ -793,11 +1117,9 @@ fn xpath_results(
     expression: &str,
     namespaces: Option<&JsonValue>,
 ) -> Result<Vec<String>> {
-    let package = parse_xpath_document(xml)?;
-    let document = package.as_document();
-    let xpath = compile_xpath(expression)?;
+    let (package, xpath) = parse_xpath_input(xml, expression)?;
     let context = xpath_context(namespaces);
-    let value = evaluate_xpath(&xpath, &context, document.root().into())?;
+    let value = evaluate_xpath(&xpath, &context, package.as_document().root().into())?;
     Ok(match value {
         XPathValue::Nodeset(nodes) => nodes
             .document_order()
@@ -808,10 +1130,30 @@ fn xpath_results(
     })
 }
 
+fn parse_xpath_input(xml: &str, expression: &str) -> Result<(sxd_document::Package, XPath)> {
+    // PostgreSQL checks an empty expression first. Other syntax errors
+    // follow XML document validation.
+    require_xpath_expression(expression, "empty XPath expression")?;
+    let package = parse_xpath_document(xml)?;
+    Ok((package, compile_xpath(expression)?))
+}
+
+fn require_xpath_expression(expression: &str, message: &'static str) -> Result<()> {
+    if expression.is_empty() {
+        return Err(SqlError::data_exception_public("10608", message, None));
+    }
+    Ok(())
+}
+
 fn compile_xpath(expression: &str) -> Result<XPath> {
     check_nesting_budget(expression, &['(', '['], &[')', ']'], "XPath expression")?;
-    Factory::new().build(expression).map_err(|error| {
-        SqlError::invalid_parameter_value(format!("invalid XPath expression: {error}"))
+    Factory::new().build(expression).map_err(|_| {
+        SqlError::coded(
+            "10608",
+            "invalid XPath expression",
+            Some("Invalid expression".to_string()),
+            None,
+        )
     })
 }
 
@@ -826,6 +1168,9 @@ fn xpath_context<'d>(namespaces: Option<&JsonValue>) -> Context<'d> {
             }
         }
     }
+    // XML fixes this prefix to the standard namespace, even if the
+    // requested mappings supplied a different URI for it.
+    context.set_namespace("xml", "http://www.w3.org/XML/1998/namespace");
     context
 }
 
@@ -835,6 +1180,14 @@ fn evaluate_xpath<'d>(
     node: Node<'d>,
 ) -> Result<XPathValue<'d>> {
     xpath.evaluate(context, node).map_err(|error| {
+        if error.undefined_node_namespace() {
+            return SqlError::coded(
+                "10608",
+                "could not create XPath object",
+                Some("Undefined namespace prefix".to_string()),
+                None,
+            );
+        }
         SqlError::invalid_parameter_value(format!("XPath evaluation failed: {error}"))
     })
 }
@@ -888,6 +1241,7 @@ fn xml_table_columns<'a>(
                 Some(path) => path.to_cell(),
                 None => name.to_owned(),
             };
+            require_xpath_expression(&path, "column path filter must not be empty string")?;
             Some(compile_xpath(&path)?)
         };
         columns.push(XmlTableColumn {
@@ -957,6 +1311,7 @@ fn xml_table_rows(args: &[SqlValue]) -> Result<SqlValue> {
     }
     let document = xml_text(&args[0]);
     let row_path = xml_text(&args[1]);
+    require_xpath_expression(&row_path, "row path filter must not be empty string")?;
     let spec_json = match &args[2] {
         SqlValue::Json(value) => value.as_ref().clone(),
         value => serde_json::from_str::<JsonValue>(&value.to_cell())?,
@@ -1149,8 +1504,17 @@ pub(crate) fn eval_xml_function_value(
         }
         "bicdb_xmlattributes" => {
             let mut attributes = Vec::new();
+            let mut names = std::collections::BTreeSet::new();
             for (pair_index, pair) in args.chunks(2).enumerate() {
                 if let [name, value] = pair {
+                    let name = xml_text(name);
+                    if !names.insert(name.clone()) {
+                        return Err(SqlError::data_exception_public(
+                            "42601",
+                            format!("XML attribute name \"{name}\" appears more than once"),
+                            None,
+                        ));
+                    }
                     if matches!(value, SqlValue::Null) {
                         continue;
                     }
@@ -1158,7 +1522,7 @@ pub(crate) fn eval_xml_function_value(
                         .and_then(|types| types.get(pair_index * 2 + 1))
                         .and_then(Option::as_deref);
                     attributes.push(JsonValue::Array(vec![
-                        JsonValue::String(xml_name(&xml_text(name))?.to_string()),
+                        JsonValue::String(map_sql_identifier_to_xml_name(&name, false)),
                         JsonValue::String(xml_scalar_text(value, value_type)?),
                     ]));
                 }
@@ -1175,8 +1539,7 @@ pub(crate) fn eval_xml_function_value(
                     if matches!(value, SqlValue::Null) {
                         continue;
                     }
-                    let name_text = xml_text(name);
-                    let name = xml_name(&name_text)?;
+                    let name = map_sql_identifier_to_xml_name(&xml_text(name), false);
                     let value_type = arg_types
                         .and_then(|types| types.get(pair_index * 2 + 1))
                         .and_then(Option::as_deref);
@@ -1194,8 +1557,7 @@ pub(crate) fn eval_xml_function_value(
                     "XMLELEMENT requires a name",
                 ));
             };
-            let name_text = xml_text(first);
-            let name = xml_name(&name_text)?;
+            let name = map_sql_identifier_to_xml_name(&xml_text(first), false);
             let mut attributes = String::new();
             let mut content = String::new();
             for (index, value) in args[1..].iter().enumerate() {
@@ -1235,8 +1597,7 @@ pub(crate) fn eval_xml_function_value(
             let Some(first) = args.first() else {
                 return Err(SqlError::invalid_parameter_value("XMLPI requires a name"));
             };
-            let name_text = xml_text(first);
-            let name = xml_name(&name_text)?;
+            let name = map_sql_identifier_to_xml_name(&xml_text(first), false);
             if name.eq_ignore_ascii_case("xml") {
                 return Err(SqlError::coded(
                     "2200T",
@@ -1369,7 +1730,12 @@ pub(crate) fn eval_xml_function_value(
                 });
                 SqlValue::Json(
                     JsonValue::Array(
-                        xpath_results(&xml_text(&args[1]), &xml_text(&args[0]), namespaces)?
+                        xpath_results(&xml_text(&args[1]), &xml_text(&args[0]), namespaces)
+                            .map_err(|error| {
+                                error.with_context_line(
+                                    "SQL function \"xpath\" statement 1".to_string(),
+                                )
+                            })?
                             .into_iter()
                             .map(JsonValue::String)
                             .collect(),
@@ -1386,41 +1752,25 @@ pub(crate) fn eval_xml_function_value(
                     SqlValue::Json(value) => Some(&**value),
                     _ => None,
                 });
-                let package = parse_xpath_document(&xml_text(&args[1]))?;
-                let document = package.as_document();
-                let expression_text = xml_text(&args[0]);
-                if expression_text.is_empty() {
-                    return Err(SqlError::data_exception_public(
-                        "10608",
-                        "empty XPath expression",
-                        None,
-                    ));
-                }
-                check_nesting_budget(
-                    &expression_text,
-                    &['(', '['],
-                    &[')', ']'],
-                    "XPath expression",
-                )?;
-                let xpath = Factory::new().build(&expression_text).map_err(|error| {
-                    SqlError::invalid_parameter_value(format!("invalid XPath expression: {error}"))
-                })?;
-                let mut context = Context::new();
-                if let Some(JsonValue::Array(entries)) = namespaces {
-                    for entry in entries {
-                        if let Some(pair) = entry.as_array() {
-                            if let [JsonValue::String(prefix), JsonValue::String(uri)] =
-                                pair.as_slice()
-                            {
-                                context.set_namespace(prefix, uri);
-                            }
-                        }
+                let result = (|| {
+                    let xml = xml_text(&args[1]);
+                    let expression = xml_text(&args[0]);
+                    let (package, xpath) = parse_xpath_input(&xml, &expression)?;
+                    let context = xpath_context(namespaces);
+                    let result =
+                        evaluate_xpath(&xpath, &context, package.as_document().root().into())?;
+                    Ok(!matches!(result, XPathValue::Nodeset(nodes) if nodes.size() == 0))
+                })()
+                .map_err(|error: SqlError| {
+                    if name == "xpath_exists" {
+                        error.with_context_line(
+                            "SQL function \"xpath_exists\" statement 1".to_string(),
+                        )
+                    } else {
+                        error
                     }
-                }
-                let result = xpath.evaluate(&context, document.root()).map_err(|error| {
-                    SqlError::invalid_parameter_value(format!("XPath evaluation failed: {error}"))
                 })?;
-                SqlValue::Bool(!matches!(result, XPathValue::Nodeset(nodes) if nodes.size() == 0))
+                SqlValue::Bool(result)
             }
         }
         "bicdb_xmltable_json" => return xml_table_rows(args).map(Some),
@@ -1449,6 +1799,72 @@ pub(crate) fn eval_xml_function_value(
     Ok(Some(value))
 }
 
+pub(crate) fn map_query_rows(
+    result: &crate::SqlResult,
+    document_name: &str,
+    row_name: &str,
+    nulls: bool,
+    forest: bool,
+    namespace: Option<&str>,
+    check_cancellation: impl Fn() -> Result<()>,
+) -> Result<String> {
+    use std::fmt::Write as _;
+
+    let row_name = map_sql_identifier_to_xml_name(row_name, true);
+    let columns = result
+        .columns
+        .iter()
+        .map(|label| map_sql_identifier_to_xml_name(label, true))
+        .collect::<Vec<_>>();
+    let attributes = xml_mapping_attributes(namespace);
+    let mut output = String::new();
+    for (index, row) in result.rows.iter().enumerate() {
+        if index % 1024 == 0 {
+            check_cancellation()?;
+        }
+        let row_attributes = if forest { attributes.as_str() } else { "" };
+        writeln!(output, "<{row_name}{row_attributes}>").unwrap();
+        for (index, (value, column)) in row.iter().zip(&columns).enumerate() {
+            if matches!(value, SqlValue::Null) {
+                if nulls {
+                    writeln!(output, "  <{column} xsi:nil=\"true\"/>").unwrap();
+                }
+            } else {
+                let pg_type = result.column_types.get(index).and_then(Option::as_deref);
+                let content = xml_content(value, pg_type)?;
+                writeln!(output, "  <{column}>{content}</{column}>").unwrap();
+            }
+        }
+        write!(output, "</{row_name}>\n\n").unwrap();
+    }
+    if forest {
+        Ok(output)
+    } else {
+        Ok(wrap_xml_mapping(&output, document_name, namespace))
+    }
+}
+
+fn xml_mapping_attributes(namespace: Option<&str>) -> String {
+    let Some(namespace) = namespace else {
+        return String::new();
+    };
+    let mut attributes = " xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"".to_string();
+    if !namespace.is_empty() {
+        attributes.push_str(&format!(" xmlns=\"{namespace}\""));
+    }
+    attributes
+}
+
+pub(crate) fn wrap_xml_mapping(
+    contents: &str,
+    document_name: &str,
+    namespace: Option<&str>,
+) -> String {
+    let document = map_sql_identifier_to_xml_name(document_name, true);
+    let attributes = xml_mapping_attributes(namespace);
+    format!("<{document}{attributes}>\n\n{contents}</{document}>\n")
+}
+
 pub(crate) fn xml_function_pg_type(name: &str) -> Option<&'static str> {
     let name = name
         .rsplit('.')
@@ -1469,6 +1885,16 @@ pub(crate) fn xml_function_pg_type(name: &str) -> Option<&'static str> {
         "xml_send" => Some("bytea"),
         "xml_out" => Some("cstring"),
         "xmlconcat"
+        | "table_to_xml"
+        | "query_to_xml"
+        | "table_to_xmlschema"
+        | "query_to_xmlschema"
+        | "cursor_to_xmlschema"
+        | "schema_to_xml"
+        | "schema_to_xmlschema"
+        | "cursor_to_xml"
+        | "database_to_xml"
+        | "database_to_xmlschema"
         | "xmlcomment"
         | "xmltext"
         | "xml_in"

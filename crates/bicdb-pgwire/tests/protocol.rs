@@ -14897,6 +14897,7 @@ fn partial_conflict_predicate_preserves_parameter_types_and_describe_is_read_onl
     for sql in [
         direct.clone(),
         format!("PREPARE rejected_sql_carrier AS {carrier}"),
+        format!("PREPARE rejected_constant_carrier AS {direct}"),
         format!(
             "CREATE FUNCTION rejected_atomic_carrier() RETURNS int LANGUAGE SQL
                  BEGIN ATOMIC {direct} RETURNING b; END"
@@ -14906,6 +14907,10 @@ fn partial_conflict_predicate_preserves_parameter_types_and_describe_is_read_onl
         let (error, _) = read_error_response_with_status(&mut client);
         assert!(error.contains("42601"), "{error}");
     }
+
+    send_query(&mut client, "EXECUTE rejected_constant_carrier");
+    let (error, _) = read_error_response_with_status(&mut client);
+    assert!(error.contains("26000"), "{error}");
 
     send_parse(
         &mut client,

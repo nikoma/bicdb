@@ -7,8 +7,8 @@ publish = false
 
 [dependencies]
 axum.workspace = true
-bicdb-core = { path = "../../../crates/bicdb-core", version = "1.0.596" }
-bicdb-extension = { path = "../../../crates/bicdb-extension", version = "1.0.596", features = ["http"] }
-bicdb-sql = { path = "../../../crates/bicdb-sql", version = "1.0.596" }
+bicdb-core = { path = "../../../crates/bicdb-core", version = "1.0.699" }
+bicdb-extension = { path = "../../../crates/bicdb-extension", version = "1.0.699", features = ["http"] }
+bicdb-sql = { path = "../../../crates/bicdb-sql", version = "1.0.699" }
 serde_json.workspace = true
 tokio.workspace = true

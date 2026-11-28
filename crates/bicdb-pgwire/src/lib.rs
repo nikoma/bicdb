@@ -4391,12 +4391,19 @@ fn execute_sql_prepared_statement_query(
                 .iter()
                 .map(|data_type| require_type_oid(&data_type.to_string()))
                 .collect::<Result<Vec<_>>>()?;
+            // Validate the original PostgreSQL body before any AST rendering
+            // could reinterpret user-written syntax as an internal rewrite.
+            let source = if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile) {
+                None
+            } else {
+                parse_raw_sql_prepare(sql)?.map(|(_, _, source)| source)
+            };
             register_sql_prepared_statement(
                 server,
                 state,
                 name,
                 param_type_oids,
-                bicdb_sql::sql_text::sql_text(&*statement),
+                source.unwrap_or_else(|| bicdb_sql::sql_text::sql_text(&*statement)),
             )?;
             Ok(Some(SqlPreparedStatementResult {
                 result: SqlResult::command("PREPARE"),
@@ -4494,23 +4501,21 @@ fn register_sql_prepared_statement(
                 None,
             )));
         }
-        if sql.contains('$') {
-            let db = server.read_db_for_transaction_progress()?;
-            let _catalog_owner = db.enter_catalog_read_access(state.tx.as_ref())?;
-            let temp_schema = bicdb_sql::temp_schema_for_backend(
-                i32::try_from(state.connection_id).unwrap_or(i32::MAX),
-            );
-            let inferred = state.catalog_cache.with_schema_cache(&db, || {
-                let bound = bicdb_sql::search_path::bind_session_sql_with_temp(
-                    &db,
-                    &sql,
-                    state.session_state.session_gucs(),
-                    Some(&temp_schema),
-                )?;
-                infer_parameter_types(&db, bound.as_deref().unwrap_or(&sql))
-            })?;
-            param_type_oids = resolve_parameter_type_oids(&db, param_type_oids, inferred)?;
-        }
+        let db = server.read_db_for_transaction_progress()?;
+        let _catalog_owner = db.enter_catalog_read_access(state.tx.as_ref())?;
+        let temp_schema = bicdb_sql::temp_schema_for_backend(
+            i32::try_from(state.connection_id).unwrap_or(i32::MAX),
+        );
+        let inferred = state.catalog_cache.with_schema_cache(&db, || {
+            let bound = bicdb_sql::search_path::bind_session_sql_with_temp(
+                &db,
+                &sql,
+                state.session_state.session_gucs(),
+                Some(&temp_schema),
+            )?;
+            infer_parameter_types(&db, bound.as_deref().unwrap_or(&sql))
+        })?;
+        param_type_oids = resolve_parameter_type_oids(&db, param_type_oids, inferred)?;
     }
     state.prepared.insert(
         name,

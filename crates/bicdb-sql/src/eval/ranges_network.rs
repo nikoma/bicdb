@@ -2060,7 +2060,7 @@ fn postgres_numeric_unary_value(
     })?;
     if *op == UnaryOperator::PGAbs {
         let value = if matches!(operand, None | Some("unknown")) {
-            cast_value_to_pg_type(value, result_type)?
+            cast_value_to_pg_type(value, result_type).map_err(numeric_operator_error)?
         } else {
             value
         };
@@ -2069,9 +2069,12 @@ fn postgres_numeric_unary_value(
             &[value],
             Some(&[Some(result_type.to_owned())]),
         )
-        .map(|result| result.expect("abs is implemented for numeric input"));
+        .map(|result| result.expect("abs is implemented for numeric input"))
+        .map_err(numeric_operator_error);
     }
-    let SqlValue::Float(value) = cast_value_to_pg_type(value, "float8")? else {
+    let SqlValue::Float(value) =
+        cast_value_to_pg_type(value, "float8").map_err(numeric_operator_error)?
+    else {
         unreachable!("non-null double precision cast returns a float");
     };
     let result = if *op == UnaryOperator::PGSquareRoot {
@@ -2087,6 +2090,17 @@ fn postgres_numeric_unary_value(
         value.cbrt()
     };
     Ok(SqlValue::Float(result))
+}
+
+// PostgreSQL's numeric operators report these input and range errors without
+// a protocol datatype field. Preserve the shared helpers' message and SQLSTATE.
+fn numeric_operator_error(error: SqlError) -> SqlError {
+    match error {
+        SqlError::DataException {
+            sqlstate, message, ..
+        } => SqlError::data_exception(sqlstate, message, None),
+        other => other,
+    }
 }
 
 pub(crate) fn eval_unary_bit_not_expr_value(

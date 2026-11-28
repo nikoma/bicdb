@@ -51,3 +51,58 @@ fn numeric_logarithms_keep_decimal_precision_and_compose_with_power() {
         );
     }
 }
+
+#[test]
+fn values_coerces_unknown_rows_before_numeric_functions_consume_them() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut sql = SqlSession::new(&mut db);
+    let result = sql
+        .execute(
+            "WITH v(x) AS (VALUES ('0'::numeric), ('1'), ('4.2'), ('inf'), ('nan')) \
+             SELECT x, pg_typeof(x), sqrt(x) FROM v",
+        )
+        .unwrap();
+    let actual: Vec<Vec<_>> = result
+        .rows
+        .iter()
+        .map(|row| row.iter().map(|value| value.to_cell()).collect())
+        .collect();
+    assert_eq!(
+        actual,
+        [
+            ["0", "numeric", "0.000000000000000"],
+            ["1", "numeric", "1.000000000000000"],
+            ["4.2", "numeric", "2.049390153191920"],
+            ["Infinity", "numeric", "Infinity"],
+            ["NaN", "numeric", "NaN"],
+        ],
+    );
+    let result = sql
+        .execute(
+            "SELECT sqrt(0.01::numeric), sqrt(10000::numeric), \
+             log10(4.2::numeric), pg_typeof(log10(4)), length(sqrt(1e1000::numeric)::text)",
+        )
+        .unwrap();
+    let cells: Vec<_> = result.rows[0].iter().map(|value| value.to_cell()).collect();
+    assert_eq!(
+        cells,
+        [
+            "0.10000000000000000",
+            "100.0000000000000",
+            "0.6232492903979005",
+            "double precision",
+            "501",
+        ],
+    );
+    for (statement, state) in [
+        ("SELECT sqrt('-Infinity'::numeric)", "2201F"),
+        ("VALUES (1::integer), ('invalid')", "22P02"),
+    ] {
+        assert_eq!(
+            sql.execute(statement).unwrap_err().sqlstate(),
+            state,
+            "{statement}"
+        );
+    }
+}

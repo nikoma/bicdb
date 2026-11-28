@@ -3957,15 +3957,18 @@ pub(crate) fn eval_compatibility_function_value(
             {
                 return super::numeric_power::pg_numeric_power_value(base, exponent).map(Some);
             }
-            ("ln" | "log", [arg])
+            ("ln" | "log" | "log10" | "sqrt", [arg])
                 if arg_types
                     .and_then(|types| types.first())
                     .and_then(Option::as_deref)
                     .map_or_else(|| numeric_operand(arg), |pg_type| pg_type == "numeric") =>
             {
+                if bare_name == "sqrt" {
+                    return super::numeric_power::numeric_sqrt(arg).map(Some);
+                }
                 let base_ten = SqlValue::Int(10);
                 return super::numeric_power::numeric_logarithm(
-                    (bare_name == "log").then_some(&base_ten),
+                    (bare_name != "ln").then_some(&base_ten),
                     arg,
                 )
                 .map(Some);

@@ -920,8 +920,8 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             }
             SqlValue::Float(result)
         }
-        "ln" | "log" => {
-            arity(name, args, 1..=2)?;
+        "ln" | "log" | "log10" => {
+            arity(name, args, 1..=if name == "log" { 2 } else { 1 })?;
             let (base, value) = if args.len() == 2 {
                 (float_arg(name, &args[0])?, float_arg(name, &args[1])?)
             } else {

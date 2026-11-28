@@ -323,6 +323,39 @@ fn special_numeric_power(base: PgNumeric, exponent: PgNumeric) -> Result<SqlValu
     Ok(SqlValue::String(result.to_string()))
 }
 
+pub(super) fn numeric_sqrt(value: &SqlValue) -> Result<SqlValue> {
+    if matches!(value, SqlValue::Null) {
+        return Ok(SqlValue::Null);
+    }
+    let value = pg_numeric_from_sql_value(value.clone())?;
+    if pg_numeric_is_negative(&value) {
+        return Err(power_error("cannot take square root of a negative number"));
+    }
+    if matches!(value, PgNumeric::NaN | PgNumeric::PositiveInfinity) {
+        return Ok(SqlValue::String(value.to_decimal_text()));
+    }
+    let value = decimal_from_pg_numeric(value)?;
+    // PostgreSQL counts the base-10000 weight of the input to select the scale.
+    let weight = if value.mantissa.is_zero() {
+        0
+    } else {
+        (value.mantissa.to_str_radix(10).len() as i64 - 1 - i64::from(value.scale)).div_euclid(4)
+    };
+    let scale = (MIN_SIG_DIGITS - (weight * 2 + 1))
+        .max(i64::from(value.scale))
+        .clamp(0, MAX_DISPLAY_SCALE);
+    // The integer root at one additional decimal place retains the exact
+    // rounding digit. Truncating the radicand leaves its integer root unchanged.
+    let shift = 2 * (scale + 1) - i64::from(value.scale);
+    let radicand = if shift >= 0 {
+        value.mantissa * pow10_bigint(shift as u32)
+    } else {
+        value.mantissa / pow10_bigint((-shift) as u32)
+    };
+    let result = rescale(&radicand.sqrt(), scale + 1, scale);
+    Ok(SqlValue::String(result.format()))
+}
+
 /// PostgreSQL uses the decimal weight of ln(x) to choose its display scale.
 fn ln_weight(value: &Decimal) -> i64 {
     let one = pow10_bigint(value.scale);

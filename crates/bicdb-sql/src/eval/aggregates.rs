@@ -2467,7 +2467,7 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             "log" if argument_nodes.len() == 2 && !oracle::simple_case::enabled() => {
                 return Some("numeric".to_string());
             }
-            "ln" | "log" if !oracle::simple_case::enabled() => {
+            "ln" | "log" | "log10" | "sqrt" if !oracle::simple_case::enabled() => {
                 return Some(float8_or_numeric_result_type(
                     argument_nodes
                         .first()

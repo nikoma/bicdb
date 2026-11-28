@@ -3953,8 +3953,8 @@ impl<'db> SqlEngine<'db> {
                     .collect();
                 Some(power_result_type(types.iter().filter_map(Option::as_deref)))
             }
-            "pow" | "power" | "cbrt" | "exp" | "ln" | "log" | "sqrt" | "ceil" | "ceiling"
-            | "floor" | "degrees" | "radians" => Some(float8_or_numeric_result_type(
+            "pow" | "power" | "cbrt" | "exp" | "ln" | "log" | "log10" | "sqrt" | "ceil"
+            | "ceiling" | "floor" | "degrees" | "radians" => Some(float8_or_numeric_result_type(
                 args.first()
                     .and_then(|arg| self.infer_env_expr_type(arg, env))
                     .as_deref(),

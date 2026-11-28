@@ -6764,6 +6764,45 @@ fn xml_wire_binary_and_copy_paths_validate_and_canonicalize() {
 }
 
 #[test]
+fn xml_xpath_namespace_results_keep_the_xml_array_wire_type() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        bicdb_pgwire::handle_client(stream, path).unwrap();
+    });
+
+    let mut client = TcpStream::connect(address).unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+    send_query(
+        &mut client,
+        r#"SELECT xpath('true() or count(/p:r) > 0','<r/>'),
+                  xpath('false() and count(/p:r) > 0','<r/>'),
+                  xpath('/p:r/text()','<a:r xmlns:a="urn:p">yes</a:r>',ARRAY[['p','urn:p']]),
+                  xpath('//@xml:lang','<r xml:lang="en"/>',ARRAY[['xml','urn:other']]);"#,
+    );
+    let (oids, formats, rows, status) = read_binary_query_result_with_oids(&mut client);
+    assert_eq!(status, b'I');
+    assert_eq!(oids, vec![143; 4]);
+    assert_eq!(formats, vec![0; 4]);
+    assert_eq!(
+        rows,
+        vec![vec![
+            b"{true}".to_vec(),
+            b"{false}".to_vec(),
+            b"{yes}".to_vec(),
+            b"{en}".to_vec(),
+        ]],
+    );
+
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
+}
+
+#[test]
 fn xml_bind_validates_in_the_current_xmloption_and_keeps_its_type() {
     let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

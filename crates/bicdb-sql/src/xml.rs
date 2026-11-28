@@ -1,9 +1,11 @@
 pub(crate) mod schema_mapping;
+#[rustfmt::skip]
+mod xpath;
 
+use self::xpath::{nodeset::Node, Context, Factory, Value as XPathValue, XPath};
 use serde_json::Value as JsonValue;
 use std::collections::BTreeMap;
 use sxd_document::{dom, parser};
-use sxd_xpath::{nodeset::Node, Context, Factory, Value as XPathValue, XPath};
 
 use crate::{Result, SqlError, SqlValue};
 
@@ -501,6 +503,86 @@ pub(crate) fn validate_xml_constructor_names(
             return Err(SqlError::data_exception_public(
                 "42601",
                 format!("unnamed XML {kind} value must be a column reference"),
+                None,
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Validate XMLTABLE's projected aliases before evaluating XPath or reading rows.
+pub(crate) fn validate_xmltable_aliases(statements: &[sqlparser::ast::Statement]) -> Result<()> {
+    use sqlparser::ast::{
+        Expr, FunctionArg, FunctionArgExpr, SelectItem, TableFactor, Visit, Visitor,
+    };
+    use std::ops::ControlFlow;
+
+    // The SQL/XML rewrite keeps the typed XMLTABLE columns on the inner
+    // jsonb_to_recordset call and applies the authored aliases to its wrapper.
+    fn xmltable_columns(source: &TableFactor) -> Option<(usize, usize)> {
+        let TableFactor::Derived {
+            subquery,
+            alias: Some(alias),
+            ..
+        } = source
+        else {
+            return None;
+        };
+        if alias.columns.is_empty() {
+            return None;
+        }
+        let select = subquery.body.as_select()?;
+        let [SelectItem::Wildcard(_)] = select.projection.as_slice() else {
+            return None;
+        };
+        let [from] = select.from.as_slice() else {
+            return None;
+        };
+        let TableFactor::Table {
+            name,
+            args: Some(arguments),
+            alias: Some(inner_alias),
+            ..
+        } = &from.relation
+        else {
+            return None;
+        };
+        if !from.joins.is_empty()
+            || name.to_string() != "jsonb_to_recordset"
+            || inner_alias.name.value != "xmltable"
+        {
+            return None;
+        }
+        let [FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Function(call)))] =
+            arguments.args.as_slice()
+        else {
+            return None;
+        };
+        (call.name.to_string() == "bicdb_xmltable_json")
+            .then_some((inner_alias.columns.len(), alias.columns.len()))
+    }
+
+    struct XmlTableAliases;
+    impl Visitor for XmlTableAliases {
+        type Break = (usize, usize);
+
+        fn pre_visit_table_factor(&mut self, factor: &TableFactor) -> ControlFlow<Self::Break> {
+            if let Some((available, specified)) = xmltable_columns(factor) {
+                if specified > available {
+                    return ControlFlow::Break((available, specified));
+                }
+            }
+            ControlFlow::Continue(())
+        }
+    }
+
+    for statement in statements {
+        if let ControlFlow::Break((available, specified)) = statement.visit(&mut XmlTableAliases) {
+            return Err(SqlError::data_exception_public(
+                "42P10",
+                format!(
+                    "XMLTABLE function has {available} columns available but {specified} columns specified"
+                ),
                 None,
             ));
         }
@@ -1086,6 +1168,9 @@ fn xpath_context<'d>(namespaces: Option<&JsonValue>) -> Context<'d> {
             }
         }
     }
+    // XML fixes this prefix to the standard namespace, even if the
+    // requested mappings supplied a different URI for it.
+    context.set_namespace("xml", "http://www.w3.org/XML/1998/namespace");
     context
 }
 
@@ -1095,6 +1180,14 @@ fn evaluate_xpath<'d>(
     node: Node<'d>,
 ) -> Result<XPathValue<'d>> {
     xpath.evaluate(context, node).map_err(|error| {
+        if error.undefined_node_namespace() {
+            return SqlError::coded(
+                "10608",
+                "could not create XPath object",
+                Some("Undefined namespace prefix".to_string()),
+                None,
+            );
+        }
         SqlError::invalid_parameter_value(format!("XPath evaluation failed: {error}"))
     })
 }

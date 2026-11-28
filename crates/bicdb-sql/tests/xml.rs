@@ -473,6 +473,29 @@ fn xmltable_relation_aliases_rename_output_columns_without_changing_their_paths(
         .execute("SELECT * FROM XMLTABLE('/a' PASSING '<a>7</a>' COLUMNS n int PATH '.') f(a,b)")
         .unwrap_err();
     assert_eq!(error.sqlstate(), "42P10");
+    assert_eq!(
+        error.to_string(),
+        "XMLTABLE function has 1 columns available but 2 columns specified"
+    );
+    let error = session
+        .execute(
+            "SELECT * FROM (SELECT NULL::xml AS doc WHERE false) d,
+             LATERAL XMLTABLE('' PASSING d.doc COLUMNS n int, pos FOR ORDINALITY) f(a,b,c)",
+        )
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42P10");
+    assert_eq!(
+        error.to_string(),
+        "XMLTABLE function has 2 columns available but 3 columns specified"
+    );
+    let error = session
+        .execute("SELECT * FROM (SELECT 1) f(a,b)")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42P10");
+    assert_eq!(
+        error.to_string(),
+        "table \"f\" has 1 columns available but 2 columns specified"
+    );
 }
 
 #[test]
@@ -1419,4 +1442,53 @@ fn namespace_and_database_xml_schemas_use_visible_catalog_descriptors() {
         .execute("SELECT schema_to_xmlschema('missing_scope', false, false, '')")
         .unwrap_err();
     assert_eq!(error.sqlstate(), "3F000");
+}
+
+#[test]
+fn xpath_namespace_resolution_is_fallible_and_lazy() {
+    let (_dir, mut db) = session_db();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "SELECT xpath('/p:r','<r/>')",
+        "SELECT xpath('/missing/p:r','<r/>')",
+        "SELECT xpath('//@p:a','<r/>')",
+        "SELECT xpath_exists('/p:r','<r/>')",
+        "SELECT xmlexists('/p:r' PASSING '<r/>')",
+        "SELECT * FROM XMLTABLE('/p:r' PASSING '<r/>' COLUMNS v text)",
+        "SELECT * FROM XMLTABLE('/r' PASSING '<r/>' COLUMNS v text PATH '/p:r')",
+    ] {
+        let error = session.execute(sql).unwrap_err();
+        assert_eq!(error.sqlstate(), "10608", "{sql}");
+        assert_eq!(
+            error.postgres_message(),
+            "could not create XPath object",
+            "{sql}"
+        );
+    }
+    for (sql, expected) in [
+        ("SELECT xpath('true() or count(/p:r) > 0','<r/>')", "true"),
+        (
+            "SELECT xpath('false() and count(/p:r) > 0','<r/>')",
+            "false",
+        ),
+        (
+            r#"SELECT xpath('/p:r/text()','<a:r xmlns:a="urn:p">yes</a:r>',ARRAY[['p','urn:p']])"#,
+            "yes",
+        ),
+        (
+            r#"SELECT xpath('//@xml:lang','<r xml:lang="en"/>',ARRAY[['xml','urn:other']])"#,
+            "en",
+        ),
+    ] {
+        let result = session.execute(sql).unwrap();
+        assert_eq!(
+            result.rows,
+            vec![vec![SqlValue::json(json!([expected]))]],
+            "{sql}",
+        );
+    }
+    let no_rows = session
+        .execute("SELECT * FROM XMLTABLE('/missing' PASSING '<r/>' COLUMNS v text PATH '/p:r')")
+        .unwrap();
+    assert!(no_rows.rows.is_empty());
 }

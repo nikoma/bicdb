@@ -211,6 +211,9 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>> {
     if check_xml_names {
         crate::xml::validate_xml_constructor_names(&statements)?;
     }
+    if sql_for_parse.contains("bicdb_xmltable_json") {
+        crate::xml::validate_xmltable_aliases(&statements)?;
+    }
     restore_postgres_distinct_boolean_precedence(&mut statements);
     restore_postgres_whole_row_function_args(&mut statements);
     crate::similar_to::rewrite_similar_to(&mut statements);

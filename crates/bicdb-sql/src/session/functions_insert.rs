@@ -1232,6 +1232,7 @@ impl<'db> SqlSession<'db> {
                     Some(parent),
                     records,
                     on_insert,
+                    insert.table_alias.as_ref().map(|alias| &alias.alias),
                     insert.returning.as_deref(),
                 );
             }
@@ -1256,6 +1257,7 @@ impl<'db> SqlSession<'db> {
                 schema.as_deref(),
                 records,
                 on_insert,
+                insert.table_alias.as_ref().map(|alias| &alias.alias),
                 insert.returning.as_deref(),
             );
         }
@@ -2022,6 +2024,7 @@ impl<'db> SqlSession<'db> {
         schema: Option<&TableSchema>,
         records: Vec<Record>,
         on_insert: &OnInsert,
+        insert_alias: Option<&Ident>,
         returning: Option<&[SelectItem]>,
     ) -> Result<SqlResult> {
         let OnInsert::OnConflict(on_conflict) = on_insert else {
@@ -2116,6 +2119,13 @@ impl<'db> SqlSession<'db> {
             Vec::new()
         } else {
             conflict_target_columns(table, schema, on_conflict.conflict_target.as_ref())?
+        };
+        let target_alias = insert_alias.map_or_else(|| catalog_display_name(table), ident_value);
+        let whole_rows = match &on_conflict.action {
+            OnConflictAction::DoUpdate(update) => {
+                conflict_whole_row_references(update, &target_alias)
+            }
+            OnConflictAction::DoNothing => ConflictWholeRows::default(),
         };
         let mut affected_records = Vec::new();
         let mut affected_identities = BTreeSet::new();
@@ -2258,16 +2268,22 @@ impl<'db> SqlSession<'db> {
                                 "ON CONFLICT DO UPDATE requires a table schema".to_string(),
                             ));
                         };
-                        let mut update_row = row_from_record(
+                        let row_schema = access_schema.unwrap_or(schema);
+                        let mut old_row = row_from_record(
                             access_table,
-                            access_table,
-                            access_schema.or(Some(schema)),
+                            &target_alias,
+                            Some(row_schema),
                             &existing,
                         )?;
-                        update_row = merge_rows(
-                            &update_row,
-                            &row_from_record("excluded", "excluded", Some(schema), &record)?,
-                        );
+                        let mut excluded_row =
+                            row_from_record("excluded", "excluded", Some(row_schema), &record)?;
+                        if whole_rows.target {
+                            insert_upsert_whole_row(&mut old_row, &target_alias, row_schema);
+                        }
+                        if whole_rows.excluded {
+                            insert_upsert_whole_row(&mut excluded_row, "excluded", row_schema);
+                        }
+                        let update_row = merge_rows(&old_row, &excluded_row);
                         if let Some(selection) = &update.selection {
                             if !self
                                 .row_engine()
@@ -4278,6 +4294,49 @@ pub(crate) fn require_dml_target_exists(db: &BicDb, table: &str) -> Result<()> {
         return Ok(());
     }
     Err(SqlError::InvalidCollection(table.to_string()))
+}
+
+#[derive(Default)]
+struct ConflictWholeRows {
+    target: bool,
+    excluded: bool,
+}
+
+fn conflict_whole_row_references(
+    update: &sqlparser::ast::DoUpdate,
+    target_alias: &str,
+) -> ConflictWholeRows {
+    let mut names = ConflictWholeRows::default();
+    let _ = sqlparser::ast::visit_expressions(update, |expr| {
+        if let Expr::QualifiedWildcard(relation, _) = expr {
+            let alias = relation_default_alias(relation);
+            names.excluded |= alias == "excluded";
+            names.target |= alias == target_alias;
+        }
+        std::ops::ControlFlow::<()>::Continue(())
+    });
+    names
+}
+
+fn insert_upsert_whole_row(row: &mut SqlRow, alias: &str, schema: &TableSchema) {
+    let fields = schema
+        .columns
+        .iter()
+        .filter(|column| !column.hidden)
+        .map(|column| SqlCompositeField {
+            name: column.name.clone(),
+            pg_type: column.pg_type.clone(),
+            value: row.get(&column.name).cloned().unwrap_or(SqlValue::Null),
+        })
+        .collect();
+    row.insert(
+        compound_row_value_key(alias),
+        SqlValue::Composite(SqlComposite {
+            type_name: schema.name.clone(),
+            type_oid: u32::try_from(schema.row_type_oid()).ok(),
+            fields,
+        }),
+    );
 }
 
 fn insert_width_error(message: &str) -> SqlError {

@@ -1116,3 +1116,40 @@ fn postgres_upsert_excluded_is_bound_only_in_the_update_action() {
         ["1|updated"]
     );
 }
+
+#[test]
+fn postgres_upsert_compares_and_casts_whole_existing_and_excluded_rows() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = open(dir.path());
+    let mut session = SqlSession::new(&mut db);
+    exec(
+        &mut session,
+        "CREATE TABLE conflict_whole (id int PRIMARY KEY, z int, a text);
+         INSERT INTO conflict_whole VALUES (1,2,'before')",
+    );
+    assert_eq!(
+        rows(
+            &mut session,
+            "INSERT INTO conflict_whole AS old VALUES(1,3,'new')
+             ON CONFLICT(id) DO UPDATE SET z=excluded.z,a=excluded.a
+             WHERE old.* <> excluded.* RETURNING z,a",
+        ),
+        ["3|new"]
+    );
+    assert!(rows(
+        &mut session,
+        "INSERT INTO conflict_whole AS old VALUES(1,3,'new')
+         ON CONFLICT(id) DO UPDATE SET a='unequal'
+         WHERE old.* <> excluded.* RETURNING a",
+    )
+    .is_empty());
+    assert_eq!(
+        rows(
+            &mut session,
+            "INSERT INTO conflict_whole AS old VALUES(1,3,'new')
+             ON CONFLICT(id) DO UPDATE SET a=excluded.*::text
+             WHERE old.* = excluded.* RETURNING a",
+        ),
+        ["(1,3,new)"]
+    );
+}

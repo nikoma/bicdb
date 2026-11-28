@@ -2847,6 +2847,11 @@ fn handle_frontend_message(
             Err(error) => {
                 state.failed_queries += 1;
                 server.failed_queries.fetch_add(1, Ordering::SeqCst);
+                if matches!(error, PgWireError::Sql(_))
+                    && !bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile)
+                {
+                    state.record_query_error(&server.config.sql_profile);
+                }
                 state.discard_until_sync = true;
                 log_failed_query(server, state, None, &error);
                 error_response_for_error(stream, &error)?;

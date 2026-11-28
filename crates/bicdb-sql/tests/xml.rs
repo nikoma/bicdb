@@ -437,6 +437,45 @@ fn xml_fragment_concatenation_preserves_a_single_compatible_declaration() {
     }
 }
 #[test]
+fn xmltable_relation_aliases_rename_output_columns_without_changing_their_paths() {
+    let (_dir, mut db) = session_db();
+    let mut session = SqlSession::new(&mut db);
+    for lateral in ["", "LATERAL "] {
+        let result = session
+            .execute(&format!(
+                r#"SELECT f.* FROM {lateral}XMLTABLE('/r/a' PASSING '<r><a><n>7</n></a><a><n>8</n></a></r>'
+                   COLUMNS n int, rowno FOR ORDINALITY) AS f("Value")"#
+            ))
+            .unwrap();
+        assert_eq!(result.columns, ["Value", "rowno"]);
+        assert_eq!(
+            result.rows,
+            [
+                [SqlValue::Int(7), SqlValue::Int(1)],
+                [SqlValue::Int(8), SqlValue::Int(2)]
+            ]
+        );
+        let result = session
+            .execute(&format!(
+                "SELECT d.id, f.val FROM (VALUES (1, xml '<a>7</a>'), (2, xml '<a>8</a>')) d(id,doc),
+                 {lateral}XMLTABLE('/a' PASSING d.doc COLUMNS n int PATH '.') f(val) ORDER BY d.id"
+            ))
+            .unwrap();
+        assert_eq!(
+            result.rows,
+            [
+                [SqlValue::Int(1), SqlValue::Int(7)],
+                [SqlValue::Int(2), SqlValue::Int(8)]
+            ]
+        );
+    }
+    let error = session
+        .execute("SELECT * FROM XMLTABLE('/a' PASSING '<a>7</a>' COLUMNS n int PATH '.') f(a,b)")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42P10");
+}
+
+#[test]
 fn xmltable_uses_the_selected_node_as_xpath_context() {
     let (_dir, mut db) = session_db();
     let mut session = SqlSession::new(&mut db);
@@ -741,6 +780,118 @@ fn xmlparse_and_xmlserialize_preserve_document_and_content_modes() {
 }
 
 #[test]
+fn sql_xml_maps_arrays_and_temporal_values_to_xml_text() {
+    let (_dir, mut db) = session_db();
+    let mut session = SqlSession::new(&mut db);
+    let result = session
+        .execute(
+            r#"SELECT
+                xmlelement(NAME demo, ARRAY[[1,NULL],[2,3]]),
+                xmlforest(ARRAY['x<','y>'] AS vals),
+                xmlelement(NAME t, xmlattributes(ARRAY['<&'] AS a)),
+                xmlelement(NAME demo, ARRAY[xml '<a/>', xml 'some text']),
+                xmlelement(NAME demo, true, false, timestamp '2009-04-09 00:24:37.1234'),
+                xmlelement(NAME demo, '[0:2]={1,NULL,3}'::int[])"#,
+        )
+        .unwrap();
+    assert_eq!(
+        result.rows[0]
+            .iter()
+            .map(SqlValue::to_cell)
+            .collect::<Vec<_>>(),
+        [
+            "<demo><element>1</element><element>2</element><element>3</element></demo>",
+            "<vals><element>x&lt;</element><element>y&gt;</element></vals>",
+            r#"<t a="&lt;element&gt;&amp;lt;&amp;amp;&lt;/element&gt;"/>"#,
+            "<demo><element><a/></element><element>some text</element></demo>",
+            "<demo>truefalse2009-04-09T00:24:37.1234</demo>",
+            "<demo><element>1</element><element>3</element></demo>",
+        ]
+    );
+    session.execute("SET TIME ZONE 'America/New_York'").unwrap();
+    assert_eq!(
+        session
+            .execute("SELECT xmlelement(NAME demo, timestamptz '2009-04-09 00:24:37Z')")
+            .unwrap()
+            .rows[0][0]
+            .to_cell(),
+        "<demo>2009-04-08T20:24:37-04:00</demo>"
+    );
+    for sql in [
+        "SELECT xmlelement(NAME x, date 'infinity')",
+        "SELECT xmlelement(NAME x, timestamp '-infinity')",
+        "SELECT xmlelement(NAME x, timestamptz 'infinity')",
+    ] {
+        assert_eq!(session.execute(sql).unwrap_err().sqlstate(), "22008");
+    }
+}
+
+#[test]
+fn xmlserialize_indents_mixed_content_and_keeps_the_document_prolog() {
+    let (_dir, mut db) = session_db();
+    let mut session = SqlSession::new(&mut db);
+    let result = session
+        .execute(
+            r#"SELECT
+                xmlserialize(CONTENT 'text<foo>73</foo>next<bar><val x="y">42</val></bar>' AS text INDENT),
+                xmlserialize(DOCUMENT '<?xml version="1.0"?><foo><bar/></foo>' AS text INDENT),
+                xmlserialize(DOCUMENT '<?pi hi?><!DOCTYPE a><a/>' AS text INDENT),
+                xmlserialize(CONTENT '<?pi hi?><!DOCTYPE a><a/>' AS text INDENT),
+                xmlserialize(CONTENT ' a &#65; &amp; ' AS text INDENT),
+                xmlserialize(CONTENT '<!--<!DOCTYPE sample>--><a/><b/>' AS text INDENT)"#,
+        )
+        .unwrap();
+    assert_eq!(
+        result.rows[0]
+            .iter()
+            .map(SqlValue::to_cell)
+            .collect::<Vec<_>>(),
+        [
+            "text\n<foo>73</foo>next\n<bar>\n  <val x=\"y\">42</val>\n</bar>",
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<foo>\n  <bar/>\n</foo>",
+            "<?pi hi?>\n<!DOCTYPE a>\n<a/>",
+            "<?pi hi?>\n<!DOCTYPE a>\n<a/>\n",
+            " a A &amp; ",
+            "<!--<!DOCTYPE sample>-->\n<a/>\n<b/>",
+        ]
+    );
+    let error = session
+        .execute("SELECT xml '<!DOCTYPE a><a/><b/>'")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "2200N");
+}
+
+#[test]
+fn sql_xml_names_escape_characters_and_duplicate_attributes_are_rejected() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = bicdb_core::BicDb::open(root.path()).unwrap();
+    let mut sql = bicdb_sql::SqlSession::new(&mut db);
+    let result = sql
+        .execute(
+            r#"SELECT xmlpi(NAME "123"), xmlpi(NAME ":::_xml_abc135.%-&_"),
+              xmlelement(NAME "a b", 'text'),
+              xmlelement(NAME "_x0031_", xmlattributes(1 AS "any value")),
+              xmlforest(1 AS "123", 'value' AS "café", 2 AS "é", 3 AS "𐐀")"#,
+        )
+        .unwrap();
+    let cells: Vec<_> = result.rows[0].iter().map(|value| value.to_cell()).collect();
+    assert_eq!(
+        cells,
+        [
+            "<?_x0031_23?>",
+            "<?_x003A_::_x005F_xml_abc135._x0025_-_x0026__?>",
+            "<a_x0020_b>text</a_x0020_b>",
+            r#"<_x005F_x0031_ any_x0020_value="1"/>"#,
+            "<_x0031_23>1</_x0031_23><café>value</café><é>2</é><_x10400_>3</_x10400_>",
+        ]
+    );
+    let error = sql
+        .execute("SELECT xmlelement(NAME e, XMLATTRIBUTES(NULL AS a, 'value' AS a))")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42601");
+}
+
+#[test]
 fn xmloption_controls_input_without_reinterpreting_existing_xml_values() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();
@@ -759,7 +910,7 @@ fn xmloption_controls_input_without_reinterpreting_existing_xml_values() {
         "CREATE TABLE xmloption_values (id int PRIMARY KEY, body xml);
          INSERT INTO xmloption_values VALUES (1, XMLPARSE(CONTENT '<a/><b/>'));
          BEGIN;
-         SET LOCAL xmloption TO DOCUMENT;",
+         SET LOCAL XML /* language syntax */ OPTION DOCUMENT;",
     )
     .unwrap();
     let result = sql
@@ -873,4 +1024,63 @@ fn xml_document_mode_applies_to_assignment_and_copy_input() {
             vec![SqlValue::String("<root/>".into())]
         ]
     );
+}
+
+#[test]
+fn xml_mapping_serializes_query_rows_and_does_not_execute_writes() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = bicdb_core::BicDb::open(root.path()).unwrap();
+    let mut session = bicdb_sql::SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE TABLE \"t-xml\" (id int, \"a:name\" text, markup xml);
+             INSERT INTO \"t-xml\" VALUES (1, NULL, '<p/>')",
+        )
+        .unwrap();
+    let wrapped = session
+        .execute("SELECT table_to_xml('\"t-xml\"', true, false, 'urn:test')")
+        .unwrap();
+    assert_eq!(
+        wrapped.rows[0][0].to_cell(),
+        concat!(
+            "<t-xml xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns=\"urn:test\">\n\n",
+            "<row>\n  <id>1</id>\n  <a_x003A_name xsi:nil=\"true\"/>\n  <markup><p/></markup>\n",
+            "</row>\n\n</t-xml>\n"
+        ),
+    );
+    let forest = session
+        .execute(
+            "SELECT query_to_xml(
+                'SELECT 1; SELECT ARRAY[1,NULL,3] AS arr, true AS ok',
+                false, true, ''
+             )",
+        )
+        .unwrap();
+    assert_eq!(
+        forest.rows[0][0].to_cell(),
+        concat!(
+            "<row xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">\n",
+            "  <arr><element>1</element><element>3</element></arr>\n",
+            "  <ok>true</ok>\n</row>\n\n"
+        ),
+    );
+    let error = session
+        .execute(
+            "SELECT query_to_xml(
+                'INSERT INTO \"t-xml\" (id) VALUES (2) RETURNING id', false, false, ''
+             )",
+        )
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "0A000");
+    let error = session
+        .execute(
+            "SELECT query_to_xml('WITH w AS (
+                INSERT INTO \"t-xml\" (id) VALUES (3) RETURNING id
+             ) SELECT id FROM w', false, false, '')",
+        )
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "0A000");
+    assert!(error.to_string().starts_with("SELECT is not allowed"));
+    let result = session.execute("SELECT count(*) FROM \"t-xml\"").unwrap();
+    assert_eq!(result.rows[0][0].to_cell(), "1");
 }

@@ -38,6 +38,7 @@ mod row_locks;
 mod view_predicates;
 pub(crate) use row_locks::is_read_committed_lock_refresh;
 mod scan_fts;
+mod xml_mapping;
 
 /// Rows resolved per batch by the streaming scan path.
 ///

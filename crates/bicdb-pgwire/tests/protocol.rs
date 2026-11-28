@@ -6764,6 +6764,94 @@ fn xml_wire_binary_and_copy_paths_validate_and_canonicalize() {
 }
 
 #[test]
+fn xml_bind_validates_in_the_current_xmloption_and_keeps_its_type() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        bicdb_pgwire::handle_client(stream, path).unwrap();
+    });
+
+    let mut client = TcpStream::connect(address).unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+    send_parse(
+        &mut client,
+        "typed_xml",
+        "SELECT pg_typeof($1)::text, $1",
+        &[142],
+    );
+    assert_eq!(read_message(&mut client).0, b'1');
+    send_sync(&mut client);
+    read_until_ready(&mut client);
+
+    send_query(&mut client, "SET XMLOPTION TO DOCUMENT");
+    assert!(read_query_rows(&mut client).is_empty());
+    send_bind(&mut client, "invalid_xml", "typed_xml", &["plain text"]);
+    send_sync(&mut client);
+    let (error, status) = read_error_response_with_status(&mut client);
+    assert_eq!(status, b'I');
+    assert!(error.contains("2200M"), "{error}");
+
+    send_query(&mut client, "BEGIN");
+    assert!(read_query_rows(&mut client).is_empty());
+    send_bind_binary(
+        &mut client,
+        "invalid_binary_xml",
+        "typed_xml",
+        &[(1, b"<one/><two/>".to_vec())],
+        &[],
+    );
+    send_sync(&mut client);
+    let (error, status) = read_error_response_with_status(&mut client);
+    assert_eq!(status, b'E');
+    assert!(error.contains("2200M"), "{error}");
+    send_query(&mut client, "ROLLBACK");
+    assert!(read_query_rows(&mut client).is_empty());
+
+    send_query(&mut client, "BEGIN; SET LOCAL xmloption = 'content'");
+    assert!(read_query_rows(&mut client).is_empty());
+    send_bind(&mut client, "bound_content", "typed_xml", &["<one/><two/>"]);
+    assert_eq!(read_message(&mut client).0, b'2');
+    send_sync(&mut client);
+    read_until_ready(&mut client);
+    send_query(&mut client, "SET LOCAL xmloption = 'document'");
+    assert!(read_query_rows(&mut client).is_empty());
+    send_describe_portal(&mut client, "bound_content");
+    send_execute(&mut client, "bound_content");
+    send_sync(&mut client);
+    assert_eq!(
+        read_query_rows(&mut client),
+        vec![vec!["xml".to_string(), "<one/><two/>".to_string()]]
+    );
+    send_query(&mut client, "COMMIT");
+    assert!(read_query_rows(&mut client).is_empty());
+
+    send_bind_binary(
+        &mut client,
+        "latin1_xml",
+        "typed_xml",
+        &[(
+            1,
+            b"<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?><r>caf\xe9</r>".to_vec(),
+        )],
+        &[],
+    );
+    send_describe_portal(&mut client, "latin1_xml");
+    send_execute(&mut client, "latin1_xml");
+    send_sync(&mut client);
+    assert_eq!(
+        read_query_rows(&mut client),
+        vec![vec!["xml".to_string(), "<r>café</r>".to_string()]]
+    );
+
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
+}
+
+#[test]
 fn extended_query_enum_parameters_and_results_use_persisted_oids() {
     let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

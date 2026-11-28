@@ -1487,11 +1487,9 @@ impl TextSearchConfig {
                 include_str!("../assets/postgresql-18-stopwords/turkish.stop"),
             )),
             "yiddish" => Ok(snowball_config(Algorithm::Yiddish, "")),
-            _ => Err(SqlError::data_exception(
-                "42704",
-                format!("text search configuration \"{name}\" does not exist"),
-                Some("regconfig".to_string()),
-            )),
+            _ => Err(SqlError::undefined_object(format!(
+                "text search configuration \"{name}\" does not exist"
+            ))),
         }
     }
 

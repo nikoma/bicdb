@@ -196,10 +196,12 @@ fn authored_configuration_names_obey_schema_usage() {
             "SELECT to_tsvector('search_private.secret','running')",
             "42501",
         ),
-        ("SELECT 'secret'::regconfig", "42704"),
     ] {
         assert_eq!(sql.execute(query).unwrap_err().sqlstate(), state, "{query}");
     }
+    let missing = sql.execute("SELECT 'secret'::regconfig").unwrap_err();
+    assert_eq!(missing.sqlstate(), "42704");
+    assert!(missing.fields().is_empty());
     assert_eq!(
         sql.execute(
             "SELECT oid::regconfig::text, to_tsvector(oid::regconfig,'running')::text

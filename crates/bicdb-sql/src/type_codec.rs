@@ -442,10 +442,11 @@ fn canonical_text_for_value(
                 &array,
                 crate::pg_type_delimiter(spec.name).unwrap_or(','),
             )?;
-            if value
-                .dimensions
-                .iter()
-                .any(|dimension| dimension.lower_bound != 1)
+            if !value.elements.is_empty()
+                && value
+                    .dimensions
+                    .iter()
+                    .any(|dimension| dimension.lower_bound != 1)
             {
                 let bounds = value
                     .dimensions

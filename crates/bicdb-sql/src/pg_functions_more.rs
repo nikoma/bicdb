@@ -19,6 +19,13 @@ pub(crate) fn pg_function_more_result_type(
         match bare(name) {
             "to_hex" | "to_oct" | "to_bin" => "text",
             "gcd" | "lcm" => {
+                if arg_types
+                    .iter()
+                    .flatten()
+                    .any(|pg_type| pg_type == "numeric")
+                {
+                    return Some("numeric".to_string());
+                }
                 return Some(match first.as_deref() {
                     Some("int8") => "int8".to_string(),
                     Some("int2" | "int4") | None => {
@@ -29,7 +36,7 @@ pub(crate) fn pg_function_more_result_type(
                         }
                     }
                     Some(other) => other.to_string(),
-                })
+                });
             }
             "num_nulls" | "num_nonnulls" => "int4",
             "sinh" | "cosh" | "tanh" | "asinh" | "acosh" | "atanh" => "float8",
@@ -89,21 +96,11 @@ fn radix_text(value: i64, width: u32, radix: u32) -> String {
     }
 }
 
-fn integer_gcd(left: i64, right: i64) -> i64 {
-    let (mut a, mut b) = (left, right);
-    // Euclid on the magnitudes, kept negative to cover i64::MIN.
-    if a > 0 {
-        a = -a;
+fn integer_gcd(mut left: u64, mut right: u64) -> u64 {
+    while right != 0 {
+        (left, right) = (right, left % right);
     }
-    if b > 0 {
-        b = -b;
-    }
-    while b != 0 {
-        let r = a % b;
-        a = b;
-        b = r;
-    }
-    a
+    left
 }
 
 fn out_of_range(width: u32) -> SqlError {
@@ -312,6 +309,21 @@ pub(crate) fn eval_pg_function_more(
             SqlValue::String(radix_text(value, integer_width(value, arg_type(0)), radix))
         }
         ("gcd" | "lcm", 2) => {
+            if arg_types.is_some_and(|types| types.len() == 2 && types.iter().all(Option::is_none))
+                && args
+                    .iter()
+                    .all(|value| matches!(value, SqlValue::String(_) | SqlValue::Null))
+            {
+                return Err(SqlError::coded(
+                    "42725",
+                    format!("function {name}(unknown, unknown) is not unique"),
+                    None,
+                    Some(
+                        "Could not choose a best candidate function. You might need to add explicit type casts."
+                            .to_string(),
+                    ),
+                ));
+            }
             if arg_types.is_some_and(|types| {
                 types
                     .iter()
@@ -340,26 +352,23 @@ pub(crate) fn eval_pg_function_more(
             } else {
                 32
             };
-            let (min, max) = if width == 32 {
-                (i64::from(i32::MIN), i64::from(i32::MAX))
+            let max = if width == 32 {
+                i32::MAX as u64
             } else {
-                (i64::MIN, i64::MAX)
+                i64::MAX as u64
             };
-            let negative_gcd = integer_gcd(left, right);
-            let gcd = negative_gcd
-                .checked_neg()
-                .filter(|gcd| *gcd <= max)
-                .ok_or_else(|| out_of_range(width))?;
-            if name == "gcd" {
-                SqlValue::Int(gcd)
+            let left = left.unsigned_abs();
+            let right = right.unsigned_abs();
+            let gcd = integer_gcd(left, right);
+            let magnitude = if name == "gcd" {
+                Some(gcd)
             } else {
-                let lcm = (left / gcd)
-                    .checked_mul(right)
-                    .and_then(i64::checked_abs)
-                    .filter(|lcm| (min..=max).contains(lcm))
-                    .ok_or_else(|| out_of_range(width))?;
-                SqlValue::Int(lcm)
-            }
+                (left / gcd).checked_mul(right)
+            };
+            let value = magnitude
+                .filter(|value| *value <= max)
+                .ok_or_else(|| out_of_range(width))?;
+            SqlValue::Int(value as i64)
         }
         ("num_nulls", _) => SqlValue::Int(
             args.iter()

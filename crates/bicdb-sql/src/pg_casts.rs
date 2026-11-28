@@ -129,6 +129,14 @@ fn string_category_type(pg_type: &str) -> bool {
     matches!(pg_type, "text" | "varchar" | "bpchar" | "name" | "char")
 }
 
+pub(crate) fn catalog_vector_element_type(source: &str) -> Option<&'static str> {
+    match source {
+        "oidvector" => Some("oid"),
+        "int2vector" => Some("int2"),
+        _ => None,
+    }
+}
+
 /// Return the parser coercion cost when PostgreSQL permits this conversion in
 /// the requested context. Binary-compatible casts are cheapest, then function
 /// casts, then I/O casts. Identical types cost zero. Arrays recurse through the
@@ -143,7 +151,12 @@ pub(crate) fn pg_cast_cost(source: &str, target: &str, requested: PgCastContext)
     if let Some(spec) = pg_cast_spec(source, target) {
         return spec.context.allows(requested).then_some(spec.method.cost());
     }
-    if let (Some(source), Some(target)) = (source.strip_suffix("[]"), target.strip_suffix("[]")) {
+    if let (Some(source), Some(target)) = (
+        source
+            .strip_suffix("[]")
+            .or_else(|| catalog_vector_element_type(source)),
+        target.strip_suffix("[]"),
+    ) {
         return pg_cast_cost(source, target, requested).map(|cost| cost.saturating_add(1));
     }
 

@@ -2612,6 +2612,11 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         {
             return Some(pg_type);
         }
+        if let Some(pg_type) =
+            postgres_numeric_unary_type(op, projected_expr_pg_type(expr, schema).as_deref())
+        {
+            return Some(pg_type.to_owned());
+        }
         if matches!(op, UnaryOperator::BitwiseNot) {
             match projected_expr_pg_type(expr, schema).as_deref() {
                 Some("bit" | "varbit") => return Some("bit".to_string()),

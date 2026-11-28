@@ -252,3 +252,70 @@ fn datetime_special_values_zones_and_templates() {
         );
     });
 }
+
+#[test]
+fn alter_operator_assigns_reciprocal_links_atomically() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE FUNCTION link_equal(int,int) RETURNS bool LANGUAGE sql IMMUTABLE RETURN $1=$2; CREATE OPERATOR === (LEFTARG=int,RIGHTARG=int,FUNCTION=link_equal); CREATE OPERATOR ==== (LEFTARG=int,RIGHTARG=int,FUNCTION=link_equal); CREATE OPERATOR ===== (LEFTARG=int,RIGHTARG=int,FUNCTION=link_equal)").unwrap();
+    let links = "SELECT original.oprcom = linked.oid, linked.oprcom = original.oid, original.oprnegate = linked.oid, linked.oprnegate = original.oid FROM pg_operator AS original CROSS JOIN pg_operator AS linked WHERE original.oprname='===' AND linked.oprname='====' AND original.oprleft='integer'::regtype AND linked.oprleft='integer'::regtype";
+    let assert_links = |session: &mut SqlSession<'_>, expected| {
+        assert_eq!(
+            session.execute(links).unwrap().rows,
+            vec![vec![SqlValue::Bool(expected); 4]]
+        );
+    };
+    let (state, message) = error(
+        &mut session,
+        "ALTER OPERATOR === (int,int) SET (COMMUTATOR= ====,NEGATOR= ===)",
+    );
+    assert_eq!(state, "42P13");
+    assert!(message.contains("operator cannot be its own negator"));
+    assert_links(&mut session, false);
+
+    session
+        .execute("BEGIN; ALTER OPERATOR === (int,int) SET (COMMUTATOR= ====,NEGATOR= ====)")
+        .unwrap();
+    assert_links(&mut session, true);
+    session.execute("ROLLBACK").unwrap();
+    assert_links(&mut session, false);
+
+    session.execute("ALTER OPERATOR === (int,int) SET (COMMUTATOR= ====,NEGATOR= ====); ALTER OPERATOR === (int,int) SET (COMMUTATOR= ====,NEGATOR= ====)").unwrap();
+    assert_links(&mut session, true);
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT oprcom::regoperator::text, oprnegate::regoperator::text,
+                    '===(integer,integer)'::regoperator::oid = oid,
+                    'public.==='::regoper::oid = oid
+             FROM pg_operator WHERE oprname = '==='"
+        ),
+        strings(&[&[
+            "====(integer,integer)",
+            "====(integer,integer)",
+            "true",
+            "true"
+        ]])
+    );
+    let (state, message) = error(
+        &mut session,
+        "ALTER OPERATOR ===== (int,int) SET (COMMUTATOR= ===)",
+    );
+    assert_eq!(state, "42P13");
+    assert!(message.contains("commutator operator === is already the commutator of operator ===="));
+    let (state, message) = error(
+        &mut session,
+        "ALTER OPERATOR === (int,int) SET (NEGATOR= =====)",
+    );
+    assert_eq!(state, "42P13");
+    assert!(message.contains("operator attribute \"negator\" cannot be changed"));
+    assert_links(&mut session, true);
+    session.execute("CREATE FUNCTION add_operator(int,int) RETURNS int LANGUAGE sql IMMUTABLE RETURN $1+$2; CREATE OPERATOR ~~~ (LEFTARG=int,RIGHTARG=int,FUNCTION=add_operator)").unwrap();
+    let (state, message) = error(
+        &mut session,
+        "ALTER OPERATOR ~~~ (int,int) SET (NEGATOR= =====)",
+    );
+    assert_eq!(state, "42P13");
+    assert!(message.contains("only boolean operators can have negators"));
+}

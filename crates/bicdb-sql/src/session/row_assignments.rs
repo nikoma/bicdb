@@ -76,10 +76,11 @@ pub(super) fn independent_row_query(assignment: &Assignment) -> Option<&Query> {
 
 fn row_query_value(result: &SqlResult, count: usize) -> Result<SqlValue> {
     if result.columns.len() != count {
-        return Err(SqlError::InvalidSql(format!(
-            "UPDATE assignment has {count} columns but subquery returns {}",
-            result.columns.len()
-        )));
+        return Err(SqlError::data_exception(
+            "42601",
+            "number of columns does not match number of values",
+            None,
+        ));
     }
     let values = match result.rows.as_slice() {
         [] => vec![SqlValue::Null; count],
@@ -87,7 +88,7 @@ fn row_query_value(result: &SqlResult, count: usize) -> Result<SqlValue> {
         _ => {
             return Err(SqlError::data_exception(
                 "21000",
-                "UPDATE row subquery returned more than one row",
+                "more than one row returned by a subquery used as an expression",
                 None,
             ))
         }

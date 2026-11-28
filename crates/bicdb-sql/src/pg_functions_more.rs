@@ -323,6 +323,9 @@ pub(crate) fn eval_pg_function_more(
             else {
                 return Ok(Some(SqlValue::Null));
             };
+            if name == "lcm" && (left == 0 || right == 0) {
+                return Ok(Some(SqlValue::Int(0)));
+            }
             let width = if arg_type(0) == Some("int8")
                 || arg_type(1) == Some("int8")
                 || integer_width(left, None) == 64
@@ -344,8 +347,6 @@ pub(crate) fn eval_pg_function_more(
                 .ok_or_else(|| out_of_range(width))?;
             if name == "gcd" {
                 SqlValue::Int(gcd)
-            } else if left == 0 || right == 0 {
-                SqlValue::Int(0)
             } else {
                 let lcm = (left / gcd)
                     .checked_mul(right)

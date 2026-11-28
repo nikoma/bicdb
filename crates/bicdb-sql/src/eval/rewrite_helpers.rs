@@ -18,20 +18,10 @@ pub(crate) fn literal_to_value(value: &ValueWithSpan) -> Result<SqlValue> {
         | Value::TripleSingleQuotedByteStringLiteral(value)
         | Value::TripleDoubleQuotedByteStringLiteral(value) => PgBitString::from_bit_text(value)
             .map(|value| SqlValue::String(value.to_bit_text()))
-            .map_err(|_| {
-                SqlError::invalid_text_representation(
-                    "bit",
-                    format!("invalid binary digit in bit string: \"{value}\""),
-                )
-            }),
+            .map_err(|_| bit_input_error("bit", &format!("b{value}"))),
         Value::HexStringLiteral(value) => PgBitString::from_hex_text(value)
             .map(|value| SqlValue::String(value.to_bit_text()))
-            .map_err(|_| {
-                SqlError::invalid_text_representation(
-                    "bit",
-                    format!("invalid hexadecimal digit in bit string: \"{value}\""),
-                )
-            }),
+            .map_err(|_| bit_input_error("bit", &format!("x{value}"))),
         // Escape (E'...') and Unicode-escape (U&'...') strings: the tokenizer
         // already decoded the value; decoding it again lost backslashes.
         Value::EscapedStringLiteral(value) | Value::UnicodeStringLiteral(value) => {

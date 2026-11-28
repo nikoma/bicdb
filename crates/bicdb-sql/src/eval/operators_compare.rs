@@ -3411,8 +3411,10 @@ fn eval_record_aggregate_expr_inner(
         Expr::Position { expr, r#in } => eval_position_typed_value(
             eval_record_aggregate_expr(records, expr, schema)?,
             eval_record_aggregate_expr(records, r#in, schema)?,
-            projected_expr_pg_type(expr, schema).as_deref() == Some("bytea")
-                || projected_expr_pg_type(r#in, schema).as_deref() == Some("bytea"),
+            [
+                projected_expr_pg_type(expr, schema).as_deref(),
+                projected_expr_pg_type(r#in, schema).as_deref(),
+            ],
         ),
         Expr::Overlay {
             expr,

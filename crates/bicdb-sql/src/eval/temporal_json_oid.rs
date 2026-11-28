@@ -1889,6 +1889,7 @@ pub(crate) fn postgres_figure_column_name(expr: &Expr) -> Option<(String, u8)> {
             2,
         )),
         Expr::Position { .. } => Some(("position".to_string(), 2)),
+        Expr::Overlay { .. } => Some(("overlay".to_string(), 2)),
         Expr::Trim { .. } => Some(("btrim".to_string(), 2)),
         Expr::Ceil { .. } => Some(("ceil".to_string(), 2)),
         Expr::Floor { .. } => Some(("floor".to_string(), 2)),
@@ -4500,7 +4501,7 @@ fn pg_integer_type_name(pg_type: &str) -> &'static str {
 
 /// `bit_in`'s message for an invalid digit: the first character that is not
 /// a binary (or, after an `x` prefix, hexadecimal) digit.
-fn bit_input_error(pg_type: &str, text: &str) -> SqlError {
+pub(crate) fn bit_input_error(pg_type: &str, text: &str) -> SqlError {
     let (hex, digits) = match text.chars().next() {
         Some('x' | 'X') => (true, &text[1..]),
         Some('b' | 'B') => (false, &text[1..]),
@@ -4520,7 +4521,7 @@ fn bit_input_error(pg_type: &str, text: &str) -> SqlError {
                 "\"{c}\" is not a valid {} digit",
                 if hex { "hexadecimal" } else { "binary" }
             ),
-            Some(pg_type.to_string()),
+            None,
         ),
         None => SqlError::InvalidTextRepresentation(format!(
             "invalid input syntax for type {pg_type}: \"{text}\""
@@ -4530,7 +4531,7 @@ fn bit_input_error(pg_type: &str, text: &str) -> SqlError {
 
 /// The integer types' input function (`int2in`, `int4in`, `int8in`):
 /// surrounding whitespace, an optional sign, then decimal digits or a
-/// `0x`/`0o`/`0b` prefix, with single underscores between digits. Text in any
+/// `0x`/`0o`/`0b` prefix, with single underscores between digits or after a prefix. Text in any
 /// other form (`34.5`, `1e3`) is invalid input, never rounded.
 pub(crate) fn pg_integer_input(text: &str, pg_type: &str) -> Result<i64> {
     let invalid = || {
@@ -4557,6 +4558,11 @@ pub(crate) fn pg_integer_input(text: &str, pg_type: &str) -> Result<i64> {
         Some("0o") => (8, &body[2..]),
         Some("0b") => (2, &body[2..]),
         _ => (10, body),
+    };
+    let digits = if radix == 10 {
+        digits
+    } else {
+        digits.strip_prefix('_').unwrap_or(digits)
     };
     if digits.is_empty()
         || digits.starts_with('_')

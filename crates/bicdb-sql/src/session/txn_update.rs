@@ -3704,11 +3704,23 @@ impl<'db> SqlSession<'db> {
     #[inline(never)]
     fn eval_session_text_expr(&mut self, expr: &Expr) -> Result<SqlValue> {
         match expr {
-            Expr::Position { expr, r#in } => eval_position_typed_value(
-                self.eval_session_expr(expr)?,
-                self.eval_session_expr(r#in)?,
-                self.routine_expr_is_bytea(expr) || self.routine_expr_is_bytea(r#in),
-            ),
+            Expr::Position { expr, r#in } => {
+                let needle = self.eval_session_expr(expr)?;
+                let haystack = self.eval_session_expr(r#in)?;
+                let operand_type = |expr| {
+                    if self.routine_expr_is_bytea(expr) {
+                        Some("bytea".to_string())
+                    } else {
+                        self.routine_unary_operand_type(expr)
+                            .or_else(|| projected_expr_pg_type_with_db(self.db_ref(), expr))
+                    }
+                };
+                eval_position_typed_value(
+                    needle,
+                    haystack,
+                    [operand_type(expr).as_deref(), operand_type(r#in).as_deref()],
+                )
+            }
             Expr::Substring {
                 expr,
                 substring_from,

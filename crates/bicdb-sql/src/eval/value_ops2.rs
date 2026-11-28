@@ -1110,12 +1110,30 @@ pub(crate) fn array_cardinality(value: &JsonValue) -> usize {
 pub(crate) fn eval_position_typed_value(
     needle: SqlValue,
     haystack: SqlValue,
-    bytea: bool,
+    operand_types: [Option<&str>; 2],
 ) -> Result<SqlValue> {
+    let bit_typed = operand_types
+        .into_iter()
+        .any(|kind| matches!(kind, Some("bit" | "varbit")));
+    if bit_typed
+        && operand_types
+            .into_iter()
+            .flatten()
+            .any(|kind| !matches!(kind, "bit" | "varbit" | "unknown"))
+    {
+        let [needle_type, haystack_type] =
+            operand_types.map(|kind| pg_cast_display_type(kind.unwrap_or("unknown")));
+        return Err(SqlError::coded(
+            "42883",
+            format!("function pg_catalog.position({haystack_type}, {needle_type}) does not exist"),
+            None,
+            Some("No function matches the given name and argument types. You might need to add explicit type casts.".into()),
+        ));
+    }
     if matches!(needle, SqlValue::Null) || matches!(haystack, SqlValue::Null) {
         return Ok(SqlValue::Null);
     }
-    if bytea {
+    if operand_types.contains(&Some("bytea")) {
         let needle = bytea_argument(&needle)?.unwrap();
         let haystack = bytea_argument(&haystack)?.unwrap();
         let position = if needle.is_empty() {
@@ -1129,8 +1147,21 @@ pub(crate) fn eval_position_typed_value(
         };
         return Ok(SqlValue::Int(position));
     }
-    let needle = needle.to_cell();
-    let haystack = haystack.to_cell();
+    let position_text = |value: SqlValue| -> Result<String> {
+        let text = value.to_cell();
+        if bit_typed {
+            PgBitString::from_postgres_text(&text)
+                .map(|value| value.to_bit_text())
+                .map_err(|_| bit_input_error("bit", &text))
+        } else {
+            Ok(text)
+        }
+    };
+    let needle = position_text(needle)?;
+    let haystack = position_text(haystack)?;
+    if bit_typed && needle.is_empty() && haystack.is_empty() {
+        return Ok(SqlValue::Int(0));
+    }
     let position = haystack
         .find(&needle)
         .map(|index| haystack[..index].chars().count() as i64 + 1)

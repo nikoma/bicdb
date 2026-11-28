@@ -478,8 +478,10 @@ impl<'db> SqlEngine<'db> {
             Expr::Position { expr, r#in } => eval_position_typed_value(
                 self.eval_select_constant_expr(expr)?,
                 self.eval_select_constant_expr(r#in)?,
-                self.constant_expr_pg_type(expr).as_deref() == Some("bytea")
-                    || self.constant_expr_pg_type(r#in).as_deref() == Some("bytea"),
+                [
+                    self.constant_expr_pg_type(expr).as_deref(),
+                    self.constant_expr_pg_type(r#in).as_deref(),
+                ],
             ),
             Expr::Trim {
                 trim_where,

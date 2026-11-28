@@ -1644,13 +1644,12 @@ impl<'db> SqlEngine<'db> {
             Expr::Position { expr, r#in } => eval_position_typed_value(
                 self.eval_slot_row_value(row, context, expr)?,
                 self.eval_slot_row_value(row, context, r#in)?,
-                self.infer_slot_row_expr_type(context.row_lookup.columns(), expr)
-                    .as_deref()
-                    == Some("bytea")
-                    || self
-                        .infer_slot_row_expr_type(context.row_lookup.columns(), r#in)
-                        .as_deref()
-                        == Some("bytea"),
+                [
+                    self.infer_slot_row_expr_type(context.row_lookup.columns(), expr)
+                        .as_deref(),
+                    self.infer_slot_row_expr_type(context.row_lookup.columns(), r#in)
+                        .as_deref(),
+                ],
             ),
             Expr::Substring {
                 expr,
@@ -3530,9 +3529,10 @@ impl<'db> SqlEngine<'db> {
             Expr::Position { expr, r#in } => eval_position_typed_value(
                 self.eval_row_value(row, expr)?,
                 self.eval_row_value(row, r#in)?,
-                projected_expr_pg_type_with_db(self.db_ref(), expr).as_deref() == Some("bytea")
-                    || projected_expr_pg_type_with_db(self.db_ref(), r#in).as_deref()
-                        == Some("bytea"),
+                [
+                    self.infer_sql_row_expr_type(row, expr).as_deref(),
+                    self.infer_sql_row_expr_type(row, r#in).as_deref(),
+                ],
             ),
             Expr::Substring {
                 expr,

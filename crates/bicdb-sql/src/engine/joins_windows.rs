@@ -1807,9 +1807,10 @@ impl<'db> SqlEngine<'db> {
             Expr::Position { expr, r#in } => eval_position_typed_value(
                 self.eval_row_aggregate_expr(rows, columns, expr)?,
                 self.eval_row_aggregate_expr(rows, columns, r#in)?,
-                projected_expr_pg_type_with_db(self.db_ref(), expr).as_deref() == Some("bytea")
-                    || projected_expr_pg_type_with_db(self.db_ref(), r#in).as_deref()
-                        == Some("bytea"),
+                [
+                    projected_expr_pg_type_with_db(self.db_ref(), expr).as_deref(),
+                    projected_expr_pg_type_with_db(self.db_ref(), r#in).as_deref(),
+                ],
             ),
             Expr::Extract { field, expr, .. } => {
                 eval_extract_value(field, self.eval_row_aggregate_expr(rows, columns, expr)?)

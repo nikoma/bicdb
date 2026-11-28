@@ -3703,9 +3703,10 @@ impl<'db> SqlSession<'db> {
                 Ok(Some(eval_position_typed_value(
                     expr,
                     r#in,
-                    projected_expr_pg_type(needle_expr, Some(schema)).as_deref() == Some("bytea")
-                        || projected_expr_pg_type(haystack_expr, Some(schema)).as_deref()
-                            == Some("bytea"),
+                    [
+                        projected_expr_pg_type(needle_expr, Some(schema)).as_deref(),
+                        projected_expr_pg_type(haystack_expr, Some(schema)).as_deref(),
+                    ],
                 )?))
             }
             Expr::Substring {

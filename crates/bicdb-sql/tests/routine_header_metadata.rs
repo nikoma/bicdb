@@ -121,3 +121,65 @@ fn routine_defaults_keep_the_callers_privileges_before_definer_entry() {
             .is_empty());
     }
 }
+
+#[test]
+fn leakproof_function_metadata_survives_restart_and_enforces_role_privileges() {
+    let root = tempfile::tempdir().unwrap();
+    let cfg = DbConfig::default()
+        .with_fsync(true)
+        .with_storage_mode(StorageMode::ServerPaged);
+    let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+    {
+        let mut sql = SqlSession::new(&mut db);
+        sql.execute("CREATE FUNCTION header_hash(v text) RETURNS text LANGUAGE sql STRICT IMMUTABLE PARALLEL SAFE LEAKPROOF RETURN substr(encode(sha256(v::bytea), 'hex'), 1, 10)").unwrap();
+        sql.execute("CREATE FUNCTION header_hash(v bytea) RETURNS text LANGUAGE sql STRICT IMMUTABLE PARALLEL SAFE LEAKPROOF RETURN substr(encode(sha256(v), 'hex'), 1, 10)").unwrap();
+        sql.execute("CREATE FUNCTION header_plain(v text) RETURNS text LANGUAGE sql NOT /* explicit */ LEAKPROOF AS 'SELECT v'").unwrap();
+        assert_eq!(
+            sql.execute("SELECT header_hash('x'::text), header_hash('x'::bytea)")
+                .unwrap()
+                .rows,
+            vec![vec![
+                SqlValue::String("2d711642b7".into()),
+                SqlValue::String("2d711642b7".into()),
+            ]]
+        );
+    }
+    db.close().unwrap();
+
+    let mut db = BicDb::open_with_config(root.path(), cfg).unwrap();
+    let mut sql = SqlSession::new(&mut db);
+    assert_eq!(
+        sql.execute("SELECT proleakproof, provolatile::text, proisstrict, proparallel::text, position('LEAKPROOF' IN pg_get_functiondef(oid)) > 0 FROM pg_proc WHERE proname = 'header_hash'")
+            .unwrap()
+            .rows,
+        vec![vec![
+            SqlValue::Bool(true),
+            SqlValue::String("i".into()),
+            SqlValue::Bool(true),
+            SqlValue::String("s".into()),
+            SqlValue::Bool(true),
+        ]; 2]
+    );
+    sql.execute("CREATE ROLE header_routine_owner; CREATE SCHEMA header_owned AUTHORIZATION header_routine_owner; SET ROLE header_routine_owner").unwrap();
+    sql.execute(
+        "CREATE FUNCTION header_owned.f(v int) RETURNS int LANGUAGE sql NOT LEAKPROOF RETURN v",
+    )
+    .unwrap();
+    for statement in [
+        "ALTER FUNCTION header_owned.f(int) LEAKPROOF",
+        "CREATE FUNCTION header_owned.g(v int) RETURNS int LANGUAGE sql LEAKPROOF RETURN v",
+    ] {
+        let err = sql.execute(statement).unwrap_err();
+        assert_eq!(err.sqlstate(), "42501");
+        assert!(err
+            .to_string()
+            .contains("only superuser can define a leakproof function"));
+    }
+    sql.execute("RESET ROLE; ALTER FUNCTION header_owned.f(int) LEAKPROOF; SET ROLE header_routine_owner; ALTER FUNCTION header_owned.f(int) NOT LEAKPROOF; RESET ROLE").unwrap();
+    assert_eq!(
+        sql.execute("SELECT proleakproof FROM pg_proc WHERE proname = 'f' AND pronamespace = 'header_owned'::regnamespace")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Bool(false)]]
+    );
+}

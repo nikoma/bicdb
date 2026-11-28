@@ -84,14 +84,7 @@ enum ArraySelector {
 }
 
 #[derive(Clone, Debug)]
-enum Endpoint {
-    Last(i64),
-    Absolute(i64),
-    Variable(String, i64),
-    LastVariable(String, i64),
-    /// Any other subscript expression.
-    Expr(Box<Expr>),
-}
+struct Endpoint(Box<Expr>);
 
 #[derive(Clone, Copy, Debug)]
 enum UnaryOp {
@@ -1120,7 +1113,7 @@ impl Parser {
         self.subscript_depth += 1;
         let expression = self.nested_expression(0);
         self.subscript_depth -= 1;
-        Ok(Endpoint::simplify(expression?))
+        Ok(Endpoint(Box::new(expression?)))
     }
 
     fn expect(&mut self, expected: Token) -> Result<()> {
@@ -1140,6 +1133,16 @@ enum Truth {
     True,
     False,
     Unknown,
+}
+
+impl From<bool> for Truth {
+    fn from(value: bool) -> Self {
+        if value {
+            Self::True
+        } else {
+            Self::False
+        }
+    }
 }
 
 struct EvalContext<'a> {
@@ -1422,7 +1425,11 @@ impl Expr {
                 .cloned()
                 .map(|value| vec![value])
                 .ok_or_else(|| {
-                    execution_error(format!("could not find jsonpath variable {}", quoted(name)))
+                    SqlError::data_exception(
+                        "42704",
+                        format!("could not find jsonpath variable {}", quoted(name)),
+                        None,
+                    )
                 }),
             Self::Literal(value) => Ok(vec![value.clone()]),
             Self::Member(base, name) => {
@@ -1485,9 +1492,17 @@ impl Expr {
                             }
                         }
                         _ => {
-                            return Err(execution_error(
-                                "jsonpath array accessor can only be applied to an array",
-                            ))
+                            let accessor =
+                                if matches!(selectors.as_slice(), [ArraySelector::Wildcard]) {
+                                    "wildcard array accessor"
+                                } else {
+                                    "array accessor"
+                                };
+                            return Err(SqlError::data_exception(
+                                "22039",
+                                format!("jsonpath {accessor} can only be applied to an array"),
+                                None,
+                            ));
                         }
                     }
                 }
@@ -1531,9 +1546,12 @@ impl Expr {
                 }
                 Ok(output)
             }
-            Self::Exists(expression) => Ok(vec![JsonValue::Bool(
-                !expression.evaluate(context)?.is_empty(),
-            )]),
+            Self::Exists(expression) => {
+                let result = expression
+                    .predicate_items(context)?
+                    .map_or(Truth::Unknown, |values| Truth::from(!values.is_empty()));
+                Ok(vec![truth_json(result)])
+            }
             Self::Unary(UnaryOp::Not, expression) => {
                 Ok(vec![truth_json(match expression.truth(context)? {
                     Truth::True => Truth::False,
@@ -1554,12 +1572,13 @@ impl Expr {
                 | BinaryOp::LtEq
                 | BinaryOp::Gt
                 | BinaryOp::GtEq => {
-                    let truth = compare_sequences(
-                        &left.evaluate(context)?,
-                        *operator,
-                        &right.evaluate(context)?,
-                        context,
-                    )?;
+                    let Some(left) = left.predicate_items(context)? else {
+                        return Ok(vec![JsonValue::Null]);
+                    };
+                    let Some(right) = right.predicate_items(context)? else {
+                        return Ok(vec![JsonValue::Null]);
+                    };
+                    let truth = compare_sequences(&left, *operator, &right, context)?;
                     Ok(vec![truth_json(truth)])
                 }
                 BinaryOp::Add
@@ -1571,11 +1590,24 @@ impl Expr {
                     *operator,
                     &right.evaluate(context)?,
                 ),
-                BinaryOp::StartsWith => Ok(vec![truth_json(string_predicate_sequences(
-                    &left.evaluate(context)?,
-                    &right.evaluate(context)?,
-                    |left, right| left.starts_with(right),
-                ))]),
+                BinaryOp::StartsWith => {
+                    let Some(left) = left.predicate_items(context)? else {
+                        return Ok(vec![JsonValue::Null]);
+                    };
+                    let Some(right) = right.predicate_items(context)? else {
+                        return Ok(vec![JsonValue::Null]);
+                    };
+                    let left = comparison_items(&left, context.mode);
+                    let outcomes = left.iter().flat_map(|left| {
+                        right.iter().map(move |right| {
+                            Ok(match (left.as_str(), right.as_str()) {
+                                (Some(left), Some(right)) => Truth::from(left.starts_with(right)),
+                                _ => Truth::Unknown,
+                            })
+                        })
+                    });
+                    Ok(vec![truth_json(predicate_truth(outcomes, context.mode)?)])
+                }
             },
             Self::LikeRegex(left, pattern, flags) => {
                 let patterns = pattern.evaluate(context)?;
@@ -1612,11 +1644,17 @@ impl Expr {
                 let regex = builder.build().map_err(|error| {
                     execution_error(format!("invalid regular expression: {error}"))
                 })?;
-                let matched = left
-                    .evaluate(context)?
-                    .iter()
-                    .any(|value| value.as_str().is_some_and(|value| regex.is_match(value)));
-                Ok(vec![JsonValue::Bool(matched)])
+                let Some(left) = left.predicate_items(context)? else {
+                    return Ok(vec![JsonValue::Null]);
+                };
+                let outcomes = comparison_items(&left, context.mode)
+                    .into_iter()
+                    .map(|value| {
+                        Ok(value
+                            .as_str()
+                            .map_or(Truth::Unknown, |value| Truth::from(regex.is_match(value))))
+                    });
+                Ok(vec![truth_json(predicate_truth(outcomes, context.mode)?)])
             }
             Self::IsUnknown(expression) => Ok(vec![JsonValue::Bool(
                 expression.truth(context)? == Truth::Unknown,
@@ -1627,6 +1665,14 @@ impl Expr {
                     "evaluating jsonpath LAST outside of array subscript",
                 )),
             },
+        }
+    }
+
+    fn predicate_items(&self, context: &EvalContext<'_>) -> Result<Option<Vec<JsonValue>>> {
+        match self.evaluate(context) {
+            Ok(values) => Ok(Some(values)),
+            Err(error) if is_suppressible(&error) => Ok(None),
+            Err(error) => Err(error),
         }
     }
 
@@ -1688,121 +1734,69 @@ impl ArraySelector {
         context: &EvalContext<'_>,
         output: &mut Vec<JsonValue>,
     ) -> Result<()> {
-        match self {
-            Self::Wildcard => output.extend_from_slice(values),
+        let last = i64::try_from(values.len())
+            .map_err(|_| execution_error("jsonpath array is too large"))?
+            - 1;
+        let (start, end) = match self {
+            Self::Wildcard => {
+                output.extend_from_slice(values);
+                return Ok(());
+            }
             Self::Index(endpoint) => {
-                if let Some(index) = endpoint.resolve(values.len(), context)? {
-                    output.push(values[index].clone());
-                }
+                let index = i64::from(endpoint.resolve(last, context)?);
+                (index, index)
             }
-            Self::Range(start, end) => {
-                let (Some(start), Some(end)) = (
-                    start.resolve(values.len(), context)?,
-                    end.resolve(values.len(), context)?,
-                ) else {
-                    return Ok(());
-                };
-                if start <= end {
-                    output.extend_from_slice(&values[start..=end]);
-                }
-            }
+            Self::Range(start, end) => (
+                i64::from(start.resolve(last, context)?),
+                i64::from(end.resolve(last, context)?),
+            ),
+        };
+        if context.mode == Mode::Strict && (start < 0 || start > end || end > last) {
+            return Err(array_subscript_error(
+                "jsonpath array subscript is out of bounds",
+            ));
+        }
+
+        // Lax ranges intersect the existing array positions.
+        let start = start.max(0);
+        let end = end.min(last);
+        if start <= end {
+            output.extend_from_slice(&values[start as usize..=end as usize]);
         }
         Ok(())
     }
 }
 
+fn array_subscript_error(message: &'static str) -> SqlError {
+    SqlError::data_exception("22033", message, None)
+}
+
 impl Endpoint {
-    /// The fast forms of a subscript expression; anything else is kept as
-    /// an expression evaluated with `last` bound.
-    fn simplify(expression: Expr) -> Self {
-        let integer = |value: &JsonValue| value.as_i64();
-        match &expression {
-            Expr::Literal(value) if integer(value).is_some() => {
-                return Self::Absolute(integer(value).expect("checked integer"))
-            }
-            Expr::Variable(name) => return Self::Variable(name.clone(), 1),
-            Expr::Unary(UnaryOp::Minus, inner) => {
-                if let Expr::Variable(name) = inner.as_ref() {
-                    return Self::Variable(name.clone(), -1);
-                }
-            }
-            Expr::Last => return Self::Last(0),
-            Expr::Binary(left, operator @ (BinaryOp::Add | BinaryOp::Subtract), right)
-                if matches!(left.as_ref(), Expr::Last) =>
-            {
-                let sign = if matches!(operator, BinaryOp::Subtract) {
-                    -1
-                } else {
-                    1
-                };
-                match right.as_ref() {
-                    Expr::Literal(value) if integer(value).is_some() => {
-                        return Self::Last(sign * integer(value).expect("checked integer"))
-                    }
-                    Expr::Variable(name) => return Self::LastVariable(name.clone(), sign),
-                    _ => {}
-                }
-            }
-            _ => {}
-        }
-        Self::Expr(Box::new(expression))
-    }
-
     fn canonical_text(&self) -> String {
-        match self {
-            Self::Expr(expression) => expression.pg_text(false),
-            Self::Last(0) => "last".to_string(),
-            Self::Last(offset) if *offset < 0 => format!("last - {}", offset.unsigned_abs()),
-            Self::Last(offset) => format!("last + {offset}"),
-            Self::Absolute(index) => index.to_string(),
-            Self::Variable(name, 1) => format!("${}", quoted(name)),
-            Self::Variable(name, -1) => format!("-${}", quoted(name)),
-            Self::Variable(name, multiplier) => {
-                format!("({multiplier} * ${})", quoted(name))
-            }
-            Self::LastVariable(name, -1) => format!("last - ${}", quoted(name)),
-            Self::LastVariable(name, 1) => format!("last + ${}", quoted(name)),
-            Self::LastVariable(name, multiplier) => {
-                format!("last + ({multiplier} * ${})", quoted(name))
-            }
-        }
+        self.0.pg_text(false)
     }
 
-    fn resolve(&self, length: usize, context: &EvalContext<'_>) -> Result<Option<usize>> {
-        let length =
-            i64::try_from(length).map_err(|_| execution_error("jsonpath array is too large"))?;
-        let index = match self {
-            Self::Absolute(index) => *index,
-            Self::Last(offset) => length - 1 + offset,
-            Self::Variable(name, multiplier) => variable_integer(context, name)? * multiplier,
-            Self::LastVariable(name, multiplier) => {
-                length - 1 + variable_integer(context, name)? * multiplier
-            }
-            Self::Expr(expression) => {
-                let local = EvalContext {
-                    last: Some(length - 1),
-                    ..*context
-                };
-                let values = expression.evaluate(&local)?;
-                let [JsonValue::Number(number)] = values.as_slice() else {
-                    return Err(SqlError::data_exception(
-                        "22033",
-                        "jsonpath array subscript is not a single numeric value",
-                        Some("jsonpath".to_string()),
-                    ));
-                };
-                let value = number.as_f64().unwrap_or(f64::NAN).trunc();
-                if !(i32::MIN as f64..=i32::MAX as f64).contains(&value) {
-                    return Err(SqlError::data_exception(
-                        "22033",
-                        "jsonpath array subscript is out of integer range",
-                        Some("jsonpath".to_string()),
-                    ));
-                }
-                value as i64
-            }
+    fn resolve(&self, last: i64, context: &EvalContext<'_>) -> Result<i32> {
+        let local = EvalContext {
+            last: Some(last),
+            ..*context
         };
-        Ok((index >= 0 && index < length).then_some(index as usize))
+        let values = self.0.evaluate(&local)?;
+        let [JsonValue::Number(number)] = values.as_slice() else {
+            return Err(array_subscript_error(
+                "jsonpath array subscript is not a single numeric value",
+            ));
+        };
+        let range_error =
+            || array_subscript_error("jsonpath array subscript is out of integer range");
+        // Truncate as a PostgreSQL numeric before checking the int4 limits.
+        let number = crate::PgNumeric::from_decimal_text(&number.to_string())
+            .map_err(|_| range_error())?
+            .to_decimal_text();
+        let integral = number
+            .split_once('.')
+            .map_or(number.as_str(), |(integer, _)| integer);
+        integral.parse().map_err(|_| range_error())
     }
 }
 
@@ -1855,14 +1849,6 @@ impl Method {
 
 fn quoted(value: &str) -> String {
     serde_json::to_string(value).expect("JSON string serialization is infallible")
-}
-
-fn variable_integer(context: &EvalContext<'_>, name: &str) -> Result<i64> {
-    context
-        .variables
-        .get(name)
-        .and_then(JsonValue::as_i64)
-        .ok_or_else(|| execution_error(format!("jsonpath variable {name} must be an integer")))
 }
 
 fn member_values(
@@ -1941,39 +1927,44 @@ fn compare_sequences(
 ) -> Result<Truth> {
     let left = comparison_items(left, context.mode);
     let right = comparison_items(right, context.mode);
-    let mut unknown = false;
-    for left in &left {
-        for right in &right {
-            match compare_json_values(left, right, context.timezone_aware)? {
-                Comparison::Ordered(ordering) => {
-                    let matched = match operator {
-                        BinaryOp::Eq => ordering == Ordering::Equal,
-                        BinaryOp::NotEq => ordering != Ordering::Equal,
-                        BinaryOp::Lt => ordering == Ordering::Less,
-                        BinaryOp::LtEq => ordering != Ordering::Greater,
-                        BinaryOp::Gt => ordering == Ordering::Greater,
-                        BinaryOp::GtEq => ordering != Ordering::Less,
-                        _ => unreachable!(),
-                    };
-                    if matched {
-                        return Ok(Truth::True);
-                    }
-                }
-                // Null against a non-null item: only `!=` holds.
-                Comparison::NullMismatch => {
-                    if matches!(operator, BinaryOp::NotEq) {
-                        return Ok(Truth::True);
-                    }
-                }
-                Comparison::Unknown => unknown = true,
-            }
+    let outcomes = left.iter().flat_map(|left| {
+        right.iter().map(move |right| {
+            let comparison = compare_json_values(left, right, context.timezone_aware)?;
+            Ok(match comparison {
+                Comparison::Ordered(ordering) => Truth::from(match operator {
+                    BinaryOp::Eq => ordering == Ordering::Equal,
+                    BinaryOp::NotEq => ordering != Ordering::Equal,
+                    BinaryOp::Lt => ordering == Ordering::Less,
+                    BinaryOp::LtEq => ordering != Ordering::Greater,
+                    BinaryOp::Gt => ordering == Ordering::Greater,
+                    BinaryOp::GtEq => ordering != Ordering::Less,
+                    _ => unreachable!(),
+                }),
+                Comparison::NullMismatch => Truth::from(matches!(operator, BinaryOp::NotEq)),
+                Comparison::Unknown => Truth::Unknown,
+            })
+        })
+    });
+    predicate_truth(outcomes, context.mode)
+}
+
+fn predicate_truth(outcomes: impl IntoIterator<Item = Result<Truth>>, mode: Mode) -> Result<Truth> {
+    let mut result = Truth::False;
+    for outcome in outcomes {
+        let outcome = match outcome {
+            Ok(truth) => truth,
+            Err(error) if is_suppressible(&error) => Truth::Unknown,
+            Err(error) => return Err(error),
+        };
+        match (mode, outcome) {
+            (Mode::Strict, Truth::Unknown) => return Ok(Truth::Unknown),
+            (Mode::Lax, Truth::True) => return Ok(Truth::True),
+            (Mode::Strict, Truth::True) => result = Truth::True,
+            (Mode::Lax, Truth::Unknown) => result = Truth::Unknown,
+            (_, Truth::False) => {}
         }
     }
-    Ok(if unknown {
-        Truth::Unknown
-    } else {
-        Truth::False
-    })
+    Ok(result)
 }
 
 fn is_datetime_method(method: Method) -> bool {
@@ -1986,29 +1977,6 @@ fn is_datetime_method(method: Method) -> bool {
             | Method::TimestampTz
             | Method::DateTime
     )
-}
-
-fn string_predicate_sequences(
-    left: &[JsonValue],
-    right: &[JsonValue],
-    predicate: impl Fn(&str, &str) -> bool,
-) -> Truth {
-    let mut comparable = false;
-    for left in left {
-        for right in right {
-            if let (Some(left), Some(right)) = (left.as_str(), right.as_str()) {
-                comparable = true;
-                if predicate(left, right) {
-                    return Truth::True;
-                }
-            }
-        }
-    }
-    if comparable {
-        Truth::False
-    } else {
-        Truth::Unknown
-    }
 }
 
 fn comparison_items(values: &[JsonValue], mode: Mode) -> Vec<&JsonValue> {
@@ -2632,7 +2600,12 @@ pub(crate) fn eval_jsonpath_function_value(
     let result = path.query(&target, &variables, timezone_aware);
     let values = match result {
         Ok(values) => values,
-        Err(error) if silent && !datetime::is_unsuppressible(&error) => Vec::new(),
+        Err(error) if silent && is_suppressible(&error) => {
+            if base_name == "jsonb_path_exists" {
+                return Ok(Some(SqlValue::Null));
+            }
+            Vec::new()
+        }
         Err(error) => return Err(error),
     };
     let value = match base_name {
@@ -2686,6 +2659,10 @@ pub(crate) fn eval_jsonpath_operator_value(
     .ok_or_else(|| SqlError::Unsupported("jsonpath operator is unavailable".to_string()))
 }
 
+fn is_suppressible(error: &SqlError) -> bool {
+    error.sqlstate() != "42704" && !datetime::is_unsuppressible(error)
+}
+
 pub(crate) fn eval_jsonpath_query_values(name: &str, args: &[SqlValue]) -> Result<Vec<SqlValue>> {
     let timezone_aware = name
         .strip_prefix("pg_catalog.")
@@ -2696,7 +2673,7 @@ pub(crate) fn eval_jsonpath_query_values(name: &str, args: &[SqlValue]) -> Resul
     };
     match path.query(&target, &variables, timezone_aware) {
         Ok(values) => Ok(values.into_iter().map(SqlValue::json).collect()),
-        Err(error) if silent && !datetime::is_unsuppressible(&error) => Ok(Vec::new()),
+        Err(error) if silent && is_suppressible(&error) => Ok(Vec::new()),
         Err(error) => Err(error),
     }
 }

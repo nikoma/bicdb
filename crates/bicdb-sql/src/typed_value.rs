@@ -5,7 +5,7 @@
 //! forcing existing embedders to migrate in one release.
 
 use crate::{pg_type_oid_by_name, PgTsQuery, PgTsVector, SqlResult, SqlRowStream, SqlValue};
-use num_bigint::BigInt;
+use num_bigint::{BigInt, BigUint};
 use num_traits::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
@@ -51,6 +51,8 @@ pub enum PgCanonicalValueError {
     TemporalFieldOverflow(&'static str),
     #[error("{0} value exceeds its canonical storage range")]
     TemporalOverflow(&'static str),
+    #[error("interval out of range")]
+    IntervalOutOfRange,
     #[error("network prefix {prefix} exceeds address width {address_bits}")]
     InvalidNetworkPrefix { prefix: u8, address_bits: u8 },
     #[error("invalid octet value in macaddr value")]
@@ -422,6 +424,23 @@ pub enum PgNumeric {
 pub const PG_NUMERIC_MAX_INTEGER_DIGITS: i32 = 131_072;
 pub const PG_NUMERIC_MAX_FRACTIONAL_DIGITS: i32 = 16_383;
 
+fn strip_numeric_digit_separators(
+    input: &str,
+    is_digit: impl Fn(u8) -> bool,
+) -> Result<String, PgCanonicalValueError> {
+    let bytes = input.as_bytes();
+    for (index, byte) in bytes.iter().enumerate() {
+        if *byte == b'_'
+            && (index == 0
+                || !is_digit(bytes[index - 1])
+                || !bytes.get(index + 1).is_some_and(|byte| is_digit(*byte)))
+        {
+            return Err(PgCanonicalValueError::InvalidNumericCoefficient);
+        }
+    }
+    Ok(input.replace('_', ""))
+}
+
 impl PgNumeric {
     pub fn finite(
         negative: bool,
@@ -496,12 +515,39 @@ impl PgNumeric {
     }
 
     pub fn from_postgres_text(value: &str) -> Result<Self, PgCanonicalValueError> {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "nan" => Ok(Self::NaN),
-            "infinity" | "+infinity" | "inf" | "+inf" => Ok(Self::PositiveInfinity),
-            "-infinity" | "-inf" => Ok(Self::NegativeInfinity),
-            _ => Self::from_decimal_text(value),
+        let value = value.trim();
+        match value.to_ascii_lowercase().as_str() {
+            "nan" => return Ok(Self::NaN),
+            "infinity" | "+infinity" | "inf" | "+inf" => return Ok(Self::PositiveInfinity),
+            "-infinity" | "-inf" => return Ok(Self::NegativeInfinity),
+            _ => {}
         }
+
+        let digits = value.strip_prefix(['+', '-']).unwrap_or(value);
+        let radix = match digits.as_bytes().get(..2) {
+            Some([b'0', b'x' | b'X']) => Some(16),
+            Some([b'0', b'o' | b'O']) => Some(8),
+            Some([b'0', b'b' | b'B']) => Some(2),
+            _ => None,
+        };
+        if let Some(radix) = radix {
+            let digits = digits[2..].strip_prefix('_').unwrap_or(&digits[2..]);
+            let digits =
+                strip_numeric_digit_separators(digits, |byte| (byte as char).is_digit(radix))?;
+            if !digits.bytes().all(|byte| (byte as char).is_digit(radix)) {
+                return Err(PgCanonicalValueError::InvalidNumericCoefficient);
+            }
+            let magnitude = BigUint::parse_bytes(digits.as_bytes(), radix)
+                .ok_or(PgCanonicalValueError::InvalidNumericCoefficient)?;
+            let value = Self::finite(value.starts_with('-'), magnitude.to_str_radix(10), 0)?;
+            value.validate_unconstrained_range()?;
+            return Ok(value);
+        }
+        if value.contains('_') {
+            let value = strip_numeric_digit_separators(value, |byte| byte.is_ascii_digit())?;
+            return Self::from_decimal_text(&value);
+        }
+        Self::from_decimal_text(value)
     }
 
     pub fn to_decimal_text(&self) -> String {
@@ -1758,76 +1804,10 @@ impl PgInterval {
         if original.is_empty() {
             return Err(invalid_temporal("interval", original));
         }
-        match original.to_ascii_lowercase().as_str() {
-            "infinity" | "+infinity" => return Ok(Self::POSITIVE_INFINITY),
-            "-infinity" => return Ok(Self::NEGATIVE_INFINITY),
-            _ => {}
+        if value.starts_with('P') {
+            return parse_iso_interval(value);
         }
-        if original
-            .trim_start_matches(['+', '-'])
-            .starts_with(['P', 'p'])
-        {
-            return parse_iso_interval(original);
-        }
-        let mut value = original;
-        if let Some(stripped) = value.strip_prefix('@') {
-            value = stripped.trim_start();
-        }
-        let ago = value
-            .get(value.len().saturating_sub(3)..)
-            .is_some_and(|suffix| suffix.eq_ignore_ascii_case("ago"));
-        if ago {
-            value = value[..value.len() - 3].trim_end();
-        }
-        if !value
-            .chars()
-            .any(|character| character.is_ascii_alphabetic())
-        {
-            let mut interval = parse_sql_standard_interval(value, fields)?;
-            if ago {
-                interval = interval.checked_neg()?;
-            }
-            return Ok(interval);
-        }
-        let parts = value.split_whitespace().collect::<Vec<_>>();
-        let mut months = 0_i64;
-        let mut days = 0_i64;
-        let mut micros = 0_i64;
-        let mut index = 0;
-        while index < parts.len() {
-            if parts[index].contains(':') {
-                micros = micros
-                    .checked_add(parse_interval_clock_micros(parts[index], fields)?)
-                    .ok_or(PgCanonicalValueError::TemporalOverflow("interval"))?;
-                index += 1;
-                continue;
-            }
-            let amount_text = parts[index];
-            let unit = parts
-                .get(index + 1)
-                .ok_or_else(|| invalid_temporal("interval", original))?
-                .to_ascii_lowercase();
-            add_interval_unit(
-                amount_text,
-                &unit,
-                &mut months,
-                &mut days,
-                &mut micros,
-                original,
-            )?;
-            index += 2;
-        }
-        let mut interval = Self {
-            months: i32::try_from(months)
-                .map_err(|_| PgCanonicalValueError::TemporalOverflow("interval"))?,
-            days: i32::try_from(days)
-                .map_err(|_| PgCanonicalValueError::TemporalOverflow("interval"))?,
-            micros,
-        };
-        if ago {
-            interval = interval.checked_neg()?;
-        }
-        Ok(interval)
+        parse_postgres_interval(original, fields)
     }
 
     pub fn to_postgres_text(self) -> String {
@@ -1856,13 +1836,23 @@ impl PgInterval {
         }
         if self.days != 0 {
             parts.push(format!(
-                "{} {}",
+                "{}{} {}",
+                if self.days > 0 && self.months < 0 {
+                    "+"
+                } else {
+                    ""
+                },
                 self.days,
                 if self.days == 1 { "day" } else { "days" }
             ));
         }
         if self.micros != 0 || parts.is_empty() {
-            let force_positive = self.micros > 0 && (self.months < 0 || self.days < 0);
+            let previous_is_negative = if self.days == 0 {
+                self.months < 0
+            } else {
+                self.days < 0
+            };
+            let force_positive = self.micros > 0 && previous_is_negative;
             parts.push(format_interval_clock(self.micros, force_positive, true));
         }
         parts.join(" ")
@@ -1870,7 +1860,7 @@ impl PgInterval {
 
     pub fn to_postgres_verbose_text(self) -> String {
         if self.months <= 0 && self.days <= 0 && self.micros <= 0 {
-            let positive = self.checked_neg().unwrap_or(self);
+            let positive = self.checked_neg_components().unwrap_or(self);
             if positive == Self::ZERO {
                 return "@ 0".to_string();
             }
@@ -2056,6 +2046,18 @@ impl PgInterval {
     }
 
     pub fn checked_neg(self) -> Result<Self, PgCanonicalValueError> {
+        if self.is_positive_infinity() {
+            return Ok(Self::NEGATIVE_INFINITY);
+        }
+        if self.is_negative_infinity() {
+            return Ok(Self::POSITIVE_INFINITY);
+        }
+        self.checked_neg_components()
+            .map_err(|_| PgCanonicalValueError::IntervalOutOfRange)?
+            .finite_arithmetic_result()
+    }
+
+    fn checked_neg_components(self) -> Result<Self, PgCanonicalValueError> {
         Ok(Self {
             months: self
                 .months
@@ -2073,95 +2075,202 @@ impl PgInterval {
     }
 
     pub fn checked_add(self, other: Self) -> Result<Self, PgCanonicalValueError> {
-        Ok(Self {
-            months: self
-                .months
-                .checked_add(other.months)
-                .ok_or(PgCanonicalValueError::TemporalOverflow("interval"))?,
-            days: self
-                .days
-                .checked_add(other.days)
-                .ok_or(PgCanonicalValueError::TemporalOverflow("interval"))?,
-            micros: self
-                .micros
-                .checked_add(other.micros)
-                .ok_or(PgCanonicalValueError::TemporalOverflow("interval"))?,
-        })
+        let overflow = || PgCanonicalValueError::IntervalOutOfRange;
+        if !self.is_finite() {
+            if !other.is_finite() && self != other {
+                return Err(overflow());
+            }
+            return Ok(self);
+        }
+        if !other.is_finite() {
+            return Ok(other);
+        }
+        Self {
+            months: self.months.checked_add(other.months).ok_or_else(overflow)?,
+            days: self.days.checked_add(other.days).ok_or_else(overflow)?,
+            micros: self.micros.checked_add(other.micros).ok_or_else(overflow)?,
+        }
+        .finite_arithmetic_result()
     }
 
     pub fn checked_sub(self, other: Self) -> Result<Self, PgCanonicalValueError> {
-        self.checked_add(other.checked_neg()?)
+        if !other.is_finite() {
+            return self.checked_add(other.checked_neg()?);
+        }
+        if !self.is_finite() {
+            return Ok(self);
+        }
+        let overflow = || PgCanonicalValueError::IntervalOutOfRange;
+        Self {
+            months: self.months.checked_sub(other.months).ok_or_else(overflow)?,
+            days: self.days.checked_sub(other.days).ok_or_else(overflow)?,
+            micros: self.micros.checked_sub(other.micros).ok_or_else(overflow)?,
+        }
+        .finite_arithmetic_result()
+    }
+
+    fn finite_arithmetic_result(self) -> Result<Self, PgCanonicalValueError> {
+        self.is_finite()
+            .then_some(self)
+            .ok_or(PgCanonicalValueError::IntervalOutOfRange)
     }
 
     pub fn checked_scale(self, factor: f64) -> Result<Self, PgCanonicalValueError> {
-        if !factor.is_finite() {
-            return Err(PgCanonicalValueError::TemporalOverflow("interval"));
+        if factor.is_nan() {
+            return Err(PgCanonicalValueError::IntervalOutOfRange);
         }
-        let months_exact = f64::from(self.months) * factor;
-        let months = months_exact.trunc();
-        let month_remainder_days = (months_exact - months) * 30.0;
-        let days_exact = f64::from(self.days) * factor + month_remainder_days;
-        let days = days_exact.trunc();
-        let day_remainder_micros = (days_exact - days) * MICROS_PER_DAY as f64;
-        let micros = (self.micros as f64 * factor + day_remainder_micros).round_ties_even();
-        Ok(Self {
-            months: f64_to_i32_interval(months)?,
-            days: f64_to_i32_interval(days)?,
-            micros: f64_to_i64_interval(micros)?,
-        })
+        if !self.is_finite() {
+            return if factor == 0.0 {
+                Err(PgCanonicalValueError::IntervalOutOfRange)
+            } else if factor.is_sign_negative() {
+                self.checked_neg()
+            } else {
+                Ok(self)
+            };
+        }
+        if factor.is_infinite() {
+            let sign = self.comparison_micros().signum();
+            return if sign == 0 {
+                Err(PgCanonicalValueError::IntervalOutOfRange)
+            } else if (sign < 0) != factor.is_sign_negative() {
+                Ok(Self::NEGATIVE_INFINITY)
+            } else {
+                Ok(Self::POSITIVE_INFINITY)
+            };
+        }
+        Self::from_scaled_components(
+            f64::from(self.months) * factor,
+            f64::from(self.days) * factor,
+            self.micros as f64 * factor,
+        )
     }
 
     pub fn checked_div(self, divisor: f64) -> Result<Self, PgCanonicalValueError> {
-        if divisor == 0.0 || !divisor.is_finite() {
-            return Err(PgCanonicalValueError::TemporalOverflow("interval"));
+        if divisor == 0.0 || divisor.is_nan() {
+            return Err(PgCanonicalValueError::IntervalOutOfRange);
         }
-        self.checked_scale(1.0 / divisor)
+        if !self.is_finite() {
+            return if divisor.is_infinite() {
+                Err(PgCanonicalValueError::IntervalOutOfRange)
+            } else if divisor.is_sign_negative() {
+                self.checked_neg()
+            } else {
+                Ok(self)
+            };
+        }
+        Self::from_scaled_components(
+            f64::from(self.months) / divisor,
+            f64::from(self.days) / divisor,
+            self.micros as f64 / divisor,
+        )
     }
 
-    pub fn justify_hours(self) -> Result<Self, PgCanonicalValueError> {
-        let extra_days = self.micros / MICROS_PER_DAY;
-        Ok(Self {
-            months: self.months,
-            days: self
-                .days
-                .checked_add(
-                    i32::try_from(extra_days)
-                        .map_err(|_| PgCanonicalValueError::TemporalOverflow("interval"))?,
-                )
-                .ok_or(PgCanonicalValueError::TemporalOverflow("interval"))?,
-            micros: self.micros % MICROS_PER_DAY,
-        })
+    fn from_scaled_components(
+        exact_months: f64,
+        exact_days: f64,
+        exact_micros: f64,
+    ) -> Result<Self, PgCanonicalValueError> {
+        const SECONDS_PER_DAY: f64 = 86_400.0;
+        let months = f64_to_i32_interval(exact_months)?;
+        let days = f64_to_i32_interval(exact_days)?;
+        let month_remainder = round_interval_fraction((exact_months - f64::from(months)) * 30.0);
+        let whole_month_days = month_remainder as i32;
+        // Carry whole fractional months into days only after rounding the
+        // combined fractional seconds, so each stored component keeps its sign.
+        let day_remainder = exact_days - f64::from(days);
+        let mut seconds = round_interval_fraction(
+            (day_remainder + month_remainder - f64::from(whole_month_days)) * SECONDS_PER_DAY,
+        );
+        let days_from_seconds = (seconds / SECONDS_PER_DAY) as i32;
+        seconds -= f64::from(days_from_seconds) * SECONDS_PER_DAY;
+        let days = days
+            .checked_add(days_from_seconds)
+            .and_then(|days| days.checked_add(whole_month_days))
+            .ok_or(PgCanonicalValueError::IntervalOutOfRange)?;
+        let micros = f64_to_i64_interval((exact_micros + seconds * 1_000_000.0).round_ties_even())?;
+        Self {
+            months,
+            days,
+            micros,
+        }
+        .finite_arithmetic_result()
     }
 
-    pub fn justify_days(self) -> Result<Self, PgCanonicalValueError> {
-        let extra_months = self.days / 30;
-        Ok(Self {
-            months: self
-                .months
-                .checked_add(extra_months)
-                .ok_or(PgCanonicalValueError::TemporalOverflow("interval"))?,
-            days: self.days % 30,
-            micros: self.micros,
-        })
+    pub fn justify_hours(mut self) -> Result<Self, PgCanonicalValueError> {
+        if self.is_finite() {
+            self.carry_hours_into_days()?;
+            self.align_day_time_signs();
+        }
+        Ok(self)
     }
 
-    pub fn justify_interval(self) -> Result<Self, PgCanonicalValueError> {
-        let mut value = self.justify_hours()?.justify_days()?;
-        if value.months > 0 && (value.days < 0 || (value.days == 0 && value.micros < 0)) {
-            value.months -= 1;
-            value.days += 30;
-        } else if value.months < 0 && (value.days > 0 || (value.days == 0 && value.micros > 0)) {
-            value.months += 1;
-            value.days -= 30;
+    pub fn justify_days(mut self) -> Result<Self, PgCanonicalValueError> {
+        if self.is_finite() {
+            self.carry_days_into_months()?;
+            self.align_month_day_signs(self.days.signum());
         }
-        if value.days > 0 && value.micros < 0 {
-            value.days -= 1;
-            value.micros += MICROS_PER_DAY;
-        } else if value.days < 0 && value.micros > 0 {
-            value.days += 1;
-            value.micros -= MICROS_PER_DAY;
+        Ok(self)
+    }
+
+    pub fn justify_interval(mut self) -> Result<Self, PgCanonicalValueError> {
+        if !self.is_finite() {
+            return Ok(self);
         }
-        Ok(value)
+        // Make room for whole days from the clock when both components
+        // have the same sign and their sum could otherwise overflow.
+        if self.days != 0 && i64::from(self.days.signum()) == self.micros.signum() {
+            self.carry_days_into_months()?;
+        }
+        self.carry_hours_into_days()?;
+        self.carry_days_into_months()?;
+        let day_time_sign = if self.days == 0 {
+            self.micros.signum() as i32
+        } else {
+            self.days.signum()
+        };
+        self.align_month_day_signs(day_time_sign);
+        self.align_day_time_signs();
+        Ok(self)
+    }
+
+    fn carry_hours_into_days(&mut self) -> Result<(), PgCanonicalValueError> {
+        // An i64 microsecond count spans fewer than 107 million whole days.
+        let whole_days = (self.micros / MICROS_PER_DAY) as i32;
+        self.days = self
+            .days
+            .checked_add(whole_days)
+            .ok_or(PgCanonicalValueError::IntervalOutOfRange)?;
+        self.micros %= MICROS_PER_DAY;
+        Ok(())
+    }
+
+    fn carry_days_into_months(&mut self) -> Result<(), PgCanonicalValueError> {
+        self.months = self
+            .months
+            .checked_add(self.days / 30)
+            .ok_or(PgCanonicalValueError::IntervalOutOfRange)?;
+        self.days %= 30;
+        Ok(())
+    }
+
+    fn align_month_day_signs(&mut self, day_sign: i32) {
+        if self.months > 0 && day_sign < 0 {
+            self.months -= 1;
+            self.days += 30;
+        } else if self.months < 0 && day_sign > 0 {
+            self.months += 1;
+            self.days -= 30;
+        }
+    }
+
+    fn align_day_time_signs(&mut self) {
+        if self.days > 0 && self.micros < 0 {
+            self.days -= 1;
+            self.micros += MICROS_PER_DAY;
+        } else if self.days < 0 && self.micros > 0 {
+            self.days += 1;
+            self.micros -= MICROS_PER_DAY;
+        }
     }
 
     pub fn comparison_micros(self) -> i128 {
@@ -2249,17 +2358,67 @@ fn parse_interval_decimal_scaled(value: &str, scale: i64) -> Result<i64, PgCanon
     rounded_interval_ratio(numerator * BigInt::from(scale), &denominator)
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[repr(u16)]
+enum IntervalInputUnit {
+    Millennium = 1 << 0,
+    Century = 1 << 1,
+    Decade = 1 << 2,
+    Year = 1 << 3,
+    Month = 1 << 4,
+    Week = 1 << 5,
+    Day = 1 << 6,
+    Hour = 1 << 7,
+    Minute = 1 << 8,
+    Second = 1 << 9,
+    Millisecond = 1 << 10,
+    Microsecond = 1 << 11,
+}
+
+impl IntervalInputUnit {
+    const SUBSECOND_MASK: u16 = Self::Millisecond as u16 | Self::Microsecond as u16;
+    const CLOCK_MASK: u16 =
+        Self::Hour as u16 | Self::Minute as u16 | Self::Second as u16 | Self::SUBSECOND_MASK;
+
+    fn from_keyword(keyword: &str) -> Option<Self> {
+        Some(match keyword {
+            "mil" | "mils" | "millennia" | "millennium" => Self::Millennium,
+            "c" | "cent" | "century" | "centuries" => Self::Century,
+            "dec" | "decs" | "decade" | "decades" => Self::Decade,
+            "y" | "yr" | "yrs" | "year" | "years" => Self::Year,
+            "mon" | "mons" | "month" | "months" => Self::Month,
+            "w" | "week" | "weeks" => Self::Week,
+            "d" | "day" | "days" => Self::Day,
+            "h" | "hr" | "hrs" | "hour" | "hours" => Self::Hour,
+            "m" | "mm" | "min" | "mins" | "minute" | "minutes" => Self::Minute,
+            "s" | "sec" | "secs" | "second" | "seconds" => Self::Second,
+            "ms" | "msec" | "msecs" | "msecond" | "mseconds" | "millisecon" => Self::Millisecond,
+            "us" | "usec" | "usecs" | "usecond" | "useconds" | "microsecon" => Self::Microsecond,
+            _ => return None,
+        })
+    }
+
+    fn rightmost_field(fields: Option<&str>) -> Self {
+        match fields.map(|fields| fields.rsplit_once(" TO ").map_or(fields, |(_, unit)| unit)) {
+            Some("YEAR") => Self::Year,
+            Some("MONTH") => Self::Month,
+            Some("DAY") => Self::Day,
+            Some("HOUR") => Self::Hour,
+            Some("MINUTE") => Self::Minute,
+            _ => Self::Second,
+        }
+    }
+}
+
 fn add_interval_unit(
     amount: &str,
-    unit: &str,
+    unit: IntervalInputUnit,
     months: &mut i64,
     days: &mut i64,
     micros: &mut i64,
-    original: &str,
 ) -> Result<(), PgCanonicalValueError> {
-    let unit = unit.trim_end_matches('s');
     match unit {
-        "millennium" | "millennia" | "millenniu" => {
+        IntervalInputUnit::Millennium => {
             *months = checked_add_scaled(
                 *months,
                 parse_interval_decimal_scaled(amount, 12_000)?,
@@ -2267,7 +2426,7 @@ fn add_interval_unit(
                 "interval",
             )?;
         }
-        "century" | "centurie" => {
+        IntervalInputUnit::Century => {
             *months = checked_add_scaled(
                 *months,
                 parse_interval_decimal_scaled(amount, 1_200)?,
@@ -2275,7 +2434,7 @@ fn add_interval_unit(
                 "interval",
             )?;
         }
-        "decade" => {
+        IntervalInputUnit::Decade => {
             *months = checked_add_scaled(
                 *months,
                 parse_interval_decimal_scaled(amount, 120)?,
@@ -2283,7 +2442,7 @@ fn add_interval_unit(
                 "interval",
             )?;
         }
-        "year" | "yr" => {
+        IntervalInputUnit::Year => {
             *months = checked_add_scaled(
                 *months,
                 parse_interval_decimal_scaled(amount, 12)?,
@@ -2291,7 +2450,7 @@ fn add_interval_unit(
                 "interval",
             )?;
         }
-        "mon" | "month" => {
+        IntervalInputUnit::Month => {
             let (numerator, denominator) = interval_decimal_ratio(amount)?;
             let whole = (&numerator / &denominator)
                 .to_i64()
@@ -2314,34 +2473,33 @@ fn add_interval_unit(
                 )?)
                 .ok_or(PgCanonicalValueError::TemporalOverflow("interval"))?;
         }
-        "week" => add_interval_day_fraction(amount, 7, days, micros)?,
-        "day" => add_interval_day_fraction(amount, 1, days, micros)?,
-        "hour" | "hr" => {
+        IntervalInputUnit::Week => add_interval_day_fraction(amount, 7, days, micros)?,
+        IntervalInputUnit::Day => add_interval_day_fraction(amount, 1, days, micros)?,
+        IntervalInputUnit::Hour => {
             *micros = micros
                 .checked_add(parse_interval_decimal_scaled(amount, 3_600_000_000)?)
                 .ok_or(PgCanonicalValueError::TemporalOverflow("interval"))?;
         }
-        "minute" | "min" => {
+        IntervalInputUnit::Minute => {
             *micros = micros
                 .checked_add(parse_interval_decimal_scaled(amount, 60_000_000)?)
                 .ok_or(PgCanonicalValueError::TemporalOverflow("interval"))?;
         }
-        "second" | "sec" => {
+        IntervalInputUnit::Second => {
             *micros = micros
                 .checked_add(parse_interval_decimal_scaled(amount, 1_000_000)?)
                 .ok_or(PgCanonicalValueError::TemporalOverflow("interval"))?;
         }
-        "millisecond" | "msec" => {
+        IntervalInputUnit::Millisecond => {
             *micros = micros
                 .checked_add(parse_interval_decimal_scaled(amount, 1_000)?)
                 .ok_or(PgCanonicalValueError::TemporalOverflow("interval"))?;
         }
-        "microsecond" | "usec" => {
+        IntervalInputUnit::Microsecond => {
             *micros = micros
                 .checked_add(parse_interval_decimal_scaled(amount, 1)?)
                 .ok_or(PgCanonicalValueError::TemporalOverflow("interval"))?;
         }
-        _ => return Err(invalid_temporal("interval", original)),
     }
     Ok(())
 }
@@ -2414,52 +2572,170 @@ fn parse_interval_clock_micros(
     i64::try_from(sign * magnitude).map_err(|_| PgCanonicalValueError::TemporalOverflow("interval"))
 }
 
-fn parse_sql_standard_interval(
+fn tokenize_postgres_interval(value: &str) -> Result<Vec<&str>, PgCanonicalValueError> {
+    let invalid = || invalid_temporal("interval", value);
+    let mut tokens = Vec::new();
+    let mut position = 0;
+    let bytes = value.as_bytes();
+    while position < bytes.len() {
+        let start = position;
+        let first = bytes[position];
+        position += 1;
+        let signed_word = matches!(first, b'+' | b'-')
+            && bytes.get(position).is_some_and(u8::is_ascii_alphabetic);
+        if first.is_ascii_alphabetic() || signed_word {
+            while position < bytes.len() && bytes[position].is_ascii_alphabetic() {
+                position += 1;
+            }
+            if let Some(&next) = bytes.get(position) {
+                // A word adjoining a number can be a date or time zone token.
+                // PostgreSQL only separates the fields at its core date keywords.
+                if matches!(next, b'-' | b'/' | b'.')
+                    || ((next.is_ascii_digit() || next == b'+')
+                        && !matches!(
+                            value[start..position].to_ascii_lowercase().as_str(),
+                            "d" | "dec" | "h" | "m" | "mm" | "mon" | "s" | "y"
+                        ))
+                {
+                    return Err(invalid());
+                }
+            }
+        } else if first.is_ascii_digit() || matches!(first, b'+' | b'-' | b'.') {
+            while position < bytes.len() && bytes[position].is_ascii_digit() {
+                position += 1;
+            }
+            let delimiters: &[u8] = match (first, bytes.get(position).copied()) {
+                (b'+' | b'-', _) if position == start + 1 => return Err(invalid()),
+                (b'+' | b'-', _) => b":.-",
+                (b'.', _) => b"",
+                (_, Some(b':')) => b":.",
+                (_, Some(delimiter @ (b'.' | b'-' | b'/'))) => {
+                    if delimiter == b'.'
+                        && bytes.get(position + 1).is_some_and(u8::is_ascii_alphabetic)
+                    {
+                        return Err(invalid());
+                    }
+                    match delimiter {
+                        b'.' => b".",
+                        b'-' => b"-",
+                        _ => b"/",
+                    }
+                }
+                _ => b"",
+            };
+            while position < bytes.len()
+                && (bytes[position].is_ascii_digit() || delimiters.contains(&bytes[position]))
+            {
+                position += 1;
+            }
+        } else if first.is_ascii_whitespace() || first.is_ascii_punctuation() {
+            continue;
+        } else {
+            return Err(invalid());
+        }
+        tokens.push(&value[start..position]);
+        if tokens.len() > 25 {
+            return Err(invalid());
+        }
+    }
+    Ok(tokens)
+}
+
+fn parse_postgres_interval(
     value: &str,
     fields: Option<&str>,
 ) -> Result<PgInterval, PgCanonicalValueError> {
-    let parts = value.split_whitespace().collect::<Vec<_>>();
-    if parts.is_empty() || parts.len() > 3 {
-        return Err(invalid_temporal("interval", value));
-    }
-    let part_count = parts.len();
-    let mut interval = PgInterval::ZERO;
-    let mut has_clock = false;
-    for part in parts {
-        if part.contains(':') {
-            if has_clock {
-                return Err(invalid_temporal("interval", value));
-            }
-            interval.micros = parse_interval_clock_micros(part, fields)?;
-            has_clock = true;
-        } else if let Some(months) = parse_sql_year_month(part)? {
-            interval.months = interval
-                .months
-                .checked_add(months)
-                .ok_or(PgCanonicalValueError::TemporalOverflow("interval"))?;
-        } else if part_count == 1 {
-            let unit = fields
-                .map(|fields| fields.rsplit_once(" TO ").map_or(fields, |(_, unit)| unit))
-                .unwrap_or("SECOND")
-                .to_ascii_lowercase();
-            let (mut months, mut days, mut micros) = (0, 0, 0);
-            add_interval_unit(part, &unit, &mut months, &mut days, &mut micros, value)?;
-            interval = PgInterval {
-                months: i32::try_from(months)
-                    .map_err(|_| PgCanonicalValueError::TemporalOverflow("interval"))?,
-                days: i32::try_from(days)
-                    .map_err(|_| PgCanonicalValueError::TemporalOverflow("interval"))?,
-                micros,
-            };
-        } else {
-            interval.days = interval
-                .days
-                .checked_add(
-                    part.parse::<i32>()
-                        .map_err(|_| invalid_temporal("interval", value))?,
-                )
-                .ok_or(PgCanonicalValueError::TemporalOverflow("interval"))?;
+    let invalid = || invalid_temporal("interval", value);
+    let tokens = tokenize_postgres_interval(value)?;
+    let mut tokens = tokens.into_iter().rev().peekable();
+    let ago = tokens
+        .next_if(|token| token.eq_ignore_ascii_case("ago"))
+        .is_some();
+    if !ago && tokens.len() == 1 {
+        match tokens.peek().unwrap().to_ascii_lowercase().as_str() {
+            "infinity" | "+infinity" => return Ok(PgInterval::POSITIVE_INFINITY),
+            "-infinity" => return Ok(PgInterval::NEGATIVE_INFINITY),
+            _ => {}
         }
+    }
+
+    // Unlabelled fields inherit the most recent unit while reading right to left.
+    // The one transition is that a number to the left of an hour or clock is days.
+    let mut unit = None;
+    let mut awaiting_amount = false;
+    let mut seen = 0_u16;
+    let (mut months, mut days, mut micros) = (0_i64, 0_i64, 0_i64);
+    for token in tokens {
+        if token.as_bytes()[0].is_ascii_alphabetic() {
+            if awaiting_amount {
+                return Err(invalid());
+            }
+            let keyword = token.to_ascii_lowercase();
+            unit = Some(
+                IntervalInputUnit::from_keyword(&keyword[..keyword.len().min(10)])
+                    .ok_or_else(invalid)?,
+            );
+            awaiting_amount = true;
+            continue;
+        }
+
+        let mask = if token.contains(':') {
+            micros = parse_interval_clock_micros(token, fields)?;
+            unit = Some(IntervalInputUnit::Day);
+            IntervalInputUnit::CLOCK_MASK
+        } else if let Some(value) = parse_sql_year_month(token)? {
+            months = months
+                .checked_add(i64::from(value))
+                .ok_or(PgCanonicalValueError::TemporalOverflow("interval"))?;
+            unit = Some(IntervalInputUnit::Month);
+            IntervalInputUnit::Month as u16
+        } else {
+            let current_unit = match unit {
+                Some(unit) => unit,
+                None if !ago => IntervalInputUnit::rightmost_field(fields),
+                None => return Err(invalid()),
+            };
+            unit = Some(if current_unit == IntervalInputUnit::Hour {
+                IntervalInputUnit::Day
+            } else {
+                current_unit
+            });
+            add_interval_unit(
+                if token == "." { "0" } else { token },
+                current_unit,
+                &mut months,
+                &mut days,
+                &mut micros,
+            )?;
+            let mut mask = current_unit as u16;
+            if current_unit == IntervalInputUnit::Second
+                && token
+                    .split_once('.')
+                    .is_some_and(|(_, fraction)| fraction.bytes().any(|digit| digit != b'0'))
+            {
+                mask |= IntervalInputUnit::SUBSECOND_MASK;
+            }
+            mask
+        };
+        if seen & mask != 0 {
+            return Err(invalid());
+        }
+        seen |= mask;
+        awaiting_amount = false;
+    }
+    if awaiting_amount || seen == 0 {
+        return Err(invalid());
+    }
+    let mut interval = PgInterval {
+        months: i32::try_from(months)
+            .map_err(|_| PgCanonicalValueError::TemporalOverflow("interval"))?,
+        days: i32::try_from(days)
+            .map_err(|_| PgCanonicalValueError::TemporalOverflow("interval"))?,
+        micros,
+    };
+    if ago {
+        // AGO negates raw fields before interpreting an infinity sentinel.
+        interval = interval.checked_neg_components()?;
     }
     Ok(interval)
 }
@@ -2475,15 +2751,22 @@ fn parse_sql_year_month(value: &str) -> Result<Option<i32>, PgCanonicalValueErro
     let Some((years, months)) = value.split_once('-') else {
         return Ok(None);
     };
-    if years.is_empty() || months.is_empty() || months.parse::<u32>().ok().is_none_or(|m| m > 11) {
+    if years.is_empty()
+        || !years.bytes().all(|byte| byte.is_ascii_digit())
+        || !months.bytes().all(|byte| byte.is_ascii_digit())
+    {
         return Err(invalid_temporal("interval", value));
     }
-    let years = years
-        .parse::<i64>()
-        .map_err(|_| invalid_temporal("interval", value))?;
-    let months = months
-        .parse::<i64>()
-        .map_err(|_| invalid_temporal("interval", value))?;
+    let overflow = || PgCanonicalValueError::TemporalFieldOverflow("interval");
+    let years = years.parse::<i64>().map_err(|_| overflow())?;
+    let months = if months.is_empty() {
+        0
+    } else {
+        months.parse::<i64>().map_err(|_| overflow())?
+    };
+    if months > 11 {
+        return Err(overflow());
+    }
     let total = years
         .checked_mul(12)
         .and_then(|value| value.checked_add(months))
@@ -2494,69 +2777,222 @@ fn parse_sql_year_month(value: &str) -> Result<Option<i32>, PgCanonicalValueErro
         .map_err(|_| PgCanonicalValueError::TemporalOverflow("interval"))
 }
 
-fn parse_iso_interval(value: &str) -> Result<PgInterval, PgCanonicalValueError> {
-    let (global_sign, value) = if let Some(value) = value.strip_prefix('-') {
-        (-1_i64, value)
-    } else if let Some(value) = value.strip_prefix('+') {
-        (1_i64, value)
-    } else {
-        (1_i64, value)
-    };
-    let value = value
-        .strip_prefix(['P', 'p'])
-        .ok_or_else(|| invalid_temporal("interval", value))?;
-    let mut months = 0_i64;
-    let mut days = 0_i64;
-    let mut micros = 0_i64;
-    let mut in_time = false;
-    let mut start = 0;
-    let bytes = value.as_bytes();
-    let mut saw_component = false;
-    for index in 0..bytes.len() {
-        let byte = bytes[index];
-        if matches!(byte, b'T' | b't') {
-            if start != index {
-                return Err(invalid_temporal("interval", value));
+struct IsoIntervalNumber {
+    whole: i64,
+    fraction: f64,
+    integral_digits: usize,
+}
+
+fn parse_iso_interval_number<'a>(
+    input: &'a str,
+    original: &str,
+) -> Result<(IsoIntervalNumber, &'a str), PgCanonicalValueError> {
+    let invalid = || invalid_temporal("interval", original);
+    if !input
+        .as_bytes()
+        .first()
+        .is_some_and(|byte| byte.is_ascii_digit() || matches!(byte, b'-' | b'.'))
+    {
+        return Err(invalid());
+    }
+    let length = float_token_length(input.as_bytes()).ok_or_else(invalid)?;
+    let (literal, rest) = input.split_at(length);
+    let number = parse_geometric_float(literal).map_err(|_| invalid())?;
+    if number.is_subnormal() {
+        return Err(invalid());
+    }
+    // Keep the integral part exact when the ISO parser reads a floating value.
+    if !(-1.0e15..=1.0e15).contains(&number) {
+        return Err(PgCanonicalValueError::TemporalFieldOverflow("interval"));
+    }
+    let whole = number.trunc();
+    let integral_digits = literal
+        .strip_prefix('-')
+        .unwrap_or(literal)
+        .bytes()
+        .take_while(u8::is_ascii_digit)
+        .count();
+    Ok((
+        IsoIntervalNumber {
+            whole: whole as i64,
+            fraction: number - whole,
+            integral_digits,
+        },
+        rest,
+    ))
+}
+
+#[derive(Default)]
+struct IsoIntervalFields {
+    years: i32,
+    months: i32,
+    days: i32,
+    micros: i64,
+}
+
+impl IsoIntervalFields {
+    fn add(
+        &mut self,
+        unit: IntervalInputUnit,
+        whole: i64,
+        fraction: f64,
+    ) -> Result<(), PgCanonicalValueError> {
+        match unit {
+            IntervalInputUnit::Year => {
+                Self::add_calendar_field(&mut self.years, whole, 1)?;
+                let months = (fraction * 12.0).round_ties_even() as i64;
+                Self::add_calendar_field(&mut self.months, months, 1)
             }
-            in_time = true;
-            start = index + 1;
-            continue;
+            IntervalInputUnit::Month => {
+                Self::add_calendar_field(&mut self.months, whole, 1)?;
+                self.add_day_fraction(fraction * 30.0)
+            }
+            IntervalInputUnit::Week => {
+                Self::add_calendar_field(&mut self.days, whole, 7)?;
+                self.add_day_fraction(fraction * 7.0)
+            }
+            IntervalInputUnit::Day => {
+                Self::add_calendar_field(&mut self.days, whole, 1)?;
+                self.add_time(0, fraction, MICROS_PER_DAY)
+            }
+            IntervalInputUnit::Hour => self.add_time(whole, fraction, 3_600_000_000),
+            IntervalInputUnit::Minute => self.add_time(whole, fraction, 60_000_000),
+            IntervalInputUnit::Second => self.add_time(whole, fraction, 1_000_000),
+            _ => unreachable!("ISO interval units were resolved by the parser"),
         }
-        if !byte.is_ascii_alphabetic() {
-            continue;
-        }
-        let amount = value
-            .get(start..index)
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| invalid_temporal("interval", value))?;
-        let unit = match (byte.to_ascii_uppercase(), in_time) {
-            (b'Y', false) => "year",
-            (b'M', false) => "month",
-            (b'W', false) => "week",
-            (b'D', false) => "day",
-            (b'H', true) => "hour",
-            (b'M', true) => "minute",
-            (b'S', true) => "second",
-            _ => return Err(invalid_temporal("interval", value)),
+    }
+
+    fn add_calendar_field(
+        field: &mut i32,
+        whole: i64,
+        scale: i32,
+    ) -> Result<(), PgCanonicalValueError> {
+        *field = i32::try_from(whole)
+            .ok()
+            .and_then(|whole| whole.checked_mul(scale))
+            .and_then(|days| field.checked_add(days))
+            .ok_or(PgCanonicalValueError::TemporalFieldOverflow("interval"))?;
+        Ok(())
+    }
+
+    fn add_day_fraction(&mut self, days: f64) -> Result<(), PgCanonicalValueError> {
+        let whole = days.trunc();
+        Self::add_calendar_field(&mut self.days, whole as i64, 1)?;
+        self.add_time(0, days - whole, MICROS_PER_DAY)
+    }
+
+    fn add_time(
+        &mut self,
+        whole: i64,
+        fraction: f64,
+        scale: i64,
+    ) -> Result<(), PgCanonicalValueError> {
+        let micros = checked_add_scaled(self.micros, whole, scale, "interval")?;
+        let fraction = fraction * scale as f64;
+        let whole_micros = fraction.trunc();
+        // An exact half microsecond is discarded for ISO input.
+        let remainder = fraction - whole_micros;
+        let adjustment = if remainder.abs() > 0.5 {
+            remainder.signum() as i64
+        } else {
+            0
         };
-        add_interval_unit(amount, unit, &mut months, &mut days, &mut micros, value)?;
-        saw_component = true;
-        start = index + 1;
+        self.micros = micros
+            .checked_add(whole_micros as i64 + adjustment)
+            .ok_or(PgCanonicalValueError::TemporalFieldOverflow("interval"))?;
+        Ok(())
     }
-    if !saw_component || start != value.len() {
-        return Err(invalid_temporal("interval", value));
+
+    fn finish(self) -> Result<PgInterval, PgCanonicalValueError> {
+        let months = i64::from(self.years) * 12 + i64::from(self.months);
+        Ok(PgInterval {
+            months: i32::try_from(months).map_err(|_| PgCanonicalValueError::IntervalOutOfRange)?,
+            days: self.days,
+            micros: self.micros,
+        })
     }
-    let mut interval = PgInterval {
-        months: i32::try_from(months)
-            .map_err(|_| PgCanonicalValueError::TemporalOverflow("interval"))?,
-        days: i32::try_from(days)
-            .map_err(|_| PgCanonicalValueError::TemporalOverflow("interval"))?,
-        micros,
-    };
-    if global_sign < 0 {
-        interval = interval.checked_neg()?;
+}
+
+fn parse_iso_interval(value: &str) -> Result<PgInterval, PgCanonicalValueError> {
+    use IntervalInputUnit::{Day, Hour, Minute, Month, Second, Week, Year};
+
+    let invalid = || invalid_temporal("interval", value);
+    let mut input = value
+        .strip_prefix('P')
+        .filter(|rest| !rest.is_empty())
+        .ok_or_else(invalid)?;
+    let mut fields = IsoIntervalFields::default();
+    let mut in_time = false;
+    let mut has_designator = false;
+    while !input.is_empty() {
+        if let Some(rest) = input.strip_prefix('T') {
+            in_time = true;
+            has_designator = false;
+            input = rest;
+            continue;
+        }
+        let (number, tail) = parse_iso_interval_number(input, value)?;
+        let suffix = tail.as_bytes().first().copied();
+        let designated = match (in_time, suffix) {
+            (false, Some(b'Y')) => Some(Year),
+            (false, Some(b'M')) => Some(Month),
+            (false, Some(b'W')) => Some(Week),
+            (false, Some(b'D')) => Some(Day),
+            (true, Some(b'H')) => Some(Hour),
+            (true, Some(b'M')) => Some(Minute),
+            (true, Some(b'S')) => Some(Second),
+            _ => None,
+        };
+        if let Some(unit) = designated {
+            fields.add(unit, number.whole, number.fraction)?;
+            input = &tail[1..];
+            has_designator = true;
+            continue;
+        }
+        if has_designator {
+            return Err(invalid());
+        }
+
+        let (first, extended, separator, basic_width) = if in_time {
+            (Hour, [Minute, Second], ':', 6)
+        } else {
+            (Year, [Month, Day], '-', 8)
+        };
+        let at_end = tail.is_empty() || !in_time && tail.starts_with('T');
+        if at_end && number.integral_digits == basic_width {
+            fields.add(first, number.whole / 10_000, 0.0)?;
+            fields.add(extended[0], number.whole / 100 % 100, 0.0)?;
+            fields.add(
+                extended[1],
+                number.whole % 100,
+                if in_time { 0.0 } else { number.fraction },
+            )?;
+            if in_time {
+                // The undelimited time form historically rounds its fraction
+                // in microseconds, unlike the colon-delimited seconds form.
+                fields.add_time(0, number.fraction, 1)?;
+            }
+            input = tail;
+            continue;
+        }
+        if !at_end && !tail.starts_with(separator) {
+            return Err(invalid());
+        }
+        fields.add(first, number.whole, number.fraction)?;
+        input = tail;
+        for unit in extended {
+            let Some(rest) = input.strip_prefix(separator) else {
+                break;
+            };
+            let (number, rest) = parse_iso_interval_number(rest, value)?;
+            fields.add(unit, number.whole, number.fraction)?;
+            input = rest;
+        }
+        if !input.is_empty() && (in_time || !input.starts_with('T')) {
+            return Err(invalid());
+        }
     }
-    Ok(interval)
+    fields.finish()
 }
 
 fn format_interval_clock(micros: i64, force_positive: bool, pad_hours: bool) -> String {
@@ -2615,16 +3051,22 @@ fn push_verbose_interval_part(parts: &mut Vec<String>, value: i64, one: &str, ma
     }
 }
 
+fn round_interval_fraction(value: f64) -> f64 {
+    (value * 1_000_000.0).round_ties_even() / 1_000_000.0
+}
+
 fn f64_to_i32_interval(value: f64) -> Result<i32, PgCanonicalValueError> {
-    if value < f64::from(i32::MIN) || value > f64::from(i32::MAX) {
-        return Err(PgCanonicalValueError::TemporalOverflow("interval"));
+    if !(f64::from(i32::MIN)..-f64::from(i32::MIN)).contains(&value) {
+        return Err(PgCanonicalValueError::IntervalOutOfRange);
     }
     Ok(value as i32)
 }
 
 fn f64_to_i64_interval(value: f64) -> Result<i64, PgCanonicalValueError> {
-    if value < i64::MIN as f64 || value > i64::MAX as f64 {
-        return Err(PgCanonicalValueError::TemporalOverflow("interval"));
+    // i64::MAX would round up to 2^63 as f64, so use an exclusive upper bound.
+    let minimum = i64::MIN as f64;
+    if !(minimum..-minimum).contains(&value) {
+        return Err(PgCanonicalValueError::IntervalOutOfRange);
     }
     Ok(value as i64)
 }
@@ -3877,6 +4319,19 @@ pub fn parse_pg_xid8(value: &str) -> Result<u64, PgCanonicalValueError> {
         return Ok(magnitude);
     }
     Ok(0_u64.wrapping_sub(magnitude))
+}
+
+/// A binary-compatible cast from an empty catalog vector keeps its single
+/// dimension of length zero and lower bound zero. Ordinary empty arrays have
+/// no dimensions.
+#[doc(hidden)]
+pub fn restore_empty_catalog_vector_dimension(
+    lengths: &mut Vec<usize>,
+    lower_bounds: Option<&[i32]>,
+) {
+    if lengths.is_empty() && lower_bounds == Some(&[0]) {
+        lengths.push(0);
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

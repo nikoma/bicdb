@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-sql"
-version = "1.0.588"
+version = "1.0.613"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -25,8 +25,8 @@ extension-host = ["bicdb-extension/host"]
 [dependencies]
 smallvec = "1"
 base64.workspace = true
-bicdb-core = { path = "../bicdb-core", version = "=1.0.588", default-features = false }
-bicdb-extension = { path = "../bicdb-extension", version = "=1.0.588", default-features = false }
+bicdb-core = { path = "../bicdb-core", version = "=1.0.613", default-features = false }
+bicdb-extension = { path = "../bicdb-extension", version = "=1.0.613", default-features = false }
 chrono = "0.4"
 chrono-tz = "0.10"
 crc32fast.workspace = true
@@ -65,13 +65,15 @@ unicode-normalization.workspace = true
 uuid.workspace = true
 sqlparser.workspace = true
 sxd-document = { package = "sxd-document-no-unsafe", version = "0.4.2", default-features = false, features = ["no-unsafe"] }
-sxd-xpath = { package = "sxd-xpath-no-unsafe", version = "0.5.1", features = ["no-unsafe"] }
+# SXD-XPath is embedded in src/xml/xpath so published consumers keep the fix.
+peresil = "0.3.0"
+snafu = "0.5.0"
 thiserror.workspace = true
 wasm-encoder = { version = "0.252.0", optional = true }
 wasmtime = { version = "48.0.3", optional = true }
 
 [dev-dependencies]
 # Deterministic I/O fault injection for tests/commit_outcome_resolution.rs.
-bicdb-page = { path = "../bicdb-page", version = "=1.0.588" }
+bicdb-page = { path = "../bicdb-page", version = "=1.0.613" }
 tempfile.workspace = true
 wat = "1"

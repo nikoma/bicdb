@@ -886,6 +886,16 @@ impl<'db> SqlSession<'db> {
                 no_inherit_checks,
                 no_inherit_not_null,
             } => {
+                // A raw CREATE can become parseable only after the rewrite.
+                // Its target and parent names must bind through the same
+                // path as ordinary CREATE TABLE statements.
+                let rebound = match (create, crate::search_path::active_path()) {
+                    (true, Some(path)) => {
+                        crate::search_path::bind_create_table_text(self.db_ref(), &sql, &path)?
+                    }
+                    _ => None,
+                };
+                let (sql, table) = rebound.unwrap_or((sql, table));
                 let before = load_schema(
                     self.db_ref(),
                     &resolve_session_relation_name_if_exists(self.db_ref(), &table),
@@ -902,7 +912,18 @@ impl<'db> SqlSession<'db> {
                     }
                     None => false,
                 };
-                let result = self.execute_inner(&sql)?;
+                let result = {
+                    let _scope = create.then(|| {
+                        crate::persistence_ddl::CreateTableRewriteScope::enter(
+                            &table,
+                            crate::persistence_ddl::CreateTableRewriteFlags {
+                                no_inherit_not_null: no_inherit_not_null.clone(),
+                                virtual_columns: virtual_columns.clone(),
+                            },
+                        )
+                    });
+                    self.execute_inner(&sql)?
+                };
                 if existed {
                     return Ok(result);
                 }
@@ -1000,7 +1021,15 @@ impl<'db> SqlSession<'db> {
         }
         let path = values
             .iter()
-            .map(|value| eval_setting_value(value).map(|value| value.to_cell()))
+            .map(|value| {
+                let name = match value {
+                    Expr::Identifier(ident) if ident.quote_style.is_none() => {
+                        ident.value.to_ascii_lowercase()
+                    }
+                    _ => eval_setting_value(value)?.to_cell(),
+                };
+                Ok(pg_quote_ident(&name))
+            })
             .collect::<Result<Vec<_>>>()?
             .join(", ");
         Arc::make_mut(&mut self.session_gucs).insert("search_path".to_string(), path);

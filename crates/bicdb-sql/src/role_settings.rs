@@ -67,10 +67,12 @@ fn parse(sql: &str) -> Option<(String, RoleSettingChange)> {
         if value.eq_ignore_ascii_case("DEFAULT") {
             return Some((name, RoleSettingChange::Reset(Some(parameter))));
         }
-        return Some((
-            name,
-            RoleSettingChange::Set(parameter, setting_value(value)),
-        ));
+        let value = if parameter == "search_path" {
+            crate::search_path::render_raw_assignment(value)
+        } else {
+            setting_value(value)
+        };
+        return Some((name, RoleSettingChange::Set(parameter, value)));
     }
     if let Some(after) = strip_prefix_ci(rest, "RESET ") {
         let parameter = after.trim().to_ascii_lowercase();

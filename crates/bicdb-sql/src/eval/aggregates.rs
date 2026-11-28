@@ -2005,6 +2005,10 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         let argument_nodes = function_arg_list(function);
         let name = object_name(&function.name).ok()?.to_ascii_lowercase();
         let unqualified_name = name.strip_prefix("pg_catalog.").unwrap_or(&name);
+        if let Some(pg_type) = crate::pg_hash::scalar_hash_result_type(&name, argument_nodes.len())
+        {
+            return Some(pg_type.into());
+        }
         if let Some(pg_type) =
             current_datetime_function_pg_type(unqualified_name, argument_nodes.len())
         {
@@ -2611,6 +2615,11 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             geometric_unary_result_pg_type(op, projected_expr_pg_type(expr, schema).as_deref())
         {
             return Some(pg_type);
+        }
+        if let Some(pg_type) =
+            postgres_numeric_unary_type(op, projected_expr_pg_type(expr, schema).as_deref())
+        {
+            return Some(pg_type.to_owned());
         }
         if matches!(op, UnaryOperator::BitwiseNot) {
             match projected_expr_pg_type(expr, schema).as_deref() {

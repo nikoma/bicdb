@@ -49,6 +49,7 @@ mod distribution_metadata_read_provider;
 mod distribution_native_admission;
 mod distribution_native_apply;
 mod distribution_native_host;
+mod sql_like;
 #[cfg(feature = "tls-replication")]
 pub use distribution_native_host::{
     NativeInitialDataRangeStatus, NativeInitialDataStatus, NativeMetadataBootstrapPlan,
@@ -590,6 +591,7 @@ pub use resource_governor::{
     ResourcePermit, ResourceUsage,
 };
 pub use spatial_packed::SpatialPackStrategy;
+pub use sql_like::{like_match_chars, like_pattern_ends_with_escape};
 pub use storage::{salvage_frame_log, CompressionConfig, FrameLogSalvage, SegmentReadMode};
 pub use sync::{OpType, SyncOp};
 pub use sync_mesh::{

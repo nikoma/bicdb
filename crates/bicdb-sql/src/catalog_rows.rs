@@ -433,6 +433,16 @@ pub(crate) fn not_null_constraint_name(table: &str, column: &str) -> String {
     format!("{table}_{column}_not_null")
 }
 
+pub(crate) fn inheritable_not_null(schema: &TableSchema, column: &str) -> bool {
+    schema.column(column).is_some_and(|column| {
+        !column.hidden
+            && (!column.nullable || column.primary_key)
+            && !schema
+                .no_inherit_constraints
+                .contains(&not_null_constraint_name(&schema.name, &column.name))
+    })
+}
+
 /// The direct parents whose not-null constraint on `column` `schema`
 /// inherits (constraints declared NO INHERIT are not passed on).
 pub(crate) fn inherited_not_null_parents<'a>(
@@ -444,15 +454,7 @@ pub(crate) fn inherited_not_null_parents<'a>(
         .inherits
         .iter()
         .filter_map(|parent| schemas.iter().find(|candidate| candidate.name == *parent))
-        .filter(|parent| {
-            parent.columns.iter().any(|candidate| {
-                candidate.name == column
-                    && !candidate.hidden
-                    && (!candidate.nullable || candidate.primary_key)
-            }) && !parent
-                .no_inherit_constraints
-                .contains(&not_null_constraint_name(&parent.name, column))
-        })
+        .filter(|parent| inheritable_not_null(parent, column))
         .collect()
 }
 
@@ -1576,21 +1578,30 @@ fn pg_attribute_rows_with_grants(
 ) -> Result<Vec<BTreeMap<String, SqlValue>>> {
     let grants = list_privileges(db)?;
     let mut rows = pg_attribute_rows_for_columns(attrelid, columns);
-    let virtual_columns = load_schema(db, table)?
-        .map(|schema| schema.virtual_generated_columns)
-        .unwrap_or_default();
-    if !virtual_columns.is_empty() {
-        for row in &mut rows {
-            if matches!(row.get("attname"), Some(SqlValue::String(column)) if virtual_columns.contains(column))
-            {
-                row.insert("attgenerated".into(), SqlValue::String("v".into()));
-            }
+    let schema = load_schema(db, table)?;
+    let inheritance_counts = match schema.as_ref() {
+        Some(schema) if !schema.inherits.is_empty() && !oracle::is_oracle_database(db)? => {
+            crate::inheritance::inherited_column_counts(db, schema)?
         }
-    }
+        _ => BTreeMap::new(),
+    };
     for row in &mut rows {
         let Some(SqlValue::String(column)) = row.get("attname") else {
             continue;
         };
+        let inherited = schema
+            .as_ref()
+            .filter(|_| !inheritance_counts.is_empty())
+            .and_then(|schema| schema.column(column))
+            .filter(|column| !column.hidden)
+            .and_then(|column| {
+                inheritance_counts
+                    .get(&column.name)
+                    .map(|&count| (count, column.attributes.inherited_local.unwrap_or(false)))
+            });
+        let virtual_column = schema
+            .as_ref()
+            .is_some_and(|schema| schema.virtual_generated_columns.contains(column));
         let acl = acl_value(
             grants
                 .iter()
@@ -1603,6 +1614,13 @@ fn pg_attribute_rows_with_grants(
                 .collect(),
         )?;
         row.insert("attacl".into(), acl);
+        if virtual_column {
+            row.insert("attgenerated".into(), SqlValue::String("v".into()));
+        }
+        if let Some((count, local)) = inherited {
+            row.insert("attinhcount".into(), SqlValue::Int(count));
+            row.insert("attislocal".into(), SqlValue::Bool(local));
+        }
     }
     Ok(rows)
 }
@@ -3762,6 +3780,32 @@ fn pg_proc_rows_uncached(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> 
                 row
             }),
     );
+    rows.extend(crate::pg_hash::scalar_hash_procedures().map(
+        |(oid, name, input, result, extended)| {
+            let mut row = proc_row(
+                oid,
+                name,
+                11,
+                result,
+                false,
+                "f",
+                "internal",
+                name,
+                if extended { 2 } else { 1 },
+                BOOTSTRAP_ROLE_NAME,
+                false,
+            );
+            let args = if extended {
+                format!("{input} 20")
+            } else {
+                input.to_string()
+            };
+            row.insert("proargtypes".into(), SqlValue::String(args));
+            row.insert("proisstrict".into(), SqlValue::Bool(true));
+            row.insert("provolatile".into(), SqlValue::String("i".into()));
+            row
+        },
+    ));
     rows.extend(PG_PLPGSQL_PROC_ROWS.iter().map(
         |(oid, name, return_type, language, source, nargs)| {
             proc_row(
@@ -3927,6 +3971,10 @@ fn pg_proc_rows_uncached(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> 
         row.insert(
             "provolatile".to_string(),
             SqlValue::String(routine.declared_volatility().to_string()),
+        );
+        row.insert(
+            "proleakproof".to_string(),
+            SqlValue::Bool(routine.leakproof),
         );
         row.insert(
             "proisstrict".to_string(),
@@ -5948,12 +5996,13 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                             conbin: Some(expression.clone()),
                             convalidated: *validated,
                         }));
-                        // A CHECK the table took from its parents.
+                        // Reuse the lineage loaded above when a relation filter
+                        // left the parents out of the catalog rows being returned.
                         let inherited_from = schema
                             .inherits
                             .iter()
                             .filter(|parent| {
-                                schemas.iter().any(|candidate| {
+                                lineage.iter().any(|candidate| {
                                     candidate.name == **parent
                                         && !candidate.no_inherit_constraints.contains(name)
                                         && candidate.constraints.iter().any(|constraint| {

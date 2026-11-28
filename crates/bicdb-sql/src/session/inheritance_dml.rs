@@ -453,6 +453,7 @@ impl<'db> SqlSession<'db> {
                 None,
             ));
         };
+        let postgres = !oracle::is_oracle_database(self.db_ref())?;
         if !inherit {
             if !child.inherits.contains(&parent.name) {
                 return Err(SqlError::data_exception(
@@ -465,6 +466,9 @@ impl<'db> SqlSession<'db> {
                 ));
             }
             child.inherits.retain(|name| name != &parent.name);
+            if postgres {
+                crate::inheritance::preserve_local_columns(self.db_ref(), &mut child, &parent)?;
+            }
             parent
                 .inheritance_children
                 .retain(|name| name != &child.name);
@@ -507,6 +511,8 @@ impl<'db> SqlSession<'db> {
                 None,
             ));
         }
+        let child_name = relation_name_for_message(&child.name);
+        let mut not_null_conflict = None;
         for column in parent.columns.iter().filter(|column| !column.hidden) {
             let Some(own) = child.column(&column.name) else {
                 return Err(wrong(format!(
@@ -520,27 +526,126 @@ impl<'db> SqlSession<'db> {
                     child.name, column.name
                 )));
             }
-            if !column.nullable && own.nullable {
+            if postgres && column.collation_oid() != own.collation_oid() {
+                return Err(SqlError::data_exception(
+                    "42P21",
+                    format!(
+                        "child table \"{child_name}\" has different collation for column \"{}\"",
+                        column.name
+                    ),
+                    None,
+                ));
+            }
+            let inherits_not_null = if postgres {
+                inheritable_not_null(&parent, &column.name)
+            } else {
+                !column.nullable
+            };
+            if inherits_not_null && own.nullable {
+                let child_table = if postgres {
+                    format!(" \"{child_name}\"")
+                } else {
+                    String::new()
+                };
                 return Err(wrong(format!(
-                    "column \"{}\" in child table must be marked NOT NULL",
+                    "column \"{}\" in child table{child_table} must be marked NOT NULL",
                     column.name
                 )));
             }
-        }
-        for constraint in &parent.constraints {
-            if let ConstraintSchema::Check { name, .. } = constraint {
-                if parent.no_inherit_constraints.contains(name) {
-                    continue;
-                }
-                if !child.constraints.iter().any(|candidate| {
-                    matches!(candidate, ConstraintSchema::Check { .. })
-                        && constraint_name(candidate) == name
-                }) {
-                    return Err(wrong(format!(
-                        "child table is missing constraint \"{name}\""
-                    )));
+            if postgres && inherits_not_null && not_null_conflict.is_none() {
+                let key = not_null_constraint_name(&child.name, &column.name);
+                if child.no_inherit_constraints.contains(&key) {
+                    not_null_conflict = Some((&column.name, "non-inherited"));
+                } else if !column.attributes.not_null_not_valid && own.attributes.not_null_not_valid
+                {
+                    not_null_conflict = Some((&column.name, "NOT VALID"));
                 }
             }
+            if postgres {
+                let parent_kind = crate::inheritance::column_generation_kind(
+                    column,
+                    &parent.virtual_generated_columns,
+                );
+                let own_kind = crate::inheritance::column_generation_kind(
+                    own,
+                    &child.virtual_generated_columns,
+                );
+                let column = &column.name;
+                match (parent_kind, own_kind) {
+                    (Some(parent), Some(own)) if parent != own => {
+                        return Err(SqlError::coded(
+                            "42804",
+                            format!("column \"{column}\" inherits from generated column of different kind"),
+                            Some(format!("Parent column is {parent}, child column is {own}.")),
+                            None,
+                        ));
+                    }
+                    (Some(_), None) => {
+                        return Err(wrong(format!(
+                            "column \"{column}\" in child table must be a generated column"
+                        )));
+                    }
+                    (None, Some(_)) => {
+                        return Err(wrong(format!(
+                            "column \"{column}\" in child table must not be a generated column"
+                        )));
+                    }
+                    _ => {}
+                }
+            }
+        }
+        if let Some((column, conflict)) = not_null_conflict {
+            let schemas = list_schemas(self.db_ref())?;
+            let name = effective_not_null_name(&schemas, &child, column);
+            return Err(SqlError::data_exception(
+                "42P17",
+                format!("constraint \"{name}\" conflicts with {conflict} constraint on child table \"{child_name}\""),
+                None,
+            ));
+        }
+        for constraint in &parent.constraints {
+            let ConstraintSchema::Check {
+                name,
+                expression: parent_expression,
+                validated: parent_validated,
+            } = constraint
+            else {
+                continue;
+            };
+            if parent.no_inherit_constraints.contains(name) {
+                continue;
+            }
+            let Some(ConstraintSchema::Check { expression, validated, .. }) = child
+                .constraints
+                .iter()
+                .find(|candidate| matches!(candidate, ConstraintSchema::Check { name: existing, .. } if existing == name))
+            else {
+                return Err(wrong(format!("child table is missing constraint \"{name}\"")));
+            };
+            if postgres {
+                if !crate::inheritance::same_inherited_check(expression, parent_expression)? {
+                    return Err(wrong(format!(
+                        "child table \"{child_name}\" has different definition for check constraint \"{name}\""
+                    )));
+                }
+                let conflict = if child.no_inherit_constraints.contains(name) {
+                    Some("non-inherited")
+                } else if *parent_validated && !*validated {
+                    Some("NOT VALID")
+                } else {
+                    None
+                };
+                if let Some(conflict) = conflict {
+                    return Err(SqlError::data_exception(
+                        "42P17",
+                        format!("constraint \"{name}\" conflicts with {conflict} constraint on child table \"{child_name}\""),
+                        None,
+                    ));
+                }
+            }
+        }
+        if postgres {
+            crate::inheritance::preserve_local_columns(self.db_ref(), &mut child, &parent)?;
         }
         child.inherits.push(parent.name.clone());
         parent.inheritance_children.push(child.name.clone());

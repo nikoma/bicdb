@@ -104,3 +104,71 @@ fn scalar_in_subquery_preserves_null_and_empty_set_semantics() {
         );
     }
 }
+
+#[test]
+fn scalar_hash_support_functions_preserve_postgres_values_and_result_types() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut sql = SqlSession::new(&mut db);
+    let result = sql
+        .execute(
+            "SELECT hashint2(-1::smallint), hashint4(-1), pg_catalog.hashint8(-1::bigint),
+                    hashint4extended(-1, 0), hashoid('4294967295'::oid),
+                    hashfloat4('NaN'::real), hashfloat8extended('-0'::double precision, -9),
+                    hashchar('a'::\"char\"), hashname('a'::name), hashint4(NULL)",
+        )
+        .unwrap();
+    assert_eq!(
+        result.rows,
+        vec![vec![
+            SqlValue::Int(385747274),
+            SqlValue::Int(385747274),
+            SqlValue::Int(385747274),
+            SqlValue::Int(-1888257769727981238),
+            SqlValue::Int(385747274),
+            SqlValue::Int(-1275764840),
+            SqlValue::Int(-9),
+            SqlValue::Int(463612535),
+            SqlValue::Int(1075015857),
+            SqlValue::Null,
+        ]]
+    );
+    let result = sql
+        .execute(
+            "SELECT hashint4(v)::bit(32) = hashint4extended(v,0)::bit(32),
+                    pg_typeof(hashint4(v))::text, pg_typeof(hashint4extended(v,0))::text
+             FROM (VALUES (17), (42)) AS inputs(v)",
+        )
+        .unwrap();
+    let expected = vec![
+        SqlValue::Bool(true),
+        SqlValue::String("integer".into()),
+        SqlValue::String("bigint".into()),
+    ];
+    assert_eq!(result.rows, vec![expected; 2]);
+    assert_eq!(
+        sql.execute(
+            "SELECT oid::int4, pronargs::int4, proisstrict
+             FROM pg_proc WHERE proname = 'hashint4extended'"
+        )
+        .unwrap()
+        .rows,
+        vec![vec![
+            SqlValue::Int(425),
+            SqlValue::Int(2),
+            SqlValue::Bool(true)
+        ]]
+    );
+    assert_eq!(
+        sql.execute("SELECT hashint4(1::bigint)")
+            .unwrap_err()
+            .sqlstate(),
+        "42883"
+    );
+    assert_eq!(
+        sql.execute("SELECT hashint4extended(1, 0::double precision)")
+            .unwrap_err()
+            .sqlstate(),
+        "42883"
+    );
+}

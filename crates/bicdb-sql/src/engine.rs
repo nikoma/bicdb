@@ -115,7 +115,7 @@ fn parse_inference_statements(db: &BicDb, sql: &str) -> Result<Vec<Statement>> {
 /// Parse PostgreSQL inference predicates for protocol metadata without
 /// evaluating the statement or using sqlparser's incomplete grammar.
 pub fn parse_postgres_conflict_inference(sql: &str) -> Result<Option<Vec<Statement>>> {
-    if crate::conflict_inference::has_predicates(sql) {
+    if crate::conflict_inference::requires_lowering(sql) {
         parse_statements(sql).map(Some)
     } else {
         Ok(None)
@@ -679,12 +679,17 @@ impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
                     self.assignments(assignments, &schema_columns, &env);
                 }
                 OnInsert::OnConflict(conflict) => {
-                    if let Some((_, Some(predicate))) = conflict
+                    if let Some(inference) = conflict
                         .conflict_target
                         .as_ref()
-                        .and_then(crate::conflict_inference::column_inference)
+                        .and_then(crate::conflict_inference::index_inference)
                     {
-                        self.expr(predicate, &env[..1], None);
+                        for element in &inference.elements {
+                            self.expr(&element.expr, &env[..1], None);
+                        }
+                        if let Some(predicate) = &inference.predicate {
+                            self.expr(predicate, &env[..1], None);
+                        }
                     }
                     if let OnConflictAction::DoUpdate(update) = &conflict.action {
                         self.assignments(&update.assignments, &schema_columns, &env);

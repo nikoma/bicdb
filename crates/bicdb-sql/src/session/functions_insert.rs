@@ -16,7 +16,7 @@ type ConflictRow = (
 #[derive(Clone, Copy)]
 enum ConflictDoNothingTarget<'a> {
     All,
-    Columns(&'a ConflictColumnInference),
+    Columns(&'a ConflictIndexInference),
     Exclusion(&'a str),
 }
 
@@ -1158,53 +1158,22 @@ impl<'db> SqlSession<'db> {
             (schema.as_deref(), &insert.on)
         {
             let target = conflict.conflict_target.as_ref();
-            if let Some((_, predicate)) =
-                target.and_then(crate::conflict_inference::column_inference)
+            if let Some(target) =
+                target.filter(|target| crate::conflict_inference::is_index_inference(target))
             {
-                let columns = conflict_target_columns(&table, Some(schema), target)?;
-                for name in &columns {
-                    if !schema
-                        .columns
-                        .iter()
-                        .any(|column| column.name == *name && !column.hidden)
-                    {
-                        return Err(SqlError::data_exception(
-                            "42703",
-                            format!("column \"{name}\" does not exist"),
-                            None,
-                        ));
-                    }
-                }
-                let mut read_columns: BTreeSet<_> = columns.iter().cloned().collect();
-                if let Some(predicate) = predicate {
-                    read_columns.extend(crate::conflict_inference::predicate_columns(
-                        predicate,
-                        schema,
-                        insert.table_alias.as_ref().map(|alias| &alias.alias),
-                    )?);
-                }
+                let (inferred, read_columns) = crate::conflict_inference::resolve_index_inference(
+                    schema,
+                    target,
+                    insert.table_alias.as_ref().map(|alias| &alias.alias),
+                )?;
                 if !preauthorized {
-                    self.require_column_privilege(
-                        &table,
-                        "SELECT",
-                        &read_columns.into_iter().collect::<Vec<_>>(),
-                    )?;
+                    self.require_column_privilege(&table, "SELECT", &read_columns)?;
                 }
-                let inferred = ConflictColumnInference {
-                    columns,
-                    predicate: predicate.and_then(|predicate| {
-                        crate::partial_index::inference_predicate(schema, predicate)
-                    }),
-                };
                 if self
                     .memoized_unique_arbiters(&table, schema, &inferred)
                     .is_empty()
                 {
-                    return Err(SqlError::data_exception(
-                        "42P10",
-                        "there is no unique or exclusion constraint matching the ON CONFLICT specification",
-                        None,
-                    ));
+                    return Err(crate::conflict_inference::no_conflict_arbiter());
                 }
                 inference = Some(inferred);
             } else if let Some(ConflictTarget::OnConstraint(name)) = target {
@@ -2174,7 +2143,7 @@ impl<'db> SqlSession<'db> {
         schema: Option<&TableSchema>,
         records: Vec<Record>,
         on_insert: &OnInsert,
-        inference: Option<&ConflictColumnInference>,
+        inference: Option<&ConflictIndexInference>,
         insert_alias: Option<&Ident>,
         returning: Option<&[SelectItem]>,
         preauthorized: bool,
@@ -2185,6 +2154,8 @@ impl<'db> SqlSession<'db> {
                 "INSERT ON DUPLICATE KEY UPDATE is not supported".to_string(),
             ));
         };
+        let returning_alias = insert_alias.map(ident_value);
+        let returning_alias = returning_alias.as_deref().unwrap_or(table);
         // An arbiter reads the target relation (PostgreSQL requires SELECT
         // rights for it), so the SELECT policies join the new-row checks.
         let select_required = on_conflict.conflict_target.is_some()
@@ -2193,7 +2164,7 @@ impl<'db> SqlSession<'db> {
         // ON CONFLICT ON CONSTRAINT naming an exclusion constraint or a temporal key.
         let named_constraint = match on_conflict.conflict_target.as_ref() {
             Some(target @ ConflictTarget::OnConstraint(name))
-                if crate::conflict_inference::column_inference(target).is_none() =>
+                if !crate::conflict_inference::is_index_inference(target) =>
             {
                 Some(relation_name(name)?)
             }
@@ -2222,6 +2193,7 @@ impl<'db> SqlSession<'db> {
                     records,
                     ConflictDoNothingTarget::Exclusion(target),
                     returning,
+                    returning_alias,
                     select_required,
                 );
             }
@@ -2234,12 +2206,13 @@ impl<'db> SqlSession<'db> {
         } else if let Some(inference) = inference {
             Some(inference)
         } else {
-            fallback_inference = ConflictColumnInference {
+            fallback_inference = ConflictIndexInference {
                 columns: conflict_target_columns(
                     table,
                     schema,
                     on_conflict.conflict_target.as_ref(),
                 )?,
+                keys: Vec::new(),
                 predicate: None,
             };
             Some(&fallback_inference)
@@ -2262,6 +2235,7 @@ impl<'db> SqlSession<'db> {
                 records,
                 target,
                 returning,
+                returning_alias,
                 select_required,
             );
         }
@@ -2701,8 +2675,9 @@ impl<'db> SqlSession<'db> {
             }
         }
         self.fire_after_insert_triggers(table, schema, &inserted_records)?;
-        self.insert_result(
+        self.insert_result_with_alias(
             table,
+            returning_alias,
             schema,
             returning,
             &affected_records,
@@ -2718,7 +2693,7 @@ impl<'db> SqlSession<'db> {
         table: &str,
         schema: Option<&TableSchema>,
         record: &Record,
-        inference: &ConflictColumnInference,
+        inference: &ConflictIndexInference,
     ) -> Result<ConflictRow> {
         let Some(schema) = schema else {
             return Ok((None, 0, None));
@@ -3170,7 +3145,7 @@ impl<'db> SqlSession<'db> {
         &self,
         table: &str,
         schema: Option<&TableSchema>,
-        inference: Option<&ConflictColumnInference>,
+        inference: Option<&ConflictIndexInference>,
         error: SqlError,
     ) -> SqlError {
         let Some(schema) = schema else {
@@ -3227,6 +3202,7 @@ impl<'db> SqlSession<'db> {
         records: Vec<Record>,
         target: ConflictDoNothingTarget<'_>,
         returning: Option<&[SelectItem]>,
+        returning_alias: &str,
         select_required: bool,
     ) -> Result<SqlResult> {
         let filter = |session: &Self, rows: Vec<Record>| match target {
@@ -3269,8 +3245,9 @@ impl<'db> SqlSession<'db> {
         self.insert_session_new_records(table, schema, inserted_records.clone())
             .map_err(|error| map_error(self, error))?;
         self.fire_after_insert_triggers(table, schema, &inserted_records)?;
-        self.insert_result(
+        self.insert_result_with_alias(
             table,
+            returning_alias,
             schema,
             returning,
             &inserted_records,
@@ -3285,7 +3262,7 @@ impl<'db> SqlSession<'db> {
         &self,
         table: &str,
         schema: &TableSchema,
-        inference: Option<&ConflictColumnInference>,
+        inference: Option<&ConflictIndexInference>,
     ) -> Result<()> {
         if !schema
             .constraints
@@ -3350,7 +3327,7 @@ impl<'db> SqlSession<'db> {
         table: &str,
         schema: Option<&TableSchema>,
         records: Vec<Record>,
-        inference: &ConflictColumnInference,
+        inference: &ConflictIndexInference,
     ) -> Result<Vec<Record>> {
         let Some(schema) = schema else {
             return Ok(records);
@@ -3709,7 +3686,7 @@ impl<'db> SqlSession<'db> {
         &self,
         table: &str,
         schema: &TableSchema,
-        inference: &ConflictColumnInference,
+        inference: &ConflictIndexInference,
     ) -> Arc<Vec<UniqueConflictArbiter>> {
         if let Some((memo_table, memo_inference, arbiters)) =
             self.conflict_arbiter_memo.borrow().as_ref()
@@ -3718,7 +3695,7 @@ impl<'db> SqlSession<'db> {
                 return Arc::clone(arbiters);
             }
         }
-        let arbiters = Arc::new(unique_arbiters_for_columns(
+        let arbiters = Arc::new(unique_arbiters_for_inference(
             self.db_ref(),
             table,
             schema,
@@ -3760,8 +3737,21 @@ impl<'db> SqlSession<'db> {
         records: &[Record],
         count: usize,
     ) -> Result<SqlResult> {
+        self.insert_result_with_alias(table, table, schema, returning, records, count)
+    }
+
+    fn insert_result_with_alias(
+        &self,
+        table: &str,
+        alias: &str,
+        schema: Option<&TableSchema>,
+        returning: Option<&[SelectItem]>,
+        records: &[Record],
+        count: usize,
+    ) -> Result<SqlResult> {
         if let Some(returning) = returning {
-            return self.project_returning_records(table, schema, returning, records);
+            return self
+                .project_returning_records_with_alias(table, alias, schema, returning, records);
         }
         Ok(SqlResult::command(format!("INSERT 0 {count}")))
     }

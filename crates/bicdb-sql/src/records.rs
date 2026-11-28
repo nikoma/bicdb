@@ -1181,16 +1181,133 @@ pub(crate) fn unique_arbiters_for_table_uncached(
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct ConflictColumnInference {
+pub(crate) enum ConflictKeyIdentity {
+    Column(String),
+    Expression(IndexField),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ConflictKey {
+    pub(crate) identity: ConflictKeyIdentity,
+    pub(crate) collation: Option<i64>,
+    pub(crate) operator_family: Option<(i64, i32)>,
+}
+
+fn conflict_key_identity(schema: &TableSchema, field: &IndexField) -> ConflictKeyIdentity {
+    index_field_column_name(schema, field).map_or_else(
+        || ConflictKeyIdentity::Expression(field.clone()),
+        ConflictKeyIdentity::Column,
+    )
+}
+
+fn conflict_key_type_and_collation<'a>(
+    schema: &'a TableSchema,
+    identity: &ConflictKeyIdentity,
+) -> Option<(&'a str, i64)> {
+    match identity {
+        ConflictKeyIdentity::Column(name) => {
+            let column = schema.column(name)?;
+            let collation = if pg_type_is_collatable(&column.pg_type) {
+                column.collation_oid()
+            } else {
+                0
+            };
+            Some((&column.pg_type, collation))
+        }
+        ConflictKeyIdentity::Expression(IndexField::Lower(inner) | IndexField::Upper(inner)) => {
+            let (_, collation) =
+                conflict_key_type_and_collation(schema, &conflict_key_identity(schema, inner))?;
+            Some(("text", collation))
+        }
+        ConflictKeyIdentity::Expression(_) => None,
+    }
+}
+
+fn extended_conflict_key_matches(
+    db: &BicDb,
+    schema: &TableSchema,
+    arbiter: &UniqueConflictArbiter,
+    requested: &[ConflictKey],
+) -> bool {
+    let keys: Vec<_> = match &arbiter.key {
+        UniqueKey::Columns(columns) => columns
+            .iter()
+            .cloned()
+            .map(ConflictKeyIdentity::Column)
+            .collect(),
+        UniqueKey::IndexFields(fields) => fields
+            .iter()
+            .map(|field| conflict_key_identity(schema, field))
+            .collect(),
+    };
+    let definition = schema
+        .indexes
+        .iter()
+        .find(|index| catalog_display_name(&index.name) == arbiter.name && index.unique);
+    if let Some(index) = definition {
+        if index.metadata_only
+            || index.access_method != "btree"
+            || crate::conflict_inference::declared_index_keys(schema, index).as_deref()
+                != Some(keys.as_slice())
+        {
+            return false;
+        }
+    }
+    keys.iter()
+        .all(|key| requested.iter().any(|target| target.identity == *key))
+        && requested.iter().all(|target| {
+            keys.iter().enumerate().any(|(position, identity)| {
+                if target.identity != *identity {
+                    return false;
+                }
+                if target.collation.is_none() && target.operator_family.is_none() {
+                    return true;
+                }
+                let Some((pg_type, type_collation)) =
+                    conflict_key_type_and_collation(schema, identity)
+                else {
+                    return false;
+                };
+                if let Some(expected) = target.collation {
+                    let actual = definition
+                        .and_then(|index| index.collations.get(position))
+                        .copied()
+                        .filter(|oid| *oid != 0)
+                        .unwrap_or(type_collation);
+                    if actual != expected {
+                        return false;
+                    }
+                }
+                if let Some(expected) = target.operator_family {
+                    let actual = if let Some(class) =
+                        definition.and_then(|index| index.operator_classes.get(position))
+                    {
+                        pg_opclass_named_for_type(db, "btree", pg_type, class)
+                    } else {
+                        pg_default_opclass_for_type(db, "btree", pg_type)
+                    };
+                    return actual
+                        .ok()
+                        .flatten()
+                        .is_some_and(|spec| (spec.family_oid, spec.input_type_oid) == expected);
+                }
+                true
+            })
+        })
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ConflictIndexInference {
     pub(crate) columns: Vec<String>,
+    pub(crate) keys: Vec<ConflictKey>,
     pub(crate) predicate: Option<bicdb_core::IndexPredicate>,
 }
 
-pub(crate) fn unique_arbiters_for_columns(
+pub(crate) fn unique_arbiters_for_inference(
     db: &BicDb,
     table: &str,
     schema: &TableSchema,
-    inference: &ConflictColumnInference,
+    inference: &ConflictIndexInference,
 ) -> Vec<UniqueConflictArbiter> {
     let requested: BTreeSet<_> = inference.columns.iter().map(String::as_str).collect();
     // SQL inference matches a set of named columns. Ordered matching still
@@ -1204,20 +1321,25 @@ pub(crate) fn unique_arbiters_for_columns(
                 })
             })
         })
-        .filter(|arbiter| match &arbiter.key {
-            UniqueKey::Columns(names) => {
-                names.iter().map(String::as_str).collect::<BTreeSet<_>>() == requested
+        .filter(|arbiter| {
+            if !inference.keys.is_empty() {
+                return extended_conflict_key_matches(db, schema, arbiter, &inference.keys);
             }
-            UniqueKey::IndexFields(fields) => fields
-                .iter()
-                .map(|field| index_field_column_name(schema, field))
-                .collect::<Option<BTreeSet<_>>>()
-                .is_some_and(|names| {
-                    names
-                        .iter()
-                        .map(String::as_str)
-                        .eq(requested.iter().copied())
-                }),
+            match &arbiter.key {
+                UniqueKey::Columns(names) => {
+                    names.iter().map(String::as_str).collect::<BTreeSet<_>>() == requested
+                }
+                UniqueKey::IndexFields(fields) => fields
+                    .iter()
+                    .map(|field| index_field_column_name(schema, field))
+                    .collect::<Option<BTreeSet<_>>>()
+                    .is_some_and(|names| {
+                        names
+                            .iter()
+                            .map(String::as_str)
+                            .eq(requested.iter().copied())
+                    }),
+            }
         })
         .cloned()
         .collect()

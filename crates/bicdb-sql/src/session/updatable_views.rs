@@ -17,7 +17,7 @@
 //! (0A000) rather than evaluated with the wrong role's policies.
 use super::*;
 use crate::column_privileges::ReferencedNames;
-use crate::conflict_inference::{column_inference, column_target};
+use crate::conflict_inference::{index_inference, index_target, is_index_inference};
 use sqlparser::ast::{OnConflict, TableAliasWithoutColumns};
 use sqlparser::ast::{Visit, VisitMut, Visitor, VisitorMut};
 
@@ -856,17 +856,9 @@ struct Chain {
     cascade: bool,
 }
 
-pub(super) fn no_view_conflict_arbiter() -> SqlError {
-    SqlError::data_exception(
-        "42P10",
-        "there is no unique or exclusion constraint matching the ON CONFLICT specification",
-        None,
-    )
-}
-
 pub(super) fn reject_view_conflict_constraint(conflict: &OnConflict, view: &str) -> Result<()> {
     if let Some(target @ ConflictTarget::OnConstraint(name)) = &conflict.conflict_target {
-        if column_inference(target).is_none() {
+        if !is_index_inference(target) {
             return Err(SqlError::data_exception(
                 "42704",
                 format!(
@@ -1132,14 +1124,18 @@ impl SqlSession<'_> {
         conflict: &OnConflict,
     ) -> Result<()> {
         let mut reads = ReferencedNames::default();
-        if let Some((columns, predicate)) =
-            conflict.conflict_target.as_ref().and_then(column_inference)
-        {
-            for column in columns {
-                reads.add_name(normalized(column));
+        if let Some(inference) = conflict.conflict_target.as_ref().and_then(index_inference) {
+            for element in inference.elements {
+                // A key that names a column does not read the whole row,
+                // even if that column shares the name of the target.
+                if let Expr::Identifier(column) = element.expr {
+                    reads.add_name(normalized(&column));
+                } else {
+                    reads.add_expr(&element.expr);
+                }
             }
-            if let Some(predicate) = predicate {
-                reads.add_expr(predicate);
+            if let Some(predicate) = inference.predicate {
+                reads.add_expr(&predicate);
             }
         }
         if let OnConflictAction::DoUpdate(update) = &conflict.action {
@@ -1164,12 +1160,9 @@ impl SqlSession<'_> {
         target: &str,
         conflict: &mut OnConflict,
     ) -> Result<()> {
-        if let Some((keys, predicate)) =
-            conflict.conflict_target.as_ref().and_then(column_inference)
-        {
-            let mapped = keys
-                .into_iter()
-                .map(|key| {
+        if let Some(mut inference) = conflict.conflict_target.as_ref().and_then(index_inference) {
+            for element in &mut inference.elements {
+                if let Expr::Identifier(key) = &element.expr {
                     let name = normalized(key);
                     let Some(column) = level.columns.iter().find(|column| column.name == name)
                     else {
@@ -1179,14 +1172,20 @@ impl SqlSession<'_> {
                             None,
                         ));
                     };
-                    let Some(base_column) = &column.base_column else {
-                        return Err(no_view_conflict_arbiter());
-                    };
-                    Ok(Ident::with_quote('"', base_column.clone()))
-                })
-                .collect::<Result<Vec<_>>>()?;
-            let mut predicate = predicate.cloned();
-            if let Some(predicate) = &mut predicate {
+                    element.expr = column.base_column.as_ref().map_or_else(
+                        || column.expr.clone(),
+                        |base| Expr::Identifier(Ident::with_quote('"', base.clone())),
+                    );
+                } else {
+                    self.substitute_view_expr(
+                        level,
+                        target,
+                        &mut element.expr,
+                        ViewExpression::ConflictTarget,
+                    )?;
+                }
+            }
+            if let Some(predicate) = &mut inference.predicate {
                 self.substitute_view_expr(
                     level,
                     target,
@@ -1194,7 +1193,7 @@ impl SqlSession<'_> {
                     ViewExpression::ConflictTarget,
                 )?;
             }
-            conflict.conflict_target = Some(column_target(mapped, predicate));
+            conflict.conflict_target = Some(index_target(inference));
         }
         if let OnConflictAction::DoUpdate(update) = &mut conflict.action {
             for assignment in &mut update.assignments {

@@ -1174,7 +1174,7 @@ pub struct SqlSession<'db> {
     conflict_arbiter_memo: std::cell::RefCell<
         Option<(
             String,
-            records::ConflictColumnInference,
+            records::ConflictIndexInference,
             Arc<Vec<records::UniqueConflictArbiter>>,
         )>,
     >,
@@ -7978,7 +7978,7 @@ pub(crate) fn type_usage_denied(user_type: &UserTypeSchema) -> SqlError {
     )))
 }
 
-fn index_expr_collation_oid(columns: &[ColumnSchema], expr: &Expr) -> Result<i64> {
+pub(crate) fn index_expr_collation_oid(columns: &[ColumnSchema], expr: &Expr) -> Result<i64> {
     match expr {
         Expr::Collate { expr, collation } => {
             if index_expr_collation_oid(columns, expr)? == 0 {
@@ -7993,7 +7993,7 @@ fn index_expr_collation_oid(columns: &[ColumnSchema], expr: &Expr) -> Result<i64
         }
         Expr::Identifier(ident) => Ok(columns
             .iter()
-            .find(|column| column.name.eq_ignore_ascii_case(&ident.value))
+            .find(|column| column.name == ident_value(ident))
             .filter(|column| pg_type_is_collatable(&column.pg_type))
             .map(ColumnSchema::collation_oid)
             .unwrap_or(0)),
@@ -8002,11 +8002,38 @@ fn index_expr_collation_oid(columns: &[ColumnSchema], expr: &Expr) -> Result<i64
             .and_then(|ident| {
                 columns
                     .iter()
-                    .find(|column| column.name.eq_ignore_ascii_case(&ident.value))
+                    .find(|column| column.name == ident_value(ident))
             })
             .filter(|column| pg_type_is_collatable(&column.pg_type))
             .map(ColumnSchema::collation_oid)
             .unwrap_or(0)),
+        Expr::Function(function)
+            if matches!(
+                object_name_lowercase(&function.name).as_deref(),
+                Ok("lower" | "upper" | "pg_catalog.lower" | "pg_catalog.upper")
+            ) =>
+        {
+            let Some(arguments) = positional_function_args(&function.args) else {
+                return Ok(0);
+            };
+            let [argument] = arguments.as_slice() else {
+                return Ok(0);
+            };
+            let ident = match unwrap_nested_expr(argument) {
+                Expr::Identifier(ident) => Some(ident),
+                Expr::CompoundIdentifier(parts) => parts.last(),
+                _ => None,
+            };
+            Ok(ident
+                .and_then(|ident| {
+                    columns
+                        .iter()
+                        .find(|column| column.name == ident_value(ident))
+                })
+                .filter(|column| column.pg_type == "text" && column.user_type.is_none())
+                .map(ColumnSchema::collation_oid)
+                .unwrap_or(0))
+        }
         Expr::Nested(expr) => index_expr_collation_oid(columns, expr),
         Expr::Cast { data_type, .. } => {
             let (pg_type, _) = pg_type_from_data_type(data_type)?;

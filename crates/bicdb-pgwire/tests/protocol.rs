@@ -14992,6 +14992,27 @@ fn partial_conflict_predicate_preserves_parameter_types_and_describe_is_read_onl
     send_query(&mut client, "SELECT count(*) FROM public.partial_wire");
     assert_eq!(read_query_rows(&mut client), vec![vec!["0".to_string()]]);
 
+    send_query(
+        &mut client,
+        "CREATE TABLE folded_wire(k int, fruit text);
+         CREATE UNIQUE INDEX folded_wire_unique
+           ON folded_wire(k, lower(fruit) COLLATE \"C\" text_pattern_ops);
+         INSERT INTO folded_wire VALUES (1, 'APPLE')",
+    );
+    assert!(read_query_rows(&mut client).is_empty());
+    send_query(
+        &mut client,
+        "PREPARE folded_update(int, text) AS INSERT INTO folded_wire AS f VALUES ($1, $2)
+           ON CONFLICT (k, lower(fruit) COLLATE \"C\" text_pattern_ops)
+           DO UPDATE SET fruit = excluded.fruit RETURNING f.k, f.fruit",
+    );
+    assert!(read_query_rows(&mut client).is_empty());
+    send_query(&mut client, "EXECUTE folded_update(1, 'Apple')");
+    assert_eq!(
+        read_query_rows(&mut client),
+        vec![vec!["1".to_string(), "Apple".to_string()]]
+    );
+
     client.write_all(b"X\0\0\0\x04").unwrap();
     server.join().unwrap();
 }

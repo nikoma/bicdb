@@ -635,7 +635,7 @@ pub(crate) fn bind_sql_text(db: &BicDb, sql: &str, path: &[String]) -> Result<Op
     let mut statements = match Parser::parse_sql(&dialect, sql) {
         Ok(statements) => statements,
         Err(_) => {
-            let Some(masked) = crate::conflict_inference::mask_predicates_for_binding(sql) else {
+            let Some(masked) = crate::conflict_inference::mask_for_binding(sql) else {
                 return Ok(None);
             };
             let Ok(statements) = Parser::parse_sql(&dialect, &masked) else {

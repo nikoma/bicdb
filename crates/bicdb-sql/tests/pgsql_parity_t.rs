@@ -1409,3 +1409,105 @@ fn partial_like_shares_sql_wildcards_escape_and_negated_null_behavior() {
         .unwrap_err();
     assert_eq!(error.sqlstate(), "22025");
 }
+
+#[test]
+fn conflict_expression_arbiters_preserve_collation_and_operator_class() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute(
+        "CREATE TABLE fruit_names(k int, fruit text);
+         CREATE UNIQUE INDEX fruit_folded ON fruit_names(k, lower(fruit) COLLATE \"C\" text_pattern_ops);
+         INSERT INTO fruit_names VALUES (1, 'Apple');",
+    )
+    .unwrap();
+    assert!(sql
+        .execute(
+            "INSERT INTO fruit_names VALUES (1, 'APPLE')
+             ON CONFLICT(lower(fruit), k, lower(fruit), k) DO NOTHING RETURNING *"
+        )
+        .unwrap()
+        .rows
+        .is_empty());
+    assert_eq!(
+        sql.execute(
+            "INSERT INTO fruit_names VALUES (1, 'APPLE')
+             ON CONFLICT(lower(fruit) COLLATE \"C\" text_pattern_ops, k)
+             DO UPDATE SET fruit = excluded.fruit RETURNING *"
+        )
+        .unwrap()
+        .rows,
+        [[SqlValue::Int(1), SqlValue::String("APPLE".to_string())]],
+    );
+    for (target, sqlstate) in [
+        ("k, lower(fruit) COLLATE \"POSIX\"", "42P10"),
+        ("k, lower(fruit) text_ops", "42P10"),
+        ("k, lower(fruit) int4_ops", "42P10"),
+        ("k, upper(fruit)", "42P10"),
+        ("k, fruit", "42P10"),
+        ("k, lower(fruit) missing_ops", "42704"),
+        ("k, lower(fruit) COLLATE missing_collation", "42704"),
+        ("k, lower(fruit) DESC", "42P10"),
+    ] {
+        let statement = format!(
+            "INSERT INTO fruit_names VALUES (1, 'apple') ON CONFLICT ({target}) DO NOTHING"
+        );
+        let error = sql.execute(&statement).unwrap_err();
+        assert_eq!(error.sqlstate(), sqlstate, "{statement}: {error}");
+    }
+    sql.execute("CREATE VIEW fruits AS SELECT k AS id, fruit AS label FROM fruit_names")
+        .unwrap();
+    assert_eq!(
+        sql.execute(
+            "INSERT INTO fruits VALUES (1, 'aPpLe') ON CONFLICT(lower(label), id)
+             DO UPDATE SET label = excluded.label RETURNING *"
+        )
+        .unwrap()
+        .rows,
+        [[SqlValue::Int(1), SqlValue::String("aPpLe".to_string())]],
+    );
+}
+
+#[test]
+fn each_expression_matches_its_own_index_decoration_and_predicate() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute(
+        "CREATE TABLE fruit_names(fruit text, live boolean);
+         CREATE UNIQUE INDEX fruit_folded ON fruit_names(
+           lower(fruit) COLLATE \"C\", upper(fruit) text_pattern_ops
+         ) WHERE live;
+         INSERT INTO fruit_names VALUES ('Apple', true)",
+    )
+    .unwrap();
+    for target in [
+        "(lower(fruit) COLLATE \"C\", upper(fruit) text_pattern_ops)",
+        "(lower(fruit) text_pattern_ops, upper(fruit) COLLATE \"C\") WHERE live",
+    ] {
+        let query = format!(
+            "INSERT INTO fruit_names VALUES ('APPLE', true) ON CONFLICT {target} DO NOTHING"
+        );
+        let error = sql.execute(&query).unwrap_err();
+        assert_eq!(error.sqlstate(), "42P10", "{query}: {error}");
+    }
+    assert_eq!(
+        sql.execute(
+            "INSERT INTO fruit_names AS f VALUES ('APPLE', true)
+             ON CONFLICT(upper(fruit) text_pattern_ops, lower(fruit) COLLATE \"C\") WHERE f.live
+             DO UPDATE SET fruit = excluded.fruit RETURNING f.fruit"
+        )
+        .unwrap()
+        .rows,
+        [[SqlValue::String("APPLE".to_string())]],
+    );
+    assert_eq!(
+        sql.execute(
+            "INSERT INTO fruit_names VALUES ('APPLE', false)
+             ON CONFLICT(lower(fruit), upper(fruit)) WHERE live DO NOTHING RETURNING live"
+        )
+        .unwrap()
+        .rows,
+        [[SqlValue::Bool(false)]],
+    );
+}

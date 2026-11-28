@@ -310,7 +310,7 @@ impl SqlSession<'_> {
             if conflict.conflict_target.is_some()
                 || !matches!(conflict.action, OnConflictAction::DoNothing)
             {
-                return Err(super::updatable_views::no_view_conflict_arbiter());
+                return Err(crate::conflict_inference::no_conflict_arbiter());
             }
         }
         let alias = Self::view_alias(&view, insert.table_alias.as_ref().map(|a| &a.alias));

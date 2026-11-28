@@ -3607,6 +3607,9 @@ impl<'db> SqlEngine<'db> {
             });
         }
         let args = function_args(function);
+        if let Some(pg_type) = crate::pg_hash::scalar_hash_result_type(&name, args.len()) {
+            return Some(pg_type.into());
+        }
         if let Some(pg_type) = current_datetime_function_pg_type(bare_name, args.len()) {
             return Some(pg_type.into());
         }

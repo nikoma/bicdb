@@ -3780,6 +3780,32 @@ fn pg_proc_rows_uncached(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> 
                 row
             }),
     );
+    rows.extend(crate::pg_hash::scalar_hash_procedures().map(
+        |(oid, name, input, result, extended)| {
+            let mut row = proc_row(
+                oid,
+                name,
+                11,
+                result,
+                false,
+                "f",
+                "internal",
+                name,
+                if extended { 2 } else { 1 },
+                BOOTSTRAP_ROLE_NAME,
+                false,
+            );
+            let args = if extended {
+                format!("{input} 20")
+            } else {
+                input.to_string()
+            };
+            row.insert("proargtypes".into(), SqlValue::String(args));
+            row.insert("proisstrict".into(), SqlValue::Bool(true));
+            row.insert("provolatile".into(), SqlValue::String("i".into()));
+            row
+        },
+    ));
     rows.extend(PG_PLPGSQL_PROC_ROWS.iter().map(
         |(oid, name, return_type, language, source, nargs)| {
             proc_row(

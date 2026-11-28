@@ -100,3 +100,6 @@ pub(crate) fn hash_bytes_extended(bytes: &[u8], seed: u64) -> u64 {
     c = c.wrapping_sub(b.rotate_left(24));
     (u64::from(b) << 32) | u64::from(c)
 }
+
+mod scalar;
+pub(crate) use scalar::{eval_scalar_hash, scalar_hash_procedures, scalar_hash_result_type};

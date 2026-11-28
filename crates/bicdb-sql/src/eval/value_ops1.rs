@@ -3968,6 +3968,9 @@ pub(crate) fn eval_compatibility_function_value(
         expanded.extend(flattened.into_iter().map(json_to_sql_value));
         return eval_compatibility_function_value(&target, &expanded, None);
     }
+    if let Some(value) = crate::pg_hash::eval_scalar_hash(name, args, arg_types)? {
+        return Ok(Some(value));
+    }
     if let Some(value) = eval_bit_function_value(name, args, arg_types)? {
         return Ok(Some(value));
     }

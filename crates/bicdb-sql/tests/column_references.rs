@@ -65,6 +65,76 @@ fn unknown_column_references_are_errors() {
 }
 
 #[test]
+fn postgres_group_and_order_positions_bind_before_execution() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = session_with_fixture(&mut db);
+    for (sql, state, message) in [
+        (
+            "SELECT name, count(*) FROM t GROUP BY 3",
+            "42P10",
+            "GROUP BY position 3 is not in select list",
+        ),
+        (
+            "SELECT id FROM t GROUP BY 0",
+            "42P10",
+            "GROUP BY position 0 is not in select list",
+        ),
+        (
+            "SELECT id FROM t GROUP BY -1",
+            "42P10",
+            "GROUP BY position -1 is not in select list",
+        ),
+        (
+            "SELECT id FROM t GROUP BY true",
+            "42601",
+            "non-integer constant in GROUP BY",
+        ),
+        (
+            "SELECT id FROM t GROUP BY 'a'",
+            "42601",
+            "non-integer constant in GROUP BY",
+        ),
+        (
+            "SELECT id FROM t ORDER BY (2)",
+            "42P10",
+            "ORDER BY position 2 is not in select list",
+        ),
+        (
+            "SELECT id FROM t WHERE false ORDER BY 2147483648",
+            "42601",
+            "non-integer constant in ORDER BY",
+        ),
+        (
+            "SELECT * FROM t ORDER BY 4",
+            "42P10",
+            "ORDER BY position 4 is not in select list",
+        ),
+        (
+            "SELECT v FROM (SELECT 9 AS v ORDER BY 3) r",
+            "42P10",
+            "ORDER BY position 3 is not in select list",
+        ),
+    ] {
+        let error = session.execute(sql).expect_err(sql);
+        assert_eq!(error.sqlstate(), state, "{sql}: {error}");
+        assert!(error.to_string().contains(message), "{sql}: {error}");
+    }
+    for sql in [
+        "SELECT name, count(*) FROM t GROUP BY 1 ORDER BY 2",
+        "SELECT id FROM t ORDER BY +2",
+        "SELECT 1 GROUP BY 1 ORDER BY 1",
+        "SELECT * FROM t ORDER BY 3",
+    ] {
+        let rows = session
+            .execute(sql)
+            .unwrap_or_else(|error| panic!("{sql}: {error}"))
+            .rows;
+        assert_eq!(rows.len(), 1, "{sql}");
+    }
+}
+
+#[test]
 fn valid_references_keep_working() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();

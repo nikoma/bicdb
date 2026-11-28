@@ -1860,6 +1860,73 @@ impl<'db> SqlSession<'db> {
         Ok(())
     }
 
+    fn prepare_conflict_row_assignments(
+        &self,
+        table: &str,
+        schema: &TableSchema,
+        update: &sqlparser::ast::DoUpdate,
+    ) -> Result<Vec<Assignment>> {
+        let mut target_columns = BTreeSet::new();
+        let mut reads = crate::column_privileges::ReferencedNames::default();
+        let mut expanded = Vec::with_capacity(update.assignments.len());
+        if let Some(selection) = &update.selection {
+            reads.add_expr(selection);
+        }
+        for assignment in &update.assignments {
+            reads.add_expr(&assignment.value);
+            let names = super::row_assignments::assignment_columns(&assignment.target);
+            for name in names {
+                let column = relation_name(name)?;
+                ensure_schema_column(table, schema, &column)?;
+                if !target_columns.insert(column.clone()) {
+                    return Err(SqlError::data_exception(
+                        "42601",
+                        format!("multiple assignments to same column \"{column}\""),
+                        None,
+                    ));
+                }
+            }
+            if !matches!(assignment.target, AssignmentTarget::Tuple(_)) {
+                expanded.push(assignment.clone());
+                continue;
+            }
+            let values = match unwrap_nested_expr(&assignment.value) {
+                Expr::Tuple(values) => values.iter().collect::<Vec<_>>(),
+                Expr::Function(function) if is_row_constructor(function) => {
+                    unnamed_function_arg_exprs(function)
+                        .into_iter()
+                        .flatten()
+                        .collect()
+                }
+                Expr::Subquery(query) => {
+                    if let Some(width) = self.insert_source_width(query, &BTreeMap::new())? {
+                        check_conflict_assignment_width(names.len(), width)?;
+                    }
+                    for name in names {
+                        check_conflict_generated_assignment(schema, name, None)?;
+                    }
+                    expanded.push(assignment.clone());
+                    continue;
+                }
+                _ => return Err(SqlError::data_exception(
+                    "0A000",
+                    "source for a multiple-column UPDATE item must be a sub-SELECT or ROW() expression",
+                    None,
+                )),
+            };
+            check_conflict_assignment_width(names.len(), values.len())?;
+            for (name, value) in names.iter().zip(values) {
+                check_conflict_generated_assignment(schema, name, Some(value))?;
+                expanded.push(Assignment {
+                    target: AssignmentTarget::ColumnName(name.clone()),
+                    value: value.clone(),
+                });
+            }
+        }
+        self.require_select_on_names(table, &reads, &["excluded".to_string()])?;
+        Ok(expanded)
+    }
+
     pub(crate) fn execute_insert_on_conflict(
         &mut self,
         table: &str,
@@ -1980,9 +2047,24 @@ impl<'db> SqlSession<'db> {
                 select_required,
             );
         }
+        let expanded_assignments = match (&on_conflict.action, schema) {
+            (OnConflictAction::DoUpdate(update), Some(schema))
+                if update
+                    .assignments
+                    .iter()
+                    .any(|assignment| matches!(assignment.target, AssignmentTarget::Tuple(_))) =>
+            {
+                Some(self.prepare_conflict_row_assignments(table, schema, update)?)
+            }
+            _ => None,
+        };
+        let mut update_assignments = &[][..];
         let assignments = if let OnConflictAction::DoUpdate(update) = &on_conflict.action {
             self.require_update_privileges(table, &update.assignments)?;
-            super::row_assignments::default_assignment_order(&update.assignments, schema)
+            update_assignments = expanded_assignments
+                .as_deref()
+                .unwrap_or(&update.assignments);
+            super::row_assignments::default_assignment_order(update_assignments, schema)
         } else {
             None
         };
@@ -2164,70 +2246,91 @@ impl<'db> SqlSession<'db> {
                         )?;
 
                         let mut updated = existing.clone();
-                        let mut assigned_columns = Vec::with_capacity(update.assignments.len());
-                        for index in 0..update.assignments.len() {
+                        let mut assigned_columns = Vec::with_capacity(update_assignments.len());
+                        for index in 0..update_assignments.len() {
                             let assignment = match assignments.as_ref() {
                                 Some(ordered) => ordered[index],
-                                None => &update.assignments[index],
+                                None => &update_assignments[index],
                             };
-                            let AssignmentTarget::ColumnName(column_name) = &assignment.target
-                            else {
-                                return Err(SqlError::Unsupported(
-                                    "ON CONFLICT DO UPDATE supports only single-column assignments"
-                                        .to_string(),
-                                ));
-                            };
-                            let column = relation_name(column_name)?;
-                            ensure_schema_column(table, schema, &column)?;
-                            if schema
-                                .column(&column)
-                                .is_some_and(|column| column.generated_expr.is_some())
-                            {
-                                if expr_is_default(&assignment.value) {
-                                    continue;
+                            let names =
+                                super::row_assignments::assignment_columns(&assignment.target);
+                            let mut source_values =
+                                if matches!(assignment.target, AssignmentTarget::Tuple(_)) {
+                                    let Expr::Subquery(query) =
+                                        unwrap_nested_expr(&assignment.value)
+                                    else {
+                                        unreachable!(
+                                            "row constructors were expanded before execution"
+                                        );
+                                    };
+                                    let result = self
+                                        .row_engine()
+                                        .execute_correlated_query(&update_row, query)?;
+                                    Some(
+                                        conflict_assignment_query_values(result, names.len())?
+                                            .into_iter(),
+                                    )
+                                } else {
+                                    None
+                                };
+                            for column_name in names {
+                                let column = relation_name(column_name)?;
+                                ensure_schema_column(table, schema, &column)?;
+                                if schema
+                                    .column(&column)
+                                    .is_some_and(|column| column.generated_expr.is_some())
+                                {
+                                    if expr_is_default(&assignment.value) {
+                                        continue;
+                                    }
+                                    return Err(SqlError::generated_always_violation(format!(
+                                        "column \"{column}\" can only be updated to DEFAULT"
+                                    )));
                                 }
-                                return Err(SqlError::generated_always_violation(format!(
-                                    "column \"{column}\" can only be updated to DEFAULT"
-                                )));
-                            }
-                            assigned_columns.push(column.clone());
-                            let mut value = if expr_is_default(&assignment.value) {
-                                self.default_value_for_column(
-                                    access_schema.or(Some(schema)),
-                                    &column,
-                                )?
-                                .unwrap_or(SqlValue::Null)
-                            } else {
-                                self.row_engine()
-                                    .eval_row_value(&update_row, &assignment.value)?
-                            };
-                            if schema
-                                .column(&column)
-                                .is_some_and(|column| column.pg_type == "oid")
-                            {
-                                if let Some(cast) = explicit_oid_cast(
-                                    value.clone(),
-                                    &assignment.value,
-                                    Some(schema),
-                                ) {
-                                    value = cast?;
-                                }
-                            }
-                            let value = resolve_oid_alias_column_value(
-                                self.db_ref(),
-                                schema,
-                                &column,
-                                value,
-                            )?;
-                            if partition_parent.is_some() {
-                                set_partition_update_column(
-                                    &mut updated,
-                                    access_schema,
+                                assigned_columns.push(column.clone());
+                                let value = if let Some(values) = source_values.as_mut() {
+                                    values.next().expect("subquery row width was validated")
+                                } else if expr_is_default(&assignment.value) {
+                                    self.default_value_for_column(
+                                        access_schema.or(Some(schema)),
+                                        &column,
+                                    )?
+                                    .unwrap_or(SqlValue::Null)
+                                } else {
+                                    let value = self
+                                        .row_engine()
+                                        .eval_row_value(&update_row, &assignment.value)?;
+                                    if schema
+                                        .column(&column)
+                                        .is_some_and(|column| column.pg_type == "oid")
+                                    {
+                                        explicit_oid_cast(
+                                            value.clone(),
+                                            &assignment.value,
+                                            Some(schema),
+                                        )
+                                        .transpose()?
+                                        .unwrap_or(value)
+                                    } else {
+                                        value
+                                    }
+                                };
+                                let value = resolve_oid_alias_column_value(
+                                    self.db_ref(),
+                                    schema,
                                     &column,
                                     value,
                                 )?;
-                            } else {
-                                set_record_column(&mut updated, Some(schema), &column, value)?;
+                                if let Some(parent) = partition_parent {
+                                    set_partition_update_column(
+                                        &mut updated,
+                                        Some(parent),
+                                        &column,
+                                        value,
+                                    )?;
+                                } else {
+                                    set_record_column(&mut updated, Some(schema), &column, value)?;
+                                }
                             }
                         }
                         // ON CONFLICT DO UPDATE takes the update path, so
@@ -4312,4 +4415,52 @@ fn select_output_is_unknown_literal(source: &Query, index: usize) -> bool {
     matches!(select.projection.get(index),
         Some(SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. })
             if is_string_literal_expr(expr))
+}
+
+fn check_conflict_assignment_width(columns: usize, values: usize) -> Result<()> {
+    if columns == values {
+        return Ok(());
+    }
+    Err(SqlError::data_exception(
+        "42601",
+        "number of columns does not match number of values",
+        None,
+    ))
+}
+
+fn check_conflict_generated_assignment(
+    schema: &TableSchema,
+    name: &ObjectName,
+    value: Option<&Expr>,
+) -> Result<()> {
+    if value.is_some_and(expr_is_default) {
+        return Ok(());
+    }
+    let column = relation_name(name)?;
+    if schema
+        .column(&column)
+        .is_some_and(|column| column.generated_expr.is_some())
+    {
+        return Err(SqlError::with_detail(
+            SqlError::generated_always_violation(format!(
+                "column \"{column}\" can only be updated to DEFAULT"
+            )),
+            format!("Column \"{column}\" is a generated column."),
+        ));
+    }
+    Ok(())
+}
+
+fn conflict_assignment_query_values(result: SqlResult, columns: usize) -> Result<Vec<SqlValue>> {
+    check_conflict_assignment_width(columns, result.columns.len())?;
+    let mut rows = result.rows.into_iter();
+    let first = rows.next().unwrap_or_else(|| vec![SqlValue::Null; columns]);
+    if rows.next().is_some() {
+        return Err(SqlError::data_exception(
+            "21000",
+            "more than one row returned by a subquery used as an expression",
+            None,
+        ));
+    }
+    Ok(first)
 }

@@ -3227,3 +3227,56 @@ fn same_table_name_in_distinct_schemas_has_isolated_storage() {
         "unexpected error: {reserved}"
     );
 }
+
+#[test]
+fn on_conflict_row_assignments_use_the_old_and_excluded_rows() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = bicdb_core::BicDb::open(root.path()).unwrap();
+    let mut session = bicdb_sql::SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE TABLE qa(k int PRIMARY KEY, a int DEFAULT 9, b int DEFAULT 8,
+                             g int GENERATED ALWAYS AS (a+b) STORED);
+             INSERT INTO qa(k,a,b) VALUES (1,2,3)",
+        )
+        .unwrap();
+    for (source, expected) in [
+        ("(qa.b,excluded.a)", ["1", "3", "6", "9"]),
+        ("ROW(DEFAULT,qa.a)", ["1", "9", "3", "12"]),
+        ("(SELECT excluded.a,qa.a)", ["1", "6", "9", "15"]),
+        ("(SELECT 1,2 WHERE false)", ["1", "", "", ""]),
+    ] {
+        let result = session
+            .execute(&format!(
+                "INSERT INTO qa(k,a,b) VALUES (1,6,7)
+                 ON CONFLICT (k) DO UPDATE SET (a,b)={source} RETURNING k,a,b,g"
+            ))
+            .unwrap();
+        let cells = result.rows[0]
+            .iter()
+            .map(|value| value.to_cell())
+            .collect::<Vec<_>>();
+        assert_eq!(cells, expected);
+    }
+    for (targets, source, state) in [
+        ("(a,b)", "ROW(1)", "42601"),
+        ("(a,b)", "(VALUES (1,2),(3,4))", "21000"),
+        ("(a,b)", "42", "0A000"),
+        ("(a,a)", "(6,7)", "42601"),
+        ("(g,a)", "(7,3)", "428C9"),
+    ] {
+        let result = session.execute(&format!(
+            "INSERT INTO qa(k,a,b) VALUES (1,6,7)
+             ON CONFLICT (k) DO UPDATE SET {targets}={source}"
+        ));
+        assert_eq!(result.unwrap_err().sqlstate(), state);
+    }
+    let result = session
+        .execute(
+            "INSERT INTO qa(k,a,b) VALUES (1,6,7)
+             ON CONFLICT (k) DO UPDATE SET (g,a)=(DEFAULT,3) RETURNING a,g",
+        )
+        .unwrap();
+    assert_eq!(result.rows[0][0].to_cell(), "3");
+    assert!(matches!(result.rows[0][1], bicdb_sql::SqlValue::Null));
+}

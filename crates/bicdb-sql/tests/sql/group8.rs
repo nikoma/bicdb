@@ -2805,24 +2805,28 @@ fn rls_create_policy_validation_matches_postgres() {
     let error = session
         .execute("CREATE POLICY bad ON t FOR INSERT USING (true)")
         .unwrap_err();
+    assert_eq!(error.sqlstate(), "42601");
     assert!(error
         .to_string()
         .contains("only WITH CHECK expression allowed for INSERT"));
     let error = session
         .execute("CREATE POLICY bad ON t FOR SELECT WITH CHECK (true)")
         .unwrap_err();
+    assert_eq!(error.sqlstate(), "42601");
     assert!(error
         .to_string()
         .contains("WITH CHECK cannot be applied to SELECT or DELETE"));
     let error = session
         .execute("CREATE POLICY bad ON t USING (count(*) > 0)")
         .unwrap_err();
+    assert_eq!(error.sqlstate(), "42803");
     assert!(error
         .to_string()
         .contains("aggregate functions are not allowed in policy expressions"));
     let error = session
         .execute("CREATE POLICY bad ON t USING (nosuchcol = 1)")
         .unwrap_err();
+    assert_eq!(error.sqlstate(), "42703");
     assert!(error
         .to_string()
         .contains("column \"nosuchcol\" does not exist"));
@@ -2832,8 +2836,19 @@ fn rls_create_policy_validation_matches_postgres() {
     let error = session
         .execute("CREATE POLICY dup ON t USING (true)")
         .unwrap_err();
+    assert_eq!(error.sqlstate(), "42710");
     assert!(error.to_string().contains("already exists"));
+    session.execute("CREATE POLICY \"Dup\" ON t").unwrap();
+    let error = session
+        .execute("ALTER POLICY dup ON t RENAME TO \"Dup\"")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42710");
+    session.execute("DROP POLICY dup ON t").unwrap();
+    session
+        .execute("ALTER POLICY \"Dup\" ON t USING (true)")
+        .unwrap();
     let error = session.execute("DROP POLICY nope ON t").unwrap_err();
+    assert_eq!(error.sqlstate(), "42704");
     assert!(error
         .to_string()
         .contains("policy \"nope\" for table \"t\" does not exist"));

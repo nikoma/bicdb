@@ -3276,18 +3276,12 @@ impl<'db> SqlSession<'db> {
         let table = relation_name(&create_policy.table_name)?;
         // CR-4: an ungated CREATE POLICY let any user attach a permissive
         // `USING (true)` policy to someone else's RLS table.
-        self.require_table_ownership(&table, "CREATE POLICY")?;
+        self.require_policy_table_ownership(&table, "CREATE POLICY")?;
         let mut schema = load_schema(self.db_ref(), &table)?
             .ok_or_else(|| SqlError::InvalidCollection(table.clone()))?;
         let name = ident_value(&create_policy.name);
-        if schema
-            .policies
-            .iter()
-            .any(|existing| existing.name.eq_ignore_ascii_case(&name))
-        {
-            return Err(SqlError::InvalidSql(format!(
-                "policy \"{name}\" for table \"{table}\" already exists"
-            )));
+        if schema.policies.iter().any(|existing| existing.name == name) {
+            return Err(duplicate_policy(&table, &name));
         }
         let command = match create_policy.command {
             None | Some(CreatePolicyCommand::All) => PolicyCommand::All,
@@ -3330,30 +3324,20 @@ impl<'db> SqlSession<'db> {
 
     pub(crate) fn execute_alter_policy(&mut self, alter_policy: &AlterPolicy) -> Result<SqlResult> {
         let table = relation_name(&alter_policy.table_name)?;
-        self.require_table_ownership(&table, "ALTER POLICY")?;
+        self.require_policy_table_ownership(&table, "ALTER POLICY")?;
         let mut schema = load_schema(self.db_ref(), &table)?
             .ok_or_else(|| SqlError::InvalidCollection(table.clone()))?;
         let name = ident_value(&alter_policy.name);
         let position = schema
             .policies
             .iter()
-            .position(|policy| policy.name.eq_ignore_ascii_case(&name))
-            .ok_or_else(|| {
-                SqlError::InvalidSql(format!(
-                    "policy \"{name}\" for table \"{table}\" does not exist"
-                ))
-            })?;
+            .position(|policy| policy.name == name)
+            .ok_or_else(|| missing_policy(&table, &name))?;
         match &alter_policy.operation {
             AlterPolicyOperation::Rename { new_name } => {
                 let new_name = ident_value(new_name);
-                if schema
-                    .policies
-                    .iter()
-                    .any(|policy| policy.name.eq_ignore_ascii_case(&new_name))
-                {
-                    return Err(SqlError::InvalidSql(format!(
-                        "policy \"{new_name}\" for table \"{table}\" already exists"
-                    )));
+                if schema.policies.iter().any(|policy| policy.name == new_name) {
+                    return Err(duplicate_policy(&table, &new_name));
                 }
                 schema.policies[position].name = new_name;
             }
@@ -3390,19 +3374,15 @@ impl<'db> SqlSession<'db> {
         let table = relation_name(&drop_policy.table_name)?;
         // Dropping the isolating policy is as powerful as adding a permissive
         // one, so it needs the same gate.
-        self.require_table_ownership(&table, "DROP POLICY")?;
+        self.require_policy_table_ownership(&table, "DROP POLICY")?;
         let mut schema = load_schema(self.db_ref(), &table)?
             .ok_or_else(|| SqlError::InvalidCollection(table.clone()))?;
         let name = ident_value(&drop_policy.name);
         // Policies have no dependents, so CASCADE and RESTRICT are both no-ops.
         let original_len = schema.policies.len();
-        schema
-            .policies
-            .retain(|policy| !policy.name.eq_ignore_ascii_case(&name));
+        schema.policies.retain(|policy| policy.name != name);
         if schema.policies.len() == original_len && !drop_policy.if_exists {
-            return Err(SqlError::InvalidSql(format!(
-                "policy \"{name}\" for table \"{table}\" does not exist"
-            )));
+            return Err(missing_policy(&table, &name));
         }
         if schema.policies.len() == original_len {
             crate::statement_context::report_notice(
@@ -3410,12 +3390,28 @@ impl<'db> SqlSession<'db> {
                 "00000",
                 format!(
                     "policy \"{name}\" for relation \"{}\" does not exist, skipping",
-                    relation_name_for_message(&table)
+                    catalog_display_name(&table)
                 ),
             );
+            return Ok(SqlResult::command("DROP POLICY"));
         }
         self.save_session_schema(&schema)?;
         Ok(SqlResult::command("DROP POLICY"))
+    }
+
+    fn require_policy_table_ownership(&self, table: &str, action: &str) -> Result<()> {
+        self.require_table_ownership(table, action)
+            .map_err(|error| match error {
+                SqlError::BicDb(BicDbError::Authorization(_)) => SqlError::data_exception(
+                    "42501",
+                    format!(
+                        "must be owner of table {}",
+                        relation_name_for_message(table)
+                    ),
+                    None,
+                ),
+                error => error,
+            })
     }
 
     pub(crate) fn validated_policy_expression(
@@ -3424,8 +3420,10 @@ impl<'db> SqlSession<'db> {
         expr: &Expr,
     ) -> Result<String> {
         if expr_contains_aggregate(expr) {
-            return Err(SqlError::InvalidSql(
-                "aggregate functions are not allowed in policy expressions".to_string(),
+            return Err(SqlError::data_exception(
+                "42803",
+                "aggregate functions are not allowed in policy expressions",
+                None,
             ));
         }
         validate_policy_expression_columns(schema, expr)?;
@@ -4775,6 +4773,24 @@ impl<'db> SqlSession<'db> {
         )?;
         Ok(SqlResult::command("CREATE FUNCTION"))
     }
+}
+
+fn duplicate_policy(table: &str, policy: &str) -> SqlError {
+    SqlError::data_exception(
+        "42710",
+        format!(
+            "policy \"{policy}\" for table \"{}\" already exists",
+            relation_name_for_message(table)
+        ),
+        None,
+    )
+}
+
+fn missing_policy(table: &str, policy: &str) -> SqlError {
+    SqlError::undefined_object(format!(
+        "policy \"{policy}\" for table \"{}\" does not exist",
+        relation_name_for_message(table)
+    ))
 }
 
 struct CarrierRuntimeRoleBlock {

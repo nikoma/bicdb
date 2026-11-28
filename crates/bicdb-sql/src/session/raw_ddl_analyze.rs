@@ -902,7 +902,13 @@ impl<'db> SqlSession<'db> {
                     }
                     None => false,
                 };
-                let result = self.execute_inner(&sql)?;
+                let result = {
+                    let _scope = super::not_null_constraints::CreateNoInheritScope::enter(
+                        &table,
+                        no_inherit_not_null.clone(),
+                    );
+                    self.execute_inner(&sql)?
+                };
                 if existed {
                     return Ok(result);
                 }
@@ -1000,7 +1006,15 @@ impl<'db> SqlSession<'db> {
         }
         let path = values
             .iter()
-            .map(|value| eval_setting_value(value).map(|value| value.to_cell()))
+            .map(|value| {
+                let name = match value {
+                    Expr::Identifier(ident) if ident.quote_style.is_none() => {
+                        ident.value.to_ascii_lowercase()
+                    }
+                    _ => eval_setting_value(value)?.to_cell(),
+                };
+                Ok(pg_quote_ident(&name))
+            })
             .collect::<Result<Vec<_>>>()?
             .join(", ");
         Arc::make_mut(&mut self.session_gucs).insert("search_path".to_string(), path);

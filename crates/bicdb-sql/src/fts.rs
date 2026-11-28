@@ -2747,30 +2747,19 @@ pub(crate) fn ts_stat_rows(
     vectors: &[SqlValue],
     weights: Option<&str>,
 ) -> Result<Vec<(String, i64, i64)>> {
-    let weights = match weights {
-        None => None,
-        Some(text) => {
-            let mut set = Vec::new();
-            for letter in text.chars() {
-                let weight = match letter.to_ascii_uppercase() {
-                    'A' => PgTsWeight::A,
-                    'B' => PgTsWeight::B,
-                    'C' => PgTsWeight::C,
-                    'D' => PgTsWeight::D,
-                    ' ' => continue,
-                    other => {
-                        return Err(SqlError::data_exception(
-                            "22023",
-                            format!("unrecognized weight: \"{other}\""),
-                            None,
-                        ))
-                    }
-                };
-                set.push(weight);
-            }
-            Some(set)
-        }
-    };
+    let weights = weights
+        .map(|text| {
+            text.chars()
+                .filter_map(|letter| match letter.to_ascii_uppercase() {
+                    'A' => Some(PgTsWeight::A),
+                    'B' => Some(PgTsWeight::B),
+                    'C' => Some(PgTsWeight::C),
+                    'D' => Some(PgTsWeight::D),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        })
+        .filter(|weights| !weights.is_empty());
     let mut stats = BTreeMap::<String, (i64, i64)>::new();
     for value in vectors {
         if matches!(value, SqlValue::Null) {

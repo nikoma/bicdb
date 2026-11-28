@@ -24,6 +24,7 @@ Notable components and license choices include:
 | QuickJS and `rquickjs` | MIT |
 | OXC TypeScript parser, semantic analysis, transformer and code generator | MIT |
 | `@bjorn3/browser_wasi_shim` vendored under `web/bicdb-client/vendor/` | MIT (the included `LICENSE-MIT`) |
+| SXD-XPath 0.5.1 under `crates/bicdb-sql/src/xml/xpath/` | MIT or Apache-2.0 (the original licenses and attribution are included in that directory) |
 | Oracle Database Human Resources sample under `examples/oracle/hr/upstream/` | MIT (the included `LICENSE.txt`; source revision and hashes in `examples/oracle/hr/upstream.json`) |
 
 EmbeddingGemma-300m weights are not included in this repository. If obtained

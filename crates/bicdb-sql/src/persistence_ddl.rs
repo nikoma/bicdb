@@ -62,7 +62,7 @@ fn relation_at(tokens: &[Token], significant: &[usize], at: usize) -> Option<(St
         parts.push(identifier(&tokens[*significant.get(next + 1)?])?);
         next += 2;
     }
-    Some((parts.join("."), next))
+    Some((relation_name_from_parts(&parts).ok()?, next))
 }
 
 pub(crate) fn parse_persistence_ddl(sql: &str) -> Result<Option<PersistenceDdl>> {

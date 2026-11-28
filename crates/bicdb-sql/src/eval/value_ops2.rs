@@ -231,10 +231,10 @@ pub(crate) fn eval_polymorphic_array_function_value(
         }
         "array_ndims" => {
             require_arg_count(name, args, 1)?;
-            let Some((array, _)) = array_json_parts(&args[0], name)? else {
+            let Some((array, lower_bounds)) = array_json_parts(&args[0], name)? else {
                 return Ok(Some(SqlValue::Null));
             };
-            let dimensions = array_dimensions(array);
+            let dimensions = array_dimensions_with_bounds(array, &lower_bounds);
             if dimensions.is_empty() {
                 SqlValue::Null
             } else {
@@ -246,8 +246,8 @@ pub(crate) fn eval_polymorphic_array_function_value(
             let Some((array, lower_bounds)) = array_json_parts(&args[0], name)? else {
                 return Ok(Some(SqlValue::Null));
             };
-            let dimensions = array_dimensions(array);
-            if dimensions.is_empty() || dimensions.iter().any(|length| *length == 0) {
+            let dimensions = array_dimensions_with_bounds(array, &lower_bounds);
+            if dimensions.is_empty() {
                 SqlValue::Null
             } else {
                 SqlValue::String(
@@ -273,11 +273,14 @@ pub(crate) fn eval_polymorphic_array_function_value(
                 SqlError::InvalidSql(format!("{name} dimension must be an integer"))
             })?;
             let dimension_index = usize::try_from(dimension - 1).ok();
-            let length =
-                dimension_index.and_then(|index| array_dimensions(array).get(index).copied());
+            let length = dimension_index.and_then(|index| {
+                array_dimensions_with_bounds(array, &lower_bounds)
+                    .get(index)
+                    .copied()
+            });
             let lower_bound = dimension_index.and_then(|index| lower_bounds.get(index).copied());
             match (name, length, lower_bound) {
-                (_, None | Some(0), _) => SqlValue::Null,
+                (_, None, _) => SqlValue::Null,
                 ("array_lower", Some(_), Some(lower)) => SqlValue::Int(i64::from(lower)),
                 ("array_upper", Some(length), Some(lower)) => {
                     SqlValue::Int(i64::from(lower) + length as i64 - 1)
@@ -1072,7 +1075,7 @@ pub(crate) fn array_json_parts<'a>(
                 })?,
             )
             .map_err(|_| SqlError::InvalidSql("invalid internal array lower bounds".to_string()))?;
-            if lower_bounds.len() != array_dimensions(array).len() {
+            if lower_bounds.len() != array_dimensions_with_bounds(array, &lower_bounds).len() {
                 return Err(SqlError::InvalidSql(
                     "internal array lower bounds do not match array rank".to_string(),
                 ));
@@ -1084,6 +1087,12 @@ pub(crate) fn array_json_parts<'a>(
             value.to_cell()
         ))),
     }
+}
+
+fn array_dimensions_with_bounds(value: &JsonValue, lower_bounds: &[i32]) -> Vec<usize> {
+    let mut dimensions = array_dimensions(value);
+    restore_empty_catalog_vector_dimension(&mut dimensions, Some(lower_bounds));
+    dimensions
 }
 
 pub(crate) fn array_dimensions(value: &JsonValue) -> Vec<usize> {
@@ -1591,6 +1600,14 @@ pub(crate) fn cast_expr_value(
     }
     let (target_type, _) = pg_type_from_data_type(data_type)?;
     let source_type = projected_arithmetic_operand_pg_type(expr, schema);
+    if let (Some(vector), Some(element)) = (
+        source_type
+            .as_deref()
+            .filter(|source| catalog_vector_element_type(source).is_some()),
+        target_type.strip_suffix("[]"),
+    ) {
+        return cast_catalog_vector_array(None, value, vector, element, data_type);
+    }
     if target_type == "xml" && crate::xml::xml_input_is_document() {
         return if projected_expr_pg_type(expr, schema).as_deref() == Some("xml") {
             Ok(value)
@@ -1964,13 +1981,14 @@ pub(crate) fn postgres_array_cast_text_value_of(
     };
     let (array, bounds) =
         array_json_parts(value, "array text cast")?.ok_or_else(|| invalid_array_text("NULL"))?;
-    if bounds.iter().all(|lower| *lower == 1) {
+    let dimensions = array_dimensions_with_bounds(array, &bounds);
+    if dimensions.contains(&0) || bounds.iter().all(|lower| *lower == 1) {
         return Ok(text);
     }
-    let prefix = bounds
-        .iter()
-        .zip(array_dimensions(array))
-        .map(|(lower, length)| format!("[{}:{}]", lower, i64::from(*lower) + length as i64 - 1))
+    let prefix = dimensions
+        .into_iter()
+        .zip(bounds)
+        .map(|(length, lower)| format!("[{lower}:{}]", i64::from(lower) + length as i64 - 1))
         .collect::<String>();
     Ok(format!("{prefix}={text}"))
 }
@@ -2051,16 +2069,9 @@ fn postgres_array_text_value_with(
         }
     }
 
-    let value = match value {
-        SqlValue::Json(json) if json.is_object() => json
-            .get("$bicdb_array_input")
-            .and_then(JsonValue::as_object)
-            .and_then(|input| input.get("value"))
-            .ok_or_else(|| invalid_array_text("internal array value"))?,
-        SqlValue::Json(value) => &**value,
-        _ => return Err(invalid_array_text(&value.to_cell())),
-    };
-    scalar(value, delimiter, float_type)
+    let (array, _) = array_json_parts(value, "array cast")?
+        .ok_or_else(|| invalid_array_text(&value.to_cell()))?;
+    scalar(array, delimiter, float_type)
 }
 
 pub(crate) fn explicit_oid_cast(
@@ -2552,7 +2563,8 @@ pub(crate) fn parse_composite_text_fields(value: &str) -> Result<Vec<Option<Stri
     let mut escaped = false;
     let mut was_quoted = false;
     let mut depth = 0usize;
-    for character in inner.chars().chain(std::iter::once(',')) {
+    let mut characters = inner.chars().chain(std::iter::once(',')).peekable();
+    while let Some(character) = characters.next() {
         if escaped {
             field.push(character);
             escaped = false;
@@ -2563,6 +2575,10 @@ pub(crate) fn parse_composite_text_fields(value: &str) -> Result<Vec<Option<Stri
             continue;
         }
         if character == '"' {
+            if quoted && characters.next_if_eq(&'"').is_some() {
+                field.push('"');
+                continue;
+            }
             quoted = !quoted;
             was_quoted = true;
             continue;
@@ -3082,6 +3098,16 @@ pub(crate) fn cast_expr_value_with_db_and_source_type(
         .or_else(|| projected_expr_pg_type(expr, schema))
         .or_else(|| projected_expr_pg_type_with_db(db, expr))
         .or_else(|| catalog_oid_alias_expr_type(expr).map(str::to_string));
+    if let (Some(vector), Some(element)) = (
+        source_pg_type
+            .as_deref()
+            .filter(|source| catalog_vector_element_type(source).is_some()),
+        target_pg_type
+            .as_deref()
+            .and_then(|target| target.strip_suffix("[]")),
+    ) {
+        return cast_catalog_vector_array(Some(db), value, vector, element, data_type);
+    }
     if let Some(target) = target_pg_type
         .as_deref()
         .filter(|target| matches!(*target, "int2" | "int4" | "int8"))
@@ -3204,6 +3230,61 @@ pub(crate) fn cast_expr_value_with_db_and_source_type(
         );
     }
     cast_expr_value(value, expr, data_type, schema)
+}
+
+fn cast_catalog_vector_array(
+    db: Option<&BicDb>,
+    value: SqlValue,
+    vector: &str,
+    element: &str,
+    data_type: &DataType,
+) -> Result<SqlValue> {
+    let source = catalog_vector_element_type(vector).expect("validated vector type");
+    if !pg_cast_allows(source, element, PgCastContext::Explicit) {
+        return Err(SqlError::cannot_coerce(format!(
+            "cannot cast type {vector} to {}[]",
+            common_type_display(element)
+        )));
+    }
+    if matches!(value, SqlValue::Null) {
+        return Ok(SqlValue::Null);
+    }
+    let PgCanonicalValue::Array(array) =
+        crate::type_codec::canonical_catalog_vector(vector, &value.to_cell())?
+    else {
+        unreachable!("catalog vectors are canonical arrays")
+    };
+    if array.elements.is_empty()
+        && (source == element
+            || pg_cast_spec(source, element)
+                .is_some_and(|cast| cast.method == PgCastMethod::Binary))
+    {
+        return Ok(SqlValue::json(serde_json::json!({
+            "$bicdb_array_input": {"lower_bounds": [0], "value": []}
+        })));
+    }
+    let modifier = pg_type_modifier_from_data_type(data_type)?;
+    let values = array
+        .elements
+        .into_iter()
+        .map(|value| {
+            let value = match value {
+                PgCanonicalValue::Oid(value) if element == "int4" => {
+                    SqlValue::Int(i64::from(value as i32))
+                }
+                PgCanonicalValue::Oid(value) => SqlValue::Int(i64::from(value)),
+                PgCanonicalValue::Int2(value) => SqlValue::Int(i64::from(value)),
+                _ => unreachable!("catalog vector element type was validated"),
+            };
+            let value = if let Some(db) = db.filter(|_| is_oid_alias_type(element)) {
+                resolve_oid_alias_value(db, element, value)?
+            } else {
+                cast_value_to_pg_type(value, element)?
+            };
+            apply_pg_type_modifier_with_context(value, element, modifier.as_ref(), true)
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok(array_value_with_lower_bounds(values, vec![0]))
 }
 
 pub(crate) fn catalog_oid_alias_expr_type(expr: &Expr) -> Option<&'static str> {

@@ -522,7 +522,7 @@ mod tests {
                 bind.extend(1_i32.to_be_bytes());
                 bind.push(b'1');
                 bind.extend(0_i16.to_be_bytes());
-                bind_message(&bind, &prepared, &worker_server).unwrap();
+                bind_message(&bind, &prepared, &worker_server, false).unwrap();
                 phase_tx.send("describe-query").unwrap();
                 execute_server_sql_for_describe_with_session(
                     &worker_server,

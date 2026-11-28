@@ -1,5 +1,5 @@
 use bicdb_core::BicDb;
-use bicdb_sql::{SqlSession, SqlValue};
+use bicdb_sql::{SqlErrorField, SqlSession, SqlValue};
 use std::sync::{Arc, Barrier};
 
 #[test]
@@ -208,4 +208,83 @@ fn postgres_alter_sequence_changes_type_bounds_and_parameters_atomically() {
     session
         .execute("ALTER SEQUENCE resizing_fixed AS int2 MAXVALUE 20000")
         .unwrap();
+}
+
+#[test]
+fn postgres_sequence_search_path_and_discard_follow_relation_identity() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut sql = SqlSession::new(&mut db);
+    for statement in [
+        "CREATE SEQUENCE slot_seq START 100",
+        "CREATE SEQUENCE blocked_seq START 300",
+        "CREATE SCHEMA seq_scope",
+        "CREATE SEQUENCE seq_scope.slot_seq START 20",
+        "CREATE TABLE seq_scope.blocked_seq(id int)",
+        "SET search_path = seq_scope, public",
+    ] {
+        sql.execute(statement).unwrap();
+    }
+    for (query, value) in [
+        ("SELECT nextval('slot_seq')", 20),
+        ("SELECT nextval('public.slot_seq')", 100),
+        ("SELECT nextval('public.slot_seq'::regclass)", 101),
+    ] {
+        assert_eq!(
+            sql.execute(query).unwrap().rows,
+            vec![vec![SqlValue::Int(value)]]
+        );
+    }
+    let error = sql.execute("SELECT nextval('blocked_seq')").unwrap_err();
+    assert_eq!(error.sqlstate(), "42809");
+    assert_eq!(
+        error.postgres_message(),
+        "cannot open relation \"blocked_seq\""
+    );
+    assert!(error.fields().contains(&SqlErrorField::Detail(
+        "This operation is not supported for tables.".into(),
+    )));
+
+    sql.execute("CREATE TEMP SEQUENCE slot_seq START 800")
+        .unwrap();
+    assert_eq!(
+        sql.execute("SELECT nextval('slot_seq')").unwrap().rows,
+        vec![vec![SqlValue::Int(800)]]
+    );
+    sql.execute("SET search_path = seq_scope, public, pg_temp")
+        .unwrap();
+    assert_eq!(
+        sql.execute("SELECT nextval('slot_seq'), currval('pg_temp.slot_seq')")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(21), SqlValue::Int(800)]]
+    );
+
+    sql.execute("BEGIN; DISCARD SEQUENCES; ROLLBACK").unwrap();
+    for query in [
+        "SELECT currval('slot_seq')",
+        "SELECT lastval()",
+        "SELECT currval('public.slot_seq')",
+    ] {
+        assert_eq!(
+            sql.execute(query).unwrap_err().sqlstate(),
+            "55000",
+            "{query}"
+        );
+    }
+    assert_eq!(
+        sql.execute("SELECT nextval('slot_seq')").unwrap().rows,
+        vec![vec![SqlValue::Int(22)]]
+    );
+    sql.execute("SET search_path = ''").unwrap();
+    assert_eq!(
+        sql.execute("SELECT nextval('slot_seq')").unwrap().rows,
+        vec![vec![SqlValue::Int(801)]]
+    );
+    assert_eq!(
+        sql.execute("SELECT nextval('public.slot_seq')")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(102)]]
+    );
 }

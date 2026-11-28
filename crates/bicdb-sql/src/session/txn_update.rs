@@ -4285,7 +4285,10 @@ impl<'db> SqlSession<'db> {
                     .ok_or_else(|| {
                         SqlError::coded_public(
                             "55000",
-                            format!("currval of sequence \"{sequence}\" is not yet defined in this session"),
+                            format!(
+                                "currval of sequence \"{}\" is not yet defined in this session",
+                                sequence_catalog_name(&sequence)
+                            ),
                             None,
                             None,
                         )
@@ -6625,6 +6628,13 @@ impl<'db> SqlSession<'db> {
     }
 
     fn sequence_argument(&self, value: Option<&SqlValue>, function: &str) -> Result<String> {
+        if !oracle::is_oracle_database(self.db_ref())? {
+            match value {
+                Some(SqlValue::String(text)) => return self.postgres_sequence_name(text),
+                Some(SqlValue::Int(oid)) => return self.postgres_sequence_oid(*oid),
+                _ => {}
+            }
+        }
         let text = match value {
             Some(SqlValue::String(value)) => std::borrow::Cow::Borrowed(value.as_str()),
             Some(SqlValue::Int(oid)) => std::borrow::Cow::Owned(
@@ -6647,6 +6657,82 @@ impl<'db> SqlSession<'db> {
             }
         };
         self.session_sequence_name(&text)
+    }
+
+    fn postgres_sequence_name(&self, text: &str) -> Result<String> {
+        let db = self.db_ref();
+        let normalized = normalize_sequence_name(text)
+            .map_err(|_| SqlError::data_exception_public("42602", "invalid name syntax", None))?;
+        // Stored sequence defaults can carry the catalog's physical name.
+        if text.starts_with("__bicdb_s_") && load_sequence(db, &normalized)?.is_some() {
+            return Ok(normalized);
+        }
+        let oid = resolve_regclass_oid(db, text)?.ok_or_else(|| {
+            SqlError::coded_public(
+                "42P01",
+                format!("relation \"{text}\" does not exist"),
+                None,
+                None,
+            )
+        })?;
+        if sequence_oid(&normalized) == oid && load_sequence(db, &normalized)?.is_some() {
+            return Ok(normalized);
+        }
+        if let (Ok(parts), Some(path)) = (
+            sql_identifier_parts(text),
+            crate::search_path::active_path(),
+        ) {
+            if let [name] = parts.as_slice() {
+                for namespace in path.iter() {
+                    let candidate = relation_name_from_parts(&[namespace.clone(), name.clone()])?;
+                    if sequence_oid(&candidate) == oid && load_sequence(db, &candidate)?.is_some() {
+                        return Ok(candidate);
+                    }
+                }
+            }
+        }
+        self.postgres_sequence_oid(oid)
+    }
+
+    fn postgres_sequence_oid(&self, oid: i64) -> Result<String> {
+        let db = self.db_ref();
+        if let Some(sequence) = list_sequences(db)?
+            .into_iter()
+            .find(|sequence| sequence_oid(&sequence.name) == oid)
+        {
+            return Ok(sequence.name);
+        }
+        let class = pg_class_rows_filtered(db, None, None, Some(&BTreeSet::from([oid])))?
+            .into_iter()
+            .next();
+        if let Some(class) = class {
+            let name = virtual_cell(&class, "relname").to_cell();
+            let kind = virtual_cell(&class, "relkind").to_cell();
+            let relation_type = match kind.as_str() {
+                "i" => "indexes",
+                "I" => "partitioned indexes",
+                "m" => "materialized views",
+                "p" => "partitioned tables",
+                "v" => "views",
+                "f" => "foreign tables",
+                "c" => "composite types",
+                _ => "tables",
+            };
+            return Err(SqlError::coded_public(
+                "42809",
+                format!("cannot open relation \"{name}\""),
+                Some(format!(
+                    "This operation is not supported for {relation_type}."
+                )),
+                None,
+            ));
+        }
+        Err(SqlError::coded_public(
+            "XX000",
+            format!("could not open relation with OID {oid}"),
+            None,
+            None,
+        ))
     }
 
     /// Sequence state is independent of the caller's transaction. Persist it

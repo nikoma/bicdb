@@ -198,6 +198,9 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>> {
         reject_deep_expressions(&statements)?;
     }
     crate::table_queries::reject_unlowered(&statements)?;
+    if sql_for_parse.contains("bicdb_xmlattributes") || sql_for_parse.contains("bicdb_xmlforest") {
+        crate::xml::validate_xml_constructor_names(&statements)?;
+    }
     restore_postgres_distinct_boolean_precedence(&mut statements);
     restore_postgres_whole_row_function_args(&mut statements);
     crate::similar_to::rewrite_similar_to(&mut statements);

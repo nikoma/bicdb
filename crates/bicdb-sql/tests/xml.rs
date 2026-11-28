@@ -1084,3 +1084,129 @@ fn xml_mapping_serializes_query_rows_and_does_not_execute_writes() {
     let result = session.execute("SELECT count(*) FROM \"t-xml\"").unwrap();
     assert_eq!(result.rows[0][0].to_cell(), "1");
 }
+
+#[test]
+fn xml_constructors_infer_names_from_column_references() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let result = session
+        .execute(
+            r#"SELECT xmlelement(NAME BIG,
+                  xmlattributes(x.VAL),
+                  xmlforest(x.VAL, ("VaL"), amount+1 AS "Ca'Se"))
+               FROM (VALUES (1,2,3)) AS x(val,"VaL",amount)"#,
+        )
+        .unwrap();
+    assert_eq!(
+        result.rows[0][0].to_cell(),
+        r#"<big val="1"><val>1</val><VaL>2</VaL><Ca_x0027_Se>4</Ca_x0027_Se></big>"#
+    );
+    for (sql, kind) in [
+        ("SELECT xmlforest(1) WHERE false", "element"),
+        ("SELECT xmlelement(NAME X, xmlattributes(1))", "attribute"),
+    ] {
+        let error = session.execute(sql).unwrap_err();
+        assert_eq!(error.sqlstate(), "42601");
+        assert_eq!(
+            error.to_string(),
+            format!("unnamed XML {kind} value must be a column reference")
+        );
+    }
+}
+
+#[test]
+fn schema_xml_maps_readable_relations_in_name_order() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            r#"CREATE SCHEMA "xml Set";
+               CREATE TABLE "xml Set".z (a int);
+               INSERT INTO "xml Set".z VALUES (NULL);
+               CREATE TABLE "xml Set".a (b text);
+               INSERT INTO "xml Set".a VALUES ('&');
+               CREATE VIEW "xml Set".m AS SELECT a FROM "xml Set".z;
+               CREATE SEQUENCE "xml Set".s"#,
+        )
+        .unwrap();
+    let result = session
+        .execute(r#"SELECT schema_to_xml('xml Set', true, false, 'urn:x')"#)
+        .unwrap();
+    assert_eq!(
+        result.rows[0][0].to_cell(),
+        concat!(
+            "<_x0078_ml_x0020_Set xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns=\"urn:x\">\n\n",
+            "<a>\n\n<row>\n  <b>&amp;</b>\n</row>\n\n</a>\n\n",
+            "<m>\n\n<row>\n  <a xsi:nil=\"true\"/>\n</row>\n\n</m>\n\n",
+            "<z>\n\n<row>\n  <a xsi:nil=\"true\"/>\n</row>\n\n</z>\n\n",
+            "</_x0078_ml_x0020_Set>\n",
+        )
+    );
+    assert_eq!(
+        session
+            .execute("SELECT schema_to_xml('xml_schema_absent', true, false, '')")
+            .unwrap_err()
+            .sqlstate(),
+        "3F000"
+    );
+}
+
+#[test]
+fn cursor_xml_consumes_rows_from_the_live_portal() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("BEGIN").unwrap();
+    session
+        .execute(
+            "DECLARE c SCROLL CURSOR FOR SELECT * FROM (VALUES (1,'v'::text),(2,NULL)) AS x(id,v)",
+        )
+        .unwrap();
+    let mapped = session
+        .execute("SELECT cursor_to_xml('c', 1, true, false, '')")
+        .unwrap();
+    let zero = session
+        .execute("SELECT cursor_to_xml('c', 0, true, false, '')")
+        .unwrap();
+    assert_eq!(mapped.rows, zero.rows);
+    assert!(mapped.rows[0][0].to_cell().contains("<id>1</id>"));
+    let second = session.execute("FETCH NEXT FROM c").unwrap();
+    assert_eq!(second.rows, [[SqlValue::Int(2), SqlValue::Null]]);
+    let back = session
+        .execute("SELECT cursor_to_xml('c', -1, true, false, '')")
+        .unwrap();
+    assert_eq!(mapped.rows, back.rows);
+    let error = session
+        .execute("SELECT cursor_to_xml('missing', 1, true, false, '')")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "34000");
+}
+
+#[test]
+fn xpath_reports_postgresql_syntax_and_empty_path_errors() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for (sql, message) in [
+        (
+            "SELECT xpath('', '<!-- no root -->')",
+            "empty XPath expression",
+        ),
+        ("SELECT xpath_exists('', '<a/>')", "empty XPath expression"),
+        ("SELECT xpath('[', '<a/>')", "invalid XPath expression"),
+        (
+            "SELECT * FROM XMLTABLE('' PASSING '<a/>' COLUMNS val text PATH '.')",
+            "row path filter must not be empty string",
+        ),
+        (
+            "SELECT * FROM XMLTABLE('/a' PASSING '<a/>' COLUMNS val text PATH '')",
+            "column path filter must not be empty string",
+        ),
+    ] {
+        let error = session.execute(sql).unwrap_err();
+        assert_eq!(error.sqlstate(), "10608", "{sql}");
+        assert_eq!(error.to_string(), message, "{sql}");
+    }
+}

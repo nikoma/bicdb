@@ -1847,6 +1847,30 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             return Some("bit".to_string());
         }
     }
+    if matches!(
+        expr,
+        Expr::Like { .. }
+            | Expr::ILike { .. }
+            | Expr::SimilarTo { .. }
+            | Expr::InList { .. }
+            | Expr::InSubquery { .. }
+            | Expr::Between { .. }
+            | Expr::IsNull(_)
+            | Expr::IsNotNull(_)
+            | Expr::IsTrue(_)
+            | Expr::IsNotTrue(_)
+            | Expr::IsFalse(_)
+            | Expr::IsNotFalse(_)
+            | Expr::IsUnknown(_)
+            | Expr::IsNotUnknown(_)
+            | Expr::IsDistinctFrom(_, _)
+            | Expr::IsNotDistinctFrom(_, _)
+            | Expr::Exists { .. }
+            | Expr::AnyOp { .. }
+            | Expr::AllOp { .. }
+    ) {
+        return Some("bool".to_string());
+    }
     if matches!(expr, Expr::Interval(_)) {
         return Some("interval".to_string());
     }

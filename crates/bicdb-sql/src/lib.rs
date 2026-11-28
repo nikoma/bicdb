@@ -3206,7 +3206,7 @@ fn composite_field_text(field: &SqlCompositeField) -> String {
     escaped.push('"');
     for character in text.chars() {
         if matches!(character, '"' | '\\') {
-            escaped.push('\\');
+            escaped.push(character);
         }
         escaped.push(character);
     }

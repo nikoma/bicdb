@@ -3399,6 +3399,12 @@ impl<'db> SqlEngine<'db> {
                 }
                 Ok(routine_var_from_ident(&self.routine_vars, ident).unwrap_or(SqlValue::Null))
             }
+            Expr::QualifiedWildcard(relation, _) => row
+                .get(&compound_row_value_key(&relation_default_alias(relation)))
+                .cloned()
+                .ok_or_else(|| {
+                    SqlError::Unsupported(format!("unsupported value expression {expr}"))
+                }),
             Expr::Value(value) => routine_var_from_value(&self.routine_vars, value)
                 .map(Ok)
                 .unwrap_or_else(|| literal_to_value(value)),

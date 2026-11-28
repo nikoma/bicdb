@@ -2552,7 +2552,8 @@ pub(crate) fn parse_composite_text_fields(value: &str) -> Result<Vec<Option<Stri
     let mut escaped = false;
     let mut was_quoted = false;
     let mut depth = 0usize;
-    for character in inner.chars().chain(std::iter::once(',')) {
+    let mut characters = inner.chars().chain(std::iter::once(',')).peekable();
+    while let Some(character) = characters.next() {
         if escaped {
             field.push(character);
             escaped = false;
@@ -2563,6 +2564,10 @@ pub(crate) fn parse_composite_text_fields(value: &str) -> Result<Vec<Option<Stri
             continue;
         }
         if character == '"' {
+            if quoted && characters.next_if_eq(&'"').is_some() {
+                field.push('"');
+                continue;
+            }
             quoted = !quoted;
             was_quoted = true;
             continue;

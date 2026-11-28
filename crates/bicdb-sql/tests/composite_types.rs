@@ -904,3 +904,24 @@ fn table_row_type_oids_dependencies_and_renames_survive_reopen() {
         .rows
         .is_empty());
 }
+
+#[test]
+fn composite_text_doubles_quotes_and_accepts_legacy_backslash_input() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE TYPE quoted_record AS (v text, n int)")
+        .unwrap();
+    let result = session
+        .execute(
+            r#"SELECT ROW($$a"b\c$$, NULL)::text,
+               ($$("(a""b\\c)",)$$::quoted_record).v,
+               ($$("(a\"b\\c)",)$$::quoted_record).v"#,
+        )
+        .unwrap();
+    assert_eq!(result.rows[0][0].to_cell(), r#"("a""b\\c",)"#);
+    for column in &result.rows[0][1..] {
+        assert_eq!(column.to_cell(), r#"(a"b\c)"#);
+    }
+}

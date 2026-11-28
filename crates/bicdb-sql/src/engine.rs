@@ -26,6 +26,7 @@ mod named_joins;
 pub(crate) use inline_routine::validate_inline_sql_routine;
 pub(crate) use joins_windows::RowJoinPrediction;
 pub(crate) mod materialize;
+mod outer_aggregates;
 mod pg_catalog;
 mod predicates_locators;
 pub(crate) use predicates_locators::selection_has_false_term;
@@ -5583,6 +5584,9 @@ impl<'db> SqlEngine<'db> {
             return self.execute_grouping_sets_query(query);
         }
         self.check_cancellation()?;
+        if let Some(rewritten) = self.rewrite_outer_owned_scalar_aggregates(query)? {
+            return self.execute_query(&rewritten);
+        }
         if let Some(rewritten) = rewrite_ordinal_order_by(
             query,
             &|relation| table_factor_column_names(self.db, relation),

@@ -1836,10 +1836,9 @@ impl<'db> SqlEngine<'db> {
                 .eval_slot_row_truth(row, context, expr)
                 .map(sql_not)
                 .map(|value| value.map(SqlValue::Bool).unwrap_or(SqlValue::Null)),
-            Expr::UnaryOp { op, expr } if op.to_string() == "-" => eval_unary_minus_expr_value(
-                expr,
+            Expr::UnaryOp { op, expr } if op.to_string() == "-" => eval_unary_minus_typed_value(
                 self.eval_slot_row_value(row, context, expr)?,
-                None,
+                self.scoped_slot_row_expr_type(context, expr).as_deref(),
             ),
             Expr::UnaryOp { op, expr } if op.to_string() == "+" => eval_unary_plus_expr_value(
                 expr,
@@ -3689,9 +3688,10 @@ impl<'db> SqlEngine<'db> {
                 .eval_row_truth(row, expr)
                 .map(sql_not)
                 .map(|value| value.map(SqlValue::Bool).unwrap_or(SqlValue::Null)),
-            Expr::UnaryOp { op, expr } if op.to_string() == "-" => {
-                eval_unary_minus_expr_value(expr, self.eval_row_value(row, expr)?, None)
-            }
+            Expr::UnaryOp { op, expr } if op.to_string() == "-" => eval_unary_minus_typed_value(
+                self.eval_row_value(row, expr)?,
+                self.infer_sql_row_expr_type(row, expr).as_deref(),
+            ),
             Expr::UnaryOp { op, expr } if op.to_string() == "+" => {
                 eval_unary_plus_expr_value(expr, self.eval_row_value(row, expr)?, None)
             }

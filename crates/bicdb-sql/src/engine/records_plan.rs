@@ -138,7 +138,35 @@ impl<'db> SqlEngine<'db> {
             }
             rows.push(
                 row.iter()
-                    .map(|expr| self.eval_select_constant_expr(expr))
+                    .zip(&column_types)
+                    .map(|(expr, target)| {
+                        let value = self.eval_select_constant_expr(expr)?;
+                        let Some(target) = target.as_deref() else {
+                            return Ok(value);
+                        };
+                        if matches!(value, SqlValue::Null)
+                            || oracle::simple_case::enabled()
+                            || pg_type_spec(target.strip_suffix("[]").unwrap_or(target)).is_none()
+                        {
+                            return Ok(value);
+                        }
+                        let source = projected_expr_pg_type_with_db(self.db_ref(), expr);
+                        if source.as_deref() == Some(target) {
+                            return Ok(value);
+                        }
+                        if target == "xml" {
+                            return crate::xml::xml_input_value(value);
+                        }
+                        let value = match (source.as_deref(), target, value) {
+                            (
+                                Some("bpchar"),
+                                "text" | "varchar" | "name",
+                                SqlValue::String(text),
+                            ) => SqlValue::String(text.trim_end_matches(' ').to_string()),
+                            (_, _, value) => value,
+                        };
+                        cast_value_to_pg_type(value, target)
+                    })
                     .collect::<Result<Vec<_>>>()?,
             );
         }

@@ -1847,6 +1847,30 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             return Some("bit".to_string());
         }
     }
+    if matches!(
+        expr,
+        Expr::Like { .. }
+            | Expr::ILike { .. }
+            | Expr::SimilarTo { .. }
+            | Expr::InList { .. }
+            | Expr::InSubquery { .. }
+            | Expr::Between { .. }
+            | Expr::IsNull(_)
+            | Expr::IsNotNull(_)
+            | Expr::IsTrue(_)
+            | Expr::IsNotTrue(_)
+            | Expr::IsFalse(_)
+            | Expr::IsNotFalse(_)
+            | Expr::IsUnknown(_)
+            | Expr::IsNotUnknown(_)
+            | Expr::IsDistinctFrom(_, _)
+            | Expr::IsNotDistinctFrom(_, _)
+            | Expr::Exists { .. }
+            | Expr::AnyOp { .. }
+            | Expr::AllOp { .. }
+    ) {
+        return Some("bool".to_string());
+    }
     if matches!(expr, Expr::Interval(_)) {
         return Some("interval".to_string());
     }
@@ -2464,8 +2488,21 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             // reverse/btrim/ltrim/rtrim keep their bytea-aware typing below.
             "lpad" | "rpad" | "repeat" => return Some("text".to_string()),
             "starts_with" => return Some("bool".to_string()),
+            "ln" | "log" | "log10" | "sqrt" | "round" | "trunc" | "ceil" | "ceiling" | "floor"
+            | "power" | "pow"
+                if !oracle::simple_case::enabled() =>
+            {
+                let types = argument_nodes
+                    .iter()
+                    .zip(&function_arg_types)
+                    .map(|(argument, kind)| {
+                        crate::routine_overloads::routine_argument_type_hint(argument, kind.clone())
+                    })
+                    .collect::<Vec<_>>();
+                return static_pg_math_result_type(unqualified_name, &types);
+            }
             "power" | "pow" | "sqrt" | "cbrt" | "exp" | "ln" | "log" => {
-                return Some("float8".to_string())
+                return Some("float8".to_string());
             }
             "bicdb_oracle_blob_getlength"
             | "bicdb_oracle_blob_istemporary"
@@ -2937,13 +2974,12 @@ pub(crate) fn projected_binary_expr_pg_type_with_types(
     if vector_distance_operator(op).is_some() {
         return Some("float8".to_string());
     }
-    // numeric ^ numeric when either side is NUMERIC, else float8.
     if matches!(op, BinaryOperator::PGExp) {
-        return match (left_type.as_deref(), right_type.as_deref()) {
-            (Some("numeric"), _) | (_, Some("numeric")) => Some("numeric".to_string()),
-            (Some(_), Some(_)) => Some("float8".to_string()),
-            _ => None,
-        };
+        let types = [left_type.as_deref(), right_type.as_deref()];
+        if types.iter().any(Option::is_some) {
+            return Some(power_result_type(types.into_iter().flatten()));
+        }
+        return None;
     }
     if let Some(pg_type) =
         network_binary_result_pg_type(op, left_type.as_deref(), right_type.as_deref())
@@ -4940,6 +4976,36 @@ pub(crate) fn date_trunc_result_type(argument: Option<&str>) -> String {
     }
 }
 
+/// A context-free fallback must decline calls whose arguments are outside
+/// the built-in signature. Scoped and catalog-aware callers can then resolve
+/// an authored overload such as trunc(timestamptz).
+fn static_pg_math_result_type(name: &str, types: &[Option<String>]) -> Option<String> {
+    let decimal =
+        |kind: Option<&str>| matches!(kind, Some("unknown" | "int2" | "int4" | "int8" | "numeric"));
+    let math = |kind: Option<&str>| decimal(kind) || matches!(kind, Some("float4" | "float8"));
+    match (name, types) {
+        ("log", [base, value]) if decimal(base.as_deref()) && decimal(value.as_deref()) => {
+            Some("numeric".to_string())
+        }
+        ("round" | "trunc", [value, scale])
+            if decimal(value.as_deref())
+                && matches!(scale.as_deref(), Some("unknown" | "int2" | "int4")) =>
+        {
+            Some("numeric".to_string())
+        }
+        ("power" | "pow", [base, exponent])
+            if math(base.as_deref()) && math(exponent.as_deref()) =>
+        {
+            Some(power_result_type(types.iter().filter_map(Option::as_deref)))
+        }
+        (
+            "ln" | "log" | "log10" | "sqrt" | "round" | "trunc" | "ceil" | "ceiling" | "floor",
+            [value],
+        ) if math(value.as_deref()) => Some(float8_or_numeric_result_type(value.as_deref())),
+        _ => None,
+    }
+}
+
 /// The result type of a math function with float8 and numeric forms: a
 /// numeric argument keeps numeric, every other numeric input resolves to
 /// float8 (PostgreSQL's preferred numeric type).
@@ -4948,4 +5014,25 @@ pub(crate) fn float8_or_numeric_result_type(argument: Option<&str>) -> String {
         Some("numeric") => "numeric".to_string(),
         _ => "float8".to_string(),
     }
+}
+
+/// Exponentiation picks the float overload for explicitly floating inputs.
+pub(crate) fn power_result_type<'a>(types: impl Iterator<Item = &'a str>) -> String {
+    if uses_numeric_power(types) {
+        "numeric".into()
+    } else {
+        "float8".into()
+    }
+}
+
+pub(crate) fn uses_numeric_power<'a>(types: impl Iterator<Item = &'a str>) -> bool {
+    let mut numeric = false;
+    for pg_type in types {
+        match pg_type {
+            "float4" | "float8" => return false,
+            "numeric" => numeric = true,
+            _ => {}
+        }
+    }
+    numeric
 }

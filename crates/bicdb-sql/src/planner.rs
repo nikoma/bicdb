@@ -685,7 +685,10 @@ pub(crate) enum BoundExpr {
         expr: Box<BoundExpr>,
         data_type: DataType,
     },
-    UnaryMinus(Box<BoundExpr>),
+    UnaryMinus {
+        expr: Box<BoundExpr>,
+        pg_type: Option<String>,
+    },
     UnaryNot(Box<BoundExpr>),
     IsNull {
         expr: Box<BoundExpr>,
@@ -706,6 +709,7 @@ pub(crate) enum BoundExpr {
     Call {
         name: String,
         args: Vec<BoundExpr>,
+        arg_types: Vec<Option<String>>,
     },
 }
 
@@ -724,7 +728,7 @@ pub(crate) fn is_unknown_literal(expr: &Expr) -> bool {
 
 /// Builtins a bound expression may call: pure functions of their argument
 /// values that the session evaluator resolves through
-/// `eval_compatibility_function_value` regardless of argument types.
+/// `eval_compatibility_function_value`.
 const BOUND_BUILTIN_FUNCTIONS: &[&str] = &["random", "trunc", "abs", "round", "mod", "char_length"];
 
 fn bound_builtin_name(name: &ObjectName) -> Option<String> {
@@ -779,7 +783,7 @@ fn bound_expr_calls_builtin(expr: &BoundExpr, builtin: &str) -> bool {
             bound_expr_calls_builtin(left, builtin) || bound_expr_calls_builtin(right, builtin)
         }
         BoundExpr::Cast { expr, .. }
-        | BoundExpr::UnaryMinus(expr)
+        | BoundExpr::UnaryMinus { expr, .. }
         | BoundExpr::UnaryNot(expr)
         | BoundExpr::IsNull { expr, .. } => bound_expr_calls_builtin(expr, builtin),
         BoundExpr::Case {
@@ -798,7 +802,7 @@ fn bound_expr_calls_builtin(expr: &BoundExpr, builtin: &str) -> bool {
                     .as_ref()
                     .is_some_and(|expr| bound_expr_calls_builtin(expr, builtin))
         }
-        BoundExpr::Call { name, args } => {
+        BoundExpr::Call { name, args, .. } => {
             name == builtin
                 || args
                     .iter()
@@ -2343,8 +2347,8 @@ impl BoundExprScope {
                 {
                     return None;
                 }
-                let args = match &function.args {
-                    FunctionArguments::None => Vec::new(),
+                let (args, arg_types) = match &function.args {
+                    FunctionArguments::None => (Vec::new(), Vec::new()),
                     FunctionArguments::List(list) => {
                         if list.duplicate_treatment.is_some() || !list.clauses.is_empty() {
                             return None;
@@ -2353,21 +2357,30 @@ impl BoundExprScope {
                             .iter()
                             .map(|arg| match arg {
                                 FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => {
-                                    self.bind_in(expr, ctx)
+                                    Some((self.bind_in(expr, ctx)?, self.known_expr_type(expr)))
                                 }
                                 _ => None,
                             })
                             .collect::<Option<Vec<_>>>()?
+                            .into_iter()
+                            .unzip()
                     }
                     FunctionArguments::Subquery(_) => return None,
                 };
-                Some(BoundExpr::Call { name, args })
+                Some(BoundExpr::Call {
+                    name,
+                    args,
+                    arg_types,
+                })
             }
             Expr::UnaryOp { op, expr: inner } if op.to_string().eq_ignore_ascii_case("NOT") => {
                 Some(BoundExpr::UnaryNot(Box::new(self.bind_in(inner, ctx)?)))
             }
             Expr::UnaryOp { op, expr: inner } if op.to_string() == "-" => {
-                Some(BoundExpr::UnaryMinus(Box::new(self.bind_in(inner, ctx)?)))
+                Some(BoundExpr::UnaryMinus {
+                    expr: Box::new(self.bind_in(inner, ctx)?),
+                    pg_type: self.known_expr_type(inner),
+                })
             }
             Expr::UnaryOp { op, expr: inner } if op.to_string() == "+" => self.bind_in(inner, ctx),
             Expr::IsNull(inner) => Some(BoundExpr::IsNull {
@@ -2650,7 +2663,9 @@ impl BoundExpr {
             Self::Cast { expr, data_type } => {
                 cast_value_with_db(frame.db, expr.eval(frame)?, data_type)
             }
-            Self::UnaryMinus(expr) => negate_numeric_value(expr.eval(frame)?),
+            Self::UnaryMinus { expr, pg_type } => {
+                eval_unary_minus_typed_value(expr.eval(frame)?, pg_type.as_deref())
+            }
             Self::Case {
                 operand,
                 conditions,
@@ -2679,14 +2694,18 @@ impl BoundExpr {
             Self::IsNull { .. } => self
                 .eval_truth(frame)
                 .map(|value| value.map(SqlValue::Bool).unwrap_or(SqlValue::Null)),
-            Self::Call { name, args } => {
+            Self::Call {
+                name,
+                args,
+                arg_types,
+            } => {
                 // Argument lists are short; keep them off the heap.
                 let mut values: smallvec::SmallVec<[SqlValue; 4]> =
                     smallvec::SmallVec::with_capacity(args.len());
                 for arg in args {
                     values.push(arg.eval(frame)?);
                 }
-                eval_compatibility_function_value(name, &values, None)?
+                eval_compatibility_function_value(name, &values, Some(arg_types))?
                     .ok_or_else(|| SqlError::Unsupported(format!("unsupported function {name}")))
             }
         };

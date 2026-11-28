@@ -3946,13 +3946,17 @@ pub(crate) fn validate_policy_clauses(
     has_check: bool,
 ) -> Result<()> {
     if matches!(command, PolicyCommand::Insert) && has_using {
-        return Err(SqlError::InvalidSql(
-            "only WITH CHECK expression allowed for INSERT".to_string(),
+        return Err(SqlError::data_exception(
+            "42601",
+            "only WITH CHECK expression allowed for INSERT",
+            None,
         ));
     }
     if matches!(command, PolicyCommand::Select | PolicyCommand::Delete) && has_check {
-        return Err(SqlError::InvalidSql(
-            "WITH CHECK cannot be applied to SELECT or DELETE".to_string(),
+        return Err(SqlError::data_exception(
+            "42601",
+            "WITH CHECK cannot be applied to SELECT or DELETE",
+            None,
         ));
     }
     Ok(())
@@ -3981,9 +3985,11 @@ pub(crate) fn validate_policy_expression_columns(schema: &TableSchema, expr: &Ex
                 {
                     Ok(())
                 } else {
-                    Err(SqlError::InvalidSql(format!(
-                        "column \"{name}\" does not exist"
-                    )))
+                    Err(SqlError::data_exception(
+                        "42703",
+                        format!("column \"{name}\" does not exist"),
+                        None,
+                    ))
                 }
             }
             Expr::CompoundIdentifier(parts) => {
@@ -3991,10 +3997,11 @@ pub(crate) fn validate_policy_expression_columns(schema: &TableSchema, expr: &Ex
                     if qualifier.value.eq_ignore_ascii_case(&schema.name)
                         && !column_exists(schema, &column.value)
                     {
-                        return Err(SqlError::InvalidSql(format!(
-                            "column {}.{} does not exist",
-                            qualifier.value, column.value
-                        )));
+                        return Err(SqlError::data_exception(
+                            "42703",
+                            format!("column {}.{} does not exist", qualifier.value, column.value),
+                            None,
+                        ));
                     }
                 }
                 Ok(())

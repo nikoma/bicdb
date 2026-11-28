@@ -1736,10 +1736,25 @@ fn scalar_numeric_functions_work_without_from_and_inside_stored_functions() {
         panic!("random() should return a float");
     };
     assert!((0.0..1.0).contains(random_value));
-    assert_eq!(truncated, &SqlValue::Float(12.0));
-    assert_eq!(rounded, &SqlValue::Float(12.0));
+    assert_eq!(truncated, &SqlValue::String("12".into()));
+    assert_eq!(rounded, &SqlValue::String("12".into()));
     assert_eq!(remainder, &SqlValue::Int(3));
     assert!(!captured_at.to_cell().is_empty());
+    assert_eq!(
+        session
+            .execute(
+                "SELECT pg_typeof(trunc(12.9))::text, pg_typeof(round(12.4))::text,
+                            trunc(12.9::double precision), round(12.4::double precision)"
+            )
+            .unwrap()
+            .rows,
+        [vec![
+            SqlValue::String("numeric".into()),
+            SqlValue::String("numeric".into()),
+            SqlValue::Float(12.0),
+            SqlValue::Float(12.0),
+        ]]
+    );
 
     session
         .execute(

@@ -1845,12 +1845,7 @@ impl<'db> SqlEngine<'db> {
                 self.eval_slot_row_value(row, context, expr)?,
                 None,
             ),
-            Expr::UnaryOp { op, expr }
-                if matches!(
-                    op,
-                    UnaryOperator::BitwiseNot | UnaryOperator::PGPrefixFactorial
-                ) || is_geometric_unary_operator(op) =>
-            {
+            Expr::UnaryOp { op, expr } if is_builtin_prefix_operator(op) => {
                 self.eval_slot_unary_operator(row, context, op, expr)
             }
             other => Err(SqlError::Unsupported(format!(
@@ -2753,12 +2748,7 @@ impl<'db> SqlEngine<'db> {
                 };
                 eval_unary_plus_expr_value(expr, value, schema).map(Some)
             }
-            Expr::UnaryOp { op, expr }
-                if matches!(
-                    op,
-                    UnaryOperator::BitwiseNot | UnaryOperator::PGPrefixFactorial
-                ) || is_geometric_unary_operator(op) =>
-            {
+            Expr::UnaryOp { op, expr } if is_builtin_prefix_operator(op) => {
                 let Some(value) =
                     self.eval_record_outer_value(table, alias, schema, record, outer_row, expr)?
                 else {
@@ -3695,12 +3685,7 @@ impl<'db> SqlEngine<'db> {
             Expr::UnaryOp { op, expr } if op.to_string() == "+" => {
                 eval_unary_plus_expr_value(expr, self.eval_row_value(row, expr)?, None)
             }
-            Expr::UnaryOp { op, expr }
-                if matches!(
-                    op,
-                    UnaryOperator::BitwiseNot | UnaryOperator::PGPrefixFactorial
-                ) || is_geometric_unary_operator(op) =>
-            {
+            Expr::UnaryOp { op, expr } if is_builtin_prefix_operator(op) => {
                 self.eval_row_unary_operator(row, op, expr)
             }
             other => Err(SqlError::Unsupported(format!(

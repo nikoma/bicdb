@@ -3914,12 +3914,7 @@ impl<'db> SqlSession<'db> {
             Expr::UnaryOp { op, expr } if op.to_string() == "+" => {
                 self.eval_target_record_expr(table, alias, schema, record, expr)
             }
-            Expr::UnaryOp { op, expr }
-                if matches!(
-                    op,
-                    UnaryOperator::BitwiseNot | UnaryOperator::PGPrefixFactorial
-                ) || is_geometric_unary_operator(op) =>
-            {
+            Expr::UnaryOp { op, expr } if is_builtin_prefix_operator(op) => {
                 let Some(value) =
                     self.eval_target_record_expr(table, alias, schema, record, expr)?
                 else {

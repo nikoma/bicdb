@@ -349,3 +349,59 @@ fn postgres_numeric_input_and_int8_gcd_accept_boundary_values() {
         assert_eq!(error.sqlstate(), state, "{sql}: {error:?}");
     }
 }
+
+#[test]
+fn postgres_numeric_prefix_operators_resolve_argument_and_result_types() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let result = session
+        .execute(
+            "SELECT @'2.5', pg_typeof(@'2.5'), pg_typeof(@(-2)::int2),
+                    pg_typeof(@(-2)::float4), pg_typeof(@(-2)::numeric),
+                    |/4.0::numeric, ||/(-8)::float4,
+                    ~1, ~42::int2, ~B'10'",
+        )
+        .unwrap();
+    assert_eq!(
+        result.rows[0]
+            .iter()
+            .map(SqlValue::to_cell)
+            .collect::<Vec<_>>(),
+        [
+            "2.5",
+            "double precision",
+            "smallint",
+            "real",
+            "numeric",
+            "2",
+            "-2",
+            "-2",
+            "-43",
+            "01"
+        ],
+    );
+    let result = session
+        .execute(
+            "SELECT @n, |/x, ~n, pg_typeof(@n), pg_typeof(~n)
+         FROM (VALUES (4::int2, 16::float4)) AS d(n,x)",
+        )
+        .unwrap();
+    assert_eq!(
+        result.rows[0]
+            .iter()
+            .map(SqlValue::to_cell)
+            .collect::<Vec<_>>(),
+        ["4", "4", "-5", "smallint", "smallint"],
+    );
+    for (sql, state) in [
+        ("SELECT @(-2147483648)::int4", "22003"),
+        ("SELECT |/(-1)::float8", "2201F"),
+        ("SELECT ~'8'", "42725"),
+        ("SELECT @'foo'", "22P02"),
+        ("SELECT |/'x'::text", "42883"),
+    ] {
+        let error = session.execute(sql).unwrap_err();
+        assert_eq!(error.sqlstate(), state, "{sql}: {error:?}");
+    }
+}

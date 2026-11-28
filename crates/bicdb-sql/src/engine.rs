@@ -4030,6 +4030,22 @@ pub(crate) fn row_columns_expr_pg_type<'a>(
     if let Expr::Nested(inner) | Expr::Collate { expr: inner, .. } = expr {
         return row_columns_expr_pg_type(db, inner, columns.iter().copied());
     }
+    if let Expr::UnaryOp { op, expr: operand } = expr {
+        if matches!(
+            op,
+            UnaryOperator::BitwiseNot
+                | UnaryOperator::PGAbs
+                | UnaryOperator::PGSquareRoot
+                | UnaryOperator::PGCubeRoot
+        ) {
+            return postgres_numeric_unary_type(
+                op,
+                row_columns_expr_pg_type(db, operand, columns.iter().copied()).as_deref(),
+            )
+            .map(str::to_owned)
+            .or_else(|| projected_expr_pg_type_with_db(db, expr));
+        }
+    }
     if let Expr::BinaryOp { left, op, right } = expr {
         // A context-free concat fallback is text; applying it before resolving
         // row operands incorrectly rejects JSONB CASE/COALESCE branches.

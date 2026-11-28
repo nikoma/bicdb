@@ -400,12 +400,7 @@ pub(crate) fn eval_value(record: &Record, expr: &Expr) -> Result<SqlValue> {
         Expr::UnaryOp { op, expr } if op.to_string() == "+" => {
             eval_unary_plus_expr_value(expr, eval_value(record, expr)?, None)
         }
-        Expr::UnaryOp { op, expr }
-            if matches!(
-                op,
-                UnaryOperator::BitwiseNot | UnaryOperator::PGPrefixFactorial
-            ) || is_geometric_unary_operator(op) =>
-        {
+        Expr::UnaryOp { op, expr } if is_builtin_prefix_operator(op) => {
             eval_unary_bit_not_expr_value(op, expr, eval_value(record, expr)?, None)
         }
         Expr::Nested(expr) => eval_value(record, expr),
@@ -559,12 +554,7 @@ pub(crate) fn eval_constant_expr(expr: &Expr) -> Result<SqlValue> {
         Expr::UnaryOp { op, expr } if op.to_string() == "+" => {
             eval_unary_plus_expr_value(expr, eval_constant_expr(expr)?, None)
         }
-        Expr::UnaryOp { op, expr }
-            if matches!(
-                op,
-                UnaryOperator::BitwiseNot | UnaryOperator::PGPrefixFactorial
-            ) || is_geometric_unary_operator(op) =>
-        {
+        Expr::UnaryOp { op, expr } if is_builtin_prefix_operator(op) => {
             eval_unary_bit_not_expr_value(op, expr, eval_constant_expr(expr)?, None)
         }
         Expr::BinaryOp {

@@ -3325,6 +3325,10 @@ impl<'db> SqlEngine<'db> {
                 }
             }
             Expr::UnaryOp { op, expr: inner } => {
+                let operand = self.infer_env_expr_type(inner, env);
+                if let Some(pg_type) = postgres_numeric_unary_type(op, operand.as_deref()) {
+                    return Some(pg_type.to_owned());
+                }
                 if let Some(pg_type) = geometric_unary_result_pg_type(
                     op,
                     self.infer_env_expr_type(inner, env).as_deref(),

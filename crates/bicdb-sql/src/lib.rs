@@ -251,12 +251,14 @@ mod json_table;
 mod lock_lists;
 mod parse_compat_postfix;
 mod query_rules;
+mod recursive_search_cycle;
 mod role_settings;
 mod routine_calls;
 mod routine_overloads;
 mod schema_meta;
 pub mod search_path;
 mod similar_to;
+mod sql_atomic_body;
 mod sql_json;
 mod srf_projection;
 mod stats_ext;
@@ -290,6 +292,7 @@ mod persistence_ddl;
 mod pg_float_text_functions;
 mod pg_functions_more;
 mod pg_number_input;
+mod pg_random;
 mod pg_scalar_extra;
 mod pgcrypto;
 mod quantified_operators;
@@ -712,7 +715,6 @@ const PLPGSQL_INLINE_HANDLER_OID: i64 = 14026;
 const PLPGSQL_VALIDATOR_OID: i64 = 14027;
 const PLPGSQL_LANGUAGE_OID: i64 = 14028;
 static SYNTHETIC_ROW_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-static SQL_RANDOM_STATE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 #[derive(Clone, Debug, Default)]
 struct SqlProfileStats {
@@ -1514,7 +1516,7 @@ fn sql_index_definitions_for_collection(db: &BicDb, collection: &str) -> Vec<Ind
                     index
                         .collations
                         .iter()
-                        .any(|oid| Some(*oid) == collation_oid("en-x-icu"))
+                        .any(|oid| !matches!(oid, 0 | 100 | 950 | 951 | 962))
                 })
                 .map(|index| index.name.to_ascii_lowercase())
                 .collect::<BTreeSet<_>>()
@@ -4253,6 +4255,9 @@ fn information_schema_datetime_for(
 }
 
 fn collation_oid(name: &str) -> Option<i64> {
+    if let Some(collation) = crate::collations::stored_builtin_icu_collation(name) {
+        return Some(collation.oid);
+    }
     match name {
         "default" => Some(100),
         "C" => Some(950),

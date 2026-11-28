@@ -67,6 +67,23 @@ pub(crate) fn reject_undefined_comparison(
     op: &BinaryOperator,
     right_type: Option<&str>,
 ) -> Result<()> {
+    if let (Some(left), Some(right)) = (left_type, right_type) {
+        let known = |pg_type: &str| pg_type != "unknown";
+        let same_type_required =
+            |pg_type: &str| matches!(pg_type, "oidvector" | "int2vector" | "pg_lsn");
+        if left != right
+            && known(left)
+            && known(right)
+            && (same_type_required(left) || same_type_required(right))
+        {
+            return Err(SqlError::coded(
+                "42883",
+                format!("operator does not exist: {} {op} {}", common_type_display(left), common_type_display(right)),
+                None,
+                Some("No operator matches the given name and argument types. You might need to add explicit type casts.".to_string()),
+            ));
+        }
+    }
     let unsupported = type_without_comparison_operators(left_type)
         .or_else(|| type_without_comparison_operators(right_type));
     let Some(unsupported) = unsupported else {
@@ -196,25 +213,45 @@ pub(crate) fn comparison_collation(
     right: &Expr,
     schema: Option<&TableSchema>,
 ) -> Result<Option<String>> {
+    let left_explicit = matches!(unwrap_nested_expr(left), Expr::Collate { .. });
+    let right_explicit = matches!(unwrap_nested_expr(right), Expr::Collate { .. });
     let left = expr_collation(left, schema)?;
     let right = expr_collation(right, schema)?;
-    match (left, right) {
-        (Some(left), Some(right)) if left != "default" && right != "default" && left != right => {
-            Err(SqlError::data_exception(
-                "42P21",
-                format!(
-                    "collation mismatch between explicit collations \"{}\" and \"{}\"",
-                    crate::collations::display_name(&left),
-                    crate::collations::display_name(&right)
-                ),
-                None,
-            ))
-        }
-        (Some(left), Some(right)) if left == "default" => Ok(Some(right)),
-        (Some(left), _) => Ok(Some(left)),
-        (_, Some(right)) => Ok(Some(right)),
-        _ => Ok(None),
+    match (left_explicit, right_explicit, left, right) {
+        (true, true, Some(left), Some(right)) if left != right => Err(SqlError::data_exception(
+            "42P21",
+            format!(
+                "collation mismatch between explicit collations \"{}\" and \"{}\"",
+                crate::collations::display_name(&left),
+                crate::collations::display_name(&right)
+            ),
+            None,
+        )),
+        (true, _, left, _) => Ok(left),
+        (_, true, _, right) => Ok(right),
+        (_, _, left, right) => implicit_comparison_collation(left, right),
     }
+}
+
+pub(crate) fn implicit_comparison_collation(
+    left: Option<String>,
+    right: Option<String>,
+) -> Result<Option<String>> {
+    let left = left.filter(|collation| collation != "default");
+    let right = right.filter(|collation| collation != "default");
+    if left
+        .as_ref()
+        .zip(right.as_ref())
+        .is_some_and(|(left, right)| left != right)
+    {
+        return Err(SqlError::coded(
+            "42P22",
+            "could not determine which collation to use for string comparison",
+            None,
+            Some("Use the COLLATE clause to set the collation explicitly.".into()),
+        ));
+    }
+    Ok(left.or(right))
 }
 
 pub(crate) fn compare_values_with_collation(
@@ -3395,8 +3432,10 @@ fn eval_record_aggregate_expr_inner(
         Expr::Position { expr, r#in } => eval_position_typed_value(
             eval_record_aggregate_expr(records, expr, schema)?,
             eval_record_aggregate_expr(records, r#in, schema)?,
-            projected_expr_pg_type(expr, schema).as_deref() == Some("bytea")
-                || projected_expr_pg_type(r#in, schema).as_deref() == Some("bytea"),
+            [
+                projected_expr_pg_type(expr, schema).as_deref(),
+                projected_expr_pg_type(r#in, schema).as_deref(),
+            ],
         ),
         Expr::Overlay {
             expr,
@@ -4089,12 +4128,21 @@ pub(crate) enum PgComparisonKind {
     BpcharText {
         left_bpchar: bool,
     },
+    /// A name operand and a name or unknown literal use the name input limit.
+    Name,
+    CatalogVector,
     /// text / varchar / name with one another: plain text comparison.
     Text,
     Bool,
 }
 
 pub(crate) fn pg_comparison_kind(left: &str, right: &str) -> Option<PgComparisonKind> {
+    if left == "name" && right == "name" {
+        return Some(PgComparisonKind::Name);
+    }
+    if left == right && matches!(left, "oidvector" | "int2vector") {
+        return Some(PgComparisonKind::CatalogVector);
+    }
     #[derive(PartialEq)]
     enum Class {
         Int,
@@ -4239,6 +4287,8 @@ pub(crate) fn compare_values_by_kind(
             };
             left_text.cmp(right_text)
         }
+        Kind::Name => pg_typed_compare("name", left, right)?,
+        Kind::CatalogVector => pg_typed_compare(left_type, left, right)?,
         Kind::Text => comparison_text(left).cmp(&comparison_text(right)),
         Kind::Bool => match (left, right) {
             (SqlValue::Bool(left), SqlValue::Bool(right)) => left.cmp(right),
@@ -4291,14 +4341,22 @@ pub(crate) fn compare_values_by_pg_types(
     if left_type == Some("regtype") && right_type == Some("regtype") {
         return Ok(compare_builtin_regtype_values(left, op, right));
     }
+    if matches!(
+        (left_type, right_type),
+        (Some("name"), Some("unknown") | None) | (Some("unknown") | None, Some("name"))
+    ) {
+        return compare_values_by_kind(PgComparisonKind::Name, "name", "name", left, op, right)
+            .map(Some);
+    }
     let array_type = match (left_type, right_type) {
         (Some(left), Some(right)) if left == right => Some(left),
-        (Some(kind), None) | (None, Some(kind)) => Some(kind),
+        (Some(kind), Some("unknown") | None) | (Some("unknown") | None, Some(kind)) => Some(kind),
         _ => None,
     };
-    if let Some(pg_type) =
-        array_type.filter(|kind| kind.ends_with("[]") && pg_type_oid_by_name(kind).is_some())
-    {
+    if let Some(pg_type) = array_type.filter(|kind| {
+        matches!(*kind, "oidvector" | "int2vector")
+            || (kind.ends_with("[]") && pg_type_oid_by_name(kind).is_some())
+    }) {
         if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
             return Ok(Some(None));
         }

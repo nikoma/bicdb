@@ -18,20 +18,10 @@ pub(crate) fn literal_to_value(value: &ValueWithSpan) -> Result<SqlValue> {
         | Value::TripleSingleQuotedByteStringLiteral(value)
         | Value::TripleDoubleQuotedByteStringLiteral(value) => PgBitString::from_bit_text(value)
             .map(|value| SqlValue::String(value.to_bit_text()))
-            .map_err(|_| {
-                SqlError::invalid_text_representation(
-                    "bit",
-                    format!("invalid binary digit in bit string: \"{value}\""),
-                )
-            }),
+            .map_err(|_| bit_input_error("bit", &format!("b{value}"))),
         Value::HexStringLiteral(value) => PgBitString::from_hex_text(value)
             .map(|value| SqlValue::String(value.to_bit_text()))
-            .map_err(|_| {
-                SqlError::invalid_text_representation(
-                    "bit",
-                    format!("invalid hexadecimal digit in bit string: \"{value}\""),
-                )
-            }),
+            .map_err(|_| bit_input_error("bit", &format!("x{value}"))),
         // Escape (E'...') and Unicode-escape (U&'...') strings: the tokenizer
         // already decoded the value; decoding it again lost backslashes.
         Value::EscapedStringLiteral(value) | Value::UnicodeStringLiteral(value) => {
@@ -820,6 +810,92 @@ pub(crate) fn rewrite_qualified_unnest_calls(sql: &str) -> Option<String> {
     changed.then_some(out)
 }
 
+fn rewrite_named_type_literals(sql: &str) -> Option<String> {
+    let lower = sql.to_ascii_lowercase();
+    if !lower.contains("name") && !lower.contains("pg_lsn") {
+        return None;
+    }
+    let tokens = tokens_with_source(&PostgreSqlDialect {}, sql)?;
+    let mut offset = 0;
+    let mut code = Vec::new();
+    for (token, source) in &tokens {
+        if !matches!(token, Token::Whitespace(_)) {
+            code.push((token, offset, offset + source.len()));
+        }
+        offset += source.len();
+    }
+    let is_word = |token: &Token, spelling: &str| {
+        matches!(token, Token::Word(word) if if word.quote_style.is_none() {
+            word.value.eq_ignore_ascii_case(spelling)
+        } else {
+            word.value == spelling
+        })
+    };
+    let mut edits = Vec::new();
+    let mut ddl = false;
+    let mut statement_start = true;
+    let mut option_depth = 0usize;
+    for (index, pair) in code.windows(2).enumerate() {
+        let [(token, start, end), (literal, _, literal_end)] = pair else {
+            unreachable!("window contains the type and input token");
+        };
+        if statement_start {
+            ddl = is_word(token, "create") || is_word(token, "alter");
+        }
+        statement_start = matches!(token, Token::SemiColon);
+        if ddl
+            && matches!(token, Token::LParen)
+            && (option_depth > 0
+                || index
+                    .checked_sub(1)
+                    .is_some_and(|i| is_word(code[i].0, "options")))
+        {
+            option_depth += 1;
+        } else if matches!(token, Token::RParen) {
+            option_depth = option_depth.saturating_sub(1);
+        }
+        if option_depth > 0
+            || !(is_word(token, "name") || is_word(token, "pg_lsn"))
+            || !matches!(
+                literal,
+                Token::SingleQuotedString(_)
+                    | Token::EscapedStringLiteral(_)
+                    | Token::DollarQuotedString(_)
+            )
+        {
+            continue;
+        }
+        let start = if matches!(index.checked_sub(1).map(|i| code[i].0), Some(Token::Period)) {
+            let Some((schema, start, _)) = index.checked_sub(2).map(|i| code[i]) else {
+                continue;
+            };
+            if !is_word(schema, "pg_catalog") {
+                continue;
+            }
+            start
+        } else {
+            *start
+        };
+        edits.push((
+            start,
+            *literal_end,
+            format!(
+                "CAST({} AS {})",
+                &sql[*end..*literal_end],
+                &sql[start..*end]
+            ),
+        ));
+    }
+    if edits.is_empty() {
+        return None;
+    }
+    let mut result = sql.to_string();
+    for (start, end, replacement) in edits.into_iter().rev() {
+        result.replace_range(start..end, &replacement);
+    }
+    Some(result)
+}
+
 pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
     let mut rewritten = sql.to_string();
     let mut changed = false;
@@ -845,6 +921,11 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
     }
 
     if let Some(next) = rewrite_select_top_identifiers(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
+    if let Some(next) = rewrite_named_type_literals(&rewritten) {
         rewritten = next;
         changed = true;
     }
@@ -880,6 +961,11 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
     }
 
     if let Some(next) = crate::similar_to::rewrite_substring_similar(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
+    if let Some(next) = rewrite_qualified_substring_calls(&rewritten) {
         rewritten = next;
         changed = true;
     }
@@ -1034,6 +1120,49 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
     }
 
     changed.then_some(rewritten)
+}
+
+fn rewrite_qualified_substring_calls(sql: &str) -> Option<String> {
+    if !sql
+        .as_bytes()
+        .windows(6)
+        .any(|text| text.eq_ignore_ascii_case(b"substr"))
+    {
+        return None;
+    }
+    let tokens = tokens_with_source(&PostgreSqlDialect {}, sql)?;
+    let mut offset = 0;
+    let mut code = Vec::new();
+    for (token, original) in tokens {
+        let end = offset + original.len();
+        if !matches!(token, Token::Whitespace(_)) {
+            code.push((token, offset, end));
+        }
+        offset = end;
+    }
+    let mut rewritten = String::new();
+    let mut copied = 0;
+    for window in code.windows(3) {
+        if let [(Token::Period, _, _), (Token::Word(word), start, end), (Token::LParen, _, _)] =
+            window
+        {
+            let name = word.value.to_ascii_lowercase();
+            if word.quote_style.is_none() && matches!(name.as_str(), "substring" | "substr") {
+                // The generic parser treats a bare SUBSTRING token as the
+                // special SQL syntax even after a schema qualifier.
+                rewritten.push_str(&sql[copied..*start]);
+                rewritten.push('"');
+                rewritten.push_str(&name);
+                rewritten.push('"');
+                copied = *end;
+            }
+        }
+    }
+    if copied == 0 {
+        return None;
+    }
+    rewritten.push_str(&sql[copied..]);
+    Some(rewritten)
 }
 
 /// `FOR KEY SHARE` and `FOR NO KEY UPDATE` are PostgreSQL's weaker row lock
@@ -1878,7 +2007,35 @@ pub(crate) struct JsonPredicateToken {
     pub(crate) symbol: Option<u8>,
 }
 
-pub(crate) fn rewrite_sql_xml_expressions(input: &str) -> Option<String> {
+fn xml_passing_document<'a>(
+    input: &'a str,
+    tokens: &[JsonPredicateToken],
+    passing: usize,
+    end: usize,
+) -> &'a str {
+    let depth = tokens[passing].depth;
+    let by_mode = |start: usize| {
+        tokens.get(start..start + 2).is_some_and(|pair| {
+            pair.iter().all(|token| token.depth == depth)
+                && pair[0].word.as_deref() == Some("by")
+                && matches!(pair[1].word.as_deref(), Some("ref" | "value"))
+        })
+    };
+    let (prefix, suffix) = (passing + 1, end.saturating_sub(2));
+    let start_byte = if prefix + 2 < end && by_mode(prefix) {
+        tokens[prefix + 1].end
+    } else {
+        tokens[passing].end
+    };
+    let end_byte = if suffix > prefix && tokens[suffix].start >= start_byte && by_mode(suffix) {
+        tokens[suffix].start
+    } else {
+        tokens[end].start
+    };
+    input[start_byte..end_byte].trim()
+}
+
+fn rewrite_sql_xml_calls(input: &str) -> Option<String> {
     let tokens = json_predicate_tokens(input);
     let mut replacements = Vec::new();
     for (index, function) in tokens.iter().enumerate() {
@@ -1910,7 +2067,20 @@ pub(crate) fn rewrite_sql_xml_expressions(input: &str) -> Option<String> {
                 }) else {
                     continue;
                 };
-                let expression = input[mode.end..tokens[close_index].start].trim();
+                let end = close_index
+                    .checked_sub(2)
+                    .filter(|flag| *flag > index + 2)
+                    .and_then(|flag| {
+                        let first = &tokens[flag];
+                        let second = &tokens[flag + 1];
+                        (first.depth == inner_depth
+                            && second.depth == inner_depth
+                            && matches!(first.word.as_deref(), Some("preserve" | "strip"))
+                            && second.word.as_deref() == Some("whitespace"))
+                        .then_some(first.start)
+                    })
+                    .unwrap_or(tokens[close_index].start);
+                let expression = input[mode.end..end].trim();
                 format!(
                     "bicdb_xmlparse_{}(({expression}))",
                     mode.word.as_deref().unwrap()
@@ -1933,9 +2103,25 @@ pub(crate) fn rewrite_sql_xml_expressions(input: &str) -> Option<String> {
                     continue;
                 };
                 let expression = input[mode.end..tokens[as_index].start].trim();
-                let data_type = input[tokens[as_index].end..tokens[close_index].start].trim();
+                let mut type_end = tokens[close_index].start;
+                let mut indent = false;
+                let indent_index = close_index - 1;
+                if indent_index > as_index + 1
+                    && tokens[indent_index].depth == inner_depth
+                    && tokens[indent_index].word.as_deref() == Some("indent")
+                {
+                    let before = &tokens[indent_index - 1];
+                    if before.depth == inner_depth && before.word.as_deref() == Some("no") {
+                        type_end = before.start;
+                    } else {
+                        indent = true;
+                        type_end = tokens[indent_index].start;
+                    }
+                }
+                let data_type = input[tokens[as_index].end..type_end].trim();
+                let target = data_type.replace('\'', "''");
                 format!(
-                    "CAST(bicdb_xmlserialize_{}(({expression})) AS {data_type})",
+                    "CAST(bicdb_xmlserialize_{}(({expression}), {indent}, '{target}') AS {data_type})",
                     mode.word.as_deref().unwrap()
                 )
             }
@@ -1950,29 +2136,34 @@ pub(crate) fn rewrite_sql_xml_expressions(input: &str) -> Option<String> {
                     continue;
                 };
                 let path = input[open.end..tokens[passing_index].start].trim();
-                let mut document_start = tokens[passing_index].end;
-                let mut cursor = passing_index + 1;
-                if tokens.get(cursor).is_some_and(|token| {
-                    token.depth == inner_depth && token.word.as_deref() == Some("by")
-                }) && tokens.get(cursor + 1).is_some_and(|token| {
-                    token.depth == inner_depth && token.word.as_deref() == Some("value")
-                }) {
-                    document_start = tokens[cursor + 1].end;
-                    cursor += 2;
-                }
-                let _ = cursor;
-                let document = input[document_start..tokens[close_index].start].trim();
+                let document = xml_passing_document(input, &tokens, passing_index, close_index);
                 format!("bicdb_xmlexists(({path}), ({document}))")
             }
             _ => unreachable!(),
         };
         replacements.push((function.start, tokens[close_index].end, replacement));
     }
-    let mut changed = !replacements.is_empty();
+    if replacements.is_empty() {
+        return None;
+    }
     replacements.sort_by_key(|(start, _, _)| *start);
     let mut output = input.to_string();
+    let mut rightmost = input.len();
     for (start, end, replacement) in replacements.into_iter().rev() {
-        output.replace_range(start..end, &replacement);
+        if end <= rightmost {
+            output.replace_range(start..end, &replacement);
+            rightmost = start;
+        }
+    }
+    Some(output)
+}
+
+pub(crate) fn rewrite_sql_xml_expressions(input: &str) -> Option<String> {
+    let mut output = input.to_string();
+    let mut changed = false;
+    while let Some(next) = rewrite_sql_xml_calls(&output) {
+        output = next;
+        changed = true;
     }
     while let Some(next) = rewrite_xml_constructor_once(&output) {
         output = next;
@@ -1991,10 +2182,12 @@ pub(crate) fn rewrite_sql_xml_expressions(input: &str) -> Option<String> {
 
 pub(crate) fn rewrite_xmlroot_once(input: &str) -> Option<String> {
     let tokens = json_predicate_tokens(input);
-    let (index, function) = tokens
-        .iter()
-        .enumerate()
-        .find(|(_, token)| token.word.as_deref() == Some("xmlroot"))?;
+    let (index, function) = tokens.iter().enumerate().rev().find(|(index, token)| {
+        token.word.as_deref() == Some("xmlroot")
+            && tokens
+                .get(index + 1)
+                .is_some_and(|next| next.depth == token.depth && next.symbol == Some(b'('))
+    })?;
     let open = tokens
         .get(index + 1)
         .filter(|token| token.symbol == Some(b'('))?;
@@ -2007,29 +2200,35 @@ pub(crate) fn rewrite_xmlroot_once(input: &str) -> Option<String> {
         .iter()
         .filter(|token| token.depth == depth && token.symbol == Some(b','))
         .collect::<Vec<_>>();
-    if commas.len() != 2 {
-        return None;
-    }
-    let document = input[open.end..commas[0].start].trim();
-    let version_clause = input[commas[0].end..commas[1].start].trim();
-    let standalone_clause = input[commas[1].end..tokens[close_index].start].trim();
+    let (version_start, standalone_start) = match commas.as_slice() {
+        [version] => (*version, None),
+        [version, standalone] => (*version, Some(*standalone)),
+        _ => return None,
+    };
+    let document = input[open.end..version_start.start].trim();
+    let close = &tokens[close_index];
+    let version_end = standalone_start.map_or(close.start, |token| token.start);
+    let version_clause = input[version_start.end..version_end].trim();
     let version = strip_case_insensitive_keyword(version_clause, "version")?.trim();
     let version = if version.eq_ignore_ascii_case("no value") {
         "NULL"
     } else {
         version
     };
-    let standalone = strip_case_insensitive_keyword(standalone_clause, "standalone")?.trim();
-    let standalone = if standalone.eq_ignore_ascii_case("no value") {
-        "NULL"
-    } else {
-        match standalone.to_ascii_lowercase().as_str() {
-            "yes" => "'yes'",
-            "no" => "'no'",
-            _ => return None,
+    let replacement = match standalone_start {
+        Some(token) => {
+            let clause = input[token.end..close.start].trim();
+            let standalone = strip_case_insensitive_keyword(clause, "standalone")?.trim();
+            let standalone = match standalone.to_ascii_lowercase().as_str() {
+                "no value" => "NULL",
+                "yes" => "'yes'",
+                "no" => "'no'",
+                _ => return None,
+            };
+            format!("bicdb_xmlroot(({document}), {version}, {standalone})")
         }
+        None => format!("bicdb_xmlroot(({document}), {version})"),
     };
-    let replacement = format!("bicdb_xmlroot(({document}), {version}, {standalone})");
     let mut output = input.to_string();
     output.replace_range(function.start..tokens[close_index].end, &replacement);
     Some(output)
@@ -2044,10 +2243,12 @@ pub(crate) fn strip_case_insensitive_keyword<'a>(value: &'a str, keyword: &str) 
 
 pub(crate) fn rewrite_xmltable_once(input: &str) -> Option<String> {
     let tokens = json_predicate_tokens(input);
-    let (index, function) = tokens
-        .iter()
-        .enumerate()
-        .find(|(_, token)| token.word.as_deref() == Some("xmltable"))?;
+    let (index, function) = tokens.iter().enumerate().find(|(index, token)| {
+        token.word.as_deref() == Some("xmltable")
+            && tokens
+                .get(index + 1)
+                .is_some_and(|open| open.depth == token.depth && open.symbol == Some(b'('))
+    })?;
     let open = tokens
         .get(index + 1)
         .filter(|token| token.symbol == Some(b'('))?;
@@ -2127,20 +2328,7 @@ pub(crate) fn rewrite_xmltable_once(input: &str) -> Option<String> {
         .position(|token| token.depth == inner_depth && token.word.as_deref() == Some("columns"))
         .map(|offset| passing_index + 1 + offset)?;
     let row_path = input[row_path_start..tokens[passing_index].start].trim();
-    let mut document_start = tokens[passing_index].end;
-    if let Some(by_index) = tokens[passing_index + 1..columns_index]
-        .iter()
-        .position(|token| token.depth == inner_depth && token.word.as_deref() == Some("by"))
-        .map(|offset| passing_index + 1 + offset)
-    {
-        if tokens
-            .get(by_index + 1)
-            .is_some_and(|token| token.word.as_deref() == Some("value"))
-        {
-            document_start = tokens[by_index + 1].end;
-        }
-    }
-    let document = input[document_start..tokens[columns_index].start].trim();
+    let document = xml_passing_document(input, &tokens, passing_index, columns_index);
     let mut starts = vec![tokens[columns_index].end];
     starts.extend(
         tokens[columns_index + 1..close_index]
@@ -2164,15 +2352,21 @@ pub(crate) fn rewrite_xmltable_once(input: &str) -> Option<String> {
             .filter(|token| token.start >= start && token.end <= end && token.depth == inner_depth)
             .collect::<Vec<_>>();
         let name_token = *segment_tokens.first()?;
-        let column_name = input[name_token.start..name_token.end]
-            .trim()
-            .trim_matches('"');
-        let for_ordinality = segment_tokens
-            .iter()
-            .any(|token| token.word.as_deref() == Some("ordinality"));
+        let authored_name = input[name_token.start..name_token.end].trim();
+        let column_name = match authored_name
+            .strip_prefix('"')
+            .and_then(|name| name.strip_suffix('"'))
+        {
+            Some(name) => name.replace("\"\"", "\""),
+            None => authored_name.to_ascii_lowercase(),
+        };
+        let column_sql = format!("\"{}\"", column_name.replace('"', "\"\""));
+        let for_ordinality = segment_tokens.windows(2).any(|pair| {
+            pair[0].word.as_deref() == Some("for") && pair[1].word.as_deref() == Some("ordinality")
+        });
         if for_ordinality {
             specs.push(serde_json::json!({"name": column_name, "ordinality": true}));
-            aliases.push(format!("{column_name} int"));
+            aliases.push(format!("{column_sql} int"));
             continue;
         }
         let boundary = segment_tokens
@@ -2192,31 +2386,49 @@ pub(crate) fn rewrite_xmltable_once(input: &str) -> Option<String> {
             .iter()
             .find(|token| token.word.as_deref() == Some("default"));
         let not_token = segment_tokens
-            .iter()
-            .find(|token| token.word.as_deref() == Some("not"));
-        let path_end = default_token
-            .map(|token| token.start)
-            .or_else(|| not_token.map(|token| token.start))
-            .unwrap_or(end);
+            .windows(2)
+            .find(|pair| {
+                pair[0].word.as_deref() == Some("not") && pair[1].word.as_deref() == Some("null")
+            })
+            .map(|pair| pair[0]);
+        let option_end = |start| {
+            [path_token.copied(), default_token.copied(), not_token]
+                .into_iter()
+                .flatten()
+                .map(|token| token.start)
+                .filter(|position| *position > start)
+                .min()
+                .unwrap_or(end)
+        };
         let path_expression = path_token
-            .map(|token| input[token.end..path_end].trim().to_string())
-            .unwrap_or_else(|| format!("'{column_name}'"));
+            .map(|token| input[token.end..option_end(token.start)].trim().to_string())
+            .unwrap_or_else(|| format!("'{}'", column_name.replace('\'', "''")));
         let path_arg = 4 + extra_arguments.len();
         extra_arguments.push(path_expression);
+        let pg_type = Parser::new(&PostgreSqlDialect {})
+            .try_with_sql(data_type)
+            .ok()
+            .and_then(|mut parser| parser.parse_data_type().ok())
+            .and_then(|ty| pg_type_from_data_type(&ty).ok())
+            .map(|(kind, _)| kind);
         let mut spec = serde_json::json!({
             "name": column_name,
             "path_arg": path_arg,
-            "xml": data_type.trim().eq_ignore_ascii_case("xml")
+            "xml": pg_type.as_deref() == Some("xml"),
+            "numeric": pg_type.as_deref().is_some_and(|kind| {
+                matches!(kind, "int2" | "int4" | "int8" | "numeric" | "float4" | "float8")
+            }),
+            "required": not_token.is_some()
         });
         if let Some(default_token) = default_token {
-            let default_end = not_token.map(|token| token.start).unwrap_or(end);
+            let default_end = option_end(default_token.start);
             let expression = input[default_token.end..default_end].trim();
             let default_arg = 4 + extra_arguments.len();
             extra_arguments.push(expression.to_string());
             spec["default_arg"] = serde_json::json!(default_arg);
         }
         specs.push(spec);
-        aliases.push(format!("{column_name} {data_type}"));
+        aliases.push(format!("{column_sql} {data_type}"));
     }
     let spec = serde_json::to_string(&specs).ok()?.replace('\'', "''");
     let extras = if extra_arguments.is_empty() {
@@ -2224,12 +2436,28 @@ pub(crate) fn rewrite_xmltable_once(input: &str) -> Option<String> {
     } else {
         format!(", {}", extra_arguments.join(", "))
     };
+    let after = tokens
+        .get(close_index + 1)
+        .filter(|token| token.depth == function.depth);
+    let alias_token = match after.and_then(|token| token.word.as_deref()) {
+        Some("as") => tokens.get(close_index + 2),
+        Some(
+            "where" | "join" | "inner" | "left" | "right" | "full" | "cross" | "natural" | "on"
+            | "using" | "group" | "order" | "limit" | "offset" | "fetch" | "for" | "window"
+            | "having" | "union" | "intersect" | "except" | "qualify",
+        ) => None,
+        _ => after
+            .filter(|token| token.word.is_some() || input[token.start..token.end].starts_with('"')),
+    };
+    let (alias, end) = alias_token.map_or(("\"xmltable\"", tokens[close_index].end), |token| {
+        (&input[token.start..token.end], token.end)
+    });
     let replacement = format!(
-        "jsonb_to_recordset(bicdb_xmltable_json(({document}), ({row_path}), '{spec}'::jsonb, {namespace_expression}{extras})) AS xmltable({})",
+        "jsonb_to_recordset(bicdb_xmltable_json(({document}), ({row_path}), '{spec}'::jsonb, {namespace_expression}{extras})) AS {alias}({})",
         aliases.join(", ")
     );
     let mut output = input.to_string();
-    output.replace_range(function.start..tokens[close_index].end, &replacement);
+    output.replace_range(function.start..end, &replacement);
     Some(output)
 }
 

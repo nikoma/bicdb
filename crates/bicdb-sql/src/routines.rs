@@ -108,8 +108,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
         .eq_ignore_ascii_case("sql")
     {
         let params = parse_routine_params(&routine.args)?;
-        let body = plpgsql_body_from_definition(&routine.definition)?;
-        let parsed = parse_statements(&body)?;
+        let parsed = sql_function_body_statements(&routine.definition)?;
         let context_label = (!sql_function_is_inlinable(routine, &parsed))
             .then(|| Arc::from(format!("SQL function \"{}\"", routine.name)));
         let mut statements = Vec::with_capacity(parsed.len() * 2);
@@ -1228,6 +1227,28 @@ pub(crate) fn plpgsql_body_from_definition(definition: &str) -> Result<String> {
     Err(SqlError::UnsupportedPlpgsqlFeature(
         "routine body must be single-quoted or dollar-quoted".to_string(),
     ))
+}
+
+fn sql_function_body_statements(definition: &str) -> Result<Vec<Statement>> {
+    if find_top_level_keyword(definition, "RETURN").is_some()
+        || !crate::sql_atomic_body::atomic_bodies(definition).is_empty()
+    {
+        let mut statements = parse_statements(definition)?;
+        if let [Statement::CreateFunction(function)] = statements.as_mut_slice() {
+            match function.function_body.take() {
+                Some(CreateFunctionBody::Return(expression)) => {
+                    return parse_statements(&format!(
+                        "SELECT {}",
+                        crate::sql_text::sql_text(&expression)
+                    ));
+                }
+                Some(CreateFunctionBody::AsBeginEnd(block)) => return Ok(block.statements),
+                _ => {}
+            }
+        }
+    }
+    let body = plpgsql_body_from_definition(definition)?;
+    parse_statements(&body)
 }
 
 pub(crate) fn parse_single_quoted_sql_string(sql: &str) -> Result<Option<String>> {
@@ -2660,6 +2681,7 @@ pub(crate) fn format_routine_raise_message(template: &str, arguments: &[SqlValue
         if let Some(argument) = arguments.get(argument_index) {
             let text = match argument {
                 SqlValue::Null => "<NULL>".to_string(),
+                SqlValue::Bool(flag) => if *flag { "t" } else { "f" }.to_string(),
                 value => sql_value_text(value)
                     .unwrap_or_else(|| sql_value_to_json(value.clone()).to_string()),
             };
@@ -3038,43 +3060,31 @@ pub(crate) fn extract_query_into(statement: &str) -> Result<Option<(String, Vec<
     while let Some(relative_idx) = find_top_level_keyword(&statement[search_start..], "INTO") {
         let into_idx = search_start + relative_idx;
         let after_into = &statement[into_idx + "INTO".len()..];
-        let target_end = first_top_level_keyword_index(
-            after_into,
-            &[
-                "FROM",
-                "WHERE",
-                "GROUP BY",
-                "HAVING",
-                "ORDER BY",
-                "LIMIT",
-                "OFFSET",
-                "UNION",
-                "INTERSECT",
-                "EXCEPT",
-            ],
-        )
-        .unwrap_or(after_into.len());
-        let raw_targets = after_into[..target_end].trim_start();
-        let strict = raw_targets
-            .get(..6)
-            .is_some_and(|head| head.eq_ignore_ascii_case("STRICT"))
-            && raw_targets
-                .get(6..)
-                .is_some_and(|tail| tail.starts_with(char::is_whitespace));
-        let targets = routine_target_names(if strict {
-            raw_targets[6..].trim_start()
-        } else {
-            raw_targets
-        })?;
-        let sql = format!(
-            "{} {}",
-            statement[..into_idx].trim_end(),
-            after_into[target_end..].trim_start()
-        )
-        .trim()
-        .to_string();
+        let strict_tail = strip_sql_keywords(after_into, &["STRICT"]);
+        let mut rest = strict_tail.unwrap_or(after_into);
+        let mut targets = Vec::new();
+        loop {
+            let (target, after_target) = parse_leading_qualified_sql_identifier(
+                crate::trim_leading_sql_comments_with_offset(rest).0,
+            )?;
+            targets.push(normalize_object_name(&target));
+            rest = after_target;
+            let next = crate::trim_leading_sql_comments_with_offset(rest)
+                .0
+                .trim_start();
+            if let Some(after_comma) = next.strip_prefix(',') {
+                rest = after_comma;
+            } else {
+                break;
+            }
+        }
+        // PL/pgSQL also allows INTO immediately after SELECT, where the
+        // result expressions follow the target list.
+        let sql = format!("{} {}", statement[..into_idx].trim_end(), rest.trim_start(),)
+            .trim()
+            .to_string();
         if parse_single_query(&sql).is_ok() {
-            return Ok(Some((sql, targets, strict)));
+            return Ok(Some((sql, targets, strict_tail.is_some())));
         }
         search_start = into_idx + "INTO".len();
     }

@@ -271,6 +271,7 @@ struct Binder<'a> {
     insertions: Vec<(sqlparser::tokenizer::Location, String)>,
     /// A qualified name had no source position (synthesized AST).
     positions_missing: bool,
+    qualify_public: bool,
 }
 
 impl Binder<'_> {
@@ -310,6 +311,9 @@ impl Binder<'_> {
         for schema in self.path {
             if schema == "public" {
                 if exists(self.db, &table) {
+                    if self.qualify_public {
+                        self.qualify(name, "public");
+                    }
                     return;
                 }
                 continue;
@@ -522,6 +526,7 @@ pub(crate) fn bind_raw_relation(db: &BicDb, name: &mut ObjectName) {
         changed: false,
         insertions: Vec::new(),
         positions_missing: false,
+        qualify_public: false,
     };
     binder.bind_reference(name, relation_exists);
 }
@@ -532,13 +537,22 @@ pub(crate) fn bind_node<T: sqlparser::ast::VisitMut>(
     node: &mut T,
     path: &[String],
 ) -> bool {
-    run_binder(db, node, path).changed
+    run_binder(db, node, path, false).changed
+}
+
+/// SQL-standard function bodies resolve their relations in the creation session.
+pub(crate) fn bind_inline_sql_body(db: &BicDb, body: &mut impl sqlparser::ast::VisitMut) {
+    match active_path() {
+        Some(path) => run_binder(db, body, &path, true),
+        None => run_binder(db, body, &["public".to_owned()], true),
+    };
 }
 
 fn run_binder<'a, T: sqlparser::ast::VisitMut>(
     db: &'a BicDb,
     node: &mut T,
     path: &'a [String],
+    qualify_public: bool,
 ) -> Binder<'a> {
     let mut binder = Binder {
         db,
@@ -547,6 +561,7 @@ fn run_binder<'a, T: sqlparser::ast::VisitMut>(
         changed: false,
         insertions: Vec::new(),
         positions_missing: false,
+        qualify_public,
     };
     let _ = sqlparser::ast::VisitMut::visit(node, &mut binder);
     binder
@@ -607,7 +622,7 @@ pub(crate) fn bind_sql_text(db: &BicDb, sql: &str, path: &[String]) -> Result<Op
     }) {
         return Ok(None);
     }
-    let binder = run_binder(db, &mut statements, path);
+    let binder = run_binder(db, &mut statements, path, false);
     if !binder.changed {
         return Ok(None);
     }

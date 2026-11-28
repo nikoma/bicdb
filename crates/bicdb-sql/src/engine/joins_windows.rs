@@ -1807,9 +1807,10 @@ impl<'db> SqlEngine<'db> {
             Expr::Position { expr, r#in } => eval_position_typed_value(
                 self.eval_row_aggregate_expr(rows, columns, expr)?,
                 self.eval_row_aggregate_expr(rows, columns, r#in)?,
-                projected_expr_pg_type_with_db(self.db_ref(), expr).as_deref() == Some("bytea")
-                    || projected_expr_pg_type_with_db(self.db_ref(), r#in).as_deref()
-                        == Some("bytea"),
+                [
+                    projected_expr_pg_type_with_db(self.db_ref(), expr).as_deref(),
+                    projected_expr_pg_type_with_db(self.db_ref(), r#in).as_deref(),
+                ],
             ),
             Expr::Extract { field, expr, .. } => {
                 eval_extract_value(field, self.eval_row_aggregate_expr(rows, columns, expr)?)
@@ -2527,14 +2528,17 @@ impl<'db> SqlEngine<'db> {
                 .cloned()
                 .unwrap_or_else(|| vec![SqlValue::Null; row_columns.len()]);
             for function in &aggregates {
-                let mut aggregate_rows = group.clone();
-                if let Some(filter) = &function.filter {
-                    aggregate_rows =
-                        self.filter_bound_row_predicate(aggregate_rows, row_columns, filter)?;
-                }
+                let filtered;
+                let aggregate_rows = if let Some(filter) = &function.filter {
+                    filtered =
+                        self.filter_bound_row_predicate(group.clone(), row_columns, filter)?;
+                    filtered.as_slice()
+                } else {
+                    group.as_slice()
+                };
                 row.push(RowAggregate::from_function(function)?.evaluate(
                     self,
-                    &aggregate_rows,
+                    aggregate_rows,
                     row_columns,
                 )?);
             }
@@ -2668,13 +2672,20 @@ impl<'db> SqlEngine<'db> {
                     .iter()
                     .zip(&order_collations)
                     .zip(left_values.iter().zip(right_values))
-                    .map(|((order, collation), (left, right))| {
+                    .zip(
+                        order_types
+                            .iter()
+                            .map(Option::as_deref)
+                            .chain(std::iter::repeat(None)),
+                    )
+                    .map(|(((order, collation), (left, right)), pg_type)| {
                         typed_order_collation_value_ordering(
                             collation.as_deref(),
                             &left.0,
                             left.1.as_deref(),
                             &right.0,
                             right.1.as_deref(),
+                            pg_type,
                             &order.options,
                         )
                     })
@@ -2846,6 +2857,7 @@ impl<'db> SqlEngine<'db> {
                         left,
                         None,
                         right,
+                        None,
                         None,
                         &order.options,
                     )
@@ -3406,6 +3418,7 @@ impl<'db> SqlEngine<'db> {
                             None,
                             &target,
                             None,
+                            None,
                             &order.options,
                         ) != Ordering::Less
                 })
@@ -3421,6 +3434,7 @@ impl<'db> SqlEngine<'db> {
                             key,
                             None,
                             &target,
+                            None,
                             None,
                             &order.options,
                         ) != Ordering::Greater
@@ -3607,40 +3621,76 @@ impl<'db> SqlEngine<'db> {
     /// The collation an ORDER BY key sorts by: an explicit COLLATE, else
     /// the declared collation of the table column the key names.
     pub(crate) fn slot_order_collation(&self, expr: &Expr, columns: &[String]) -> Option<String> {
-        if let Some(collation) = explicit_expr_collation(expr) {
-            return Some(collation);
-        }
+        explicit_expr_collation(expr).or_else(|| self.slot_input_collation(expr, columns.iter()))
+    }
+
+    pub(crate) fn slot_input_collation<'a>(
+        &self,
+        expr: &Expr,
+        columns: impl Iterator<Item = &'a String>,
+    ) -> Option<String> {
         let mut expr = expr;
         while let Expr::Nested(inner) = expr {
             expr = inner;
         }
-        let candidates: Vec<&String> = match expr {
+        let key = match expr {
             Expr::CompoundIdentifier(parts) if parts.len() >= 2 => {
-                let wanted = parts.iter().map(ident_value).collect::<Vec<_>>().join(".");
-                columns.iter().filter(|column| **column == wanted).collect()
+                parts.iter().map(ident_value).collect::<Vec<_>>().join(".")
             }
-            Expr::Identifier(ident) => {
-                let suffix = format!(".{}", ident_value(ident));
-                columns
-                    .iter()
-                    .filter(|column| column.ends_with(&suffix))
-                    .collect()
-            }
+            Expr::Identifier(ident) => format!(".{}", ident_value(ident)),
             _ => return None,
         };
-        // A table column appears under its alias and its table name; the
-        // table-named slot resolves the declared collation.
-        candidates.into_iter().find_map(|column| {
-            let (qualifier, name) = column.rsplit_once('.')?;
-            if self.cte(qualifier).is_some() {
-                return None;
-            }
-            let schema = load_schema_shared(self.db_ref(), qualifier)
-                .ok()
-                .flatten()?;
-            let collation = schema.column(name)?.collation.clone()?;
-            (collation != "default").then(|| crate::collations::semantic_collation(collation))
-        })
+        let qualified = !key.starts_with('.');
+        columns
+            .filter(|column| {
+                if qualified {
+                    **column == key
+                } else {
+                    column.ends_with(&key)
+                }
+            })
+            .find_map(|column| {
+                if let Some(found) = crate::slot_types::lookup_key_collation(column) {
+                    return found
+                        .filter(|name| name != "default")
+                        .map(crate::collations::semantic_collation);
+                }
+                let (qualifier, name) = column.rsplit_once('.')?;
+                if self.cte(qualifier).is_some() {
+                    return None;
+                }
+                let schema = load_schema_shared(self.db_ref(), qualifier)
+                    .ok()
+                    .flatten()?;
+                let collation = schema.column(name)?.collation.clone()?;
+                (collation != "default").then(|| crate::collations::semantic_collation(collation))
+            })
+    }
+
+    pub(crate) fn slot_comparison_collation<'a, I>(
+        &self,
+        left: &Expr,
+        right: &Expr,
+        columns: I,
+        types: [Option<&str>; 2],
+    ) -> Result<Option<String>>
+    where
+        I: Iterator<Item = &'a String> + Clone,
+    {
+        if let Some(explicit) = comparison_collation(left, right, None)? {
+            return Ok(Some(explicit));
+        }
+        let [left_type, right_type] = types;
+        implicit_comparison_collation(
+            left_type
+                .is_none_or(pg_type_is_collatable)
+                .then(|| self.slot_input_collation(left, columns.clone()))
+                .flatten(),
+            right_type
+                .is_none_or(pg_type_is_collatable)
+                .then(|| self.slot_input_collation(right, columns))
+                .flatten(),
+        )
     }
 
     pub(crate) fn slot_column_type(&self, column: &str) -> Option<String> {
@@ -3747,16 +3797,20 @@ impl<'db> SqlEngine<'db> {
             expressions
                 .iter()
                 .zip(keys[left].iter().zip(&keys[right]))
-                .map(|(order, ((left, left_key), (right, right_key)))| {
-                    typed_order_expr_value_ordering(
-                        &order.expr,
-                        left,
-                        left_key.as_deref(),
-                        right,
-                        right_key.as_deref(),
-                        &order.options,
-                    )
-                })
+                .zip(&order_types)
+                .map(
+                    |((order, ((left, left_key), (right, right_key))), pg_type)| {
+                        typed_order_expr_value_ordering(
+                            &order.expr,
+                            left,
+                            left_key.as_deref(),
+                            right,
+                            right_key.as_deref(),
+                            pg_type.as_deref(),
+                            &order.options,
+                        )
+                    },
+                )
                 .find(|ordering| *ordering != Ordering::Equal)
                 .unwrap_or(Ordering::Equal)
         });

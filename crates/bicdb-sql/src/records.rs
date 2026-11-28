@@ -1938,7 +1938,12 @@ pub(crate) fn primary_key_identity_cell(
         if is_empty_text_key(value) {
             return Ok(EMPTY_TEXT_KEY_CELL.to_string());
         }
-        return Ok(value.to_cell());
+        let cell = value.to_cell();
+        return Ok(if column_schema.pg_type == "name" {
+            clip_postgres_name(cell)
+        } else {
+            cell
+        });
     }
     column_typed_index_label(column_schema, value)
 }
@@ -6621,6 +6626,9 @@ fn canonical_array_element(value: &JsonValue, element_type: &str) -> Result<PgCa
             parse_postgres_uuid(value.as_str().ok_or_else(invalid)?).map_err(|_| invalid())?,
         ),
         "json" | "jsonb" => PgCanonicalValue::Json(value.clone()),
+        "record" => crate::type_codec::canonical_record_value(
+            &pg_composite_from_array_json(value).ok_or_else(invalid)?,
+        )?,
         "oid" => PgCanonicalValue::Oid(
             u32::try_from(value.as_i64().ok_or_else(invalid)?).map_err(|_| invalid())?,
         ),

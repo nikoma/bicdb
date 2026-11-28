@@ -244,13 +244,15 @@ impl<'db> SqlEngine<'db> {
                 expressions
                     .iter()
                     .zip(left.iter().zip(right))
-                    .map(|(order, (left, right))| {
+                    .zip(&order_types)
+                    .map(|((order, (left, right)), pg_type)| {
                         typed_order_expr_value_ordering(
                             &order.expr,
                             &left.0,
                             left.1.as_deref(),
                             &right.0,
                             right.1.as_deref(),
+                            pg_type.as_deref(),
                             &order.options,
                         )
                     })

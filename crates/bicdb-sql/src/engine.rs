@@ -20,8 +20,10 @@ pub(crate) use explain_pg::ExplainBuilder;
 pub(crate) mod flashback;
 use exists_probe::{ExistsCandidate, ExistsProbeMemo};
 mod hierarchy;
+mod inline_routine;
 mod joins_windows;
 mod named_joins;
+pub(crate) use inline_routine::validate_inline_sql_routine;
 pub(crate) use joins_windows::RowJoinPrediction;
 pub(crate) mod materialize;
 mod pg_catalog;
@@ -67,6 +69,11 @@ fn parse_inference_statements(db: &BicDb, sql: &str) -> Result<Vec<Statement>> {
     if is_constraint_timing_command(sql)? || is_postgres_rule_command(sql)? {
         return Ok(Vec::new());
     }
+    if crate::recursive_search_cycle::lower(sql).is_some() {
+        let statements = parse_statements(sql)?;
+        oracle::lock_waits::validate(db, &statements)?;
+        return Ok(statements);
+    }
     // A dollar-quoted anonymous body is one command with no wire parameters
     // or result columns. Its procedural syntax is parsed at execution, just
     // like a stored routine body; $1 inside it is not an outer bind marker.
@@ -74,6 +81,8 @@ fn parse_inference_statements(db: &BicDb, sql: &str) -> Result<Vec<Statement>> {
         raw_do_block_language(sql)?;
         return Ok(Vec::new());
     }
+    let atomic = crate::sql_atomic_body::lower(sql);
+    let sql = atomic.as_ref().map_or(sql, |lowered| lowered.sql.as_str());
     let parse_sql = rewrite_postgres_parse_compat(sql);
     let sql_for_parse = parse_sql.as_deref().unwrap_or(sql);
     reject_oversized_sql(sql_for_parse)?;
@@ -106,12 +115,20 @@ pub fn infer_parameter_types(db: &BicDb, sql: &str) -> Result<Vec<Option<String>
     // The resolver only types the shapes it understands; the parameter count
     // must still cover every placeholder or Bind would reject the statement.
     let mut highest = 0usize;
-    let _ = sqlparser::ast::visit_expressions(&statements, |expr| {
-        if let Some(index) = placeholder_index(expr) {
-            highest = highest.max(index);
+    for statement in &statements {
+        if matches!(
+            statement,
+            Statement::CreateFunction(_) | Statement::CreateProcedure { .. }
+        ) {
+            continue;
         }
-        std::ops::ControlFlow::<()>::Continue(())
-    });
+        let _ = sqlparser::ast::visit_expressions(statement, |expr| {
+            if let Some(index) = placeholder_index(expr) {
+                highest = highest.max(index);
+            }
+            std::ops::ControlFlow::<()>::Continue(())
+        });
+    }
     if resolver.types.len() < highest {
         resolver.types.resize(highest, None);
     }
@@ -290,6 +307,8 @@ struct ParameterTypeResolver<'engine, 'db> {
     ctes: BTreeMap<String, Vec<(String, Option<String>)>>,
     comparison_error: Option<SqlError>,
     check_comparisons: bool,
+    inline_routine_scope: Option<RelationColumns>,
+    query_depth: usize,
 }
 
 impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
@@ -300,6 +319,8 @@ impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
             ctes: BTreeMap::new(),
             comparison_error: None,
             check_comparisons: false,
+            inline_routine_scope: None,
+            query_depth: 0,
         }
     }
 
@@ -328,9 +349,12 @@ impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
         }
         let left = self.expr_type(left, env);
         let right = self.expr_type(right, env);
-        self.comparison_error =
+        self.comparison_error = if self.inline_routine_scope.is_some() {
+            inline_routine::validate_catalog_comparison(self.engine, left, op, right).err()
+        } else {
             reject_comparison_for_db(self.engine.db_ref(), left.as_deref(), op, right.as_deref())
-                .err();
+                .err()
+        };
     }
 
     fn routine_env(locals: &BTreeMap<String, String>) -> Vec<RelationColumns> {
@@ -763,6 +787,7 @@ impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
     }
 
     fn query(&mut self, query: &Query, expected: Option<&[Option<String>]>) {
+        self.query_depth += 1;
         let outer_ctes = self.ctes.clone();
         if let Some(with) = &query.with {
             for cte in &with.cte_tables {
@@ -790,6 +815,7 @@ impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
             }
         }
         self.ctes = outer_ctes;
+        self.query_depth -= 1;
     }
 
     fn cte_output_columns(
@@ -962,7 +988,16 @@ impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
     }
 
     fn select(&mut self, select: &Select, expected: Option<&[Option<String>]>) {
-        let env = self.from_relation_columns(&select.from);
+        let mut env = self.from_relation_columns(&select.from);
+        if let Some(scope) = &self.inline_routine_scope {
+            let mut parameters = scope.clone();
+            // Table columns have precedence over unqualified parameter names.
+            parameters.columns.retain(|(name, _)| {
+                !env.iter()
+                    .any(|relation| relation.columns.iter().any(|(column, _)| column == name))
+            });
+            env.push(parameters);
+        }
         for table in &select.from {
             self.table_factor(&table.relation);
             for join in &table.joins {
@@ -979,6 +1014,9 @@ impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
                 SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => expr,
                 _ => continue,
             };
+            if self.inline_routine_scope.is_some() && self.query_depth == 1 {
+                self.check_inline_projection_column(expr, &env, &select.from);
+            }
             let expected = expected
                 .and_then(|expected| expected.get(idx))
                 .and_then(Option::as_deref);
@@ -4420,9 +4458,11 @@ fn typed_index_predicate_value(
     // the padded text. A predicate literal is not padded, which made an
     // indexed CHAR column disagree with an unindexed one: `code = 'ab'`
     // matched the row until the column gained an index, and then silently
-    // matched nothing. Put the probe through the same cast the stored value
-    // went through.
-    if let Some(column) = column.filter(|column| column.pg_type == "bpchar") {
+    // matched nothing. A name probe likewise needs the name input limit.
+    // Put the probe through the same cast as the stored value.
+    if let Some(column) =
+        column.filter(|column| matches!(column.pg_type.as_str(), "bpchar" | "name"))
+    {
         let value = cast_value_to_column_type(sql_value_from_index_value(&value), column)?;
         return Ok(index_value_from_sql(value)?);
     }
@@ -5541,9 +5581,11 @@ impl<'db> SqlEngine<'db> {
             return self.execute_grouping_sets_query(query);
         }
         self.check_cancellation()?;
-        if let Some(rewritten) = rewrite_ordinal_order_by(query, &|relation| {
-            table_factor_column_names(self.db, relation)
-        }) {
+        if let Some(rewritten) = rewrite_ordinal_order_by(
+            query,
+            &|relation| table_factor_column_names(self.db, relation),
+            self.db_ref(),
+        )? {
             return self.execute_query(&rewritten);
         }
         if let Some(rewritten) = rewrite_row_type_constructs(self.db, query)? {
@@ -5600,6 +5642,23 @@ impl<'db> SqlEngine<'db> {
         self.validate_native_aggregate_signatures(select, query)?;
         let has_windows = select_has_window_functions(select, query)?;
 
+        if let Some(having) = &select.having {
+            let env = self.from_relation_columns(&select.from).unwrap_or_default();
+            if let Some(pg_type) = self
+                .infer_env_expr_type(having, &env)
+                .filter(|pg_type| !matches!(pg_type.as_str(), "bool" | "unknown"))
+            {
+                return Err(SqlError::data_exception_public(
+                    "42804",
+                    format!(
+                        "argument of HAVING must be type boolean, not type {}",
+                        common_type_display(&pg_type)
+                    ),
+                    None,
+                ));
+            }
+        }
+
         if select.from.is_empty() {
             if has_windows {
                 return self.execute_window_query_without_from(select, query);
@@ -5612,7 +5671,21 @@ impl<'db> SqlEngine<'db> {
             return self.execute_select_without_from(select, query);
         }
 
+        if select.having.is_some() {
+            return self.execute_having_query(select, query, has_windows);
+        }
+
         if has_windows {
+            return self.execute_row_query(select, query);
+        }
+
+        if select.from.iter().any(|from| {
+            has_relation_column_aliases(&from.relation)
+                || from
+                    .joins
+                    .iter()
+                    .any(|join| has_relation_column_aliases(&join.relation))
+        }) {
             return self.execute_row_query(select, query);
         }
 

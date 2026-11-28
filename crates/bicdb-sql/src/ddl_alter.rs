@@ -2090,8 +2090,33 @@ pub(crate) fn text_column_schema(name: String) -> ColumnSchema {
 
 pub(crate) fn normalize_column_collation(name: &ObjectName) -> Result<String> {
     let full = object_name(name)?;
-    let qualifier = full.rsplit_once('.').map(|(schema, _)| schema.to_string());
-    let name = full.rsplit('.').next().unwrap_or(&full);
+    let parts = object_name_parts(name);
+    let name = parts.last().map(String::as_str).unwrap_or(&full);
+    let qualifier = (parts.len() > 1).then(|| parts[..parts.len() - 1].join("."));
+    if qualifier
+        .as_deref()
+        .is_some_and(|schema| schema != "pg_catalog")
+    {
+        return crate::collations::resolve_user_collation(qualifier.as_deref(), name)
+            .map(|collation| collation.name)
+            .ok_or_else(|| undefined_column_collation(&full));
+    }
+    if let Some(collation) = crate::collations::builtin_icu_collation(name) {
+        let shadow = qualifier
+            .is_none()
+            .then(crate::search_path::active_path)
+            .flatten()
+            .and_then(|path| {
+                let index = path.iter().position(|schema| schema == "pg_catalog")?;
+                path[..index].iter().find_map(|schema| {
+                    crate::collations::resolve_user_collation(Some(schema), name)
+                })
+            });
+        return Ok(shadow.map_or_else(
+            || format!("pg_catalog.{}", collation.name),
+            |shadow| shadow.name,
+        ));
+    }
     let canonical = match name.to_ascii_lowercase().as_str() {
         "default" => "default",
         "c" => "C",
@@ -2099,20 +2124,23 @@ pub(crate) fn normalize_column_collation(name: &ObjectName) -> Result<String> {
         "ucs_basic" => "ucs_basic",
         "en-x-icu" => "en-x-icu",
         _ => {
-            let schema = qualifier.filter(|schema| schema != "pg_catalog");
             if let Some(collation) =
-                crate::collations::resolve_user_collation(schema.as_deref(), name)
+                crate::collations::resolve_user_collation(qualifier.as_deref(), name)
             {
                 return Ok(collation.name);
             }
-            return Err(SqlError::data_exception(
-                "42704",
-                format!("collation \"{name}\" for encoding UTF8 does not exist"),
-                None,
-            ));
+            return Err(undefined_column_collation(&full));
         }
     };
     Ok(canonical.to_string())
+}
+
+fn undefined_column_collation(name: &str) -> SqlError {
+    SqlError::data_exception(
+        "42704",
+        format!("collation \"{name}\" for encoding \"UTF8\" does not exist"),
+        None,
+    )
 }
 
 pub(crate) fn pg_type_is_collatable(pg_type: &str) -> bool {
@@ -2945,39 +2973,37 @@ pub(crate) fn raw_analyze_target(sql: &str) -> Result<Option<Option<String>>> {
     Ok(Some(Some(table)))
 }
 
-pub(crate) enum RawAlterSequence {
-    OwnerTo {
-        sequence: String,
-        owner: String,
-    },
-    OwnedBy {
-        sequence: String,
-        owner: Option<ObjectName>,
-    },
-    Restart {
-        sequence: String,
-        value: Option<i64>,
-    },
-    Parameters {
-        sequence: String,
-        options: crate::session::SequenceAlterParameters,
-    },
+pub(crate) struct RawAlterSequence {
+    pub(crate) target: String,
+    pub(crate) if_exists: bool,
+    pub(crate) action: RawAlterSequenceAction,
+}
+
+pub(crate) enum RawAlterSequenceAction {
+    OwnerTo(String),
+    OwnedBy(Option<ObjectName>),
+    Restart(Option<i64>),
+    Parameters(crate::session::SequenceAlterParameters),
 }
 
 pub(crate) fn raw_alter_sequence(sql: &str) -> Result<Option<RawAlterSequence>> {
-    let normalized = normalize_sql(sql);
-    let initial_tokens = normalized.split_whitespace().collect::<Vec<_>>();
-    if initial_tokens.len() < 4 || initial_tokens[0] != "alter" || initial_tokens[1] != "sequence" {
+    let Some(rest) = strip_sql_keywords(sql, &["ALTER", "SEQUENCE"]) else {
         return Ok(None);
-    }
-    let (_, rest) = parse_leading_sql_identifier(sql.trim())?;
-    let (_, rest) = parse_leading_sql_identifier(rest.trim())?;
-    let (target, options_source) = parse_leading_qualified_sql_identifier(rest.trim())?;
-    let sequence = normalize_sequence_name(&target)?;
+    };
+    let if_exists = strip_sql_keywords(rest, &["IF", "EXISTS"]);
+    let (target, options_source) =
+        parse_leading_qualified_sql_identifier(if_exists.unwrap_or(rest))?;
+    let statement = |action| {
+        Some(RawAlterSequence {
+            target,
+            if_exists: if_exists.is_some(),
+            action,
+        })
+    };
     let normalized = format!("alter sequence __target {}", normalize_sql(options_source));
     let tokens = normalized.split_whitespace().collect::<Vec<_>>();
     if let Some(options) = crate::session::parse_alter_sequence_parameters(options_source)? {
-        return Ok(Some(RawAlterSequence::Parameters { sequence, options }));
+        return Ok(statement(RawAlterSequenceAction::Parameters(options)));
     }
     if tokens.get(3..5) == Some(&["owner", "to"][..]) {
         let Some(_owner) = tokens.get(5) else {
@@ -2993,10 +3019,9 @@ pub(crate) fn raw_alter_sequence(sql: &str) -> Result<Option<RawAlterSequence>> 
                 "ALTER SEQUENCE OWNER TO trailing options are not supported".to_string(),
             ));
         }
-        return Ok(Some(RawAlterSequence::OwnerTo {
-            sequence,
-            owner: normalize_role_name(&owner),
-        }));
+        return Ok(statement(RawAlterSequenceAction::OwnerTo(
+            normalize_role_name(&owner),
+        )));
     }
     if tokens.get(3) == Some(&"restart") {
         let has_with = tokens.get(4) == Some(&"with");
@@ -3019,7 +3044,7 @@ pub(crate) fn raw_alter_sequence(sql: &str) -> Result<Option<RawAlterSequence>> 
                 "ALTER SEQUENCE RESTART trailing options are not supported".to_string(),
             ));
         }
-        return Ok(Some(RawAlterSequence::Restart { sequence, value }));
+        return Ok(statement(RawAlterSequenceAction::Restart(value)));
     }
     if tokens.get(3) != Some(&"owned") || tokens.get(4) != Some(&"by") {
         return Ok(None);
@@ -3033,10 +3058,7 @@ pub(crate) fn raw_alter_sequence(sql: &str) -> Result<Option<RawAlterSequence>> 
         ));
     }
     if owner.eq_ignore_ascii_case("none") {
-        return Ok(Some(RawAlterSequence::OwnedBy {
-            sequence,
-            owner: None,
-        }));
+        return Ok(statement(RawAlterSequenceAction::OwnedBy(None)));
     }
     let mut parser = Parser::new(&PostgreSqlDialect {})
         .try_with_sql(&owner)
@@ -3044,10 +3066,7 @@ pub(crate) fn raw_alter_sequence(sql: &str) -> Result<Option<RawAlterSequence>> 
     let owner = parser
         .parse_object_name(false)
         .map_err(|e| SqlError::InvalidSql(e.to_string()))?;
-    Ok(Some(RawAlterSequence::OwnedBy {
-        sequence,
-        owner: Some(owner),
-    }))
+    Ok(statement(RawAlterSequenceAction::OwnedBy(Some(owner))))
 }
 
 pub(crate) struct RawAlterIdentityRestart {

@@ -448,6 +448,7 @@ impl SqlSession<'_> {
                 frame,
                 &dynamic.into,
                 &result.columns,
+                &result.column_types,
                 result.rows.into_iter().next(),
             )?;
         }

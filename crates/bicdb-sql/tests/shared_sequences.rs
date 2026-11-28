@@ -363,3 +363,48 @@ fn postgres_sequence_owned_by_requires_an_existing_column_in_the_same_schema_wit
         vec![vec![SqlValue::Int(2)]]
     );
 }
+
+#[test]
+fn postgres_alter_sequence_resolves_the_search_path_and_if_exists() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut sql = SqlSession::new(&mut db);
+    for statement in [
+        "CREATE SEQUENCE path_seq START 100",
+        "CREATE SCHEMA seq_alter_path",
+        "CREATE SEQUENCE seq_alter_path.path_seq START 20",
+        "CREATE TABLE seq_alter_path.path_block (id int)",
+        "SET search_path = seq_alter_path, public",
+        "ALTER SEQUENCE path_seq RESTART WITH 42",
+    ] {
+        sql.execute(statement).unwrap();
+    }
+    let result = sql
+        .execute("SELECT nextval('path_seq'), nextval('public.path_seq')")
+        .unwrap();
+    assert_eq!(
+        result.rows,
+        vec![vec![SqlValue::Int(42), SqlValue::Int(100)]]
+    );
+    let result = sql
+        .execute("ALTER SEQUENCE IF EXISTS seq_alter_path.missing_seq AS smallint RESTART WITH 10")
+        .unwrap();
+    assert_eq!(result.command_tag.as_deref(), Some("ALTER SEQUENCE"));
+    assert_eq!(result.notices.len(), 1);
+    assert_eq!(
+        result.notices[0].message,
+        "relation \"missing_seq\" does not exist, skipping"
+    );
+    assert_eq!(
+        sql.execute("ALTER SEQUENCE IF EXISTS path_block RESTART")
+            .unwrap_err()
+            .sqlstate(),
+        "42809"
+    );
+    assert_eq!(
+        sql.execute("ALTER SEQUENCE missing_seq RESTART")
+            .unwrap_err()
+            .sqlstate(),
+        "42P01"
+    );
+}

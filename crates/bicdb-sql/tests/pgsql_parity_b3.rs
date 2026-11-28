@@ -218,3 +218,21 @@ fn column_insert_update_grants_and_returning() {
         ]
     );
 }
+#[test]
+fn renamed_relation_columns_check_the_underlying_column_grants() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE ROLE alias_reader; CREATE TABLE alias_notes (id integer, secret text); INSERT INTO alias_notes VALUES (1, 'hidden'); GRANT SELECT(id) ON alias_notes TO alias_reader; SET ROLE alias_reader").unwrap();
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT visible_id FROM alias_notes AS notes(visible_id)"
+        ),
+        vec![vec![int(1)]]
+    );
+    let error = session
+        .execute("SELECT innocuous FROM alias_notes AS notes(visible_id, innocuous)")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42501");
+}

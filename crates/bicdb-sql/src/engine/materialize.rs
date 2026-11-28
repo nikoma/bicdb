@@ -1,6 +1,7 @@
 //! Split out of the parent module to keep files digestible; behavior
 //! unchanged — a separate `impl` block on the same type.
 use super::*;
+use crate::planner::expr_contains_subquery;
 #[allow(unused_imports)]
 use crate::*;
 
@@ -478,8 +479,10 @@ impl<'db> SqlEngine<'db> {
             Expr::Position { expr, r#in } => eval_position_typed_value(
                 self.eval_select_constant_expr(expr)?,
                 self.eval_select_constant_expr(r#in)?,
-                self.constant_expr_pg_type(expr).as_deref() == Some("bytea")
-                    || self.constant_expr_pg_type(r#in).as_deref() == Some("bytea"),
+                [
+                    self.constant_expr_pg_type(expr).as_deref(),
+                    self.constant_expr_pg_type(r#in).as_deref(),
+                ],
             ),
             Expr::Trim {
                 trim_where,
@@ -812,6 +815,38 @@ impl<'db> SqlEngine<'db> {
         project_virtual_rows(&select.projection, rows, &[])
     }
 
+    pub(super) fn execute_having_query(
+        &self,
+        select: &Select,
+        query: &Query,
+        has_windows: bool,
+    ) -> Result<SqlResult> {
+        // An implicit group with no aggregates can be evaluated without an
+        // input scan. Restrict the shortcut to a single ordinary table and
+        // keep the regular expression and privilege checks before reaching it.
+        let [from] = select.from.as_slice() else {
+            return self.execute_row_query(select, query);
+        };
+        if has_windows
+            || has_group_by(select)?
+            || query.order_by.is_some()
+            || select.having.as_ref().is_some_and(expr_contains_subquery)
+            || select.projection.iter().any(|item| {
+                select_item_expr_and_alias(item)
+                    .map_or(true, |(expr, _)| expr_contains_subquery(expr))
+            })
+            || !query_group_aggregate_functions(select, query)?.is_empty()
+        {
+            return self.execute_row_query(select, query);
+        }
+        let Some(schema) = self.single_relation_schema(from) else {
+            return self.execute_row_query(select, query);
+        };
+        self.reject_encrypted_predicates(&schema.name, select.selection.as_ref())?;
+        let result = self.execute_grouped_window_rows(select, &[], query, &[], Vec::new(), &[])?;
+        self.typed_row_result(result, select, Some(&schema))
+    }
+
     pub(crate) fn execute_row_query(&self, select: &Select, query: &Query) -> Result<SqlResult> {
         self.check_cancellation()?;
         let normalized_from;
@@ -1082,16 +1117,16 @@ impl<'db> SqlEngine<'db> {
             )?;
             return self.typed_row_result(result, select, schema_ref);
         }
-        if let Some(having) = &select.having {
+        if select.having.is_some() {
             self.check_cancellation()?;
-            let mut result =
-                self.execute_row_aggregates(&select.projection, &row_set.rows, &row_set.columns)?;
-            if !self
-                .eval_row_aggregate_truth(&row_set.rows, &row_set.columns, having)?
-                .unwrap_or(false)
-            {
-                result.rows.clear();
-            }
+            let result = self.execute_grouped_window_rows(
+                select,
+                &[],
+                query,
+                &row_set.columns,
+                row_set.rows,
+                &[],
+            )?;
             return self.typed_row_result(result, select, schema_ref);
         }
         if has_aggregates(&select.projection) {
@@ -1834,10 +1869,11 @@ impl<'db> SqlEngine<'db> {
                         .iter()
                         .enumerate()
                         .filter(|(_, column)| !column.hidden)
-                        .map(|(index, column)| {
+                        .zip(typed_columns)
+                        .map(|((index, column), (name, _))| {
                             let attribute_number = i16::try_from(index + 1).ok()?;
                             Some((
-                                column.name.clone(),
+                                name,
                                 SqlColumnMetadata {
                                     table_oid,
                                     attribute_number,
@@ -2825,6 +2861,40 @@ impl<'db> SqlEngine<'db> {
                 name,
                 alias,
                 args: Some(_),
+                with_ordinality,
+                ..
+            } if relation_name(name)
+                .ok()
+                .is_some_and(|table| crate::routine_calls::parse_ident_function(&table)) =>
+            {
+                let alias_name = alias
+                    .as_ref()
+                    .map(|alias| ident_value(&alias.name))
+                    .unwrap_or_else(|| "parse_ident".to_string());
+                let source_columns = table_function_source_columns_for_alias(
+                    alias.as_ref(),
+                    &alias_name,
+                    vec!["parse_ident".to_string()],
+                );
+                let mut columns = vec![(source_columns[0].clone(), Some("text[]".to_string()))];
+                if *with_ordinality {
+                    columns.push(("ordinality".to_string(), Some("int8".to_string())));
+                }
+                let alias_cols = alias
+                    .as_ref()
+                    .map(|alias| alias.columns.as_slice())
+                    .unwrap_or(&[]);
+                env.push(RelationColumns {
+                    alias: alias_name.to_ascii_lowercase(),
+                    row_type: None,
+                    columns: rename_relation_columns(columns, alias_cols)?,
+                });
+                Some(())
+            }
+            TableFactor::Table {
+                name,
+                alias,
+                args: Some(_),
                 with_ordinality: false,
                 ..
             }
@@ -2903,15 +2973,13 @@ impl<'db> SqlEngine<'db> {
         }
         let table = resolve_session_relation_name(self.db_ref(), table).ok()?;
         let schema = load_schema_shared(self.db_ref(), &table).ok().flatten()?;
-        // The base-table scan path keys columns off the schema field names and
-        // ignores any relation column-alias list, so we do too.
         let columns = schema
             .columns
             .iter()
             .filter(|column| !column.hidden)
             .map(|column| (column.name.clone(), Some(column.pg_type.clone())))
             .collect();
-        Some((columns, true))
+        Some((rename_relation_columns(columns, alias_cols)?, true))
     }
 
     /// Infer the logical PostgreSQL type of a projected expression against a
@@ -3433,6 +3501,9 @@ impl<'db> SqlEngine<'db> {
         if is_current_catalog_keyword(function) {
             return Some("name".into());
         }
+        if is_row_constructor(function) {
+            return Some("record".to_string());
+        }
         if matches!(function.args, sqlparser::ast::FunctionArguments::None) {
             let parts = object_name_parts(&function.name);
             if parts.len() >= 2
@@ -3886,6 +3957,14 @@ impl<'db> SqlEngine<'db> {
                     .and_then(|arg| self.infer_env_expr_type(arg, env))
                     .as_deref(),
             )),
+            "random" if args.len() == 2 => {
+                let types = args
+                    .iter()
+                    .map(|arg| self.infer_env_expr_type(arg, env))
+                    .collect::<Vec<_>>();
+                crate::pg_random::range_pg_type(&types).map(str::to_owned)
+            }
+            "setseed" => Some("void".to_owned()),
             "random" | "pi" | "sin" | "cos" | "tan" | "asin" | "acos" | "atan" | "atan2"
             | "cot" | "random_normal" => Some("float8".to_string()),
             "generate_series" => args
@@ -3933,12 +4012,13 @@ impl<'db> SqlEngine<'db> {
             | "bicdb_oracle_plsql_trunc_date"
             | "bicdb_oracle_date_add_days" => Some("timestamp".to_string()),
             "regexp_match" | "regexp_split_to_array" => Some("text[]".to_string()),
-            "substr" | "substring" => match self.infer_env_expr_type(args.first()?, env).as_deref()
-            {
-                Some("bit" | "varbit") => Some("bit".to_string()),
-                Some("bytea") => Some("bytea".to_string()),
-                _ => Some("text".to_string()),
-            },
+            "substr" | "substring" | "overlay" => {
+                match self.infer_env_expr_type(args.first()?, env).as_deref() {
+                    Some("bit" | "varbit") => Some("bit".to_string()),
+                    Some("bytea") => Some("bytea".to_string()),
+                    _ => Some("text".to_string()),
+                }
+            }
             "length" | "char_length" | "character_length" | "octet_length" | "bit_length"
             | "position" | "strpos" | "ascii" => Some("int4".to_string()),
             "bit_count" | "crc32" | "crc32c" => Some("int8".to_string()),
@@ -4335,25 +4415,34 @@ impl<'db> SqlEngine<'db> {
         let selection = folded_selection.as_ref().or(selection);
         let qualified_selection = self.qualify_catalog_cross_join_selection(from, selection)?;
         let selection = qualified_selection.as_ref().or(selection);
-        if let Some(row_set) = self.pg_class_index_join_row_set(from, selection)? {
-            return Ok(row_set);
-        }
-        if let Some(row_set) = self.pg_class_indexrelid_join_row_set(from, selection)? {
-            return Ok(row_set);
-        }
-        if let Some(row_set) =
-            self.pg_class_namespace_join_row_set(from, selection, projection, order_by)?
-        {
-            return Ok(row_set);
-        }
-        if let Some(row_set) = self.pg_constraint_foreign_key_join_row_set(from, selection)? {
-            return Ok(row_set);
-        }
-        if let Some(row_set) = self.pg_constraint_class_namespace_join_row_set(from, selection)? {
-            return Ok(row_set);
-        }
-        if let Some(row_set) = self.pg_locks_class_join_row_set(from)? {
-            return Ok(row_set);
+        let has_column_aliases = has_relation_column_aliases(&from.relation)
+            || from
+                .joins
+                .iter()
+                .any(|join| has_relation_column_aliases(&join.relation));
+        if !has_column_aliases {
+            if let Some(row_set) = self.pg_class_index_join_row_set(from, selection)? {
+                return Ok(row_set);
+            }
+            if let Some(row_set) = self.pg_class_indexrelid_join_row_set(from, selection)? {
+                return Ok(row_set);
+            }
+            if let Some(row_set) =
+                self.pg_class_namespace_join_row_set(from, selection, projection, order_by)?
+            {
+                return Ok(row_set);
+            }
+            if let Some(row_set) = self.pg_constraint_foreign_key_join_row_set(from, selection)? {
+                return Ok(row_set);
+            }
+            if let Some(row_set) =
+                self.pg_constraint_class_namespace_join_row_set(from, selection)?
+            {
+                return Ok(row_set);
+            }
+            if let Some(row_set) = self.pg_locks_class_join_row_set(from)? {
+                return Ok(row_set);
+            }
         }
 
         let (relation, joins) = self.plan_row_join_order(from, selection)?;

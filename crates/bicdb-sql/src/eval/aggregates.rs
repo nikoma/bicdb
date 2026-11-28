@@ -1019,25 +1019,19 @@ pub(crate) struct RelationColumns {
 }
 
 /// Apply a relation alias's optional column-rename list to a typed column list,
-/// preserving types positionally. Returns `None` when an explicit list is present
-/// but its length doesn't match (mirrors `table_alias_columns`' error).
+/// preserving types positionally. The list may rename a prefix of the
+/// columns, but must fit the row width.
 pub(crate) fn rename_relation_columns(
-    columns: Vec<(String, Option<String>)>,
+    mut columns: Vec<(String, Option<String>)>,
     alias_cols: &[TableAliasColumnDef],
 ) -> Option<Vec<(String, Option<String>)>> {
-    if alias_cols.is_empty() {
-        return Some(columns);
-    }
-    if alias_cols.len() != columns.len() {
+    if alias_cols.len() > columns.len() {
         return None;
     }
-    Some(
-        alias_cols
-            .iter()
-            .zip(columns)
-            .map(|(alias, (_, ty))| (ident_value(&alias.name), ty))
-            .collect(),
-    )
+    for ((name, _), alias) in columns.iter_mut().zip(alias_cols) {
+        *name = ident_value(&alias.name);
+    }
+    Some(columns)
 }
 
 /// Look up an unqualified column name across all FROM relations. Returns the type
@@ -1979,6 +1973,9 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         if is_current_catalog_keyword(function) {
             return Some("name".into());
         }
+        if is_row_constructor(function) {
+            return Some("record".to_string());
+        }
         // Type memos retain node addresses across calls. Borrow real argument
         // nodes; never cache the addresses of function_args' temporary clones.
         let argument_nodes = function_arg_list(function);
@@ -2135,6 +2132,15 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         }
         if let Some(pg_type) = crate::xml_function_pg_type(&name) {
             return Some(pg_type.to_string());
+        }
+        match name.strip_prefix("pg_catalog.").unwrap_or(&name) {
+            "random" if geometric_arg_types.len() == 2 => {
+                return crate::pg_random::range_pg_type(&geometric_arg_types).map(str::to_owned);
+            }
+            "random" if geometric_arg_types.is_empty() => return Some("float8".to_owned()),
+            "random_normal" => return Some("float8".to_owned()),
+            "setseed" => return Some("void".to_owned()),
+            _ => {}
         }
         if matches!(
             name.as_str(),
@@ -2523,13 +2529,18 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         if unqualified_name == "array_dims" {
             return Some("text".to_string());
         }
+        if unqualified_name == "position" {
+            return Some("int4".to_string());
+        }
         if matches!(
             unqualified_name,
-            "substr" | "substring" | "reverse" | "trim" | "btrim" | "ltrim" | "rtrim"
+            "substr" | "substring" | "overlay" | "reverse" | "trim" | "btrim" | "ltrim" | "rtrim"
         ) {
             return match projected_expr_pg_type(argument_nodes.first()?, schema).as_deref() {
                 Some("bytea") => Some("bytea".to_string()),
-                Some("bit" | "varbit") if matches!(unqualified_name, "substr" | "substring") => {
+                Some("bit" | "varbit")
+                    if matches!(unqualified_name, "substr" | "substring" | "overlay") =>
+                {
                     Some("bit".to_string())
                 }
                 Some("text" | "varchar" | "bpchar" | "char" | "name") => Some("text".to_string()),
@@ -4273,7 +4284,16 @@ pub(crate) fn apply_order_by_cancellable(
                     projected_expr_pg_type(&order.expr, schema),
                     expr_collation(&order.expr, schema)?,
                     schema.and_then(|schema| {
-                        partition_key_column_name(&order.expr)
+                        // The cast's result has its own ordering semantics.
+                        // The underlying column codec applies to column reads.
+                        let mut expr = &order.expr;
+                        while let Expr::Nested(inner) | Expr::Collate { expr: inner, .. } = expr {
+                            expr = inner;
+                        }
+                        if !matches!(expr, Expr::Identifier(_) | Expr::CompoundIdentifier(_)) {
+                            return None;
+                        }
+                        partition_key_column_name(expr)
                             .ok()
                             .and_then(|column| schema.column(&column))
                     }),
@@ -4337,6 +4357,7 @@ pub(crate) fn apply_order_by_cancellable(
                     left.1.as_deref(),
                     &right.0,
                     right.1.as_deref(),
+                    drivers[index].3.as_deref(),
                     &order.options,
                 )
             })

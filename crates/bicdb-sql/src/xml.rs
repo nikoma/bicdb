@@ -1,7 +1,7 @@
 use serde_json::Value as JsonValue;
 use std::collections::BTreeMap;
 use sxd_document::{dom, parser};
-use sxd_xpath::{nodeset::Node, Context, Factory, Value as XPathValue};
+use sxd_xpath::{nodeset::Node, Context, Factory, Value as XPathValue, XPath};
 
 use crate::{Result, SqlError, SqlValue};
 
@@ -13,16 +13,19 @@ fn xml_text(value: &SqlValue) -> String {
     value.to_cell()
 }
 
-fn strip_declaration(value: &str) -> &str {
-    let trimmed = value.trim_start_matches('\u{feff}').trim_start();
-    if trimmed.starts_with("<?xml") {
-        trimmed
-            .find("?>")
-            .map(|end| &trimmed[end + 2..])
-            .unwrap_or(trimmed)
-    } else {
-        value
+fn xml_declaration(value: &str) -> Option<(&str, &str)> {
+    let value = value.trim_start_matches('\u{feff}');
+    let after_prefix = value.strip_prefix("<?xml")?;
+    let starts_with_whitespace = |character| matches!(character, ' ' | '\t' | '\r' | '\n');
+    if !after_prefix.starts_with(starts_with_whitespace) {
+        return None;
     }
+    let end = value.find("?>")? + 2;
+    Some(value.split_at(end))
+}
+
+fn strip_declaration(value: &str) -> &str {
+    xml_declaration(value).map_or(value, |(_, body)| body)
 }
 
 fn wrapped_content(value: &str) -> String {
@@ -208,6 +211,12 @@ fn xml_for_parser(value: &str) -> Result<String> {
 }
 
 pub(crate) fn validate_xml(value: &str, document: bool) -> Result<()> {
+    if let Some((declaration, _)) = xml_declaration(value) {
+        // Content parsing can wrap multiple root elements and strip the
+        // outer declaration. Analyze the declaration before that fallback.
+        parser::parse(&format!("{declaration}<bicdb/>"))
+            .map_err(|_| invalid_xml("invalid XML declaration"))?;
+    }
     let prepared = xml_for_parser(value)?;
     let parsed = if document {
         parser::parse(&prepared)
@@ -263,26 +272,25 @@ fn xml_declaration_attribute(declaration: &str, name: &str) -> Option<String> {
 
 pub(crate) fn normalize_xml(value: &str) -> Result<String> {
     validate_xml(value, false)?;
+    Ok(normalize_validated_xml(value))
+}
+
+fn normalize_validated_xml(value: &str) -> String {
     let value = value.trim_start_matches('\u{feff}');
-    let Some(declaration_end) = value
-        .starts_with("<?xml")
-        .then(|| value.find("?>"))
-        .flatten()
-    else {
-        return Ok(value.to_string());
+    let Some((declaration, body)) = xml_declaration(value) else {
+        return value.to_string();
     };
-    let declaration = &value[5..declaration_end];
+    let declaration = &declaration[5..declaration.len() - 2];
     let version =
         xml_declaration_attribute(declaration, "version").unwrap_or_else(|| "1.0".to_string());
     let standalone = xml_declaration_attribute(declaration, "standalone");
-    let body = &value[declaration_end + 2..];
     if version == "1.0" && standalone.is_none() {
-        return Ok(body.to_string());
+        return body.to_string();
     }
     let standalone = standalone
         .map(|standalone| format!(" standalone=\"{standalone}\""))
         .unwrap_or_default();
-    Ok(format!("<?xml version=\"{version}\"{standalone}?>{body}"))
+    format!("<?xml version=\"{version}\"{standalone}?>{body}")
 }
 
 fn escape_text(value: &str) -> String {
@@ -458,6 +466,7 @@ fn serialize_element(
     element: dom::Element<'_>,
     inherited_namespaces: &BTreeMap<String, String>,
     output: &mut String,
+    indent: Option<usize>,
 ) {
     let name = element.name();
     let local_name = name.local_part_clone();
@@ -501,36 +510,196 @@ fn serialize_element(
         return;
     }
     output.push('>');
+    let indent = indent.filter(|_| {
+        element.attribute_value(("http://www.w3.org/XML/1998/namespace", "space")).as_deref() != Some("preserve")
+            && children.iter().any(|child| !matches!(child, dom::ChildOfElement::Text(_)))
+            && children.iter().all(|child| {
+                !matches!(child, dom::ChildOfElement::Text(text) if !text.text().trim().is_empty())
+            })
+    });
     for child in children {
-        match child {
-            dom::ChildOfElement::Element(child) => serialize_element(child, &namespaces, output),
-            dom::ChildOfElement::Text(text) => output.push_str(&escape_text(&text.text())),
-            dom::ChildOfElement::Comment(comment) => {
-                output.push_str("<!--");
-                output.push_str(&comment.text());
-                output.push_str("-->");
+        if let Some(level) = indent {
+            if matches!(child, dom::ChildOfElement::Text(_)) {
+                continue;
             }
-            dom::ChildOfElement::ProcessingInstruction(pi) => {
-                output.push_str("<?");
-                output.push_str(&pi.target());
-                if let Some(value) = pi.value() {
-                    output.push(' ');
-                    output.push_str(&value);
-                }
-                output.push_str("?>");
-            }
+            write_xml_indent(output, level + 1);
         }
+        serialize_child(child, &namespaces, output, indent.map(|level| level + 1));
+    }
+    if let Some(level) = indent {
+        write_xml_indent(output, level);
     }
     output.push_str("</");
     output.push_str(&element_name);
     output.push('>');
 }
 
+fn write_xml_indent(output: &mut String, level: usize) {
+    output.push('\n');
+    for _ in 0..level {
+        output.push_str("  ");
+    }
+}
+
+fn serialize_child(
+    child: dom::ChildOfElement<'_>,
+    namespaces: &BTreeMap<String, String>,
+    output: &mut String,
+    indent: Option<usize>,
+) {
+    match child {
+        dom::ChildOfElement::Element(child) => serialize_element(child, namespaces, output, indent),
+        dom::ChildOfElement::Text(text) => output.push_str(&escape_text(&text.text())),
+        dom::ChildOfElement::Comment(comment) => {
+            output.push_str("<!--");
+            output.push_str(&comment.text());
+            output.push_str("-->");
+        }
+        dom::ChildOfElement::ProcessingInstruction(pi) => {
+            output.push_str("<?");
+            output.push_str(&pi.target());
+            if let Some(value) = pi.value() {
+                output.push(' ');
+                output.push_str(&value);
+            }
+            output.push_str("?>");
+        }
+    }
+}
+
+fn indent_xml_content(value: &str) -> Result<String> {
+    check_nesting_budget_for_document(value)?;
+    let prepared = xml_for_parser(value)?;
+    let content = strip_declaration(&prepared);
+    let package = parser::parse(&wrapped_content(&prepared)).map_err(invalid_xml)?;
+    let document = package.as_document();
+    let root = document
+        .root()
+        .children()
+        .into_iter()
+        .find_map(dom::ChildOfRoot::element)
+        .expect("wrapped XML has one enclosing element");
+    let children = root.children();
+    if children.iter().all(|child| matches!(child, dom::ChildOfElement::Text(_)))
+        || children.iter().any(|child| {
+            matches!(child, dom::ChildOfElement::Text(text) if !text.text().trim().is_empty())
+        })
+    {
+        return Ok(content.to_owned());
+    }
+    let mut output = String::new();
+    let namespaces = BTreeMap::new();
+    let last = children.len().saturating_sub(1);
+    for (index, child) in children.into_iter().enumerate() {
+        if let dom::ChildOfElement::Text(text) = child {
+            if index == last {
+                output.push_str(&text.text());
+            }
+            continue;
+        }
+        if !output.is_empty() {
+            output.push('\n');
+        }
+        serialize_child(child, &namespaces, &mut output, Some(0));
+    }
+    Ok(output)
+}
+
+fn xml_serialize(
+    name: &str,
+    args: &[SqlValue],
+    arg_types: Option<&[Option<String>]>,
+) -> Result<SqlValue> {
+    let input_type = arg_types
+        .and_then(|types| types.first())
+        .and_then(Option::as_deref);
+    if let Some(input_type) = input_type.filter(|kind| !matches!(*kind, "xml" | "unknown")) {
+        return Err(SqlError::data_exception_public(
+            "42804",
+            format!(
+                "argument of XMLSERIALIZE must be type xml, not type {}",
+                crate::common_type_display(input_type)
+            ),
+            None,
+        ));
+    }
+    let target = args.get(2).map(xml_text);
+    let target_data_type = target.as_deref().and_then(|declaration| {
+        sqlparser::parser::Parser::new(&sqlparser::dialect::PostgreSqlDialect {})
+            .try_with_sql(declaration)
+            .ok()
+            .and_then(|mut parser| parser.parse_data_type().ok())
+    });
+    let target_type = target_data_type
+        .as_ref()
+        .and_then(|data_type| crate::pg_type_from_data_type(data_type).ok());
+    if let Some((kind, _)) = target_type.as_ref() {
+        if crate::pg_type_oid_by_name(kind).is_some()
+            && !matches!(kind.as_str(), "text" | "varchar" | "bpchar" | "name")
+        {
+            let target = target.as_deref().unwrap_or(kind);
+            return Err(SqlError::cannot_coerce(format!(
+                "cannot cast XMLSERIALIZE result to {}",
+                if kind == "char" {
+                    target.to_owned()
+                } else {
+                    crate::common_type_display(kind)
+                }
+            )));
+        }
+    }
+    let character_target = match (target_type, target_data_type) {
+        (Some((kind, _)), Some(data_type)) if matches!(kind.as_str(), "varchar" | "bpchar") => {
+            match crate::pg_type_modifier_from_data_type(&data_type)? {
+                Some(crate::PgTypeModifier::Character { length }) => Some((kind, length as usize)),
+                _ => None,
+            }
+        }
+        _ => None,
+    };
+    let Some(value) = args
+        .first()
+        .filter(|value| !matches!(value, SqlValue::Null))
+    else {
+        return Ok(SqlValue::Null);
+    };
+    let value = xml_text(value);
+    let document = name == "bicdb_xmlserialize_document";
+    if document && validate_xml(&value, true).is_err() {
+        return Err(SqlError::data_exception_public(
+            "2200L",
+            "not an XML document",
+            None,
+        ));
+    }
+    if !document {
+        validate_xml(&value, false)?;
+    }
+    let value = if matches!(args.get(1), Some(SqlValue::Bool(true))) {
+        indent_xml_content(&value)?
+    } else {
+        normalize_validated_xml(&value)
+    };
+    if let Some((kind, length)) = character_target {
+        if value.chars().skip(length).any(|character| character != ' ') {
+            return Err(SqlError::data_exception_public(
+                "22001",
+                format!(
+                    "value too long for type {}({length})",
+                    crate::common_type_display(&kind)
+                ),
+                None,
+            ));
+        }
+    }
+    Ok(SqlValue::String(value))
+}
+
 fn xpath_node_xml(node: Node<'_>) -> String {
     match node {
         Node::Element(element) => {
             let mut output = String::new();
-            serialize_element(element, &BTreeMap::new(), &mut output);
+            serialize_element(element, &BTreeMap::new(), &mut output, None);
             output
         }
         Node::Attribute(attribute) => escape_text(&attribute.value()),
@@ -547,7 +716,7 @@ fn xpath_node_xml(node: Node<'_>) -> String {
             .filter_map(dom::ChildOfRoot::element)
             .map(|element| {
                 let mut output = String::new();
-                serialize_element(element, &BTreeMap::new(), &mut output);
+                serialize_element(element, &BTreeMap::new(), &mut output, None);
                 output
             })
             .collect(),
@@ -561,10 +730,27 @@ fn xpath_results(
 ) -> Result<Vec<String>> {
     let package = parse_xpath_document(xml)?;
     let document = package.as_document();
+    let xpath = compile_xpath(expression)?;
+    let context = xpath_context(namespaces);
+    let value = evaluate_xpath(&xpath, &context, document.root().into())?;
+    Ok(match value {
+        XPathValue::Nodeset(nodes) => nodes
+            .document_order()
+            .into_iter()
+            .map(xpath_node_xml)
+            .collect(),
+        other => vec![other.string()],
+    })
+}
+
+fn compile_xpath(expression: &str) -> Result<XPath> {
     check_nesting_budget(expression, &['(', '['], &[')', ']'], "XPath expression")?;
-    let xpath = Factory::new().build(expression).map_err(|error| {
+    Factory::new().build(expression).map_err(|error| {
         SqlError::invalid_parameter_value(format!("invalid XPath expression: {error}"))
-    })?;
+    })
+}
+
+fn xpath_context<'d>(namespaces: Option<&JsonValue>) -> Context<'d> {
     let mut context = Context::new();
     if let Some(JsonValue::Array(entries)) = namespaces {
         for entry in entries {
@@ -575,17 +761,181 @@ fn xpath_results(
             }
         }
     }
-    let value = xpath.evaluate(&context, document.root()).map_err(|error| {
+    context
+}
+
+fn evaluate_xpath<'d>(
+    xpath: &XPath,
+    context: &Context<'d>,
+    node: Node<'d>,
+) -> Result<XPathValue<'d>> {
+    xpath.evaluate(context, node).map_err(|error| {
         SqlError::invalid_parameter_value(format!("XPath evaluation failed: {error}"))
-    })?;
-    Ok(match value {
-        XPathValue::Nodeset(nodes) => nodes
-            .document_order()
-            .into_iter()
-            .map(xpath_node_xml)
-            .collect(),
-        other => vec![other.string()],
     })
+}
+
+struct XmlTableColumn<'a> {
+    name: &'a str,
+    xpath: Option<XPath>,
+    xml: bool,
+    numeric: bool,
+    required: bool,
+    default: JsonValue,
+}
+
+fn xml_table_columns<'a>(
+    specs: &'a [JsonValue],
+    args: &[SqlValue],
+) -> Result<Vec<XmlTableColumn<'a>>> {
+    let mut columns = Vec::with_capacity(specs.len());
+    let mut seen_ordinality = false;
+    for spec in specs {
+        let Some(name) = spec.get("name").and_then(JsonValue::as_str) else {
+            continue;
+        };
+        let flag = |key| spec.get(key).and_then(JsonValue::as_bool).unwrap_or(false);
+        let argument = |key| {
+            spec.get(key)
+                .and_then(JsonValue::as_u64)
+                .and_then(|index| args.get(index as usize))
+        };
+        let xpath = if flag("ordinality") {
+            if std::mem::replace(&mut seen_ordinality, true) {
+                return Err(SqlError::data_exception_public(
+                    "42601",
+                    "only one FOR ORDINALITY column is allowed",
+                    None,
+                ));
+            }
+            None
+        } else {
+            let path = match argument("path_arg") {
+                Some(SqlValue::Null) => {
+                    return Err(SqlError::with_detail(
+                        SqlError::data_exception_public(
+                            "22004",
+                            "column filter expression must not be null",
+                            None,
+                        ),
+                        format!("Filter for column \"{name}\" is null."),
+                    ));
+                }
+                Some(path) => path.to_cell(),
+                None => name.to_owned(),
+            };
+            Some(compile_xpath(&path)?)
+        };
+        columns.push(XmlTableColumn {
+            name,
+            xpath,
+            xml: flag("xml"),
+            numeric: flag("numeric"),
+            required: flag("required"),
+            default: argument("default_arg").map_or(JsonValue::Null, sql_value_json),
+        });
+    }
+    Ok(columns)
+}
+
+fn xml_table_column_value<'d>(
+    column: &XmlTableColumn<'_>,
+    context: &Context<'d>,
+    row: Node<'d>,
+    ordinal: usize,
+) -> Result<JsonValue> {
+    let Some(xpath) = &column.xpath else {
+        return Ok(JsonValue::Number(ordinal.into()));
+    };
+    let value = match evaluate_xpath(xpath, context, row)? {
+        XPathValue::Nodeset(nodes) if nodes.size() == 0 => column.default.clone(),
+        XPathValue::Nodeset(nodes) if column.xml => JsonValue::String(
+            nodes
+                .document_order()
+                .into_iter()
+                .map(xpath_node_xml)
+                .collect(),
+        ),
+        XPathValue::Nodeset(nodes) => {
+            if nodes.size() > 1 {
+                return Err(SqlError::data_exception_public(
+                    "21000",
+                    "more than one value returned by column XPath expression",
+                    None,
+                ));
+            }
+            JsonValue::String(nodes.document_order()[0].string_value())
+        }
+        XPathValue::Boolean(value) if column.numeric => JsonValue::Number(u64::from(value).into()),
+        value if column.xml => JsonValue::String(escape_text(&value.string())),
+        value => JsonValue::String(value.string()),
+    };
+    if column.required && value.is_null() {
+        return Err(SqlError::data_exception_public(
+            "22004",
+            format!("null is not allowed in column \"{}\"", column.name),
+            None,
+        ));
+    }
+    Ok(value)
+}
+
+fn xml_table_rows(args: &[SqlValue]) -> Result<SqlValue> {
+    if args.len() < 4 || matches!(args[0], SqlValue::Null) {
+        return Ok(SqlValue::Null);
+    }
+    if matches!(args[1], SqlValue::Null) {
+        return Err(SqlError::data_exception_public(
+            "22004",
+            "row filter expression must not be null",
+            None,
+        ));
+    }
+    let document = xml_text(&args[0]);
+    let row_path = xml_text(&args[1]);
+    let spec_json = match &args[2] {
+        SqlValue::Json(value) => value.as_ref().clone(),
+        value => serde_json::from_str::<JsonValue>(&value.to_cell())?,
+    };
+    let specs = spec_json.as_array().map_or(&[][..], Vec::as_slice);
+    let namespaces = match &args[3] {
+        SqlValue::Json(value) => Some(value.as_ref()),
+        _ => None,
+    };
+    if namespaces
+        .and_then(JsonValue::as_array)
+        .is_some_and(|entries| {
+            entries
+                .iter()
+                .any(|entry| entry.get(0).and_then(JsonValue::as_str) == Some(""))
+        })
+    {
+        return Err(SqlError::data_exception_public(
+            "0A000",
+            "DEFAULT namespace is not supported",
+            None,
+        ));
+    }
+    let columns = xml_table_columns(specs, args)?;
+    let package = parse_xpath_document(&document)?;
+    let context = xpath_context(namespaces);
+    let xpath = compile_xpath(&row_path)?;
+    let XPathValue::Nodeset(rows) =
+        evaluate_xpath(&xpath, &context, package.as_document().root().into())?
+    else {
+        return Ok(SqlValue::Json(JsonValue::Array(Vec::new()).into()));
+    };
+    let mut output = Vec::with_capacity(rows.size());
+    for (index, row) in rows.document_order().into_iter().enumerate() {
+        let mut values = serde_json::Map::new();
+        for column in &columns {
+            values.insert(
+                column.name.to_owned(),
+                xml_table_column_value(column, &context, row.clone(), index + 1)?,
+            );
+        }
+        output.push(JsonValue::Object(values));
+    }
+    Ok(SqlValue::Json(JsonValue::Array(output).into()))
 }
 
 fn sql_value_json(value: &SqlValue) -> JsonValue {
@@ -608,15 +958,54 @@ pub(crate) fn finish_xml_agg(
     if !order_by.is_empty() {
         entries.sort_by(|left, right| crate::json_agg_entry_ordering(left, right, order_by));
     }
-    let values = entries
-        .into_iter()
-        .filter_map(|(value, _)| (!matches!(value, SqlValue::Null)).then(|| xml_text(&value)))
-        .collect::<Vec<_>>();
-    if values.is_empty() {
-        Ok(SqlValue::Null)
-    } else {
-        Ok(SqlValue::String(values.concat()))
+    Ok(concat_xml_fragments(entries.into_iter().filter_map(
+        |(value, _)| (!matches!(value, SqlValue::Null)).then(|| xml_text(&value)),
+    )))
+}
+
+fn concat_xml_fragments(values: impl IntoIterator<Item = String>) -> SqlValue {
+    let mut version = None;
+    let mut standalone = None;
+    let mut content = String::new();
+    let mut present = false;
+    for value in values {
+        let (declaration, body) = xml_declaration(&value)
+            .map_or(("", value.as_str()), |(declaration, body)| {
+                (&declaration[5..declaration.len() - 2], body)
+            });
+        let next_version = xml_declaration_attribute(declaration, "version");
+        let next_standalone = xml_declaration_attribute(declaration, "standalone");
+        if present {
+            if next_version != version {
+                version = None;
+            }
+            standalone = standalone.zip(next_standalone).map(|(left, right)| {
+                if left == "no" || right == "no" {
+                    "no".to_string()
+                } else {
+                    left
+                }
+            });
+        } else {
+            version = next_version;
+            standalone = next_standalone;
+            present = true;
+        }
+        content.push_str(body);
     }
+    if !present {
+        return SqlValue::Null;
+    }
+    let version = version.as_deref().unwrap_or("1.0");
+    if version == "1.0" && standalone.is_none() {
+        return SqlValue::String(content);
+    }
+    let standalone = standalone
+        .map(|attribute| format!(" standalone=\"{attribute}\""))
+        .unwrap_or_default();
+    SqlValue::String(format!(
+        "<?xml version=\"{version}\"{standalone}?>{content}"
+    ))
 }
 
 pub(crate) fn eval_xml_function_value(
@@ -632,6 +1021,36 @@ pub(crate) fn eval_xml_function_value(
         .to_ascii_lowercase();
     let strict_null = args.iter().any(|value| matches!(value, SqlValue::Null));
     let value = match name.as_str() {
+        "bicdb_xml_is_document" | "bicdb_xml_is_not_document" => {
+            let [value] = args else {
+                return Err(SqlError::invalid_parameter_value(
+                    "IS DOCUMENT requires one argument",
+                ));
+            };
+            let kind = arg_types
+                .and_then(|kinds| kinds.first())
+                .and_then(Option::as_deref);
+            if let Some(kind) = kind.filter(|kind| !matches!(*kind, "unknown" | "xml")) {
+                return Err(SqlError::data_exception_public(
+                    "42804",
+                    format!(
+                        "argument of IS DOCUMENT must be type xml, not type {}",
+                        crate::common_type_display(kind)
+                    ),
+                    None,
+                ));
+            }
+            if strict_null {
+                SqlValue::Null
+            } else {
+                let text = xml_text(value);
+                if kind != Some("xml") {
+                    validate_xml(&text, false)?;
+                }
+                let document = validate_xml(&text, true).is_ok();
+                SqlValue::Bool(document == (name == "bicdb_xml_is_document"))
+            }
+        }
         "xml_is_well_formed" | "xml_is_well_formed_content" => {
             if strict_null {
                 SqlValue::Null
@@ -646,12 +1065,28 @@ pub(crate) fn eval_xml_function_value(
                 SqlValue::Bool(validate_xml(&xml_text(&args[0]), true).is_ok())
             }
         }
-        "xmlconcat" => SqlValue::String(
-            args.iter()
-                .filter(|value| !matches!(value, SqlValue::Null))
-                .map(xml_text)
-                .collect(),
-        ),
+        "xmlconcat" => {
+            let mut values = Vec::with_capacity(args.len());
+            for (index, value) in args.iter().enumerate() {
+                let pg_type = arg_types
+                    .and_then(|types| types.get(index))
+                    .and_then(Option::as_deref);
+                if let Some(pg_type) = pg_type.filter(|kind| !matches!(*kind, "xml" | "unknown")) {
+                    return Err(SqlError::data_exception_public(
+                        "42804",
+                        format!(
+                            "argument of XMLCONCAT must be type xml, not type {}",
+                            crate::common_type_display(pg_type)
+                        ),
+                        None,
+                    ));
+                }
+                if !matches!(value, SqlValue::Null) {
+                    values.push(normalize_xml(&xml_text(value))?);
+                }
+            }
+            concat_xml_fragments(values)
+        }
         "bicdb_xmlattributes" => {
             let mut attributes = Vec::new();
             for (pair_index, pair) in args.chunks(2).enumerate() {
@@ -743,49 +1178,69 @@ pub(crate) fn eval_xml_function_value(
             let name_text = xml_text(first);
             let name = xml_name(&name_text)?;
             if name.eq_ignore_ascii_case("xml") {
-                return Err(invalid_xml(
-                    "XML processing instruction target name cannot be xml",
+                return Err(SqlError::coded(
+                    "2200T",
+                    "invalid XML processing instruction",
+                    Some("XML processing instruction target name cannot be \"xml\".".into()),
+                    None,
                 ));
             }
-            let content = args
-                .get(1)
-                .filter(|value| !matches!(value, SqlValue::Null))
-                .map(xml_text);
-            if content.as_deref().is_some_and(|value| value.contains("?>")) {
-                return Err(invalid_xml("invalid XML processing instruction"));
+            match args.get(1) {
+                Some(SqlValue::Null) => SqlValue::Null,
+                Some(value) => {
+                    let content = xml_text(value);
+                    if content.contains("?>") {
+                        return Err(SqlError::coded(
+                            "2200T",
+                            "invalid XML processing instruction",
+                            Some("XML processing instruction cannot contain \"?>\".".into()),
+                            None,
+                        ));
+                    }
+                    SqlValue::String(format!("<?{name} {}?>", content.trim_start_matches(' ')))
+                }
+                None => SqlValue::String(format!("<?{name}?>")),
             }
-            SqlValue::String(match content {
-                Some(content) => format!("<?{name} {}?>", content.trim()),
-                None => format!("<?{name}?>"),
-            })
         }
         "bicdb_xmlroot" => {
+            let kind = arg_types
+                .and_then(|types| types.first())
+                .and_then(Option::as_deref);
+            if let Some(kind) = kind.filter(|kind| !matches!(*kind, "unknown" | "xml")) {
+                return Err(SqlError::data_exception_public(
+                    "42804",
+                    format!(
+                        "argument of XMLROOT must be type xml, not type {}",
+                        crate::common_type_display(kind)
+                    ),
+                    None,
+                ));
+            }
             if args
                 .first()
                 .is_none_or(|value| matches!(value, SqlValue::Null))
             {
                 SqlValue::Null
             } else {
-                let body = strip_declaration(&xml_text(&args[0]))
-                    .trim_start()
-                    .to_string();
+                let text = xml_text(&args[0]);
+                if kind != Some("xml") {
+                    validate_xml(&text, false)?;
+                }
+                let declaration = xml_declaration(&text);
+                let body = declaration.map_or(text.as_str(), |(_, body)| body);
                 let version = args
                     .get(1)
                     .filter(|value| !matches!(value, SqlValue::Null))
                     .map(xml_text);
-                if version
-                    .as_deref()
-                    .is_some_and(|version| !matches!(version, "1.0" | "1.1"))
-                {
-                    return Err(invalid_xml("invalid XML version"));
-                }
-                let standalone = args
-                    .get(2)
-                    .filter(|value| !matches!(value, SqlValue::Null))
-                    .map(xml_text);
+                let standalone = match args.get(2) {
+                    Some(SqlValue::Null) => None,
+                    Some(value) => Some(xml_text(value)),
+                    None => declaration
+                        .and_then(|(decl, _)| xml_declaration_attribute(decl, "standalone")),
+                };
                 if version.as_deref().is_none_or(|version| version == "1.0") && standalone.is_none()
                 {
-                    SqlValue::String(body)
+                    SqlValue::String(body.to_owned())
                 } else {
                     let version = version.unwrap_or_else(|| "1.0".to_string());
                     let standalone = standalone
@@ -801,9 +1256,47 @@ pub(crate) fn eval_xml_function_value(
             } else {
                 let text = xml_text(&args[0]);
                 if text.contains("--") || text.ends_with('-') {
-                    return Err(invalid_xml("invalid XML comment"));
+                    return Err(SqlError::data_exception_public(
+                        "2200S",
+                        "invalid XML comment",
+                        None,
+                    ));
                 }
                 SqlValue::String(format!("<!--{text}-->"))
+            }
+        }
+        "xmltext" => {
+            let [value] = args else {
+                return Err(SqlError::undefined_function(
+                    "function xmltext requires one argument",
+                ));
+            };
+            let kind = arg_types
+                .and_then(|kinds| kinds.first())
+                .and_then(Option::as_deref);
+            if let Some(kind) = kind.filter(|kind| {
+                !matches!(
+                    *kind,
+                    "text" | "varchar" | "bpchar" | "char" | "name" | "unknown"
+                )
+            }) {
+                return Err(SqlError::coded(
+                    "42883",
+                    format!("function xmltext({}) does not exist", crate::common_type_display(kind)),
+                    None,
+                    Some("No function matches the given name and argument types. You might need to add explicit type casts.".into()),
+                ));
+            }
+            if strict_null {
+                SqlValue::Null
+            } else {
+                let text = xml_text(value);
+                let text = if kind == Some("bpchar") {
+                    text.trim_end_matches(' ')
+                } else {
+                    &text
+                };
+                SqlValue::String(escape_attribute(text).replace('\r', "&#13;"))
             }
         }
         "xpath" => {
@@ -836,6 +1329,13 @@ pub(crate) fn eval_xml_function_value(
                 let package = parse_xpath_document(&xml_text(&args[1]))?;
                 let document = package.as_document();
                 let expression_text = xml_text(&args[0]);
+                if expression_text.is_empty() {
+                    return Err(SqlError::data_exception_public(
+                        "10608",
+                        "empty XPath expression",
+                        None,
+                    ));
+                }
                 check_nesting_budget(
                     &expression_text,
                     &['(', '['],
@@ -857,114 +1357,32 @@ pub(crate) fn eval_xml_function_value(
                         }
                     }
                 }
-                SqlValue::Bool(
-                    xpath
-                        .evaluate(&context, document.root())
-                        .map_err(|error| {
-                            SqlError::invalid_parameter_value(format!(
-                                "XPath evaluation failed: {error}"
-                            ))
-                        })?
-                        .boolean(),
-                )
+                let result = xpath.evaluate(&context, document.root()).map_err(|error| {
+                    SqlError::invalid_parameter_value(format!("XPath evaluation failed: {error}"))
+                })?;
+                SqlValue::Bool(!matches!(result, XPathValue::Nodeset(nodes) if nodes.size() == 0))
             }
         }
-        "bicdb_xmltable_json" => {
-            let required_null = args.get(..4).is_none_or(|required| {
-                required.iter().any(|value| matches!(value, SqlValue::Null))
-            });
-            if required_null {
-                SqlValue::Null
-            } else {
-                let document = xml_text(&args[0]);
-                let row_path = xml_text(&args[1]);
-                let specs = match &args[2] {
-                    SqlValue::Json(value) => value.as_array().cloned().unwrap_or_default(),
-                    value => serde_json::from_str::<JsonValue>(&value.to_cell())?
-                        .as_array()
-                        .cloned()
-                        .unwrap_or_default(),
-                };
-                let namespaces = args.get(3).and_then(|value| match value {
-                    SqlValue::Json(value) => Some(&**value),
-                    _ => None,
-                });
-                let rows = xpath_results(&document, &row_path, namespaces)?;
-                let mut output = Vec::with_capacity(rows.len());
-                for (ordinality, row_xml) in rows.into_iter().enumerate() {
-                    let mut object = serde_json::Map::new();
-                    for spec in &specs {
-                        let Some(name) = spec.get("name").and_then(JsonValue::as_str) else {
-                            continue;
-                        };
-                        if spec.get("ordinality").and_then(JsonValue::as_bool) == Some(true) {
-                            object.insert(
-                                name.to_string(),
-                                JsonValue::Number((ordinality + 1).into()),
-                            );
-                            continue;
-                        }
-                        let path_arg = spec
-                            .get("path_arg")
-                            .and_then(JsonValue::as_u64)
-                            .unwrap_or(0) as usize;
-                        let path = args
-                            .get(path_arg)
-                            .map(xml_text)
-                            .unwrap_or_else(|| name.to_string());
-                        let relative_path = if path.starts_with('/') {
-                            path
-                        } else {
-                            format!("/*/{path}")
-                        };
-                        let raw_values = xpath_results(&row_xml, &relative_path, namespaces)?;
-                        let values = if raw_values.is_empty()
-                            || spec.get("xml").and_then(JsonValue::as_bool) == Some(true)
-                        {
-                            raw_values
-                        } else {
-                            xpath_results(
-                                &row_xml,
-                                &format!("string({relative_path})"),
-                                namespaces,
-                            )?
-                        };
-                        if values.len() > 1 {
-                            return Err(SqlError::data_exception_public(
-                                "21000",
-                                "more than one value returned by XMLTABLE column expression",
-                                None,
-                            ));
-                        }
-                        let value = values
-                            .first()
-                            .map(|value| JsonValue::String(value.clone()))
-                            .or_else(|| {
-                                spec.get("default_arg")
-                                    .and_then(JsonValue::as_u64)
-                                    .and_then(|index| args.get(index as usize))
-                                    .map(sql_value_json)
-                            })
-                            .unwrap_or(JsonValue::Null);
-                        object.insert(name.to_string(), value);
-                    }
-                    output.push(JsonValue::Object(object));
-                }
-                SqlValue::Json(JsonValue::Array(output).into())
-            }
-        }
+        "bicdb_xmltable_json" => return xml_table_rows(args).map(Some),
         "xml_in" | "bicdb_xmlparse_content" | "bicdb_xmlparse_document" => {
             if strict_null {
                 SqlValue::Null
             } else {
                 let document = name == "bicdb_xmlparse_document";
                 let text = xml_text(&args[0]);
-                validate_xml(&text, document)?;
-                SqlValue::String(text)
+                validate_xml(&text, document).map_err(|error| {
+                    if document {
+                        SqlError::data_exception_public("2200M", "invalid XML document", None)
+                    } else {
+                        error
+                    }
+                })?;
+                SqlValue::String(normalize_validated_xml(&text))
             }
         }
-        "xml_out" | "bicdb_xmlserialize_content" | "bicdb_xmlserialize_document" => {
-            args.first().cloned().unwrap_or(SqlValue::Null)
+        "xml_out" => args.first().cloned().unwrap_or(SqlValue::Null),
+        "bicdb_xmlserialize_content" | "bicdb_xmlserialize_document" => {
+            return xml_serialize(&name, args, arg_types).map(Some);
         }
         "xml_send" => {
             if strict_null {
@@ -990,6 +1408,8 @@ pub(crate) fn xml_function_pg_type(name: &str) -> Option<&'static str> {
         | "xml_is_well_formed_content"
         | "xml_is_well_formed_document"
         | "xpath_exists"
+        | "bicdb_xml_is_document"
+        | "bicdb_xml_is_not_document"
         | "bicdb_xmlexists" => Some("bool"),
         "xpath" => Some("xml[]"),
         "bicdb_xmltable_json" => Some("jsonb"),
@@ -997,6 +1417,7 @@ pub(crate) fn xml_function_pg_type(name: &str) -> Option<&'static str> {
         "xml_out" => Some("cstring"),
         "xmlconcat"
         | "xmlcomment"
+        | "xmltext"
         | "xml_in"
         | "bicdb_xmlattributes"
         | "bicdb_xmlforest"

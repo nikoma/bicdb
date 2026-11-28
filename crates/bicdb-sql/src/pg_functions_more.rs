@@ -34,7 +34,8 @@ pub(crate) fn pg_function_more_result_type(
             "num_nulls" | "num_nonnulls" => "int4",
             "sinh" | "cosh" | "tanh" | "asinh" | "acosh" | "atanh" => "float8",
             "getdatabaseencoding" => "name",
-            "isfinite" => "bool",
+            "isfinite" | "booleq" | "boolne" | "boollt" | "boolle" | "boolgt" | "boolge" => "bool",
+            "btboolcmp" => "int4",
             "scale" | "min_scale" => "int4",
             "trim_scale" => "numeric",
             "regexp_count" | "regexp_instr" => "int4",
@@ -102,11 +103,12 @@ fn integer_gcd(left: i64, right: i64) -> i64 {
 }
 
 fn out_of_range(width: u32) -> SqlError {
-    SqlError::numeric_value_out_of_range(if width == 32 {
+    let message = if width == 32 {
         "integer out of range"
     } else {
         "bigint out of range"
-    })
+    };
+    SqlError::data_exception_public("22003", message, None)
 }
 
 fn float_value(value: &SqlValue) -> Result<f64> {
@@ -263,6 +265,37 @@ pub(crate) fn eval_pg_function_more(
     };
     let strict = |args: &[SqlValue]| args.iter().any(|arg| matches!(arg, SqlValue::Null));
     Ok(Some(match (name, args.len()) {
+        ("booleq" | "boolne" | "boollt" | "boolle" | "boolgt" | "boolge" | "btboolcmp", 2) => {
+            if (0..2).any(|index| {
+                arg_type(index).is_some_and(|pg_type| !matches!(pg_type, "bool" | "unknown"))
+                    || !matches!(
+                        args[index],
+                        SqlValue::Bool(_) | SqlValue::String(_) | SqlValue::Null
+                    )
+            }) {
+                return Ok(None);
+            }
+            if strict(args) {
+                return Ok(Some(SqlValue::Null));
+            }
+            let cast = |value: &SqlValue| -> Result<bool> {
+                let SqlValue::Bool(flag) = cast_value_to_pg_type(value.clone(), "bool")? else {
+                    unreachable!("non-null boolean input")
+                };
+                Ok(flag)
+            };
+            let left = cast(&args[0])?;
+            let right = cast(&args[1])?;
+            match name {
+                "booleq" => SqlValue::Bool(left == right),
+                "boolne" => SqlValue::Bool(left != right),
+                "boollt" => SqlValue::Bool(!left && right),
+                "boolle" => SqlValue::Bool(!left || right),
+                "boolgt" => SqlValue::Bool(left && !right),
+                "boolge" => SqlValue::Bool(left || !right),
+                _ => SqlValue::Int((left.cmp(&right) as i8).into()),
+            }
+        }
         ("to_hex" | "to_oct" | "to_bin", 1) => {
             let Some(value) = integer_arg(name, &args[0])? else {
                 return Ok(Some(SqlValue::Null));
@@ -291,6 +324,9 @@ pub(crate) fn eval_pg_function_more(
             else {
                 return Ok(Some(SqlValue::Null));
             };
+            if name == "lcm" && (left == 0 || right == 0) {
+                return Ok(Some(SqlValue::Int(0)));
+            }
             let width = if arg_type(0) == Some("int8")
                 || arg_type(1) == Some("int8")
                 || integer_width(left, None) == 64
@@ -312,8 +348,6 @@ pub(crate) fn eval_pg_function_more(
                 .ok_or_else(|| out_of_range(width))?;
             if name == "gcd" {
                 SqlValue::Int(gcd)
-            } else if left == 0 || right == 0 {
-                SqlValue::Int(0)
             } else {
                 let lcm = (left / gcd)
                     .checked_mul(right)

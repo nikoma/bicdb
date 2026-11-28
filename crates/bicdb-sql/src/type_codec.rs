@@ -8,9 +8,10 @@ use crate::{
     parse_pg_canonical_special, parse_postgres_uuid, parse_timestamptz,
     pg_array_element_spec_by_oid, pg_internal_char_byte, pg_internal_char_text,
     pg_type_spec_by_oid, sql_value_to_vector, BicDb, ColumnSchema, EnumLabelSchema, PgArray,
-    PgArrayDimension, PgBitString, PgCanonicalValue, PgDate, PgFloat4, PgFloat8, PgInterval,
-    PgIpAddress, PgNumeric, PgOidAlias, PgRange, PgRangeBound, PgTime, PgTimeTz, PgTimestamp,
-    PgTsQuery, PgTsVector, PgTypeSpec, Result, SqlError, SqlValue, UserTypeKind,
+    PgArrayDimension, PgBitString, PgCanonicalValue, PgComposite, PgCompositeField, PgDate,
+    PgFloat4, PgFloat8, PgInterval, PgIpAddress, PgNumeric, PgOidAlias, PgRange, PgRangeBound,
+    PgTime, PgTimeTz, PgTimestamp, PgTsQuery, PgTsVector, PgTypeSpec, Result, SqlComposite,
+    SqlError, SqlValue, UserTypeKind,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -61,6 +62,14 @@ impl PgScalarCodec for PgCanonicalTextCodec {
 
     fn canonical_text(&self, value: &SqlValue, context: PgCodecContext) -> Result<String> {
         let codec_type = codec_type(context)?;
+        if codec_type.spec.name == "record" {
+            if codec_type.array {
+                return crate::postgres_array_cast_text_value_of("record", value, ',');
+            }
+            if let SqlValue::Composite(record) = value {
+                return Ok(record.to_postgres_text());
+            }
+        }
         let canonical = canonical_value_for_type(codec_type, value)?;
         canonical_text_for_value(codec_type.spec, value, &canonical)
     }
@@ -197,6 +206,11 @@ fn canonical_value_for_type(codec_type: CodecType, value: &SqlValue) -> Result<P
 }
 
 pub(crate) fn canonical_value(spec: &PgTypeSpec, value: &SqlValue) -> Result<PgCanonicalValue> {
+    if spec.name == "record" {
+        if let SqlValue::Composite(composite) = value {
+            return canonical_record_value(composite);
+        }
+    }
     reject_pseudo(spec)?;
     if matches!(value, SqlValue::Null) {
         return Ok(PgCanonicalValue::Null);
@@ -291,8 +305,9 @@ pub(crate) fn canonical_value(spec: &PgTypeSpec, value: &SqlValue) -> Result<PgC
             SqlValue::TsQuery(query) => query.clone(),
             _ => PgTsQuery::from_postgres_text(&text)?,
         }),
-        "name" | "text" | "varchar" | "refcursor" | "pg_node_tree" | "pg_ndistinct"
-        | "pg_dependencies" | "pg_mcv_list" => PgCanonicalValue::Text(text),
+        "name" => PgCanonicalValue::Text(crate::clip_postgres_name(text)),
+        "text" | "varchar" | "refcursor" | "pg_node_tree" | "pg_ndistinct" | "pg_dependencies"
+        | "pg_mcv_list" => PgCanonicalValue::Text(text),
         "regproc" | "regprocedure" | "regoper" | "regoperator" | "regclass" | "regcollation"
         | "regtype" | "regrole" | "regnamespace" | "regconfig" | "regdictionary" => {
             let alias = if spec.name == "regtype" {
@@ -324,6 +339,39 @@ pub(crate) fn canonical_value(spec: &PgTypeSpec, value: &SqlValue) -> Result<PgC
             )))
         }
     })
+}
+
+pub(crate) fn canonical_record_value(record: &SqlComposite) -> Result<PgCanonicalValue> {
+    let mut fields = Vec::with_capacity(record.fields.len());
+    for field in &record.fields {
+        let value = if matches!(field.value, SqlValue::Null) {
+            PgCanonicalValue::Null
+        } else {
+            let pg_type = &field.pg_type;
+            if matches!(pg_type.as_str(), "unknown" | "json" | "xml") {
+                return Err(SqlError::undefined_function(format!(
+                    "could not identify an ordering operator for type {}",
+                    crate::common_type_display(pg_type)
+                )));
+            }
+            let oid = crate::pg_type_oid_by_name(pg_type).ok_or_else(|| {
+                SqlError::Unsupported(format!(
+                    "record field type {pg_type} has no registered codec"
+                ))
+            })?;
+            canonical_value_for_type(codec_type(PgCodecContext::new(oid, -1))?, &field.value)?
+        };
+        fields.push(PgCompositeField {
+            name: field.name.clone(),
+            pg_type: field.pg_type.clone(),
+            value,
+        });
+    }
+    Ok(PgCanonicalValue::Composite(PgComposite {
+        type_oid: record.type_oid,
+        type_name: record.type_name.clone(),
+        fields,
+    }))
 }
 
 fn canonical_i64(value: &SqlValue, spec: &PgTypeSpec) -> Result<i64> {
@@ -423,39 +471,52 @@ pub(crate) fn canonical_catalog_vector(pg_type: &str, input: &str) -> Result<PgC
     let (element_type, elements) = match pg_type {
         "int2vector" => {
             let values = input
-                .split_whitespace()
+                .split_ascii_whitespace()
                 .map(|value| {
-                    let parsed = value.parse::<i64>().map_err(|_| {
-                        SqlError::invalid_text_representation("smallint", format!("\"{value}\""))
-                    })?;
-                    i16::try_from(parsed)
+                    use std::num::IntErrorKind;
+                    value
+                        .parse::<i16>()
                         .map(PgCanonicalValue::Int2)
-                        .map_err(|_| {
-                            SqlError::numeric_value_out_of_range(format!(
-                                "value \"{value}\" is out of range for type smallint"
-                            ))
+                        .map_err(|error| {
+                            if matches!(
+                                error.kind(),
+                                IntErrorKind::PosOverflow | IntErrorKind::NegOverflow
+                            ) {
+                                SqlError::numeric_value_out_of_range(format!(
+                                    "value \"{value}\" is out of range for type smallint"
+                                ))
+                            } else {
+                                SqlError::data_exception_public(
+                                    "22P02",
+                                    format!("invalid input syntax for type smallint: \"{value}\""),
+                                    None,
+                                )
+                            }
                         })
                 })
                 .collect::<Result<Vec<_>>>()?;
             ("int2", values)
         }
         "oidvector" => {
-            let values = input
-                .split_whitespace()
-                .map(|value| {
-                    let parsed = value.parse::<i64>().map_err(|_| {
-                        SqlError::invalid_text_representation("oid", format!("\"{value}\""))
+            let mut values = Vec::new();
+            let mut rest = input.trim_start_matches(|ch: char| ch.is_ascii_whitespace());
+            while !rest.is_empty() {
+                let (oid, consumed) =
+                    crate::parse_pg_oid_prefix(rest).map_err(|error| match error {
+                        crate::PgOidParseError::InvalidSyntax => SqlError::data_exception_public(
+                            "22P02",
+                            format!("invalid input syntax for type oid: \"{rest}\""),
+                            None,
+                        ),
+                        crate::PgOidParseError::OutOfRange => SqlError::data_exception_public(
+                            "22003",
+                            format!("value \"{rest}\" is out of range for type oid"),
+                            None,
+                        ),
                     })?;
-                    let wrapped = if parsed < 0 {
-                        i128::from(parsed) + (1_i128 << 32)
-                    } else {
-                        i128::from(parsed)
-                    };
-                    u32::try_from(wrapped)
-                        .map(PgCanonicalValue::Oid)
-                        .map_err(|_| SqlError::numeric_value_out_of_range("oid out of range"))
-                })
-                .collect::<Result<Vec<_>>>()?;
+                values.push(PgCanonicalValue::Oid(oid));
+                rest = rest[consumed..].trim_start_matches(|ch: char| ch.is_ascii_whitespace());
+            }
             ("oid", values)
         }
         _ => {
@@ -478,6 +539,9 @@ pub(crate) fn canonical_catalog_vector(pg_type: &str, input: &str) -> Result<PgC
 }
 
 fn compare_arrays(spec: &PgTypeSpec, left: &PgArray, right: &PgArray) -> Result<Ordering> {
+    if spec.name == "oidvector" && left.elements.len() != right.elements.len() {
+        return Ok(left.elements.len().cmp(&right.elements.len()));
+    }
     for (left, right) in left.elements.iter().zip(&right.elements) {
         let ordering = match (left, right) {
             (PgCanonicalValue::Null, PgCanonicalValue::Null) => Ordering::Equal,
@@ -623,8 +687,17 @@ pub(crate) fn canonical_index_key(spec: &PgTypeSpec, value: &PgCanonicalValue) -
                     value.element_type
                 ))
             })?;
+            if spec.name == "oidvector" {
+                key.extend((value.elements.len() as u64).to_be_bytes());
+            }
             for element_value in &value.elements {
-                let element_key = canonical_index_key(element, element_value)?;
+                let element_key = if element.name == "record"
+                    && matches!(element_value, PgCanonicalValue::Null)
+                {
+                    vec![2]
+                } else {
+                    canonical_index_key(element, element_value)?
+                };
                 push_ordered_bytes(&mut key, &element_key);
             }
             key.extend([0, 0]);
@@ -633,6 +706,26 @@ pub(crate) fn canonical_index_key(spec: &PgTypeSpec, value: &PgCanonicalValue) -
                 key.extend((dimension.length as u64).to_be_bytes());
                 key.extend(order_i32(dimension.lower_bound));
             }
+        }
+        PgCanonicalValue::Composite(record) => {
+            for field in &record.fields {
+                let field_key = if matches!(field.value, PgCanonicalValue::Null) {
+                    vec![2]
+                } else {
+                    let oid = crate::pg_type_oid_by_name(&field.pg_type).ok_or_else(|| {
+                        SqlError::Unsupported(format!(
+                            "record field type {} has no registered codec",
+                            field.pg_type
+                        ))
+                    })?;
+                    canonical_index_key(
+                        codec_type(PgCodecContext::new(oid, -1))?.spec,
+                        &field.value,
+                    )?
+                };
+                push_ordered_bytes(&mut key, &field_key);
+            }
+            key.extend([0, 0]);
         }
         PgCanonicalValue::OidAlias(value) => match (value.oid, &value.symbolic_name) {
             (Some(oid), _) => {

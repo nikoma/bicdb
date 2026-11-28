@@ -437,6 +437,45 @@ fn xml_fragment_concatenation_preserves_a_single_compatible_declaration() {
     }
 }
 #[test]
+fn xmltable_relation_aliases_rename_output_columns_without_changing_their_paths() {
+    let (_dir, mut db) = session_db();
+    let mut session = SqlSession::new(&mut db);
+    let result = session
+        .execute(
+            r#"SELECT f.* FROM XMLTABLE('/r/a' PASSING '<r><a><n>7</n></a><a><n>8</n></a></r>'
+               COLUMNS n int, rowno FOR ORDINALITY) AS f("Value")"#,
+        )
+        .unwrap();
+    assert_eq!(result.columns, ["Value", "rowno"]);
+    assert_eq!(
+        result.rows,
+        [
+            [SqlValue::Int(7), SqlValue::Int(1)],
+            [SqlValue::Int(8), SqlValue::Int(2)]
+        ]
+    );
+    for lateral in ["", "LATERAL "] {
+        let result = session
+            .execute(&format!(
+                "SELECT d.id, f.val FROM (VALUES (1, xml '<a>7</a>'), (2, xml '<a>8</a>')) d(id,doc),
+                 {lateral}XMLTABLE('/a' PASSING d.doc COLUMNS n int PATH '.') f(val) ORDER BY d.id"
+            ))
+            .unwrap();
+        assert_eq!(
+            result.rows,
+            [
+                [SqlValue::Int(1), SqlValue::Int(7)],
+                [SqlValue::Int(2), SqlValue::Int(8)]
+            ]
+        );
+    }
+    let error = session
+        .execute("SELECT * FROM XMLTABLE('/a' PASSING '<a>7</a>' COLUMNS n int PATH '.') f(a,b)")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42P10");
+}
+
+#[test]
 fn xmltable_uses_the_selected_node_as_xpath_context() {
     let (_dir, mut db) = session_db();
     let mut session = SqlSession::new(&mut db);

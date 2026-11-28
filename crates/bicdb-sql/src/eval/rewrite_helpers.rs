@@ -2442,23 +2442,42 @@ pub(crate) fn rewrite_xmltable_once(input: &str) -> Option<String> {
     let after = tokens
         .get(close_index + 1)
         .filter(|token| token.depth == function.depth);
-    let alias_token = match after.and_then(|token| token.word.as_deref()) {
-        Some("as") => tokens.get(close_index + 2),
+    let alias_index = match after.and_then(|token| token.word.as_deref()) {
+        Some("as") => tokens.get(close_index + 2).map(|_| close_index + 2),
         Some(
             "where" | "join" | "inner" | "left" | "right" | "full" | "cross" | "natural" | "on"
             | "using" | "group" | "order" | "limit" | "offset" | "fetch" | "for" | "window"
             | "having" | "union" | "intersect" | "except" | "qualify",
         ) => None,
         _ => after
-            .filter(|token| token.word.is_some() || input[token.start..token.end].starts_with('"')),
+            .filter(|token| token.word.is_some() || input[token.start..token.end].starts_with('"'))
+            .map(|_| close_index + 1),
     };
+    let alias_token = alias_index.map(|index| &tokens[index]);
     let (alias, end) = alias_token.map_or(("\"xmltable\"", tokens[close_index].end), |token| {
         (&input[token.start..token.end], token.end)
     });
-    let replacement = format!(
-        "jsonb_to_recordset(bicdb_xmltable_json(({document}), ({row_path}), '{spec}'::jsonb, {namespace_expression}{extras})) AS {alias}({})",
-        aliases.join(", ")
+    let recordset = format!(
+        "jsonb_to_recordset(bicdb_xmltable_json(({document}), ({row_path}), '{spec}'::jsonb, {namespace_expression}{extras}))"
     );
+    let columns = aliases.join(", ");
+    let has_column_aliases = alias_index
+        .and_then(|alias_index| tokens.get(alias_index + 1))
+        .is_some_and(|token| token.depth == function.depth && token.symbol == Some(b'('));
+    let replacement = if has_column_aliases {
+        // Keep the COLUMNS clause's names and types for XML evaluation.
+        // The outer alias list only renames the projected SQL columns.
+        let explicit_lateral = index
+            .checked_sub(1)
+            .and_then(|previous| tokens.get(previous))
+            .is_some_and(|token| {
+                token.depth == function.depth && token.word.as_deref() == Some("lateral")
+            });
+        let lateral = if explicit_lateral { "" } else { "LATERAL " };
+        format!("{lateral}(SELECT * FROM {recordset} AS \"xmltable\"({columns})) AS {alias}")
+    } else {
+        format!("{recordset} AS {alias}({columns})")
+    };
     let mut output = input.to_string();
     output.replace_range(function.start..end, &replacement);
     Some(output)

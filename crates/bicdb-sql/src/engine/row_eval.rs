@@ -1650,12 +1650,11 @@ impl<'db> SqlEngine<'db> {
                         });
                     }
                     if source_type.as_deref().is_some_and(is_oid_alias_type) {
-                        return render_oid_alias_value(
+                        return oid_alias_text_value(
                             self.db_ref(),
                             source_type.as_deref().expect("alias source type checked"),
                             &value,
-                        )
-                        .map(SqlValue::String);
+                        );
                     }
                     if let Some(element_type) = source_type
                         .as_deref()
@@ -3540,12 +3539,11 @@ impl<'db> SqlEngine<'db> {
                         });
                     }
                     if source_type.as_deref().is_some_and(is_oid_alias_type) {
-                        return render_oid_alias_value(
+                        return oid_alias_text_value(
                             self.db_ref(),
                             source_type.as_deref().expect("alias source type checked"),
                             &value,
-                        )
-                        .map(SqlValue::String);
+                        );
                     }
                     if let Some(element_type) = source_type
                         .as_deref()

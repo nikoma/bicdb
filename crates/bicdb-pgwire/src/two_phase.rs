@@ -62,7 +62,7 @@ fn prepare_refusal(server: &PgWireServer, state: &ConnectionState) -> Option<Sql
 }
 
 fn end_failed_prepare(server: &Arc<PgWireServer>, state: &mut ConnectionState) {
-    let _ = rollback_open_transaction(server, state);
+    let _ = rollback_open_transaction(server, state, None);
 }
 
 pub(crate) fn execute(
@@ -99,7 +99,7 @@ fn prepare(
     }
     if state.failed_transaction {
         // PostgreSQL: PREPARE TRANSACTION in an aborted block rolls it back.
-        rollback_open_transaction(server, state)?;
+        rollback_open_transaction(server, state, None)?;
         return Ok(SqlResult::command("ROLLBACK"));
     }
     if let Some(refusal) = prepare_refusal(server, state) {

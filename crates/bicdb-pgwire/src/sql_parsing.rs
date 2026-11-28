@@ -3320,6 +3320,7 @@ pub(crate) fn bind_message(
     payload: &[u8],
     prepared: &FxHashMap<String, PreparedStatement>,
     server: &Arc<PgWireServer>,
+    xml_document: bool,
 ) -> Result<(String, Portal, bool)> {
     let mut idx = 0;
     let portal_name = read_cstr(payload, &mut idx)?;
@@ -3344,6 +3345,7 @@ pub(crate) fn bind_message(
     }
     validate_format_arity(&param_formats, param_count, "parameter")?;
     let db = server.read_db_for_transaction_progress()?;
+    let oracle = bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile);
     let mut params = Vec::with_capacity(param_count);
     for param_idx in 0..param_count {
         let len = read_i32(payload, &mut idx)?;
@@ -3357,8 +3359,13 @@ pub(crate) fn bind_message(
             .get(param_idx)
             .copied()
             .unwrap_or_default();
+        let postgres_xml = oid == 142 && !oracle;
         if len < 0 {
-            params.push(temporal_parameter_literal(oid, "NULL".to_string()));
+            params.push(if postgres_xml {
+                "CAST(NULL AS xml)".into()
+            } else {
+                temporal_parameter_literal(oid, "NULL".to_string())
+            });
             continue;
         }
         let len = len as usize;
@@ -3367,19 +3374,19 @@ pub(crate) fn bind_message(
                 "Bind parameter length exceeds payload".to_string(),
             ));
         }
-        if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile)
-            && len == 0
-            && matches!(oid, 0 | 25 | 1042 | 1043)
-        {
+        if oracle && len == 0 && matches!(oid, 0 | 25 | 1042 | 1043) {
             params.push("NULL".to_string());
             continue;
         }
-        params.push(decode_parameter_with_db(
-            &db,
-            &payload[idx..idx + len],
-            format,
-            oid,
-        )?);
+        let bytes = &payload[idx..idx + len];
+        params.push(if postgres_xml {
+            let xml = bicdb_sql::decode_postgres_xml_parameter(bytes, format == 1, xml_document)?;
+            // Bind already validated the value in the correct mode. CONTENT
+            // carries its XML type even if XMLOPTION changes before Execute.
+            format!("XMLPARSE(CONTENT {})", quote_sql_string(&xml))
+        } else {
+            decode_parameter_with_db(&db, bytes, format, oid)?
+        });
         idx += len;
     }
 
@@ -3414,7 +3421,12 @@ pub(crate) fn bind_message_for_connection(
     state: &ConnectionState,
 ) -> Result<(String, Portal, bool)> {
     let _catalog_owner = connection_catalog_read_access(server, state)?;
-    bind_message(payload, &state.prepared, server)
+    let xml_document = state
+        .session_state
+        .session_gucs()
+        .get("xmloption")
+        .is_some_and(|mode| mode == "document");
+    bind_message(payload, &state.prepared, server, xml_document)
 }
 
 pub(crate) fn describe_message(

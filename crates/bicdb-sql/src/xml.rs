@@ -306,6 +306,34 @@ pub(crate) fn xml_input_value(value: SqlValue) -> Result<SqlValue> {
     parse_xml_value(&value.to_cell(), xml_input_is_document()).map(SqlValue::String)
 }
 
+/// Validate a scalar XML value using the settings at PostgreSQL Bind time.
+pub fn decode_postgres_xml_parameter(bytes: &[u8], binary: bool, document: bool) -> Result<String> {
+    let mut encoding = "UTF8";
+    if binary {
+        // A binary XML declaration determines the encoding. Its attributes
+        // are ASCII, so they can be read before decoding the rest of the value.
+        let header = bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(bytes);
+        if header.starts_with(b"<?xml") {
+            let declared = header
+                .windows(2)
+                .position(|pair| pair == b"?>")
+                .and_then(|end| std::str::from_utf8(&header[..end + 2]).ok())
+                .and_then(xml_declaration)
+                .and_then(|(declaration, _)| xml_declaration_attribute(declaration, "encoding"));
+            if let Some(declared) = declared {
+                encoding = crate::normalized_encoding_name(&SqlValue::String(declared.clone()))
+                    .map_err(|_| {
+                        SqlError::invalid_parameter_value(format!(
+                            "invalid encoding name \"{declared}\""
+                        ))
+                    })?;
+            }
+        }
+    }
+    let value = crate::decode_server_text(bytes, encoding)?;
+    parse_xml_value(&value, document)
+}
+
 pub(crate) fn xml_assignment_value(
     column: &crate::ColumnSchema,
     source: Option<&str>,

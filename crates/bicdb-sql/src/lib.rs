@@ -292,6 +292,7 @@ mod persistence_ddl;
 mod pg_float_text_functions;
 mod pg_functions_more;
 mod pg_number_input;
+mod pg_random;
 mod pg_scalar_extra;
 mod pgcrypto;
 mod quantified_operators;
@@ -714,7 +715,6 @@ const PLPGSQL_INLINE_HANDLER_OID: i64 = 14026;
 const PLPGSQL_VALIDATOR_OID: i64 = 14027;
 const PLPGSQL_LANGUAGE_OID: i64 = 14028;
 static SYNTHETIC_ROW_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-static SQL_RANDOM_STATE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 #[derive(Clone, Debug, Default)]
 struct SqlProfileStats {

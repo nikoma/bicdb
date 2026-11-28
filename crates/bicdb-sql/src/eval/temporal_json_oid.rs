@@ -3644,38 +3644,7 @@ pub(crate) fn unix_seconds_to_utc_timestamp(seconds: i64) -> String {
 }
 
 pub(crate) fn sql_random_value() -> f64 {
-    let seed = || {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|duration| duration.as_nanos() as u64)
-            .unwrap_or(0x9e37_79b9_7f4a_7c15);
-        nanos ^ 0xa076_1d64_78bd_642f
-    };
-    let mut current = SQL_RANDOM_STATE.load(std::sync::atomic::Ordering::Relaxed);
-    if current == 0 {
-        let initialized = seed().max(1);
-        let _ = SQL_RANDOM_STATE.compare_exchange(
-            0,
-            initialized,
-            std::sync::atomic::Ordering::Relaxed,
-            std::sync::atomic::Ordering::Relaxed,
-        );
-        current = SQL_RANDOM_STATE.load(std::sync::atomic::Ordering::Relaxed);
-    }
-    loop {
-        let next = current
-            .wrapping_mul(6_364_136_223_846_793_005)
-            .wrapping_add(1_442_695_040_888_963_407);
-        match SQL_RANDOM_STATE.compare_exchange(
-            current,
-            next,
-            std::sync::atomic::Ordering::Relaxed,
-            std::sync::atomic::Ordering::Relaxed,
-        ) {
-            Ok(_) => return ((next >> 11) as f64) / ((1u64 << 53) as f64),
-            Err(observed) => current = observed,
-        }
-    }
+    crate::pg_random::unit()
 }
 
 /// Epoch-day count for a date-only text (`2026-08-22`). `None` for anything

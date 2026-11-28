@@ -2133,6 +2133,15 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         if let Some(pg_type) = crate::xml_function_pg_type(&name) {
             return Some(pg_type.to_string());
         }
+        match name.strip_prefix("pg_catalog.").unwrap_or(&name) {
+            "random" if geometric_arg_types.len() == 2 => {
+                return crate::pg_random::range_pg_type(&geometric_arg_types).map(str::to_owned);
+            }
+            "random" if geometric_arg_types.is_empty() => return Some("float8".to_owned()),
+            "random_normal" => return Some("float8".to_owned()),
+            "setseed" => return Some("void".to_owned()),
+            _ => {}
+        }
         if matches!(
             name.as_str(),
             "to_regnamespace" | "pg_catalog.to_regnamespace"

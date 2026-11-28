@@ -1896,6 +1896,10 @@ pub(crate) fn expr_contains_volatile_function(expr: &Expr) -> bool {
                 name.as_str(),
                 "random"
                     | "pg_catalog.random"
+                    | "random_normal"
+                    | "pg_catalog.random_normal"
+                    | "setseed"
+                    | "pg_catalog.setseed"
                     | "now"
                     | "pg_catalog.now"
                     | "current_timestamp"

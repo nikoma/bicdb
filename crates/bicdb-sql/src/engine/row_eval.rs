@@ -4617,6 +4617,7 @@ fn function_is_volatile(name: &str) -> bool {
     matches!(
         bare.as_str(),
         "random"
+            | "random_normal"
             | "setseed"
             | "nextval"
             | "setval"

@@ -993,3 +993,68 @@ fn parse_ident_supports_named_arguments_and_scalar_from_rows() {
         "42883"
     );
 }
+
+#[test]
+fn postgres_upsert_column_inference_requires_a_matching_unique_key() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = open(dir.path());
+    let mut session = SqlSession::new(&mut db);
+    exec(
+        &mut session,
+        "CREATE TABLE arbiter_case (a int, b int, c int UNIQUE, PRIMARY KEY(a,b));
+         INSERT INTO arbiter_case VALUES (1,2,3)",
+    );
+    for (sql, expected) in [
+        (
+            "INSERT INTO arbiter_case VALUES(1,99,4) ON CONFLICT (a) DO NOTHING",
+            "42P10",
+        ),
+        (
+            "INSERT INTO arbiter_case SELECT 1,99,4 WHERE false ON CONFLICT (a) DO NOTHING",
+            "42P10",
+        ),
+        (
+            "INSERT INTO arbiter_case VALUES(1,99,4) ON CONFLICT (missing) DO NOTHING",
+            "42703",
+        ),
+        (
+            "INSERT INTO arbiter_case VALUES(1,2,3) ON CONFLICT DO UPDATE SET c=10",
+            "42601",
+        ),
+        (
+            "INSERT INTO arbiter_case VALUES(1,99,3) ON CONFLICT (a,b) DO NOTHING",
+            "23505",
+        ),
+    ] {
+        assert_eq!(sqlstate(&mut session, sql), expected, "{sql}");
+    }
+    assert_eq!(
+        rows(
+            &mut session,
+            "INSERT INTO arbiter_case VALUES (1,2,4) ON CONFLICT (B,a,b)
+             DO UPDATE SET c=excluded.c RETURNING a,b,c",
+        ),
+        ["1|2|4"]
+    );
+
+    exec(
+        &mut session,
+        "CREATE TABLE arbiter_quotes (\"K\" int UNIQUE, k int, v text);
+         INSERT INTO arbiter_quotes VALUES(1,2,'seed')",
+    );
+    assert_eq!(
+        rows(
+            &mut session,
+            "INSERT INTO arbiter_quotes VALUES(1,3,'new') ON CONFLICT (\"K\")
+             DO UPDATE SET v=excluded.v RETURNING \"K\",k,v",
+        ),
+        ["1|2|new"]
+    );
+    assert_eq!(
+        sqlstate(
+            &mut session,
+            "INSERT INTO arbiter_quotes VALUES(2,2,'new') ON CONFLICT (k) DO NOTHING",
+        ),
+        "42P10"
+    );
+}

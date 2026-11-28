@@ -5700,10 +5700,14 @@ pub(crate) fn conflict_target_columns(
     target: Option<&ConflictTarget>,
 ) -> Result<Vec<String>> {
     match target {
-        Some(ConflictTarget::Columns(columns)) => Ok(columns
-            .iter()
-            .map(|column| column.value.clone())
-            .collect::<Vec<_>>()),
+        Some(ConflictTarget::Columns(columns)) => {
+            let mut seen = BTreeSet::new();
+            Ok(columns
+                .iter()
+                .map(ident_value)
+                .filter(|column| seen.insert(column.clone()))
+                .collect())
+        }
         Some(ConflictTarget::OnConstraint(name)) => {
             let name = relation_name(name)?;
             let Some(schema) = schema else {

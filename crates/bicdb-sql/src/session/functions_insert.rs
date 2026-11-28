@@ -981,6 +981,20 @@ impl<'db> SqlSession<'db> {
         // Consumed here, before the source or any trigger can run another INSERT.
         let overriding_system_value = super::insert_overriding::take_system_value(&table);
         require_dml_target_exists(self.db_ref(), &table)?;
+        if matches!(
+            &insert.on,
+            Some(OnInsert::OnConflict(conflict))
+                if conflict.conflict_target.is_none()
+                    && matches!(conflict.action, OnConflictAction::DoUpdate(_))
+        ) && !oracle::is_oracle_database(self.db_ref())?
+        {
+            return Err(SqlError::coded(
+                "42601",
+                "ON CONFLICT DO UPDATE requires inference specification or constraint name",
+                None,
+                Some("For example, ON CONFLICT (column_name).".to_string()),
+            ));
+        }
         // Without the table privilege, column INSERT grants are checked once
         // the target columns are known.
         let mut insert_columns_need_grants = false;
@@ -1018,6 +1032,32 @@ impl<'db> SqlSession<'db> {
             return self.execute_insert_into_view(insert, view, ctes);
         }
         let schema = load_schema_shared(self.db_ref(), &table)?;
+        if let (Some(schema), Some(OnInsert::OnConflict(conflict))) =
+            (schema.as_deref(), &insert.on)
+        {
+            if let target @ Some(ConflictTarget::Columns(_)) = conflict.conflict_target.as_ref() {
+                let columns = conflict_target_columns(&table, Some(schema), target)?;
+                for name in &columns {
+                    if schema.column(name).is_none_or(|column| column.hidden) {
+                        return Err(SqlError::data_exception(
+                            "42703",
+                            format!("column \"{name}\" does not exist"),
+                            None,
+                        ));
+                    }
+                }
+                if self
+                    .memoized_unique_arbiter(&table, schema, &columns)?
+                    .is_none()
+                {
+                    return Err(SqlError::data_exception(
+                        "42P10",
+                        "there is no unique or exclusion constraint matching the ON CONFLICT specification",
+                        None,
+                    ));
+                }
+            }
+        }
         let mut columns = insert
             .columns
             .iter()
@@ -2023,20 +2063,6 @@ impl<'db> SqlSession<'db> {
         let select_required = on_conflict.conflict_target.is_some()
             || matches!(on_conflict.action, OnConflictAction::DoUpdate(_))
             || returning.is_some_and(select_items_reference_stored_columns);
-        // A column conflict target needs some unique arbiter to infer; a
-        // table with none (no primary key, unique constraint or unique
-        // index) fails as in PostgreSQL instead of never conflicting.
-        if let (Some(ConflictTarget::Columns(_)), Some(schema)) =
-            (on_conflict.conflict_target.as_ref(), schema)
-        {
-            if unique_arbiters_for_table(self.db_ref(), table, schema).is_empty() {
-                return Err(SqlError::data_exception(
-                    "42P10",
-                    "there is no unique or exclusion constraint matching the ON CONFLICT specification",
-                    None,
-                ));
-            }
-        }
         if partition_parent.is_none() && matches!(on_conflict.action, OnConflictAction::DoNothing) {
             if on_conflict.conflict_target.is_none() {
                 return self.execute_insert_on_conflict_do_nothing_all_unique(

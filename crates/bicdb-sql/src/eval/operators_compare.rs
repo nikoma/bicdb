@@ -67,6 +67,22 @@ pub(crate) fn reject_undefined_comparison(
     op: &BinaryOperator,
     right_type: Option<&str>,
 ) -> Result<()> {
+    if let (Some(left), Some(right)) = (left_type, right_type) {
+        let known = |pg_type: &str| pg_type != "unknown";
+        let catalog_vector = |pg_type: &str| matches!(pg_type, "oidvector" | "int2vector");
+        if left != right
+            && known(left)
+            && known(right)
+            && (catalog_vector(left) || catalog_vector(right))
+        {
+            return Err(SqlError::coded(
+                "42883",
+                format!("operator does not exist: {} {op} {}", common_type_display(left), common_type_display(right)),
+                None,
+                Some("No operator matches the given name and argument types. You might need to add explicit type casts.".to_string()),
+            ));
+        }
+    }
     let unsupported = type_without_comparison_operators(left_type)
         .or_else(|| type_without_comparison_operators(right_type));
     let Some(unsupported) = unsupported else {
@@ -4091,6 +4107,7 @@ pub(crate) enum PgComparisonKind {
     },
     /// A name operand and a name or unknown literal use the name input limit.
     Name,
+    CatalogVector,
     /// text / varchar / name with one another: plain text comparison.
     Text,
     Bool,
@@ -4099,6 +4116,9 @@ pub(crate) enum PgComparisonKind {
 pub(crate) fn pg_comparison_kind(left: &str, right: &str) -> Option<PgComparisonKind> {
     if left == "name" && right == "name" {
         return Some(PgComparisonKind::Name);
+    }
+    if left == right && matches!(left, "oidvector" | "int2vector") {
+        return Some(PgComparisonKind::CatalogVector);
     }
     #[derive(PartialEq)]
     enum Class {
@@ -4245,6 +4265,7 @@ pub(crate) fn compare_values_by_kind(
             left_text.cmp(right_text)
         }
         Kind::Name => pg_typed_compare("name", left, right)?,
+        Kind::CatalogVector => pg_typed_compare(left_type, left, right)?,
         Kind::Text => comparison_text(left).cmp(&comparison_text(right)),
         Kind::Bool => match (left, right) {
             (SqlValue::Bool(left), SqlValue::Bool(right)) => left.cmp(right),
@@ -4306,12 +4327,13 @@ pub(crate) fn compare_values_by_pg_types(
     }
     let array_type = match (left_type, right_type) {
         (Some(left), Some(right)) if left == right => Some(left),
-        (Some(kind), None) | (None, Some(kind)) => Some(kind),
+        (Some(kind), Some("unknown") | None) | (Some("unknown") | None, Some(kind)) => Some(kind),
         _ => None,
     };
-    if let Some(pg_type) =
-        array_type.filter(|kind| kind.ends_with("[]") && pg_type_oid_by_name(kind).is_some())
-    {
+    if let Some(pg_type) = array_type.filter(|kind| {
+        matches!(*kind, "oidvector" | "int2vector")
+            || (kind.ends_with("[]") && pg_type_oid_by_name(kind).is_some())
+    }) {
         if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
             return Ok(Some(None));
         }

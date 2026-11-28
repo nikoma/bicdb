@@ -471,17 +471,27 @@ pub(crate) fn canonical_catalog_vector(pg_type: &str, input: &str) -> Result<PgC
     let (element_type, elements) = match pg_type {
         "int2vector" => {
             let values = input
-                .split_whitespace()
+                .split_ascii_whitespace()
                 .map(|value| {
-                    let parsed = value.parse::<i64>().map_err(|_| {
-                        SqlError::invalid_text_representation("smallint", format!("\"{value}\""))
-                    })?;
-                    i16::try_from(parsed)
+                    use std::num::IntErrorKind;
+                    value
+                        .parse::<i16>()
                         .map(PgCanonicalValue::Int2)
-                        .map_err(|_| {
-                            SqlError::numeric_value_out_of_range(format!(
-                                "value \"{value}\" is out of range for type smallint"
-                            ))
+                        .map_err(|error| {
+                            if matches!(
+                                error.kind(),
+                                IntErrorKind::PosOverflow | IntErrorKind::NegOverflow
+                            ) {
+                                SqlError::numeric_value_out_of_range(format!(
+                                    "value \"{value}\" is out of range for type smallint"
+                                ))
+                            } else {
+                                SqlError::data_exception_public(
+                                    "22P02",
+                                    format!("invalid input syntax for type smallint: \"{value}\""),
+                                    None,
+                                )
+                            }
                         })
                 })
                 .collect::<Result<Vec<_>>>()?;
@@ -529,6 +539,9 @@ pub(crate) fn canonical_catalog_vector(pg_type: &str, input: &str) -> Result<PgC
 }
 
 fn compare_arrays(spec: &PgTypeSpec, left: &PgArray, right: &PgArray) -> Result<Ordering> {
+    if spec.name == "oidvector" && left.elements.len() != right.elements.len() {
+        return Ok(left.elements.len().cmp(&right.elements.len()));
+    }
     for (left, right) in left.elements.iter().zip(&right.elements) {
         let ordering = match (left, right) {
             (PgCanonicalValue::Null, PgCanonicalValue::Null) => Ordering::Equal,
@@ -674,6 +687,9 @@ pub(crate) fn canonical_index_key(spec: &PgTypeSpec, value: &PgCanonicalValue) -
                     value.element_type
                 ))
             })?;
+            if spec.name == "oidvector" {
+                key.extend((value.elements.len() as u64).to_be_bytes());
+            }
             for element_value in &value.elements {
                 let element_key = if element.name == "record"
                     && matches!(element_value, PgCanonicalValue::Null)

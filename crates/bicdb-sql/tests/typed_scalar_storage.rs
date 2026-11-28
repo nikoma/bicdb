@@ -154,3 +154,40 @@ fn money_preserves_exact_cents_in_versioned_metadata_across_reopen() {
         ]
     );
 }
+#[test]
+fn postgres_catalog_vectors_use_their_input_and_ordering_rules() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let scalar = session
+        .execute(
+            "SELECT '2 10'::oidvector > '2 2', '3'::oidvector < '2 100',
+                '3'::int2vector < '2 100', '-1 10'::int2vector > '-1 2',
+                ' 2  10 ' = '2 10'::oidvector",
+        )
+        .unwrap();
+    assert_eq!(
+        scalar.rows,
+        vec![vec![
+            SqlValue::Bool(true),
+            SqlValue::Bool(true),
+            SqlValue::Bool(false),
+            SqlValue::Bool(true),
+            SqlValue::Bool(true),
+        ]]
+    );
+    assert_eq!(
+        session
+            .execute("SELECT '2 10'::oidvector = '2 bogus'")
+            .unwrap_err()
+            .sqlstate(),
+        "22P02"
+    );
+    assert_eq!(
+        session
+            .execute("SELECT '2 10'::oidvector = '2 10'::text")
+            .unwrap_err()
+            .sqlstate(),
+        "42883"
+    );
+}

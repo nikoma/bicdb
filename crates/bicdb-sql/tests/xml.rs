@@ -1183,3 +1183,30 @@ fn cursor_xml_consumes_rows_from_the_live_portal() {
         .unwrap_err();
     assert_eq!(error.sqlstate(), "34000");
 }
+
+#[test]
+fn xpath_reports_postgresql_syntax_and_empty_path_errors() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for (sql, message) in [
+        (
+            "SELECT xpath('', '<!-- no root -->')",
+            "empty XPath expression",
+        ),
+        ("SELECT xpath_exists('', '<a/>')", "empty XPath expression"),
+        ("SELECT xpath('[', '<a/>')", "invalid XPath expression"),
+        (
+            "SELECT * FROM XMLTABLE('' PASSING '<a/>' COLUMNS val text PATH '.')",
+            "row path filter must not be empty string",
+        ),
+        (
+            "SELECT * FROM XMLTABLE('/a' PASSING '<a/>' COLUMNS val text PATH '')",
+            "column path filter must not be empty string",
+        ),
+    ] {
+        let error = session.execute(sql).unwrap_err();
+        assert_eq!(error.sqlstate(), "10608", "{sql}");
+        assert_eq!(error.to_string(), message, "{sql}");
+    }
+}

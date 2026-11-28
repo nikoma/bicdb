@@ -527,18 +527,46 @@ impl<'db> SqlSession<'db> {
                 )));
             }
         }
+        let postgres = !oracle::is_oracle_database(self.db_ref())?;
+        let child_name = relation_name_for_message(&child.name);
         for constraint in &parent.constraints {
-            if let ConstraintSchema::Check { name, .. } = constraint {
-                if parent.no_inherit_constraints.contains(name) {
-                    continue;
-                }
-                if !child.constraints.iter().any(|candidate| {
-                    matches!(candidate, ConstraintSchema::Check { .. })
-                        && constraint_name(candidate) == name
-                }) {
+            let ConstraintSchema::Check {
+                name,
+                expression: parent_expression,
+                validated: parent_validated,
+            } = constraint
+            else {
+                continue;
+            };
+            if parent.no_inherit_constraints.contains(name) {
+                continue;
+            }
+            let Some(ConstraintSchema::Check { expression, validated, .. }) = child
+                .constraints
+                .iter()
+                .find(|candidate| matches!(candidate, ConstraintSchema::Check { name: existing, .. } if existing == name))
+            else {
+                return Err(wrong(format!("child table is missing constraint \"{name}\"")));
+            };
+            if postgres {
+                if !crate::inheritance::same_inherited_check(expression, parent_expression)? {
                     return Err(wrong(format!(
-                        "child table is missing constraint \"{name}\""
+                        "child table \"{child_name}\" has different definition for check constraint \"{name}\""
                     )));
+                }
+                let conflict = if child.no_inherit_constraints.contains(name) {
+                    Some("non-inherited")
+                } else if *parent_validated && !*validated {
+                    Some("NOT VALID")
+                } else {
+                    None
+                };
+                if let Some(conflict) = conflict {
+                    return Err(SqlError::data_exception(
+                        "42P17",
+                        format!("constraint \"{name}\" conflicts with {conflict} constraint on child table \"{child_name}\""),
+                        None,
+                    ));
                 }
             }
         }

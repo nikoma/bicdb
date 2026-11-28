@@ -5952,12 +5952,13 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                             conbin: Some(expression.clone()),
                             convalidated: *validated,
                         }));
-                        // A CHECK the table took from its parents.
+                        // Reuse the lineage loaded above when a relation filter
+                        // left the parents out of the catalog rows being returned.
                         let inherited_from = schema
                             .inherits
                             .iter()
                             .filter(|parent| {
-                                schemas.iter().any(|candidate| {
+                                lineage.iter().any(|candidate| {
                                     candidate.name == **parent
                                         && !candidate.no_inherit_constraints.contains(name)
                                         && candidate.constraints.iter().any(|constraint| {

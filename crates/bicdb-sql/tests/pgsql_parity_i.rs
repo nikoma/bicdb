@@ -322,3 +322,132 @@ fn text_search_catalog_functions_handle_lateral_arguments_and_typed_queries() {
         assert_eq!(error.sqlstate(), "22023", "{sql}: {error:?}");
     }
 }
+
+#[test]
+fn create_table_inheritance_merges_parent_defaults_and_notices() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = open(root.path());
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE TABLE first_parent (x int, y int DEFAULT (3));
+             CREATE TABLE second_parent (x int DEFAULT 8, y int DEFAULT 3);
+             CREATE TABLE conflict_parent (x int DEFAULT 9);
+             CREATE TABLE null_parent (x int DEFAULT NULL::int);
+             CREATE TABLE computed_null_parent (x int DEFAULT NULL::int + 1);
+             CREATE TABLE wrong_type_parent (x text)",
+        )
+        .unwrap();
+
+    let notices = session
+        .execute("CREATE TABLE inherited_child (x int) INHERITS (first_parent, second_parent)")
+        .unwrap()
+        .notices;
+    assert_eq!(
+        notices
+            .iter()
+            .map(|notice| notice.message.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "merging multiple inherited definitions of column \"x\"",
+            "merging multiple inherited definitions of column \"y\"",
+            "merging column \"x\" with inherited definition",
+        ]
+    );
+    assert_eq!(
+        rows(
+            &mut session,
+            "INSERT INTO inherited_child DEFAULT VALUES RETURNING x,y"
+        ),
+        ["8|3"]
+    );
+
+    let error = session
+        .execute("CREATE TABLE conflicting_child () INHERITS (second_parent, conflict_parent)")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42611");
+    assert_eq!(error.notices().len(), 1);
+    session
+        .execute("CREATE TABLE conflicting_child (x int DEFAULT NULL) INHERITS (second_parent, conflict_parent)")
+        .unwrap();
+    assert_eq!(
+        rows(
+            &mut session,
+            "INSERT INTO conflicting_child DEFAULT VALUES RETURNING x,y"
+        ),
+        ["NULL|3"]
+    );
+    assert_eq!(
+        rows(&mut session, "SELECT atthasdef FROM pg_attribute WHERE attrelid = 'conflicting_child'::regclass AND attname = 'x'"),
+        ["f"]
+    );
+
+    session
+        .execute("CREATE TABLE non_null_default_child () INHERITS (null_parent, second_parent)")
+        .unwrap();
+    assert_eq!(
+        rows(
+            &mut session,
+            "INSERT INTO non_null_default_child DEFAULT VALUES RETURNING x,y"
+        ),
+        ["8|3"]
+    );
+
+    let error = session
+        .execute(
+            "CREATE TABLE computed_null_child () INHERITS (computed_null_parent, second_parent)",
+        )
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42611");
+
+    let error = session
+        .execute("CREATE TABLE wrong_type_child () INHERITS (second_parent, wrong_type_parent)")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42804");
+    assert_eq!(error.notices().len(), 1);
+}
+
+#[test]
+fn inheritance_checks_named_constraints_by_definition_and_validation_state() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = open(root.path());
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE TABLE check_parent (a int, CONSTRAINT ck CHECK (a > 0));
+             CREATE TABLE equivalent_parent (a int, CONSTRAINT ck CHECK ((A > 0)));
+             CREATE TABLE different_parent (a int, CONSTRAINT ck CHECK (a > 1));
+             CREATE TABLE local_check (a int, CONSTRAINT ck CHECK (a > 0) NO INHERIT);
+             CREATE TABLE unvalidated_parent (a int);
+             ALTER TABLE unvalidated_parent ADD CONSTRAINT ck CHECK (a > 0) NOT VALID",
+        )
+        .unwrap();
+    session
+        .execute("CREATE TABLE common_child () INHERITS (check_parent, equivalent_parent)")
+        .unwrap();
+    assert_eq!(
+        rows(&mut session, "SELECT conislocal, coninhcount, convalidated FROM pg_constraint WHERE conrelid = 'common_child'::regclass AND conname = 'ck'"),
+        ["f|2|t"]
+    );
+    session
+        .execute("CREATE TABLE validated_child () INHERITS (unvalidated_parent)")
+        .unwrap();
+    assert_eq!(
+        rows(&mut session, "SELECT convalidated FROM pg_constraint WHERE conrelid = 'validated_child'::regclass AND conname = 'ck'"),
+        ["t"]
+    );
+    for (statement, state) in [
+        (
+            "CREATE TABLE conflicting_child () INHERITS (check_parent, different_parent)",
+            "42710",
+        ),
+        ("ALTER TABLE different_parent INHERIT check_parent", "42804"),
+        ("ALTER TABLE local_check INHERIT check_parent", "42P17"),
+        (
+            "ALTER TABLE unvalidated_parent INHERIT check_parent",
+            "42P17",
+        ),
+    ] {
+        assert_eq!(session.execute(statement).unwrap_err().sqlstate(), state);
+    }
+}

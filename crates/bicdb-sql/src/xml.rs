@@ -424,9 +424,13 @@ fn xml_name(value: &str) -> Result<&str> {
     Ok(value)
 }
 
-fn map_sql_identifier_to_xml_name(identifier: &str) -> String {
+fn map_sql_identifier_to_xml_name(identifier: &str, fully_escaped: bool) -> String {
     use std::fmt::Write;
 
+    let reserved_prefix = fully_escaped
+        && identifier
+            .get(..3)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("xml"));
     let mut name = String::with_capacity(identifier.len());
     let mut characters = identifier.chars().enumerate().peekable();
     while let Some((index, character)) = characters.next() {
@@ -436,13 +440,14 @@ fn map_sql_identifier_to_xml_name(identifier: &str) -> String {
             _ => {
                 letter
                     || character.is_ascii_digit()
-                    || matches!(character, '.' | '-' | '_' | ':' | '\u{00b7}')
+                    || matches!(character, '.' | '-' | '_' | '\u{00b7}')
+                    || (!fully_escaped && character == ':')
                     || unicode_normalization::char::is_combining_mark(character)
             }
         };
         let starts_escape =
             character == '_' && characters.peek().is_some_and(|(_, next)| *next == 'x');
-        if valid && !starts_escape {
+        if valid && !starts_escape && !(index == 0 && reserved_prefix) {
             name.push(character);
         } else {
             write!(name, "_x{:04X}_", u32::from(character))
@@ -1353,7 +1358,7 @@ pub(crate) fn eval_xml_function_value(
                         .and_then(|types| types.get(pair_index * 2 + 1))
                         .and_then(Option::as_deref);
                     attributes.push(JsonValue::Array(vec![
-                        JsonValue::String(map_sql_identifier_to_xml_name(&name)),
+                        JsonValue::String(map_sql_identifier_to_xml_name(&name, false)),
                         JsonValue::String(xml_scalar_text(value, value_type)?),
                     ]));
                 }
@@ -1370,7 +1375,7 @@ pub(crate) fn eval_xml_function_value(
                     if matches!(value, SqlValue::Null) {
                         continue;
                     }
-                    let name = map_sql_identifier_to_xml_name(&xml_text(name));
+                    let name = map_sql_identifier_to_xml_name(&xml_text(name), false);
                     let value_type = arg_types
                         .and_then(|types| types.get(pair_index * 2 + 1))
                         .and_then(Option::as_deref);
@@ -1388,7 +1393,7 @@ pub(crate) fn eval_xml_function_value(
                     "XMLELEMENT requires a name",
                 ));
             };
-            let name = map_sql_identifier_to_xml_name(&xml_text(first));
+            let name = map_sql_identifier_to_xml_name(&xml_text(first), false);
             let mut attributes = String::new();
             let mut content = String::new();
             for (index, value) in args[1..].iter().enumerate() {
@@ -1428,7 +1433,7 @@ pub(crate) fn eval_xml_function_value(
             let Some(first) = args.first() else {
                 return Err(SqlError::invalid_parameter_value("XMLPI requires a name"));
             };
-            let name = map_sql_identifier_to_xml_name(&xml_text(first));
+            let name = map_sql_identifier_to_xml_name(&xml_text(first), false);
             if name.eq_ignore_ascii_case("xml") {
                 return Err(SqlError::coded(
                     "2200T",
@@ -1652,12 +1657,12 @@ pub(crate) fn map_query_rows(
 ) -> Result<String> {
     use std::fmt::Write as _;
 
-    let document = map_sql_identifier_to_xml_name(document_name);
-    let row_name = map_sql_identifier_to_xml_name(row_name);
+    let document = map_sql_identifier_to_xml_name(document_name, true);
+    let row_name = map_sql_identifier_to_xml_name(row_name, true);
     let columns = result
         .columns
         .iter()
-        .map(|label| map_sql_identifier_to_xml_name(label))
+        .map(|label| map_sql_identifier_to_xml_name(label, true))
         .collect::<Vec<_>>();
     let namespace = if namespace.is_empty() {
         String::new()

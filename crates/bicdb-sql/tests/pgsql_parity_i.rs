@@ -218,6 +218,22 @@ fn ts_parse_reports_raw_tokens_and_their_types() {
         ),
         ["1|1|Hi|1", "1|12|!|2", "2|NULL|NULL|NULL"],
     );
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT * FROM ts_parse('default', 'readline-4.2 ...< bad &x')",
+        ),
+        [
+            "1|readline",
+            "20|-4.2",
+            "12| ...",
+            "12|< ",
+            "1|bad",
+            "12| ",
+            "12|&",
+            "1|x"
+        ],
+    );
     assert!(rows(&mut session, "SELECT * FROM ts_parse('missing', NULL)").is_empty());
     assert_eq!(
         session

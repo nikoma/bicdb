@@ -624,13 +624,15 @@ fn xml_serialize(
         ));
     }
     let target = args.get(2).map(xml_text);
-    let target_type = target.as_deref().and_then(|declaration| {
+    let target_data_type = target.as_deref().and_then(|declaration| {
         sqlparser::parser::Parser::new(&sqlparser::dialect::PostgreSqlDialect {})
             .try_with_sql(declaration)
             .ok()
             .and_then(|mut parser| parser.parse_data_type().ok())
-            .and_then(|data_type| crate::pg_type_from_data_type(&data_type).ok())
     });
+    let target_type = target_data_type
+        .as_ref()
+        .and_then(|data_type| crate::pg_type_from_data_type(data_type).ok());
     if let Some((kind, _)) = target_type.as_ref() {
         if crate::pg_type_oid_by_name(kind).is_some()
             && !matches!(kind.as_str(), "text" | "varchar" | "bpchar" | "name")
@@ -646,6 +648,15 @@ fn xml_serialize(
             )));
         }
     }
+    let character_target = match (target_type, target_data_type) {
+        (Some((kind, _)), Some(data_type)) if matches!(kind.as_str(), "varchar" | "bpchar") => {
+            match crate::pg_type_modifier_from_data_type(&data_type)? {
+                Some(crate::PgTypeModifier::Character { length }) => Some((kind, length as usize)),
+                _ => None,
+            }
+        }
+        _ => None,
+    };
     let Some(value) = args
         .first()
         .filter(|value| !matches!(value, SqlValue::Null))
@@ -669,10 +680,8 @@ fn xml_serialize(
     } else {
         normalize_validated_xml(&value)
     };
-    if let Some((kind, Some(length))) = target_type {
-        if matches!(kind.as_str(), "varchar" | "bpchar")
-            && value.chars().skip(length).any(|character| character != ' ')
-        {
+    if let Some((kind, length)) = character_target {
+        if value.chars().skip(length).any(|character| character != ' ') {
             return Err(SqlError::data_exception_public(
                 "22001",
                 format!(

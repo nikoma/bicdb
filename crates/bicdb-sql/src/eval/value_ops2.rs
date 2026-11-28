@@ -2972,10 +2972,8 @@ pub(crate) fn apply_pg_type_modifier_with_context(
             return Ok(value);
         };
         let text = value.to_cell();
-        return PgInterval::from_postgres_text_with_field_range(&text, fields.as_deref())
-            .and_then(|interval| interval.with_typmod(fields.as_deref(), *precision))
-            .map(|interval| SqlValue::String(render_interval(interval)))
-            .map_err(|error| postgres_interval_input_error(&text, error));
+        return parse_postgres_interval_with_typmod(&text, fields.as_deref(), *precision)
+            .map(|interval| SqlValue::String(render_interval(interval)));
     }
     let Some(PgTypeModifier::Numeric { precision, scale }) = modifier else {
         return Ok(value);

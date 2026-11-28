@@ -14886,6 +14886,27 @@ fn partial_conflict_predicate_preserves_parameter_types_and_describe_is_read_onl
     );
     read_query_rows(&mut client);
 
+    let carrier = "INSERT INTO partial_wire VALUES (4,$1)
+        ON CONFLICT ON CONSTRAINT __bicdb_conflict_inference((a), b>0)
+        DO UPDATE SET b=excluded.b";
+    send_parse(&mut client, "rejected_carrier", carrier, &[]);
+    send_sync(&mut client);
+    let (error, _) = read_error_response_with_status(&mut client);
+    assert!(error.contains("42601"), "{error}");
+    let direct = carrier.replace("$1", "2");
+    for sql in [
+        direct.clone(),
+        format!("PREPARE rejected_sql_carrier AS {carrier}"),
+        format!(
+            "CREATE FUNCTION rejected_atomic_carrier() RETURNS int LANGUAGE SQL
+                 BEGIN ATOMIC {direct} RETURNING b; END"
+        ),
+    ] {
+        send_query(&mut client, &sql);
+        let (error, _) = read_error_response_with_status(&mut client);
+        assert!(error.contains("42601"), "{error}");
+    }
+
     send_parse(
         &mut client,
         "partial_upsert",

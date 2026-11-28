@@ -38,6 +38,9 @@ impl SqlSession<'_> {
         records: Vec<Record>,
         reads_target: bool,
     ) -> Result<Vec<Record>> {
+        if records.len() > 1 && self.can_batch_plain_partition_insert(parent)? {
+            return self.batch_plain_partition_insert(parent, records);
+        }
         let mut inserted = Vec::with_capacity(records.len());
         for record in records {
             self.cancellation.check()?;
@@ -86,6 +89,72 @@ impl SqlSession<'_> {
         )?;
         self.after_partition_insert_triggers(parent, &inserted)?;
         Ok(inserted)
+    }
+
+    /// With only row-local checks and no callbacks or key conflicts, stage
+    /// leaf writes in batches. Preserve per-row writes for paths where the
+    /// next check or trigger can observe an earlier row.
+    fn can_batch_plain_partition_insert(&self, parent: &TableSchema) -> Result<bool> {
+        if self.tx.is_none() || oracle::is_oracle_database(self.db_ref())? {
+            return Ok(false);
+        }
+        let db = self.db_ref();
+        let triggers = crate::catalog_memo::triggers_shared(db)?;
+        let indexes = db.index_definitions();
+        for table in partition::physical_tables(db, parent)? {
+            if !table.constraints.is_empty()
+                || !table.temporal_foreign_keys.is_empty()
+                || !table.indexes.is_empty()
+                || indexes.iter().any(|index| index.collection == table.name)
+                || !table.has_hidden_primary_key()
+                || table.rls_enabled
+                || table.rls_forced
+                || table
+                    .columns
+                    .iter()
+                    .any(|column| column.user_type.is_some() || column.generated_expr.is_some())
+                || triggers.iter().any(|trigger| {
+                    trigger.enabled
+                        && trigger.table_name.eq_ignore_ascii_case(&table.name)
+                        && trigger.fires_on("insert")
+                })
+                || self
+                    .has_extension_database_event_bindings(&table.name, DatabaseOperation::Insert)?
+                || db.collection_policy(&table.name)?.is_some()
+                || db.mutation_policy(&table.name)?.is_some()
+            {
+                return Ok(false);
+            }
+            if partition::validate_new_key(db, &table).is_err() {
+                // Older stores may contain keys that the current DDL refuses.
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    fn batch_plain_partition_insert(
+        &mut self,
+        parent: &TableSchema,
+        records: Vec<Record>,
+    ) -> Result<Vec<Record>> {
+        let mut groups: BTreeMap<String, (TableSchema, Vec<Record>)> = BTreeMap::new();
+        for record in &records {
+            self.cancellation.check()?;
+            let target = partition::route_record(self.db_ref(), parent, record)?;
+            crate::records::validate_record_columns(&target.name, &target, record)?;
+            crate::records::validate_record_columns(&parent.name, parent, record)?;
+            groups
+                .entry(target.name.clone())
+                .or_insert_with(|| (target, Vec::new()))
+                .1
+                .push(record.clone());
+        }
+        for (name, (schema, rows)) in groups {
+            self.cancellation.check()?;
+            self.insert_session_new_records(&name, Some(&schema), rows)?;
+        }
+        Ok(records)
     }
 
     /// Routing precedes BEFORE INSERT. A leaf trigger may modify the row but

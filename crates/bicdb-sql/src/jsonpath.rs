@@ -1428,7 +1428,7 @@ impl Expr {
                     SqlError::data_exception(
                         "42704",
                         format!("could not find jsonpath variable {}", quoted(name)),
-                        Some("jsonpath".to_string()),
+                        None,
                     )
                 }),
             Self::Literal(value) => Ok(vec![value.clone()]),
@@ -1501,7 +1501,7 @@ impl Expr {
                             return Err(SqlError::data_exception(
                                 "22039",
                                 format!("jsonpath {accessor} can only be applied to an array"),
-                                Some("jsonpath".to_string()),
+                                None,
                             ));
                         }
                     }
@@ -1768,7 +1768,7 @@ impl ArraySelector {
 }
 
 fn array_subscript_error(message: &'static str) -> SqlError {
-    SqlError::data_exception("22033", message, Some("jsonpath".to_string()))
+    SqlError::data_exception("22033", message, None)
 }
 
 impl Endpoint {

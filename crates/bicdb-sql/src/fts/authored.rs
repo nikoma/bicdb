@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use sqlparser::dialect::PostgreSqlDialect;
 use sqlparser::tokenizer::{Token, Tokenizer};
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
 pub(crate) const COLLECTION: &str = "__bicdb_pg_ts_configurations";
@@ -104,52 +104,77 @@ impl Configuration<'_> {
 pub(crate) struct Catalog {
     authored: Arc<Vec<AuthoredConfig>>,
     search_path: Vec<String>,
+    inaccessible: BTreeSet<String>,
 }
 
 impl Catalog {
     pub(crate) fn load(db: &BicDb, gucs: &HashMap<String, String>) -> Result<Self> {
         let authored = list(db)?;
-        let search_path = if authored.is_empty() {
-            Vec::new()
-        } else {
-            configuration_search_path(gucs)
-        };
+        let mut inaccessible = BTreeSet::new();
+        let mut search_path = Vec::new();
+        if !authored.is_empty() {
+            let role = crate::schema_meta::current_user_from_gucs(gucs);
+            let schemas: BTreeSet<_> = authored
+                .iter()
+                .map(|config| config.schema.as_str())
+                .collect();
+            for schema in schemas {
+                if !crate::schema_meta::role_can_use_schema(db, &role, schema)? {
+                    inaccessible.insert(schema.to_owned());
+                }
+            }
+            search_path = configuration_search_path(gucs);
+        }
         Ok(Self {
             authored,
             search_path,
+            inaccessible,
         })
     }
 
-    pub(crate) fn resolve(&self, input: &str) -> Option<Configuration<'_>> {
+    pub(crate) fn resolve(&self, input: &str) -> Result<Option<Configuration<'_>>> {
         if let Ok(oid) = input.trim().parse::<u32>() {
-            return self
+            return Ok(self
                 .authored
                 .iter()
                 .find(|object| object.oid == oid)
                 .map(Configuration::Authored)
                 .or_else(|| {
                     builtin_regconfig_name(i64::from(oid)).map(|_| Configuration::Builtin(oid))
-                });
+                }));
         }
-        match qualified_name(input)?.as_slice() {
-            [name] if self.authored.is_empty() => self.in_schema("pg_catalog", name),
-            [name] => self
+        let Some(parts) = qualified_name(input) else {
+            return Ok(None);
+        };
+        match parts.as_slice() {
+            [name] if self.authored.is_empty() => Ok(self.in_schema("pg_catalog", name)),
+            [name] => Ok(self
                 .search_path
                 .iter()
-                .find_map(|schema| self.in_schema(schema, name)),
-            [schema, name] => self.in_schema(schema, name),
-            _ => None,
+                .filter(|schema| !self.inaccessible.contains(*schema))
+                .find_map(|schema| self.in_schema(schema, name))),
+            [schema, name] => {
+                if self.inaccessible.contains(schema) {
+                    return Err(SqlError::data_exception_public(
+                        "42501",
+                        format!("permission denied for schema {schema}"),
+                        None,
+                    ));
+                }
+                Ok(self.in_schema(schema, name))
+            }
+            _ => Ok(None),
         }
     }
 
-    fn resolve_authored(&self, input: &str) -> Option<&AuthoredConfig> {
+    fn resolve_authored(&self, input: &str) -> Result<Option<&AuthoredConfig>> {
         if self.authored.is_empty() {
-            return None;
+            return Ok(None);
         }
-        match self.resolve(input)? {
-            Configuration::Authored(config) => Some(config),
-            Configuration::Builtin(_) => None,
-        }
+        Ok(match self.resolve(input)? {
+            Some(Configuration::Authored(config)) => Some(config),
+            _ => None,
+        })
     }
 
     pub(crate) fn in_schema(&self, schema: &str, name: &str) -> Option<Configuration<'_>> {
@@ -246,28 +271,21 @@ pub(crate) fn oid(input: &str) -> Option<u32> {
             .borrow()
             .as_ref()?
             .resolve_authored(input)
+            .ok()
+            .flatten()
             .map(|config| config.oid)
     })
 }
 
-pub(super) fn mapped_dictionaries(input: &str) -> Option<Arc<DictionaryMappings>> {
+pub(super) fn normalization(input: &str) -> Result<Option<(u32, Option<Arc<DictionaryMappings>>)>> {
     ACTIVE.with(|active| {
-        active
-            .borrow()
-            .as_ref()?
+        let active = active.borrow();
+        let Some(catalog) = active.as_ref() else {
+            return Ok(None);
+        };
+        Ok(catalog
             .resolve_authored(input)?
-            .mappings
-            .clone()
-    })
-}
-
-pub(crate) fn source_oid(input: &str) -> Option<u32> {
-    ACTIVE.with(|active| {
-        active
-            .borrow()
-            .as_ref()?
-            .resolve_authored(input)
-            .map(|config| config.source_oid)
+            .map(|config| (config.source_oid, config.mappings.clone())))
     })
 }
 
@@ -280,7 +298,7 @@ impl Catalog {
         let name = pg_quote_ident(&config.name);
         if self
             .resolve(&name)
-            .is_some_and(|visible| visible.oid() == config.oid)
+            .is_ok_and(|found| found.is_some_and(|visible| visible.oid() == config.oid))
         {
             Some(name)
         } else {
@@ -290,12 +308,18 @@ impl Catalog {
 }
 
 pub(crate) fn resolve_oid(db: &BicDb, input: &str) -> Result<Option<u32>> {
-    if ACTIVE.with(|active| active.borrow().is_some()) {
-        return Ok(oid(input));
+    let active = ACTIVE.with(|active| {
+        active
+            .borrow()
+            .as_ref()
+            .map(|catalog| Ok(catalog.resolve_authored(input)?.map(|config| config.oid)))
+    });
+    match active {
+        Some(oid) => oid,
+        None => Ok(wire_catalog(db)?
+            .resolve_authored(input)?
+            .map(|config| config.oid)),
     }
-    Ok(wire_catalog(db)?
-        .resolve_authored(input)
-        .map(|config| config.oid))
 }
 
 pub(crate) fn display_name(db: &BicDb, oid: i64) -> Result<Option<String>> {

@@ -175,3 +175,54 @@ fn authored_mappings_distinguish_unmapped_tokens_from_stop_words_and_copy_the_de
     ).unwrap_err();
     assert_eq!(error.sqlstate(), "23505");
 }
+
+#[test]
+fn authored_configuration_names_obey_schema_usage() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute(
+        "CREATE ROLE config_reader;
+         CREATE SCHEMA search_private;
+         CREATE TEXT SEARCH CONFIGURATION search_private.secret (COPY = pg_catalog.english);
+         SET ROLE config_reader;
+         SET search_path TO search_private, public;",
+    )
+    .unwrap();
+
+    for (query, state) in [
+        ("SELECT 'search_private.secret'::regconfig", "42501"),
+        (
+            "SELECT to_tsvector('search_private.secret','running')",
+            "42501",
+        ),
+        ("SELECT 'secret'::regconfig", "42704"),
+    ] {
+        assert_eq!(sql.execute(query).unwrap_err().sqlstate(), state, "{query}");
+    }
+    assert_eq!(
+        sql.execute(
+            "SELECT oid::regconfig::text, to_tsvector(oid::regconfig,'running')::text
+             FROM pg_ts_config WHERE cfgname = 'secret'"
+        )
+        .unwrap()
+        .rows,
+        vec![vec![
+            SqlValue::String("search_private.secret".into()),
+            SqlValue::String("'run':1".into()),
+        ]]
+    );
+
+    sql.execute(
+        "RESET ROLE;
+         GRANT USAGE ON SCHEMA search_private TO config_reader;
+         SET ROLE config_reader;",
+    )
+    .unwrap();
+    assert_eq!(
+        sql.execute("SELECT 'secret'::regconfig::text")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::String("secret".into())]]
+    );
+}

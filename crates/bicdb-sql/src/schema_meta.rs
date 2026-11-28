@@ -3316,12 +3316,15 @@ pub(crate) fn is_implicit_public_privilege(
     object_name: &str,
     privilege: &str,
 ) -> bool {
-    privilege.eq_ignore_ascii_case("CREATE")
-        && match object_type {
-            PrivilegeObjectType::Schema => object_name.eq_ignore_ascii_case("public"),
-            PrivilegeObjectType::Database => true,
-            _ => false,
+    match object_type {
+        PrivilegeObjectType::Schema => {
+            (object_name.eq_ignore_ascii_case("public") && privilege.eq_ignore_ascii_case("CREATE"))
+                || (matches!(object_name, "public" | "pg_catalog" | "information_schema")
+                    && privilege.eq_ignore_ascii_case("USAGE"))
         }
+        PrivilegeObjectType::Database => privilege.eq_ignore_ascii_case("CREATE"),
+        _ => false,
+    }
 }
 
 /// The durable "PUBLIC's implicit privilege was revoked" record. It lives in
@@ -3374,6 +3377,20 @@ fn closure_holds_grant(
             && (grant.grantee.eq_ignore_ascii_case("public")
                 || closure.contains(&normalize_role_name(&grant.grantee)))
     }))
+}
+
+pub(crate) fn role_can_use_schema(db: &BicDb, role: &str, schema: &str) -> Result<bool> {
+    let role = normalize_role_name(role);
+    if role_is_superuser(db, &role)? {
+        return Ok(true);
+    }
+    let closure = role_privilege_closure(db, &role)?;
+    if load_namespace(db, schema)?
+        .is_some_and(|namespace| closure.contains(&normalize_role_name(&namespace.owner)))
+    {
+        return Ok(true);
+    }
+    closure_holds_grant(db, &closure, PrivilegeObjectType::Schema, schema, "USAGE")
 }
 
 fn role_is_superuser(db: &BicDb, role: &str) -> Result<bool> {

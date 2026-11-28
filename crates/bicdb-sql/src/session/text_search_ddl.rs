@@ -146,7 +146,7 @@ impl SqlSession<'_> {
         let catalog = Catalog::load(self.db_ref(), &self.session_gucs)?;
         let (source_oid, mappings) = if keyword(option, "copy") {
             let source = catalog
-                .resolve(&source)
+                .resolve(&source)?
                 .ok_or_else(|| unknown_config(&source))?;
             (source.source_oid(), source.mappings())
         } else if keyword(option, "parser") {
@@ -232,7 +232,7 @@ impl SqlSession<'_> {
         let (written, rest) = object_name_from_tokens(tokens)?;
         let catalog = Catalog::load(self.db_ref(), &self.session_gucs)?;
         let config = catalog
-            .resolve(&written)
+            .resolve(&written)?
             .ok_or_else(|| unknown_config(&written))?;
         let previous = self.changeable_text_search_configuration(config, &written)?;
         let mut config = previous.clone();
@@ -386,7 +386,7 @@ impl SqlSession<'_> {
         let mut remove = Vec::new();
         loop {
             let (name, rest) = object_name_from_tokens(tokens)?;
-            if let Some(config) = catalog.resolve(&name) {
+            if let Some(config) = catalog.resolve(&name)? {
                 let config = self.changeable_text_search_configuration(config, &name)?;
                 if !remove
                     .iter()

@@ -1243,7 +1243,7 @@ impl<'db> SqlSession<'db> {
                 let name = value.to_cell();
                 let catalog =
                     crate::fts::authored::Catalog::load(self.db_ref(), &self.session_gucs)?;
-                let authored = match catalog.resolve(&name) {
+                let authored = match catalog.resolve(&name)? {
                     Some(crate::fts::authored::Configuration::Authored(config)) => {
                         Some(config.qualified_name())
                     }

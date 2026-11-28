@@ -1397,11 +1397,11 @@ enum TextSearchConfig {
 impl TextSearchConfig {
     fn parse(value: &SqlValue) -> Result<Self> {
         let text = value.to_cell();
-        if let Some(mappings) = authored::mapped_dictionaries(&text) {
-            return Ok(Self::Mapped(mappings));
-        }
-        let authored =
-            authored::source_oid(&text).and_then(|oid| builtin_regconfig_name(i64::from(oid)));
+        let authored = match authored::normalization(&text)? {
+            Some((_, Some(mappings))) => return Ok(Self::Mapped(mappings)),
+            Some((oid, None)) => builtin_regconfig_name(i64::from(oid)),
+            None => None,
+        };
         let input = text.to_ascii_lowercase();
         let input = input.strip_prefix("pg_catalog.").unwrap_or(&input);
         let value = authored

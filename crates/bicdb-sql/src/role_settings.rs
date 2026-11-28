@@ -67,10 +67,7 @@ fn parse(sql: &str) -> Option<(String, RoleSettingChange)> {
         if value.eq_ignore_ascii_case("DEFAULT") {
             return Some((name, RoleSettingChange::Reset(Some(parameter))));
         }
-        return Some((
-            name,
-            RoleSettingChange::Set(parameter, setting_value(value)),
-        ));
+        return Some((name, RoleSettingChange::Set(parameter, value.to_string())));
     }
     if let Some(after) = strip_prefix_ci(rest, "RESET ") {
         let parameter = after.trim().to_ascii_lowercase();
@@ -115,6 +112,12 @@ impl SqlSession<'_> {
         self.capture_role_undo(&role_name)?;
         match change {
             RoleSettingChange::Set(parameter, value) => {
+                let value =
+                    if parameter == "search_path" && !oracle::is_oracle_database(self.db_ref())? {
+                        crate::search_path::render_raw_assignment(&value)
+                    } else {
+                        setting_value(&value)
+                    };
                 role.settings.insert(parameter, value);
             }
             RoleSettingChange::Reset(Some(parameter)) => {

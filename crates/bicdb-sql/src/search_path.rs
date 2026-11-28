@@ -133,7 +133,7 @@ pub(crate) fn current_catalog_value() -> SqlValue {
 /// unquoted names folded to lower case.
 pub(crate) fn parse_search_path(path: &str, user: &str) -> Vec<String> {
     let mut schemas = Vec::new();
-    for part in path.split(',') {
+    for part in crate::ddl_alter::split_setting_list(path) {
         let part = part.trim();
         if part.is_empty() {
             continue;
@@ -161,6 +161,31 @@ pub(crate) fn parse_search_path(path: &str, user: &str) -> Vec<String> {
         }
     }
     schemas
+}
+
+/// Render a list of SQL SET arguments as a search_path setting string.
+pub(crate) fn render_raw_assignment(value: &str) -> String {
+    crate::ddl_alter::split_setting_list(value)
+        .into_iter()
+        .map(|part| {
+            let part = part.trim();
+            let name = if let Some(quoted) = part
+                .strip_prefix('"')
+                .and_then(|part| part.strip_suffix('"'))
+            {
+                quoted.replace("\"\"", "\"")
+            } else if let Some(literal) = part
+                .strip_prefix('\'')
+                .and_then(|part| part.strip_suffix('\''))
+            {
+                literal.replace("''", "'")
+            } else {
+                part.to_ascii_lowercase()
+            };
+            pg_quote_ident(&name)
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// The schemas unqualified relations bind through, or `None` when binding

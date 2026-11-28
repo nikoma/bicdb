@@ -207,6 +207,17 @@ fn ts_parse_reports_raw_tokens_and_their_types() {
         ),
         ["integer|text|bigint|1|Hi|1", "integer|text|bigint|12|.!|2"],
     );
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT d.id, t.kind, t.fragment, t.position
+             FROM (VALUES (1, 'Hi!'), (2, NULL)) AS d(id, body)
+             LEFT JOIN LATERAL ts_parse('default', d.body) WITH ORDINALITY
+               AS t(kind, fragment, position) ON true
+             ORDER BY d.id, t.position",
+        ),
+        ["1|1|Hi|1", "1|12|!|2", "2|NULL|NULL|NULL"],
+    );
     assert!(rows(&mut session, "SELECT * FROM ts_parse('missing', NULL)").is_empty());
     assert_eq!(
         session

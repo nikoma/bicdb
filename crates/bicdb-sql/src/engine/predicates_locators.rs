@@ -6371,11 +6371,13 @@ impl<'db> SqlEngine<'db> {
                 let table = normalize_object_name(&object_name(name)?);
                 // The select-list SRF source checks EXECUTE per call it runs.
                 let zip = table == crate::routine_srf_projection::ZIP_FUNCTION;
-                if zip
+                let builtin = matches!(table.as_str(), "ts_parse" | "pg_catalog.ts_parse");
+                if builtin
+                    || zip
                     || resolve_routine_cached(self.db_ref(), RoutineKind::Function, &table)?
                         .is_some()
                 {
-                    if with_ordinality {
+                    if with_ordinality && !builtin {
                         return Err(SqlError::Unsupported(format!(
                             "{table} WITH ORDINALITY is not supported"
                         )));
@@ -6402,7 +6404,8 @@ impl<'db> SqlEngine<'db> {
                             }
                         }
                     }
-                    if !zip && !role_can_execute_routine(self.db_ref(), &role, &table)? {
+                    if !builtin && !zip && !role_can_execute_routine(self.db_ref(), &role, &table)?
+                    {
                         return Err(SqlError::BicDb(BicDbError::Authorization(format!(
                             "permission denied for function {table}"
                         ))));
@@ -6410,8 +6413,13 @@ impl<'db> SqlEngine<'db> {
                     // Serialize only authored AST arguments, never row values.
                     // Parse once per join, then reuse the existing correlated
                     // query executor to bind each prior row before the call.
+                    let ordinality = if with_ordinality {
+                        " WITH ORDINALITY"
+                    } else {
+                        ""
+                    };
                     let sql = format!(
-                        "SELECT * FROM {name}({})",
+                        "SELECT * FROM {name}({}){ordinality}",
                         args.iter()
                             .map(crate::sql_text::sql_text)
                             .collect::<Vec<_>>()

@@ -70,6 +70,17 @@ pub(crate) fn cte_columns(
     aliases: &[TableAliasColumnDef],
     result_columns: &[String],
 ) -> Result<Vec<String>> {
+    if aliases.len() > result_columns.len() {
+        return Err(SqlError::data_exception_public(
+            "42P10",
+            format!(
+                "WITH query \"{name}\" has {} columns available but {} columns specified",
+                result_columns.len(),
+                aliases.len(),
+            ),
+            None,
+        ));
+    }
     table_alias_columns(name, name, aliases, result_columns)
 }
 

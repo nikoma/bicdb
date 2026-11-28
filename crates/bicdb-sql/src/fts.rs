@@ -1608,11 +1608,11 @@ pub(crate) fn debug_rows(db: &BicDb, config: &str, document: &str) -> Result<Vec
         Some((_, Some(mappings))) => mappings,
         Some((source_oid, None)) => Arc::new(catalog::builtin_config_mappings(source_oid)),
         None => {
-            let oid = authored::resolve_oid(db, config)?.ok_or_else(|| {
-                SqlError::undefined_object(format!(
-                    "text search configuration \"{config}\" does not exist",
-                ))
-            })?;
+            let oid = crate::eval::oid_alias_numeric_value(
+                db,
+                "regconfig",
+                &SqlValue::String(config.to_owned()),
+            )?;
             Arc::new(catalog::builtin_config_mappings(oid))
         }
     };

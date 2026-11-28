@@ -178,3 +178,41 @@ fn alter_table_inherit_lists_and_not_null_no_inherit() {
         .unwrap_err();
     assert_eq!(error.sqlstate(), "42P16");
 }
+
+#[test]
+fn ts_parse_reports_raw_tokens_and_their_types() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = open(root.path());
+    let mut session = SqlSession::new(&mut db);
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT * FROM pg_catalog.ts_parse(
+                'pg_catalog.default',
+                'Running café foo-bar, HTTP://Example.com/a?x=1 test@x.org! 1.23 -43 1e-2 <x>ok</x>&gt;'
+            )",
+        ),
+        [
+            "1|Running", "12| ", "2|café", "12| ", "16|foo-bar", "11|foo", "12|-",
+            "11|bar", "12|, ", "14|HTTP://", "5|Example.com/a?x=1", "6|Example.com",
+            "18|/a?x=1", "12| ", "4|test@x.org", "12|! ", "20|1.23", "12| ",
+            "21|-43", "12| ", "7|1e-2", "12| ", "13|<x>", "1|ok", "13|</x>", "23|&gt;",
+        ],
+    );
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT pg_typeof(k), pg_typeof(t), pg_typeof(pos), k, t, pos
+             FROM ts_parse(3722::oid, 'Hi.!') WITH ORDINALITY p(k, t, pos)",
+        ),
+        ["integer|text|bigint|1|Hi|1", "integer|text|bigint|12|.!|2"],
+    );
+    assert!(rows(&mut session, "SELECT * FROM ts_parse('missing', NULL)").is_empty());
+    assert_eq!(
+        session
+            .execute("SELECT * FROM ts_parse(1::oid, 'Hi')")
+            .unwrap_err()
+            .sqlstate(),
+        "XX000",
+    );
+}

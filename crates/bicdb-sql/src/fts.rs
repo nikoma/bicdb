@@ -12,6 +12,7 @@ use crate::{pg_internal_char_byte, BicDb, Result, SqlEngine, SqlError, SqlValue}
 pub(crate) mod authored;
 pub(crate) mod catalog;
 pub(crate) mod dictionary;
+pub(crate) mod parser;
 
 const MAX_LEXEME_BYTES: usize = bicdb_core::MAX_FULL_TEXT_TERM_BYTES;
 const MAX_POSITION: u16 = 16_383;

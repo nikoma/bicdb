@@ -846,6 +846,14 @@ impl<'db> SqlEngine<'db> {
             if table == crate::routine_srf_projection::ZIP_FUNCTION && !*with_ordinality {
                 return self.set_returning_zip_row_set(&table, alias.as_ref(), &arguments);
             }
+            if let Some(rows) = self.text_search_catalog_row_set(
+                &table,
+                alias.as_ref(),
+                &arguments,
+                *with_ordinality,
+            )? {
+                return Ok(rows);
+            }
             if let Some(rows) = self.stored_routine_table_function_row_set(
                 &table,
                 alias.as_ref(),
@@ -5500,7 +5508,7 @@ impl<'db> SqlEngine<'db> {
         }))
     }
 
-    /// `ts_token_type(parser)` and `ts_stat(query [, weights])` in FROM.
+    /// PostgreSQL text search catalog functions in FROM.
     pub(crate) fn text_search_catalog_row_set(
         &self,
         table: &str,
@@ -5512,6 +5520,33 @@ impl<'db> SqlEngine<'db> {
         let function = function.to_ascii_lowercase();
         let (mut source_columns, mut rows): (Vec<String>, Vec<Vec<SqlValue>>) =
             match function.as_str() {
+                "ts_parse" => {
+                    let values = table_function_expr_args(args)?
+                        .iter()
+                        .map(|expr| self.eval_select_constant_expr(expr))
+                        .collect::<Result<Vec<_>>>()?;
+                    let [parser, document] = values.as_slice() else {
+                        return Err(SqlError::undefined_function(
+                            "function ts_parse expects two arguments",
+                        ));
+                    };
+                    let rows =
+                        if matches!(parser, SqlValue::Null) || matches!(document, SqlValue::Null) {
+                            Vec::new()
+                        } else {
+                            crate::fts::parser::resolve(self.db_ref(), parser)?;
+                            crate::fts::parser::tokens(&document.to_cell())
+                                .into_iter()
+                                .map(|(kind, fragment)| {
+                                    vec![
+                                        SqlValue::Int(i64::from(kind)),
+                                        SqlValue::String(fragment.to_owned()),
+                                    ]
+                                })
+                                .collect()
+                        };
+                    (vec!["tokid".into(), "token".into()], rows)
+                }
                 "ts_token_type" | "ts_stat" => {
                     let values = table_function_expr_args(args)?
                         .iter()
@@ -5595,6 +5630,13 @@ impl<'db> SqlEngine<'db> {
                 .unwrap_or(&[]),
             &source_columns,
         )?;
+        if function == "ts_parse" {
+            let mut types = vec![Some("int4".to_string()), Some("text".to_string())];
+            if with_ordinality {
+                types.push(Some("int8".to_string()));
+            }
+            crate::slot_types::register_columns(&alias_name, &columns, &types);
+        }
         let rows = rows
             .iter()
             .map(|row| slot_row_from_values(&columns, row))
@@ -7689,6 +7731,7 @@ impl<'db> SqlEngine<'db> {
                 .to_ascii_lowercase()
                 .as_str()
             {
+                "ts_parse" => Some(&["tokid", "token"]),
                 "ts_token_type" => Some(&["tokid", "alias", "description"]),
                 "ts_stat" => Some(&["word", "ndoc", "nentry"]),
                 _ => None,

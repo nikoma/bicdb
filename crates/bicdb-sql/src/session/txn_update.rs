@@ -5535,6 +5535,7 @@ impl<'db> SqlSession<'db> {
                     frame,
                     targets,
                     &result.columns,
+                    &result.column_types,
                     result.rows.into_iter().next(),
                 )?;
                 frame.set(ROUTINE_FOUND_VAR, SqlValue::Bool(found));
@@ -5582,6 +5583,7 @@ impl<'db> SqlSession<'db> {
                     frame,
                     targets,
                     &result.columns,
+                    &result.column_types,
                     result.rows.into_iter().next(),
                 )?;
                 frame.set(ROUTINE_FOUND_VAR, SqlValue::Bool(found));

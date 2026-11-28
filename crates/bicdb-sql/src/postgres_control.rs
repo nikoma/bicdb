@@ -409,6 +409,7 @@ impl SqlSession<'_> {
                         frame,
                         targets,
                         &result.columns,
+                        &result.column_types,
                         result.rows.into_iter().next(),
                     )?;
                 }

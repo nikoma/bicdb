@@ -6544,7 +6544,7 @@ pub(crate) fn assign_routine_targets(
     targets: &[String],
     row: Option<&Vec<SqlValue>>,
 ) -> Result<()> {
-    assign_routine_targets_with_columns(frame, targets, &[], row.cloned())
+    assign_routine_targets_with_columns(frame, targets, &[], &[], row.cloned())
 }
 
 /// Column-aware INTO assignment. A declared record, including a one-column
@@ -6556,6 +6556,7 @@ pub(crate) fn assign_routine_targets_with_columns(
     frame: &mut RoutineFrame,
     targets: &[String],
     columns: &[String],
+    types: &[Option<String>],
     row: Option<Vec<SqlValue>>,
 ) -> Result<()> {
     if row.is_none() && plpgsql_into_no_data_enabled() {
@@ -6583,6 +6584,9 @@ pub(crate) fn assign_routine_targets_with_columns(
             None => SqlValue::Null,
         };
         frame.assign(&targets[0], value)?;
+        if !frame.oracle_procedural_evaluation {
+            frame.set_record_field_types(&targets[0], columns, types);
+        }
         return Ok(());
     }
     assign_routine_targets_owned_nullable(frame, targets, row)?;

@@ -207,3 +207,14 @@ fn postgres_raise_accepts_escape_strings_and_arrays_in_arguments() {
     assert_eq!(error.sqlstate(), "P0001");
     assert_eq!(error.postgres_message(), "value !");
 }
+
+#[test]
+fn postgres_raise_renders_boolean_arguments_via_boolout() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let result = session
+        .execute("DO $$ BEGIN RAISE NOTICE '% %', true, false; END $$")
+        .unwrap();
+    assert_eq!(result.notices[0].message, "t f");
+}

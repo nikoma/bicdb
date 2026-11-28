@@ -13,16 +13,19 @@ fn xml_text(value: &SqlValue) -> String {
     value.to_cell()
 }
 
-fn strip_declaration(value: &str) -> &str {
-    let trimmed = value.trim_start_matches('\u{feff}').trim_start();
-    if trimmed.starts_with("<?xml") {
-        trimmed
-            .find("?>")
-            .map(|end| &trimmed[end + 2..])
-            .unwrap_or(trimmed)
-    } else {
-        value
+fn xml_declaration(value: &str) -> Option<(&str, &str)> {
+    let value = value.trim_start_matches('\u{feff}');
+    let after_prefix = value.strip_prefix("<?xml")?;
+    let starts_with_whitespace = |character| matches!(character, ' ' | '\t' | '\r' | '\n');
+    if !after_prefix.starts_with(starts_with_whitespace) {
+        return None;
     }
+    let end = value.find("?>")? + 2;
+    Some(value.split_at(end))
+}
+
+fn strip_declaration(value: &str) -> &str {
+    xml_declaration(value).map_or(value, |(_, body)| body)
 }
 
 fn wrapped_content(value: &str) -> String {
@@ -208,6 +211,12 @@ fn xml_for_parser(value: &str) -> Result<String> {
 }
 
 pub(crate) fn validate_xml(value: &str, document: bool) -> Result<()> {
+    if let Some((declaration, _)) = xml_declaration(value) {
+        // Content parsing can wrap multiple root elements and strip the
+        // outer declaration. Analyze the declaration before that fallback.
+        parser::parse(&format!("{declaration}<bicdb/>"))
+            .map_err(|_| invalid_xml("invalid XML declaration"))?;
+    }
     let prepared = xml_for_parser(value)?;
     let parsed = if document {
         parser::parse(&prepared)
@@ -264,18 +273,13 @@ fn xml_declaration_attribute(declaration: &str, name: &str) -> Option<String> {
 pub(crate) fn normalize_xml(value: &str) -> Result<String> {
     validate_xml(value, false)?;
     let value = value.trim_start_matches('\u{feff}');
-    let Some(declaration_end) = value
-        .starts_with("<?xml")
-        .then(|| value.find("?>"))
-        .flatten()
-    else {
+    let Some((declaration, body)) = xml_declaration(value) else {
         return Ok(value.to_string());
     };
-    let declaration = &value[5..declaration_end];
+    let declaration = &declaration[5..declaration.len() - 2];
     let version =
         xml_declaration_attribute(declaration, "version").unwrap_or_else(|| "1.0".to_string());
     let standalone = xml_declaration_attribute(declaration, "standalone");
-    let body = &value[declaration_end + 2..];
     if version == "1.0" && standalone.is_none() {
         return Ok(body.to_string());
     }
@@ -608,15 +612,54 @@ pub(crate) fn finish_xml_agg(
     if !order_by.is_empty() {
         entries.sort_by(|left, right| crate::json_agg_entry_ordering(left, right, order_by));
     }
-    let values = entries
-        .into_iter()
-        .filter_map(|(value, _)| (!matches!(value, SqlValue::Null)).then(|| xml_text(&value)))
-        .collect::<Vec<_>>();
-    if values.is_empty() {
-        Ok(SqlValue::Null)
-    } else {
-        Ok(SqlValue::String(values.concat()))
+    Ok(concat_xml_fragments(entries.into_iter().filter_map(
+        |(value, _)| (!matches!(value, SqlValue::Null)).then(|| xml_text(&value)),
+    )))
+}
+
+fn concat_xml_fragments(values: impl IntoIterator<Item = String>) -> SqlValue {
+    let mut version = None;
+    let mut standalone = None;
+    let mut content = String::new();
+    let mut present = false;
+    for value in values {
+        let (declaration, body) = xml_declaration(&value)
+            .map_or(("", value.as_str()), |(declaration, body)| {
+                (&declaration[5..declaration.len() - 2], body)
+            });
+        let next_version = xml_declaration_attribute(declaration, "version");
+        let next_standalone = xml_declaration_attribute(declaration, "standalone");
+        if present {
+            if next_version != version {
+                version = None;
+            }
+            standalone = standalone.zip(next_standalone).map(|(left, right)| {
+                if left == "no" || right == "no" {
+                    "no".to_string()
+                } else {
+                    left
+                }
+            });
+        } else {
+            version = next_version;
+            standalone = next_standalone;
+            present = true;
+        }
+        content.push_str(body);
     }
+    if !present {
+        return SqlValue::Null;
+    }
+    let version = version.as_deref().unwrap_or("1.0");
+    if version == "1.0" && standalone.is_none() {
+        return SqlValue::String(content);
+    }
+    let standalone = standalone
+        .map(|attribute| format!(" standalone=\"{attribute}\""))
+        .unwrap_or_default();
+    SqlValue::String(format!(
+        "<?xml version=\"{version}\"{standalone}?>{content}"
+    ))
 }
 
 pub(crate) fn eval_xml_function_value(
@@ -646,12 +689,28 @@ pub(crate) fn eval_xml_function_value(
                 SqlValue::Bool(validate_xml(&xml_text(&args[0]), true).is_ok())
             }
         }
-        "xmlconcat" => SqlValue::String(
-            args.iter()
-                .filter(|value| !matches!(value, SqlValue::Null))
-                .map(xml_text)
-                .collect(),
-        ),
+        "xmlconcat" => {
+            let mut values = Vec::with_capacity(args.len());
+            for (index, value) in args.iter().enumerate() {
+                let pg_type = arg_types
+                    .and_then(|types| types.get(index))
+                    .and_then(Option::as_deref);
+                if let Some(pg_type) = pg_type.filter(|kind| !matches!(*kind, "xml" | "unknown")) {
+                    return Err(SqlError::data_exception_public(
+                        "42804",
+                        format!(
+                            "argument of XMLCONCAT must be type xml, not type {}",
+                            crate::common_type_display(pg_type)
+                        ),
+                        None,
+                    ));
+                }
+                if !matches!(value, SqlValue::Null) {
+                    values.push(normalize_xml(&xml_text(value))?);
+                }
+            }
+            concat_xml_fragments(values)
+        }
         "bicdb_xmlattributes" => {
             let mut attributes = Vec::new();
             for (pair_index, pair) in args.chunks(2).enumerate() {
@@ -801,7 +860,11 @@ pub(crate) fn eval_xml_function_value(
             } else {
                 let text = xml_text(&args[0]);
                 if text.contains("--") || text.ends_with('-') {
-                    return Err(invalid_xml("invalid XML comment"));
+                    return Err(SqlError::data_exception_public(
+                        "2200S",
+                        "invalid XML comment",
+                        None,
+                    ));
                 }
                 SqlValue::String(format!("<!--{text}-->"))
             }

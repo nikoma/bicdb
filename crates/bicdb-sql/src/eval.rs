@@ -1298,7 +1298,9 @@ pub fn resolve_oid_alias_value(db: &BicDb, pg_type: &str, value: SqlValue) -> Re
         "regdictionary" => crate::fts::authored::dictionary_oid(db, &input)?
             .or_else(|| resolve_named_oid(&input, REGDICTIONARY_OBJECTS)),
         "regproc" | "regprocedure" => resolve_regprocedure_oid(db, pg_type, &input)?,
-        "regoper" | "regoperator" => resolve_regoperator_oid(pg_type, &input)?,
+        "regoper" | "regoperator" => {
+            crate::pg_operators::resolve_catalog_alias_oid(db, pg_type, &input)?
+        }
         _ => None,
     };
     oid.map(|oid| SqlValue::Int(i64::from(oid)))
@@ -1428,7 +1430,10 @@ pub fn render_oid_alias_value(db: &BicDb, pg_type: &str, value: &SqlValue) -> Re
         "regdictionary" => crate::fts::authored::dictionary_name(db, oid)?
             .or_else(|| resolve_named_oid_output(oid, REGDICTIONARY_OBJECTS)),
         "regproc" | "regprocedure" => resolve_regprocedure_name(db, pg_type, oid)?,
-        "regoper" | "regoperator" => resolve_regoperator_name(pg_type, oid),
+        "regoper" | "regoperator" => match resolve_regoperator_name(pg_type, oid) {
+            Some(name) => Some(name),
+            None => crate::pg_operators::render_catalog_alias(db, pg_type, oid)?,
+        },
         _ => None,
     };
     Ok(rendered.unwrap_or_else(|| oid.to_string()))

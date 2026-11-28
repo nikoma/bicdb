@@ -178,6 +178,86 @@ fn display_type(pg_type: &str) -> &str {
     pg_cast_display_type(pg_type)
 }
 
+fn catalog_alias_oid(
+    db: &BicDb,
+    schema: Option<&str>,
+    name: &str,
+    signature: Option<(Option<&str>, &str)>,
+) -> Result<Option<i64>> {
+    let path = schema.map_or_else(
+        || crate::search_path::current_schema_names(true),
+        |schema| vec![schema.to_string()],
+    );
+    let authored = user_operators(db)?;
+    let mut visible = BTreeMap::new();
+    for schema in &path {
+        if schema == "pg_catalog" {
+            for operator in builtin_operators()
+                .iter()
+                .filter(|operator| operator.name == name)
+            {
+                visible
+                    .entry((operator.left, operator.right))
+                    .or_insert(operator.oid);
+            }
+        }
+        for operator in authored
+            .iter()
+            .filter(|operator| operator.id.schema == *schema && operator.id.name == name)
+        {
+            visible
+                .entry((operator.id.left.as_deref(), operator.id.right.as_str()))
+                .or_insert_with(|| operator.oid());
+        }
+    }
+    if let Some(signature) = signature {
+        return Ok(visible.get(&signature).copied());
+    }
+    Ok((visible.len() == 1).then(|| *visible.values().next().expect("one visible operator")))
+}
+
+pub(crate) fn resolve_catalog_alias_oid(
+    db: &BicDb,
+    pg_type: &str,
+    value: &str,
+) -> Result<Option<u32>> {
+    let (name, signature) = split_alias_signature(value);
+    let (schema, name) = alias_schema_and_name(name);
+    let signature = match (pg_type, signature.as_deref()) {
+        ("regoperator", Some([left, right])) => Some((
+            (!left.eq_ignore_ascii_case("NONE")).then_some(left.as_str()),
+            right.as_str(),
+        )),
+        ("regoper", None) => None,
+        _ => return Ok(None),
+    };
+    Ok(catalog_alias_oid(db, schema.as_deref(), &name, signature)?
+        .and_then(|oid| u32::try_from(oid).ok()))
+}
+
+pub(crate) fn render_catalog_alias(db: &BicDb, pg_type: &str, oid: i64) -> Result<Option<String>> {
+    let operators = user_operators(db)?;
+    let Some(operator) = operators.iter().find(|operator| operator.oid() == oid) else {
+        return Ok(None);
+    };
+    let id = &operator.id;
+    let signature = (id.left.as_deref(), id.right.as_str());
+    let visible = catalog_alias_oid(db, None, &id.name, Some(signature))? == Some(oid);
+    let name = if visible {
+        id.name.clone()
+    } else {
+        format!("{}.{}", pg_quote_ident(&id.schema), id.name)
+    };
+    if pg_type == "regoper" {
+        return Ok(Some(name));
+    }
+    Ok(Some(format!(
+        "{name}({},{})",
+        id.left.as_deref().map(display_type).unwrap_or("NONE"),
+        display_type(&id.right)
+    )))
+}
+
 pub(crate) fn parse_sql_data_type(text: &str) -> Result<DataType> {
     Parser::new(&PostgreSqlDialect {})
         .try_with_sql(text)
@@ -234,6 +314,18 @@ pub(crate) fn save_operator(db: &mut BicDb, operator: &OperatorSchema) -> Result
         OPERATOR_COLLECTION,
         Record::new(operator.id.key()).with_metadata(serde_json::to_value(operator)?),
     )?;
+    Ok(())
+}
+
+pub(crate) fn save_operators(db: &mut BicDb, operators: &[OperatorSchema]) -> Result<()> {
+    let records = operators
+        .iter()
+        .map(|operator| {
+            serde_json::to_value(operator)
+                .map(|metadata| Record::new(operator.id.key()).with_metadata(metadata))
+        })
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    db.batch_insert(OPERATOR_COLLECTION, records)?;
     Ok(())
 }
 

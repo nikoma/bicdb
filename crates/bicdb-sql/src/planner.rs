@@ -1787,6 +1787,22 @@ impl BoundExprScope {
         }
     }
 
+    fn references_collated_column(&self, expr: &Expr) -> bool {
+        let id = match expr {
+            Expr::Identifier(ident) => self.column_id(&[ident_value(ident)]),
+            Expr::CompoundIdentifier(parts) => {
+                self.column_id(&parts.iter().map(ident_value).collect::<Vec<_>>())
+            }
+            Expr::Nested(inner) | Expr::Cast { expr: inner, .. } => {
+                return self.references_collated_column(inner);
+            }
+            _ => None,
+        };
+        id.and_then(|id| crate::slot_types::lookup_key_collation(&self.cols.columns[id.0]))
+            .flatten()
+            .is_some_and(|collation| collation != "default")
+    }
+
     pub(crate) fn known_expr_type(&self, expr: &Expr) -> Option<String> {
         match expr {
             Expr::Identifier(ident) => match self.bind_identifier(&[ident_value(ident)])? {
@@ -2013,9 +2029,11 @@ impl BoundExprScope {
                         && !expr_may_need_tuple_comparison(right) =>
                 {
                     // The compact comparison IR carries types but no locale.
-                    // Keep explicit collation validation and ordering together
-                    // on the evaluator path, including mismatched collations.
-                    if !matches!(comparison_collation(left, right, None), Ok(None)) {
+                    // Let the row evaluator apply explicit and declared collations.
+                    if !matches!(comparison_collation(left, right, None), Ok(None))
+                        || self.references_collated_column(left)
+                        || self.references_collated_column(right)
+                    {
                         return None;
                     }
                     let mut left_type = self.known_expr_type(left);

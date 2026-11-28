@@ -150,6 +150,16 @@ fn postgres_simple_query_batches_report_each_result_and_roll_back_on_error() {
     send_query(&mut client, "SELECT id FROM batch_rows WHERE id = 7");
     assert!(read_query_rows(&mut client).is_empty());
 
+    send_query(
+        &mut client,
+        "CREATE TABLE promoted_rows (id int); INSERT INTO promoted_rows VALUES (1); BEGIN; ROLLBACK",
+    );
+    assert!(read_query_rows(&mut client).is_empty());
+    send_query(&mut client, "SELECT id FROM promoted_rows");
+    let (error, status) = read_error_response_with_status(&mut client);
+    assert!(error.contains("42P01"), "{error}");
+    assert_eq!(status, b'I');
+
     client.write_all(b"X\0\0\0\x04").unwrap();
     server.join().unwrap();
 }

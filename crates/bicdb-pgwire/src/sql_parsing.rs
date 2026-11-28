@@ -645,6 +645,7 @@ pub(crate) fn clear_open_transaction_state(server: &PgWireServer, state: &mut Co
     state.catalog_cache.close_transaction_large_objects();
     delegation::clear_delegation(server, state);
     state.in_transaction = false;
+    state.implicit_simple_transaction = false;
     state.failed_transaction = false;
     state.tx_statements.clear();
     state.tx = None;
@@ -1528,7 +1529,7 @@ pub(crate) fn execute_savepoint_command(
             if state.failed_transaction {
                 return Err(PgWireError::InFailedTransaction);
             }
-            if !state.in_transaction {
+            if !state.in_transaction || state.implicit_simple_transaction {
                 if server.config.sql_profile == bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE {
                     // Oracle SAVEPOINT can establish an otherwise idle
                     // transaction; PostgreSQL retains its explicit-block rule.
@@ -1558,7 +1559,7 @@ pub(crate) fn execute_savepoint_command(
             Ok(SqlResult::command("SAVEPOINT"))
         }
         SavepointCommand::RollbackTo(name) => {
-            if !state.in_transaction {
+            if !state.in_transaction || state.implicit_simple_transaction {
                 if server.config.sql_profile == bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE {
                     return Err(missing_transport_savepoint(server, state, name));
                 }
@@ -1606,7 +1607,7 @@ pub(crate) fn execute_savepoint_command(
             if state.failed_transaction {
                 return Err(PgWireError::InFailedTransaction);
             }
-            if !state.in_transaction {
+            if !state.in_transaction || state.implicit_simple_transaction {
                 if server.config.sql_profile == bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE {
                     return Err(missing_transport_savepoint(server, state, name));
                 }
@@ -2317,11 +2318,7 @@ pub(crate) fn finish_copy_in(
 
 pub(crate) fn abort_copy_in(server: &Arc<PgWireServer>, state: &mut ConnectionState) -> Result<()> {
     if let Some(copy) = state.copy_in.take() {
-        if copy.owns_serializable_transaction
-            || copy
-                .simple_batch
-                .is_some_and(|batch| batch.owns_transaction)
-        {
+        if copy.owns_serializable_transaction || state.implicit_simple_transaction {
             rollback_open_transaction(server, state)?;
         } else if copy.started_guc_transaction {
             state.session_state.rollback_transaction();

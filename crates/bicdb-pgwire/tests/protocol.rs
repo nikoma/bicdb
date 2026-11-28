@@ -113,6 +113,43 @@ fn postgres_simple_query_batches_report_each_result_and_roll_back_on_error() {
     send_query(&mut client, "SELECT id FROM batch_rows ORDER BY id");
     assert_eq!(read_query_rows(&mut client), vec![vec!["1".to_string()]]);
 
+    send_query(
+        &mut client,
+        "INSERT INTO batch_rows VALUES (4); BEGIN; SAVEPOINT s; INSERT INTO batch_rows VALUES (5); ROLLBACK TO s; COMMIT; INSERT INTO batch_rows VALUES (6); SELECT missing FROM batch_rows",
+    );
+    let (error, status) = read_error_response_with_status(&mut client);
+    assert!(error.contains("42703"), "{error}");
+    assert_eq!(status, b'I');
+    send_query(&mut client, "SELECT id FROM batch_rows ORDER BY id");
+    assert_eq!(
+        read_query_rows(&mut client),
+        vec![vec!["1".to_string()], vec!["4".to_string()]]
+    );
+
+    for (command, message) in [
+        (
+            "SAVEPOINT s",
+            "SAVEPOINT can only be used in transaction blocks",
+        ),
+        (
+            "COMMIT AND CHAIN",
+            "COMMIT AND CHAIN can only be used in transaction blocks",
+        ),
+    ] {
+        send_query(
+            &mut client,
+            &format!("INSERT INTO batch_rows VALUES (7); {command}"),
+        );
+        let (error, status) = read_error_response_with_status(&mut client);
+        assert!(
+            error.contains("25P01") && error.contains(message),
+            "{error}"
+        );
+        assert_eq!(status, b'I');
+    }
+    send_query(&mut client, "SELECT id FROM batch_rows WHERE id = 7");
+    assert!(read_query_rows(&mut client).is_empty());
+
     client.write_all(b"X\0\0\0\x04").unwrap();
     server.join().unwrap();
 }
@@ -175,6 +212,33 @@ fn postgres_simple_query_resumes_after_copy_and_keeps_the_implicit_transaction()
         read_query_rows(&mut client),
         vec![vec!["1".to_string()], vec!["2".to_string()]]
     );
+
+    send_query(
+        &mut client,
+        "COPY batch_copy FROM STDIN; COMMIT; INSERT INTO batch_copy VALUES (9); SELECT missing FROM batch_copy",
+    );
+    assert_eq!(read_message(&mut client).0, b'G');
+    send_message(&mut client, b'd', b"8\n");
+    send_message(&mut client, b'c', &[]);
+    let (error, status) = read_error_response_with_status(&mut client);
+    assert!(error.contains("42703"), "{error}");
+    assert_eq!(status, b'I');
+    send_query(&mut client, "SELECT id FROM batch_copy WHERE id >= 8");
+    assert_eq!(read_query_rows(&mut client), vec![vec!["8".to_string()]]);
+
+    send_query(
+        &mut client,
+        "COPY batch_copy FROM STDIN; BEGIN; SELECT missing FROM batch_copy",
+    );
+    assert_eq!(read_message(&mut client).0, b'G');
+    send_message(&mut client, b'd', b"10\n");
+    send_message(&mut client, b'c', &[]);
+    let (error, status) = read_error_response_with_status(&mut client);
+    assert!(error.contains("42703"), "{error}");
+    assert_eq!(status, b'E');
+    send_query(&mut client, "ROLLBACK");
+    assert_eq!(read_query_rows_with_status(&mut client), (Vec::new(), b'I'));
+
     client.write_all(b"X\0\0\0\x04").unwrap();
     server.join().unwrap();
 }

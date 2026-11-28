@@ -94,11 +94,7 @@ fn prepare(
 ) -> Result<SqlResult> {
     if !state.in_transaction {
         let mut result = SqlResult::command("ROLLBACK");
-        result.notices.push(bicdb_sql::SqlNotice {
-            sqlstate: "25P01".to_string(),
-            message: "there is no transaction in progress".to_string(),
-            fields: vec![bicdb_sql::SqlErrorField::Severity("WARNING".to_string())],
-        });
+        result.notices.push(no_explicit_transaction_warning());
         return Ok(result);
     }
     if state.failed_transaction {
@@ -133,13 +129,18 @@ fn prepare(
     })();
     match prepared {
         Ok(sequence) => {
+            let implicit_block = state.implicit_simple_transaction;
             drop(tx);
             state.session_state.commit_transaction();
             state.tx_shared_role_ddl.clear();
             clear_open_transaction_state(server, state);
             state.last_commit_seq = state.last_commit_seq.max(sequence);
             server.sync_quorum.wait_for(sequence)?;
-            Ok(SqlResult::command("PREPARE TRANSACTION"))
+            let mut result = SqlResult::command("PREPARE TRANSACTION");
+            if implicit_block {
+                result.notices.push(no_explicit_transaction_warning());
+            }
+            Ok(result)
         }
         Err(error) => {
             let _ = tx.rollback();

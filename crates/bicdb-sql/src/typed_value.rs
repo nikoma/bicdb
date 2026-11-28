@@ -5,7 +5,7 @@
 //! forcing existing embedders to migrate in one release.
 
 use crate::{pg_type_oid_by_name, PgTsQuery, PgTsVector, SqlResult, SqlRowStream, SqlValue};
-use num_bigint::BigInt;
+use num_bigint::{BigInt, BigUint};
 use num_traits::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
@@ -422,6 +422,23 @@ pub enum PgNumeric {
 pub const PG_NUMERIC_MAX_INTEGER_DIGITS: i32 = 131_072;
 pub const PG_NUMERIC_MAX_FRACTIONAL_DIGITS: i32 = 16_383;
 
+fn strip_numeric_digit_separators(
+    input: &str,
+    is_digit: impl Fn(u8) -> bool,
+) -> Result<String, PgCanonicalValueError> {
+    let bytes = input.as_bytes();
+    for (index, byte) in bytes.iter().enumerate() {
+        if *byte == b'_'
+            && (index == 0
+                || !is_digit(bytes[index - 1])
+                || !bytes.get(index + 1).is_some_and(|byte| is_digit(*byte)))
+        {
+            return Err(PgCanonicalValueError::InvalidNumericCoefficient);
+        }
+    }
+    Ok(input.replace('_', ""))
+}
+
 impl PgNumeric {
     pub fn finite(
         negative: bool,
@@ -496,12 +513,39 @@ impl PgNumeric {
     }
 
     pub fn from_postgres_text(value: &str) -> Result<Self, PgCanonicalValueError> {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "nan" => Ok(Self::NaN),
-            "infinity" | "+infinity" | "inf" | "+inf" => Ok(Self::PositiveInfinity),
-            "-infinity" | "-inf" => Ok(Self::NegativeInfinity),
-            _ => Self::from_decimal_text(value),
+        let value = value.trim();
+        match value.to_ascii_lowercase().as_str() {
+            "nan" => return Ok(Self::NaN),
+            "infinity" | "+infinity" | "inf" | "+inf" => return Ok(Self::PositiveInfinity),
+            "-infinity" | "-inf" => return Ok(Self::NegativeInfinity),
+            _ => {}
         }
+
+        let digits = value.strip_prefix(['+', '-']).unwrap_or(value);
+        let radix = match digits.as_bytes().get(..2) {
+            Some([b'0', b'x' | b'X']) => Some(16),
+            Some([b'0', b'o' | b'O']) => Some(8),
+            Some([b'0', b'b' | b'B']) => Some(2),
+            _ => None,
+        };
+        if let Some(radix) = radix {
+            let digits = digits[2..].strip_prefix('_').unwrap_or(&digits[2..]);
+            let digits =
+                strip_numeric_digit_separators(digits, |byte| (byte as char).is_digit(radix))?;
+            if !digits.bytes().all(|byte| (byte as char).is_digit(radix)) {
+                return Err(PgCanonicalValueError::InvalidNumericCoefficient);
+            }
+            let magnitude = BigUint::parse_bytes(digits.as_bytes(), radix)
+                .ok_or(PgCanonicalValueError::InvalidNumericCoefficient)?;
+            let value = Self::finite(value.starts_with('-'), magnitude.to_str_radix(10), 0)?;
+            value.validate_unconstrained_range()?;
+            return Ok(value);
+        }
+        if value.contains('_') {
+            let value = strip_numeric_digit_separators(value, |byte| byte.is_ascii_digit())?;
+            return Self::from_decimal_text(&value);
+        }
+        Self::from_decimal_text(value)
     }
 
     pub fn to_decimal_text(&self) -> String {
@@ -3877,6 +3921,19 @@ pub fn parse_pg_xid8(value: &str) -> Result<u64, PgCanonicalValueError> {
         return Ok(magnitude);
     }
     Ok(0_u64.wrapping_sub(magnitude))
+}
+
+/// A binary-compatible cast from an empty catalog vector keeps its single
+/// dimension of length zero and lower bound zero. Ordinary empty arrays have
+/// no dimensions.
+#[doc(hidden)]
+pub fn restore_empty_catalog_vector_dimension(
+    lengths: &mut Vec<usize>,
+    lower_bounds: Option<&[i32]>,
+) {
+    if lengths.is_empty() && lower_bounds == Some(&[0]) {
+        lengths.push(0);
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

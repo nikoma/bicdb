@@ -231,3 +231,32 @@ fn rollback_of_added_partition_default_restores_all_raw_rows_and_descriptors() {
         db.close().unwrap();
     }
 }
+
+#[test]
+fn quoted_partition_identifiers_keep_their_schema_and_case() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = bicdb_core::BicDb::open(root.path()).unwrap();
+    let mut session = bicdb_sql::SqlSession::new(&mut db);
+    for sql in [
+        r#"CREATE SCHEMA "Part.Mixed""#,
+        r#"CREATE TABLE "Part.Mixed"."Parent"(id int) PARTITION BY RANGE(id)"#,
+        r#"CREATE TABLE "Part.Mixed"."Leaf" PARTITION OF "Part.Mixed"."Parent" FOR VALUES FROM (0) TO (10)"#,
+        r#"CREATE TABLE "Part.Mixed"."Attached"(id int)"#,
+        r#"ALTER TABLE "Part.Mixed"."Parent" ATTACH PARTITION "Part.Mixed"."Attached" FOR VALUES FROM (10) TO (20)"#,
+        r#"INSERT INTO "Part.Mixed"."Parent" VALUES (5), (15)"#,
+        r#"ALTER TABLE "Part.Mixed"."Parent" DETACH PARTITION "Part.Mixed"."Attached""#,
+    ] {
+        session
+            .execute(sql)
+            .unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    for (relation, value) in [("Parent", 5), ("Leaf", 5), ("Attached", 15)] {
+        assert_eq!(
+            session
+                .execute(&format!(r#"SELECT id FROM "Part.Mixed"."{relation}""#))
+                .unwrap()
+                .rows,
+            [[bicdb_sql::SqlValue::Int(value)]]
+        );
+    }
+}

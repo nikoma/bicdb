@@ -418,6 +418,7 @@ pub(crate) fn aggregate_routine(
         internal_symbol: Some(AGGREGATE_SYMBOL.to_string()),
         owner: Some(owner),
         security_definer: false,
+        leakproof: false,
         overload: None,
         catalog_oid: None,
     }

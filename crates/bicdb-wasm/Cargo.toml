@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-wasm"
-version = "1.0.584"
+version = "1.0.606"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -16,8 +16,8 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-bicdb-core = { path = "../bicdb-core", version = "=1.0.584", default-features = false }
-bicdb-sql = { path = "../bicdb-sql", version = "=1.0.584", default-features = false }
+bicdb-core = { path = "../bicdb-core", version = "=1.0.606", default-features = false }
+bicdb-sql = { path = "../bicdb-sql", version = "=1.0.606", default-features = false }
 hex.workspace = true
 serde.workspace = true
 serde_json.workspace = true

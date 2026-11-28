@@ -192,6 +192,7 @@ impl SqlSession<'_> {
                 &trigger.function_name,
                 &vars,
                 &shape,
+                None,
             )? {
                 None | Some(SqlValue::Null) => return Ok(None),
                 Some(returned) => {

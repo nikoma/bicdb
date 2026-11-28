@@ -400,12 +400,7 @@ pub(crate) fn eval_value(record: &Record, expr: &Expr) -> Result<SqlValue> {
         Expr::UnaryOp { op, expr } if op.to_string() == "+" => {
             eval_unary_plus_expr_value(expr, eval_value(record, expr)?, None)
         }
-        Expr::UnaryOp { op, expr }
-            if matches!(
-                op,
-                UnaryOperator::BitwiseNot | UnaryOperator::PGPrefixFactorial
-            ) || is_geometric_unary_operator(op) =>
-        {
+        Expr::UnaryOp { op, expr } if is_builtin_prefix_operator(op) => {
             eval_unary_bit_not_expr_value(op, expr, eval_value(record, expr)?, None)
         }
         Expr::Nested(expr) => eval_value(record, expr),
@@ -559,12 +554,7 @@ pub(crate) fn eval_constant_expr(expr: &Expr) -> Result<SqlValue> {
         Expr::UnaryOp { op, expr } if op.to_string() == "+" => {
             eval_unary_plus_expr_value(expr, eval_constant_expr(expr)?, None)
         }
-        Expr::UnaryOp { op, expr }
-            if matches!(
-                op,
-                UnaryOperator::BitwiseNot | UnaryOperator::PGPrefixFactorial
-            ) || is_geometric_unary_operator(op) =>
-        {
+        Expr::UnaryOp { op, expr } if is_builtin_prefix_operator(op) => {
             eval_unary_bit_not_expr_value(op, expr, eval_constant_expr(expr)?, None)
         }
         Expr::BinaryOp {
@@ -1308,7 +1298,9 @@ pub fn resolve_oid_alias_value(db: &BicDb, pg_type: &str, value: SqlValue) -> Re
         "regdictionary" => crate::fts::authored::dictionary_oid(db, &input)?
             .or_else(|| resolve_named_oid(&input, REGDICTIONARY_OBJECTS)),
         "regproc" | "regprocedure" => resolve_regprocedure_oid(db, pg_type, &input)?,
-        "regoper" | "regoperator" => resolve_regoperator_oid(pg_type, &input)?,
+        "regoper" | "regoperator" => {
+            crate::pg_operators::resolve_catalog_alias_oid(db, pg_type, &input)?
+        }
         _ => None,
     };
     oid.map(|oid| SqlValue::Int(i64::from(oid)))
@@ -1403,6 +1395,17 @@ pub fn render_oid_alias_array_value(
     .map(SqlValue::json)
 }
 
+pub(crate) fn oid_alias_text_value(
+    db: &BicDb,
+    pg_type: &str,
+    value: &SqlValue,
+) -> Result<SqlValue> {
+    if matches!(value, SqlValue::Null) {
+        return Ok(SqlValue::Null);
+    }
+    render_oid_alias_value(db, pg_type, value).map(SqlValue::String)
+}
+
 pub fn render_oid_alias_value(db: &BicDb, pg_type: &str, value: &SqlValue) -> Result<String> {
     if matches!(value, SqlValue::Null) {
         return Ok(String::new());
@@ -1427,7 +1430,10 @@ pub fn render_oid_alias_value(db: &BicDb, pg_type: &str, value: &SqlValue) -> Re
         "regdictionary" => crate::fts::authored::dictionary_name(db, oid)?
             .or_else(|| resolve_named_oid_output(oid, REGDICTIONARY_OBJECTS)),
         "regproc" | "regprocedure" => resolve_regprocedure_name(db, pg_type, oid)?,
-        "regoper" | "regoperator" => resolve_regoperator_name(pg_type, oid),
+        "regoper" | "regoperator" => match resolve_regoperator_name(pg_type, oid) {
+            Some(name) => Some(name),
+            None => crate::pg_operators::render_catalog_alias(db, pg_type, oid)?,
+        },
         _ => None,
     };
     Ok(rendered.unwrap_or_else(|| oid.to_string()))

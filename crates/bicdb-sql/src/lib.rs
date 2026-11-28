@@ -242,6 +242,7 @@ pub use session::*;
 mod runtime;
 pub use runtime::*;
 mod application_copy;
+mod conflict_inference;
 mod constraint_nulls;
 pub mod datestyle_output;
 mod datetime_input;
@@ -361,6 +362,7 @@ pub(crate) use jsonpath::{
     jsonpath_function_pg_type, jsonpath_index_terms, normalize_jsonpath,
 };
 mod xml;
+pub use xml::decode_postgres_xml_parameter;
 pub(crate) use xml::{
     eval_xml_function_value, finish_xml_agg, normalize_xml, xml_function_pg_type,
 };
@@ -3205,7 +3207,7 @@ fn composite_field_text(field: &SqlCompositeField) -> String {
     escaped.push('"');
     for character in text.chars() {
         if matches!(character, '"' | '\\') {
-            escaped.push('\\');
+            escaped.push(character);
         }
         escaped.push(character);
     }
@@ -3785,6 +3787,10 @@ struct ColumnAttributes {
     /// is the type's default. Catalog-only: values are always stored whole.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     storage: Option<char>,
+    /// Whether this definition is also local when it has inheritance
+    /// parents. Legacy records did not retain explicit redeclarations.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    inherited_local: Option<bool>,
 }
 
 impl ColumnAttributes {
@@ -5135,6 +5141,8 @@ struct RoutineSchema {
     owner: Option<String>,
     #[serde(default)]
     security_definer: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    leakproof: bool,
     /// Input signature of a further overload of `name`; `None` for the name's
     /// first routine, which keeps the plain catalog key.
     #[serde(default, skip_serializing_if = "Option::is_none")]

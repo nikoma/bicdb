@@ -291,16 +291,52 @@ pub(crate) fn rewrite_json_unique_keys_clauses(input: &str) -> Option<String> {
     Some(output)
 }
 
+/// The label of a SQL/XML element or attribute. An unnamed argument takes
+/// its name from the last component of a column reference.
+fn xml_constructor_identifier(input: &str, qualified: bool) -> Option<String> {
+    use sqlparser::dialect::PostgreSqlDialect;
+    use sqlparser::tokenizer::{Token, Tokenizer};
+    let input = if qualified {
+        strip_balanced_outer_parens(input.trim())
+    } else {
+        input.trim()
+    };
+    let tokens = Tokenizer::new(&PostgreSqlDialect {}, input)
+        .tokenize()
+        .ok()?;
+    let mut tokens = tokens
+        .into_iter()
+        .filter(|token| !matches!(token, Token::Whitespace(_)));
+    let Token::Word(mut name) = tokens.next()? else {
+        return None;
+    };
+    while let Some(token) = tokens.next() {
+        if !qualified || token != Token::Period {
+            return None;
+        }
+        let Token::Word(next) = tokens.next()? else {
+            return None;
+        };
+        name = next;
+    }
+    Some(match name.quote_style {
+        Some(_) => name.value,
+        None => name.value.to_ascii_lowercase(),
+    })
+}
+
 pub(crate) fn rewrite_xml_constructor_once(input: &str) -> Option<String> {
     let tokens = json_predicate_tokens(input);
     let (index, function) = tokens
         .iter()
         .enumerate()
-        .filter(|(_, token)| {
+        .filter(|(index, token)| {
             matches!(
                 token.word.as_deref(),
                 Some("xmlattributes" | "xmlforest" | "xmlelement" | "xmlpi")
-            )
+            ) && tokens
+                .get(index + 1)
+                .is_some_and(|next| next.depth == token.depth && next.symbol == Some(b'('))
         })
         .max_by_key(|(_, token)| token.depth)?;
     let name = function.word.as_deref()?;
@@ -314,17 +350,22 @@ pub(crate) fn rewrite_xml_constructor_once(input: &str) -> Option<String> {
     let inner_depth = open.depth + 1;
     let replacement = if matches!(name, "xmlattributes" | "xmlforest") {
         let mut boundaries = vec![open.end];
-        boundaries.extend(
-            tokens[index + 2..close_index]
-                .iter()
-                .filter(|token| token.depth == inner_depth && token.symbol == Some(b','))
-                .map(|token| token.end),
-        );
-        let mut ends = tokens[index + 2..close_index]
-            .iter()
-            .filter(|token| token.depth == inner_depth && token.symbol == Some(b','))
-            .map(|token| token.start)
-            .collect::<Vec<_>>();
+        let mut ends = Vec::new();
+        let mut brackets = 0usize;
+        for token in &tokens[index + 2..close_index] {
+            if token.depth != inner_depth {
+                continue;
+            }
+            match token.symbol {
+                Some(b'[') => brackets += 1,
+                Some(b']') => brackets = brackets.saturating_sub(1),
+                Some(b',') if brackets == 0 => {
+                    ends.push(token.start);
+                    boundaries.push(token.end);
+                }
+                _ => {}
+            }
+        }
         ends.push(tokens[close_index].start);
         let mut arguments = Vec::new();
         for (start, end) in boundaries.into_iter().zip(ends) {
@@ -333,10 +374,27 @@ pub(crate) fn rewrite_xml_constructor_once(input: &str) -> Option<String> {
                 .filter(|token| {
                     token.start >= start && token.end <= end && token.depth == inner_depth
                 })
-                .rfind(|token| token.word.as_deref() == Some("as"))?;
-            let expression = input[start..as_token.start].trim();
-            let alias = input[as_token.end..end].trim().trim_matches('"');
-            arguments.push(format!("'{alias}', ({expression})"));
+                .rfind(|token| token.word.as_deref() == Some("as"));
+            let (expression, alias) = match as_token {
+                Some(token) => (
+                    input[start..token.start].trim(),
+                    Some(xml_constructor_identifier(&input[token.end..end], false)?),
+                ),
+                None => {
+                    let expression = input[start..end].trim();
+                    (expression, xml_constructor_identifier(expression, true))
+                }
+            };
+            if expression.is_empty() {
+                return None;
+            }
+            match alias {
+                Some(alias) => {
+                    let alias = alias.replace('\'', "''");
+                    arguments.push(format!("'{alias}', ({expression})"));
+                }
+                None => arguments.push(format!("NULL, ({expression})")),
+            }
         }
         format!("bicdb_{name}({})", arguments.join(", "))
     } else {
@@ -345,16 +403,8 @@ pub(crate) fn rewrite_xml_constructor_once(input: &str) -> Option<String> {
             return None;
         }
         let identifier = tokens.get(index + 3)?;
-        let authored_name = input[identifier.start..identifier.end].trim();
-        let xml_name = match authored_name
-            .strip_prefix('"')
-            .and_then(|name| name.strip_suffix('"'))
-        {
-            Some(name) => name.replace("\"\"", "\""),
-            None if name == "xmlpi" => authored_name.to_ascii_lowercase(),
-            None => authored_name.to_owned(),
-        };
-        let xml_name = xml_name.replace('\'', "''");
+        let xml_name = xml_constructor_identifier(&input[identifier.start..identifier.end], false)?
+            .replace('\'', "''");
         let remainder = input[identifier.end..tokens[close_index].start].trim();
         let remainder = remainder.strip_prefix(',').unwrap_or(remainder).trim();
         let internal = if name == "xmlelement" {
@@ -1391,154 +1441,6 @@ mod interval_parse_compat_tests {
         assert!(rewritten.contains("-- <+>"));
         assert!(rewritten.contains("/* <+> */"));
     }
-}
-
-/// `ON CONFLICT (cols) WHERE predicate DO ...` names a partial unique index by its columns and
-/// predicate (PostgreSQL index inference). The parser has no slot for the predicate, so it is dropped
-/// here; the conflict target then resolves by its columns to that index's arbiter, which applies the
-/// index's own predicate.
-pub(crate) fn rewrite_on_conflict_index_predicates(input: &str) -> Option<String> {
-    let bytes = input.as_bytes();
-    let lower = input.to_ascii_lowercase();
-    let lower = lower.as_bytes();
-    let word_at = |at: usize, word: &[u8]| {
-        lower.get(at..at + word.len()) == Some(word)
-            && (at == 0 || !(bytes[at - 1].is_ascii_alphanumeric() || bytes[at - 1] == b'_'))
-            && bytes
-                .get(at + word.len())
-                .is_none_or(|next| !(next.is_ascii_alphanumeric() || *next == b'_'))
-    };
-    // Skips a quoted string, quoted identifier, comment or dollar-quoted body starting at `at`.
-    let skip_quoted = |at: usize| -> Option<usize> {
-        match bytes[at] {
-            b'\'' | b'"' => {
-                let quote = bytes[at];
-                let mut idx = at + 1;
-                while idx < bytes.len() {
-                    if bytes[idx] == quote {
-                        if bytes.get(idx + 1) == Some(&quote) {
-                            idx += 2;
-                            continue;
-                        }
-                        return Some(idx + 1);
-                    }
-                    idx += 1;
-                }
-                Some(bytes.len())
-            }
-            b'-' if bytes.get(at + 1) == Some(&b'-') => Some(
-                bytes[at..]
-                    .iter()
-                    .position(|b| *b == b'\n')
-                    .map_or(bytes.len(), |p| at + p + 1),
-            ),
-            b'/' if bytes.get(at + 1) == Some(&b'*') => Some(
-                input[at + 2..]
-                    .find("*/")
-                    .map_or(bytes.len(), |p| at + 2 + p + 2),
-            ),
-            b'$' => dollar_quote_delimiter(&input[at..]).map(|delimiter| {
-                let body = at + delimiter.len();
-                input[body..]
-                    .find(&delimiter)
-                    .map_or(bytes.len(), |p| body + p + delimiter.len())
-            }),
-            _ => None,
-        }
-    };
-    let mut cuts = Vec::<(usize, usize)>::new();
-    let mut idx = 0usize;
-    while idx < bytes.len() {
-        if let Some(next) = skip_quoted(idx) {
-            idx = next;
-            continue;
-        }
-        if !word_at(idx, b"on") {
-            idx += 1;
-            continue;
-        }
-        let mut conflict_at = idx + 2;
-        while conflict_at < bytes.len() && bytes[conflict_at].is_ascii_whitespace() {
-            conflict_at += 1;
-        }
-        if conflict_at == idx + 2 || !word_at(conflict_at, b"conflict") {
-            idx += 1;
-            continue;
-        }
-        let mut at = conflict_at + "conflict".len();
-        while at < bytes.len() && bytes[at].is_ascii_whitespace() {
-            at += 1;
-        }
-        if bytes.get(at) != Some(&b'(') {
-            idx = at;
-            continue;
-        }
-        // The column list, to its matching parenthesis.
-        let mut depth = 0usize;
-        while at < bytes.len() {
-            if let Some(next) = skip_quoted(at) {
-                at = next;
-                continue;
-            }
-            match bytes[at] {
-                b'(' => depth += 1,
-                b')' => {
-                    depth -= 1;
-                    if depth == 0 {
-                        at += 1;
-                        break;
-                    }
-                }
-                _ => {}
-            }
-            at += 1;
-        }
-        let mut where_at = at;
-        while where_at < bytes.len() && bytes[where_at].is_ascii_whitespace() {
-            where_at += 1;
-        }
-        if !word_at(where_at, b"where") {
-            idx = at;
-            continue;
-        }
-        // The predicate runs to the top-level DO.
-        let mut scan = where_at + "where".len();
-        let mut depth = 0usize;
-        let mut do_at = None;
-        while scan < bytes.len() {
-            if let Some(next) = skip_quoted(scan) {
-                scan = next;
-                continue;
-            }
-            match bytes[scan] {
-                b'(' => depth += 1,
-                b')' => depth = depth.saturating_sub(1),
-                _ if depth == 0 && word_at(scan, b"do") => {
-                    do_at = Some(scan);
-                    break;
-                }
-                _ => {}
-            }
-            scan += 1;
-        }
-        let Some(do_at) = do_at else {
-            idx = at;
-            continue;
-        };
-        cuts.push((where_at, do_at));
-        idx = do_at;
-    }
-    if cuts.is_empty() {
-        return None;
-    }
-    let mut output = String::with_capacity(input.len());
-    let mut last = 0usize;
-    for (start, end) in cuts {
-        output.push_str(&input[last..start]);
-        last = end;
-    }
-    output.push_str(&input[last..]);
-    Some(output)
 }
 
 /// `INSERT ... SELECT 1, 'x' ON CONFLICT ...` is valid PostgreSQL, but sqlparser

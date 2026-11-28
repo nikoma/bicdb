@@ -98,3 +98,56 @@ fn polymorphic_aggregates_bind_types_without_repeating_their_inputs() {
         "4",
     );
 }
+
+#[test]
+fn aggregate_support_functions_require_compatible_signatures_and_state_types() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+
+    for statement in [
+        "CREATE FUNCTION state_wide(bigint, bigint) RETURNS bigint AS 'SELECT $1 + $2' LANGUAGE SQL",
+        "CREATE FUNCTION state_wrong(int, int) RETURNS text AS $$ SELECT 'x' $$ LANGUAGE SQL",
+        "CREATE FUNCTION state_pick(bigint, bigint) RETURNS bigint AS 'SELECT $1 + $2 + 100' LANGUAGE SQL",
+        "CREATE FUNCTION state_pick(bigint, int) RETURNS bigint AS 'SELECT $1 + $2' LANGUAGE SQL",
+    ] {
+        session.execute(statement).unwrap();
+    }
+
+    for (statement, sqlstate, message) in [
+        (
+            "CREATE AGGREGATE bad_when_coerced(int) (SFUNC = state_wide, STYPE = bigint)",
+            "42804",
+            "function state_wide(bigint, bigint) requires run-time type coercion",
+        ),
+        (
+            "CREATE AGGREGATE bad_state(int) (SFUNC = state_wrong, STYPE = int)",
+            "42804",
+            "return type of transition function state_wrong is not integer",
+        ),
+        (
+            "CREATE AGGREGATE no_poly_input(*) (SFUNC = state_wide, STYPE = anyarray)",
+            "42P13",
+            "cannot determine transition data type",
+        ),
+        (
+            "CREATE AGGREGATE wrong_arity(*) (SFUNC = state_wide, STYPE = bigint)",
+            "42883",
+            "function state_wide(bigint) does not exist",
+        ),
+    ] {
+        let (actual_state, actual_message) = error(&mut session, statement);
+        assert_eq!(actual_state, sqlstate, "{statement}");
+        assert!(actual_message.contains(message), "{actual_message}");
+    }
+
+    session
+        .execute(
+            "CREATE AGGREGATE picked(int) (SFUNC = state_pick, STYPE = bigint, INITCOND = '0')",
+        )
+        .unwrap();
+    assert_eq!(
+        cell(&mut session, "SELECT picked(x) FROM (VALUES (1), (2)) v(x)"),
+        "3",
+    );
+}

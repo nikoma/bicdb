@@ -21,7 +21,7 @@ pub(crate) fn routine_input_signature(routine: &RoutineSchema) -> Result<String>
 /// Declared input arguments: type name and whether a default makes it optional.
 /// Recorded argument types are authoritative; the declaration text is the
 /// fallback for routines recorded without them.
-fn declared_inputs(routine: &RoutineSchema) -> Result<Vec<(Option<String>, bool)>> {
+pub(crate) fn declared_inputs(routine: &RoutineSchema) -> Result<Vec<(Option<String>, bool)>> {
     let params = parse_routine_params(&routine.args)?;
     let recorded = routine.arg_types.len() == params.len();
     Ok(params

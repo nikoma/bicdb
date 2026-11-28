@@ -4109,16 +4109,26 @@ fn resolved_text_search_operand_type(
     }
 }
 
-fn eval_atat_match_value(
+fn eval_match_operator_value(
+    op: &BinaryOperator,
     left: SqlValue,
     right: SqlValue,
     left_type: Option<&str>,
     right_type: Option<&str>,
 ) -> Result<Option<bool>> {
-    if left_type == Some("jsonb") && right_type == Some("jsonpath") {
-        return eval_jsonpath_operator_value(left, right, true).and_then(sql_value_truth);
+    if jsonpath_operator_signature(left_type, right_type, &right) {
+        return eval_jsonpath_operator_value(left, right, *op == BinaryOperator::AtAt)
+            .and_then(sql_value_truth);
     }
-    eval_text_search_match_value(left, right, left_type, right_type).and_then(sql_value_truth)
+    if *op == BinaryOperator::AtAt && left_type != Some("jsonb") {
+        return eval_text_search_match_value(left, right, left_type, right_type)
+            .and_then(sql_value_truth);
+    }
+    Err(SqlError::undefined_function(format!(
+        "operator does not exist: {} {op} {}",
+        left_type.unwrap_or("unknown"),
+        right_type.unwrap_or("unknown")
+    )))
 }
 
 /// An index-only `count(*)`: the number of entries of `index` under the

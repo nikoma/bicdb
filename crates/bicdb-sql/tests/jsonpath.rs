@@ -89,6 +89,29 @@ fn jsonpath_operators_work_for_constants_and_stored_rows_without_breaking_fts_di
         )
         .unwrap();
     assert_eq!(stored.rows, vec![vec![SqlValue::Int(1)]]);
+
+    let matched = session
+        .execute(
+            r#"SELECT count(*) FROM documents d
+               WHERE d.payload @@ '$.score >= 5'
+                 AND d.payload @? '$.tags[*] ? (@ == "urgent")'"#,
+        )
+        .unwrap();
+    assert_eq!(matched.rows, [vec![SqlValue::Int(1)]]);
+
+    let nulls = session
+        .execute("SELECT NULL::jsonb @@ '$.a == 1', '{}'::jsonb @@ NULL")
+        .unwrap();
+    assert_eq!(nulls.rows, [vec![SqlValue::Null, SqlValue::Null]]);
+
+    for operator in ["@@", "@?"] {
+        let error = session
+            .execute(&format!(
+                "SELECT payload {operator} '$.score >= 5'::text FROM documents"
+            ))
+            .unwrap_err();
+        assert_eq!(error.sqlstate(), "42883");
+    }
 }
 
 #[test]

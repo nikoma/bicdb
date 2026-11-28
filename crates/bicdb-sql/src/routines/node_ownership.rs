@@ -48,6 +48,7 @@ impl OwnedNodes {
                     self.ast(query);
                 }
                 RoutineDecl::Alias { .. }
+                | RoutineDecl::TriggerRecordAlias { .. }
                 | RoutineDecl::Variable {
                     default_expr: None, ..
                 } => {}

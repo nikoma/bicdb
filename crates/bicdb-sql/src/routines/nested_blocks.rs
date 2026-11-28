@@ -64,6 +64,8 @@ impl SqlSession<'_> {
         let types = Arc::clone(&frame.assignment_types);
         let registered_types = frame.registered_assignment_types.clone();
         let dates = frame.oracle_dates.clone();
+        let aliases = frame.record_alias_ids.clone();
+        let alias_value_count = frame.record_alias_values.len();
         let mut saved = Vec::new();
         let local =
             RoutineFrameTemplate::build_with_declarations(&[], &frame.slot_names, declarations);
@@ -71,9 +73,11 @@ impl SqlSession<'_> {
             let name = match declaration {
                 RoutineDecl::Variable { name, .. }
                 | RoutineDecl::Alias { name, .. }
+                | RoutineDecl::TriggerRecordAlias { name, .. }
                 | RoutineDecl::Cursor { name, .. } => name,
             };
             saved.push((name.clone(), frame.get(name), frame.cursors.remove(name)));
+            frame.record_alias_ids.remove(name);
             frame.set(name, SqlValue::Null);
             Arc::make_mut(&mut frame.assignment_types).remove(name);
             if let Some(dates) = &mut frame.oracle_dates {
@@ -117,12 +121,18 @@ impl SqlSession<'_> {
         frame.registered_assignment_types = registered_types;
         frame.oracle_dates = dates;
         for (name, value, cursor) in saved {
-            frame.set(&name, value);
+            let value = aliases
+                .get(&name)
+                .map(|id| frame.record_alias_values[*id].clone())
+                .unwrap_or(value);
+            frame.set_unaliased(&name, value);
             frame.cursors.remove(&name);
             if let Some(cursor) = cursor {
                 frame.cursors.insert(name, cursor);
             }
         }
+        frame.record_alias_ids = aliases;
+        frame.record_alias_values.truncate(alias_value_count);
         result
     }
 }

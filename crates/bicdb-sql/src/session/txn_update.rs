@@ -4994,6 +4994,9 @@ impl<'db> SqlSession<'db> {
                         .unwrap_or(SqlValue::Null);
                     frame.set(name, value);
                 }
+                RoutineDecl::TriggerRecordAlias { name, target } => {
+                    frame.bind_trigger_record_alias(name, target)?;
+                }
                 RoutineDecl::Variable {
                     name, default_expr, ..
                 } => {

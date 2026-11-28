@@ -215,7 +215,7 @@ pub(crate) fn declaration_bindings(
                     bindings.insert(key, collection);
                 }
             }
-            RoutineDecl::Cursor { name, .. } => {
+            RoutineDecl::Cursor { name, .. } | RoutineDecl::TriggerRecordAlias { name, .. } => {
                 bindings.remove(&normalize_object_name(name));
             }
         }

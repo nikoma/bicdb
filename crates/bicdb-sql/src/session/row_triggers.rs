@@ -223,6 +223,7 @@ impl<'db> SqlSession<'db> {
             // declarations are initialized. Generated trigger functions use
             // that ordering for defaults such as
             // `qualified_table TEXT := TG_TABLE_SCHEMA || '.' || TG_TABLE_NAME`.
+            frame.trigger_record_variables = vars.iter().any(|(name, _)| name == "new");
             for (name, value) in vars {
                 frame.set(name, value.clone());
             }

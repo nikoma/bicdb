@@ -5783,6 +5783,9 @@ impl RoutineFrame {
             dirty_slots: vec![false; slot_count],
             full_resync: true,
             positional: args.to_vec(),
+            trigger_record_variables: false,
+            record_alias_ids: FxHashMap::default(),
+            record_alias_values: Vec::new(),
             output_names: Vec::new(),
             cursors: BTreeMap::new(),
             returned_set: None,
@@ -6013,11 +6016,51 @@ impl RoutineFrame {
         self.set(key, value);
     }
 
+    pub(crate) fn bind_trigger_record_alias(&mut self, name: &str, target: &str) -> Result<()> {
+        if !self.trigger_record_variables || self.oracle_procedural_evaluation {
+            return Err(SqlError::data_exception_public(
+                "42704",
+                format!("variable \"{target}\" does not exist"),
+                None,
+            ));
+        }
+        let id = if let Some(&id) = self.record_alias_ids.get(target) {
+            id
+        } else {
+            let id = self.record_alias_values.len();
+            self.record_alias_values.push(self.get(target));
+            self.record_alias_ids.insert(target.to_owned(), id);
+            id
+        };
+        self.record_alias_ids.insert(name.to_owned(), id);
+        self.set_unaliased(name, self.record_alias_values[id].clone());
+        Ok(())
+    }
+
     pub(crate) fn set(&mut self, name: &str, value: SqlValue) {
         let key = normalized_object_name_ref(name);
+        if let Some(&id) = self.record_alias_ids.get(key.as_ref()) {
+            self.record_alias_values[id] = value.clone();
+            // Bound expression ids remain fixed. Mirror the record into each
+            // visible name's slot so reads work through either name.
+            let names: Vec<_> = self
+                .record_alias_ids
+                .iter()
+                .filter(|(_, binding)| **binding == id)
+                .map(|(name, _)| name.clone())
+                .collect();
+            for name in names {
+                self.set_unaliased(&name, value.clone());
+            }
+        } else {
+            self.set_unaliased(&key, value);
+        }
+    }
+
+    pub(crate) fn set_unaliased(&mut self, key: &str, value: SqlValue) {
         // Inline slot write (not set_slot_by_key) so the hot path moves the
         // value instead of cloning it for a fallback that rarely runs.
-        if let Some(id) = self.slot_ids.get(key.as_ref()).copied() {
+        if let Some(id) = self.slot_ids.get(key).copied() {
             if let Some(slot) = std::rc::Rc::make_mut(&mut self.slot_values).get_mut(id.0) {
                 *slot = value;
                 if let Some(dirty) = self.dirty_slots.get_mut(id.0) {
@@ -6030,7 +6073,7 @@ impl RoutineFrame {
         self.sync_values();
         #[cfg(test)]
         SQL_ROUTINE_FRAME_MAP_SYNCS.with(|syncs| *syncs.borrow_mut() += 1);
-        Arc::make_mut(&mut self.values).insert(key.into_owned(), value);
+        Arc::make_mut(&mut self.values).insert(key.to_owned(), value);
     }
 
     pub(crate) fn set_slot_by_key(&mut self, key: &str, value: SqlValue) -> bool {

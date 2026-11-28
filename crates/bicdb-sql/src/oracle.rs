@@ -3921,13 +3921,16 @@ mod tests {
             .execute("SELECT \"HAPPENED\" FROM \"CALENDAR\".\"EVENTS\"")
             .unwrap();
         assert_eq!(result.rows[0][0].to_cell(), "2024-02-29 00:00:00");
-        assert_eq!(
-            SqlSession::new(&mut db)
-                .execute("SELECT trunc(123.75)")
-                .unwrap()
-                .rows[0][0],
-            SqlValue::Float(123.0)
-        );
+        let native = SqlSession::new(&mut db)
+            .execute(
+                "SELECT pg_typeof(trunc(123.75))::text, trunc(123.75),
+                        pg_typeof(trunc(123.75::float8))::text, trunc(123.75::float8)",
+            )
+            .unwrap();
+        assert_eq!(native.rows[0][0].to_cell(), "numeric");
+        assert_eq!(native.rows[0][1].to_cell(), "123");
+        assert_eq!(native.rows[0][2].to_cell(), "double precision");
+        assert_eq!(native.rows[0][3], SqlValue::Float(123.0));
         assert!(SqlSession::new(&mut db)
             .execute("SELECT trunc(TIMESTAMP '2024-02-29 23:59:58')")
             .is_err());

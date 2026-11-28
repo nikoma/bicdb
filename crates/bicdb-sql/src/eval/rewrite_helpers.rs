@@ -2173,10 +2173,12 @@ pub(crate) fn strip_case_insensitive_keyword<'a>(value: &'a str, keyword: &str) 
 
 pub(crate) fn rewrite_xmltable_once(input: &str) -> Option<String> {
     let tokens = json_predicate_tokens(input);
-    let (index, function) = tokens
-        .iter()
-        .enumerate()
-        .find(|(_, token)| token.word.as_deref() == Some("xmltable"))?;
+    let (index, function) = tokens.iter().enumerate().find(|(index, token)| {
+        token.word.as_deref() == Some("xmltable")
+            && tokens
+                .get(index + 1)
+                .is_some_and(|open| open.depth == token.depth && open.symbol == Some(b'('))
+    })?;
     let open = tokens
         .get(index + 1)
         .filter(|token| token.symbol == Some(b'('))?;
@@ -2332,12 +2334,17 @@ pub(crate) fn rewrite_xmltable_once(input: &str) -> Option<String> {
                 pair[0].word.as_deref() == Some("not") && pair[1].word.as_deref() == Some("null")
             })
             .map(|pair| pair[0]);
-        let path_end = default_token
-            .map(|token| token.start)
-            .or_else(|| not_token.map(|token| token.start))
-            .unwrap_or(end);
+        let option_end = |start| {
+            [path_token.copied(), default_token.copied(), not_token]
+                .into_iter()
+                .flatten()
+                .map(|token| token.start)
+                .filter(|position| *position > start)
+                .min()
+                .unwrap_or(end)
+        };
         let path_expression = path_token
-            .map(|token| input[token.end..path_end].trim().to_string())
+            .map(|token| input[token.end..option_end(token.start)].trim().to_string())
             .unwrap_or_else(|| format!("'{}'", column_name.replace('\'', "''")));
         let path_arg = 4 + extra_arguments.len();
         extra_arguments.push(path_expression);
@@ -2357,7 +2364,7 @@ pub(crate) fn rewrite_xmltable_once(input: &str) -> Option<String> {
             "required": not_token.is_some()
         });
         if let Some(default_token) = default_token {
-            let default_end = not_token.map(|token| token.start).unwrap_or(end);
+            let default_end = option_end(default_token.start);
             let expression = input[default_token.end..default_end].trim();
             let default_arg = 4 + extra_arguments.len();
             extra_arguments.push(expression.to_string());

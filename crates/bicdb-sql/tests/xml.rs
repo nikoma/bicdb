@@ -475,6 +475,10 @@ fn xmltable_uses_the_selected_node_as_xpath_context() {
     assert!(session.execute(
         "SELECT * FROM XMLTABLE('count(/doc/item)' PASSING '<doc><item/></doc>' COLUMNS v text PATH '.')"
     ).unwrap().rows.is_empty());
+    assert_eq!(
+        session.execute("SELECT xmltable.* FROM XMLTABLE('/doc/item' PASSING '<doc><item/></doc>' COLUMNS v text DEFAULT 'fallback' PATH 'missing')").unwrap().rows,
+        [[SqlValue::String("fallback".into())]]
+    );
     for (sql, state, message) in [
         ("SELECT * FROM XMLTABLE('/doc/item' PASSING '<doc><item><b>x</b><b>y</b></item></doc>' COLUMNS many text PATH 'b')", "21000", "more than one value returned by column XPath expression"),
         ("SELECT * FROM XMLTABLE('/doc/item' PASSING '<doc><item/></doc>' COLUMNS \"UPPER\" text PATH '@absent' NOT NULL)", "22004", "null is not allowed in column \"UPPER\""),

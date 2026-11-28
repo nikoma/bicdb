@@ -3002,6 +3002,16 @@ pub(crate) fn eval_binary_expr_value_typed(
     let pg_type = &types.result;
     let left = enforce_integer_value_type(left, left_type.as_deref())?;
     let right = enforce_integer_value_type(right, right_type.as_deref())?;
+    if *op == BinaryOperator::PGExp
+        && !oracle::simple_case::enabled()
+        && uses_numeric_power(
+            [left_type.as_deref(), right_type.as_deref()]
+                .into_iter()
+                .flatten(),
+        )
+    {
+        return super::numeric_power::pg_numeric_power_value(&left, &right);
+    }
     if left_type.as_deref() == Some("regtype") && right_type.as_deref() == Some("regtype") {
         if let Some(truth) = compare_builtin_regtype_values(&left, op, &right) {
             return Ok(truth.map(SqlValue::Bool).unwrap_or(SqlValue::Null));

@@ -4969,17 +4969,21 @@ pub(crate) fn float8_or_numeric_result_type(argument: Option<&str>) -> String {
 
 /// Exponentiation picks the float overload for explicitly floating inputs.
 pub(crate) fn power_result_type<'a>(types: impl Iterator<Item = &'a str>) -> String {
-    let mut numeric = false;
-    for pg_type in types {
-        match pg_type {
-            "float4" | "float8" => return "float8".into(),
-            "numeric" => numeric = true,
-            _ => {}
-        }
-    }
-    if numeric {
+    if uses_numeric_power(types) {
         "numeric".into()
     } else {
         "float8".into()
     }
+}
+
+pub(crate) fn uses_numeric_power<'a>(types: impl Iterator<Item = &'a str>) -> bool {
+    let mut numeric = false;
+    for pg_type in types {
+        match pg_type {
+            "float4" | "float8" => return false,
+            "numeric" => numeric = true,
+            _ => {}
+        }
+    }
+    numeric
 }

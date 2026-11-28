@@ -260,6 +260,69 @@ pub(crate) fn numeric_power(base: &Decimal, exponent: &Decimal) -> Result<Decima
     Ok(result)
 }
 
+pub(super) fn pg_numeric_power_value(base: &SqlValue, exponent: &SqlValue) -> Result<SqlValue> {
+    if matches!(base, SqlValue::Null) || matches!(exponent, SqlValue::Null) {
+        return Ok(SqlValue::Null);
+    }
+    let base = pg_numeric_from_sql_value(base.clone())?;
+    let exponent = pg_numeric_from_sql_value(exponent.clone())?;
+    match (&base, &exponent) {
+        (PgNumeric::Finite { .. }, PgNumeric::Finite { .. }) => {
+            let base = decimal_from_pg_numeric(base)?;
+            let exponent = decimal_from_pg_numeric(exponent)?;
+            Ok(SqlValue::String(numeric_power(&base, &exponent)?.format()))
+        }
+        _ => special_numeric_power(base, exponent),
+    }
+}
+
+fn special_numeric_power(base: PgNumeric, exponent: PgNumeric) -> Result<SqlValue> {
+    let finite_base = match &base {
+        PgNumeric::Finite { .. } => Some(decimal_from_pg_numeric(base.clone())?),
+        _ => None,
+    };
+    let base_magnitude = finite_base
+        .as_ref()
+        .map(|value| value.mantissa.abs().cmp(&pow10_bigint(value.scale)));
+    let base_is_one =
+        base_magnitude == Some(std::cmp::Ordering::Equal) && !pg_numeric_is_negative(&base);
+    let exponent_is_zero = pg_numeric_is_zero(&exponent);
+    let result = match (&base, &exponent) {
+        (PgNumeric::NaN, _) if !exponent_is_zero => "NaN",
+        (_, PgNumeric::NaN) if !base_is_one => "NaN",
+        _ if base_is_one || exponent_is_zero => "1",
+        _ if pg_numeric_is_zero(&base) && pg_numeric_is_negative(&exponent) => {
+            return Err(power_error("zero raised to a negative power is undefined"));
+        }
+        (_, PgNumeric::PositiveInfinity | PgNumeric::NegativeInfinity) => match base_magnitude {
+            Some(std::cmp::Ordering::Equal) => "1",
+            Some(std::cmp::Ordering::Less) if pg_numeric_is_negative(&exponent) => "Infinity",
+            Some(std::cmp::Ordering::Less) => "0",
+            _ if pg_numeric_is_negative(&exponent) => "0",
+            _ => "Infinity",
+        },
+        (PgNumeric::PositiveInfinity, _) if pg_numeric_is_negative(&exponent) => "0",
+        (PgNumeric::PositiveInfinity, _) => "Infinity",
+        (PgNumeric::NegativeInfinity, _) => {
+            let exponent = decimal_from_pg_numeric(exponent)?;
+            let Some(integer) = integral(&exponent) else {
+                return Err(power_error(
+                    "a negative number raised to a non-integer power yields a complex result",
+                ));
+            };
+            if integer.is_negative() {
+                "0"
+            } else if (integer % 2_i32).is_zero() {
+                "Infinity"
+            } else {
+                "-Infinity"
+            }
+        }
+        _ => unreachable!("finite inputs are handled by numeric_power"),
+    };
+    Ok(SqlValue::String(result.to_string()))
+}
+
 /// PostgreSQL uses the decimal weight of ln(x) to choose its display scale.
 fn ln_weight(value: &Decimal) -> i64 {
     let one = pow10_bigint(value.scale);

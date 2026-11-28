@@ -3950,6 +3950,13 @@ pub(crate) fn eval_compatibility_function_value(
     let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(name);
     if !oracle::simple_case::enabled() {
         match (bare_name, args) {
+            ("power" | "pow", [base, exponent])
+                if arg_types.is_some_and(|types| {
+                    uses_numeric_power(types.iter().flatten().map(String::as_str))
+                }) =>
+            {
+                return super::numeric_power::pg_numeric_power_value(base, exponent).map(Some);
+            }
             ("ln" | "log", [arg])
                 if arg_types
                     .and_then(|types| types.first())

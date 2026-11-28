@@ -85,19 +85,21 @@ fn shared_batch_defaults_and_setval_keep_nontransactional_sequence_state() {
 #[test]
 fn postgres_sequence_values_from_rows_and_nested_routines_share_the_session() {
     let dir = tempfile::tempdir().unwrap();
-    let db = BicDb::open(dir.path()).unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    {
+        let mut setup = SqlSession::new(&mut db);
+        for statement in [
+            "CREATE SEQUENCE outer_seq",
+            "CREATE SEQUENCE other_seq",
+            "CREATE TABLE sequence_inputs (id int PRIMARY KEY)",
+            "INSERT INTO sequence_inputs VALUES (1), (2), (3)",
+            "CREATE FUNCTION sequence_tick() RETURNS bigint LANGUAGE plpgsql AS
+             $$ BEGIN RETURN nextval('outer_seq'); END $$",
+        ] {
+            setup.execute(statement).unwrap();
+        }
+    }
     let mut sql = SqlSession::new_shared(&db);
-    sql.execute("CREATE SEQUENCE outer_seq").unwrap();
-    sql.execute("CREATE SEQUENCE other_seq").unwrap();
-    sql.execute("CREATE TABLE sequence_inputs (id int PRIMARY KEY)")
-        .unwrap();
-    sql.execute("INSERT INTO sequence_inputs VALUES (1), (2), (3)")
-        .unwrap();
-    sql.execute(
-        "CREATE FUNCTION sequence_tick() RETURNS bigint LANGUAGE plpgsql AS
-         $$ BEGIN RETURN nextval('outer_seq'); END $$",
-    )
-    .unwrap();
     sql.execute("BEGIN").unwrap();
     sql.execute("SAVEPOINT s").unwrap();
     assert_eq!(

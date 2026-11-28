@@ -3172,7 +3172,6 @@ pub(crate) fn array_projection_set_returning_calls(
 fn generate_series_declared_kind(arguments: &[Expr]) -> Option<GenerateSeriesKind> {
     let types = arguments
         .iter()
-        .take(2)
         .map(|argument| projected_expr_pg_type(argument, None))
         .collect::<Vec<_>>();
     if types.iter().all(Option::is_none) {
@@ -3196,11 +3195,11 @@ pub(crate) fn generate_series_projection_pg_type(
 /// PostgreSQL's `generate_series` result type for these argument types: the timestamp type it
 /// steps over, or int4/int8/numeric following integer arguments. None when no bound is typed.
 pub(crate) fn generate_series_output_pg_type(argument_types: &[Option<String>]) -> Option<String> {
-    if argument_types.iter().take(2).all(Option::is_none) {
-        return None;
-    }
     if let Some(pg_type) = GenerateSeriesKind::resolve(argument_types, &SqlValue::Null).pg_type() {
         return Some(pg_type.to_string());
+    }
+    if argument_types.iter().take(2).all(Option::is_none) {
+        return None;
     }
     let declared = |names: &[&str]| {
         argument_types.iter().any(|pg_type| {
@@ -3210,9 +3209,7 @@ pub(crate) fn generate_series_output_pg_type(argument_types: &[Option<String>]) 
         })
     };
     Some(
-        if declared(&["numeric", "decimal"]) {
-            "numeric"
-        } else if declared(&["int8", "bigint"]) {
+        if declared(&["int8", "bigint"]) {
             "int8"
         } else {
             "int4"
@@ -3394,10 +3391,12 @@ pub(crate) fn array_projection_set_values(
             let kind = kind.unwrap_or_else(|| {
                 GenerateSeriesKind::resolve(&[], arguments.first().unwrap_or(&SqlValue::Null))
             });
-            if kind == GenerateSeriesKind::Integer {
-                generate_series_integer_values(&arguments)
-            } else {
-                generate_series_timestamp_values(kind, &arguments, |_| Ok(()))
+            match kind {
+                GenerateSeriesKind::Integer => generate_series_integer_values(&arguments),
+                GenerateSeriesKind::Numeric => {
+                    generate_series_numeric_values(&arguments, |_| Ok(()))
+                }
+                _ => generate_series_timestamp_values(kind, &arguments, |_| Ok(())),
             }
         }
     }

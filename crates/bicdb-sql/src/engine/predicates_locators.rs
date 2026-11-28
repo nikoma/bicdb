@@ -5249,19 +5249,27 @@ impl<'db> SqlEngine<'db> {
             .collect::<Result<Vec<_>>>()?;
         let types = expressions
             .iter()
-            .take(2)
             .map(|expr| self.infer_env_expr_type(expr, &[]))
             .collect::<Vec<_>>();
-        if values.len() == 3
-            && GenerateSeriesKind::resolve(&types, &values[0]) != GenerateSeriesKind::Integer
-        {
-            let kind = GenerateSeriesKind::resolve(&types, &values[0]);
-            let series = generate_series_timestamp_values(kind, &values, |count| {
-                if count % 1024 == 0 {
-                    self.check_cancellation()?;
+        let check = |count| {
+            if count % 1024 == 0 {
+                self.check_cancellation()?;
+            }
+            Ok(())
+        };
+        let series =
+            match GenerateSeriesKind::resolve(&types, values.first().unwrap_or(&SqlValue::Null)) {
+                GenerateSeriesKind::Numeric => {
+                    Some(generate_series_numeric_values(&values, check)?)
                 }
-                Ok(())
-            })?;
+                kind @ (GenerateSeriesKind::Timestamp | GenerateSeriesKind::Timestamptz)
+                    if values.len() == 3 =>
+                {
+                    Some(generate_series_timestamp_values(kind, &values, check)?)
+                }
+                _ => None,
+            };
+        if let Some(series) = series {
             let rows = series
                 .into_iter()
                 .map(|value| slot_row_from_values(&columns, &[value]))

@@ -1496,6 +1496,65 @@ fn generate_series_steps_timestamps_by_an_interval() {
 }
 
 #[test]
+fn generate_series_uses_exact_numeric_steps_and_result_types() {
+    let (_dir, mut db) = db();
+    let mut session = SqlSession::new(&mut db);
+    let positive = session
+        .execute("SELECT v FROM generate_series(0.0, 1.0, 0.25) AS v")
+        .unwrap();
+    assert_eq!(positive.column_types, vec![Some("numeric".to_owned())]);
+    assert_eq!(
+        positive.rows,
+        ["0.0", "0.25", "0.50", "0.75", "1.00"]
+            .into_iter()
+            .map(|value| vec![text(value)])
+            .collect::<Vec<_>>(),
+    );
+    let descending = session
+        .execute("SELECT generate_series(3, 1, -0.50)")
+        .unwrap();
+    assert_eq!(descending.column_types, vec![Some("numeric".to_owned())]);
+    assert_eq!(
+        descending.rows,
+        ["3", "2.50", "2.00", "1.50", "1.00"]
+            .into_iter()
+            .map(|value| vec![text(value)])
+            .collect::<Vec<_>>(),
+    );
+    assert_eq!(
+        session
+            .execute("SELECT count(*) FROM generate_series(1, 1e4)")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(10_000)]],
+    );
+    for sql in [
+        "SELECT generate_series(NULL::numeric, 2)",
+        "SELECT * FROM generate_series(1::numeric, 2, -1)",
+    ] {
+        assert!(session.execute(sql).unwrap().rows.is_empty(), "{sql}");
+    }
+    for (sql, message) in [
+        (
+            "SELECT generate_series(1::numeric, 2, 0)",
+            "step size cannot equal zero",
+        ),
+        (
+            "SELECT generate_series('NaN'::numeric, 2)",
+            "start value cannot be NaN",
+        ),
+        (
+            "SELECT * FROM generate_series(1, 'Infinity'::numeric)",
+            "stop value cannot be infinity",
+        ),
+    ] {
+        let error = session.execute(sql).unwrap_err();
+        assert_eq!(error.sqlstate(), "22023", "{sql}: {error}");
+        assert_eq!(error.postgres_message(), message);
+    }
+}
+
+#[test]
 fn partial_unique_index_frees_a_key_when_the_transaction_moves_the_row_out_of_its_predicate() {
     let (_dir, mut db) = db();
     // $1/$2 are the WeWoBo statement's parameters; the other statements take none.

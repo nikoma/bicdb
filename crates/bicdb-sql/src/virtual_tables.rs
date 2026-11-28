@@ -3835,23 +3835,24 @@ pub(crate) fn validate_zero_arg_table_function(
 }
 
 pub(crate) fn estimate_generate_series_rows(args: &TableFunctionArgs) -> Result<usize> {
-    if let Some((kind, values)) = generate_series_timestamp_args(args)? {
-        return estimate_generate_series_timestamp_rows(kind, &values);
-    }
-    Ok(generate_series_bounds(args)?
-        .map(|(_, _, _, rows)| rows)
-        .unwrap_or_default())
-}
-
-pub(crate) fn generate_series_bounds(
-    args: &TableFunctionArgs,
-) -> Result<Option<(i64, i64, i64, usize)>> {
     let args = table_function_expr_args(args)?;
     let values = args
         .iter()
         .map(eval_constant_expr)
         .collect::<Result<Vec<_>>>()?;
-    generate_series_value_bounds(&values)
+    let types = args
+        .iter()
+        .map(|arg| projected_expr_pg_type(arg, None))
+        .collect::<Vec<_>>();
+    match GenerateSeriesKind::resolve(&types, values.first().unwrap_or(&SqlValue::Null)) {
+        GenerateSeriesKind::Numeric => Ok(NumericSeries::new(&values)?.map_or(0, |s| s.rows)),
+        kind @ (GenerateSeriesKind::Timestamp | GenerateSeriesKind::Timestamptz)
+            if values.len() == 3 =>
+        {
+            estimate_generate_series_timestamp_rows(kind, &values)
+        }
+        _ => Ok(generate_series_value_bounds(&values)?.map_or(0, |(_, _, _, rows)| rows)),
+    }
 }
 
 pub(crate) fn generate_series_value_bounds(
@@ -3915,11 +3916,11 @@ pub(crate) fn generate_series_row_count(start: i64, stop: i64, step: i64) -> Res
     })
 }
 
-/// Which `generate_series` PostgreSQL resolves: the integer form or the
-/// `(timestamp[tz], timestamp[tz], interval)` form.
+/// The integer, numeric, or timestamp form of PostgreSQL's `generate_series`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum GenerateSeriesKind {
     Integer,
+    Numeric,
     Timestamp,
     Timestamptz,
 }
@@ -3943,6 +3944,13 @@ impl GenerateSeriesKind {
         if declared("date") {
             return Self::Timestamptz;
         }
+        if bound_types
+            .iter()
+            .flatten()
+            .any(|kind| matches!(kind.as_str(), "numeric" | "decimal"))
+        {
+            return Self::Numeric;
+        }
         let SqlValue::String(text) = start else {
             return Self::Integer;
         };
@@ -3959,33 +3967,101 @@ impl GenerateSeriesKind {
     pub(crate) fn pg_type(self) -> Option<&'static str> {
         match self {
             Self::Integer => None,
+            Self::Numeric => Some("numeric"),
             Self::Timestamp => Some("timestamp"),
             Self::Timestamptz => Some("timestamptz"),
         }
     }
 }
 
-/// The timestamp form of a `generate_series(...)` table function call, if its arguments resolve to it.
-pub(crate) fn generate_series_timestamp_args(
-    args: &TableFunctionArgs,
-) -> Result<Option<(GenerateSeriesKind, Vec<SqlValue>)>> {
-    let args = table_function_expr_args(args)?;
-    if args.len() != 3 {
-        return Ok(None);
+struct NumericSeries {
+    start: Decimal,
+    step: Decimal,
+    rows: usize,
+}
+
+impl NumericSeries {
+    fn new(args: &[SqlValue]) -> Result<Option<Self>> {
+        if !(2..=3).contains(&args.len()) {
+            return Err(SqlError::InvalidSql(format!(
+                "generate_series expects 2 or 3 arguments, got {}",
+                args.len()
+            )));
+        }
+        if args.iter().any(|value| matches!(value, SqlValue::Null)) {
+            return Ok(None);
+        }
+        let parse = |value: &SqlValue, argument: &str| {
+            let numeric = pg_numeric_from_sql_value(value.clone())?;
+            let forbidden = match numeric {
+                PgNumeric::NaN => Some("NaN"),
+                PgNumeric::PositiveInfinity | PgNumeric::NegativeInfinity => Some("infinity"),
+                PgNumeric::Finite { .. } => None,
+            };
+            if let Some(forbidden) = forbidden {
+                return Err(SqlError::invalid_parameter_value(format!(
+                    "{argument} cannot be {forbidden}"
+                )));
+            }
+            decimal_from_pg_numeric(numeric)
+        };
+        let start = parse(&args[0], "start value")?;
+        let stop = parse(&args[1], "stop value")?;
+        let step = match args.get(2) {
+            Some(step) => parse(step, "step size")?,
+            None => Decimal {
+                mantissa: BigInt::from(1),
+                scale: 0,
+            },
+        };
+        if step.mantissa.is_zero() {
+            return Err(SqlError::invalid_parameter_value(
+                "step size cannot equal zero",
+            ));
+        }
+        let scale = start.scale.max(stop.scale).max(step.scale);
+        let scale_mantissa = |value: &Decimal| &value.mantissa * pow10_bigint(scale - value.scale);
+        let distance = scale_mantissa(&stop) - scale_mantissa(&start);
+        let rows = if !distance.is_zero() && distance.is_negative() != step.mantissa.is_negative() {
+            0
+        } else {
+            (distance / scale_mantissa(&step) + BigInt::from(1))
+                .to_usize()
+                .ok_or_else(|| {
+                    SqlError::Unsupported(
+                        "generate_series result is too large to materialize on this platform"
+                            .into(),
+                    )
+                })?
+        };
+        Ok(Some(Self { start, step, rows }))
     }
-    let values = args
-        .iter()
-        .map(eval_constant_expr)
-        .collect::<Result<Vec<_>>>()?;
-    let types = args
-        .iter()
-        .take(2)
-        .map(|arg| projected_expr_pg_type(arg, None))
-        .collect::<Vec<_>>();
-    match GenerateSeriesKind::resolve(&types, &values[0]) {
-        GenerateSeriesKind::Integer => Ok(None),
-        kind => Ok(Some((kind, values))),
+}
+
+pub(crate) fn generate_series_numeric_values(
+    args: &[SqlValue],
+    mut check: impl FnMut(usize) -> Result<()>,
+) -> Result<Vec<SqlValue>> {
+    let Some(series) = NumericSeries::new(args)? else {
+        return Ok(Vec::new());
+    };
+    let mut values = Vec::new();
+    values.try_reserve(series.rows).map_err(|_| {
+        SqlError::Unsupported(format!(
+            "generate_series result has {} rows and cannot be materialized",
+            series.rows
+        ))
+    })?;
+    let scale = series.start.scale.max(series.step.scale);
+    let step = series.step.mantissa * pow10_bigint(scale - series.step.scale);
+    let mut value = series.start;
+    for row in 0..series.rows {
+        check(row)?;
+        values.push(SqlValue::String(value.clone().format()));
+        value.mantissa = value.mantissa * pow10_bigint(scale - value.scale) + &step;
+        value.scale = scale;
     }
+    Ok(values)
 }
 
 fn generate_series_timestamp(kind: GenerateSeriesKind, value: &SqlValue) -> Result<PgTimestamp> {

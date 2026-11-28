@@ -108,8 +108,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
         .eq_ignore_ascii_case("sql")
     {
         let params = parse_routine_params(&routine.args)?;
-        let body = plpgsql_body_from_definition(&routine.definition)?;
-        let parsed = parse_statements(&body)?;
+        let parsed = sql_function_body_statements(&routine.definition)?;
         let context_label = (!sql_function_is_inlinable(routine, &parsed))
             .then(|| Arc::from(format!("SQL function \"{}\"", routine.name)));
         let mut statements = Vec::with_capacity(parsed.len() * 2);
@@ -1228,6 +1227,28 @@ pub(crate) fn plpgsql_body_from_definition(definition: &str) -> Result<String> {
     Err(SqlError::UnsupportedPlpgsqlFeature(
         "routine body must be single-quoted or dollar-quoted".to_string(),
     ))
+}
+
+fn sql_function_body_statements(definition: &str) -> Result<Vec<Statement>> {
+    if find_top_level_keyword(definition, "RETURN").is_some()
+        || !crate::sql_atomic_body::atomic_bodies(definition).is_empty()
+    {
+        let mut statements = parse_statements(definition)?;
+        if let [Statement::CreateFunction(function)] = statements.as_mut_slice() {
+            match function.function_body.take() {
+                Some(CreateFunctionBody::Return(expression)) => {
+                    return parse_statements(&format!(
+                        "SELECT {}",
+                        crate::sql_text::sql_text(&expression)
+                    ));
+                }
+                Some(CreateFunctionBody::AsBeginEnd(block)) => return Ok(block.statements),
+                _ => {}
+            }
+        }
+    }
+    let body = plpgsql_body_from_definition(definition)?;
+    parse_statements(&body)
 }
 
 pub(crate) fn parse_single_quoted_sql_string(sql: &str) -> Result<Option<String>> {

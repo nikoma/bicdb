@@ -18,6 +18,19 @@ impl<'db> SqlSession<'db> {
         } else {
             return Ok(None);
         };
+        if !crate::sql_atomic_body::atomic_bodies(trimmed).is_empty() {
+            return Ok(None);
+        }
+        if let Some(return_start) = find_top_level_keyword(trimmed, "RETURN") {
+            if find_top_level_keyword(&trimmed[..return_start], "AS").is_some() {
+                return Err(SqlError::data_exception_public(
+                    "42P13",
+                    "duplicate function body specified",
+                    None,
+                ));
+            }
+            return Ok(None);
+        }
         let rest = trimmed[prefix.len()..].trim_start();
         let name_end = rest
             .find(|ch: char| ch == '(' || ch.is_whitespace())

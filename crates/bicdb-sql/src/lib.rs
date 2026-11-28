@@ -257,6 +257,7 @@ mod routine_overloads;
 mod schema_meta;
 pub mod search_path;
 mod similar_to;
+mod sql_atomic_body;
 mod sql_json;
 mod srf_projection;
 mod stats_ext;

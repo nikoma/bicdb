@@ -74,6 +74,8 @@ fn parse_inference_statements(db: &BicDb, sql: &str) -> Result<Vec<Statement>> {
         raw_do_block_language(sql)?;
         return Ok(Vec::new());
     }
+    let atomic = crate::sql_atomic_body::lower(sql);
+    let sql = atomic.as_ref().map_or(sql, |lowered| lowered.sql.as_str());
     let parse_sql = rewrite_postgres_parse_compat(sql);
     let sql_for_parse = parse_sql.as_deref().unwrap_or(sql);
     reject_oversized_sql(sql_for_parse)?;
@@ -106,12 +108,20 @@ pub fn infer_parameter_types(db: &BicDb, sql: &str) -> Result<Vec<Option<String>
     // The resolver only types the shapes it understands; the parameter count
     // must still cover every placeholder or Bind would reject the statement.
     let mut highest = 0usize;
-    let _ = sqlparser::ast::visit_expressions(&statements, |expr| {
-        if let Some(index) = placeholder_index(expr) {
-            highest = highest.max(index);
+    for statement in &statements {
+        if matches!(
+            statement,
+            Statement::CreateFunction(_) | Statement::CreateProcedure { .. }
+        ) {
+            continue;
         }
-        std::ops::ControlFlow::<()>::Continue(())
-    });
+        let _ = sqlparser::ast::visit_expressions(statement, |expr| {
+            if let Some(index) = placeholder_index(expr) {
+                highest = highest.max(index);
+            }
+            std::ops::ControlFlow::<()>::Continue(())
+        });
+    }
     if resolver.types.len() < highest {
         resolver.types.resize(highest, None);
     }

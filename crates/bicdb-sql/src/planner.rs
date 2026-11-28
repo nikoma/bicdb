@@ -685,7 +685,10 @@ pub(crate) enum BoundExpr {
         expr: Box<BoundExpr>,
         data_type: DataType,
     },
-    UnaryMinus(Box<BoundExpr>),
+    UnaryMinus {
+        expr: Box<BoundExpr>,
+        pg_type: Option<String>,
+    },
     UnaryNot(Box<BoundExpr>),
     IsNull {
         expr: Box<BoundExpr>,
@@ -779,7 +782,7 @@ fn bound_expr_calls_builtin(expr: &BoundExpr, builtin: &str) -> bool {
             bound_expr_calls_builtin(left, builtin) || bound_expr_calls_builtin(right, builtin)
         }
         BoundExpr::Cast { expr, .. }
-        | BoundExpr::UnaryMinus(expr)
+        | BoundExpr::UnaryMinus { expr, .. }
         | BoundExpr::UnaryNot(expr)
         | BoundExpr::IsNull { expr, .. } => bound_expr_calls_builtin(expr, builtin),
         BoundExpr::Case {
@@ -2367,7 +2370,10 @@ impl BoundExprScope {
                 Some(BoundExpr::UnaryNot(Box::new(self.bind_in(inner, ctx)?)))
             }
             Expr::UnaryOp { op, expr: inner } if op.to_string() == "-" => {
-                Some(BoundExpr::UnaryMinus(Box::new(self.bind_in(inner, ctx)?)))
+                Some(BoundExpr::UnaryMinus {
+                    expr: Box::new(self.bind_in(inner, ctx)?),
+                    pg_type: self.known_expr_type(inner),
+                })
             }
             Expr::UnaryOp { op, expr: inner } if op.to_string() == "+" => self.bind_in(inner, ctx),
             Expr::IsNull(inner) => Some(BoundExpr::IsNull {
@@ -2650,7 +2656,9 @@ impl BoundExpr {
             Self::Cast { expr, data_type } => {
                 cast_value_with_db(frame.db, expr.eval(frame)?, data_type)
             }
-            Self::UnaryMinus(expr) => negate_numeric_value(expr.eval(frame)?),
+            Self::UnaryMinus { expr, pg_type } => {
+                eval_unary_minus_typed_value(expr.eval(frame)?, pg_type.as_deref())
+            }
             Self::Case {
                 operand,
                 conditions,

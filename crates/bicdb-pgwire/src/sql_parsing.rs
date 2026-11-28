@@ -2106,6 +2106,9 @@ pub(crate) fn copy_in_data(state: &mut ConnectionState, payload: &[u8]) -> Resul
         .copy_in
         .as_mut()
         .ok_or_else(|| PgWireError::Protocol("COPY FROM STDIN is not active".to_string()))?;
+    if copy.text_trailer_seen {
+        return Ok(());
+    }
     if copy.spec.binary {
         copy.pending_bytes.extend_from_slice(payload);
         return copy_in_binary_rows(copy);
@@ -2125,6 +2128,18 @@ pub(crate) fn copy_in_data(state: &mut ConnectionState, payload: &[u8]) -> Resul
         Err(error) if error.error_len().is_none() => error.valid_up_to(),
         Err(error) => {
             let start = error.valid_up_to();
+            // A complete text end marker makes the remaining bytes irrelevant,
+            // even if the marker and those bytes were in the same CopyData.
+            if copy.spec.format == CopyFormat::Text {
+                let prefix =
+                    std::str::from_utf8(&copy.pending_bytes[..start]).expect("valid UTF-8 prefix");
+                copy.pending.push_str(prefix);
+                payload_records(copy)?;
+                if copy.text_trailer_seen {
+                    copy.pending_bytes.clear();
+                    return Ok(());
+                }
+            }
             let end = (start + error.error_len().unwrap_or(1) + 1).min(copy.pending_bytes.len());
             let shown = copy.pending_bytes[start..end]
                 .iter()
@@ -2145,7 +2160,11 @@ pub(crate) fn copy_in_data(state: &mut ConnectionState, payload: &[u8]) -> Resul
     copy.pending.push_str(
         std::str::from_utf8(&decoded).map_err(|error| PgWireError::Protocol(error.to_string()))?,
     );
-    payload_records(copy)
+    payload_records(copy)?;
+    if copy.text_trailer_seen {
+        copy.pending_bytes.clear();
+    }
+    Ok(())
 }
 
 /// Hand every complete record in `pending` to `copy_in_line`.
@@ -2158,7 +2177,11 @@ fn payload_records(copy: &mut CopyInState) -> Result<()> {
         }
         copy.pending.drain(..=newline);
         copy.csv_scanned = 0;
-        copy_in_line(copy, &line)?;
+        copy_in_line(copy, &line, true)?;
+        if copy.text_trailer_seen {
+            copy.pending.clear();
+            break;
+        }
         spill_copy_rows_if_needed(copy)?;
     }
     Ok(())
@@ -2333,7 +2356,9 @@ pub(crate) fn finish_copy_in_inner(
     if !copy.pending.is_empty() {
         let line = std::mem::take(&mut copy.pending);
         note_csv_embedded_lines(&mut copy, &line, false);
-        copy_in_line(&mut copy, line.trim_end_matches('\r'))?;
+        let terminated = line.ends_with('\r');
+        let record = line.trim_end_matches('\r');
+        copy_in_line(&mut copy, record, terminated)?;
         spill_copy_rows_if_needed(&mut copy)?;
     }
     if let Some(spill) = copy.spill.as_mut() {
@@ -2670,13 +2695,13 @@ pub(crate) fn append_copy_insert_statements(
     Ok(count)
 }
 
-pub(crate) fn copy_in_line(copy: &mut CopyInState, line: &str) -> Result<()> {
+fn copy_in_line(copy: &mut CopyInState, line: &str, terminated: bool) -> Result<()> {
     if copy.deferred_error.is_some() {
         // The input already failed at an earlier line; the rest is read and
         // dropped, as PostgreSQL drops it after its error.
         return Ok(());
     }
-    match copy_in_line_inner(copy, line) {
+    match copy_in_line_inner(copy, line, terminated) {
         // A row that cannot be read fails COPY where PostgreSQL reaches it:
         // after the rows before it were converted, so an earlier row's bad
         // value is the error reported (see `finish_transactional_copy_in`).
@@ -2688,15 +2713,28 @@ pub(crate) fn copy_in_line(copy: &mut CopyInState, line: &str) -> Result<()> {
     }
 }
 
-fn copy_in_line_inner(copy: &mut CopyInState, line: &str) -> Result<()> {
+fn copy_in_line_inner(copy: &mut CopyInState, line: &str, terminated: bool) -> Result<()> {
     // A blank record is one field: empty text, or CSV NULL. It is also a
     // real header record when HEADER is set. No input is handled by the
     // pending-buffer boundary, not by discarding a parsed record here.
-    if copy.spec.format == CopyFormat::Text && line == "\\." {
+    if copy.spec.format == CopyFormat::Text && line == "\\." && terminated {
+        copy.text_trailer_seen = true;
         return Ok(());
     }
     // PostgreSQL counts line ends inside a quoted CSV field as lines.
     copy.line_number += 1 + std::mem::take(&mut copy.csv_embedded_lines);
+    if copy.spec.format == CopyFormat::Text {
+        let mut bytes = line.bytes();
+        while let Some(byte) = bytes.next() {
+            if byte == b'\\' && bytes.next() == Some(b'.') {
+                return Err(with_copy_line_context(
+                    bad_copy_data("end-of-copy marker is not alone on its line"),
+                    copy,
+                    None,
+                ));
+            }
+        }
+    }
     let mut marks = Vec::new();
     let mut parse = |copy: &CopyInState| {
         marks.clear();
@@ -2704,13 +2742,14 @@ fn copy_in_line_inner(copy: &mut CopyInState, line: &str) -> Result<()> {
             CopyFormat::Text => parse_text_fields_marked(line, &copy.spec.options, &mut marks),
             CopyFormat::Csv => parse_csv_fields_marked(line, &copy.spec.options, &mut marks),
         }
-        .map_err(|error| with_copy_line_context(error, copy, line))
+        .map_err(|error| with_copy_line_context(error, copy, Some(line)))
     };
     if copy.spec.header && !copy.header_seen {
         copy.header_seen = true;
         if copy.spec.header_match {
             let fields = parse(copy)?;
-            check_copy_header(&fields, &copy.spec.header_expected, &copy.spec.options.null)?;
+            check_copy_header(&fields, &copy.spec.header_expected, &copy.spec.options.null)
+                .map_err(|error| with_copy_line_context(error, copy, Some(line)))?;
         }
         return Ok(());
     }
@@ -2737,7 +2776,7 @@ fn copy_in_line_inner(copy: &mut CopyInState, line: &str) -> Result<()> {
                 None,
             )),
             copy,
-            line,
+            Some(line),
         ));
     }
     if expected > 0 && row.len() != expected {
@@ -2747,7 +2786,11 @@ fn copy_in_line_inner(copy: &mut CopyInState, line: &str) -> Result<()> {
             }
             _ => "extra data after last expected column".to_string(),
         };
-        return Err(with_copy_line_context(bad_copy_data(&message), copy, line));
+        return Err(with_copy_line_context(
+            bad_copy_data(&message),
+            copy,
+            Some(line),
+        ));
     }
     copy.rows.push(row);
     copy.row_lines.push(copy.line_number);
@@ -2755,15 +2798,16 @@ fn copy_in_line_inner(copy: &mut CopyInState, line: &str) -> Result<()> {
     Ok(())
 }
 
-/// PostgreSQL's CONTEXT for an error in a COPY FROM line:
-/// `COPY t, line N: "<line>"`.
-fn with_copy_line_context(error: PgWireError, copy: &CopyInState, line: &str) -> PgWireError {
-    let context = format!(
-        "COPY {}, line {}: \"{}\"",
-        copy.display_relation,
-        copy.line_number,
-        bicdb_sql::copy_context_printout(line)
-    );
+/// PostgreSQL's COPY FROM context includes the record when it was read fully.
+fn with_copy_line_context(
+    error: PgWireError,
+    copy: &CopyInState,
+    line: Option<&str>,
+) -> PgWireError {
+    let mut context = format!("COPY {}, line {}", copy.display_relation, copy.line_number);
+    if let Some(line) = line {
+        context.push_str(&format!(": \"{}\"", bicdb_sql::copy_context_printout(line)));
+    }
     match error {
         PgWireError::Sql(error) => PgWireError::Sql(bicdb_sql::SqlError::with_detail_fields(
             error,

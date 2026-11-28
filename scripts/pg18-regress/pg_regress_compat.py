@@ -19,7 +19,7 @@ Outputs (in --out): results/<test>.out, diffs/<test>.diff, status.tsv, summary.j
 Targets:
   --target ref      start a stock PostgreSQL 18.4 container (pgregress-ref, 127.0.0.1:57434, 1G)
   --target bicdb    start `<bin> serve --port <p> [server COPY, 2PC flags] <fresh dir>` under
-                    systemd-run (MemoryMax, Nice, UMask=0000)
+                    systemd-run (MemoryMax, Nice)
   --target conn     use an already running server (--host/--port/--user/--admin-db)
 
 Adaptations applied only for BicDB are listed in ADAPTATIONS below and written to summary.json.
@@ -228,13 +228,10 @@ class Target:
             sh(["systemctl", "stop", self.unit], check=False)
             time.sleep(1)
         # Server-side COPY reads the regression data files and writes results/ in the run
-        # directory, as PostgreSQL's server does. UMask=0000 keeps the files it writes
-        # writable for psql, which runs as the client image's `postgres` uid (psql's \o and
-        # later COPY TO overwrite them). max_prepared_transactions=2 is pg_regress's own
-        # setting, so prepared_xacts runs its enabled variant, as the reference does.
+        # directory, as PostgreSQL's server does. max_prepared_transactions=2 is
+        # pg_regress's own setting, so prepared_xacts uses its enabled variant.
         sh(["systemd-run", "--quiet", f"--unit={self.unit}", "--collect", "-p",
             f"MemoryMax={self.args.memory_max}", "-p", "Nice=15", "-p", "CPUWeight=20",
-            "-p", "UMask=0000",
             self.args.bicdb_bin, "serve", "--port", str(self.port),
             "--copy-server-files-dir", self.regress, "--copy-server-files-dir", self.builddir,
             "--allow-copy-program", "--max-prepared-transactions", "2", self.datadir])
@@ -331,12 +328,13 @@ def port_in_use(port):
     return False
 
 
-def start_client(regress, builddir, libdir):
+def start_client(regress, builddir, libdir, target):
     sh(["docker", "rm", "-f", CLIENT], check=False)
-    # Run psql as the image's `postgres` user (the reference server's uid) so files psql creates
-    # (\o) can be overwritten by server-side COPY TO, as when pg_regress and the server share a user.
+    # pg_regress and its server share an owner for files overwritten by both `\o`
+    # and server-side COPY TO. The local BicDB systemd service runs as uid 0.
+    client_user = "0" if target == "bicdb" else "postgres"
     sh(["docker", "run", "-d", "--name", CLIENT, "--network", "host", "--memory", "1g", "--cpus", "2",
-        "--user", "postgres", "--entrypoint", "sleep", "-v", f"{regress}:{regress}:ro", "-v", f"{builddir}:{builddir}",
+        "--user", client_user, "--entrypoint", "sleep", "-v", f"{regress}:{regress}:ro", "-v", f"{builddir}:{builddir}",
         "-v", f"{libdir}:{libdir}:ro", IMAGE, "infinity"])
     sh(["docker", "exec", "-u", "0", CLIENT, "chmod", "o+x", "/root"])
 
@@ -491,7 +489,7 @@ def main():
             scope[parts[0]] = (parts[1], parts[2] if len(parts) > 2 else "")
 
     t = Target(args, builddir, regress, libdir)
-    start_client(regress, builddir, libdir)
+    start_client(regress, builddir, libdir, args.target)
     t.start()
     setup_log = []
     create_database(t, setup_log)

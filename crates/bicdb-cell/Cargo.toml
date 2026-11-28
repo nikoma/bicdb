@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-cell"
-version = "1.0.578"
+version = "1.0.579"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -21,14 +21,14 @@ path = "src/main.rs"
 [dependencies]
 anyhow.workspace = true
 base64.workspace = true
-bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "=1.0.578" }
-bicdb-cell-admission = { path = "../bicdb-cell-admission", version = "=1.0.578" }
-bicdb-cell-ha = { path = "../bicdb-cell-ha", version = "=1.0.578" }
-bicdb-cell-device = { path = "../bicdb-cell-device", version = "=1.0.578" }
-bicdb-cell-grant = { path = "../bicdb-cell-grant", version = "=1.0.578" }
-bicdb-core = { path = "../bicdb-core", version = "=1.0.578", default-features = false, features = ["compression"] }
-bicdb-extension = { path = "../bicdb-extension", version = "=1.0.578" }
-bicdb-fleet = { path = "../bicdb-fleet", version = "=1.0.578" }
+bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "=1.0.579" }
+bicdb-cell-admission = { path = "../bicdb-cell-admission", version = "=1.0.579" }
+bicdb-cell-ha = { path = "../bicdb-cell-ha", version = "=1.0.579" }
+bicdb-cell-device = { path = "../bicdb-cell-device", version = "=1.0.579" }
+bicdb-cell-grant = { path = "../bicdb-cell-grant", version = "=1.0.579" }
+bicdb-core = { path = "../bicdb-core", version = "=1.0.579", default-features = false, features = ["compression"] }
+bicdb-extension = { path = "../bicdb-extension", version = "=1.0.579" }
+bicdb-fleet = { path = "../bicdb-fleet", version = "=1.0.579" }
 ciborium.workspace = true
 clap.workspace = true
 ctrlc.workspace = true

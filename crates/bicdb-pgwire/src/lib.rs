@@ -3058,6 +3058,8 @@ struct CopyInState {
     /// chunk COPY data by size (psql uses 8 KiB), not by character.
     pending_bytes: Vec<u8>,
     header_seen: bool,
+    /// Text COPY FROM: a complete end-of-copy line arrived.
+    text_trailer_seen: bool,
     /// Binary COPY FROM: the end-of-data marker arrived.
     binary_trailer_seen: bool,
     resolved_columns: Option<Vec<String>>,
@@ -4175,6 +4177,7 @@ fn begin_copy_in(
         pending: String::new(),
         pending_bytes: Vec::new(),
         header_seen: false,
+        text_trailer_seen: false,
         binary_trailer_seen: false,
         resolved_columns: None,
         inserted_rows: 0,

@@ -142,6 +142,7 @@ fn copy_from_header_match_checks_the_column_names() {
             .contains("column name mismatch in header line field 2: got \"wrong\", expected \"b\""),
         "{error}"
     );
+    assert!(error.contains("WCOPY m, line 1: \"a,wrong\""), "{error}");
 
     // A plain HEADER skips the line whatever it says.
     send_query(&mut client, "COPY m FROM STDIN WITH (FORMAT csv, HEADER)");

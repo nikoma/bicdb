@@ -144,6 +144,47 @@ fn copy_in(client: &mut TcpStream, sql: &str, data: &[u8]) -> Vec<(u8, Vec<u8>)>
     read_until_ready(client)
 }
 
+#[test]
+fn text_copy_end_marker_requires_its_own_line() {
+    let (mut client, server, _dir) = serve();
+    simple(&mut client, "CREATE TABLE markers (value text)");
+    for data in [
+        b"first\nsecond\nfoo\\.\n".as_slice(),
+        b"first\nsecond\n\\.foo\n",
+        b"first\nsecond\n\\.",
+    ] {
+        let messages = copy_in(&mut client, "COPY markers FROM STDIN", data);
+        assert_eq!(error_field(&messages, 'C').as_deref(), Some("22P04"));
+        assert_eq!(
+            error_field(&messages, 'M').as_deref(),
+            Some("end-of-copy marker is not alone on its line")
+        );
+        assert_eq!(
+            error_field(&messages, 'W').as_deref(),
+            Some("COPY markers, line 3")
+        );
+        assert!(rows(&simple(&mut client, "SELECT value FROM markers")).is_empty());
+    }
+
+    send_query(&mut client, "COPY markers FROM STDIN");
+    assert_eq!(read_message(&mut client).0, b'G');
+    send_message(&mut client, b'd', b"foo\\\\.\r\n\\");
+    send_message(&mut client, b'd', b".\r\n\xff");
+    send_message(&mut client, b'd', b"ignored\r\n");
+    send_message(&mut client, b'c', &[]);
+    assert!(error_field(&read_until_ready(&mut client), 'C').is_none());
+    let messages = copy_in(&mut client, "COPY markers FROM STDIN CSV", b"\\.\n");
+    assert!(error_field(&messages, 'C').is_none());
+    assert_eq!(
+        rows(&simple(
+            &mut client,
+            "SELECT value FROM markers ORDER BY value"
+        )),
+        vec![vec![Some("\\.".into())], vec![Some("foo\\.".into())]]
+    );
+    finish(client, server);
+}
+
 fn copy_bytes(messages: &[(u8, Vec<u8>)]) -> Vec<u8> {
     messages
         .iter()

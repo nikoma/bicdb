@@ -91,6 +91,10 @@ fn parse_inference_statements(db: &BicDb, sql: &str) -> Result<Vec<Statement>> {
         raw_do_block_language(sql)?;
         return Ok(Vec::new());
     }
+    if let Some(statements) = parse_postgres_conflict_inference(sql)? {
+        oracle::lock_waits::validate(db, &statements)?;
+        return Ok(statements);
+    }
     let atomic = crate::sql_atomic_body::lower(sql);
     let sql = atomic.as_ref().map_or(sql, |lowered| lowered.sql.as_str());
     let parse_sql = rewrite_postgres_parse_compat(sql);
@@ -106,6 +110,16 @@ fn parse_inference_statements(db: &BicDb, sql: &str) -> Result<Vec<Statement>> {
     reject_deep_expressions(&statements)?;
     oracle::lock_waits::validate(db, &statements)?;
     Ok(statements)
+}
+
+/// Parse PostgreSQL inference predicates for protocol metadata without
+/// evaluating the statement or using sqlparser's incomplete grammar.
+pub fn parse_postgres_conflict_inference(sql: &str) -> Result<Option<Vec<Statement>>> {
+    if crate::conflict_inference::lower(sql).is_some() {
+        parse_statements(sql).map(Some)
+    } else {
+        Ok(None)
+    }
 }
 
 /// Resolve PostgreSQL parameter types from statement, schema, and expression
@@ -665,6 +679,13 @@ impl<'engine, 'db> ParameterTypeResolver<'engine, 'db> {
                     self.assignments(assignments, &schema_columns, &env);
                 }
                 OnInsert::OnConflict(conflict) => {
+                    if let Some((_, Some(predicate))) = conflict
+                        .conflict_target
+                        .as_ref()
+                        .and_then(crate::conflict_inference::column_inference)
+                    {
+                        self.expr(predicate, &env[..1], None);
+                    }
                     if let OnConflictAction::DoUpdate(update) = &conflict.action {
                         self.assignments(&update.assignments, &schema_columns, &env);
                         if let Some(selection) = &update.selection {

@@ -82,8 +82,8 @@ fn column_ref(schema: &TableSchema, expr: &Expr) -> Option<ColumnRef> {
         return Some(reference);
     }
     let name = match strip(expr) {
-        Expr::Identifier(ident) => ident.value.clone(),
-        Expr::CompoundIdentifier(parts) => parts.last()?.value.clone(),
+        Expr::Identifier(ident) => ident_value(ident),
+        Expr::CompoundIdentifier(parts) => ident_value(parts.last()?),
         _ => return None,
     };
     let column = schema.column(&name)?;
@@ -109,8 +109,8 @@ fn json_text_field_ref(schema: &TableSchema, expr: &Expr) -> Option<ColumnRef> {
         return None;
     };
     let name = match strip(left) {
-        Expr::Identifier(ident) => ident.value.clone(),
-        Expr::CompoundIdentifier(parts) => parts.last()?.value.clone(),
+        Expr::Identifier(ident) => ident_value(ident),
+        Expr::CompoundIdentifier(parts) => ident_value(parts.last()?),
         _ => return None,
     };
     let column = schema.column(&name)?;
@@ -467,5 +467,181 @@ fn translate(schema: &TableSchema, predicate: &Expr) -> Result<IndexPredicate> {
             _ => Err(unsupported(predicate)),
         },
         _ => Err(unsupported(predicate)),
+    }
+}
+
+/// Lower the usable conditions of a conflict inference predicate. An
+/// unrecognized conjunct may strengthen known conditions. An unrecognized
+/// disjunct cannot establish a bound on the rows the expression describes.
+pub(crate) fn inference_predicate(schema: &TableSchema, expr: &Expr) -> Option<IndexPredicate> {
+    match strip(expr) {
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::And,
+            right,
+        } => match (
+            inference_predicate(schema, left),
+            inference_predicate(schema, right),
+        ) {
+            (Some(left), Some(right)) => Some(and(left, right)),
+            (other, None) | (None, other) => other,
+        },
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::Or,
+            right,
+        } => Some(or(
+            inference_predicate(schema, left)?,
+            inference_predicate(schema, right)?,
+        )),
+        _ => {
+            let static_atom = sqlparser::ast::visit_expressions(expr, |expr| {
+                if matches!(expr, Expr::Function(_))
+                    || matches!(expr, Expr::Identifier(ident) if ident.quote_style.is_none() && ident.value.eq_ignore_ascii_case("current_date"))
+                {
+                    std::ops::ControlFlow::Break(())
+                } else {
+                    std::ops::ControlFlow::Continue(())
+                }
+            }).is_continue();
+            static_atom
+                .then(|| partial_index_predicate(schema, expr).ok())
+                .flatten()
+        }
+    }
+}
+
+/// Test that every true row of the supplied inference predicate can enter
+/// the index. Stay conservative when the storage predicates give us no safe
+/// proof, including ordered text comparisons with an unknown collation.
+pub(crate) fn inference_implies(supplied: &IndexPredicate, index: &IndexPredicate) -> bool {
+    implies(supplied, index, &mut 16_384)
+}
+
+fn implies(supplied: &IndexPredicate, index: &IndexPredicate, budget: &mut usize) -> bool {
+    use IndexPredicateBinaryOperator::{And, Or};
+
+    if *budget == 0 {
+        return false;
+    }
+    *budget -= 1;
+    if supplied == index || matches!(index, IndexPredicate::Literal { value } if value == &true) {
+        return true;
+    }
+    if let IndexPredicate::Binary {
+        operator: And,
+        left,
+        right,
+        ..
+    } = index
+    {
+        return implies(supplied, left, budget) && implies(supplied, right, budget);
+    }
+    if let IndexPredicate::Binary {
+        operator: Or,
+        left,
+        right,
+        ..
+    } = supplied
+    {
+        return implies(left, index, budget) && implies(right, index, budget);
+    }
+    if let IndexPredicate::Binary {
+        operator: Or,
+        left,
+        right,
+        ..
+    } = index
+    {
+        if implies(supplied, left, budget) || implies(supplied, right, budget) {
+            return true;
+        }
+    }
+    if let IndexPredicate::Binary {
+        operator: And,
+        left,
+        right,
+        ..
+    } = supplied
+    {
+        return implies(left, index, budget) || implies(right, index, budget);
+    }
+    comparison_implies(supplied, index)
+}
+
+fn comparison_parts(
+    predicate: &IndexPredicate,
+) -> Option<(
+    &IndexField,
+    IndexPredicateBinaryOperator,
+    &JsonValue,
+    IndexPredicateValueType,
+)> {
+    let IndexPredicate::Binary {
+        operator,
+        left,
+        right,
+        value_type,
+    } = predicate
+    else {
+        return None;
+    };
+    let (IndexPredicate::Field { field }, IndexPredicate::Literal { value }) =
+        (left.as_ref(), right.as_ref())
+    else {
+        return None;
+    };
+    Some((field, *operator, value, *value_type))
+}
+
+fn comparison_implies(supplied: &IndexPredicate, index: &IndexPredicate) -> bool {
+    use std::cmp::Ordering::{Equal, Greater, Less};
+    use IndexPredicateBinaryOperator::{
+        Equal as Eq, Greater as Gt, GreaterEqual as Ge, Less as Lt, LessEqual as Le, NotEqual as Ne,
+    };
+
+    let Some((source, source_op, source_value, source_type)) = comparison_parts(supplied) else {
+        return false;
+    };
+    let Some((target, target_op, target_value, target_type)) = comparison_parts(index) else {
+        return false;
+    };
+    if source != target || source_value.is_null() {
+        return false;
+    }
+    if target_op == Ne && target_value.is_null() {
+        // Comparisons to non-null constants reject SQL NULL (the compiled
+        // inequality also carries its own IS NOT NULL guard).
+        return matches!(source_op, Eq | Gt | Ge | Lt | Le);
+    }
+    if source_type != target_type {
+        return false;
+    }
+    let ordering = match source_type {
+        IndexPredicateValueType::Int64 => source_value
+            .as_i64()
+            .zip(target_value.as_i64())
+            .map(|(left, right)| left.cmp(&right)),
+        IndexPredicateValueType::Float64 => source_value
+            .as_f64()
+            .zip(target_value.as_f64())
+            .and_then(|(left, right)| left.partial_cmp(&right)),
+        _ => None,
+    };
+    let Some(ordering) = ordering else {
+        return false;
+    };
+    match (source_op, target_op) {
+        (Eq, Eq) => ordering == Equal,
+        (Eq, Ne) => ordering != Equal,
+        (Eq, Gt) => ordering == Greater,
+        (Eq, Ge) => ordering != Less,
+        (Eq, Lt) => ordering == Less,
+        (Eq, Le) => ordering != Greater,
+        (Gt, Gt | Ge | Ne) | (Ge, Ge) => ordering != Less,
+        (Ge, Gt | Ne) => ordering == Greater,
+        (Lt, Lt | Le | Ne) | (Le, Le) => ordering != Greater,
+        (Le, Lt | Ne) => ordering == Less,
+        _ => false,
     }
 }

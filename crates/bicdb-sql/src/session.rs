@@ -1167,15 +1167,15 @@ impl Drop for CatalogPreflightScope {
 
 #[derive(Debug)]
 pub struct SqlSession<'db> {
-    /// Per-statement memo for the unique arbiter backing an ON CONFLICT
-    /// target. Resolving it calls `index_definitions()`, which read-locks and
-    /// CLONES every index definition in the database and sorts them — and it
-    /// was resolved once per input ROW, so a 100-row upsert on a store with
-    /// hundreds of indexes cloned the whole index catalog hundreds of times.
-    /// The answer depends only on (table, conflict columns), which are
-    /// statement-invariant.
-    conflict_arbiter_memo:
-        std::cell::RefCell<Option<(String, Vec<String>, Option<records::UniqueConflictArbiter>)>>,
+    /// Per-statement memo for the unique arbiters backing an ON CONFLICT
+    /// target. Catalog resolution stays out of the per-row upsert path.
+    conflict_arbiter_memo: std::cell::RefCell<
+        Option<(
+            String,
+            records::ConflictColumnInference,
+            Arc<Vec<records::UniqueConflictArbiter>>,
+        )>,
+    >,
     /// Identity of the compiled routine IR whose statements are executing
     /// (a unique per-compilation token), or None outside routine bodies. Keys the
     /// per-node expression-type memo: IR nodes are immutable and live as long

@@ -5693,15 +5693,16 @@ pub(crate) fn conflict_target_columns(
     schema: Option<&TableSchema>,
     target: Option<&ConflictTarget>,
 ) -> Result<Vec<String>> {
+    if let Some((columns, _)) = target.and_then(crate::conflict_inference::column_inference) {
+        let mut seen = BTreeSet::new();
+        return Ok(columns
+            .into_iter()
+            .map(ident_value)
+            .filter(|column| seen.insert(column.clone()))
+            .collect());
+    }
     match target {
-        Some(ConflictTarget::Columns(columns)) => {
-            let mut seen = BTreeSet::new();
-            Ok(columns
-                .iter()
-                .map(ident_value)
-                .filter(|column| seen.insert(column.clone()))
-                .collect())
-        }
+        Some(ConflictTarget::Columns(_)) => unreachable!("column inference was handled above"),
         Some(ConflictTarget::OnConstraint(name)) => {
             let name = relation_name(name)?;
             let Some(schema) = schema else {

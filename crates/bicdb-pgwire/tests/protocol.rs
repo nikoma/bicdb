@@ -14861,3 +14861,66 @@ fn extended_joined_dml_returning_describes_source_columns() {
     client.write_all(b"X\0\0\0\x04").unwrap();
     server.join().unwrap();
 }
+
+#[test]
+fn partial_conflict_predicate_preserves_parameter_types_and_describe_is_read_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        bicdb_pgwire::handle_client(stream, path).unwrap();
+    });
+
+    let mut client = TcpStream::connect(address).unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+    send_query(
+        &mut client,
+        "CREATE TABLE partial_wire(a int, b int);
+         CREATE UNIQUE INDEX partial_wire_pos ON partial_wire(a) WHERE b > 0",
+    );
+    read_query_rows(&mut client);
+
+    send_parse(
+        &mut client,
+        "partial_upsert",
+        "INSERT INTO partial_wire VALUES ($1,$2)
+         ON CONFLICT (a) WHERE b > $3 DO UPDATE SET b=excluded.b",
+        &[],
+    );
+    assert_eq!(read_message(&mut client).0, b'1');
+    send_describe_statement(&mut client, "partial_upsert");
+    assert_eq!(read_parameter_description(&mut client), vec![23, 23, 23]);
+    assert_eq!(read_message(&mut client).0, b'n');
+    send_bind(
+        &mut client,
+        "partial_portal",
+        "partial_upsert",
+        &["4", "2", "1"],
+    );
+    send_describe_portal(&mut client, "partial_portal");
+    send_sync(&mut client);
+    let (tags, _) = read_tags_until_ready(&mut client);
+    assert_eq!(tags, vec![b'2', b'n']);
+    send_query(&mut client, "SELECT count(*) FROM partial_wire");
+    assert_eq!(read_query_rows(&mut client), vec![vec!["0".to_string()]]);
+
+    send_bind(&mut client, "", "partial_upsert", &["4", "2", "1"]);
+    send_execute(&mut client, "");
+    send_sync(&mut client);
+    assert!(read_query_rows(&mut client).is_empty());
+    send_bind(&mut client, "", "partial_upsert", &["4", "3", "1"]);
+    send_execute(&mut client, "");
+    send_sync(&mut client);
+    assert!(read_query_rows(&mut client).is_empty());
+    send_query(&mut client, "SELECT a,b FROM partial_wire");
+    assert_eq!(
+        read_query_rows(&mut client),
+        vec![vec!["4".to_string(), "3".to_string()]]
+    );
+
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
+}

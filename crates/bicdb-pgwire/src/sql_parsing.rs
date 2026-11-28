@@ -4111,6 +4111,16 @@ pub(crate) fn returning_describe_result(
     }
 }
 
+fn parse_dml_metadata(sql: &str) -> Option<Vec<Statement>> {
+    Parser::parse_sql(&PostgreSqlDialect {}, sql)
+        .ok()
+        .or_else(|| {
+            bicdb_sql::parse_postgres_conflict_inference(sql)
+                .ok()
+                .flatten()
+        })
+}
+
 /// The original mutation has no result descriptor even if rewrite actions
 /// produce rows. Portal Describe must not execute it to discover that shape.
 fn is_mutation_without_returning(sql: &str) -> bool {
@@ -4133,8 +4143,7 @@ fn is_mutation_without_returning(sql: &str) -> bool {
             _ => false,
         }
     }
-    Parser::parse_sql(&PostgreSqlDialect {}, sql)
-        .ok()
+    parse_dml_metadata(sql)
         .is_some_and(|statements| matches!(statements.as_slice(), [value] if statement(value)))
 }
 
@@ -4151,8 +4160,7 @@ pub(crate) fn dml_target_relation(sql: &str) -> Option<String> {
 }
 
 pub(crate) fn dml_target_relation_from_ast(sql: &str) -> Option<String> {
-    let dialect = PostgreSqlDialect {};
-    let mut statements = Parser::parse_sql(&dialect, sql).ok()?;
+    let mut statements = parse_dml_metadata(sql)?;
     if statements.len() != 1 {
         return None;
     }
@@ -4904,7 +4912,7 @@ pub(crate) fn mutating_with_describe_sql(sql: &str) -> Option<String> {
     if !normalized.starts_with("with ") || !is_mutating_with_sql(&normalized) {
         return None;
     }
-    let mut statements = Parser::parse_sql(&PostgreSqlDialect {}, sql).ok()?;
+    let mut statements = parse_dml_metadata(sql)?;
     if statements.len() != 1 {
         return None;
     }

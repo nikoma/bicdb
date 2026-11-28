@@ -3638,6 +3638,9 @@ impl<'db> SqlEngine<'db> {
                 )
                 .as_deref(),
             ),
+            Expr::InSubquery { .. } | Expr::Exists { .. } => self
+                .eval_row_truth(row, expr)
+                .map(|value| value.map(SqlValue::Bool).unwrap_or(SqlValue::Null)),
             Expr::Subquery(query) => self.execute_correlated_scalar_subquery(row, query),
             Expr::Nested(expr) => self.eval_row_value(row, expr),
             Expr::Collate { expr, collation } => {

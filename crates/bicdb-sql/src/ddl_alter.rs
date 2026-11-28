@@ -5045,7 +5045,7 @@ pub(crate) fn nextval_sequence_from_expr(expr: &Expr) -> Result<Option<String>> 
 }
 
 pub(crate) fn expr_is_default(expr: &Expr) -> bool {
-    matches!(expr, Expr::Identifier(ident) if ident.value.eq_ignore_ascii_case("default"))
+    matches!(expr, Expr::Identifier(ident) if ident.quote_style.is_none() && ident.value.eq_ignore_ascii_case("default"))
 }
 
 /// Rendering the `DataType` to text (and lower-casing it) is only needed for

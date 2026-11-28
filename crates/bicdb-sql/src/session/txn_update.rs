@@ -1003,6 +1003,26 @@ impl<'db> SqlSession<'db> {
         } else {
             assignment_candidates
         };
+        let has_default_assignments = update
+            .assignments
+            .iter()
+            .any(|assignment| expr_is_default(&assignment.value));
+        let mut ordered_assignments = Vec::new();
+        if let Some(schema) = schema.as_deref().filter(|_| has_default_assignments) {
+            ordered_assignments.extend(update.assignments.iter());
+            ordered_assignments.sort_by_cached_key(|assignment| {
+                super::row_assignments::assignment_columns(&assignment.target)
+                    .first()
+                    .and_then(|name| relation_name(name).ok())
+                    .and_then(|name| schema.columns.iter().position(|column| column.name == name))
+                    .unwrap_or(usize::MAX)
+            });
+        }
+        let assignments = if ordered_assignments.is_empty() {
+            None
+        } else {
+            Some(ordered_assignments.as_slice())
+        };
         let mut before_after_records = Vec::new();
         let mut partition_after_events = Vec::new();
         let mut partition_suppressed_deletes = Vec::new();
@@ -1205,6 +1225,12 @@ impl<'db> SqlSession<'db> {
                 let (scope, context) = row_engine.bound_row_context(candidate.columns.as_ref());
                 let mut values = Vec::with_capacity(update.assignments.len());
                 for assignment in &update.assignments {
+                    // A default can allocate a sequence value. Evaluate all
+                    // assignments in order when the statement uses DEFAULT.
+                    if has_default_assignments {
+                        values.push(None);
+                        continue;
+                    }
                     if matches!(assignment.target, AssignmentTarget::Tuple(_)) {
                         if super::row_assignments::independent_row_query(assignment).is_some() {
                             values.push(None);
@@ -1278,7 +1304,11 @@ impl<'db> SqlSession<'db> {
                 });
                 (values.into_iter(), deltas.map(Vec::into_iter))
             };
-            for assignment in &update.assignments {
+            for index in 0..update.assignments.len() {
+                let assignment = match assignments {
+                    Some(ordered) => ordered[index],
+                    None => &update.assignments[index],
+                };
                 let evaluated = assignment_values.next().flatten();
                 if let AssignmentTarget::Tuple(names) = &assignment.target {
                     let values = match evaluated {
@@ -1329,6 +1359,9 @@ impl<'db> SqlSession<'db> {
                     }
                 }
                 let mut value = match evaluated {
+                    _ if expr_is_default(&assignment.value) => self
+                        .default_value_for_column(schema.as_deref(), &column)?
+                        .unwrap_or(SqlValue::Null),
                     Some(Ok(value)) => value,
                     Some(Err(SqlError::Unsupported(_))) => {
                         self.eval_session_expr(&assignment.value)?

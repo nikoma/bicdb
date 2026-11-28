@@ -499,6 +499,11 @@ impl<'db> SqlSession<'db> {
         let parents = self.inheritance_parents(create_table)?;
         let postgres = !oracle::is_oracle_database(self.db_ref())?;
         let postgres_inheritance = postgres && !parents.is_empty();
+        let rewrite_flags = if postgres_inheritance {
+            crate::persistence_ddl::current_create_table_flags(original_name)?
+        } else {
+            crate::persistence_ddl::CreateTableRewriteFlags::default()
+        };
         let mut inherited_expression_conflicts = BTreeSet::new();
         let has_like_clause = create_table.like.is_some();
         let (mut columns, mut constraints, inherited_virtual) =
@@ -553,6 +558,14 @@ impl<'db> SqlSession<'db> {
                 )?;
                 if explicitly_generated {
                     inherited_expression_conflicts.remove(&column_schema.name);
+                    if postgres_inheritance {
+                        crate::inheritance::check_local_generation_kind(
+                            &columns[position],
+                            &inherited_virtual,
+                            column,
+                            rewrite_flags.virtual_columns.contains(&column_schema.name),
+                        )?;
+                    }
                 }
                 if postgres_inheritance && columns[position].generated_expr.is_some() {
                     let conflict = if column_schema.default_expr.is_some()
@@ -917,7 +930,10 @@ impl<'db> SqlSession<'db> {
             .transpose()?;
 
         if postgres_inheritance {
-            super::not_null_constraints::validate_created_no_inherit(original_name, &parents)?;
+            super::not_null_constraints::validate_created_no_inherit(
+                &rewrite_flags.no_inherit_not_null,
+                &parents,
+            )?;
         }
 
         let mut schema = TableSchema {

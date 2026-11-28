@@ -19,58 +19,19 @@ pub(crate) struct NotNullSpec {
     pub(crate) not_valid: bool,
 }
 
-thread_local! {
-    static CREATE_NO_INHERIT: RefCell<Vec<(String, Vec<String>)>> = const { RefCell::new(Vec::new()) };
-}
-
-/// Preserve NO INHERIT through the raw rewrite so inherited constraints
-/// can be checked before CREATE publishes the relation.
-pub(super) struct CreateNoInheritScope(bool);
-
-impl CreateNoInheritScope {
-    pub(super) fn enter(relation: &str, columns: Vec<String>) -> Self {
-        if columns.is_empty() {
-            return Self(false);
-        }
-        CREATE_NO_INHERIT.with(|active| {
-            active.borrow_mut().push((relation.to_string(), columns));
-        });
-        Self(true)
-    }
-}
-
-impl Drop for CreateNoInheritScope {
-    fn drop(&mut self) {
-        if self.0 {
-            CREATE_NO_INHERIT.with(|active| active.borrow_mut().pop());
-        }
-    }
-}
-
 pub(super) fn validate_created_no_inherit(
-    name: &ObjectName,
+    columns: &[String],
     parents: &[TableSchema],
 ) -> Result<()> {
-    CREATE_NO_INHERIT.with(|active| {
-        let active = active.borrow();
-        if active.is_empty() {
-            return Ok(());
-        }
-        let relation = relation_name(name)?;
-        for column in active
+    for column in columns {
+        if parents
             .iter()
-            .filter(|(table, _)| *table == relation)
-            .flat_map(|(_, columns)| columns)
+            .any(|parent| inheritable_not_null(parent, column))
         {
-            if parents
-                .iter()
-                .any(|parent| inheritable_not_null(parent, column))
-            {
-                return Err(no_inherit_conflicts_with_parent(column));
-            }
+            return Err(no_inherit_conflicts_with_parent(column));
         }
-        Ok(())
-    })
+    }
+    Ok(())
 }
 
 fn no_inherit_conflicts_with_parent(column: &str) -> SqlError {
@@ -552,7 +513,13 @@ impl<'a> SqlSession<'a> {
                     .map(|spec| spec.column.clone())
                     .collect();
                 let result = {
-                    let _scope = CreateNoInheritScope::enter(&relation, no_inherit);
+                    let _scope = crate::persistence_ddl::CreateTableRewriteScope::enter(
+                        &relation,
+                        crate::persistence_ddl::CreateTableRewriteFlags {
+                            no_inherit_not_null: no_inherit,
+                            ..Default::default()
+                        },
+                    );
                     self.execute_inner(&sql)?
                 };
                 if existed {

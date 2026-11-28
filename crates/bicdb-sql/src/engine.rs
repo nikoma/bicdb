@@ -1563,7 +1563,7 @@ fn placeholder_index(expr: &Expr) -> Option<usize> {
     value.strip_prefix('$')?.parse().ok()
 }
 
-fn literal_expr_type(expr: &Expr) -> Option<String> {
+pub(crate) fn literal_expr_type(expr: &Expr) -> Option<String> {
     let Expr::Value(value) = expr else {
         return None;
     };

@@ -623,6 +623,32 @@ fn insert_at_positions(
 /// when nothing changed (or the text is not ordinary SQL, which then runs as
 /// before).
 pub(crate) fn bind_sql_text(db: &BicDb, sql: &str, path: &[String]) -> Result<Option<String>> {
+    bind_sql_text_with(db, sql, path, |text, _| Ok(text))
+}
+
+/// Rebind a CREATE TABLE that became parseable after a compatibility
+/// rewrite, retaining the bound target for its saved options.
+pub(crate) fn bind_create_table_text(
+    db: &BicDb,
+    sql: &str,
+    path: &[String],
+) -> Result<Option<(String, String)>> {
+    bind_sql_text_with(db, sql, path, |text, statements| {
+        let [Statement::CreateTable(create)] = statements else {
+            return Err(SqlError::InvalidSql(
+                "expected CREATE TABLE after rewrite".into(),
+            ));
+        };
+        Ok((text, relation_name(&create.name)?))
+    })
+}
+
+fn bind_sql_text_with<T>(
+    db: &BicDb,
+    sql: &str,
+    path: &[String],
+    output: impl FnOnce(String, &[Statement]) -> Result<T>,
+) -> Result<Option<T>> {
     // Lock strengths sqlparser lacks become the stronger ones it parses, as
     // statement execution does.
     let weak_locks = rewrite_weak_lock_strengths(sql);
@@ -673,9 +699,8 @@ pub(crate) fn bind_sql_text(db: &BicDb, sql: &str, path: &[String]) -> Result<Op
     }
     // Insert qualifiers into the original text: re-rendering the AST is not
     // a faithful round trip (string literals with doubled quotes lost one).
-    insert_at_positions(sql, binder.insertions)
-        .map(Some)
-        .ok_or_else(unbindable)
+    let text = insert_at_positions(sql, binder.insertions).ok_or_else(unbindable)?;
+    output(text, &statements).map(Some)
 }
 
 /// Binds every SQL statement and expression of a routine body, before its

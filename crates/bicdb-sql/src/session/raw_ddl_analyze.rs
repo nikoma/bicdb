@@ -886,6 +886,16 @@ impl<'db> SqlSession<'db> {
                 no_inherit_checks,
                 no_inherit_not_null,
             } => {
+                // A raw CREATE can become parseable only after the rewrite.
+                // Its target and parent names must bind through the same
+                // path as ordinary CREATE TABLE statements.
+                let rebound = match (create, crate::search_path::active_path()) {
+                    (true, Some(path)) => {
+                        crate::search_path::bind_create_table_text(self.db_ref(), &sql, &path)?
+                    }
+                    _ => None,
+                };
+                let (sql, table) = rebound.unwrap_or((sql, table));
                 let before = load_schema(
                     self.db_ref(),
                     &resolve_session_relation_name_if_exists(self.db_ref(), &table),
@@ -903,10 +913,15 @@ impl<'db> SqlSession<'db> {
                     None => false,
                 };
                 let result = {
-                    let _scope = super::not_null_constraints::CreateNoInheritScope::enter(
-                        &table,
-                        no_inherit_not_null.clone(),
-                    );
+                    let _scope = create.then(|| {
+                        crate::persistence_ddl::CreateTableRewriteScope::enter(
+                            &table,
+                            crate::persistence_ddl::CreateTableRewriteFlags {
+                                no_inherit_not_null: no_inherit_not_null.clone(),
+                                virtual_columns: virtual_columns.clone(),
+                            },
+                        )
+                    });
                     self.execute_inner(&sql)?
                 };
                 if existed {

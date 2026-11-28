@@ -112,22 +112,56 @@ fn same_inherited_default(left: &ColumnSchema, right: &ColumnSchema) -> bool {
         return left.default_sequence == right.default_sequence;
     }
     match (&left.default_expr, &right.default_expr) {
-        (Some(left), Some(right)) => same_inherited_expression(left, right),
+        (Some(left), Some(right)) => {
+            same_inherited_expression(left, right, normalize_default_expression)
+        }
         _ => left.default_value == right.default_value,
     }
 }
 
-fn same_inherited_expression(left: &str, right: &str) -> bool {
+fn same_inherited_expression(left: &str, right: &str, normalize: fn(Expr) -> Expr) -> bool {
     left == right
-        || normalized_default_expr(left)
-            .zip(normalized_default_expr(right))
-            .is_some_and(|(left, right)| left == right)
+        || SqlSession::parse_default_expr(left)
+            .ok()
+            .zip(SqlSession::parse_default_expr(right).ok())
+            .is_some_and(|(left, right)| normalize(left) == normalize(right))
 }
 
-fn normalized_default_expr(text: &str) -> Option<Expr> {
-    SqlSession::parse_default_expr(text)
-        .ok()
-        .map(normalize_expr)
+fn normalize_default_expression(expression: Expr) -> Expr {
+    let mut expression = normalize_expr(expression);
+    let _ = sqlparser::ast::visit_expressions_mut(&mut expression, |candidate| {
+        use sqlparser::ast::CastKind;
+
+        // PostgreSQL removes an identity cast when the parser already knows
+        // the literal has exactly that built-in type. Preserve conversions,
+        // typmods, domains, and operators in the stored expression tree.
+        if let Expr::Cast {
+            kind: CastKind::Cast | CastKind::DoubleColon,
+            expr,
+            data_type,
+            array: false,
+            format: None,
+        } = candidate
+        {
+            let builtin = match data_type {
+                DataType::Custom(name, _) => {
+                    matches!(object_name_parts(name).as_slice(), [schema, _] if schema == "pg_catalog")
+                }
+                _ => true,
+            };
+            if builtin
+                && matches!(pg_type_modifier_from_data_type(data_type), Ok(None))
+                && crate::engine::literal_expr_type(expr).is_some_and(|literal_type| {
+                    pg_type_from_data_type(data_type)
+                        .is_ok_and(|(cast_type, _)| cast_type == literal_type)
+                })
+            {
+                *candidate = std::mem::replace(expr.as_mut(), Expr::Value(Value::Null.into()));
+            }
+        }
+        ControlFlow::<()>::Continue(())
+    });
+    expression
 }
 
 /// Parent and child expressions can differ in source parentheses and in the
@@ -172,6 +206,44 @@ pub(crate) fn column_generation_kind(
             "STORED"
         }
     })
+}
+
+pub(crate) fn check_local_generation_kind(
+    parent: &ColumnSchema,
+    inherited_virtual: &[String],
+    child: &ColumnDef,
+    rewritten_virtual: bool,
+) -> Result<()> {
+    let Some(parent_kind) = column_generation_kind(parent, inherited_virtual) else {
+        return Ok(());
+    };
+    use sqlparser::ast::GeneratedExpressionMode;
+    let virtual_column = rewritten_virtual
+        || child.options.iter().any(|option| {
+            matches!(
+                option.option,
+                ColumnOption::Generated {
+                    generation_expr: Some(_),
+                    generation_expr_mode: None | Some(GeneratedExpressionMode::Virtual),
+                    ..
+                }
+            )
+        });
+    let child_kind = if virtual_column { "VIRTUAL" } else { "STORED" };
+    if parent_kind != child_kind {
+        return Err(SqlError::coded(
+            "42611",
+            format!(
+                "column \"{}\" inherits from generated column of different kind",
+                parent.name,
+            ),
+            Some(format!(
+                "Parent column is {parent_kind}, child column is {child_kind}."
+            )),
+            None,
+        ));
+    }
+    Ok(())
 }
 
 fn same_type(left: &ColumnSchema, right: &ColumnSchema) -> bool {
@@ -251,7 +323,9 @@ pub(crate) fn inherited_table_definition(
                             ));
                         }
                         let differs = match (&existing.generated_expr, &inherited.generated_expr) {
-                            (Some(left), Some(right)) => !same_inherited_expression(left, right),
+                            (Some(left), Some(right)) => {
+                                !same_inherited_expression(left, right, normalize_expr)
+                            }
                             _ if has_inheritable_default(&inherited) => {
                                 if has_inheritable_default(existing) {
                                     !same_inherited_default(existing, &inherited)

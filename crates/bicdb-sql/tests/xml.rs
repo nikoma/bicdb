@@ -490,3 +490,61 @@ fn xmltable_uses_the_selected_node_as_xpath_context() {
         assert!(error.to_string().contains(message), "{sql}: {error:?}");
     }
 }
+#[test]
+fn xmlparse_and_xmlserialize_preserve_document_and_content_modes() {
+    let (_dir, mut db) = session_db();
+    let mut session = SqlSession::new(&mut db);
+    let value = session
+        .execute(
+            r#"SELECT
+        xmlparse(DOCUMENT '<?xml version="1.0" encoding="LATIN1"?><a>å</a>'),
+        xmlparse(CONTENT ' a ' STRIP WHITESPACE),
+        xmlserialize(DOCUMENT xml '<a><b/><c>text</c></a>' AS text INDENT),
+        xmlserialize(CONTENT xml '<a/><b/>' AS text INDENT),
+        xmlserialize(CONTENT xml '<a>at<b/>b</a>' AS text INDENT),
+        xmlserialize(CONTENT xml '<a><b/></a>' AS text NO INDENT)"#,
+        )
+        .unwrap();
+    assert_eq!(
+        value.rows,
+        [[
+            SqlValue::String("<a>å</a>".into()),
+            SqlValue::String(" a ".into()),
+            SqlValue::String("<a>\n  <b/>\n  <c>text</c>\n</a>".into()),
+            SqlValue::String("<a/>\n<b/>".into()),
+            SqlValue::String("<a>at<b/>b</a>".into()),
+            SqlValue::String("<a><b/></a>".into()),
+        ]]
+    );
+    for (sql, state, message) in [
+        (
+            "SELECT xmlparse(DOCUMENT '<a/><b/>')",
+            "2200M",
+            "invalid XML document",
+        ),
+        (
+            "SELECT xmlserialize(DOCUMENT xml '<a/><b/>' AS text)",
+            "2200L",
+            "not an XML document",
+        ),
+        (
+            "SELECT xmlserialize(CONTENT '<a/>'::text AS text)",
+            "42804",
+            "argument of XMLSERIALIZE must be type xml",
+        ),
+        (
+            "SELECT xmlserialize(CONTENT xml '<a/>' AS integer)",
+            "42846",
+            "cannot cast XMLSERIALIZE result to integer",
+        ),
+        (
+            "SELECT xmlserialize(CONTENT xml '<long/>' AS varchar(4))",
+            "22001",
+            "value too long for type character varying(4)",
+        ),
+    ] {
+        let error = session.execute(sql).unwrap_err();
+        assert_eq!(error.sqlstate(), state, "{sql}: {error:?}");
+        assert!(error.to_string().contains(message), "{sql}: {error:?}");
+    }
+}

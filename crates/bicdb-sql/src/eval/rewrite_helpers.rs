@@ -2039,7 +2039,20 @@ pub(crate) fn rewrite_sql_xml_expressions(input: &str) -> Option<String> {
                 }) else {
                     continue;
                 };
-                let expression = input[mode.end..tokens[close_index].start].trim();
+                let end = close_index
+                    .checked_sub(2)
+                    .filter(|flag| *flag > index + 2)
+                    .and_then(|flag| {
+                        let first = &tokens[flag];
+                        let second = &tokens[flag + 1];
+                        (first.depth == inner_depth
+                            && second.depth == inner_depth
+                            && matches!(first.word.as_deref(), Some("preserve" | "strip"))
+                            && second.word.as_deref() == Some("whitespace"))
+                        .then_some(first.start)
+                    })
+                    .unwrap_or(tokens[close_index].start);
+                let expression = input[mode.end..end].trim();
                 format!(
                     "bicdb_xmlparse_{}(({expression}))",
                     mode.word.as_deref().unwrap()
@@ -2062,9 +2075,25 @@ pub(crate) fn rewrite_sql_xml_expressions(input: &str) -> Option<String> {
                     continue;
                 };
                 let expression = input[mode.end..tokens[as_index].start].trim();
-                let data_type = input[tokens[as_index].end..tokens[close_index].start].trim();
+                let mut type_end = tokens[close_index].start;
+                let mut indent = false;
+                let indent_index = close_index - 1;
+                if indent_index > as_index + 1
+                    && tokens[indent_index].depth == inner_depth
+                    && tokens[indent_index].word.as_deref() == Some("indent")
+                {
+                    let before = &tokens[indent_index - 1];
+                    if before.depth == inner_depth && before.word.as_deref() == Some("no") {
+                        type_end = before.start;
+                    } else {
+                        indent = true;
+                        type_end = tokens[indent_index].start;
+                    }
+                }
+                let data_type = input[tokens[as_index].end..type_end].trim();
+                let target = data_type.replace('\'', "''");
                 format!(
-                    "CAST(bicdb_xmlserialize_{}(({expression})) AS {data_type})",
+                    "CAST(bicdb_xmlserialize_{}(({expression}), {indent}, '{target}') AS {data_type})",
                     mode.word.as_deref().unwrap()
                 )
             }

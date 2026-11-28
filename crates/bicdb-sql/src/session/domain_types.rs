@@ -2160,6 +2160,7 @@ impl<'db> SqlSession<'db> {
                 AlterTableOperation::DropColumn {
                     column_names,
                     if_exists,
+                    drop_behavior,
                     ..
                 } => {
                     for column in column_names {
@@ -2183,6 +2184,17 @@ impl<'db> SqlSession<'db> {
                             .column(&column_name)
                             .and_then(|column| column.default_sequence.clone());
                         self.capture_table_state_undo(&table, &schema)?;
+                        if let Some(column) = schema.column(&column_name) {
+                            let column = column.name.clone();
+                            handle_policy_column_drop(
+                                &mut schema,
+                                &column,
+                                matches!(
+                                    drop_behavior,
+                                    Some(sqlparser::ast::DropBehavior::Cascade)
+                                ),
+                            )?;
+                        }
                         alter_table_drop_column(
                             self.ddl_rows()?,
                             &table,
@@ -2223,6 +2235,10 @@ impl<'db> SqlSession<'db> {
                         .column(&old_column)
                         .and_then(|column| column.default_sequence.clone());
                     self.capture_table_state_undo(&table, &schema)?;
+                    if let Some(column) = schema.column(&old_column) {
+                        let column = column.name.clone();
+                        rename_policy_column_references(&mut schema, &column, &new_column)?;
+                    }
                     alter_table_rename_column(
                         self.db_mut()?,
                         &table,
@@ -2534,6 +2550,19 @@ impl<'db> SqlSession<'db> {
             options: Vec::new(),
         };
         let mut updated_column = column_schema_from_def(self.db_ref(), &synthetic)?;
+        if let Some(policy) = policies_referencing_column(schema, &previous_column.name)?.first() {
+            return Err(SqlError::coded(
+                "0A000",
+                "cannot alter type of a column used in a policy definition",
+                Some(format!(
+                    "policy {} on table {} depends on column \"{}\"",
+                    policy.name,
+                    catalog_display_name(table),
+                    previous_column.name
+                )),
+                None,
+            ));
+        }
         let source_metadata_only = using.is_none()
             && (oracle::temporal_columns::source(&updated_column).is_some()
                 && oracle::temporal_columns::source(&previous_column).is_none_or(|source| {
@@ -4791,6 +4820,174 @@ fn missing_policy(table: &str, policy: &str) -> SqlError {
         "policy \"{policy}\" for table \"{}\" does not exist",
         relation_name_for_message(table)
     ))
+}
+
+fn policies_referencing_column<'a>(
+    schema: &'a TableSchema,
+    column: &str,
+) -> Result<Vec<&'a PolicySchema>> {
+    let table = catalog_display_name(&schema.name);
+    let mut dependent = Vec::new();
+    for policy in &schema.policies {
+        for expression in [&policy.using_expr, &policy.check_expr]
+            .into_iter()
+            .flatten()
+        {
+            let mut expression = parse_policy_expression(expression)?;
+            if bind_policy_column(&mut expression, &schema.schema_name, &table, column, None) {
+                dependent.push(policy);
+                break;
+            }
+        }
+    }
+    Ok(dependent)
+}
+
+fn handle_policy_column_drop(schema: &mut TableSchema, column: &str, cascade: bool) -> Result<()> {
+    let dependent = policies_referencing_column(schema, column)?;
+    if dependent.is_empty() {
+        return Ok(());
+    }
+    let table = catalog_display_name(&schema.name);
+    let objects = dependent
+        .iter()
+        .map(|policy| format!("policy {} on table {table}", policy.name))
+        .collect::<Vec<_>>();
+    if !cascade {
+        let target = format!("column {column} of table {table}");
+        let detail = objects
+            .iter()
+            .map(|object| format!("{object} depends on {target}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        return Err(SqlError::coded(
+            "2BP01",
+            format!("cannot drop {target} because other objects depend on it"),
+            Some(detail),
+            Some("Use DROP ... CASCADE to drop the dependent objects too.".into()),
+        ));
+    }
+    let names: BTreeSet<_> = dependent
+        .into_iter()
+        .map(|policy| policy.name.clone())
+        .collect();
+    schema
+        .policies
+        .retain(|policy| !names.contains(&policy.name));
+    crate::statement_context::notice_drop_cascades(&objects);
+    Ok(())
+}
+
+fn rename_policy_column_references(
+    schema: &mut TableSchema,
+    column: &str,
+    new: &str,
+) -> Result<()> {
+    let table = catalog_display_name(&schema.name);
+    for policy in &mut schema.policies {
+        for stored in [&mut policy.using_expr, &mut policy.check_expr]
+            .into_iter()
+            .flatten()
+        {
+            let mut expression = parse_policy_expression(stored)?;
+            if bind_policy_column(
+                &mut expression,
+                &schema.schema_name,
+                &table,
+                column,
+                Some(new),
+            ) {
+                *stored = format!("({})", crate::sql_text::sql_text(&expression));
+            }
+        }
+    }
+    Ok(())
+}
+
+// Bind identifiers in the policy's own relation scope. Subqueries have their
+// own relation namespaces and must resolve their references in that scope.
+fn bind_policy_column(
+    expr: &mut Expr,
+    schema: &str,
+    table: &str,
+    column: &str,
+    rename: Option<&str>,
+) -> bool {
+    use sqlparser::ast::{VisitMut, VisitorMut};
+    use std::ops::ControlFlow;
+
+    struct Binder<'a> {
+        schema: &'a str,
+        table: &'a str,
+        column: &'a str,
+        rename: Option<&'a str>,
+        queries: usize,
+        found: bool,
+    }
+
+    impl VisitorMut for Binder<'_> {
+        type Break = ();
+
+        fn pre_visit_query(&mut self, _: &mut Query) -> ControlFlow<()> {
+            self.queries += 1;
+            ControlFlow::Continue(())
+        }
+
+        fn post_visit_query(&mut self, _: &mut Query) -> ControlFlow<()> {
+            self.queries -= 1;
+            ControlFlow::Continue(())
+        }
+
+        fn pre_visit_expr(&mut self, expression: &mut Expr) -> ControlFlow<()> {
+            if self.queries != 0 {
+                return ControlFlow::Continue(());
+            }
+            let reference = match expression {
+                Expr::Identifier(column)
+                    if column.quote_style.is_some()
+                        || !matches!(
+                            ident_value(column).as_str(),
+                            "current_user" | "session_user" | "current_role"
+                        ) =>
+                {
+                    column
+                }
+                Expr::CompoundIdentifier(parts) => match parts.as_mut_slice() {
+                    [table, column] if ident_value(table) == self.table => column,
+                    [schema, table, column]
+                        if ident_value(schema) == self.schema
+                            && ident_value(table) == self.table =>
+                    {
+                        column
+                    }
+                    _ => return ControlFlow::Continue(()),
+                },
+                _ => return ControlFlow::Continue(()),
+            };
+            if ident_value(reference) == self.column {
+                self.found = true;
+                if let Some(name) = self.rename {
+                    *reference = if pg_quote_ident(name) == name {
+                        Ident::new(name)
+                    } else {
+                        Ident::with_quote('"', name)
+                    };
+                }
+            }
+            ControlFlow::Continue(())
+        }
+    }
+
+    let mut binder = Binder {
+        schema,
+        table: table.rsplit('.').next().unwrap_or(table),
+        column,
+        rename,
+        queries: 0,
+        found: false,
+    };
+    let _ = expr.visit(&mut binder);
+    binder.found
 }
 
 struct CarrierRuntimeRoleBlock {

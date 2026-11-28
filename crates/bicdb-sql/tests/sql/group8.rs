@@ -2796,6 +2796,62 @@ fn rls_row_security_off_errors_when_policies_would_apply() {
 }
 
 #[test]
+fn rls_column_changes_preserve_or_drop_the_bound_policies() {
+    let (_dir, mut db) = empty_test_db();
+    let mut session = rls_test_session(&mut db);
+    session
+        .execute(
+            "CREATE ROLE column_policy_reader;
+             CREATE TABLE policy_columns (id int PRIMARY KEY, tenant int, note text);
+             INSERT INTO policy_columns VALUES (1, 1, 'first'), (2, 2, 'second');
+             ALTER TABLE policy_columns ENABLE ROW LEVEL SECURITY;
+             GRANT SELECT ON policy_columns TO column_policy_reader;
+             CREATE POLICY read_rule ON policy_columns FOR SELECT USING (policy_columns.tenant = 1);
+             CREATE POLICY write_rule ON policy_columns FOR INSERT WITH CHECK (tenant > 0);
+             CREATE POLICY unrelated ON policy_columns FOR UPDATE USING (note <> 'tenant');
+             ALTER TABLE policy_columns RENAME COLUMN tenant TO client;",
+        )
+        .unwrap();
+    session.execute("SET ROLE column_policy_reader").unwrap();
+    assert_eq!(
+        session
+            .execute("SELECT id FROM policy_columns")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(1)]]
+    );
+    session.execute("RESET ROLE").unwrap();
+
+    let error = session
+        .execute("ALTER TABLE policy_columns DROP COLUMN client")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "2BP01");
+    let error = session
+        .execute("ALTER TABLE policy_columns ALTER COLUMN client TYPE bigint")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "0A000");
+    session
+        .execute("BEGIN; ALTER TABLE policy_columns DROP COLUMN client CASCADE")
+        .unwrap();
+    let policies =
+        "SELECT policyname FROM pg_policies WHERE tablename = 'policy_columns' ORDER BY 1";
+    assert_eq!(
+        session.execute(policies).unwrap().rows,
+        vec![vec![SqlValue::String("unrelated".into())]]
+    );
+    session.execute("ROLLBACK").unwrap();
+    assert_eq!(session.execute(policies).unwrap().rows.len(), 3);
+    session.execute("SET ROLE column_policy_reader").unwrap();
+    assert_eq!(
+        session
+            .execute("SELECT id FROM policy_columns")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(1)]]
+    );
+}
+
+#[test]
 fn rls_create_policy_validation_matches_postgres() {
     let (_dir, mut db) = empty_test_db();
     let mut session = rls_test_session(&mut db);

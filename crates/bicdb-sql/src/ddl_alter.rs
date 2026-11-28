@@ -2793,6 +2793,10 @@ pub(crate) fn raw_create_sequence(sql: &str) -> Result<Option<(String, SequenceS
         ));
     };
     let option_tokens = &tokens[idx + 1..];
+    // Resolve ownership against the SQL catalog using the parsed target names.
+    if option_tokens.windows(2).any(|pair| pair == ["owned", "by"]) {
+        return Ok(None);
+    }
     let data_type = option_tokens
         .windows(2)
         .find(|pair| pair[0] == "as")
@@ -2877,20 +2881,6 @@ pub(crate) fn raw_create_sequence(sql: &str) -> Result<Option<(String, SequenceS
                 sequence.cycle = false;
                 idx += 2;
             }
-            "owned" if tokens.get(idx + 1) == Some(&"by") => {
-                let Some(owner) = tokens.get(idx + 2) else {
-                    return Err(SqlError::InvalidSql(
-                        "CREATE SEQUENCE OWNED BY expects an owner".to_string(),
-                    ));
-                };
-                if *owner != "none" {
-                    if let Some((table, column)) = owner.rsplit_once('.') {
-                        sequence.owned_by_table = Some(normalize_sequence_name(table)?);
-                        sequence.owned_by_column = Some(column.trim_matches('"').to_string());
-                    }
-                }
-                idx += 3;
-            }
             other => {
                 return Err(SqlError::Unsupported(format!(
                     "CREATE SEQUENCE option {other} is not supported"
@@ -2955,8 +2945,6 @@ pub(crate) fn raw_analyze_target(sql: &str) -> Result<Option<Option<String>>> {
     Ok(Some(Some(table)))
 }
 
-pub(crate) type SequenceOwner = Option<(String, String)>;
-
 pub(crate) enum RawAlterSequence {
     OwnerTo {
         sequence: String,
@@ -2964,7 +2952,7 @@ pub(crate) enum RawAlterSequence {
     },
     OwnedBy {
         sequence: String,
-        owner: SequenceOwner,
+        owner: Option<ObjectName>,
     },
     Restart {
         sequence: String,
@@ -3056,17 +3044,9 @@ pub(crate) fn raw_alter_sequence(sql: &str) -> Result<Option<RawAlterSequence>> 
     let owner = parser
         .parse_object_name(false)
         .map_err(|e| SqlError::InvalidSql(e.to_string()))?;
-    let mut parts = object_name_parts(&owner);
-    if parts.len() < 2 {
-        return Err(SqlError::InvalidSql(
-            "ALTER SEQUENCE OWNED BY expects table.column".into(),
-        ));
-    }
-    let column = parts.pop().unwrap();
-    let table = relation_name_from_parts(&parts)?;
     Ok(Some(RawAlterSequence::OwnedBy {
         sequence,
-        owner: Some((table, column)),
+        owner: Some(owner),
     }))
 }
 

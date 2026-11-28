@@ -6140,12 +6140,7 @@ impl<'db> SqlSession<'db> {
     pub(crate) fn drop_owned_sequences_for_table(&mut self, table: &str) -> Result<()> {
         let owned_sequences = list_sequences(self.db_ref())?
             .into_iter()
-            .filter(|sequence| {
-                sequence
-                    .owned_by_table
-                    .as_deref()
-                    .is_some_and(|owned_table| owned_table.eq_ignore_ascii_case(table))
-            })
+            .filter(|sequence| sequence.owned_by_table.as_deref() == Some(table))
             .map(|sequence| sequence.name)
             .collect::<Vec<_>>();
         for sequence in owned_sequences {
@@ -6186,6 +6181,9 @@ impl<'db> SqlSession<'db> {
         let existed = delete_view(self.db_mut()?, view)?;
         if let Some(view) = previous {
             self.ddl_undo.push(DdlUndo::RestoreView { view });
+        }
+        if existed {
+            self.drop_owned_sequences_for_table(view)?;
         }
         Ok(existed)
     }

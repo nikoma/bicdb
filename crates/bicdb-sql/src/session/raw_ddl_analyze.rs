@@ -80,6 +80,11 @@ impl<'db> SqlSession<'db> {
                     owner,
                 } => {
                     let mut sequence = load_sequence_required(self.db_ref(), &name)?;
+                    self.require_object_ownership(
+                        &sequence.owner,
+                        &format!("sequence {name}"),
+                        "change its ownership",
+                    )?;
                     let identity_owned = match (
                         sequence.owned_by_table.as_deref(),
                         sequence.owned_by_column.as_deref(),
@@ -95,19 +100,7 @@ impl<'db> SqlSession<'db> {
                             "cannot change ownership of identity sequence".to_string(),
                         ));
                     }
-                    match owner {
-                        Some((table, column)) => {
-                            let schema = load_schema(self.db_ref(), &table)?
-                                .ok_or_else(|| SqlError::InvalidCollection(table.clone()))?;
-                            ensure_schema_column(&table, &schema, &column)?;
-                            sequence.owned_by_table = Some(table);
-                            sequence.owned_by_column = Some(column);
-                        }
-                        None => {
-                            sequence.owned_by_table = None;
-                            sequence.owned_by_column = None;
-                        }
-                    }
+                    self.set_sequence_owned_by(&mut sequence, owner.as_ref())?;
                     self.save_session_sequence(&sequence)?;
                 }
                 RawAlterSequence::Restart {
@@ -115,6 +108,11 @@ impl<'db> SqlSession<'db> {
                     value,
                 } => {
                     let mut sequence = load_sequence_required(self.db_ref(), &name)?;
+                    self.require_object_ownership(
+                        &sequence.owner,
+                        &format!("sequence {name}"),
+                        "restart it",
+                    )?;
                     let value = value.unwrap_or(sequence.start_value);
                     validate_sequence_value(&sequence, value, "RESTART")?;
                     sequence.last_value = value;

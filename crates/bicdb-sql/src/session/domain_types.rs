@@ -697,19 +697,122 @@ impl<'db> SqlSession<'db> {
         let sequence_name = relation_name(name)?;
         let mut sequence =
             sequence_from_options(sequence_name, &sequence_data_type, sequence_options)?;
-        if let Some(owned_by) = owned_by {
-            let parts = object_name_parts(owned_by);
-            if parts.len() >= 2 {
-                sequence.owned_by_table =
-                    Some(relation_name_from_parts(&parts[..parts.len() - 1])?);
-                sequence.owned_by_column = parts.last().cloned();
-            }
-        }
         if if_not_exists && load_sequence(self.db_ref(), &sequence.name)?.is_some() {
             crate::statement_context::relation_exists_skipping(&sequence.name);
+            return Ok(SqlResult::command("CREATE SEQUENCE"));
         }
+        sequence.owner = current_user_from_gucs(&self.session_gucs);
+        self.set_sequence_owned_by(&mut sequence, owned_by)?;
         self.create_session_sequence_if_missing(sequence, if_not_exists)?;
         Ok(SqlResult::command("CREATE SEQUENCE"))
+    }
+
+    pub(super) fn set_sequence_owned_by(
+        &self,
+        sequence: &mut SequenceSchema,
+        owner: Option<&ObjectName>,
+    ) -> Result<()> {
+        let parts = owner.map(object_name_parts).unwrap_or_default();
+        if owner.is_none() || parts == ["none"] {
+            sequence.owned_by_table = None;
+            sequence.owned_by_column = None;
+            return Ok(());
+        }
+        let invalid_owned_by = || {
+            SqlError::coded_public(
+                "42601",
+                "invalid OWNED BY option",
+                None,
+                Some("Specify OWNED BY table.column or OWNED BY NONE.".to_string()),
+            )
+        };
+        let [relation @ .., column] = parts.as_slice() else {
+            return Err(invalid_owned_by());
+        };
+        if relation.is_empty() || relation.len() > 2 {
+            return Err(invalid_owned_by());
+        }
+        let db = self.db_ref();
+        let reference = relation
+            .iter()
+            .map(|name| pg_quote_ident(name))
+            .collect::<Vec<_>>()
+            .join(".");
+        let missing = || {
+            SqlError::coded_public(
+                "42P01",
+                format!("relation \"{}\" does not exist", relation.join(".")),
+                None,
+                None,
+            )
+        };
+        let oid = resolve_regclass_oid(db, &reference)?.ok_or_else(missing)?;
+        let class = pg_class_rows_filtered(db, None, None, Some(&BTreeSet::from([oid])))?
+            .into_iter()
+            .next()
+            .ok_or_else(missing)?;
+        let name = virtual_cell(&class, "relname").to_cell();
+        let kind = virtual_cell(&class, "relkind").to_cell();
+        let unsupported = match kind.as_str() {
+            "r" | "p" | "f" | "v" => None,
+            "i" => Some("indexes"),
+            "I" => Some("partitioned indexes"),
+            "m" => Some("materialized views"),
+            "S" => Some("sequences"),
+            "c" => Some("composite types"),
+            _ => Some("this relation type"),
+        };
+        if let Some(relation_type) = unsupported {
+            return Err(SqlError::coded_public(
+                "42809",
+                format!("sequence cannot be owned by relation \"{name}\""),
+                Some(format!(
+                    "This operation is not supported for {relation_type}."
+                )),
+                None,
+            ));
+        }
+        if class
+            .get("relowner")
+            .and_then(sql_value_i64)
+            .unwrap_or(role_oid(BOOTSTRAP_ROLE_NAME))
+            != role_oid(&sequence.owner)
+        {
+            return Err(SqlError::coded_public(
+                "55000",
+                "sequence must have same owner as table it is linked to",
+                None,
+                None,
+            ));
+        }
+        let namespace = namespace_oid(&sequence_catalog_namespace(db, &sequence.name)?);
+        if class.get("relnamespace").and_then(sql_value_i64) != Some(namespace) {
+            return Err(SqlError::coded_public(
+                "55000",
+                "sequence must be in same schema as table it is linked to",
+                None,
+                None,
+            ));
+        }
+        let Some(CatalogRelationTarget::Relation(table)) =
+            catalog_relation_target_for_oid(db, oid)?
+        else {
+            return Err(missing());
+        };
+        if !catalog_columns_for_relation(db, &table)?
+            .iter()
+            .any(|field| field.name == *column)
+        {
+            return Err(SqlError::coded_public(
+                "42703",
+                format!("column \"{column}\" of relation \"{name}\" does not exist"),
+                None,
+                None,
+            ));
+        }
+        sequence.owned_by_table = Some(table);
+        sequence.owned_by_column = Some(column.clone());
+        Ok(())
     }
 
     /// Drops one table, after its partitions: PostgreSQL drops a partitioned table's partitions

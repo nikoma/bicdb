@@ -288,3 +288,78 @@ fn postgres_sequence_search_path_and_discard_follow_relation_identity() {
         vec![vec![SqlValue::Int(102)]]
     );
 }
+
+#[test]
+fn postgres_sequence_owned_by_requires_an_existing_column_in_the_same_schema_with_the_same_owner() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut sql = SqlSession::new(&mut db);
+    for statement in [
+        "CREATE TABLE own_target (id int PRIMARY KEY)",
+        "CREATE UNIQUE INDEX own_target_idx ON own_target (id)",
+        "CREATE SCHEMA own_scope",
+        "CREATE TABLE own_scope.other_target (id int)",
+        "CREATE ROLE own_role",
+        "CREATE TABLE own_other_role (id int)",
+        "ALTER TABLE own_other_role OWNER TO own_role",
+    ] {
+        sql.execute(statement).unwrap();
+    }
+    for (owner, code, message) in [
+        ("invalid", "42601", "invalid OWNED BY option"),
+        (
+            "own_target.missing",
+            "42703",
+            "column \"missing\" of relation \"own_target\" does not exist",
+        ),
+        (
+            "own_scope.other_target.id",
+            "55000",
+            "sequence must be in same schema as table it is linked to",
+        ),
+        (
+            "own_other_role.id",
+            "55000",
+            "sequence must have same owner as table it is linked to",
+        ),
+        (
+            "own_target_idx.id",
+            "42809",
+            "sequence cannot be owned by relation \"own_target_idx\"",
+        ),
+    ] {
+        let error = sql
+            .execute(&format!("CREATE SEQUENCE own_seq OWNED BY {owner}"))
+            .unwrap_err();
+        assert_eq!(error.sqlstate(), code);
+        assert_eq!(error.postgres_message(), message);
+        assert_eq!(
+            sql.execute("SELECT to_regclass('own_seq')").unwrap().rows,
+            vec![vec![SqlValue::Null]]
+        );
+    }
+
+    sql.execute("CREATE SEQUENCE own_seq OWNED BY own_target.id")
+        .unwrap();
+    sql.execute("ALTER SEQUENCE own_seq OWNED BY NONE").unwrap();
+    sql.execute("DROP TABLE own_target").unwrap();
+    assert_eq!(
+        sql.execute("SELECT nextval('own_seq')").unwrap().rows,
+        vec![vec![SqlValue::Int(1)]]
+    );
+    sql.execute("CREATE VIEW own_view AS SELECT 1 AS id")
+        .unwrap();
+    sql.execute("ALTER SEQUENCE own_seq OWNED BY own_view.id")
+        .unwrap();
+    sql.execute("BEGIN").unwrap();
+    sql.execute("DROP VIEW own_view").unwrap();
+    assert_eq!(
+        sql.execute("SELECT to_regclass('own_seq')").unwrap().rows,
+        vec![vec![SqlValue::Null]]
+    );
+    sql.execute("ROLLBACK").unwrap();
+    assert_eq!(
+        sql.execute("SELECT nextval('own_seq')").unwrap().rows,
+        vec![vec![SqlValue::Int(2)]]
+    );
+}

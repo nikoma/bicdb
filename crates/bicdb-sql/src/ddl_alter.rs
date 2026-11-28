@@ -4224,7 +4224,17 @@ fn parse_database_setting_assignment(text: &str) -> Result<(String, Option<Strin
             "ALTER DATABASE ... SET ... FROM CURRENT is not supported".to_string(),
         ));
     }
-    // A list (search_path = a, b) keeps PostgreSQL's comma-space rendering; quotes are removed.
+    if raw_value.is_empty() {
+        return Err(SqlError::InvalidSql(format!(
+            "missing value in ALTER DATABASE SET {name}"
+        )));
+    }
+    if name == "search_path" {
+        return Ok((
+            name,
+            Some(crate::search_path::render_raw_assignment(raw_value)),
+        ));
+    }
     let parts = split_setting_list(raw_value)
         .into_iter()
         .map(|part| {
@@ -4238,15 +4248,10 @@ fn parse_database_setting_assignment(text: &str) -> Result<(String, Option<Strin
             }
         })
         .collect::<Vec<_>>();
-    if raw_value.is_empty() {
-        return Err(SqlError::InvalidSql(format!(
-            "missing value in ALTER DATABASE SET {name}"
-        )));
-    }
     Ok((name, Some(parts.join(", "))))
 }
 
-fn split_setting_list(value: &str) -> Vec<String> {
+pub(crate) fn split_setting_list(value: &str) -> Vec<String> {
     let mut parts = Vec::new();
     let mut current = String::new();
     let mut quote: Option<char> = None;
@@ -4255,7 +4260,7 @@ fn split_setting_list(value: &str) -> Vec<String> {
         match quote {
             Some(q) if ch == q => {
                 current.push(ch);
-                if q == '\'' && chars.peek() == Some(&'\'') {
+                if chars.peek() == Some(&q) {
                     current.push(chars.next().unwrap());
                 } else {
                     quote = None;

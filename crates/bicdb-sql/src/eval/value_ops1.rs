@@ -1411,7 +1411,16 @@ pub(crate) fn eval_db_catalog_function_value_with_engine(
                 return Ok(Some(SqlValue::Null));
             };
             let definition = routine_for_oid(db, oid)?.map(|routine| {
-                let sql = routine.definition.trim();
+                let mut sql = routine.definition.trim().to_owned();
+                if routine.leakproof {
+                    let location = ["RETURN", "BEGIN"]
+                        .iter()
+                        .filter_map(|keyword| find_top_level_keyword(&sql, keyword))
+                        .min()
+                        .unwrap_or(sql.len());
+                    sql.insert_str(location, " LEAKPROOF ");
+                }
+                let sql = sql.trim();
                 if let Some(rest) = strip_prefix_ci(sql, "CREATE FUNCTION ") {
                     format!("CREATE OR REPLACE FUNCTION {rest}")
                 } else if let Some(rest) = strip_prefix_ci(sql, "CREATE PROCEDURE ") {

@@ -4611,6 +4611,14 @@ impl<'db> SqlSession<'db> {
         &mut self,
         create_function: &CreateFunction,
     ) -> Result<SqlResult> {
+        self.execute_create_function_with_leakproof(create_function, false)
+    }
+
+    pub(super) fn execute_create_function_with_leakproof(
+        &mut self,
+        create_function: &CreateFunction,
+        leakproof: bool,
+    ) -> Result<SqlResult> {
         if create_function.temporary {
             return Err(SqlError::Unsupported(
                 "temporary functions are not supported".to_string(),
@@ -4779,6 +4787,7 @@ impl<'db> SqlSession<'db> {
             internal_symbol,
             owner: Some(current_user_from_gucs(&self.session_gucs)),
             security_definer: matches!(create_function.security, Some(FunctionSecurity::Definer)),
+            leakproof,
             overload: None,
             catalog_oid: None,
         };

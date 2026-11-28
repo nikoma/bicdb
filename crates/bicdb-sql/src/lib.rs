@@ -5136,6 +5136,8 @@ struct RoutineSchema {
     owner: Option<String>,
     #[serde(default)]
     security_definer: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    leakproof: bool,
     /// Input signature of a further overload of `name`; `None` for the name's
     /// first routine, which keeps the plain catalog key.
     #[serde(default, skip_serializing_if = "Option::is_none")]

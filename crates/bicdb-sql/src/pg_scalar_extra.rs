@@ -732,6 +732,7 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             | "exp"
             | "ln"
             | "log"
+            | "log10"
             | "ceil"
             | "ceiling"
             | "floor"

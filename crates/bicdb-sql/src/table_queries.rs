@@ -1,8 +1,9 @@
 //! Lower PostgreSQL TABLE query bodies without changing TABLE used as a label
 //! or in DDL. Keep identifier tokens and their source positions intact.
 use sqlparser::ast::{
-    visit_expressions_mut, Expr, Function, FunctionArg, FunctionArgExpr, FunctionArgumentList,
-    FunctionArguments, Ident, ObjectName, Statement,
+    visit_expressions_mut, visit_statements_mut, AssignmentTarget, Expr, Function, FunctionArg,
+    FunctionArgExpr, FunctionArgumentList, FunctionArguments, Ident, ObjectName, OnConflictAction,
+    OnInsert, Query, SetExpr, Statement,
 };
 use sqlparser::dialect::PostgreSqlDialect;
 use sqlparser::keywords::Keyword;
@@ -133,6 +134,7 @@ fn parse_tokens(
     dialect: &PostgreSqlDialect,
     mut tokens: Vec<TokenWithSpan>,
 ) -> Result<Vec<Statement>, ParserError> {
+    let row_assignments = has_values_row_assignment(&tokens);
     let document = lower_xml_document_predicates(&mut tokens);
     let mut statements = Parser::new(dialect)
         .with_tokens_with_locations(tokens)
@@ -175,7 +177,89 @@ fn parse_tokens(
             std::ops::ControlFlow::Continue(())
         });
     }
+    if row_assignments {
+        crate::reject_deep_expressions(&statements)
+            .map_err(|error| ParserError::ParserError(error.to_string()))?;
+        let _ = visit_statements_mut(&mut statements, |statement| {
+            let assignments = match statement {
+                Statement::Update(update) => Some(&mut update.assignments),
+                Statement::Insert(insert) => match insert.on.as_mut() {
+                    Some(OnInsert::OnConflict(conflict)) => match &mut conflict.action {
+                        OnConflictAction::DoUpdate(update) => Some(&mut update.assignments),
+                        _ => None,
+                    },
+                    _ => None,
+                },
+                _ => None,
+            };
+            for assignment in assignments.into_iter().flatten() {
+                if matches!(assignment.target, AssignmentTarget::Tuple(_)) {
+                    if let Some(query) = parenthesized_values_query(&assignment.value) {
+                        assignment.value = Expr::Subquery(query);
+                    }
+                }
+            }
+            std::ops::ControlFlow::<()>::Continue(())
+        });
+    }
     Ok(statements)
+}
+
+fn has_values_row_assignment(tokens: &[TokenWithSpan]) -> bool {
+    let mut tokens = tokens
+        .iter()
+        .map(|token| &token.token)
+        .filter(|token| !matches!(token, Token::Whitespace(_)));
+    let mut previous = None;
+    while let Some(token) = tokens.next() {
+        if token == &Token::Eq && previous == Some(&Token::RParen) {
+            let mut rhs = tokens.clone().peekable();
+            if rhs.next_if_eq(&&Token::LParen).is_some()
+                && rhs
+                    .find(|token| *token != &Token::LParen)
+                    .is_some_and(|token| keyword(token) == Keyword::VALUES)
+            {
+                return true;
+            }
+        }
+        previous = Some(token);
+    }
+    false
+}
+
+/// The parser reads a parenthesized VALUES query in an assignment as a
+/// tuple starting with a VALUES function. Recover the query's row structure.
+fn parenthesized_values_query(expr: &Expr) -> Option<Box<Query>> {
+    let (first, rest) = match crate::unwrap_nested_expr(expr) {
+        Expr::Tuple(items) => items.split_first()?,
+        expr => (expr, &[][..]),
+    };
+    let Expr::Function(first) = first else {
+        return None;
+    };
+    let [sqlparser::ast::ObjectNamePart::Identifier(name)] = first.name.0.as_slice() else {
+        return None;
+    };
+    if name.quote_style.is_some() || !name.value.eq_ignore_ascii_case("values") {
+        return None;
+    }
+    let first_row = crate::unnamed_function_arg_exprs(first)?.cloned().collect();
+    let mut rows = vec![sqlparser::ast::Parens::with_empty_span(first_row)];
+    for row in rest {
+        let values = match row {
+            Expr::Tuple(values) => values.clone(),
+            Expr::Nested(value) => vec![(**value).clone()],
+            _ => return None,
+        };
+        rows.push(sqlparser::ast::Parens::with_empty_span(values));
+    }
+    Some(Box::new(crate::query_from_body(SetExpr::Values(
+        sqlparser::ast::Values {
+            explicit_row: false,
+            value_keyword: false,
+            rows,
+        },
+    ))))
 }
 
 fn lower_xml_document_predicates(tokens: &mut Vec<TokenWithSpan>) -> bool {

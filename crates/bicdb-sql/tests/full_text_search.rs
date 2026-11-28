@@ -772,3 +772,63 @@ fn text_search_mapping_catalog_links_legacy_and_stock_ids() {
         ]
     );
 }
+
+#[test]
+fn tsvector_update_triggers_refresh_search_text_before_writes() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = bicdb_core::BicDb::open(root.path()).unwrap();
+    let mut session = bicdb_sql::SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE TABLE docs(id int PRIMARY KEY, title text, body text,
+                               config regconfig, search tsvector);
+             CREATE TRIGGER docs_search BEFORE INSERT OR UPDATE ON docs FOR EACH ROW
+             EXECUTE FUNCTION pg_catalog.tsvector_update_trigger_column(search, config, title, body)",
+        )
+        .unwrap();
+    for (sql, expected) in [
+        (
+            "INSERT INTO docs VALUES (1, 'The Cats', 'The Dogs', 'pg_catalog.english', NULL)
+             RETURNING search",
+            "'cat':2 'dog':4",
+        ),
+        (
+            "UPDATE docs SET search = 'preset' RETURNING search",
+            "'preset'",
+        ),
+        (
+            "UPDATE docs SET config = 'pg_catalog.simple' RETURNING search",
+            "'preset'",
+        ),
+        ("UPDATE docs SET search = NULL RETURNING search", ""),
+        (
+            "UPDATE docs SET title = title RETURNING search",
+            "'cats':2 'dogs':4 'the':1,3",
+        ),
+        (
+            "UPDATE docs SET body = NULL RETURNING search",
+            "'cats':2 'the':1",
+        ),
+    ] {
+        let result = session.execute(sql).unwrap();
+        assert_eq!(result.rows[0][0].to_cell(), expected);
+    }
+    assert_eq!(
+        session
+            .execute("INSERT INTO docs(id,body) VALUES (2,'missing configuration')")
+            .unwrap_err()
+            .sqlstate(),
+        "22004",
+    );
+    session
+        .execute(
+            "DROP TRIGGER docs_search ON docs;
+             CREATE TRIGGER docs_search BEFORE INSERT OR UPDATE ON docs FOR EACH ROW
+             EXECUTE FUNCTION tsvector_update_trigger(search, 'pg_catalog.english', body)",
+        )
+        .unwrap();
+    let inserted = session
+        .execute("INSERT INTO docs(id,body) VALUES (2,'The dogs') RETURNING search")
+        .unwrap();
+    assert_eq!(inserted.rows[0][0].to_cell(), "'dog':2");
+}

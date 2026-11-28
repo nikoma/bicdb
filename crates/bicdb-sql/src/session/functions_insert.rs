@@ -7,6 +7,72 @@ thread_local! {
     pub(crate) static SQL_STORED_INSERT_HITS: std::cell::RefCell<usize> = const { std::cell::RefCell::new(0) };
 }
 
+type ConflictRow = (
+    Option<Record>,
+    u64,
+    Option<bicdb_core::ReadCommittedRowReservation>,
+);
+
+#[derive(Clone, Copy)]
+enum ConflictDoNothingTarget<'a> {
+    All,
+    Columns(&'a ConflictColumnInference),
+    Exclusion(&'a str),
+}
+
+fn create_function_leakproof_option(
+    statement: &str,
+    declaration_start: usize,
+) -> Result<Option<(String, bool)>> {
+    let rest = &statement[declaration_start..];
+    let (_, arguments) = parse_leading_qualified_sql_identifier(rest)?;
+    let arguments = arguments.trim_start();
+    if !arguments.starts_with('(') {
+        return Ok(None);
+    }
+    let Some(close) = find_matching_paren_nested(arguments, 0) else {
+        return Ok(None);
+    };
+    let options = &arguments[close + 1..];
+    let end = ["RETURN", "BEGIN"]
+        .iter()
+        .filter_map(|word| find_top_level_keyword(options, word))
+        .min()
+        .unwrap_or(options.len());
+    let header = &options[..end];
+    let Some(flag) = find_top_level_keyword(header, "LEAKPROOF") else {
+        return Ok(None);
+    };
+    let flag_end = flag + "LEAKPROOF".len();
+    if find_top_level_keyword(&header[flag_end..], "LEAKPROOF").is_some() {
+        return Err(SqlError::data_exception_public(
+            "42601",
+            "conflicting or redundant options",
+            None,
+        ));
+    }
+    let prefix = &header[..flag];
+    let not = find_top_level_keyword(prefix, "NOT").filter(|not| {
+        Tokenizer::new(&PostgreSqlDialect {}, &prefix[not + "NOT".len()..])
+            .tokenize()
+            .is_ok_and(|tokens| {
+                tokens
+                    .into_iter()
+                    .all(|token| matches!(token, Token::Whitespace(_)))
+            })
+    });
+    let flag_start = not.unwrap_or(flag);
+    let absolute_start = statement.len() - options.len();
+    Ok(Some((
+        format!(
+            "{} {}",
+            &statement[..absolute_start + flag_start],
+            &options[flag_end..]
+        ),
+        not.is_none(),
+    )))
+}
+
 impl<'db> SqlSession<'db> {
     pub(crate) fn execute_raw_create_function(&mut self, sql: &str) -> Result<Option<SqlResult>> {
         let trimmed = sql.trim().trim_end_matches(';').trim();
@@ -18,16 +84,37 @@ impl<'db> SqlSession<'db> {
         } else {
             return Ok(None);
         };
-        if !crate::sql_atomic_body::atomic_bodies(trimmed).is_empty() {
-            return Ok(None);
-        }
-        if let Some(return_start) = find_top_level_keyword(trimmed, "RETURN") {
-            if find_top_level_keyword(&trimmed[..return_start], "AS").is_some() {
+        let option = if lower.contains("leakproof") {
+            create_function_leakproof_option(trimmed, prefix.len())?
+        } else {
+            None
+        };
+        let leakproof = option.as_ref().is_some_and(|(_, leakproof)| *leakproof);
+        self.require_leakproof_privilege(leakproof)?;
+        let trimmed = option.as_ref().map_or(trimmed, |(sql, _)| sql.as_str());
+        let lower = trimmed.to_ascii_lowercase();
+
+        let atomic = !crate::sql_atomic_body::atomic_bodies(trimmed).is_empty();
+        let return_start = find_top_level_keyword(trimmed, "RETURN");
+        if atomic || return_start.is_some() {
+            if !atomic
+                && return_start
+                    .is_some_and(|start| find_top_level_keyword(&trimmed[..start], "AS").is_some())
+            {
                 return Err(SqlError::data_exception_public(
                     "42P13",
                     "duplicate function body specified",
                     None,
                 ));
+            }
+            if option.is_some() {
+                let statements = parse_statements(trimmed)?;
+                let [Statement::CreateFunction(function)] = statements.as_slice() else {
+                    return Err(SqlError::InvalidSql("expected CREATE FUNCTION".to_string()));
+                };
+                return self
+                    .execute_create_function_with_leakproof(function, leakproof)
+                    .map(Some);
             }
             return Ok(None);
         }
@@ -85,6 +172,7 @@ impl<'db> SqlSession<'db> {
                 internal_symbol: None,
                 owner: Some(owner),
                 security_definer: routine_definition_is_security_definer(trimmed),
+                leakproof,
                 overload: None,
                 catalog_oid: None,
             },
@@ -92,6 +180,22 @@ impl<'db> SqlSession<'db> {
             prefix.contains("replace"),
         )?;
         Ok(Some(SqlResult::command("CREATE FUNCTION")))
+    }
+
+    fn require_leakproof_privilege(&self, leakproof: bool) -> Result<()> {
+        if leakproof {
+            let role = current_user_from_gucs(&self.session_gucs);
+            if role != BOOTSTRAP_ROLE_NAME
+                && !load_role_schema(self.db_ref(), &role)?.is_some_and(|role| role.superuser)
+            {
+                return Err(SqlError::data_exception_public(
+                    "42501",
+                    "only superuser can define a leakproof function",
+                    None,
+                ));
+            }
+        }
+        Ok(())
     }
 
     pub(crate) fn execute_alter_function(
@@ -248,9 +352,12 @@ impl<'db> SqlSession<'db> {
                         AlterFunctionAction::Parallel(value) => {
                             create.parallel = Some(value.clone())
                         }
+                        AlterFunctionAction::Leakproof(leakproof) => {
+                            self.require_leakproof_privilege(*leakproof)?;
+                            routine.leakproof = *leakproof;
+                        }
                         // Planner hints with no effect on results.
-                        AlterFunctionAction::Leakproof(_)
-                        | AlterFunctionAction::Cost(_)
+                        AlterFunctionAction::Cost(_)
                         | AlterFunctionAction::Rows(_)
                         | AlterFunctionAction::Support(_)
                         | AlterFunctionAction::Reset(_) => {}
@@ -319,6 +426,7 @@ impl<'db> SqlSession<'db> {
             internal_symbol: None,
             owner: Some(current_user_from_gucs(&self.session_gucs)),
             security_definer: false,
+            leakproof: false,
             overload: None,
             catalog_oid: None,
         };
@@ -382,6 +490,7 @@ impl<'db> SqlSession<'db> {
                 internal_symbol: None,
                 owner: Some(owner),
                 security_definer: routine_definition_is_security_definer(trimmed),
+                leakproof: false,
                 overload: None,
                 catalog_oid: None,
             },
@@ -595,20 +704,8 @@ impl<'db> SqlSession<'db> {
         // could attach a capturing function to another tenant's table and
         // exfiltrate every row the owner later writes.
         self.require_table_ownership(&trigger.table_name, "create a trigger on it")?;
-        let function = load_routine(self.db_ref(), RoutineKind::Function, &trigger.function_name)?
-            .ok_or_else(|| {
-                SqlError::InvalidSql(format!(
-                    "function \"{}\" does not exist",
-                    trigger.function_name
-                ))
-            })?;
-        if function.return_type != "trigger" {
-            return Err(SqlError::InvalidSql(format!(
-                "function \"{}\" must return trigger",
-                trigger.function_name
-            )));
-        }
-        self.require_trigger_function_execute(&trigger.function_name)?;
+        trigger.function_name =
+            self.bind_trigger_function(&trigger.function_name, &trigger.for_each)?;
         self.create_session_trigger_if_missing(trigger, or_replace)?;
         Ok(Some(SqlResult::command("CREATE TRIGGER")))
     }
@@ -644,17 +741,7 @@ impl<'db> SqlSession<'db> {
         let exec_body = create_trigger.exec_body.as_ref().ok_or_else(|| {
             SqlError::Unsupported("trigger statement bodies are not supported".to_string())
         })?;
-        let (_, function_name) = routine_schema_and_name(&object_name(&exec_body.func_desc.name)?);
-        let function = load_routine(self.db_ref(), RoutineKind::Function, &function_name)?
-            .ok_or_else(|| {
-                SqlError::InvalidSql(format!("function \"{function_name}\" does not exist"))
-            })?;
-        if function.return_type != "trigger" {
-            return Err(SqlError::InvalidSql(format!(
-                "function \"{function_name}\" must return trigger"
-            )));
-        }
-        self.require_trigger_function_execute(&function_name)?;
+        let authored_function_name = object_name(&exec_body.func_desc.name)?;
         // DEFERRABLE INITIALLY DEFERRED constraint triggers queue on the
         // transaction and fire at COMMIT; everything else fires in-statement.
         let initially_deferred = create_trigger.is_constraint
@@ -673,6 +760,7 @@ impl<'db> SqlSession<'db> {
             // PostgreSQL: constraint triggers default to FOR EACH ROW.
             for_each = "row".to_string();
         }
+        let function_name = self.bind_trigger_function(&authored_function_name, &for_each)?;
         let definition = crate::sql_text::sql_text(create_trigger);
         let arguments = parse_raw_create_trigger(&definition)?
             .map(|(trigger, _)| trigger.arguments)
@@ -695,6 +783,38 @@ impl<'db> SqlSession<'db> {
         self.validate_view_trigger(&trigger)?;
         self.create_session_trigger_if_missing(trigger, create_trigger.or_replace)?;
         Ok(SqlResult::command("CREATE TRIGGER"))
+    }
+
+    fn bind_trigger_function(&self, authored: &str, for_each: &str) -> Result<String> {
+        let (_, name) = routine_schema_and_name(authored);
+        let builtin = crate::fts::update_trigger_oid(authored).is_some();
+        let routine = if builtin && authored.starts_with("pg_catalog.") {
+            None
+        } else {
+            load_routine(self.db_ref(), RoutineKind::Function, authored)?
+        };
+        if let Some(function) = routine {
+            if function.return_type != "trigger" {
+                return Err(SqlError::InvalidSql(format!(
+                    "function \"{name}\" must return trigger",
+                )));
+            }
+            self.require_trigger_function_execute(authored)?;
+            return Ok(authored.to_string());
+        }
+        if builtin {
+            if !for_each.eq_ignore_ascii_case("row") {
+                return Err(SqlError::data_exception_public(
+                    "XX000",
+                    "tsvector_update_trigger: must be fired for row",
+                    None,
+                ));
+            }
+            return Ok(format!("pg_catalog.{name}"));
+        }
+        Err(SqlError::InvalidSql(format!(
+            "function \"{authored}\" does not exist",
+        )))
     }
 
     fn owned_routine_for_ddl(
@@ -970,6 +1090,20 @@ impl<'db> SqlSession<'db> {
         // Consumed here, before the source or any trigger can run another INSERT.
         let overriding_system_value = super::insert_overriding::take_system_value(&table);
         require_dml_target_exists(self.db_ref(), &table)?;
+        if matches!(
+            &insert.on,
+            Some(OnInsert::OnConflict(conflict))
+                if conflict.conflict_target.is_none()
+                    && matches!(conflict.action, OnConflictAction::DoUpdate(_))
+        ) && !oracle::is_oracle_database(self.db_ref())?
+        {
+            return Err(SqlError::coded(
+                "42601",
+                "ON CONFLICT DO UPDATE requires inference specification or constraint name",
+                None,
+                Some("For example, ON CONFLICT (column_name).".to_string()),
+            ));
+        }
         // Without the table privilege, column INSERT grants are checked once
         // the target columns are known.
         let mut insert_columns_need_grants = false;
@@ -1007,6 +1141,91 @@ impl<'db> SqlSession<'db> {
             return self.execute_insert_into_view(insert, view, ctes);
         }
         let schema = load_schema_shared(self.db_ref(), &table)?;
+        if let Some(schema) = schema.as_deref() {
+            super::conflict_scope::validate_excluded_references(insert, &table, schema)?;
+        }
+        let mut inference = None;
+        if let (Some(schema), Some(OnInsert::OnConflict(conflict))) =
+            (schema.as_deref(), &insert.on)
+        {
+            let target = conflict.conflict_target.as_ref();
+            if let Some((_, predicate)) =
+                target.and_then(crate::conflict_inference::column_inference)
+            {
+                let columns = conflict_target_columns(&table, Some(schema), target)?;
+                for name in &columns {
+                    if !schema
+                        .columns
+                        .iter()
+                        .any(|column| column.name == *name && !column.hidden)
+                    {
+                        return Err(SqlError::data_exception(
+                            "42703",
+                            format!("column \"{name}\" does not exist"),
+                            None,
+                        ));
+                    }
+                }
+                let mut read_columns: BTreeSet<_> = columns.iter().cloned().collect();
+                if let Some(predicate) = predicate {
+                    read_columns.extend(crate::conflict_inference::predicate_columns(
+                        predicate,
+                        schema,
+                        insert.table_alias.as_ref().map(|alias| &alias.alias),
+                    )?);
+                }
+                self.require_column_privilege(
+                    &table,
+                    "SELECT",
+                    &read_columns.into_iter().collect::<Vec<_>>(),
+                )?;
+                let inferred = ConflictColumnInference {
+                    columns,
+                    predicate: predicate.and_then(|predicate| {
+                        crate::partial_index::inference_predicate(schema, predicate)
+                    }),
+                };
+                if self
+                    .memoized_unique_arbiters(&table, schema, &inferred)
+                    .is_empty()
+                {
+                    return Err(SqlError::data_exception(
+                        "42P10",
+                        "there is no unique or exclusion constraint matching the ON CONFLICT specification",
+                        None,
+                    ));
+                }
+                inference = Some(inferred);
+            } else if let Some(ConflictTarget::OnConstraint(name)) = target {
+                let target = relation_name(name)?;
+                for constraint in &schema.constraints {
+                    let ConstraintSchema::Exclusion {
+                        name,
+                        equal_columns,
+                        range,
+                        ..
+                    } = constraint
+                    else {
+                        continue;
+                    };
+                    if name != &target {
+                        continue;
+                    }
+                    let columns = match range {
+                        // An expression arbiter marks the whole row as read.
+                        Some(range) if range.range_column.is_none() => schema
+                            .columns
+                            .iter()
+                            .filter(|column| !column.hidden)
+                            .map(|column| column.name.clone())
+                            .collect(),
+                        _ => exclusion_constraint_columns(equal_columns, range),
+                    };
+                    self.require_column_privilege(&table, "SELECT", &columns)?;
+                    break;
+                }
+            }
+        }
         let mut columns = insert
             .columns
             .iter()
@@ -1143,6 +1362,8 @@ impl<'db> SqlSession<'db> {
                     Some(parent),
                     records,
                     on_insert,
+                    inference.as_ref(),
+                    insert.table_alias.as_ref().map(|alias| &alias.alias),
                     insert.returning.as_deref(),
                 );
             }
@@ -1167,6 +1388,8 @@ impl<'db> SqlSession<'db> {
                 schema.as_deref(),
                 records,
                 on_insert,
+                inference.as_ref(),
+                insert.table_alias.as_ref().map(|alias| &alias.alias),
                 insert.returning.as_deref(),
             );
         }
@@ -1860,12 +2083,81 @@ impl<'db> SqlSession<'db> {
         Ok(())
     }
 
-    pub(crate) fn execute_insert_on_conflict(
+    fn prepare_conflict_row_assignments(
+        &self,
+        table: &str,
+        schema: &TableSchema,
+        update: &sqlparser::ast::DoUpdate,
+    ) -> Result<Vec<Assignment>> {
+        let mut target_columns = BTreeSet::new();
+        let mut reads = crate::column_privileges::ReferencedNames::default();
+        let mut expanded = Vec::with_capacity(update.assignments.len());
+        if let Some(selection) = &update.selection {
+            reads.add_expr(selection);
+        }
+        for assignment in &update.assignments {
+            reads.add_expr(&assignment.value);
+            let names = super::row_assignments::assignment_columns(&assignment.target);
+            for name in names {
+                let column = relation_name(name)?;
+                ensure_schema_column(table, schema, &column)?;
+                if !target_columns.insert(column.clone()) {
+                    return Err(SqlError::data_exception(
+                        "42601",
+                        format!("multiple assignments to same column \"{column}\""),
+                        None,
+                    ));
+                }
+            }
+            if !matches!(assignment.target, AssignmentTarget::Tuple(_)) {
+                expanded.push(assignment.clone());
+                continue;
+            }
+            let values = match unwrap_nested_expr(&assignment.value) {
+                Expr::Tuple(values) => values.iter().collect::<Vec<_>>(),
+                Expr::Function(function) if is_row_constructor(function) => {
+                    unnamed_function_arg_exprs(function)
+                        .into_iter()
+                        .flatten()
+                        .collect()
+                }
+                Expr::Subquery(query) => {
+                    if let Some(width) = self.insert_source_width(query, &BTreeMap::new())? {
+                        check_conflict_assignment_width(names.len(), width)?;
+                    }
+                    for name in names {
+                        check_conflict_generated_assignment(schema, name, None)?;
+                    }
+                    expanded.push(assignment.clone());
+                    continue;
+                }
+                _ => return Err(SqlError::data_exception(
+                    "0A000",
+                    "source for a multiple-column UPDATE item must be a sub-SELECT or ROW() expression",
+                    None,
+                )),
+            };
+            check_conflict_assignment_width(names.len(), values.len())?;
+            for (name, value) in names.iter().zip(values) {
+                check_conflict_generated_assignment(schema, name, Some(value))?;
+                expanded.push(Assignment {
+                    target: AssignmentTarget::ColumnName(name.clone()),
+                    value: value.clone(),
+                });
+            }
+        }
+        self.require_select_on_names(table, &reads, &["excluded".to_string()])?;
+        Ok(expanded)
+    }
+
+    fn execute_insert_on_conflict(
         &mut self,
         table: &str,
         schema: Option<&TableSchema>,
         records: Vec<Record>,
         on_insert: &OnInsert,
+        inference: Option<&ConflictColumnInference>,
+        insert_alias: Option<&Ident>,
         returning: Option<&[SelectItem]>,
     ) -> Result<SqlResult> {
         let OnInsert::OnConflict(on_conflict) = on_insert else {
@@ -1873,125 +2165,113 @@ impl<'db> SqlSession<'db> {
                 "INSERT ON DUPLICATE KEY UPDATE is not supported".to_string(),
             ));
         };
-        if let Some(schema) = schema.filter(|_| !records.is_empty()) {
-            self.reject_deferrable_conflict_arbiters(table, schema, on_conflict)?;
-        }
-        // ON CONFLICT ON CONSTRAINT naming an exclusion constraint or a temporal key.
-        let records = match (on_conflict.conflict_target.as_ref(), schema) {
-            (Some(ConflictTarget::OnConstraint(name)), Some(schema)) => {
-                let name = relation_name(name)?;
-                let exclusion = schema.constraints.iter().any(|constraint| {
-                    matches!(constraint, ConstraintSchema::Exclusion { .. })
-                        && constraint_name(constraint).eq_ignore_ascii_case(&name)
-                });
-                if exclusion {
-                    if matches!(on_conflict.action, OnConflictAction::DoUpdate(_)) {
-                        return Err(SqlError::data_exception(
-                            "42809",
-                            "ON CONFLICT DO UPDATE not supported with exclusion constraints",
-                            None,
-                        ));
-                    }
-                    // DO NOTHING arbitrates that constraint alone; any other unique or
-                    // exclusion violation must still fail. Only the case where nothing else
-                    // could conflict is handled; others are refused rather than skipped.
-                    let others = !unique_arbiters_for_table(self.db_ref(), table, schema)
-                        .is_empty()
-                        || schema
-                            .constraints
-                            .iter()
-                            .filter(|constraint| {
-                                matches!(constraint, ConstraintSchema::Exclusion { .. })
-                            })
-                            .count()
-                            > 1;
-                    if others || schema.partitioning.is_some() {
-                        return Err(SqlError::RaisedException {
-                            sqlstate: "0A000".to_string(),
-                            message: "ON CONFLICT ON CONSTRAINT with an exclusion constraint is \
-                                      supported only when no other unique or exclusion \
-                                      constraint applies"
-                                .to_string(),
-                            detail: None,
-                        });
-                    }
-                    let records = self.non_conflicting_exclusion_records(
-                        table,
-                        schema,
-                        Some(&name),
-                        records,
-                    )?;
-                    let no_target = sqlparser::ast::OnConflict {
-                        conflict_target: None,
-                        action: OnConflictAction::DoNothing,
-                    };
-                    return self.execute_insert_on_conflict(
-                        table,
-                        Some(schema),
-                        records,
-                        &OnInsert::OnConflict(no_target),
-                        returning,
-                    );
-                }
-                records
-            }
-            _ => records,
-        };
-        let access_table = table;
-        let access_schema = schema;
-        let partition_parent = schema.filter(|schema| schema.partitioning.is_some());
         // An arbiter reads the target relation (PostgreSQL requires SELECT
         // rights for it), so the SELECT policies join the new-row checks.
         let select_required = on_conflict.conflict_target.is_some()
             || matches!(on_conflict.action, OnConflictAction::DoUpdate(_))
             || returning.is_some_and(select_items_reference_stored_columns);
-        // A column conflict target needs some unique arbiter to infer; a
-        // table with none (no primary key, unique constraint or unique
-        // index) fails as in PostgreSQL instead of never conflicting.
-        if let (Some(ConflictTarget::Columns(_)), Some(schema)) =
-            (on_conflict.conflict_target.as_ref(), schema)
-        {
-            if unique_arbiters_for_table(self.db_ref(), table, schema).is_empty() {
-                return Err(SqlError::data_exception(
-                    "42P10",
-                    "there is no unique or exclusion constraint matching the ON CONFLICT specification",
-                    None,
-                ));
+        // ON CONFLICT ON CONSTRAINT naming an exclusion constraint or a temporal key.
+        let named_constraint = match on_conflict.conflict_target.as_ref() {
+            Some(target @ ConflictTarget::OnConstraint(name))
+                if crate::conflict_inference::column_inference(target).is_none() =>
+            {
+                Some(relation_name(name)?)
             }
-        }
-        if partition_parent.is_none() && matches!(on_conflict.action, OnConflictAction::DoNothing) {
-            if on_conflict.conflict_target.is_none() {
-                return self.execute_insert_on_conflict_do_nothing_all_unique(
+            _ => None,
+        };
+        if let (Some(target), Some(schema)) = (named_constraint.as_ref(), schema) {
+            if schema.constraints.iter().any(|constraint| {
+                matches!(constraint, ConstraintSchema::Exclusion { name, .. } if name == target)
+            }) {
+                if matches!(on_conflict.action, OnConflictAction::DoUpdate(_)) {
+                    return Err(SqlError::data_exception(
+                        "42809",
+                        "ON CONFLICT DO UPDATE not supported with exclusion constraints",
+                        None,
+                    ));
+                }
+                if schema.partitioning.is_some() {
+                    return Err(SqlError::Unsupported(
+                        "ON CONFLICT targeting an exclusion constraint on a partitioned table"
+                            .to_string(),
+                    ));
+                }
+                return self.execute_insert_on_conflict_do_nothing(
                     table,
-                    schema,
+                    Some(schema),
                     records,
+                    ConflictDoNothingTarget::Exclusion(target),
                     returning,
                     select_required,
                 );
             }
-            let conflict_columns =
-                conflict_target_columns(table, schema, on_conflict.conflict_target.as_ref())?;
+        }
+        let any_arbiter = on_conflict.conflict_target.is_none()
+            && matches!(on_conflict.action, OnConflictAction::DoNothing);
+        let fallback_inference;
+        let inference = if any_arbiter {
+            None
+        } else if let Some(inference) = inference {
+            Some(inference)
+        } else {
+            fallback_inference = ConflictColumnInference {
+                columns: conflict_target_columns(
+                    table,
+                    schema,
+                    on_conflict.conflict_target.as_ref(),
+                )?,
+                predicate: None,
+            };
+            Some(&fallback_inference)
+        };
+        if let Some(schema) = schema.filter(|_| !records.is_empty()) {
+            self.reject_deferrable_conflict_arbiters(table, schema, inference)?;
+        }
+
+        let access_table = table;
+        let access_schema = schema;
+        let partition_parent = schema.filter(|schema| schema.partitioning.is_some());
+        if partition_parent.is_none() && matches!(on_conflict.action, OnConflictAction::DoNothing) {
+            let target = inference.map_or(
+                ConflictDoNothingTarget::All,
+                ConflictDoNothingTarget::Columns,
+            );
             return self.execute_insert_on_conflict_do_nothing(
                 table,
                 schema,
                 records,
-                &conflict_columns,
+                target,
                 returning,
                 select_required,
             );
         }
+        let expanded_assignments = match (&on_conflict.action, schema) {
+            (OnConflictAction::DoUpdate(update), Some(schema))
+                if update
+                    .assignments
+                    .iter()
+                    .any(|assignment| matches!(assignment.target, AssignmentTarget::Tuple(_))) =>
+            {
+                Some(self.prepare_conflict_row_assignments(table, schema, update)?)
+            }
+            _ => None,
+        };
+        let mut update_assignments = &[][..];
         let assignments = if let OnConflictAction::DoUpdate(update) = &on_conflict.action {
             self.require_update_privileges(table, &update.assignments)?;
-            super::row_assignments::default_assignment_order(&update.assignments, schema)
+            update_assignments = expanded_assignments
+                .as_deref()
+                .unwrap_or(&update.assignments);
+            super::row_assignments::default_assignment_order(update_assignments, schema)
         } else {
             None
         };
-        let conflict_columns = if matches!(on_conflict.action, OnConflictAction::DoNothing)
-            && on_conflict.conflict_target.is_none()
-        {
-            Vec::new()
-        } else {
-            conflict_target_columns(table, schema, on_conflict.conflict_target.as_ref())?
+        let target_alias = insert_alias.map_or_else(|| catalog_display_name(table), ident_value);
+        let whole_rows = match &on_conflict.action {
+            OnConflictAction::DoUpdate(update) => {
+                conflict_whole_row_references(update, &target_alias)
+            }
+            OnConflictAction::DoNothing => ConflictWholeRows::default(),
         };
         let mut affected_records = Vec::new();
         let mut affected_identities = BTreeSet::new();
@@ -2032,18 +2312,18 @@ impl<'db> SqlSession<'db> {
             if partition_parent.is_some()
                 && matches!(on_conflict.action, OnConflictAction::DoNothing)
             {
-                let retained = if on_conflict.conflict_target.is_none() {
-                    self.non_conflicting_insert_records_all_unique(
-                        table,
-                        schema,
-                        vec![record.clone()],
-                    )?
-                } else {
+                let retained = if let Some(inference) = inference {
                     self.non_conflicting_insert_records(
                         table,
                         schema,
                         vec![record.clone()],
-                        &conflict_columns,
+                        inference,
+                    )?
+                } else {
+                    self.non_conflicting_insert_records_all_unique(
+                        table,
+                        schema,
+                        vec![record.clone()],
                     )?
                 };
                 if retained.is_empty() {
@@ -2061,30 +2341,10 @@ impl<'db> SqlSession<'db> {
                     false,
                     Some(&self.sql_engine()),
                 )
-                .map_err(|error| {
-                    self.arbiter_race_as_conflict(
-                        table,
-                        schema,
-                        if on_conflict.conflict_target.is_none() {
-                            None
-                        } else {
-                            Some(&conflict_columns)
-                        },
-                        error,
-                    )
-                })?;
+                .map_err(|error| self.arbiter_race_as_conflict(table, schema, inference, error))?;
                 self.insert_session_new_records(table, schema, retained.clone())
                     .map_err(|error| {
-                        self.arbiter_race_as_conflict(
-                            table,
-                            schema,
-                            if on_conflict.conflict_target.is_none() {
-                                None
-                            } else {
-                                Some(&conflict_columns)
-                            },
-                            error,
-                        )
+                        self.arbiter_race_as_conflict(table, schema, inference, error)
                     })?;
                 for row in retained {
                     partition_after_events.push((target.clone(), None, row.clone()));
@@ -2092,19 +2352,13 @@ impl<'db> SqlSession<'db> {
                 }
                 continue;
             }
-            // A READ COMMITTED primary-key upsert must reserve the row before
-            // deciding INSERT versus UPDATE. The winner may commit while this
-            // statement waits, leaving it invisible to the statement snapshot.
-            let refreshed =
-                self.read_committed_primary_conflict(table, schema, &record, &conflict_columns)?;
-            let (existing, conflict_snapshot, conflict_reservation) = match refreshed {
-                Some(found) => found,
-                None => (
-                    self.find_conflict_record(table, schema, &record, &conflict_columns)?,
-                    0,
-                    None,
-                ),
-            };
+            let (existing, conflict_snapshot, conflict_reservation) = self
+                .conflict_record_for_upsert(
+                    table,
+                    schema,
+                    &record,
+                    inference.expect("DO UPDATE has an arbiter target"),
+                )?;
             if let Some(existing) = existing {
                 if let Some(tx) = records::postgres_fixed_snapshot(self.db_ref(), self.tx.as_ref())?
                 {
@@ -2134,16 +2388,22 @@ impl<'db> SqlSession<'db> {
                                 "ON CONFLICT DO UPDATE requires a table schema".to_string(),
                             ));
                         };
-                        let mut update_row = row_from_record(
+                        let row_schema = access_schema.unwrap_or(schema);
+                        let mut old_row = row_from_record(
                             access_table,
-                            access_table,
-                            access_schema.or(Some(schema)),
+                            &target_alias,
+                            Some(row_schema),
                             &existing,
                         )?;
-                        update_row = merge_rows(
-                            &update_row,
-                            &row_from_record("excluded", "excluded", Some(schema), &record)?,
-                        );
+                        let mut excluded_row =
+                            row_from_record("excluded", "excluded", Some(row_schema), &record)?;
+                        if whole_rows.target {
+                            insert_upsert_whole_row(&mut old_row, &target_alias, row_schema);
+                        }
+                        if whole_rows.excluded {
+                            insert_upsert_whole_row(&mut excluded_row, "excluded", row_schema);
+                        }
+                        let update_row = merge_rows(&old_row, &excluded_row);
                         if let Some(selection) = &update.selection {
                             if !self
                                 .row_engine()
@@ -2164,70 +2424,91 @@ impl<'db> SqlSession<'db> {
                         )?;
 
                         let mut updated = existing.clone();
-                        let mut assigned_columns = Vec::with_capacity(update.assignments.len());
-                        for index in 0..update.assignments.len() {
+                        let mut assigned_columns = Vec::with_capacity(update_assignments.len());
+                        for index in 0..update_assignments.len() {
                             let assignment = match assignments.as_ref() {
                                 Some(ordered) => ordered[index],
-                                None => &update.assignments[index],
+                                None => &update_assignments[index],
                             };
-                            let AssignmentTarget::ColumnName(column_name) = &assignment.target
-                            else {
-                                return Err(SqlError::Unsupported(
-                                    "ON CONFLICT DO UPDATE supports only single-column assignments"
-                                        .to_string(),
-                                ));
-                            };
-                            let column = relation_name(column_name)?;
-                            ensure_schema_column(table, schema, &column)?;
-                            if schema
-                                .column(&column)
-                                .is_some_and(|column| column.generated_expr.is_some())
-                            {
-                                if expr_is_default(&assignment.value) {
-                                    continue;
+                            let names =
+                                super::row_assignments::assignment_columns(&assignment.target);
+                            let mut source_values =
+                                if matches!(assignment.target, AssignmentTarget::Tuple(_)) {
+                                    let Expr::Subquery(query) =
+                                        unwrap_nested_expr(&assignment.value)
+                                    else {
+                                        unreachable!(
+                                            "row constructors were expanded before execution"
+                                        );
+                                    };
+                                    let result = self
+                                        .row_engine()
+                                        .execute_correlated_query(&update_row, query)?;
+                                    Some(
+                                        conflict_assignment_query_values(result, names.len())?
+                                            .into_iter(),
+                                    )
+                                } else {
+                                    None
+                                };
+                            for column_name in names {
+                                let column = relation_name(column_name)?;
+                                ensure_schema_column(table, schema, &column)?;
+                                if schema
+                                    .column(&column)
+                                    .is_some_and(|column| column.generated_expr.is_some())
+                                {
+                                    if expr_is_default(&assignment.value) {
+                                        continue;
+                                    }
+                                    return Err(SqlError::generated_always_violation(format!(
+                                        "column \"{column}\" can only be updated to DEFAULT"
+                                    )));
                                 }
-                                return Err(SqlError::generated_always_violation(format!(
-                                    "column \"{column}\" can only be updated to DEFAULT"
-                                )));
-                            }
-                            assigned_columns.push(column.clone());
-                            let mut value = if expr_is_default(&assignment.value) {
-                                self.default_value_for_column(
-                                    access_schema.or(Some(schema)),
-                                    &column,
-                                )?
-                                .unwrap_or(SqlValue::Null)
-                            } else {
-                                self.row_engine()
-                                    .eval_row_value(&update_row, &assignment.value)?
-                            };
-                            if schema
-                                .column(&column)
-                                .is_some_and(|column| column.pg_type == "oid")
-                            {
-                                if let Some(cast) = explicit_oid_cast(
-                                    value.clone(),
-                                    &assignment.value,
-                                    Some(schema),
-                                ) {
-                                    value = cast?;
-                                }
-                            }
-                            let value = resolve_oid_alias_column_value(
-                                self.db_ref(),
-                                schema,
-                                &column,
-                                value,
-                            )?;
-                            if partition_parent.is_some() {
-                                set_partition_update_column(
-                                    &mut updated,
-                                    access_schema,
+                                assigned_columns.push(column.clone());
+                                let value = if let Some(values) = source_values.as_mut() {
+                                    values.next().expect("subquery row width was validated")
+                                } else if expr_is_default(&assignment.value) {
+                                    self.default_value_for_column(
+                                        access_schema.or(Some(schema)),
+                                        &column,
+                                    )?
+                                    .unwrap_or(SqlValue::Null)
+                                } else {
+                                    let value = self
+                                        .row_engine()
+                                        .eval_row_value(&update_row, &assignment.value)?;
+                                    if schema
+                                        .column(&column)
+                                        .is_some_and(|column| column.pg_type == "oid")
+                                    {
+                                        explicit_oid_cast(
+                                            value.clone(),
+                                            &assignment.value,
+                                            Some(schema),
+                                        )
+                                        .transpose()?
+                                        .unwrap_or(value)
+                                    } else {
+                                        value
+                                    }
+                                };
+                                let value = resolve_oid_alias_column_value(
+                                    self.db_ref(),
+                                    schema,
                                     &column,
                                     value,
                                 )?;
-                            } else {
-                                set_record_column(&mut updated, Some(schema), &column, value)?;
+                                if let Some(parent) = partition_parent {
+                                    set_partition_update_column(
+                                        &mut updated,
+                                        Some(parent),
+                                        &column,
+                                        value,
+                                    )?;
+                                } else {
+                                    set_record_column(&mut updated, Some(schema), &column, value)?;
+                                }
                             }
                         }
                         // ON CONFLICT DO UPDATE takes the update path, so
@@ -2240,6 +2521,7 @@ impl<'db> SqlSession<'db> {
                                 &existing,
                                 updated,
                                 partition_parent,
+                                Some(&assigned_columns),
                             )?
                         else {
                             continue;
@@ -2345,12 +2627,7 @@ impl<'db> SqlSession<'db> {
                     Some(&self.sql_engine()),
                 )
                 .map_err(|error| {
-                    self.arbiter_race_as_conflict(
-                        table,
-                        Some(schema),
-                        Some(&conflict_columns),
-                        error,
-                    )
+                    self.arbiter_race_as_conflict(table, Some(schema), inference, error)
                 })?;
             }
             let inserted = match conflict_reservation {
@@ -2360,12 +2637,7 @@ impl<'db> SqlSession<'db> {
                 None => self.insert_session_new_records(table, schema, vec![record.clone()]),
             };
             if let Err(error) = inserted {
-                return Err(self.arbiter_race_as_conflict(
-                    table,
-                    schema,
-                    Some(&conflict_columns),
-                    error,
-                ));
+                return Err(self.arbiter_race_as_conflict(table, schema, inference, error));
             }
             affected_identities.insert((table.to_string(), record.id.clone()));
             if let Some(target) = destination {
@@ -2402,21 +2674,57 @@ impl<'db> SqlSession<'db> {
         )
     }
 
-    /// Recheck only the arbiter row; other relations retain the statement's
-    /// original snapshot. Fixed-snapshot isolation keeps its existing conflict.
-    fn read_committed_primary_conflict(
+    /// Resolve every inferred arbiter in catalog order. When one of the
+    /// read-committed probes reserves an absent proposed row, keep the
+    /// reservation for INSERT while continuing to look for a conflict.
+    fn conflict_record_for_upsert(
         &mut self,
         table: &str,
         schema: Option<&TableSchema>,
         record: &Record,
-        conflict_columns: &[String],
-    ) -> Result<
-        Option<(
-            Option<Record>,
-            u64,
-            Option<bicdb_core::ReadCommittedRowReservation>,
-        )>,
-    > {
+        inference: &ConflictColumnInference,
+    ) -> Result<ConflictRow> {
+        let Some(schema) = schema else {
+            return Ok((None, 0, None));
+        };
+        let arbiters = self.memoized_unique_arbiters(table, schema, inference);
+        if arbiters.is_empty() {
+            return Ok((
+                self.scan_conflict_record_by_columns(table, schema, record, &inference.columns)?,
+                0,
+                None,
+            ));
+        }
+
+        let mut absence = (None, 0, None);
+        for arbiter in arbiters.iter() {
+            if let Some(found) =
+                self.read_committed_arbiter_conflict(table, schema, record, arbiter)?
+            {
+                if found.0.is_some() {
+                    return Ok(found);
+                }
+                if absence.2.is_none() {
+                    absence = found;
+                }
+            } else if let Some(existing) =
+                self.find_conflict_record(table, schema, record, arbiter)?
+            {
+                return Ok((Some(existing), 0, None));
+            }
+        }
+        Ok(absence)
+    }
+
+    /// Recheck only the arbiter row; other relations retain the statement's
+    /// original snapshot. Fixed-snapshot isolation keeps its existing conflict.
+    fn read_committed_arbiter_conflict(
+        &mut self,
+        table: &str,
+        schema: &TableSchema,
+        record: &Record,
+        arbiter: &UniqueConflictArbiter,
+    ) -> Result<Option<ConflictRow>> {
         if !self
             .tx
             .as_ref()
@@ -2424,25 +2732,19 @@ impl<'db> SqlSession<'db> {
         {
             return Ok(None);
         }
-        let Some(schema) = schema else {
-            return Ok(None);
-        };
-        let Some(arbiter) = self.memoized_unique_arbiter(table, schema, conflict_columns)? else {
-            return Ok(None);
-        };
         if unique_key_values(record, schema, &arbiter.key)
             .iter()
             .any(|value| matches!(value, SqlValue::Json(_)))
         {
-            return self.read_committed_json_arbiter_conflict(table, schema, record, &arbiter);
+            return self.read_committed_json_arbiter_conflict(table, schema, record, arbiter);
         }
         if self.signed_mutation_grant(table).is_some() {
-            return self.read_committed_signed_arbiter_conflict(table, schema, record, &arbiter);
+            return self.read_committed_signed_arbiter_conflict(table, schema, record, arbiter);
         }
-        let columns = primary_key_columns_for_unique_arbiter(schema, &arbiter);
+        let columns = primary_key_columns_for_unique_arbiter(schema, arbiter);
         let Some(columns) = columns.filter(|_| !primary_key_requires_typed_identity(schema)) else {
             return self
-                .read_committed_index_conflict(table, schema, record, &arbiter)
+                .read_committed_index_conflict(table, schema, record, arbiter)
                 .map(|found| found.map(|(row, snapshot)| (row, snapshot, None)));
         };
         let key = record_column_values(record, schema, &columns);
@@ -2832,7 +3134,7 @@ impl<'db> SqlSession<'db> {
         &self,
         table: &str,
         schema: Option<&TableSchema>,
-        conflict_columns: Option<&[String]>,
+        inference: Option<&ConflictColumnInference>,
         error: SqlError,
     ) -> SqlError {
         let Some(schema) = schema else {
@@ -2850,12 +3152,12 @@ impl<'db> SqlSession<'db> {
         let matches_violation = |arbiter: &records::UniqueConflictArbiter| {
             arbiter.name == violated || arbiter.index_name.as_deref() == Some(violated.as_str())
         };
-        let arbiter = match conflict_columns {
-            Some(columns) => self
-                .memoized_unique_arbiter(table, schema, columns)
-                .ok()
-                .flatten()
-                .filter(matches_violation),
+        let arbiter = match inference {
+            Some(inference) => self
+                .memoized_unique_arbiters(table, schema, inference)
+                .iter()
+                .find(|arbiter| matches_violation(arbiter))
+                .cloned(),
             None => {
                 // Untargeted DO NOTHING accepts any of this table's unique
                 // arbiters. A fixed snapshot cannot silently ignore a tuple
@@ -2882,26 +3184,40 @@ impl<'db> SqlSession<'db> {
         )))
     }
 
-    pub(crate) fn execute_insert_on_conflict_do_nothing(
+    fn execute_insert_on_conflict_do_nothing(
         &mut self,
         table: &str,
         schema: Option<&TableSchema>,
         records: Vec<Record>,
-        conflict_columns: &[String],
+        target: ConflictDoNothingTarget<'_>,
         returning: Option<&[SelectItem]>,
         select_required: bool,
     ) -> Result<SqlResult> {
-        self.enforce_rls_before_do_nothing(
-            table,
-            schema,
-            &records,
-            select_required,
-            |session, rows| {
-                session.non_conflicting_insert_records(table, schema, rows, conflict_columns)
-            },
-        )?;
-        let inserted_records =
-            self.non_conflicting_insert_records(table, schema, records, conflict_columns)?;
+        let filter = |session: &Self, rows: Vec<Record>| match target {
+            ConflictDoNothingTarget::All => {
+                session.non_conflicting_insert_records_all_unique(table, schema, rows)
+            }
+            ConflictDoNothingTarget::Columns(columns) => {
+                session.non_conflicting_insert_records(table, schema, rows, columns)
+            }
+            ConflictDoNothingTarget::Exclusion(name) => session.non_conflicting_exclusion_records(
+                table,
+                schema.expect("an exclusion arbiter belongs to a table schema"),
+                Some(name),
+                rows,
+            ),
+        };
+        self.enforce_rls_before_do_nothing(table, schema, &records, select_required, filter)?;
+        let inserted_records = filter(self, records)?;
+        let map_error = |session: &Self, error| match target {
+            ConflictDoNothingTarget::All => {
+                session.arbiter_race_as_conflict(table, schema, None, error)
+            }
+            ConflictDoNothingTarget::Columns(columns) => {
+                session.arbiter_race_as_conflict(table, schema, Some(columns), error)
+            }
+            ConflictDoNothingTarget::Exclusion(_) => error,
+        };
         if let Some(schema) = schema {
             validate_records_for_write(
                 self.db_ref(),
@@ -2912,19 +3228,10 @@ impl<'db> SqlSession<'db> {
                 false,
                 Some(&self.sql_engine()),
             )
-            .map_err(|error| {
-                self.arbiter_race_as_conflict(table, Some(schema), Some(conflict_columns), error)
-            })?;
+            .map_err(|error| map_error(self, error))?;
         }
-        if let Err(error) = self.insert_session_new_records(table, schema, inserted_records.clone())
-        {
-            return Err(self.arbiter_race_as_conflict(
-                table,
-                schema,
-                Some(conflict_columns),
-                error,
-            ));
-        }
+        self.insert_session_new_records(table, schema, inserted_records.clone())
+            .map_err(|error| map_error(self, error))?;
         self.fire_after_insert_triggers(table, schema, &inserted_records)?;
         self.insert_result(
             table,
@@ -2942,7 +3249,7 @@ impl<'db> SqlSession<'db> {
         &self,
         table: &str,
         schema: &TableSchema,
-        on_conflict: &sqlparser::ast::OnConflict,
+        inference: Option<&ConflictColumnInference>,
     ) -> Result<()> {
         if !schema
             .constraints
@@ -2951,61 +3258,17 @@ impl<'db> SqlSession<'db> {
         {
             return Ok(());
         }
-        let deferrable_arbiter = match on_conflict.conflict_target.as_ref() {
-            None => true,
-            Some(target) => {
-                let columns = conflict_target_columns(table, Some(schema), Some(target))?;
-                self.memoized_unique_arbiter(table, schema, &columns)?
-                    .is_some_and(|arbiter| arbiter.deferral.is_some())
-            }
-        };
+        let deferrable_arbiter = inference.is_none_or(|inference| {
+            self.memoized_unique_arbiters(table, schema, inference)
+                .iter()
+                .any(|arbiter| arbiter.deferral.is_some())
+        });
         if deferrable_arbiter {
             return Err(SqlError::object_not_in_prerequisite_state(
                 "ON CONFLICT does not support deferrable unique constraints/exclusion constraints as arbiters",
             ));
         }
         Ok(())
-    }
-
-    pub(crate) fn execute_insert_on_conflict_do_nothing_all_unique(
-        &mut self,
-        table: &str,
-        schema: Option<&TableSchema>,
-        records: Vec<Record>,
-        returning: Option<&[SelectItem]>,
-        select_required: bool,
-    ) -> Result<SqlResult> {
-        self.enforce_rls_before_do_nothing(
-            table,
-            schema,
-            &records,
-            select_required,
-            |session, rows| session.non_conflicting_insert_records_all_unique(table, schema, rows),
-        )?;
-        let inserted_records =
-            self.non_conflicting_insert_records_all_unique(table, schema, records)?;
-        if let Some(schema) = schema {
-            validate_records_for_write(
-                self.db_ref(),
-                self.tx.as_ref(),
-                table,
-                schema,
-                &inserted_records,
-                false,
-                Some(&self.sql_engine()),
-            )
-            .map_err(|error| self.arbiter_race_as_conflict(table, Some(schema), None, error))?;
-        }
-        self.insert_session_new_records(table, schema, inserted_records.clone())
-            .map_err(|error| self.arbiter_race_as_conflict(table, schema, None, error))?;
-        self.fire_after_insert_triggers(table, schema, &inserted_records)?;
-        self.insert_result(
-            table,
-            schema,
-            returning,
-            &inserted_records,
-            inserted_records.len(),
-        )
     }
 
     /// `ON CONFLICT DO NOTHING`: every proposed row, conflicting or not,
@@ -3046,43 +3309,90 @@ impl<'db> SqlSession<'db> {
         Err(error)
     }
 
-    pub(crate) fn non_conflicting_insert_records(
+    fn non_conflicting_insert_records(
         &self,
         table: &str,
         schema: Option<&TableSchema>,
         records: Vec<Record>,
-        conflict_columns: &[String],
+        inference: &ConflictColumnInference,
     ) -> Result<Vec<Record>> {
         let Some(schema) = schema else {
             return Ok(records);
         };
-        let Some(arbiter) = self.memoized_unique_arbiter(table, schema, conflict_columns)? else {
-            let existing_records =
-                self.scan_session_records_for_action(table, PolicyAction::Update)?;
-            sql_profile_full_scan();
-            return non_conflicting_records_from_scan(
+        let arbiters = self.memoized_unique_arbiters(table, schema, inference);
+        match arbiters.as_slice() {
+            [] => {
+                let existing_records =
+                    self.scan_session_records_for_action(table, PolicyAction::Update)?;
+                sql_profile_full_scan();
+                non_conflicting_records_from_scan(
+                    schema,
+                    &UniqueConflictArbiter {
+                        null_policy: UniqueNullPolicy::Distinct,
+                        name: inference.columns.join("_"),
+                        key: UniqueKey::Columns(inference.columns.clone()),
+                        index_name: None,
+                        predicate: None,
+                        deferral: None,
+                    },
+                    records,
+                    &existing_records,
+                    None,
+                )
+            }
+            [arbiter] => non_conflicting_records(
+                self.db_ref(),
+                self.tx.as_ref(),
+                table,
                 schema,
-                &UniqueConflictArbiter {
-                    null_policy: UniqueNullPolicy::Distinct,
-                    name: conflict_columns.join("_"),
-                    key: UniqueKey::Columns(conflict_columns.to_vec()),
-                    index_name: None,
-                    predicate: None,
-                    deferral: None,
-                },
+                arbiter,
                 records,
-                &existing_records,
-                None,
-            );
-        };
-        non_conflicting_records(
-            self.db_ref(),
-            self.tx.as_ref(),
-            table,
-            schema,
-            &arbiter,
-            records,
-        )
+            ),
+            arbiters => self.non_conflicting_inferred_records(table, schema, arbiters, records),
+        }
+    }
+
+    /// An input row can occupy keys in several arbiters. Enter a row's keys
+    /// into the batch only when all arbiters accept that row.
+    fn non_conflicting_inferred_records(
+        &self,
+        table: &str,
+        schema: &TableSchema,
+        arbiters: &[UniqueConflictArbiter],
+        records: Vec<Record>,
+    ) -> Result<Vec<Record>> {
+        let mut seen: Vec<BTreeSet<Vec<String>>> = vec![BTreeSet::new(); arbiters.len()];
+        let mut kept = Vec::with_capacity(records.len());
+        'records: for record in records {
+            self.cancellation.check()?;
+            let mut keys = Vec::new();
+            for (index, arbiter) in arbiters.iter().enumerate() {
+                let values = unique_key_values(&record, schema, &arbiter.key);
+                if arbiter.skips_null_key(&values) || !arbiter.applies_to(&record)? {
+                    continue;
+                }
+                let key = typed_unique_key_label(schema, &arbiter.key, &values)?;
+                if seen[index].contains(&key)
+                    || non_conflicting_records(
+                        self.db_ref(),
+                        self.tx.as_ref(),
+                        table,
+                        schema,
+                        arbiter,
+                        vec![record.clone()],
+                    )?
+                    .is_empty()
+                {
+                    continue 'records;
+                }
+                keys.push((index, key));
+            }
+            for (index, key) in keys {
+                seen[index].insert(key);
+            }
+            kept.push(record);
+        }
+        Ok(kept)
     }
 
     pub(crate) fn non_conflicting_insert_records_all_unique(
@@ -3131,8 +3441,8 @@ impl<'db> SqlSession<'db> {
                     range,
                     predicate,
                     ..
-                } if only.is_none_or(|only| name.eq_ignore_ascii_case(only)) => {
-                    Some((equal_columns, range, predicate))
+                } if only.is_none_or(|only| name == only) => {
+                    Some((name, equal_columns, range, predicate))
                 }
                 _ => None,
             })
@@ -3141,7 +3451,15 @@ impl<'db> SqlSession<'db> {
             return Ok(records);
         }
         let mut compiled = Vec::with_capacity(constraints.len());
-        for (equal_columns, range, predicate) in constraints {
+        for (name, equal_columns, range, predicate) in constraints {
+            reserve_exclusion_keys(
+                self.tx.as_ref(),
+                table,
+                schema,
+                name,
+                equal_columns,
+                &records,
+            )?;
             compiled.push((
                 equal_columns,
                 range,
@@ -3149,13 +3467,15 @@ impl<'db> SqlSession<'db> {
             ));
         }
         let existing = current_integrity_records(self.db_ref(), self.tx.as_ref(), table)?;
+        let fixed_snapshot = records::postgres_fixed_snapshot(self.db_ref(), self.tx.as_ref())?;
         let mut kept: Vec<Record> = Vec::with_capacity(records.len());
         'records: for record in records {
             for (equal_columns, range, predicate) in &compiled {
-                for other in existing.iter().chain(kept.iter()) {
-                    if other.id == record.id {
-                        continue;
-                    }
+                let candidates = existing
+                    .iter()
+                    .map(|other| (other, fixed_snapshot))
+                    .chain(kept.iter().map(|other| (other, None)));
+                for (other, snapshot) in candidates {
                     if crate::records::exclusion_record_pair_conflicts(
                         schema,
                         equal_columns,
@@ -3164,6 +3484,9 @@ impl<'db> SqlSession<'db> {
                         &record,
                         other,
                     )? {
+                        if let Some(tx) = snapshot {
+                            tx.require_conflict_tuple_in_snapshot(table, &other.id)?;
+                        }
                         continue 'records;
                     }
                 }
@@ -3173,132 +3496,151 @@ impl<'db> SqlSession<'db> {
         Ok(kept)
     }
 
-    pub(crate) fn find_conflict_record(
+    fn find_conflict_record(
         &self,
         table: &str,
-        schema: Option<&TableSchema>,
+        schema: &TableSchema,
         record: &Record,
-        conflict_columns: &[String],
+        arbiter: &UniqueConflictArbiter,
     ) -> Result<Option<Record>> {
-        let Some(schema) = schema else {
-            return Ok(None);
-        };
-        let key = record_column_values(record, schema, conflict_columns);
-        let arbiter = self.memoized_unique_arbiter(table, schema, conflict_columns)?;
-        if arbiter
-            .as_ref()
-            .map(|arbiter| arbiter.skips_null_key(&key))
-            .unwrap_or_else(|| unique_key_has_null(&key))
-        {
+        let key_values = unique_key_values(record, schema, &arbiter.key);
+        if arbiter.skips_null_key(&key_values) || !arbiter.applies_to(record)? {
             return Ok(None);
         }
-        if let Some(arbiter) = arbiter {
-            let fixed = records::postgres_fixed_snapshot(self.db_ref(), self.tx.as_ref())?;
-            if fixed.is_some() && !arbiter.applies_to(record)? {
-                return Ok(None);
-            }
-            let mut typed_primary_key = false;
-            if let Some(columns) = primary_key_columns_for_unique_arbiter(schema, &arbiter) {
-                typed_primary_key = primary_key_requires_typed_identity(schema);
-                if !typed_primary_key {
-                    sql_profile_index_lookup();
-                    // Conflict targets may list a composite constraint in a
-                    // different order. Row identity uses authoritative PK order.
-                    let primary_values = record_column_values(record, schema, &columns);
-                    let record_id =
-                        record_id_from_column_values(table, schema, &columns, &primary_values)?;
-                    if let Some(tx) = fixed {
-                        if tx
-                            .overlay_pending_write(
-                                table,
-                                &record_id,
-                                self.db_ref().get_unchecked(table, &record_id)?,
-                            )
-                            .is_none()
-                        {
-                            return Ok(None);
-                        }
-                        tx.require_conflict_tuple_in_snapshot(table, &record_id)?;
-                    }
-                    return self.conflict_record_by_id(table, &record_id);
-                }
-            }
-
-            let key_values = unique_key_values(record, schema, &arbiter.key);
-            let contains_json = key_values
-                .iter()
-                .any(|value| matches!(value, SqlValue::Json(_)));
-            if let Some(tx) =
-                fixed.filter(|_| typed_primary_key || contains_json || arbiter.index_name.is_none())
-            {
-                let key_label = typed_unique_key_label(schema, &arbiter.key, &key_values)?;
-                let live = current_integrity_records(self.db_ref(), Some(tx), table)?;
-                for candidate in arbiter.covered(&live)? {
-                    let values = unique_key_values(candidate, schema, &arbiter.key);
-                    if !arbiter.skips_null_key(&values)
-                        && typed_unique_key_label(schema, &arbiter.key, &values)? == key_label
-                    {
-                        tx.require_conflict_tuple_in_snapshot(table, &candidate.id)?;
-                        return self.conflict_record_by_id(table, &candidate.id);
-                    }
-                }
-                return Ok(None);
-            }
-            if let Some(index_name) = arbiter.index_name.as_ref().filter(|_| !contains_json) {
+        let matches_arbiter = |existing: &Record| -> Result<bool> {
+            Ok(arbiter.applies_to(existing)?
+                && records::unique_key_values_not_distinct(
+                    schema,
+                    &arbiter.key,
+                    &unique_key_values(existing, schema, &arbiter.key),
+                    &key_values,
+                )?)
+        };
+        let fixed = records::postgres_fixed_snapshot(self.db_ref(), self.tx.as_ref())?;
+        let mut typed_primary_key = false;
+        if let Some(columns) = primary_key_columns_for_unique_arbiter(schema, arbiter) {
+            typed_primary_key = primary_key_requires_typed_identity(schema);
+            if !typed_primary_key {
                 sql_profile_index_lookup();
-                let index_values = unique_key_index_values(schema, &arbiter.key, &key_values)?;
-                let mut candidate_ids = self
-                    .db_ref()
-                    .lookup_index_exact(index_name, &index_values)
-                    .map_err(SqlError::from)?;
+                // Conflict targets may list a composite constraint in a
+                // different order. Row identity uses authoritative PK order.
+                let primary_values = record_column_values(record, schema, &columns);
+                let record_id =
+                    record_id_from_column_values(table, schema, &columns, &primary_values)?;
+                if let Some(tx) = fixed {
+                    if tx
+                        .overlay_pending_write(
+                            table,
+                            &record_id,
+                            self.db_ref().get_unchecked(table, &record_id)?,
+                        )
+                        .is_none()
+                    {
+                        return Ok(None);
+                    }
+                    tx.require_conflict_tuple_in_snapshot(table, &record_id)?;
+                }
+                return self.conflict_record_by_id(table, &record_id);
+            }
+        }
 
-                // Executable indexes contain committed state, so try those
-                // candidates FIRST and re-verify each through the transaction
-                // view (which applies pending writes, so a row this
-                // transaction deleted or re-keyed correctly fails to match).
-                //
-                // Only when no committed candidate matches do we consult the
-                // transaction's pending delta, which covers the remaining
-                // cases: this transaction inserted a matching key, or changed
-                // some row's key INTO this one. Read-your-writes is preserved.
-                //
-                // Merging the delta unconditionally (the previous shape) cost
-                // a linear scan of the transaction's whole write set plus a
-                // full Record clone — payload JSON included — per candidate,
-                // per input row. In a multi-row upsert every processed row
-                // appends a write, so a batch degraded to O(batch^2) clones,
-                // and a long-lived transaction made it O(batch x rows): the
-                // conflict-heavy bulk upsert that stalled past its 30s write
-                // timeout on a large collection.
-                candidate_ids.sort();
-                candidate_ids.dedup();
-                for candidate_id in &candidate_ids {
+        let contains_json = key_values
+            .iter()
+            .any(|value| matches!(value, SqlValue::Json(_)));
+        if let Some(tx) =
+            fixed.filter(|_| typed_primary_key || contains_json || arbiter.index_name.is_none())
+        {
+            let key_label = typed_unique_key_label(schema, &arbiter.key, &key_values)?;
+            let live = current_integrity_records(self.db_ref(), Some(tx), table)?;
+            for candidate in arbiter.covered(&live)? {
+                let values = unique_key_values(candidate, schema, &arbiter.key);
+                if !arbiter.skips_null_key(&values)
+                    && typed_unique_key_label(schema, &arbiter.key, &values)? == key_label
+                {
+                    tx.require_conflict_tuple_in_snapshot(table, &candidate.id)?;
+                    return self.conflict_record_by_id(table, &candidate.id);
+                }
+            }
+            return Ok(None);
+        }
+        if let Some(index_name) = arbiter.index_name.as_ref().filter(|_| !contains_json) {
+            sql_profile_index_lookup();
+            let index_values = unique_key_index_values(schema, &arbiter.key, &key_values)?;
+            let mut candidate_ids = self
+                .db_ref()
+                .lookup_index_exact(index_name, &index_values)
+                .map_err(SqlError::from)?;
+
+            // Executable indexes contain committed state, so try those
+            // candidates FIRST and re-verify each through the transaction
+            // view (which applies pending writes, so a row this
+            // transaction deleted or re-keyed correctly fails to match).
+            //
+            // Only when no committed candidate matches do we consult the
+            // transaction's pending delta, which covers the remaining
+            // cases: this transaction inserted a matching key, or changed
+            // some row's key INTO this one. Read-your-writes is preserved.
+            //
+            // Merging the delta unconditionally (the previous shape) cost
+            // a linear scan of the transaction's whole write set plus a
+            // full Record clone — payload JSON included — per candidate,
+            // per input row. In a multi-row upsert every processed row
+            // appends a write, so a batch degraded to O(batch^2) clones,
+            // and a long-lived transaction made it O(batch x rows): the
+            // conflict-heavy bulk upsert that stalled past its 30s write
+            // timeout on a large collection.
+            candidate_ids.sort();
+            candidate_ids.dedup();
+            for candidate_id in &candidate_ids {
+                self.cancellation.check()?;
+                if let Some(existing) = self.conflict_record_by_id(table, candidate_id)? {
+                    if matches_arbiter(&existing)? {
+                        return Ok(Some(existing));
+                    }
+                }
+            }
+
+            if let Some(tx) = self.tx.as_ref() {
+                let committed: std::collections::HashSet<&String> = candidate_ids.iter().collect();
+                for candidate_id in tx.pending_record_ids_for_collection(table) {
+                    if committed.contains(&candidate_id) {
+                        continue;
+                    }
                     self.cancellation.check()?;
-                    if let Some(existing) = self.conflict_record_by_id(table, candidate_id)? {
-                        if record_column_values(&existing, schema, conflict_columns) == key {
+                    if let Some(existing) = self.conflict_record_by_id(table, &candidate_id)? {
+                        if matches_arbiter(&existing)? {
                             return Ok(Some(existing));
                         }
                     }
                 }
-
-                if let Some(tx) = self.tx.as_ref() {
-                    let committed: std::collections::HashSet<&String> =
-                        candidate_ids.iter().collect();
-                    for candidate_id in tx.pending_record_ids_for_collection(table) {
-                        if committed.contains(&candidate_id) {
-                            continue;
-                        }
-                        self.cancellation.check()?;
-                        if let Some(existing) = self.conflict_record_by_id(table, &candidate_id)? {
-                            if record_column_values(&existing, schema, conflict_columns) == key {
-                                return Ok(Some(existing));
-                            }
-                        }
-                    }
-                }
-                return Ok(None);
             }
+            return Ok(None);
         }
+
+        self.scan_conflict_record_matching(table, matches_arbiter)
+    }
+
+    fn scan_conflict_record_by_columns(
+        &self,
+        table: &str,
+        schema: &TableSchema,
+        record: &Record,
+        columns: &[String],
+    ) -> Result<Option<Record>> {
+        let key = record_column_values(record, schema, columns);
+        if unique_key_has_null(&key) {
+            return Ok(None);
+        }
+        self.scan_conflict_record_matching(table, |existing| {
+            Ok(record_column_values(existing, schema, columns) == key)
+        })
+    }
+
+    fn scan_conflict_record_matching(
+        &self,
+        table: &str,
+        matches: impl Fn(&Record) -> Result<bool>,
+    ) -> Result<Option<Record>> {
         // Conflict detection is index-level and independent of RLS, like
         // PostgreSQL: a policy-hidden conflicting row must surface here so
         // DO UPDATE can raise the USING-expression violation instead of a
@@ -3319,34 +3661,36 @@ impl<'db> SqlSession<'db> {
             },
         }?;
         for existing in records {
-            if record_column_values(&existing, schema, conflict_columns) == key {
+            if matches(&existing)? {
                 return Ok(Some(existing));
             }
         }
         Ok(None)
     }
 
-    /// `unique_arbiter_for_columns`, memoized for the current statement.
-    pub(crate) fn memoized_unique_arbiter(
+    /// Resolve the same target once for early validation and all input rows.
+    fn memoized_unique_arbiters(
         &self,
         table: &str,
         schema: &TableSchema,
-        conflict_columns: &[String],
-    ) -> Result<Option<records::UniqueConflictArbiter>> {
-        if let Some((memo_table, memo_columns, arbiter)) =
+        inference: &ConflictColumnInference,
+    ) -> Arc<Vec<UniqueConflictArbiter>> {
+        if let Some((memo_table, memo_inference, arbiters)) =
             self.conflict_arbiter_memo.borrow().as_ref()
         {
-            if memo_table == table && memo_columns.as_slice() == conflict_columns {
-                return Ok(arbiter.clone());
+            if memo_table == table && memo_inference == inference {
+                return Arc::clone(arbiters);
             }
         }
-        let arbiter = unique_arbiter_for_columns(self.db_ref(), table, schema, conflict_columns)?;
-        *self.conflict_arbiter_memo.borrow_mut() = Some((
-            table.to_string(),
-            conflict_columns.to_vec(),
-            arbiter.clone(),
+        let arbiters = Arc::new(unique_arbiters_for_columns(
+            self.db_ref(),
+            table,
+            schema,
+            inference,
         ));
-        Ok(arbiter)
+        *self.conflict_arbiter_memo.borrow_mut() =
+            Some((table.to_string(), inference.clone(), Arc::clone(&arbiters)));
+        arbiters
     }
 
     pub(crate) fn conflict_record_by_id(
@@ -3914,12 +4258,7 @@ impl<'db> SqlSession<'db> {
             Expr::UnaryOp { op, expr } if op.to_string() == "+" => {
                 self.eval_target_record_expr(table, alias, schema, record, expr)
             }
-            Expr::UnaryOp { op, expr }
-                if matches!(
-                    op,
-                    UnaryOperator::BitwiseNot | UnaryOperator::PGPrefixFactorial
-                ) || is_geometric_unary_operator(op) =>
-            {
+            Expr::UnaryOp { op, expr } if is_builtin_prefix_operator(op) => {
                 let Some(value) =
                     self.eval_target_record_expr(table, alias, schema, record, expr)?
                 else {
@@ -4162,6 +4501,49 @@ pub(crate) fn require_dml_target_exists(db: &BicDb, table: &str) -> Result<()> {
     Err(SqlError::InvalidCollection(table.to_string()))
 }
 
+#[derive(Default)]
+struct ConflictWholeRows {
+    target: bool,
+    excluded: bool,
+}
+
+fn conflict_whole_row_references(
+    update: &sqlparser::ast::DoUpdate,
+    target_alias: &str,
+) -> ConflictWholeRows {
+    let mut names = ConflictWholeRows::default();
+    let _ = sqlparser::ast::visit_expressions(update, |expr| {
+        if let Expr::QualifiedWildcard(relation, _) = expr {
+            let alias = relation_default_alias(relation);
+            names.excluded |= alias == "excluded";
+            names.target |= alias == target_alias;
+        }
+        std::ops::ControlFlow::<()>::Continue(())
+    });
+    names
+}
+
+fn insert_upsert_whole_row(row: &mut SqlRow, alias: &str, schema: &TableSchema) {
+    let fields = schema
+        .columns
+        .iter()
+        .filter(|column| !column.hidden)
+        .map(|column| SqlCompositeField {
+            name: column.name.clone(),
+            pg_type: column.pg_type.clone(),
+            value: row.get(&column.name).cloned().unwrap_or(SqlValue::Null),
+        })
+        .collect();
+    row.insert(
+        compound_row_value_key(alias),
+        SqlValue::Composite(SqlComposite {
+            type_name: schema.name.clone(),
+            type_oid: u32::try_from(schema.row_type_oid()).ok(),
+            fields,
+        }),
+    );
+}
+
 fn insert_width_error(message: &str) -> SqlError {
     SqlError::RaisedException {
         sqlstate: "42601".to_string(),
@@ -4312,4 +4694,52 @@ fn select_output_is_unknown_literal(source: &Query, index: usize) -> bool {
     matches!(select.projection.get(index),
         Some(SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. })
             if is_string_literal_expr(expr))
+}
+
+fn check_conflict_assignment_width(columns: usize, values: usize) -> Result<()> {
+    if columns == values {
+        return Ok(());
+    }
+    Err(SqlError::data_exception(
+        "42601",
+        "number of columns does not match number of values",
+        None,
+    ))
+}
+
+fn check_conflict_generated_assignment(
+    schema: &TableSchema,
+    name: &ObjectName,
+    value: Option<&Expr>,
+) -> Result<()> {
+    if value.is_some_and(expr_is_default) {
+        return Ok(());
+    }
+    let column = relation_name(name)?;
+    if schema
+        .column(&column)
+        .is_some_and(|column| column.generated_expr.is_some())
+    {
+        return Err(SqlError::with_detail(
+            SqlError::generated_always_violation(format!(
+                "column \"{column}\" can only be updated to DEFAULT"
+            )),
+            format!("Column \"{column}\" is a generated column."),
+        ));
+    }
+    Ok(())
+}
+
+fn conflict_assignment_query_values(result: SqlResult, columns: usize) -> Result<Vec<SqlValue>> {
+    check_conflict_assignment_width(columns, result.columns.len())?;
+    let mut rows = result.rows.into_iter();
+    let first = rows.next().unwrap_or_else(|| vec![SqlValue::Null; columns]);
+    if rows.next().is_some() {
+        return Err(SqlError::data_exception(
+            "21000",
+            "more than one row returned by a subquery used as an expression",
+            None,
+        ));
+    }
+    Ok(first)
 }

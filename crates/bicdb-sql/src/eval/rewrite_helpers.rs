@@ -965,7 +965,7 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
         changed = true;
     }
 
-    if let Some(next) = rewrite_qualified_substring(&rewritten) {
+    if let Some(next) = rewrite_qualified_substring_calls(&rewritten) {
         rewritten = next;
         changed = true;
     }
@@ -1122,11 +1122,11 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
     changed.then_some(rewritten)
 }
 
-fn rewrite_qualified_substring(sql: &str) -> Option<String> {
+fn rewrite_qualified_substring_calls(sql: &str) -> Option<String> {
     if !sql
         .as_bytes()
-        .windows(9)
-        .any(|text| text.eq_ignore_ascii_case(b"substring"))
+        .windows(6)
+        .any(|text| text.eq_ignore_ascii_case(b"substr"))
     {
         return None;
     }
@@ -1146,11 +1146,14 @@ fn rewrite_qualified_substring(sql: &str) -> Option<String> {
         if let [(Token::Period, _, _), (Token::Word(word), start, end), (Token::LParen, _, _)] =
             window
         {
-            if word.quote_style.is_none() && word.value.eq_ignore_ascii_case("substring") {
+            let name = word.value.to_ascii_lowercase();
+            if word.quote_style.is_none() && matches!(name.as_str(), "substring" | "substr") {
                 // The generic parser treats a bare SUBSTRING token as the
                 // special SQL syntax even after a schema qualifier.
                 rewritten.push_str(&sql[copied..*start]);
-                rewritten.push_str("\"substring\"");
+                rewritten.push('"');
+                rewritten.push_str(&name);
+                rewritten.push('"');
                 copied = *end;
             }
         }

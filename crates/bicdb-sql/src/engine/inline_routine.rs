@@ -3,6 +3,44 @@ use super::*;
 use sqlparser::ast::{ArgMode, CastKind, Visit, Visitor};
 use std::ops::ControlFlow;
 
+pub(super) fn validate_catalog_comparison(
+    engine: &SqlEngine<'_>,
+    left: Option<String>,
+    op: &BinaryOperator,
+    right: Option<String>,
+) -> Result<()> {
+    use crate::pg_operators::{
+        effective_search_path, operator_candidates, resolve_operator, user_operators,
+        CatalogTypeFacts, Resolution,
+    };
+    let (Some(left_type), Some(right_type)) = (left.as_deref(), right.as_deref()) else {
+        return Ok(());
+    };
+    if pg_type_oid_by_name(left_type).is_none() || pg_type_oid_by_name(right_type).is_none() {
+        return reject_comparison_for_db(engine.db_ref(), Some(left_type), op, Some(right_type));
+    }
+    let db = engine.db_ref();
+    let operators = user_operators(db)?;
+    let path = effective_search_path(&engine.session_gucs);
+    let candidates = operator_candidates(&operators, &path, None, &op.to_string(), false);
+    if matches!(
+        resolve_operator(&CatalogTypeFacts(db), &candidates, Some(&left), &right),
+        Resolution::NotFound
+    ) {
+        return Err(SqlError::coded(
+            "42883",
+            format!(
+                "operator does not exist: {} {op} {}",
+                crate::eval::pg_cast_display_type(left_type),
+                crate::eval::pg_cast_display_type(right_type)
+            ),
+            None,
+            Some("No operator matches the given name and argument types. You might need to add explicit type casts.".to_string()),
+        ));
+    }
+    Ok(())
+}
+
 pub(crate) fn validate_inline_sql_routine(
     engine: &SqlEngine<'_>,
     declaration: &CreateFunction,

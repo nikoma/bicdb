@@ -1135,6 +1135,16 @@ enum Truth {
     Unknown,
 }
 
+impl From<bool> for Truth {
+    fn from(value: bool) -> Self {
+        if value {
+            Self::True
+        } else {
+            Self::False
+        }
+    }
+}
+
 struct EvalContext<'a> {
     root: &'a JsonValue,
     current: &'a JsonValue,
@@ -1536,9 +1546,12 @@ impl Expr {
                 }
                 Ok(output)
             }
-            Self::Exists(expression) => Ok(vec![JsonValue::Bool(
-                !expression.evaluate(context)?.is_empty(),
-            )]),
+            Self::Exists(expression) => {
+                let result = expression
+                    .predicate_items(context)?
+                    .map_or(Truth::Unknown, |values| Truth::from(!values.is_empty()));
+                Ok(vec![truth_json(result)])
+            }
             Self::Unary(UnaryOp::Not, expression) => {
                 Ok(vec![truth_json(match expression.truth(context)? {
                     Truth::True => Truth::False,
@@ -1559,12 +1572,13 @@ impl Expr {
                 | BinaryOp::LtEq
                 | BinaryOp::Gt
                 | BinaryOp::GtEq => {
-                    let truth = compare_sequences(
-                        &left.evaluate(context)?,
-                        *operator,
-                        &right.evaluate(context)?,
-                        context,
-                    )?;
+                    let Some(left) = left.predicate_items(context)? else {
+                        return Ok(vec![JsonValue::Null]);
+                    };
+                    let Some(right) = right.predicate_items(context)? else {
+                        return Ok(vec![JsonValue::Null]);
+                    };
+                    let truth = compare_sequences(&left, *operator, &right, context)?;
                     Ok(vec![truth_json(truth)])
                 }
                 BinaryOp::Add
@@ -1576,11 +1590,24 @@ impl Expr {
                     *operator,
                     &right.evaluate(context)?,
                 ),
-                BinaryOp::StartsWith => Ok(vec![truth_json(string_predicate_sequences(
-                    &left.evaluate(context)?,
-                    &right.evaluate(context)?,
-                    |left, right| left.starts_with(right),
-                ))]),
+                BinaryOp::StartsWith => {
+                    let Some(left) = left.predicate_items(context)? else {
+                        return Ok(vec![JsonValue::Null]);
+                    };
+                    let Some(right) = right.predicate_items(context)? else {
+                        return Ok(vec![JsonValue::Null]);
+                    };
+                    let left = comparison_items(&left, context.mode);
+                    let outcomes = left.iter().flat_map(|left| {
+                        right.iter().map(move |right| {
+                            Ok(match (left.as_str(), right.as_str()) {
+                                (Some(left), Some(right)) => Truth::from(left.starts_with(right)),
+                                _ => Truth::Unknown,
+                            })
+                        })
+                    });
+                    Ok(vec![truth_json(predicate_truth(outcomes, context.mode)?)])
+                }
             },
             Self::LikeRegex(left, pattern, flags) => {
                 let patterns = pattern.evaluate(context)?;
@@ -1617,11 +1644,17 @@ impl Expr {
                 let regex = builder.build().map_err(|error| {
                     execution_error(format!("invalid regular expression: {error}"))
                 })?;
-                let matched = left
-                    .evaluate(context)?
-                    .iter()
-                    .any(|value| value.as_str().is_some_and(|value| regex.is_match(value)));
-                Ok(vec![JsonValue::Bool(matched)])
+                let Some(left) = left.predicate_items(context)? else {
+                    return Ok(vec![JsonValue::Null]);
+                };
+                let outcomes = comparison_items(&left, context.mode)
+                    .into_iter()
+                    .map(|value| {
+                        Ok(value
+                            .as_str()
+                            .map_or(Truth::Unknown, |value| Truth::from(regex.is_match(value))))
+                    });
+                Ok(vec![truth_json(predicate_truth(outcomes, context.mode)?)])
             }
             Self::IsUnknown(expression) => Ok(vec![JsonValue::Bool(
                 expression.truth(context)? == Truth::Unknown,
@@ -1632,6 +1665,14 @@ impl Expr {
                     "evaluating jsonpath LAST outside of array subscript",
                 )),
             },
+        }
+    }
+
+    fn predicate_items(&self, context: &EvalContext<'_>) -> Result<Option<Vec<JsonValue>>> {
+        match self.evaluate(context) {
+            Ok(values) => Ok(Some(values)),
+            Err(error) if is_suppressible(&error) => Ok(None),
+            Err(error) => Err(error),
         }
     }
 
@@ -1886,39 +1927,44 @@ fn compare_sequences(
 ) -> Result<Truth> {
     let left = comparison_items(left, context.mode);
     let right = comparison_items(right, context.mode);
-    let mut unknown = false;
-    for left in &left {
-        for right in &right {
-            match compare_json_values(left, right, context.timezone_aware)? {
-                Comparison::Ordered(ordering) => {
-                    let matched = match operator {
-                        BinaryOp::Eq => ordering == Ordering::Equal,
-                        BinaryOp::NotEq => ordering != Ordering::Equal,
-                        BinaryOp::Lt => ordering == Ordering::Less,
-                        BinaryOp::LtEq => ordering != Ordering::Greater,
-                        BinaryOp::Gt => ordering == Ordering::Greater,
-                        BinaryOp::GtEq => ordering != Ordering::Less,
-                        _ => unreachable!(),
-                    };
-                    if matched {
-                        return Ok(Truth::True);
-                    }
-                }
-                // Null against a non-null item: only `!=` holds.
-                Comparison::NullMismatch => {
-                    if matches!(operator, BinaryOp::NotEq) {
-                        return Ok(Truth::True);
-                    }
-                }
-                Comparison::Unknown => unknown = true,
-            }
+    let outcomes = left.iter().flat_map(|left| {
+        right.iter().map(move |right| {
+            let comparison = compare_json_values(left, right, context.timezone_aware)?;
+            Ok(match comparison {
+                Comparison::Ordered(ordering) => Truth::from(match operator {
+                    BinaryOp::Eq => ordering == Ordering::Equal,
+                    BinaryOp::NotEq => ordering != Ordering::Equal,
+                    BinaryOp::Lt => ordering == Ordering::Less,
+                    BinaryOp::LtEq => ordering != Ordering::Greater,
+                    BinaryOp::Gt => ordering == Ordering::Greater,
+                    BinaryOp::GtEq => ordering != Ordering::Less,
+                    _ => unreachable!(),
+                }),
+                Comparison::NullMismatch => Truth::from(matches!(operator, BinaryOp::NotEq)),
+                Comparison::Unknown => Truth::Unknown,
+            })
+        })
+    });
+    predicate_truth(outcomes, context.mode)
+}
+
+fn predicate_truth(outcomes: impl IntoIterator<Item = Result<Truth>>, mode: Mode) -> Result<Truth> {
+    let mut result = Truth::False;
+    for outcome in outcomes {
+        let outcome = match outcome {
+            Ok(truth) => truth,
+            Err(error) if is_suppressible(&error) => Truth::Unknown,
+            Err(error) => return Err(error),
+        };
+        match (mode, outcome) {
+            (Mode::Strict, Truth::Unknown) => return Ok(Truth::Unknown),
+            (Mode::Lax, Truth::True) => return Ok(Truth::True),
+            (Mode::Strict, Truth::True) => result = Truth::True,
+            (Mode::Lax, Truth::Unknown) => result = Truth::Unknown,
+            (_, Truth::False) => {}
         }
     }
-    Ok(if unknown {
-        Truth::Unknown
-    } else {
-        Truth::False
-    })
+    Ok(result)
 }
 
 fn is_datetime_method(method: Method) -> bool {
@@ -1931,29 +1977,6 @@ fn is_datetime_method(method: Method) -> bool {
             | Method::TimestampTz
             | Method::DateTime
     )
-}
-
-fn string_predicate_sequences(
-    left: &[JsonValue],
-    right: &[JsonValue],
-    predicate: impl Fn(&str, &str) -> bool,
-) -> Truth {
-    let mut comparable = false;
-    for left in left {
-        for right in right {
-            if let (Some(left), Some(right)) = (left.as_str(), right.as_str()) {
-                comparable = true;
-                if predicate(left, right) {
-                    return Truth::True;
-                }
-            }
-        }
-    }
-    if comparable {
-        Truth::False
-    } else {
-        Truth::Unknown
-    }
 }
 
 fn comparison_items(values: &[JsonValue], mode: Mode) -> Vec<&JsonValue> {

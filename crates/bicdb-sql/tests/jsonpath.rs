@@ -451,3 +451,47 @@ fn jsonpath_array_subscripts_clip_lax_ranges_and_validate_strict_bounds() {
         assert_eq!(error.to_string(), message, "{statement}");
     }
 }
+
+#[test]
+fn jsonpath_predicates_preserve_sql_json_unknown_in_strict_and_lax_modes() {
+    let (_dir, mut db) = session_db();
+    let mut session = SqlSession::new(&mut db);
+    let result = session
+        .execute(
+            r#"SELECT
+                jsonb_path_match('{"a":[4,1],"b":[3,"s"]}', 'strict $.a[*] >= $.b[*]'),
+                jsonb_path_match('{"a":[4,1],"b":[3,"s"]}', 'lax $.a[*] >= $.b[*]'),
+                jsonb_path_match('["abc",42]', 'strict $[*] starts with "a"'),
+                jsonb_path_match('["abc",42]', 'lax $ starts with "a"'),
+                jsonb_path_match('["abc",42]', 'strict $[*] like_regex "^a"'),
+                jsonb_path_match('["abc",42]', 'lax $ like_regex "^a"'),
+                jsonb_path_match('{}', 'strict $.missing == 5'),
+                jsonb_path_match('{}', 'strict exists ($.missing)'),
+                jsonb_path_match('[]', 'lax $ starts with "a"'),
+                jsonb_path_match('[]', 'lax $ like_regex "^a"')"#,
+        )
+        .unwrap();
+    assert_eq!(
+        result.rows,
+        [[
+            SqlValue::Null,
+            SqlValue::Bool(true),
+            SqlValue::Null,
+            SqlValue::Bool(true),
+            SqlValue::Null,
+            SqlValue::Bool(true),
+            SqlValue::Null,
+            SqlValue::Null,
+            SqlValue::Bool(false),
+            SqlValue::Bool(false),
+        ]]
+    );
+    let result = session
+        .execute("SELECT jsonb_path_match('{}','strict $.a == $missing',silent => true)")
+        .unwrap();
+    assert_eq!(result.rows, [[SqlValue::Null]]);
+    let err = session
+        .execute("SELECT jsonb_path_match('{}','strict $missing == $.a',silent => true)")
+        .unwrap_err();
+    assert_eq!(err.sqlstate(), "42704");
+}

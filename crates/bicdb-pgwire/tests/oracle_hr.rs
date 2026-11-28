@@ -139,6 +139,17 @@ async fn session_transaction_defaults_preserve_visibility_and_explicit_overrides
             )
             .await
             .unwrap();
+            // BEGIN promotes the simple-query transaction, which took its
+            // isolation level before the SET ran.
+            assert_eq!(
+                transaction_defaults_text(&a, "SHOW transaction_isolation").await,
+                "read committed"
+            );
+            assert_eq!(
+                transaction_defaults_text(&a, "SHOW default_transaction_isolation").await,
+                "serializable"
+            );
+            a.batch_execute("COMMIT;BEGIN").await.unwrap();
             assert_eq!(
                 transaction_defaults_text(&a, "SHOW transaction_isolation").await,
                 "serializable"
@@ -3449,7 +3460,13 @@ async fn oracle_anonymous_host_error_policies_remain_independent() {
         let directory = tempfile::tempdir().unwrap();
         let server = Running::with_profile(directory.path(), profile);
         let (client, connection) = transaction_defaults_connect(&server, profile).await;
-        client.batch_execute("CREATE TABLE host_rows(key_value INTEGER PRIMARY KEY);INSERT INTO host_rows VALUES(1);BEGIN;INSERT INTO host_rows VALUES(2)").await.unwrap();
+        let setup = if profile == "postgres" {
+            // Keep the fixture through ROLLBACK of the explicit transaction.
+            "CREATE TABLE host_rows(key_value INTEGER PRIMARY KEY);INSERT INTO host_rows VALUES(1);COMMIT;BEGIN;INSERT INTO host_rows VALUES(2)"
+        } else {
+            "CREATE TABLE host_rows(key_value INTEGER PRIMARY KEY);INSERT INTO host_rows VALUES(1);BEGIN;INSERT INTO host_rows VALUES(2)"
+        };
+        client.batch_execute(setup).await.unwrap();
         let error = client
             .execute("INSERT INTO host_rows VALUES($1)", &[&1_i32])
             .await

@@ -44,7 +44,9 @@ fn builtin_text_search_catalogs_resolve_supported_names_and_stored_ids() {
         ),
     ];
     for (sql, expected) in cases {
-        assert_eq!(one(&mut session, sql), expected, "{sql}");
+        let rows = session.execute(sql).unwrap().rows;
+        assert_eq!(rows.len(), 1, "{sql}: {rows:?}");
+        assert_eq!(rows[0][0].to_cell(), expected, "{sql}");
     }
 }
 

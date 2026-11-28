@@ -1286,6 +1286,16 @@ impl<'db> SqlSession<'db> {
                 Arc::make_mut(&mut self.session_gucs).insert(setting, enabled);
                 Ok(())
             }
+            "xmlbinary" => {
+                let mode = value.to_cell().to_ascii_lowercase();
+                if !matches!(mode.as_str(), "base64" | "hex") {
+                    return Err(SqlError::invalid_parameter_value(format!(
+                        "invalid value for parameter \"xmlbinary\": \"{mode}\""
+                    )));
+                }
+                Arc::make_mut(&mut self.session_gucs).insert(setting, mode);
+                Ok(())
+            }
             "xmloption" => {
                 let option = value.to_cell().to_ascii_lowercase();
                 if matches!(option.as_str(), "content" | "document") {

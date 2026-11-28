@@ -338,3 +338,44 @@ fn xml_rejects_postgres_undefined_comparison_and_ordering_operations() {
         );
     }
 }
+
+#[test]
+fn postgres_xmlbinary_controls_bytea_in_elements_attributes_and_forests() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut sql = SqlSession::new(&mut db);
+    let literal = "SELECT xmlelement(name item, decode('abff', 'hex')),
+                          xmlforest(decode('abff', 'hex') AS bytes),
+                          xmlelement(name item, xmlattributes(decode('abff', 'hex') AS bytes))";
+    let expected = |encoded: &str| {
+        [
+            format!("<item>{encoded}</item>"),
+            format!("<bytes>{encoded}</bytes>"),
+            format!("<item bytes=\"{encoded}\"/>"),
+        ]
+        .into_iter()
+        .map(SqlValue::String)
+        .collect::<Vec<_>>()
+    };
+    assert_eq!(sql.execute(literal).unwrap().rows, [expected("q/8=")]);
+    sql.execute(
+        "CREATE TABLE xml_binary_input (payload bytea);
+                 INSERT INTO xml_binary_input VALUES (decode('abff', 'hex'));
+                 BEGIN;
+                 SET LOCAL xmlbinary TO hex",
+    )
+    .unwrap();
+    let statement = "SELECT xmlelement(name item, payload),
+                            xmlforest(payload AS bytes),
+                            xmlelement(name item, xmlattributes(payload AS bytes))
+                     FROM xml_binary_input";
+    assert_eq!(sql.execute(statement).unwrap().rows, [expected("ABFF")]);
+    sql.execute("ROLLBACK").unwrap();
+    assert_eq!(sql.execute(statement).unwrap().rows, [expected("q/8=")]);
+    assert_eq!(
+        sql.execute("SET xmlbinary TO unsupported")
+            .unwrap_err()
+            .sqlstate(),
+        "22023"
+    );
+}

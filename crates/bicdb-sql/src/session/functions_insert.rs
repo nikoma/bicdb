@@ -14,6 +14,59 @@ enum ConflictDoNothingTarget<'a> {
     Exclusion(&'a str),
 }
 
+fn create_function_leakproof_option(
+    statement: &str,
+    declaration_start: usize,
+) -> Result<Option<(String, bool)>> {
+    let rest = &statement[declaration_start..];
+    let (_, arguments) = parse_leading_qualified_sql_identifier(rest)?;
+    let arguments = arguments.trim_start();
+    if !arguments.starts_with('(') {
+        return Ok(None);
+    }
+    let Some(close) = find_matching_paren_nested(arguments, 0) else {
+        return Ok(None);
+    };
+    let options = &arguments[close + 1..];
+    let end = ["RETURN", "BEGIN"]
+        .iter()
+        .filter_map(|word| find_top_level_keyword(options, word))
+        .min()
+        .unwrap_or(options.len());
+    let header = &options[..end];
+    let Some(flag) = find_top_level_keyword(header, "LEAKPROOF") else {
+        return Ok(None);
+    };
+    let flag_end = flag + "LEAKPROOF".len();
+    if find_top_level_keyword(&header[flag_end..], "LEAKPROOF").is_some() {
+        return Err(SqlError::data_exception_public(
+            "42601",
+            "conflicting or redundant options",
+            None,
+        ));
+    }
+    let prefix = &header[..flag];
+    let not = find_top_level_keyword(prefix, "NOT").filter(|not| {
+        Tokenizer::new(&PostgreSqlDialect {}, &prefix[not + "NOT".len()..])
+            .tokenize()
+            .is_ok_and(|tokens| {
+                tokens
+                    .into_iter()
+                    .all(|token| matches!(token, Token::Whitespace(_)))
+            })
+    });
+    let flag_start = not.unwrap_or(flag);
+    let absolute_start = statement.len() - options.len();
+    Ok(Some((
+        format!(
+            "{} {}",
+            &statement[..absolute_start + flag_start],
+            &options[flag_end..]
+        ),
+        not.is_none(),
+    )))
+}
+
 impl<'db> SqlSession<'db> {
     pub(crate) fn execute_raw_create_function(&mut self, sql: &str) -> Result<Option<SqlResult>> {
         let trimmed = sql.trim().trim_end_matches(';').trim();
@@ -25,16 +78,37 @@ impl<'db> SqlSession<'db> {
         } else {
             return Ok(None);
         };
-        if !crate::sql_atomic_body::atomic_bodies(trimmed).is_empty() {
-            return Ok(None);
-        }
-        if let Some(return_start) = find_top_level_keyword(trimmed, "RETURN") {
-            if find_top_level_keyword(&trimmed[..return_start], "AS").is_some() {
+        let option = if lower.contains("leakproof") {
+            create_function_leakproof_option(trimmed, prefix.len())?
+        } else {
+            None
+        };
+        let leakproof = option.as_ref().is_some_and(|(_, leakproof)| *leakproof);
+        self.require_leakproof_privilege(leakproof)?;
+        let trimmed = option.as_ref().map_or(trimmed, |(sql, _)| sql.as_str());
+        let lower = trimmed.to_ascii_lowercase();
+
+        let atomic = !crate::sql_atomic_body::atomic_bodies(trimmed).is_empty();
+        let return_start = find_top_level_keyword(trimmed, "RETURN");
+        if atomic || return_start.is_some() {
+            if !atomic
+                && return_start
+                    .is_some_and(|start| find_top_level_keyword(&trimmed[..start], "AS").is_some())
+            {
                 return Err(SqlError::data_exception_public(
                     "42P13",
                     "duplicate function body specified",
                     None,
                 ));
+            }
+            if option.is_some() {
+                let statements = parse_statements(trimmed)?;
+                let [Statement::CreateFunction(function)] = statements.as_slice() else {
+                    return Err(SqlError::InvalidSql("expected CREATE FUNCTION".to_string()));
+                };
+                return self
+                    .execute_create_function_with_leakproof(function, leakproof)
+                    .map(Some);
             }
             return Ok(None);
         }
@@ -92,6 +166,7 @@ impl<'db> SqlSession<'db> {
                 internal_symbol: None,
                 owner: Some(owner),
                 security_definer: routine_definition_is_security_definer(trimmed),
+                leakproof,
                 overload: None,
                 catalog_oid: None,
             },
@@ -99,6 +174,22 @@ impl<'db> SqlSession<'db> {
             prefix.contains("replace"),
         )?;
         Ok(Some(SqlResult::command("CREATE FUNCTION")))
+    }
+
+    fn require_leakproof_privilege(&self, leakproof: bool) -> Result<()> {
+        if leakproof {
+            let role = current_user_from_gucs(&self.session_gucs);
+            if role != BOOTSTRAP_ROLE_NAME
+                && !load_role_schema(self.db_ref(), &role)?.is_some_and(|role| role.superuser)
+            {
+                return Err(SqlError::data_exception_public(
+                    "42501",
+                    "only superuser can define a leakproof function",
+                    None,
+                ));
+            }
+        }
+        Ok(())
     }
 
     pub(crate) fn execute_alter_function(
@@ -255,9 +346,12 @@ impl<'db> SqlSession<'db> {
                         AlterFunctionAction::Parallel(value) => {
                             create.parallel = Some(value.clone())
                         }
+                        AlterFunctionAction::Leakproof(leakproof) => {
+                            self.require_leakproof_privilege(*leakproof)?;
+                            routine.leakproof = *leakproof;
+                        }
                         // Planner hints with no effect on results.
-                        AlterFunctionAction::Leakproof(_)
-                        | AlterFunctionAction::Cost(_)
+                        AlterFunctionAction::Cost(_)
                         | AlterFunctionAction::Rows(_)
                         | AlterFunctionAction::Support(_)
                         | AlterFunctionAction::Reset(_) => {}
@@ -326,6 +420,7 @@ impl<'db> SqlSession<'db> {
             internal_symbol: None,
             owner: Some(current_user_from_gucs(&self.session_gucs)),
             security_definer: false,
+            leakproof: false,
             overload: None,
             catalog_oid: None,
         };
@@ -389,6 +484,7 @@ impl<'db> SqlSession<'db> {
                 internal_symbol: None,
                 owner: Some(owner),
                 security_definer: routine_definition_is_security_definer(trimmed),
+                leakproof: false,
                 overload: None,
                 catalog_oid: None,
             },

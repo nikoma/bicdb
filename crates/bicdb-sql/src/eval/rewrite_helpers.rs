@@ -1209,14 +1209,24 @@ pub(crate) fn tokens_with_source<'a>(
         .ok()?;
     let mut line_starts = vec![0usize];
     line_starts.extend(input.match_indices('\n').map(|(index, _)| index + 1));
-    let offset = |location: sqlparser::tokenizer::Location| -> Option<usize> {
-        let start = *line_starts.get(usize::try_from(location.line).ok()?.checked_sub(1)?)?;
+    // Token locations advance in source order. Within each line, keep the
+    // UTF-8 cursor at the last token instead of scanning again from column 1.
+    let mut line = 0;
+    let mut line_start = 0;
+    let mut next_column = 0;
+    let mut chars = input.char_indices();
+    let mut offset = |location: sqlparser::tokenizer::Location| -> Option<usize> {
+        let token_line = usize::try_from(location.line).ok()?.checked_sub(1)?;
         let column = usize::try_from(location.column).ok()?.checked_sub(1)?;
-        input[start..]
-            .char_indices()
-            .map(|(index, _)| start + index)
-            .chain(std::iter::once(input.len()))
-            .nth(column)
+        if token_line != line {
+            line = token_line;
+            line_start = *line_starts.get(line)?;
+            chars = input[line_start..].char_indices();
+            next_column = 0;
+        }
+        let (index, _) = chars.nth(column.checked_sub(next_column)?)?;
+        next_column = column + 1;
+        Some(line_start + index)
     };
     let starts = spanned
         .iter()
@@ -1235,6 +1245,29 @@ pub(crate) fn tokens_with_source<'a>(
         tokens.push((token.token, &input[start..end]));
     }
     Some(tokens)
+}
+
+#[cfg(test)]
+mod source_token_tests {
+    use super::*;
+
+    #[test]
+    fn tokens_with_source_preserves_multibyte_columns_and_crlf() {
+        let input = "SELECT 'é''猫',\r\n  \"Δ\" FROM \"表\"";
+        let tokens = tokens_with_source(&PostgreSqlDialect {}, input).unwrap();
+        assert_eq!(
+            tokens.iter().map(|(_, text)| *text).collect::<String>(),
+            input
+        );
+        let lexemes: Vec<_> = tokens
+            .into_iter()
+            .filter_map(|(token, text)| (!matches!(token, Token::Whitespace(_))).then_some(text))
+            .collect();
+        assert_eq!(
+            lexemes,
+            ["SELECT", "'é''猫'", ",", "\"Δ\"", "FROM", "\"表\""]
+        );
+    }
 }
 
 pub(crate) fn rewrite_weak_lock_strengths(input: &str) -> Option<String> {

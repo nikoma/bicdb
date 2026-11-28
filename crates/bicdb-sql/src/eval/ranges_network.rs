@@ -2013,6 +2013,96 @@ pub(crate) fn eval_range_binary_value_with_db(
     Ok(Some(value))
 }
 
+pub(crate) fn is_builtin_prefix_operator(op: &UnaryOperator) -> bool {
+    matches!(
+        op,
+        UnaryOperator::BitwiseNot
+            | UnaryOperator::PGPrefixFactorial
+            | UnaryOperator::PGAbs
+            | UnaryOperator::PGSquareRoot
+            | UnaryOperator::PGCubeRoot
+    ) || is_geometric_unary_operator(op)
+}
+
+pub(crate) fn postgres_numeric_unary_type<'a>(
+    op: &UnaryOperator,
+    operand: Option<&'a str>,
+) -> Option<&'a str> {
+    let numeric = matches!(
+        operand,
+        Some("int2" | "int4" | "int8" | "float4" | "float8" | "numeric")
+    );
+    match op {
+        UnaryOperator::PGAbs if numeric => operand,
+        UnaryOperator::PGAbs if matches!(operand, None | Some("unknown")) => Some("float8"),
+        UnaryOperator::PGSquareRoot | UnaryOperator::PGCubeRoot
+            if numeric || matches!(operand, None | Some("unknown")) =>
+        {
+            Some("float8")
+        }
+        UnaryOperator::BitwiseNot if matches!(operand, Some("int2" | "int4" | "int8")) => operand,
+        _ => None,
+    }
+}
+
+fn postgres_numeric_unary_value(
+    op: &UnaryOperator,
+    value: SqlValue,
+    operand: Option<&str>,
+) -> Result<SqlValue> {
+    let result_type = postgres_numeric_unary_type(op, operand).ok_or_else(|| {
+        SqlError::coded(
+            "42883",
+            format!("operator does not exist: {op} {}", common_type_display(operand.unwrap_or("unknown"))),
+            None,
+            Some("No operator matches the given name and argument type. You might need to add an explicit type cast.".to_owned()),
+        )
+    })?;
+    if *op == UnaryOperator::PGAbs {
+        let value = if matches!(operand, None | Some("unknown")) {
+            cast_value_to_pg_type(value, result_type).map_err(numeric_operator_error)?
+        } else {
+            value
+        };
+        return eval_compatibility_function_value(
+            "abs",
+            &[value],
+            Some(&[Some(result_type.to_owned())]),
+        )
+        .map(|result| result.expect("abs is implemented for numeric input"))
+        .map_err(numeric_operator_error);
+    }
+    let SqlValue::Float(value) =
+        cast_value_to_pg_type(value, "float8").map_err(numeric_operator_error)?
+    else {
+        unreachable!("non-null double precision cast returns a float");
+    };
+    let result = if *op == UnaryOperator::PGSquareRoot {
+        if value < 0.0 {
+            return Err(SqlError::data_exception_public(
+                "2201F",
+                "cannot take square root of a negative number",
+                None,
+            ));
+        }
+        value.sqrt()
+    } else {
+        value.cbrt()
+    };
+    Ok(SqlValue::Float(result))
+}
+
+// PostgreSQL's numeric operators report these input and range errors without
+// a protocol datatype field. Preserve the shared helpers' message and SQLSTATE.
+fn numeric_operator_error(error: SqlError) -> SqlError {
+    match error {
+        SqlError::DataException {
+            sqlstate, message, ..
+        } => SqlError::data_exception(sqlstate, message, None),
+        other => other,
+    }
+}
+
 pub(crate) fn eval_unary_bit_not_expr_value(
     op: &UnaryOperator,
     expr: &Expr,
@@ -2038,12 +2128,32 @@ pub(crate) fn eval_unary_bit_not_expr_value_typed(
     if let Some(value) = eval_geometric_unary_value(op, &value, pg_type.as_deref())? {
         return Ok(value);
     }
+    if matches!(
+        op,
+        UnaryOperator::PGAbs | UnaryOperator::PGSquareRoot | UnaryOperator::PGCubeRoot
+    ) {
+        return postgres_numeric_unary_value(op, value, pg_type.as_deref());
+    }
     if matches!(op, UnaryOperator::PGPrefixFactorial) && pg_type.as_deref() == Some("tsquery") {
         return tsquery_from_sql_value(&value)
             .map(PgTsQuery::not)
             .map(SqlValue::TsQuery);
     }
     if matches!(op, UnaryOperator::BitwiseNot) {
+        if matches!(pg_type.as_deref(), Some("int2" | "int4" | "int8")) {
+            let number = sql_value_i64(&value)
+                .ok_or_else(|| SqlError::InvalidSql("integer operand required".into()))?;
+            return Ok(SqlValue::Int(!number));
+        }
+        if matches!(pg_type.as_deref(), None | Some("unknown")) {
+            return Err(SqlError::coded(
+                "42725",
+                "operator is not unique: ~ unknown",
+                None,
+                Some("Could not choose a best candidate operator. You might need to add explicit type casts.".to_owned()),
+            ));
+        }
+
         if let Some(pg_type @ ("inet" | "cidr")) = pg_type.as_deref() {
             let network = network_argument(&value, pg_type)?;
             return Ok(network_value(PgNetwork {
@@ -3876,12 +3986,15 @@ pub(crate) fn eval_typed_interval_arithmetic(
             interval.checked_scale(scalar)
         }
     }
-    .map_err(|_| {
-        SqlError::data_exception(
+    .map_err(|error| match error {
+        PgCanonicalValueError::IntervalOutOfRange => {
+            SqlError::data_exception("22008", "interval out of range", None)
+        }
+        _ => SqlError::data_exception(
             "22015",
             "interval out of range",
             Some("interval".to_string()),
-        )
+        ),
     })?;
     Ok(Some(SqlValue::String(render_interval(result))))
 }

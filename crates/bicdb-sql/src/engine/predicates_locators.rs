@@ -1149,6 +1149,27 @@ impl<'db> SqlEngine<'db> {
                 &alias_name,
                 Clone::clone,
             );
+            if table_alias.is_none_or(|alias| alias.columns.is_empty()) {
+                if let Some(declared) = virtual_table_column_types(&table) {
+                    let types = source_columns
+                        .iter()
+                        .map(|name| {
+                            declared
+                                .iter()
+                                .find(|(column, _)| column == name)
+                                .and_then(|(_, pg_type)| pg_type.clone())
+                        })
+                        .collect::<Vec<_>>();
+                    if types.iter().any(|pg_type| {
+                        pg_type
+                            .as_deref()
+                            .and_then(catalog_vector_element_type)
+                            .is_some()
+                    }) {
+                        crate::slot_types::register_columns(&alias_name, &source_columns, &types);
+                    }
+                }
+            }
             let columns = source_columns
                 .iter()
                 .map(|column| format!("{alias_name}.{column}"))

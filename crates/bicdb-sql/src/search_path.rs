@@ -133,7 +133,7 @@ pub(crate) fn current_catalog_value() -> SqlValue {
 /// unquoted names folded to lower case.
 pub(crate) fn parse_search_path(path: &str, user: &str) -> Vec<String> {
     let mut schemas = Vec::new();
-    for part in path.split(',') {
+    for part in crate::ddl_alter::split_setting_list(path) {
         let part = part.trim();
         if part.is_empty() {
             continue;
@@ -161,6 +161,31 @@ pub(crate) fn parse_search_path(path: &str, user: &str) -> Vec<String> {
         }
     }
     schemas
+}
+
+/// Render a list of SQL SET arguments as a search_path setting string.
+pub(crate) fn render_raw_assignment(value: &str) -> String {
+    crate::ddl_alter::split_setting_list(value)
+        .into_iter()
+        .map(|part| {
+            let part = part.trim();
+            let name = if let Some(quoted) = part
+                .strip_prefix('"')
+                .and_then(|part| part.strip_suffix('"'))
+            {
+                quoted.replace("\"\"", "\"")
+            } else if let Some(literal) = part
+                .strip_prefix('\'')
+                .and_then(|part| part.strip_suffix('\''))
+            {
+                literal.replace("''", "'")
+            } else {
+                part.to_ascii_lowercase()
+            };
+            pg_quote_ident(&name)
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// The schemas unqualified relations bind through, or `None` when binding
@@ -606,9 +631,18 @@ pub(crate) fn bind_sql_text(db: &BicDb, sql: &str, path: &[String]) -> Result<Op
     let sql = lock_order.as_deref().unwrap_or(sql);
     let top = crate::eval::rewrite_helpers::rewrite_select_top_identifiers(sql);
     let sql = top.as_deref().unwrap_or(sql);
-    let Ok(mut statements) = Parser::parse_sql(&sqlparser::dialect::PostgreSqlDialect {}, sql)
-    else {
-        return Ok(None);
+    let dialect = sqlparser::dialect::PostgreSqlDialect {};
+    let mut statements = match Parser::parse_sql(&dialect, sql) {
+        Ok(statements) => statements,
+        Err(_) => {
+            let Some(masked) = crate::conflict_inference::mask_for_binding(sql) else {
+                return Ok(None);
+            };
+            let Ok(statements) = Parser::parse_sql(&dialect, &masked) else {
+                return Ok(None);
+            };
+            statements
+        }
     };
     // Routine bodies bind when they execute, with the caller's path; DDL
     // that defines them is left verbatim.

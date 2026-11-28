@@ -124,6 +124,9 @@ fn postgres_group_and_order_positions_bind_before_execution() {
         "SELECT name, count(*) FROM t GROUP BY 1 ORDER BY 2",
         "SELECT id FROM t ORDER BY +2",
         "SELECT 1 GROUP BY 1 ORDER BY 1",
+        "SELECT 'constant' AS name FROM t ORDER BY name",
+        "SELECT true AS label FROM t ORDER BY 1",
+        "SELECT id FROM t ORDER BY CASE WHEN 'a' = 'a' THEN 1 ELSE 2 END",
         "SELECT * FROM t ORDER BY 3",
     ] {
         let rows = session

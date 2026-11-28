@@ -182,3 +182,28 @@ fn postgres_raise_accepts_dollar_quoted_format_and_options() {
     assert_eq!(error.sqlstate(), "P0001");
     assert_eq!(error.postgres_message(), "bad input: '-1'");
 }
+
+#[test]
+fn postgres_raise_accepts_escape_strings_and_arrays_in_arguments() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let result = session
+        .execute(
+            r"DO $$ BEGIN
+            RAISE NOTICE E'can\'t, USING; %', ARRAY[1,2]::text
+                USING DETAIL = E'foo\\bar\041baz';
+        END $$",
+        )
+        .unwrap();
+    assert_eq!(result.notices[0].message, "can't, USING; {1,2}");
+    assert!(result.notices[0]
+        .fields
+        .contains(&SqlErrorField::Detail(r"foo\bar!baz".into(),)));
+
+    let error = session
+        .execute(r"DO $$ BEGIN RAISE E'value \041'; END $$")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "P0001");
+    assert_eq!(error.postgres_message(), "value !");
+}

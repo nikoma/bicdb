@@ -5623,6 +5623,10 @@ pub(crate) fn find_top_level_keyword(sql: &str, keyword: &str) -> Option<usize> 
         }
         // Dollar-quoted SQL fragments may contain unmatched parentheses,
         // quotes, and keywords. They are one literal token.
+        if let Some(end) = escape_string_end(bytes, idx) {
+            idx = end;
+            continue;
+        }
         if byte == b'$' && (idx == 0 || !is_sql_identifier_byte(bytes[idx - 1])) {
             if let Some(delimiter) = dollar_quote_delimiter(&sql[idx..]) {
                 let start = idx + delimiter.len();

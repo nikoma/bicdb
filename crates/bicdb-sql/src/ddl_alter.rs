@@ -4825,6 +4825,10 @@ pub(crate) fn split_top_level_commas_nested(value: &str) -> Vec<String> {
             idx += 1;
             continue;
         }
+        if let Some(end) = escape_string_end(bytes, idx) {
+            idx = end;
+            continue;
+        }
         if byte == b'$' && (idx == 0 || !is_sql_identifier_byte(bytes[idx - 1])) {
             if let Some(delimiter) = dollar_quote_delimiter(&value[idx..]) {
                 let body_start = idx + delimiter.len();
@@ -4836,8 +4840,8 @@ pub(crate) fn split_top_level_commas_nested(value: &str) -> Vec<String> {
         }
         match byte {
             b'\'' => in_string = true,
-            b'(' => depth += 1,
-            b')' => depth = depth.saturating_sub(1),
+            b'(' | b'[' => depth += 1,
+            b')' | b']' => depth = depth.saturating_sub(1),
             b',' if depth == 0 => {
                 parts.push(value[start..idx].trim().to_string());
                 start = idx + 1;

@@ -2035,10 +2035,34 @@ fn matching_routine_end(
     Err(SqlError::UnsupportedPlpgsqlFeature(error.to_string()))
 }
 
+fn starts_escape_string(sql: &[u8]) -> bool {
+    matches!(sql.get(..2), Some(b"E'" | b"e'"))
+}
+
+pub(crate) fn escape_string_end(sql: &[u8], start: usize) -> Option<usize> {
+    if !starts_escape_string(&sql[start..]) || (start > 0 && is_sql_identifier_byte(sql[start - 1]))
+    {
+        return None;
+    }
+    let mut index = start + 2;
+    while index < sql.len() {
+        match sql[index] {
+            b'\\' => index += 2,
+            b'\'' if sql.get(index + 1) == Some(&b'\'') => index += 2,
+            b'\'' => return Some(index + 1),
+            _ => index += 1,
+        }
+    }
+    Some(sql.len())
+}
+
 // These fragments are single lexical units even when they contain quotes,
 // assignment operators, unmatched parentheses, or statement separators.
-fn skip_routine_comment_or_dollar_quote(sql: &str, start: usize) -> Option<usize> {
+fn skip_routine_quoted_fragment(sql: &str, start: usize) -> Option<usize> {
     let bytes = sql.as_bytes();
+    if let Some(end) = escape_string_end(bytes, start) {
+        return Some(end);
+    }
     if bytes.get(start..start + 2) == Some(b"--") {
         return Some(sql[start..].find('\n').map_or(sql.len(), |n| start + n + 1));
     }
@@ -2097,7 +2121,7 @@ pub(crate) fn find_top_level_statement_semicolon(value: &str) -> Option<usize> {
             idx += 1;
             continue;
         }
-        if let Some(end) = skip_routine_comment_or_dollar_quote(value, idx) {
+        if let Some(end) = skip_routine_quoted_fragment(value, idx) {
             idx = end;
             continue;
         }
@@ -2388,6 +2412,19 @@ fn strip_routine_keyword<'a>(source: &'a str, keyword: &str) -> Option<&'a str> 
 }
 
 fn parse_raise_string_literal(sql: &str) -> Result<Option<String>> {
+    if starts_escape_string(sql.as_bytes()) {
+        use sqlparser::tokenizer::{Token, Tokenizer};
+        let tokens = Tokenizer::new(&PostgreSqlDialect {}, sql)
+            .tokenize()
+            .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+        let mut tokens = tokens
+            .into_iter()
+            .filter(|token| !matches!(token, Token::Whitespace(_)));
+        return Ok(match (tokens.next(), tokens.next()) {
+            (Some(Token::EscapedStringLiteral(value)), None) => Some(value),
+            _ => None,
+        });
+    }
     let Some(delimiter) = dollar_quote_delimiter(sql) else {
         return parse_single_quoted_sql_string(sql);
     };
@@ -2411,6 +2448,7 @@ pub(crate) fn parse_routine_raise(statement: &str) -> Result<RoutineStmt> {
     let head = statement.trim_start();
     if starts_with_plpgsql_word(statement, "USING")
         || head.starts_with('\'')
+        || starts_escape_string(head.as_bytes())
         || dollar_quote_delimiter(head).is_some()
     {
         return parse_routine_raise(&format!("EXCEPTION {statement}"));
@@ -3336,7 +3374,7 @@ pub(crate) fn find_top_level_operator(sql: &str, operator: &str) -> Option<usize
             idx += 1;
             continue;
         }
-        if let Some(end) = skip_routine_comment_or_dollar_quote(sql, idx) {
+        if let Some(end) = skip_routine_quoted_fragment(sql, idx) {
             idx = end;
             continue;
         }

@@ -48,7 +48,11 @@ impl SqlEngine<'_> {
                 (Some(source), Some(count), nulls, forest, namespace)
             }
             (
-                "table_to_xml" | "query_to_xml" | "query_to_xmlschema" | "schema_to_xml",
+                "table_to_xml"
+                | "query_to_xml"
+                | "query_to_xmlschema"
+                | "cursor_to_xmlschema"
+                | "schema_to_xml",
                 [source, nulls, forest, namespace],
             ) => (Some(source), None, nulls, forest, namespace),
             ("database_to_xml", [nulls, forest, namespace]) => {
@@ -64,7 +68,14 @@ impl SqlEngine<'_> {
                     "{name} expects five arguments"
                 )));
             }
-            ("table_to_xml" | "query_to_xml" | "query_to_xmlschema" | "schema_to_xml", _) => {
+            (
+                "table_to_xml"
+                | "query_to_xml"
+                | "query_to_xmlschema"
+                | "cursor_to_xmlschema"
+                | "schema_to_xml",
+                _,
+            ) => {
                 return Err(SqlError::undefined_function(format!(
                     "{name} expects four arguments"
                 )));
@@ -103,10 +114,16 @@ impl SqlEngine<'_> {
             )
             .map(|value| Some(SqlValue::String(value)));
         }
-        if name == "query_to_xmlschema" {
-            return self
-                .map_query_schema(&source.to_cell(), nulls, forest, &namespace)
-                .map(|value| Some(SqlValue::String(value)));
+        if matches!(name, "query_to_xmlschema" | "cursor_to_xmlschema") {
+            let source = source.to_cell();
+            let columns = if name == "cursor_to_xmlschema" {
+                crate::session::describe_xml_cursor(&source)?
+            } else {
+                self.describe_xml_query(&source)?
+            };
+            return Ok(Some(SqlValue::String(
+                self.render_xml_query_schema(&columns, nulls, forest, &namespace),
+            )));
         }
         if name == "schema_to_xml" {
             return self
@@ -152,13 +169,7 @@ impl SqlEngine<'_> {
         .map(|value| Some(SqlValue::String(value)))
     }
 
-    fn map_query_schema(
-        &self,
-        query: &str,
-        nulls: bool,
-        forest: bool,
-        namespace: &str,
-    ) -> Result<String> {
+    fn describe_xml_query(&self, query: &str) -> Result<Vec<(String, Option<String>)>> {
         let multi_query_error = || {
             SqlError::data_exception_public("42P11", "cannot open multi-query plan as cursor", None)
         };
@@ -173,11 +184,19 @@ impl SqlEngine<'_> {
         let query = queries.pop().expect("one cursor query");
         self.authorize_read_relations(&query)?;
         // A schema-only call describes the cursor without consuming it.
-        let columns = self
-            .query_describe_output_columns(&query)
-            .ok_or_else(multi_query_error)?;
-        Ok(crate::xml::schema_mapping::query_schema(
-            &columns,
+        self.query_describe_output_columns(&query)
+            .ok_or_else(multi_query_error)
+    }
+
+    fn render_xml_query_schema(
+        &self,
+        columns: &[(String, Option<String>)],
+        nulls: bool,
+        forest: bool,
+        namespace: &str,
+    ) -> String {
+        crate::xml::schema_mapping::query_schema(
+            columns,
             &current_database_from_gucs(&self.session_gucs),
             namespace,
             nulls,
@@ -185,7 +204,7 @@ impl SqlEngine<'_> {
             self.session_gucs
                 .get("xmlbinary")
                 .is_some_and(|mode| mode == "hex"),
-        ))
+        )
     }
 
     fn map_database_rows(&self, nulls: bool, forest: bool, namespace: &str) -> Result<String> {

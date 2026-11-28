@@ -1278,3 +1278,40 @@ fn query_xml_schema_describes_types_without_running_the_query() {
         "42P11"
     );
 }
+
+#[test]
+fn cursor_xml_schema_uses_saved_columns_without_moving_the_cursor() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("BEGIN; DECLARE xml_schema_cursor CURSOR FOR SELECT 3::smallint AS n, 'a'::varchar AS v")
+        .unwrap();
+    let schema = session
+        .execute("SELECT cursor_to_xmlschema('xml_schema_cursor',true,true,'urn:probe')")
+        .unwrap();
+    let schema = schema.rows[0][0].to_cell();
+    assert!(schema.contains("targetNamespace=\"urn:probe\""));
+    assert!(schema.contains("<xsd:element name=\"n\" type=\"SMALLINT\" nillable=\"true\">"));
+    assert!(schema.contains("<xsd:element name=\"v\" type=\"VARCHAR\" nillable=\"true\">"));
+    assert_eq!(
+        session
+            .execute("FETCH NEXT FROM xml_schema_cursor")
+            .unwrap()
+            .rows,
+        [[SqlValue::Int(3), SqlValue::String("a".into())]]
+    );
+    assert!(session
+        .execute("FETCH NEXT FROM xml_schema_cursor")
+        .unwrap()
+        .rows
+        .is_empty());
+    session.execute("CLOSE xml_schema_cursor; COMMIT").unwrap();
+    assert_eq!(
+        session
+            .execute("SELECT cursor_to_xmlschema('xml_schema_cursor',false,false,'')")
+            .unwrap_err()
+            .sqlstate(),
+        "34000"
+    );
+}

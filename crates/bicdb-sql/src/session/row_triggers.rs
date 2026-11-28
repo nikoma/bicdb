@@ -801,7 +801,7 @@ fn text_search_update_trigger(
             ));
         }
         match new.get(config).filter(|value| !value.is_null()) {
-            Some(value) => json_to_sql_value(value.clone()),
+            Some(value) => json_to_sql_value(value),
             None => {
                 return Err(SqlError::data_exception_public(
                     "22004",

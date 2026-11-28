@@ -205,6 +205,22 @@ pub(crate) fn pg_cursors_rows() -> Vec<BTreeMap<String, SqlValue>> {
     })
 }
 
+/// Fetch from the active connection's portal for an SQL/XML function.
+pub(crate) fn fetch_xml_cursor_rows(name: &str, count: i32) -> Result<SqlResult> {
+    ACTIVE_CURSORS.with(|active| {
+        let active = active.borrow();
+        let cursors = active.as_ref().ok_or_else(|| undefined_cursor(name))?;
+        cursors.with(|cursors| {
+            let cursor = cursors
+                .iter_mut()
+                .find(|cursor| cursor.name == name)
+                .ok_or_else(|| undefined_cursor(name))?;
+            let positions = cursor.advance(Motion::Forward(Some(i64::from(count))))?;
+            Ok(cursor.fetched_rows(&positions))
+        })
+    })
+}
+
 pub(crate) const PG_CURSORS_COLUMNS: [(&str, &str); 6] = [
     ("name", "text"),
     ("statement", "text"),
@@ -319,6 +335,15 @@ fn parse_fetch(rest: &[String]) -> Result<(Motion, String)> {
 impl SqlCursor {
     fn len(&self) -> usize {
         self.rows.len()
+    }
+
+    fn fetched_rows(&self, positions: &[usize]) -> SqlResult {
+        let visible = self.columns.len();
+        let rows = positions
+            .iter()
+            .map(|index| self.rows[*index][..visible].to_vec())
+            .collect();
+        SqlResult::new(self.columns.clone(), rows).with_column_types(self.column_types.clone())
     }
 
     fn require_backward(&self) -> Result<()> {
@@ -481,13 +506,7 @@ impl SqlSession<'_> {
                     if !fetch {
                         return Ok(Some(SqlResult::command(format!("MOVE {}", passed.len()))));
                     }
-                    let visible = cursor.columns.len();
-                    let rows = passed
-                        .iter()
-                        .map(|index| cursor.rows[*index][..visible].to_vec())
-                        .collect::<Vec<_>>();
-                    let mut result = SqlResult::new(cursor.columns.clone(), rows)
-                        .with_column_types(cursor.column_types.clone());
+                    let mut result = cursor.fetched_rows(&passed);
                     result.command_tag = Some(format!("FETCH {}", passed.len()));
                     Ok(Some(result))
                 })

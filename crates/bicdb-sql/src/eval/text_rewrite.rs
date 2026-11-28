@@ -291,16 +291,52 @@ pub(crate) fn rewrite_json_unique_keys_clauses(input: &str) -> Option<String> {
     Some(output)
 }
 
+/// The label of a SQL/XML element or attribute. An unnamed argument takes
+/// its name from the last component of a column reference.
+fn xml_constructor_identifier(input: &str, qualified: bool) -> Option<String> {
+    use sqlparser::dialect::PostgreSqlDialect;
+    use sqlparser::tokenizer::{Token, Tokenizer};
+    let input = if qualified {
+        strip_balanced_outer_parens(input.trim())
+    } else {
+        input.trim()
+    };
+    let tokens = Tokenizer::new(&PostgreSqlDialect {}, input)
+        .tokenize()
+        .ok()?;
+    let mut tokens = tokens
+        .into_iter()
+        .filter(|token| !matches!(token, Token::Whitespace(_)));
+    let Token::Word(mut name) = tokens.next()? else {
+        return None;
+    };
+    while let Some(token) = tokens.next() {
+        if !qualified || token != Token::Period {
+            return None;
+        }
+        let Token::Word(next) = tokens.next()? else {
+            return None;
+        };
+        name = next;
+    }
+    Some(match name.quote_style {
+        Some(_) => name.value,
+        None => name.value.to_ascii_lowercase(),
+    })
+}
+
 pub(crate) fn rewrite_xml_constructor_once(input: &str) -> Option<String> {
     let tokens = json_predicate_tokens(input);
     let (index, function) = tokens
         .iter()
         .enumerate()
-        .filter(|(_, token)| {
+        .filter(|(index, token)| {
             matches!(
                 token.word.as_deref(),
                 Some("xmlattributes" | "xmlforest" | "xmlelement" | "xmlpi")
-            )
+            ) && tokens
+                .get(index + 1)
+                .is_some_and(|next| next.depth == token.depth && next.symbol == Some(b'('))
         })
         .max_by_key(|(_, token)| token.depth)?;
     let name = function.word.as_deref()?;
@@ -338,10 +374,27 @@ pub(crate) fn rewrite_xml_constructor_once(input: &str) -> Option<String> {
                 .filter(|token| {
                     token.start >= start && token.end <= end && token.depth == inner_depth
                 })
-                .rfind(|token| token.word.as_deref() == Some("as"))?;
-            let expression = input[start..as_token.start].trim();
-            let alias = input[as_token.end..end].trim().trim_matches('"');
-            arguments.push(format!("'{alias}', ({expression})"));
+                .rfind(|token| token.word.as_deref() == Some("as"));
+            let (expression, alias) = match as_token {
+                Some(token) => (
+                    input[start..token.start].trim(),
+                    Some(xml_constructor_identifier(&input[token.end..end], false)?),
+                ),
+                None => {
+                    let expression = input[start..end].trim();
+                    (expression, xml_constructor_identifier(expression, true))
+                }
+            };
+            if expression.is_empty() {
+                return None;
+            }
+            match alias {
+                Some(alias) => {
+                    let alias = alias.replace('\'', "''");
+                    arguments.push(format!("'{alias}', ({expression})"));
+                }
+                None => arguments.push(format!("NULL, ({expression})")),
+            }
         }
         format!("bicdb_{name}({})", arguments.join(", "))
     } else {
@@ -350,16 +403,8 @@ pub(crate) fn rewrite_xml_constructor_once(input: &str) -> Option<String> {
             return None;
         }
         let identifier = tokens.get(index + 3)?;
-        let authored_name = input[identifier.start..identifier.end].trim();
-        let xml_name = match authored_name
-            .strip_prefix('"')
-            .and_then(|name| name.strip_suffix('"'))
-        {
-            Some(name) => name.replace("\"\"", "\""),
-            None if name == "xmlpi" => authored_name.to_ascii_lowercase(),
-            None => authored_name.to_owned(),
-        };
-        let xml_name = xml_name.replace('\'', "''");
+        let xml_name = xml_constructor_identifier(&input[identifier.start..identifier.end], false)?
+            .replace('\'', "''");
         let remainder = input[identifier.end..tokens[close_index].start].trim();
         let remainder = remainder.strip_prefix(',').unwrap_or(remainder).trim();
         let internal = if name == "xmlelement" {

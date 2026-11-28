@@ -457,6 +457,55 @@ fn map_sql_identifier_to_xml_name(identifier: &str, fully_escaped: bool) -> Stri
     name
 }
 
+/// The constructor rewrite uses a NULL label for an unnamed non-column
+/// expression. Reject it during parsing, including queries over empty inputs.
+pub(crate) fn validate_xml_constructor_names(
+    statements: &[sqlparser::ast::Statement],
+) -> Result<()> {
+    use sqlparser::ast::{
+        Expr, FunctionArg, FunctionArgExpr, FunctionArguments, Value, ValueWithSpan,
+    };
+    use std::ops::ControlFlow;
+
+    let invalid_name = |expression: &Expr| {
+        let Expr::Function(function) = expression else {
+            return ControlFlow::Continue(());
+        };
+        let kind = match function.name.to_string().as_str() {
+            "bicdb_xmlattributes" => "attribute",
+            "bicdb_xmlforest" => "element",
+            _ => return ControlFlow::Continue(()),
+        };
+        let FunctionArguments::List(arguments) = &function.args else {
+            return ControlFlow::Continue(());
+        };
+        if arguments.args.iter().step_by(2).any(|argument| {
+            matches!(
+                argument,
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(ValueWithSpan {
+                    value: Value::Null,
+                    ..
+                })))
+            )
+        }) {
+            ControlFlow::Break(kind)
+        } else {
+            ControlFlow::Continue(())
+        }
+    };
+    for statement in statements {
+        if let ControlFlow::Break(kind) = sqlparser::ast::visit_expressions(statement, invalid_name)
+        {
+            return Err(SqlError::data_exception_public(
+                "42601",
+                format!("unnamed XML {kind} value must be a column reference"),
+                None,
+            ));
+        }
+    }
+    Ok(())
+}
+
 const XML_ATTRIBUTES_MARKER: &str = "\0bicdb:xmlattributes:";
 
 thread_local! {
@@ -1652,30 +1701,19 @@ pub(crate) fn map_query_rows(
     row_name: &str,
     nulls: bool,
     forest: bool,
-    namespace: &str,
+    namespace: Option<&str>,
     check_cancellation: impl Fn() -> Result<()>,
 ) -> Result<String> {
     use std::fmt::Write as _;
 
-    let document = map_sql_identifier_to_xml_name(document_name, true);
     let row_name = map_sql_identifier_to_xml_name(row_name, true);
     let columns = result
         .columns
         .iter()
         .map(|label| map_sql_identifier_to_xml_name(label, true))
         .collect::<Vec<_>>();
-    let namespace = if namespace.is_empty() {
-        String::new()
-    } else {
-        format!(" xmlns=\"{namespace}\"")
-    };
-    let attributes =
-        format!(" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"{namespace}",);
-
+    let attributes = xml_mapping_attributes(namespace);
     let mut output = String::new();
-    if !forest {
-        write!(output, "<{document}{attributes}>\n\n").unwrap();
-    }
     for (index, row) in result.rows.iter().enumerate() {
         if index % 1024 == 0 {
             check_cancellation()?;
@@ -1695,10 +1733,32 @@ pub(crate) fn map_query_rows(
         }
         write!(output, "</{row_name}>\n\n").unwrap();
     }
-    if !forest {
-        writeln!(output, "</{document}>").unwrap();
+    if forest {
+        Ok(output)
+    } else {
+        Ok(wrap_xml_mapping(&output, document_name, namespace))
     }
-    Ok(output)
+}
+
+fn xml_mapping_attributes(namespace: Option<&str>) -> String {
+    let Some(namespace) = namespace else {
+        return String::new();
+    };
+    let mut attributes = " xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"".to_string();
+    if !namespace.is_empty() {
+        attributes.push_str(&format!(" xmlns=\"{namespace}\""));
+    }
+    attributes
+}
+
+pub(crate) fn wrap_xml_mapping(
+    contents: &str,
+    document_name: &str,
+    namespace: Option<&str>,
+) -> String {
+    let document = map_sql_identifier_to_xml_name(document_name, true);
+    let attributes = xml_mapping_attributes(namespace);
+    format!("<{document}{attributes}>\n\n{contents}</{document}>\n")
 }
 
 pub(crate) fn xml_function_pg_type(name: &str) -> Option<&'static str> {
@@ -1723,6 +1783,8 @@ pub(crate) fn xml_function_pg_type(name: &str) -> Option<&'static str> {
         "xmlconcat"
         | "table_to_xml"
         | "query_to_xml"
+        | "schema_to_xml"
+        | "cursor_to_xml"
         | "xmlcomment"
         | "xmltext"
         | "xml_in"

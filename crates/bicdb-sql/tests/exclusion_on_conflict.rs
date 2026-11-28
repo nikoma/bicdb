@@ -115,3 +115,40 @@ fn exclusion_constraints_arbitrate_do_nothing_but_not_do_update() {
     );
     assert_eq!(cells(&mut db, "SELECT count(*) FROM r"), [["1"]]);
 }
+
+#[test]
+fn a_named_exclusion_arbiter_coexists_with_other_constraints() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    run(
+        &mut db,
+        "CREATE TABLE mixed_arbiters (id int PRIMARY KEY, code int UNIQUE, during int4range,
+         CONSTRAINT during_excl EXCLUDE USING gist(during WITH &&))",
+    );
+    run(&mut db, "INSERT INTO mixed_arbiters VALUES (1,10,'[1,5)')");
+    for statement in [
+        "INSERT INTO mixed_arbiters VALUES (2,10,'[2,6)') ON CONFLICT ON CONSTRAINT during_excl DO NOTHING",
+        "INSERT INTO mixed_arbiters VALUES (1,20,'[2,6)') ON CONFLICT ON CONSTRAINT during_excl DO NOTHING",
+    ] {
+        assert_eq!(run(&mut db, statement), 0);
+    }
+    assert_eq!(
+        fails(
+            &mut db,
+            "INSERT INTO mixed_arbiters VALUES (2,10,'[5,9)') ON CONFLICT ON CONSTRAINT during_excl DO NOTHING",
+        ).0,
+        "23505"
+    );
+    assert_eq!(
+        run(
+            &mut db,
+            "INSERT INTO mixed_arbiters VALUES (2,20,'[5,9)'), (3,30,'[6,8)')
+             ON CONFLICT ON CONSTRAINT during_excl DO NOTHING",
+        ),
+        1
+    );
+    assert_eq!(
+        cells(&mut db, "SELECT id,code FROM mixed_arbiters ORDER BY id"),
+        [["1", "10"], ["2", "20"]]
+    );
+}

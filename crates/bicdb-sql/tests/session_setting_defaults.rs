@@ -48,3 +48,72 @@ fn set_default_restores_session_settings_with_local_scope() {
         vec![vec![SqlValue::String("4MB".into())]]
     );
 }
+
+#[test]
+fn search_path_preserves_quoted_names_in_session_and_persisted_defaults() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    {
+        let mut sql = SqlSession::new(&mut db);
+        sql.execute(
+            r#"CREATE SCHEMA "Partial.Path";
+               CREATE SCHEMA "with,comma";
+               CREATE SCHEMA "quo""te";
+               CREATE TABLE public.path_probe (value text);
+               SET search_path TO "Partial.Path", public;
+               CREATE TABLE path_probe (value int);
+               INSERT INTO path_probe VALUES (23)"#,
+        )
+        .unwrap();
+        assert_eq!(
+            sql.execute("SHOW search_path").unwrap().rows,
+            [[SqlValue::String(r#""Partial.Path", public"#.into())]]
+        );
+        assert_eq!(
+            sql.execute(r#"SELECT value FROM "Partial.Path".path_probe"#)
+                .unwrap()
+                .rows,
+            [[SqlValue::Int(23)]]
+        );
+        for (assignment, name) in [
+            ("SET search_path TO 'with,comma', public", "with,comma"),
+            (r#"SET search_path TO "quo""te", public"#, "quo\"te"),
+            (
+                r#"SELECT set_config('search_path', '"with,comma", public', false)"#,
+                "with,comma",
+            ),
+        ] {
+            sql.execute(assignment).unwrap();
+            assert_eq!(
+                sql.execute("SELECT current_schema()").unwrap().rows,
+                [[SqlValue::String(name.into())]],
+                "{assignment}"
+            );
+        }
+        sql.execute(r#"CREATE ROLE path_default_role; ALTER ROLE path_default_role SET search_path TO 'with,comma', "Partial.Path", public"#)
+            .unwrap();
+        let database = sql.execute("SELECT current_database()").unwrap().rows[0][0].to_cell();
+        sql.execute(&format!(
+            r#"ALTER DATABASE "{database}" SET search_path = 'with,comma', "Partial.Path", public"#
+        ))
+        .unwrap();
+    }
+    assert_eq!(
+        bicdb_sql::role_session_settings(&db, "path_default_role").unwrap(),
+        vec![(
+            "search_path".into(),
+            r#""with,comma", "Partial.Path", public"#.into()
+        )]
+    );
+    let mut sql = SqlSession::new(&mut db);
+    assert_eq!(
+        sql.execute("SHOW search_path").unwrap().rows,
+        [[SqlValue::String(
+            r#""with,comma", "Partial.Path", public"#.into()
+        )]]
+    );
+    assert_eq!(
+        sql.execute("SELECT current_schema()").unwrap().rows,
+        [[SqlValue::String("with,comma".into())]]
+    );
+}

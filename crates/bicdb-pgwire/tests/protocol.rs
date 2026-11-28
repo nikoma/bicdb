@@ -6764,6 +6764,45 @@ fn xml_wire_binary_and_copy_paths_validate_and_canonicalize() {
 }
 
 #[test]
+fn xml_xpath_namespace_results_keep_the_xml_array_wire_type() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        bicdb_pgwire::handle_client(stream, path).unwrap();
+    });
+
+    let mut client = TcpStream::connect(address).unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+    send_query(
+        &mut client,
+        r#"SELECT xpath('true() or count(/p:r) > 0','<r/>'),
+                  xpath('false() and count(/p:r) > 0','<r/>'),
+                  xpath('/p:r/text()','<a:r xmlns:a="urn:p">yes</a:r>',ARRAY[['p','urn:p']]),
+                  xpath('//@xml:lang','<r xml:lang="en"/>',ARRAY[['xml','urn:other']]);"#,
+    );
+    let (oids, formats, rows, status) = read_binary_query_result_with_oids(&mut client);
+    assert_eq!(status, b'I');
+    assert_eq!(oids, vec![143; 4]);
+    assert_eq!(formats, vec![0; 4]);
+    assert_eq!(
+        rows,
+        vec![vec![
+            b"{true}".to_vec(),
+            b"{false}".to_vec(),
+            b"{yes}".to_vec(),
+            b"{en}".to_vec(),
+        ]],
+    );
+
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
+}
+
+#[test]
 fn xml_bind_validates_in_the_current_xmloption_and_keeps_its_type() {
     let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -14858,6 +14897,182 @@ fn extended_joined_dml_returning_describes_source_columns() {
         assert_eq!(rows[0][4], 9_i64.to_be_bytes());
     }
 
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
+}
+
+#[test]
+fn partial_conflict_predicate_preserves_parameter_types_and_describe_is_read_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        bicdb_pgwire::handle_client(stream, path).unwrap();
+    });
+
+    let mut client = TcpStream::connect(address).unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+    send_query(
+        &mut client,
+        "CREATE TABLE public.partial_wire(a text, b text);
+         CREATE SCHEMA partial_wire_schema;
+         SET search_path = partial_wire_schema, public;
+         CREATE TABLE partial_wire(a int, b int);
+         CREATE UNIQUE INDEX partial_wire_pos ON partial_wire(a) WHERE b > 0",
+    );
+    read_query_rows(&mut client);
+
+    let carrier = "INSERT INTO partial_wire VALUES (4,$1)
+        ON CONFLICT ON CONSTRAINT __bicdb_conflict_inference((a), b>0)
+        DO UPDATE SET b=excluded.b";
+    send_parse(&mut client, "rejected_carrier", carrier, &[]);
+    send_sync(&mut client);
+    let (error, _) = read_error_response_with_status(&mut client);
+    assert!(error.contains("42601"), "{error}");
+    let direct = carrier.replace("$1", "2");
+    for sql in [
+        direct.clone(),
+        format!("PREPARE rejected_sql_carrier AS {carrier}"),
+        format!("PREPARE rejected_constant_carrier AS {direct}"),
+        format!(
+            "CREATE FUNCTION rejected_atomic_carrier() RETURNS int LANGUAGE SQL
+                 BEGIN ATOMIC {direct} RETURNING b; END"
+        ),
+    ] {
+        send_query(&mut client, &sql);
+        let (error, _) = read_error_response_with_status(&mut client);
+        assert!(error.contains("42601"), "{error}");
+    }
+
+    send_query(&mut client, "EXECUTE rejected_constant_carrier");
+    let (error, _) = read_error_response_with_status(&mut client);
+    assert!(error.contains("26000"), "{error}");
+
+    send_parse(
+        &mut client,
+        "partial_upsert",
+        "INSERT INTO partial_wire VALUES ($1,$2)
+         ON CONFLICT (a) WHERE b > $3 DO UPDATE SET b=excluded.b",
+        &[],
+    );
+    assert_eq!(read_message(&mut client).0, b'1');
+    send_describe_statement(&mut client, "partial_upsert");
+    assert_eq!(read_parameter_description(&mut client), vec![23, 23, 23]);
+    assert_eq!(read_message(&mut client).0, b'n');
+    send_bind(
+        &mut client,
+        "partial_portal",
+        "partial_upsert",
+        &["4", "2", "1"],
+    );
+    send_describe_portal(&mut client, "partial_portal");
+    send_sync(&mut client);
+    let (tags, _) = read_tags_until_ready(&mut client);
+    assert_eq!(tags, vec![b'2', b'n']);
+    send_query(&mut client, "SELECT count(*) FROM partial_wire");
+    assert_eq!(read_query_rows(&mut client), vec![vec!["0".to_string()]]);
+
+    send_bind(&mut client, "", "partial_upsert", &["4", "2", "1"]);
+    send_execute(&mut client, "");
+    send_sync(&mut client);
+    assert!(read_query_rows(&mut client).is_empty());
+    send_bind(&mut client, "", "partial_upsert", &["4", "3", "1"]);
+    send_execute(&mut client, "");
+    send_sync(&mut client);
+    assert!(read_query_rows(&mut client).is_empty());
+    send_query(&mut client, "SELECT a,b FROM partial_wire");
+    assert_eq!(
+        read_query_rows(&mut client),
+        vec![vec!["4".to_string(), "3".to_string()]]
+    );
+
+    send_query(&mut client, "SELECT count(*) FROM public.partial_wire");
+    assert_eq!(read_query_rows(&mut client), vec![vec!["0".to_string()]]);
+
+    send_query(
+        &mut client,
+        "CREATE TABLE folded_wire(k int, fruit text);
+         CREATE UNIQUE INDEX folded_wire_unique
+           ON folded_wire(k, lower(fruit) COLLATE \"C\" text_pattern_ops);
+         INSERT INTO folded_wire VALUES (1, 'APPLE')",
+    );
+    assert!(read_query_rows(&mut client).is_empty());
+    send_query(
+        &mut client,
+        "PREPARE folded_update(int, text) AS INSERT INTO folded_wire AS f VALUES ($1, $2)
+           ON CONFLICT (k, lower(fruit) COLLATE \"C\" text_pattern_ops)
+           DO UPDATE SET fruit = excluded.fruit RETURNING f.k, f.fruit",
+    );
+    assert!(read_query_rows(&mut client).is_empty());
+    send_query(&mut client, "EXECUTE folded_update(1, 'Apple')");
+    assert_eq!(
+        read_query_rows(&mut client),
+        vec![vec!["1".to_string(), "Apple".to_string()]]
+    );
+
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
+}
+
+#[test]
+fn catalog_vector_array_casts_keep_postgres_text_and_binary_dimensions() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        bicdb_pgwire::handle_client(stream, path).unwrap();
+    });
+    let mut client = TcpStream::connect(address).unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+
+    let sql = "SELECT '23 25'::oidvector::oid[] AS values, ''::oidvector::oid[] AS empty";
+    send_query(&mut client, sql);
+    assert_eq!(
+        read_query_rows(&mut client),
+        vec![vec!["[0:1]={23,25}".to_string(), "{}".to_string()]],
+    );
+
+    send_parse(&mut client, "catalog_vector_array", sql, &[]);
+    send_bind_binary(&mut client, "", "catalog_vector_array", &[], &[1]);
+    send_describe_portal(&mut client, "");
+    send_execute(&mut client, "");
+    send_sync(&mut client);
+    let mut fields = Vec::new();
+    let mut row = Vec::new();
+    loop {
+        let (tag, payload) = read_message(&mut client);
+        match tag {
+            b'T' => fields = parse_row_description_fields(&payload),
+            b'D' => row = payload,
+            b'E' => panic!("{}", String::from_utf8_lossy(&payload)),
+            b'Z' => break,
+            _ => {}
+        }
+    }
+    assert_eq!(
+        fields
+            .iter()
+            .map(|field| field.type_oid)
+            .collect::<Vec<_>>(),
+        [1028, 1028]
+    );
+    let mut expected = 2_i16.to_be_bytes().to_vec();
+    for cell in [
+        vec![1_i32, 0, 26, 2, 0, 4, 23, 4, 25],
+        vec![1_i32, 0, 26, 0, 0],
+    ] {
+        expected.extend_from_slice(&((cell.len() * 4) as i32).to_be_bytes());
+        for value in cell {
+            expected.extend_from_slice(&value.to_be_bytes());
+        }
+    }
+    assert_eq!(row, expected);
     client.write_all(b"X\0\0\0\x04").unwrap();
     server.join().unwrap();
 }

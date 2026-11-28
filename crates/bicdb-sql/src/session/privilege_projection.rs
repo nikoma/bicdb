@@ -453,6 +453,7 @@ impl<'db> SqlSession<'db> {
                 super::create_table_as::CreateTableAs::from_parsed(create_table)?,
             );
         }
+        let original_name = &create_table.name;
         let temporary_target = self.temporary_table_target(create_table)?;
         let create_table = temporary_target.as_ref().unwrap_or(create_table);
 
@@ -496,6 +497,14 @@ impl<'db> SqlSession<'db> {
         }
 
         let parents = self.inheritance_parents(create_table)?;
+        let postgres = !oracle::is_oracle_database(self.db_ref())?;
+        let postgres_inheritance = postgres && !parents.is_empty();
+        let rewrite_flags = if postgres_inheritance {
+            crate::persistence_ddl::current_create_table_flags(original_name)?
+        } else {
+            crate::persistence_ddl::CreateTableRewriteFlags::default()
+        };
+        let mut inherited_expression_conflicts = BTreeSet::new();
         let has_like_clause = create_table.like.is_some();
         let (mut columns, mut constraints, inherited_virtual) =
             if let Some(like) = &create_table.like {
@@ -510,7 +519,11 @@ impl<'db> SqlSession<'db> {
                     Vec::new(),
                 )
             } else {
-                crate::inheritance::inherited_table_definition(&parents)?
+                crate::inheritance::inherited_table_definition(
+                    &parents,
+                    postgres_inheritance,
+                    &mut inherited_expression_conflicts,
+                )?
             };
         let inherited_names = columns
             .iter()
@@ -518,8 +531,7 @@ impl<'db> SqlSession<'db> {
             .collect::<BTreeSet<_>>();
         let mut merged_names = BTreeSet::new();
         let mut primary_key_name = None;
-        let postgres = !oracle::is_oracle_database(self.db_ref())?;
-        for column in &create_table.columns {
+        for (local_position, column) in create_table.columns.iter().enumerate() {
             let mut column_schema = column_schema_from_def(self.db_ref(), column)?;
             if let Some(compression) = compression
                 .iter()
@@ -537,7 +549,45 @@ impl<'db> SqlSession<'db> {
                     .iter()
                     .position(|existing| existing.name == column_schema.name)
                     .expect("inherited column is present");
-                crate::inheritance::merge_inherited_column(&columns[position], &mut column_schema)?;
+                let explicitly_generated = column_schema.generated_expr.is_some();
+                crate::inheritance::merge_inherited_column(
+                    &columns[position],
+                    &mut column_schema,
+                    postgres_inheritance,
+                    position != local_position,
+                )?;
+                if explicitly_generated {
+                    inherited_expression_conflicts.remove(&column_schema.name);
+                    if postgres_inheritance {
+                        crate::inheritance::check_local_generation_kind(
+                            &columns[position],
+                            &inherited_virtual,
+                            column,
+                            rewrite_flags.virtual_columns.contains(&column_schema.name),
+                        )?;
+                    }
+                }
+                if postgres_inheritance && columns[position].generated_expr.is_some() {
+                    let conflict = if column_schema.default_expr.is_some()
+                        || serial_type(&column.data_type).is_some()
+                    {
+                        Some("default")
+                    } else if identity_options(column)?.is_some() {
+                        Some("identity")
+                    } else {
+                        None
+                    };
+                    if let Some(conflict) = conflict {
+                        return Err(SqlError::data_exception(
+                            "42611",
+                            format!(
+                                "column \"{}\" inherits from generated column but specifies {conflict}",
+                                column_schema.name
+                            ),
+                            None,
+                        ));
+                    }
+                }
                 Some(position)
             } else {
                 None
@@ -650,6 +700,26 @@ impl<'db> SqlSession<'db> {
                     }
                 });
             }
+            if postgres_inheritance {
+                if let Some(position) = merge_position {
+                    // An explicit DEFAULT NULL also resolves an inherited
+                    // conflict, even though it has no catalog default.
+                    if column_schema.default_expr.is_some()
+                        || column_schema.default_sequence.is_some()
+                    {
+                        inherited_expression_conflicts.remove(&column_schema.name);
+                        if !crate::inheritance::has_inheritable_default(&column_schema) {
+                            column_schema.default_expr = None;
+                            column_schema.default_value = None;
+                        }
+                    } else if crate::inheritance::has_inheritable_default(&columns[position]) {
+                        crate::inheritance::copy_inherited_default(
+                            &columns[position],
+                            &mut column_schema,
+                        );
+                    }
+                }
+            }
             constraints.extend(column_constraints_from_def(
                 &table,
                 column,
@@ -660,6 +730,24 @@ impl<'db> SqlSession<'db> {
                 Some(position) => columns[position] = column_schema,
                 None => columns.push(column_schema),
             }
+        }
+        if let Some(column) = columns
+            .iter()
+            .find(|column| inherited_expression_conflicts.contains(&column.name))
+        {
+            let (conflict, resolution) = if column.generated_expr.is_some() {
+                ("generation expressions", "generation expression")
+            } else {
+                ("default values", "default")
+            };
+            return Err(SqlError::coded(
+                "42611",
+                format!("column \"{}\" inherits conflicting {conflict}", column.name),
+                None,
+                Some(format!(
+                    "To resolve the conflict, specify a {resolution} explicitly."
+                )),
+            ));
         }
         for requested in compression {
             if !columns.iter().any(|column| column.name == requested.column) {
@@ -840,6 +928,13 @@ impl<'db> SqlSession<'db> {
             .as_deref()
             .map(partitioning_schema_from_expr)
             .transpose()?;
+
+        if postgres_inheritance {
+            super::not_null_constraints::validate_created_no_inherit(
+                &rewrite_flags.no_inherit_not_null,
+                &parents,
+            )?;
+        }
 
         let mut schema = TableSchema {
             comment: None,

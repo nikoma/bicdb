@@ -2953,11 +2953,7 @@ pub(crate) fn eval_like_values(
             }
             let value = value.to_cell();
             if value.chars().count() > 1 {
-                return Err(SqlError::data_exception(
-                    "22025",
-                    "invalid escape string",
-                    Some("text".to_string()),
-                ));
+                return Err(invalid_like_escape());
             }
             value.chars().next()
         }
@@ -2969,6 +2965,15 @@ pub(crate) fn eval_like_values(
         escape,
     )?;
     Ok(Some(if negated { !matched } else { matched }))
+}
+
+pub(crate) fn invalid_like_escape() -> SqlError {
+    SqlError::coded(
+        "22025",
+        "invalid escape string",
+        None,
+        Some("Escape string must be empty or one character.".to_string()),
+    )
 }
 
 pub(crate) fn like_matches(
@@ -2988,61 +2993,18 @@ pub(crate) fn like_matches(
         pattern.to_string()
     };
     let value = value.chars().collect::<Vec<_>>();
-    let pattern = pattern.chars().collect::<Vec<_>>();
-    if let Some(escape) = escape {
-        let trailing_escapes = pattern
-            .iter()
-            .rev()
-            .take_while(|character| **character == escape)
-            .count();
-        if trailing_escapes % 2 == 1 {
-            return Err(SqlError::data_exception(
-                "22025",
-                "LIKE pattern must not end with escape character",
-                Some("text".to_string()),
-            ));
-        }
+    if bicdb_core::like_pattern_ends_with_escape(&pattern, escape) {
+        return Err(SqlError::data_exception(
+            "22025",
+            "LIKE pattern must not end with escape character",
+            Some("text".to_string()),
+        ));
     }
+    let pattern = pattern.chars().collect::<Vec<_>>();
     Ok(like_match_chars(&value, &pattern, escape))
 }
 
-pub(crate) fn like_match_chars(value: &[char], pattern: &[char], escape: Option<char>) -> bool {
-    let (mut vi, mut pi) = (0usize, 0usize);
-    let mut star = None::<usize>;
-    let mut star_value = 0usize;
-    while vi < value.len() {
-        if pi < pattern.len() {
-            if Some(pattern[pi]) == escape && pi + 1 < pattern.len() {
-                pi += 1;
-                if pattern[pi] == value[vi] {
-                    vi += 1;
-                    pi += 1;
-                    continue;
-                }
-            } else if pattern[pi] == '_' || pattern[pi] == value[vi] {
-                vi += 1;
-                pi += 1;
-                continue;
-            } else if pattern[pi] == '%' {
-                star = Some(pi);
-                pi += 1;
-                star_value = vi;
-                continue;
-            }
-        }
-        if let Some(star_idx) = star {
-            pi = star_idx + 1;
-            star_value += 1;
-            vi = star_value;
-        } else {
-            return false;
-        }
-    }
-    while pi < pattern.len() && pattern[pi] == '%' {
-        pi += 1;
-    }
-    pi == pattern.len()
-}
+pub(crate) use bicdb_core::like_match_chars;
 
 pub(crate) fn value_ordering(left: &SqlValue, right: &SqlValue) -> Option<Ordering> {
     if let (SqlValue::Composite(left), SqlValue::Composite(right)) = (left, right) {
@@ -3512,12 +3474,7 @@ fn eval_record_aggregate_expr_inner(
             eval_record_aggregate_expr(records, expr, schema)?,
             schema,
         ),
-        Expr::UnaryOp { op, expr }
-            if matches!(
-                op,
-                UnaryOperator::BitwiseNot | UnaryOperator::PGPrefixFactorial
-            ) || is_geometric_unary_operator(op) =>
-        {
+        Expr::UnaryOp { op, expr } if is_builtin_prefix_operator(op) => {
             eval_unary_bit_not_expr_value(
                 op,
                 expr,

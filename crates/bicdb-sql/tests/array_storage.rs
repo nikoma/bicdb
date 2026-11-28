@@ -673,3 +673,107 @@ fn postgres_oidvector_reads_oid_prefixes_and_reports_unconsumed_input() {
         "value \"9999999999 22\" is out of range for type oid"
     );
 }
+
+#[test]
+fn catalog_vector_casts_keep_array_bounds_and_catalog_values() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    {
+        let mut sql = SqlSession::new(&mut db);
+        let result = sql
+            .execute(
+                "SELECT '23 4294967295'::oidvector::int[]::text,
+                    '23 4294967295'::oidvector::bigint[]::text,
+                    '1 -2'::int2vector::smallint[]::text,
+                    array_dims(''::oidvector::oid[]),
+                    array_length(''::oidvector::int[], 1),
+                    array_ndims(''::int2vector::bigint[])",
+            )
+            .unwrap();
+        assert_eq!(
+            result.rows,
+            vec![vec![
+                SqlValue::String("[0:1]={23,-1}".into()),
+                SqlValue::String("[0:1]={23,4294967295}".into()),
+                SqlValue::String("[0:1]={1,-2}".into()),
+                SqlValue::String("[0:-1]".into()),
+                SqlValue::Int(0),
+                SqlValue::Null,
+            ]]
+        );
+        let error = sql
+            .execute("SELECT '23 25'::oidvector::boolean[]")
+            .unwrap_err();
+        assert_eq!(error.sqlstate(), "42846");
+        assert_eq!(
+            error.postgres_message(),
+            "cannot cast type oidvector to boolean[]"
+        );
+
+        sql.execute(
+            "CREATE FUNCTION catalog_vector_args(id int, label text) RETURNS text LANGUAGE SQL RETURN label;
+             CREATE TABLE converted_vectors (id INT PRIMARY KEY, args oid[]);
+             INSERT INTO converted_vectors VALUES (1, ''::oidvector::oid[]), (2, '23 25'::oidvector::oid[]);",
+        ).unwrap();
+        let result = sql
+            .execute(
+                "SELECT a.arg, a.ord
+               FROM pg_catalog.pg_proc AS p,
+                    unnest(p.proargtypes::oid[]) WITH ORDINALITY AS a(arg,ord)
+              WHERE p.proname = 'catalog_vector_args'
+              ORDER BY a.ord",
+            )
+            .unwrap();
+        assert_eq!(
+            result.rows,
+            vec![
+                vec![SqlValue::Int(23), SqlValue::Int(1)],
+                vec![SqlValue::Int(25), SqlValue::Int(2)],
+            ]
+        );
+
+        assert_eq!(
+            sql.execute(
+                "SELECT p.proargtypes::oid[]::text FROM pg_catalog.pg_proc AS p
+                 WHERE p.proname = 'catalog_vector_args'",
+            )
+            .unwrap()
+            .rows,
+            vec![vec![SqlValue::String("[0:1]={23,25}".into())]],
+        );
+        assert_eq!(
+            sql.execute(
+                "SELECT unnest(p.proargtypes::oid[])
+                 FROM (SELECT '23 25'::text AS proargtypes) AS p",
+            )
+            .unwrap_err()
+            .sqlstate(),
+            "22P02",
+        );
+    }
+    drop(db);
+    let mut db = BicDb::open(root.path()).unwrap();
+    let result = SqlSession::new(&mut db)
+        .execute(
+            "SELECT args::text, array_ndims(args), array_lower(args,1), array_upper(args,1)
+           FROM converted_vectors ORDER BY id",
+        )
+        .unwrap();
+    assert_eq!(
+        result.rows,
+        vec![
+            vec![
+                SqlValue::String("{}".into()),
+                SqlValue::Int(1),
+                SqlValue::Int(0),
+                SqlValue::Int(-1)
+            ],
+            vec![
+                SqlValue::String("[0:1]={23,25}".into()),
+                SqlValue::Int(1),
+                SqlValue::Int(0),
+                SqlValue::Int(1)
+            ],
+        ]
+    );
+}

@@ -61,6 +61,10 @@ fn operator_type_list(left: Option<&str>, right: &str) -> String {
 }
 
 fn missing_operator(id: &OperatorRef, qualified: bool) -> SqlError {
+    operator_lookup_error(id, qualified, "operator does not exist")
+}
+
+fn operator_lookup_error(id: &OperatorRef, qualified: bool, message: &str) -> SqlError {
     let name = if qualified {
         format!("{}.{}", id.schema, id.name)
     } else {
@@ -72,13 +76,60 @@ fn missing_operator(id: &OperatorRef, qualified: bool) -> SqlError {
             .unwrap_or_else(|| pg_type.to_string())
     };
     SqlError::undefined_function(match &id.left {
-        Some(left) => format!(
-            "operator does not exist: {} {name} {}",
-            display(left),
-            display(&id.right)
-        ),
-        None => format!("operator does not exist: {name} {}", display(&id.right)),
+        Some(left) => format!("{message}: {} {name} {}", display(left), display(&id.right)),
+        None => format!("{message}: {name} {}", display(&id.right)),
     })
+}
+
+#[derive(Clone, Copy)]
+enum OperatorLink {
+    Commutator,
+    Negator,
+}
+
+impl OperatorLink {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Commutator => "commutator",
+            Self::Negator => "negator",
+        }
+    }
+
+    fn reference(self, operator: &mut OperatorSchema) -> &mut Option<OperatorRef> {
+        match self {
+            Self::Commutator => &mut operator.commutator,
+            Self::Negator => &mut operator.negator,
+        }
+    }
+
+    fn check_existing(self, operator: &mut OperatorSchema, target: &OperatorRef) -> Result<()> {
+        if self
+            .reference(operator)
+            .as_ref()
+            .is_some_and(|existing| existing != target)
+        {
+            return Err(SqlError::data_exception_public(
+                "42P13",
+                format!(
+                    "operator attribute \"{}\" cannot be changed if it has already been set",
+                    self.name()
+                ),
+                None,
+            ));
+        }
+        Ok(())
+    }
+
+    fn already_references(self, operator: &str, previous: &str) -> SqlError {
+        let attribute = self.name();
+        SqlError::data_exception_public(
+            "42P13",
+            format!(
+                "{attribute} operator {operator} is already the {attribute} of operator {previous}"
+            ),
+            None,
+        )
+    }
 }
 
 /// A routine's input argument types (IN, INOUT and VARIADIC), canonical.
@@ -472,12 +523,165 @@ impl SqlSession<'_> {
         Ok(SqlResult::command("CREATE OPERATOR"))
     }
 
-    fn require_operator_owner(&self, operator: &OperatorSchema) -> Result<()> {
-        self.require_object_ownership(
-            &operator.owner(),
-            &format!("operator {}.{}", operator.id.schema, operator.id.name),
-            "change it",
-        )
+    fn require_alter_operator_owner(&self, owner: &str, name: &str) -> Result<()> {
+        if self.current_user_is_superuser()? || self.current_user_holds_role(owner)? {
+            return Ok(());
+        }
+        Err(SqlError::data_exception_public(
+            "42501",
+            format!("must be owner of operator {name}"),
+            None,
+        ))
+    }
+
+    fn alter_operator_link(
+        &self,
+        operator: &mut OperatorSchema,
+        name: &ObjectName,
+        link: OperatorLink,
+        writes: &mut Vec<OperatorSchema>,
+    ) -> Result<()> {
+        let id = operator.id.clone();
+        let (left, right) = match link {
+            OperatorLink::Commutator => (
+                Some(id.right.clone()),
+                id.left.clone().ok_or_else(|| {
+                    SqlError::data_exception_public("XX000", "cache lookup failed for type 0", None)
+                })?,
+            ),
+            OperatorLink::Negator => (id.left.clone(), id.right.clone()),
+        };
+        let (schema, symbol) = split_name(name)?;
+        let role = current_user_from_gucs(&self.session_gucs);
+        let schemas = if let Some(schema) = &schema {
+            if schema != "pg_catalog" && load_namespace(self.db_ref(), schema)?.is_none() {
+                return Err(SqlError::data_exception_public(
+                    "3F000",
+                    format!("schema \"{schema}\" does not exist"),
+                    None,
+                ));
+            }
+            if schema != "pg_catalog" && !role_can_use_schema(self.db_ref(), &role, schema)? {
+                return Err(SqlError::data_exception_public(
+                    "42501",
+                    format!("permission denied for schema {schema}"),
+                    None,
+                ));
+            }
+            vec![schema.clone()]
+        } else {
+            effective_search_path(&self.session_gucs)
+        };
+        let mut target = OperatorRef {
+            schema: schema.clone().unwrap_or_else(|| "public".into()),
+            name: symbol,
+            left,
+            right,
+        };
+        let target_label = if let Some(schema) = &schema {
+            format!("{schema}.{}", target.name)
+        } else {
+            target.name.clone()
+        };
+        let mut selected = None;
+        let mut builtin = None;
+        for namespace in schemas {
+            if namespace != "pg_catalog" && !role_can_use_schema(self.db_ref(), &role, &namespace)?
+            {
+                continue;
+            }
+            target.schema = namespace;
+            if target == id {
+                selected = Some(operator.clone());
+                break;
+            }
+            let from_statement = writes.iter().find(|candidate| candidate.id == target);
+            selected = match from_statement {
+                Some(candidate) => Some(candidate.clone()),
+                None => load_operator(self.db_ref(), &target)?,
+            };
+            if selected.is_some() {
+                break;
+            }
+            if target.schema == "pg_catalog" {
+                builtin = builtin_operators().iter().find(|builtin| {
+                    builtin.name == target.name
+                        && builtin.left == target.left.as_deref()
+                        && builtin.right == target.right
+                });
+                if builtin.is_some() {
+                    break;
+                }
+            }
+        }
+
+        if let Some(builtin) = builtin {
+            self.require_alter_operator_owner(BOOTSTRAP_ROLE_NAME, &target_label)?;
+            link.check_existing(operator, &target)?;
+            let back = match link {
+                OperatorLink::Commutator => builtin.commutator,
+                OperatorLink::Negator => builtin.negator,
+            };
+            if let Some(back) = builtin_operators()
+                .iter()
+                .find(|builtin| builtin.oid == back)
+            {
+                return Err(link.already_references(&target.name, back.name));
+            }
+            return Err(SqlError::Unsupported(
+                "ALTER OPERATOR cannot update built-in operator links".into(),
+            ));
+        }
+
+        let Some(mut other) = selected else {
+            return Err(missing_operator(&target, schema.is_some()));
+        };
+        if other.function.is_none() {
+            return Err(operator_lookup_error(
+                &target,
+                schema.is_some(),
+                "operator is only a shell",
+            ));
+        }
+        self.require_alter_operator_owner(&other.owner(), &target_label)?;
+        if target == id && matches!(link, OperatorLink::Negator) {
+            return Err(SqlError::data_exception_public(
+                "42P13",
+                "operator cannot be its own negator",
+                None,
+            ));
+        }
+        link.check_existing(operator, &target)?;
+        if matches!(link, OperatorLink::Negator)
+            && operator
+                .function
+                .as_ref()
+                .is_some_and(|function| function.result != "bool")
+        {
+            return Err(SqlError::data_exception_public(
+                "42P13",
+                "only boolean operators can have negators",
+                None,
+            ));
+        }
+
+        if target != id {
+            let back = link.reference(&mut other);
+            if let Some(back) = back {
+                if back != &id {
+                    return Err(link.already_references(&target.name, &back.name));
+                }
+            } else {
+                *back = Some(id.clone());
+            }
+            if let Some(existing) = writes.iter_mut().find(|candidate| candidate.id == target) {
+                *existing = other;
+            } else {
+                writes.push(other);
+            }
+        }
+        *link.reference(operator) = Some(target);
+        Ok(())
     }
 
     pub(crate) fn execute_alter_operator(&mut self, alter: &AlterOperator) -> Result<SqlResult> {
@@ -488,7 +692,8 @@ impl SqlSession<'_> {
                     return Err(missing_operator(&id, split_name(&alter.name)?.0.is_some()));
                 }
             };
-        self.require_operator_owner(&operator)?;
+        self.require_alter_operator_owner(&operator.owner(), &operator.id.name)?;
+        let mut writes = Vec::new();
         match &alter.operation {
             AlterOperatorOperation::OwnerTo(owner) => {
                 let current_user = current_user_from_gucs(&self.session_gucs);
@@ -505,6 +710,8 @@ impl SqlSession<'_> {
                 operator.owner = Some(owner);
             }
             AlterOperatorOperation::Set { options } => {
+                let mut commutator = None;
+                let mut negator = None;
                 for option in options {
                     match option {
                         OperatorOption::Restrict(function) => {
@@ -515,12 +722,25 @@ impl SqlSession<'_> {
                         }
                         OperatorOption::Hashes => operator.hashes = true,
                         OperatorOption::Merges => operator.merges = true,
-                        OperatorOption::Commutator(_) | OperatorOption::Negator(_) => {
-                            return Err(SqlError::Unsupported(
-                                "ALTER OPERATOR SET (COMMUTATOR | NEGATOR) is not supported".into(),
-                            ));
-                        }
+                        OperatorOption::Commutator(name) => commutator = Some(name),
+                        OperatorOption::Negator(name) => negator = Some(name),
                     }
+                }
+                if let Some(name) = commutator {
+                    self.alter_operator_link(
+                        &mut operator,
+                        name,
+                        OperatorLink::Commutator,
+                        &mut writes,
+                    )?;
+                }
+                if let Some(name) = negator {
+                    self.alter_operator_link(
+                        &mut operator,
+                        name,
+                        OperatorLink::Negator,
+                        &mut writes,
+                    )?;
                 }
             }
             AlterOperatorOperation::SetSchema { .. } => {
@@ -529,7 +749,11 @@ impl SqlSession<'_> {
                 ));
             }
         }
-        self.store_operator(&operator)?;
+        writes.push(operator);
+        for operator in &writes {
+            self.record_operator_undo(&operator.id)?;
+        }
+        save_operators(self.db_mut()?, &writes)?;
         Ok(SqlResult::command("ALTER OPERATOR"))
     }
 

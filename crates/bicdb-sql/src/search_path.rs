@@ -133,7 +133,7 @@ pub(crate) fn current_catalog_value() -> SqlValue {
 /// unquoted names folded to lower case.
 pub(crate) fn parse_search_path(path: &str, user: &str) -> Vec<String> {
     let mut schemas = Vec::new();
-    for part in path.split(',') {
+    for part in crate::ddl_alter::split_setting_list(path) {
         let part = part.trim();
         if part.is_empty() {
             continue;
@@ -161,6 +161,31 @@ pub(crate) fn parse_search_path(path: &str, user: &str) -> Vec<String> {
         }
     }
     schemas
+}
+
+/// Render a list of SQL SET arguments as a search_path setting string.
+pub(crate) fn render_raw_assignment(value: &str) -> String {
+    crate::ddl_alter::split_setting_list(value)
+        .into_iter()
+        .map(|part| {
+            let part = part.trim();
+            let name = if let Some(quoted) = part
+                .strip_prefix('"')
+                .and_then(|part| part.strip_suffix('"'))
+            {
+                quoted.replace("\"\"", "\"")
+            } else if let Some(literal) = part
+                .strip_prefix('\'')
+                .and_then(|part| part.strip_suffix('\''))
+            {
+                literal.replace("''", "'")
+            } else {
+                part.to_ascii_lowercase()
+            };
+            pg_quote_ident(&name)
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// The schemas unqualified relations bind through, or `None` when binding
@@ -598,6 +623,32 @@ fn insert_at_positions(
 /// when nothing changed (or the text is not ordinary SQL, which then runs as
 /// before).
 pub(crate) fn bind_sql_text(db: &BicDb, sql: &str, path: &[String]) -> Result<Option<String>> {
+    bind_sql_text_with(db, sql, path, |text, _| Ok(text))
+}
+
+/// Rebind a CREATE TABLE that became parseable after a compatibility
+/// rewrite, retaining the bound target for its saved options.
+pub(crate) fn bind_create_table_text(
+    db: &BicDb,
+    sql: &str,
+    path: &[String],
+) -> Result<Option<(String, String)>> {
+    bind_sql_text_with(db, sql, path, |text, statements| {
+        let [Statement::CreateTable(create)] = statements else {
+            return Err(SqlError::InvalidSql(
+                "expected CREATE TABLE after rewrite".into(),
+            ));
+        };
+        Ok((text, relation_name(&create.name)?))
+    })
+}
+
+fn bind_sql_text_with<T>(
+    db: &BicDb,
+    sql: &str,
+    path: &[String],
+    output: impl FnOnce(String, &[Statement]) -> Result<T>,
+) -> Result<Option<T>> {
     // Lock strengths sqlparser lacks become the stronger ones it parses, as
     // statement execution does.
     let weak_locks = rewrite_weak_lock_strengths(sql);
@@ -606,9 +657,18 @@ pub(crate) fn bind_sql_text(db: &BicDb, sql: &str, path: &[String]) -> Result<Op
     let sql = lock_order.as_deref().unwrap_or(sql);
     let top = crate::eval::rewrite_helpers::rewrite_select_top_identifiers(sql);
     let sql = top.as_deref().unwrap_or(sql);
-    let Ok(mut statements) = Parser::parse_sql(&sqlparser::dialect::PostgreSqlDialect {}, sql)
-    else {
-        return Ok(None);
+    let dialect = sqlparser::dialect::PostgreSqlDialect {};
+    let mut statements = match Parser::parse_sql(&dialect, sql) {
+        Ok(statements) => statements,
+        Err(_) => {
+            let Some(masked) = crate::conflict_inference::mask_for_binding(sql) else {
+                return Ok(None);
+            };
+            let Ok(statements) = Parser::parse_sql(&dialect, &masked) else {
+                return Ok(None);
+            };
+            statements
+        }
     };
     // Routine bodies bind when they execute, with the caller's path; DDL
     // that defines them is left verbatim.
@@ -639,9 +699,8 @@ pub(crate) fn bind_sql_text(db: &BicDb, sql: &str, path: &[String]) -> Result<Op
     }
     // Insert qualifiers into the original text: re-rendering the AST is not
     // a faithful round trip (string literals with doubled quotes lost one).
-    insert_at_positions(sql, binder.insertions)
-        .map(Some)
-        .ok_or_else(unbindable)
+    let text = insert_at_positions(sql, binder.insertions).ok_or_else(unbindable)?;
+    output(text, &statements).map(Some)
 }
 
 /// Binds every SQL statement and expression of a routine body, before its

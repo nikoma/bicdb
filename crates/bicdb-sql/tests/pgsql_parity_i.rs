@@ -322,3 +322,506 @@ fn text_search_catalog_functions_handle_lateral_arguments_and_typed_queries() {
         assert_eq!(error.sqlstate(), "22023", "{sql}: {error:?}");
     }
 }
+
+#[test]
+fn create_table_inheritance_merges_parent_defaults_and_notices() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = open(root.path());
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE TABLE first_parent (x int, y int DEFAULT (3));
+             CREATE TABLE second_parent (x int DEFAULT 8, y int DEFAULT 3);
+             CREATE TABLE conflict_parent (x int DEFAULT 9);
+             CREATE TABLE null_parent (x int DEFAULT NULL::int);
+             CREATE TABLE computed_null_parent (x int DEFAULT NULL::int + 1);
+             CREATE TABLE wrong_type_parent (x text)",
+        )
+        .unwrap();
+
+    let notices = session
+        .execute("CREATE TABLE inherited_child (x int) INHERITS (first_parent, second_parent)")
+        .unwrap()
+        .notices;
+    assert_eq!(
+        notices
+            .iter()
+            .map(|notice| notice.message.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "merging multiple inherited definitions of column \"x\"",
+            "merging multiple inherited definitions of column \"y\"",
+            "merging column \"x\" with inherited definition",
+        ]
+    );
+    assert_eq!(
+        rows(
+            &mut session,
+            "INSERT INTO inherited_child DEFAULT VALUES RETURNING x,y"
+        ),
+        ["8|3"]
+    );
+
+    let error = session
+        .execute("CREATE TABLE conflicting_child () INHERITS (second_parent, conflict_parent)")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42611");
+    assert_eq!(error.notices().len(), 1);
+    session
+        .execute("CREATE TABLE conflicting_child (x int DEFAULT NULL) INHERITS (second_parent, conflict_parent)")
+        .unwrap();
+    assert_eq!(
+        rows(
+            &mut session,
+            "INSERT INTO conflicting_child DEFAULT VALUES RETURNING x,y"
+        ),
+        ["NULL|3"]
+    );
+    assert_eq!(
+        rows(&mut session, "SELECT atthasdef FROM pg_attribute WHERE attrelid = 'conflicting_child'::regclass AND attname = 'x'"),
+        ["f"]
+    );
+
+    session
+        .execute("CREATE TABLE non_null_default_child () INHERITS (null_parent, second_parent)")
+        .unwrap();
+    assert_eq!(
+        rows(
+            &mut session,
+            "INSERT INTO non_null_default_child DEFAULT VALUES RETURNING x,y"
+        ),
+        ["8|3"]
+    );
+
+    let error = session
+        .execute(
+            "CREATE TABLE computed_null_child () INHERITS (computed_null_parent, second_parent)",
+        )
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42611");
+
+    let error = session
+        .execute("CREATE TABLE wrong_type_child () INHERITS (second_parent, wrong_type_parent)")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42804");
+    assert_eq!(error.notices().len(), 1);
+}
+
+#[test]
+fn inheritance_checks_named_constraints_by_definition_and_validation_state() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = open(root.path());
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE TABLE check_parent (a int, CONSTRAINT ck CHECK (a > 0));
+             CREATE TABLE equivalent_parent (a int, CONSTRAINT ck CHECK ((A > 0)));
+             CREATE TABLE different_parent (a int, CONSTRAINT ck CHECK (a > 1));
+             CREATE TABLE local_check (a int, CONSTRAINT ck CHECK (a > 0) NO INHERIT);
+             CREATE TABLE unvalidated_parent (a int);
+             ALTER TABLE unvalidated_parent ADD CONSTRAINT ck CHECK (a > 0) NOT VALID",
+        )
+        .unwrap();
+    session
+        .execute("CREATE TABLE common_child () INHERITS (check_parent, equivalent_parent)")
+        .unwrap();
+    assert_eq!(
+        rows(&mut session, "SELECT conislocal, coninhcount, convalidated FROM pg_constraint WHERE conrelid = 'common_child'::regclass AND conname = 'ck'"),
+        ["f|2|t"]
+    );
+    session
+        .execute("CREATE TABLE validated_child () INHERITS (unvalidated_parent)")
+        .unwrap();
+    assert_eq!(
+        rows(&mut session, "SELECT convalidated FROM pg_constraint WHERE conrelid = 'validated_child'::regclass AND conname = 'ck'"),
+        ["t"]
+    );
+    for (statement, state) in [
+        (
+            "CREATE TABLE conflicting_child () INHERITS (check_parent, different_parent)",
+            "42710",
+        ),
+        ("ALTER TABLE different_parent INHERIT check_parent", "42804"),
+        ("ALTER TABLE local_check INHERIT check_parent", "42P17"),
+        (
+            "ALTER TABLE unvalidated_parent INHERIT check_parent",
+            "42P17",
+        ),
+    ] {
+        assert_eq!(session.execute(statement).unwrap_err().sqlstate(), state);
+    }
+}
+
+#[test]
+fn inheritance_enforces_column_collations_and_generation_kinds() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = open(root.path());
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE TABLE collate_c (v text COLLATE \"C\");
+             CREATE TABLE collate_posix (v text COLLATE \"POSIX\");
+             CREATE TABLE collate_implicit (v text);
+             CREATE TABLE generated_a (x int, y int GENERATED ALWAYS AS (x + 1) STORED);
+             CREATE TABLE generated_b (x int, y int GENERATED ALWAYS AS (x + 2) STORED);
+             CREATE TABLE generated_v (x int, y int GENERATED ALWAYS AS (x + 1) VIRTUAL);
+             CREATE TABLE generated_plain (x int, y int)",
+        )
+        .unwrap();
+    for (statement, state) in [
+        (
+            "CREATE TABLE clash () INHERITS (collate_c, collate_posix)",
+            "42P21",
+        ),
+        ("CREATE TABLE clash (v text) INHERITS (collate_c)", "42P21"),
+        ("ALTER TABLE collate_implicit INHERIT collate_c", "42P21"),
+        (
+            "CREATE TABLE clash () INHERITS (generated_a, generated_b)",
+            "42611",
+        ),
+        (
+            "CREATE TABLE clash () INHERITS (generated_a, generated_v)",
+            "42804",
+        ),
+        (
+            "CREATE TABLE clash () INHERITS (generated_a, generated_plain)",
+            "42804",
+        ),
+        (
+            "CREATE TABLE clash (y int DEFAULT 4) INHERITS (generated_a)",
+            "42611",
+        ),
+        ("ALTER TABLE generated_v INHERIT generated_a", "42804"),
+    ] {
+        let error = session.execute(statement).unwrap_err();
+        assert_eq!(error.sqlstate(), state, "{statement}: {error}");
+    }
+
+    let notices = session
+        .execute("CREATE TABLE generated_child (y int GENERATED ALWAYS AS (x + 3) STORED) INHERITS (generated_a, generated_b)")
+        .unwrap()
+        .notices;
+    assert_eq!(
+        notices.last().unwrap().message,
+        "moving and merging column \"y\" with inherited definition"
+    );
+    assert_eq!(
+        rows(
+            &mut session,
+            "INSERT INTO generated_child (x) VALUES (6) RETURNING y"
+        ),
+        ["9"]
+    );
+    session
+        .execute("CREATE TABLE virtual_child (y int) INHERITS (generated_v)")
+        .unwrap();
+    assert_eq!(
+        rows(&mut session, "SELECT attgenerated FROM pg_attribute WHERE attrelid = 'virtual_child'::regclass AND attname = 'y'"),
+        ["v"]
+    );
+}
+
+#[test]
+fn pg_attribute_keeps_column_inheritance_provenance_through_rollback_and_reopen() {
+    fn attributes(session: &mut SqlSession<'_>, relation: &str) -> Vec<String> {
+        rows(
+            session,
+            &format!(
+                "SELECT attname, attislocal, attinhcount FROM pg_attribute
+                 WHERE attrelid = '{relation}'::regclass AND attnum > 0 ORDER BY attnum"
+            ),
+        )
+    }
+
+    let root = tempfile::tempdir().unwrap();
+    let mut db = open(root.path());
+    {
+        let mut session = SqlSession::new(&mut db);
+        session
+            .execute(
+                "CREATE TABLE origin_a (a int, b int);
+                 CREATE TABLE origin_b (a int, c int);
+                 CREATE TABLE declared_child (a int, d int) INHERITS (origin_a, origin_b);
+                 CREATE TABLE inherited_child () INHERITS (origin_a, origin_b);
+                 CREATE TABLE attached_child (a int, b int);
+                 ALTER TABLE attached_child INHERIT origin_a",
+            )
+            .unwrap();
+        assert_eq!(
+            attributes(&mut session, "declared_child"),
+            ["a|t|2", "b|f|1", "c|f|1", "d|t|0"]
+        );
+        assert_eq!(
+            attributes(&mut session, "inherited_child"),
+            ["a|f|2", "b|f|1", "c|f|1"]
+        );
+        assert_eq!(
+            attributes(&mut session, "attached_child"),
+            ["a|t|1", "b|t|1"]
+        );
+
+        session
+            .execute("BEGIN; SAVEPOINT original; ALTER TABLE inherited_child NO INHERIT origin_a")
+            .unwrap();
+        assert_eq!(
+            attributes(&mut session, "inherited_child"),
+            ["a|f|1", "b|t|0", "c|f|1"]
+        );
+        session
+            .execute("ROLLBACK TO SAVEPOINT original; COMMIT")
+            .unwrap();
+        assert_eq!(
+            attributes(&mut session, "inherited_child"),
+            ["a|f|2", "b|f|1", "c|f|1"]
+        );
+        session
+            .execute(
+                "ALTER TABLE inherited_child NO INHERIT origin_a;
+                 ALTER TABLE inherited_child INHERIT origin_a",
+            )
+            .unwrap();
+        assert_eq!(
+            attributes(&mut session, "inherited_child"),
+            ["a|f|2", "b|t|1", "c|f|1"]
+        );
+    }
+
+    db.close().unwrap();
+    let mut db = open(root.path());
+    let mut session = SqlSession::new(&mut db);
+    assert_eq!(
+        attributes(&mut session, "inherited_child"),
+        ["a|f|2", "b|t|1", "c|f|1"]
+    );
+}
+
+#[test]
+fn inheritance_respects_not_null_no_inherit_and_validation_state() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = open(root.path());
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE TABLE required_parent (a int, b int NOT NULL);
+             CREATE TABLE ordinary_parent (a int, b int);
+             CREATE TABLE local_parent (a int, b int NOT NULL NO INHERIT);
+             CREATE TABLE nullable_child (a int, b int);
+             CREATE TABLE local_child (a int, b int NOT NULL NO INHERIT);
+             CREATE TABLE unvalidated_child (a int, b int);
+             ALTER TABLE unvalidated_child ADD NOT NULL b NOT VALID",
+        )
+        .unwrap();
+
+    for statement in [
+        "CREATE TABLE rejected_child (b int NOT NULL NO INHERIT) INHERITS (required_parent)",
+        "CREATE TABLE rejected_child (CONSTRAINT local_nn NOT NULL b NO INHERIT) INHERITS (required_parent)",
+        "CREATE TABLE rejected_child (b int NOT NULL NO INHERIT) INHERITS (ordinary_parent,required_parent)",
+    ] {
+        let error = session.execute(statement).unwrap_err();
+        assert_eq!(error.sqlstate(), "42804");
+        assert_eq!(
+            error.postgres_message(),
+            "cannot define not-null constraint with NO INHERIT on column \"b\""
+        );
+        assert_eq!(
+            rows(&mut session, "SELECT to_regclass('rejected_child') IS NULL"),
+            ["t"]
+        );
+    }
+
+    session
+        .execute("ALTER TABLE nullable_child INHERIT local_parent")
+        .unwrap();
+    assert_eq!(
+        rows(
+            &mut session,
+            "INSERT INTO nullable_child (b) VALUES(NULL) RETURNING b"
+        ),
+        ["NULL"]
+    );
+    for (relation, state) in [
+        ("nullable_child", "42804"),
+        ("local_child", "42P17"),
+        ("unvalidated_child", "42P17"),
+    ] {
+        let error = session
+            .execute(&format!("ALTER TABLE {relation} INHERIT required_parent"))
+            .unwrap_err();
+        assert_eq!(error.sqlstate(), state);
+    }
+
+    session
+        .execute(
+            "CREATE TABLE accepted_child (b int NOT NULL NO INHERIT) INHERITS (local_parent);
+             CREATE TABLE unrequired_grandchild () INHERITS (accepted_child)",
+        )
+        .unwrap();
+    assert_eq!(
+        rows(&mut session, "SELECT attnotnull FROM pg_attribute WHERE attrelid='unrequired_grandchild'::regclass AND attname='b'"),
+        ["f"]
+    );
+}
+
+#[test]
+fn inherited_defaults_ignore_identity_casts_after_catalog_reopen() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = open(root.path());
+    {
+        let mut session = SqlSession::new(&mut db);
+        session
+            .execute(
+                "CREATE TABLE exact_plain (a int DEFAULT 1, b bool DEFAULT true);
+                 CREATE TABLE exact_cast (a int DEFAULT CAST((1) AS integer), b bool DEFAULT true::boolean);
+                 CREATE TABLE different_numeric (a int DEFAULT 1.0);
+                 CREATE TABLE different_unary (a int DEFAULT +1);
+                 CREATE TABLE different_operator (a int DEFAULT 1 + 0);
+                 CREATE SCHEMA \"quoted.schema\";
+                 CREATE TABLE \"quoted.schema\".\"Parent One\" (\"Test Col\" int DEFAULT 2);
+                 CREATE TABLE \"quoted.schema\".\"Parent Two\" (\"Test Col\" int DEFAULT 2::int)",
+            )
+            .unwrap();
+    }
+    db.close().unwrap();
+
+    let mut db = open(root.path());
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE TABLE cast_child () INHERITS (exact_cast,exact_plain)")
+        .unwrap();
+    assert_eq!(
+        rows(
+            &mut session,
+            "INSERT INTO cast_child DEFAULT VALUES RETURNING a,b"
+        ),
+        ["1|t"]
+    );
+    for parent in ["different_numeric", "different_unary", "different_operator"] {
+        let statement =
+            format!("CREATE TABLE rejected_cast_child () INHERITS (exact_plain,{parent})");
+        assert_eq!(session.execute(&statement).unwrap_err().sqlstate(), "42611");
+    }
+
+    session
+        .execute(
+            "CREATE TABLE \"quoted.schema\".\"Child\" (\"Test Col\" int DEFAULT 7)
+             INHERITS (\"quoted.schema\".\"Parent One\",\"quoted.schema\".\"Parent Two\")",
+        )
+        .unwrap();
+    assert_eq!(
+        rows(
+            &mut session,
+            "INSERT INTO \"quoted.schema\".\"Child\" DEFAULT VALUES RETURNING \"Test Col\""
+        ),
+        ["7"]
+    );
+}
+
+#[test]
+fn local_generated_overrides_preserve_the_inherited_generation_kind() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = open(root.path());
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE TABLE stored_parent (x int, y int GENERATED ALWAYS AS (x+1) STORED);
+             CREATE TABLE virtual_parent (x int, y int GENERATED ALWAYS AS (x+1) VIRTUAL)",
+        )
+        .unwrap();
+
+    for statement in [
+        "CREATE TABLE refused (y int GENERATED ALWAYS AS (x+2) VIRTUAL) INHERITS (stored_parent)",
+        "CREATE TABLE refused (y int GENERATED ALWAYS AS (x+2) STORED) INHERITS (virtual_parent)",
+        "CREATE TABLE refused (y int GENERATED ALWAYS AS (x+2)) INHERITS (stored_parent)",
+    ] {
+        let error = session.execute(statement).unwrap_err();
+        assert_eq!(error.sqlstate(), "42611");
+        assert_eq!(
+            error.postgres_message(),
+            "column \"y\" inherits from generated column of different kind"
+        );
+        assert_eq!(
+            rows(&mut session, "SELECT to_regclass('refused') IS NULL"),
+            ["t"]
+        );
+    }
+    session
+        .execute(
+            "CREATE TABLE stored_child (y int GENERATED ALWAYS AS (x+2) STORED) INHERITS (stored_parent);
+             CREATE TABLE virtual_child (y int GENERATED ALWAYS AS (x+2)) INHERITS (virtual_parent)",
+        )
+        .unwrap();
+    for (table, kind) in [("stored_child", "s"), ("virtual_child", "v")] {
+        assert_eq!(
+            rows(
+                &mut session,
+                &format!("INSERT INTO {table}(x) VALUES (2) RETURNING y")
+            ),
+            ["4"]
+        );
+        assert_eq!(
+            rows(
+                &mut session,
+                &format!("SELECT attgenerated FROM pg_attribute WHERE attrelid='{table}'::regclass AND attname='y'")
+            ),
+            [kind]
+        );
+    }
+}
+
+#[test]
+fn rewritten_generated_inheritance_binds_the_target_and_parent_in_search_path() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = open(root.path());
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE TABLE public.gen_parent (a int, b int GENERATED ALWAYS AS (a+1) VIRTUAL);
+             CREATE SCHEMA \"gen.schema\";
+             SET search_path = \"gen.schema\", public;
+             CREATE TABLE gen_parent (a int, b int GENERATED ALWAYS AS (a+1) STORED)",
+        )
+        .unwrap();
+
+    let error = session
+        .execute(
+            "CREATE TABLE refused (b int GENERATED ALWAYS AS (a+2) VIRTUAL) INHERITS (gen_parent)",
+        )
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42611");
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT to_regclass('\"gen.schema\".refused') IS NULL, to_regclass('public.refused') IS NULL"
+        ),
+        ["t|t"]
+    );
+
+    session
+        .execute(
+            "CREATE TABLE raw_parent (a int, b int GENERATED ALWAYS AS (a+1) VIRTUAL);
+             CREATE TABLE raw_child (b int GENERATED ALWAYS AS (a+2)) INHERITS (raw_parent);
+             CREATE TABLE public.explicit_child (b int GENERATED ALWAYS AS (a+3) VIRTUAL) INHERITS (public.gen_parent)",
+        )
+        .unwrap();
+    assert_eq!(
+        rows(
+            &mut session,
+            "SELECT to_regclass('public.raw_child') IS NULL, to_regclass('\"gen.schema\".raw_child') IS NOT NULL"
+        ),
+        ["t|t"]
+    );
+    assert_eq!(
+        rows(
+            &mut session,
+            "INSERT INTO \"gen.schema\".raw_child(a) VALUES(2) RETURNING b"
+        ),
+        ["4"]
+    );
+    assert_eq!(
+        rows(
+            &mut session,
+            "INSERT INTO public.explicit_child(a) VALUES(2) RETURNING b"
+        ),
+        ["5"]
+    );
+}

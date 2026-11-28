@@ -7,6 +7,59 @@
 use crate::*;
 use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
 
+#[derive(Default)]
+pub(crate) struct CreateTableRewriteFlags {
+    pub(crate) no_inherit_not_null: Vec<String>,
+    pub(crate) virtual_columns: Vec<String>,
+}
+
+thread_local! {
+    static CREATE_TABLE_REWRITES: RefCell<Vec<(String, CreateTableRewriteFlags)>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Keep SQL-only options visible to the table definition before publication.
+pub(crate) struct CreateTableRewriteScope(bool);
+
+impl CreateTableRewriteScope {
+    pub(crate) fn enter(relation: &str, flags: CreateTableRewriteFlags) -> Self {
+        if flags.no_inherit_not_null.is_empty() && flags.virtual_columns.is_empty() {
+            return Self(false);
+        }
+        CREATE_TABLE_REWRITES.with(|active| {
+            active.borrow_mut().push((relation.to_string(), flags));
+        });
+        Self(true)
+    }
+}
+
+impl Drop for CreateTableRewriteScope {
+    fn drop(&mut self) {
+        if self.0 {
+            CREATE_TABLE_REWRITES.with(|active| active.borrow_mut().pop());
+        }
+    }
+}
+
+pub(crate) fn current_create_table_flags(name: &ObjectName) -> Result<CreateTableRewriteFlags> {
+    CREATE_TABLE_REWRITES.with(|active| {
+        let active = active.borrow();
+        let mut flags = CreateTableRewriteFlags::default();
+        if active.is_empty() {
+            return Ok(flags);
+        }
+        let relation = relation_name(name)?;
+        for (_, scoped) in active.iter().filter(|(table, _)| *table == relation) {
+            flags
+                .no_inherit_not_null
+                .extend(scoped.no_inherit_not_null.iter().cloned());
+            flags
+                .virtual_columns
+                .extend(scoped.virtual_columns.iter().cloned());
+        }
+        Ok(flags)
+    })
+}
+
 #[derive(Debug, PartialEq)]
 pub(crate) enum PersistenceDdl {
     /// A `CREATE TABLE` or `ALTER TABLE ... ADD COLUMN` rewritten into a form
@@ -62,7 +115,7 @@ fn relation_at(tokens: &[Token], significant: &[usize], at: usize) -> Option<(St
         parts.push(identifier(&tokens[*significant.get(next + 1)?])?);
         next += 2;
     }
-    Some((parts.join("."), next))
+    Some((relation_name_from_parts(&parts).ok()?, next))
 }
 
 pub(crate) fn parse_persistence_ddl(sql: &str) -> Result<Option<PersistenceDdl>> {

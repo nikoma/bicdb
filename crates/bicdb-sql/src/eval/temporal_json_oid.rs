@@ -1156,16 +1156,35 @@ pub(crate) fn postgres_timestamptz_input_error(
 
 pub(crate) fn postgres_interval_input_error(value: &str, error: PgCanonicalValueError) -> SqlError {
     match error {
+        PgCanonicalValueError::IntervalOutOfRange => {
+            SqlError::data_exception("22008", "interval out of range", None)
+        }
         PgCanonicalValueError::TemporalOverflow(_)
         | PgCanonicalValueError::TemporalFieldOverflow(_) => SqlError::data_exception(
             "22015",
             format!("interval field value out of range: \"{value}\""),
-            Some("interval".to_string()),
+            None,
         ),
         _ => SqlError::invalid_datetime_format(format!(
             "invalid input syntax for type interval: \"{value}\""
         )),
     }
+}
+
+pub(crate) fn parse_postgres_interval_with_typmod(
+    input: &str,
+    fields: Option<&str>,
+    precision: Option<u8>,
+) -> Result<PgInterval> {
+    PgInterval::from_postgres_text_with_field_range(input, fields)
+        .map_err(|error| postgres_interval_input_error(input, error))?
+        .with_typmod(fields, precision)
+        .map_err(|error| match error {
+            PgCanonicalValueError::TemporalOverflow("interval") => {
+                SqlError::data_exception("22008", "interval out of range", None)
+            }
+            _ => postgres_interval_input_error(input, error),
+        })
 }
 
 pub(crate) fn unknown_timestamp_timezone(value: &str) -> Option<&str> {
@@ -3722,13 +3741,7 @@ pub(crate) fn eval_date_interval_arithmetic(
             BinaryOperator::Minus => left_interval.checked_sub(right_interval),
             _ => return Ok(None),
         }
-        .map_err(|_| {
-            SqlError::data_exception(
-                "22015",
-                "interval out of range",
-                Some("interval".to_string()),
-            )
-        })?;
+        .map_err(|error| postgres_interval_input_error(left, error))?;
         return Ok(Some(SqlValue::String(render_interval(result))));
     }
     // An interval computed at run time (`interval '1' month * n`) reaches
@@ -3925,10 +3938,12 @@ where
             "interval precision must be between 0 and 6",
         ));
     }
-    PgInterval::from_postgres_text_with_field_range(&value, fields.as_deref())
-        .and_then(|value| value.with_typmod(fields.as_deref(), precision.map(|value| value as u8)))
-        .map(|value| SqlValue::String(render_interval(value)))
-        .map_err(|error| postgres_interval_input_error(&value, error))
+    parse_postgres_interval_with_typmod(
+        &value,
+        fields.as_deref(),
+        precision.map(|value| value as u8),
+    )
+    .map(|value| SqlValue::String(render_interval(value)))
 }
 
 pub(crate) fn add_interval_to_value(value: &str, seconds: i64) -> Result<SqlValue> {

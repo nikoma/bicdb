@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-app-host"
-version = "1.0.588"
+version = "1.0.612"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -16,9 +16,9 @@ path = "src/main.rs"
 anyhow.workspace = true
 axum.workspace = true
 base64.workspace = true
-bicdb-core = { path = "../bicdb-core", version = "=1.0.588" }
-bicdb-pgwire = { path = "../bicdb-pgwire", version = "=1.0.588", default-features = false }
-bicdb-sql = { path = "../bicdb-sql", version = "=1.0.588", default-features = false }
+bicdb-core = { path = "../bicdb-core", version = "=1.0.612" }
+bicdb-pgwire = { path = "../bicdb-pgwire", version = "=1.0.612", default-features = false }
+bicdb-sql = { path = "../bicdb-sql", version = "=1.0.612", default-features = false }
 clap.workspace = true
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 libc.workspace = true

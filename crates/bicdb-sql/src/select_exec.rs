@@ -4161,9 +4161,10 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
         "pg_amop" => Ok(pg_amop_rows()),
         "pg_amproc" => Ok(pg_amproc_rows()),
         "pg_operator" => crate::pg_operators::pg_operator_rows(db),
-        "pg_ts_config" | "pg_ts_config_map" | "pg_ts_dict" | "pg_ts_parser" | "pg_ts_template" => {
-            Ok(Vec::new())
+        "pg_ts_config" | "pg_ts_dict" | "pg_ts_parser" | "pg_ts_template" => {
+            Ok(crate::fts::catalog::rows(table))
         }
+        "pg_ts_config_map" => Ok(Vec::new()),
         "pg_default_acl" => pg_default_acl_rows(db),
         "pg_tablespace" => Ok(pg_tablespace_rows()),
         "pg_auth_members" => pg_auth_members_rows(db),
@@ -5343,6 +5344,38 @@ pub(crate) fn virtual_table_column_types(table: &str) -> Option<Vec<(String, Opt
     let table = table.strip_prefix("pg_catalog.").unwrap_or(table);
     let columns: &[(&str, &str)] = match table {
         "pg_event_trigger" => &crate::session::PG_EVENT_TRIGGER_COLUMNS,
+        "pg_ts_config" => &[
+            ("oid", "oid"),
+            ("cfgname", "name"),
+            ("cfgnamespace", "oid"),
+            ("cfgowner", "oid"),
+            ("cfgparser", "oid"),
+        ],
+        "pg_ts_dict" => &[
+            ("oid", "oid"),
+            ("dictname", "name"),
+            ("dictnamespace", "oid"),
+            ("dictowner", "oid"),
+            ("dicttemplate", "oid"),
+            ("dictinitoption", "text"),
+        ],
+        "pg_ts_template" => &[
+            ("oid", "oid"),
+            ("tmplname", "name"),
+            ("tmplnamespace", "oid"),
+            ("tmplinit", "regproc"),
+            ("tmpllexize", "regproc"),
+        ],
+        "pg_ts_parser" => &[
+            ("oid", "oid"),
+            ("prsname", "name"),
+            ("prsnamespace", "oid"),
+            ("prsstart", "regproc"),
+            ("prstoken", "regproc"),
+            ("prsend", "regproc"),
+            ("prsheadline", "regproc"),
+            ("prslextype", "regproc"),
+        ],
         "information_schema.tables" => &[
             ("table_catalog", "name"),
             ("table_schema", "name"),

@@ -14,6 +14,41 @@ fn tsquery_sql_value_serializes_as_postgres_text() {
 }
 
 #[test]
+fn builtin_text_search_catalogs_resolve_supported_names_and_stored_ids() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let cases = [
+        (
+            "SELECT c.oid::bigint FROM pg_ts_config c WHERE c.cfgname = 'english'",
+            "810102",
+        ),
+        ("SELECT 'english'::regconfig::oid::bigint", "810102"),
+        ("SELECT 'yiddish'::regconfig::oid::bigint", "13292"),
+        ("SELECT 'yiddish_stem'::regdictionary::oid::bigint", "13291"),
+        (
+            "SELECT ts_lexize(810202::regdictionary, 'running')::text",
+            "{run}",
+        ),
+        (
+            "SELECT dictinitoption FROM pg_catalog.pg_ts_dict WHERE dictname = 'english_stem'",
+            "language = 'english', stopwords = 'english'",
+        ),
+        (
+            "SELECT prsstart::text FROM pg_ts_parser WHERE prsname = 'default'",
+            "prsd_start",
+        ),
+        (
+            "SELECT tmpllexize::text FROM pg_ts_template WHERE tmplname = 'snowball'",
+            "dsnowball_lexize",
+        ),
+    ];
+    for (sql, expected) in cases {
+        assert_eq!(one(&mut session, sql), expected, "{sql}");
+    }
+}
+
+#[test]
 fn tsvector_storage_functions_and_comparison_match_postgres() {
     let dir = tempfile::tempdir().unwrap();
     {

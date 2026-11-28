@@ -1072,6 +1072,15 @@ fn xml_mapping_serializes_query_rows_and_does_not_execute_writes() {
         )
         .unwrap_err();
     assert_eq!(error.sqlstate(), "0A000");
+    let error = session
+        .execute(
+            "SELECT query_to_xml('WITH w AS (
+                INSERT INTO \"t-xml\" (id) VALUES (3) RETURNING id
+             ) SELECT id FROM w', false, false, '')",
+        )
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "0A000");
+    assert!(error.to_string().starts_with("SELECT is not allowed"));
     let result = session.execute("SELECT count(*) FROM \"t-xml\"").unwrap();
     assert_eq!(result.rows[0][0].to_cell(), "1");
 }

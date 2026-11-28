@@ -89,6 +89,23 @@ impl SqlEngine<'_> {
         for command in split_sql_statements(&query) {
             let statements = parse_statements(&command)?;
             if let ControlFlow::Break(operation) = statements.visit(&mut ReadOnlyXmlQuery) {
+                let operation = match statements.as_slice() {
+                    [Statement::Query(query)]
+                        if matches!(
+                            operation.as_str(),
+                            "INSERT" | "UPDATE" | "DELETE" | "MERGE"
+                        ) && !matches!(
+                            query.body.as_ref(),
+                            SetExpr::Insert(_)
+                                | SetExpr::Update(_)
+                                | SetExpr::Delete(_)
+                                | SetExpr::Merge(_)
+                        ) =>
+                    {
+                        "SELECT"
+                    }
+                    _ => operation.as_str(),
+                };
                 return Err(SqlError::data_exception_public(
                     "0A000",
                     format!("{operation} is not allowed in a non-volatile function"),

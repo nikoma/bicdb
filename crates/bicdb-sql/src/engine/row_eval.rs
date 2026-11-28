@@ -2125,6 +2125,9 @@ impl<'db> SqlEngine<'db> {
         if let Some(value) = eval_json_function_call_value(function, &args)? {
             return Ok(value);
         }
+        if let Some(value) = self.eval_xml_mapping(&name, &args)? {
+            return Ok(value);
+        }
         if let Some(value) = crate::eval_xml_function_value(&name, &args, Some(&arg_types))? {
             return Ok(value);
         }
@@ -3900,6 +3903,9 @@ impl<'db> SqlEngine<'db> {
             return Ok(value);
         }
         if let Some(value) = eval_json_function_call_value(function, &args)? {
+            return Ok(value);
+        }
+        if let Some(value) = self.eval_xml_mapping(&name, &args)? {
             return Ok(value);
         }
         if let Some(value) = crate::eval_xml_function_value(&name, &args, Some(&arg_types))? {

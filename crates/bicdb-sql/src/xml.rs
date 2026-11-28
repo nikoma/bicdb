@@ -1641,6 +1641,61 @@ pub(crate) fn eval_xml_function_value(
     Ok(Some(value))
 }
 
+pub(crate) fn map_query_rows(
+    result: &crate::SqlResult,
+    document_name: &str,
+    row_name: &str,
+    nulls: bool,
+    forest: bool,
+    namespace: &str,
+    check_cancellation: impl Fn() -> Result<()>,
+) -> Result<String> {
+    use std::fmt::Write as _;
+
+    let document = map_sql_identifier_to_xml_name(document_name);
+    let row_name = map_sql_identifier_to_xml_name(row_name);
+    let columns = result
+        .columns
+        .iter()
+        .map(|label| map_sql_identifier_to_xml_name(label))
+        .collect::<Vec<_>>();
+    let namespace = if namespace.is_empty() {
+        String::new()
+    } else {
+        format!(" xmlns=\"{namespace}\"")
+    };
+    let attributes =
+        format!(" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"{namespace}",);
+
+    let mut output = String::new();
+    if !forest {
+        write!(output, "<{document}{attributes}>\n\n").unwrap();
+    }
+    for (index, row) in result.rows.iter().enumerate() {
+        if index % 1024 == 0 {
+            check_cancellation()?;
+        }
+        let row_attributes = if forest { attributes.as_str() } else { "" };
+        writeln!(output, "<{row_name}{row_attributes}>").unwrap();
+        for (index, (value, column)) in row.iter().zip(&columns).enumerate() {
+            if matches!(value, SqlValue::Null) {
+                if nulls {
+                    writeln!(output, "  <{column} xsi:nil=\"true\"/>").unwrap();
+                }
+            } else {
+                let pg_type = result.column_types.get(index).and_then(Option::as_deref);
+                let content = xml_content(value, pg_type)?;
+                writeln!(output, "  <{column}>{content}</{column}>").unwrap();
+            }
+        }
+        write!(output, "</{row_name}>\n\n").unwrap();
+    }
+    if !forest {
+        writeln!(output, "</{document}>").unwrap();
+    }
+    Ok(output)
+}
+
 pub(crate) fn xml_function_pg_type(name: &str) -> Option<&'static str> {
     let name = name
         .rsplit('.')
@@ -1661,6 +1716,8 @@ pub(crate) fn xml_function_pg_type(name: &str) -> Option<&'static str> {
         "xml_send" => Some("bytea"),
         "xml_out" => Some("cstring"),
         "xmlconcat"
+        | "table_to_xml"
+        | "query_to_xml"
         | "xmlcomment"
         | "xmltext"
         | "xml_in"

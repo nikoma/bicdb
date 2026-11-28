@@ -1025,3 +1025,53 @@ fn xml_document_mode_applies_to_assignment_and_copy_input() {
         ]
     );
 }
+
+#[test]
+fn xml_mapping_serializes_query_rows_and_does_not_execute_writes() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = bicdb_core::BicDb::open(root.path()).unwrap();
+    let mut session = bicdb_sql::SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE TABLE \"t-xml\" (id int, \"a:name\" text, markup xml);
+             INSERT INTO \"t-xml\" VALUES (1, NULL, '<p/>')",
+        )
+        .unwrap();
+    let wrapped = session
+        .execute("SELECT table_to_xml('\"t-xml\"', true, false, 'urn:test')")
+        .unwrap();
+    assert_eq!(
+        wrapped.rows[0][0].to_cell(),
+        concat!(
+            "<t-xml xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns=\"urn:test\">\n\n",
+            "<row>\n  <id>1</id>\n  <a_x003A_name xsi:nil=\"true\"/>\n  <markup><p/></markup>\n",
+            "</row>\n\n</t-xml>\n"
+        ),
+    );
+    let forest = session
+        .execute(
+            "SELECT query_to_xml(
+                'SELECT 1; SELECT ARRAY[1,NULL,3] AS arr, true AS ok',
+                false, true, ''
+             )",
+        )
+        .unwrap();
+    assert_eq!(
+        forest.rows[0][0].to_cell(),
+        concat!(
+            "<row xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">\n",
+            "  <arr><element>1</element><element>3</element></arr>\n",
+            "  <ok>true</ok>\n</row>\n\n"
+        ),
+    );
+    let error = session
+        .execute(
+            "SELECT query_to_xml(
+                'INSERT INTO \"t-xml\" (id) VALUES (2) RETURNING id', false, false, ''
+             )",
+        )
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "0A000");
+    let result = session.execute("SELECT count(*) FROM \"t-xml\"").unwrap();
+    assert_eq!(result.rows[0][0].to_cell(), "1");
+}

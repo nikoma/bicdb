@@ -2464,28 +2464,18 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             // reverse/btrim/ltrim/rtrim keep their bytea-aware typing below.
             "lpad" | "rpad" | "repeat" => return Some("text".to_string()),
             "starts_with" => return Some("bool".to_string()),
-            "log" if argument_nodes.len() == 2 && !oracle::simple_case::enabled() => {
-                return Some("numeric".to_string());
-            }
-            "round" if argument_nodes.len() == 2 && !oracle::simple_case::enabled() => {
-                return Some("numeric".to_string());
-            }
             "ln" | "log" | "log10" | "sqrt" | "round" | "trunc" | "ceil" | "ceiling" | "floor"
-                if argument_nodes.len() == 1 && !oracle::simple_case::enabled() =>
+            | "power" | "pow"
+                if !oracle::simple_case::enabled() =>
             {
-                return Some(float8_or_numeric_result_type(
-                    argument_nodes
-                        .first()
-                        .and_then(|argument| projected_expr_pg_type(argument, schema))
-                        .as_deref(),
-                ));
-            }
-            "power" | "pow" if !oracle::simple_case::enabled() => {
-                let types: Vec<_> = argument_nodes
+                let types = argument_nodes
                     .iter()
-                    .map(|arg| projected_expr_pg_type(arg, schema))
-                    .collect();
-                return Some(power_result_type(types.iter().filter_map(Option::as_deref)));
+                    .zip(&function_arg_types)
+                    .map(|(argument, kind)| {
+                        crate::routine_overloads::routine_argument_type_hint(argument, kind.clone())
+                    })
+                    .collect::<Vec<_>>();
+                return static_pg_math_result_type(unqualified_name, &types);
             }
             "power" | "pow" | "sqrt" | "cbrt" | "exp" | "ln" | "log" => {
                 return Some("float8".to_string());
@@ -4964,6 +4954,36 @@ pub(crate) fn date_trunc_result_type(argument: Option<&str>) -> String {
         Some("timestamp") => "timestamp".to_string(),
         Some("interval") => "interval".to_string(),
         _ => "timestamptz".to_string(),
+    }
+}
+
+/// A context-free fallback must decline calls whose arguments are outside
+/// the built-in signature. Scoped and catalog-aware callers can then resolve
+/// an authored overload such as trunc(timestamptz).
+fn static_pg_math_result_type(name: &str, types: &[Option<String>]) -> Option<String> {
+    let decimal =
+        |kind: Option<&str>| matches!(kind, Some("unknown" | "int2" | "int4" | "int8" | "numeric"));
+    let math = |kind: Option<&str>| decimal(kind) || matches!(kind, Some("float4" | "float8"));
+    match (name, types) {
+        ("log", [base, value]) if decimal(base.as_deref()) && decimal(value.as_deref()) => {
+            Some("numeric".to_string())
+        }
+        ("round" | "trunc", [value, scale])
+            if decimal(value.as_deref())
+                && matches!(scale.as_deref(), Some("unknown" | "int2" | "int4")) =>
+        {
+            Some("numeric".to_string())
+        }
+        ("power" | "pow", [base, exponent])
+            if math(base.as_deref()) && math(exponent.as_deref()) =>
+        {
+            Some(power_result_type(types.iter().filter_map(Option::as_deref)))
+        }
+        (
+            "ln" | "log" | "log10" | "sqrt" | "round" | "trunc" | "ceil" | "ceiling" | "floor",
+            [value],
+        ) if math(value.as_deref()) => Some(float8_or_numeric_result_type(value.as_deref())),
+        _ => None,
     }
 }
 

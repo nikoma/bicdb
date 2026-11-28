@@ -51,7 +51,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 mod database_options;
 pub use database_options::ServerDatabaseOptions;
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::fs::{self, File};
 use std::hash::{Hash, Hasher};
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
@@ -2612,24 +2612,38 @@ fn handle_frontend_message(
                 }
             }
             b'c' => {
+                let batch = state
+                    .copy_in
+                    .as_mut()
+                    .and_then(|copy| copy.simple_batch.take());
+                let owns_transaction = batch.as_ref().is_some_and(|batch| batch.owns_transaction);
                 let result = finish_copy_in(server, state).and_then(|count| {
                     if let Some(seq) = bicdb_core::take_thread_commit_seq() {
                         server.sync_quorum.wait_for(seq)?;
                     }
                     Ok(count)
                 });
-                // Notices the copied rows' triggers reported come first.
                 for notice in std::mem::take(&mut state.pending_notices) {
                     notice_response(stream, &notice)?;
                 }
-                match result {
-                    Ok(count) => {
-                        command_complete(stream, &format!("COPY {count}"))?;
-                        if !extended {
-                            ready_for_query_status(stream, state.transaction_status())?;
-                        }
+                let result = result.and_then(|count| {
+                    command_complete(stream, &format!("COPY {count}"))?;
+                    match batch {
+                        Some(batch) => execute_simple_query_batch(stream, server, state, batch),
+                        None => Ok(QueryFlow::Complete),
                     }
+                });
+                match result {
+                    Ok(QueryFlow::Complete) if !extended => {
+                        write_session_parameter_status(stream, state)?;
+                        flush_notifications(stream, server, state.connection_id)?;
+                        ready_for_query_status(stream, state.transaction_status())?;
+                    }
+                    Ok(_) => {}
                     Err(error) => {
+                        if owns_transaction && state.in_transaction {
+                            rollback_open_transaction(server, state)?;
+                        }
                         state.failed_queries += 1;
                         server.failed_queries.fetch_add(1, Ordering::SeqCst);
                         state.record_query_error(&server.config.sql_profile);
@@ -2640,6 +2654,7 @@ fn handle_frontend_message(
                         if extended {
                             state.discard_until_sync = true;
                         } else {
+                            write_session_parameter_status(stream, state)?;
                             ready_for_query_status(stream, state.transaction_status())?;
                         }
                     }
@@ -3029,6 +3044,12 @@ struct Portal {
 }
 
 #[derive(Debug)]
+struct SimpleQueryBatch {
+    statements: VecDeque<String>,
+    owns_transaction: bool,
+}
+
+#[derive(Debug)]
 struct CopyInState {
     spec: CopyStatement,
     rows: Vec<Vec<Option<String>>>,
@@ -3045,6 +3066,8 @@ struct CopyInState {
     started_guc_transaction: bool,
     owns_serializable_transaction: bool,
     extended: bool,
+    /// A simple-query message suspended while the client supplies COPY data.
+    simple_batch: Option<SimpleQueryBatch>,
     /// Input line number of each row in `rows` (PostgreSQL's COPY CONTEXT).
     row_lines: Vec<u64>,
     /// Per row in `rows`: the fields that were the DEFAULT marker.
@@ -3105,7 +3128,11 @@ impl CopyInState {
             .as_ref()
             .map(CopySpillState::memory_estimate)
             .unwrap_or_default();
-        spec + resolved_columns + self.pending.len() + rows + spill
+        let batch = self.simple_batch.as_ref().map_or(0, |batch| {
+            batch.statements.capacity() * std::mem::size_of::<String>()
+                + batch.statements.iter().map(String::capacity).sum::<usize>()
+        });
+        spec + resolved_columns + self.pending.len() + rows + spill + batch
     }
 }
 
@@ -3518,35 +3545,41 @@ fn execute_server_query(
     state: &mut ConnectionState,
     sql: &str,
 ) -> Result<QueryFlow> {
-    // Keep explicit transaction boundaries in the connection state, including
-    // when a client sends BEGIN and subsequent statements in one Simple Query.
-    // Running that batch inside a temporary SQL session committed its pending
-    // transaction and discarded SET LOCAL before the next protocol message.
     if sql.contains(';') {
         let statements = split_sql_statements(sql);
         if statements.len() > 1 {
             let mut boundaries = state.in_transaction;
-            if !boundaries {
-                for statement in &statements {
-                    let normalized = normalize_executable_sql(statement);
-                    if is_transaction_control_candidate(&normalized)
-                        && parse_transaction_control_for_profile(
-                            statement,
-                            &server.config.sql_profile,
-                        )?
-                        .is_some()
-                        || delegation::transaction_end(statement, &normalized)?.is_some()
-                        // COPY is parsed by the wire layer one statement at a
-                        // time: in a batch, the text after it would otherwise be
-                        // read as COPY options and never run.
-                        || normalized.starts_with("copy ")
-                    {
-                        boundaries = true;
-                        break;
-                    }
-                }
+            let mut copy = false;
+            for statement in &statements {
+                let normalized = normalize_executable_sql(statement);
+                boundaries |= is_transaction_control_candidate(&normalized)
+                    && parse_transaction_control_for_profile(
+                        statement,
+                        &server.config.sql_profile,
+                    )?
+                    .is_some()
+                    || delegation::transaction_end(statement, &normalized)?.is_some();
+                copy |= normalized.starts_with("copy ");
             }
-            if boundaries {
+            let oracle = bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile);
+            let standby = server.config.standby_read_only
+                && server.read_db_for_transaction_progress()?.ha_role() == HaRole::Standby;
+            if !oracle && !standby {
+                let owns_transaction = !boundaries;
+                if owns_transaction {
+                    begin_buffered_transaction(server, state)?;
+                }
+                return execute_simple_query_batch(
+                    stream,
+                    server,
+                    state,
+                    SimpleQueryBatch {
+                        statements: statements.into(),
+                        owns_transaction,
+                    },
+                );
+            }
+            if boundaries || copy {
                 for statement in &statements[..statements.len() - 1] {
                     if matches!(
                         parse_copy_statement(statement)?,
@@ -3566,16 +3599,6 @@ fn execute_server_query(
                     flow = execute_server_query(stream, server, state, &statement)?;
                 }
                 return Ok(flow);
-            }
-            if !bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile) {
-                // An ordinary multi-statement Simple Query has one implicit
-                // transaction and one result per statement. The final COMMIT
-                // ends the transaction but has no CommandComplete of its own.
-                let standby = server.config.standby_read_only
-                    && server.read_db_for_transaction_progress()?.ha_role() == HaRole::Standby;
-                if !standby {
-                    return execute_implicit_simple_query_batch(stream, server, state, statements);
-                }
             }
         }
     }
@@ -3720,25 +3743,38 @@ fn execute_server_query(
     }
 }
 
-fn execute_implicit_simple_query_batch(
+fn execute_simple_query_batch(
     stream: &mut ClientStream,
     server: &Arc<PgWireServer>,
     state: &mut ConnectionState,
-    statements: Vec<String>,
+    mut batch: SimpleQueryBatch,
 ) -> Result<QueryFlow> {
+    let owns_transaction = batch.owns_transaction;
     let result = (|| {
-        begin_buffered_transaction(server, state)?;
-        for statement in statements {
-            execute_server_query(stream, server, state, &statement)?;
+        while let Some(statement) = batch.statements.pop_front() {
+            if matches!(
+                execute_server_query(stream, server, state, &statement)?,
+                QueryFlow::CopyInStarted
+            ) {
+                let copy = state.copy_in.as_mut().ok_or_else(|| {
+                    PgWireError::Server("COPY FROM STDIN state is missing".to_string())
+                })?;
+                copy.simple_batch = Some(batch);
+                return Ok(QueryFlow::CopyInStarted);
+            }
         }
-        let commit =
-            execute_server_sql_with_options_normalized(server, state, "COMMIT", "commit", false)?;
-        for notice in &commit.notices {
-            notice_response(stream, notice)?;
+        if owns_transaction {
+            // The implicit COMMIT can issue notices but has no result frame.
+            let result = execute_server_sql_with_options_normalized(
+                server, state, "COMMIT", "commit", false,
+            )?;
+            for notice in &result.notices {
+                notice_response(stream, notice)?;
+            }
         }
         Ok(QueryFlow::Complete)
     })();
-    if result.is_err() && state.in_transaction {
+    if result.is_err() && owns_transaction && state.in_transaction {
         rollback_open_transaction(server, state)?;
     }
     result
@@ -4146,6 +4182,7 @@ fn begin_copy_in(
         started_guc_transaction,
         owns_serializable_transaction,
         extended: false,
+        simple_batch: None,
         row_lines: Vec::new(),
         row_marks: Vec::new(),
         skipped_rows: 0,
@@ -4257,7 +4294,10 @@ fn execute_sql_prepared_statement_query(
     sql: &str,
     normalized: &str,
 ) -> Result<Option<SqlPreparedStatementResult>> {
-    if !(normalized.starts_with("prepare ")
+    let explain = normalized.starts_with("explain ")
+        && find_top_level_keyword(normalized, "execute").is_some();
+    if !(explain
+        || normalized.starts_with("prepare ")
         || normalized.starts_with("execute ")
         || normalized.starts_with("deallocate "))
         || normalized.starts_with("prepare transaction ")
@@ -4265,19 +4305,20 @@ fn execute_sql_prepared_statement_query(
         return Ok(None);
     }
 
+    let without_comments = explain.then(|| strip_sql_comments(sql));
+    let sql = without_comments.as_deref().unwrap_or(sql);
     let dialect = PostgreSqlDialect {};
     let statements = match Parser::parse_sql(&dialect, sql) {
         Ok(statements) => statements,
         Err(error) if normalized.starts_with("prepare ") => {
             if let Some((name, param_type_oids, statement_sql)) = parse_raw_sql_prepare(sql)? {
-                state.prepared.insert(
+                register_sql_prepared_statement(
+                    server,
+                    state,
                     name,
-                    PreparedStatement {
-                        sql: statement_sql,
-                        param_type_oids,
-                        oracle_host_block: None,
-                    },
-                );
+                    param_type_oids,
+                    statement_sql,
+                )?;
                 return Ok(Some(SqlPreparedStatementResult {
                     result: SqlResult::command("PREPARE"),
                     source_sql: None,
@@ -4285,12 +4326,24 @@ fn execute_sql_prepared_statement_query(
             }
             return Err(PgWireError::Protocol(error.to_string()));
         }
+        Err(_) if explain => return Ok(None),
         Err(error) => return Err(PgWireError::Protocol(error.to_string())),
     };
     let [statement] = statements.as_slice() else {
         return Ok(None);
     };
 
+    let (statement, explain_prefix) = match statement {
+        Statement::Explain { statement, .. }
+            if matches!(statement.as_ref(), Statement::Execute { .. }) =>
+        {
+            let Some(index) = find_top_level_keyword(sql, "execute") else {
+                return Ok(None);
+            };
+            (statement.as_ref(), Some(&sql[..index]))
+        }
+        _ => (statement, None),
+    };
     match statement {
         Statement::Prepare {
             name,
@@ -4302,14 +4355,13 @@ fn execute_sql_prepared_statement_query(
                 .iter()
                 .map(|data_type| require_type_oid(&data_type.to_string()))
                 .collect::<Result<Vec<_>>>()?;
-            state.prepared.insert(
+            register_sql_prepared_statement(
+                server,
+                state,
                 name,
-                PreparedStatement {
-                    sql: bicdb_sql::sql_text::sql_text(&*statement),
-                    param_type_oids,
-                    oracle_host_block: None,
-                },
-            );
+                param_type_oids,
+                bicdb_sql::sql_text::sql_text(&*statement),
+            )?;
             Ok(Some(SqlPreparedStatementResult {
                 result: SqlResult::command("PREPARE"),
                 source_sql: None,
@@ -4337,9 +4389,12 @@ fn execute_sql_prepared_statement_query(
             };
             let name = sql_prepared_name_from_object(name)?;
             let prepared = state.prepared.get(&name).cloned().ok_or_else(|| {
-                PgWireError::Sql(SqlError::InvalidSql(format!(
-                    "prepared statement {name:?} not found"
-                )))
+                PgWireError::Sql(SqlError::coded_public(
+                    "26000",
+                    format!("prepared statement {name:?} does not exist"),
+                    None,
+                    None,
+                ))
             })?;
             if parameters.len() != prepared.param_type_oids.len() {
                 return Err(PgWireError::Sql(SqlError::InvalidSql(format!(
@@ -4360,10 +4415,15 @@ fn execute_sql_prepared_statement_query(
                 }
                 None => substitute_parameters(&prepared.sql, &params)?,
             };
-            let result = execute_server_sql_with_options(server, state, &sql, true)?;
+            let result = match explain_prefix {
+                Some(prefix) => {
+                    execute_server_sql_with_options(server, state, &format!("{prefix}{sql}"), true)?
+                }
+                None => execute_server_sql_with_options(server, state, &sql, true)?,
+            };
             Ok(Some(SqlPreparedStatementResult {
                 result,
-                source_sql: Some(prepared.sql),
+                source_sql: explain_prefix.is_none().then_some(prepared.sql),
             }))
         }
         Statement::Deallocate { name, .. } => {
@@ -4380,6 +4440,51 @@ fn execute_sql_prepared_statement_query(
         }
         _ => Ok(None),
     }
+}
+
+fn register_sql_prepared_statement(
+    server: &Arc<PgWireServer>,
+    state: &mut ConnectionState,
+    name: String,
+    mut param_type_oids: Vec<i32>,
+    sql: String,
+) -> Result<()> {
+    if !bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile) {
+        if state.prepared.contains_key(&name) {
+            return Err(PgWireError::Sql(SqlError::coded_public(
+                "42P05",
+                format!("prepared statement {name:?} already exists"),
+                None,
+                None,
+            )));
+        }
+        if sql.contains('$') {
+            let db = server.read_db_for_transaction_progress()?;
+            let _catalog_owner = db.enter_catalog_read_access(state.tx.as_ref())?;
+            let temp_schema = bicdb_sql::temp_schema_for_backend(
+                i32::try_from(state.connection_id).unwrap_or(i32::MAX),
+            );
+            let inferred = state.catalog_cache.with_schema_cache(&db, || {
+                let bound = bicdb_sql::search_path::bind_session_sql_with_temp(
+                    &db,
+                    &sql,
+                    state.session_state.session_gucs(),
+                    Some(&temp_schema),
+                )?;
+                infer_parameter_types(&db, bound.as_deref().unwrap_or(&sql))
+            })?;
+            param_type_oids = resolve_parameter_type_oids(&db, param_type_oids, inferred)?;
+        }
+    }
+    state.prepared.insert(
+        name,
+        PreparedStatement {
+            sql,
+            param_type_oids,
+            oracle_host_block: None,
+        },
+    );
+    Ok(())
 }
 
 fn parse_raw_sql_prepare(sql: &str) -> Result<Option<(String, Vec<i32>, String)>> {

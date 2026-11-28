@@ -4964,7 +4964,7 @@ pub(crate) fn mutating_with_describe_sql(sql: &str) -> Option<String> {
         query.body = replacement.body;
         query.limit_clause = replacement.limit_clause;
     }
-    Some(query.to_string())
+    Some(bicdb_sql::sql_text::sql_text(&query))
 }
 
 #[cfg(test)]

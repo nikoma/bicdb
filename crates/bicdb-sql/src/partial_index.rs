@@ -77,17 +77,22 @@ fn strip(expr: &Expr) -> &Expr {
     }
 }
 
+fn column_ident(expr: &Expr) -> Option<&Ident> {
+    match strip(expr) {
+        Expr::Identifier(ident) => Some(ident),
+        Expr::CompoundIdentifier(parts) => parts.last(),
+        _ => None,
+    }
+}
+
 fn column_ref(schema: &TableSchema, expr: &Expr) -> Option<ColumnRef> {
     if let Some(reference) = json_text_field_ref(schema, expr) {
         return Some(reference);
     }
-    let name = match strip(expr) {
-        Expr::Identifier(ident) => ident_value(ident),
-        Expr::CompoundIdentifier(parts) => ident_value(parts.last()?),
-        _ => return None,
-    };
-    let column = schema.column(&name)?;
-    let field = index_field_from_expr_for_schema(schema, strip(expr)).ok()?;
+    let ident = column_ident(expr)?;
+    let column = schema.column(&ident_value(ident))?;
+    // A validated SQL qualifier names the table, not a field in its record.
+    let field = index_field_from_expr_for_schema(schema, &Expr::Identifier(ident.clone())).ok()?;
     Some(ColumnRef {
         field: IndexPredicate::Field { field },
         value_type: comparable_type(column),
@@ -108,12 +113,8 @@ fn json_text_field_ref(schema: &TableSchema, expr: &Expr) -> Option<ColumnRef> {
     else {
         return None;
     };
-    let name = match strip(left) {
-        Expr::Identifier(ident) => ident_value(ident),
-        Expr::CompoundIdentifier(parts) => ident_value(parts.last()?),
-        _ => return None,
-    };
-    let column = schema.column(&name)?;
+    let ident = column_ident(left)?;
+    let column = schema.column(&ident_value(ident))?;
     if !matches!(
         column.pg_type.to_ascii_lowercase().as_str(),
         "json" | "jsonb"
@@ -124,7 +125,7 @@ fn json_text_field_ref(schema: &TableSchema, expr: &Expr) -> Option<ColumnRef> {
         return None;
     };
     let IndexField::MetadataPath(mut path) =
-        index_field_from_expr_for_schema(schema, strip(left)).ok()?
+        index_field_from_expr_for_schema(schema, &Expr::Identifier(ident.clone())).ok()?
     else {
         return None;
     };
@@ -393,22 +394,17 @@ fn translate(schema: &TableSchema, predicate: &Expr) -> Result<IndexPredicate> {
             op: BinaryOperator::Question,
             right,
         } => {
-            let name = match strip(left) {
-                Expr::Identifier(name) => name.value.clone(),
-                Expr::CompoundIdentifier(parts) => parts
-                    .last()
-                    .map(|name| name.value.clone())
-                    .ok_or_else(|| unsupported(predicate))?,
-                _ => return Err(unsupported(predicate)),
-            };
-            let column = schema.column(&name).ok_or_else(|| unsupported(predicate))?;
+            let ident = column_ident(left).ok_or_else(|| unsupported(predicate))?;
+            let column = schema
+                .column(&ident_value(ident))
+                .ok_or_else(|| unsupported(predicate))?;
             if column.pg_type != "jsonb" || column.user_type.is_some() {
                 return Err(unsupported(predicate));
             }
             let SqlValue::String(key) = eval_constant_expr(strip(right))? else {
                 return Err(unsupported(predicate));
             };
-            let field = index_field_from_expr_for_schema(schema, strip(left))?;
+            let field = index_field_from_expr_for_schema(schema, &Expr::Identifier(ident.clone()))?;
             Ok(binary(
                 IndexPredicateBinaryOperator::JsonHasKey,
                 IndexPredicate::Field { field },

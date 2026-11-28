@@ -115,7 +115,7 @@ fn parse_inference_statements(db: &BicDb, sql: &str) -> Result<Vec<Statement>> {
 /// Parse PostgreSQL inference predicates for protocol metadata without
 /// evaluating the statement or using sqlparser's incomplete grammar.
 pub fn parse_postgres_conflict_inference(sql: &str) -> Result<Option<Vec<Statement>>> {
-    if crate::conflict_inference::lower(sql).is_some() {
+    if crate::conflict_inference::has_predicates(sql) {
         parse_statements(sql).map(Some)
     } else {
         Ok(None)

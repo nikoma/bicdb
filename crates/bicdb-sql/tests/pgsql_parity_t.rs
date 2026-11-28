@@ -1262,3 +1262,29 @@ fn partial_conflict_predicates_round_trip_through_ctes_and_atomic_routines() {
         [[SqlValue::Bool(true)]]
     );
 }
+
+#[test]
+fn conflict_predicate_carrier_is_never_accepted_as_client_sql() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            r#"CREATE TABLE marker_table ("__bicdb_conflict_inference_0" int, v int,
+                        CONSTRAINT "__bicdb_conflict_inference" UNIQUE ("__bicdb_conflict_inference_0"));
+               INSERT INTO marker_table VALUES(1,1)
+                 ON CONFLICT ON CONSTRAINT "__bicdb_conflict_inference" DO NOTHING;
+               INSERT INTO marker_table VALUES(1,2)
+                 ON CONFLICT ("__bicdb_conflict_inference_0") WHERE v>0
+                 DO UPDATE SET v=excluded.v;"#,
+        )
+        .unwrap();
+    let sql = r#"INSERT INTO marker_table VALUES(1,3)
+        ON CONFLICT ON CONSTRAINT __bicdb_conflict_inference(("__bicdb_conflict_inference_0"), v>0)
+        DO UPDATE SET v=excluded.v"#;
+    assert_eq!(session.execute(sql).unwrap_err().sqlstate(), "42601");
+    assert_eq!(
+        session.execute("SELECT v FROM marker_table").unwrap().rows,
+        [[SqlValue::Int(2)]]
+    );
+}

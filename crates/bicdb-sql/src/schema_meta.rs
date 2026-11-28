@@ -149,8 +149,6 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>> {
 
     ensure_parser_stack_margin();
     reject_oversized_sql(sql)?;
-    let rendered = crate::conflict_inference::render(sql);
-    let sql = rendered.as_deref().unwrap_or(sql);
     let atomic = crate::sql_atomic_body::lower(sql);
     let sql = atomic.as_ref().map_or(sql, |lowered| lowered.sql.as_str());
     let recursive = crate::recursive_search_cycle::lower(sql);

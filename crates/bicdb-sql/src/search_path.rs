@@ -606,9 +606,18 @@ pub(crate) fn bind_sql_text(db: &BicDb, sql: &str, path: &[String]) -> Result<Op
     let sql = lock_order.as_deref().unwrap_or(sql);
     let top = crate::eval::rewrite_helpers::rewrite_select_top_identifiers(sql);
     let sql = top.as_deref().unwrap_or(sql);
-    let Ok(mut statements) = Parser::parse_sql(&sqlparser::dialect::PostgreSqlDialect {}, sql)
-    else {
-        return Ok(None);
+    let dialect = sqlparser::dialect::PostgreSqlDialect {};
+    let mut statements = match Parser::parse_sql(&dialect, sql) {
+        Ok(statements) => statements,
+        Err(_) => {
+            let Some(masked) = crate::conflict_inference::mask_predicates_for_binding(sql) else {
+                return Ok(None);
+            };
+            let Ok(statements) = Parser::parse_sql(&dialect, &masked) else {
+                return Ok(None);
+            };
+            statements
+        }
     };
     // Routine bodies bind when they execute, with the caller's path; DDL
     // that defines them is left verbatim.

@@ -14878,7 +14878,10 @@ fn partial_conflict_predicate_preserves_parameter_types_and_describe_is_read_onl
     read_until_ready(&mut client);
     send_query(
         &mut client,
-        "CREATE TABLE partial_wire(a int, b int);
+        "CREATE TABLE public.partial_wire(a text, b text);
+         CREATE SCHEMA partial_wire_schema;
+         SET search_path = partial_wire_schema, public;
+         CREATE TABLE partial_wire(a int, b int);
          CREATE UNIQUE INDEX partial_wire_pos ON partial_wire(a) WHERE b > 0",
     );
     read_query_rows(&mut client);
@@ -14920,6 +14923,9 @@ fn partial_conflict_predicate_preserves_parameter_types_and_describe_is_read_onl
         read_query_rows(&mut client),
         vec![vec!["4".to_string(), "3".to_string()]]
     );
+
+    send_query(&mut client, "SELECT count(*) FROM public.partial_wire");
+    assert_eq!(read_query_rows(&mut client), vec![vec!["0".to_string()]]);
 
     client.write_all(b"X\0\0\0\x04").unwrap();
     server.join().unwrap();

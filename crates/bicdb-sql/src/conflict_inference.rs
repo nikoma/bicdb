@@ -65,7 +65,13 @@ pub(crate) struct LoweredInference<'a> {
     predicates: BTreeMap<String, &'a str>,
 }
 
-pub(crate) fn lower(sql: &str) -> Option<LoweredInference<'_>> {
+struct InferenceClause {
+    close: usize,
+    predicate: Range<usize>,
+    where_at: usize,
+}
+
+fn inference_tokens(sql: &str) -> Option<Vec<SourceToken>> {
     if !sql
         .as_bytes()
         .windows(8)
@@ -73,22 +79,23 @@ pub(crate) fn lower(sql: &str) -> Option<LoweredInference<'_>> {
     {
         return None;
     }
-    let tokens = source_tokens(sql)?;
-    let mut predicates = BTreeMap::new();
-    let mut output = String::with_capacity(sql.len());
-    let mut cursor = 0;
-    let mut marker_number = 0;
+    source_tokens(sql)
+}
+
+fn clauses(tokens: &[SourceToken]) -> Vec<InferenceClause> {
+    let mut result = Vec::new();
+    let mut end_of_predicate = 0;
     for i in 0..tokens.len() {
-        if !keyword(&tokens, i, Keyword::ON)
-            || !keyword(&tokens, i + 1, Keyword::CONFLICT)
-            || !open_paren(&tokens, i + 2)
+        if !keyword(tokens, i, Keyword::ON)
+            || !keyword(tokens, i + 1, Keyword::CONFLICT)
+            || !open_paren(tokens, i + 2)
         {
             continue;
         }
-        let Some(close) = closing_paren(&tokens, i + 2) else {
+        let Some(close) = closing_paren(tokens, i + 2) else {
             continue;
         };
-        if !keyword(&tokens, close + 1, Keyword::WHERE) {
+        if !keyword(tokens, close + 1, Keyword::WHERE) {
             continue;
         }
         let start = tokens[close + 1].bytes.end;
@@ -100,39 +107,89 @@ pub(crate) fn lower(sql: &str) -> Option<LoweredInference<'_>> {
                 Token::RParen | Token::SemiColon => return true,
                 _ => {}
             }
-            depth == 0 && keyword(&tokens, at, Keyword::DO)
+            depth == 0 && keyword(tokens, at, Keyword::DO)
         }) else {
             continue;
         };
-        if !keyword(&tokens, action, Keyword::DO)
-            || !(keyword(&tokens, action + 1, Keyword::NOTHING)
-                || keyword(&tokens, action + 1, Keyword::UPDATE))
+        if !keyword(tokens, action, Keyword::DO)
+            || !(keyword(tokens, action + 1, Keyword::NOTHING)
+                || keyword(tokens, action + 1, Keyword::UPDATE))
         {
             continue;
         }
         let end = tokens[action].bytes.start;
-        let replace_from = tokens[close].bytes.start;
-        if replace_from < cursor {
-            continue;
+        let close_at = tokens[close].bytes.start;
+        if close_at >= end_of_predicate {
+            result.push(InferenceClause {
+                close: close_at,
+                predicate: start..end,
+                where_at: tokens[close + 1].bytes.start,
+            });
+            end_of_predicate = end;
         }
+    }
+    result
+}
+
+pub(crate) fn has_predicates(sql: &str) -> bool {
+    inference_tokens(sql).is_some_and(|tokens| !clauses(&tokens).is_empty())
+}
+
+/// The search_path binder inserts qualifiers at original token locations.
+/// Mask the unsupported grammar in its parse only, preserving line and
+/// character columns so the qualifier edits still apply to the original SQL.
+pub(crate) fn mask_predicates_for_binding(sql: &str) -> Option<String> {
+    let tokens = inference_tokens(sql)?;
+    let clauses = clauses(&tokens);
+    if clauses.is_empty() {
+        return None;
+    }
+    let mut masked = String::with_capacity(sql.len());
+    let mut last = 0;
+    for clause in clauses {
+        masked.push_str(&sql[last..clause.where_at]);
+        masked.extend(
+            sql[clause.where_at..clause.predicate.end]
+                .chars()
+                .map(|character| if character == '\n' { '\n' } else { ' ' }),
+        );
+        last = clause.predicate.end;
+    }
+    masked.push_str(&sql[last..]);
+    Some(masked)
+}
+
+pub(crate) fn lower(sql: &str) -> Option<LoweredInference<'_>> {
+    let tokens = inference_tokens(sql)?;
+    let clauses = clauses(&tokens);
+    if clauses.is_empty() {
+        return None;
+    }
+    let occupied = tokens
+        .iter()
+        .filter_map(|token| match &token.token {
+            Token::Word(word) => Some(word.value.to_ascii_lowercase()),
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
+    let mut predicates = BTreeMap::new();
+    let mut output = String::with_capacity(sql.len());
+    let mut cursor = 0;
+    let mut marker_number = 0;
+    for clause in clauses {
         let marker = loop {
             let marker = format!("{CARRIER}_{marker_number}");
             marker_number += 1;
-            // A quoted identifier with Unicode escapes can spell our marker
-            // without containing its literal source text. Inspect decoded tokens.
-            if !tokens.iter().any(|token|
-                matches!(&token.token, Token::Word(word) if word.value.eq_ignore_ascii_case(&marker))
-            ) {
+            // Inspect decoded words, including quoted identifiers. The token
+            // we introduce cannot alias a name authored in the statement.
+            if !occupied.contains(&marker) {
                 break marker;
             }
         };
-        output.push_str(&sql[cursor..replace_from]);
+        output.push_str(&sql[cursor..clause.close]);
         output.push_str(&format!(", \"{marker}\") "));
-        predicates.insert(marker, &sql[start..end]);
-        cursor = end;
-    }
-    if predicates.is_empty() {
-        return None;
+        cursor = clause.predicate.end;
+        predicates.insert(marker, &sql[clause.predicate]);
     }
     output.push_str(&sql[cursor..]);
     Some(LoweredInference {

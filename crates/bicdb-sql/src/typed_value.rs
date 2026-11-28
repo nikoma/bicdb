@@ -3923,6 +3923,19 @@ pub fn parse_pg_xid8(value: &str) -> Result<u64, PgCanonicalValueError> {
     Ok(0_u64.wrapping_sub(magnitude))
 }
 
+/// A binary-compatible cast from an empty catalog vector keeps its single
+/// dimension of length zero and lower bound zero. Ordinary empty arrays have
+/// no dimensions.
+#[doc(hidden)]
+pub fn restore_empty_catalog_vector_dimension(
+    lengths: &mut Vec<usize>,
+    lower_bounds: Option<&[i32]>,
+) {
+    if lengths.is_empty() && lower_bounds == Some(&[0]) {
+        lengths.push(0);
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct PgArrayDimension {
     pub lower_bound: i32,

@@ -6029,11 +6029,12 @@ pub(crate) fn canonical_array_from_sql(
 ) -> Result<(JsonValue, PgArray)> {
     let element_type = pg_type.trim_end_matches("[]");
     let (legacy, lower_bounds) = array_storage_input(value, pg_type)?;
-    let (lengths, flattened) = flatten_array_json(&legacy).ok_or_else(|| {
+    let (mut lengths, flattened) = flatten_array_json(&legacy).ok_or_else(|| {
         SqlError::InvalidTextRepresentation(
             "multidimensional arrays must have matching dimensions".to_string(),
         )
     })?;
+    restore_empty_catalog_vector_dimension(&mut lengths, lower_bounds.as_deref());
     let lower_bounds = lower_bounds.unwrap_or_else(|| vec![1; lengths.len()]);
     if lower_bounds.len() != lengths.len() {
         return Err(SqlError::InvalidTextRepresentation(format!(

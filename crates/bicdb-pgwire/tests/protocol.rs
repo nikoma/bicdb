@@ -14956,3 +14956,63 @@ fn partial_conflict_predicate_preserves_parameter_types_and_describe_is_read_onl
     client.write_all(b"X\0\0\0\x04").unwrap();
     server.join().unwrap();
 }
+
+#[test]
+fn catalog_vector_array_casts_keep_postgres_text_and_binary_dimensions() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        bicdb_pgwire::handle_client(stream, path).unwrap();
+    });
+    let mut client = TcpStream::connect(address).unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+
+    let sql = "SELECT '23 25'::oidvector::oid[] AS values, ''::oidvector::oid[] AS empty";
+    send_query(&mut client, sql);
+    assert_eq!(
+        read_query_rows(&mut client),
+        vec![vec!["[0:1]={23,25}".to_string(), "{}".to_string()]],
+    );
+
+    send_parse(&mut client, "catalog_vector_array", sql, &[]);
+    send_bind_binary(&mut client, "", "catalog_vector_array", &[], &[1]);
+    send_describe_portal(&mut client, "");
+    send_execute(&mut client, "");
+    send_sync(&mut client);
+    let mut fields = Vec::new();
+    let mut row = Vec::new();
+    loop {
+        let (tag, payload) = read_message(&mut client);
+        match tag {
+            b'T' => fields = parse_row_description_fields(&payload),
+            b'D' => row = payload,
+            b'E' => panic!("{}", String::from_utf8_lossy(&payload)),
+            b'Z' => break,
+            _ => {}
+        }
+    }
+    assert_eq!(
+        fields
+            .iter()
+            .map(|field| field.type_oid)
+            .collect::<Vec<_>>(),
+        [1028, 1028]
+    );
+    let mut expected = 2_i16.to_be_bytes().to_vec();
+    for cell in [
+        vec![1_i32, 0, 26, 2, 0, 4, 23, 4, 25],
+        vec![1_i32, 0, 26, 0, 0],
+    ] {
+        expected.extend_from_slice(&((cell.len() * 4) as i32).to_be_bytes());
+        for value in cell {
+            expected.extend_from_slice(&value.to_be_bytes());
+        }
+    }
+    assert_eq!(row, expected);
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
+}

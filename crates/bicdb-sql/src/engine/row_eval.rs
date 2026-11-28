@@ -1375,7 +1375,11 @@ impl<'db> SqlEngine<'db> {
         });
         let source_type = scope.known_expr_type(expr).or_else(|| {
             self.infer_slot_row_expr_type(context.row_lookup.columns(), expr)
-                .filter(|pg_type| needs_source_type || is_geometric_type(Some(pg_type)))
+                .filter(|pg_type| {
+                    needs_source_type
+                        || is_geometric_type(Some(pg_type))
+                        || catalog_vector_element_type(pg_type).is_some()
+                })
         });
         cast_expr_value_with_db_and_source_type(
             self.db_ref(),
@@ -1407,8 +1411,11 @@ impl<'db> SqlEngine<'db> {
                 || (pg_type == "xml" && crate::xml::xml_input_is_document())
         });
         let source_type = scope.known_expr_type(expr).or_else(|| {
-            self.infer_sql_row_expr_type(row, expr)
-                .filter(|pg_type| needs_source_type || is_geometric_type(Some(pg_type)))
+            self.infer_sql_row_expr_type(row, expr).filter(|pg_type| {
+                needs_source_type
+                    || is_geometric_type(Some(pg_type))
+                    || catalog_vector_element_type(pg_type).is_some()
+            })
         });
         cast_expr_value_with_db_and_source_type(
             self.db_ref(),

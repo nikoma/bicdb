@@ -355,6 +355,68 @@ fn base_types_reject_unsafe_or_mismatched_codecs() {
 }
 
 #[test]
+fn variable_width_base_types_preserve_the_declared_storage_policy() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for (name, storage_clause, storage_code) in [
+        ("plain_base", "", "p"),
+        ("main_base", ", STORAGE=main", "m"),
+        ("external_base", ", STORAGE=external", "e"),
+        ("extended_base", ", STORAGE=extended", "x"),
+    ] {
+        for sql in [
+            format!("CREATE TYPE {name}"),
+            format!("CREATE FUNCTION {name}_in(cstring) RETURNS {name} AS 'textin' LANGUAGE internal IMMUTABLE STRICT"),
+            format!("CREATE FUNCTION {name}_out({name}) RETURNS cstring AS 'textout' LANGUAGE internal IMMUTABLE STRICT"),
+            format!("CREATE TYPE {name} (INPUT={name}_in, OUTPUT={name}_out, INTERNALLENGTH=variable, ALIGNMENT=int4, DEFAULT='héllo'{storage_clause})"),
+            format!("CREATE TABLE {name}_rows (value {name})"),
+            format!("INSERT INTO {name}_rows DEFAULT VALUES"),
+        ] {
+            session.execute(&sql).unwrap();
+        }
+        assert_eq!(
+            session
+                .execute(&format!(
+                    "SELECT typlen, typalign, typstorage FROM pg_type WHERE typname = '{name}'"
+                ))
+                .unwrap()
+                .rows,
+            vec![vec![
+                SqlValue::Int(-1),
+                SqlValue::String("i".into()),
+                SqlValue::String(storage_code.into()),
+            ]]
+        );
+        assert_eq!(
+            session
+                .execute(&format!("SELECT value FROM {name}_rows"))
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::String("héllo".into())]]
+        );
+    }
+
+    for sql in [
+        "CREATE TYPE fixed_base",
+        "CREATE FUNCTION fixed_base_in(cstring) RETURNS fixed_base AS 'int4in' LANGUAGE internal IMMUTABLE STRICT",
+        "CREATE FUNCTION fixed_base_out(fixed_base) RETURNS cstring AS 'int4out' LANGUAGE internal IMMUTABLE STRICT",
+    ] {
+        session.execute(sql).unwrap();
+    }
+    let error = session
+        .execute("CREATE TYPE fixed_base (INPUT=fixed_base_in, OUTPUT=fixed_base_out, INTERNALLENGTH=4, ALIGNMENT=int4, PASSEDBYVALUE, STORAGE=extended)")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "42P17");
+    assert!(error
+        .to_string()
+        .contains("fixed-size types must have storage PLAIN"));
+    session
+        .execute("CREATE TYPE fixed_base (INPUT=fixed_base_in, OUTPUT=fixed_base_out, INTERNALLENGTH=4, ALIGNMENT=int4, PASSEDBYVALUE)")
+        .unwrap();
+}
+
+#[test]
 fn base_type_finalization_rolls_back_to_the_original_shell() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();

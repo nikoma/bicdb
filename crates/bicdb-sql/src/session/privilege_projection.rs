@@ -1176,10 +1176,19 @@ impl<'db> SqlSession<'db> {
                     .passed_by_value
                     .or_else(|| like_spec.map(|spec| spec.by_value))
                     .unwrap_or(false);
+                if internal_length != -1 && storage != 'p' {
+                    return Err(SqlError::data_exception_public(
+                        "42P17",
+                        "fixed-size types must have storage PLAIN",
+                        None,
+                    ));
+                }
+                // Variable-width codecs operate on the same logical datum in
+                // all four PostgreSQL storage modes. The declaration controls
+                // the type's catalog storage policy, independent of its codec.
                 if internal_length != i64::from(input_spec.len)
                     || passed_by_value != input_spec.by_value
                     || alignment != input_spec.align
-                    || storage != input_spec.storage
                 {
                     return Err(SqlError::InvalidSql(format!(
                         "CREATE TYPE storage declaration does not match registered {} codec",

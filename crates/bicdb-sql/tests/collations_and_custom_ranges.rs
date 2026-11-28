@@ -280,12 +280,19 @@ fn declared_collations_follow_columns_through_predicates_aliases_and_indexes() {
             ["2", "3"]
         );
         assert_eq!(
-            session
-                .execute("SELECT word >= ascii_word FROM catalog_words")
-                .unwrap_err()
-                .sqlstate(),
-            "42P22"
+            column(
+                session,
+                "SELECT word >= 'bbc' FROM catalog_words ORDER BY id"
+            ),
+            ["false", "false", "true", "false"]
         );
+        for sql in [
+            "SELECT word >= ascii_word FROM catalog_words",
+            "SELECT id FROM catalog_words WHERE word = ascii_word",
+            "SELECT w.word >= w.ascii_word FROM catalog_words AS w",
+        ] {
+            assert_eq!(session.execute(sql).unwrap_err().sqlstate(), "42P22");
+        }
         let missing = session
             .execute("SELECT 'a' COLLATE \"ja_JP.eucjp-x-icu\" < 'b'")
             .unwrap_err();

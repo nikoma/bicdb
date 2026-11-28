@@ -1184,16 +1184,24 @@ where
     let replacement = eval(overlay_what)?;
     let start = eval(overlay_from)?;
     let length = overlay_for.map(&mut eval).transpose()?;
+    eval_overlay_values(&value, &replacement, &start, length.as_ref(), bytea)
+}
+
+pub(crate) fn eval_overlay_values(
+    value: &SqlValue,
+    replacement: &SqlValue,
+    start: &SqlValue,
+    length: Option<&SqlValue>,
+    bytea: bool,
+) -> Result<SqlValue> {
     if matches!(value, SqlValue::Null)
         || matches!(replacement, SqlValue::Null)
         || matches!(start, SqlValue::Null)
-        || length
-            .as_ref()
-            .is_some_and(|value| matches!(value, SqlValue::Null))
+        || length.is_some_and(|value| matches!(value, SqlValue::Null))
     {
         return Ok(SqlValue::Null);
     }
-    let start = sql_value_i64(&start)
+    let start = sql_value_i64(start)
         .ok_or_else(|| SqlError::InvalidSql("overlay start must be an integer".to_string()))?;
     if start <= 0 {
         return Err(SqlError::data_exception(
@@ -1204,9 +1212,9 @@ where
     }
 
     if bytea {
-        let bytes = bytea_argument(&value)?.unwrap();
-        let replacement = bytea_argument(&replacement)?.unwrap();
-        let remove = match length.as_ref() {
+        let bytes = bytea_argument(value)?.unwrap();
+        let replacement = bytea_argument(replacement)?.unwrap();
+        let remove = match length {
             Some(value) => sql_value_i64(value).ok_or_else(|| {
                 SqlError::InvalidSql("overlay length must be an integer".to_string())
             })?,
@@ -1234,7 +1242,7 @@ where
 
     let value = value.to_cell().chars().collect::<Vec<_>>();
     let replacement = replacement.to_cell().chars().collect::<Vec<_>>();
-    let remove = match length.as_ref() {
+    let remove = match length {
         Some(value) => sql_value_i64(value)
             .ok_or_else(|| SqlError::InvalidSql("overlay length must be an integer".to_string()))?,
         None => replacement.len() as i64,

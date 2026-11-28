@@ -964,6 +964,11 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
         changed = true;
     }
 
+    if let Some(next) = rewrite_qualified_substring(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
     if let Some(next) = rewrite_variadic_builtin_calls(&rewritten) {
         rewritten = next;
         changed = true;
@@ -1114,6 +1119,46 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
     }
 
     changed.then_some(rewritten)
+}
+
+fn rewrite_qualified_substring(sql: &str) -> Option<String> {
+    if !sql
+        .as_bytes()
+        .windows(9)
+        .any(|text| text.eq_ignore_ascii_case(b"substring"))
+    {
+        return None;
+    }
+    let tokens = tokens_with_source(&PostgreSqlDialect {}, sql)?;
+    let mut offset = 0;
+    let mut code = Vec::new();
+    for (token, original) in tokens {
+        let end = offset + original.len();
+        if !matches!(token, Token::Whitespace(_)) {
+            code.push((token, offset, end));
+        }
+        offset = end;
+    }
+    let mut rewritten = String::new();
+    let mut copied = 0;
+    for window in code.windows(3) {
+        if let [(Token::Period, _, _), (Token::Word(word), start, end), (Token::LParen, _, _)] =
+            window
+        {
+            if word.quote_style.is_none() && word.value.eq_ignore_ascii_case("substring") {
+                // The generic parser treats a bare SUBSTRING token as the
+                // special SQL syntax even after a schema qualifier.
+                rewritten.push_str(&sql[copied..*start]);
+                rewritten.push_str("\"substring\"");
+                copied = *end;
+            }
+        }
+    }
+    if copied == 0 {
+        return None;
+    }
+    rewritten.push_str(&sql[copied..]);
+    Some(rewritten)
 }
 
 /// `FOR KEY SHARE` and `FOR NO KEY UPDATE` are PostgreSQL's weaker row lock

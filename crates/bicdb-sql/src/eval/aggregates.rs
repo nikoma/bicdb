@@ -2520,13 +2520,18 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         if unqualified_name == "array_dims" {
             return Some("text".to_string());
         }
+        if unqualified_name == "position" {
+            return Some("int4".to_string());
+        }
         if matches!(
             unqualified_name,
-            "substr" | "substring" | "reverse" | "trim" | "btrim" | "ltrim" | "rtrim"
+            "substr" | "substring" | "overlay" | "reverse" | "trim" | "btrim" | "ltrim" | "rtrim"
         ) {
             return match projected_expr_pg_type(argument_nodes.first()?, schema).as_deref() {
                 Some("bytea") => Some("bytea".to_string()),
-                Some("bit" | "varbit") if matches!(unqualified_name, "substr" | "substring") => {
+                Some("bit" | "varbit")
+                    if matches!(unqualified_name, "substr" | "substring" | "overlay") =>
+                {
                     Some("bit".to_string())
                 }
                 Some("text" | "varchar" | "bpchar" | "char" | "name") => Some("text".to_string()),

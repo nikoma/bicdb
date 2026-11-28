@@ -21,7 +21,14 @@ use std::sync::Arc;
 #[derive(Clone)]
 enum RelationTypes {
     Schema(Arc<TableSchema>),
-    Columns(Rc<[(String, Option<String>)]>),
+    Columns(Rc<[RelationColumn]>),
+}
+
+#[derive(Clone)]
+struct RelationColumn {
+    name: String,
+    pg_type: Option<String>,
+    collation: Option<String>,
 }
 
 impl RelationTypes {
@@ -43,10 +50,19 @@ impl RelationTypes {
                 .or_else(|| {
                     crate::postgres_system_column_pg_type(column).map(|kind| Some(kind.to_string()))
                 }),
-            Self::Columns(columns) => columns
-                .iter()
-                .find(|(name, _)| name == column)
-                .map(|(_, pg_type)| pg_type.clone()),
+            Self::Columns(columns) => {
+                columns
+                    .iter()
+                    .find(|entry| entry.name == column)
+                    .map(|entry| {
+                        entry
+                            .collation
+                            .as_deref()
+                            .is_none_or(|name| name == "default")
+                            .then(|| entry.pg_type.clone())
+                            .flatten()
+                    })
+            }
         }
     }
 }
@@ -95,10 +111,23 @@ pub(crate) fn register_table(qualifier: &str, schema: &Arc<TableSchema>) {
 /// `columns` are its visible column names, `types` the result's column types
 /// aligned with them (shorter or empty = unknown).
 pub(crate) fn register_columns(qualifier: &str, columns: &[String], types: &[Option<String>]) {
+    register_columns_with_collations(qualifier, columns, types, &[]);
+}
+
+pub(crate) fn register_columns_with_collations(
+    qualifier: &str,
+    columns: &[String],
+    types: &[Option<String>],
+    collations: &[Option<String>],
+) {
     let columns = columns
         .iter()
         .enumerate()
-        .map(|(index, name)| (name.clone(), types.get(index).cloned().flatten()))
+        .map(|(index, name)| RelationColumn {
+            name: name.clone(),
+            pg_type: types.get(index).cloned().flatten(),
+            collation: collations.get(index).cloned().flatten(),
+        })
         .collect::<Rc<[_]>>();
     register(qualifier, RelationTypes::Columns(columns));
 }
@@ -137,6 +166,16 @@ pub(crate) fn current_schema_qualifier_matches(parts: &[String]) -> Option<bool>
 /// (the caller may resolve it another way), `Some(None)` = registered but
 /// unknown or ambiguous, `Some(Some(type))` = the column's type.
 pub(crate) fn lookup(qualifier: &str, column: &str) -> Option<Option<String>> {
+    lookup_attribute(qualifier, column, |types, column| {
+        types.column(column).flatten()
+    })
+}
+
+fn lookup_attribute(
+    qualifier: &str,
+    column: &str,
+    attribute: impl Fn(&RelationTypes, &str) -> Option<String>,
+) -> Option<Option<String>> {
     FRAMES.with(|frames| {
         let frames = frames.borrow();
         for frame in frames.iter().rev() {
@@ -145,7 +184,7 @@ pub(crate) fn lookup(qualifier: &str, column: &str) -> Option<Option<String>> {
                 if !name.eq_ignore_ascii_case(qualifier) {
                     continue;
                 }
-                let pg_type = types.column(column).flatten();
+                let pg_type = attribute(types, column);
                 found = Some(match found {
                     None => pg_type,
                     Some(previous) if previous == pg_type => previous,
@@ -167,6 +206,27 @@ pub(crate) fn lookup_key(key: &str) -> Option<Option<String>> {
     for (index, _) in key.match_indices('.').rev() {
         if let Some(found) = lookup(&key[..index], &key[index + 1..]) {
             return Some(found);
+        }
+    }
+    None
+}
+
+pub(crate) fn lookup_key_collation(key: &str) -> Option<Option<String>> {
+    for (index, _) in key.match_indices('.').rev() {
+        let found = lookup_attribute(
+            &key[..index],
+            &key[index + 1..],
+            |types, column| match types {
+                RelationTypes::Schema(schema) => schema.column(column)?.collation.clone(),
+                RelationTypes::Columns(columns) => columns
+                    .iter()
+                    .find(|entry| entry.name == column)?
+                    .collation
+                    .clone(),
+            },
+        );
+        if found.is_some() {
+            return found;
         }
     }
     None

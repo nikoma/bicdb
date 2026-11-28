@@ -3618,40 +3618,76 @@ impl<'db> SqlEngine<'db> {
     /// The collation an ORDER BY key sorts by: an explicit COLLATE, else
     /// the declared collation of the table column the key names.
     pub(crate) fn slot_order_collation(&self, expr: &Expr, columns: &[String]) -> Option<String> {
-        if let Some(collation) = explicit_expr_collation(expr) {
-            return Some(collation);
-        }
+        explicit_expr_collation(expr).or_else(|| self.slot_input_collation(expr, columns.iter()))
+    }
+
+    pub(crate) fn slot_input_collation<'a>(
+        &self,
+        expr: &Expr,
+        columns: impl Iterator<Item = &'a String>,
+    ) -> Option<String> {
         let mut expr = expr;
         while let Expr::Nested(inner) = expr {
             expr = inner;
         }
-        let candidates: Vec<&String> = match expr {
+        let key = match expr {
             Expr::CompoundIdentifier(parts) if parts.len() >= 2 => {
-                let wanted = parts.iter().map(ident_value).collect::<Vec<_>>().join(".");
-                columns.iter().filter(|column| **column == wanted).collect()
+                parts.iter().map(ident_value).collect::<Vec<_>>().join(".")
             }
-            Expr::Identifier(ident) => {
-                let suffix = format!(".{}", ident_value(ident));
-                columns
-                    .iter()
-                    .filter(|column| column.ends_with(&suffix))
-                    .collect()
-            }
+            Expr::Identifier(ident) => format!(".{}", ident_value(ident)),
             _ => return None,
         };
-        // A table column appears under its alias and its table name; the
-        // table-named slot resolves the declared collation.
-        candidates.into_iter().find_map(|column| {
-            let (qualifier, name) = column.rsplit_once('.')?;
-            if self.cte(qualifier).is_some() {
-                return None;
-            }
-            let schema = load_schema_shared(self.db_ref(), qualifier)
-                .ok()
-                .flatten()?;
-            let collation = schema.column(name)?.collation.clone()?;
-            (collation != "default").then(|| crate::collations::semantic_collation(collation))
-        })
+        let qualified = !key.starts_with('.');
+        columns
+            .filter(|column| {
+                if qualified {
+                    **column == key
+                } else {
+                    column.ends_with(&key)
+                }
+            })
+            .find_map(|column| {
+                if let Some(found) = crate::slot_types::lookup_key_collation(column) {
+                    return found
+                        .filter(|name| name != "default")
+                        .map(crate::collations::semantic_collation);
+                }
+                let (qualifier, name) = column.rsplit_once('.')?;
+                if self.cte(qualifier).is_some() {
+                    return None;
+                }
+                let schema = load_schema_shared(self.db_ref(), qualifier)
+                    .ok()
+                    .flatten()?;
+                let collation = schema.column(name)?.collation.clone()?;
+                (collation != "default").then(|| crate::collations::semantic_collation(collation))
+            })
+    }
+
+    pub(crate) fn slot_comparison_collation<'a, I>(
+        &self,
+        left: &Expr,
+        right: &Expr,
+        columns: I,
+        types: [Option<&str>; 2],
+    ) -> Result<Option<String>>
+    where
+        I: Iterator<Item = &'a String> + Clone,
+    {
+        if let Some(explicit) = comparison_collation(left, right, None)? {
+            return Ok(Some(explicit));
+        }
+        let [left_type, right_type] = types;
+        implicit_comparison_collation(
+            left_type
+                .is_none_or(pg_type_is_collatable)
+                .then(|| self.slot_input_collation(left, columns.clone()))
+                .flatten(),
+            right_type
+                .is_none_or(pg_type_is_collatable)
+                .then(|| self.slot_input_collation(right, columns))
+                .flatten(),
+        )
     }
 
     pub(crate) fn slot_column_type(&self, column: &str) -> Option<String> {

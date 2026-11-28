@@ -251,3 +251,54 @@ fn ranges_over_float_text_interval_and_time() {
         );
     });
 }
+#[test]
+fn declared_collations_follow_columns_through_predicates_aliases_and_indexes() {
+    with_session(|session| {
+        session.execute("CREATE TABLE catalog_words(id int PRIMARY KEY, word text COLLATE \"en-x-icu\", ascii_word text COLLATE \"C\"); INSERT INTO catalog_words VALUES (1,'abc','bbc'),(2,'äbc','bbc'),(3,'bbc','bbc'),(4,'ABC','bbc')").unwrap();
+        for sql in [
+            "SELECT id FROM catalog_words WHERE word >= 'bbc' ORDER BY id",
+            "SELECT w.id FROM catalog_words AS w WHERE w.word >= 'bbc' ORDER BY w.id",
+            "SELECT w.id FROM catalog_words AS w(id, renamed) WHERE w.renamed >= 'bbc' ORDER BY w.id",
+        ] {
+            assert_eq!(column(session, sql), ["3"]);
+        }
+        session
+            .execute("CREATE INDEX words_idx ON catalog_words(word)")
+            .unwrap();
+        assert_eq!(
+            column(
+                session,
+                "SELECT id FROM catalog_words WHERE word >= 'bbc' ORDER BY word"
+            ),
+            ["3"]
+        );
+        assert_eq!(
+            column(
+                session,
+                "SELECT id FROM catalog_words WHERE word COLLATE \"C\" >= ascii_word ORDER BY id"
+            ),
+            ["2", "3"]
+        );
+        assert_eq!(
+            column(
+                session,
+                "SELECT word >= 'bbc' FROM catalog_words ORDER BY id"
+            ),
+            ["false", "false", "true", "false"]
+        );
+        for sql in [
+            "SELECT word >= ascii_word FROM catalog_words",
+            "SELECT id FROM catalog_words WHERE word = ascii_word",
+            "SELECT w.word >= w.ascii_word FROM catalog_words AS w",
+        ] {
+            assert_eq!(session.execute(sql).unwrap_err().sqlstate(), "42P22");
+        }
+        let missing = session
+            .execute("SELECT 'a' COLLATE \"ja_JP.eucjp-x-icu\" < 'b'")
+            .unwrap_err();
+        assert_eq!(missing.sqlstate(), "42704");
+        assert!(missing
+            .to_string()
+            .contains("collation \"ja_JP.eucjp-x-icu\" for encoding \"UTF8\" does not exist"));
+    });
+}

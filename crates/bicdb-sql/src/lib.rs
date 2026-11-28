@@ -1516,7 +1516,7 @@ fn sql_index_definitions_for_collection(db: &BicDb, collection: &str) -> Vec<Ind
                     index
                         .collations
                         .iter()
-                        .any(|oid| Some(*oid) == collation_oid("en-x-icu"))
+                        .any(|oid| !matches!(oid, 0 | 100 | 950 | 951 | 962))
                 })
                 .map(|index| index.name.to_ascii_lowercase())
                 .collect::<BTreeSet<_>>()

@@ -213,25 +213,45 @@ pub(crate) fn comparison_collation(
     right: &Expr,
     schema: Option<&TableSchema>,
 ) -> Result<Option<String>> {
+    let left_explicit = matches!(unwrap_nested_expr(left), Expr::Collate { .. });
+    let right_explicit = matches!(unwrap_nested_expr(right), Expr::Collate { .. });
     let left = expr_collation(left, schema)?;
     let right = expr_collation(right, schema)?;
-    match (left, right) {
-        (Some(left), Some(right)) if left != "default" && right != "default" && left != right => {
-            Err(SqlError::data_exception(
-                "42P21",
-                format!(
-                    "collation mismatch between explicit collations \"{}\" and \"{}\"",
-                    crate::collations::display_name(&left),
-                    crate::collations::display_name(&right)
-                ),
-                None,
-            ))
-        }
-        (Some(left), Some(right)) if left == "default" => Ok(Some(right)),
-        (Some(left), _) => Ok(Some(left)),
-        (_, Some(right)) => Ok(Some(right)),
-        _ => Ok(None),
+    match (left_explicit, right_explicit, left, right) {
+        (true, true, Some(left), Some(right)) if left != right => Err(SqlError::data_exception(
+            "42P21",
+            format!(
+                "collation mismatch between explicit collations \"{}\" and \"{}\"",
+                crate::collations::display_name(&left),
+                crate::collations::display_name(&right)
+            ),
+            None,
+        )),
+        (true, _, left, _) => Ok(left),
+        (_, true, _, right) => Ok(right),
+        (_, _, left, right) => implicit_comparison_collation(left, right),
     }
+}
+
+pub(crate) fn implicit_comparison_collation(
+    left: Option<String>,
+    right: Option<String>,
+) -> Result<Option<String>> {
+    let left = left.filter(|collation| collation != "default");
+    let right = right.filter(|collation| collation != "default");
+    if left
+        .as_ref()
+        .zip(right.as_ref())
+        .is_some_and(|(left, right)| left != right)
+    {
+        return Err(SqlError::coded(
+            "42P22",
+            "could not determine which collation to use for string comparison",
+            None,
+            Some("Use the COLLATE clause to set the collation explicitly.".into()),
+        ));
+    }
+    Ok(left.or(right))
 }
 
 pub(crate) fn compare_values_with_collation(

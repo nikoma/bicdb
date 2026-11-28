@@ -754,7 +754,7 @@ impl<'db> SqlEngine<'db> {
         table: &str,
         alias: &TableAlias,
     ) -> Result<RowSet> {
-        let Some((columns, _)) = self.relation_table_columns(table, &[]) else {
+        let Some((columns, base_table)) = self.relation_table_columns(table, &[]) else {
             resolve_session_relation_name(self.db_ref(), table)?;
             return Err(SqlError::Unsupported(
                 "column aliases require a relation with declared columns".into(),
@@ -763,6 +763,16 @@ impl<'db> SqlEngine<'db> {
         let qualifier = &alias.name.value;
         let (old_names, types): (Vec<_>, Vec<_>) = columns.into_iter().unzip();
         let new_names = table_alias_columns(table, qualifier, &alias.columns, &old_names)?;
+        let collations = if base_table {
+            let physical = resolve_session_relation_name(self.db_ref(), table)?;
+            let schema = load_schema_shared(self.db_ref(), &physical)?;
+            old_names
+                .iter()
+                .map(|name| schema.as_ref()?.column(name)?.collation.clone())
+                .collect()
+        } else {
+            Vec::new()
+        };
         // A predicate or projection over the new names cannot be pushed into
         // a scan keyed on the original schema names.
         let RowSet { rows, columns } =
@@ -786,7 +796,12 @@ impl<'db> SqlEngine<'db> {
                 keep[slot] = true;
             }
         }
-        crate::slot_types::register_columns(qualifier, &new_names, &types);
+        crate::slot_types::register_columns_with_collations(
+            qualifier,
+            &new_names,
+            &types,
+            &collations,
+        );
         let rows = if output.len() == columns.len() {
             rows
         } else {

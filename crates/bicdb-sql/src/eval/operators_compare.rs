@@ -3512,12 +3512,7 @@ fn eval_record_aggregate_expr_inner(
             eval_record_aggregate_expr(records, expr, schema)?,
             schema,
         ),
-        Expr::UnaryOp { op, expr }
-            if matches!(
-                op,
-                UnaryOperator::BitwiseNot | UnaryOperator::PGPrefixFactorial
-            ) || is_geometric_unary_operator(op) =>
-        {
+        Expr::UnaryOp { op, expr } if is_builtin_prefix_operator(op) => {
             eval_unary_bit_not_expr_value(
                 op,
                 expr,

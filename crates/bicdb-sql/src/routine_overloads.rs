@@ -362,7 +362,7 @@ pub(crate) fn routine_argument_type_hint(expr: &Expr, inferred: Option<String>) 
     }
 }
 
-fn element_polymorphic_family(name: &str) -> Option<bool> {
+pub(crate) fn element_polymorphic_family(name: &str) -> Option<bool> {
     match name {
         "anyelement" | "anyarray" | "anynonarray" => Some(false),
         "anycompatible" | "anycompatiblearray" | "anycompatiblenonarray" => Some(true),
@@ -372,7 +372,7 @@ fn element_polymorphic_family(name: &str) -> Option<bool> {
 
 /// Resolve element/array polymorphism to real SQL types. These bindings are
 /// per call; pseudo-types remain authoritative in the persisted catalog.
-fn element_polymorphic_bindings(
+pub(crate) fn element_polymorphic_bindings(
     db: &BicDb,
     routine: &RoutineSchema,
     static_types: &[Option<String>],

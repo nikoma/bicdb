@@ -5898,6 +5898,17 @@ impl RoutineFrame {
         }
     }
 
+    pub(crate) fn clear_record_field_types(&mut self, target: &str) {
+        let prefix = routine_record_field_type_prefix(target);
+        if self
+            .assignment_types
+            .keys()
+            .any(|name| name.starts_with(&prefix))
+        {
+            Arc::make_mut(&mut self.assignment_types).retain(|name, _| !name.starts_with(&prefix));
+        }
+    }
+
     /// A query FOR target can be a scalar, or a record receiving the whole row.
     /// Do not infer that distinction from the value: both start as NULL, and a
     /// JSON scalar may itself contain an object. Undeclared implicit loop records
@@ -6034,6 +6045,19 @@ impl RoutineFrame {
         };
         self.record_alias_ids.insert(name.to_owned(), id);
         self.set_unaliased(name, self.record_alias_values[id].clone());
+        let target_prefix = routine_record_field_type_prefix(target);
+        let alias_prefix = routine_record_field_type_prefix(name);
+        let field_types = self
+            .assignment_types
+            .iter()
+            .filter_map(|(field, kind)| {
+                Some((
+                    format!("{alias_prefix}{}", field.strip_prefix(&target_prefix)?),
+                    kind.clone(),
+                ))
+            })
+            .collect::<Vec<_>>();
+        Arc::make_mut(&mut self.assignment_types).extend(field_types);
         Ok(())
     }
 

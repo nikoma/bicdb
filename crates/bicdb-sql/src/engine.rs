@@ -5553,6 +5553,9 @@ impl<'db> SqlEngine<'db> {
                 ));
             }
         };
+        if let Some(rewritten) = self.bind_polymorphic_aggregate_query(query, select)? {
+            return self.execute_query(&rewritten);
+        }
         if let Some(rewritten) = self.rewrite_quantified_vectors(query, select)? {
             return self.execute_query(&rewritten);
         }

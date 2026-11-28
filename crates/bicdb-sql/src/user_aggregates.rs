@@ -13,6 +13,7 @@
 //! the marked call folds the collected inputs through the state transition
 //! function, then the final function, with PostgreSQL's strictness rules.
 
+use crate::routine_overloads::{element_polymorphic_bindings, element_polymorphic_family};
 use crate::*;
 use sqlparser::ast::{Expr, FunctionArg, FunctionArgExpr, FunctionArguments};
 
@@ -22,6 +23,8 @@ pub(crate) const AGGREGATE_SYMBOL: &str = "aggregate_dummy";
 /// First argument of the rewritten call that folds collected inputs.
 const FOLD_MARKER: &str = "bicdb$aggregate$fold";
 const STAR_FOLD_MARKER: &str = "bicdb$aggregate$star";
+const POLYMORPHIC_FOLD_MARKER: &str = "bicdb$aggregate$polymorphic";
+const TYPED_FOLD_PREFIX: &str = "bicdb$aggregate$types:";
 
 #[derive(Clone, Debug)]
 pub(crate) struct AggregateDef {
@@ -527,11 +530,7 @@ pub(crate) fn rewrite_aggregate_call(db: &BicDb, function: &Function) -> Result<
     let FunctionArguments::List(list) = &function.args else {
         return Ok(None);
     };
-    if list
-        .args
-        .first()
-        .is_some_and(|arg| matches!(arg, FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(value))) if matches!(&value.value, sqlparser::ast::Value::SingleQuotedString(text) if text == FOLD_MARKER || text == STAR_FOLD_MARKER)))
-    {
+    if fold_marker(function).is_some() {
         return Ok(None);
     }
     let name = object_name(&function.name)?.to_ascii_lowercase();
@@ -540,9 +539,9 @@ pub(crate) fn rewrite_aggregate_call(db: &BicDb, function: &Function) -> Result<
         [FunctionArg::Unnamed(FunctionArgExpr::Wildcard)]
     );
     let arity = if star { 0 } else { list.args.len() };
-    if find_aggregate(db, &name, arity)?.is_none() {
+    let Some((routine, def)) = find_aggregate(db, &name, arity)? else {
         return Ok(None);
-    }
+    };
     if arity == 0 && !star {
         return Err(SqlError::data_exception_public(
             "42809",
@@ -558,7 +557,19 @@ pub(crate) fn rewrite_aggregate_call(db: &BicDb, function: &Function) -> Result<
             "{name} is not an ordered-set aggregate, so WITHIN GROUP is not allowed"
         )));
     }
-    let marker = if star { STAR_FOLD_MARKER } else { FOLD_MARKER };
+    let polymorphic = def
+        .args
+        .iter()
+        .chain([&def.stype])
+        .any(|arg| element_polymorphic_family(&arg.pg_type).is_some())
+        || element_polymorphic_family(&routine.return_type).is_some();
+    let marker = if star {
+        STAR_FOLD_MARKER
+    } else if polymorphic {
+        POLYMORPHIC_FOLD_MARKER
+    } else {
+        FOLD_MARKER
+    };
     let mut args = vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::value(
         sqlparser::ast::Value::SingleQuotedString(marker.to_string()),
     )))];
@@ -577,7 +588,11 @@ pub(crate) fn rewrite_aggregate_call(db: &BicDb, function: &Function) -> Result<
             arg.clone()
         };
         let collected = Function {
-            name: ObjectName::from(vec![Ident::new("array_agg")]),
+            name: ObjectName::from(vec![Ident::new(if polymorphic {
+                "json_agg"
+            } else {
+                "array_agg"
+            })]),
             uses_odbc_syntax: false,
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(sqlparser::ast::FunctionArgumentList {
@@ -647,15 +662,107 @@ pub(crate) fn unbound_aggregate_call(name: &str) -> SqlError {
     ))
 }
 
+fn marker_for_string(value: &str) -> Option<&str> {
+    (matches!(
+        value,
+        FOLD_MARKER | STAR_FOLD_MARKER | POLYMORPHIC_FOLD_MARKER
+    ) || value.starts_with(TYPED_FOLD_PREFIX))
+    .then_some(value)
+}
+
+fn fold_marker(function: &Function) -> Option<&str> {
+    let FunctionArguments::List(list) = &function.args else {
+        return None;
+    };
+    let FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(value))) = list.args.first()? else {
+        return None;
+    };
+    match &value.value {
+        sqlparser::ast::Value::SingleQuotedString(text) => marker_for_string(text),
+        _ => None,
+    }
+}
+
+pub(crate) fn untyped_polymorphic_fold(function: &Function) -> bool {
+    fold_marker(function) == Some(POLYMORPHIC_FOLD_MARKER)
+}
+
+fn folded_input_types(
+    function: &Function,
+    infer: &mut dyn FnMut(&Expr) -> Option<String>,
+) -> Option<Vec<Option<String>>> {
+    let marker = fold_marker(function)?;
+    if marker == STAR_FOLD_MARKER {
+        return Some(Vec::new());
+    }
+    if let Some(types) = marker.strip_prefix(TYPED_FOLD_PREFIX) {
+        return serde_json::from_str(types).ok();
+    }
+    let FunctionArguments::List(list) = &function.args else {
+        return None;
+    };
+    list.args
+        .iter()
+        .skip(1)
+        .map(|arg| {
+            let FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Function(collector))) = arg else {
+                return None;
+            };
+            let FunctionArguments::List(list) = &collector.args else {
+                return None;
+            };
+            let [FunctionArg::Unnamed(FunctionArgExpr::Expr(input))] = list.args.as_slice() else {
+                return None;
+            };
+            Some(crate::routine_overloads::routine_argument_type_hint(
+                input,
+                infer(input),
+            ))
+        })
+        .collect()
+}
+
+pub(crate) fn bind_fold_types(
+    function: &mut Function,
+    infer: &mut dyn FnMut(&Expr) -> Option<String>,
+) -> Result<()> {
+    let types = folded_input_types(function, infer)
+        .ok_or_else(|| SqlError::InvalidSql("invalid polymorphic aggregate fold".into()))?;
+    let encoded = format!("{TYPED_FOLD_PREFIX}{}", serde_json::to_string(&types)?);
+    let FunctionArguments::List(list) = &mut function.args else {
+        unreachable!("checked a folding argument list");
+    };
+    list.args[0] = FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::value(
+        sqlparser::ast::Value::SingleQuotedString(encoded),
+    )));
+    Ok(())
+}
+
+pub(crate) fn folded_result_type(
+    db: &BicDb,
+    function: &Function,
+    infer: &mut dyn FnMut(&Expr) -> Option<String>,
+) -> Option<String> {
+    let inputs = folded_input_types(function, infer)?;
+    let name = object_name(&function.name).ok()?;
+    let (routine, _) = find_aggregate(db, &name, inputs.len()).ok()??;
+    crate::routine_overloads::concrete_routine_return_type(db, &routine, &inputs).ok()
+}
+
 /// Whether evaluated call arguments are the folding form of an aggregate.
 pub(crate) fn is_fold_call(args: &[SqlValue]) -> bool {
-    matches!(args.first(), Some(SqlValue::String(marker)) if marker == FOLD_MARKER || marker == STAR_FOLD_MARKER)
+    matches!(args.first(), Some(SqlValue::String(marker)) if marker_for_string(marker).is_some())
 }
 
 /// The values one input array of the folding call holds.
 fn collected_values(value: &SqlValue) -> Result<Vec<SqlValue>> {
     match value {
         SqlValue::Null => Ok(Vec::new()),
+        SqlValue::JsonText(json) => json
+            .parsed
+            .as_array()
+            .map(|rows| rows.iter().map(json_to_sql_value).collect())
+            .ok_or_else(|| SqlError::InvalidSql("aggregate input expects an array".into())),
         other => match array_json_parts(other, "aggregate input")? {
             Some((array, _)) => Ok(array
                 .as_array()
@@ -680,8 +787,20 @@ pub(crate) fn fold_plan(db: &BicDb, name: &str, args: &[SqlValue]) -> Result<Fol
     } else {
         args.len().saturating_sub(1)
     };
-    let (_, def) = find_aggregate(db, name, arity)?
+    let (mut routine, mut def) = find_aggregate(db, name, arity)?
         .ok_or_else(|| SqlError::undefined_function(format!("aggregate {name} does not exist")))?;
+    if let Some(SqlValue::String(types)) = args.first() {
+        if let Some(types) = types.strip_prefix(TYPED_FOLD_PREFIX) {
+            let types: Vec<Option<String>> = serde_json::from_str(types)?;
+            routine.return_type = def.stype.pg_type.clone();
+            let bindings = element_polymorphic_bindings(db, &routine, &types, &[])?;
+            for ty in def.args.iter_mut().chain([&mut def.stype]) {
+                if let Some(bound) = bindings.get(&ty.pg_type) {
+                    ty.pg_type = bound.clone();
+                }
+            }
+        }
+    }
     let strict = |function: &str| -> Result<bool> {
         Ok(routines_named(db, RoutineKind::Function, function)?
             .first()

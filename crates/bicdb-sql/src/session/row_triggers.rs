@@ -41,6 +41,32 @@ pub(crate) struct DeferredTriggerCall {
     pub(crate) trigger_name: String,
     pub(crate) function_name: String,
     pub(crate) vars: Vec<(String, SqlValue)>,
+    #[serde(default)]
+    record_shape: TriggerRecordShape,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub(super) struct TriggerRecordShape {
+    columns: Vec<String>,
+    types: Vec<Option<String>>,
+}
+
+impl TriggerRecordShape {
+    pub(super) fn new(columns: &[ColumnSchema]) -> Self {
+        let (columns, types) = columns
+            .iter()
+            .filter(|column| !column.hidden)
+            .map(|column| {
+                let kind = column
+                    .user_type
+                    .as_ref()
+                    .map(UserTypeColumnSchema::formatted_name)
+                    .unwrap_or_else(|| column.pg_type.clone());
+                (column.name.clone(), Some(kind))
+            })
+            .unzip();
+        Self { columns, types }
+    }
 }
 
 /// Bound on trigger recursion (a trigger whose function writes a table that
@@ -191,11 +217,12 @@ impl<'db> SqlSession<'db> {
 
     /// Run one trigger function with the given variables bound. Returns the
     /// function's RETURN value (None for a bare `RETURN;` or fall-through).
-    pub(crate) fn call_trigger_function(
+    pub(super) fn call_trigger_function(
         &mut self,
         trigger_name: &str,
         function_name: &str,
         vars: &[(String, SqlValue)],
+        shape: &TriggerRecordShape,
     ) -> Result<Option<SqlValue>> {
         if self.trigger_depth >= MAX_TRIGGER_DEPTH {
             return Err(SqlError::InvalidSql(format!(
@@ -226,6 +253,11 @@ impl<'db> SqlSession<'db> {
             frame.trigger_record_variables = vars.iter().any(|(name, _)| name == "new");
             for (name, value) in vars {
                 frame.set(name, value.clone());
+            }
+            if frame.trigger_record_variables && !frame.oracle_procedural_evaluation {
+                for name in ["new", "old"] {
+                    frame.set_record_field_types(name, &shape.columns, &shape.types);
+                }
             }
             session.initialize_routine_frame(&mut frame, &routine.ir.declarations)?;
             frame.set(ROUTINE_FOUND_VAR, SqlValue::Bool(false));
@@ -397,13 +429,19 @@ impl<'db> SqlSession<'db> {
         if triggers.is_empty() {
             return Ok((records, false));
         }
+        let shape = TriggerRecordShape::new(&schema.columns);
         let mut surviving = Vec::with_capacity(records.len());
         'record: for mut record in records {
             for trigger in &triggers {
                 let new_value = Self::before_trigger_row_value(schema, &record);
                 let vars =
                     Self::trigger_vars(trigger, schema, "insert", None, Some(new_value.clone()));
-                match self.call_trigger_function(&trigger.name, &trigger.function_name, &vars)? {
+                match self.call_trigger_function(
+                    &trigger.name,
+                    &trigger.function_name,
+                    &vars,
+                    &shape,
+                )? {
                     Some(SqlValue::Null) => continue 'record,
                     Some(returned) => {
                         Self::apply_returned_row(
@@ -452,6 +490,7 @@ impl<'db> SqlSession<'db> {
         if triggers.is_empty() {
             return Ok(Some(record));
         }
+        let shape = TriggerRecordShape::new(&schema.columns);
         let old_value = Self::trigger_row_value(schema, old);
         for trigger in &triggers {
             let new_value = Self::before_trigger_row_value(schema, &record);
@@ -462,7 +501,12 @@ impl<'db> SqlSession<'db> {
                 Some(old_value.clone()),
                 Some(new_value.clone()),
             );
-            match self.call_trigger_function(&trigger.name, &trigger.function_name, &vars)? {
+            match self.call_trigger_function(
+                &trigger.name,
+                &trigger.function_name,
+                &vars,
+                &shape,
+            )? {
                 Some(SqlValue::Null) => return Ok(None),
                 Some(returned) => {
                     Self::apply_returned_row(
@@ -496,11 +540,12 @@ impl<'db> SqlSession<'db> {
         if triggers.is_empty() {
             return Ok(true);
         }
+        let shape = TriggerRecordShape::new(&schema.columns);
         let old_value = Self::trigger_row_value(schema, old);
         for trigger in &triggers {
             let vars = Self::trigger_vars(trigger, schema, "delete", Some(old_value.clone()), None);
             if let Some(SqlValue::Null) =
-                self.call_trigger_function(&trigger.name, &trigger.function_name, &vars)?
+                self.call_trigger_function(&trigger.name, &trigger.function_name, &vars, &shape)?
             {
                 return Ok(false);
             }
@@ -526,6 +571,7 @@ impl<'db> SqlSession<'db> {
         if triggers.is_empty() {
             return Ok(());
         }
+        let shape = TriggerRecordShape::new(&schema.columns);
         for (old, new) in pairs {
             let old_value = old.map(|record| Self::trigger_row_value(schema, record));
             let new_value = new.map(|record| Self::trigger_row_value(schema, record));
@@ -542,6 +588,7 @@ impl<'db> SqlSession<'db> {
                         trigger_name: trigger.name.clone(),
                         function_name: trigger.function_name.clone(),
                         vars,
+                        record_shape: shape.clone(),
                     };
                     let hook = serde_json::to_value(&call)?;
                     self.tx
@@ -549,7 +596,12 @@ impl<'db> SqlSession<'db> {
                         .expect("checked is_some above")
                         .push_deferred_hook(hook);
                 } else {
-                    self.call_trigger_function(&trigger.name, &trigger.function_name, &vars)?;
+                    self.call_trigger_function(
+                        &trigger.name,
+                        &trigger.function_name,
+                        &vars,
+                        &shape,
+                    )?;
                 }
             }
         }
@@ -618,7 +670,12 @@ impl<'db> SqlSession<'db> {
                 let call: DeferredTriggerCall = serde_json::from_value(hook).map_err(|error| {
                     SqlError::InvalidSql(format!("malformed deferred trigger hook: {error}"))
                 })?;
-                self.call_trigger_function(&call.trigger_name, &call.function_name, &call.vars)?;
+                self.call_trigger_function(
+                    &call.trigger_name,
+                    &call.function_name,
+                    &call.vars,
+                    &call.record_shape,
+                )?;
             }
             // A deferred body may itself write rows that queue more deferred
             // work; loop until quiet (genuine recursion is bounded by

@@ -314,17 +314,22 @@ pub(crate) fn rewrite_xml_constructor_once(input: &str) -> Option<String> {
     let inner_depth = open.depth + 1;
     let replacement = if matches!(name, "xmlattributes" | "xmlforest") {
         let mut boundaries = vec![open.end];
-        boundaries.extend(
-            tokens[index + 2..close_index]
-                .iter()
-                .filter(|token| token.depth == inner_depth && token.symbol == Some(b','))
-                .map(|token| token.end),
-        );
-        let mut ends = tokens[index + 2..close_index]
-            .iter()
-            .filter(|token| token.depth == inner_depth && token.symbol == Some(b','))
-            .map(|token| token.start)
-            .collect::<Vec<_>>();
+        let mut ends = Vec::new();
+        let mut brackets = 0usize;
+        for token in &tokens[index + 2..close_index] {
+            if token.depth != inner_depth {
+                continue;
+            }
+            match token.symbol {
+                Some(b'[') => brackets += 1,
+                Some(b']') => brackets = brackets.saturating_sub(1),
+                Some(b',') if brackets == 0 => {
+                    ends.push(token.start);
+                    boundaries.push(token.end);
+                }
+                _ => {}
+            }
+        }
         ends.push(tokens[close_index].start);
         let mut arguments = Vec::new();
         for (start, end) in boundaries.into_iter().zip(ends) {

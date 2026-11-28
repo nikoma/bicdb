@@ -1152,3 +1152,34 @@ fn schema_xml_maps_readable_relations_in_name_order() {
         "3F000"
     );
 }
+
+#[test]
+fn cursor_xml_consumes_rows_from_the_live_portal() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("BEGIN").unwrap();
+    session
+        .execute(
+            "DECLARE c SCROLL CURSOR FOR SELECT * FROM (VALUES (1,'v'::text),(2,NULL)) AS x(id,v)",
+        )
+        .unwrap();
+    let mapped = session
+        .execute("SELECT cursor_to_xml('c', 1, true, false, '')")
+        .unwrap();
+    let zero = session
+        .execute("SELECT cursor_to_xml('c', 0, true, false, '')")
+        .unwrap();
+    assert_eq!(mapped.rows, zero.rows);
+    assert!(mapped.rows[0][0].to_cell().contains("<id>1</id>"));
+    let second = session.execute("FETCH NEXT FROM c").unwrap();
+    assert_eq!(second.rows, [[SqlValue::Int(2), SqlValue::Null]]);
+    let back = session
+        .execute("SELECT cursor_to_xml('c', -1, true, false, '')")
+        .unwrap();
+    assert_eq!(mapped.rows, back.rows);
+    let error = session
+        .execute("SELECT cursor_to_xml('missing', 1, true, false, '')")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "34000");
+}

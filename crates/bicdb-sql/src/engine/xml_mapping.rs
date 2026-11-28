@@ -43,13 +43,25 @@ impl SqlEngine<'_> {
         args: &[SqlValue],
     ) -> Result<Option<SqlValue>> {
         let name = name.strip_prefix("pg_catalog.").unwrap_or(name);
-        if !matches!(name, "table_to_xml" | "query_to_xml" | "schema_to_xml") {
-            return Ok(None);
-        }
-        let [source, nulls, forest, namespace] = args else {
-            return Err(SqlError::undefined_function(format!(
-                "{name} expects four arguments"
-            )));
+        let (source, count, nulls, forest, namespace) = match (name, args) {
+            ("cursor_to_xml", [source, count, nulls, forest, namespace]) => {
+                (source, Some(count), nulls, forest, namespace)
+            }
+            (
+                "table_to_xml" | "query_to_xml" | "schema_to_xml",
+                [source, nulls, forest, namespace],
+            ) => (source, None, nulls, forest, namespace),
+            ("cursor_to_xml", _) => {
+                return Err(SqlError::undefined_function(format!(
+                    "{name} expects five arguments"
+                )));
+            }
+            ("table_to_xml" | "query_to_xml" | "schema_to_xml", _) => {
+                return Err(SqlError::undefined_function(format!(
+                    "{name} expects four arguments"
+                )));
+            }
+            _ => return Ok(None),
         };
         if args.iter().any(|value| matches!(value, SqlValue::Null)) {
             return Ok(Some(SqlValue::Null));
@@ -59,6 +71,25 @@ impl SqlEngine<'_> {
         let forest = sql_value_bool(forest)
             .ok_or_else(|| SqlError::invalid_parameter_value("tableforest must be boolean"))?;
         let namespace = namespace.to_cell();
+        if let Some(count) = count {
+            let count = sql_value_i64(count)
+                .and_then(|count| i32::try_from(count).ok())
+                .ok_or_else(|| {
+                    SqlError::invalid_parameter_value("cursor count must be an integer")
+                })?;
+            let mut result = crate::session::fetch_xml_cursor_rows(&source.to_cell(), count)?;
+            self.normalize_xml_result_types(&mut result)?;
+            return crate::xml::map_query_rows(
+                &result,
+                "table",
+                "row",
+                nulls,
+                forest,
+                Some(&namespace),
+                || self.check_cancellation(),
+            )
+            .map(|value| Some(SqlValue::String(value)));
+        }
         if name == "schema_to_xml" {
             return self
                 .map_schema_rows(&source.to_cell(), nulls, forest, &namespace)
@@ -212,9 +243,14 @@ impl SqlEngine<'_> {
         }
         let mut result = result
             .ok_or_else(|| SqlError::data_exception_public("22000", "invalid query", None))?;
+        self.normalize_xml_result_types(&mut result)?;
+        Ok(result)
+    }
+
+    fn normalize_xml_result_types(&self, result: &mut SqlResult) -> Result<()> {
         for pg_type in result.column_types.iter_mut().flatten() {
             *pg_type = common_type_base_name(self.db_ref(), pg_type)?;
         }
-        Ok(result)
+        Ok(())
     }
 }

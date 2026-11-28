@@ -387,3 +387,111 @@ fn jsonpath_datetime_methods_convert_compare_and_print_as_postgres() {
         .unwrap();
     assert_eq!(result.rows, vec![vec![SqlValue::Int(0)]]);
 }
+
+#[test]
+fn jsonpath_array_subscripts_clip_lax_ranges_and_validate_strict_bounds() {
+    let (_dir, mut db) = session_db();
+    let mut session = SqlSession::new(&mut db);
+    let result = session
+        .execute(
+            r#"SELECT
+                jsonb_path_query_array('[0,1,2]', 'lax $[-3 to 10]'),
+                jsonb_path_query_array('[0,1,2]', 'lax $[2 to 1]'),
+                jsonb_path_query_array('[0,1,2]', '$[$v]', '{"v":1.9}'),
+                jsonb_path_query_array('[0,1,2]', '$[last - $v]', '{"v":1.9}'),
+                jsonb_path_query_array('[0,1,2]', 'lax $[2147483647.999999999999999999]'),
+                jsonb_path_exists('[0,1,2]', 'strict $[10]', silent => true),
+                '[0,1,2]'::jsonb @? 'strict $[10]',
+                '[0,1,2]'::jsonb @? 'lax $[10]'"#,
+        )
+        .unwrap();
+    assert_eq!(
+        result.rows,
+        [[
+            SqlValue::json(json!([0, 1, 2])),
+            SqlValue::json(json!([])),
+            SqlValue::json(json!([1])),
+            SqlValue::json(json!([0])),
+            SqlValue::json(json!([])),
+            SqlValue::Null,
+            SqlValue::Null,
+            SqlValue::Bool(false),
+        ]]
+    );
+    for (path, state, message) in [
+        (
+            "strict $[2 to 1]",
+            "22033",
+            "jsonpath array subscript is out of bounds",
+        ),
+        (
+            "strict $[-1 to 3]",
+            "22033",
+            "jsonpath array subscript is out of bounds",
+        ),
+        (
+            "lax $[2147483648]",
+            "22033",
+            "jsonpath array subscript is out of integer range",
+        ),
+        (
+            "lax $[last + 9223372036854775807]",
+            "22033",
+            "jsonpath array subscript is out of integer range",
+        ),
+        (
+            "lax $[$missing]",
+            "42704",
+            "could not find jsonpath variable \"missing\"",
+        ),
+    ] {
+        let statement = format!("SELECT jsonb_path_query_array('[0,1,2]', '{path}')");
+        let error = session.execute(&statement).unwrap_err();
+        assert_eq!(error.sqlstate(), state, "{statement}");
+        assert_eq!(error.to_string(), message, "{statement}");
+    }
+}
+
+#[test]
+fn jsonpath_predicates_preserve_sql_json_unknown_in_strict_and_lax_modes() {
+    let (_dir, mut db) = session_db();
+    let mut session = SqlSession::new(&mut db);
+    let result = session
+        .execute(
+            r#"SELECT
+                jsonb_path_match('{"a":[4,1],"b":[3,"s"]}', 'strict $.a[*] >= $.b[*]'),
+                jsonb_path_match('{"a":[4,1],"b":[3,"s"]}', 'lax $.a[*] >= $.b[*]'),
+                jsonb_path_match('["abc",42]', 'strict $[*] starts with "a"'),
+                jsonb_path_match('["abc",42]', 'lax $ starts with "a"'),
+                jsonb_path_match('["abc",42]', 'strict $[*] like_regex "^a"'),
+                jsonb_path_match('["abc",42]', 'lax $ like_regex "^a"'),
+                jsonb_path_match('{}', 'strict $.missing == 5'),
+                jsonb_path_match('{}', 'strict exists ($.missing)'),
+                jsonb_path_match('[]', 'lax $ starts with "a"'),
+                jsonb_path_match('[]', 'lax $ like_regex "^a"')"#,
+        )
+        .unwrap();
+    assert_eq!(
+        result.rows,
+        [[
+            SqlValue::Null,
+            SqlValue::Bool(true),
+            SqlValue::Null,
+            SqlValue::Bool(true),
+            SqlValue::Null,
+            SqlValue::Bool(true),
+            SqlValue::Null,
+            SqlValue::Null,
+            SqlValue::Bool(false),
+            SqlValue::Bool(false),
+        ]]
+    );
+    let result = session
+        .execute("SELECT jsonb_path_match('{}','strict $.a == $missing',silent => true)")
+        .unwrap();
+    assert_eq!(result.rows, [[SqlValue::Null]]);
+    let err = session
+        .execute("SELECT jsonb_path_match('{}','strict $missing == $.a',silent => true)")
+        .unwrap_err();
+    assert_eq!(err.sqlstate(), "42704");
+}

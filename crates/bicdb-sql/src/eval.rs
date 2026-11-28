@@ -400,12 +400,7 @@ pub(crate) fn eval_value(record: &Record, expr: &Expr) -> Result<SqlValue> {
         Expr::UnaryOp { op, expr } if op.to_string() == "+" => {
             eval_unary_plus_expr_value(expr, eval_value(record, expr)?, None)
         }
-        Expr::UnaryOp { op, expr }
-            if matches!(
-                op,
-                UnaryOperator::BitwiseNot | UnaryOperator::PGPrefixFactorial
-            ) || is_geometric_unary_operator(op) =>
-        {
+        Expr::UnaryOp { op, expr } if is_builtin_prefix_operator(op) => {
             eval_unary_bit_not_expr_value(op, expr, eval_value(record, expr)?, None)
         }
         Expr::Nested(expr) => eval_value(record, expr),
@@ -559,12 +554,7 @@ pub(crate) fn eval_constant_expr(expr: &Expr) -> Result<SqlValue> {
         Expr::UnaryOp { op, expr } if op.to_string() == "+" => {
             eval_unary_plus_expr_value(expr, eval_constant_expr(expr)?, None)
         }
-        Expr::UnaryOp { op, expr }
-            if matches!(
-                op,
-                UnaryOperator::BitwiseNot | UnaryOperator::PGPrefixFactorial
-            ) || is_geometric_unary_operator(op) =>
-        {
+        Expr::UnaryOp { op, expr } if is_builtin_prefix_operator(op) => {
             eval_unary_bit_not_expr_value(op, expr, eval_constant_expr(expr)?, None)
         }
         Expr::BinaryOp {
@@ -1401,6 +1391,17 @@ pub fn render_oid_alias_array_value(
         render_oid_alias_value(db, element_type, &input).map(JsonValue::String)
     })
     .map(SqlValue::json)
+}
+
+pub(crate) fn oid_alias_text_value(
+    db: &BicDb,
+    pg_type: &str,
+    value: &SqlValue,
+) -> Result<SqlValue> {
+    if matches!(value, SqlValue::Null) {
+        return Ok(SqlValue::Null);
+    }
+    render_oid_alias_value(db, pg_type, value).map(SqlValue::String)
 }
 
 pub fn render_oid_alias_value(db: &BicDb, pg_type: &str, value: &SqlValue) -> Result<String> {

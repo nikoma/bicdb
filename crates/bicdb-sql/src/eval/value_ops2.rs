@@ -2552,7 +2552,8 @@ pub(crate) fn parse_composite_text_fields(value: &str) -> Result<Vec<Option<Stri
     let mut escaped = false;
     let mut was_quoted = false;
     let mut depth = 0usize;
-    for character in inner.chars().chain(std::iter::once(',')) {
+    let mut characters = inner.chars().chain(std::iter::once(',')).peekable();
+    while let Some(character) = characters.next() {
         if escaped {
             field.push(character);
             escaped = false;
@@ -2563,6 +2564,10 @@ pub(crate) fn parse_composite_text_fields(value: &str) -> Result<Vec<Option<Stri
             continue;
         }
         if character == '"' {
+            if quoted && characters.next_if_eq(&'"').is_some() {
+                field.push('"');
+                continue;
+            }
             quoted = !quoted;
             was_quoted = true;
             continue;
@@ -3136,14 +3141,13 @@ pub(crate) fn cast_expr_value_with_db_and_source_type(
         .is_some_and(|target| matches!(target, "text" | "varchar"))
         && source_pg_type.as_deref().is_some_and(is_oid_alias_type)
     {
-        return render_oid_alias_value(
+        return oid_alias_text_value(
             db,
             source_pg_type
                 .as_deref()
                 .expect("alias source type checked"),
             &value,
-        )
-        .map(SqlValue::String);
+        );
     }
     if target_pg_type.as_deref() == Some("oid")
         && source_pg_type.as_deref().is_some_and(is_oid_alias_type)

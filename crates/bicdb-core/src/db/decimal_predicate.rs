@@ -18,7 +18,9 @@ pub(super) fn affected(definition: &IndexDefinition) -> bool {
                     || decimal_comparison(left)
                     || decimal_comparison(right)
             }
-            IndexPredicate::Unary { value, .. } => decimal_comparison(value),
+            IndexPredicate::Unary { value, .. } | IndexPredicate::Like { value, .. } => {
+                decimal_comparison(value)
+            }
             IndexPredicate::Field { .. } | IndexPredicate::Literal { .. } => false,
         }
     }

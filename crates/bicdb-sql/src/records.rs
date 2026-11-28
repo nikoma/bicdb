@@ -1180,44 +1180,47 @@ pub(crate) fn unique_arbiters_for_table_uncached(
     arbiters
 }
 
-pub(crate) fn unique_arbiter_for_columns(
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ConflictColumnInference {
+    pub(crate) columns: Vec<String>,
+    pub(crate) predicate: Option<bicdb_core::IndexPredicate>,
+}
+
+pub(crate) fn unique_arbiters_for_columns(
     db: &BicDb,
     table: &str,
     schema: &TableSchema,
-    columns: &[String],
-) -> Result<Option<UniqueConflictArbiter>> {
-    let arbiters = unique_arbiters_for_table(db, table, schema);
-    for arbiter in arbiters.iter() {
-        if unique_key_matches_columns(schema, &arbiter.key, columns) {
-            return Ok(Some(arbiter.clone()));
-        }
-    }
-    // ON CONFLICT infers a unique constraint by its column set, independent
-    // of target order. Keep ordered matching for index access elsewhere; the
-    // chosen arbiter retains its own key order for value encoding and row IDs.
-    let mut requested: Vec<_> = columns
+    inference: &ConflictColumnInference,
+) -> Vec<UniqueConflictArbiter> {
+    let requested: BTreeSet<_> = inference.columns.iter().map(String::as_str).collect();
+    // SQL inference matches a set of named columns. Ordered matching still
+    // matters when encoding a key for each chosen index.
+    unique_arbiters_for_table(db, table, schema)
         .iter()
-        .map(|name| name.to_ascii_lowercase())
-        .collect();
-    requested.sort_unstable();
-    for arbiter in arbiters.iter() {
-        let names = match &arbiter.key {
-            UniqueKey::Columns(names) => Some(names.clone()),
+        .filter(|arbiter| {
+            arbiter.predicate.as_ref().is_none_or(|index| {
+                inference.predicate.as_ref().is_some_and(|predicate| {
+                    crate::partial_index::inference_implies(predicate, index)
+                })
+            })
+        })
+        .filter(|arbiter| match &arbiter.key {
+            UniqueKey::Columns(names) => {
+                names.iter().map(String::as_str).collect::<BTreeSet<_>>() == requested
+            }
             UniqueKey::IndexFields(fields) => fields
                 .iter()
                 .map(|field| index_field_column_name(schema, field))
-                .collect::<Option<Vec<_>>>(),
-        };
-        let Some(names) = names else {
-            continue;
-        };
-        let mut actual: Vec<_> = names.iter().map(|name| name.to_ascii_lowercase()).collect();
-        actual.sort_unstable();
-        if actual == requested {
-            return Ok(Some(arbiter.clone()));
-        }
-    }
-    Ok(None)
+                .collect::<Option<BTreeSet<_>>>()
+                .is_some_and(|names| {
+                    names
+                        .iter()
+                        .map(String::as_str)
+                        .eq(requested.iter().copied())
+                }),
+        })
+        .cloned()
+        .collect()
 }
 
 /// Index lookups see committed rows. A row this transaction has since deleted or rewritten no longer holds its
@@ -2634,16 +2637,7 @@ pub(crate) fn validate_exclusion_constraints(
         // equality columns), then read current committed rows with this
         // transaction's own writes overlaid: overlapping transactions cannot
         // both pass, and a row written earlier in this transaction counts.
-        if let Some(tx) = tx {
-            let scope = format!("exclusion:{}", serde_json::to_string(&(table, name))?);
-            for record in records {
-                let key = equal_columns
-                    .iter()
-                    .map(|column| record_column_value(record, schema, column).to_cell())
-                    .collect::<Vec<_>>();
-                tx.reserve_integrity_key(&scope, &serde_json::to_string(&key)?)?;
-            }
-        }
+        reserve_exclusion_keys(tx, table, schema, name, equal_columns, records)?;
         let existing_records = current_integrity_records(db, tx, table)?;
         let batch_ids = records
             .iter()
@@ -2677,6 +2671,27 @@ pub(crate) fn validate_exclusion_constraints(
                     ));
                 }
             }
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn reserve_exclusion_keys(
+    tx: Option<&Transaction>,
+    table: &str,
+    schema: &TableSchema,
+    name: &str,
+    equal_columns: &[String],
+    records: &[Record],
+) -> Result<()> {
+    if let Some(tx) = tx {
+        let scope = format!("exclusion:{}", serde_json::to_string(&(table, name))?);
+        for record in records {
+            let key = equal_columns
+                .iter()
+                .map(|column| record_column_value(record, schema, column).to_cell())
+                .collect::<Vec<_>>();
+            tx.reserve_integrity_key(&scope, &serde_json::to_string(&key)?)?;
         }
     }
     Ok(())
@@ -3429,6 +3444,7 @@ fn row_security_disabled(session_gucs: &HashMap<String, String>) -> bool {
 }
 
 pub(crate) fn row_security_disabled_error(table: &str) -> SqlError {
+    let table = catalog_display_name(table);
     SqlError::BicDb(BicDbError::Authorization(format!(
         "query would be affected by row-level security policy for table \"{table}\""
     )))
@@ -4187,6 +4203,7 @@ pub(crate) fn parse_policy_expression(expression: &str) -> Result<Expr> {
 }
 
 pub(crate) fn rls_permission_denied(table: &str) -> SqlError {
+    let table = catalog_display_name(table);
     SqlError::BicDb(BicDbError::Authorization(format!(
         "new row violates row-level security policy for table \"{table}\""
     )))
@@ -4194,9 +4211,12 @@ pub(crate) fn rls_permission_denied(table: &str) -> SqlError {
 
 pub(crate) fn rls_check_denied(table: &str, verdict: &RlsRowVerdict) -> SqlError {
     match verdict {
-        RlsRowVerdict::Denied(Some(policy)) => SqlError::BicDb(BicDbError::Authorization(format!(
-            "new row violates row-level security policy \"{policy}\" for table \"{table}\""
-        ))),
+        RlsRowVerdict::Denied(Some(policy)) => {
+            let table = catalog_display_name(table);
+            SqlError::BicDb(BicDbError::Authorization(format!(
+                "new row violates row-level security policy \"{policy}\" for table \"{table}\""
+            )))
+        }
         _ => rls_permission_denied(table),
     }
 }
@@ -4204,6 +4224,7 @@ pub(crate) fn rls_check_denied(table: &str, verdict: &RlsRowVerdict) -> SqlError
 // PostgreSQL's ON CONFLICT DO UPDATE message variant: the conflicting
 // existing row failed the UPDATE or SELECT policies' USING expression.
 pub(crate) fn rls_using_denied(table: &str, verdict: &RlsRowVerdict) -> SqlError {
+    let table = catalog_display_name(table);
     SqlError::BicDb(BicDbError::Authorization(match verdict {
         RlsRowVerdict::Denied(Some(policy)) => format!(
             "new row violates row-level security policy \"{policy}\" (USING expression) for table \"{table}\""
@@ -4403,7 +4424,14 @@ fn exclusion_conflict_violation(
     record: &Record,
     existing: &Record,
 ) -> SqlError {
-    let error = exclusion_violation(table, name);
+    let mut error = exclusion_violation(&catalog_display_name(table), name);
+    if let SqlError::ConstraintViolation {
+        schema: error_schema,
+        ..
+    } = &mut error
+    {
+        *error_schema = Some(Box::new(schema.schema_name.clone()));
+    }
     // The range element's place among the elements orders the key; an older
     // catalog without it is printed only when that place cannot matter.
     let columns = match range {

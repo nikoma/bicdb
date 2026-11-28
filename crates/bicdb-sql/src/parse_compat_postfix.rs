@@ -7,6 +7,7 @@
 //! - `RANGE ... '1 day'::interval PRECEDING` and `interval '1 day' FOLLOWING`
 //!   frame offsets, parenthesized so the frame parser reads one expression;
 //! - `ALTER ROUTINE` / `DROP ROUTINE`, which name a function or a procedure;
+//! - `SET XML OPTION`, the SQL spelling of the `xmloption` setting;
 //! - `BETWEEN [A]SYMMETRIC`: the symmetric form marks its lower bound with
 //!   `BETWEEN_SYMMETRIC_MARKER(...)`, which the post-parse rewrite in
 //!   `crate::similar_to` expands as PostgreSQL does.
@@ -657,9 +658,43 @@ fn matching_close(sql: &str, tokens: &[Token], order: &[usize], open: usize) -> 
     None
 }
 
+fn rewrite_xml_option(sql: &str, tokens: &[Token], edits: &mut Vec<(usize, usize, String)>) {
+    let words: Vec<_> = tokens
+        .iter()
+        .filter(|token| token.kind != Kind::Space)
+        .collect();
+    for (index, token) in words.iter().enumerate() {
+        if !is_word(sql, token, "set") || (index > 0 && text(sql, words[index - 1]) != ";") {
+            continue;
+        }
+        let mut rest = &words[index + 1..];
+        if rest
+            .first()
+            .is_some_and(|token| is_word(sql, token, "local") || is_word(sql, token, "session"))
+        {
+            rest = &rest[1..];
+        }
+        let [xml, option, mode, tail @ ..] = rest else {
+            continue;
+        };
+        if is_word(sql, xml, "xml")
+            && is_word(sql, option, "option")
+            && (is_word(sql, mode, "document") || is_word(sql, mode, "content"))
+            && tail.first().is_none_or(|next| text(sql, next) == ";")
+        {
+            edits.push((
+                xml.start,
+                mode.end,
+                format!("xmloption TO '{}'", text(sql, mode)),
+            ));
+        }
+    }
+}
+
 /// Apply all rewrites of this module; `None` when nothing changed.
 pub(crate) fn rewrite(sql: &str) -> Option<String> {
     let lower = sql.to_ascii_lowercase();
+    let may_set_xml_option = lower.contains("xml") && lower.contains("option");
     if !(lower.contains("isnull")
         || lower.contains("notnull")
         || lower.contains("symmetric")
@@ -670,12 +705,16 @@ pub(crate) fn rewrite(sql: &str) -> Option<String> {
         || sql.contains("!==")
         || sql.contains("~~~")
         || sql.contains("@@@")
-        || lower.contains("operator"))
+        || lower.contains("operator")
+        || may_set_xml_option)
     {
         return None;
     }
     let tokens = tokenize(sql)?;
     let mut edits = Vec::new();
+    if may_set_xml_option {
+        rewrite_xml_option(sql, &tokens, &mut edits);
+    }
     rewrite_postfix_null_tests(sql, &tokens, &mut edits);
     rewrite_frame_offsets(sql, &tokens, &mut edits);
     if lower.contains("symmetric") {

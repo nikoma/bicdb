@@ -1780,12 +1780,11 @@ impl<'db> SqlEngine<'db> {
                         });
                     }
                     if source_type.as_deref().is_some_and(is_oid_alias_type) {
-                        return render_oid_alias_value(
+                        return oid_alias_text_value(
                             self.db_ref(),
                             source_type.as_deref().expect("alias source type checked"),
                             &value,
-                        )
-                        .map(SqlValue::String);
+                        );
                     }
                     if let Some(element_type) = source_type
                         .as_deref()
@@ -1899,12 +1898,7 @@ impl<'db> SqlEngine<'db> {
                 self.eval_row_aggregate_expr(rows, columns, expr)?,
                 None,
             ),
-            Expr::UnaryOp { op, expr }
-                if matches!(
-                    op,
-                    UnaryOperator::BitwiseNot | UnaryOperator::PGPrefixFactorial
-                ) || is_geometric_unary_operator(op) =>
-            {
+            Expr::UnaryOp { op, expr } if is_builtin_prefix_operator(op) => {
                 eval_unary_bit_not_expr_value(
                     op,
                     expr,

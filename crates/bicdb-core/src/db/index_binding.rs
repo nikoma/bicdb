@@ -281,6 +281,9 @@ fn oracle_case_v1_replacement_matches(old: &IndexDefinition, new: &IndexDefiniti
     fn predicate(old: &IndexPredicate, new: &mut IndexPredicate) {
         match (old, new) {
             (IndexPredicate::Field { field: a }, IndexPredicate::Field { field: b }) => field(a, b),
+            (IndexPredicate::Like { value: a, .. }, IndexPredicate::Like { value: b, .. }) => {
+                predicate(a, b)
+            }
             (IndexPredicate::Unary { value: a, .. }, IndexPredicate::Unary { value: b, .. }) => {
                 predicate(a, b)
             }
@@ -360,7 +363,9 @@ fn oracle_case_v1_definition(mut definition: IndexDefinition) -> IndexDefinition
         match value {
             IndexPredicate::Field { field: value } => field(value),
             IndexPredicate::Literal { .. } => {}
-            IndexPredicate::Unary { value, .. } => predicate(value),
+            IndexPredicate::Unary { value, .. } | IndexPredicate::Like { value, .. } => {
+                predicate(value)
+            }
             IndexPredicate::Binary { left, right, .. } => {
                 predicate(left);
                 predicate(right);

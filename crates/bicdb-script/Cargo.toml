@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-script"
-version = "1.0.584"
+version = "1.0.603"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true

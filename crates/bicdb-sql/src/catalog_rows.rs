@@ -1576,21 +1576,30 @@ fn pg_attribute_rows_with_grants(
 ) -> Result<Vec<BTreeMap<String, SqlValue>>> {
     let grants = list_privileges(db)?;
     let mut rows = pg_attribute_rows_for_columns(attrelid, columns);
-    let virtual_columns = load_schema(db, table)?
-        .map(|schema| schema.virtual_generated_columns)
-        .unwrap_or_default();
-    if !virtual_columns.is_empty() {
-        for row in &mut rows {
-            if matches!(row.get("attname"), Some(SqlValue::String(column)) if virtual_columns.contains(column))
-            {
-                row.insert("attgenerated".into(), SqlValue::String("v".into()));
-            }
+    let schema = load_schema(db, table)?;
+    let inheritance_counts = match schema.as_ref() {
+        Some(schema) if !schema.inherits.is_empty() && !oracle::is_oracle_database(db)? => {
+            crate::inheritance::inherited_column_counts(db, schema)?
         }
-    }
+        _ => BTreeMap::new(),
+    };
     for row in &mut rows {
         let Some(SqlValue::String(column)) = row.get("attname") else {
             continue;
         };
+        let inherited = schema
+            .as_ref()
+            .filter(|_| !inheritance_counts.is_empty())
+            .and_then(|schema| schema.column(column))
+            .filter(|column| !column.hidden)
+            .and_then(|column| {
+                inheritance_counts
+                    .get(&column.name)
+                    .map(|&count| (count, column.attributes.inherited_local.unwrap_or(false)))
+            });
+        let virtual_column = schema
+            .as_ref()
+            .is_some_and(|schema| schema.virtual_generated_columns.contains(column));
         let acl = acl_value(
             grants
                 .iter()
@@ -1603,6 +1612,13 @@ fn pg_attribute_rows_with_grants(
                 .collect(),
         )?;
         row.insert("attacl".into(), acl);
+        if virtual_column {
+            row.insert("attgenerated".into(), SqlValue::String("v".into()));
+        }
+        if let Some((count, local)) = inherited {
+            row.insert("attinhcount".into(), SqlValue::Int(count));
+            row.insert("attislocal".into(), SqlValue::Bool(local));
+        }
     }
     Ok(rows)
 }
@@ -3929,6 +3945,10 @@ fn pg_proc_rows_uncached(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> 
             SqlValue::String(routine.declared_volatility().to_string()),
         );
         row.insert(
+            "proleakproof".to_string(),
+            SqlValue::Bool(routine.leakproof),
+        );
+        row.insert(
             "proisstrict".to_string(),
             SqlValue::Bool(crate::user_aggregates::routine_is_strict(&routine)),
         );
@@ -4018,11 +4038,16 @@ pub(crate) fn pg_trigger_rows_filtered(
                 ("tgname", SqlValue::String(trigger.name.clone())),
                 (
                     "tgfoid",
-                    SqlValue::Int(named_routine_oid(
-                        db,
-                        RoutineKind::Function,
-                        &trigger.function_name,
-                    )?),
+                    SqlValue::Int(
+                        match crate::fts::update_trigger_oid(&trigger.function_name) {
+                            Some(oid) if trigger.function_name.starts_with("pg_catalog.") => oid,
+                            _ => named_routine_oid(
+                                db,
+                                RoutineKind::Function,
+                                &trigger.function_name,
+                            )?,
+                        },
+                    ),
                 ),
                 (
                     "tgtype",
@@ -5943,12 +5968,13 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                             conbin: Some(expression.clone()),
                             convalidated: *validated,
                         }));
-                        // A CHECK the table took from its parents.
+                        // Reuse the lineage loaded above when a relation filter
+                        // left the parents out of the catalog rows being returned.
                         let inherited_from = schema
                             .inherits
                             .iter()
                             .filter(|parent| {
-                                schemas.iter().any(|candidate| {
+                                lineage.iter().any(|candidate| {
                                     candidate.name == **parent
                                         && !candidate.no_inherit_constraints.contains(name)
                                         && candidate.constraints.iter().any(|constraint| {

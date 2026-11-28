@@ -382,24 +382,11 @@ pub(crate) enum Resolution<'a> {
 /// path names it explicitly.
 pub(crate) fn effective_search_path(gucs: &HashMap<String, String>) -> Vec<String> {
     let user = current_user_from_gucs(gucs);
-    let mut path = gucs
+    let value = gucs
         .get("search_path")
         .map(String::as_str)
-        .unwrap_or("\"$user\", public")
-        .split(',')
-        .map(str::trim)
-        .filter(|schema| !schema.is_empty())
-        .map(|schema| {
-            if schema == "\"$user\"" || schema == "$user" {
-                user.clone()
-            } else if let Some(quoted) = schema.strip_prefix('"').and_then(|s| s.strip_suffix('"'))
-            {
-                quoted.to_string()
-            } else {
-                schema.to_ascii_lowercase()
-            }
-        })
-        .collect::<Vec<_>>();
+        .unwrap_or("\"$user\", public");
+    let mut path = crate::search_path::parse_search_path(value, &user);
     if !path.iter().any(|schema| schema == "pg_catalog") {
         path.insert(0, "pg_catalog".to_string());
     }

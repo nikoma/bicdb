@@ -1650,12 +1650,11 @@ impl<'db> SqlEngine<'db> {
                         });
                     }
                     if source_type.as_deref().is_some_and(is_oid_alias_type) {
-                        return render_oid_alias_value(
+                        return oid_alias_text_value(
                             self.db_ref(),
                             source_type.as_deref().expect("alias source type checked"),
                             &value,
-                        )
-                        .map(SqlValue::String);
+                        );
                     }
                     if let Some(element_type) = source_type
                         .as_deref()
@@ -1845,12 +1844,7 @@ impl<'db> SqlEngine<'db> {
                 self.eval_slot_row_value(row, context, expr)?,
                 None,
             ),
-            Expr::UnaryOp { op, expr }
-                if matches!(
-                    op,
-                    UnaryOperator::BitwiseNot | UnaryOperator::PGPrefixFactorial
-                ) || is_geometric_unary_operator(op) =>
-            {
+            Expr::UnaryOp { op, expr } if is_builtin_prefix_operator(op) => {
                 self.eval_slot_unary_operator(row, context, op, expr)
             }
             other => Err(SqlError::Unsupported(format!(
@@ -2753,12 +2747,7 @@ impl<'db> SqlEngine<'db> {
                 };
                 eval_unary_plus_expr_value(expr, value, schema).map(Some)
             }
-            Expr::UnaryOp { op, expr }
-                if matches!(
-                    op,
-                    UnaryOperator::BitwiseNot | UnaryOperator::PGPrefixFactorial
-                ) || is_geometric_unary_operator(op) =>
-            {
+            Expr::UnaryOp { op, expr } if is_builtin_prefix_operator(op) => {
                 let Some(value) =
                     self.eval_record_outer_value(table, alias, schema, record, outer_row, expr)?
                 else {
@@ -3410,6 +3399,12 @@ impl<'db> SqlEngine<'db> {
                 }
                 Ok(routine_var_from_ident(&self.routine_vars, ident).unwrap_or(SqlValue::Null))
             }
+            Expr::QualifiedWildcard(relation, _) => row
+                .get(&compound_row_value_key(&relation_default_alias(relation)))
+                .cloned()
+                .ok_or_else(|| {
+                    SqlError::Unsupported(format!("unsupported value expression {expr}"))
+                }),
             Expr::Value(value) => routine_var_from_value(&self.routine_vars, value)
                 .map(Ok)
                 .unwrap_or_else(|| literal_to_value(value)),
@@ -3539,12 +3534,11 @@ impl<'db> SqlEngine<'db> {
                         });
                     }
                     if source_type.as_deref().is_some_and(is_oid_alias_type) {
-                        return render_oid_alias_value(
+                        return oid_alias_text_value(
                             self.db_ref(),
                             source_type.as_deref().expect("alias source type checked"),
                             &value,
-                        )
-                        .map(SqlValue::String);
+                        );
                     }
                     if let Some(element_type) = source_type
                         .as_deref()
@@ -3695,12 +3689,7 @@ impl<'db> SqlEngine<'db> {
             Expr::UnaryOp { op, expr } if op.to_string() == "+" => {
                 eval_unary_plus_expr_value(expr, self.eval_row_value(row, expr)?, None)
             }
-            Expr::UnaryOp { op, expr }
-                if matches!(
-                    op,
-                    UnaryOperator::BitwiseNot | UnaryOperator::PGPrefixFactorial
-                ) || is_geometric_unary_operator(op) =>
-            {
+            Expr::UnaryOp { op, expr } if is_builtin_prefix_operator(op) => {
                 self.eval_row_unary_operator(row, op, expr)
             }
             other => Err(SqlError::Unsupported(format!(

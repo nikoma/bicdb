@@ -345,6 +345,26 @@ fn create_schema_with_elements_creates_them_inside_it() {
 }
 
 #[test]
+fn create_schema_elements_restore_an_explicit_empty_search_path() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = open(root.path());
+    let mut session = SqlSession::new(&mut db);
+    exec(&mut session, "CREATE TABLE t (different int)");
+    assert_eq!(
+        rows(&mut session, "SELECT set_config('search_path', ' ', false)"),
+        vec![" "]
+    );
+    exec(
+        &mut session,
+        "CREATE SCHEMA empty_path CREATE UNIQUE INDEX nested_idx ON t(a)
+         CREATE VIEW v AS SELECT a FROM t CREATE TABLE t (a int)",
+    );
+    assert_eq!(rows(&mut session, "SHOW search_path"), vec![" "]);
+    exec(&mut session, "INSERT INTO empty_path.t VALUES (4)");
+    assert_eq!(rows(&mut session, "SELECT a FROM empty_path.v"), vec!["4"]);
+}
+
+#[test]
 fn create_schema_elements_run_as_the_schema_owner() {
     let root = tempfile::tempdir().unwrap();
     let mut db = open(root.path());

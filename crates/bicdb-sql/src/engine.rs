@@ -5640,6 +5640,23 @@ impl<'db> SqlEngine<'db> {
         self.validate_native_aggregate_signatures(select, query)?;
         let has_windows = select_has_window_functions(select, query)?;
 
+        if let Some(having) = &select.having {
+            let env = self.from_relation_columns(&select.from).unwrap_or_default();
+            if let Some(pg_type) = self
+                .infer_env_expr_type(having, &env)
+                .filter(|pg_type| !matches!(pg_type.as_str(), "bool" | "unknown"))
+            {
+                return Err(SqlError::data_exception_public(
+                    "42804",
+                    format!(
+                        "argument of HAVING must be type boolean, not type {}",
+                        common_type_display(&pg_type)
+                    ),
+                    None,
+                ));
+            }
+        }
+
         if select.from.is_empty() {
             if has_windows {
                 return self.execute_window_query_without_from(select, query);
@@ -5650,6 +5667,10 @@ impl<'db> SqlEngine<'db> {
                 return self.execute_query(&rewritten);
             }
             return self.execute_select_without_from(select, query);
+        }
+
+        if select.having.is_some() {
+            return self.execute_having_query(select, query, has_windows);
         }
 
         if has_windows {

@@ -1,6 +1,7 @@
 //! Split out of the parent module to keep files digestible; behavior
 //! unchanged — a separate `impl` block on the same type.
 use super::*;
+use crate::planner::expr_contains_subquery;
 #[allow(unused_imports)]
 use crate::*;
 
@@ -814,6 +815,38 @@ impl<'db> SqlEngine<'db> {
         project_virtual_rows(&select.projection, rows, &[])
     }
 
+    pub(super) fn execute_having_query(
+        &self,
+        select: &Select,
+        query: &Query,
+        has_windows: bool,
+    ) -> Result<SqlResult> {
+        // An implicit group with no aggregates can be evaluated without an
+        // input scan. Restrict the shortcut to a single ordinary table and
+        // keep the regular expression and privilege checks before reaching it.
+        let [from] = select.from.as_slice() else {
+            return self.execute_row_query(select, query);
+        };
+        if has_windows
+            || has_group_by(select)?
+            || query.order_by.is_some()
+            || select.having.as_ref().is_some_and(expr_contains_subquery)
+            || select.projection.iter().any(|item| {
+                select_item_expr_and_alias(item)
+                    .map_or(true, |(expr, _)| expr_contains_subquery(expr))
+            })
+            || !query_group_aggregate_functions(select, query)?.is_empty()
+        {
+            return self.execute_row_query(select, query);
+        }
+        let Some(schema) = self.single_relation_schema(from) else {
+            return self.execute_row_query(select, query);
+        };
+        self.reject_encrypted_predicates(&schema.name, select.selection.as_ref())?;
+        let result = self.execute_grouped_window_rows(select, &[], query, &[], Vec::new(), &[])?;
+        self.typed_row_result(result, select, Some(&schema))
+    }
+
     pub(crate) fn execute_row_query(&self, select: &Select, query: &Query) -> Result<SqlResult> {
         self.check_cancellation()?;
         let normalized_from;
@@ -1084,16 +1117,16 @@ impl<'db> SqlEngine<'db> {
             )?;
             return self.typed_row_result(result, select, schema_ref);
         }
-        if let Some(having) = &select.having {
+        if select.having.is_some() {
             self.check_cancellation()?;
-            let mut result =
-                self.execute_row_aggregates(&select.projection, &row_set.rows, &row_set.columns)?;
-            if !self
-                .eval_row_aggregate_truth(&row_set.rows, &row_set.columns, having)?
-                .unwrap_or(false)
-            {
-                result.rows.clear();
-            }
+            let result = self.execute_grouped_window_rows(
+                select,
+                &[],
+                query,
+                &row_set.columns,
+                row_set.rows,
+                &[],
+            )?;
             return self.typed_row_result(result, select, schema_ref);
         }
         if has_aggregates(&select.projection) {

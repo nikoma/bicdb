@@ -331,6 +331,8 @@ fn missing_from_entry(qualifier: &str) -> SqlError {
 #[derive(Default)]
 struct ReferenceCollector {
     depth: usize,
+    skip_group_aggregates: bool,
+    aggregate_depth: usize,
     references: Vec<Vec<Ident>>,
     subqueries: Vec<Query>,
     /// Field names of `(expr).field` access chains: not column references.
@@ -351,6 +353,14 @@ impl Visitor for ReferenceCollector {
         ControlFlow::Continue(())
     }
     fn pre_visit_expr(&mut self, expr: &Expr) -> ControlFlow<()> {
+        if self.skip_group_aggregates
+            && matches!(expr, Expr::Function(function) if function.over.is_none() && is_aggregate_function(function))
+        {
+            self.aggregate_depth += 1;
+        }
+        if self.aggregate_depth != 0 {
+            return ControlFlow::Continue(());
+        }
         if let Expr::CompoundFieldAccess { access_chain, .. } = expr {
             for access in access_chain {
                 if let AccessExpr::Dot(field) = access {
@@ -380,6 +390,61 @@ impl Visitor for ReferenceCollector {
         }
         ControlFlow::Continue(())
     }
+    fn post_visit_expr(&mut self, expr: &Expr) -> ControlFlow<()> {
+        if self.skip_group_aggregates
+            && matches!(expr, Expr::Function(function) if function.over.is_none() && is_aggregate_function(function))
+        {
+            self.aggregate_depth -= 1;
+        }
+        ControlFlow::Continue(())
+    }
+}
+
+fn ungrouped_column(relation: &str, column: &str) -> SqlError {
+    SqlError::data_exception_public(
+        "42803",
+        format!(
+            "column \"{relation}.{column}\" must appear in the GROUP BY clause or be used in an aggregate function"
+        ),
+        None,
+    )
+}
+
+fn check_implicit_group_references(expr: &Expr, scope: &Scope) -> Result<()> {
+    let mut collector = ReferenceCollector {
+        skip_group_aggregates: true,
+        ..ReferenceCollector::default()
+    };
+    let _ = expr.visit(&mut collector);
+    for parts in collector.references {
+        let (qualifier, column) = match parts.as_slice() {
+            [column] => (None, ident_value(column)),
+            [.., qualifier, column] if parts.len() <= 3 => {
+                (Some(ident_value(qualifier)), ident_value(column))
+            }
+            _ => continue,
+        };
+        let mut relations = scope.relations.iter().filter(|relation| {
+            qualifier
+                .as_ref()
+                .is_none_or(|alias| alias == &relation.alias)
+                && relation
+                    .columns
+                    .as_ref()
+                    .is_some_and(|columns| columns.contains(&column))
+        });
+        if let Some(relation) = relations.next() {
+            if relations.next().is_some() && qualifier.is_none() {
+                return Err(SqlError::data_exception_public(
+                    "42702",
+                    format!("column reference \"{column}\" is ambiguous"),
+                    None,
+                ));
+            }
+            return Err(ungrouped_column(&relation.alias, &column));
+        }
+    }
+    Ok(())
 }
 
 /// Column name a CTE carries when its output columns cannot be inferred;
@@ -738,7 +803,39 @@ impl SqlEngine<'_> {
             }
         }
         if let Some(having) = &select.having {
-            self.check_expr_columns(having, &scope, outer, true)?;
+            self.check_expr_columns(having, &scope, outer, false)?;
+            if !has_group_by(select)? {
+                for item in &select.projection {
+                    match item {
+                        SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => {
+                            check_implicit_group_references(expr, &scope)?;
+                        }
+                        SelectItem::Wildcard(_) => {
+                            if let Some((relation, column)) =
+                                scope.relations.iter().find_map(|relation| {
+                                    Some((relation, relation.columns.as_ref()?.first()?))
+                                })
+                            {
+                                return Err(ungrouped_column(&relation.alias, column));
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                check_implicit_group_references(having, &scope)?;
+                if let Some(OrderBy {
+                    kind: OrderByKind::Expressions(orders),
+                    ..
+                }) = order_by
+                {
+                    for order in orders {
+                        if !matches!(&order.expr, Expr::Identifier(name) if scope.output_names.iter().any(|alias| alias == &ident_value(name)))
+                        {
+                            check_implicit_group_references(&order.expr, &scope)?;
+                        }
+                    }
+                }
+            }
         }
         if let Some(qualify) = &select.qualify {
             self.check_expr_columns(qualify, &scope, outer, true)?;

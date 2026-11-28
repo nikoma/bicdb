@@ -2528,14 +2528,17 @@ impl<'db> SqlEngine<'db> {
                 .cloned()
                 .unwrap_or_else(|| vec![SqlValue::Null; row_columns.len()]);
             for function in &aggregates {
-                let mut aggregate_rows = group.clone();
-                if let Some(filter) = &function.filter {
-                    aggregate_rows =
-                        self.filter_bound_row_predicate(aggregate_rows, row_columns, filter)?;
-                }
+                let filtered;
+                let aggregate_rows = if let Some(filter) = &function.filter {
+                    filtered =
+                        self.filter_bound_row_predicate(group.clone(), row_columns, filter)?;
+                    filtered.as_slice()
+                } else {
+                    group.as_slice()
+                };
                 row.push(RowAggregate::from_function(function)?.evaluate(
                     self,
-                    &aggregate_rows,
+                    aggregate_rows,
                     row_columns,
                 )?);
             }

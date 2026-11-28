@@ -1,7 +1,7 @@
 //! Top-level WITH DELETE shares the native DELETE transaction/CTE path.
 //! Results independently checked against PostgreSQL16.13.
 use bicdb_core::{BicDb, DbConfig};
-use bicdb_sql::SqlSession;
+use bicdb_sql::{SqlErrorField, SqlSession, SqlValue};
 #[test]
 fn top_level_with_delete_uses_ctes_for_using_returning_and_subqueries() {
     let root = tempfile::tempdir().unwrap();
@@ -72,5 +72,49 @@ fn top_level_delete_rolls_back_cte_mutations_on_constraint_failure() {
     assert_eq!(
         session.execute("SELECT count(*) FROM child").unwrap().rows[0][0].to_cell(),
         "1"
+    );
+}
+
+#[test]
+fn postgres_dml_target_alias_hides_the_original_relation_name() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE TABLE alias_target(id int PRIMARY KEY); INSERT INTO alias_target VALUES (1), (2)")
+        .unwrap();
+
+    for statement in [
+        "DELETE FROM alias_target AS t WHERE alias_target.id = 1",
+        "DELETE FROM public.alias_target AS t WHERE public.alias_target.id = 1",
+        "DELETE FROM alias_target AS t WHERE EXISTS (SELECT alias_target.id)",
+        "DELETE FROM alias_target AS t WHERE t.id = 1 RETURNING alias_target.*",
+        "WITH search AS (SELECT 1 AS id) DELETE FROM alias_target AS t USING search WHERE alias_target.id = search.id",
+        "UPDATE alias_target AS t SET id = alias_target.id + 10",
+    ] {
+        let error = session.execute(statement).unwrap_err();
+        assert_eq!(error.sqlstate(), "42P01", "{statement}: {error}");
+        assert_eq!(
+            error.postgres_message(),
+            "invalid reference to FROM-clause entry for table \"alias_target\"",
+            "{statement}",
+        );
+        assert!(error.fields().contains(&SqlErrorField::Hint(
+            "Perhaps you meant to reference the table alias \"t\".".to_owned(),
+        )));
+    }
+    assert_eq!(
+        session
+            .execute("SELECT id FROM alias_target ORDER BY id")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(2)]],
+    );
+    assert_eq!(
+        session
+            .execute("DELETE FROM alias_target AS t WHERE t.id = (SELECT alias_target.id FROM alias_target WHERE id = 2) RETURNING t.id")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(2)]],
     );
 }

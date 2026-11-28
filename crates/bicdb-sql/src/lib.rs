@@ -361,6 +361,7 @@ pub(crate) use jsonpath::{
     jsonpath_function_pg_type, jsonpath_index_terms, normalize_jsonpath,
 };
 mod xml;
+pub use xml::decode_postgres_xml_parameter;
 pub(crate) use xml::{
     eval_xml_function_value, finish_xml_agg, normalize_xml, xml_function_pg_type,
 };

@@ -3947,6 +3947,38 @@ pub(crate) fn eval_compatibility_function_value(
     if let Some(value) = eval_bytea_function_value(name, args, arg_types)? {
         return Ok(Some(value));
     }
+    let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(name);
+    if !oracle::simple_case::enabled() {
+        match (bare_name, args) {
+            ("ln" | "log", [arg])
+                if arg_types
+                    .and_then(|types| types.first())
+                    .and_then(Option::as_deref)
+                    .map_or_else(|| numeric_operand(arg), |pg_type| pg_type == "numeric") =>
+            {
+                let base_ten = SqlValue::Int(10);
+                return super::numeric_power::numeric_logarithm(
+                    (bare_name == "log").then_some(&base_ten),
+                    arg,
+                )
+                .map(Some);
+            }
+            ("log", [base, arg]) => {
+                if arg_types.is_some_and(|types| {
+                    types
+                        .iter()
+                        .flatten()
+                        .any(|kind| matches!(kind.as_str(), "float4" | "float8"))
+                }) {
+                    return Err(SqlError::undefined_function(
+                        "function log does not exist for these argument types",
+                    ));
+                }
+                return super::numeric_power::numeric_logarithm(Some(base), arg).map(Some);
+            }
+            _ => {}
+        }
+    }
     // After the bytea overloads (reverse/ltrim/rtrim/btrim on bytea), which need argument types.
     if let Some(value) = eval_pg_scalar_extra(name, args)? {
         return Ok(Some(value));

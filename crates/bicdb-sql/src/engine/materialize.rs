@@ -3945,6 +3945,14 @@ impl<'db> SqlEngine<'db> {
             "bicdb_oracle_current_sqlcode" => Some("int4".into()),
             "nextval" | "currval" | "setval" => Some("int8".to_string()),
             "starts_with" => Some("bool".to_string()),
+            "log" if args.len() == 2 && !oracle::simple_case::enabled() => Some("numeric".into()),
+            "pow" | "power" if !oracle::simple_case::enabled() => {
+                let types: Vec<_> = args
+                    .iter()
+                    .map(|arg| self.infer_env_expr_type(arg, env))
+                    .collect();
+                Some(power_result_type(types.iter().filter_map(Option::as_deref)))
+            }
             "pow" | "power" | "cbrt" | "exp" | "ln" | "log" | "sqrt" | "ceil" | "ceiling"
             | "floor" | "degrees" | "radians" => Some(float8_or_numeric_result_type(
                 args.first()
@@ -4157,11 +4165,11 @@ impl<'db> SqlEngine<'db> {
                 .filter(|pg_type| matches!(pg_type.as_str(), "json" | "jsonb")),
             BinaryOperator::LongArrow | BinaryOperator::HashLongArrow => Some("text".to_string()),
             // numeric ^ numeric when either side is NUMERIC, else float8.
-            BinaryOperator::PGExp => match (left_type.as_deref(), right_type.as_deref()) {
-                (Some("numeric"), _) | (_, Some("numeric")) => Some("numeric".to_string()),
-                (Some(_), Some(_)) => Some("float8".to_string()),
-                _ => None,
-            },
+            BinaryOperator::PGExp => Some(power_result_type(
+                [left_type.as_deref(), right_type.as_deref()]
+                    .into_iter()
+                    .flatten(),
+            )),
             BinaryOperator::StringConcat => match (left_type, right_type) {
                 (Some(left), _) if left.ends_with("[]") => Some(left),
                 (_, Some(right)) if right.ends_with("[]") => Some(right),

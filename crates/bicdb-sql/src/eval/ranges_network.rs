@@ -2762,8 +2762,13 @@ pub(crate) fn eval_binary_value(
         // Exponentiation, as power().
         BinaryOperator::PGExp => match (&left, &right) {
             (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
-            // A NUMERIC operand (decimal text) makes the power NUMERIC.
-            _ if numeric_operand(&left) || numeric_operand(&right) => {
+            _ if (numeric_operand(&left) || numeric_operand(&right))
+                && (oracle::simple_case::enabled()
+                    || !matches!(
+                        (&left, &right),
+                        (SqlValue::Float(_), _) | (_, SqlValue::Float(_))
+                    )) =>
+            {
                 numeric_power_value(&left, &right)
             }
             _ => crate::pg_scalar_extra::eval_pg_scalar_extra("power", &[left, right])?

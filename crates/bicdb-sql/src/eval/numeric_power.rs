@@ -145,9 +145,27 @@ impl Fixed {
         }
         let t = self.div(&(&m - &self.one), &(&m + &self.one));
         let ln_m = self.two_atanh(&t);
+        if k == 0 {
+            return ln_m;
+        }
         // ln 2 = 2 atanh(1/3).
         let ln2 = self.two_atanh(&divide(&self.one, &BigInt::from(3), 0));
         ln_m + ln2 * BigInt::from(k)
+    }
+
+    fn ln_decimal(&self, input: &Decimal) -> BigInt {
+        let magnitude = input.mantissa.abs();
+        let digits = magnitude.to_str_radix(10).len() as i64;
+        let weight = digits - 1 - i64::from(input.scale);
+        // Normalizing the mantissa keeps even very small positive inputs
+        // away from zero in fixed point.
+        let scaled = rescale(&magnitude, digits - 1, self.scale).mantissa;
+        let base = self.ln(&scaled);
+        if weight == 0 {
+            base
+        } else {
+            base + self.ln(&(&self.one * 10_i32)) * BigInt::from(weight)
+        }
     }
 
     /// exp(z) for |z| small enough that the series converges quickly, after
@@ -228,9 +246,8 @@ pub(crate) fn numeric_power(base: &Decimal, exponent: &Decimal) -> Result<Decima
         && integral_exponent
             .as_ref()
             .is_some_and(|n| (n % BigInt::from(2)) != BigInt::zero());
-    let base_fixed = rescale(&base.mantissa.abs(), i64::from(base.scale), working).mantissa;
     let exponent_fixed = rescale(&exponent.mantissa, i64::from(exponent.scale), working).mantissa;
-    let ln_base = fixed.ln(&base_fixed);
+    let ln_base = fixed.ln_decimal(base);
     let ln10 = fixed.ln(&(&fixed.one * 10_i32));
     let product = fixed.mul(&ln_base, &exponent_fixed);
     let reduced = &product - &ln10 * BigInt::from(weight);
@@ -241,6 +258,106 @@ pub(crate) fn numeric_power(base: &Decimal, exponent: &Decimal) -> Result<Decima
         result.mantissa = -result.mantissa;
     }
     Ok(result)
+}
+
+/// PostgreSQL uses the decimal weight of ln(x) to choose its display scale.
+fn ln_weight(value: &Decimal) -> i64 {
+    let one = pow10_bigint(value.scale);
+    let difference = (&value.mantissa - &one).abs();
+    if &difference * 10_i32 <= one {
+        if difference.is_zero() {
+            return 0;
+        }
+        return difference.to_str_radix(10).len() as i64 - 1 - i64::from(value.scale);
+    }
+    let digits = value.mantissa.to_str_radix(10);
+    let weight = digits.len() as i64 - 1 - i64::from(value.scale);
+    // Approximate with the first two base-10000 digits. This stays finite
+    // for very large and very small numerics.
+    let end = ((weight.rem_euclid(4) + 5) as usize).min(digits.len());
+    let prefix: f64 = digits[..end].parse().expect("positive decimal digits");
+    let approximate = prefix.ln() + (weight + 1 - end as i64) as f64 * std::f64::consts::LN_10;
+    approximate.abs().log10() as i64
+}
+
+fn check_log_operand(value: &PgNumeric) -> Result<()> {
+    if pg_numeric_is_negative(value) {
+        return Err(SqlError::data_exception(
+            "2201E",
+            "cannot take logarithm of a negative number",
+            None,
+        ));
+    }
+    if pg_numeric_is_zero(value) {
+        return Err(SqlError::data_exception(
+            "2201E",
+            "cannot take logarithm of zero",
+            None,
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn numeric_logarithm(base: Option<&SqlValue>, value: &SqlValue) -> Result<SqlValue> {
+    if matches!(value, SqlValue::Null) || base.is_some_and(|base| matches!(base, SqlValue::Null)) {
+        return Ok(SqlValue::Null);
+    }
+    let value = pg_numeric_from_sql_value(value.clone())?;
+    let base = base
+        .map(|base| pg_numeric_from_sql_value(base.clone()))
+        .transpose()?;
+    if value == PgNumeric::NaN || base.as_ref() == Some(&PgNumeric::NaN) {
+        return Ok(SqlValue::String("NaN".into()));
+    }
+    if let Some(base) = &base {
+        check_log_operand(base)?;
+    }
+    check_log_operand(&value)?;
+
+    if base == Some(PgNumeric::PositiveInfinity) {
+        return Ok(SqlValue::String(
+            if value == PgNumeric::PositiveInfinity {
+                "NaN"
+            } else {
+                "0"
+            }
+            .into(),
+        ));
+    }
+    if value == PgNumeric::PositiveInfinity {
+        return Ok(SqlValue::String("Infinity".into()));
+    }
+    let value = decimal_from_pg_numeric(value)?;
+    let value_weight = ln_weight(&value);
+    let result = if let Some(base) = base {
+        let base = decimal_from_pg_numeric(base)?;
+        let base_weight = ln_weight(&base);
+        let weight = value_weight - base_weight;
+        let scale = (MIN_SIG_DIGITS - weight)
+            .max(display_scale(&value))
+            .max(display_scale(&base))
+            .clamp(0, MAX_DISPLAY_SCALE);
+        // When the base is very close to one, its logarithm needs extra
+        // precision before dividing by it.
+        let working =
+            scale + weight.max(0) + (-base_weight).max(0) + (-value_weight).max(0) + GUARD_DIGITS;
+        let fixed = Fixed::new(working);
+        let denominator = fixed.ln_decimal(&base);
+        if denominator.is_zero() {
+            return Err(division_by_zero());
+        }
+        Decimal {
+            mantissa: divide(&fixed.ln_decimal(&value), &denominator, scale),
+            scale: scale as u32,
+        }
+    } else {
+        let scale = (MIN_SIG_DIGITS - value_weight)
+            .max(display_scale(&value))
+            .clamp(0, MAX_DISPLAY_SCALE);
+        let fixed = Fixed::new(scale + GUARD_DIGITS);
+        rescale(&fixed.ln_decimal(&value), fixed.scale, scale)
+    };
+    Ok(SqlValue::String(result.format()))
 }
 
 #[cfg(test)]

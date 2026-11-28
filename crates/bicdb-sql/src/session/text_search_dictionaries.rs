@@ -257,9 +257,10 @@ fn require_free_name(catalog: &Catalog, schema: &str, name: &str) -> Result<()> 
 type Options = Vec<(String, Option<String>)>;
 
 fn parse_options(tokens: Tokens<'_>) -> Result<Options> {
-    let [Token::LParen, mut tokens @ ..] = tokens else {
+    let [Token::LParen, tokens @ ..] = tokens else {
         return Err(syntax_error(tokens.first()));
     };
+    let mut tokens = tokens;
     let mut options = Vec::new();
     loop {
         let (name, rest) = ident(tokens)?;

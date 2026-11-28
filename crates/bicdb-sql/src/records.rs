@@ -4415,7 +4415,14 @@ fn exclusion_conflict_violation(
     record: &Record,
     existing: &Record,
 ) -> SqlError {
-    let error = exclusion_violation(table, name);
+    let mut error = exclusion_violation(&catalog_display_name(table), name);
+    if let SqlError::ConstraintViolation {
+        schema: error_schema,
+        ..
+    } = &mut error
+    {
+        *error_schema = Some(Box::new(schema.schema_name.clone()));
+    }
     // The range element's place among the elements orders the key; an older
     // catalog without it is printed only when that place cannot matter.
     let columns = match range {

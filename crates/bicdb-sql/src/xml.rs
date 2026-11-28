@@ -1033,11 +1033,9 @@ fn xpath_results(
     expression: &str,
     namespaces: Option<&JsonValue>,
 ) -> Result<Vec<String>> {
-    let package = parse_xpath_document(xml)?;
-    let document = package.as_document();
-    let xpath = compile_xpath(expression)?;
+    let (package, xpath) = parse_xpath_input(xml, expression)?;
     let context = xpath_context(namespaces);
-    let value = evaluate_xpath(&xpath, &context, document.root().into())?;
+    let value = evaluate_xpath(&xpath, &context, package.as_document().root().into())?;
     Ok(match value {
         XPathValue::Nodeset(nodes) => nodes
             .document_order()
@@ -1048,10 +1046,30 @@ fn xpath_results(
     })
 }
 
+fn parse_xpath_input(xml: &str, expression: &str) -> Result<(sxd_document::Package, XPath)> {
+    // PostgreSQL checks an empty expression first. Other syntax errors
+    // follow XML document validation.
+    require_xpath_expression(expression, "empty XPath expression")?;
+    let package = parse_xpath_document(xml)?;
+    Ok((package, compile_xpath(expression)?))
+}
+
+fn require_xpath_expression(expression: &str, message: &'static str) -> Result<()> {
+    if expression.is_empty() {
+        return Err(SqlError::data_exception_public("10608", message, None));
+    }
+    Ok(())
+}
+
 fn compile_xpath(expression: &str) -> Result<XPath> {
     check_nesting_budget(expression, &['(', '['], &[')', ']'], "XPath expression")?;
-    Factory::new().build(expression).map_err(|error| {
-        SqlError::invalid_parameter_value(format!("invalid XPath expression: {error}"))
+    Factory::new().build(expression).map_err(|_| {
+        SqlError::coded(
+            "10608",
+            "invalid XPath expression",
+            Some("Invalid expression".to_string()),
+            None,
+        )
     })
 }
 
@@ -1128,6 +1146,7 @@ fn xml_table_columns<'a>(
                 Some(path) => path.to_cell(),
                 None => name.to_owned(),
             };
+            require_xpath_expression(&path, "column path filter must not be empty string")?;
             Some(compile_xpath(&path)?)
         };
         columns.push(XmlTableColumn {
@@ -1197,6 +1216,7 @@ fn xml_table_rows(args: &[SqlValue]) -> Result<SqlValue> {
     }
     let document = xml_text(&args[0]);
     let row_path = xml_text(&args[1]);
+    require_xpath_expression(&row_path, "row path filter must not be empty string")?;
     let spec_json = match &args[2] {
         SqlValue::Json(value) => value.as_ref().clone(),
         value => serde_json::from_str::<JsonValue>(&value.to_cell())?,
@@ -1615,7 +1635,12 @@ pub(crate) fn eval_xml_function_value(
                 });
                 SqlValue::Json(
                     JsonValue::Array(
-                        xpath_results(&xml_text(&args[1]), &xml_text(&args[0]), namespaces)?
+                        xpath_results(&xml_text(&args[1]), &xml_text(&args[0]), namespaces)
+                            .map_err(|error| {
+                                error.with_context_line(
+                                    "SQL function \"xpath\" statement 1".to_string(),
+                                )
+                            })?
                             .into_iter()
                             .map(JsonValue::String)
                             .collect(),
@@ -1632,41 +1657,25 @@ pub(crate) fn eval_xml_function_value(
                     SqlValue::Json(value) => Some(&**value),
                     _ => None,
                 });
-                let package = parse_xpath_document(&xml_text(&args[1]))?;
-                let document = package.as_document();
-                let expression_text = xml_text(&args[0]);
-                if expression_text.is_empty() {
-                    return Err(SqlError::data_exception_public(
-                        "10608",
-                        "empty XPath expression",
-                        None,
-                    ));
-                }
-                check_nesting_budget(
-                    &expression_text,
-                    &['(', '['],
-                    &[')', ']'],
-                    "XPath expression",
-                )?;
-                let xpath = Factory::new().build(&expression_text).map_err(|error| {
-                    SqlError::invalid_parameter_value(format!("invalid XPath expression: {error}"))
-                })?;
-                let mut context = Context::new();
-                if let Some(JsonValue::Array(entries)) = namespaces {
-                    for entry in entries {
-                        if let Some(pair) = entry.as_array() {
-                            if let [JsonValue::String(prefix), JsonValue::String(uri)] =
-                                pair.as_slice()
-                            {
-                                context.set_namespace(prefix, uri);
-                            }
-                        }
+                let result = (|| {
+                    let xml = xml_text(&args[1]);
+                    let expression = xml_text(&args[0]);
+                    let (package, xpath) = parse_xpath_input(&xml, &expression)?;
+                    let context = xpath_context(namespaces);
+                    let result =
+                        evaluate_xpath(&xpath, &context, package.as_document().root().into())?;
+                    Ok(!matches!(result, XPathValue::Nodeset(nodes) if nodes.size() == 0))
+                })()
+                .map_err(|error: SqlError| {
+                    if name == "xpath_exists" {
+                        error.with_context_line(
+                            "SQL function \"xpath_exists\" statement 1".to_string(),
+                        )
+                    } else {
+                        error
                     }
-                }
-                let result = xpath.evaluate(&context, document.root()).map_err(|error| {
-                    SqlError::invalid_parameter_value(format!("XPath evaluation failed: {error}"))
                 })?;
-                SqlValue::Bool(!matches!(result, XPathValue::Nodeset(nodes) if nodes.size() == 0))
+                SqlValue::Bool(result)
             }
         }
         "bicdb_xmltable_json" => return xml_table_rows(args).map(Some),

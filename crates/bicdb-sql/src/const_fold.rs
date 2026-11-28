@@ -58,7 +58,7 @@ fn fold_query(query: &mut Query, folder: &mut Folder<'_>) {
         } else if !constant_keys.is_empty() {
             // Every key is constant: keep one written key (no ordering effect).
             keys.truncate(1);
-            keys[0].expr = Expr::Nested(Box::new(Expr::value(Value::Null)));
+            keys[0].expr = crate::order_by_ordinal::not_positional(Expr::value(Value::Null));
         }
     }
 }

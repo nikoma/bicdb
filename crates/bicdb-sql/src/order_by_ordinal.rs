@@ -18,11 +18,10 @@ use std::ops::ControlFlow;
 /// Output column names of a FROM relation, for `SELECT *` (None when unknown).
 pub(crate) type RelationColumns<'a> = dyn Fn(&TableFactor) -> Option<Vec<String>> + 'a;
 
-/// A resolved key that is itself an integer literal (`SELECT 1 ... ORDER BY
-/// 1`) would read as a position again and be resolved forever; `+1` keeps
-/// the constant's value without being positional.
-fn not_positional(expr: Expr) -> Expr {
-    if ordinal(&expr).is_some() {
+/// A resolved constant key keeps its scalar value when the normalized query
+/// is planned again. Unary plus distinguishes it from an authored position.
+pub(crate) fn not_positional(expr: Expr) -> Expr {
+    if position_literal(&expr).is_some() {
         Expr::UnaryOp {
             op: sqlparser::ast::UnaryOperator::Plus,
             expr: Box::new(expr),
